@@ -25,8 +25,10 @@ on:
     paths:
       - "src/FS.GG.Coord.GitHub/**"
       - "tests/FS.GG.Coord.GitHub.Tests/**"
+      - "tests/historical-loss-capture-cli/**"
       - "tests/producer-fence-attacks/**"
       - "src/FS.GG.Coord.Core/**"
+      - "tools/HistoricalLossCapture/**"
       - "Directory.Build.props"
       - "dist/dotnet/Directory.Build.props"
       - "Directory.Packages.props"
@@ -37,8 +39,10 @@ on:
     paths:
       - "src/FS.GG.Coord.GitHub/**"
       - "tests/FS.GG.Coord.GitHub.Tests/**"
+      - "tests/historical-loss-capture-cli/**"
       - "tests/producer-fence-attacks/**"
       - "src/FS.GG.Coord.Core/**"
+      - "tools/HistoricalLossCapture/**"
       - "Directory.Build.props"
       - "dist/dotnet/Directory.Build.props"
       - "Directory.Packages.props"
@@ -77,6 +81,9 @@ jobs:
       # Every failure here is a refusal the org paid for once already.
       - name: Test — the edge must refuse
         run: dotnet test tests/FS.GG.Coord.GitHub.Tests/FS.GG.Coord.GitHub.Tests.fsproj --no-build -c Release --logger "console;verbosity=normal"
+
+      - name: Test — private historical capture CLI
+        run: python3 tests/historical-loss-capture-cli/test_capture_cli.py
 
       - name: Verify GS2-08.6 producer attack oracle
         run: |
