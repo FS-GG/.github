@@ -33,6 +33,7 @@ HEX40 = re.compile(r"[0-9a-f]{40}\Z")
 ARCHIVE_DIGEST = re.compile(r"sha256:[0-9a-f]{64}\Z")
 REQUEST_MEMBER = "seed-admission-request.json"
 MAX_READ = 1024 * 1024
+MAX_ARCHIVE_READ = 128 * 1024 * 1024
 WAIT_SECONDS = 13 * 60
 POLL_SECONDS = 10
 
@@ -74,7 +75,8 @@ class GitHubReadPort:
 
     def get(self, route: str, *, limit: int = MAX_READ) -> bytes:
         require(type(route) is str and route.startswith(REPO + "/")
-                and ".." not in route and "#" not in route and limit <= MAX_READ,
+                and ".." not in route and "#" not in route
+                and 0 < limit <= (MAX_ARCHIVE_READ if route.endswith("/zip") else MAX_READ),
                 "native-read-route")
         try:
             result = subprocess.run(
@@ -94,6 +96,14 @@ def get_json(port: GitHubReadPort, route: str) -> object:
     return reader.strict_json(port.get(route))
 
 
+def require_protected_main(port: GitHubReadPort, workflow_sha: str) -> None:
+    require(type(workflow_sha) is str and HEX40.fullmatch(workflow_sha) is not None,
+            "protected-main-sha")
+    value = get_json(port, f"{REPO}/commits/main")
+    require(type(value) is dict and value.get("sha") == workflow_sha,
+            "protected-main-drift")
+
+
 def artifacts(port: GitHubReadPort, name: str) -> dict:
     require(re.fullmatch(r"gs2-09-7-seed-admission-(?:request|decision)-(?:prepare|final)-[1-9][0-9]*-[1-9][0-9]*",
                          name) is not None, "artifact-name")
@@ -110,8 +120,9 @@ def request_artifact(port: GitHubReadPort, phase: str, subject: dict) -> dict:
     listing = artifacts(port, name)
     require(listing["total_count"] == 1, "request-artifact-unique")
     item = listing["artifacts"][0]
+    require(type(item) is dict, "request-artifact-binding")
     binding = item.get("workflow_run") or {}
-    require(type(item) is dict and item.get("name") == name
+    require(type(binding) is dict and item.get("name") == name
             and type(item.get("id")) is int and item["id"] > 0
             and item.get("expired") is False
             and type(item.get("digest")) is str
@@ -133,6 +144,37 @@ def owner_dispatch_fields(phase: str, subject: dict, artifact: dict) -> dict:
             "executor_request_archive_digest": artifact["digest"],
             "executor_run_id": str(subject["runId"]),
             "executor_run_attempt": str(subject["runAttempt"])}
+
+
+def producer_state(port: GitHubReadPort, artifact: dict, producer_sha: str) -> str:
+    """Observe the exact owner run; an uploaded artifact is not a terminal verdict."""
+    binding = artifact.get("workflow_run") or {}
+    require(type(binding) is dict, "decision-artifact-binding")
+    run_id = binding.get("id")
+    require(type(run_id) is int and run_id > 0
+            and binding.get("head_sha") == producer_sha
+            and binding.get("head_branch") == "main"
+            and binding.get("repository_id") == authorizer.REPOSITORY_ID
+            and binding.get("head_repository_id") == authorizer.REPOSITORY_ID,
+            "decision-artifact-binding")
+    run = get_json(port, f"{REPO}/actions/runs/{run_id}")
+    require(type(run) is dict and run.get("id") == run_id
+            and run.get("run_attempt") == 1
+            and run.get("path") == authorizer.AUTHORIZER_WORKFLOW
+            and run.get("head_sha") == producer_sha
+            and run.get("head_branch") == "main"
+            and run.get("event") == "workflow_dispatch"
+            and (run.get("repository") or {}).get("id") == authorizer.REPOSITORY_ID
+            and (run.get("actor") or {}).get("id") == authorizer.OWNER["id"]
+            and (run.get("actor") or {}).get("login") == authorizer.OWNER["login"],
+            "decision-producer-binding")
+    status = run.get("status")
+    if status == "completed":
+        require(run.get("conclusion") == "success", "decision-producer-failed")
+        return "success"
+    require(status in {"queued", "in_progress", "waiting", "requested", "pending"}
+            and run.get("conclusion") is None, "decision-producer-status")
+    return "pending"
 
 
 def verified_decision(port: GitHubReadPort, phase: str, subject: dict,
@@ -175,13 +217,35 @@ def wait_decision(port: GitHubReadPort, phase: str, subject: dict,
             "decision-wait-bound")
     deadline = clock() + max_seconds
     name = decision_name(phase, subject)
+    observed_artifact = None
     while True:
+        current_request = request_artifact(port, phase, subject)
+        require((current_request["id"], current_request["digest"])
+                == (request_info["id"], request_info["digest"]),
+                "request-artifact-drift")
         listing = artifacts(port, name)
         require(listing["total_count"] <= 1, "decision-artifact-ambiguous")
         if listing["total_count"] == 1:
             item = listing["artifacts"][0]
-            return verified_decision(port, phase, subject, producer_sha, item, listing,
-                                     dt.datetime.now(dt.timezone.utc), request_info)
+            require(type(item) is dict, "decision-artifact-binding")
+            binding = item.get("workflow_run") or {}
+            require(type(binding) is dict and item.get("name") == name
+                    and type(item.get("id")) is int and item["id"] > 0
+                    and item.get("expired") is False
+                    and type(item.get("digest")) is str
+                    and ARCHIVE_DIGEST.fullmatch(item["digest"]) is not None,
+                    "decision-artifact-binding")
+            identity = (item["id"], item["digest"], binding.get("id"),
+                        binding.get("head_sha"), binding.get("head_branch"),
+                        binding.get("repository_id"), binding.get("head_repository_id"))
+            if observed_artifact is None:
+                observed_artifact = identity
+            require(identity == observed_artifact, "decision-artifact-drift")
+            if producer_state(port, item, producer_sha) == "success":
+                return verified_decision(port, phase, subject, producer_sha, item, listing,
+                                         dt.datetime.now(dt.timezone.utc), request_info)
+        else:
+            require(observed_artifact is None, "decision-artifact-disappeared")
         remaining = deadline - clock()
         require(remaining > 0, "owner-authorization-pending")
         pause(min(POLL_SECONDS, remaining))

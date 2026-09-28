@@ -177,6 +177,26 @@ class NativeCasTests(unittest.TestCase):
         self.assertEqual("pending", report["status"])
         self.assertEqual("readback-unavailable", report["reason"])
 
+    def test_push_response_unknown_reconciles_only_exact_fresh_objects(self):
+        original_push = self.port.push_genesis
+        def accepted_then_lost(directory, item):
+            original_push(directory, item)
+            raise cas.Refused("transport-timeout")
+        with mock.patch.object(cas, "INSTALLATION_STATUS", "installed-protected-host"), \
+             mock.patch.object(self.port, "push_genesis", side_effect=accepted_then_lost):
+            report = cas.apply(self.value, self.declaration, PLAN, self.port,
+                               protected_grant_verified=True)
+        self.assertTrue(report["complete"])
+        self.assertEqual(self.value["commitOid"], report["observedRefOid"])
+
+    def test_push_response_unknown_without_exact_readback_stays_pending(self):
+        with mock.patch.object(cas, "INSTALLATION_STATUS", "installed-protected-host"), \
+             mock.patch.object(self.port, "push_genesis", side_effect=cas.Refused("transport-timeout")):
+            report = cas.apply(self.value, self.declaration, PLAN, self.port,
+                               protected_grant_verified=True)
+        self.assertFalse(report["complete"])
+        self.assertEqual("pending", report["status"])
+
 
 if __name__ == "__main__":
     unittest.main()

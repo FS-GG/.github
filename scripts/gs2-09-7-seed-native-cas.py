@@ -348,7 +348,12 @@ def apply(value: dict, declaration_bytes: bytes, seed_plan_bytes: bytes, port: G
         port.new_repo(directory)
         port.install_objects(directory, item)
         # Exact absence is checked atomically by the server-side lease.
-        port.push_genesis(directory, item)
+        try:
+            port.push_genesis(directory, item)
+        except (Refused, OSError):
+            # A timeout or lost response may follow an accepted lease. The
+            # independent native object read below is the only settlement.
+            pass
     # A rejected lease, timeout or lost response can qualify only through a
     # new independent read that returns the exact precomputed objects.
     try:

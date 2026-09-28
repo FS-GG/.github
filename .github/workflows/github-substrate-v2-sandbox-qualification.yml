@@ -233,17 +233,25 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: python3 host/scripts/gs2-09-7-seed-bootstrap-entry.py request-info prepare
 
-      - name: Set up the pinned Coordination SDK
-        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
-        with:
-          global-json-file: coordination/global.json
-
-      - name: Wait for owner prepare decision, then mint and seal immutable S2 and S1
+      - name: Wait for owner prepare decision, then mint and prepare credential-free seal input
         env:
           GH_TOKEN: ${{ github.token }}
           FSGG_DISPATCH_APP_ID: ${{ secrets.FSGG_DISPATCH_APP_ID }}
           FSGG_DISPATCH_APP_PRIVATE_KEY: ${{ secrets.FSGG_DISPATCH_APP_PRIVATE_KEY }}
-        run: python3 host/scripts/gs2-09-7-seed-bootstrap-entry.py seal-and-request-final
+        run: python3 host/scripts/gs2-09-7-seed-bootstrap-entry.py seal-input
+
+      - name: Publish allowlisted credential-free seal input
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: gs2-09-7-seed-seal-input-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.FSGG_SEED_PRIVATE_DIR }}/seal-input/
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Accept terminal sealer job and immutable S1 output, then request final admission
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 host/scripts/gs2-09-7-seed-bootstrap-entry.py consume-seal-and-request-final
 
       - name: Publish sanitized final journal-only admission request
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -275,3 +283,48 @@ jobs:
           path: ${{ env.FSGG_SEED_SANITIZED_EVIDENCE_DIR }}/native-readback.json
           if-no-files-found: ignore
           retention-days: 90
+
+  seed-seal:
+    if: inputs.seed_source_manifest_sha256 != ''
+    name: gs2-09-7-seed-seal
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      contents: read
+      actions: read
+    env:
+      GITHUB_WORKFLOW_SHA: ${{ github.workflow_sha }}
+      FSGG_PROTECTED_SHA: ${{ github.sha }}
+      FSGG_CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+      FSGG_SEED_SOURCE_MANIFEST_SHA256: ${{ inputs.seed_source_manifest_sha256 }}
+      FSGG_SEED_SEAL_OUTPUT_DIR: /tmp/fsgg-seal-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - name: Check out the exact protected sealer source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          path: host
+      - name: Check out the exact Coordination candidate for credential-free seal
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: FS-GG/FS.GG.Coordination
+          ref: ${{ inputs.candidate_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+          path: coordination
+      - name: Set up the pinned Coordination SDK on the sealer only
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          global-json-file: coordination/global.json
+      - name: Seal exact S1 on the credential-free runner
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 host/scripts/gs2-09-7-seed-seal-exchange.py run-seal
+      - name: Return exact S1 output to the protected host
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: gs2-09-7-seed-seal-output-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.FSGG_SEED_SEAL_OUTPUT_DIR }}/publish/
+          if-no-files-found: error
+          retention-days: 1

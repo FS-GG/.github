@@ -134,7 +134,11 @@ class EntryTests(unittest.TestCase):
         self.assertIn("timeout-minutes: 40", seed)
         self.assertIn("actions: read", seed)
         self.assertIn("gs2-09-7-seed-bootstrap-entry.py prepare-request", seed)
-        self.assertIn("gs2-09-7-seed-bootstrap-entry.py seal-and-request-final", seed)
+        self.assertIn("gs2-09-7-seed-bootstrap-entry.py seal-input", seed)
+        self.assertIn("gs2-09-7-seed-bootstrap-entry.py consume-seal-and-request-final", seed)
+        self.assertIn("  seed-seal:", seed)
+        self.assertIn("gs2-09-7-seed-seal-exchange.py run-seal", seed)
+        self.assertNotIn("needs: seed-bootstrap", seed)
         self.assertIn("gs2-09-7-seed-bootstrap-entry.py final-apply", seed)
         self.assertLess(seed.index("gs2-09-7-seed-bootstrap-entry.py prepare-request"),
                         seed.index("secrets.FSGG_DISPATCH_APP_PRIVATE_KEY"))
@@ -164,14 +168,6 @@ class EntryTests(unittest.TestCase):
             with self.assertRaisesRegex(entry.Refused, "capture"):
                 entry.produce_prestate("token", entry.context(self.env))
 
-    def test_run_refuses_before_mint_while_installation_is_unavailable(self):
-        self.write_source()
-        mint = mock.Mock()
-        with mock.patch.object(entry, "mint_private", mint):
-            with self.assertRaisesRegex(entry.Refused, "bootstrap-source-uninstalled"):
-                entry.run_protected(self.host, self.candidate, self.env)
-        mint.assert_not_called()
-
     def test_staged_prepare_refuses_before_request_and_mint_when_uninstalled(self):
         self.write_source()
         environment = {**self.env, "FSGG_SEED_PRIVATE_DIR": str(self.root / "private")}
@@ -194,30 +190,59 @@ class EntryTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             entry.read_request(root, "prepare")
 
-    def test_coordination_seal_uses_exact_flags_and_excludes_credentials(self):
-        self.write_source()
-        facts = entry.context(self.env)
-        output = self.runtime / "sealed"
-        completed = SimpleNamespace(returncode=0,
-                                    stdout=str(output / entry.DERIVED_MANIFEST).encode() + b"\n")
-        with mock.patch.dict(os.environ, {
-            "FSGG_DISPATCH_APP_PRIVATE_KEY": "private-key",
-            "FSGG_SANDBOX_TOKEN": "installation-token",
-            "ACTIONS_RUNTIME_TOKEN": "actions-token"}), \
-             mock.patch.object(entry.subprocess, "run", return_value=completed) as run:
-            self.assertEqual(output, entry.seal_with_coordination(
-                self.candidate, facts, self.runtime, self.source,
-                self.runtime / "s2-declaration.json", self.runtime / "mint-grants.json",
-                self.runtime / "prestate.json"))
-        command = run.call_args.args[0]
-        self.assertEqual(command[:5], ["dotnet", "run", "--project",
-                                       entry.COORDINATION_CLI_PROJECT, "--"])
-        self.assertEqual(command[5:7], ["seed-bootstrap-artifacts", "seal"])
-        self.assertIn("--prestate", command)
-        self.assertIn("--source-manifest", command)
-        self.assertNotIn("FSGG_SANDBOX_TOKEN", run.call_args.kwargs["env"])
-        self.assertNotIn("FSGG_DISPATCH_APP_PRIVATE_KEY", run.call_args.kwargs["env"])
-        self.assertNotIn("ACTIONS_RUNTIME_TOKEN", run.call_args.kwargs["env"])
+    def test_altered_returned_s2_is_rejected_before_final_request(self):
+        files = {"s2-declaration.json": b"original",
+                 "seed-plan.json": self.plan, "corpus.json": self.corpus}
+        retained = {"seed-plan.json": self.plan, "corpus.json": self.corpus}
+        entry.require_returned_seal_inputs(files, retained, b"original")
+        with self.assertRaisesRegex(entry.Refused, "seal-returned-input-drift"):
+            entry.require_returned_seal_inputs({**files, "s2-declaration.json": b"altered"},
+                                               retained, b"original")
+
+    def test_revoke_failure_preserves_private_token_and_pending_readback(self):
+        root = self.root / "private"
+        root.mkdir(mode=0o700)
+        token_path = root / "installation-token.private"
+        entry.write_private(token_path, b"t" * 30)
+        entry.write_private(root / "cas-readback.private.json", b'{"complete":false}\n')
+        sanitized = self.root / "sanitized"
+        revoke = mock.Mock(side_effect=ValueError("response-unknown"))
+        with mock.patch.object(entry, "load_sibling", return_value=SimpleNamespace(revoke_token=revoke)), \
+             mock.patch.dict(os.environ, {"FSGG_SEED_SANITIZED_EVIDENCE_DIR": str(sanitized)}):
+            with self.assertRaisesRegex(ValueError, "response-unknown"):
+                entry.revoke_private_token(root)
+            self.assertTrue(token_path.exists())
+            self.assertFalse(sanitized.exists())
+            revoke.side_effect = None
+            self.assertTrue(entry.revoke_private_token(root))
+        self.assertFalse(token_path.exists())
+        self.assertEqual(b'{"complete":false}\n',
+                         (sanitized / "native-readback.json").read_bytes())
+
+    def test_final_nonce_prestate_drift_refuses_before_cas(self):
+        root = self.root / "private"
+        root.mkdir(mode=0o700)
+        entry.write_private(root / "installation-token.private", b"t" * 30)
+        env = {**self.env, "FSGG_SEED_PRIVATE_DIR": str(root), "GH_TOKEN": "g" * 30}
+        subject = {"runId": 12345}
+        bridge = SimpleNamespace(
+            GitHubReadPort=lambda _: object(),
+            require_protected_main=lambda *_: None,
+            wait_decision=lambda *_args, **_kwargs: object())
+        execute = mock.Mock()
+        with mock.patch.object(entry, "INSTALLATION_STATUS", "installed-protected-bootstrap"), \
+             mock.patch.object(entry, "read_request", return_value=subject), \
+             mock.patch.object(entry, "bridge_module", return_value=bridge), \
+             mock.patch.object(entry, "deadline_remaining", return_value=30), \
+             mock.patch.object(entry, "require_postmint_ready", return_value=(object(), object(), object())), \
+             mock.patch.object(entry, "load_sibling", return_value=object()), \
+             mock.patch.object(entry, "produce_prestate", side_effect=entry.Refused("nonce-nonzero")), \
+             mock.patch.object(entry, "revoke_private_token") as revoke, \
+             mock.patch.object(entry, "execute_source", execute):
+            with self.assertRaisesRegex(entry.Refused, "nonce-nonzero"):
+                entry.stage_final_apply(self.host, self.candidate, env)
+        execute.assert_not_called()
+        revoke.assert_called_once_with(root)
 
     def test_private_mint_retains_only_sanitized_proof_and_revokes_on_failure(self):
         token = "t" * 30
@@ -251,40 +276,6 @@ class EntryTests(unittest.TestCase):
         with self.assertRaisesRegex(entry.Refused, "mint-actor"):
             entry.mint_private(module, environment)
         module.revoke_token.assert_called_once_with(token)
-
-    def test_pending_native_readback_is_sanitized_and_token_is_revoked(self):
-        facts = entry.context(self.env)
-        environment = {**self.env,
-                       "FSGG_SEED_SANITIZED_EVIDENCE_DIR": str(self.root / "sanitized")}
-        source = {"approvedArtifactSourceSha256": self.approved}
-        order = []
-        mint = SimpleNamespace(
-            request_json=mock.Mock(side_effect=[
-                ({"id": 1353050537}, b'{"id":1353050537}'),
-                ({"data": {"organization": {"projectV2": {"id": "PVT_kwDOEYAWY84BiESo"}}}}, b"{}")]),
-            revoke_token=mock.Mock(side_effect=lambda _: order.append("revoke")))
-        binding = SimpleNamespace(build_document=lambda: (order.append("s2"), b"{}\n")[1])
-        cas = SimpleNamespace(authenticated_port=lambda _: nullcontext(object()),
-                              canonical=lambda report: (json.dumps(report) + "\n").encode())
-        report = {"complete": False, "status": "pending"}
-        with mock.patch.object(entry, "preflight", return_value=facts), \
-             mock.patch.object(entry, "require_postmint_ready", return_value=(binding, cas, object())), \
-             mock.patch.object(entry, "validate_source_artifacts",
-                               return_value=(source, {"seed-plan.json": self.plan,
-                                                     "corpus.json": self.corpus})), \
-             mock.patch.object(entry, "load_sibling", return_value=mint), \
-             mock.patch.object(entry, "mint_private",
-                               side_effect=lambda *_: (order.append("mint"), ("t" * 30, b"{}\n"))[1]), \
-             mock.patch.object(entry, "produce_prestate",
-                               side_effect=lambda *_: (order.append("prestate"), b"{}\n")[1]), \
-             mock.patch.object(entry, "seal_with_coordination",
-                               side_effect=lambda *_: (order.append("seal"), self.runtime)[1]), \
-             mock.patch.object(entry, "execute_source",
-                               side_effect=lambda *_: (order.append("cas"), report)[1]):
-            with self.assertRaisesRegex(entry.Refused, "native-readback-pending"):
-                entry.run_protected(self.host, self.candidate, environment)
-        self.assertEqual(["mint", "prestate", "s2", "seal", "cas", "revoke"], order)
-        self.assertEqual(report, json.loads((self.root / "sanitized/native-readback.json").read_bytes()))
 
     def test_composed_source_never_calls_git_without_admission(self):
         self.write_source()

@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
-"""Fail-closed protected Q4 journal bootstrap entry point.
+"""Fail-closed protected Q4 journal bootstrap credential-host entry point.
 
-The Coordination S1 library has no installed CLI producing the retained exact
-proposal and source declaration. Independent admission has no installed port.
-This pre-mint check makes either absence terminal before App secret use.
+Independent admission and the separate credential-free sealer remain explicit
+installation boundaries. The host never executes Coordination candidate code.
 """
 
 from __future__ import annotations
@@ -15,7 +14,6 @@ import os
 import re
 import sys
 import datetime as dt
-import subprocess
 import tempfile
 import stat
 from contextlib import contextmanager
@@ -316,6 +314,7 @@ def require_postmint_ready(host_checkout: Path, candidate_checkout: Path,
                      "scripts/gs2-09-7-mint-sandbox-token.py",
                      "scripts/gs2-09-7-seed-prestate.py",
                      "scripts/gs2-09-7-seed-admission-bridge.py",
+                     "scripts/gs2-09-7-seed-seal-exchange.py",
                      "scripts/gs2-09-7-seed-admission-authorizer.py",
                      "scripts/gs2-09-7-seed-admission-native-read.py"):
         current = binding.read_regular(regular_inside(host_checkout, relative), 1024 * 1024)
@@ -413,119 +412,6 @@ def mint_private(mint_module, environment: dict[str, str]) -> tuple[str, bytes]:
         raise
 
 
-def seal_with_coordination(candidate_checkout: Path, facts: dict, private_root: Path,
-                           source: dict, s2_path: Path, proof_path: Path,
-                           prestate_path: Path) -> Path:
-    output = private_root / "sealed"
-    require(not output.exists(), "seal-output-exists")
-    source_root = candidate_checkout / Path(SOURCE_MANIFEST).parent
-    command = ["dotnet", "run", "--project", COORDINATION_CLI_PROJECT, "--",
-               "seed-bootstrap-artifacts", "seal",
-               "--candidate-sha", facts["candidateSha"],
-               "--workflow-run-id", str(facts["runId"]),
-               "--workflow-run-attempt", str(facts["runAttempt"]),
-               "--workflow-sha", facts["workflowSha"],
-               "--source-manifest", str(source_root / "source-manifest.json"),
-               "--s2-declaration", str(s2_path),
-               "--mint-proof", str(proof_path),
-               "--seed-plan", str(source_root / source["seedPlan"]["path"]),
-               "--corpus", str(source_root / source["corpus"]["path"]),
-               "--prestate", str(prestate_path),
-               "--output-dir", str(output)]
-    # Candidate code receives only SDK/runtime settings. In particular, the
-    # App key, installation token and Actions runtime credentials stay outside
-    # the Coordination process and its child processes.
-    allowed = {"PATH", "HOME", "DOTNET_ROOT", "DOTNET_CLI_HOME", "NUGET_PACKAGES",
-               "LANG", "LC_ALL", "CI"}
-    clean_env = {key: value for key, value in os.environ.items() if key in allowed}
-    try:
-        completed = subprocess.run(command, cwd=candidate_checkout, env=clean_env,
-                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                   timeout=180, check=False)
-    except (OSError, subprocess.SubprocessError) as error:
-        raise Refused("coordination-seal-unavailable") from error
-    require(completed.returncode == 0 and len(completed.stdout) <= 4096
-            and completed.stdout.strip() == str(output / DERIVED_MANIFEST).encode(),
-            "coordination-seal-refused")
-    return output
-
-
-def run_protected(host_checkout: Path, candidate_checkout: Path,
-                  environment: dict[str, str]) -> dict:
-    """One protected run; all missing installation dependencies refuse before mint."""
-    facts = preflight(host_checkout, candidate_checkout, environment)
-    binding, cas, _ = require_postmint_ready(host_checkout, candidate_checkout,
-                                             facts["workflowSha"])
-    source, retained = validate_source_artifacts(candidate_checkout, facts)
-    sanitized_dir = Path(environment["FSGG_SEED_SANITIZED_EVIDENCE_DIR"])
-    require(sanitized_dir.is_absolute() and not sanitized_dir.exists(),
-            "sanitized-output-path")
-    mint_module = load_sibling("gs2_seed_mint", "gs2-09-7-mint-sandbox-token.py")
-    token = None
-    with tempfile.TemporaryDirectory(prefix="gs2-seed-bootstrap-") as temporary:
-        private_root = Path(temporary).resolve()
-        os.chmod(private_root, 0o700)
-        try:
-            token, proof = mint_private(mint_module, environment)
-            proof_path = private_root / "mint-grants.json"
-            write_private(proof_path, proof)
-            plan_path = private_root / "seed-plan.json"
-            corpus_path = private_root / "corpus.json"
-            write_private(plan_path, retained["seed-plan.json"])
-            write_private(corpus_path, retained["corpus.json"])
-            prestate = produce_prestate(token, facts)
-            prestate_path = private_root / "prestate.json"
-            write_private(prestate_path, prestate)
-            with temporary_environment({
-                "FSGG_SANDBOX_EVIDENCE_DIR": str(private_root),
-                "FSGG_SEED_PLAN_PATH": str(plan_path),
-                "FSGG_SEED_CORPUS_PATH": str(corpus_path),
-                "FSGG_SANDBOX_MINT_PROOF": str(proof_path),
-                "FSGG_SANDBOX_TOKEN": token,
-                "FSGG_APPROVED_ARTIFACT_SOURCE_SHA256": source["approvedArtifactSourceSha256"],
-                "FSGG_PROTECTED_ENVIRONMENT": "github-substrate-v2-sandbox",
-                "FSGG_SANDBOX_RUN_NONCE": facts["runNonce"],
-                "FSGG_SANDBOX_REPOSITORY_ID": "1353050537",
-                "FSGG_SANDBOX_REPOSITORY_NODE_ID": "R_kgDOUKXpqQ",
-                "FSGG_SANDBOX_PROJECT_NUMBER": "2",
-                "FSGG_SANDBOX_PROJECT_NODE_ID": "PVT_kwDOEYAWY84BiESo",
-                "FSGG_SEED_JOURNAL_REF": f'refs/heads/gs2-09-7/{facts["runNonce"]}/seed-journal',
-            }):
-                declaration = binding.build_document()
-            s2_path = private_root / "s2-declaration.json"
-            write_private(s2_path, declaration)
-            sealed_dir = seal_with_coordination(candidate_checkout, facts, private_root,
-                                                source, s2_path, proof_path, prestate_path)
-            repository, repository_raw = mint_module.request_json(
-                "GET", "/repos/FS-GG/FS.GG.GitHub.Substrate.Sandbox", token)
-            require(type(repository) is dict, "sandbox-repository-readback")
-            project_response, _ = mint_module.request_json(
-                "POST", "/graphql", token,
-                {"query": "query($owner:String!,$number:Int!){organization(login:$owner){projectV2(number:$number){id title closed public}}}",
-                 "variables": {"owner": "FS-GG", "number": 2}})
-            require(not project_response.get("errors")
-                    and type(project_response.get("data")) is dict
-                    and type(project_response["data"].get("organization")) is dict
-                    and type(project_response["data"]["organization"].get("projectV2")) is dict,
-                    "sandbox-project-readback")
-            project_raw = json.dumps(project_response["data"]["organization"]["projectV2"],
-                                     sort_keys=True, separators=(",", ":")).encode()
-            with cas.authenticated_port(token) as git_port:
-                report = execute_source(environment, candidate_checkout, sealed_dir,
-                                        proof, token, repository_raw, project_raw,
-                                        FINAL_ADMISSION_PORT, git_port,
-                                        dt.datetime.now(dt.timezone.utc))
-        finally:
-            if token is not None:
-                mint_module.revoke_token(token)
-        # A complete native envelope is retained only after token revocation.
-        # Pending readback is likewise retained, but remains non-authorizing.
-        sanitized_dir.mkdir(mode=0o700)
-        write_private(sanitized_dir / "native-readback.json", cas.canonical(report))
-        require(report.get("complete") is True, "native-readback-pending")
-        return report
-
-
 def private_root(environment: dict[str, str], *, create: bool = False) -> Path:
     root = Path(environment["FSGG_SEED_PRIVATE_DIR"])
     require(root.is_absolute() and not root.is_symlink(), "private-root")
@@ -535,6 +421,28 @@ def private_root(environment: dict[str, str], *, create: bool = False) -> Path:
     require(root.is_dir() and stat.S_IMODE(root.stat().st_mode) == 0o700,
             "private-root-mode")
     return root
+
+
+def deadline_remaining(root: Path, now: dt.datetime | None = None) -> int:
+    record = strict_json(read_private(root / "deadline.json", 4096))
+    require(set(record) == {"schema", "startedAt", "deadlineAt"}
+            and record["schema"] == "fsgg.gs2-09-7.seed-host-deadline/1",
+            "host-deadline")
+    try:
+        started = dt.datetime.fromisoformat(record["startedAt"].replace("Z", "+00:00"))
+        deadline = dt.datetime.fromisoformat(record["deadlineAt"].replace("Z", "+00:00"))
+    except (TypeError, ValueError, OverflowError) as error:
+        raise Refused("host-deadline") from error
+    current = now or dt.datetime.now(dt.timezone.utc)
+    require(started.tzinfo is not None and deadline.tzinfo is not None
+            and current.tzinfo is not None
+            and started <= current < deadline
+            and deadline - started == dt.timedelta(minutes=35), "host-deadline-expired")
+    return max(1, int((deadline - current).total_seconds()))
+
+
+def exchange_module():
+    return load_sibling("gs2_seed_seal_exchange", "gs2-09-7-seed-seal-exchange.py")
 
 
 def prepare_subject(facts: dict, source: dict) -> dict:
@@ -573,6 +481,13 @@ def stage_prepare_request(host_checkout: Path, candidate_checkout: Path,
     bridge = bridge_module()
     subject = prepare_subject(facts, source)
     root = private_root(environment, create=True)
+    started = dt.datetime.now(dt.timezone.utc).replace(microsecond=0)
+    deadline = started + dt.timedelta(minutes=35)
+    write_private(root / "deadline.json", (json.dumps({
+        "schema": "fsgg.gs2-09-7.seed-host-deadline/1",
+        "startedAt": started.isoformat().replace("+00:00", "Z"),
+        "deadlineAt": deadline.isoformat().replace("+00:00", "Z")},
+        sort_keys=True, separators=(",", ":")) + "\n").encode())
     folder = root / "prepare"
     folder.mkdir(mode=0o700)
     write_private(request_file(root, "prepare"), bridge.request_bytes("prepare", subject))
@@ -625,29 +540,43 @@ def target_readbacks(mint_module, token: str) -> tuple[bytes, bytes]:
     return repository_raw, project_raw
 
 
-def stage_seal_and_final_request(host_checkout: Path, candidate_checkout: Path,
-                                 environment: dict[str, str]) -> dict:
-    """Fresh prepare decision precedes mint; private token survives only this job."""
+def require_returned_seal_inputs(files: dict[str, bytes], retained: dict[str, bytes],
+                                 declaration: bytes) -> None:
+    require(files["s2-declaration.json"] == declaration
+            and files["seed-plan.json"] == retained["seed-plan.json"]
+            and files["corpus.json"] == retained["corpus.json"],
+            "seal-returned-input-drift")
+
+
+def stage_seal_input(host_checkout: Path, candidate_checkout: Path,
+                     environment: dict[str, str]) -> dict:
+    """After prepare admission, mint and export only sanitized seal inputs."""
     require(INSTALLATION_STATUS == "installed-protected-bootstrap",
             "bootstrap-source-uninstalled")
     facts = context(environment)
     root = private_root(environment)
     bridge = bridge_module()
+    exchange = exchange_module()
     prestate = load_sibling("gs2_seed_prestate", "gs2-09-7-seed-prestate.py")
     binding, _, _ = require_postmint_ready(
-        host_checkout, candidate_checkout, facts["workflowSha"],
-        prestate_port=prestate)
+        host_checkout, candidate_checkout, facts["workflowSha"], prestate_port=prestate)
     source, retained = validate_source_artifacts(candidate_checkout, facts)
     expected = prepare_subject(facts, source)
     require(read_request(root, "prepare") == expected, "prepare-request-drift")
     actions_read = bridge.GitHubReadPort(environment["GH_TOKEN"])
-    port = bridge.wait_decision(actions_read, "prepare", expected, facts["workflowSha"])
+    bridge.require_protected_main(actions_read, facts["workflowSha"])
+    port = bridge.wait_decision(actions_read, "prepare", expected, facts["workflowSha"],
+                                max_seconds=min(13 * 60, deadline_remaining(root)))
+    bridge.require_protected_main(actions_read, facts["workflowSha"])
     preflight(host_checkout, candidate_checkout, environment, port)
     mint_module = load_sibling("gs2_seed_mint", "gs2-09-7-mint-sandbox-token.py")
     token = None
     token_path = root / "installation-token.private"
     try:
         token, proof = mint_private(mint_module, environment)
+        # Persist first. Every later failure leaves a retryable private token
+        # until native revoke confirms success.
+        write_private(token_path, token.encode("ascii"))
         proof_path = root / "mint-grants.json"
         plan_path = root / "seed-plan.json"
         corpus_path = root / "corpus.json"
@@ -672,27 +601,96 @@ def stage_seal_and_final_request(host_checkout: Path, candidate_checkout: Path,
             "FSGG_SEED_JOURNAL_REF": f'refs/heads/gs2-09-7/{facts["runNonce"]}/seed-journal',
         }):
             declaration = binding.build_document()
-        s2_path = root / "s2-declaration.json"
-        write_private(s2_path, declaration)
-        sealed = seal_with_coordination(candidate_checkout, facts, root, source,
-                                        s2_path, proof_path, prestate_path)
-        repository_raw, project_raw = target_readbacks(mint_module, token)
-        _, _, _, subject = inspect_source(environment, candidate_checkout, sealed,
-                                          proof, token, repository_raw, project_raw,
-                                          dt.datetime.now(dt.timezone.utc))
-        folder = root / "final"
+        write_private(root / "s2-declaration.json", declaration)
+        # Upload-artifact receives only this allowlisted directory. The token
+        # and raw mint/viewer responses never enter this tree.
+        folder = root / "seal-input"
         folder.mkdir(mode=0o700)
-        write_private(request_file(root, "final"), bridge.request_bytes("final", subject))
-        # The candidate CLI has exited before the token is written to disk.
-        write_private(token_path, token.encode("ascii"))
-        return subject
+        files = {
+            "source-manifest.json": regular_inside(candidate_checkout, SOURCE_MANIFEST).read_bytes(),
+            "s2-declaration.json": declaration,
+            "mint-grants.json": proof,
+            "seed-plan.json": retained["seed-plan.json"],
+            "corpus.json": retained["corpus.json"],
+            "prestate.json": read_private(prestate_path),
+        }
+        require(tuple(files) == exchange.INPUT_FILES, "seal-input-allowlist")
+        write_private(folder / "seal-input-manifest.json", exchange.manifest(facts, files))
+        for name, raw in files.items():
+            write_private(folder / name, raw)
+        return facts
     except BaseException:
-        if token is not None:
-            try:
-                mint_module.revoke_token(token)
-            finally:
-                token_path.unlink(missing_ok=True)
+        if token is not None and token_path.exists():
+            revoke_private_token(root)
+        elif token is not None:
+            mint_module.revoke_token(token)
         raise
+
+
+def stage_consume_seal_and_final_request(host_checkout: Path,
+                                         candidate_checkout: Path,
+                                         environment: dict[str, str]) -> dict:
+    """Accept only exact sealer-job success and byte-identical protected inputs."""
+    require(INSTALLATION_STATUS == "installed-protected-bootstrap",
+            "bootstrap-source-uninstalled")
+    facts = context(environment)
+    root = private_root(environment)
+    bridge = bridge_module()
+    exchange = exchange_module()
+    actions_read = bridge.GitHubReadPort(environment["GH_TOKEN"])
+    files, _ = exchange.wait(actions_read, "output", facts, deadline_remaining(root),
+                             require_job=True)
+    sealed = root / "sealed"
+    require(not sealed.exists(), "seal-output-exists")
+    sealed.mkdir(mode=0o700)
+    for name in exchange.OUTPUT_FILES:
+        destination = sealed / name
+        destination.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        write_private(destination, files[name])
+    validate_artifacts(sealed, facts)
+    source, retained = validate_source_artifacts(candidate_checkout, facts)
+    require_returned_seal_inputs(files, retained,
+                                 read_private(root / "s2-declaration.json"))
+    input_files = {name: read_private(root / "seal-input" / name, 64 * 1024 * 1024)
+                   for name in exchange.INPUT_FILES}
+    exchange.validate_manifest(read_private(root / "seal-input" / "seal-input-manifest.json"),
+                               facts, input_files)
+    input_artifact = exchange.artifact(actions_read, "input", facts)
+    require(input_artifact is not None, "seal-input-artifact-missing")
+    receipt_bytes = files["seal-exchange-receipt.json"]
+    receipt = exchange.strict_json(receipt_bytes)
+    require(receipt_bytes == exchange.canonical(receipt)
+            and receipt == {
+                "schema": exchange.SCHEMA, "status": "source-only-no-authority",
+                "candidateSha": facts["candidateSha"],
+                "workflowSha": facts["workflowSha"],
+                "runId": facts["runId"], "runAttempt": facts["runAttempt"],
+                "inputArtifactId": input_artifact["id"],
+                "inputArchiveDigest": input_artifact["digest"],
+                "inputManifestSha256": digest(read_private(root / "seal-input" / "seal-input-manifest.json")),
+                "s2DeclarationSha256": digest(input_files["s2-declaration.json"]),
+                "seedPlanSha256": digest(input_files["seed-plan.json"]),
+                "corpusSha256": digest(input_files["corpus.json"]),
+                "prestateSha256": digest(input_files["prestate.json"]),
+                "bootstrapAuthority": False,
+            }, "seal-exchange-receipt-drift")
+    require(files["prestate.json"] == input_files["prestate.json"]
+            and input_files["prestate.json"] == read_private(root / "prestate.json")
+            and input_files["mint-grants.json"] == read_private(root / "mint-grants.json")
+            and input_files["source-manifest.json"] == regular_inside(candidate_checkout, SOURCE_MANIFEST).read_bytes(),
+            "seal-input-drift")
+    token = read_private(root / "installation-token.private", 4096).decode("ascii")
+    mint_module = load_sibling("gs2_seed_mint", "gs2-09-7-mint-sandbox-token.py")
+    repository_raw, project_raw = target_readbacks(mint_module, token)
+    _, _, _, subject = inspect_source(environment, candidate_checkout, sealed,
+                                      input_files["mint-grants.json"], token,
+                                      repository_raw, project_raw,
+                                      dt.datetime.now(dt.timezone.utc))
+    bridge.require_protected_main(actions_read, facts["workflowSha"])
+    folder = root / "final"
+    folder.mkdir(mode=0o700)
+    write_private(request_file(root, "final"), bridge.request_bytes("final", subject))
+    return subject
 
 
 def revoke_private_token(root: Path) -> bool:
@@ -701,9 +699,26 @@ def revoke_private_token(root: Path) -> bool:
         return False
     token = read_private(path, 4096).decode("ascii")
     mint_module = load_sibling("gs2_seed_mint", "gs2-09-7-mint-sandbox-token.py")
+    # An unknown revoke response preserves the token file for the cleanup step
+    # or a later bounded owner reconciliation. Never erase custody on failure.
     mint_module.revoke_token(token)
     path.unlink()
+    promote_readback(root)
     return True
+
+
+def promote_readback(root: Path) -> None:
+    pending_path = root / "cas-readback.private.json"
+    if not pending_path.exists():
+        return
+    require(not (root / "installation-token.private").exists(),
+            "readback-revocation-pending")
+    report = read_private(pending_path)
+    sanitized = Path(os.environ["FSGG_SEED_SANITIZED_EVIDENCE_DIR"])
+    require(sanitized.is_absolute() and not sanitized.exists(), "sanitized-output-path")
+    sanitized.mkdir(mode=0o700)
+    write_private(sanitized / "native-readback.json", report)
+    pending_path.unlink()
 
 
 def stage_final_apply(host_checkout: Path, candidate_checkout: Path,
@@ -719,13 +734,20 @@ def stage_final_apply(host_checkout: Path, candidate_checkout: Path,
     token = read_private(root / "installation-token.private", 4096).decode("ascii")
     report = None
     try:
-        final_port = bridge.wait_decision(read_port, "final", subject,
-                                          facts["workflowSha"])
+        bridge.require_protected_main(read_port, facts["workflowSha"])
+        final_port = bridge.wait_decision(
+            read_port, "final", subject, facts["workflowSha"],
+            max_seconds=min(13 * 60, deadline_remaining(root)))
+        bridge.require_protected_main(read_port, facts["workflowSha"])
         _, cas, _ = require_postmint_ready(
             host_checkout, candidate_checkout, facts["workflowSha"],
             final_port=final_port,
             prestate_port=load_sibling("gs2_seed_prestate", "gs2-09-7-seed-prestate.py"))
         mint_module = load_sibling("gs2_seed_mint", "gs2-09-7-mint-sandbox-token.py")
+        # Recheck the exact nonce census after final admission, immediately
+        # before the journal operation. It remains GET-only and must be zero.
+        produce_prestate(token, facts,
+                         load_sibling("gs2_seed_prestate", "gs2-09-7-seed-prestate.py"))
         proof = read_private(root / "mint-grants.json")
         repository_raw, project_raw = target_readbacks(mint_module, token)
         sealed = root / "sealed"
@@ -733,18 +755,16 @@ def stage_final_apply(host_checkout: Path, candidate_checkout: Path,
             environment, candidate_checkout, sealed, proof, token,
             repository_raw, project_raw, dt.datetime.now(dt.timezone.utc))
         require(actual_subject == subject, "final-request-drift")
+        deadline_remaining(root)
         with cas.authenticated_port(token) as git_port:
             report = execute_source(environment, candidate_checkout, sealed,
                                     proof, token, repository_raw, project_raw,
                                     final_port, git_port,
                                     dt.datetime.now(dt.timezone.utc))
+        cas = load_sibling("gs2_seed_native_cas", "gs2-09-7-seed-native-cas.py")
+        write_private(root / "cas-readback.private.json", cas.canonical(report))
     finally:
         revoke_private_token(root)
-    if report is not None:
-        sanitized = Path(environment["FSGG_SEED_SANITIZED_EVIDENCE_DIR"])
-        require(sanitized.is_absolute() and not sanitized.exists(), "sanitized-output-path")
-        sanitized.mkdir(mode=0o700)
-        write_private(sanitized / "native-readback.json", cas.canonical(report))
     require(report is not None and report.get("complete") is True,
             "native-readback-pending")
     return report
@@ -845,9 +865,10 @@ def execute_source(environment: dict[str, str], candidate_checkout: Path,
 
 def main(arguments: list[str]) -> int:
     try:
-        require(arguments in (["preflight"], ["prepare-request"],
+        require(arguments in (["preflight"], ["prepare-request"], ["seal-input"],
+                              ["consume-seal-and-request-final"],
                               ["request-info", "prepare"], ["request-info", "final"],
-                              ["seal-and-request-final"], ["final-apply"],
+                              ["final-apply"],
                               ["revoke-private"]), "mode")
         if arguments == ["preflight"]:
             preflight(Path("host"), Path("coordination"), dict(os.environ))
@@ -855,17 +876,21 @@ def main(arguments: list[str]) -> int:
             stage_prepare_request(Path("host"), Path("coordination"), dict(os.environ))
         elif arguments[:1] == ["request-info"]:
             request_info(dict(os.environ), arguments[1])
-        elif arguments == ["seal-and-request-final"]:
-            stage_seal_and_final_request(Path("host"), Path("coordination"), dict(os.environ))
+        elif arguments == ["seal-input"]:
+            stage_seal_input(Path("host"), Path("coordination"), dict(os.environ))
+        elif arguments == ["consume-seal-and-request-final"]:
+            stage_consume_seal_and_final_request(Path("host"), Path("coordination"), dict(os.environ))
         elif arguments == ["final-apply"]:
             stage_final_apply(Path("host"), Path("coordination"), dict(os.environ))
         else:
             try:
-                revoke_private_token(private_root(dict(os.environ)))
+                root = private_root(dict(os.environ))
+                if not revoke_private_token(root):
+                    promote_readback(root)
             except Refused as error:
                 if str(error) != "private-root-mode":
                     raise
-    except (Refused, OSError, KeyError, ValueError, TypeError, subprocess.SubprocessError) as error:
+    except (Refused, OSError, KeyError, ValueError, TypeError) as error:
         print(f"GS2-SEED-BOOTSTRAP: refused {error}", file=sys.stderr)
         return 1
     return 0

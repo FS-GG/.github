@@ -9,13 +9,16 @@ on:
       - "scripts/gs2-09-7-seed-admission-bridge.py"
       - "scripts/gs2-09-7-seed-admission-authorizer.py"
       - "scripts/gs2-09-7-seed-admission-native-read.py"
+      - "scripts/gs2-09-7-seed-seal-exchange.py"
       - "tests/gs2-09-7-seed-native-cas/**"
       - "tests/gs2-09-7-seed-bootstrap-admission/**"
       - "tests/gs2-09-7-seed-bootstrap-entry/**"
       - "tests/gs2-09-7-seed-admission-bridge/**"
       - "tests/gs2-09-7-seed-admission-authorizer/**"
       - "tests/gs2-09-7-seed-admission-native-read/**"
+      - "tests/gs2-09-7-seed-seal-exchange/**"
       - ".github/workflows/github-substrate-v2-sandbox-qualification.yml"
+      - ".github/workflows/gs2-09-7-seed-admission-authorize.yml"
       - ".github/workflows/gs2-09-7-seed-native-cas-selftest.yml"
   push:
     branches: [main]
@@ -26,13 +29,16 @@ on:
       - "scripts/gs2-09-7-seed-admission-bridge.py"
       - "scripts/gs2-09-7-seed-admission-authorizer.py"
       - "scripts/gs2-09-7-seed-admission-native-read.py"
+      - "scripts/gs2-09-7-seed-seal-exchange.py"
       - "tests/gs2-09-7-seed-native-cas/**"
       - "tests/gs2-09-7-seed-bootstrap-admission/**"
       - "tests/gs2-09-7-seed-bootstrap-entry/**"
       - "tests/gs2-09-7-seed-admission-bridge/**"
       - "tests/gs2-09-7-seed-admission-authorizer/**"
       - "tests/gs2-09-7-seed-admission-native-read/**"
+      - "tests/gs2-09-7-seed-seal-exchange/**"
       - ".github/workflows/github-substrate-v2-sandbox-qualification.yml"
+      - ".github/workflows/gs2-09-7-seed-admission-authorize.yml"
       - ".github/workflows/gs2-09-7-seed-native-cas-selftest.yml"
   workflow_dispatch:
 
@@ -58,3 +64,4 @@ jobs:
           python3 tests/gs2-09-7-seed-admission-bridge/test_seed_admission_bridge.py
           python3 tests/gs2-09-7-seed-admission-authorizer/test_seed_admission_authorizer.py
           python3 tests/gs2-09-7-seed-admission-native-read/test_seed_admission_native_read.py
+          python3 tests/gs2-09-7-seed-seal-exchange/test_seed_seal_exchange.py

@@ -22,6 +22,8 @@ class FakeRead:
     def get(self, route, *, limit=bridge.MAX_READ):
         self.calls.append(route)
         value = self.rows[route]
+        if callable(value):
+            value = value()
         return value if isinstance(value, bytes) else json.dumps(value).encode()
 
 
@@ -115,12 +117,82 @@ class BridgeTests(unittest.TestCase):
         self.assertEqual("a" * 40, verify.call_args.kwargs["expected_producer_sha"])
         self.assertEqual(5555, verify.call_args.kwargs["producer_run_id"])
 
+    def decision_run(self, *, status="completed", conclusion="success"):
+        return {"id": 5555, "run_attempt": 1,
+                "path": bridge.authorizer.AUTHORIZER_WORKFLOW,
+                "head_sha": "a" * 40, "head_branch": "main",
+                "event": "workflow_dispatch", "status": status,
+                "conclusion": conclusion,
+                "repository": {"id": bridge.authorizer.REPOSITORY_ID},
+                "actor": bridge.authorizer.OWNER}
+
+    def test_visible_artifact_waits_for_exact_completed_success(self):
+        name = bridge.decision_name("prepare", self.subject)
+        artifact = {**self.artifact, "id": 4567, "name": name,
+                    "workflow_run": {**self.artifact["workflow_run"], "id": 5555}}
+        decision_route = f"{bridge.REPO}/actions/artifacts?name={name}&per_page=100"
+        run_route = f"{bridge.REPO}/actions/runs/5555"
+        states = iter((self.decision_run(status="in_progress", conclusion=None),
+                       self.decision_run(status="completed", conclusion="success")))
+        port = FakeRead({self.route: {"total_count": 1, "artifacts": [self.artifact]},
+                         decision_route: {"total_count": 1, "artifacts": [artifact]},
+                         run_route: lambda: next(states)})
+        accepted = object()
+        with mock.patch.object(bridge, "verified_decision", return_value=accepted) as verify:
+            result = bridge.wait_decision(port, "prepare", self.subject, "a" * 40,
+                                          max_seconds=30, clock=lambda: 0,
+                                          pause=lambda _: self.assertEqual(0, verify.call_count))
+        self.assertIs(accepted, result)
+        self.assertEqual(2, port.calls.count(run_route))
+        verify.assert_called_once()
+
+    def test_terminal_failure_and_producer_drift_refuse_without_verifier(self):
+        name = bridge.decision_name("prepare", self.subject)
+        artifact = {**self.artifact, "id": 4567, "name": name,
+                    "workflow_run": {**self.artifact["workflow_run"], "id": 5555}}
+        decision_route = f"{bridge.REPO}/actions/artifacts?name={name}&per_page=100"
+        run_route = f"{bridge.REPO}/actions/runs/5555"
+        rows = {self.route: {"total_count": 1, "artifacts": [self.artifact]},
+                decision_route: {"total_count": 1, "artifacts": [artifact]},
+                run_route: self.decision_run(status="completed", conclusion="failure")}
+        with mock.patch.object(bridge, "verified_decision") as verify:
+            with self.assertRaisesRegex(bridge.Refused, "decision-producer-failed"):
+                bridge.wait_decision(FakeRead(rows), "prepare", self.subject, "a" * 40,
+                                     max_seconds=1, clock=lambda: 0)
+            rows[run_route] = {**self.decision_run(), "head_sha": "f" * 40}
+            with self.assertRaisesRegex(bridge.Refused, "decision-producer-binding"):
+                bridge.wait_decision(FakeRead(rows), "prepare", self.subject, "a" * 40,
+                                     max_seconds=1, clock=lambda: 0)
+        verify.assert_not_called()
+
+    def test_visible_decision_artifact_identity_cannot_change_while_pending(self):
+        name = bridge.decision_name("prepare", self.subject)
+        artifact = {**self.artifact, "id": 4567, "name": name,
+                    "workflow_run": {**self.artifact["workflow_run"], "id": 5555}}
+        changed = {**artifact, "digest": "sha256:" + "f" * 64}
+        decision_route = f"{bridge.REPO}/actions/artifacts?name={name}&per_page=100"
+        states = iter(({"total_count": 1, "artifacts": [artifact]},
+                       {"total_count": 1, "artifacts": [changed]}))
+        port = FakeRead({self.route: {"total_count": 1, "artifacts": [self.artifact]},
+                         decision_route: lambda: next(states),
+                         f"{bridge.REPO}/actions/runs/5555": self.decision_run(
+                             status="in_progress", conclusion=None)})
+        with self.assertRaisesRegex(bridge.Refused, "decision-artifact-drift"):
+            bridge.wait_decision(port, "prepare", self.subject, "a" * 40,
+                                 max_seconds=30, clock=lambda: 0, pause=lambda _: None)
+
     def test_read_port_rejects_foreign_route_without_subprocess(self):
         port = bridge.GitHubReadPort("t" * 30)
         with mock.patch.object(bridge.subprocess, "run") as run:
             with self.assertRaisesRegex(bridge.Refused, "native-read-route"):
                 port.get("repos/FS-GG/production/actions/artifacts")
         run.assert_not_called()
+
+    def test_protected_main_drift_refuses_before_next_phase(self):
+        route = f"{bridge.REPO}/commits/main"
+        bridge.require_protected_main(FakeRead({route: {"sha": "a" * 40}}), "a" * 40)
+        with self.assertRaisesRegex(bridge.Refused, "protected-main-drift"):
+            bridge.require_protected_main(FakeRead({route: {"sha": "f" * 40}}), "a" * 40)
 
 
 if __name__ == "__main__":
