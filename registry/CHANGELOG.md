@@ -20,6 +20,8 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-09-28** — **telemetry-host `0.2.0` source preparation** (owner github; [Host successor plan](../docs/roadmaps/utel-host-release-020.md)): prepare protected native capture and bounded same-host learning export, with the true schema-10-through-12 migration range. Keep public package/tag at immutable 0.1.7 until exact-source retained-archive publication and readback. Main's fresh prospective custody and private installed proof remain separate.
+
 - **2026-09-28** — Activate the published SVG D.5 lifecycle composition (github/templates; SVG-RELEASE-D.5, Templates #644): advance `new-sdd-workspace` to public 0.12.0 and `fs-gg-workspace-template` to public 0.15.0 after protected public-only receiver run 36472328832 passed. Both packages were independently verified against their immutable sources and dual-feed payloads. Omitted SVG creation selects `typed-sdd` with `quint-specification-v1`; explicit lifecycle tokens and bundles retain their qualified behavior. Fresh creation from the merged effective pins and independent default readback remain the final milestone closure gates.
 
 - **2026-09-28** — Reconcile coherent 0.94.0 publication and canonical engine pin (github; coherent-set/v0.94.0, recovery/promotion run 36455793730): the promoted release manifest and stable channel bind source `337b6a1d53571b07ca8e1417e18e52546ad319a7` and content `sha256:9b9486a54e014fd5d21b65ed71a00b9021562a56909a1303f89c9646bca4a585`; Kit, Drivers and Coord.Cli have matching normalized payloads on both feeds. Advance the registry published version/tag and the repository canonical Coord.Cli pin to 0.94.0. This records publication, not downstream receiver adoption.

@@ -1,7 +1,7 @@
 # SVG-RELEASE-D — complete workspace publication and activation
 
-Status: complete through .4 on 2026-09-15; .5 awaits the clean-start default adoption and installed
-receiver proof selected by [ADR-0091](../adr/0091-speed-first-clean-v2-start.md). Route: protected operation
+Status: complete through .5 on 2026-09-28 after public clean-creation acceptance, protected pin activation
+and independent default readback under [ADR-0091](../adr/0091-speed-first-clean-v2-start.md). Route: protected operation
 for immutable publication; routine source delivery with required checks for default adoption. Durable public
 hosting is deferred and does not gate the compatible release.
 
@@ -86,7 +86,7 @@ activation and lifecycle-default activation are separate claims.
   the typed registry, and checks both effective pins against the newest archives on GitHub Packages and
   nuget.org. The installed receiver evidence is milestone .3.
 
-- [ ] **SVG-RELEASE-D.5 — Activate the single workspace lifecycle — route: routine source, gated default effect**
+- [x] **SVG-RELEASE-D.5 — Activate the single workspace lifecycle — route: routine source, gated default effect**
 
   The owning SDD capability is public: SDD [#927](https://github.com/FS-GG/FS.GG.SDD/issues/927),
   [#934](https://github.com/FS-GG/FS.GG.SDD/issues/934), and release
@@ -103,8 +103,7 @@ activation and lifecycle-default activation are separate claims.
   at `848fe5a1fb581707be67ecb6bda326ecd43a2fe8`. Its focused installed clean receiver and
   bounded promised retained-adoption check passed on the reviewed head, along with the native required
   checks. The [exact-main public receiver run](https://github.com/FS-GG/FS.GG.Templates/actions/runs/36454677283)
-  also passed at the protected merge. This is receiver evidence only; the omitted lifecycle default and public successor packages
-  are still pending.
+  also passed at the protected merge. This earlier receiver evidence preceded the successor publication and default activation recorded below.
 
   The SDD, Templates and wizard owners must deliver and publish the exact package composition that makes
   omitted SVG creation select `typed-sdd` with its default `quint-specification-v1` backend. Qualify that
@@ -128,10 +127,16 @@ activation and lifecycle-default activation are separate claims.
   `fd89d991f1966517ae56aebdc4b2e5000ee94e6f8ce7eb6aa6c85b932cd16c64`; all 63 evidence hashes and
   the identical direct/wizard authority hash were independently verified.
 
-  The effective registry now selects these published Templates 0.15.0 and wizard 0.12.0 packages.
-  Milestone .5 remains open until this source activation is merged, fresh clean creation repeats from
-  those effective protected pins, and independent default readback passes. Retained-workspace upgrades
-  remain separate from this fresh-creation boundary.
+  [Activation #3955](https://github.com/FS-GG/.github/pull/3955) merged as
+  `2574f02aa8cf835ab1e0b5ff6c62504c33098183`, selecting public Templates 0.15.0 and wizard 0.12.0.
+  The fresh [public-only repeat 36474756648](https://github.com/FS-GG/FS.GG.Templates/actions/runs/36474756648)
+  passed the complete clean-creation boundary after activation. Its qualification receipt SHA-256 is
+  `42c882fab211f15bf05745c98ddaaa870b3f923040c7aa0ee59a734420d1a9fb`; all 63 evidence hashes
+  and both authored authorities were independently verified. Remote protected registry and generated
+  projection SHA-256 values are `aa6ad10f8ef718b572b7c954b24e4d71697a5e40f3c3aca3f879f92b6faa6680`
+  and `ef14e4daa3a508ef18ffe9bff317c6538098173aaf09f2f7e28a9e33493162d7`. Both select the exact
+  public source/package pairs. Milestone .5 is complete. Retained upgrades remain a separate qualification;
+  the sampled invariant result does not establish exhaustive SDD verification readiness.
 
 ## Completion boundary
 
@@ -140,7 +145,7 @@ choices. Release D is fully complete only when .5 also establishes the authorize
 public game hosting is deliberately outside this release boundary and may be resumed through issue #491 without
 changing the frozen package contents.
 
-Current state: the compatible complete SVG workspace is active through .4. SDD 2.0.2, Templates 0.15.0
-and wizard 0.12.0 are public, and the exact public-only .5 receiver proof passed. The effective pin
-activation is prepared here; full Release D remains open for merged-pin clean creation and independent
-default readback. The shared generation 2 `OpenV2` remains observed at its separate operating boundary.
+Current state: Release D is complete through .5. Public SDD 2.0.2, Templates 0.15.0 and wizard 0.12.0
+passed clean receiver acceptance before and after protected pin activation, with independent default
+readback. Retained-workspace upgrades and durable public hosting remain separate. The shared generation 2
+`OpenV2` remains observed at its separate operating boundary; this release makes no fleet `OperatingV2` claim.

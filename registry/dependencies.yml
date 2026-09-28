@@ -956,11 +956,11 @@ contracts:
     surface: "the `fsgg-coord-engine` CLI verb surface (claim/take/batch/who/widen/set-paths/say/landable/done/release/flush/…) + its exit-code contract, emitted from src/FS.GG.Coord.Core/Protocol.fs; shipped as the FS.GG.Coord.Cli dotnet tool"
     consumers: [sdd, rendering, governance, templates, game, audio, net]   # All SEVEN coordination-kit receivers (registry/repos.yml `receives: coordination-kit`). `scripts/fsgg-coord` resolves and execs this package, so every receiver is a real TOOL consumer edge. `.github` itself is not listed because it resolves the engine from source.
   - id: telemetry-host
-    version: "0.1.7"     # SOURCE/PUBLISHED from 5ebaab8f49b3c7fe00b1dce355338704a3a98a70; classified private step pipeline and observed item runtime/native token totals. Prior 0.1.4 qualified the successor dashboard and independent Host publication path.
+    version: "0.2.0"     # SOURCE: protected native capture and bounded same-host learning export from #3940; schema 10..12. Publication remains at immutable 0.1.7 until the successor rail promotes.
     package-version: "0.1.7" # Both feeds observed in the 0.1.7 publication journal with normalized payload sha256:0f18a2b69f387235acd5fbc64156efd5156206eb0ba873bb13aff67da5c5a0a2.
     package-tag: "telemetry-host/v0.1.7" # Promoted three-asset independent release from source 5ebaab8f49b3c7fe00b1dce355338704a3a98a70.
     owner: github
-    surface: "optional Linux x64 FS.GG.Telemetry.Host dotnet tool — authenticated workspace-scoped ingestion and private dashboard, independently versioned from the github coordination coherent set"
+    surface: "optional Linux x64 FS.GG.Telemetry.Host dotnet tool — authenticated workspace-scoped ingestion, private dashboard, protected native capture and bounded learning export; independently versioned from the github coordination coherent set"
     consumers: []        # DELIBERATELY EMPTY: operators install this optional service; no repository in the contract graph restores it.
   - id: new-sdd-workspace
     version: "0.12.0"          # SOURCE: omitted SVG workspace lifecycle selects typed-sdd; explicit lifecycle tokens are retained. Immutable source/tag: 4889c446de0a431d1168a61a89ab660fc2062314, new-sdd-workspace/v0.12.0.
