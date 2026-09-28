@@ -26,6 +26,14 @@ HEX64 = set('0123456789abcdef')
 PASS_KEYS = {'repositoriesSha256', 'repositorySha256',
              'repositoryRepeatSha256', 'receiverRefsSha256',
              'receiverRefCount'}
+VALIDATION_STAGES = frozenset({
+    'mint-proof',
+    'pass-1-repository-roster', 'pass-1-repository-identity',
+    'pass-1-receiver-refs', 'pass-1-repository-repeat',
+    'pass-2-repository-roster', 'pass-2-repository-identity',
+    'pass-2-receiver-refs', 'pass-2-repository-repeat',
+    'cross-pass', 'observation-validation',
+})
 
 spec = importlib.util.spec_from_file_location('protected_mint', Path(__file__).with_name('gs2-09-7-mint-sandbox-token.py'))
 mint = importlib.util.module_from_spec(spec)
@@ -179,7 +187,7 @@ def run_container(raw, script=SCRIPT):
                       and type(report['refusal']['httpStatus']) is int
                       and 400 <= report['refusal']['httpStatus'] <= 599)
                      or (report['refusal']['code'] == 'validation-error'
-                         and report['refusal']['stage'] == 'observation-validation'
+                         and report['refusal']['stage'] in VALIDATION_STAGES
                          and report['refusal']['httpStatus'] is None)),
                 'isolated observer failure was not a sanitized refusal')
         require(response_token_absent(result.stdout, raw), 'observer output contains bearer')

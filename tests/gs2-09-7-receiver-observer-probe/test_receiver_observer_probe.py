@@ -94,8 +94,11 @@ class ObserverTests(unittest.TestCase):
     def test_missing_installation_repositories_endpoint_refuses(self):
         path = '/installation/repositories?per_page=100'
         api = FakeApi(TOKEN, {path: ValueError('GET repositories returned HTTP 404')})
-        with self.assertRaisesRegex(ValueError, '404'):
+        with self.assertRaises(observer.ProbeRefusal) as result:
             observer.probe(raw(mint_value()), lambda token: api)
+        self.assertEqual(('validation-error', 'pass-1-repository-roster', None),
+                         (result.exception.code, result.exception.stage,
+                          result.exception.http_status))
         self.assertEqual(api.calls, [path])
 
     def test_foreign_or_write_mint_refuses_before_get(self):
@@ -136,10 +139,53 @@ class ObserverTests(unittest.TestCase):
     def test_denied_receiver_gets_refuse_without_followup(self):
         for code in (401, 403, 404):
             path = '/installation/repositories?per_page=100'
-            api = FakeApi(TOKEN, {path: ValueError('GET returned HTTP ' + str(code))})
-            with self.subTest(code=code), self.assertRaisesRegex(ValueError, str(code)):
+            api = FakeApi(TOKEN, {path: observer.ProbeRefusal(
+                'github-http-error', 'bearer-read', code)})
+            with self.subTest(code=code), self.assertRaises(observer.ProbeRefusal) as result:
                 observer.probe(raw(mint_value()), lambda token: api)
+            self.assertEqual(code, result.exception.http_status)
             self.assertEqual(api.calls, [path])
+
+    def test_each_validation_stage_is_closed_and_pass_specific(self):
+        cases = [
+            (-1, {**mint_value(), 'permissions': {'contents': 'write'}}, 'mint-proof'),
+            (0, {'total_count': 0, 'repositories': []}, 'pass-1-repository-roster'),
+            (1, {**REPO, 'id': 9}, 'pass-1-repository-identity'),
+            (2, [{'ref': 'refs/heads/main', 'object': {'sha': 'a' * 40}}],
+             'pass-1-receiver-refs'),
+            (3, {**REPO, 'id': 9}, 'pass-1-repository-repeat'),
+            (4, {'total_count': 0, 'repositories': []}, 'pass-2-repository-roster'),
+            (5, {**REPO, 'id': 9}, 'pass-2-repository-identity'),
+            (6, [{'ref': 'refs/heads/main', 'object': {'sha': 'a' * 40}}],
+             'pass-2-receiver-refs'),
+            (7, {**REPO, 'id': 9}, 'pass-2-repository-repeat'),
+        ]
+        for target, altered, stage in cases:
+            with self.subTest(stage=stage):
+                if target == -1:
+                    invoke = lambda: observer.probe(raw(altered), FakeApi)
+                else:
+                    class AlteredApi(FakeApi):
+                        def get(self, path):
+                            index = len(self.calls)
+                            value, original = super().get(path)
+                            return ((altered, raw(altered)) if index == target
+                                    else (value, original))
+                    invoke = lambda: observer.probe(raw(mint_value()), AlteredApi)
+                with self.assertRaises(observer.ProbeRefusal) as result:
+                    invoke()
+                self.assertEqual('validation-error', result.exception.code)
+                self.assertEqual(stage, result.exception.stage)
+                self.assertIsNone(result.exception.http_status)
+
+        class ChangedRawSecondPass(FakeApi):
+            def get(self, path):
+                index = len(self.calls)
+                value, encoded = super().get(path)
+                return value, encoded + b' ' if index == 4 else encoded
+        with self.assertRaises(observer.ProbeRefusal) as result:
+            observer.probe(raw(mint_value()), ChangedRawSecondPass)
+        self.assertEqual('cross-pass', result.exception.stage)
 
     def test_main_reduces_provider_failure_to_bounded_refusal(self):
         stdin = type('Input', (), {'buffer': io.BytesIO(raw(mint_value()))})()
@@ -153,6 +199,26 @@ class ObserverTests(unittest.TestCase):
                                              'stage': 'bearer-read', 'httpStatus': 403})
         self.assertNotIn('reason', report)
         self.assertNotIn(TOKEN, stdout.getvalue())
+
+    def test_main_projects_validation_stage_without_provider_bytes(self):
+        path = '/installation/repositories?per_page=100'
+        api = FakeApi(TOKEN, {path: {'total_count': 0,
+                                    'repositories': [{'private_detail': TOKEN}]}})
+        stdin = type('Input', (), {'buffer': io.BytesIO(raw(mint_value()))})()
+        stdout = io.StringIO()
+        original_probe = observer.probe
+        with patch.object(observer.sys, 'stdin', stdin), patch.object(observer.sys, 'stdout', stdout), \
+             patch.object(observer, 'probe',
+                          side_effect=lambda data: original_probe(data, lambda _: api)):
+            self.assertEqual(observer.main(), 1)
+        report = json.loads(stdout.getvalue())
+        self.assertEqual({'code': 'validation-error',
+                          'stage': 'pass-1-repository-roster', 'httpStatus': None},
+                         report['refusal'])
+        self.assertEqual({'schema', 'status', 'complete', 'refusal',
+                          'copyAuthorized', 'refMutationAuthorized'}, set(report))
+        self.assertNotIn(TOKEN, stdout.getvalue())
+        self.assertNotIn('private_detail', stdout.getvalue())
 
 
 class HostTests(unittest.TestCase):
@@ -197,6 +263,26 @@ class HostTests(unittest.TestCase):
             run.return_value.stdout = raw(refusal)
             run.return_value.stderr = b'provider detail that must not be retained'
             self.assertEqual(host.run_container(raw(minted)), refusal)
+
+    def test_host_accepts_only_closed_validation_stages(self):
+        minted = mint_value()
+        self.assertEqual(observer.VALIDATION_STAGES, host.VALIDATION_STAGES)
+        for stage in sorted(host.VALIDATION_STAGES):
+            refusal = {'schema': 'fsgg.gs2-09-7.receiver-observer-probe/1',
+                       'status': 'refused', 'complete': False,
+                       'refusal': {'code': 'validation-error', 'stage': stage,
+                                   'httpStatus': None},
+                       'copyAuthorized': False, 'refMutationAuthorized': False}
+            with self.subTest(stage=stage), patch.object(host.subprocess, 'run') as run:
+                run.return_value.returncode = 1
+                run.return_value.stdout = raw(refusal)
+                self.assertEqual(refusal, host.run_container(raw(minted)))
+        refusal['refusal']['stage'] = 'provider-detail-or-secret'
+        with patch.object(host.subprocess, 'run') as run:
+            run.return_value.returncode = 1
+            run.return_value.stdout = raw(refusal)
+            with self.assertRaisesRegex(ValueError, 'sanitized refusal'):
+                host.run_container(raw(minted))
 
     def test_container_rejects_incomplete_or_unbound_success_report(self):
         minted = mint_value()
