@@ -304,7 +304,7 @@ module HistoricalLossRetainedNativeCensusTests =
                    NativeId = s.NativeId; Family = "delivery-receipt"; CreatedAt = s.CreatedAt; PayloadBlobSha = s.PayloadBlobSha
                    SessionOperationId = s.SessionOperationId; LiveClaim = false }: HistoricalLossRegistry.RetainedSubjectV3))
         let draft: HistoricalLossRegistry.RetainedNativeCensusV3 =
-            { SelectedRepositories = selected; ObservationHorizon = approvedHorizon; Revision = mergeSha
+            { SelectedRepositories = selected; ObservationHorizon = approvedHorizon; Revision = String.replicate 40 "d"
               Enumeration = HistoricalLossRegistry.DirectRepositoryEnumeration; Complete = true; DeclaredCount = rows.Length
               Pages = pages; Subjects = rows; HistoricalEmissions = "unknown"; HistoricalDeletions = "unknown"
               RawEvidenceDigest = capture.RawEvidenceDigest; TypedPopulationDigest = capture.Draft.EvidenceFingerprint
@@ -330,10 +330,19 @@ module HistoricalLossRetainedNativeCensusTests =
         let census = censusFromCapture capture.First delivery
         let secondDelivery = capture.Second.Draft.Subjects |> List.filter (fun s -> s.Family = DeliveryReceipt)
         let entry = { nativeEntry census with CensusSecond = censusFromCapture capture.Second secondDelivery }
+        Assert.True(entry.CensusFirst.Revision <> mergeSha)
         let bytes, approval = approvedFixture entry
         match bindV3Captured api capture entry.Family entry.Scope approvedHorizon bytes entry approval with
         | Ok bound -> Assert.Equal(2, bound.RetainedCount)
         | Error errors -> failwithf "valid native proof refused: %A" errors
+
+        let wrongRevisionDraft = { census with Revision = String.replicate 40 "9"; Digest = "" }
+        let wrongRevision = { wrongRevisionDraft with Digest = HistoricalLossRegistry.retainedCensusDigestV3 wrongRevisionDraft }
+        let wrongRevisionEntry = { entry with CensusFirst = wrongRevision; CensusSecond = wrongRevision }
+        let wrongRevisionBytes, wrongRevisionApproval = approvedFixture wrongRevisionEntry
+        match bindV3Captured api capture wrongRevisionEntry.Family wrongRevisionEntry.Scope approvedHorizon wrongRevisionBytes wrongRevisionEntry wrongRevisionApproval with
+        | Error errors -> Assert.Contains("historical-loss-native-source-revision", errors)
+        | Ok _ -> failwith "unbound census source revision gained authority"
         let emptyDraft = { census with Subjects = []; DeclaredCount = 0; Digest = "" }
         let empty = { emptyDraft with Digest = HistoricalLossRegistry.retainedCensusDigestV3 emptyDraft }
         let fabricated = { entry with CensusFirst = empty; CensusSecond = empty; KnownSurvivorIds = [] }

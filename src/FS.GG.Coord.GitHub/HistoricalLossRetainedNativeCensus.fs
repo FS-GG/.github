@@ -756,8 +756,10 @@ module HistoricalLossRetainedNativeCensus =
                 "historical-loss-native-repository-roster"
             check (entry.CensusFirst.ObservationHorizon = expectedObservationHorizon && entry.CensusSecond.ObservationHorizon = expectedObservationHorizon)
                 "historical-loss-native-observation-horizon"
-            check (entry.CensusFirst.Revision = approval.File.Revision && entry.CensusSecond.Revision = approval.File.Revision)
-                "historical-loss-native-revision"
+            let sourceRevisions = entry.RecoverySources |> List.map _.Revision |> Set.ofList
+            check (Set.contains entry.CensusFirst.Revision sourceRevisions
+                   && Set.contains entry.CensusSecond.Revision sourceRevisions)
+                "historical-loss-native-source-revision"
             check (entry.CensusFirst.Pages = firstPages && entry.CensusSecond.Pages = secondPages)
                 "historical-loss-native-pages"
             check (entry.CensusFirst.RawEvidenceDigest = capture.First.RawEvidenceDigest && entry.CensusSecond.RawEvidenceDigest = capture.Second.RawEvidenceDigest)
