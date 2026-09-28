@@ -22,6 +22,10 @@ IMAGE = 'python:3.14.6-slim@sha256:b921fe7e7522f828d45197a47656ec465a9b15689b27f
 SCHEMA = 'fsgg.gs2-09-7.receiver-observer-host/1'
 SCRIPT = Path(__file__).with_name('gs2-09-7-receiver-observer.py')
 MAX_BYTES = 1024 * 1024
+HEX64 = set('0123456789abcdef')
+PASS_KEYS = {'repositoriesSha256', 'repositorySha256',
+             'repositoryRepeatSha256', 'receiverRefsSha256',
+             'receiverRefCount'}
 
 spec = importlib.util.spec_from_file_location('protected_mint', Path(__file__).with_name('gs2-09-7-mint-sandbox-token.py'))
 mint = importlib.util.module_from_spec(spec)
@@ -35,6 +39,10 @@ def require(ok, reason):
 
 def sha(raw):
     return hashlib.sha256(raw).hexdigest()
+
+
+def is_sha256(value):
+    return isinstance(value, str) and len(value) == 64 and set(value) <= HEX64
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -150,25 +158,53 @@ def run_container(raw, script=SCRIPT):
                                 timeout=180, check=False,
                                 env={'PATH': '/usr/local/bin:/usr/bin:/bin',
                                      'HOME': config_dir, 'DOCKER_CONFIG': config_dir})
-    require(result.returncode == 0, 'isolated observer refused or failed')
     require(0 < len(result.stdout) <= 1024 * 1024, 'observer output size invalid')
-    report = json.loads(result.stdout)
-    require(isinstance(report, dict) and report.get('schema') ==
-            'fsgg.gs2-09-7.receiver-observer-probe/1'
-            and report.get('status') == 'observed-no-authority'
-            and report.get('complete') is True
+    report = json.loads(result.stdout, object_pairs_hook=unique_pairs)
+    require(isinstance(report, dict)
+            and report.get('schema') == 'fsgg.gs2-09-7.receiver-observer-probe/1'
             and report.get('copyAuthorized') is False
             and report.get('refMutationAuthorized') is False,
+            'observer report is not a read-only observation')
+    if result.returncode != 0:
+        require(result.returncode == 1
+                and set(report) == {'schema', 'status', 'complete', 'refusal',
+                                    'copyAuthorized', 'refMutationAuthorized'}
+                and report.get('status') == 'refused'
+                and report.get('complete') is False
+                and isinstance(report.get('refusal'), dict)
+                and set(report['refusal']) == {'code', 'stage', 'httpStatus'}
+                and ((report['refusal']['code'] == 'github-http-error'
+                      and report['refusal']['stage'] == 'bearer-read'
+                      and type(report['refusal']['httpStatus']) is int
+                      and 400 <= report['refusal']['httpStatus'] <= 599)
+                     or (report['refusal']['code'] == 'validation-error'
+                         and report['refusal']['stage'] == 'observation-validation'
+                         and report['refusal']['httpStatus'] is None)),
+                'isolated observer failure was not a sanitized refusal')
+        require(response_token_absent(result.stdout, raw), 'observer output contains bearer')
+        return report
+    require(report.get('status') == 'observed-no-authority'
+            and report.get('complete') is True,
             'observer report is not a complete read-only observation')
+    mint_response = json.loads(raw, object_pairs_hook=unique_pairs)
+    token = mint_response.get('token')
     require(set(report) == {'schema', 'status', 'complete', 'repositoryId',
                            'installationId', 'mint', 'passes', 'copyAuthorized',
-                           'refMutationAuthorized'} and
-            report['repositoryId'] == REPO_ID and
-            report['installationId'] == INSTALLATION_ID and
-            isinstance(report['passes'], list) and len(report['passes']) == 2 and
-            report['passes'][0] == report['passes'][1] and
-            isinstance(report['mint'], dict) and
-            set(report['mint']) == {'mintResponseSha256', 'tokenSha256', 'expiresAt'},
+                           'refMutationAuthorized'}
+            and report['repositoryId'] == REPO_ID
+            and report['installationId'] == INSTALLATION_ID
+            and isinstance(report['passes'], list) and len(report['passes']) == 2
+            and report['passes'][0] == report['passes'][1]
+            and all(isinstance(item, dict) and set(item) == PASS_KEYS
+                    and all(is_sha256(item[key]) for key in PASS_KEYS - {'receiverRefCount'})
+                    and type(item['receiverRefCount']) is int
+                    and item['receiverRefCount'] >= 0 for item in report['passes'])
+            and isinstance(report['mint'], dict)
+            and set(report['mint']) == {'mintResponseSha256', 'tokenSha256', 'expiresAt'}
+            and report['mint']['mintResponseSha256'] == sha(raw)
+            and isinstance(token, str)
+            and report['mint']['tokenSha256'] == sha(token.encode())
+            and report['mint']['expiresAt'] == mint_response.get('expires_at'),
             'observer report contains unexpected data or drift')
     require(response_token_absent(result.stdout, raw), 'observer output contains bearer')
     return report
@@ -233,9 +269,11 @@ def run(root, app_id, private_key):
     try:
         validate_mint(response)
         observer = run_container(mint_raw)
-        require(observer['mint']['mintResponseSha256'] == sha(mint_raw)
-                and observer['mint']['tokenSha256'] == report['tokenSha256'],
-                'observer mint binding drift')
+        if observer.get('complete') is True:
+            require(observer['mint']['mintResponseSha256'] == sha(mint_raw)
+                    and observer['mint']['tokenSha256'] == report['tokenSha256']
+                    and observer['mint']['expiresAt'] == response.get('expires_at'),
+                    'observer mint binding drift')
         report['observer'] = observer
     finally:
         # A failed probe still revokes. A failed revocation keeps a 0600 retry token
@@ -246,8 +284,10 @@ def run(root, app_id, private_key):
         except Exception:
             raise ValueError('token revocation was not confirmed; private retry custody retained') from None
         (root / 'token.private').unlink(missing_ok=True)
-        report['status'] = 'observed-no-authority' if report['observer'] else 'refused'
-        report['complete'] = bool(report['observer'])
+        report['status'] = ('observed-no-authority'
+                            if report['observer'] and report['observer'].get('complete') is True
+                            else 'refused')
+        report['complete'] = report['status'] == 'observed-no-authority'
         report['revoked'] = True
         write_report(root / 'report.json', report)
         (root / 'revocation-pending.json').unlink()

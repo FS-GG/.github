@@ -2,6 +2,7 @@
 import datetime as dt
 import hashlib
 import importlib.util
+import io
 import json
 import os
 from pathlib import Path
@@ -36,13 +37,33 @@ def mint_value():
             'expires_at': (dt.datetime.now(dt.timezone.utc) + dt.timedelta(minutes=50)).strftime('%Y-%m-%dT%H:%M:%SZ')}
 
 
+def pass_value():
+    return {'repositoriesSha256': '1' * 64,
+            'repositorySha256': '2' * 64,
+            'repositoryRepeatSha256': '2' * 64,
+            'receiverRefsSha256': '3' * 64,
+            'receiverRefCount': 1}
+
+
+def observed_report(mint=None):
+    mint = mint or mint_value()
+    observation = pass_value()
+    return {'schema': 'fsgg.gs2-09-7.receiver-observer-probe/1',
+            'status': 'observed-no-authority', 'complete': True,
+            'repositoryId': host.REPO_ID, 'installationId': host.INSTALLATION_ID,
+            'mint': {'mintResponseSha256': hashlib.sha256(raw(mint)).hexdigest(),
+                     'tokenSha256': hashlib.sha256(TOKEN.encode()).hexdigest(),
+                     'expiresAt': mint['expires_at']},
+            'passes': [observation, dict(observation)],
+            'copyAuthorized': False, 'refMutationAuthorized': False}
+
+
 class FakeApi:
     def __init__(self, token, override=None):
         assert token == TOKEN
         self.override = override or {}
         self.calls = []
         self.payload = {
-            '/installation': {'id': observer.INSTALLATION_ID, 'app_id': observer.APP_ID},
             '/installation/repositories?per_page=100': {'total_count': 1, 'repositories': [REPO]},
             '/repos/' + observer.FULL_NAME: REPO,
             '/repos/' + observer.FULL_NAME + '/git/matching-refs/heads/gs2-09-7/': [
@@ -65,15 +86,17 @@ class ObserverTests(unittest.TestCase):
         self.assertTrue(report['complete'])
         self.assertFalse(report['copyAuthorized'])
         self.assertFalse(report['refMutationAuthorized'])
-        self.assertEqual(len(api.calls), 10)
-        self.assertEqual(api.calls.count('/installation'), 2)
+        self.assertEqual(len(api.calls), 8)
+        self.assertEqual(api.calls.count('/installation/repositories?per_page=100'), 2)
+        self.assertNotIn('/installation', api.calls)
         self.assertEqual(report['passes'][0], report['passes'][1])
 
-    def test_missing_installation_endpoint_refuses(self):
-        api = FakeApi(TOKEN, {'/installation': ValueError('GET /installation returned HTTP 404')})
+    def test_missing_installation_repositories_endpoint_refuses(self):
+        path = '/installation/repositories?per_page=100'
+        api = FakeApi(TOKEN, {path: ValueError('GET repositories returned HTTP 404')})
         with self.assertRaisesRegex(ValueError, '404'):
             observer.probe(raw(mint_value()), lambda token: api)
-        self.assertEqual(api.calls, ['/installation'])
+        self.assertEqual(api.calls, [path])
 
     def test_foreign_or_write_mint_refuses_before_get(self):
         for change in ({'permissions': {'contents': 'write', 'metadata': 'read'}},
@@ -98,25 +121,33 @@ class ObserverTests(unittest.TestCase):
 
     def test_denied_receiver_gets_refuse_without_followup(self):
         for code in (401, 403, 404):
-            api = FakeApi(TOKEN, {'/installation': ValueError('GET returned HTTP ' + str(code))})
+            path = '/installation/repositories?per_page=100'
+            api = FakeApi(TOKEN, {path: ValueError('GET returned HTTP ' + str(code))})
             with self.subTest(code=code), self.assertRaisesRegex(ValueError, str(code)):
                 observer.probe(raw(mint_value()), lambda token: api)
-            self.assertEqual(api.calls, ['/installation'])
+            self.assertEqual(api.calls, [path])
+
+    def test_main_reduces_provider_failure_to_bounded_refusal(self):
+        stdin = type('Input', (), {'buffer': io.BytesIO(raw(mint_value()))})()
+        stdout = io.StringIO()
+        with patch.object(observer.sys, 'stdin', stdin), patch.object(observer.sys, 'stdout', stdout), \
+             patch.object(observer, 'probe', side_effect=observer.ProbeRefusal(
+                 'github-http-error', 'bearer-read', 403)):
+            self.assertEqual(observer.main(), 1)
+        report = json.loads(stdout.getvalue())
+        self.assertEqual(report['refusal'], {'code': 'github-http-error',
+                                             'stage': 'bearer-read', 'httpStatus': 403})
+        self.assertNotIn('reason', report)
+        self.assertNotIn(TOKEN, stdout.getvalue())
 
 
 class HostTests(unittest.TestCase):
     def test_container_arguments_and_environment_have_no_bearer_or_host_credentials(self):
+        minted = mint_value()
         with patch.object(host.subprocess, 'run') as run:
             run.return_value.returncode = 0
-            run.return_value.stdout = raw({'schema': 'fsgg.gs2-09-7.receiver-observer-probe/1',
-                                           'status': 'observed-no-authority', 'complete': True,
-                                           'repositoryId': host.REPO_ID,
-                                           'installationId': host.INSTALLATION_ID,
-                                           'mint': {'mintResponseSha256': 'a' * 64,
-                                                    'tokenSha256': 'b' * 64, 'expiresAt': 'later'},
-                                           'passes': [{}, {}], 'copyAuthorized': False,
-                                           'refMutationAuthorized': False})
-            report = host.run_container(raw(mint_value()))
+            run.return_value.stdout = raw(observed_report(minted))
+            report = host.run_container(raw(minted))
         self.assertTrue(report['complete'])
         args, kwargs = run.call_args
         argv = args[0]
@@ -127,7 +158,37 @@ class HostTests(unittest.TestCase):
         self.assertNotIn(TOKEN, ' '.join(argv))
         self.assertNotIn('docker.sock', ' '.join(argv))
         self.assertNotIn('FSGG_DISPATCH_APP_PRIVATE_KEY', str(kwargs['env']))
-        self.assertEqual(kwargs['input'], raw(mint_value()))
+        self.assertEqual(kwargs['input'], raw(minted))
+
+    def test_container_retains_only_validated_sanitized_refusal(self):
+        minted = mint_value()
+        refusal = {'schema': 'fsgg.gs2-09-7.receiver-observer-probe/1',
+                   'status': 'refused', 'complete': False,
+                   'refusal': {'code': 'github-http-error', 'stage': 'bearer-read',
+                               'httpStatus': 403},
+                   'copyAuthorized': False, 'refMutationAuthorized': False}
+        with patch.object(host.subprocess, 'run') as run:
+            run.return_value.returncode = 1
+            run.return_value.stdout = raw(refusal)
+            run.return_value.stderr = b'provider detail that must not be retained'
+            self.assertEqual(host.run_container(raw(minted)), refusal)
+
+    def test_container_rejects_incomplete_or_unbound_success_report(self):
+        minted = mint_value()
+        for mutate in ('empty-passes', 'wrong-expiry', 'bad-count'):
+            report = observed_report(minted)
+            if mutate == 'empty-passes':
+                report['passes'] = [{}, {}]
+            elif mutate == 'wrong-expiry':
+                report['mint']['expiresAt'] = '2099-01-01T00:00:00Z'
+            else:
+                report['passes'][0]['receiverRefCount'] = True
+                report['passes'][1]['receiverRefCount'] = True
+            with self.subTest(mutate=mutate), patch.object(host.subprocess, 'run') as run:
+                run.return_value.returncode = 0
+                run.return_value.stdout = raw(report)
+                with self.assertRaisesRegex(ValueError, 'unexpected data or drift'):
+                    host.run_container(raw(minted))
 
     def test_exact_read_only_mint_request_and_revocation(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -149,11 +210,7 @@ class HostTests(unittest.TestCase):
                 value = mint_value()
                 return value, raw(value)
 
-            observed = {'schema': 'fsgg.gs2-09-7.receiver-observer-probe/1',
-                        'status': 'observed-no-authority', 'complete': True,
-                        'copyAuthorized': False, 'refMutationAuthorized': False,
-                        'mint': {'mintResponseSha256': hashlib.sha256(raw(mint_value())).hexdigest(),
-                                 'tokenSha256': hashlib.sha256(TOKEN.encode()).hexdigest()}}
+            observed = observed_report()
             env = {'GITHUB_REPOSITORY': 'FS-GG/.github', 'GITHUB_REF': 'refs/heads/main',
                    'GITHUB_SHA': 'a' * 40, 'FSGG_PROTECTED_SHA': 'a' * 40,
                    'GITHUB_RUN_ID': '123', 'GITHUB_RUN_ATTEMPT': '1'}
@@ -169,6 +226,37 @@ class HostTests(unittest.TestCase):
             self.assertFalse((root / 'token.private').exists())
             self.assertFalse((root / 'revocation-pending.json').exists())
             self.assertEqual(result['status'], 'observed-no-authority')
+            self.assertNotIn(TOKEN, (root / 'report.json').read_text())
+
+    def test_refusal_is_retained_after_revocation_and_remains_incomplete(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp) / 'private'
+            app = {'id': host.APP_ID, 'slug': host.APP_SLUG,
+                   'permissions': {'contents': 'read', 'metadata': 'read'}}
+            installation = {'id': host.INSTALLATION_ID, 'app_id': host.APP_ID,
+                            'app_slug': host.APP_SLUG, 'account': {'login': 'FS-GG'},
+                            'suspended_at': None,
+                            'permissions': {'contents': 'read', 'metadata': 'read'}}
+            values = iter((app, installation, mint_value()))
+            refusal = {'schema': 'fsgg.gs2-09-7.receiver-observer-probe/1',
+                       'status': 'refused', 'complete': False,
+                       'refusal': {'code': 'github-http-error', 'stage': 'bearer-read',
+                                   'httpStatus': 403},
+                       'copyAuthorized': False, 'refMutationAuthorized': False}
+            env = {'GITHUB_REPOSITORY': 'FS-GG/.github', 'GITHUB_REF': 'refs/heads/main',
+                   'GITHUB_SHA': 'a' * 40, 'FSGG_PROTECTED_SHA': 'a' * 40,
+                   'GITHUB_RUN_ID': '123', 'GITHUB_RUN_ATTEMPT': '1'}
+            with patch.dict(os.environ, env), patch.object(host.mint, 'app_jwt', return_value='jwt'), \
+                 patch.object(host, 'request_json', side_effect=lambda *_args, **_kwargs:
+                              (lambda value: (value, raw(value)))(next(values))), \
+                 patch.object(host, 'revoke_token') as revoke, \
+                 patch.object(host, 'run_container', return_value=refusal):
+                result = host.run(root, host.APP_ID, 'PRIVATE KEY')
+            revoke.assert_called_once_with(TOKEN)
+            self.assertEqual(result['status'], 'refused')
+            self.assertFalse(result['complete'])
+            self.assertTrue(result['revoked'])
+            self.assertEqual(result['observer']['refusal']['httpStatus'], 403)
             self.assertNotIn(TOKEN, (root / 'report.json').read_text())
 
     def test_revoke_failure_retains_private_retry_custody_and_sanitized_pending(self):
@@ -201,11 +289,7 @@ class HostTests(unittest.TestCase):
             def request(*_args, **_kwargs):
                 value = next(values)
                 return value, raw(value)
-            observed = {'schema': 'fsgg.gs2-09-7.receiver-observer-probe/1',
-                        'status': 'observed-no-authority', 'complete': True,
-                        'copyAuthorized': False, 'refMutationAuthorized': False,
-                        'mint': {'mintResponseSha256': hashlib.sha256(raw(mint_value())).hexdigest(),
-                                 'tokenSha256': hashlib.sha256(TOKEN.encode()).hexdigest()}}
+            observed = observed_report()
             env = {'GITHUB_REPOSITORY': 'FS-GG/.github', 'GITHUB_REF': 'refs/heads/main',
                    'GITHUB_SHA': 'a' * 40, 'FSGG_PROTECTED_SHA': 'a' * 40,
                    'GITHUB_RUN_ID': '123', 'GITHUB_RUN_ATTEMPT': '1'}

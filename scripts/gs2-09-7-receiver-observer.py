@@ -19,6 +19,14 @@ VERSION = '2026-03-10'
 MAX_BYTES = 1024 * 1024
 
 
+class ProbeRefusal(ValueError):
+    def __init__(self, code, stage, http_status=None):
+        super().__init__(code)
+        self.code = code
+        self.stage = stage
+        self.http_status = http_status
+
+
 def require(ok, reason):
     if not ok:
         raise ValueError(reason)
@@ -84,7 +92,7 @@ class Api:
                         'GET redirected or returned non-200')
                 raw = response.read(MAX_BYTES + 1)
         except urllib.error.HTTPError as error:
-            raise ValueError('GET ' + path + ' returned HTTP ' + str(error.code)) from None
+            raise ProbeRefusal('github-http-error', 'bearer-read', error.code) from None
         return parse(raw), raw
 
 
@@ -94,10 +102,9 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
 
 
 def one_pass(api):
-    # A missing /installation endpoint is an explicit unsupported result, never inferred from repositories.
-    installation, installation_raw = api.get('/installation')
-    require(isinstance(installation, dict) and installation.get('id') == INSTALLATION_ID
-            and installation.get('app_id') == APP_ID, 'installation identity drift')
+    # Installation identity is established by the credential host with its App JWT.
+    # This isolated process receives only the minted installation bearer and uses
+    # endpoints that GitHub supports for that authentication mode.
     repositories, repositories_raw = api.get('/installation/repositories?per_page=100')
     require(isinstance(repositories, dict) and repositories.get('total_count') == 1
             and isinstance(repositories.get('repositories'), list)
@@ -119,8 +126,7 @@ def one_pass(api):
     repo_repeat, repo_repeat_raw = api.get('/repos/' + FULL_NAME)
     check_repo(repo_repeat)
     require(repo == repo_repeat, 'repository metadata changed within pass')
-    return {'installationSha256': digest(installation_raw),
-            'repositoriesSha256': digest(repositories_raw),
+    return {'repositoriesSha256': digest(repositories_raw),
             'repositorySha256': digest(repo_raw),
             'repositoryRepeatSha256': digest(repo_repeat_raw),
             'receiverRefsSha256': digest(refs_raw), 'receiverRefCount': len(refs)}
@@ -144,10 +150,17 @@ def main():
     try:
         result = probe(raw)
     except (ValueError, TypeError, KeyError, json.JSONDecodeError) as error:
-        # Errors are controlled values and do not include raw provider bytes or bearer.
+        # Refusals expose only a bounded classification. Raw provider bytes, paths,
+        # exception text, stderr, and bearer material never cross this boundary.
+        if isinstance(error, ProbeRefusal):
+            code, stage, http_status = error.code, error.stage, error.http_status
+        else:
+            code, stage, http_status = 'validation-error', 'observation-validation', None
         print(json.dumps({'schema': 'fsgg.gs2-09-7.receiver-observer-probe/1',
                           'status': 'refused', 'complete': False,
-                          'reason': str(error), 'copyAuthorized': False,
+                          'refusal': {'code': code, 'stage': stage,
+                                      'httpStatus': http_status},
+                          'copyAuthorized': False,
                           'refMutationAuthorized': False}, sort_keys=True))
         return 1
     print(json.dumps(result, sort_keys=True, separators=(',', ':')))
