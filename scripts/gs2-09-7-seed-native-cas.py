@@ -94,14 +94,17 @@ def inspect_proposal(value: dict) -> dict:
     expected = {"runId", "runAttempt", "candidateSha", "workflowSha", "refName",
                 "runNonce", "journalGeneration", "stateGeneration", "expectedParent",
                 "stateSha256", "stateBytesBase64", "blobOid", "treeBytesBase64",
-                "treeOid", "commitBytesBase64", "commitOid", "s2DeclarationSha256"}
+                "treeOid", "commitBytesBase64", "commitOid", "s2DeclarationSha256",
+                "seedPlanSha256"}
     require(type(value) is dict and set(value) == expected, "proposal-shape")
     ref = nonce_ref(value["runId"], value["runAttempt"], value["candidateSha"])
     nonce = f'{value["runId"]}-{value["runAttempt"]}-{value["candidateSha"]}'
     require(value["refName"] == ref and value["runNonce"] == nonce, "proposal-nonce-ref")
     require(type(value["workflowSha"]) is str and HEX40.fullmatch(value["workflowSha"]) is not None
             and type(value["s2DeclarationSha256"]) is str
-            and HEX64.fullmatch(value["s2DeclarationSha256"]) is not None,
+            and HEX64.fullmatch(value["s2DeclarationSha256"]) is not None
+            and type(value["seedPlanSha256"]) is str
+            and HEX64.fullmatch(value["seedPlanSha256"]) is not None,
             "proposal-provenance")
     require(value["journalGeneration"] == 0 and type(value["journalGeneration"]) is int
             and value["stateGeneration"] == 0 and type(value["stateGeneration"]) is int
@@ -128,7 +131,8 @@ def inspect_proposal(value: dict) -> dict:
             and state_json.get("stateGeneration") == 0 and state_json.get("mode") == "forward"
             and state_json.get("activeIndex") == 0 and type(binding) is dict
             and binding.get("runNonce") == nonce and binding.get("workflowSha") == value["workflowSha"]
-            and binding.get("protectedHostReceiptSha256") == value["s2DeclarationSha256"],
+            and binding.get("protectedHostReceiptSha256") == value["s2DeclarationSha256"]
+            and binding.get("seedPlanSha256") == value["seedPlanSha256"],
             "proposal-state-binding")
     effects = state_json.get("effects")
     require(type(effects) is list and len(effects) == 2
@@ -142,7 +146,7 @@ def inspect_proposal(value: dict) -> dict:
             "value": value}
 
 
-def verify_declaration(raw: bytes, value: dict) -> None:
+def verify_declaration(raw: bytes, plan_raw: bytes, value: dict) -> None:
     declaration = strict_json(raw)
     require(raw == canonical(declaration) and sha256(raw) == value["s2DeclarationSha256"],
             "s2-declaration-bytes")
@@ -151,6 +155,12 @@ def verify_declaration(raw: bytes, value: dict) -> None:
             "s2-declaration-fingerprint")
     source = declaration.get("source")
     journal = declaration.get("journal")
+    artifacts = declaration.get("artifacts")
+    require(type(plan_raw) is bytes and 0 < len(plan_raw) <= 64 * MAX_BYTES
+            and sha256(plan_raw) == value["seedPlanSha256"]
+            and type(artifacts) is dict and type(artifacts.get("seedPlan")) is dict
+            and artifacts["seedPlan"].get("sha256") == value["seedPlanSha256"],
+            "seed-plan-custody")
     require(declaration.get("schema") == "fsgg.github-substrate-v2.sandbox-seed-execution-binding/2"
             and declaration.get("status") == "bound-no-write-authority"
             and declaration.get("activation") is False
@@ -275,6 +285,7 @@ def readback(item: dict, port: GitPort) -> dict:
             "runAttempt": value["runAttempt"], "runNonce": item["nonce"],
             "candidateSha": value["candidateSha"], "workflowSha": value["workflowSha"],
             "s2DeclarationSha256": value["s2DeclarationSha256"],
+            "seedPlanSha256": value["seedPlanSha256"],
             "oldOid": None, "newOid": value["commitOid"], "commitOid": value["commitOid"],
             "commitParentOid": None, "treeOid": value["treeOid"],
             "blobOid": value["blobOid"], "payloadSha256": value["stateSha256"],
@@ -286,12 +297,25 @@ def readback(item: dict, port: GitPort) -> dict:
             "observedAt": dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00", "Z")}
 
 
-def apply(value: dict, declaration_bytes: bytes, port: GitPort,
+def pending(item: dict, reason: str) -> dict:
+    value = item["value"]
+    return {"schema": SCHEMA, "status": "pending", "outcome": "unproven",
+            "complete": False, "reason": reason, "repositoryId": REPOSITORY["id"],
+            "refName": item["ref"], "runId": value["runId"],
+            "runAttempt": value["runAttempt"], "runNonce": item["nonce"],
+            "candidateSha": value["candidateSha"], "workflowSha": value["workflowSha"],
+            "s2DeclarationSha256": value["s2DeclarationSha256"],
+            "seedPlanSha256": value["seedPlanSha256"],
+            "newOid": value["commitOid"], "observedAt":
+            dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00", "Z")}
+
+
+def apply(value: dict, declaration_bytes: bytes, seed_plan_bytes: bytes, port: GitPort,
           *, protected_grant_verified: bool = False) -> dict:
     require(INSTALLATION_STATUS == "installed-protected-host"
             and protected_grant_verified, "cas-bootstrap-authority-uninstalled")
     item = inspect_proposal(value)
-    verify_declaration(declaration_bytes, value)
+    verify_declaration(declaration_bytes, seed_plan_bytes, value)
     with tempfile.TemporaryDirectory(prefix="gs2-seed-write-") as temporary:
         directory = Path(temporary)
         port.new_repo(directory)
@@ -300,4 +324,10 @@ def apply(value: dict, declaration_bytes: bytes, port: GitPort,
         port.push_genesis(directory, item)
     # A rejected lease, timeout or lost response can qualify only through a
     # new independent read that returns the exact precomputed objects.
-    return readback(item, port)
+    try:
+        return readback(item, port)
+    except (Refused, OSError) as error:
+        # A failed, stale or ambiguous read cannot certify an applied write.
+        # Retain this non-authorizing envelope for exact later reconciliation.
+        reason = "object-mismatch" if str(error) == "native-cas-mismatch" else "readback-unavailable"
+        return pending(item, reason)

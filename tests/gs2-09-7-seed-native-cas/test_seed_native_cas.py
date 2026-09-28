@@ -11,6 +11,7 @@ ROOT = Path(__file__).resolve().parents[2]
 SPEC = importlib.util.spec_from_file_location("seed_native_cas", ROOT / "scripts/gs2-09-7-seed-native-cas.py")
 cas = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(cas)
+PLAN = b'{"seed":"retained"}\n'
 
 
 def declaration(extra="first"):
@@ -24,6 +25,7 @@ def declaration(extra="first"):
                    "runId": 12345, "runAttempt": 2, "runNonce": nonce,
                    "seedJournalRef": ref},
         "journal": {"profile": {"ref": ref, "object": {"path": "state.json"}}},
+        "artifacts": {"seedPlan": {"sha256": cas.sha256(PLAN)}},
         "fixture": extra,
     }
     value["fingerprint"] = cas.sha256(cas.canonical(value))
@@ -38,7 +40,8 @@ def proposal(declaration_digest):
         "schema": "fsgg.gs2-09-7.sandbox-seed-execution/1",
         "stateGeneration": 0, "mode": "forward", "activeIndex": 0,
         "binding": {"runNonce": nonce, "workflowSha": workflow,
-                    "protectedHostReceiptSha256": declaration_digest},
+                    "protectedHostReceiptSha256": declaration_digest,
+                    "seedPlanSha256": cas.sha256(PLAN)},
         "effects": [{"kind": "create-nonce-issue", "stage": "planned",
                      "originalEffectId": None, "ownership": None},
                     {"kind": "add-project-membership", "stage": "planned",
@@ -61,7 +64,8 @@ def proposal(declaration_digest):
             "stateBytesBase64": encode(state), "blobOid": blob,
             "treeBytesBase64": encode(tree), "treeOid": tree_oid,
             "commitBytesBase64": encode(commit), "commitOid": cas.git_oid("commit", commit),
-            "s2DeclarationSha256": declaration_digest}
+            "s2DeclarationSha256": declaration_digest,
+            "seedPlanSha256": cas.sha256(PLAN)}
 
 
 class NativeCasTests(unittest.TestCase):
@@ -77,7 +81,7 @@ class NativeCasTests(unittest.TestCase):
 
     def test_exact_raw_object_genesis_and_independent_readback(self):
         with mock.patch.object(cas, "INSTALLATION_STATUS", "installed-protected-host"):
-            receipt = cas.apply(self.value, self.declaration, self.port,
+            receipt = cas.apply(self.value, self.declaration, PLAN, self.port,
                                 protected_grant_verified=True)
         self.assertTrue(receipt["complete"])
         self.assertEqual(cas.SCHEMA, receipt["schema"])
@@ -90,19 +94,21 @@ class NativeCasTests(unittest.TestCase):
 
     def test_source_only_and_missing_grant_refuse_before_object_write(self):
         with self.assertRaisesRegex(cas.Refused, "uninstalled"):
-            cas.apply(self.value, self.declaration, self.port, protected_grant_verified=True)
+            cas.apply(self.value, self.declaration, PLAN, self.port, protected_grant_verified=True)
         with mock.patch.object(cas, "INSTALLATION_STATUS", "installed-protected-host"):
             with self.assertRaisesRegex(cas.Refused, "uninstalled"):
-                cas.apply(self.value, self.declaration, self.port, protected_grant_verified=False)
+                cas.apply(self.value, self.declaration, PLAN, self.port, protected_grant_verified=False)
         self.assertIsNone(self.port.ref_oid(self.remote, self.value["refName"]))
 
     def test_expected_absence_lease_refuses_second_different_genesis(self):
         with mock.patch.object(cas, "INSTALLATION_STATUS", "installed-protected-host"):
-            cas.apply(self.value, self.declaration, self.port, protected_grant_verified=True)
+            cas.apply(self.value, self.declaration, PLAN, self.port, protected_grant_verified=True)
             second_declaration = declaration("second")
             second = proposal(cas.sha256(second_declaration))
-            with self.assertRaisesRegex(cas.Refused, "native-cas-mismatch"):
-                cas.apply(second, second_declaration, self.port, protected_grant_verified=True)
+            result = cas.apply(second, second_declaration, PLAN, self.port,
+                               protected_grant_verified=True)
+            self.assertFalse(result["complete"])
+            self.assertEqual("object-mismatch", result["reason"])
         self.assertEqual(self.value["commitOid"], self.port.ref_oid(self.remote, self.value["refName"]))
 
     def test_exact_oid_state_nonce_generation_and_path_refusals(self):
@@ -122,7 +128,7 @@ class NativeCasTests(unittest.TestCase):
     def test_changed_declaration_refuses_before_any_push(self):
         with mock.patch.object(cas, "INSTALLATION_STATUS", "installed-protected-host"):
             with self.assertRaisesRegex(cas.Refused, "s2-declaration-bytes"):
-                cas.apply(self.value, declaration("changed"), self.port,
+                cas.apply(self.value, declaration("changed"), PLAN, self.port,
                           protected_grant_verified=True)
         self.assertIsNone(self.port.ref_oid(self.remote, self.value["refName"]))
 
@@ -134,6 +140,15 @@ class NativeCasTests(unittest.TestCase):
             "blobOid": self.value["blobOid"]}):
             with self.assertRaisesRegex(cas.Refused, "native-cas-mismatch"):
                 cas.readback(item, self.port)
+
+    def test_lost_or_unavailable_readback_stays_explicitly_pending(self):
+        with mock.patch.object(cas, "INSTALLATION_STATUS", "installed-protected-host"), \
+             mock.patch.object(self.port, "fresh", side_effect=cas.Refused("native-ref-missing")):
+            report = cas.apply(self.value, self.declaration, PLAN, self.port,
+                               protected_grant_verified=True)
+        self.assertFalse(report["complete"])
+        self.assertEqual("pending", report["status"])
+        self.assertEqual("readback-unavailable", report["reason"])
 
 
 if __name__ == "__main__":
