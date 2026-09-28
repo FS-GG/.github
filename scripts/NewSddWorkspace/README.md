@@ -33,7 +33,9 @@ new-sdd-workspace ./Arena Arena --template fable-game --bundle studio
 
 Run it with **no arguments** on an interactive terminal and it asks for the product name, target
 directory, and workspace template. Choosing `fable-bindings` also asks for its required exact npm
-package/version and binding target. Standard SDD and light governance remain the defaults; GitHub
+package/version and binding target. Standard SDD remains the default for other templates; a
+`fable-game` descriptor pinned to `FS.GG.Workspace.Template` 0.15.0 selects `typed-sdd` when
+`--lifecycle` is omitted. Light governance remains the default; GitHub
 coordination stays unset, and the wizard installs
 `$initialize-sdd-workspace` for the agent you open inside the new repository. That skill discovers
 the real local/provider state and asks about repository, board, access, collaborators, chore locks,
@@ -51,7 +53,7 @@ usage-error contract, so scripted callers must still pass `<target-dir> <product
 | Option | Effect |
 |---|---|
 | `--template <name>` | Selects the scaffold provider: `rendering` (the compatibility default when omitted), `console`, `web`, `fable-game`, or `fable-bindings`. This chooses the generated workspace shape; it is not a rendering profile. |
-| `--lifecycle <none\|sdd\|typed-sdd\|spec-kit>` | Selects the representation backend and forwards it unchanged to `fsgg-sdd scaffold`. Omitted remains `sdd` during P4. `typed-sdd` is the canonical F# specification lane, `none` is Freeform, and `spec-kit` remains legacy/frozen. |
+| `--lifecycle <none\|sdd\|typed-sdd\|spec-kit>` | Selects the root lifecycle and forwards an explicit token unchanged to `fsgg-sdd scaffold`. Omission is `sdd` except for a `fable-game` descriptor whose exact source is `FS.GG.Workspace.Template::0.15.0`, which selects `typed-sdd`. An older descriptor keeps `sdd`. `none` is Freeform; `spec-kit` remains legacy/frozen. |
 | `--profile <name>` | Rendering-only `fs-gg-ui` profile: `game` (default — minimal Pong-style starter), `app`, `headless-scene`, `governed`, `sample-pack`. Omitted ⇒ the rendering provider default (`game`); other templates reject it. |
 | `--bundle <player\|studio\|tactical\|arcade\|complete>` | `fable-game` composition only. Omitted selects `player`; unrelated providers reject the flag. The value is forwarded as the provider's `bundle` parameter and does not change lifecycle or Rendering profile selection. |
 | `--npm-package <name>` / `--npm-version <exact>` / `--binding-target <browser\|node\|universal>` | Required together for `--template fable-bindings`, to pin its npm/declaration closure and target runtime. They are rejected for other templates. |
@@ -66,6 +68,25 @@ usage-error contract, so scripted callers must still pass `<target-dir> <product
 | `secure <workspace> --project … --verified-base-permission READ --verified-exclusive-writers <ids>` | After checking **Project → Settings → Manage access**, re-validates the supported visibility/requested-grant facts and records both human facts: base `Read` and the exact effective/exclusive writer set. It clears only the matching obligation when both assertions equal the requested allowlist. |
 | `--chore-locks <refs>` | `FSGG_COORD_CHORE_LOCKS` for a **non-FS-GG** board's chore queue: comma-separated `owner/repo#n`. Unneeded for the FS-GG board (the engine carries its lock table). |
 | `--no-coordination` | skip wiring the workspace to a coordination board entirely (no kit, no env). |
+
+### Release D.5 qualification boundary
+
+Version 0.12.0 is the wizard candidate for the selected SVG default. Its omitted `fable-game`
+lifecycle changes only when the fetched descriptor's exact `source:` is
+`FS.GG.Workspace.Template::0.15.0`. This binds the choice to the Templates 0.15.0
+candidate; fetching an older descriptor or spelling `--lifecycle` preserves that selection.
+This source change does not publish either package or activate the registry default.
+
+Before public activation, verify immutable Templates 0.15.0 and wizard 0.12.0 packages and
+the selected SDD release (2.0.2 or later, independently qualified) from public feeds.
+With empty package caches and no sibling source, create the omitted SVG Player through
+raw `dotnet new fs-gg-fable-game` for product files, then through installed
+`fsgg-sdd scaffold` and this wizard for the root `typed-sdd` lifecycle and default
+Quint backend. Exercise an authored and verified path plus a refusal case. Check
+explicit lifecycle tokens, older provider pins, unrelated templates and SVG bundles.
+Repeat clean creation after the effective registry pins the published pair; record
+package hashes and generated results. Existing workspace upgrades need their own
+promised compatibility proof.
 
 ### Public-content and board-access boundary
 

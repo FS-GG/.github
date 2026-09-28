@@ -55,9 +55,11 @@ type Options =
         Product: string
         /// The SDD scaffold provider selected by --template. Omitted selection remains rendering.
         Template: string
-        /// The representation backend selected by --lifecycle. Omission remains Standard SDD.
+        /// The representation backend selected by --lifecycle. A pinned D.5 fable-game
+        /// provider can select Typed SDD when the caller omitted this flag.
         /// The token is forwarded unchanged to the provider; typed-sdd is never aliased to sdd.
         Lifecycle: string
+        LifecycleExplicit: bool
         Ref: string
         Upgrade: bool
         Governance: bool
@@ -108,6 +110,7 @@ let assembleWizardOptions (target: string) (product: string) : Options =
         Product = product
         Template = "rendering"
         Lifecycle = "sdd"
+        LifecycleExplicit = false
         Ref = "main"
         Upgrade = false
         Governance = true
@@ -149,6 +152,18 @@ let assembleWizardTemplateOptions
         NpmVersion = npmVersion
         BindingTarget = bindingTarget
     }
+
+/// The D.5 omission applies only to the exact published SVG provider generation.
+/// Older descriptors and explicit lifecycle selections retain their original token.
+let selectScaffoldLifecycle (opts: Options) (sourceLine: string option) : string =
+    if
+        opts.Template = "fable-game"
+        && not opts.LifecycleExplicit
+        && sourceLine = Some "source: FS.GG.Workspace.Template::0.15.0"
+    then
+        "typed-sdd"
+    else
+        opts.Lifecycle
 
 // ── Effects ──────────────────────────────────────────────────────────────────
 
@@ -1644,7 +1659,13 @@ let private header (opts: Options) =
 
     grid.AddRow("[grey]target[/]", Markup.Escape opts.Target) |> ignore
     grid.AddRow("[grey]template[/]", Markup.Escape opts.Template) |> ignore
-    grid.AddRow("[grey]lifecycle[/]", Markup.Escape opts.Lifecycle) |> ignore
+    let lifecycleLabel =
+        if opts.Template = "fable-game" && not opts.LifecycleExplicit then
+            "selected from published provider"
+        else
+            opts.Lifecycle
+
+    grid.AddRow("[grey]lifecycle[/]", Markup.Escape lifecycleLabel) |> ignore
 
     match opts.Profile with
     | Some profile -> grid.AddRow("[grey]profile[/]", Markup.Escape profile) |> ignore
@@ -1846,7 +1867,7 @@ let private usage () =
         "  [green]--template[/] <name>  provider/template (default: rendering; omitted for compatibility)"
 
     AnsiConsole.MarkupLine(sprintf "                    [dim]%s[/]" (String.Join(", ", templates |> List.map fst)))
-    AnsiConsole.MarkupLine "  [green]--lifecycle[/] <name> representation backend (default: sdd)"
+    AnsiConsole.MarkupLine "  [green]--lifecycle[/] <name> representation backend (default: sdd; fable-game 0.15.0: typed-sdd)"
     AnsiConsole.MarkupLine "                    [dim]none, sdd, typed-sdd, spec-kit (legacy/frozen)[/]"
     AnsiConsole.MarkupLine "  [green]--profile[/] <name>   rendering-only profile (default: game = provider default)"
     AnsiConsole.MarkupLine(sprintf "                    [dim]%s[/]" (String.Join(", ", profiles |> List.map fst)))
@@ -1987,9 +2008,10 @@ let private paramsPanel (d: Draft) =
 
     row
         "lifecycle"
-        (d.Lifecycle
-         |> Option.map (fun p -> sprintf "[aqua]%s[/]" (Markup.Escape p))
-         |> Option.defaultValue pendingCell)
+        (match d.Template, d.Lifecycle with
+         | Some "fable-game", None -> "[aqua]provider pin: 0.15.0 → typed-sdd; otherwise sdd[/]"
+         | _, Some lifecycle -> sprintf "[aqua]%s[/]" (Markup.Escape lifecycle)
+         | _ -> pendingCell)
 
     match d.Template, d.Profile with
     | Some "rendering", _ ->
@@ -2079,7 +2101,11 @@ let private previewPanel (d: Draft) =
         |> Option.map (fun p -> sprintf "[grey](productName=[/][green]%s[/][grey])[/]" (Markup.Escape p))
         |> Option.defaultValue pendingCell
 
-    let lifecycle = d.Lifecycle |> Option.defaultValue "sdd"
+    let lifecycle =
+        match d.Template, d.Lifecycle with
+        | Some "fable-game", None -> "from provider pin (0.15.0 → typed-sdd; otherwise sdd)"
+        | _, Some lifecycle -> lifecycle
+        | _ -> "sdd"
 
     let sdd =
         tree.AddNode(sprintf "%s lifecycle skeleton  %s" (Markup.Escape lifecycle) prodAnno)
@@ -2287,7 +2313,11 @@ let private interactive () : Options option =
         |> fst
         |> fst
 
-    draft <- { draft with Template = Some template }
+    draft <-
+        { draft with
+            Template = Some template
+            Lifecycle = if template = "fable-game" then None else Some "sdd"
+        }
 
     let mutable npmPackage = None
     let mutable npmVersion = None
@@ -2458,7 +2488,12 @@ let private parse (argv: string list) : Result<Options, string> =
             Error(sprintf "--lifecycle needs a value (got flag '%s')" value)
         | "--lifecycle" :: value :: t ->
             if List.contains value knownLifecycles then
-                flags { acc with Lifecycle = value } t
+                flags
+                    { acc with
+                        Lifecycle = value
+                        LifecycleExplicit = true
+                    }
+                    t
             else
                 Error(sprintf "unknown lifecycle '%s' (choose one of: %s)" value (String.Join(", ", knownLifecycles)))
         | [ "--lifecycle" ] -> Error "--lifecycle needs a value"
@@ -2543,6 +2578,7 @@ let private parse (argv: string list) : Result<Options, string> =
                 Product = product
                 Template = "rendering"
                 Lifecycle = "sdd"
+                LifecycleExplicit = false
                 Ref = "main"
                 Upgrade = false
                 Governance = true
@@ -2727,7 +2763,13 @@ let private run (opts: Options) : int =
                 |> Option.map (fun target -> [ "--param"; sprintf "target=%s" target ])
                 |> Option.defaultValue []
 
-            let lifecycleParam = [ "--param"; sprintf "lifecycle=%s" opts.Lifecycle ]
+            let sourceLine =
+                match fetched with
+                | Ok pinned -> pinned
+                | Error _ -> None
+
+            let lifecycle = selectScaffoldLifecycle opts sourceLine
+            let lifecycleParam = [ "--param"; sprintf "lifecycle=%s" lifecycle ]
 
             let code, _ =
                 runProcess
