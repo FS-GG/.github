@@ -26,6 +26,9 @@
     <Compile Include="ProducerFenceCompletionTests.fs" />
     <Compile Include="V1AdmissionTests.fs" />
     <Compile Include="ProtectedIntakeJournalTests.fs" />
+    <Compile Include="ProtectedIntakeAuthorityTests.fs" />
+    <Compile Include="ProtectedIntakeProviderTests.fs" />
+    <Compile Include="ProtectedIntakeGenesisTests.fs" />
     <Compile Include="TransportTests.fs" />
     <Compile Include="BudgetTests.fs" />
     <Compile Include="CacheTests.fs" />

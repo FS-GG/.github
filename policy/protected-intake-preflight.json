@@ -1,0 +1,68 @@
+{
+  "schema": "fsgg.github.protected-intake-preflight-policy/1",
+  "policyId": "gs2-09-7-retained-intake-production-v1",
+  "status": "candidate-source-only",
+  "activation": false,
+  "sourceRepository": "FS-GG/.github",
+  "operation": {
+    "class": "retained-intake-journal",
+    "aggregateId": "intake-transactions:fs-gg-production",
+    "ref": "refs/heads/fsgg/v2/journal/operation/13",
+    "intent": "genesis",
+    "expectedOldObjectId": null,
+    "operationId": "preinstalled-empty-genesis"
+  },
+  "workflow": {
+    "path": ".github/workflows/protected-intake-preflight.yml",
+    "script": "tools/protected-intake-preflight.py",
+    "event": "push",
+    "ref": "refs/heads/main",
+    "manualEventsForbidden": [
+      "workflow_dispatch",
+      "repository_dispatch"
+    ],
+    "requestEventsForbidden": [
+      "pull_request",
+      "pull_request_target"
+    ],
+    "credentialAccess": false,
+    "mutationAccess": false
+  },
+  "authority": {
+    "repository": "FS-GG/FS.GG.Coordination.Authority",
+    "repositoryId": 1351660651,
+    "writerAppId": 5064713,
+    "installationId": 164553252,
+    "permissions": {
+      "contents": "write",
+      "metadata": "read"
+    },
+    "environment": "retained-intake-production",
+    "workflowRef": "refs/heads/main"
+  },
+  "nativeApproval": {
+    "marker": "<!-- fsgg:review-decision/v2 -->",
+    "schema": "fsgg.coord.review-decision/v2",
+    "requiredKind": "acceptance",
+    "requiredVerdict": "accepted",
+    "bindExactBaseHeadMerge": true,
+    "bindCanonicalBytes": true,
+    "configured": false
+  },
+  "authorizer": {
+    "algorithm": "RSA-PSS-SHA256",
+    "signingDomain": "fsgg.github.protected-intake-authority/v1",
+    "keyId": null,
+    "publicKeySpkiSha256": null,
+    "configured": false
+  },
+  "preflight": {
+    "kind": "static-read-only",
+    "publicRulesetReadback": "bypass-actors-incomplete-without-authorized-read",
+    "exactBypassRosterRequiresAuthorizedRead": true,
+    "expectedReuse": "every protected-main source revision until installation",
+    "defectCaught": "authority or object drift before any future credential-bearing job",
+    "avoidedWork": "future environment approval, App token mint and receive-pack attempt",
+    "customModel": "deferred-single-linear-job-with-no-shared-mutable-state"
+  }
+}

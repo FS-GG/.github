@@ -1,0 +1,35 @@
+name: Protected intake preflight self-test
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/protected-intake-preflight.yml"
+      - ".github/workflows/protected-intake-preflight-selftest.yml"
+      - "policy/protected-intake-authority-candidate.json"
+      - "policy/protected-intake-preflight.json"
+      - "tools/protected-intake-preflight.py"
+      - "tests/protected-intake-preflight/**"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/protected-intake-preflight.yml"
+      - ".github/workflows/protected-intake-preflight-selftest.yml"
+      - "policy/protected-intake-authority-candidate.json"
+      - "policy/protected-intake-preflight.json"
+      - "tools/protected-intake-preflight.py"
+      - "tests/protected-intake-preflight/**"
+
+permissions:
+  contents: read
+
+jobs:
+  fixture:
+    name: protected-intake-preflight-fixture
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Exercise source-only intake refusal controls
+        run: bash tests/protected-intake-preflight/run.sh

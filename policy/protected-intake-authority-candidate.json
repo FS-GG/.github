@@ -1,0 +1,136 @@
+{
+  "schema": "fsgg.github.protected-intake-authority-candidate/1",
+  "candidateForSchema": "fsgg.github.protected-intake-authority/1",
+  "policyId": "gs2-09-7-retained-intake-production-v1",
+  "status": "candidate-not-accepted",
+  "operationClass": "retained-intake-journal",
+  "aggregateId": "intake-transactions:fs-gg-production",
+  "ref": "refs/heads/fsgg/v2/journal/operation/13",
+  "intent": {
+    "kind": "genesis",
+    "expectedOldObjectId": null,
+    "operationId": "preinstalled-empty-genesis"
+  },
+  "workflow": {
+    "path": ".github/workflows/protected-intake-preflight.yml",
+    "environment": "retained-intake-production",
+    "ref": "refs/heads/main",
+    "requiredReviewerIds": [],
+    "preventSelfReview": true,
+    "installed": false
+  },
+  "authorizer": {
+    "algorithm": "RSA-PSS-SHA256",
+    "signingDomain": "fsgg.github.protected-intake-authority/v1",
+    "keyId": null,
+    "publicKeySpkiSha256": null,
+    "installed": false
+  },
+  "writer": {
+    "appId": 5064713,
+    "installationId": 164553252,
+    "repository": "FS-GG/FS.GG.Coordination.Authority",
+    "repositoryId": 1351660651,
+    "repositoryIds": [
+      1351660651
+    ],
+    "permissions": {
+      "contents": "write",
+      "metadata": "read"
+    },
+    "credentialInstalled": false
+  },
+  "rulesets": {
+    "writer": {
+      "id": 21872113,
+      "name": "v2-journal-writer",
+      "target": "branch",
+      "enforcement": "active",
+      "updatedAt": "2026-09-24T19:41:44.504000Z",
+      "include": [
+        "refs/heads/fsgg/v2/journal/**/*"
+      ],
+      "exclude": [
+        "refs/heads/fsgg/v2/journal/cutover/d5"
+      ],
+      "rules": [
+        "creation",
+        "update"
+      ],
+      "bypassAppIds": [
+        4882140,
+        5064713
+      ]
+    },
+    "integrity": {
+      "id": 21872115,
+      "name": "v2-journal-integrity",
+      "target": "branch",
+      "enforcement": "active",
+      "updatedAt": "2026-08-30T18:43:34.946000Z",
+      "include": [
+        "refs/heads/fsgg/v2/journal/**/*"
+      ],
+      "exclude": [],
+      "rules": [
+        "deletion",
+        "non_fast_forward"
+      ],
+      "bypassAppIds": []
+    }
+  },
+  "effectiveRules": [
+    {
+      "type": "creation",
+      "rulesetId": 21872113,
+      "rulesetSourceType": "Repository",
+      "rulesetSource": "FS-GG/FS.GG.Coordination.Authority"
+    },
+    {
+      "type": "update",
+      "rulesetId": 21872113,
+      "rulesetSourceType": "Repository",
+      "rulesetSource": "FS-GG/FS.GG.Coordination.Authority"
+    },
+    {
+      "type": "deletion",
+      "rulesetId": 21872115,
+      "rulesetSourceType": "Repository",
+      "rulesetSource": "FS-GG/FS.GG.Coordination.Authority"
+    },
+    {
+      "type": "non_fast_forward",
+      "rulesetId": 21872115,
+      "rulesetSourceType": "Repository",
+      "rulesetSource": "FS-GG/FS.GG.Coordination.Authority"
+    }
+  ],
+  "genesis": {
+    "planSha256": "fb398c6936db857447f648bcef022aa8efd613570fbc0f22d62c494af572fe5f",
+    "eventBlobOid": "79d0c2a97c350cb9283eb8ff59b42e25634df275",
+    "eventBlobSha256": "842442511d1e5d2a988a0af1b3d4a7ac9bc87b01a15149049122f72c5d1fab69",
+    "headBlobOid": "b6a297ee76c55838a6f706fdcb3a6326ed7bc8d3",
+    "headBlobSha256": "9076b916d17055f0572dacbb9f400399ca01403f01648b2a4f1c8914db62dbc4",
+    "treeOid": "fd004ec56625905eee77a149345a5176733ba5c4",
+    "treeSha256": "081bf3fa9ae5384825754734ddcd079a6e2007aef9a7c01ab5313b41ed61ed3c",
+    "commitOid": "b51adad418f0c89f7f420a973da403ca1c8fa075",
+    "commitSha256": "ba6af79a40a1ecea50c922472d3195321add6fc1a9b8d131f2e03c4005d48b98",
+    "parentOid": null,
+    "forceWithLease": "--force-with-lease=refs/heads/fsgg/v2/journal/operation/13:"
+  },
+  "nativeAuthorization": null,
+  "protectedReadback": {
+    "expectedRefBefore": "absent",
+    "observedAt": null,
+    "writerRuleset": null,
+    "integrityRuleset": null,
+    "effectiveRules": null,
+    "refBefore": null,
+    "refAfter": null,
+    "objects": null
+  },
+  "sourceCommit": null,
+  "workflowSha256": null,
+  "policySha256": null,
+  "acceptedAt": null
+}
