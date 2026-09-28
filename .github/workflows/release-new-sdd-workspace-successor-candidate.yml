@@ -1,0 +1,84 @@
+name: release-new-sdd-workspace-successor-candidate
+
+# SVG-D5 wizard 0.12.0: protected source and package-byte qualification only.
+# The GS2-08.9 sealed legacy workflow remains unchanged.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: release-new-sdd-workspace-successor-candidate
+  cancel-in-progress: false
+
+jobs:
+  candidate:
+    name: new-sdd-workspace-012-candidate
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+      - name: Bind exact protected source and unused version
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = FS-GG/.github
+          test "$GITHUB_EVENT_NAME" = workflow_dispatch
+          test "$GITHUB_REF" = refs/heads/main
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$SOURCE_SHA"
+          version="$(dotnet msbuild scripts/NewSddWorkspace/NewSddWorkspace.fsproj -getProperty:Version | tr -d '[:space:]')"
+          test "$version" = 0.12.0
+          test -z "$(git ls-remote --tags origin refs/tags/new-sdd-workspace/v0.12.0)"
+          response="$(curl --silent --show-error --location --output /dev/null --write-out '%{http_code}' \
+            https://api.nuget.org/v3-flatcontainer/fs.gg.newsddworkspace/0.12.0/fs.gg.newsddworkspace.0.12.0.nupkg)"
+          test "$response" = 404
+          response="$(curl --silent --show-error --location --output /dev/null --write-out '%{http_code}' \
+            -u "$GITHUB_ACTOR:$GITHUB_TOKEN" \
+            https://nuget.pkg.github.com/FS-GG/download/fs.gg.newsddworkspace/0.12.0/fs.gg.newsddworkspace.0.12.0.nupkg)"
+          test "$response" = 404
+      - name: Qualify wizard source
+        run: bash tests/new-sdd-workspace/run.sh
+      - name: Pack and bind one package archive
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/new-sdd-workspace
+          dotnet pack scripts/NewSddWorkspace/NewSddWorkspace.fsproj -c Release \
+            -p:RepositoryCommit="$SOURCE_SHA" -o artifacts/new-sdd-workspace
+          package=artifacts/new-sdd-workspace/FS.GG.NewSddWorkspace.0.12.0.nupkg
+          manifest=artifacts/new-sdd-workspace/manifest.json
+          test -f "$package"
+          python3 scripts/new-sdd-workspace-release.py prepare --package "$package" \
+            --source-sha "$SOURCE_SHA" --version 0.12.0 \
+            --tag new-sdd-workspace/v0.12.0 --output "$manifest"
+          python3 scripts/new-sdd-workspace-release.py verify --manifest "$manifest" --package "$package"
+          python3 tests/new-sdd-workspace-successor/run.py
+          python3 scripts/new-sdd-workspace-release.py verify --manifest "$manifest" --package "$package" \
+            > artifacts/new-sdd-workspace/package-evidence.json
+      - name: Refuse changed main before retaining candidate
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+        run: test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$SOURCE_SHA"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: new-sdd-workspace-successor-candidate-${{ github.sha }}-${{ github.run_id }}
+          path: |
+            artifacts/new-sdd-workspace/FS.GG.NewSddWorkspace.0.12.0.nupkg
+            artifacts/new-sdd-workspace/manifest.json
+            artifacts/new-sdd-workspace/package-evidence.json
+          if-no-files-found: error
+          retention-days: 90
