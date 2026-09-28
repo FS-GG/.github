@@ -1,0 +1,111 @@
+name: GS2-09.7 seed admission authorization
+
+on:
+  workflow_dispatch:
+    inputs:
+      phase:
+        description: Credential preparation or the one genesis journal CAS
+        required: true
+        type: choice
+        options:
+          - prepare
+          - final
+      executor_request_artifact_id:
+        description: Exact Q4 executor request artifact ID
+        required: true
+        type: string
+      executor_request_archive_digest:
+        description: Exact GitHub artifact digest (sha256:...)
+        required: true
+        type: string
+      executor_run_id:
+        description: Exact Q4 executor workflow run ID
+        required: true
+        type: string
+      executor_run_attempt:
+        description: Exact Q4 executor workflow run attempt
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: gs2-09-7-seed-admission-${{ inputs.phase }}-${{ inputs.executor_run_id }}-${{ inputs.executor_run_attempt }}
+  cancel-in-progress: false
+
+jobs:
+  authorize:
+    name: authorize exact seed admission request
+    environment: fleet-v1-admission-owner
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Capture native request and authorization evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PHASE: ${{ inputs.phase }}
+          REQUEST_ARTIFACT_ID: ${{ inputs.executor_request_artifact_id }}
+          REQUEST_ARCHIVE_DIGEST: ${{ inputs.executor_request_archive_digest }}
+          EXECUTOR_RUN_ID: ${{ inputs.executor_run_id }}
+          EXECUTOR_RUN_ATTEMPT: ${{ inputs.executor_run_attempt }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'FS-GG/.github'
+          test "$GITHUB_EVENT_NAME" = 'workflow_dispatch'
+          test "$GITHUB_REF" = 'refs/heads/main'
+          test "$GITHUB_RUN_ATTEMPT" = 1
+          [[ "$REQUEST_ARTIFACT_ID" =~ ^[1-9][0-9]*$ ]]
+          [[ "$EXECUTOR_RUN_ID" =~ ^[1-9][0-9]*$ ]]
+          [[ "$EXECUTOR_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]]
+          [[ "$REQUEST_ARCHIVE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+          gh api -H 'X-GitHub-Api-Version: 2026-03-10' "repos/FS-GG/.github/actions/artifacts/$REQUEST_ARTIFACT_ID" > request-artifact.json
+          gh api -H 'X-GitHub-Api-Version: 2026-03-10' "repos/FS-GG/.github/actions/artifacts/$REQUEST_ARTIFACT_ID/zip" > request.zip
+          gh api -H 'X-GitHub-Api-Version: 2026-03-10' "repos/FS-GG/.github/actions/runs/$EXECUTOR_RUN_ID" > executor-run.json
+          gh api -H 'X-GitHub-Api-Version: 2026-03-10' "repos/FS-GG/.github/actions/runs/$GITHUB_RUN_ID" > producer-run.json
+          gh api -H 'X-GitHub-Api-Version: 2026-03-10' "repos/FS-GG/.github/actions/runs/$GITHUB_RUN_ID/approvals" > approvals.json
+          gh api -H 'X-GitHub-Api-Version: 2026-03-10' 'repos/FS-GG/.github/environments/fleet-v1-admission-owner' > environment.json
+          gh api -H 'X-GitHub-Api-Version: 2026-03-10' 'repos/FS-GG/.github/environments/fleet-v1-admission-owner/deployment-branch-policies' > branch-policies.json
+          decision_name="gs2-09-7-seed-admission-decision-$PHASE-$EXECUTOR_RUN_ID-$EXECUTOR_RUN_ATTEMPT"
+          gh api -H 'X-GitHub-Api-Version: 2026-03-10' "repos/FS-GG/.github/actions/artifacts?name=$decision_name&per_page=100" > existing-decisions.json
+          test "$(jq -r '.total_count' existing-decisions.json)" = 0
+      - name: Authorize the bounded decision
+        env:
+          PHASE: ${{ inputs.phase }}
+          REQUEST_ARTIFACT_ID: ${{ inputs.executor_request_artifact_id }}
+          REQUEST_ARCHIVE_DIGEST: ${{ inputs.executor_request_archive_digest }}
+          EXECUTOR_RUN_ID: ${{ inputs.executor_run_id }}
+          EXECUTOR_RUN_ATTEMPT: ${{ inputs.executor_run_attempt }}
+        run: |
+          set -euo pipefail
+          python3 scripts/gs2-09-7-seed-admission-authorizer.py \
+            --phase "$PHASE" \
+            --artifact-json request-artifact.json \
+            --executor-run-json executor-run.json \
+            --request-archive request.zip \
+            --producer-run-json producer-run.json \
+            --approvals-json approvals.json \
+            --environment-json environment.json \
+            --branch-policies-json branch-policies.json \
+            --existing-decisions-json existing-decisions.json \
+            --artifact-id "$REQUEST_ARTIFACT_ID" \
+            --executor-run-id "$EXECUTOR_RUN_ID" \
+            --executor-run-attempt "$EXECUTOR_RUN_ATTEMPT" \
+            --archive-digest "$REQUEST_ARCHIVE_DIGEST" \
+            --producer-sha "$GITHUB_SHA" \
+            --producer-run-id "$GITHUB_RUN_ID" \
+            --producer-run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --output gs2-09-7-seed-admission-decision.json
+          chmod 600 gs2-09-7-seed-admission-decision.json
+      - name: Retain sanitized immutable decision
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: gs2-09-7-seed-admission-decision-${{ inputs.phase }}-${{ inputs.executor_run_id }}-${{ inputs.executor_run_attempt }}
+          path: gs2-09-7-seed-admission-decision.json
+          retention-days: 1
+          if-no-files-found: error

@@ -1,98 +1,135 @@
-# GS2-09.7 Q4 route admission and installation hold
+# GS2-09.7 Q4 seed admission authorizer
 
-Status: **read-only decision packet; no admission or installation**. This is
-stacked on draft #3749. The inspected remote default branch was
-`origin/main` at `2e553e41e58ee2f5e27aedcffc7403ce50e7cdd4`.
-Protected workflow PR #3690 was merged as source at
-`ff425734d277fa54c3d71601da90fe7b22619c15`; that merge is not an
-OperatingV1 protected admission decision or a GS2-09.7 Q5/Q6 receipt.
+Status: **authorizer and native reader source prepared; executor bridge absent**.
+This packet does not dispatch a workflow, change an environment, mint a token,
+or write the sandbox journal. The Q4 executor remains fail closed because the
+pins in `gs2-09-7-seed-bootstrap-admission.py` remain empty.
 
-## Installed route and exact gap
+## Independent native owner boundary
 
-The default-branch
-[Q4 workflow](../../.github/workflows/github-substrate-v2-sandbox-qualification.yml)
-is manual, checks out an exact Coordination candidate, uses the fixed
-`github-substrate-v2-registered-sandbox` concurrency group and protected
-`github-substrate-v2-sandbox` environment, and references the existing
-`FSGG_DISPATCH_APP_ID` and `FSGG_DISPATCH_APP_PRIVATE_KEY` secrets. It pins
-actor `fs-gg-cross-repo-dispatch[bot]` (ID `297630107`), private repository
-`FS-GG/FS.GG.GitHub.Substrate.Sandbox` (node `R_kgDOUKXpqQ`), Project 2
-(node `PVT_kwDOEYAWY84BiESo`), and purpose `fsgg-sandbox-gs2-04-9`. Its
-nonce is run ID, attempt and candidate SHA. #3690 added selected-repository
-mint-grant proof before the candidate route. The separate mint-proof workflow
-checks token grants and revocation; it does not run migration.
+The authorizer uses only the existing `fleet-v1-admission-owner` environment.
+Readback on 2026-09-28 established this exact profile:
 
-The Q4 workflow still invokes `eng/qualify-github-sandbox-closure.sh` for
-GS2-04.9. It passes the minted token directly to candidate execute and
-cleanup, then invokes native token revocation. It does not invoke the stacked
-GS2-09.7 host signer, independent admission port, one-use release, durable
-vault/claim/journal, finalizer, scheduler or recovery worker. Those files are
-absent from the default-branch route. Source references to secrets do not
-prove their current value, installation grant or ACL; a selected-repository
-grant does not itself restrict the App's organization Project write scope to
-Project 2. No new sandbox copy or maintainer-provisioned credential is
-required by [ADR-0089](../adr/0089-reuse-the-protected-q4-sandbox-for-migration-rehearsal.md).
+- environment ID `22582241959`;
+- required reviewer `EHotwagner` (user ID `1645484`), rule `66492942`, with
+  self review permitted;
+- five-minute wait timer, rule `66492943`;
+- custom branch rule `66492944`, whose only policy is exact branch `main`,
+  policy ID `60823087`;
+- administrator bypass enabled. The decision still requires the native owner
+  and timer approval records, so a bypassed run does not qualify.
 
-The missing **OperatingV1 admission** is an independent protected decision
-for the reviewed workflow revision and exact candidate, before this route
-may be treated as GS2-09.7 execution. The source-only
-[revision hold](gs2-09-7-protected-revision-admission.md) requires an
-immutable admission record outside the workflow checkout and candidate
-workspace, with workflow path/SHA, candidate SHA, run ID/attempt, nonce,
-sandbox target, signer identity and release policy revision. The host must
-authenticate and read it through a separately pinned protected identity
-before App secret use. `github.sha`, a runner environment value, candidate
-consistency proof or merged PR cannot supply that independent decision.
-The stacked source pin for admitted workflow SHA is empty, as are signer,
-admission, store, vault, revoker and recovery production pins. There is no
-installed claim that #3690 has passed this admission.
+The new workflow is a manual, first-attempt, exact-main producer. It has only
+`contents: read` and `actions: read`. It does not receive the sandbox App key,
+an installation token, or any writer credential. The workflow reads an exact
+executor request artifact and native GitHub records, then uploads one sanitized
+decision. It does not reuse the production OperatingV1 authorization or any
+`operation/79` decision.
 
-## Protected-owner actions, in order
+The authorizer requires the native approval list to contain one approval by the
+named owner and one GitHub wait-timer approval for this environment. It also
+reads the current environment and main branch policy. A changed owner, missing
+timer, self-review setting drift, policy drift, duplicate approval, wrong run,
+or non-main producer refuses before a decision is written.
 
-1. The OperatingV1 admission/release owner independently reviews the exact
-   protected workflow and Coordination candidate, publishes an immutable
-   admitted decision with the binding above, and supplies native current,
-   unrevoked readback and resource/policy digests. The current #3690 merge
-   needs its own admission; any later migration workflow revision needs its
-   own exact review and decision. A self-asserted workflow SHA refuses.
-2. The protected `.github` workflow and credential custodian verifies the
-   **existing** App/installation actor, selected repository and effective
-   grants, Project target, environment and concurrency policy, then proves
-   host-only secret, signer, token-vault and durable-store ACLs. Review exact
-   installed endpoint/resource IDs, signer SPKI and policy pins, candidate
-   write denial, and native readback. Do not place a private key, raw token or
-   writable claim record in the candidate workspace or artifact.
-3. The release/store/revoker owners jointly install and qualify the source
-   contracts only after step 1: mint-to-pending census completeness, signed
-   joint head and monotonic floor, decision-ID one-use claim, admission/revoke
-   launch interlock, one shared native-attempt namespace, durable scheduler
-   and finalizer, and token-safe revocation. Resolve the documented
-   [emergency native-revocation choice](gs2-09-7-emergency-native-qualification-packet.md):
-   provider idempotency, authoritative settled token readback, or protected
-   containment with the receipt held. A fake port cannot choose this policy.
-4. The Coordination migration and protected sandbox owners complete the
-   accepted nine-authority interpreter and Q5/Q6 gate, then separately run
-   the isolated representative rehearsal, interruption/recovery matrix,
-   independent native receiver/effect readback, rollback and second round.
-   Only the protected acceptance owner may bind that evidence into a Q5/Q6
-   receipt. See the [accepted rehearsal contract](https://github.com/FS-GG/FS.GG.Coordination/blob/main/docs/roadmaps/gs2-09-7-representative-rehearsal.md).
+## Executor request interface
 
-## Non-effect refusal controls for the installation review
+The later integration bridge must upload exactly one regular file named
+`seed-admission-request.json` in an Actions artifact named:
 
-| Injected observation or read-only mismatch | Required disposition |
-| --- | --- |
-| Missing, foreign, stale, revoked or self-asserted admission; changed workflow SHA/path, candidate, run ID, attempt or nonce | Refuse before signing, mint or token handoff; no source merge is substituted for native admission. |
-| Wrong App actor/installation, repository node, Project node, selected repository, grant, purpose or changed target | Refuse before candidate/provider call; retain the native observation without a raw token. |
-| Empty or drifted signer/admission/store/vault/recovery pin, candidate-writable ACL, duplicate decision-ID mint, lost CAS result | Refuse handoff or retain durable pending state; never infer one-use from token expiry or process memory. |
-| Minted token absent from a sealed pending census, duplicate job, withdrawn job, scheduler crash or unknown provider result | Keep pending, fence another launch, use exact native readback and shared attempt identity; never close by a partial scan. |
-| Native revoke timeout, store outage, crash after attempt marker or unknown token state | No successful revocation or Q5/Q6 receipt until settled native evidence and durable receipt; use the owner-selected emergency policy. |
-| Q4 closure or mint-proof green, source-only fake test green, partial migration read, or missing terminal page | No GS2-09.7 Q5/Q6 acceptance. |
+```text
+gs2-09-7-seed-admission-request-<phase>-<executor-run-id>-<executor-run-attempt>
+```
 
-The existing fake-port negatives characterize these refusals but do not prove
-the installed protected principals, ACLs, provider semantics or native
-terminal state. All installation evidence must identify exact run and
-attempt, candidate/workflow heads, resource IDs, policy/key digests, native
-request/attempt IDs and readback timestamps while excluding secret material.
-Until the owners supply the protected decision and installation evidence,
-Q5/Q6 remain open and the existing Q4 route is the only installed sandbox
-effect route observed here.
+The dispatch supplies the exact artifact ID, archive `sha256:` digest, executor
+run ID, run attempt and `prepare` or `final` phase. The artifact file is
+canonical JSON with this envelope:
+
+```json
+{
+  "schema": "fsgg.gs2-09-7.seed-admission-request/1",
+  "phase": "prepare|final",
+  "subject": {}
+}
+```
+
+The request artifact must come from the exact Q4 workflow run and attempt on
+`main`; its Actions metadata, archive digest, workflow path and head SHA must
+agree with the subject. Extra members, duplicate JSON keys, noncanonical bytes,
+expired artifacts, rerun drift and failed completed runs refuse.
+
+`prepare` has only the existing `fsgg.gs2-09-7.seed-prepare-decision/1`
+subject. Its operation is exactly `prepare-only-no-effect`. It binds the source
+manifest and approved source artifact digests and may only permit credential
+preparation. It contains no token digest, journal ref or Git object OID.
+
+`final` has the existing `fsgg.gs2-09-7.seed-bootstrap-decision/1` subject. It
+binds the mint proof and token digests, S2 declaration digest, S1 blob/tree/commit
+OIDs, the nonce-derived seed journal ref, and `expectedOldOid: null`. Its only
+operation is `genesis-nonce-seed-journal`; issue and Project effects, updates of
+an existing ref, later migration effects and any other operation refuse.
+
+Neither request schema has a field for a raw token. Strict field equality makes
+adding one a refusal.
+
+## Decision and read API
+
+The producer uploads exactly one file named
+`gs2-09-7-seed-admission-decision.json` as:
+
+```text
+gs2-09-7-seed-admission-decision-<phase>-<executor-run-id>-<executor-run-attempt>
+```
+
+The record binds the exact request artifact ID, archive digest, canonical
+request digest, executor run/attempt, subject, authorizer workflow SHA and
+run/attempt, environment/rule/policy IDs, and sanitized owner and timer
+approvals. It expires no later than ten minutes after issue. It contains the
+token digest for `final`, never the token.
+
+`scripts/gs2-09-7-seed-admission-native-read.py` exposes:
+
+- `verify_decision(...)`, which verifies the completed successful producer
+  run, an integration-pinned exact authorizer workflow SHA, native approvals
+  and current policy, the sole repository artifact with the decision name,
+  the archive digest,
+  exactly one safe member, canonical decision bytes, exact expected subject
+  and live bounded expiry;
+- `NativeDecisionPort(decision, phase)`, whose `describe()` and
+  `read_decision(executor_run_id, executor_run_attempt)` methods implement the
+  port consumed by `gs2-09-7-seed-bootstrap-admission.py`.
+
+The sanitized artifact is intentionally readable with Actions read access.
+Isolation comes from write custody: candidate code and the Q4 executor have no
+write permission to the authorizer run or its artifact, while the authorizer
+has no token or provider write credential. Artifact deletion, replacement,
+multiple artifacts with the decision name, changed source, approval drift or
+expiry causes refusal. Readability is not represented as false.
+
+## Timing and integration boundary
+
+Prepare and final are two distinct authorizer runs. Each retains the native
+five-minute timer and produces a fresh decision valid for at most ten minutes.
+The integration bridge must therefore stage the operation:
+
+1. publish the prepare request, dispatch and approve its authorizer run, read
+   the fresh prepare decision, then perform credential preparation only;
+2. after mint proof and S2/S1 OIDs exist, publish the final request, dispatch
+   and approve a second authorizer run, read the fresh final decision, then
+   attempt the one expected-absent journal CAS before that decision expires.
+
+The Q4 executor job introduced by #3904 currently has a ten-minute timeout. It
+cannot safely wait through both independent five-minute timers plus mint,
+sealing, readback and CAS. The bridge must use separately bounded stages/runs
+or raise the executor timeout while retaining both timers and each decision's
+fresh ten-minute expiry. It must also preserve any minted token across the
+stage boundary only in protected host custody and revoke or expire it on every
+refusal path.
+
+This packet deliberately does not edit the protected Q4 workflow. The remaining
+integration packet must publish the two request artifacts, dispatch/wait/read
+the authorizer runs, construct the native reader port, install the currently
+empty admission pins, grant the executor `actions: read` without Actions write,
+and route only the accepted prepare/final results into
+the executor. Q5/Q6 migration acceptance, the production Authority journal,
+and all issue or Project mutations remain separate.

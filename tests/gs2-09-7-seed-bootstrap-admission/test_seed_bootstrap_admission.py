@@ -20,13 +20,26 @@ class Port:
         return {"schema": admission.SCHEMA, "origin": "https://authority.example",
                 "resourceId": "protected-q4-seed", "endpoint": "https://authority.example/q4",
                 "durable": True, "immutable": True, "nativeReadback": True,
-                "credentialScope": "protected-host-only", "candidateCanRead": False,
-                "candidateCanWrite": False, "workflowCanWrite": False}
+                "credentialScope": "actions-read", "candidateCanRead": True,
+                "candidateCanWrite": False, "executorWorkflowCanWrite": False,
+                "authorizerWorkflowCanWrite": True,
+                "decisionWriter": ".github/workflows/gs2-09-7-seed-admission-authorize.yml"}
     def read_decision(self, run_id, attempt):
         return {"schema": admission.DECISION_SCHEMA, "resourceId": "protected-q4-seed",
                 "decisionId": admission.decision_id(self.subject), "state": "admitted",
+                "phase": "final",
                 "subject": self.subject, "issuedAt": "2026-09-28T08:00:00Z",
-                "expiresAt": "2026-09-28T08:10:00Z", "sealed": True}
+                "expiresAt": "2026-09-28T08:10:00Z", "sealed": True,
+                "executorRequest": {"artifactId": 456, "archiveDigest": "sha256:" + "7" * 64,
+                                    "requestSha256": "6" * 64, "runId": self.subject["runId"],
+                                    "runAttempt": self.subject["runAttempt"]},
+                "authorization": {
+                    "repository": "FS-GG/.github", "repositoryId": 1269292704,
+                    "workflowPath": ".github/workflows/gs2-09-7-seed-admission-authorize.yml",
+                    "workflowSha": "4" * 40, "runId": 9001, "runAttempt": 1,
+                    "environment": {"id": 22582241959, "branchPolicyId": 60823087,
+                                    "waitTimerMinutes": 5}},
+                }
 
 
 class AdmissionTests(unittest.TestCase):

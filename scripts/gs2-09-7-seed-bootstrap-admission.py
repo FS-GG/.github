@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Independent protected admission for one Q4 seed-journal genesis.
 
-No admission origin, resource, credential or read port is installed here.
-The decision authorizes only the exact precomputed journal objects/ref. It
-does not authorize a seed issue, Project mutation, or later migration effect.
+The expected port reads a sanitized Actions artifact. Candidate code may
+read those public decision bytes, but cannot create or replace the artifact;
+the protected authorizer workflow is the sole producer. The decision permits
+only credential preparation or the exact precomputed genesis journal CAS.
 """
 
 from __future__ import annotations
@@ -98,9 +99,42 @@ def check_port(port) -> None:
         "schema": SCHEMA, "origin": PINNED_ORIGIN,
         "resourceId": PINNED_RESOURCE_ID, "endpoint": PINNED_ENDPOINT,
         "durable": True, "immutable": True, "nativeReadback": True,
-        "credentialScope": "protected-host-only", "candidateCanRead": False,
-        "candidateCanWrite": False, "workflowCanWrite": False,
+        "credentialScope": "actions-read", "candidateCanRead": True,
+        "candidateCanWrite": False, "executorWorkflowCanWrite": False,
+        "authorizerWorkflowCanWrite": True,
+        "decisionWriter": ".github/workflows/gs2-09-7-seed-admission-authorize.yml",
     }, "bootstrap-admission-port")
+
+
+def validate_envelope(record: dict, phase: str) -> None:
+    require(set(record) == {
+        "schema", "resourceId", "decisionId", "state", "phase", "subject",
+        "executorRequest", "authorization", "issuedAt", "expiresAt", "sealed"},
+        f"{phase}-decision-shape")
+    require(type(record["subject"]) is dict, f"{phase}-decision-subject")
+    request = record["executorRequest"]
+    authorization = record["authorization"]
+    require(type(request) is dict and set(request) == {
+        "artifactId", "archiveDigest", "requestSha256", "runId", "runAttempt"}
+            and type(request["artifactId"]) is int and request["artifactId"] > 0
+            and type(request["archiveDigest"]) is str
+            and re.fullmatch(r"sha256:[0-9a-f]{64}", request["archiveDigest"])
+            and type(request["requestSha256"]) is str and HEX64.fullmatch(request["requestSha256"])
+            and request["runId"] == record["subject"]["runId"]
+            and request["runAttempt"] == record["subject"]["runAttempt"],
+            f"{phase}-executor-request")
+    require(type(authorization) is dict
+            and authorization.get("repository") == "FS-GG/.github"
+            and authorization.get("repositoryId") == 1269292704
+            and authorization.get("workflowPath") == ".github/workflows/gs2-09-7-seed-admission-authorize.yml"
+            and type(authorization.get("workflowSha")) is str
+            and HEX40.fullmatch(authorization["workflowSha"])
+            and type(authorization.get("runId")) is int and authorization["runId"] > 0
+            and authorization.get("runAttempt") == 1
+            and authorization.get("environment", {}).get("id") == 22582241959
+            and authorization.get("environment", {}).get("branchPolicyId") == 60823087
+            and authorization.get("environment", {}).get("waitTimerMinutes") == 5,
+            f"{phase}-authorization")
 
 
 def require_admitted(port, subject: dict, now: dt.datetime) -> dict:
@@ -112,13 +146,13 @@ def require_admitted(port, subject: dict, now: dt.datetime) -> dict:
         record = port.read_decision(subject["runId"], subject["runAttempt"])
     except Exception as error:
         raise Refused("bootstrap-admission-readback") from error
-    require(type(record) is dict and set(record) == {
-        "schema", "resourceId", "decisionId", "state", "subject", "issuedAt", "expiresAt",
-        "sealed"}, "bootstrap-decision-shape")
+    require(type(record) is dict, "bootstrap-decision-shape")
+    validate_envelope(record, "final")
     require(record["schema"] == DECISION_SCHEMA
             and record["resourceId"] == PINNED_RESOURCE_ID
             and record["decisionId"] == decision_id(subject)
             and record["state"] == "admitted"
+            and record["phase"] == "final"
             and record["subject"] == subject
             and record["sealed"] is True, "bootstrap-decision-binding")
     try:
@@ -148,8 +182,10 @@ def require_prepare_admitted(port, context: dict, source_sha256: str,
         "schema": PREPARE_SCHEMA, "origin": PINNED_PREPARE_ORIGIN,
         "resourceId": PINNED_PREPARE_RESOURCE_ID, "endpoint": PINNED_PREPARE_ENDPOINT,
         "durable": True, "immutable": True, "nativeReadback": True,
-        "credentialScope": "protected-host-only", "candidateCanRead": False,
-        "candidateCanWrite": False, "workflowCanWrite": False,
+        "credentialScope": "actions-read", "candidateCanRead": True,
+        "candidateCanWrite": False, "executorWorkflowCanWrite": False,
+        "authorizerWorkflowCanWrite": True,
+        "decisionWriter": ".github/workflows/gs2-09-7-seed-admission-authorize.yml",
     }, "prepare-admission-port")
     require(type(now) is dt.datetime and now.tzinfo is not None
             and now.utcoffset() is not None
@@ -185,13 +221,13 @@ def require_prepare_admitted(port, context: dict, source_sha256: str,
         record = port.read_decision(context["runId"], context["runAttempt"])
     except Exception as error:
         raise Refused("prepare-admission-readback") from error
-    require(type(record) is dict and set(record) == {
-        "schema", "resourceId", "decisionId", "state", "subject",
-        "issuedAt", "expiresAt", "sealed"}
-            and record["schema"] == PREPARE_DECISION_SCHEMA
+    require(type(record) is dict, "prepare-decision-shape")
+    validate_envelope(record, "prepare")
+    require(record["schema"] == PREPARE_DECISION_SCHEMA
             and record["resourceId"] == PINNED_PREPARE_RESOURCE_ID
             and record["decisionId"] == decision_id
             and record["state"] == "admitted"
+            and record["phase"] == "prepare"
             and record["subject"] == subject
             and record["sealed"] is True, "prepare-decision-binding")
     try:
