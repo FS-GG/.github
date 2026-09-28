@@ -6,14 +6,14 @@ index: 36
 description: Research of the existing HighBar and FSBar repositories, with a proposed Fable tactical client, custom WASM control, native Recoil integration and staged delivery roadmap.
 status: proposed
 document-type: research-design-and-roadmap
-last-updated: 2026-09-08
+last-updated: 2026-09-28
 ---
 
 # Fable Beyond All Reason client — repository research, design and roadmap
 
 **Feature: BARC-01. Status: proposed extension of existing products.**
-Extend **EHotwagner/FSBarV2** with a Fable/Elmish tactical browser client and a custom WebAssembly
-host. Retain **EHotwagner/HighBarV3** as the native Recoil Skirmish AI adapter. Game data and
+Replace FSBarV2's SkiaViewer product view with a Fable/Elmish tactical browser client and a custom
+WebAssembly host. Retain **EHotwagner/HighBarV3** as the native Recoil Skirmish AI adapter. Game data and
 normalized mouse/keyboard input reach WASM; WASM returns typed intentions; the browser host,
 broker and native adapter validate those intentions before native game commands are submitted.
 
@@ -26,9 +26,8 @@ This is the BAR analogue of the
 user's existing BAR work. The engines have different integration, observation and command models.
 Reuse the browser/WASM design ideas while retaining BAR's actual native boundaries.
 
-The current request authorizes repository research, this design, its documentation PR and merge.
-It does not start product implementation, upgrade another repository, publish packages, deploy a
-service, or activate game control. Proposed schemas, signatures, limits and acceptance criteria
+This document proposes product changes. It does not itself remove the native viewer, publish packages,
+deploy a service or activate game control. Proposed schemas, signatures, limits and acceptance criteria
 below are design candidates; this document does not publish a runtime contract or amend an accepted ADR.
 
 Planning remains here until implementation is selected in the existing owner repositories. The
@@ -45,8 +44,8 @@ controller or a separately authored module, acquires a team control lease, and i
 mouse or keyboard. A later observation shows what the game actually did.
 
 The resulting product is a programmable tactical client, not a browser port of Recoil's simulation
-or 3D renderer. Existing TUI and native visualization can remain useful operator tools. The browser
-adds an accessible play surface and a portable controller interface without recreating the broker.
+or 3D renderer. The browser is the product's sole graphical play surface. The existing TUI may remain
+an operator console, but SkiaViewer is not a fallback renderer, required dependency or release target.
 
 | User capability | Proposed behavior | Completion evidence |
 |---|---|---|
@@ -128,7 +127,10 @@ promote its latency figures or command-stream assertions into actual engine resu
 
 The existing [Broker.Viz host](https://github.com/EHotwagner/FSBarV2/blob/bbd3c4beb6009b32d456a921913f96042251dac0/src/Broker.Viz/VizHost.fs)
 uses SkiaViewer and detects a native graphical display. It currently ignores the viewer input stream.
-Its scene concepts are useful, but this is not an existing Fable renderer or mouse/keyboard game client.
+The [Broker.App project](https://github.com/EHotwagner/FSBarV2/blob/bbd3c4beb6009b32d456a921913f96042251dac0/src/Broker.App/Broker.App.fsproj)
+references [Broker.Viz](https://github.com/EHotwagner/FSBarV2/blob/bbd3c4beb6009b32d456a921913f96042251dac0/src/Broker.Viz/Broker.Viz.fsproj),
+which pins SkiaViewer 1.1.3. Its scene concepts may inform browser glyphs,
+but its package, window host and input path must leave the normal broker build and product composition.
 
 ### 2.4 HighBarV3 has two materially different network routes
 
@@ -156,9 +158,10 @@ supported session before extending broad command campaigns.
 
 ## 3. Concrete gaps that change the design
 
-These are findings from the inspected source, not changes made by this PR. The first product work
-should turn them into targeted corrections and behavioral fixtures in their actual owners. Avoid
-rebuilding infrastructure that already exists.
+This table records gaps in the pinned FSBarV2 `bbd3c4b` and HighBarV3 `6648351` source
+inspected for the original design. It is a historical baseline, not a claim that every gap remains
+open. Continue targeted corrections and behavioral fixtures in the actual owners; avoid rebuilding
+infrastructure that already exists.
 
 | Finding | Evidence and practical consequence | Proposed treatment |
 |---|---|---|
@@ -177,6 +180,13 @@ rebuilding infrastructure that already exists.
 | “Not visual” is emitted as radar | [SnapshotBuilder](https://github.com/EHotwagner/HighBarV3/blob/66483515a3333d6160bb5298e0d0bf6bb7188b4c/src/circuit/grpc/SnapshotBuilder.cpp) uses a non-LOS else branch for radar without an explicit radar check at that point | Audit enemy-manager retention and distinguish current radar from remembered contact; current leakage is not asserted without that qualification |
 | Existing listener is a native local service | [ServerHost](https://github.com/EHotwagner/FSBarV2/blob/bbd3c4beb6009b32d456a921913f96042251dac0/src/Broker.Protocol/ServerHost.fs) defaults to loopback HTTP/2, maps native gRPC services and adds no authentication there | Keep native ingress private; add a deliberately authenticated browser endpoint and session binding |
 | UI state can overstate engine state | Operator speed/pause presentation can change before engine confirmation; speed has no coordinator mapping | Show requested/pending/confirmed separately and disable unsupported operations |
+
+Since that baseline, FSBarV2 merged [bounded multi-unit delivery](https://github.com/EHotwagner/FSBarV2/commit/41481e35d4f5cf18ace1942e680dcd0a9f2b3f03)
+(.1e) and [scripting feature projection](https://github.com/EHotwagner/FSBarV2/commit/9921f038d07f27ea0e1647ae40e71a73e7e69780)
+(.1g). HighBarV3 merged [atomic coordinator batch admission with provenance](https://github.com/EHotwagner/HighBarV3/commit/14b5ce74244e0a10fd1468a57299f58befd66280)
+(.1f). These source and synthetic-test outcomes do not establish live native acceptance, final
+engine-thread authority, browser behavior or end-to-end results. Qualify those remaining boundaries
+without repeating the completed broker and queue repairs.
 
 Two subtler cases also belong in focused qualification: the scripting conversion uses zero as an
 absent target-slot sentinel, and the command stream drain blocks through `Task.Result` inside an
@@ -234,8 +244,9 @@ or reactivate the disabled BARb decision system.
 |---|---|
 | Broker.Core/Protocol/App | Extend existing FSBarV2 responsibilities; repair fidelity/authority and expose a narrow browser-facing facade |
 | Broker.Contracts | Preserve HighBar provenance and compatibility; add only the missing browser/product and native coordination contracts through their owners |
-| Broker.Tui/Viz | Retain useful operator/native views; they share control policy rather than having hidden competing writers |
-| Browser application | Add Fable/Elmish projects using the current FS.GG Fable provider's conventions; adapt into the existing repo rather than scaffold over it |
+| Broker.Tui | Retain an optional text operator console; it has no independent graphical gameplay writer |
+| Broker.Viz/SkiaViewer | Remove the native window from Broker.App and the normal solution/build path; retire the package after any useful pure scene mapping is moved behind browser-compatible types |
+| Browser application | Make Fable/Elmish the only graphical client, using the current FS.GG Fable provider's conventions; adapt into the existing repo rather than scaffold over it |
 | WASM host and guest SDK | New product functionality informed by the SC2 proposal and S.I.R.'s host research |
 | Native admission/results/metadata gaps | HighBarV3 producer changes, followed by explicit FSBarV2 pin/adoption |
 | FS.GG.Net | Consider its qualified transport/lifecycle helpers where useful; the current broker already uses native gRPC and does not need a transport rewrite to adopt an org package |
@@ -244,7 +255,7 @@ or reactivate the disabled BARb decision system.
 Conceptual additions include `Broker.Browser`, a browser protocol/codec boundary, a trusted module
 worker loader, `sdk/barc`, a manual controller and fixture/example modules. These names are
 proposals, not projects created here. Keep browser-compatible pure code separate from Google.Protobuf,
-native gRPC, process launching, SkiaViewer and filesystem dependencies. Reuse ideas from the archived
+native gRPC, process launching and filesystem dependencies. Reuse ideas from the archived
 hub's map/glyph/style panels without importing its native UI runtime.
 
 The [SVG engine proposal](2026-09-07-064259-svg-game-engine-template-design-roadmap.md) and its
@@ -914,11 +925,12 @@ codec, input and memory evidence; no untested platform is implied by using Fable
 
 FSBarV2 is the proposed existing product owner; HighBarV3 owns native producer changes. Only the
 first three milestones form the detailed future execution window. Later milestones specify outcomes
-and evidence needed for planning. The current documentation merge starts none of them.
+and evidence needed for planning. The browser replaces the native SkiaViewer product view; this
+documentation change does not remove source or ship a client.
 
-The native gaps justify an observation/preview boundary before enabling browser commands. This is
-a deliberate difference from a greenfield UI plan: the first window proves trustworthy data and
-the requested host/input mechanism; the fourth milestone establishes live guest-derived control.
+The native gaps justify a separate observation boundary before enabling browser commands. Build the
+Fable UI against a fixture-backed broker stream while native observation is being qualified, then
+join both results before real guest-derived control. No SkiaViewer repair gates that browser work.
 
 ```mermaid
 flowchart TD
@@ -929,7 +941,11 @@ flowchart TD
     E[01.5 Useful BAR tactical play]
     F[01.6 Resilience and scale]
     G[01.7 Qualified release and adoption]
-    A --> B --> C --> D --> E --> F --> G
+    A --> B
+    A --> C
+    B --> D
+    C --> D
+    D --> E --> F --> G
 ```
 
 ### 12.1 First executable window
@@ -939,13 +955,16 @@ flowchart TD
   workspaces and their then-current baselines. Inspect current dependencies and the actual published
   Fable game provider/tool identities before choosing the browser composition.
   **Scope:** broker projection, identity/presence, delta materialization, gap state, strict command
-  mapping and targeted compatibility fixtures. Narrow native producer changes address demonstrated
-  option/generation/route defects; do not create another broker or reanimate legacy transports.
+  mapping and targeted compatibility fixtures. Detach Broker.App and the normal solution/build from
+  Broker.Viz/SkiaViewer, retire the native window entry point and preserve only browser-usable pure
+  scene concepts. Narrow native producer changes address demonstrated option/generation/route defects;
+  do not create another broker or reanimate legacy transports.
   **Acceptance:** asymmetric coordinate fixtures preserve X/Z/elevation; perspective, optional values
   and feature identity survive normalization; deltas change materialized state; a gap blocks dependent
   state/control until snapshot recovery. Unknown commands reject; multi-unit/Guard/Build retain all
   required targets and definitions. Record actual native option and generation enforcement verdicts,
-  current unsupported capabilities and exact source/schema/binary/content candidates.
+  current unsupported capabilities and exact source/schema/binary/content candidates. The normal
+  broker build and focused test path restore without SkiaViewer or a graphical display.
   **Handoff:** focused passing fixtures, corrected boundary model, chosen browser/Fable game composition,
   and precise native proof requirements. Maintain producer/receiver compatibility if any wire changes.
 
@@ -965,21 +984,24 @@ flowchart TD
   native assets or unresolved bootstrap blocks the live claim, not unrelated fixture repairs.
 
 - [ ] **BARC-01.3 — Deliver the Fable game and custom-WASM preview — route: routine.**
-  **Depends on:** BARC-01.2's qualified observation route, selected browser codec/transport and the
-  current fs-gg-fable-game template/provider.
+  **Depends on:** BARC-01.1's corrected broker contract, selected browser codec/transport and the
+  current fs-gg-fable-game template/provider. Fixture-backed browser work may proceed alongside
+  BARC-01.2; real native observation remains a prerequisite for BARC-01.4.
   **Scope:** additive Fable/Elmish client, broker browser endpoint, trusted worker host, manual and
   independently built example guests; an explicit composition running inside a generated Fable game
   workspace as well as the product's local companion development path.
-  **Acceptance:** actual authorized BAR data and normalized mouse/keyboard actions reach the guest.
+  **Acceptance:** perspective-filtered BAR-shaped fixture data from a real broker connection and
+  normalized mouse/keyboard actions reach the guest.
   Both input methods select an owned unit and resolve a correct ground target, producing equivalent
   typed intent previews. Radar, features, economy and stale status retain their meaning. A custom
   `.wasm` imports without a client rebuild. Invalid/trapped/hung modules cannot freeze navigation or
   issue native commands; focus loss releases input. A clean generated Fable game workspace builds
-  and runs this preview through its actual browser toolchain with a real broker connection.
+  and runs this preview through its actual browser toolchain with a fixture-backed broker connection.
   The primary client and generated receiver consume the same BAR composition and example guest;
   receiver cross-runtime/browser checks reject arena messages or credentials in BAR sessions.
-  **Boundary:** preview intentions only; native execution is not claimed. The template's arena
-  simulation authority does not handle BAR state or commands.
+  **Boundary:** preview intentions only; live native state and execution are not claimed. The
+  template's arena simulation authority does not handle BAR state or commands. The preview uses
+  Fable browser rendering and input, with no SkiaViewer window or dependency.
   **Handoff:** usable Fable game receiver example, exact provider/tool/package identity, host/SDK
   fixtures and measured browser costs; expand only the next useful window from this evidence.
 
@@ -987,7 +1009,7 @@ flowchart TD
 
 | Milestone | Outcome | Entry evidence | Exit examples |
 |---|---|---|---|
-| **BARC-01.4 — Real manual and custom-module control** | Native admission/epoch/generation checks, preserved correlation, bounded results and a narrow actual control slice | First three milestones; corrected native option/identity path and known coordinator result limitations | Stop, Move, queued Move and selected Attack through mouse and keyboard; an external module controls a real unit; revocation, stale IDs and overflow reject; the generated Fable game receiver runs the same live path |
+| **BARC-01.4 — Real manual and custom-module control** | Join the Fable preview with qualified native observation, admission/epoch/generation checks, preserved correlation, bounded results and a narrow actual control slice | BARC-01.1–.3; corrected native option/identity path and known coordinator result limitations | Stop, Move, queued Move and selected Attack through mouse and keyboard; an external module controls a real unit; revocation, stale IDs and overflow reject; the generated Fable game receiver runs the same live path |
 | **BARC-01.5 — Useful BAR tactical play** | Construction, economy, guard/repair, reclaim/features, factory/rally queues, queue editing and selected BAR custom commands | Actual unit/feature/command definitions and live command-family evidence | Complete a representative build/economy/combat/reclaim scenario using either input method; explain game rejection and partial results; no silent first-unit or invented-definition behavior |
 | **BARC-01.6 — Resilience, scale, SDK and recordings** | Reconnect/replacement/background behavior, late-game budgets, second-language guest conformance, advisor roles and offline/native recording workflows | Real workload and failure data, stable ABI from use, privacy/version decisions | Hung guest leaves UI usable; stale queued work never acts; unknown outcomes never auto-retry; a new author imports a module; offline trace needs no native game; measured frame/stream limits match supported claims |
 | **BARC-01.7 — Qualified opt-in release and adoption** | Compatible browser/broker/native artifacts, clean install and upgrade, Fable game receiver support, docs and independent operator walkthrough | All core journeys plus actual release identities, supported engine/game/map matrix and release authority | Clean local and generated Fable game installations reach live custom-module play with both inputs; upgrade preserves user modules/configuration; unsupported combinations give actionable diagnostics; published artifacts and receiver pins match |
@@ -1017,7 +1039,8 @@ the actual installation/compatibility workload; this design invents no calendar 
 ## 13. Decisions, ownership and workspace effects
 
 The recommended owner is the existing FSBarV2 repository, not a new FS.GG.BAR.Client repository.
-Its browser/WASM surface is additive product work. HighBarV3 retains native ABI/threading/schema
+The broker and native adapter remain; the graphical client changes from SkiaViewer to Fable in a
+browser. HighBarV3 retains native ABI/threading/schema
 ownership. The user-selected FS.GG Fable game target adds an explicit receiver qualification path;
 it does not require rewriting every generated arena or creating another authoritative simulator.
 
@@ -1029,14 +1052,15 @@ it does not require rewriting every generated arena or creating another authorit
 | Guest language | Rust first, C conformance second | Actual toolchain artifact/import profile and independent author success |
 | Native queries/results | Extend the coordinator's required subset through HighBarV3 | Direct-service route qualification or a smaller existing event path proves sufficient |
 | Visibility/contact continuity | Conservative unknown/last-seen semantics | Native enemy-manager and callback evidence supports a stronger claim |
-| Renderer | DOM/SVG and measured terrain layers | Declared late-game profile warrants another backend |
+| Renderer | Fable-driven DOM/SVG and measured browser terrain layers; no SkiaViewer fallback | Declared late-game profile warrants another browser backend |
 | Recovery | Reset after a gap/replacement unless qualified checkpoints exist | Complete compatible state/event recovery corpus |
 | Native versus browser execution | Browser host for interactive modules; native host only when justified | Unattended/adversarial requirements demand stronger scheduling/isolation |
 
-This design merge changes no installed runtime, public ABI, template default, provider package,
-generated workspace or existing product dependency pin. BARC-01.3 is the first source milestone
-adding the opt-in browser/Fable game composition. BARC-01.4 first enables its guest-derived native
-gameplay. BARC-01.7 proves published clean installation and existing-installation upgrade separately.
+This design edit changes no installed runtime, public ABI, template default, provider package,
+generated workspace or existing product dependency pin. BARC-01.1 first removes the native viewer
+from the normal build; BARC-01.3 adds the Fable/browser composition. BARC-01.4 first enables
+guest-derived native gameplay. BARC-01.7 proves published clean installation and
+existing-installation upgrade separately.
 
 The Fable game receiver records its actual scaffold tool/provider release and package pins. Product
 examples or adapters are published from their owning source only when release work is authorized.
@@ -1057,8 +1081,8 @@ continuation, not a second completion authority for every old specification.
 Future implementation uses the ordinary routine route unless the user explicitly selects another
 process. Resume the valid BARC-01 window without another initial planning pass. The selected
 Sol-medium implementation worker receives the actual owning repository's installed work-roadmap
-entry point, current baselines, BARC-01.1–01.3 and the bounded stop. The present documentation task
-does not launch that implementation or authorize protected publication/deployment.
+entry point, current baselines, BARC-01.1–01.3 and the bounded stop. This document does not launch
+that implementation or authorize protected publication/deployment.
 
 Use automatic runtime/provider/CI observation for feature/item/attempt lineage, model/effort, useful
 implementation/tests, administration, waits, repairs and delivery outcomes. Product game traces
