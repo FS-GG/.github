@@ -1,0 +1,32 @@
+name: GS2-09.7 settings scope probe self-test
+
+on:
+  pull_request:
+    paths:
+      - "scripts/gs2-09-7-settings-scope-probe.py"
+      - "tests/gs2-09-7-settings-scope-probe/**"
+      - ".github/workflows/gs2-09-7-settings-scope-probe-selftest.yml"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/gs2-09-7-settings-scope-probe.py"
+      - "tests/gs2-09-7-settings-scope-probe/**"
+      - ".github/workflows/gs2-09-7-settings-scope-probe-selftest.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gs2-09-7-settings-scope-probe-selftest-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  selftest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Exercise the secret-free settings scope probe controls
+        run: python3 tests/gs2-09-7-settings-scope-probe/test_settings_scope_probe.py

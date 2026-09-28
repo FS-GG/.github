@@ -1,0 +1,117 @@
+name: GitHub substrate v2 settings scope probe
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: github-substrate-v2-registered-sandbox
+  queue: max
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    name: gs2-09-7-settings-scope-preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # This small static/unit job runs before protected environment approval and credential minting.
+      # The pipeline is a literal two-job chain, so a graph check is sufficient; no model is needed.
+      - name: Check out the protected probe revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Bind the protected main revision
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test '${{ github.ref }}' = refs/heads/main
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+
+      - name: Run secret-free scope probe controls
+        run: python3 -m unittest discover -s tests/gs2-09-7-settings-scope-probe -p 'test_*.py'
+
+  probe:
+    name: gs2-09-7-settings-scope-probe
+    needs: preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: github-substrate-v2-sandbox
+    env:
+      FSGG_PROTECTED_SHA: ${{ github.sha }}
+      FSGG_SANDBOX_EVIDENCE_DIR: /tmp/fsgg-${{ github.run_id }}-${{ github.run_attempt }}-settings-scope
+    steps:
+      - name: Check out the protected probe revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Bind the protected main revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          test '${{ github.ref }}' = refs/heads/main
+          test "$(git rev-parse HEAD)" = "$FSGG_PROTECTED_SHA"
+
+      - name: Mint the unchanged exact sandbox App grant
+        id: mint
+        continue-on-error: true
+        env:
+          FSGG_DISPATCH_APP_ID: ${{ secrets.FSGG_DISPATCH_APP_ID }}
+          FSGG_DISPATCH_APP_PRIVATE_KEY: ${{ secrets.FSGG_DISPATCH_APP_PRIVATE_KEY }}
+        run: python3 scripts/gs2-09-7-mint-sandbox-token.py
+
+      - name: Probe the current token's settings scope
+        id: probe
+        if: ${{ always() && steps.mint.outcome == 'success' }}
+        continue-on-error: true
+        env:
+          FSGG_SANDBOX_TOKEN: ${{ steps.mint.outputs.token }}
+          FSGG_SANDBOX_MINT_PROOF: ${{ env.FSGG_SANDBOX_EVIDENCE_DIR }}/mint-grants.json
+        run: python3 scripts/gs2-09-7-settings-scope-probe.py
+
+      - name: Revoke the scoped token
+        id: revoke
+        if: ${{ always() && steps.mint.outputs.token != '' }}
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ steps.mint.outputs.token }}
+        run: gh api --method DELETE installation/token
+
+      - name: Retain the sanitized probe evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: gs2-09-7-settings-scope-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.FSGG_SANDBOX_EVIDENCE_DIR }}
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Preserve probe and revocation verdicts
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test '${{ steps.mint.outcome }}' = success
+          test '${{ steps.probe.outcome }}' = success
+          test '${{ steps.revoke.outcome }}' = success
+          report="$FSGG_SANDBOX_EVIDENCE_DIR/settings-scope-probe.json"
+          test -s "$report"
+          test "$(jq -r .activation "$report")" = false
+          test "$(jq -r .source.headSha "$report")" = "$FSGG_PROTECTED_SHA"
+          test "$(jq -r .sandbox.repository.id "$report")" = 1353050537
+          test "$(jq -r .sandbox.repository.nodeId "$report")" = R_kgDOUKXpqQ
+          test "$(jq -r .sandbox.project.nodeId "$report")" = PVT_kwDOEYAWY84BiESo
+          test "$(jq -r .app.permissions.metadata "$report")" = read
+          test "$(jq -r .app.permissions.organization_custom_properties "$report")" = read
+          test "$(jq -r .customProperties.verdict "$report")" = qualified-current-token-read
+          test "$(jq -r .customProperties.schemaStatus "$report")" = 200
+          test "$(jq -r .customProperties.repositoryValuesStatus "$report")" = 200
+          test "$(jq -r .repositoryRulesets.permissionEvidence.metadata "$report")" = read
+          test "$(jq -r .repositoryRulesets.permissionEvidence.administration "$report")" = write
+          test "$(jq -r .repositoryRulesets.verdict "$report")" = qualified-current-token-read
