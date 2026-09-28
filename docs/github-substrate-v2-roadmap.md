@@ -120,6 +120,12 @@ activation. [Coordination #877](https://github.com/FS-GG/FS.GG.Coordination/pull
 profiles for one proposed CLI 0.1.6; protected qualification, publication and dedicated credential
 custody remain. Each receiver then activates and proves settlement separately within the bounded wave.
 
+Coordination self-adoption is a later receiver. Its current main protection is supplied by applicable
+rulesets rather than the classic branch-protection check list, and its Bootstrap qualification can
+validly reuse a prior result with skipped jobs. A ruleset-aware observer and a profile-specific
+validated-reuse receipt are needed before that repository is selected. This work can be prepared in
+parallel; it does not delay SDD/Templates or turn skipped checks into successes for other profiles.
+
 [ADR-0091](adr/0091-speed-first-clean-v2-start.md) records the decision. Everything below describing the
 older GS2-09–GS2-14 migration sequence is retained historical design, not a second set of prerequisites.
 Superseded work is not reported as completed.
