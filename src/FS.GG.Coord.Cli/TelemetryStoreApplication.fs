@@ -3539,6 +3539,7 @@ ON CONFLICT(key) DO UPDATE SET value=excluded.value;"""
                                 Error [ "overload" ]
                             else
                                 let inbox = Path.Combine(root, "receipt-inbox")
+                                let createdInbox = not (Directory.Exists inbox)
                                 Directory.CreateDirectory inbox |> ignore
 
                                 File.SetUnixFileMode(
@@ -3546,11 +3547,20 @@ ON CONFLICT(key) DO UPDATE SET value=excluded.value;"""
                                     UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute
                                 )
 
-                                fsyncDirectory root
+                                // The parent sync makes the inbox directory durable after its first creation.
+                                // Re-syncing an unchanged parent on every admission adds another storage barrier
+                                // to the protected warm path without making the new receipt any more durable.
+                                if createdInbox then
+                                    fsyncDirectory root
+                                    hook "after-inbox-directory-sync"
+
                                 let target = receiptPath root scope.Producer envelope.BatchId
                                 let temporary = Path.Combine(inbox, "." + Guid.NewGuid().ToString("N") + ".tmp")
 
                                 try
+                                    // Flush(true) below is the single file durability barrier. Opening the
+                                    // stream with WriteThrough as well would synchronously persist the write
+                                    // and then immediately repeat that work at the explicit crash boundary.
                                     use stream =
                                         new FileStream(
                                             temporary,
@@ -3558,7 +3568,7 @@ ON CONFLICT(key) DO UPDATE SET value=excluded.value;"""
                                             FileAccess.Write,
                                             FileShare.None,
                                             4096,
-                                            FileOptions.WriteThrough
+                                            FileOptions.None
                                         )
 
                                     File.SetUnixFileMode(temporary, UnixFileMode.UserRead ||| UnixFileMode.UserWrite)
