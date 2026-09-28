@@ -16,9 +16,15 @@ freezes, installs and verifies v2 without normal writes, and crosses one explici
 return. Production becomes new-only after that receipt; historical v1 state is sealed and verifiable but
 is not a permanent compatibility burden on the v2 runtime.
 
+> **Accepted clean-start amendment — 2026-09-28:** [ADR-0091](../adr/0091-speed-first-clean-v2-start.md)
+> supersedes this document's staged migration and fleet-cutover requirements for the active route.
+> `.github` starts a fresh v2 generation, proves one real journey and one ordinary rerun, and then
+> adopts other repositories explicitly with forward repair. The older design remains below as historical
+> rationale and accepted evidence; unfinished work is cancelled or superseded, not complete.
+
 | Field | Value |
 |---|---|
-| Status | Proposed governing design for [`.github#2953`](https://github.com/FS-GG/.github/issues/2953) |
+| Status | Historical staged-cutover design; active route is ADR-0091 |
 | Authored | 2026-08-25 |
 | Program | [GitHub modernization Epic `.github#2952`](https://github.com/FS-GG/.github/issues/2952) |
 | Execution spine | [Bootstrap/qualify `.github#2963`](https://github.com/FS-GG/.github/issues/2963), [bridge/ledger `.github#2964`](https://github.com/FS-GG/.github/issues/2964), [cutover/retire `.github#2965`](https://github.com/FS-GG/.github/issues/2965) |
@@ -360,6 +366,12 @@ shell table.
 
 ### 4.9 Cutover epoch
 
+For the active clean-start route, the repository administrator writes one new `.github` `OpenV2`
+generation directly from the historical `OperatingV1` head under a narrow temporary cutover-ref writer
+grant, reads it back, and restores the exact rules immediately. No `VerifiedV2`, migration or human-run
+receipt is invented. Source branch protections remain unchanged, and the operation uses no forced update
+or admin merge. The staged state machine below applies only to the superseded fleet-migration route.
+
 The global epoch is a protocol state machine stored in a content-addressed Git ledger on a dedicated,
 ruleset-protected cutover ref and bound to the exact cutover manifest. Each transition is an expected-parent
 commit; a protected, non-deletable phase tag anchors the accepted commit. The GitHub App is the sole normal
@@ -400,6 +412,9 @@ operation grant. The issue projection is regenerated only after the authoritativ
 successfully.
 
 #### OperatingV1 admission after genesis
+
+This admission design is historical for the clean-start route. ADR-0091 does not require it for ordinary
+source delivery or `.github` activation and grants it no new authority.
 
 The installed v1 admission genesis establishes a journal root, not authority for a caller to create an
 admission. While the verified epoch is `OperatingV1`, one protected service derives each new
@@ -513,6 +528,9 @@ GS2-08 bridge fence remains the outer precondition; this admission contract adds
 writer and grants no cutover transition.
 
 ### 4.10 Sealed legacy history
+
+Sealed-history completeness is not an acceptance condition for ADR-0091. Existing archives and evidence
+remain historical material; no new clean-start write claims that v1 history was migrated or verified.
 
 V2 production does not carry permanent upcasters for all v1 history. The cutover classifies v1 state as:
 
@@ -777,6 +795,9 @@ authority for whether a package is externally served.
 
 ### 9.1 Manifest
 
+The manifest contract below belongs to the superseded staged migration. The active clean-start route
+records the new epoch and pilot repository only; it does not manufacture a fleet migration manifest.
+
 The cutover manifest is generated from a fresh complete reading and binds:
 
 - protocol/model/package fingerprints;
@@ -813,11 +834,18 @@ until an explicit disposition is recorded. No heuristic default silently turns p
 
 ### 9.3 Historical state
 
+ADR-0091 preserves old state as history without requiring transformation or backward-valid replay.
+
 Archived Project items and closed issues remain audit subjects. They need not all receive active planning
 fields, but their old authority bytes and relationships must be sealed. Open items and anything referenced
 by an open operation receive full v2 migration.
 
 ## 10. Fleet cutover protocol
+
+The active protocol is the four-step ADR-0091 route: conventional checked source delivery; fresh
+`.github` clean-start activation; one real journey plus one normal rerun; and explicit repository-by-
+repository adoption with forward repair. `.github` is initially the only continuous activation target.
+The staged protocol below is retained for history and is not an active dependency.
 
 ### Single-operator execution
 

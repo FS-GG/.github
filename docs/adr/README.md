@@ -116,6 +116,7 @@ registry like any other, and this org gates its registries.
 | [0089](0089-reuse-the-protected-q4-sandbox-for-migration-rehearsal.md) | Reuse the protected Q4 sandbox for migration rehearsal | Accepted |
 
 | [0090](0090-single-operator-v2-cutover-execution.md) | Prepare one-operator cutover execution with a protected human OpenV2 decision | Proposed |
+| [0091](0091-speed-first-clean-v2-start.md) | Start v2 clean in `.github`, prove one real journey and rerun, then adopt repositories explicitly and repair forward | Accepted |
 
 ## Supersession map
 

@@ -18,6 +18,13 @@ cross-repository sequence and exit gates; the
 [governing design](coordination/2026-08-25-github-substrate-v2-fleet-cutover-design.md) owns the architecture
 and rationale.
 
+> **Accepted clean-start amendment — 2026-09-28:** [ADR-0091](adr/0091-speed-first-clean-v2-start.md)
+> replaces the active fleet-migration sequence with a speed-first clean v2 start. Deliver the source
+> through ordinary GitHub protections, open a fresh `.github` v2 generation, prove one real journey and
+> one normal rerun, then add repositories explicitly and repair forward. `.github` alone is continuously
+> activated at first; generated and scaffolded defaults do not change. The detailed GS2-09–GS2-14 plan
+> below is retained as historical work. Its unfinished units are cancelled or superseded, not complete.
+
 > **Quint-first candidate dependency:** [ADR-0077](adr/0077-quint-first-typed-specification-authority.md)
 > and the [migration design](coordination/2026-08-25-quint-first-typed-sdd-migration-design.md) require the
 > behavioral protocol in GS2-02 to be a literate Quint source consumed through the published FS.GG
@@ -51,14 +58,14 @@ and rationale.
 
 | Field | Value |
 |---|---|
-| Status | GS2-00 and GS2-01 accepted; GS2-02.1–GS2-02.11, all GS2-03 units, all GS2-04 units, all GS2-05 units, all GS2-06 units, and GS2-07.1–GS2-07.8 and GS2-08.1–GS2-08.9 accepted; GS2-01.9 not applicable |
+| Status | Clean-start activation governed by ADR-0091; earlier accepted units remain historical evidence |
 | Program | [GitHub modernization Epic `.github#2952`](https://github.com/FS-GG/.github/issues/2952) |
 | Ratification | [`.github#2953`](https://github.com/FS-GG/.github/issues/2953) |
 | Build and qualification | [`.github#2963`](https://github.com/FS-GG/.github/issues/2963) |
 | Bridge and cutover ledger | [`.github#2964`](https://github.com/FS-GG/.github/issues/2964) |
 | Fleet cutover and retirement | [`.github#2965`](https://github.com/FS-GG/.github/issues/2965) |
-| Point of no return | Authoritative `OpenV2` transition in the protected cutover ledger |
-| Current production authority | v1 until `OpenV2`; preparation and shadow reads do not change that |
+| Point of no return | Direct `OperatingV1` to fresh `OpenV2` clean-start generation for `.github` |
+| Current production authority | v1 until the clean-start epoch write is read back; then `.github` v2 only |
 
 ## 1. How work is executed
 
@@ -1513,7 +1520,11 @@ GS2-11.3 through the switch and verification window, do not start or advance
 independent telemetry mutations: stop ingress, drain active work, and preserve
 the fleet freeze until the roadmap explicitly releases deferred programs.
 
-### GS2-09 — Build migration, archive, and rollback tooling
+### GS2-09 — Build migration, archive, and rollback tooling (historical; superseded)
+
+ADR-0091 cancels the unfinished mandatory migration, archive, rollback, callable-v1 admission and
+rehearsal work for the clean-start route. Checked units below retain their accepted historical meaning;
+unchecked units remain unchecked and are not prerequisites for the new `.github` generation.
 
 **Parents:** `.github#2954`, `.github#2963`, `.github#2965`
 **Owner:** `FS.GG.Coordination`
@@ -1565,7 +1576,7 @@ the fleet freeze until the roadmap explicitly releases deferred programs.
 - [ ] **GS2-09.8 — Prove idempotency and no omission.** Re-running an exact manifest changes nothing;
   adding one unknown live subject or losing one page prevents qualification.
 
-### GS2-10 — Qualify the exact candidate and prepare the fleet
+### GS2-10 — Qualify the exact candidate and prepare the fleet (historical; superseded)
 
 **Parent:** `.github#2965`
 **Owner:** `FS.GG.Coordination`, `.github`, and every receiver
@@ -1606,7 +1617,7 @@ the fleet freeze until the roadmap explicitly releases deferred programs.
   repository-settings mutation, or release saga expected to cross the cutover window. Defer each remaining
   row until `OperatingV2` or mint a new candidate and repeat the complete Q0–Q7 matrix.
 
-### GS2-11 — Freeze the production fleet
+### GS2-11 — Freeze the production fleet (historical; superseded)
 
 **Parent:** `.github#2965`
 **Owner:** protected cutover operators
@@ -1631,7 +1642,7 @@ the fleet freeze until the roadmap explicitly releases deferred programs.
 - [ ] **GS2-11.8 — Decide continue or rollback.** Any active writer, unreadable authority, manifest drift,
   unplanned head/settings change, or unsettled operation executes the rollback plan before switch.
 
-### GS2-12 — Switch and verify while the fleet remains closed
+### GS2-12 — Switch and verify while the fleet remains closed (historical; superseded)
 
 **Parent:** `.github#2965`
 **Owner:** protected cutover operators
@@ -1661,7 +1672,7 @@ the fleet freeze until the roadmap explicitly releases deferred programs.
 - [ ] **GS2-12.10 — Commit verification.** Independent reviewers accept Q8 and the operator commits/anchors
   `VerifiedV2(evidence)`. Failure chooses repair-and-reverify or rollback while writes remain closed.
 
-### GS2-13 — Open v2, fence v1, and enter observation
+### GS2-13 — Open v2, fence v1, and enter observation (historical; superseded)
 
 **Parent:** `.github#2965`
 **Owner:** protected cutover operators followed by repository maintainers
@@ -1694,7 +1705,7 @@ the fleet freeze until the roadmap explicitly releases deferred programs.
   operations, action items, old-client attempts, and the later contraction; no destructive v1 deletion is
   allowed before the 15-item Q10 gate.
 
-### GS2-14 — Observe, improve, and close the renovation
+### GS2-14 — Observe, improve, and close the renovation (historical; superseded)
 
 **Parent:** `.github#2965` and Epic `.github#2952`
 **Owner:** `FS.GG.Coordination` and `.github`

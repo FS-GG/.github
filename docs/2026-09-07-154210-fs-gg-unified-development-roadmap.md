@@ -11,11 +11,11 @@ Short name: **Unified Roadmap**. In FS-GG development discussions, **“the road
 and **“compacted roadmap”** refer to this document unless another roadmap is explicitly named.
 
 Authored: **2026-09-07 15:42:10 UTC**. Section 0 evidence reconciliation: **2026-09-27**.
-Status: **active programme; V2 migration implementation and rehearsal remain the critical path**.
+Status: **active programme; the ADR-0091 clean-start `.github` V2 pilot is the critical path**.
 
-**Start from completed development simplification and the existing v2 implementation. Finish and qualify
-the remaining migration, preserve the simplified experience on installed v2 receivers, then invest in
-bounded execution and operations research only for demonstrated unmet needs.** This document specifies
+**Start from completed development simplification and the existing v2 implementation. Deliver checked,
+head-conditioned source changes, open one fresh `.github` V2 epoch, prove one real journey and one normal
+rerun, then roll forward to explicitly selected repositories.** This document specifies
 which development process applies to each kind of work, where its behavior belongs, what evidence is
 needed, and how the programmes join.
 
@@ -30,6 +30,11 @@ Publication of this prose does not adopt a policy, change a GS2 unit, enable a w
 default, or authorize an administrative operation. Existing accepted contracts, exact roadmap pins and
 operating authority remain binding. The stage labels below are planning joins, not a second executable
 queue. Implementation uses the existing owning units after any necessary versioned amendment.
+
+[ADR-0091](adr/0091-speed-first-clean-v2-start.md) is the accepted owner amendment for the active V2
+route. It prospectively supersedes ADR-0090 and the GS2-09 through GS2-14 migration sequence for this
+clean start. Earlier accepted evidence remains historical evidence; unfinished migration, archive,
+rollback and mandatory V1-admission work is cancelled or superseded, not completed.
 
 For the operating model, start with [process selection](#4-which-development-process-applies-and-where).
 For sequencing, use the [unified roadmap](#9-unified-roadmap-from-the-current-v2-frontier) and
@@ -48,11 +53,12 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
-**Current frontier: callable v2 is qualified for its isolated scope; GS2-09.1–.6 migration contracts are
-accepted; GS2-09.7 and GS2-09.9 source slices are merged, while their protected qualification and GS2-09.8
-omission proof remain open.** Fleet production `OpenV2`, Q4 and `OperatingV2` are not established by those results.
-The protected OperatingV1 admission *genesis* is now installed and independently read back; post-genesis
-admission CAS, copy-specific effect authority and ordinary CLI enablement remain separate open gates.
+**Current frontier: the accepted clean-start route uses the existing published Coordination CLI 0.1.2
+and workflow to pilot V2 in `.github`.** Its next steps are conventional checked and head-conditioned
+source delivery, a fresh `.github` `OpenV2` epoch, one real working journey, and one normal rerun smoke.
+The earlier callable, GS2-09 and OperatingV1 evidence remains valid at its recorded scope but no longer
+forms the active dependency chain. No clean-start step may relabel that evidence as migration completion,
+`VerifiedV2`, or a human-run receipt.
 
 The source and publication frontier was updated from protected evidence on **2026-09-27**. The broader
 [code audit](reports/2026-09-24-v2-roadmap-code-audit.md) records its 2026-09-24 revisions, implementation boundaries,
@@ -75,6 +81,12 @@ may continue while the projection lands. Update the relevant current row and its
 retain detailed milestone history in the owning plan. CI ticks and intermediate checkpoints need no edit.
 
 ### 0.1 Stage progress
+
+The active profile is **C0–C3**: C0 checked source delivery; C1 fresh `.github` V2 pilot; C2 one real
+journey plus one normal rerun; C3 explicit-repository rollout with repair forward. `.github` is the only
+continuous activation target initially. Other repositories join only by explicit later selection, and
+generated/scaffold defaults remain unchanged. The V0–V6 rows below preserve the superseded staged route
+for history and must not be used as clean-start prerequisites.
 
 | Stage | Verified position | Remaining exit and owner |
 |---|---|---|
@@ -1068,9 +1080,18 @@ must be reserved so more clients do not merely lengthen the master's queue.
 
 ## 9. Unified roadmap from the current v2 frontier
 
-The stages below consolidate outcomes and joins. They are not instructions to create new epics.
-Reuse existing GS2 and predecessor ownership; map an accepted OR/PB experiment into one owning work item
-when funded. No stage acquires mutable completion checkboxes in this document.
+ADR-0091 replaces the active V0–V6 cutover sequence with this bounded clean-start route:
+
+| Stage | Work | Observable exit |
+|---|---|---|
+| **C0 — Deliver source** | Use ordinary GitHub delivery with current authenticated identity, applicable checks and an exact-head merge condition. Preserve native branch protections; do not force-update or use an admin merge. | The intended source is merged at the checked head and independently read back. |
+| **C1 — Start `.github` clean** | From `OperatingV1`, create a fresh `.github` `OpenV2` generation with the existing published CLI 0.1.2 and workflow. A repository administrator may grant the narrow cutover-ref writer temporarily, then must restore and read back the exact prior permission. | The new generation and restored permission are independently observed. No migration or `VerifiedV2` receipt is invented. |
+| **C2 — Smoke real use** | Run one real working journey and one ordinary rerun through the new `.github` generation. | Both journeys complete with native provider readback; failures are repaired forward. |
+| **C3 — Roll out explicitly** | Select each additional repository explicitly and repeat its bounded adoption. Keep generated/scaffold defaults unchanged. | Each selected repository has its own observed working journey; unselected repositories retain their current behavior. |
+
+The V0–V6 table, dependency graph and migration lanes below are retained as historical design context.
+They no longer schedule work or constrain C0–C3. Accepted predecessor results keep their original scope;
+unfinished GS2-09 through GS2-14 work is cancelled or superseded rather than recorded as complete.
 
 | Stage | Work and owning sources | Development process | Observable exit |
 |---|---|---|---|
@@ -1088,9 +1109,15 @@ when funded. No stage acquires mutable completion checkboxes in this document.
 
 ### 9.1 Dependencies and parallelism
 
-**Solid arrows are acceptance dependencies. Dashed arrows permit preparation or reuse; they do not grant
+The active dependency chain is `C0 checked source → C1 .github clean epoch → C2 journey and rerun → C3
+explicit-repository adoption`. Repair forward within that chain; do not require migration, archive,
+rollback, retained-state transformation, GS2-10 candidate freeze, or GS2-11–GS2-14 gates.
+
+The graph and lane table below describe the superseded staged route. **Solid arrows are its historical
+acceptance dependencies. Dashed arrows permit preparation or reuse; they do not grant
 effect authority.** Completed inputs remain visible so the graph does not schedule them again. The exact
-GS2 contracts own acceptance; this graph introduces no new unit or mutable completion ledger.
+GS2 contracts retain their historical acceptance; this graph introduces no active clean-start unit or
+mutable completion ledger.
 
 ```mermaid
 flowchart TD
@@ -1174,6 +1201,11 @@ producer and consumer changes, registered unit contracts and exact pins must agr
 an explicit owner and later target population; do not claim a simplified-v2 default or completed R5.
 
 ### 9.3 V1–V2: make v2 usable before freezing it
+
+**Historical staged route.** ADR-0091 removes this section from the active dependency chain. The existing
+CLI 0.1.2 and workflow support the clean `.github` pilot; no remaining GS2-09 migration slice, V1 admission
+extension, archive or rollback proof is a prerequisite. Retain the evidence below at its original scope
+without presenting unfinished items as complete.
 
 **Reuse completed inputs.** GS2-07.1–.8 and GS2-08.1–.9 are accepted. Preserve their event/audit behavior,
 bridge artifact, receiver census and residual-writer dispositions. New writers still need the common
@@ -1333,6 +1365,11 @@ That source supplies protocol depth; this unified roadmap owns the feature's pla
 
 ### 9.8 Feature parts and subroadmap index
 
+For the active clean-start route, plan one bounded part: **clean `.github` V2 activation**, covering C0
+through C2 with the existing CLI 0.1.2 and workflow. C3 is selected repository by repository after the
+smoke passes. The migration, candidate-freeze, controlled-cutover and observation parts in the table below
+are historical entries and must not be dispatched for the clean-start route.
+
 These are the default **parts for Astra planning**, named by deliverable. Select independent
 dependency-ready parts concurrently when programme advancement is requested; use a fresh Astra-high
 planner when each part needs its first plan. A valid active subroadmap continues with its existing
@@ -1391,6 +1428,11 @@ links back to this section and names its part so the relationship is navigable i
 
 ### 9.9 When new workspaces change
 
+ADR-0091 does not change generated workspaces or scaffold defaults. Initial continuous V2 activation is
+limited to `.github`; every other repository requires an explicit later selection. A repository's clean
+epoch changes its operating route, not its generated files. The historical V0–V6 receiver rows below do
+not create adoption work for the clean-start route.
+
 **New workspace contents change at the published scaffold/receiver boundary.** A roadmap stage or
 producer source merge alone does not change the bytes delivered by an installed tool. Generated files,
 available capabilities and enabled behavior can change at different times.
@@ -1443,6 +1485,10 @@ materialization boundaries. The SVG/Fable product work retained in section 15 ha
 default decisions; progress through V0–V6 alone does not select a new product template or game runtime.
 
 ## 10. Exact GS2 integration and contract-change boundaries
+
+For ADR-0091, the active boundary is C0–C3 and the ordinary repository protections described in section
+9. GS2-09 through GS2-14 require no new integration for the clean-start route. The table below records the
+superseded staged design and remains useful only as historical context or for a separately revived route.
 
 | Existing surface | Proposed integration | Required handling |
 |---|---|---|
