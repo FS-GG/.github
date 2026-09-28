@@ -147,6 +147,11 @@ module TelemetryReceiptTests =
             let hook stage = if stage = "after-rename" then raise (IOException "injected")
             Assert.True(TelemetryStoreApplication.submitReceiptPrincipalWithHook root approved collector interrupted hook |> Result.isError)
             Assert.Equal("durably-received", status (TelemetryStoreApplication.submitReceiptPrincipal root approved collector interrupted))
+            let changedGrant = { collector with GrantGeneration = Some 2L }
+            Assert.Equal(
+                Error [ "unauthorized-scope" ],
+                TelemetryStoreApplication.submitReceiptPrincipal root approved changedGrant interrupted
+            )
             TelemetryStoreApplication.drainReceipts root approved scope.Workspace |> unwrap |> ignore
 
             use connection = new SqliteConnection($"Data Source={Path.Combine(root, TelemetryStoreApplication.databaseFileName)};Pooling=False")

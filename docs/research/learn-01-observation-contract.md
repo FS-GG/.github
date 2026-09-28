@@ -76,6 +76,12 @@ shared-cost/authority observations; it cannot submit assignments or general tele
 scope checks remain at the protected credential boundary. Schema-11 pending artifacts migrate as generic, and
 historical/direct-ingest facts retain unknown provenance.
 
+Exact receipt retries remain bound to the receiver-retained role and grant. The Host may use a scope-only read to
+find the receipt identity, but it re-enters the principal-aware store path before acknowledging matching bytes; a
+later credential with the same scope and a different role, grant identifier or generation is refused. Host
+configuration also refuses two credentials that assign incompatible authority to one scope, even when their secret
+files differ.
+
 Shared allocation uses one fixed rule, `equal-largest-remainder-v1`. Its sorted original-item roster, policy,
 window and freeze time are immutable and must agree with every member's prospective accounting inventory and
 assignment. The store accepts it only while every roster member remains unassigned, and the bounded read carries
@@ -102,7 +108,28 @@ An invocation without a validated source candidate similarly reports `independen
 The private snapshot counts learning rows before it emits `selection.complete`. More than 10,000 matching rows are
 refused rather than truncated or described as complete.
 
-The synthetic fixture proves source behavior only. The protected native collector command and custody installation,
-adapter adoption, published version/configuration and credential, and trusted snapshot acquisition remain later
-source or operational gates. Live collection and any efficiency conclusion remain pending. Current native usage is
+The protected host command accepts only dispatch and native thread selectors. It resolves admitted child lineage,
+original item and requested profile from the durable store, loads its executable, Codex home, evidence root and
+restricted principal from a private host-owned installation file, clears the inherited process environment, and
+recomputes the native roster, counters and binding with the existing native reader. It atomically retains the
+canonical two-fact envelope before submission so an interrupted retry reuses the original bytes and receiver-owned
+principal admission. Callers cannot provide inventory, totals, rollout path, source binding, executable, source
+root or credential. Missing or ambiguous lineage, a native-agent mismatch and a protected/durable profile mismatch
+refuse before invoking or admitting a new candidate.
+
+This is a refusal-safe command boundary, not qualified capture custody. Its result keeps source verification,
+snapshot origin and shared-cost completeness `unknown`; the analysis therefore continues to report
+`native-source-verification-unavailable`, `snapshot-origin-unverified`, and
+`independent-shared-cost-authority-unavailable`. The synthetic fixture proves source behavior only. Adapter
+adoption, installed configuration and credential, trusted capture custody, and trusted snapshot acquisition remain
+later operational gates. Live collection and any efficiency conclusion remain pending. Current native usage is
 `not-configured`, so no live token total is claimed.
+
+The roadmap adapter adopts that boundary only for a terminal child with durable dispatch, parent-thread and
+native-agent selectors. `FSGG_TELEMETRY_NATIVE_COLLECTOR_CONFIG` may select an absolute private `0600` Host
+configuration; the adapter passes that path and the three selectors to the fixed `fsgg-telemetry-host
+collect-native` command. It passes no credential, role, grant, inventory, total, executable, source root or source
+binding. A missing selection, unsafe file, old Host, refusal, timeout or malformed result retains the existing
+generic/local reconciliation and remains `native-collaboration-usage-unknown`. A strictly validated protected
+success suppresses the adapter's generic inventory/source candidates while generic turn observations remain
+unqualified. The adapter accepts only the Host's closed UNKNOWN result and cannot promote collector authority.

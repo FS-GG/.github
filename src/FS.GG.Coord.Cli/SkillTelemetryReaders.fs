@@ -873,7 +873,7 @@ module SkillTelemetryReaders =
                     }
             | _ -> failure "native usage counters are malformed"
 
-        type private AppServer(command: string) =
+        type private AppServer(command: string, protectedHome: string option) =
             let start = ProcessStartInfo(command)
             let evidence = ResizeArray<byte array>()
             let mutable disposed = false
@@ -886,6 +886,14 @@ module SkillTelemetryReaders =
                 start.RedirectStandardOutput <- true
                 start.RedirectStandardError <- true
                 start.CreateNoWindow <- true
+
+                protectedHome
+                |> Option.iter (fun home ->
+                    start.Environment.Clear()
+                    start.Environment["CODEX_HOME"] <- home
+                    start.Environment["HOME"] <- home
+                    start.Environment["LANG"] <- "C.UTF-8"
+                    start.WorkingDirectory <- home)
 
             let hostProcess = new Diagnostics.Process(StartInfo = start)
             let outputLines = lazy (ExactLines(hostProcess.StandardOutput.BaseStream))
@@ -1414,7 +1422,8 @@ module SkillTelemetryReaders =
                 JsonSerializerOptions(PropertyNamingPolicy = null)
             )
 
-        let collectWith
+        let private collectInternal
+            protectedLaunch
             (command: string)
             (codexHome: string)
             (parentThreadId: Guid)
@@ -1434,7 +1443,7 @@ module SkillTelemetryReaders =
                 failure "native parent or child identity is unavailable"
             else
                 try
-                    use server = new AppServer(command)
+                    use server = new AppServer(command, if protectedLaunch then Some codexHome else None)
 
                     match server.Start() with
                     | Error error -> Error error
@@ -1724,6 +1733,12 @@ module SkillTelemetryReaders =
                                 | _ -> failure "native child thread metadata is unavailable"
                 with error ->
                     failure $"native usage is unavailable: {error.Message}"
+
+        let collectWith command codexHome parentThreadId nativeAgentId rootInvocationId invocationId revision =
+            collectInternal false command codexHome parentThreadId nativeAgentId rootInvocationId invocationId revision
+
+        let collectProtectedWith command codexHome parentThreadId nativeAgentId rootInvocationId invocationId revision =
+            collectInternal true command codexHome parentThreadId nativeAgentId rootInvocationId invocationId revision
 
         let collect parentThreadId nativeAgentId rootInvocationId invocationId revision =
             let codexHome =

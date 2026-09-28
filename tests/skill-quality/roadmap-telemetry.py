@@ -595,6 +595,96 @@ class RoadmapTelemetryTests(unittest.TestCase):
                               for fact in batch["events"] if fact["kind"] == "runtime-gap"
                               and fact["invocationId"] == MODULE.read_state(config, child)["invocationId"]])
 
+    def test_protected_collector_uses_only_trusted_selectors_and_old_or_failed_hosts_stay_unknown(self):
+        state = {
+            "dispatchId": "dispatch-child",
+            "invocationId": "invocation-child",
+            "hostParentThreadId": "11111111-1111-4111-8111-111111111111",
+            "nativeId": "child_1",
+        }
+        with mock.patch.dict(os.environ, {}, clear=True), \
+             mock.patch.object(MODULE.subprocess, "run") as run:
+            self.assertFalse(MODULE.request_protected_native_collection(state))
+            run.assert_not_called()
+        with tempfile.TemporaryDirectory() as scratch:
+            host_config = pathlib.Path(scratch) / "host.json"
+            host_config.write_text("{}", encoding="utf-8")
+            host_config.chmod(0o600)
+            environment = {MODULE.NATIVE_COLLECTOR_CONFIG_ENV: str(host_config)}
+            exact = [
+                "fsgg-telemetry-host", "collect-native", "--config", str(host_config),
+                "--dispatch", "dispatch-child",
+                "--parent-thread", "11111111-1111-4111-8111-111111111111",
+                "--native-agent", "child_1",
+            ]
+            for exit_code in (2, 3):
+                with mock.patch.dict(os.environ, environment, clear=True), \
+                     mock.patch.object(MODULE.subprocess, "run", return_value=subprocess.CompletedProcess(
+                         exact, exit_code, "", "old-or-refused")) as run:
+                    self.assertFalse(MODULE.request_protected_native_collection(state))
+                    self.assertEqual(run.call_args.args[0], exact)
+            result = {
+                "schema": MODULE.NATIVE_COLLECTOR_RESULT_SCHEMA,
+                "status": "applied",
+                "dispatchId": "dispatch-child",
+                "invocationId": "invocation-child",
+                "sourceVerification": "unknown",
+                "snapshotOrigin": "unknown",
+                "sharedCostCompleteness": "unknown",
+            }
+            inflated = {**result, "receiptRole": "native-collector", "credential": "forbidden"}
+            with mock.patch.dict(os.environ, environment, clear=True), \
+                 mock.patch.object(MODULE.subprocess, "run", return_value=subprocess.CompletedProcess(
+                     exact, 0, json.dumps(inflated), "")):
+                self.assertFalse(MODULE.request_protected_native_collection(state))
+            with mock.patch.dict(os.environ, environment, clear=True), \
+                 mock.patch.object(MODULE.subprocess, "run", return_value=subprocess.CompletedProcess(
+                     exact, 0, json.dumps(result), "")) as run:
+                self.assertTrue(MODULE.request_protected_native_collection(state))
+                self.assertEqual(run.call_args.args[0], exact)
+                self.assertNotIn("--credential", exact)
+
+    def test_protected_collector_success_does_not_publish_generic_inventory_authority(self):
+        with tempfile.TemporaryDirectory() as scratch:
+            config = self.config(pathlib.Path(scratch))
+            batches = []
+            parent = "11111111-1111-4111-8111-111111111111"
+            thread = "22222222-2222-4222-8222-222222222222"
+            turn = "33333333-3333-4333-8333-333333333333"
+            usage = {"input_tokens": 10, "cached_input_tokens": 5, "output_tokens": 2,
+                     "reasoning_output_tokens": 1, "total_tokens": 12}
+            native = native_snapshot(thread, [turn], [
+                {"turnId": turn, "turnSequence": 1, "usage": usage}])
+            def fake_run(command, **_):
+                if "publish" in command:
+                    batches.append(json.loads(pathlib.Path(command[command.index("--input") + 1]).read_text()))
+                return subprocess.CompletedProcess(command, 0, "{}", "")
+            with mock.patch.dict(os.environ, {"CODEX_THREAD_ID": parent}, clear=True), \
+                 mock.patch.object(MODULE.subprocess, "run", side_effect=fake_run), \
+                 mock.patch.object(MODULE, "request_protected_native_collection", return_value=True), \
+                 mock.patch.object(MODULE, "collect_native_usage", side_effect=bound_collector(native)):
+                root = MODULE.begin(config, MODULE.parser().parse_args([
+                    "begin", "--feature", "F", "--item", "I", "--attempt", "root",
+                    "--model", "gpt-6-astra", "--effort", "high"]))["token"]
+                MODULE.started(config, MODULE.parser().parse_args([
+                    "started", "--token", root, "--native-id", "root"]))
+                child = MODULE.begin(config, MODULE.parser().parse_args([
+                    "begin", "--feature", "F", "--item", "I", "--attempt", "child",
+                    "--parent-token", root, "--relation", "child",
+                    "--model", "gpt-6-astra", "--effort", "high"]))["token"]
+                MODULE.started(config, MODULE.parser().parse_args([
+                    "started", "--token", child, "--native-id", "child_1"]))
+                result = MODULE.finish(config, MODULE.parser().parse_args([
+                    "finish", "--token", child, "--outcome", "completed"]))
+            self.assertEqual(result["coverage"], "native-collaboration-usage-unknown")
+            state = MODULE.read_state(config, child)
+            self.assertEqual(state["protectedNativeCollector"], "applied")
+            self.assertEqual(state["nativeInventoryIntegration"]["status"], "protected-host-applied")
+            facts = [fact for batch in batches for fact in batch["events"]]
+            self.assertFalse(any(fact["kind"] in {"runtime-native-inventory/1",
+                                                  "runtime-native-inventory-source/1"} for fact in facts))
+            self.assertEqual(len([fact for fact in facts if fact["kind"] == "runtime-turn-usage"]), 1)
+
     def test_followup_excludes_all_prior_native_turns(self):
         with tempfile.TemporaryDirectory() as scratch:
             config = self.config(pathlib.Path(scratch))

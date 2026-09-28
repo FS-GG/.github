@@ -51,10 +51,26 @@ type AuthEntry =
         Revoked: bool
     }
 
+type NativeCollectorInstallationConfig =
+    {
+        Schema: string
+        CredentialReference: string
+        ExecutablePath: string
+        CodexHome: string
+        EvidenceRoot: string
+        Provider: string
+        Model: string
+        Effort: string
+    }
+
 module Configuration =
     val validate: HostConfig -> Result<HostConfig, string list>
     val load: string -> Result<HostConfig, string list>
     val credentials: HostConfig -> Map<string, AuthEntry>
+    val loadNativeCollectorInstallation:
+        hostConfigPath: string ->
+        hostConfig: HostConfig ->
+            Result<NativeCollectorInstallationConfig * TelemetryReceipt.Principal, string list>
     val browserKeyHashes: HostConfig -> Map<string, byte array * Set<string> * bool>
 
 type Reply = { Status: int; Body: byte array }
