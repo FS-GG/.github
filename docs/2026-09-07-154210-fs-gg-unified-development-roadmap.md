@@ -64,9 +64,13 @@ forms the active dependency chain. No clean-start step may relabel that evidence
 On **2026-09-28**, the shared authority advanced by one fast-forward append to generation 2 `OpenV2`
 at [commit `26d1882`](https://github.com/FS-GG/FS.GG.Coordination.Authority/commit/26d1882af9293b264df17a1fa98515e108313fe5).
 The exact original cutover-ref writer rule was restored and independently read back. The conflicting
-V1 genesis workflow is disabled. The `.github` activation source is prepared; successful ordinary
-settlement and its normal rerun remain the next live acceptance steps. This does not establish
-fleet-wide activation or any historical migration result.
+V1 genesis workflow is disabled. [Activation PR #3913](https://github.com/FS-GG/.github/pull/3913)
+merged as `a98162fb119c43f2e5d60c2b284d01e81ac468db`. The [live run](https://github.com/FS-GG/.github/actions/runs/36395767759)
+reported `SettlementSucceeded` on attempt 3 and `SettlementAlreadyComplete` on the normal whole-run
+replay, attempt 4, both binding `96eebd38b0639d4c446d62dcfa413adffae32c839b387006d68322b1ca7399d6`.
+C0–C2 are complete for this bounded path; C3 is continuous `.github` use and explicit later repository
+adoption. Earlier attempts stopped at observation/artifact acquisition and did not establish settlement.
+This does not establish fleet-wide activation or any historical migration result.
 
 The source and publication frontier was updated from protected evidence on **2026-09-27**. The broader
 [code audit](reports/2026-09-24-v2-roadmap-code-audit.md) records its 2026-09-24 revisions, implementation boundaries,

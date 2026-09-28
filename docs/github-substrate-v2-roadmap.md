@@ -96,6 +96,18 @@ owns the concrete journey. [ADR-0091](adr/0091-speed-first-clean-v2-start.md) re
 Everything below describing the older GS2-09–GS2-14 migration sequence is retained historical design,
 not a second set of prerequisites. Superseded work is not reported as completed.
 
+### Observed clean-start result — 2026-09-28
+
+The `.github` pilot is active. [PR #3913](https://github.com/FS-GG/.github/pull/3913) delivered the
+activation. [Run 36395767759](https://github.com/FS-GG/.github/actions/runs/36395767759) completed a real
+settlement on attempt 3 and returned `SettlementAlreadyComplete` on the normal whole-workflow replay,
+attempt 4. Both bind settlement digest `96eebd38b0639d4c446d62dcfa413adffae32c839b387006d68322b1ca7399d6`.
+The shared generation 2 epoch is [commit 26d1882](https://github.com/FS-GG/FS.GG.Coordination.Authority/commit/26d1882af9293b264df17a1fa98515e108313fe5);
+the original cutover-ref writer rule is restored and the conflicting V1 workflow is disabled.
+
+The bounded pilot and rerun criteria are complete. Continue `.github` use and select further repositories
+explicitly; backward migration and the historical milestones below remain superseded.
+
 ## 1. How work is executed
 
 The three program issues are too large to hand directly to a general worker. They are durable anchors for
