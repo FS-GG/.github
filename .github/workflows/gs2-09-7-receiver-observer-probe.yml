@@ -60,7 +60,7 @@ jobs:
 
       - name: Retain sanitized probe evidence
         if: always()
-        uses: actions/upload-artifact@043fb65114c37b8a45b8f19c0e0be29a3b97f394
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: gs2-09-7-receiver-observer-${{ github.run_id }}-${{ github.run_attempt }}
           path: /tmp/fsgg-receiver-observer-public/
