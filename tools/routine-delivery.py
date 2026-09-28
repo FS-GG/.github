@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-import importlib.util
 import io
 import json
 import pathlib
@@ -20,30 +19,6 @@ from typing import Any, Callable, Protocol
 
 sys.dont_write_bytecode = True
 
-def _load_telemetry_defaults():
-    try:
-        import fsgg_telemetry_defaults as defaults
-        return defaults
-    except ModuleNotFoundError:
-        root = pathlib.Path(__file__).resolve().parents[1]
-        candidates = [
-            pathlib.Path(__file__).resolve().with_name("fsgg_telemetry_defaults.py"),
-            root / ".claude" / "skills" / "work-roadmap" / "scripts" / "fsgg_telemetry_defaults.py",
-            root / ".agents" / "skills" / "work-roadmap" / "scripts" / "fsgg_telemetry_defaults.py",
-        ]
-        for path in candidates:
-            if not path.is_file():
-                continue
-            spec = importlib.util.spec_from_file_location("fsgg_telemetry_defaults", path)
-            if spec is None or spec.loader is None:
-                continue
-            module = importlib.util.module_from_spec(spec)
-            sys.modules[spec.name] = module
-            spec.loader.exec_module(module)
-            return module
-        raise
-
-
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 MAX_SELECTION_ARCHIVE_BYTES = 1_048_576
 MAX_SELECTION_UNCOMPRESSED_BYTES = 1_048_576
@@ -57,6 +32,81 @@ class AmbiguousWrite(RuntimeError):
 
 class NativeMergeRefused(RuntimeError):
     """GitHub synchronously refused the head-conditioned merge request."""
+
+
+@dataclass(frozen=True)
+class TelemetryConfig:
+    path: str
+    store_root: str
+    engine: str
+    repository: str | None
+    workspace: bool
+
+
+def _compiled_json(
+    command: list[str], *, runner: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
+) -> tuple[int, dict[str, Any]]:
+    try:
+        completed = runner(
+            command, check=False, capture_output=True, text=True, timeout=25,
+        )
+    except (OSError, subprocess.SubprocessError) as error:
+        raise RuntimeError("compiled telemetry helper is unavailable") from error
+    if len(completed.stdout.encode("utf-8")) > 16 * 1024:
+        raise RuntimeError("compiled telemetry helper returned an oversized response")
+    try:
+        value = json.loads(completed.stdout)
+    except json.JSONDecodeError as error:
+        raise RuntimeError("compiled telemetry helper returned invalid JSON") from error
+    if not isinstance(value, dict):
+        raise RuntimeError("compiled telemetry helper returned a non-object response")
+    return completed.returncode, value
+
+
+def discover_telemetry_config(
+    explicit: str | None, *, command_engine: str = "fsgg-coord-engine",
+    runner: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
+) -> TelemetryConfig | None:
+    command = [command_engine, "skill", "telemetry-config", "discover"]
+    if explicit is not None:
+        command.extend(["--config", explicit])
+    code, value = _compiled_json(command, runner=runner)
+    if value == {"schema": "fsgg.telemetry.config-discovery/1", "status": "not-configured"}:
+        if code != 2:
+            raise RuntimeError("compiled telemetry discovery returned an invalid status")
+        return None
+    expected = {"schema", "status", "configPath", "storeRoot", "engine", "repository", "workspace"}
+    if code != 0 or set(value) != expected or value.get("schema") != "fsgg.telemetry.config-discovery/1" or value.get("status") != "configured":
+        raise RuntimeError("compiled telemetry configuration discovery refused")
+    path, store, engine = value.get("configPath"), value.get("storeRoot"), value.get("engine")
+    repository, workspace = value.get("repository"), value.get("workspace")
+    if (not isinstance(path, str) or not pathlib.Path(path).is_absolute()
+            or not isinstance(store, str) or not pathlib.Path(store).is_absolute()
+            or not isinstance(engine, str) or not engine
+            or (repository is not None and not isinstance(repository, str))
+            or not isinstance(workspace, bool)):
+        raise RuntimeError("compiled telemetry configuration discovery returned an invalid projection")
+    return TelemetryConfig(path, store, engine, repository, workspace)
+
+
+def create_ci_assignment(
+    config: TelemetryConfig, *, feature: str, item: str, attempt: str,
+    parent_attempt: str | None, command_engine: str = "fsgg-coord-engine",
+    runner: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
+) -> str:
+    command = [command_engine, "skill", "roadmap-telemetry", "--config", config.path,
+               "ci-assignment", "--feature", feature, "--item", item,
+               "--attempt", attempt, "--producer", "routine-delivery"]
+    if parent_attempt is not None:
+        command.extend(["--parent-attempt", parent_attempt])
+    code, value = _compiled_json(command, runner=runner)
+    if (code != 0 or set(value) != {"schema", "status", "assignment"}
+            or value.get("schema") != "fsgg.telemetry.assignment-result/1"
+            or value.get("status") != "ready"
+            or not isinstance(value.get("assignment"), str)
+            or not pathlib.Path(value["assignment"]).is_absolute()):
+        raise RuntimeError("compiled telemetry assignment creation refused")
+    return value["assignment"]
 
 
 @dataclass(frozen=True)
@@ -679,24 +729,21 @@ def main(argv: list[str]) -> int:
     engine = args.telemetry_engine or "fsgg-coord-engine"
     if not assignment and not store_root:
         try:
-            defaults = _load_telemetry_defaults()
-            config = defaults.discover_config(args.telemetry_config)
+            config = discover_telemetry_config(args.telemetry_config, command_engine=engine)
             if config is not None:
                 engine = args.telemetry_engine or config.engine
-                workspace_config = bool(getattr(config, "workspace", False))
-                workspace_transport = workspace_config
-                if workspace_config:
-                    config_path = str(config.path)
-                telemetry_repository = getattr(config, "repository", None) or args.repo
+                workspace_transport = config.workspace
+                config_path = config.path
+                telemetry_repository = config.repository or args.repo
                 if all(identity_values):
-                    assignment = str(defaults.create_assignment(
-                        config, defaults.CI_ASSIGNMENT_SCHEMA,
+                    assignment = create_ci_assignment(
+                        config,
                         feature=args.telemetry_feature, item=args.telemetry_item,
                         attempt=args.telemetry_attempt, parent_attempt=args.telemetry_parent_attempt,
-                        producer="routine-delivery",
-                    ))
-                    if not workspace_config:
-                        store_root = str(config.store_root)
+                        command_engine=args.telemetry_engine or "fsgg-coord-engine",
+                    )
+                    if not config.workspace:
+                        store_root = config.store_root
                 else:
                     observation_health.append("unavailable")
                     print("fsgg routine telemetry: host is configured but feature/item/attempt identities are missing", file=sys.stderr)

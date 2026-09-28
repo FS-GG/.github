@@ -14,7 +14,6 @@ import warnings
 import zipfile
 from dataclasses import asdict
 from datetime import datetime, timezone
-from types import SimpleNamespace
 from unittest import mock
 
 
@@ -544,39 +543,66 @@ class RoutineDeliveryTests(unittest.TestCase):
     def test_driver_discovers_host_config_and_creates_assignment_from_route_identities(self):
         observations = []
         created = []
-        defaults = SimpleNamespace(
-            CI_ASSIGNMENT_SCHEMA="ci-schema",
-            discover_config=lambda _: SimpleNamespace(engine="configured-engine", store_root=pathlib.Path("/private/store")),
-            create_assignment=lambda config, schema, **kwargs: created.append((config, schema, kwargs)) or pathlib.Path("/private/assignment.json"),
+        config = MODULE.TelemetryConfig(
+            "/private/config.json", "/private/store", "configured-engine", None, False,
         )
-        prior = MODULE.GhApi, MODULE.observe_candidate, MODULE._load_telemetry_defaults
+        prior = MODULE.GhApi, MODULE.observe_candidate, MODULE.discover_telemetry_config, MODULE.create_ci_assignment
         try:
             MODULE.GhApi = lambda: FakeApi([opened()])
             MODULE.observe_candidate = lambda summary, **kwargs: observations.append((summary, kwargs)) or "complete"
-            MODULE._load_telemetry_defaults = lambda: defaults
+            MODULE.discover_telemetry_config = lambda *_args, **_kwargs: config
+            MODULE.create_ci_assignment = lambda selected, **kwargs: created.append((selected, kwargs)) or "/private/assignment.json"
             code = MODULE.main([
                 "--repo", "FS-GG/.github", "--pr", "7", "--head", HEAD,
                 "--telemetry-feature", "GS2-08", "--telemetry-item", "GS2-08.3",
                 "--telemetry-attempt", "attempt-1",
             ])
         finally:
-            MODULE.GhApi, MODULE.observe_candidate, MODULE._load_telemetry_defaults = prior
+            (MODULE.GhApi, MODULE.observe_candidate, MODULE.discover_telemetry_config,
+             MODULE.create_ci_assignment) = prior
         self.assertEqual(code, 0)
-        self.assertEqual(created[0][2]["item"], "GS2-08.3")
+        self.assertEqual(created[0][1]["item"], "GS2-08.3")
         self.assertEqual(observations[0][1], {
             "assignment": "/private/assignment.json", "store_root": "/private/store", "engine": "configured-engine",
         })
 
     def test_configured_host_without_route_identities_is_fail_visible(self):
-        defaults = SimpleNamespace(discover_config=lambda _: SimpleNamespace(engine="engine", store_root=pathlib.Path("/private/store")))
-        prior = MODULE.GhApi, MODULE._load_telemetry_defaults
+        config = MODULE.TelemetryConfig(
+            "/private/config.json", "/private/store", "engine", None, False,
+        )
+        prior = MODULE.GhApi, MODULE.discover_telemetry_config
         try:
             MODULE.GhApi = lambda: FakeApi([opened()])
-            MODULE._load_telemetry_defaults = lambda: defaults
+            MODULE.discover_telemetry_config = lambda *_args, **_kwargs: config
             code = MODULE.main(["--repo", "FS-GG/.github", "--pr", "7", "--head", HEAD])
         finally:
-            MODULE.GhApi, MODULE._load_telemetry_defaults = prior
+            MODULE.GhApi, MODULE.discover_telemetry_config = prior
         self.assertEqual(code, 0)
+
+    def test_compiled_discovery_projection_is_the_only_configuration_input(self):
+        projection = {
+            "schema": "fsgg.telemetry.config-discovery/1", "status": "configured",
+            "configPath": "/private/config.json", "storeRoot": "/private/store",
+            "engine": "configured-engine", "repository": "FS-GG/.github", "workspace": True,
+        }
+        calls = []
+        def runner(command, **kwargs):
+            calls.append((command, kwargs))
+            return subprocess.CompletedProcess(command, 0, json.dumps(projection) + "\n", "secret-stderr")
+        actual = MODULE.discover_telemetry_config(
+            "/private/config.json", command_engine="published-0.92.0", runner=runner,
+        )
+        self.assertEqual(actual, MODULE.TelemetryConfig(
+            "/private/config.json", "/private/store", "configured-engine", "FS-GG/.github", True,
+        ))
+        self.assertEqual(calls[0][0], ["published-0.92.0", "skill", "telemetry-config", "discover",
+                                      "--config", "/private/config.json"])
+
+    def test_compiled_discovery_refusal_does_not_fall_back_to_python(self):
+        def runner(command, **_kwargs):
+            return subprocess.CompletedProcess(command, 1, "", "synthetic-secret")
+        with self.assertRaisesRegex(RuntimeError, "invalid JSON"):
+            MODULE.discover_telemetry_config(None, runner=runner)
 
     def test_exact_head_but_ineligible_pr_never_calls_population_observer(self):
         callbacks: list[object] = []

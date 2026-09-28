@@ -1,13 +1,13 @@
 # Helper examples
 
-Run from an existing checkout/environment; Python 3 is sufficient for `assess`. `graph` additionally
-uses PyYAML, already a dependency of the FS-GG registry tooling. No command downloads tools or runs CI.
-Replace `<skill>` with the installed `pipeline-preflight` skill directory.
+Run from an existing checkout/environment with the published coordination engine installed.
+No command downloads tools or runs CI. Replace `<skill>` with the installed
+`pipeline-preflight` skill directory.
 
 ```sh
-python3 <skill>/scripts/preflight.py assess <skill>/references/one-off.json
-python3 <skill>/scripts/preflight.py assess <skill>/references/recurring.json
-python3 <skill>/scripts/preflight.py graph .github/workflows/build.yml --requires report:shardA,shardB
+fsgg-coord-engine skill preflight assess <skill>/references/one-off.json
+fsgg-coord-engine skill preflight assess <skill>/references/recurring.json
+fsgg-coord-engine skill preflight graph .github/workflows/build.yml --requires report:shardA,shardB
 ```
 
 The graph command requires both shard jobs to be ancestors of `report`, including transitive

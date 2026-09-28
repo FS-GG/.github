@@ -8,7 +8,6 @@ import base64
 import datetime as dt
 import gzip
 import hashlib
-import importlib.util
 import io
 import json
 import os
@@ -238,13 +237,28 @@ def collect_deliveries(repo: str, token: str, cap: int) -> dict[str, Any]:
 
 
 def config(explicit: pathlib.Path | None = None) -> tuple[pathlib.Path, dict[str, str]]:
-    helper = pathlib.Path(__file__).resolve().parents[1] / ".claude/skills/work-roadmap/scripts/fsgg_telemetry_defaults.py"
-    spec = importlib.util.spec_from_file_location("dashboard_telemetry_defaults", helper)
-    if spec is None or spec.loader is None: raise HostSourceError("HOST_CONFIG_HELPER_UNAVAILABLE")
-    module = importlib.util.module_from_spec(spec); sys.modules[spec.name] = module; spec.loader.exec_module(module)
-    found = module.discover_config(str(explicit) if explicit is not None else None)
-    if found is None: raise HostSourceError("HOST_NOT_CONFIGURED")
-    return found.path, {"storeRoot":str(found.store_root),"engine":found.engine}
+    command = ["fsgg-coord-engine", "skill", "telemetry-config", "discover"]
+    if explicit is not None: command.extend(["--config", str(explicit)])
+    try:
+        done = subprocess.run(command, capture_output=True, text=True, timeout=25, check=False)
+    except (OSError, subprocess.SubprocessError) as error:
+        raise HostSourceError("HOST_CONFIG_HELPER_UNAVAILABLE") from error
+    if len(done.stdout.encode("utf-8")) > 16 * 1024:
+        raise HostSourceError("HOST_CONFIG_HELPER_UNAVAILABLE")
+    try: found = json.loads(done.stdout)
+    except json.JSONDecodeError as error: raise HostSourceError("HOST_CONFIG_HELPER_UNAVAILABLE") from error
+    if found == {"schema":"fsgg.telemetry.config-discovery/1","status":"not-configured"}:
+        raise HostSourceError("HOST_NOT_CONFIGURED")
+    expected={"schema","status","configPath","storeRoot","engine","repository","workspace"}
+    if (done.returncode != 0 or not isinstance(found,dict) or set(found)!=expected
+        or found.get("schema")!="fsgg.telemetry.config-discovery/1" or found.get("status")!="configured"
+        or not isinstance(found.get("configPath"),str) or not pathlib.Path(found["configPath"]).is_absolute()
+        or not isinstance(found.get("storeRoot"),str) or not pathlib.Path(found["storeRoot"]).is_absolute()
+        or not isinstance(found.get("engine"),str) or not found["engine"]
+        or (found.get("repository") is not None and not isinstance(found["repository"],str))
+        or not isinstance(found.get("workspace"),bool)):
+        raise HostSourceError("HOST_CONFIG_HELPER_UNAVAILABLE")
+    return pathlib.Path(found["configPath"]), {"storeRoot":found["storeRoot"],"engine":found["engine"]}
 
 
 def engine_json(engine: str, args: list[str]) -> Any:

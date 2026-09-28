@@ -45,7 +45,7 @@ start delivery alongside it. Pending and disputed validation remain visible boar
 blocks dependent acceptance or activation without selecting heavyweight process.
 
 Repository-owned dispatch telemetry is on by default. Start the driver's root observation with the installed
-`work-roadmap/scripts/roadmap-telemetry.py begin` adapter; immediately bind every returned native agent id with
+`fsgg-coord-engine skill roadmap-telemetry begin` command; immediately bind every returned native agent id with
 `started`. Before every
 worker/critic spawn or `followup_task`, create a child/follow-up observation carrying stable feature, item,
 attempt, parent, model and effort identities. Call `finish` with the real terminal outcome before accepting each
