@@ -306,7 +306,11 @@ printf '%s\n' '#!/usr/bin/env python3' \
   'print(json.dumps({"state":"open","draft":False,"merged":False,"mergeable":True,"mergeable_state":"clean","head":{"sha":"'"$head"'"},"base":{"ref":"main","sha":"'"$base"'"}}))' \
   > "$WORK/fake-bin/gh"
 chmod +x "$WORK/fake-bin/gh"
-XDG_CONFIG_HOME="$WORK/no-host-config" PATH="$WORK/fake-bin:$PATH" \
+# A poison sibling proves the installed routine helper does not silently return to
+# the retired Python-import boundary when its required packaged CLI is absent.
+printf '%s\n' 'raise RuntimeError("Python telemetry fallback was imported")' \
+  > "$WORK/receiver/tools/fsgg_telemetry_defaults.py"
+XDG_CONFIG_HOME="$WORK/no-host-config" PATH="$WORK/fake-bin:/usr/bin:/bin" \
   python3 "$WORK/receiver/tools/routine-delivery.py" \
     --repo fixture/receiver --pr 1 --head "$head" \
     --telemetry-feature SVG-WORKSPACE-01 --telemetry-item SVG-WORKSPACE-01.2 \
@@ -314,8 +318,10 @@ XDG_CONFIG_HOME="$WORK/no-host-config" PATH="$WORK/fake-bin:$PATH" \
     > "$WORK/routine-delivery.json" 2> "$WORK/routine-delivery.stderr"
 grep -Fq '"outcome":"ready"' "$WORK/routine-delivery.json" \
   || fail "installed routine-delivery helper did not complete a stubbed native dry run"
-grep -Fq '"telemetryHealth":"not-configured"' "$WORK/routine-delivery.json" \
-  || fail "installed routine-delivery helper did not load its sibling telemetry dependency"
+grep -Fq '"telemetryHealth":"unavailable"' "$WORK/routine-delivery.json" \
+  || fail "installed routine-delivery helper did not report the missing packaged coordination engine"
+grep -Fq 'compiled telemetry helper is unavailable' "$WORK/routine-delivery.stderr" \
+  || fail "installed routine-delivery helper did not preserve fail-visible missing-tool telemetry"
 for referenced in scripts/check-claim-generation.py scripts/check-routine-eligibility-envelope.py scripts/lib/gate.py; do
   grep -Fq "$referenced" "$WORK/receiver/.github/workflows/routine-eligibility.yml" \
     || fail "installed native workflow does not reference $referenced"
