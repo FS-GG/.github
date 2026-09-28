@@ -32,13 +32,13 @@ def declaration(extra="first"):
     return cas.canonical(value)
 
 
-def proposal(declaration_digest):
+def proposal(declaration_digest, generation=0, old=None):
     candidate = "b" * 40
     workflow = "a" * 40
     nonce = "12345-2-" + candidate
     state = json.dumps({
         "schema": "fsgg.gs2-09-7.sandbox-seed-execution/1",
-        "stateGeneration": 0, "mode": "forward", "activeIndex": 0,
+        "stateGeneration": generation, "mode": "forward", "activeIndex": 0,
         "binding": {"runNonce": nonce, "workflowSha": workflow,
                     "protectedHostReceiptSha256": declaration_digest,
                     "seedPlanSha256": cas.sha256(PLAN)},
@@ -52,15 +52,16 @@ def proposal(declaration_digest):
     tree = b"100644 state.json\0" + bytes.fromhex(blob)
     tree_oid = cas.git_oid("tree", tree)
     commit = (f"tree {tree_oid}\n"
-              "author FS.GG Q4 Seed Journal <q4-seed-journal@fs.gg> 0 +0000\n"
-              "committer FS.GG Q4 Seed Journal <q4-seed-journal@fs.gg> 0 +0000\n\n"
-              "fsgg Q4 seed journal generation 0\n"
+              + ("" if old is None else f"parent {old}\n")
+              + f"author FS.GG Q4 Seed Journal <q4-seed-journal@fs.gg> {generation} +0000\n"
+              + f"committer FS.GG Q4 Seed Journal <q4-seed-journal@fs.gg> {generation} +0000\n\n"
+              + f"fsgg Q4 seed journal generation {generation}\n"
               f"state-sha256 {state_sha}\n").encode()
     encode = lambda raw: base64.b64encode(raw).decode()
     return {"runId": 12345, "runAttempt": 2, "candidateSha": candidate,
             "workflowSha": workflow, "refName": cas.nonce_ref(12345, 2, candidate),
-            "runNonce": nonce, "journalGeneration": 0, "stateGeneration": 0,
-            "expectedParent": None, "stateSha256": state_sha,
+            "runNonce": nonce, "journalGeneration": generation, "stateGeneration": generation,
+            "expectedParent": old, "stateSha256": state_sha,
             "stateBytesBase64": encode(state), "blobOid": blob,
             "treeBytesBase64": encode(tree), "treeOid": tree_oid,
             "commitBytesBase64": encode(commit), "commitOid": cas.git_oid("commit", commit),
@@ -140,6 +141,32 @@ class NativeCasTests(unittest.TestCase):
             "blobOid": self.value["blobOid"]}):
             with self.assertRaisesRegex(cas.Refused, "native-cas-mismatch"):
                 cas.readback(item, self.port)
+
+    def test_exact_old_advance_and_leased_remove(self):
+        with mock.patch.object(cas, "INSTALLATION_STATUS", "installed-protected-host"):
+            cas.apply(self.value, self.declaration, PLAN, self.port,
+                      protected_grant_verified=True)
+            next_value = proposal(cas.sha256(self.declaration), 1, self.value["commitOid"])
+            advanced = cas.advance(next_value, self.declaration, PLAN, self.port,
+                                   protected_capability_verified=True)
+            self.assertTrue(advanced["complete"])
+            self.assertEqual(self.value["commitOid"], advanced["oldOid"])
+            self.assertEqual(next_value["commitOid"], self.port.ref_oid(self.remote, self.value["refName"]))
+            with self.assertRaisesRegex(cas.Refused, "old-oid-conflict"):
+                cas.advance(next_value, self.declaration, PLAN, self.port,
+                            protected_capability_verified=True)
+            removed = cas.remove(self.value["refName"], next_value["commitOid"], self.port,
+                                 protected_cleanup_verified=True)
+        self.assertTrue(removed["complete"])
+        self.assertIsNone(self.port.ref_oid(self.remote, self.value["refName"]))
+
+    def test_advance_and_remove_refuse_without_capability(self):
+        next_value = proposal(cas.sha256(self.declaration), 1, self.value["commitOid"])
+        with mock.patch.object(cas, "INSTALLATION_STATUS", "installed-protected-host"):
+            with self.assertRaisesRegex(cas.Refused, "advance-authority"):
+                cas.advance(next_value, self.declaration, PLAN, self.port)
+            with self.assertRaisesRegex(cas.Refused, "remove-authority"):
+                cas.remove(self.value["refName"], self.value["commitOid"], self.port)
 
     def test_lost_or_unavailable_readback_stays_explicitly_pending(self):
         with mock.patch.object(cas, "INSTALLATION_STATUS", "installed-protected-host"), \

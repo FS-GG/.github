@@ -7,6 +7,10 @@ on:
         description: Exact 40-hex FS.GG.Coordination commit to qualify
         required: true
         type: string
+      seed_source_manifest_sha256:
+        description: Exact static Coordination seed source manifest digest; leave empty for Q4 qualification
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -20,6 +24,7 @@ concurrency:
 
 jobs:
   qualify:
+    if: inputs.seed_source_manifest_sha256 == ''
     name: gs2-04-9-live-sandbox
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -170,3 +175,41 @@ jobs:
           test '${{ steps.revoke.outcome }}' = success
           test -s "$FSGG_SANDBOX_EVIDENCE_DIR/closure.json"
           test "$(jq -r .cleanup.disposition "$FSGG_SANDBOX_EVIDENCE_DIR/closure.json")" = complete
+
+  seed-bootstrap:
+    if: inputs.seed_source_manifest_sha256 != ''
+    name: gs2-09-7-seed-bootstrap-admission
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: github-substrate-v2-sandbox
+    env:
+      FSGG_PROTECTED_SHA: ${{ github.sha }}
+      FSGG_CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+      FSGG_SEED_SOURCE_MANIFEST_SHA256: ${{ inputs.seed_source_manifest_sha256 }}
+    steps:
+      - name: Check out the exact protected bootstrap source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          path: host
+
+      - name: Check out the exact Coordination candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: FS-GG/FS.GG.Coordination
+          ref: ${{ inputs.candidate_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+          path: coordination
+
+      - name: Bind both checked-out heads before bootstrap admission
+        shell: bash
+        run: |
+          set -euo pipefail
+          test '${{ github.ref }}' = refs/heads/main
+          test "$(git -C host rev-parse HEAD)" = "$FSGG_PROTECTED_SHA"
+          test "$(git -C coordination rev-parse HEAD)" = "$FSGG_CANDIDATE_SHA"
+
+      - name: Require the installed retained plan and independent bootstrap admission
+        run: python3 host/scripts/gs2-09-7-seed-bootstrap-entry.py preflight

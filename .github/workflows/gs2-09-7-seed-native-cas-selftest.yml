@@ -4,13 +4,23 @@ on:
   pull_request:
     paths:
       - "scripts/gs2-09-7-seed-native-cas.py"
+      - "scripts/gs2-09-7-seed-bootstrap-admission.py"
+      - "scripts/gs2-09-7-seed-bootstrap-entry.py"
       - "tests/gs2-09-7-seed-native-cas/**"
+      - "tests/gs2-09-7-seed-bootstrap-admission/**"
+      - "tests/gs2-09-7-seed-bootstrap-entry/**"
+      - ".github/workflows/github-substrate-v2-sandbox-qualification.yml"
       - ".github/workflows/gs2-09-7-seed-native-cas-selftest.yml"
   push:
     branches: [main]
     paths:
       - "scripts/gs2-09-7-seed-native-cas.py"
+      - "scripts/gs2-09-7-seed-bootstrap-admission.py"
+      - "scripts/gs2-09-7-seed-bootstrap-entry.py"
       - "tests/gs2-09-7-seed-native-cas/**"
+      - "tests/gs2-09-7-seed-bootstrap-admission/**"
+      - "tests/gs2-09-7-seed-bootstrap-entry/**"
+      - ".github/workflows/github-substrate-v2-sandbox-qualification.yml"
       - ".github/workflows/gs2-09-7-seed-native-cas-selftest.yml"
   workflow_dispatch:
 
@@ -29,3 +39,7 @@ jobs:
       - uses: actions/checkout@v7
       - name: Exercise exact local Git CAS and fail-closed provenance
         run: python3 -m unittest discover -s tests/gs2-09-7-seed-native-cas -p 'test_*.py'
+      - name: Exercise independent bootstrap admission and protected route boundaries
+        run: |
+          python3 -m unittest discover -s tests/gs2-09-7-seed-bootstrap-admission -p 'test_*.py'
+          python3 -m unittest discover -s tests/gs2-09-7-seed-bootstrap-entry -p 'test_*.py'

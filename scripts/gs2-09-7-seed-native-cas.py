@@ -89,8 +89,9 @@ def raw_field(value: dict, name: str) -> bytes:
     return raw
 
 
-def inspect_proposal(value: dict) -> dict:
-    """Validate Coordination S1's exact, precomputed Git objects and genesis."""
+def inspect_proposal(value: dict, operation: str = "genesis") -> dict:
+    """Validate Coordination S1's exact, precomputed Git objects."""
+    require(operation in ("genesis", "advance"), "cas-operation")
     expected = {"runId", "runAttempt", "candidateSha", "workflowSha", "refName",
                 "runNonce", "journalGeneration", "stateGeneration", "expectedParent",
                 "stateSha256", "stateBytesBase64", "blobOid", "treeBytesBase64",
@@ -106,9 +107,15 @@ def inspect_proposal(value: dict) -> dict:
             and type(value["seedPlanSha256"]) is str
             and HEX64.fullmatch(value["seedPlanSha256"]) is not None,
             "proposal-provenance")
-    require(value["journalGeneration"] == 0 and type(value["journalGeneration"]) is int
-            and value["stateGeneration"] == 0 and type(value["stateGeneration"]) is int
-            and value["expectedParent"] is None, "proposal-not-genesis")
+    generation = value["journalGeneration"]
+    state_generation = value["stateGeneration"]
+    old = value["expectedParent"]
+    require(type(generation) is int and type(state_generation) is int
+            and ((operation == "genesis" and generation == 0 and state_generation == 0
+                  and old is None)
+                 or (operation == "advance" and generation > 0 and state_generation > 0
+                     and type(old) is str and HEX40.fullmatch(old) is not None)),
+            "proposal-generation-parent")
     state = raw_field(value, "stateBytesBase64")
     tree = raw_field(value, "treeBytesBase64")
     commit = raw_field(value, "commitBytesBase64")
@@ -118,9 +125,10 @@ def inspect_proposal(value: dict) -> dict:
             and git_oid("tree", tree) == value["treeOid"], "proposal-tree-oid")
     expected_commit = (
         f'tree {value["treeOid"]}\n'
-        'author FS.GG Q4 Seed Journal <q4-seed-journal@fs.gg> 0 +0000\n'
-        'committer FS.GG Q4 Seed Journal <q4-seed-journal@fs.gg> 0 +0000\n\n'
-        'fsgg Q4 seed journal generation 0\n'
+        + ("" if old is None else f"parent {old}\n")
+        + f'author FS.GG Q4 Seed Journal <q4-seed-journal@fs.gg> {generation} +0000\n'
+        + f'committer FS.GG Q4 Seed Journal <q4-seed-journal@fs.gg> {generation} +0000\n\n'
+        + f'fsgg Q4 seed journal generation {generation}\n'
         f'state-sha256 {value["stateSha256"]}\n'
     ).encode()
     require(commit == expected_commit and git_oid("commit", commit) == value["commitOid"],
@@ -128,8 +136,8 @@ def inspect_proposal(value: dict) -> dict:
     state_json = strict_json(state)
     binding = state_json.get("binding")
     require(state_json.get("schema") == "fsgg.gs2-09-7.sandbox-seed-execution/1"
-            and state_json.get("stateGeneration") == 0 and state_json.get("mode") == "forward"
-            and state_json.get("activeIndex") == 0 and type(binding) is dict
+            and state_json.get("stateGeneration") == state_generation
+            and type(binding) is dict
             and binding.get("runNonce") == nonce and binding.get("workflowSha") == value["workflowSha"]
             and binding.get("protectedHostReceiptSha256") == value["s2DeclarationSha256"]
             and binding.get("seedPlanSha256") == value["seedPlanSha256"],
@@ -137,11 +145,13 @@ def inspect_proposal(value: dict) -> dict:
     effects = state_json.get("effects")
     require(type(effects) is list and len(effects) == 2
             and [effect.get("kind") for effect in effects if type(effect) is dict]
-            == ["create-nonce-issue", "add-project-membership"]
-            and all(effect.get("stage") == "planned"
+            == ["create-nonce-issue", "add-project-membership"], "proposal-effects")
+    if operation == "genesis":
+        require(state_json.get("mode") == "forward" and state_json.get("activeIndex") == 0
+                and all(effect.get("stage") == "planned"
                     and effect.get("originalEffectId") is None
                     and effect.get("ownership") is None for effect in effects),
-            "proposal-genesis-effects")
+                "proposal-genesis-effects")
     return {"ref": ref, "nonce": nonce, "state": state, "tree": tree, "commit": commit,
             "value": value}
 
@@ -220,6 +230,20 @@ class GitPort:
         self.run(directory, "push", f"--force-with-lease={ref}:", self.remote,
                  f'{value["commitOid"]}:{ref}', allow_failure=True)
 
+    def push_advance(self, directory: Path, item: dict) -> None:
+        ref = item["ref"]
+        value = item["value"]
+        self.run(directory, "push", f'--force-with-lease={ref}:{value["expectedParent"]}',
+                 self.remote, f'{value["commitOid"]}:{ref}', allow_failure=True)
+
+    def remove_exact(self, ref: str, old_oid: str) -> None:
+        require(type(old_oid) is str and HEX40.fullmatch(old_oid) is not None, "remove-old-oid")
+        with tempfile.TemporaryDirectory(prefix="gs2-seed-remove-") as temporary:
+            directory = Path(temporary)
+            self.new_repo(directory)
+            self.run(directory, "push", f"--force-with-lease={ref}:{old_oid}",
+                     self.remote, f":{ref}", allow_failure=True)
+
     def ref_oid(self, directory: Path, ref: str) -> str | None:
         output = self.run(directory, "ls-remote", "--refs", self.remote, ref).decode()
         rows = output.splitlines()
@@ -286,11 +310,14 @@ def readback(item: dict, port: GitPort) -> dict:
             "candidateSha": value["candidateSha"], "workflowSha": value["workflowSha"],
             "s2DeclarationSha256": value["s2DeclarationSha256"],
             "seedPlanSha256": value["seedPlanSha256"],
-            "oldOid": None, "newOid": value["commitOid"], "commitOid": value["commitOid"],
-            "commitParentOid": None, "treeOid": value["treeOid"],
+            "oldOid": value["expectedParent"], "newOid": value["commitOid"],
+            "commitOid": value["commitOid"],
+            "commitParentOid": value["expectedParent"], "treeOid": value["treeOid"],
             "blobOid": value["blobOid"], "payloadSha256": value["stateSha256"],
-            "journalGeneration": 0, "stateGeneration": 0,
-            "observedRefOid": observed["refOid"], "observedCommitParentOid": None,
+            "journalGeneration": value["journalGeneration"],
+            "stateGeneration": value["stateGeneration"],
+            "observedRefOid": observed["refOid"],
+            "observedCommitParentOid": value["expectedParent"],
             "observedTreeOid": observed["treeOid"], "observedBlobOid": observed["blobOid"],
             "observedPayloadSha256": sha256(observed["state"]),
             "readbackSource": "fresh-git-fetch-cat-file-terminal-ref-reread",
@@ -331,3 +358,63 @@ def apply(value: dict, declaration_bytes: bytes, seed_plan_bytes: bytes, port: G
         # Retain this non-authorizing envelope for exact later reconciliation.
         reason = "object-mismatch" if str(error) == "native-cas-mismatch" else "readback-unavailable"
         return pending(item, reason)
+
+
+def advance(value: dict, declaration_bytes: bytes, seed_plan_bytes: bytes, port: GitPort,
+            *, protected_capability_verified: bool = False) -> dict:
+    require(INSTALLATION_STATUS == "installed-protected-host"
+            and protected_capability_verified, "cas-advance-authority-uninstalled")
+    item = inspect_proposal(value, "advance")
+    verify_declaration(declaration_bytes, seed_plan_bytes, value)
+    previous = port.fresh(item["ref"])
+    require(previous["refOid"] == value["expectedParent"], "cas-old-oid-conflict")
+    old_state = strict_json(previous["state"])
+    old_generation = old_state.get("stateGeneration")
+    require(type(old_generation) is int and value["stateGeneration"] == old_generation + 1,
+            "cas-state-successor")
+    old_commit = previous["commit"]
+    marker = re.search(rb"\nfsgg Q4 seed journal generation ([0-9]+)\n", old_commit)
+    require(marker is not None and value["journalGeneration"] == int(marker.group(1)) + 1,
+            "cas-journal-successor")
+    with tempfile.TemporaryDirectory(prefix="gs2-seed-advance-") as temporary:
+        directory = Path(temporary)
+        port.new_repo(directory)
+        port.run(directory, "fetch", "--no-tags", port.remote, item["ref"])
+        fetched = port.run(directory, "rev-parse", "FETCH_HEAD").decode().strip()
+        require(fetched == value["expectedParent"], "cas-fetched-parent-drift")
+        port.install_objects(directory, item)
+        port.push_advance(directory, item)
+    try:
+        return readback(item, port)
+    except (Refused, OSError) as error:
+        reason = "object-mismatch" if str(error) == "native-cas-mismatch" else "readback-unavailable"
+        return pending(item, reason)
+
+
+def remove(ref: str, old_oid: str, port: GitPort,
+           *, protected_cleanup_verified: bool = False) -> dict:
+    require(INSTALLATION_STATUS == "installed-protected-host"
+            and protected_cleanup_verified, "cas-remove-authority-uninstalled")
+    require(re.fullmatch(r"refs/heads/gs2-09-7/[1-9][0-9]*-[1-9][0-9]*-[0-9a-f]{40}/seed-journal", ref)
+            is not None and type(old_oid) is str and HEX40.fullmatch(old_oid) is not None,
+            "cas-remove-identity")
+    observed = port.fresh(ref)
+    require(observed["refOid"] == old_oid, "cas-remove-old-oid")
+    port.remove_exact(ref, old_oid)
+    # Two independent remote ref reads are required; a lost response or a
+    # remaining ref is pending and cannot be called cleanup.
+    try:
+        with tempfile.TemporaryDirectory(prefix="gs2-seed-remove-read-") as temporary:
+            directory = Path(temporary)
+            port.new_repo(directory)
+            first = port.ref_oid(directory, ref)
+            second = port.ref_oid(directory, ref)
+    except (Refused, OSError):
+        first = second = "unknown"
+    now = dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00", "Z")
+    return {"schema": SCHEMA, "status": "removed" if first is None and second is None else "pending",
+            "outcome": "removed" if first is None and second is None else "unproven",
+            "complete": first is None and second is None,
+            "repositoryId": REPOSITORY["id"], "refName": ref, "oldOid": old_oid,
+            "observedRefOid": second, "readbackSource": "two-fresh-git-ls-remote",
+            "observedAt": now}
