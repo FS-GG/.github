@@ -91,22 +91,77 @@ class EntryTests(unittest.TestCase):
     def test_coordination_bootstrap_runtime_is_an_explicit_uninstalled_port(self):
         with self.assertRaisesRegex(entry.Refused, "coordination-bootstrap-runtime-uninstalled"):
             entry.require_bootstrap_runtime()
-        port = SimpleNamespace(describe=lambda: {
-            "schema": "fsgg.gs2-09-7.trusted-bootstrap-runtime/1",
-            "sha256": "a" * 64, "candidateCode": False,
-            "credentialHostOnly": True, "bootstrapVerifier": "VerifyBootstrapExact",
-            "admission": "establishBootstrapAdmission", "nativeTransport": "PushExact",
-            "readback": "writeGenesisAndRead", "privatePrestateEvidence": True},
-            establish_and_write=mock.Mock())
+        port = entry.PinnedCoordinationRuntimePort(
+            self.root / "install", Path("/usr/bin/dotnet"), Path("/usr/bin/git"),
+            "b" * 64, "a" * 64, "c" * 64, "d" * 64,
+            "ubuntu-24.04-fixture")
         with mock.patch.object(entry, "TRUSTED_COORDINATION_BOOTSTRAP_PORT", port), \
              mock.patch.object(entry, "TRUSTED_COORDINATION_BOOTSTRAP_STATUS",
                                "installed-protected-verified-runtime"), \
-             mock.patch.object(entry, "PINNED_COORDINATION_BOOTSTRAP_SHA256", "a" * 64):
+             mock.patch.object(entry, "PINNED_COORDINATION_BOOTSTRAP_SHA256", "a" * 64), \
+             mock.patch.object(entry, "PINNED_COORDINATION_RUNTIME_TREE_SHA256", "b" * 64), \
+             mock.patch.object(entry, "PINNED_DOTNET_SHA256", "c" * 64), \
+             mock.patch.object(entry, "PINNED_GIT_SHA256", "d" * 64), \
+             mock.patch.object(entry, "PINNED_RUNNER_IMAGE_VERSION", "ubuntu-24.04-fixture"), \
+             mock.patch.object(port, "verify_closure"):
             self.assertIs(port, entry.require_bootstrap_runtime())
-            port.describe = lambda: {"candidateCode": True}
+            port.runner_image_version = "foreign"
             with self.assertRaisesRegex(entry.Refused, "coordination-bootstrap-runtime-identity"):
                 entry.require_bootstrap_runtime()
-        port.establish_and_write.assert_not_called()
+
+    def test_trusted_runtime_cli_has_exact_path_only_contract(self):
+        install = self.root / "install"
+        install.mkdir()
+        (install / "FS.GG.Coordination.Cli.dll").write_bytes(b"fixture")
+        port = entry.PinnedCoordinationRuntimePort(
+            install, Path("/usr/bin/dotnet"),
+            Path("/usr/bin/git"), "a" * 64, "b" * 64,
+            "c" * 64, "d" * 64, "image-fixture")
+        command = port.command(Path("/private"), Path("/private/sealed"),
+                               Path("/candidate/source-manifest.json"))
+        self.assertEqual(["/usr/bin/dotnet",
+                          str(install / "FS.GG.Coordination.Cli.dll"),
+                          "seed-bootstrap-runtime", "establish-and-write"], command[:4])
+        self.assertEqual(17, len(command[4:]) // 2)
+        self.assertEqual("--bootstrap-dir", command[4])
+        self.assertEqual("--source-manifest", command[6])
+        self.assertIn("--initial-prestate-evidence", command)
+        self.assertIn("--final-prestate-evidence", command)
+        self.assertIn("--mint-response", command)
+        self.assertIn("--viewer-response", command)
+        self.assertIn("--output", command)
+        self.assertNotIn("secret-token", " ".join(command))
+        with mock.patch.dict(os.environ, {"RUNNER_OS": "Linux", "ImageVersion": "other"}):
+            with self.assertRaisesRegex(entry.Refused, "trusted-runtime-runner"):
+                port.verify_closure()
+
+    def test_trusted_runtime_port_refuses_private_drift_and_child_failure(self):
+        root = self.root / "private"
+        root.mkdir(mode=0o700)
+        token = "secret-token-" + "x" * 24
+        entry.write_private(root / "installation-token.private", token.encode())
+        entry.write_private(root / "final-admission.private.json", b'{"decision":1}')
+        port = entry.PinnedCoordinationRuntimePort(
+            self.root / "install", Path("/usr/bin/dotnet"), Path("/usr/bin/git"),
+            "a" * 64, "b" * 64, "c" * 64, "d" * 64, "image-fixture")
+        inputs = {"final-admission.private.json": b'{"decision":1}'}
+        with mock.patch.object(port, "verify_closure"):
+            with self.assertRaisesRegex(entry.Refused, "trusted-runtime-input-drift"):
+                port.establish_and_write(
+                    bootstrap_dir=self.runtime, source_manifest_path=self.source_path,
+                    root=root, token=token,
+                    private_inputs={"final-admission.private.json": b"changed"})
+            with mock.patch.object(entry.subprocess, "run",
+                                   return_value=SimpleNamespace(returncode=3)) as run:
+                with self.assertRaisesRegex(entry.Refused, "trusted-runtime-refused-or-pending"):
+                    port.establish_and_write(
+                        bootstrap_dir=self.runtime, source_manifest_path=self.source_path,
+                        root=root, token=token, private_inputs=inputs)
+            kwargs = run.call_args.kwargs
+            self.assertNotIn(token, " ".join(run.call_args.args[0]))
+            self.assertNotIn(token, " ".join(kwargs["env"].values()))
+            self.assertNotIn("GH_TOKEN", kwargs["env"])
+            self.assertEqual(240, kwargs["timeout"])
 
     def test_static_source_digest_files_and_admission_refuse(self):
         with mock.patch.object(entry, "INSTALLATION_STATUS", "installed-protected-bootstrap"):
@@ -289,7 +344,7 @@ class EntryTests(unittest.TestCase):
         root.mkdir(mode=0o700)
         token_path = root / "installation-token.private"
         entry.write_private(token_path, b"t" * 30)
-        entry.write_private(root / "cas-readback.private.json", b'{"complete":false}\n')
+        entry.write_private(root / "verified-bootstrap-receipt.private.json", b'{"complete":false}\n')
         sanitized = self.root / "sanitized"
         entry.write_revocation_pending(
             root, {"complete": False},
@@ -303,13 +358,13 @@ class EntryTests(unittest.TestCase):
             pending = json.loads((sanitized / "revocation-pending.json").read_bytes())
             self.assertEqual("revocation-pending", pending["status"])
             self.assertFalse(pending["activation"])
-            self.assertFalse((sanitized / "native-readback.json").exists())
+            self.assertFalse((sanitized / "trusted-bootstrap-receipt.json").exists())
             revoke.side_effect = None
             self.assertTrue(entry.revoke_private_token(root))
         self.assertFalse(token_path.exists())
         self.assertFalse((sanitized / "revocation-pending.json").exists())
         self.assertEqual(b'{"complete":false}\n',
-                         (sanitized / "native-readback.json").read_bytes())
+                         (sanitized / "trusted-bootstrap-receipt.json").read_bytes())
 
     def test_native_host_start_and_effect_reserve_are_exact_run_bound(self):
         facts = entry.context(self.env)

@@ -12,6 +12,7 @@ import importlib.util
 import json
 import os
 import re
+import subprocess
 import sys
 import datetime as dt
 import tempfile
@@ -35,6 +36,10 @@ PRESTATE_PRODUCER_PORT = None
 TRUSTED_COORDINATION_BOOTSTRAP_PORT = None
 TRUSTED_COORDINATION_BOOTSTRAP_STATUS = "source-only-uninstalled"
 PINNED_COORDINATION_BOOTSTRAP_SHA256 = ""
+PINNED_COORDINATION_RUNTIME_TREE_SHA256 = ""
+PINNED_DOTNET_SHA256 = ""
+PINNED_GIT_SHA256 = ""
+PINNED_RUNNER_IMAGE_VERSION = ""
 COORDINATION_CLI_PROJECT = "src/FS.GG.Coordination.Cli/FS.GG.Coordination.Cli.fsproj"
 PRESTATE_SCHEMA = "fsgg.gs2-09-7.sandbox-seed-prestate/1"
 
@@ -60,18 +65,155 @@ def digest(raw: bytes) -> str:
     return hashlib.sha256(raw).hexdigest()
 
 
+class PinnedCoordinationRuntimePort:
+    """Fixed CLI adapter; a separate protected change must supply reviewed pins."""
+
+    def __init__(self, install_dir: Path, dotnet_path: Path, git_path: Path,
+                 tree_sha256: str, dll_sha256: str, dotnet_sha256: str,
+                 git_sha256: str, runner_image_version: str):
+        self.install_dir = install_dir
+        self.dotnet_path = dotnet_path
+        self.git_path = git_path
+        self.tree_sha256 = tree_sha256
+        self.dll_sha256 = dll_sha256
+        self.dotnet_sha256 = dotnet_sha256
+        self.git_sha256 = git_sha256
+        self.runner_image_version = runner_image_version
+
+    @staticmethod
+    def hash_file(path: Path, limit: int, *, allow_symlink: bool = False) -> str:
+        require(path.is_absolute() and path.is_file()
+                and (allow_symlink or not path.is_symlink())
+                and 0 < path.stat().st_size <= limit, "trusted-runtime-file")
+        return digest(path.read_bytes())
+
+    def verify_closure(self) -> None:
+        root = self.install_dir
+        require(root.is_absolute() and root.is_dir() and root == root.resolve(strict=True)
+                and not root.is_relative_to(Path.cwd()), "trusted-runtime-directory")
+        require(all(type(item) is str and HEX64.fullmatch(item) is not None
+                    for item in (self.tree_sha256, self.dll_sha256,
+                                 self.dotnet_sha256, self.git_sha256))
+                and type(self.runner_image_version) is str
+                and bool(self.runner_image_version), "trusted-runtime-pins")
+        require(os.environ.get("RUNNER_OS") == "Linux"
+                and os.environ.get("ImageVersion") == self.runner_image_version,
+                "trusted-runtime-runner")
+        files = sorted(path for path in root.rglob("*") if path.is_file())
+        require(0 < len(files) <= 512
+                and all(not path.is_symlink() for path in root.rglob("*")),
+                "trusted-runtime-tree")
+        rows = []
+        total = 0
+        for path in files:
+            relative = path.relative_to(root).as_posix()
+            size = path.stat().st_size
+            total += size
+            require(0 < size <= 128 * 1024 * 1024 and total <= 512 * 1024 * 1024,
+                    "trusted-runtime-tree-size")
+            rows.append((relative, size, self.hash_file(path, 128 * 1024 * 1024)))
+        tree = digest(json.dumps(rows, separators=(",", ":")).encode("ascii"))
+        require(tree == self.tree_sha256
+                and self.hash_file(root / "FS.GG.Coordination.Cli.dll", 128 * 1024 * 1024)
+                    == self.dll_sha256
+                and self.dotnet_path == Path("/usr/bin/dotnet")
+                and self.hash_file(self.dotnet_path, 128 * 1024 * 1024,
+                                   allow_symlink=True)
+                    == self.dotnet_sha256
+                and self.git_path == Path("/usr/bin/git")
+                and self.hash_file(self.git_path, 128 * 1024 * 1024)
+                    == self.git_sha256,
+                "trusted-runtime-closure-drift")
+
+    def describe(self) -> dict:
+        self.verify_closure()
+        return {
+            "schema": "fsgg.gs2-09-7.trusted-bootstrap-runtime/1",
+            "sha256": self.dll_sha256,
+            "runtimeTreeSha256": self.tree_sha256,
+            "dotnetSha256": self.dotnet_sha256,
+            "gitSha256": self.git_sha256,
+            "runnerImageVersion": self.runner_image_version,
+            "candidateCode": False, "credentialHostOnly": True,
+            "bootstrapVerifier": "VerifyBootstrapExact",
+            "admission": "establishBootstrapAdmission",
+            "nativeTransport": "PushExact",
+            "readback": "writeGenesisAndRead",
+            "privatePrestateEvidence": True,
+        }
+
+    def command(self, root: Path, bootstrap_dir: Path,
+                source_manifest_path: Path) -> list[str]:
+        """Pass paths only. Token bytes never enter argv or the child environment."""
+        paths = {
+            "--bootstrap-dir": bootstrap_dir,
+            "--source-manifest": source_manifest_path,
+            "--mint-proof": root / "mint-grants.json",
+            "--final-admission": root / "final-admission.private.json",
+            "--initial-prestate": root / "prestate.json",
+            "--initial-prestate-evidence": root / "prestate-evidence.private.json",
+            "--final-prestate": root / "final-prestate.private.json",
+            "--final-prestate-evidence": root / "final-prestate-evidence.private.json",
+            "--run-response": root / "run-response.private.json",
+            "--workflow-blob": root / "workflow-blob.private",
+            "--binding-builder-blob": root / "binding-builder-blob.private",
+            "--repository-response": root / "repository-response.private.json",
+            "--project-response": root / "project-response.private.json",
+            "--mint-response": root / "mint-response.private.json",
+            "--viewer-response": root / "viewer-response.private.json",
+            "--token-file": root / "installation-token.private",
+            "--output": root / "trusted-bootstrap-receipt.private.json",
+        }
+        args = [str(self.dotnet_path), str(self.install_dir / "FS.GG.Coordination.Cli.dll"),
+                "seed-bootstrap-runtime", "establish-and-write"]
+        for flag, path in paths.items():
+            args.extend((flag, str(path)))
+        return args
+
+    def establish_and_write(self, *, bootstrap_dir: Path,
+                            source_manifest_path: Path, root: Path,
+                            token: str, private_inputs: dict[str, bytes]) -> dict:
+        self.verify_closure()
+        require(read_private(root / "installation-token.private", 4096) == token.encode("ascii"),
+                "trusted-runtime-token-drift")
+        for name, raw in private_inputs.items():
+            require(read_private(root / name, 64 * 1024 * 1024) == raw,
+                    "trusted-runtime-input-drift")
+        command = self.command(root, bootstrap_dir, source_manifest_path)
+        receipt = root / "trusted-bootstrap-receipt.private.json"
+        require(not receipt.exists(), "trusted-runtime-receipt-exists")
+        try:
+            result = subprocess.run(command, stdin=subprocess.DEVNULL,
+                                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                    cwd=root, timeout=240, check=False,
+                                    env={"PATH": "/usr/bin:/bin", "HOME": str(root),
+                                         "DOTNET_CLI_HOME": str(root), "DOTNET_NOLOGO": "1",
+                                         "DOTNET_SKIP_FIRST_TIME_EXPERIENCE": "1"})
+        except (OSError, subprocess.SubprocessError) as error:
+            raise Refused("trusted-runtime-outcome-unknown") from error
+        require(result.returncode == 0, "trusted-runtime-refused-or-pending")
+        return strict_json(read_private(receipt))
+
+
 def require_bootstrap_runtime():
     """A reviewed protected runtime must own S1 verification and PushExact."""
     port = TRUSTED_COORDINATION_BOOTSTRAP_PORT
     require(TRUSTED_COORDINATION_BOOTSTRAP_STATUS == "installed-protected-verified-runtime"
             and type(PINNED_COORDINATION_BOOTSTRAP_SHA256) is str
             and HEX64.fullmatch(PINNED_COORDINATION_BOOTSTRAP_SHA256) is not None
-            and port is not None and callable(getattr(port, "describe", None))
-            and callable(getattr(port, "establish_and_write", None)),
+            and all(HEX64.fullmatch(value) is not None for value in
+                    (PINNED_COORDINATION_RUNTIME_TREE_SHA256, PINNED_DOTNET_SHA256,
+                     PINNED_GIT_SHA256))
+            and bool(PINNED_RUNNER_IMAGE_VERSION)
+            and type(port) is PinnedCoordinationRuntimePort,
             "coordination-bootstrap-runtime-uninstalled")
     require(port.describe() == {
         "schema": "fsgg.gs2-09-7.trusted-bootstrap-runtime/1",
         "sha256": PINNED_COORDINATION_BOOTSTRAP_SHA256,
+        "runtimeTreeSha256": PINNED_COORDINATION_RUNTIME_TREE_SHA256,
+        "dotnetSha256": PINNED_DOTNET_SHA256,
+        "gitSha256": PINNED_GIT_SHA256,
+        "runnerImageVersion": PINNED_RUNNER_IMAGE_VERSION,
         "candidateCode": False, "credentialHostOnly": True,
         "bootstrapVerifier": "VerifyBootstrapExact",
         "admission": "establishBootstrapAdmission",
@@ -892,14 +1034,14 @@ def write_revocation_pending(root: Path, report: dict,
     raw = cas.canonical({
         "schema": "fsgg.gs2-09-7.sandbox-seed-revocation-pending/1",
         "status": "revocation-pending", "activation": False,
-        "tokenRevocation": "unconfirmed", "nativeCasReadback": report,
+        "tokenRevocation": "unconfirmed", "trustedBootstrapReceipt": report,
     })
     require(len(raw) <= 1024 * 1024, "pending-readback-size")
     write_private(sanitized / "revocation-pending.json", raw)
 
 
 def promote_readback(root: Path) -> None:
-    pending_path = root / "cas-readback.private.json"
+    pending_path = root / "verified-bootstrap-receipt.private.json"
     if not pending_path.exists():
         return
     require(not (root / "installation-token.private").exists(),
@@ -911,7 +1053,7 @@ def promote_readback(root: Path) -> None:
         sanitized.mkdir(mode=0o700)
     require(sanitized.is_dir() and stat.S_IMODE(sanitized.stat().st_mode) == 0o700,
             "sanitized-output-path")
-    write_private(sanitized / "native-readback.json", report)
+    write_private(sanitized / "trusted-bootstrap-receipt.json", report)
     (sanitized / "revocation-pending.json").unlink(missing_ok=True)
     pending_path.unlink()
 
@@ -967,7 +1109,8 @@ def stage_final_apply(host_checkout: Path, candidate_checkout: Path,
                                 proof, token, repository_raw, project_raw,
                                 final_port, dt.datetime.now(dt.timezone.utc))
         cas = load_sibling("gs2_seed_native_cas", "gs2-09-7-seed-native-cas.py")
-        write_private(root / "cas-readback.private.json", cas.canonical(report))
+        write_private(root / "verified-bootstrap-receipt.private.json",
+                      cas.canonical(report))
         write_revocation_pending(root, report, environment)
     finally:
         revoke_private_token(root)
@@ -1107,23 +1250,44 @@ def execute_source(environment: dict[str, str], candidate_checkout: Path,
             "final-prestate-drift")
     runtime = require_bootstrap_runtime()
     report = runtime.establish_and_write(
-        proposal=proposal, binding_bytes=declaration_bytes,
-        seed_plan_bytes=seed_plan_bytes, final_admission_bytes=decision_bytes,
-        prestate_bytes=initial_summary, initial_evidence_bytes=initial_evidence,
-        fresh_prestate_bytes=fresh_summary, fresh_evidence_bytes=fresh_evidence,
-        mint_response_bytes=mint_response, viewer_response_bytes=viewer_response,
-        run_response_bytes=run_response, workflow_blob_bytes=workflow_blob,
-        builder_blob_bytes=builder_blob,
-        repository_response_bytes=repository_readback_bytes,
-        project_response_bytes=project_readback_bytes,
-        token=token, facts=facts)
-    require(type(report) is dict and report.get("schema") ==
-            "fsgg.gs2-09-7.sandbox-nonce-ref-cas-readback/1"
-            and report.get("repositoryId") == 1353050537
-            and report.get("refName") == subject["refName"]
-            and report.get("runNonce") == facts["runNonce"]
-            and report.get("newOid") == proposal["commitOid"],
-            "trusted-bootstrap-readback")
+        root=root, bootstrap_dir=runtime_dir,
+        source_manifest_path=regular_inside(candidate_checkout, SOURCE_MANIFEST),
+        private_inputs={
+            "mint-grants.json": mint_proof_bytes,
+            "final-admission.private.json": decision_bytes,
+            "prestate.json": initial_summary,
+            "prestate-evidence.private.json": initial_evidence,
+            "final-prestate.private.json": fresh_summary,
+            "final-prestate-evidence.private.json": fresh_evidence,
+            "mint-response.private.json": mint_response,
+            "viewer-response.private.json": viewer_response,
+            "run-response.private.json": run_response,
+            "workflow-blob.private": workflow_blob,
+            "binding-builder-blob.private": builder_blob,
+            "repository-response.private.json": repository_readback_bytes,
+            "project-response.private.json": project_readback_bytes,
+        },
+        token=token)
+    require(report == {
+        "schema": "fsgg.gs2-09-7.trusted-bootstrap-runtime-receipt/1",
+        "status": "genesis-journal-applied-and-read-back", "complete": True,
+        "workflowRepository": HOST, "workflowSha": facts["workflowSha"],
+        "workflowRunId": facts["runId"],
+        "workflowRunAttempt": facts["runAttempt"],
+        "candidateSha": facts["candidateSha"], "runNonce": facts["runNonce"],
+        "sandboxRepositoryId": 1353050537,
+        "sandboxRepositoryNodeId": "R_kgDOUKXpqQ",
+        "projectNodeId": "PVT_kwDOEYAWY84BiESo",
+        "refName": subject["refName"], "expectedOldOid": None,
+        "commitOid": proposal["commitOid"], "treeOid": proposal["treeOid"],
+        "blobOid": proposal["blobOid"], "stateSha256": proposal["stateSha256"],
+        "journalGeneration": 0, "stateGeneration": 0,
+        "sourceManifestSha256": facts["manifestSha256"],
+        "s2DeclarationSha256": digest(declaration_bytes),
+        "finalAdmissionSha256": digest(decision_bytes),
+        "finalPrestateEvidenceSha256": digest(fresh_evidence),
+        "providerEffectsAuthorized": False,
+    }, "trusted-bootstrap-receipt-drift")
     return report
 
 
