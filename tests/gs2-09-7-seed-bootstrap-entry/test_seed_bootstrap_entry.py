@@ -163,6 +163,40 @@ class EntryTests(unittest.TestCase):
             self.assertNotIn("GH_TOKEN", kwargs["env"])
             self.assertEqual(240, kwargs["timeout"])
 
+    def test_trusted_runtime_receipt_requires_exact_run_and_genesis_tuple(self):
+        facts = entry.context(self.env)
+        proposal = {"commitOid": "1" * 40, "treeOid": "2" * 40,
+                    "blobOid": "3" * 40, "stateSha256": "4" * 64}
+        declaration, decision, evidence = b"declaration", b"decision", b"evidence"
+        receipt = {
+            "schema": "fsgg.gs2-09-7.trusted-bootstrap-runtime-receipt/1",
+            "status": "genesis-journal-applied-and-read-back", "complete": True,
+            "workflowRepository": entry.HOST, "workflowSha": facts["workflowSha"],
+            "workflowRunId": facts["runId"], "workflowRunAttempt": facts["runAttempt"],
+            "candidateSha": facts["candidateSha"], "runNonce": facts["runNonce"],
+            "sandboxRepositoryId": 1353050537,
+            "sandboxRepositoryNodeId": "R_kgDOUKXpqQ",
+            "projectNodeId": "PVT_kwDOEYAWY84BiESo",
+            "refName": "refs/heads/gs2-09-7/fixture/seed-journal",
+            "expectedOldOid": None, "commitOid": proposal["commitOid"],
+            "treeOid": proposal["treeOid"], "blobOid": proposal["blobOid"],
+            "stateSha256": proposal["stateSha256"], "journalGeneration": 0,
+            "stateGeneration": 0, "sourceManifestSha256": facts["manifestSha256"],
+            "s2DeclarationSha256": entry.digest(declaration),
+            "finalAdmissionSha256": entry.digest(decision),
+            "finalPrestateEvidenceSha256": entry.digest(evidence),
+            "providerEffectsAuthorized": False,
+        }
+        entry.validate_trusted_runtime_receipt(
+            receipt, facts, proposal, receipt["refName"], declaration, decision, evidence)
+        for changed in ({**receipt, "commitOid": "f" * 40},
+                        {**receipt, "workflowRunAttempt": facts["runAttempt"] + 1},
+                        {**receipt, "providerEffectsAuthorized": True}):
+            with self.assertRaisesRegex(entry.Refused, "trusted-bootstrap-receipt-drift"):
+                entry.validate_trusted_runtime_receipt(
+                    changed, facts, proposal, receipt["refName"],
+                    declaration, decision, evidence)
+
     def test_static_source_digest_files_and_admission_refuse(self):
         with mock.patch.object(entry, "INSTALLATION_STATUS", "installed-protected-bootstrap"):
             with self.assertRaisesRegex(entry.Refused, "source-producer-uninstalled"):

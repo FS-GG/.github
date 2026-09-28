@@ -1196,6 +1196,33 @@ def inspect_source(environment: dict[str, str], candidate_checkout: Path,
     return proposal, declaration_bytes, seed_plan_bytes, subject
 
 
+def validate_trusted_runtime_receipt(report: dict, facts: dict,
+                                     proposal: dict, ref_name: str,
+                                     declaration_bytes: bytes, decision_bytes: bytes,
+                                     final_evidence_bytes: bytes) -> None:
+    """The CLI receipt is a bounded observation, never a CAS capability."""
+    require(report == {
+        "schema": "fsgg.gs2-09-7.trusted-bootstrap-runtime-receipt/1",
+        "status": "genesis-journal-applied-and-read-back", "complete": True,
+        "workflowRepository": HOST, "workflowSha": facts["workflowSha"],
+        "workflowRunId": facts["runId"],
+        "workflowRunAttempt": facts["runAttempt"],
+        "candidateSha": facts["candidateSha"], "runNonce": facts["runNonce"],
+        "sandboxRepositoryId": 1353050537,
+        "sandboxRepositoryNodeId": "R_kgDOUKXpqQ",
+        "projectNodeId": "PVT_kwDOEYAWY84BiESo",
+        "refName": ref_name, "expectedOldOid": None,
+        "commitOid": proposal["commitOid"], "treeOid": proposal["treeOid"],
+        "blobOid": proposal["blobOid"], "stateSha256": proposal["stateSha256"],
+        "journalGeneration": 0, "stateGeneration": 0,
+        "sourceManifestSha256": facts["manifestSha256"],
+        "s2DeclarationSha256": digest(declaration_bytes),
+        "finalAdmissionSha256": digest(decision_bytes),
+        "finalPrestateEvidenceSha256": digest(final_evidence_bytes),
+        "providerEffectsAuthorized": False,
+    }, "trusted-bootstrap-receipt-drift")
+
+
 def execute_source(environment: dict[str, str], candidate_checkout: Path,
                    runtime_dir: Path, mint_proof_bytes: bytes, token: str,
                    repository_readback_bytes: bytes, project_readback_bytes: bytes,
@@ -1268,26 +1295,8 @@ def execute_source(environment: dict[str, str], candidate_checkout: Path,
             "project-response.private.json": project_readback_bytes,
         },
         token=token)
-    require(report == {
-        "schema": "fsgg.gs2-09-7.trusted-bootstrap-runtime-receipt/1",
-        "status": "genesis-journal-applied-and-read-back", "complete": True,
-        "workflowRepository": HOST, "workflowSha": facts["workflowSha"],
-        "workflowRunId": facts["runId"],
-        "workflowRunAttempt": facts["runAttempt"],
-        "candidateSha": facts["candidateSha"], "runNonce": facts["runNonce"],
-        "sandboxRepositoryId": 1353050537,
-        "sandboxRepositoryNodeId": "R_kgDOUKXpqQ",
-        "projectNodeId": "PVT_kwDOEYAWY84BiESo",
-        "refName": subject["refName"], "expectedOldOid": None,
-        "commitOid": proposal["commitOid"], "treeOid": proposal["treeOid"],
-        "blobOid": proposal["blobOid"], "stateSha256": proposal["stateSha256"],
-        "journalGeneration": 0, "stateGeneration": 0,
-        "sourceManifestSha256": facts["manifestSha256"],
-        "s2DeclarationSha256": digest(declaration_bytes),
-        "finalAdmissionSha256": digest(decision_bytes),
-        "finalPrestateEvidenceSha256": digest(fresh_evidence),
-        "providerEffectsAuthorized": False,
-    }, "trusted-bootstrap-receipt-drift")
+    validate_trusted_runtime_receipt(report, facts, proposal, subject["refName"],
+                                     declaration_bytes, decision_bytes, fresh_evidence)
     return report
 
 
