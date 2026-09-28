@@ -6,6 +6,7 @@ open System.Runtime.InteropServices
 open System.Security.Cryptography
 open System.Text
 open System.Text.Json
+open System.Text.Json.Nodes
 open System.Threading.Tasks
 open Microsoft.AspNetCore.Builder
 open Microsoft.AspNetCore.Http
@@ -246,7 +247,7 @@ module Operations =
 
         found
 
-    let private configMetadataDigest config =
+    let private configMetadataDigest (config: HostConfig) =
         // Bind logical enrollment and authorization without binding machine-specific store paths.
         // A restore is always published below a new state root and activated through a reviewed config.
         JsonSerializer.SerializeToUtf8Bytes
@@ -325,10 +326,217 @@ module Operations =
             4
         | Ok serviceLock -> use serviceLock = serviceLock in action ()
 
-    let private storeFor config workspace =
+    let private storeFor (config: HostConfig) workspace =
         config.Stores |> Array.tryFind (fun store -> store.WorkspaceId = workspace)
 
-    let private preflight config assessmentFor =
+    let private writePrivateAtomic root name (bytes: byte array) =
+        let target = Path.Combine(root, name)
+
+        if File.Exists target then
+            let info = FileInfo target
+
+            if not (isNull info.LinkTarget) || info.Length > int64 TelemetryReceipt.MaxEnvelopeBytes then
+                invalidOp "native collector replay artifact is invalid"
+
+            File.ReadAllBytes target
+        else
+            let temporary = Path.Combine(root, "." + Guid.NewGuid().ToString("N") + ".tmp")
+
+            try
+                use stream = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None)
+                File.SetUnixFileMode(temporary, UnixFileMode.UserRead ||| UnixFileMode.UserWrite)
+                stream.Write bytes
+                stream.Flush true
+                stream.Close()
+                File.Move(temporary, target, false)
+                syncDirectory root
+                bytes
+            finally
+                if File.Exists temporary then
+                    File.Delete temporary
+
+    let private nativeCollectorEnvelope
+        (installation: NativeCollectorInstallationConfig)
+        (principal: TelemetryReceipt.Principal)
+        (dispatchId: string)
+        (parentThread: string)
+        (nativeAgent: string)
+        (resolved: TelemetryStoreApplication.NativeCollectorDispatch)
+        (inventory: SkillTelemetryReaders.NativeInventory)
+        =
+        let sha values =
+            String.concat "\n" values |> Encoding.UTF8.GetBytes |> digestBytes
+
+        let invocation = resolved.InvocationId
+        let inventoryId = sha [ "native-inventory"; invocation ]
+        let inventoryIdentity = sha [ "runtime-native-inventory"; invocation ]
+        let sourceIdentity = sha [ "runtime-native-inventory-source"; invocation ]
+        let turnIds = inventory.AllTurnIds |> List.map string
+        let binding = JsonNode.Parse(inventory.SourceBinding.GetRawText())
+        let event (kind: string) (identity: string) (fields: (string * JsonNode) list) =
+            let value = JsonObject()
+            value["kind"] <- JsonValue.Create kind
+            value["identity"] <- JsonValue.Create identity
+            value["itemId"] <- JsonValue.Create resolved.ItemId
+            value["revision"] <- JsonValue.Create 0
+
+            for name, field in fields do
+                value[name] <- field
+
+            value
+
+        let inventoryFact =
+            event
+                "runtime-native-inventory/1"
+                inventoryIdentity
+                [ "inventoryId", JsonValue.Create inventoryId :> JsonNode
+                  "originalItemId", JsonValue.Create resolved.OriginalItemId :> JsonNode
+                  "invocationId", JsonValue.Create invocation :> JsonNode
+                  "page", JsonValue.Create 1 :> JsonNode
+                  "pages", JsonValue.Create 1 :> JsonNode
+                  "expectedTurnIds", JsonSerializer.SerializeToNode turnIds
+                  "expectedProvider", JsonValue.Create installation.Provider :> JsonNode
+                  "requestedModel", JsonValue.Create resolved.RequestedModel :> JsonNode
+                  "requestedEffort", JsonValue.Create resolved.RequestedEffort :> JsonNode
+                  "support", JsonValue.Create "provider-native-final-turn-counters" :> JsonNode
+                  "followupBaseline", JsonValue.Create 0 :> JsonNode
+                  "capturedAt", JsonValue.Create inventory.InventoryCapturedAt :> JsonNode
+                  "sourceKind", JsonValue.Create "provider-capability-and-dispatch-roster" :> JsonNode
+                  "sourceDigest", JsonValue.Create inventory.SourceDigest :> JsonNode ]
+        let sourceFact =
+            event
+                "runtime-native-inventory-source/1"
+                sourceIdentity
+                [ "inventoryId", JsonValue.Create inventoryId :> JsonNode
+                  "originalItemId", JsonValue.Create resolved.OriginalItemId :> JsonNode
+                  "invocationId", JsonValue.Create invocation :> JsonNode
+                  "sourceDigest", JsonValue.Create inventory.SourceDigest :> JsonNode
+                  "sourceBinding", binding ]
+        let batchId = "native-collector-" + (sha [ dispatchId; parentThread; nativeAgent ])[..31]
+        let payload = JsonObject()
+        payload["schema"] <- JsonValue.Create TelemetryStore.BatchSchema
+        payload["ingestId"] <- JsonValue.Create("receipt-" + TelemetryReceipt.key principal.Scope.Producer batchId)
+        payload["sourceIdentity"] <- JsonValue.Create "protected-native-collector"
+        payload["generation"] <- JsonValue.Create(string principal.GrantGeneration.Value)
+        payload["cursor"] <- JsonValue.Create dispatchId
+        payload["eventCount"] <- JsonValue.Create 2
+        payload["events"] <- JsonArray(inventoryFact, sourceFact)
+        let envelope = JsonObject()
+        envelope["schema"] <- JsonValue.Create TelemetryReceipt.Schema
+        envelope["workspaceId"] <- JsonValue.Create principal.Scope.Workspace
+        envelope["producerId"] <- JsonValue.Create principal.Scope.Producer
+        envelope["streamId"] <- JsonValue.Create principal.Scope.Stream
+        envelope["batchId"] <- JsonValue.Create batchId
+        envelope["payload"] <- payload
+
+        CanonicalJson.canonicalize (Encoding.UTF8.GetBytes(envelope.ToJsonString()))
+        |> Result.map Encoding.UTF8.GetBytes
+        |> Result.defaultWith (fun _ -> invalidOp "native collector envelope is invalid")
+
+    let private collectNative
+        (path: string)
+        (config: HostConfig)
+        assessmentFor
+        (dispatchId: string)
+        (parentThreadText: string)
+        (nativeAgent: string)
+        =
+        match Guid.TryParseExact(parentThreadText, "D") with
+        | false, _ -> Error [ "native parent selector is invalid" ]
+        | true, parentThread ->
+            match Configuration.loadNativeCollectorInstallation path config with
+            | Error errors -> Error errors
+            | Ok(installation, principal) ->
+                match storeFor config principal.Scope.Workspace with
+                | None -> Error [ "native collector workspace is unavailable" ]
+                | Some store ->
+                    let assessment = assessmentFor store.Root
+
+                    match
+                        TelemetryStoreApplication.resolveNativeCollectorDispatch
+                            store.Root
+                            assessment
+                            dispatchId
+                            nativeAgent
+                    with
+                    | Error errors -> Error errors
+                    | Ok resolved when
+                        resolved.RequestedModel <> installation.Model
+                        || resolved.RequestedEffort <> installation.Effort
+                        ->
+                        Error [ "native collector profile differs from durable admission" ]
+                    | Ok resolved ->
+                        let artifactName =
+                            digestBytes (Encoding.UTF8.GetBytes(String.concat "\n" [ dispatchId; parentThreadText; nativeAgent ]))
+                            + ".envelope.json"
+                        let artifactPath = Path.Combine(installation.EvidenceRoot, artifactName)
+
+                        let bytes =
+                            if File.Exists artifactPath then
+                                writePrivateAtomic installation.EvidenceRoot artifactName Array.empty
+                            else
+                                match
+                                    SkillTelemetryReaders.NativeUsage.collectProtectedWith
+                                        installation.ExecutablePath
+                                        installation.CodexHome
+                                        parentThread
+                                        nativeAgent
+                                        resolved.RootInvocationId
+                                        resolved.InvocationId
+                                        0
+                                with
+                                | Error error -> invalidOp error.Message
+                                | Ok inventory when
+                                    not inventory.Complete
+                                    || inventory.Provider <> Some installation.Provider
+                                    || inventory.Model <> Some installation.Model
+                                    || inventory.Effort <> Some installation.Effort
+                                    || inventory.InventoryPaging.GetArrayLength() <> 1
+                                    || inventory.AllTurnIds.Length <> inventory.Turns.Length
+                                    ->
+                                    invalidOp "native collector reader evidence is incomplete"
+                                | Ok inventory ->
+                                    nativeCollectorEnvelope
+                                        installation
+                                        principal
+                                        dispatchId
+                                        parentThreadText
+                                        nativeAgent
+                                        resolved
+                                        inventory
+                                    |> writePrivateAtomic installation.EvidenceRoot artifactName
+
+                        match TelemetryReceipt.parse bytes with
+                        | Error _ -> Error [ "native collector replay artifact is invalid" ]
+                        | Ok envelope when envelope.Scope <> principal.Scope ->
+                            Error [ "native collector replay artifact has foreign authority" ]
+                        | Ok _ ->
+                            match TelemetryStoreApplication.submitReceiptPrincipal store.Root assessment principal bytes with
+                            | Error errors -> Error errors
+                            | Ok _ ->
+                                match
+                                    TelemetryStoreApplication.drainReceipts
+                                        store.Root
+                                        assessment
+                                        principal.Scope.Workspace
+                                with
+                                | Error errors -> Error errors
+                                | Ok _ ->
+                                    Ok(
+                                        JsonSerializer.Serialize
+                                            {|
+                                                schema = "fsgg.telemetry.native-collector-result/1"
+                                                status = "applied"
+                                                dispatchId = dispatchId
+                                                invocationId = resolved.InvocationId
+                                                sourceVerification = "unknown"
+                                                snapshotOrigin = "unknown"
+                                                sharedCostCompleteness = "unknown"
+                                            |}
+                                        + "\n"
+                                    )
+
+    let private preflight (config: HostConfig) assessmentFor =
         try
             if config.BrowserPrincipals.Length = 0 then
                 Error [ "dashboard-auth-unavailable" ]
@@ -387,7 +595,7 @@ module Operations =
         with _ ->
             Error [ "invalid-configuration" ]
 
-    let private status config assessmentFor =
+    let private status (config: HostConfig) assessmentFor =
         let stores =
             config.Stores
             |> Array.map (fun store ->
@@ -516,6 +724,24 @@ module Operations =
                                 principal
                             |> resultExit "storage-unavailable"
                     | _ -> resultExit "invalid-configuration" (Error [ "enrollment is not declared by config" ]))
+        | [ "collect-native"
+            "--config"
+            path
+            "--dispatch"
+            dispatchId
+            "--parent-thread"
+            parentThread
+            "--native-agent"
+            nativeAgent ] ->
+            match load path with
+            | Error errors -> resultExit "invalid-configuration" (Error errors)
+            | Ok config ->
+                withLock config (fun () ->
+                    try
+                        collectNative path config assessmentFor dispatchId parentThread nativeAgent
+                        |> resultExit "native-collector-refused"
+                    with _ ->
+                        resultExit "native-collector-refused" (Error [ "native collector refused" ]))
         | [ "preflight"; "--config"; path ] ->
             match load path with
             | Error errors -> resultExit "invalid-configuration" (Error errors)

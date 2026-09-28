@@ -17,6 +17,16 @@ module TelemetryStoreApplication =
             ReceiptKeyComputed: unit -> unit
         }
 
+    type NativeCollectorDispatch =
+        {
+            ItemId: string
+            OriginalItemId: string
+            InvocationId: string
+            RootInvocationId: string
+            RequestedModel: string
+            RequestedEffort: string
+        }
+
     val databaseFileName: string
     val assessProductionRoot: path: string -> TelemetryStore.DurabilityAssessment
     val initialize: path: string -> assessment: TelemetryStore.DurabilityAssessment -> Result<string, string list>
@@ -115,6 +125,13 @@ module TelemetryStoreApplication =
         assessment: TelemetryStore.DurabilityAssessment ->
         workspace: string ->
             Result<string, string list>
+
+    val resolveNativeCollectorDispatch:
+        path: string ->
+        assessment: TelemetryStore.DurabilityAssessment ->
+        dispatchId: string ->
+        nativeAgentId: string ->
+            Result<NativeCollectorDispatch, string list>
 
     val backupReceiptStore:
         path: string ->

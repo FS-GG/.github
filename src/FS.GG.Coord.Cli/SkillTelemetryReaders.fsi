@@ -133,3 +133,13 @@ module SkillTelemetryReaders =
             invocationId: string ->
             revision: int ->
                 Result<NativeInventory, ReaderError>
+
+        val collectProtectedWith:
+            command: string ->
+            codexHome: string ->
+            parentThreadId: Guid ->
+            nativeAgentId: string ->
+            rootInvocationId: string ->
+            invocationId: string ->
+            revision: int ->
+                Result<NativeInventory, ReaderError>

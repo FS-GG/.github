@@ -1198,6 +1198,157 @@ module RemoteTelemetryTests =
         }
 
     [<Fact>]
+    let ``protected native collector resolves durable dispatch and replays retained envelope`` () =
+        let root = Path.Combine(Path.GetTempPath(), "native-collector-command-" + Guid.NewGuid().ToString("N"))
+        Directory.CreateDirectory root |> ignore
+
+        let privateFile name (content: string) =
+            let path = Path.Combine(root, name)
+            File.WriteAllText(path, content)
+            File.SetUnixFileMode(path, UnixFileMode.UserRead ||| UnixFileMode.UserWrite)
+            path
+
+        try
+            let store = Path.Combine(root, "store")
+            let codexHome = Path.Combine(root, "codex-home")
+            let evidenceRoot = Path.Combine(root, "evidence")
+            let sessions = Path.Combine(codexHome, "sessions")
+
+            for directory in [ codexHome; evidenceRoot; sessions ] do
+                Directory.CreateDirectory directory |> ignore
+                File.SetUnixFileMode(directory, UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute)
+
+            let rollout = Path.Combine(sessions, "rollout.jsonl")
+            File.WriteAllText(
+                rollout,
+                """{"type":"token_usage_record","payload":{"thread_id":"22222222-2222-2222-2222-222222222222","turn_id":"33333333-3333-3333-3333-333333333333","response_id":"r1","usage":{"input_tokens":5,"cached_input_tokens":1,"output_tokens":2,"reasoning_output_tokens":1,"total_tokens":7},"turn_token_usage":{"input_tokens":5,"cached_input_tokens":1,"output_tokens":2,"reasoning_output_tokens":1,"total_tokens":7}}}
+{"type":"token_usage_record","payload":{"thread_id":"22222222-2222-2222-2222-222222222222","turn_id":"44444444-4444-4444-4444-444444444444","response_id":"r2","usage":{"input_tokens":3,"cached_input_tokens":0,"output_tokens":1,"reasoning_output_tokens":0,"total_tokens":4},"turn_token_usage":{"input_tokens":3,"cached_input_tokens":0,"output_tokens":1,"reasoning_output_tokens":0,"total_tokens":4}}}
+"""
+            )
+            let counter = Path.Combine(root, "reader-count")
+            let reader = Path.Combine(root, "protected-codex")
+            let readerFixture =
+                Path.GetFullPath(Path.Combine(__SOURCE_DIRECTORY__, "..", "skill-fsharp", "readers", "fixtures", "fake-codex.py"))
+            let patchedFixture = Path.Combine(root, "fake-codex.py")
+            File.ReadAllText(readerFixture)
+                .Replace(
+                    "    for line in sys.stdin:\n        request = json.loads(line)",
+                    "    for line in sys.stdin:\n        if not line.strip():\n            continue\n        request = json.loads(line)"
+                )
+            |> fun content -> File.WriteAllText(patchedFixture, content)
+            File.WriteAllText(
+                reader,
+                $"""#!/bin/sh
+if [ "${{LEAK_ME+x}}" = x ]; then exit 9; fi
+count=0
+if [ -f "{counter}" ]; then count=$(/bin/cat "{counter}"); fi
+count=$((count + 1))
+/usr/bin/echo -n "$count" > "{counter}"
+export SKILL_FS_01_ROLLOUT="{rollout}"
+exec /usr/bin/python3 "{patchedFixture}" "$@"
+"""
+            )
+            File.SetUnixFileMode(reader, UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute)
+
+            TelemetryStoreApplication.initialize store TelemetryStore.ApprovedLocalDurable
+            |> Result.defaultWith (String.concat "; " >> failwith)
+            |> ignore
+
+            let collectorScope = { scope with Producer = "protected-collector"; Stream = "native-inventory" }
+            let collector: TelemetryReceipt.Principal =
+                { Scope = collectorScope; Role = TelemetryReceipt.NativeCollector
+                  GrantId = Some "collector-grant"; GrantGeneration = Some 1L }
+            TelemetryStoreApplication.provisionReceiptWorkspace store TelemetryStore.ApprovedLocalDurable scope.Workspace
+            |> Result.defaultWith (String.concat "; " >> failwith) |> ignore
+            TelemetryStoreApplication.enrollReceiptProducer store TelemetryStore.ApprovedLocalDurable scope
+            |> Result.defaultWith (String.concat "; " >> failwith) |> ignore
+
+            let events =
+                """{"kind":"budget-population","identity":"population-child","itemId":"LEARN-child","revision":0,"originalItemId":"LEARN-root","state":"open","sourceKind":"native-item","sourceRef":"fixture:population"},
+{"kind":"expected-dispatch","identity":"expected-child","itemId":"LEARN-child","revision":0,"dispatchId":"dispatch-child","activationId":"activation-root","relation":"child","parentDispatchId":"dispatch-root","runtime":"codex-collaboration","expectedAt":"2026-09-28T08:00:00Z","clockProvenance":"host-wall"},
+{"kind":"invocation-lineage","identity":"lineage-child","itemId":"LEARN-child","revision":0,"dispatchId":"dispatch-child","invocationId":"invocation-child","relation":"child","parentInvocationId":"invocation-root","rootInvocationId":"invocation-root","runtime":"codex-collaboration"},
+{"kind":"runtime-admission","identity":"admission-child","itemId":"LEARN-child","revision":0,"invocationId":"invocation-child","featureId":"LEARN-01","attemptId":"attempt-child","parentAttemptId":"attempt-root","producerStream":"roadmap","requestedModel":"fixture-model","requestedEffort":"medium","backend":"codex-collaboration"},
+{"kind":"runtime-start","identity":"process-child","itemId":"LEARN-child","revision":0,"invocationId":"invocation-child","threadId":"child_1","turnId":null,"turnSequence":null,"processId":0,"phase":"process"},
+{"kind":"runtime-terminal","identity":"terminal-child","itemId":"LEARN-child","revision":0,"invocationId":"invocation-child","threadId":"22222222-2222-2222-2222-222222222222","outcome":"completed","exitCode":0}"""
+            let batch =
+                Encoding.UTF8.GetBytes(
+                    $"""{{"schema":"{TelemetryStore.BatchSchema}","ingestId":"collector-dispatch-fixture","sourceIdentity":"fixture","generation":"g1","cursor":"1","eventCount":6,"events":[{events}]}}"""
+                )
+            let dispatchEnvelope =
+                Encoding.UTF8.GetBytes(
+                    $"""{{"schema":"{TelemetryReceipt.Schema}","workspaceId":"{scope.Workspace}","producerId":"{scope.Producer}","streamId":"{scope.Stream}","batchId":"dispatch-fixture","payload":{Encoding.UTF8.GetString batch}}}"""
+                )
+            TelemetryStoreApplication.submitReceipt store TelemetryStore.ApprovedLocalDurable scope dispatchEnvelope
+            |> Result.defaultWith (String.concat "; " >> failwith) |> ignore
+            TelemetryStoreApplication.drainReceipts store TelemetryStore.ApprovedLocalDurable scope.Workspace
+            |> Result.defaultWith (String.concat "; " >> failwith) |> ignore
+
+            let secret = privateFile "secret" (String('s', 32))
+            let certificate = privateFile "certificate" "fixture"
+            let password = privateFile "password" "fixture"
+            let config =
+                { Schema = "fsgg.telemetry.host-config/2"; ListenUrl = "https://127.0.0.1:1"
+                  CertificatePath = certificate; CertificatePasswordFile = password
+                  ServiceLockPath = Path.Combine(root, "service.lock")
+                  Stores = [| { WorkspaceId = scope.Workspace; Root = store } |]
+                  Credentials =
+                    [| { Reference = "collector"; SecretFile = secret; WorkspaceId = scope.Workspace
+                         ProducerId = collectorScope.Producer; StreamId = collectorScope.Stream
+                         Role = "native-collector"; GrantId = "collector-grant"; GrantGeneration = 1L; Revoked = false } |]
+                  BrowserPrincipals = [||]; BrowserSession = browserSession }
+            let configPath = privateFile "host.json" (JsonSerializer.Serialize config)
+            let installation =
+                { Schema = "fsgg.telemetry.native-collector-installation/1"; CredentialReference = "collector"
+                  ExecutablePath = reader; CodexHome = codexHome; EvidenceRoot = evidenceRoot
+                  Provider = "openai"; Model = "fixture-model"; Effort = "medium" }
+            let installationPath =
+                privateFile "host.json.native-collector.json" (JsonSerializer.Serialize installation)
+
+            let command =
+                [| "collect-native"; "--config"; configPath; "--dispatch"; "dispatch-child"
+                   "--parent-thread"; "11111111-1111-1111-1111-111111111111"; "--native-agent"; "child_1" |]
+            let previous = Environment.GetEnvironmentVariable "LEAK_ME"
+            try
+                Environment.SetEnvironmentVariable("LEAK_ME", "must-not-cross")
+                File.WriteAllText(configPath, JsonSerializer.Serialize { config with Schema = "fsgg.telemetry.host-config/1" })
+                Assert.Equal(2, Operations.runWithAssessment command (fun _ -> TelemetryStore.ApprovedLocalDurable))
+                Assert.False(File.Exists counter)
+                File.WriteAllText(configPath, JsonSerializer.Serialize config)
+                let mismatchedInstallation = { installation with Model = "wrong-model" }
+                File.WriteAllText(installationPath, JsonSerializer.Serialize mismatchedInstallation)
+                Assert.Equal(3, Operations.runWithAssessment command (fun _ -> TelemetryStore.ApprovedLocalDurable))
+                Assert.False(File.Exists counter)
+                File.WriteAllText(installationPath, JsonSerializer.Serialize installation)
+                Assert.Equal(3, Operations.runWithAssessment command (fun _ -> TelemetryStore.ApprovedLocalDurable))
+                Assert.Equal("1", File.ReadAllText counter)
+                TelemetryStoreApplication.enrollReceiptPrincipal store TelemetryStore.ApprovedLocalDurable collector
+                |> Result.defaultWith (String.concat "; " >> failwith) |> ignore
+                Assert.Equal(0, Operations.runWithAssessment command (fun _ -> TelemetryStore.ApprovedLocalDurable))
+                Assert.Equal("1", File.ReadAllText counter)
+                Assert.Equal(0, Operations.runWithAssessment command (fun _ -> TelemetryStore.ApprovedLocalDurable))
+                Assert.Equal("1", File.ReadAllText counter)
+                let retained = Directory.GetFiles evidenceRoot
+                Assert.Single retained |> ignore
+                Assert.Equal(UnixFileMode.UserRead ||| UnixFileMode.UserWrite, File.GetUnixFileMode retained[0])
+            finally
+                Environment.SetEnvironmentVariable("LEAK_ME", previous)
+
+            let snapshot =
+                TelemetryStoreApplication.dashboardSnapshot store TelemetryStore.ApprovedLocalDurable (Some "LEARN-child")
+                |> Result.defaultWith (String.concat "; " >> failwith)
+            Assert.DoesNotContain(String('s', 32), snapshot)
+            use envelope = JsonDocument.Parse snapshot
+            use compressed = new MemoryStream(Convert.FromBase64String(envelope.RootElement.GetProperty("canonicalSnapshotGzip").GetString()))
+            use gzip = new GZipStream(compressed, CompressionMode.Decompress)
+            use canonical = JsonDocument.Parse gzip
+            let observations = canonical.RootElement.GetProperty("learningObservations").EnumerateArray() |> Seq.toArray
+            Assert.Equal(2, observations.Length)
+            Assert.All(observations, fun row -> Assert.Equal("native-collector", row.GetProperty("receipt_role").GetString()))
+            Assert.All(observations, fun row -> Assert.Equal("collector-grant", row.GetProperty("receipt_grant_id").GetString()))
+        finally
+            if Directory.Exists root then Directory.Delete(root, true)
+
+    [<Fact>]
     let ``host global census fails closed on inconsistent accepted obligations`` () =
         task {
             let root = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"))

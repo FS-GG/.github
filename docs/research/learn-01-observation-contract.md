@@ -108,7 +108,19 @@ An invocation without a validated source candidate similarly reports `independen
 The private snapshot counts learning rows before it emits `selection.complete`. More than 10,000 matching rows are
 refused rather than truncated or described as complete.
 
-The synthetic fixture proves source behavior only. The protected native collector command and custody installation,
-adapter adoption, published version/configuration and credential, and trusted snapshot acquisition remain later
-source or operational gates. Live collection and any efficiency conclusion remain pending. Current native usage is
+The protected host command accepts only dispatch and native thread selectors. It resolves admitted child lineage,
+original item and requested profile from the durable store, loads its executable, Codex home, evidence root and
+restricted principal from a private host-owned installation file, clears the inherited process environment, and
+recomputes the native roster, counters and binding with the existing native reader. It atomically retains the
+canonical two-fact envelope before submission so an interrupted retry reuses the original bytes and receiver-owned
+principal admission. Callers cannot provide inventory, totals, rollout path, source binding, executable, source
+root or credential. Missing or ambiguous lineage, a native-agent mismatch and a protected/durable profile mismatch
+refuse before invoking or admitting a new candidate.
+
+This is a refusal-safe command boundary, not qualified capture custody. Its result keeps source verification,
+snapshot origin and shared-cost completeness `unknown`; the analysis therefore continues to report
+`native-source-verification-unavailable`, `snapshot-origin-unverified`, and
+`independent-shared-cost-authority-unavailable`. The synthetic fixture proves source behavior only. Adapter
+adoption, installed configuration and credential, trusted capture custody, and trusted snapshot acquisition remain
+later operational gates. Live collection and any efficiency conclusion remain pending. Current native usage is
 `not-configured`, so no live token total is claimed.
