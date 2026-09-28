@@ -32,7 +32,7 @@ module TelemetryStoreApplication =
     let private maxDrainBatches = 128
     let private maxDrainBytes = 8L * 1024L * 1024L
     let private maxPendingPerProducer = 128
-    let private currentSchemaVersion = 10
+    let private currentSchemaVersion = 11
 
     let private gzip (bytes: byte array) =
         use output = new MemoryStream()
@@ -216,6 +216,15 @@ PRAGMA user_version=10;
 
     let private migration10Digest =
         CanonicalJson.sha256 (Encoding.UTF8.GetBytes migration10Sql)
+
+    let private migration11Sql =
+        """
+CREATE TABLE learning_fact_order(sequence INTEGER PRIMARY KEY AUTOINCREMENT, identity TEXT NOT NULL UNIQUE REFERENCES ingest_facts(identity)) STRICT;
+PRAGMA user_version=11;
+"""
+
+    let private migration11Digest =
+        CanonicalJson.sha256 (Encoding.UTF8.GetBytes migration11Sql)
 
     let private scalarText (connection: SqliteConnection) sql =
         use command = connection.CreateCommand()
@@ -779,10 +788,29 @@ PRAGMA user_version=10;
                                                                     then
                                                                         Error [ "migration checksum mismatch" ]
                                                                     else
-                                                                        fsyncDirectory root
-                                                                        fsyncDirectory (Path.GetDirectoryName root)
+                                                                        if Int32.Parse(scalarText connection "PRAGMA user_version;") = 10 then
+                                                                            beginImmediate connection
 
-                                                                        Ok(
+                                                                            try
+                                                                                execute connection migration11Sql
+                                                                                use migration = connection.CreateCommand()
+                                                                                migration.CommandText <-
+                                                                                    "INSERT INTO schema_migrations(version,digest,applied_utc) VALUES(11,$digest,$utc);"
+                                                                                parameter migration "$digest" migration11Digest
+                                                                                parameter migration "$utc" (DateTimeOffset.UtcNow.ToString("O"))
+                                                                                migration.ExecuteNonQuery() |> ignore
+                                                                                execute connection "COMMIT;"
+                                                                            with error ->
+                                                                                rollback connection
+                                                                                raise error
+
+                                                                        if scalarText connection "SELECT digest FROM schema_migrations WHERE version=11;" <> migration11Digest then
+                                                                            Error [ "migration checksum mismatch" ]
+                                                                        else
+                                                                            fsyncDirectory root
+                                                                            fsyncDirectory (Path.GetDirectoryName root)
+
+                                                                            Ok(
                                                                             JsonSerializer.Serialize
                                                                                 {|
                                                                                     schema = "fsgg.telemetry.store-status/1"
@@ -879,6 +907,11 @@ PRAGMA user_version=10;
                     elif
                         scalarText connection "SELECT digest FROM schema_migrations WHERE version=10;"
                         <> migration10Digest
+                    then
+                        Error [ "migration checksum mismatch" ]
+                    elif
+                        scalarText connection "SELECT digest FROM schema_migrations WHERE version=11;"
+                        <> migration11Digest
                     then
                         Error [ "migration checksum mismatch" ]
                     else
@@ -1635,9 +1668,23 @@ PRAGMA user_version=10;
                     [ "$item", box item; "$kind", box fact.Kind ]
             if count <> 1L then
                 invalidOp $"%s{fact.Kind} must be unique per item"
+        | TelemetryStore.LearnSharedCostAllocation(_, _, _, _, _, roster) ->
+            use document = JsonDocument.Parse roster
+            let members = document.RootElement.EnumerateArray() |> Seq.map _.GetString() |> Seq.toList
+            let retainedBy = fact.ItemId |> Option.defaultWith (fun () -> invalidOp "shared allocation requires itemId")
+            if not (members |> List.contains retainedBy) then
+                invalidOp "shared allocation must be retained by a rostered item"
+            for rosterItem in members do
+                let assigned =
+                    scalarCount
+                        "SELECT count(*) FROM ingest_facts WHERE item_id=$item AND kind='learn-experiment-assignment';"
+                        [ "$item", box rosterItem ]
+                if assigned <> 0L then
+                    invalidOp $"shared allocation for %s{rosterItem} must be persisted before assignment"
         | TelemetryStore.RuntimeNativeInventory _
         | TelemetryStore.RuntimeNativeInventorySource _
-        | TelemetryStore.LearnSharedCost _ -> ()
+        | TelemetryStore.LearnSharedCost _
+        | TelemetryStore.LearnSharedCostAuthority _ -> ()
 
         match fact.ItemId, fact.Payload with
         | Some item,
@@ -2600,6 +2647,13 @@ ON CONFLICT(key) DO UPDATE SET value=excluded.value;"""
                                     |> List.iter (fun (name, value) -> parameter insert name value)
 
                                     insert.ExecuteNonQuery() |> ignore
+                                    if fact.Kind.StartsWith("learn-", StringComparison.Ordinal)
+                                       || fact.Kind = "runtime-native-inventory/1"
+                                       || fact.Kind = "runtime-native-inventory-source/1" then
+                                        use order = connection.CreateCommand()
+                                        order.CommandText <- "INSERT INTO learning_fact_order(identity) VALUES($identity);"
+                                        parameter order "$identity" fact.Identity
+                                        order.ExecuteNonQuery() |> ignore
                                     insertTyped connection fact
                                     accepted <- accepted + 1L
 
@@ -3170,8 +3224,8 @@ ON CONFLICT(key) DO UPDATE SET value=excluded.value;"""
                             Error [ "unsupported-version" ]
                         elif
                             scalarText connection "PRAGMA journal_mode;" <> "wal"
-                            || scalarText connection "SELECT digest FROM schema_migrations WHERE version=10;"
-                               <> migration10Digest
+                            || scalarText connection "SELECT digest FROM schema_migrations WHERE version=11;"
+                               <> migration11Digest
                         then
                             Error [ "storage-unavailable" ]
                         else
@@ -3606,8 +3660,8 @@ ON CONFLICT(key) DO UPDATE SET value=excluded.value;"""
                         if scalarText connection "PRAGMA user_version;" <> string currentSchemaVersion then
                             Error [ "unsupported-version" ]
                         elif
-                            scalarText connection "SELECT digest FROM schema_migrations WHERE version=10;"
-                            <> migration10Digest
+                            scalarText connection "SELECT digest FROM schema_migrations WHERE version=11;"
+                            <> migration11Digest
                         then
                             Error [ "storage-unavailable" ]
                         elif not (receiptAuthorized connection scope) then
@@ -3632,8 +3686,8 @@ ON CONFLICT(key) DO UPDATE SET value=excluded.value;"""
                     if scalarText connection "PRAGMA user_version;" <> string currentSchemaVersion then
                         Error [ "unsupported-version" ]
                     elif
-                        scalarText connection "SELECT digest FROM schema_migrations WHERE version=10;"
-                        <> migration10Digest
+                        scalarText connection "SELECT digest FROM schema_migrations WHERE version=11;"
+                        <> migration11Digest
                     then
                         Error [ "storage-unavailable" ]
                     else
@@ -4230,7 +4284,7 @@ ON CONFLICT(key) DO UPDATE SET value=excluded.value;"""
             ItemId = itemId
             FactCount =
                 runtimeScalar
-                    "SELECT count(*) FROM ingest_facts WHERE item_id=$item AND kind NOT IN ('learn-task-snapshot','learn-context-manifest','learn-experiment-assignment','learn-accounting-inventory/1','runtime-native-inventory/1','runtime-native-inventory-source/1','learn-shared-cost/1');"
+                    "SELECT count(*) FROM ingest_facts WHERE item_id=$item AND kind NOT IN ('learn-task-snapshot','learn-context-manifest','learn-experiment-assignment','learn-accounting-inventory/1','runtime-native-inventory/1','runtime-native-inventory-source/1','learn-shared-cost/1','learn-shared-cost-allocation/1','learn-shared-cost-authority/1');"
             UsageObservations = usageCount
             DeliveryObservations = count "delivery_observations"
             Input = sum "input_count" + runtimeSum "input_count"
@@ -4629,6 +4683,7 @@ ON CONFLICT(key) DO UPDATE SET value=excluded.value;"""
 
                             let itemFilter = whereItem "item_id"
                             let learningItemFilter = if itemId.IsSome then " AND item_id=$selected" else ""
+                            let learningFactItemFilter = if itemId.IsSome then " AND f.item_id=$selected" else ""
 
                             let table name order =
                                 rows ($"SELECT * FROM %s{name}%s{itemFilter} ORDER BY %s{order} LIMIT 10001;")
@@ -4638,7 +4693,7 @@ ON CONFLICT(key) DO UPDATE SET value=excluded.value;"""
                             use learningCount = connection.CreateCommand()
                             learningCount.Transaction <- transaction
                             learningCount.CommandText <-
-                                $"SELECT count(*) FROM ingest_facts WHERE kind IN ('learn-task-snapshot','learn-context-manifest','learn-experiment-assignment','learn-accounting-inventory/1','runtime-native-inventory/1','runtime-native-inventory-source/1','learn-shared-cost/1')%s{learningItemFilter};"
+                                $"SELECT count(*) FROM ingest_facts WHERE kind IN ('learn-task-snapshot','learn-context-manifest','learn-experiment-assignment','learn-accounting-inventory/1','runtime-native-inventory/1','runtime-native-inventory-source/1','learn-shared-cost/1','learn-shared-cost-allocation/1','learn-shared-cost-authority/1')%s{learningItemFilter};"
                             itemId |> Option.iter (parameter learningCount "$selected")
 
                             if Convert.ToInt64(learningCount.ExecuteScalar()) > 10000L then
@@ -4726,7 +4781,7 @@ ON CONFLICT(key) DO UPDATE SET value=excluded.value;"""
                                 "reviews", table "process_reviews" "item_id,scope,attempt_id,fact_revision"
                                 "learningObservations",
                                 rows
-                                    ($"SELECT identity,kind,item_id,revision,content_digest,canonical FROM ingest_facts WHERE kind IN ('learn-task-snapshot','learn-context-manifest','learn-experiment-assignment','learn-accounting-inventory/1','runtime-native-inventory/1','runtime-native-inventory-source/1','learn-shared-cost/1')%s{learningItemFilter} ORDER BY item_id,kind,identity LIMIT 10001;")
+                                    ($"SELECT o.sequence AS ingest_order,f.identity,f.kind,f.item_id,f.revision,f.content_digest,f.canonical FROM ingest_facts f LEFT JOIN learning_fact_order o ON o.identity=f.identity WHERE f.kind IN ('learn-task-snapshot','learn-context-manifest','learn-experiment-assignment','learn-accounting-inventory/1','runtime-native-inventory/1','runtime-native-inventory-source/1','learn-shared-cost/1','learn-shared-cost-allocation/1','learn-shared-cost-authority/1')%s{learningFactItemFilter} ORDER BY f.item_id,f.kind,f.identity LIMIT 10001;")
                             ]
                             |> List.iter (fun (name, value) -> content[name] <- value)
 
@@ -5549,7 +5604,7 @@ ON CONFLICT(key) DO UPDATE SET value=excluded.value;"""
                         use command = connection.CreateCommand()
 
                         command.CommandText <-
-                            "SELECT DISTINCT item_id FROM ingest_facts WHERE item_id IS NOT NULL AND kind NOT IN ('learn-task-snapshot','learn-context-manifest','learn-experiment-assignment','learn-accounting-inventory/1','runtime-native-inventory/1','runtime-native-inventory-source/1','learn-shared-cost/1') ORDER BY item_id;"
+                            "SELECT DISTINCT item_id FROM ingest_facts WHERE item_id IS NOT NULL AND kind NOT IN ('learn-task-snapshot','learn-context-manifest','learn-experiment-assignment','learn-accounting-inventory/1','runtime-native-inventory/1','runtime-native-inventory-source/1','learn-shared-cost/1','learn-shared-cost-allocation/1','learn-shared-cost-authority/1') ORDER BY item_id;"
 
                         use reader = command.ExecuteReader()
                         let items = ResizeArray<string>()

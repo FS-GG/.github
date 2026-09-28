@@ -171,7 +171,7 @@ module RemoteTelemetryTests =
         Assert.True(TelemetryStore.parseBatch bytes |> Result.isError)
 
     [<Fact>]
-    let ``LEARN task snapshot and context manifest revisions are refused by the schema-10 store`` () =
+    let ``LEARN task snapshot and context manifest revisions are refused by the schema-11 store`` () =
         let root = Path.Combine(Path.GetTempPath(), "learn-predispatch-immutable-" + Guid.NewGuid().ToString("N"))
         let original =
             Encoding.UTF8.GetBytes
@@ -198,17 +198,17 @@ module RemoteTelemetryTests =
             if Directory.Exists root then Directory.Delete(root, true)
 
     [<Fact>]
-    let ``LEARN v3 accounting facts are closed typed and immutable in schema 10`` () =
+    let ``LEARN v3 accounting facts are closed typed and immutable in schema 11`` () =
         let root = Path.Combine(Path.GetTempPath(), "learn-v3-" + Guid.NewGuid().ToString("N"))
         let exported = Path.Combine(Path.GetTempPath(), "learn-v3-public-" + Guid.NewGuid().ToString("N") + ".json")
         let batch ingest revision cutoff sharedTokens =
             Encoding.UTF8.GetBytes
-                $"""{{"schema":"fsgg.telemetry.ingest/1","ingestId":"{ingest}","sourceIdentity":"producer","generation":"g1","cursor":"{revision}","eventCount":3,"events":[{{"kind":"learn-accounting-inventory/1","identity":"accounting-1","itemId":"LEARN-01.2","revision":{revision},"inventoryId":"accounting-v1","windowId":"window-v1","policyId":"learn-01-current-focused-v1","scope":"whole-original-item","cutoffAt":"{cutoff}","capturedAt":"2026-09-27T07:59:00Z","ciApplicability":"not-applicable","expectedDispatchIds":["dispatch-1"],"expectedSharedCostIds":["shared-1"],"sourceKind":"prospective-independent-roster","sourceDigest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}},{{"kind":"runtime-native-inventory/1","identity":"native-1","itemId":"LEARN-01.2","revision":{revision},"inventoryId":"native-v1","originalItemId":"LEARN-01.2","invocationId":"invocation-1","page":1,"pages":1,"expectedTurnIds":["turn-1"],"expectedProvider":"openai","requestedModel":"gpt-fixed","requestedEffort":"medium","support":"provider-native-final-turn-counters","followupBaseline":0,"capturedAt":"2026-09-27T08:00:00Z","sourceKind":"provider-capability-and-dispatch-roster","sourceDigest":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}},{{"kind":"learn-shared-cost/1","identity":"shared-1-fact","itemId":"LEARN-01.2","revision":{revision},"nativeCostId":"shared-1","provider":"openai","providerTotalTokens":20,"allocations":[{{"originalItemId":"LEARN-01.2","tokens":{sharedTokens}}}],"sourceKind":"native-shared-cost","sourceDigest":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"}}]}}"""
+                $"""{{"schema":"fsgg.telemetry.ingest/1","ingestId":"{ingest}","sourceIdentity":"producer","generation":"g1","cursor":"{revision}","eventCount":5,"events":[{{"kind":"learn-accounting-inventory/1","identity":"accounting-1","itemId":"LEARN-01.2","revision":{revision},"inventoryId":"accounting-v1","windowId":"window-v1","policyId":"learn-01-current-focused-v1","scope":"whole-original-item","cutoffAt":"{cutoff}","capturedAt":"2026-09-27T07:59:00Z","ciApplicability":"not-applicable","expectedDispatchIds":["dispatch-1"],"expectedSharedCostIds":["shared-1"],"sourceKind":"prospective-independent-roster","sourceDigest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}},{{"kind":"runtime-native-inventory/1","identity":"native-1","itemId":"LEARN-01.2","revision":{revision},"inventoryId":"native-v1","originalItemId":"LEARN-01.2","invocationId":"invocation-1","page":1,"pages":1,"expectedTurnIds":["turn-1"],"expectedProvider":"openai","requestedModel":"gpt-fixed","requestedEffort":"medium","support":"provider-native-final-turn-counters","followupBaseline":0,"capturedAt":"2026-09-27T08:00:00Z","sourceKind":"provider-capability-and-dispatch-roster","sourceDigest":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}},{{"kind":"learn-shared-cost/1","identity":"shared-1-fact","itemId":"LEARN-01.2","revision":{revision},"nativeCostId":"shared-1","provider":"openai","providerTotalTokens":20,"allocations":[{{"originalItemId":"LEARN-01.2","tokens":{sharedTokens}}}],"sourceKind":"native-shared-cost","sourceDigest":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}},{{"kind":"learn-shared-cost-allocation/1","identity":"shared-1-allocation","itemId":"LEARN-01.2","revision":{revision},"nativeCostId":"shared-1","policyId":"learn-01-current-focused-v1","windowId":"window-v1","frozenAt":"2026-09-27T07:59:30Z","allocationRule":"equal-largest-remainder-v1","allocationRoster":["LEARN-01.2"]}},{{"kind":"learn-shared-cost-authority/1","identity":"shared-1-authority","itemId":"LEARN-01.2","revision":{revision},"nativeCostId":"shared-1","sourceInventoryId":"native-v1","sourceInvocationId":"invocation-1","sourceKind":"retained-native-shared-cost-source","sourceDigest":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}}]}}"""
 
         try
             let original = batch "learn-v3-1" 1 "2026-10-27T08:00:00Z" 20
             match TelemetryStore.parseBatch original with
-            | Ok parsed -> Assert.Equal(3, parsed.Facts.Length)
+            | Ok parsed -> Assert.Equal(5, parsed.Facts.Length)
             | Error errors -> Assert.Fail(String.concat "; " errors)
             Assert.True(batch "learn-v3-bad" 1 "2026-10-27T08:00:00Z" 19 |> TelemetryStore.parseBatch |> Result.isError)
             let zeroDigest =
@@ -237,6 +237,77 @@ module RemoteTelemetryTests =
         finally
             if Directory.Exists root then Directory.Delete(root, true)
             if File.Exists exported then File.Delete exported
+
+    [<Fact>]
+    let ``LEARN shared allocation is durably ordered before assignment`` () =
+        let root = Path.Combine(Path.GetTempPath(), "learn-shared-order-" + Guid.NewGuid().ToString("N"))
+        let allocation cost identity =
+            Encoding.UTF8.GetBytes
+                $"""{{"schema":"fsgg.telemetry.ingest/1","ingestId":"{identity}","sourceIdentity":"producer","generation":"g1","cursor":"1","eventCount":1,"events":[{{"kind":"learn-shared-cost-allocation/1","identity":"{identity}","itemId":"I-001","revision":1,"nativeCostId":"{cost}","policyId":"learn-01-current-focused-v1","windowId":"window-v1","frozenAt":"2025-12-31T23:59:00Z","allocationRule":"equal-largest-remainder-v1","allocationRoster":["I-001"]}}]}}"""
+        let assignment =
+            Encoding.UTF8.GetBytes
+                """{"schema":"fsgg.telemetry.ingest/1","ingestId":"assignment-batch","sourceIdentity":"producer","generation":"g1","cursor":"2","eventCount":1,"events":[{"kind":"learn-experiment-assignment","identity":"assignment-I-001","itemId":"I-001","revision":1,"windowId":"window-v1","policyId":"learn-01-current-focused-v1","arm":"current","assignedAt":"2026-01-01T00:00:00Z","deviation":null}]}"""
+        try
+            TelemetryStoreApplication.initialize root TelemetryStore.ApprovedLocalDurable
+            |> Result.defaultWith (String.concat "; " >> failwith) |> ignore
+            TelemetryStoreApplication.ingest root TelemetryStore.ApprovedLocalDurable (allocation "shared-1" "allocation-1")
+            |> Result.defaultWith (String.concat "; " >> failwith) |> ignore
+            TelemetryStoreApplication.ingest root TelemetryStore.ApprovedLocalDurable assignment
+            |> Result.defaultWith (String.concat "; " >> failwith) |> ignore
+            TelemetryStoreApplication.ingest root TelemetryStore.ApprovedLocalDurable (allocation "shared-1" "allocation-1")
+            |> Result.defaultWith (String.concat "; " >> failwith) |> ignore
+            match TelemetryStoreApplication.ingest root TelemetryStore.ApprovedLocalDurable (allocation "shared-2" "allocation-2") with
+            | Error errors -> Assert.Contains("must be persisted before assignment", String.concat "; " errors)
+            | Ok _ -> Assert.Fail "backdated post-assignment allocation must be refused"
+
+            let orders () =
+                let snapshot =
+                    TelemetryStoreApplication.dashboardSnapshot root TelemetryStore.ApprovedLocalDurable None
+                    |> Result.defaultWith (String.concat "; " >> failwith)
+                use envelope = JsonDocument.Parse snapshot
+                let compressed = Convert.FromBase64String(envelope.RootElement.GetProperty("canonicalSnapshotGzip").GetString())
+                use input = new MemoryStream(compressed)
+                use gzip = new GZipStream(input, CompressionMode.Decompress)
+                use canonical = JsonDocument.Parse gzip
+                canonical.RootElement.GetProperty("learningObservations").EnumerateArray()
+                |> Seq.map (fun row -> row.GetProperty("kind").GetString(), row.GetProperty("ingest_order").GetInt64())
+                |> Map.ofSeq
+
+            let beforeVacuum = orders ()
+            Assert.True(beforeVacuum["learn-shared-cost-allocation/1"] < beforeVacuum["learn-experiment-assignment"])
+            let databasePath = Path.Combine(root, "telemetry.sqlite3")
+            use database = new SqliteConnection($"Data Source={databasePath}")
+            database.Open()
+            use count = database.CreateCommand()
+            count.CommandText <- "SELECT count(*) FROM learning_fact_order WHERE identity IN ('allocation-1','allocation-2');"
+            Assert.Equal(1L, Convert.ToInt64(count.ExecuteScalar()))
+            use vacuum = database.CreateCommand()
+            vacuum.CommandText <- "VACUUM;"
+            vacuum.ExecuteNonQuery() |> ignore
+            database.Close()
+            Assert.Equal<Map<string, int64>>(beforeVacuum, orders ())
+
+            use downgrade = new SqliteConnection($"Data Source={databasePath};Pooling=False")
+            downgrade.Open()
+            use downgradeCommand = downgrade.CreateCommand()
+            downgradeCommand.CommandText <-
+                "DROP TABLE learning_fact_order; DELETE FROM schema_migrations WHERE version=11; PRAGMA user_version=10;"
+            downgradeCommand.ExecuteNonQuery() |> ignore
+            downgrade.Close()
+            TelemetryStoreApplication.initialize root TelemetryStore.ApprovedLocalDurable
+            |> Result.defaultWith (String.concat "; " >> failwith) |> ignore
+            let upgraded =
+                TelemetryStoreApplication.dashboardSnapshot root TelemetryStore.ApprovedLocalDurable None
+                |> Result.defaultWith (String.concat "; " >> failwith)
+            use upgradedEnvelope = JsonDocument.Parse upgraded
+            let upgradedCompressed = Convert.FromBase64String(upgradedEnvelope.RootElement.GetProperty("canonicalSnapshotGzip").GetString())
+            use upgradedInput = new MemoryStream(upgradedCompressed)
+            use upgradedGzip = new GZipStream(upgradedInput, CompressionMode.Decompress)
+            use upgradedCanonical = JsonDocument.Parse upgradedGzip
+            for row in upgradedCanonical.RootElement.GetProperty("learningObservations").EnumerateArray() do
+                Assert.Equal(JsonValueKind.Null, row.GetProperty("ingest_order").ValueKind)
+        finally
+            if Directory.Exists root then Directory.Delete(root, true)
 
     [<Fact>]
     let ``LEARN native inventory source binding is canonical durable and closed`` () =
@@ -286,7 +357,7 @@ module RemoteTelemetryTests =
             if Directory.Exists root then Directory.Delete(root, true)
 
     [<Fact>]
-    let ``LEARN assignment replay is idempotent and redraw is refused by the schema-10 store`` () =
+    let ``LEARN assignment replay is idempotent and redraw is refused by the schema-11 store`` () =
         let root = Path.Combine(Path.GetTempPath(), "learn-observation-" + Guid.NewGuid().ToString("N"))
         let batch ingest revision arm =
             Encoding.UTF8.GetBytes
@@ -365,7 +436,7 @@ module RemoteTelemetryTests =
             if File.Exists directExport then File.Delete directExport
 
     [<Fact>]
-    let ``LEARN one receipt cannot self attest independent inventory authority`` () =
+    let ``LEARN private analysis requires chronological retained native authority`` () =
         let root = Path.Combine(Path.GetTempPath(), "learn-v3-e2e-" + Guid.NewGuid().ToString("N"))
         let authorityRoot = Path.Combine(Path.GetTempPath(), "learn-v3-authority-" + Guid.NewGuid().ToString("N"))
         let foreignRoot = Path.Combine(Path.GetTempPath(), "learn-v3-foreign-" + Guid.NewGuid().ToString("N"))
@@ -379,7 +450,7 @@ module RemoteTelemetryTests =
             }
         let bytes =
             Encoding.UTF8.GetBytes
-                """{"schema":"fsgg.telemetry.envelope/1","workspaceId":"workspace-v3","producerId":"producer-v3","streamId":"runtime","batchId":"learn-v3-complete","payload":{"schema":"fsgg.telemetry.ingest/1","ingestId":"ignored","sourceIdentity":"producer-v3","generation":"g1","cursor":"1","eventCount":10,"events":[{"kind":"learn-task-snapshot","identity":"snapshot-v3","itemId":"I-001","revision":1,"snapshotId":"task-I-001","rubricVersion":"learn-01-rubric-v1","snapshotDigest":"1111111111111111111111111111111111111111111111111111111111111111","capturedAt":"2025-12-31T23:59:00Z"},{"kind":"learn-context-manifest","identity":"manifest-v3","itemId":"I-001","revision":1,"recipeId":"focused-recipe-v1","recipeDigest":"1111111111111111111111111111111111111111111111111111111111111111","manifestId":"manifest-I-001","manifestDigest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},{"kind":"learn-experiment-assignment","identity":"assignment-v3","itemId":"I-001","revision":1,"windowId":"window-2026-01","policyId":"learn-01-current-focused-v1","arm":"current","assignedAt":"2026-01-01T00:00:00Z","deviation":null},{"kind":"learn-accounting-inventory/1","identity":"accounting-v3","itemId":"I-001","revision":1,"inventoryId":"accounting-v1","windowId":"window-2026-01","policyId":"learn-01-current-focused-v1","scope":"whole-original-item","cutoffAt":"2026-02-02T00:00:00Z","capturedAt":"2025-12-31T23:59:30Z","ciApplicability":"not-applicable","expectedDispatchIds":["dispatch-v3"],"expectedSharedCostIds":[],"sourceKind":"prospective-independent-roster","sourceDigest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},{"kind":"runtime-native-inventory/1","identity":"native-v3","itemId":"I-001","revision":1,"inventoryId":"native-v1","originalItemId":"I-001","invocationId":"inv-v3","page":1,"pages":1,"expectedTurnIds":["turn-v3"],"expectedProvider":"openai","requestedModel":"gpt-fixed","requestedEffort":"medium","support":"provider-native-final-turn-counters","followupBaseline":0,"capturedAt":"2026-01-01T00:00:01Z","sourceKind":"provider-capability-and-dispatch-roster","sourceDigest":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"},{"kind":"runtime-admission","identity":"admission-v3","itemId":"I-001","revision":1,"invocationId":"inv-v3","featureId":"LEARN-01","attemptId":"attempt-v3","parentAttemptId":null,"producerStream":"runtime","requestedModel":"gpt-fixed","requestedEffort":"medium","backend":"codex"},{"kind":"expected-dispatch","identity":"expected-v3","itemId":"I-001","revision":1,"dispatchId":"dispatch-v3","activationId":"activation-v3","relation":"root","parentDispatchId":null,"runtime":"codex","expectedAt":"2026-01-01T00:00:00Z","clockProvenance":"host-wall"},{"kind":"invocation-lineage","identity":"lineage-v3","itemId":"I-001","revision":1,"dispatchId":"dispatch-v3","invocationId":"inv-v3","relation":"root","parentInvocationId":null,"rootInvocationId":"inv-v3","runtime":"codex"},{"kind":"runtime-turn-usage","identity":"usage-v3","itemId":"I-001","revision":1,"invocationId":"inv-v3","threadId":"thread-v3","turnId":"turn-v3","turnSequence":1,"provider":"openai","requestedModel":"gpt-fixed","observedModel":"gpt-fixed","requestedEffort":"medium","observedEffort":"medium","backend":"codex","scope":"completed-turn","provenance":"codex-exec-jsonl","input":99,"cachedInput":0,"output":1,"reasoning":null,"total":100},{"kind":"runtime-terminal","identity":"terminal-v3","itemId":"I-001","revision":1,"invocationId":"inv-v3","threadId":"thread-v3","outcome":"completed","exitCode":0}]}}"""
+                """{"schema":"fsgg.telemetry.envelope/1","workspaceId":"workspace-v3","producerId":"producer-v3","streamId":"runtime","batchId":"learn-v3-complete","payload":{"schema":"fsgg.telemetry.ingest/1","ingestId":"ignored","sourceIdentity":"producer-v3","generation":"g1","cursor":"1","eventCount":10,"events":[{"kind":"learn-task-snapshot","identity":"snapshot-v3","itemId":"I-001","revision":1,"snapshotId":"task-I-001","rubricVersion":"learn-01-rubric-v1","snapshotDigest":"1111111111111111111111111111111111111111111111111111111111111111","capturedAt":"2025-12-31T23:59:00Z"},{"kind":"learn-context-manifest","identity":"manifest-v3","itemId":"I-001","revision":1,"recipeId":"focused-recipe-v1","recipeDigest":"1111111111111111111111111111111111111111111111111111111111111111","manifestId":"manifest-I-001","manifestDigest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},{"kind":"learn-experiment-assignment","identity":"assignment-v3","itemId":"I-001","revision":1,"windowId":"window-2026-01","policyId":"learn-01-current-focused-v1","arm":"current","assignedAt":"2026-01-01T00:00:00Z","deviation":null},{"kind":"learn-accounting-inventory/1","identity":"accounting-v3","itemId":"I-001","revision":1,"inventoryId":"accounting-v1","windowId":"window-2026-01","policyId":"learn-01-current-focused-v1","scope":"whole-original-item","cutoffAt":"2026-02-02T00:00:00Z","capturedAt":"2025-12-31T23:59:30Z","ciApplicability":"not-applicable","expectedDispatchIds":["dispatch-v3"],"expectedSharedCostIds":["shared-v3"],"sourceKind":"prospective-independent-roster","sourceDigest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},{"kind":"runtime-native-inventory/1","identity":"native-v3","itemId":"I-001","revision":1,"inventoryId":"native-v1","originalItemId":"I-001","invocationId":"inv-v3","page":1,"pages":1,"expectedTurnIds":["turn-v3"],"expectedProvider":"openai","requestedModel":"gpt-fixed","requestedEffort":"medium","support":"provider-native-final-turn-counters","followupBaseline":0,"capturedAt":"2026-01-01T00:00:01Z","sourceKind":"provider-capability-and-dispatch-roster","sourceDigest":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"},{"kind":"runtime-admission","identity":"admission-v3","itemId":"I-001","revision":1,"invocationId":"inv-v3","featureId":"LEARN-01","attemptId":"attempt-v3","parentAttemptId":null,"producerStream":"runtime","requestedModel":"gpt-fixed","requestedEffort":"medium","backend":"codex"},{"kind":"expected-dispatch","identity":"expected-v3","itemId":"I-001","revision":1,"dispatchId":"dispatch-v3","activationId":"activation-v3","relation":"root","parentDispatchId":null,"runtime":"codex","expectedAt":"2026-01-01T00:00:00Z","clockProvenance":"host-wall"},{"kind":"invocation-lineage","identity":"lineage-v3","itemId":"I-001","revision":1,"dispatchId":"dispatch-v3","invocationId":"inv-v3","relation":"root","parentInvocationId":null,"rootInvocationId":"inv-v3","runtime":"codex"},{"kind":"runtime-turn-usage","identity":"usage-v3","itemId":"I-001","revision":1,"invocationId":"inv-v3","threadId":"thread-v3","turnId":"turn-v3","turnSequence":1,"provider":"openai","requestedModel":"gpt-fixed","observedModel":"gpt-fixed","requestedEffort":"medium","observedEffort":"medium","backend":"codex","scope":"completed-turn","provenance":"codex-exec-jsonl","input":99,"cachedInput":0,"output":1,"reasoning":null,"total":100},{"kind":"runtime-terminal","identity":"terminal-v3","itemId":"I-001","revision":1,"invocationId":"inv-v3","threadId":"thread-v3","outcome":"completed","exitCode":0}]}}"""
 
         try
             TelemetryStoreApplication.initialize root TelemetryStore.ApprovedLocalDurable
@@ -416,7 +487,6 @@ module RemoteTelemetryTests =
                 |> Seq.map _.GetString()
                 |> Set.ofSeq
             Assert.Contains("independent-inventory-source-unavailable", reasons)
-            Assert.Contains("independent-shared-cost-authority-unavailable", reasons)
             Assert.Equal(0L, report.RootElement.GetProperty("providerTotalTokensByArm").GetProperty("current").GetInt64())
 
             let nativeThread = "22222222-2222-4222-8222-222222222222"
@@ -426,20 +496,28 @@ module RemoteTelemetryTests =
             let bindingDigest = Convert.ToHexString(SHA256.HashData bindingBytes).ToLowerInvariant()
             let sourceEvent =
                 $"""{{"kind":"runtime-native-inventory-source/1","identity":"native-source-v3","itemId":"I-001","revision":1,"inventoryId":"native-v1","originalItemId":"I-001","invocationId":"inv-v3","sourceDigest":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","sourceBinding":{{"schema":"fsgg.telemetry.native-inventory-source-binding/1","producerIdentity":"fsgg-work-roadmap-native-collector/1","sha256":"{bindingDigest}","bytesBase64":"{Convert.ToBase64String bindingBytes}"}}}}"""
-            let withAuthority =
-                Encoding.UTF8.GetString(bytes)
-                    .Replace("\"eventCount\":10", "\"eventCount\":11")
-                    .Replace("thread-v3", nativeThread)
-                    .Replace("{\"kind\":\"runtime-admission\"", sourceEvent + ",{\"kind\":\"runtime-admission\"")
+            let allocationEnvelope =
+                Encoding.UTF8.GetBytes
+                    """{"schema":"fsgg.telemetry.envelope/1","workspaceId":"workspace-v3","producerId":"producer-v3","streamId":"runtime","batchId":"learn-v3-allocation","payload":{"schema":"fsgg.telemetry.ingest/1","ingestId":"ignored","sourceIdentity":"producer-v3","generation":"g1","cursor":"0","eventCount":1,"events":[{"kind":"learn-shared-cost-allocation/1","identity":"allocation-v3","itemId":"I-001","revision":1,"nativeCostId":"shared-v3","policyId":"learn-01-current-focused-v1","windowId":"window-2026-01","frozenAt":"2025-12-31T23:59:45Z","allocationRule":"equal-largest-remainder-v1","allocationRoster":["I-001"]}]}}"""
+            let baseEnvelope =
+                Encoding.UTF8.GetString(bytes).Replace("thread-v3", nativeThread)
                 |> Encoding.UTF8.GetBytes
+            let authorityEvent =
+                """{"kind":"learn-shared-cost-authority/1","identity":"authority-v3","itemId":"I-001","revision":1,"nativeCostId":"shared-v3","sourceInventoryId":"native-v1","sourceInvocationId":"inv-v3","sourceKind":"retained-native-shared-cost-source","sourceDigest":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}"""
+            let sharedCostEvent =
+                """{"kind":"learn-shared-cost/1","identity":"shared-cost-v3","itemId":"I-001","revision":1,"nativeCostId":"shared-v3","provider":"openai","providerTotalTokens":100,"allocations":[{"originalItemId":"I-001","tokens":100}],"sourceKind":"native-shared-cost","sourceDigest":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}"""
+            let completionEnvelope =
+                Encoding.UTF8.GetBytes
+                    $"""{{"schema":"fsgg.telemetry.envelope/1","workspaceId":"workspace-v3","producerId":"producer-v3","streamId":"runtime","batchId":"learn-v3-authority","payload":{{"schema":"fsgg.telemetry.ingest/1","ingestId":"ignored","sourceIdentity":"producer-v3","generation":"g1","cursor":"2","eventCount":3,"events":[{sourceEvent},{authorityEvent},{sharedCostEvent}]}}}}"""
             TelemetryStoreApplication.initialize authorityRoot TelemetryStore.ApprovedLocalDurable
             |> Result.defaultWith (String.concat "; " >> failwith) |> ignore
             TelemetryStoreApplication.enrollReceiptProducer authorityRoot TelemetryStore.ApprovedLocalDurable privateScope
             |> Result.defaultWith (String.concat "; " >> failwith) |> ignore
-            TelemetryStoreApplication.submitReceipt authorityRoot TelemetryStore.ApprovedLocalDurable privateScope withAuthority
-            |> Result.defaultWith (String.concat "; " >> failwith) |> ignore
-            TelemetryStoreApplication.drainReceipts authorityRoot TelemetryStore.ApprovedLocalDurable privateScope.Workspace
-            |> Result.defaultWith (String.concat "; " >> failwith) |> ignore
+            for envelopeBytes in [ allocationEnvelope; baseEnvelope; completionEnvelope ] do
+                TelemetryStoreApplication.submitReceipt authorityRoot TelemetryStore.ApprovedLocalDurable privateScope envelopeBytes
+                |> Result.defaultWith (String.concat "; " >> failwith) |> ignore
+                TelemetryStoreApplication.drainReceipts authorityRoot TelemetryStore.ApprovedLocalDurable privateScope.Workspace
+                |> Result.defaultWith (String.concat "; " >> failwith) |> ignore
             TelemetryStoreApplication.scopedDashboardSnapshot authorityRoot TelemetryStore.ApprovedLocalDurable privateScope.Workspace None
             |> Result.defaultWith (String.concat "; " >> failwith)
             |> fun value -> File.WriteAllText(snapshotPath, value)
@@ -449,15 +527,8 @@ module RemoteTelemetryTests =
             authorityProcess.WaitForExit()
             Assert.True(authorityProcess.ExitCode = 0, authorityErrors)
             use authorityReport = JsonDocument.Parse authorityOutput
-            Assert.False(authorityReport.RootElement.GetProperty("tokenComparisonQualified").GetBoolean())
-            let authorityReasons =
-                authorityReport.RootElement.GetProperty("incompleteTokenReasons").GetProperty("I-001").EnumerateArray()
-                |> Seq.map _.GetString()
-                |> Set.ofSeq
-            let expectedAuthorityReasons =
-                Set.ofList [ "independent-shared-cost-authority-unavailable" ]
-
-            Assert.Equal<Set<string>>(expectedAuthorityReasons, authorityReasons)
+            Assert.True(authorityReport.RootElement.GetProperty("tokenComparisonQualified").GetBoolean())
+            Assert.Equal(100L, authorityReport.RootElement.GetProperty("providerTotalTokensByArm").GetProperty("current").GetInt64())
 
             let foreignTerminal =
                 Encoding.UTF8.GetString(bytes)
@@ -1164,7 +1235,7 @@ module RemoteTelemetryTests =
         Assert.False(Capacity.admitsNewIdentity 0L 0L (64L * 1024L * 1024L) 1L)
 
     [<Fact>]
-    let ``Host restores a 0.1.2 schema 9 backup into separate schema 10 state`` () =
+    let ``Host restores a 0.1.2 schema 9 backup into separate schema 11 state`` () =
         let root = Path.Combine(Path.GetTempPath(), "host-schema-restore-" + Guid.NewGuid().ToString("N"))
         Directory.CreateDirectory root |> ignore
 
@@ -1209,7 +1280,7 @@ module RemoteTelemetryTests =
                     (fun _ -> TelemetryStore.ApprovedLocalDurable)
             )
 
-            Assert.Equal(10, version target)
+            Assert.Equal(11, version target)
             Assert.Equal(9, version source)
             Assert.Equal<byte>(sourceDigest, SHA256.HashData(File.ReadAllBytes source))
             let receiptScope: TelemetryReceipt.Scope =

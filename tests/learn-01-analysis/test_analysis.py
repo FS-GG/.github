@@ -23,8 +23,9 @@ def private_envelope(content, workspace="workspace-a", version=2):
     body.setdefault("selection", {"mode": "all", "complete": True})
     if version == 3:
         body["learningSnapshotSchema"] = "fsgg.telemetry.learn-item-detail/3"
-        for row in body.get("learningObservations", []):
+        for index, row in enumerate(body.get("learningObservations", []), 100):
             row.setdefault("content_digest", hashlib.sha256(row["canonical"].encode()).hexdigest())
+            row.setdefault("ingest_order", index)
     canonical = json.dumps(body, separators=(",", ":"), sort_keys=True).encode()
     return {
         "schema": "fsgg.telemetry.item-detail/2",
@@ -35,30 +36,50 @@ def private_envelope(content, workspace="workspace-a", version=2):
 
 
 class Learn01ContractTests(unittest.TestCase):
-    def native_source_event(self):
+    def native_source_event(self, item="I-001"):
         binding = {
             "schema": "fsgg.telemetry.native-inventory-source-binding/1",
             "producerIdentity": "fsgg-work-roadmap-native-collector/1",
             "capturedAt": "2026-01-01T00:00:01Z",
             "hostSource": "codex-app-server:thread/turns/list",
-            "rootInvocationId": "inv-I-001",
-            "invocationId": "inv-I-001",
-            "parentThreadId": "parent-thread-I-001",
-            "threadId": "thread-I-001",
-            "orderedTurnIds": ["turn-I-001"],
+            "rootInvocationId": f"inv-{item}",
+            "invocationId": f"inv-{item}",
+            "parentThreadId": f"parent-thread-{item}",
+            "threadId": f"thread-{item}",
+            "orderedTurnIds": [f"turn-{item}"],
             "revision": 1,
         }
         raw = json.dumps(binding, separators=(",", ":"), sort_keys=True).encode("ascii")
         return {
-            "kind": "runtime-native-inventory-source/1", "identity": "native-source-I-001",
-            "itemId": "I-001", "revision": 1, "inventoryId": "native-I-001",
-            "originalItemId": "I-001", "invocationId": "inv-I-001", "sourceDigest": "b" * 64,
+            "kind": "runtime-native-inventory-source/1", "identity": f"native-source-{item}",
+            "itemId": item, "revision": 1, "inventoryId": f"native-{item}",
+            "originalItemId": item, "invocationId": f"inv-{item}", "sourceDigest": "b" * 64,
             "sourceBinding": {
                 "schema": binding["schema"], "producerIdentity": binding["producerIdentity"],
                 "sha256": hashlib.sha256(raw).hexdigest(),
                 "bytesBase64": base64.b64encode(raw).decode("ascii"),
             },
         }
+
+    def shared_authority_event(self):
+        return {
+            "kind": "learn-shared-cost-authority/1", "identity": "shared-authority-I-001",
+            "itemId": "I-001", "revision": 1, "nativeCostId": "shared-I-001",
+            "sourceInventoryId": "native-I-001", "sourceInvocationId": "inv-I-001",
+            "sourceKind": "retained-native-shared-cost-source", "sourceDigest": "b" * 64,
+        }
+
+    def shared_allocation_event(self):
+        return {
+            "kind": "learn-shared-cost-allocation/1", "identity": "shared-allocation-I-001",
+            "itemId": "I-001", "revision": 1, "nativeCostId": "shared-I-001",
+            "policyId": "learn-01-current-focused-v1", "windowId": "window-2026-01",
+            "frozenAt": "2025-12-31T23:59:45Z", "allocationRule": "equal-largest-remainder-v1",
+            "allocationRoster": ["I-001"],
+        }
+
+    def event_for_item(self, event, item):
+        return json.loads(json.dumps(event).replace("I-001", item))
 
     def complete_v3_content(self):
         events = [copy.deepcopy(event) for event in OBSERVATIONS["events"] if event.get("itemId") == "I-001"]
@@ -85,8 +106,8 @@ class Learn01ContractTests(unittest.TestCase):
             {
                 "kind": "learn-shared-cost/1", "identity": "shared-I-001-fact", "itemId": "I-001",
                 "revision": 1, "nativeCostId": "shared-I-001", "provider": "openai",
-                "providerTotalTokens": 20, "allocations": [{"originalItemId": "I-001", "tokens": 20}],
-                "sourceKind": "native-shared-cost", "sourceDigest": "c" * 64,
+                "providerTotalTokens": 100, "allocations": [{"originalItemId": "I-001", "tokens": 100}],
+                "sourceKind": "native-shared-cost", "sourceDigest": "b" * 64,
             },
         ])
         return {
@@ -194,16 +215,33 @@ class Learn01ContractTests(unittest.TestCase):
         reopened_result = MODULE.analyze_private_snapshot(CONTRACT, private_envelope(reopened, version=3))
         self.assertIn("expected-dispatch-roster-mismatch", reopened_result["incompleteTokenReasons"]["I-001"])
 
-    def test_native_source_authority_is_consumed_but_shared_cost_stays_unqualified(self):
+    def test_native_and_frozen_shared_cost_authority_qualify_exact_total(self):
         content = self.complete_v3_content()
         source = self.native_source_event()
         content["learningObservations"].append({
-            "canonical": json.dumps(source, separators=(",", ":"), sort_keys=True)
+            "canonical": json.dumps(source, separators=(",", ":"), sort_keys=True), "ingest_order": 300,
         })
         result = MODULE.analyze_private_snapshot(CONTRACT, private_envelope(content, version=3))
         self.assertFalse(result["tokenComparisonQualified"])
         self.assertEqual(["independent-shared-cost-authority-unavailable"],
                          result["incompleteTokenReasons"]["I-001"])
+
+        allocation = self.shared_allocation_event()
+        content["learningObservations"].append({
+            "canonical": json.dumps(allocation, separators=(",", ":"), sort_keys=True), "ingest_order": 1,
+        })
+        authority = self.shared_authority_event()
+        content["learningObservations"].append({
+            "canonical": json.dumps(authority, separators=(",", ":"), sort_keys=True), "ingest_order": 301,
+        })
+        for row in content["learningObservations"]:
+            if json.loads(row["canonical"])["kind"] == "learn-shared-cost/1":
+                row["ingest_order"] = 302
+        qualified = MODULE.analyze_private_snapshot(CONTRACT, private_envelope(content, version=3))
+        self.assertTrue(qualified["tokenComparisonQualified"])
+        self.assertEqual([], qualified["incompleteTokenOriginalItems"])
+        self.assertEqual({"I-001": 100}, qualified["providerTotalTokensByOriginalItem"])
+        self.assertEqual({"current": 100, "focused": 0}, qualified["providerTotalTokensByArm"])
 
         for field, changed in (("rootInvocationId", "foreign-root"),
                                ("orderedTurnIds", ["foreign-turn"]),
@@ -215,11 +253,148 @@ class Learn01ContractTests(unittest.TestCase):
             raw = json.dumps(binding, separators=(",", ":"), sort_keys=True).encode("ascii")
             event["sourceBinding"]["sha256"] = hashlib.sha256(raw).hexdigest()
             event["sourceBinding"]["bytesBase64"] = base64.b64encode(raw).decode("ascii")
-            tampered["learningObservations"][-1] = {
-                "canonical": json.dumps(event, separators=(",", ":"), sort_keys=True)
-            }
+            tampered["learningObservations"] = [
+                {"canonical": json.dumps(event, separators=(",", ":"), sort_keys=True)}
+                if json.loads(row["canonical"])["kind"] == "runtime-native-inventory-source/1" else row
+                for row in tampered["learningObservations"]
+            ]
             with self.subTest(field=field), self.assertRaises(MODULE.Refusal):
                 MODULE.analyze_private_snapshot(CONTRACT, private_envelope(tampered, version=3))
+
+        for field, changed, message in (
+            ("sourceDigest", "d" * 64, "retained native source"),
+            ("sourceInvocationId", "forged-invocation", "independent-shared-cost-authority-unavailable"),
+        ):
+            tampered = copy.deepcopy(content)
+            event = copy.deepcopy(authority)
+            event[field] = changed
+            tampered["learningObservations"][-1] = {
+                "canonical": json.dumps(event, separators=(",", ":"), sort_keys=True), "ingest_order": 301,
+            }
+            with self.subTest(authority_field=field):
+                if field == "sourceInvocationId":
+                    refused = MODULE.analyze_private_snapshot(CONTRACT, private_envelope(tampered, version=3))
+                    self.assertFalse(refused["tokenComparisonQualified"])
+                    self.assertIn(message, refused["incompleteTokenReasons"]["I-001"])
+                else:
+                    with self.assertRaisesRegex(MODULE.Refusal, message):
+                        MODULE.analyze_private_snapshot(CONTRACT, private_envelope(tampered, version=3))
+
+        late_allocation = copy.deepcopy(content)
+        for row in late_allocation["learningObservations"]:
+            if json.loads(row["canonical"])["kind"] == "learn-shared-cost-allocation/1":
+                row["ingest_order"] = 250
+        with self.assertRaisesRegex(MODULE.Refusal, "not persisted before assignment"):
+            MODULE.analyze_private_snapshot(CONTRACT, private_envelope(late_allocation, version=3))
+
+        backdated = copy.deepcopy(content)
+        for row in backdated["learningObservations"]:
+            event = json.loads(row["canonical"])
+            if event["kind"] == "learn-shared-cost-allocation/1":
+                event["frozenAt"] = "2025-01-01T00:00:00Z"
+                row["canonical"] = json.dumps(event, separators=(",", ":"), sort_keys=True)
+                row["ingest_order"] = 250
+                row.pop("content_digest", None)
+        with self.assertRaisesRegex(MODULE.Refusal, "not persisted before assignment"):
+            MODULE.analyze_private_snapshot(CONTRACT, private_envelope(backdated, version=3))
+
+        historical = copy.deepcopy(content)
+        for row in historical["learningObservations"]:
+            if json.loads(row["canonical"])["kind"] == "learn-shared-cost-allocation/1":
+                row["ingest_order"] = None
+        unknown = MODULE.analyze_private_snapshot(CONTRACT, private_envelope(historical, version=3))
+        self.assertFalse(unknown["tokenComparisonQualified"])
+        self.assertIn("prospective-allocation-order-unavailable", unknown["incompleteTokenReasons"]["I-001"])
+
+        forged = copy.deepcopy(content)
+        forged_cost = next(json.loads(row["canonical"]) for row in forged["learningObservations"]
+                           if json.loads(row["canonical"])["kind"] == "learn-shared-cost/1")
+        forged_cost["providerTotalTokens"] = 99
+        forged_cost["allocations"][0]["tokens"] = 99
+        forged["learningObservations"] = [
+            {**row, "canonical": json.dumps(forged_cost, separators=(",", ":"), sort_keys=True)}
+            if json.loads(row["canonical"])["kind"] == "learn-shared-cost/1" else row
+            for row in forged["learningObservations"]
+        ]
+        with self.assertRaisesRegex(MODULE.Refusal, "provider total disagrees with retained native usage"):
+            MODULE.analyze_private_snapshot(CONTRACT, private_envelope(forged, version=3))
+
+        self_hashed = copy.deepcopy(content)
+        rewritten = []
+        for row in self_hashed["learningObservations"]:
+            event = json.loads(row["canonical"])
+            if event["kind"] in {"learn-shared-cost/1", "learn-shared-cost-authority/1"}:
+                event["sourceDigest"] = "d" * 64
+                row = {**row, "canonical": json.dumps(event, separators=(",", ":"), sort_keys=True)}
+            rewritten.append(row)
+        self_hashed["learningObservations"] = rewritten
+        with self.assertRaisesRegex(MODULE.Refusal, "authority does not bind the retained native source"):
+            MODULE.analyze_private_snapshot(CONTRACT, private_envelope(self_hashed, version=3))
+
+    def test_two_item_shared_cost_is_reconciled_once_by_frozen_rule(self):
+        content = self.complete_v3_content()
+        events = [json.loads(row["canonical"]) for row in content["learningObservations"]]
+        shared = next(event for event in events if event["kind"] == "learn-shared-cost/1")
+        shared["allocations"] = [
+            {"originalItemId": "I-001", "tokens": 50},
+            {"originalItemId": "I-002", "tokens": 50},
+        ]
+        accounting = next(event for event in events if event["kind"] == "learn-accounting-inventory/1")
+        native = next(event for event in events if event["kind"] == "runtime-native-inventory/1")
+        events.extend(copy.deepcopy(event) for event in OBSERVATIONS["events"] if event.get("itemId") == "I-002")
+        accounting_two = self.event_for_item(accounting, "I-002")
+        accounting_two["expectedDispatchIds"] = ["dispatch-I-002"]
+        accounting_two["expectedSharedCostIds"] = ["shared-I-001"]
+        events.extend([accounting_two, self.event_for_item(native, "I-002")])
+        allocation = self.shared_allocation_event()
+        allocation["allocationRoster"] = ["I-001", "I-002"]
+        authority = self.shared_authority_event()
+        events.extend([allocation, self.native_source_event(), self.native_source_event("I-002"), authority])
+        content["learningObservations"] = [
+            {"canonical": json.dumps(event, separators=(",", ":"), sort_keys=True)} for event in events
+        ]
+        for row in content["learningObservations"]:
+            kind = json.loads(row["canonical"])["kind"]
+            if kind == "learn-shared-cost-allocation/1": row["ingest_order"] = 1
+            elif kind == "runtime-native-inventory-source/1": row["ingest_order"] = 300 if "I-001" in row["canonical"] else 303
+            elif kind == "learn-shared-cost-authority/1": row["ingest_order"] = 301
+            elif kind == "learn-shared-cost/1": row["ingest_order"] = 302
+        content["admissions"].append({
+            "identity": "admission-I-002", "item_id": "I-002", "invocation_id": "inv-I-002",
+            "requested_model": "gpt-fixed", "requested_effort": "medium", "backend": "codex",
+        })
+        content["expectedDispatches"].append({
+            "item_id": "I-002", "dispatch_id": "dispatch-I-002", "relation": "root",
+        })
+        content["lineage"].append({
+            "item_id": "I-002", "dispatch_id": "dispatch-I-002", "invocation_id": "inv-I-002",
+            "root_invocation_id": "inv-I-002",
+        })
+        content["usage"].append({
+            "identity": "usage-I-002", "item_id": "I-002", "invocation_id": "inv-I-002",
+            "turn_id": "turn-I-002", "provider": "openai", "requested_model": "gpt-fixed",
+            "thread_id": "thread-I-002", "observed_model": "gpt-fixed", "requested_effort": "medium",
+            "observed_effort": "medium", "total": 50,
+        })
+        content["terminals"].append({"item_id": "I-002", "invocation_id": "inv-I-002"})
+
+        report = MODULE.analyze_private_snapshot(CONTRACT, private_envelope(content, version=3))
+        self.assertTrue(report["tokenComparisonQualified"])
+        self.assertEqual({"I-001": 50, "I-002": 100}, report["providerTotalTokensByOriginalItem"])
+        self.assertEqual({"current": 50, "focused": 100}, report["providerTotalTokensByArm"])
+
+        missing_shared_turn = copy.deepcopy(content)
+        missing_shared_turn["usage"] = [
+            row for row in missing_shared_turn["usage"] if row["invocation_id"] != "inv-I-001"
+        ]
+        incomplete = MODULE.analyze_private_snapshot(
+            CONTRACT, private_envelope(missing_shared_turn, version=3)
+        )
+        self.assertFalse(incomplete["tokenComparisonQualified"])
+        for original in ("I-001", "I-002"):
+            self.assertIn(
+                "shared-source-incomplete:inv-I-001", incomplete["incompleteTokenReasons"][original]
+            )
 
     def test_v3_refuses_foreign_terminal_future_capture_and_zero_digest(self):
         foreign = self.complete_v3_content()

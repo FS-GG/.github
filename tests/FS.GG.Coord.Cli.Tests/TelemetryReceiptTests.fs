@@ -141,7 +141,7 @@ module TelemetryReceiptTests =
             |> unwrap
             |> ignore
 
-            sql root "PRAGMA user_version=11;"
+            sql root "PRAGMA user_version=12;"
 
             Assert.Equal(
                 Error [ "unsupported-version" ],
@@ -420,7 +420,7 @@ module TelemetryReceiptTests =
 
             sql
                 root
-                "DELETE FROM schema_migrations WHERE version=10; DROP INDEX transport_pending; DROP TABLE transport_receipts; DROP TABLE receipt_producers; DELETE FROM schema_migrations WHERE version=9; PRAGMA user_version=8;"
+                "DROP TABLE learning_fact_order; DELETE FROM schema_migrations WHERE version=11; DELETE FROM schema_migrations WHERE version=10; DROP INDEX transport_pending; DROP TABLE transport_receipts; DROP TABLE receipt_producers; DELETE FROM schema_migrations WHERE version=9; PRAGMA user_version=8;"
 
             TelemetryStoreApplication.initialize root approved |> unwrap |> ignore
 
