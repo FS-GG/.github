@@ -3,12 +3,15 @@ from __future__ import annotations
 
 import importlib.util
 import hashlib
+import io
 import json
 import os
 import pathlib
 import subprocess
 import sys
 import unittest
+import warnings
+import zipfile
 from dataclasses import asdict
 from datetime import datetime, timezone
 from types import SimpleNamespace
@@ -108,6 +111,16 @@ def selection(disposition: str) -> bytes:
     return json.dumps(value, separators=(",", ":")).encode() + b"\n"
 
 
+def selection_archive(entries: list[tuple[str, bytes]]) -> bytes:
+    output = io.BytesIO()
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+        with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as bundle:
+            for name, payload in entries:
+                bundle.writestr(name, payload)
+    return output.getvalue()
+
+
 class RoutineDeliveryTests(unittest.TestCase):
     def call(self, api: FakeApi, *, apply: bool = True, publication: bool = False,
              coherent: bool = False):
@@ -150,6 +163,52 @@ class RoutineDeliveryTests(unittest.TestCase):
                     "FS-GG/.github", 7, HEAD, "main", "d" * 40, "squash",
                 ))
         self.assertEqual(invoked.call_count, 1)
+
+    def qualification_selection(self, archive: bytes) -> bytes | None:
+        artifact = {
+            "name": f"qualification-selection-{HEAD}",
+            "expired": False,
+            "archive_download_url": "https://api.github.test/artifact.zip",
+        }
+        api = MODULE.GhApi()
+        with mock.patch.object(api, "_run", return_value=[{"artifacts": [artifact]}]), \
+             mock.patch.object(api, "_run_bytes", return_value=archive):
+            return api.qualification_selection("FS-GG/FS.GG.Coordination", 7, HEAD)
+
+    def test_qualification_selection_accepts_bounded_producer_ancillary_files(self):
+        expected = selection("current")
+        archive = selection_archive([
+            ("selection.json", expected),
+            ("profile.json", b'{"schema":"profile"}\n'),
+            ("artifact-page-1.json", b""),
+            ("artifact-pages.jsonl", b""),
+        ])
+        self.assertEqual(self.qualification_selection(archive), expected)
+
+    def test_qualification_selection_rejects_duplicate_root_selection(self):
+        archive = selection_archive([
+            ("selection.json", selection("current")),
+            ("selection.json", selection("reused")),
+        ])
+        with self.assertRaisesRegex(RuntimeError, "unsafe shape"):
+            self.qualification_selection(archive)
+
+    def test_qualification_selection_rejects_oversize_uncompressed_archive(self):
+        archive = selection_archive([
+            ("selection.json", selection("current")),
+            ("profile.json", b"x" * 1_048_576),
+        ])
+        self.assertLess(len(archive), 1_048_576)
+        with self.assertRaisesRegex(RuntimeError, "exceeds 1 MiB uncompressed"):
+            self.qualification_selection(archive)
+
+    def test_qualification_selection_rejects_unsafe_ancillary_path(self):
+        archive = selection_archive([
+            ("selection.json", selection("current")),
+            ("../profile.json", b"{}\n"),
+        ])
+        with self.assertRaisesRegex(RuntimeError, "unsafe shape"):
+            self.qualification_selection(archive)
 
     def test_merge_effect_request_binds_complete_source_and_target_identity(self):
         api = FakeApi([opened(), merged()], [{"merged": True, "sha": MERGE}])
