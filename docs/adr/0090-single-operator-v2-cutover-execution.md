@@ -1,6 +1,6 @@
 # ADR-0090: Prepare v2 cutover for one accountable operator
 
-- **Status:** Proposed
+- **Status:** Superseded by [ADR-0091](0091-speed-first-clean-v2-start.md) for the clean-start route
 - **Date:** 2026-09-25
 - **Decision owner:** FS-GG accountable programme owner
 - **Affects:** GS2-10 readiness, protected cutover execution, and GS2-13.2 approval
@@ -23,6 +23,9 @@ execution unattended while expressly preserving protected `OpenV2` approval. Nei
 the remaining cutover authority.
 
 ## Decision
+
+**2026-09-28:** ADR-0091 supersedes this proposed migration profile for the active clean-start route.
+The requirements below remain historical; they do not block the fresh V2 pilot.
 
 The following profile is proposed and has no live authority until its acceptance requirements pass.
 

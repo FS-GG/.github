@@ -3,7 +3,7 @@
 - **Status:** Accepted
 - **Date:** 2026-09-28
 - **Decision owner:** FS-GG accountable programme owner
-- **Scope:** GitHub Substrate v2 activation and repository adoption
+- **Affects:** GitHub Substrate v2 activation and repository adoption
 - **Supersedes:** ADR-0090 and the GS2-09–GS2-14 migration sequence for the clean-start route
 
 ## Context
