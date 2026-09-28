@@ -983,7 +983,7 @@ flowchart TD
   **Handoff:** reproducible real observation session and capability/latency/size findings. Unavailable
   native assets or unresolved bootstrap blocks the live claim, not unrelated fixture repairs.
 
-- [ ] **BARC-01.3 — Deliver the Fable game and custom-WASM preview — route: routine.**
+- [x] **BARC-01.3 — Deliver the Fable game and custom-WASM preview — route: routine.**
   **Depends on:** BARC-01.1's corrected broker contract, selected browser codec/transport and the
   current fs-gg-fable-game template/provider. Fixture-backed browser work may proceed alongside
   BARC-01.2; real native observation remains a prerequisite for BARC-01.4.
@@ -1004,6 +1004,12 @@ flowchart TD
   Fable browser rendering and input, with no SkiaViewer window or dependency.
   **Handoff:** usable Fable game receiver example, exact provider/tool/package identity, host/SDK
   fixtures and measured browser costs; expand only the next useful window from this evidence.
+  **Delivered:** [FS-GG/FSBarV2 #4](https://github.com/FS-GG/FSBarV2/pull/4), exact merge
+  `c537040fe719cd3b8420c43c28eee08157e5ded8`, matches the qualified candidate tree. Actual
+  product and public-generated receiver journeys passed with zero native submissions.
+  The [owning evidence](https://github.com/FS-GG/FSBarV2/blob/c537040fe719cd3b8420c43c28eee08157e5ded8/docs/roadmaps/evidence/barc-01.3cde-preview.md)
+  records archive/tool/public-input identities and measured small-profile costs. Public BAR
+  publication, upstream adoption, installed capability and `.4` native control remain separate.
 
 ### 12.2 Remaining core outcomes
 
