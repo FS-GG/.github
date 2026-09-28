@@ -180,14 +180,18 @@ jobs:
     if: inputs.seed_source_manifest_sha256 != ''
     name: gs2-09-7-seed-bootstrap-admission
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 40
     environment: github-substrate-v2-sandbox
+    permissions:
+      contents: read
+      actions: read
     env:
       GITHUB_WORKFLOW_SHA: ${{ github.workflow_sha }}
       FSGG_PROTECTED_SHA: ${{ github.sha }}
       FSGG_CANDIDATE_SHA: ${{ inputs.candidate_sha }}
       FSGG_SEED_SOURCE_MANIFEST_SHA256: ${{ inputs.seed_source_manifest_sha256 }}
       FSGG_SEED_SANITIZED_EVIDENCE_DIR: /tmp/fsgg-seed-${{ github.run_id }}-${{ github.run_attempt }}
+      FSGG_SEED_PRIVATE_DIR: /tmp/fsgg-seed-private-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - name: Check out the exact protected bootstrap source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -213,19 +217,55 @@ jobs:
           test "$(git -C host rev-parse HEAD)" = "$FSGG_PROTECTED_SHA"
           test "$(git -C coordination rev-parse HEAD)" = "$FSGG_CANDIDATE_SHA"
 
-      - name: Require the installed retained plan and independent bootstrap admission
-        run: python3 host/scripts/gs2-09-7-seed-bootstrap-entry.py preflight
+      - name: Prepare exact credential-only admission request
+        run: python3 host/scripts/gs2-09-7-seed-bootstrap-entry.py prepare-request
+
+      - name: Publish sanitized prepare request for independent owner
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: gs2-09-7-seed-admission-request-prepare-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.FSGG_SEED_PRIVATE_DIR }}/prepare/seed-admission-request.json
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Expose exact prepare request ID and digest to native owner
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 host/scripts/gs2-09-7-seed-bootstrap-entry.py request-info prepare
 
       - name: Set up the pinned Coordination SDK
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
         with:
           global-json-file: coordination/global.json
 
-      - name: Seal immutable S2 and S1, then apply journal-only CAS
+      - name: Wait for owner prepare decision, then mint and seal immutable S2 and S1
         env:
+          GH_TOKEN: ${{ github.token }}
           FSGG_DISPATCH_APP_ID: ${{ secrets.FSGG_DISPATCH_APP_ID }}
           FSGG_DISPATCH_APP_PRIVATE_KEY: ${{ secrets.FSGG_DISPATCH_APP_PRIVATE_KEY }}
-        run: python3 host/scripts/gs2-09-7-seed-bootstrap-entry.py run
+        run: python3 host/scripts/gs2-09-7-seed-bootstrap-entry.py seal-and-request-final
+
+      - name: Publish sanitized final journal-only admission request
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: gs2-09-7-seed-admission-request-final-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.FSGG_SEED_PRIVATE_DIR }}/final/seed-admission-request.json
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Expose exact final request ID and digest to native owner
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 host/scripts/gs2-09-7-seed-bootstrap-entry.py request-info final
+
+      - name: Wait for owner final decision and apply one journal CAS
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 host/scripts/gs2-09-7-seed-bootstrap-entry.py final-apply
+
+      - name: Revoke any remaining private installation token
+        if: ${{ always() }}
+        run: python3 host/scripts/gs2-09-7-seed-bootstrap-entry.py revoke-private
 
       - name: Retain sanitized native journal readback
         if: ${{ always() }}

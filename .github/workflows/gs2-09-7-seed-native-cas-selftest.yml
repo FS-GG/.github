@@ -6,9 +6,15 @@ on:
       - "scripts/gs2-09-7-seed-native-cas.py"
       - "scripts/gs2-09-7-seed-bootstrap-admission.py"
       - "scripts/gs2-09-7-seed-bootstrap-entry.py"
+      - "scripts/gs2-09-7-seed-admission-bridge.py"
+      - "scripts/gs2-09-7-seed-admission-authorizer.py"
+      - "scripts/gs2-09-7-seed-admission-native-read.py"
       - "tests/gs2-09-7-seed-native-cas/**"
       - "tests/gs2-09-7-seed-bootstrap-admission/**"
       - "tests/gs2-09-7-seed-bootstrap-entry/**"
+      - "tests/gs2-09-7-seed-admission-bridge/**"
+      - "tests/gs2-09-7-seed-admission-authorizer/**"
+      - "tests/gs2-09-7-seed-admission-native-read/**"
       - ".github/workflows/github-substrate-v2-sandbox-qualification.yml"
       - ".github/workflows/gs2-09-7-seed-native-cas-selftest.yml"
   push:
@@ -17,9 +23,15 @@ on:
       - "scripts/gs2-09-7-seed-native-cas.py"
       - "scripts/gs2-09-7-seed-bootstrap-admission.py"
       - "scripts/gs2-09-7-seed-bootstrap-entry.py"
+      - "scripts/gs2-09-7-seed-admission-bridge.py"
+      - "scripts/gs2-09-7-seed-admission-authorizer.py"
+      - "scripts/gs2-09-7-seed-admission-native-read.py"
       - "tests/gs2-09-7-seed-native-cas/**"
       - "tests/gs2-09-7-seed-bootstrap-admission/**"
       - "tests/gs2-09-7-seed-bootstrap-entry/**"
+      - "tests/gs2-09-7-seed-admission-bridge/**"
+      - "tests/gs2-09-7-seed-admission-authorizer/**"
+      - "tests/gs2-09-7-seed-admission-native-read/**"
       - ".github/workflows/github-substrate-v2-sandbox-qualification.yml"
       - ".github/workflows/gs2-09-7-seed-native-cas-selftest.yml"
   workflow_dispatch:
@@ -43,3 +55,6 @@ jobs:
         run: |
           python3 tests/gs2-09-7-seed-bootstrap-admission/test_seed_bootstrap_admission.py
           python3 tests/gs2-09-7-seed-bootstrap-entry/test_seed_bootstrap_entry.py
+          python3 tests/gs2-09-7-seed-admission-bridge/test_seed_admission_bridge.py
+          python3 tests/gs2-09-7-seed-admission-authorizer/test_seed_admission_authorizer.py
+          python3 tests/gs2-09-7-seed-admission-native-read/test_seed_admission_native_read.py

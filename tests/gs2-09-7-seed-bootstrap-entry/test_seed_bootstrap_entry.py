@@ -127,14 +127,22 @@ class EntryTests(unittest.TestCase):
         with self.assertRaisesRegex(entry.Refused, "manifest-file-drift"):
             entry.validate_artifacts(self.runtime, entry.context(self.env))
 
-    def test_workflow_routes_static_request_before_secret_and_run(self):
+    def test_workflow_stages_two_native_decisions_before_effect(self):
         seed = WORKFLOW.read_text().split("  seed-bootstrap:\n", 1)[1]
         self.assertIn("if: inputs.seed_source_manifest_sha256 != ''", seed)
         self.assertIn("environment: github-substrate-v2-sandbox", seed)
-        self.assertIn("gs2-09-7-seed-bootstrap-entry.py preflight", seed)
-        self.assertIn("gs2-09-7-seed-bootstrap-entry.py run", seed)
-        self.assertLess(seed.index("gs2-09-7-seed-bootstrap-entry.py preflight"),
+        self.assertIn("timeout-minutes: 40", seed)
+        self.assertIn("actions: read", seed)
+        self.assertIn("gs2-09-7-seed-bootstrap-entry.py prepare-request", seed)
+        self.assertIn("gs2-09-7-seed-bootstrap-entry.py seal-and-request-final", seed)
+        self.assertIn("gs2-09-7-seed-bootstrap-entry.py final-apply", seed)
+        self.assertLess(seed.index("gs2-09-7-seed-bootstrap-entry.py prepare-request"),
                         seed.index("secrets.FSGG_DISPATCH_APP_PRIVATE_KEY"))
+        self.assertLess(seed.index("seed-admission-request-prepare-"),
+                        seed.index("seed-admission-request-final-"))
+        self.assertLess(seed.index("seed-admission-request-final-"),
+                        seed.index("gs2-09-7-seed-bootstrap-entry.py final-apply"))
+        self.assertIn("gs2-09-7-seed-bootstrap-entry.py revoke-private", seed)
         self.assertIn("native-readback.json", seed)
         self.assertNotIn("gs2-09-7-mint-sandbox-token.py", seed)
 
@@ -163,6 +171,28 @@ class EntryTests(unittest.TestCase):
             with self.assertRaisesRegex(entry.Refused, "bootstrap-source-uninstalled"):
                 entry.run_protected(self.host, self.candidate, self.env)
         mint.assert_not_called()
+
+    def test_staged_prepare_refuses_before_request_and_mint_when_uninstalled(self):
+        self.write_source()
+        environment = {**self.env, "FSGG_SEED_PRIVATE_DIR": str(self.root / "private")}
+        mint = mock.Mock()
+        with mock.patch.object(entry, "mint_private", mint):
+            with self.assertRaisesRegex(entry.Refused, "bootstrap-source-uninstalled"):
+                entry.stage_prepare_request(self.host, self.candidate, environment)
+        self.assertFalse((self.root / "private").exists())
+        mint.assert_not_called()
+
+    def test_private_request_refuses_changed_bytes(self):
+        self.write_source()
+        environment = {**self.env, "FSGG_SEED_PRIVATE_DIR": str(self.root / "private")}
+        with mock.patch.object(entry, "INSTALLATION_STATUS", "installed-protected-bootstrap"):
+            subject = entry.stage_prepare_request(self.host, self.candidate, environment)
+        root = self.root / "private"
+        self.assertEqual(subject, entry.read_request(root, "prepare"))
+        path = entry.request_file(root, "prepare")
+        path.write_bytes(path.read_bytes().replace(b"prepare-only-no-effect", b"foreign-operation"))
+        with self.assertRaises(ValueError):
+            entry.read_request(root, "prepare")
 
     def test_coordination_seal_uses_exact_flags_and_excludes_credentials(self):
         self.write_source()

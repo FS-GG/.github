@@ -17,6 +17,7 @@ import sys
 import datetime as dt
 import subprocess
 import tempfile
+import stat
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -92,6 +93,18 @@ def write_private(path: Path, raw: bytes) -> None:
                          getattr(os, "O_NOFOLLOW", 0), 0o600)
     with os.fdopen(descriptor, "wb") as stream:
         stream.write(raw)
+
+
+def read_private(path: Path, limit: int = 1024 * 1024) -> bytes:
+    require(path.is_absolute() and not path.is_symlink(), "private-input-path")
+    descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+    with os.fdopen(descriptor, "rb") as stream:
+        info = os.fstat(stream.fileno())
+        require(stat.S_ISREG(info.st_mode) and stat.S_IMODE(info.st_mode) == 0o600,
+                "private-input-mode")
+        raw = stream.read(limit + 1)
+    require(0 < len(raw) <= limit, "private-input-size")
+    return raw
 
 
 @contextmanager
@@ -245,7 +258,7 @@ def context(environment: dict[str, str]) -> dict:
 
 
 def preflight(host_checkout: Path, candidate_checkout: Path,
-              environment: dict[str, str]) -> dict:
+              environment: dict[str, str], prepare_port=None) -> dict:
     facts = context(environment)
     require(host_checkout.resolve().is_dir() and candidate_checkout.resolve().is_dir(),
             "checkout-unavailable")
@@ -255,7 +268,8 @@ def preflight(host_checkout: Path, candidate_checkout: Path,
     admission = load_sibling("gs2_seed_bootstrap_admission", "gs2-09-7-seed-bootstrap-admission.py")
     try:
         admission.require_prepare_admitted(
-            PREPARE_ADMISSION_PORT, facts, facts["manifestSha256"],
+            PREPARE_ADMISSION_PORT if prepare_port is None else prepare_port,
+            facts, facts["manifestSha256"],
             source["approvedArtifactSourceSha256"], dt.datetime.now(dt.timezone.utc))
     except admission.Refused as error:
         raise Refused(f"prepare-{error}") from error
@@ -263,7 +277,8 @@ def preflight(host_checkout: Path, candidate_checkout: Path,
 
 
 def require_postmint_ready(host_checkout: Path, candidate_checkout: Path,
-                           workflow_sha: str) -> tuple[object, object, object]:
+                           workflow_sha: str, final_port=None,
+                           prestate_port=None) -> tuple[object, object, object]:
     """Check every locally installed operation dependency before App mint."""
     binding = load_sibling("gs2_seed_execution_binding", "gs2-09-7-seed-execution-binding.py")
     cas = load_sibling("gs2_seed_native_cas", "gs2-09-7-seed-native-cas.py")
@@ -272,14 +287,20 @@ def require_postmint_ready(host_checkout: Path, candidate_checkout: Path,
             and cas.INSTALLATION_STATUS == "installed-protected-host",
             "postmint-source-uninstalled")
     try:
-        admission.check_port(FINAL_ADMISSION_PORT)
+        if final_port is None:
+            require(all(type(value) is str and value for value in (
+                admission.PINNED_ORIGIN, admission.PINNED_RESOURCE_ID,
+                admission.PINNED_ENDPOINT)), "final-admission-unconfigured")
+        else:
+            admission.check_port(final_port)
     except admission.Refused as error:
         raise Refused(f"final-{error}") from error
-    require(PRESTATE_PRODUCER_PORT is not None
-            and callable(getattr(PRESTATE_PRODUCER_PORT, "describe", None))
-            and callable(getattr(PRESTATE_PRODUCER_PORT, "produce", None)),
+    selected_prestate = PRESTATE_PRODUCER_PORT if prestate_port is None else prestate_port
+    require(selected_prestate is not None
+            and callable(getattr(selected_prestate, "describe", None))
+            and callable(getattr(selected_prestate, "produce", None)),
             "prestate-producer-uninstalled")
-    require(PRESTATE_PRODUCER_PORT.describe() == {
+    require(selected_prestate.describe() == {
         "schema": "fsgg.gs2-09-7.sandbox-seed-prestate-producer/1",
         "repositoryId": 1353050537,
         "projectNodeId": "PVT_kwDOEYAWY84BiESo",
@@ -292,7 +313,11 @@ def require_postmint_ready(host_checkout: Path, candidate_checkout: Path,
             "protected-binding-provenance")
     for relative in ("scripts/gs2-09-7-seed-bootstrap-entry.py",
                      "scripts/gs2-09-7-seed-bootstrap-admission.py",
-                     "scripts/gs2-09-7-mint-sandbox-token.py"):
+                     "scripts/gs2-09-7-mint-sandbox-token.py",
+                     "scripts/gs2-09-7-seed-prestate.py",
+                     "scripts/gs2-09-7-seed-admission-bridge.py",
+                     "scripts/gs2-09-7-seed-admission-authorizer.py",
+                     "scripts/gs2-09-7-seed-admission-native-read.py"):
         current = binding.read_regular(regular_inside(host_checkout, relative), 1024 * 1024)
         committed = binding.git_bytes(host_checkout, ["show", f"{workflow_sha}:{relative}"],
                                       1024 * 1024)
@@ -316,9 +341,11 @@ def validate_prestate(raw: bytes, facts: dict) -> None:
             "fresh-prestate")
 
 
-def produce_prestate(token: str, facts: dict) -> bytes:
+def produce_prestate(token: str, facts: dict, producer_port=None) -> bytes:
+    selected = PRESTATE_PRODUCER_PORT if producer_port is None else producer_port
+    require(selected is not None, "prestate-producer-uninstalled")
     try:
-        result = PRESTATE_PRODUCER_PORT.produce(token, facts)
+        result = selected.produce(token, facts)
     except Exception as error:
         raise Refused("prestate-producer-readback") from error
     require(type(result) is dict and set(result) == {
@@ -499,13 +526,235 @@ def run_protected(host_checkout: Path, candidate_checkout: Path,
         return report
 
 
-def execute_source(environment: dict[str, str], candidate_checkout: Path,
-                   runtime_dir: Path,
-                   mint_proof_bytes: bytes,
-                   token: str, repository_readback_bytes: bytes,
-                   project_readback_bytes: bytes, admission_port, git_port,
-                   now: dt.datetime) -> dict:
-    """Compose exact-source checks; installation must supply protected ports."""
+def private_root(environment: dict[str, str], *, create: bool = False) -> Path:
+    root = Path(environment["FSGG_SEED_PRIVATE_DIR"])
+    require(root.is_absolute() and not root.is_symlink(), "private-root")
+    if create:
+        require(not root.exists(), "private-root-exists")
+        root.mkdir(mode=0o700)
+    require(root.is_dir() and stat.S_IMODE(root.stat().st_mode) == 0o700,
+            "private-root-mode")
+    return root
+
+
+def prepare_subject(facts: dict, source: dict) -> dict:
+    return {
+        "workflowRepository": HOST, "workflowPath": WORKFLOW,
+        "environment": "github-substrate-v2-sandbox",
+        "workflowSha": facts["workflowSha"], "candidateSha": facts["candidateSha"],
+        "runId": facts["runId"], "runAttempt": facts["runAttempt"],
+        "runNonce": facts["runNonce"],
+        "sourceManifestSha256": facts["manifestSha256"],
+        "approvedArtifactSourceSha256": source["approvedArtifactSourceSha256"],
+        "sandboxRepositoryId": 1353050537,
+        "sandboxRepositoryNodeId": "R_kgDOUKXpqQ",
+        "projectNodeId": "PVT_kwDOEYAWY84BiESo",
+        "appId": 4166418, "installationId": 143110413,
+        "operation": "prepare-only-no-effect",
+    }
+
+
+def bridge_module():
+    return load_sibling("gs2_seed_admission_bridge", "gs2-09-7-seed-admission-bridge.py")
+
+
+def request_file(root: Path, phase: str) -> Path:
+    require(phase in ("prepare", "final"), "request-phase")
+    return root / phase / "seed-admission-request.json"
+
+
+def stage_prepare_request(host_checkout: Path, candidate_checkout: Path,
+                          environment: dict[str, str]) -> dict:
+    """Publish source-only credential request before any App secret access."""
+    require(INSTALLATION_STATUS == "installed-protected-bootstrap",
+            "bootstrap-source-uninstalled")
+    facts = context(environment)
+    source, _ = validate_source_artifacts(candidate_checkout, facts)
+    bridge = bridge_module()
+    subject = prepare_subject(facts, source)
+    root = private_root(environment, create=True)
+    folder = root / "prepare"
+    folder.mkdir(mode=0o700)
+    write_private(request_file(root, "prepare"), bridge.request_bytes("prepare", subject))
+    return subject
+
+
+def read_request(root: Path, phase: str) -> dict:
+    bridge = bridge_module()
+    raw = read_private(request_file(root, phase))
+    value = strict_json(raw)
+    require(raw == bridge.request_bytes(phase, value.get("subject")),
+            "request-bytes")
+    return value["subject"]
+
+
+def request_info(environment: dict[str, str], phase: str) -> dict:
+    """Publish native artifact ID/digest for the independent owner's dispatch."""
+    bridge = bridge_module()
+    root = private_root(environment)
+    subject = read_request(root, phase)
+    port = bridge.GitHubReadPort(environment["GH_TOKEN"])
+    artifact = bridge.request_artifact(port, phase, subject)
+    fields = bridge.owner_dispatch_fields(phase, subject, artifact)
+    summary = Path(environment["GITHUB_STEP_SUMMARY"])
+    require(summary.is_absolute() and summary.parent.is_dir()
+            and not summary.is_symlink(),
+            "step-summary")
+    with summary.open("a", encoding="utf-8") as stream:
+        stream.write("\nGS2-09.7 independent owner dispatch inputs:\n\n```json\n")
+        stream.write(json.dumps(fields, sort_keys=True, separators=(",", ":")))
+        stream.write("\n```\n")
+    return fields
+
+
+def target_readbacks(mint_module, token: str) -> tuple[bytes, bytes]:
+    repository, repository_raw = mint_module.request_json(
+        "GET", "/repos/FS-GG/FS.GG.GitHub.Substrate.Sandbox", token)
+    require(type(repository) is dict, "sandbox-repository-readback")
+    project_response, _ = mint_module.request_json(
+        "POST", "/graphql", token,
+        {"query": "query($owner:String!,$number:Int!){organization(login:$owner){projectV2(number:$number){id title closed public}}}",
+         "variables": {"owner": "FS-GG", "number": 2}})
+    require(not project_response.get("errors")
+            and type(project_response.get("data")) is dict
+            and type(project_response["data"].get("organization")) is dict
+            and type(project_response["data"]["organization"].get("projectV2")) is dict,
+            "sandbox-project-readback")
+    project_raw = json.dumps(project_response["data"]["organization"]["projectV2"],
+                             sort_keys=True, separators=(",", ":")).encode()
+    return repository_raw, project_raw
+
+
+def stage_seal_and_final_request(host_checkout: Path, candidate_checkout: Path,
+                                 environment: dict[str, str]) -> dict:
+    """Fresh prepare decision precedes mint; private token survives only this job."""
+    require(INSTALLATION_STATUS == "installed-protected-bootstrap",
+            "bootstrap-source-uninstalled")
+    facts = context(environment)
+    root = private_root(environment)
+    bridge = bridge_module()
+    prestate = load_sibling("gs2_seed_prestate", "gs2-09-7-seed-prestate.py")
+    binding, _, _ = require_postmint_ready(
+        host_checkout, candidate_checkout, facts["workflowSha"],
+        prestate_port=prestate)
+    source, retained = validate_source_artifacts(candidate_checkout, facts)
+    expected = prepare_subject(facts, source)
+    require(read_request(root, "prepare") == expected, "prepare-request-drift")
+    actions_read = bridge.GitHubReadPort(environment["GH_TOKEN"])
+    port = bridge.wait_decision(actions_read, "prepare", expected, facts["workflowSha"])
+    preflight(host_checkout, candidate_checkout, environment, port)
+    mint_module = load_sibling("gs2_seed_mint", "gs2-09-7-mint-sandbox-token.py")
+    token = None
+    token_path = root / "installation-token.private"
+    try:
+        token, proof = mint_private(mint_module, environment)
+        proof_path = root / "mint-grants.json"
+        plan_path = root / "seed-plan.json"
+        corpus_path = root / "corpus.json"
+        prestate_path = root / "prestate.json"
+        write_private(proof_path, proof)
+        write_private(plan_path, retained["seed-plan.json"])
+        write_private(corpus_path, retained["corpus.json"])
+        write_private(prestate_path, produce_prestate(token, facts, prestate))
+        with temporary_environment({
+            "FSGG_SANDBOX_EVIDENCE_DIR": str(root),
+            "FSGG_SEED_PLAN_PATH": str(plan_path),
+            "FSGG_SEED_CORPUS_PATH": str(corpus_path),
+            "FSGG_SANDBOX_MINT_PROOF": str(proof_path),
+            "FSGG_SANDBOX_TOKEN": token,
+            "FSGG_APPROVED_ARTIFACT_SOURCE_SHA256": source["approvedArtifactSourceSha256"],
+            "FSGG_PROTECTED_ENVIRONMENT": "github-substrate-v2-sandbox",
+            "FSGG_SANDBOX_RUN_NONCE": facts["runNonce"],
+            "FSGG_SANDBOX_REPOSITORY_ID": "1353050537",
+            "FSGG_SANDBOX_REPOSITORY_NODE_ID": "R_kgDOUKXpqQ",
+            "FSGG_SANDBOX_PROJECT_NUMBER": "2",
+            "FSGG_SANDBOX_PROJECT_NODE_ID": "PVT_kwDOEYAWY84BiESo",
+            "FSGG_SEED_JOURNAL_REF": f'refs/heads/gs2-09-7/{facts["runNonce"]}/seed-journal',
+        }):
+            declaration = binding.build_document()
+        s2_path = root / "s2-declaration.json"
+        write_private(s2_path, declaration)
+        sealed = seal_with_coordination(candidate_checkout, facts, root, source,
+                                        s2_path, proof_path, prestate_path)
+        repository_raw, project_raw = target_readbacks(mint_module, token)
+        _, _, _, subject = inspect_source(environment, candidate_checkout, sealed,
+                                          proof, token, repository_raw, project_raw,
+                                          dt.datetime.now(dt.timezone.utc))
+        folder = root / "final"
+        folder.mkdir(mode=0o700)
+        write_private(request_file(root, "final"), bridge.request_bytes("final", subject))
+        # The candidate CLI has exited before the token is written to disk.
+        write_private(token_path, token.encode("ascii"))
+        return subject
+    except BaseException:
+        if token is not None:
+            try:
+                mint_module.revoke_token(token)
+            finally:
+                token_path.unlink(missing_ok=True)
+        raise
+
+
+def revoke_private_token(root: Path) -> bool:
+    path = root / "installation-token.private"
+    if not path.exists():
+        return False
+    token = read_private(path, 4096).decode("ascii")
+    mint_module = load_sibling("gs2_seed_mint", "gs2-09-7-mint-sandbox-token.py")
+    mint_module.revoke_token(token)
+    path.unlink()
+    return True
+
+
+def stage_final_apply(host_checkout: Path, candidate_checkout: Path,
+                      environment: dict[str, str]) -> dict:
+    """Fresh final owner decision and exact sealed S1 precede one journal CAS."""
+    require(INSTALLATION_STATUS == "installed-protected-bootstrap",
+            "bootstrap-source-uninstalled")
+    facts = context(environment)
+    root = private_root(environment)
+    subject = read_request(root, "final")
+    bridge = bridge_module()
+    read_port = bridge.GitHubReadPort(environment["GH_TOKEN"])
+    token = read_private(root / "installation-token.private", 4096).decode("ascii")
+    report = None
+    try:
+        final_port = bridge.wait_decision(read_port, "final", subject,
+                                          facts["workflowSha"])
+        _, cas, _ = require_postmint_ready(
+            host_checkout, candidate_checkout, facts["workflowSha"],
+            final_port=final_port,
+            prestate_port=load_sibling("gs2_seed_prestate", "gs2-09-7-seed-prestate.py"))
+        mint_module = load_sibling("gs2_seed_mint", "gs2-09-7-mint-sandbox-token.py")
+        proof = read_private(root / "mint-grants.json")
+        repository_raw, project_raw = target_readbacks(mint_module, token)
+        sealed = root / "sealed"
+        _, _, _, actual_subject = inspect_source(
+            environment, candidate_checkout, sealed, proof, token,
+            repository_raw, project_raw, dt.datetime.now(dt.timezone.utc))
+        require(actual_subject == subject, "final-request-drift")
+        with cas.authenticated_port(token) as git_port:
+            report = execute_source(environment, candidate_checkout, sealed,
+                                    proof, token, repository_raw, project_raw,
+                                    final_port, git_port,
+                                    dt.datetime.now(dt.timezone.utc))
+    finally:
+        revoke_private_token(root)
+    if report is not None:
+        sanitized = Path(environment["FSGG_SEED_SANITIZED_EVIDENCE_DIR"])
+        require(sanitized.is_absolute() and not sanitized.exists(), "sanitized-output-path")
+        sanitized.mkdir(mode=0o700)
+        write_private(sanitized / "native-readback.json", cas.canonical(report))
+    require(report is not None and report.get("complete") is True,
+            "native-readback-pending")
+    return report
+
+
+def inspect_source(environment: dict[str, str], candidate_checkout: Path,
+                   runtime_dir: Path, mint_proof_bytes: bytes, token: str,
+                   repository_readback_bytes: bytes,
+                   project_readback_bytes: bytes, now: dt.datetime) -> tuple:
+    """Bind immutable S2/S1 and live targets before publishing final request."""
     require(INSTALLATION_STATUS == "installed-protected-bootstrap",
             "bootstrap-source-uninstalled")
     facts = context(environment)
@@ -518,7 +767,6 @@ def execute_source(environment: dict[str, str], candidate_checkout: Path,
     seed_plan_bytes = retained["seed-plan.json"]
     cas = load_sibling("gs2_seed_native_cas", "gs2-09-7-seed-native-cas.py")
     binding = load_sibling("gs2_seed_execution_binding", "gs2-09-7-seed-execution-binding.py")
-    admission = load_sibling("gs2_seed_bootstrap_admission", "gs2-09-7-seed-bootstrap-admission.py")
     import base64
     proposal = {
         "runId": facts["runId"], "runAttempt": facts["runAttempt"],
@@ -576,6 +824,18 @@ def execute_source(environment: dict[str, str], candidate_checkout: Path,
         "treeOid": proposal["treeOid"], "commitOid": proposal["commitOid"],
         "expectedOldOid": None, "operation": "genesis-nonce-seed-journal",
     }
+    return proposal, declaration_bytes, seed_plan_bytes, subject
+
+
+def execute_source(environment: dict[str, str], candidate_checkout: Path,
+                   runtime_dir: Path, mint_proof_bytes: bytes, token: str,
+                   repository_readback_bytes: bytes, project_readback_bytes: bytes,
+                   admission_port, git_port, now: dt.datetime) -> dict:
+    proposal, declaration_bytes, seed_plan_bytes, subject = inspect_source(
+        environment, candidate_checkout, runtime_dir, mint_proof_bytes, token,
+        repository_readback_bytes, project_readback_bytes, now)
+    admission = load_sibling("gs2_seed_bootstrap_admission", "gs2-09-7-seed-bootstrap-admission.py")
+    cas = load_sibling("gs2_seed_native_cas", "gs2-09-7-seed-native-cas.py")
     admission.require_admitted(admission_port, subject, now)
     # The CAS module's separate installation flag must also be armed by the
     # protected owner. No caller-controlled manifest can switch it on.
@@ -585,11 +845,26 @@ def execute_source(environment: dict[str, str], candidate_checkout: Path,
 
 def main(arguments: list[str]) -> int:
     try:
-        require(arguments in (["preflight"], ["run"]), "mode")
+        require(arguments in (["preflight"], ["prepare-request"],
+                              ["request-info", "prepare"], ["request-info", "final"],
+                              ["seal-and-request-final"], ["final-apply"],
+                              ["revoke-private"]), "mode")
         if arguments == ["preflight"]:
             preflight(Path("host"), Path("coordination"), dict(os.environ))
+        elif arguments == ["prepare-request"]:
+            stage_prepare_request(Path("host"), Path("coordination"), dict(os.environ))
+        elif arguments[:1] == ["request-info"]:
+            request_info(dict(os.environ), arguments[1])
+        elif arguments == ["seal-and-request-final"]:
+            stage_seal_and_final_request(Path("host"), Path("coordination"), dict(os.environ))
+        elif arguments == ["final-apply"]:
+            stage_final_apply(Path("host"), Path("coordination"), dict(os.environ))
         else:
-            run_protected(Path("host"), Path("coordination"), dict(os.environ))
+            try:
+                revoke_private_token(private_root(dict(os.environ)))
+            except Refused as error:
+                if str(error) != "private-root-mode":
+                    raise
     except (Refused, OSError, KeyError, ValueError, TypeError, subprocess.SubprocessError) as error:
         print(f"GS2-SEED-BOOTSTRAP: refused {error}", file=sys.stderr)
         return 1
