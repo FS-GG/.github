@@ -124,7 +124,8 @@ def validate_mint(response):
     require(isinstance(token, str) and len(token) > 20 and token.isascii()
             and not any(c.isspace() for c in token), 'mint response omitted bearer')
     require(response.get('repository_selection') == 'selected', 'mint selection drift')
-    require(response.get('permissions') == {'contents': 'read', 'metadata': 'read'},
+    require(response.get('permissions') in ({'contents': 'read'},
+                                            {'contents': 'read', 'metadata': 'read'}),
             'minted grant is not exact read-only scope')
     repos = response.get('repositories')
     require(isinstance(repos, list) and len(repos) == 1

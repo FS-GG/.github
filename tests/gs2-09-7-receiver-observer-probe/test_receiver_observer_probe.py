@@ -107,6 +107,20 @@ class ObserverTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     observer.probe(raw(value), FakeApi)
 
+    def test_implicit_or_explicit_metadata_read_are_the_only_narrow_grants(self):
+        for permissions in ({'contents': 'read'},
+                            {'contents': 'read', 'metadata': 'read'}):
+            with self.subTest(permissions=permissions):
+                value = {**mint_value(), 'permissions': permissions}
+                report = observer.probe(raw(value), FakeApi)
+                self.assertTrue(report['complete'])
+
+        for permissions in ({'contents': 'read', 'issues': 'read'},
+                            {'contents': 'read', 'metadata': 'read', 'issues': 'read'},
+                            {'metadata': 'read'}):
+            with self.subTest(permissions=permissions), self.assertRaises(ValueError):
+                observer.probe(raw({**mint_value(), 'permissions': permissions}), FakeApi)
+
     def test_ref_namespace_and_repository_drift_refuse(self):
         path = '/repos/' + observer.FULL_NAME + '/git/matching-refs/heads/gs2-09-7/'
         for override in ({path: [{'ref': 'refs/heads/main', 'object': {'sha': 'a' * 40}}]},
@@ -142,6 +156,17 @@ class ObserverTests(unittest.TestCase):
 
 
 class HostTests(unittest.TestCase):
+    def test_host_accepts_only_implicit_or_explicit_metadata_read(self):
+        for permissions in ({'contents': 'read'},
+                            {'contents': 'read', 'metadata': 'read'}):
+            with self.subTest(permissions=permissions):
+                host.validate_mint({**mint_value(), 'permissions': permissions})
+
+        for permissions in ({'contents': 'read', 'issues': 'read'},
+                            {'contents': 'read', 'metadata': 'read', 'issues': 'read'}):
+            with self.subTest(permissions=permissions), self.assertRaises(ValueError):
+                host.validate_mint({**mint_value(), 'permissions': permissions})
+
     def test_container_arguments_and_environment_have_no_bearer_or_host_credentials(self):
         minted = mint_value()
         with patch.object(host.subprocess, 'run') as run:

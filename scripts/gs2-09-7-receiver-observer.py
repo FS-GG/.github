@@ -56,7 +56,10 @@ def validate_mint(raw):
     require(isinstance(token, str) and len(token) > 20 and token.isascii()
             and not any(c.isspace() for c in token), 'missing narrow bearer')
     require(value.get('repository_selection') == 'selected', 'mint selection drift')
-    require(value.get('permissions') == {'contents': 'read', 'metadata': 'read'}, 'mint permissions drift')
+    permissions = value.get('permissions')
+    require(permissions in ({'contents': 'read'},
+                            {'contents': 'read', 'metadata': 'read'}),
+            'mint permissions drift')
     repositories = value.get('repositories')
     require(isinstance(repositories, list) and len(repositories) == 1, 'mint repository count drift')
     check_repo(repositories[0])
