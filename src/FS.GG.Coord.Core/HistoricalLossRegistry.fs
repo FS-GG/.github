@@ -1620,7 +1620,16 @@ module HistoricalLossRegistry =
         refuse (entry.Family <> expectedFamily) "historical-loss-family-mismatch"
         refuse (entry.Scope <> expectedScope) "historical-loss-scope-mismatch"
         refuse (entry.ObservationHorizon <> expectedObservationHorizon) "historical-loss-observation-horizon-mismatch"
-        refuse (not (validInstant entry.ObservationHorizon)) "historical-loss-observation-horizon-invalid"
+        let mutable observationHorizon = DateTimeOffset.MinValue
+        let observationHorizonValid =
+            DateTimeOffset.TryParseExact(
+                entry.ObservationHorizon,
+                "O",
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.RoundtripKind,
+                &observationHorizon
+            )
+        refuse (not observationHorizonValid) "historical-loss-observation-horizon-invalid"
         refuse (not (Set.contains entry.Family allowedFamilies)) "historical-loss-family-out-of-scope"
         refuse (entry.Consequence <> RequiredConsequence) "historical-loss-consequence"
         refuse entry.ExclusionAppliesToLiveClaims "historical-loss-live-claim-exclusion"
@@ -1687,7 +1696,8 @@ module HistoricalLossRegistry =
                     && not (String.IsNullOrWhiteSpace subject.NativeId)
                     && oid 40 subject.PayloadBlobSha
                     && validInstant subject.CreatedAt
-                    && DateTimeOffset.Parse(subject.CreatedAt, CultureInfo.InvariantCulture) <= DateTimeOffset.Parse(entry.ObservationHorizon, CultureInfo.InvariantCulture)
+                    && observationHorizonValid
+                    && DateTimeOffset.Parse(subject.CreatedAt, CultureInfo.InvariantCulture) <= observationHorizon
                     && not subject.LiveClaim)
 
             census.SelectedRepositories = expectedRepositories

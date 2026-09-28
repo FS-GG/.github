@@ -786,6 +786,23 @@ module HistoricalLossRegistryTests =
         Assert.Contains("historical-loss-native-census-proof-unavailable", bindV3 item bytes native |> expectError)
 
     [<Fact>]
+    let ``v3 malformed observation horizon returns errors instead of throwing`` () =
+        let original = v3Entry ()
+        let malformed = "not-an-instant"
+        let draft = { original.CensusFirst with ObservationHorizon = malformed; Digest = "" }
+        let census = { draft with Digest = HistoricalLossRegistry.retainedCensusDigestV3 draft }
+        let item =
+            { original with
+                ObservationHorizon = malformed
+                CensusFirst = census
+                CensusSecond = census }
+        let bytes, native = v3Fixture item
+        let errors = bindV3 item bytes native |> expectError
+        Assert.Contains("historical-loss-observation-horizon-invalid", errors)
+        Assert.Contains("historical-loss-retained-census-incomplete", errors)
+        Assert.Contains("historical-loss-native-census-proof-unavailable", errors)
+
+    [<Fact>]
     let ``v3 validates pagination independently for each repository before proof refusal`` () =
         let original = v3Entry ()
         let repositoryB: HistoricalLossRegistry.RepositoryIdentityV3 =
