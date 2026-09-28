@@ -687,6 +687,9 @@ module HistoricalLossRetainedNativeCensus =
         | true, _ ->
             parseInstant "observation horizon" observationHorizon
             |> Result.bind (fun horizon ->
+                if horizon > DateTimeOffset.UtcNow then
+                    Error(InvalidResponse("observation horizon", "horizon is later than the native observation time"))
+                else
                 collectPass transport apiBase 1 observationHorizon horizon
                 |> Result.bind (fun first ->
                     collectPass transport apiBase 2 observationHorizon horizon
@@ -801,6 +804,9 @@ module HistoricalLossRetainedNativeCensus =
                                       "X-GitHub-Api-Version-Selected", page.ApiVersionSelected ]
                                 |> fun values -> match page.LinkHeader with Some value -> values.Add("Link", value) | None -> values
                             Ok { Status = page.Status; Body = page.Body; Headers = headers; ETag = None; NextLink = page.NextLink } }
+        let mutable requiredHorizon = DateTimeOffset.MinValue
+        let horizonValid =
+            DateTimeOffset.TryParseExact(expectedObservationHorizon, "O", CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, &requiredHorizon)
         let exactRaw (original: PassCapture) (recomputed: PassCapture) =
             original.Number = recomputed.Number
             && original.RawEvidenceDigest = rawFingerprint original.Pages
@@ -808,6 +814,7 @@ module HistoricalLossRetainedNativeCensus =
             && List.forall2 (fun stored decoded ->
                 let mutable observed = DateTimeOffset.MinValue
                 DateTimeOffset.TryParseExact(stored.ObservedAt, "O", CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, &observed)
+                && horizonValid && observed >= requiredHorizon
                 && stored = { decoded with ObservedAt = stored.ObservedAt }) original.Pages recomputed.Pages
         match collectTwoPass replay apiBase expectedObservationHorizon with
         | Error error -> Error [ $"historical-loss-retained-raw-replay: %A{error}" ]
