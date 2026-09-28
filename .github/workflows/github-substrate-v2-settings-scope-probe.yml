@@ -109,6 +109,9 @@ jobs:
           test "$(jq -r .sandbox.repository.nodeId "$report")" = R_kgDOUKXpqQ
           test "$(jq -r .sandbox.project.nodeId "$report")" = PVT_kwDOEYAWY84BiESo
           test "$(jq -r .app.permissions.metadata "$report")" = read
+          test "$(jq -r .repositoryIdentity.stable "$report")" = true
+          jq -e '.repositoryIdentity.rawStable | type == "boolean"' "$report" >/dev/null
+          jq -e '.repositoryIdentity.revisionStable | type == "boolean"' "$report" >/dev/null
           test "$(jq -r .diagnostic.collected "$report")" = true
           test "$(jq -r .diagnostic.verdict "$report")" = collected
           test "$(jq -r .diagnostic.expectedStatusSet "$report")" = true

@@ -349,6 +349,14 @@ def validate_repository(value: dict) -> dict:
     return owner
 
 
+def repository_identity(value: dict) -> tuple:
+    """Bind the registered repository without treating volatile metadata as identity."""
+    owner = validate_repository(value)
+    return (value["id"], value["node_id"], value["full_name"], value["private"],
+            value["visibility"], value["fork"], value.get("source"),
+            owner["login"], owner["id"], owner["node_id"])
+
+
 def validate_organization(value: dict, repository_owner: dict) -> dict:
     require(value.get("login") == OWNER and type(value.get("id")) is int and value["id"] > 0
             and isinstance(value.get("node_id"), str) and value["node_id"],
@@ -686,8 +694,14 @@ def build_report(token: str, mint_path: Path, workspace: Path, revision: str, op
     probes.append(close_two)
 
     first_repository_bytes = observations["repository-identity"][1]
-    require(first_repository_bytes == close_one_bodies == start_two_bodies == close_two_bodies,
-            "repository identity changed during ruleset reads")
+    repository_reads = [first_repository_bytes, close_one_bodies, start_two_bodies, close_two_bodies]
+    require(all(len(bodies) == 1 for bodies in repository_reads),
+            "repository identity response is unavailable")
+    repository_objects = [decode_object(bodies[0], "repository-identity")
+                          for bodies in repository_reads]
+    require(all(repository_identity(value) == repository_identity(repository)
+                for value in repository_objects),
+            "registered repository identity changed during ruleset reads")
     for label, bodies in (("ruleset-pass-1-close", close_one_bodies),
                           ("ruleset-pass-2-start", start_two_bodies),
                           ("ruleset-pass-2-close", close_two_bodies)):
@@ -755,17 +769,40 @@ def build_report(token: str, mint_path: Path, workspace: Path, revision: str, op
         first, first_bodies = observations[name]
         require([page["status"] for page in confirmation["pages"]]
                 == [page["status"] for page in first["pages"]], f"{name} status changed between reads")
-        require(page_shapes(confirmation) == page_shapes(first),
-                f"{name} request URI, response digest, or terminal state changed between reads")
+        if name == "repository-identity":
+            require([{key: value for key, value in page.items() if key != "responseSha256"}
+                     for page in page_shapes(confirmation)]
+                    == [{key: value for key, value in page.items() if key != "responseSha256"}
+                        for page in page_shapes(first)],
+                    "repository-identity request URI or terminal state changed between reads")
+        else:
+            require(page_shapes(confirmation) == page_shapes(first),
+                    f"{name} request URI, response digest, or terminal state changed between reads")
         if first["pages"][-1]["status"] == 200:
-            require(first_bodies == bodies, f"{name} raw response changed between reads")
-            require([decode_json(raw, name) for raw in first_bodies]
-                    == [decode_json(raw, name) for raw in bodies], f"{name} typed response changed between reads")
+            if name == "repository-identity":
+                require(len(bodies) == 1 and
+                        repository_identity(decode_object(bodies[0], name))
+                        == repository_identity(repository),
+                        "registered repository identity changed during settings reads")
+            else:
+                require(first_bodies == bodies, f"{name} raw response changed between reads")
+                require([decode_json(raw, name) for raw in first_bodies]
+                        == [decode_json(raw, name) for raw in bodies],
+                        f"{name} typed response changed between reads")
 
     confirmed_repository = decode_object(confirmations["repository-identity"][1][0], "repository-identity-confirmation")
     confirmed_owner = validate_repository(confirmed_repository)
-    require(confirmed_repository["updated_at"] == repository["updated_at"],
-            "repository updated_at changed between settings reads")
+    repository_reads.append(confirmations["repository-identity"][1])
+    repository_objects.append(confirmed_repository)
+    repository_raw_stable = all(bodies == first_repository_bytes for bodies in repository_reads)
+    repository_revision_stable = all(
+        (value["default_branch"], value["updated_at"])
+        == (repository["default_branch"], repository["updated_at"])
+        for value in repository_objects)
+    repository_changed_keys = sorted({
+        key for value in repository_objects[1:]
+        for key in set(repository) | set(value) if repository.get(key) != value.get(key)
+    })
     confirmed_organization = decode_object(confirmations["organization-identity"][1][0],
                                            "organization-identity-confirmation")
     require(validate_organization(confirmed_organization, confirmed_owner) == account,
@@ -806,6 +843,13 @@ def build_report(token: str, mint_path: Path, workspace: Path, revision: str, op
         },
         "app": mint,
         "account": account,
+        "repositoryIdentity": {
+            "stable": True,
+            "rawStable": repository_raw_stable,
+            "revisionStable": repository_revision_stable,
+            "changedTopLevelKeys": repository_changed_keys,
+            "observationSha256": [sha256(bodies[0]) for bodies in repository_reads],
+        },
         "conditionalParents": sorted(environment_parents, key=lambda item: (item["id"], item["nodeId"])),
         "probes": probes,
         "customProperties": {
