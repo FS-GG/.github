@@ -149,6 +149,7 @@ module TelemetryReceiptTests =
             ))
 
     [<Theory>]
+    [<InlineData("after-inbox-directory-sync")>]
     [<InlineData("before-file-sync")>]
     [<InlineData("after-file-sync")>]
     [<InlineData("after-rename")>]
@@ -206,6 +207,33 @@ module TelemetryReceiptTests =
             |> ignore
 
             Assert.Equal("applied", status (TelemetryStoreApplication.lookupReceipt root approved scope "batch-a")))
+
+    [<Fact>]
+    let ``receipt admission does not resync an existing inbox parent`` () =
+        withStore (fun root ->
+            TelemetryStoreApplication.submitReceipt root approved scope (envelope scope "first" 0)
+            |> unwrap
+            |> ignore
+
+            TelemetryStoreApplication.drainReceipts root approved scope.Workspace
+            |> unwrap
+            |> ignore
+
+            let failIfParentIsResynced stage =
+                if stage = "after-inbox-directory-sync" then
+                    raise (IOException "existing inbox parent was resynced")
+
+            Assert.Equal(
+                "durably-received",
+                status (
+                    TelemetryStoreApplication.submitReceiptWithHook
+                        root
+                        approved
+                        scope
+                        (envelope scope "second" 1)
+                        failIfParentIsResynced
+                )
+            ))
 
     [<Fact>]
     let ``receipt exhaustion admits retries without another obligation and fair drain serves peers`` () =
