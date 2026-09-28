@@ -148,7 +148,9 @@ is public from exact source `941a82c0e06c9afe9db4c88fc29997d7627a5895`; the [pro
 verified GitHub Packages and nuget.org readback. Publication does not establish a specific receiver's
 installed version. [Cross-repository `verify-paths` #3894](https://github.com/FS-GG/.github/pull/3894)
 merged on protected main at `b583fa65`; [SKILL-FS-01 #3893](https://github.com/FS-GG/.github/pull/3893)
-remains an open source PR. The F# caller switch, Python retirement and updated CLI adoption remain separate work.
+merged on protected main at `0cc2082dd3fa6636f232d59fc1e6d849a989051c`. Its .1–.4 source
+window is delivered. The additive configuration-discovery capability, F# caller switch, Python retirement
+and installed receiver adoption remain separate work.
 
 Prospective telemetry can join native usage only where the configured runtime exposes a verifiable record.
 Missing parent/child population, terminal usage, CI attribution or Host acknowledgment remains an explicit
