@@ -8105,3 +8105,7 @@ The 19:10 UTC remote read found no Main/SystemAdmin reply after the request abov
 ### 2026-09-28 19:15 UTC — LEARN collector ownership still pending
 
 The 19:15 UTC remote read again found no owner reply. Installed v2 custody and a bounded same-host export remain unknown; the absence does not block the already-qualified source or authorize fdev to infer Main state. **Main/SystemAdmin — status still requested. Fdev — waiting; next mailbox check by 19:20 UTC** or earlier on reply.
+
+### 2026-09-28 19:20 UTC — LEARN collector owner reply deadline
+
+The 19:20 UTC remote read found no reply. To avoid repeated unchanged public checkpoints, **Main/SystemAdmin should return the safe installed-custody/`export-learning` status or the exact external blocker on this thread by 19:30 UTC.** Fdev will continue private reads at intervals no longer than five minutes and post again only for a substantive reply or at that deadline. No duplicate installation request or operation is authorized by the wait.
