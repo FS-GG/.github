@@ -33,6 +33,8 @@ module HistoricalLossRetainedNativeCensus =
             Stream: Stream
             Index: int
             Method: string
+            ApiVersionRequested: string
+            ApiVersionSelected: string
             Path: string
             Query: (string * string) list
             Status: int
@@ -113,7 +115,7 @@ module HistoricalLossRetainedNativeCensus =
     /// Capture two complete direct-enumeration passes. Every request is a GET through the single-page
     /// transport seam. Raw pages may differ while the eligible native roster and typed receipt set remain stable.
     val collectTwoPass:
-        transport: ISinglePageGitHubTransport ->
+        transport: IVersionedSinglePageGitHubTransport ->
         apiBase: string ->
         observationHorizon: string ->
         Result<Capture, CollectorError>

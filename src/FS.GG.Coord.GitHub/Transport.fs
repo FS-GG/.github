@@ -71,6 +71,9 @@ module Transport =
     type ISinglePageGitHubTransport =
         abstract SendSingle: request: Request -> IoResult<Response>
 
+    type IVersionedSinglePageGitHubTransport =
+        abstract SendSingleVersioned: apiVersion: string * request: Request -> IoResult<Response>
+
     [<Literal>]
     let private DefaultApiBase = "https://api.github.com"
 
@@ -437,6 +440,7 @@ module Transport =
             (url: string)
             (maximumBytes: int option)
             (rawMutationResponse: bool)
+            (apiVersion: string option)
             : IoResult<Response> =
             try
                 let method =
@@ -449,6 +453,10 @@ module Transport =
                     | m -> HttpMethod m
 
                 use message = new HttpRequestMessage(method, url)
+
+                match apiVersion with
+                | Some version -> message.Headers.TryAddWithoutValidation("X-GitHub-Api-Version", version) |> ignore
+                | None -> ()
 
                 match request.IfNoneMatch with
                 | Some etag -> message.Headers.TryAddWithoutValidation("If-None-Match", etag) |> ignore
@@ -580,7 +588,7 @@ module Transport =
 
         let sendOne http request url maximumBytes rawMutationResponse =
             if rawMutationResponse || isLegacyReadRequest request then
-                sendOneUnchecked http request url maximumBytes rawMutationResponse
+                sendOneUnchecked http request url maximumBytes rawMutationResponse None
             else
                 Error(Malformed(request.Subject, "mutation requires the typed SendMutation boundary"))
 
@@ -638,6 +646,14 @@ module Transport =
             member _.SendSingle(request: Request) : IoResult<Response> =
                 let url = base' + "/" + request.Path.TrimStart('/') + buildQuery request.Query
                 sendOne singlePageClient request url (Some(4 * 1024 * 1024)) false
+
+        interface IVersionedSinglePageGitHubTransport with
+            member _.SendSingleVersioned(apiVersion: string, request: Request) : IoResult<Response> =
+                if request.Method <> "GET" || request.Body <> NoBody || String.IsNullOrWhiteSpace apiVersion then
+                    Error(Malformed(request.Subject, "versioned native capture requires a pinned GET with no body"))
+                else
+                    let url = base' + "/" + request.Path.TrimStart('/') + buildQuery request.Query
+                    sendOneUnchecked singlePageClient request url (Some(4 * 1024 * 1024)) false (Some apiVersion)
 
         interface IDisposable with
             member _.Dispose() =

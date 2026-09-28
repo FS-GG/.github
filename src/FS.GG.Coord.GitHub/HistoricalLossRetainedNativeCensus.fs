@@ -12,6 +12,9 @@ module HistoricalLossRetainedNativeCensus =
     open Errors
     open Transport
 
+    [<Literal>]
+    let private ApiVersion = "2026-03-10"
+
     type RepositoryIdentity =
         { FullName: string
           DatabaseId: int64
@@ -31,6 +34,8 @@ module HistoricalLossRetainedNativeCensus =
           Stream: Stream
           Index: int
           Method: string
+          ApiVersionRequested: string
+          ApiVersionSelected: string
           Path: string
           Query: (string * string) list
           Status: int
@@ -161,7 +166,7 @@ module HistoricalLossRetainedNativeCensus =
                 | Some expected, [| observed |] -> expected = observed
                 | _ -> false
 
-    let private send (transport: ISinglePageGitHubTransport) (repository: RepositoryIdentity) (stream: Stream) (index: int) (path: string) (query: (string * string) list) =
+    let private send (transport: IVersionedSinglePageGitHubTransport) (repository: RepositoryIdentity) (stream: Stream) (index: int) (path: string) (query: (string * string) list) =
         let subject = requestSubject repository stream index
         let request =
             { Method = "GET"
@@ -172,7 +177,7 @@ module HistoricalLossRetainedNativeCensus =
               IfNoneMatch = None
               Subject = subject }
 
-        match transport.SendSingle request with
+        match transport.SendSingleVersioned(ApiVersion, request) with
         | Error(Errors.NotFound _) -> Error(NotFound subject)
         | Error(Errors.Unauthorized _) -> Error(Unauthorized subject)
         | Error(Errors.RateLimited _) -> Error(Forbidden subject)
@@ -185,6 +190,8 @@ module HistoricalLossRetainedNativeCensus =
             | status when status <> 200 -> Error(ProviderStatus(subject, status))
             | _ when not (validLinkHeader (header "Link" response) response.NextLink) ->
                 Error(UnsafeContinuation(subject, "Link header is missing, malformed, or disagrees with parsed next link"))
+            | _ when header "X-GitHub-Api-Version-Selected" response <> Some ApiVersion ->
+                Error(InvalidResponse(subject, "selected GitHub API version is missing or differs from the pinned request version"))
             | _ ->
                 match header "X-RateLimit-Resource" response with
                 | None -> Error(InvalidResponse(subject, "X-RateLimit-Resource is missing"))
@@ -266,7 +273,7 @@ module HistoricalLossRetainedNativeCensus =
         | true, value when value.ValueKind = JsonValueKind.String && not (String.IsNullOrWhiteSpace(value.GetString())) -> Ok(value.GetString())
         | _ -> Error(InvalidResponse(subject, "native row id is missing or invalid"))
 
-    let private collectArrayStream (transport: ISinglePageGitHubTransport) (apiBase: string) (pass: int) (repository: RepositoryIdentity) (stream: Stream) (path: string) (baseQuery: (string * string) list) =
+    let private collectArrayStream (transport: IVersionedSinglePageGitHubTransport) (apiBase: string) (pass: int) (repository: RepositoryIdentity) (stream: Stream) (path: string) (baseQuery: (string * string) list) =
         let rec loop index path query seen resourceSeen acc =
             let subject = requestSubject repository stream index
             if index > 10000 then
@@ -306,6 +313,8 @@ module HistoricalLossRetainedNativeCensus =
                               Stream = stream
                               Index = index
                               Method = request.Method
+                              ApiVersionRequested = ApiVersion
+                              ApiVersionSelected = (header "X-GitHub-Api-Version-Selected" response).Value
                               Path = request.Path
                               Query = request.Query
                               Status = response.Status
@@ -324,7 +333,7 @@ module HistoricalLossRetainedNativeCensus =
 
         loop 1 path (baseQuery @ [ "per_page", "100"; "page", "1" ]) Set.empty None []
 
-    let private collectIdentity (transport: ISinglePageGitHubTransport) (pass: int) (expected: RepositoryIdentity) =
+    let private collectIdentity (transport: IVersionedSinglePageGitHubTransport) (pass: int) (expected: RepositoryIdentity) =
         let owner, repo =
             let parts = expected.FullName.Split('/', 2)
             parts.[0], parts.[1]
@@ -351,6 +360,8 @@ module HistoricalLossRetainedNativeCensus =
                               Stream = Identity
                               Index = 1
                               Method = request.Method
+                              ApiVersionRequested = ApiVersion
+                              ApiVersionSelected = (header "X-GitHub-Api-Version-Selected" response).Value
                               Path = request.Path
                               Query = request.Query
                               Status = response.Status
@@ -533,7 +544,8 @@ module HistoricalLossRetainedNativeCensus =
               pages
               |> List.collect (fun page ->
                   [ page.Repository.FullName; string page.Repository.DatabaseId; page.Repository.NodeId
-                    string page.Pass; streamName page.Stream; string page.Index; page.Method; page.Path
+                    string page.Pass; streamName page.Stream; string page.Index; page.Method
+                    page.ApiVersionRequested; page.ApiVersionSelected; page.Path
                     page.Query |> List.collect (fun (key, value) -> [ key; value ]) |> String.concat "\u001f"
                     string page.Status; page.Resource; page.Body; page.RawSha256
                     defaultArg page.LinkHeader ""; page.ObservedAt; defaultArg page.NextLink ""
@@ -587,7 +599,7 @@ module HistoricalLossRetainedNativeCensus =
         |> Result.map (fun values ->
             values |> List.choose id |> List.sort |> List.collect id |> List.map frame |> String.concat "" |> sha256)
 
-    let private collectRepository (transport: ISinglePageGitHubTransport) (apiBase: string) (pass: int) (horizon: DateTimeOffset) (repository: RepositoryIdentity) =
+    let private collectRepository (transport: IVersionedSinglePageGitHubTransport) (apiBase: string) (pass: int) (horizon: DateTimeOffset) (repository: RepositoryIdentity) =
         let owner, repo = let parts = repository.FullName.Split('/', 2) in parts.[0], parts.[1]
         let root = $"repos/%s{owner}/%s{repo}"
         let issueQuery = [ "state", "all"; "sort", "created"; "direction", "asc" ]
@@ -776,16 +788,17 @@ module HistoricalLossRetainedNativeCensus =
         let originals = capture.First.Pages @ capture.Second.Pages
         let queue = Queue<RawPage>(originals)
         let replay =
-            { new ISinglePageGitHubTransport with
-                member _.SendSingle request =
+            { new IVersionedSinglePageGitHubTransport with
+                member _.SendSingleVersioned(version, request) =
                     if queue.Count = 0 then Error(Errors.Transport "retained raw capture ended before native enumeration")
                     else
                         let page = queue.Dequeue()
-                        if request.Method <> page.Method || request.Path <> page.Path || request.Query <> page.Query then
-                            Error(Errors.Transport "retained raw capture request path, method or query drifted")
+                        if version <> page.ApiVersionRequested || request.Method <> page.Method || request.Path <> page.Path || request.Query <> page.Query then
+                            Error(Errors.Transport "retained raw capture API version, path, method or query drifted")
                         else
                             let headers =
-                                Map [ "X-RateLimit-Resource", page.Resource ]
+                                Map [ "X-RateLimit-Resource", page.Resource
+                                      "X-GitHub-Api-Version-Selected", page.ApiVersionSelected ]
                                 |> fun values -> match page.LinkHeader with Some value -> values.Add("Link", value) | None -> values
                             Ok { Status = page.Status; Body = page.Body; Headers = headers; ETag = None; NextLink = page.NextLink } }
         let exactRaw (original: PassCapture) (recomputed: PassCapture) =

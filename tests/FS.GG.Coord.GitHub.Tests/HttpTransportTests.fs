@@ -120,6 +120,20 @@ let private get (path: string) =
     }
 
 [<Fact>]
+let ``versioned single-page transport pins the exact API header`` () =
+    use server = new Server()
+    let mutable requested = None
+    server.On(fun request response ->
+        requested <- request.Headers.["X-GitHub-Api-Version"] |> Option.ofObj
+        server.Json response 200 "[]" [ "X-RateLimit-Resource", "core"; "X-GitHub-Api-Version-Selected", "2026-03-10" ])
+    use transport = new HttpTransport(server.Base, "t")
+    match (transport :> IVersionedSinglePageGitHubTransport).SendSingleVersioned("2026-03-10", get "repos/o/r/issues") with
+    | Ok response ->
+        Assert.Equal(Some "2026-03-10", requested)
+        Assert.Equal(Some "2026-03-10", header "X-GitHub-Api-Version-Selected" response)
+    | Error error -> failwithf "versioned transport failed: %A" error
+
+[<Fact>]
 let ``raw HTTP transport refuses SendMutation without a production fence decorator`` () =
     use transport = new HttpTransport("http://127.0.0.1:1", "")
     let raw = transport :> IGitHubTransport

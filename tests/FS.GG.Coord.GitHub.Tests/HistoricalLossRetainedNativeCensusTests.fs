@@ -21,7 +21,7 @@ module HistoricalLossRetainedNativeCensusTests =
     let private ok body next =
         { Status = 200
           Body = body
-          Headers = Map ([ "X-RateLimit-Resource", "core" ] @ (next |> Option.map (fun url -> [ "Link", $"<{url}>; rel=\"next\"" ]) |> Option.defaultValue []))
+          Headers = Map ([ "X-RateLimit-Resource", "core"; "X-GitHub-Api-Version-Selected", "2026-03-10" ] @ (next |> Option.map (fun url -> [ "Link", $"<{url}>; rel=\"next\"" ]) |> Option.defaultValue []))
           ETag = None
           NextLink = next }
 
@@ -39,7 +39,7 @@ module HistoricalLossRetainedNativeCensusTests =
     let private comment id node number body repo =
         $"{{\"id\":{id},\"node_id\":\"{node}\",\"created_at\":\"{at}\",\"body\":{System.Text.Json.JsonSerializer.Serialize body},\"issue_url\":\"{api}/repos/{repo}/issues/{number}\"}}"
 
-    type Fixture(?statusFor: Request -> int option, ?nextFor: Request -> string option option, ?bodyFor: (Request * int) -> string -> string, ?resourceFor: Request -> string, ?linkFor: Request -> string option option) =
+    type Fixture(?statusFor: Request -> int option, ?nextFor: Request -> string option option, ?bodyFor: (Request * int) -> string -> string, ?resourceFor: Request -> string, ?linkFor: Request -> string option option, ?versionFor: Request -> string option) =
         let requests = ResizeArray<Request>()
         let calls = Dictionary<string, int>()
         let statusFor = defaultArg statusFor (fun _ -> None)
@@ -47,6 +47,7 @@ module HistoricalLossRetainedNativeCensusTests =
         let bodyFor = defaultArg bodyFor (fun _ body -> body)
         let resourceFor = defaultArg resourceFor (fun _ -> "core")
         let linkFor = defaultArg linkFor (fun _ -> None)
+        let versionFor = defaultArg versionFor (fun _ -> Some "2026-03-10")
 
         let defaultBody (request: Request) =
             let repository = repoForPath request.Path
@@ -84,8 +85,9 @@ module HistoricalLossRetainedNativeCensusTests =
                 [ 1 .. 100 ] |> List.map (fun id -> $"{{\"id\":{6000 + id}}}") |> String.concat "," |> fun rows -> "[" + rows + "]"
             else "[]"
 
-        interface ISinglePageGitHubTransport with
-            member _.SendSingle request =
+        interface IVersionedSinglePageGitHubTransport with
+            member _.SendSingleVersioned(apiVersion, request) =
+                if apiVersion <> "2026-03-10" then failwithf "unexpected requested API version %s" apiVersion
                 requests.Add request
                 let count = calls.GetValueOrDefault(request.Path, 0) + 1
                 calls.[request.Path] <- count
@@ -102,6 +104,7 @@ module HistoricalLossRetainedNativeCensusTests =
                     let next = defaultArg (nextFor request) defaultNext
                     let response = ok body next
                     let headers = response.Headers.Add("X-RateLimit-Resource", resourceFor request)
+                    let headers = match versionFor request with Some value -> headers.Add("X-GitHub-Api-Version-Selected", value) | None -> headers.Remove "X-GitHub-Api-Version-Selected"
                     let headers =
                         match linkFor request with
                         | None -> headers
@@ -158,6 +161,15 @@ module HistoricalLossRetainedNativeCensusTests =
         match collectTwoPass fixture api horizon with
         | Error(InvalidResponse(_, detail)) -> Assert.Contains("Resource changed", detail)
         | actual -> failwithf "resource drift was accepted: %A" actual
+
+    [<Fact>]
+    let ``missing and wrong selected API version refuse before census derivation`` () =
+        for observed in [ None; Some "2022-11-28" ] do
+            let fixture = Fixture(versionFor = (fun request ->
+                if request.Path = "repos/FS-GG/.github" then observed else Some "2026-03-10"))
+            match collectTwoPass fixture api horizon with
+            | Error(InvalidResponse(_, detail)) -> Assert.Contains("API version", detail)
+            | actual -> failwithf "unattested API version was accepted: %A" actual
 
     [<Fact>]
     let ``malformed raw Link header refuses despite a plausible parsed continuation`` () =
