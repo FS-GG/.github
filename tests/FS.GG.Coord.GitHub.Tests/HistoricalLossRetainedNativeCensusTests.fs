@@ -172,6 +172,14 @@ module HistoricalLossRetainedNativeCensusTests =
             | actual -> failwithf "unattested API version was accepted: %A" actual
 
     [<Fact>]
+    let ``future observation horizon refuses before any native request`` () =
+        let fixture = Fixture()
+        match collectTwoPass fixture api "9999-12-31T00:00:00.0000000+00:00" with
+        | Error(InvalidResponse(_, detail)) -> Assert.Contains("later than", detail)
+        | actual -> failwithf "future horizon gained authority: %A" actual
+        Assert.Empty(fixture.Requests)
+
+    [<Fact>]
     let ``malformed raw Link header refuses despite a plausible parsed continuation`` () =
         let fixture = Fixture(linkFor = (fun request ->
             if request.Path = "repos/FS-GG/.github/issues/events" && query "page" request = "1" then
@@ -454,6 +462,15 @@ module HistoricalLossRetainedNativeCensusTests =
         match bindV3Captured api missing entry.Family entry.Scope approvedHorizon bytes entry approval with
         | Error _ -> ()
         | Ok _ -> failwith "missing retained raw page gained authority"
+
+        let beforeHorizon =
+            { capture with
+                First =
+                    { capture.First with
+                        Pages = { capture.First.Pages.Head with ObservedAt = "2026-09-27T23:59:59.0000000+00:00" } :: capture.First.Pages.Tail } }
+        match bindV3Captured api beforeHorizon entry.Family entry.Scope approvedHorizon bytes entry approval with
+        | Error errors -> Assert.Contains("historical-loss-retained-page-before-horizon", errors)
+        | Ok _ -> failwith "pre-horizon raw page gained authority"
 
     [<Fact>]
     let ``marker disappearance between native passes refuses`` () =

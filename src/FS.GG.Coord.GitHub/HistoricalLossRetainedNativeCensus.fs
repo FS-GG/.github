@@ -790,6 +790,16 @@ module HistoricalLossRetainedNativeCensus =
                 | Ok _ -> Error [ "historical-loss-native-census-proof-contract" ]
 
     let bindV3Captured apiBase (capture: Capture) expectedFamily expectedScope expectedObservationHorizon registryBytes entry approval =
+        let mutable requiredHorizon = DateTimeOffset.MinValue
+        let horizonValid =
+            DateTimeOffset.TryParseExact(expectedObservationHorizon, "O", CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, &requiredHorizon)
+        let pageObservedAfterHorizon (page: RawPage) =
+            let mutable observed = DateTimeOffset.MinValue
+            DateTimeOffset.TryParseExact(page.ObservedAt, "O", CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, &observed)
+            && horizonValid && observed >= requiredHorizon
+        if not horizonValid || (capture.First.Pages @ capture.Second.Pages |> List.exists (pageObservedAfterHorizon >> not)) then
+            Error [ "historical-loss-retained-page-before-horizon" ]
+        else
         let originals = capture.First.Pages @ capture.Second.Pages
         let queue = Queue<RawPage>(originals)
         let replay =
@@ -806,18 +816,12 @@ module HistoricalLossRetainedNativeCensus =
                                       "X-GitHub-Api-Version-Selected", page.ApiVersionSelected ]
                                 |> fun values -> match page.LinkHeader with Some value -> values.Add("Link", value) | None -> values
                             Ok { Status = page.Status; Body = page.Body; Headers = headers; ETag = None; NextLink = page.NextLink } }
-        let mutable requiredHorizon = DateTimeOffset.MinValue
-        let horizonValid =
-            DateTimeOffset.TryParseExact(expectedObservationHorizon, "O", CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, &requiredHorizon)
         let exactRaw (original: PassCapture) (recomputed: PassCapture) =
             original.Number = recomputed.Number
             && original.RawEvidenceDigest = rawFingerprint original.Pages
             && original.Pages.Length = recomputed.Pages.Length
             && List.forall2 (fun stored decoded ->
-                let mutable observed = DateTimeOffset.MinValue
-                DateTimeOffset.TryParseExact(stored.ObservedAt, "O", CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, &observed)
-                && horizonValid && observed >= requiredHorizon
-                && stored = { decoded with ObservedAt = stored.ObservedAt }) original.Pages recomputed.Pages
+                stored = { decoded with ObservedAt = stored.ObservedAt }) original.Pages recomputed.Pages
         match collectTwoPass replay apiBase expectedObservationHorizon with
         | Error error -> Error [ $"historical-loss-retained-raw-replay: %A{error}" ]
         | Ok decoded when queue.Count <> 0 || not (exactRaw capture.First decoded.First) || not (exactRaw capture.Second decoded.Second) ->
