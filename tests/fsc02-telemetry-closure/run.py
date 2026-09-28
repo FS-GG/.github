@@ -21,9 +21,10 @@ with tempfile.TemporaryDirectory() as folder:
                         ignore=shutil.ignore_patterns("bin", "obj"))
     cli = fixture / "src/FS.GG.Coord.Cli"
     cli.mkdir()
-    for suffix in ("fs", "fsi"):
-        name = f"TelemetryStoreApplication.{suffix}"
-        shutil.copy2(root / "src/FS.GG.Coord.Cli" / name, cli / name)
+    for stem in ("TelemetryStoreApplication", "SkillTelemetryReaders"):
+        for suffix in ("fs", "fsi"):
+            name = f"{stem}.{suffix}"
+            shutil.copy2(root / "src/FS.GG.Coord.Cli" / name, cli / name)
     allow = fixture / "tests/standalone-telemetry-host-package/allowed-files.txt"
     allow.parent.mkdir(parents=True)
     shutil.copy2(root / "tests/standalone-telemetry-host-package/allowed-files.txt", allow)
