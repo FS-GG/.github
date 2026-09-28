@@ -3,7 +3,7 @@ title: "Roadmap: GitHub Substrate v2 clean start and explicit adoption"
 category: Design
 categoryindex: 4
 index: 26
-description: "The current clean-start sequence for `.github` V2 operation and explicit repository-by-repository adoption, with the former fleet-cutover plan retained as history."
+description: "The current clean-start sequence for `.github` V2 operation and explicit bounded-wave repository adoption, with the former fleet-cutover plan retained as history."
 ---
 
 # Roadmap: GitHub Substrate v2 clean start and explicit adoption
@@ -19,9 +19,10 @@ not schedule or gate the current route, and it is not reported as completed.
 > replaces the active fleet-migration sequence with a speed-first clean v2 start. Deliver the source
 > through ordinary GitHub protections, append a fresh shared v2 generation in the authority repository,
 > activate `.github` policy against it, prove one real journey and
-> one normal rerun, then add repositories explicitly and repair forward. `.github` alone is continuously
-> activated at first; generated and scaffolded defaults do not change. The detailed GS2-09–GS2-14 plan
-> below is retained as historical work. Its unfinished units are cancelled or superseded, not complete.
+> one normal rerun, then add repositories in explicit bounded waves and repair forward. `.github` alone
+> was continuously activated at first; generated and scaffolded defaults do not change. The detailed
+> GS2-09–GS2-14 plan below is retained as historical work. Its unfinished units are cancelled or
+> superseded, not complete.
 
 > **Quint-first candidate dependency:** [ADR-0077](adr/0077-quint-first-typed-specification-authority.md)
 > and the [migration design](coordination/2026-08-25-quint-first-typed-sdd-migration-design.md) require the
@@ -69,8 +70,8 @@ not schedule or gate the current route, and it is not reported as completed.
 
 The owner selected speed over backward validity on 2026-09-28. No V1 workload requires preserving
 its old execution guarantees. `.github` uses the published Coordination CLI 0.1.2 and its ordinary V2
-workflow. Each later repository receives an explicit source profile, immutable published CLI, dedicated
-credential custody and separate activation.
+workflow. Several ready repository profiles may share one immutable published CLI. Each repository keeps
+dedicated credential custody, its own activation and independent settlement readback.
 
 1. **Deliver source normally.** Check the current PR head and required checks, merge through native
    GitHub protections, and read the merged result back. Legacy V1 admission is no longer required.
@@ -80,14 +81,31 @@ credential custody and separate activation.
 3. **Prove useful operation.** Observe one actual merged change through ordinary V2 settlement and
    one normal rerun. Fix defects blocking that path. Exhaustive interruption, migration, historical
    replay, omission and rollback proofs are no longer required.
-4. **Continue and expand explicitly.** Leave successful `.github` settlement enabled. Enroll other
-   repositories when selected, checking each changed entrypoint once. Disable conflicting V1 writers
-   and handle ordinary defects through follow-up fixes. Recovery is disable the writer, revert a
-   source change where useful, or repair forward; no fleet-wide rollback apparatus is required.
+4. **Continue and expand in bounded waves.** Leave successful `.github` settlement enabled. Select
+   repositories explicitly, combine ready profiles into one immutable CLI release when practical, and
+   prepare disabled receivers and dedicated credentials concurrently. Activate each receiver separately
+   after its published profile, current required checks, credential custody and Authority binding are
+   verified. The first combined Net/Governance/Game wave permits at most three activations in flight;
+   each retains native protections, exact-head merge and independent settlement readback. Pause affected
+   outstanding activations if a shared-runtime defect appears. Disable conflicting V1 writers and
+   repair ordinary defects forward; no fleet-wide rollback apparatus is required.
 
 Native credentials, source branch protections, required checks and honest result reporting remain.
 The authority epoch is shared, but runtime activation is repository-specific. This strategy does not
 change generated workspace defaults or promise compatibility with old clients.
+
+C3 closes for a selected receiver after a clean installation of its pinned published package, one real
+ordinary settlement, independent Authority readback and a normal `SettlementAlreadyComplete` rerun.
+Retained-upgrade and old-client tests are gates only for receivers that explicitly promise those
+capabilities; other existing installations receive repair-forward treatment. Long-running efficiency
+readings and claims follow separately and cannot delay an observed working repository. Missing
+measurements remain unknown.
+
+The in-flight Rendering profile and CLI 0.1.4 publication remain their own candidate. The next selected
+release combines the staged Net, Governance and Game profiles once qualified on one protected source;
+their disabled receivers and credential custody can be prepared in parallel. Publication is a shared
+activation dependency, but Rendering settlement is not a preparation or activation prerequisite for
+the later wave.
 
 [ADR-0091](adr/0091-speed-first-clean-v2-start.md) records the decision. Everything below describing the
 older GS2-09–GS2-14 migration sequence is retained historical design, not a second set of prerequisites.
