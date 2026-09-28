@@ -1,0 +1,32 @@
+name: GS2-09.7 seed execution binding self-test
+
+on:
+  pull_request:
+    paths:
+      - "scripts/gs2-09-7-seed-execution-binding.py"
+      - "tests/gs2-09-7-seed-execution-binding/**"
+      - ".github/workflows/gs2-09-7-seed-execution-binding-selftest.yml"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/gs2-09-7-seed-execution-binding.py"
+      - "tests/gs2-09-7-seed-execution-binding/**"
+      - ".github/workflows/gs2-09-7-seed-execution-binding-selftest.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gs2-09-7-seed-execution-binding-selftest-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  selftest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Exercise the source-only protected execution binding
+        run: python3 tests/gs2-09-7-seed-execution-binding/test_seed_execution_binding.py

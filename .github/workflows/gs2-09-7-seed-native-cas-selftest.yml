@@ -1,0 +1,45 @@
+name: GS2-09.7 seed native CAS source self-test
+
+on:
+  pull_request:
+    paths:
+      - "scripts/gs2-09-7-seed-native-cas.py"
+      - "scripts/gs2-09-7-seed-bootstrap-admission.py"
+      - "scripts/gs2-09-7-seed-bootstrap-entry.py"
+      - "tests/gs2-09-7-seed-native-cas/**"
+      - "tests/gs2-09-7-seed-bootstrap-admission/**"
+      - "tests/gs2-09-7-seed-bootstrap-entry/**"
+      - ".github/workflows/github-substrate-v2-sandbox-qualification.yml"
+      - ".github/workflows/gs2-09-7-seed-native-cas-selftest.yml"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/gs2-09-7-seed-native-cas.py"
+      - "scripts/gs2-09-7-seed-bootstrap-admission.py"
+      - "scripts/gs2-09-7-seed-bootstrap-entry.py"
+      - "tests/gs2-09-7-seed-native-cas/**"
+      - "tests/gs2-09-7-seed-bootstrap-admission/**"
+      - "tests/gs2-09-7-seed-bootstrap-entry/**"
+      - ".github/workflows/github-substrate-v2-sandbox-qualification.yml"
+      - ".github/workflows/gs2-09-7-seed-native-cas-selftest.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gs2-09-7-seed-native-cas-selftest-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  selftest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - name: Exercise exact local Git CAS and fail-closed provenance
+        run: python3 tests/gs2-09-7-seed-native-cas/test_seed_native_cas.py
+      - name: Exercise independent bootstrap admission and protected route boundaries
+        run: |
+          python3 tests/gs2-09-7-seed-bootstrap-admission/test_seed_bootstrap_admission.py
+          python3 tests/gs2-09-7-seed-bootstrap-entry/test_seed_bootstrap_entry.py
