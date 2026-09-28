@@ -66,9 +66,16 @@ expect_red \
 
 expect_red \
   "typed lifecycle-loss mutation is detected and restored" \
-  'sprintf "lifecycle=%s" opts.Lifecycle' \
+  'sprintf "lifecycle=%s" lifecycle' \
   'sprintf "lifecycle=%s" "sdd"' \
   'FAIL  explicit Typed SDD is forwarded unchanged' \
   "$WORK/lifecycle-loss.log"
 
-echo "new-sdd-workspace mutation controls — 2 passed, 0 failed"
+expect_red \
+  "D.5 descriptor gate mutation is detected and restored" \
+  'sourceLine = Some "source: FS.GG.Workspace.Template::0.15.0"' \
+  'sourceLine = Some "source: FS.GG.Workspace.Template::0.14.0"' \
+  'the D.5 fable-game descriptor must select Typed SDD on omission' \
+  "$WORK/d5-descriptor.log"
+
+echo "new-sdd-workspace mutation controls — 3 passed, 0 failed"

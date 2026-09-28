@@ -528,6 +528,9 @@ mkdir -p "$HTTP_ROOT/main/providers"
 for template in rendering console web fable-game fable-bindings; do
   printf 'source: fixture/%s\nprovider: %s\n' "$template" "$template" > "$HTTP_ROOT/main/providers/$template.providers.yml"
 done
+mkdir -p "$HTTP_ROOT/d5/providers" "$HTTP_ROOT/legacy/providers"
+printf 'source: FS.GG.Workspace.Template::0.15.0\nprovider: fable-game\n' > "$HTTP_ROOT/d5/providers/fable-game.providers.yml"
+printf 'source: FS.GG.Workspace.Template::0.14.0\nprovider: fable-game\n' > "$HTTP_ROOT/legacy/providers/fable-game.providers.yml"
 PORT_FILE="$WORK/http-port"
 python3 - "$HTTP_ROOT" "$PORT_FILE" <<'PY' &
 import functools
@@ -561,7 +564,12 @@ expect_execution() {
   if [ "$template" = "fable-bindings" ]; then
     grep -qF "npmPackage=@babylonjs/core" "$log" && grep -qF "npmVersion=8.0.0" "$log" || params_ok=0
   fi
-  if [ "$rc" -ne 0 ] || ! grep -qF "source: fixture/$template" "$target/.fsgg/providers.yml" || ! grep -qF "scaffold --root $target --provider $template" "$log" || [ "$params_ok" -ne 1 ] \
+  local expected_source="source: fixture/$template"
+  case " $* " in
+    *" --ref d5 "*) expected_source='source: FS.GG.Workspace.Template::0.15.0' ;;
+    *" --ref legacy "*) expected_source='source: FS.GG.Workspace.Template::0.14.0' ;;
+  esac
+  if [ "$rc" -ne 0 ] || ! grep -qF "$expected_source" "$target/.fsgg/providers.yml" || ! grep -qF "scaffold --root $target --provider $template" "$log" || [ "$params_ok" -ne 1 ] \
     || ! jq -e '.schemaVersion == 1 and .status == "pending" and .next == "$initialize-sdd-workspace"' "$target/.fsgg/workspace-initialization.json" >/dev/null \
     || ! cmp -s "$target/.claude/skills/initialize-sdd-workspace/SKILL.md" "$target/.agents/skills/initialize-sdd-workspace/SKILL.md" \
     || ! grep -qF 'fsgg:workspace-initialization:start' "$target/AGENTS.md" \
@@ -584,6 +592,10 @@ expect_execution "legacy Spec Kit remains selectable and frozen" rendering "life
 expect_execution "console routes to its provider and descriptor" console "productName=Product" --template console
 expect_execution "web routes to its provider and descriptor" web "productName=Product" --template web
 expect_execution "fable-game omission forwards its player default" fable-game "bundle=player" --template fable-game
+expect_execution "D.5 fable-game omission selects Typed SDD" fable-game "lifecycle=typed-sdd" --template fable-game --ref d5
+expect_execution "older fable-game source retains Standard SDD" fable-game "lifecycle=sdd" --template fable-game --ref legacy
+expect_execution "explicit Standard SDD overrides D.5 omission" fable-game "lifecycle=sdd" --template fable-game --ref d5 --lifecycle sdd
+expect_execution "explicit Freeform overrides D.5 omission" fable-game "lifecycle=none" --template fable-game --ref d5 --lifecycle none
 for bundle in studio tactical arcade complete; do
   expect_execution "fable-game forwards the $bundle bundle" fable-game "bundle=$bundle" --template fable-game --bundle "$bundle"
 done

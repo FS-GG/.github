@@ -86,6 +86,21 @@ let game =
 if game.Template <> "fable-game" || game.Bundle <> Some "studio" then
     failwith "the wizard must preserve the selected fable-game bundle"
 
+let d5Source = Some "source: FS.GG.Workspace.Template::0.15.0"
+let legacySource = Some "source: FS.GG.Workspace.Template::0.14.0"
+
+if selectScaffoldLifecycle game d5Source <> "typed-sdd" then
+    failwith "the D.5 fable-game descriptor must select Typed SDD on omission"
+
+if selectScaffoldLifecycle game legacySource <> "sdd" then
+    failwith "the older fable-game descriptor must preserve Standard SDD"
+
+if selectScaffoldLifecycle console d5Source <> "sdd" then
+    failwith "an unrelated template must preserve Standard SDD"
+
+if selectScaffoldLifecycle { game with Lifecycle = "none"; LifecycleExplicit = true } d5Source <> "none" then
+    failwith "an explicit lifecycle must take precedence over the D.5 default"
+
 let defaultGame =
     assembleWizardTemplateOptions "./Player" "Player" "fable-game" None None None None
 
