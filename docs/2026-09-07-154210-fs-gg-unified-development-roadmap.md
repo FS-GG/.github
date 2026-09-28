@@ -1389,8 +1389,8 @@ For the active clean-start route, plan one bounded part: **clean `.github` V2 ac
 through C2 with the existing CLI 0.1.2 and workflow. C3 is selected repository by repository after the
 smoke passes. The migration, candidate-freeze, controlled-cutover and observation parts in the table below
 are historical entries and must not be dispatched for the clean-start route.
-The `.github` C0–C2 path is complete. Audio is the first selected C3 repository, but its source chain remains
-conditional on Coordination #865 merging. `.github` #3919 delivered Audio observation at
+The `.github` C0–C2 path is complete. Audio is the first selected C3 repository. Coordination #865
+delivered its source profile, `.github` #3919 delivered Audio observation at
 `4ac2224cbefa55387ab1273a09ef23daf462628c`, and Audio #326 delivered the disabled receiver at
 `08a46576320b0043d43a0ce4eeffb3cd2e736e56`. Its
 [receiver plan is durable on `main`](https://github.com/FS-GG/FS.GG.Audio/blob/main/docs/roadmaps/v2-ordinary-adoption.md).
