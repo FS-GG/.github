@@ -1197,10 +1197,13 @@ module RemoteTelemetryTests =
                     Directory.Delete(root, true)
         }
 
-    [<Fact>]
-    let ``protected native collector resolves durable dispatch and replays retained envelope`` () =
+    [<Theory>]
+    [<InlineData(false)>]
+    [<InlineData(true)>]
+    let ``protected native collector resolves durable dispatch and replays retained envelope`` (qualified: bool) =
         let root = Path.Combine(Path.GetTempPath(), "native-collector-command-" + Guid.NewGuid().ToString("N"))
         Directory.CreateDirectory root |> ignore
+        File.SetUnixFileMode(root, UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute)
 
         let privateFile name (content: string) =
             let path = Path.Combine(root, name)
@@ -1323,11 +1326,18 @@ exec /usr/bin/python3 "{patchedFixture}" "$@"
                   BrowserPrincipals = [||]; BrowserSession = browserSession }
             let configPath = privateFile "host.json" (JsonSerializer.Serialize config)
             let installation =
-                { Schema = "fsgg.telemetry.native-collector-installation/1"; CredentialReference = "collector"
+                { Schema = if qualified then "fsgg.telemetry.native-collector-installation/2" else "fsgg.telemetry.native-collector-installation/1"
+                  CredentialReference = "collector"
                   ExecutablePath = reader; CodexHome = codexHome; EvidenceRoot = evidenceRoot
                   Provider = "openai"; Model = "fixture-model"; Effort = "medium" }
+            let installationJson value =
+                let node = JsonSerializer.SerializeToNode(value).AsObject()
+                if qualified then
+                    node["ExecutableSha256"] <- System.Text.Json.Nodes.JsonValue.Create(
+                        Convert.ToHexString(SHA256.HashData(File.ReadAllBytes reader)).ToLowerInvariant())
+                node.ToJsonString()
             let installationPath =
-                privateFile "host.json.native-collector.json" (JsonSerializer.Serialize installation)
+                privateFile "host.json.native-collector.json" (installationJson installation)
 
             let command =
                 [| "collect-native"; "--config"; configPath; "--dispatch"; "dispatch-child"
@@ -1345,10 +1355,17 @@ exec /usr/bin/python3 "{patchedFixture}" "$@"
                 Assert.False(File.Exists counter)
                 File.WriteAllText(configPath, JsonSerializer.Serialize config)
                 let mismatchedInstallation = { installation with Model = "wrong-model" }
-                File.WriteAllText(installationPath, JsonSerializer.Serialize mismatchedInstallation)
+                File.WriteAllText(installationPath, installationJson mismatchedInstallation)
                 Assert.Equal(3, Operations.runWithAssessment command (fun _ -> TelemetryStore.ApprovedLocalDurable))
                 Assert.False(File.Exists counter)
-                File.WriteAllText(installationPath, JsonSerializer.Serialize installation)
+                File.WriteAllText(installationPath, installationJson installation)
+                if qualified then
+                    let wrongPin = System.Text.Json.Nodes.JsonNode.Parse(installationJson installation)
+                    wrongPin["ExecutableSha256"] <- System.Text.Json.Nodes.JsonValue.Create(String('0', 64))
+                    File.WriteAllText(installationPath, wrongPin.ToJsonString())
+                    Assert.Equal(3, Operations.runWithAssessment command (fun _ -> TelemetryStore.ApprovedLocalDurable))
+                    Assert.False(File.Exists counter)
+                    File.WriteAllText(installationPath, installationJson installation)
                 Assert.Equal(3, Operations.runWithAssessment command (fun _ -> TelemetryStore.ApprovedLocalDurable))
                 Assert.Equal("1", File.ReadAllText counter)
                 TelemetryStoreApplication.enrollReceiptPrincipal store TelemetryStore.ApprovedLocalDurable collector
@@ -1360,6 +1377,28 @@ exec /usr/bin/python3 "{patchedFixture}" "$@"
                 let retained = Directory.GetFiles evidenceRoot
                 Assert.Single retained |> ignore
                 Assert.Equal(UnixFileMode.UserRead ||| UnixFileMode.UserWrite, File.GetUnixFileMode retained[0])
+                let exportCommand = [| "export-learning"; "--config"; configPath |]
+                let originalOutput = Console.Out
+                use output = new StringWriter()
+                try
+                    Console.SetOut output
+                    let code = Operations.runWithAssessment exportCommand (fun _ -> TelemetryStore.ApprovedLocalDurable)
+                    Assert.Equal((if qualified then 0 else 3), code)
+                finally
+                    Console.SetOut originalOutput
+                if qualified then
+                    use exported = JsonDocument.Parse(output.ToString())
+                    Assert.Equal("fsgg.telemetry.protected-learning-export/1", exported.RootElement.GetProperty("schema").GetString())
+                    let captures = exported.RootElement.GetProperty("captures").EnumerateArray() |> Seq.toArray
+                    Assert.Single captures |> ignore
+                    let turns = captures[0].GetProperty("turns").EnumerateArray() |> Seq.toArray
+                    Assert.Equal(2, turns.Length)
+                    Assert.Equal(11L, turns |> Array.sumBy (fun turn -> turn.GetProperty("total").GetInt64()))
+                    Assert.DoesNotContain(secret, output.ToString())
+                    Assert.DoesNotContain(String('s', 32), output.ToString())
+                    // Changing the operator pin cannot qualify already retained evidence.
+                    File.AppendAllText(reader, "\n# changed executable\n")
+                    Assert.Equal(3, Operations.runWithAssessment exportCommand (fun _ -> TelemetryStore.ApprovedLocalDurable))
             finally
                 Environment.SetEnvironmentVariable("LEAK_ME", previous)
 

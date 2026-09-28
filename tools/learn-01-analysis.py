@@ -9,9 +9,14 @@ import hashlib
 import io
 import json
 import math
+import os
 import pathlib
 import re
+import selectors
+import stat
+import subprocess
 import sys
+import time
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta
 
@@ -75,7 +80,7 @@ def validate_contract(contract: dict) -> None:
 
 
 def decode_private_snapshot(observations: dict) -> tuple[dict, str]:
-    """Authenticate the immutable bytes and workspace carried by an item-detail snapshot."""
+    """Check byte consistency and workspace binding; imported bytes do not prove their origin."""
     encoded = observations.get("canonicalSnapshotGzip")
     workspace = observations.get("workspaceId")
     revision = observations.get("revision")
@@ -226,9 +231,116 @@ def validate_observations(corpus: dict, observations: dict) -> dict:
     }
 
 
-def analyze_private_snapshot(contract: dict, envelope: dict) -> dict:
+def acquire_protected_export(executable: pathlib.Path, config: pathlib.Path, executable_sha256: str) -> dict:
+    """Read directly from the operator-selected installed Host, never from an imported attestation.
+
+    The protected host operator is the trust anchor. Enrolled remote producers cannot
+    select these paths, change this installation or invoke analysis as that operator.
+    """
+    if not executable.is_absolute() or not config.is_absolute():
+        raise Refusal("protected host paths must be absolute")
+    for path, private in ((executable, False), (config, True)):
+        info = path.lstat()
+        if (not stat.S_ISREG(info.st_mode) or info.st_uid not in {0, os.geteuid()} or
+                info.st_mode & 0o022 or (private and stat.S_IMODE(info.st_mode) != 0o600)):
+            raise Refusal("protected host installation custody is invalid")
+    if (not re.fullmatch(r"[0-9a-f]{64}", executable_sha256) or
+            hashlib.sha256(executable.read_bytes()).hexdigest() != executable_sha256):
+        raise Refusal("protected host executable differs from the operator pin")
+    process = subprocess.Popen([str(executable), "export-learning", "--config", str(config)],
+                               stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                               env={"PATH": os.defpath, "LANG": "C.UTF-8"}, start_new_session=True)
+    buffers = {"stdout": bytearray(), "stderr": bytearray()}
+    deadline = time.monotonic() + 45
+    try:
+        with selectors.DefaultSelector() as selector:
+            selector.register(process.stdout, selectors.EVENT_READ, "stdout")
+            selector.register(process.stderr, selectors.EVENT_READ, "stderr")
+            while selector.get_map():
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise Refusal("protected host export timed out")
+                for key, _ in selector.select(remaining):
+                    chunk = os.read(key.fileobj.fileno(), 65536)
+                    if not chunk:
+                        selector.unregister(key.fileobj)
+                        continue
+                    buffers[key.data].extend(chunk)
+                    if len(buffers[key.data]) > (4 * 1024 * 1024 if key.data == "stdout" else 4096):
+                        raise Refusal("protected host export exceeds the bound")
+        if process.wait(timeout=max(0.01, deadline - time.monotonic())) or buffers["stderr"]:
+            raise Refusal("protected host export refused")
+    finally:
+        if process.poll() is None:
+            os.killpg(process.pid, 9)
+            process.wait()
+        process.stdout.close()
+        process.stderr.close()
+    exported = json.loads(buffers["stdout"])
+    if (not isinstance(exported, dict) or set(exported) != {"schema", "snapshot", "captures"} or
+            exported["schema"] != "fsgg.telemetry.protected-learning-export/1" or
+            not isinstance(exported["captures"], list) or len(exported["captures"]) > 1000):
+        raise Refusal("protected host export schema is invalid")
+    return exported
+
+
+def verified_capture_invocations(content: dict, captures: list) -> set[str]:
+    """Join protected same-host capture bytes to first-admission provenance and exact counters."""
+    rows = {json.loads(row["canonical"])["identity"]: row for row in content.get("learningObservations", [])}
+    verified = set()
+    for capture in captures:
+        if (not isinstance(capture, dict) or
+                set(capture) != {"receiptKey", "envelopeDigest", "producer", "stream", "grantId", "grantGeneration", "events", "turns"} or
+                not isinstance(capture["events"], list) or len(capture["events"]) > 64 or
+                not isinstance(capture["turns"], list) or len(capture["turns"]) > 1000):
+            raise Refusal("protected capture schema is invalid")
+        sources = [event for event in capture["events"] if event.get("kind") == "runtime-native-inventory-source/1"]
+        if len(sources) != 1:
+            raise Refusal("protected capture requires exactly one native source")
+        source = sources[0]
+        row = rows.get(source["identity"])
+        # A retained but unapplied obligation is not an accepted source.
+        if row is None:
+            continue
+        if (json.loads(row["canonical"]) != source or
+                tuple(row.get(name) for name in ("receipt_producer", "receipt_stream", "receipt_role",
+                      "receipt_grant_id", "receipt_grant_generation", "receipt_key", "receipt_envelope_digest")) !=
+                (capture["producer"], capture["stream"], "native-collector", capture["grantId"],
+                 capture["grantGeneration"], capture["receiptKey"], capture["envelopeDigest"])):
+            raise Refusal("protected capture differs from first authenticated source admission")
+        invocation = source["invocationId"]
+        if invocation in verified:
+            raise Refusal("protected capture duplicates a native invocation")
+        expected = {}
+        for turn in capture["turns"]:
+            if (not isinstance(turn, dict) or set(turn) != {"threadId", "turnId", "sequence", "provider",
+                    "model", "effort", "input", "cachedInput", "output", "reasoning", "total"} or
+                    any(not isinstance(turn[name], int) or isinstance(turn[name], bool) or turn[name] < 0
+                        for name in ("sequence", "input", "cachedInput", "output", "reasoning", "total"))):
+                raise Refusal("protected capture counters are malformed")
+            key = (turn["threadId"], turn["turnId"])
+            if (key in expected or turn["total"] != turn["input"] + turn["output"] or
+                    not 0 <= turn["cachedInput"] <= turn["input"] or not 0 <= turn["reasoning"] <= turn["output"]):
+                raise Refusal("protected capture counters are invalid")
+            expected[key] = (turn["sequence"], turn["provider"], turn["model"], turn["effort"], turn["total"])
+        observed = {}
+        for usage in content.get("usage", []):
+            if usage.get("invocation_id") != invocation:
+                continue
+            key = (usage.get("thread_id"), usage.get("turn_id"))
+            if key in observed:
+                raise Refusal("protected capture usage is duplicated")
+            observed[key] = (usage.get("turn_sequence"), usage.get("provider"), usage.get("observed_model"),
+                             usage.get("observed_effort"), usage.get("total"))
+        if expected and expected == observed:
+            verified.add(invocation)
+    return verified
+
+
+def analyze_private_snapshot(contract: dict, envelope: dict, *, _protected_captures: list | None = None) -> dict:
     """Derive assigned-treatment token coverage only from one retained private snapshot."""
     content, workspace = decode_private_snapshot(envelope)
+    verified_invocations = verified_capture_invocations(content, _protected_captures) if _protected_captures is not None else set()
     learning_rows = content.get("learningObservations", [])
     try:
         events = [json.loads(row["canonical"]) for row in learning_rows]
@@ -841,13 +953,19 @@ def analyze_private_snapshot(contract: dict, envelope: dict) -> dict:
                 authority_provenance[2] == "native-collector" and
                 source_provenance[:5] == authority_provenance[:5]
             )
-            for original in seen_originals:
-                incomplete[original].add("independent-shared-cost-authority-unavailable")
-                incomplete[original].add("snapshot-origin-unverified")
-                if protected_collector:
-                    incomplete[original].add("native-source-verification-unavailable")
-                else:
-                    incomplete[original].add("collector-principal-unavailable")
+            if protected_collector and invocation in verified_invocations:
+                totals[admitted[0]] -= source_total
+                for original, allocated in expected_allocations.items():
+                    totals[original] += allocated
+            else:
+                for original in seen_originals:
+                    incomplete[original].add("independent-shared-cost-authority-unavailable")
+                    if _protected_captures is None:
+                        incomplete[original].add("snapshot-origin-unverified")
+                    if protected_collector:
+                        incomplete[original].add("native-source-verification-unavailable")
+                    else:
+                        incomplete[original].add("collector-principal-unavailable")
 
         for cost in shared_authority_by_cost.keys() - shared_by_cost.keys():
             raise Refusal("shared cost authority has no matching cost: " + cost)
@@ -1179,11 +1297,28 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("contract", type=pathlib.Path)
     parser.add_argument("corpus", type=pathlib.Path, nargs="?")
     parser.add_argument("--observations", type=pathlib.Path)
+    parser.add_argument("--protected-host-executable", type=pathlib.Path)
+    parser.add_argument("--protected-host-sha256")
+    parser.add_argument("--protected-host-config", type=pathlib.Path)
     parser.add_argument("--output", type=pathlib.Path)
     args = parser.parse_args(argv)
     try:
         contract = load(args.contract)
         validate_contract(contract)
+        protected_options = [args.protected_host_executable, args.protected_host_sha256, args.protected_host_config]
+        if any(protected_options):
+            if not all(protected_options) or args.observations or args.corpus:
+                raise Refusal("protected host analysis requires all installation selectors and refuses imported inputs")
+            exported = acquire_protected_export(args.protected_host_executable, args.protected_host_config, args.protected_host_sha256)
+            result = analyze_private_snapshot(contract, exported["snapshot"], _protected_captures=exported["captures"])
+            rendered = json.dumps(result, indent=2, sort_keys=True) + "\n"
+            if len(rendered.encode()) > 1024 * 1024:
+                raise Refusal("analysis output exceeds the bound")
+            if args.output:
+                args.output.write_text(rendered, encoding="utf-8")
+            else:
+                print(rendered, end="")
+            return 0
         observation_input = load(args.observations) if args.observations else None
         if observation_input and observation_input.get("schema") == "fsgg.telemetry.item-detail/2":
             if args.corpus is not None:
@@ -1196,7 +1331,7 @@ def main(argv: list[str] | None = None) -> int:
             result = validate_corpus(contract, corpus)
             if observation_input:
                 result.update(validate_observations(corpus, observation_input))
-    except (OSError, json.JSONDecodeError, Refusal) as error:
+    except (OSError, json.JSONDecodeError, Refusal, subprocess.SubprocessError) as error:
         print(f"refused: {error}", file=sys.stderr)
         return 2
     rendered = json.dumps(result, indent=2, sort_keys=True) + "\n"

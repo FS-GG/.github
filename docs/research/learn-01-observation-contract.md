@@ -99,7 +99,7 @@ consume one native invocation at most once. One native invocation can appear in 
 Self-consistent caller hashes, an asserted total, a late or foreign roster, a second allocation of the invocation,
 or a binding without independently authenticated producer provenance cannot qualify. Missing or generic provenance
 reports `collector-principal-unavailable`. Matching protected collector grants on the native-source and authority
-facts pass that provenance check, but shared costs remain visibly incomplete as
+facts pass that provenance check. Imported snapshots and legacy captures remain visibly incomplete as
 `independent-shared-cost-authority-unavailable`, `native-source-verification-unavailable`, and
 `snapshot-origin-unverified`. Those reasons distinguish retained credential provenance from the still-missing
 native collector/custody verification and trusted snapshot acquisition. Mismatched evidence refuses the analysis.
@@ -117,8 +117,8 @@ principal admission. Callers cannot provide inventory, totals, rollout path, sou
 root or credential. Missing or ambiguous lineage, a native-agent mismatch and a protected/durable profile mismatch
 refuse before invoking or admitting a new candidate.
 
-This is a refusal-safe command boundary, not qualified capture custody. Its result keeps source verification,
-snapshot origin and shared-cost completeness `unknown`; the analysis therefore continues to report
+The installation-v1 command is a refusal-safe boundary, not qualified capture custody. Its result keeps source verification,
+snapshot origin and shared-cost completeness `unknown`; imported analysis therefore continues to report
 `native-source-verification-unavailable`, `snapshot-origin-unverified`, and
 `independent-shared-cost-authority-unavailable`. The synthetic fixture proves source behavior only. Adapter
 adoption, installed configuration and credential, trusted capture custody, and trusted snapshot acquisition remain
@@ -133,3 +133,63 @@ binding. A missing selection, unsafe file, old Host, refusal, timeout or malform
 generic/local reconciliation and remains `native-collaboration-usage-unknown`. A strictly validated protected
 success suppresses the adapter's generic inventory/source candidates while generic turn observations remain
 unqualified. The adapter accepts only the Host's closed UNKNOWN result and cannot promote collector authority.
+
+## Protected same-host capture and analysis
+
+Installation schema `fsgg.telemetry.native-collector-installation/2` adds exactly one field,
+`ExecutableSha256`, to the existing eight-field installation shape. The Host checks the actual executable
+against that operator-provisioned pin. The host configuration's parent must be private, and `CodexHome` and
+`EvidenceRoot` must lie beneath it through private, nonsymlink, host-owned directories. The configuration
+and installation belong to that host user; the executable belongs to that user or root. Version 1 remains accepted with
+its prior UNKNOWN meaning. Neither a producer-supplied executable nor inherited PATH/CODEX_HOME selects
+the qualified reader.
+
+The trust boundary is the protected host operator and installed collector versus an ordinary enrolled
+producer. This is protected host observation of the native provider client; it is not a provider-signed
+receipt, isolation from a malicious host owner, or authorization for untrusted local workers to write the
+native source. An installation where ordinary producers can modify the native root is ineligible.
+
+For v2, collection retains one private immutable `fsgg.telemetry.protected-native-capture/1` record before
+submission. It contains the exact envelope, independently read per-turn counters, grant generation and
+installation digest. Crash retry reuses that record without invoking the reader again. No conversation
+content or credential enters it. A v1 envelope cannot be promoted into a v2 capture by changing its label.
+Changing the pin, installation or grant does not retroactively qualify old records: stale bindings refuse,
+and the operator must retain the original qualified installation/custody or select a prospective evidence
+root and collection identity. No database migration or history rewrite is introduced by this window.
+
+The protected Host's `export-learning --config ABSOLUTE_PATH` acquires its service lock, reads its existing
+bounded private snapshot and exports retained captures from the configured evidence root. There are at most
+1,000 captures, each at most 1 MiB and cumulatively at most 3 MiB, and the complete process response is bounded to 4 MiB. The export contains
+non-secret receipt/grant references and counters; configuration, executable, credential and source-root paths
+are omitted. It does not submit facts or grant authority to an imported snapshot.
+
+The analyzer's explicit operator route is:
+
+```text
+python3 tools/learn-01-analysis.py policy/learn-01-current-focused-v1.json \
+  --protected-host-executable /absolute/installed/fsgg-telemetry-host \
+  --protected-host-sha256 <operator-verified-executable-sha256> \
+  --protected-host-config /absolute/private/host.json
+```
+
+The executable/config selectors come from the protected operator's installation, independently of any
+snapshot. This route verifies executable custody and the pin, launches it directly with a sanitized
+environment, bounds output and deadline, and refuses `--observations` or a second corpus. Direct process
+acquisition establishes snapshot origin under the same-host trust boundary. Portable JSON and its SHA-256
+establish byte consistency only; copying a capture or trusted-looking field into imported JSON cannot select
+this route. No new signing subsystem or global trust registry is introduced.
+
+Before admitting a shared source, analysis joins the captured source event to its exact first authenticated
+receipt, protected principal/grant and envelope digest, and matches every native turn identity, sequence,
+provider/profile and total to the snapshot usage. The existing prospective allocation and durable ordering
+checks still apply. A successful join subtracts that invocation once from its recording original and adds
+the frozen allocations to the recipients. A source invocation cannot qualify two shared costs. A generic
+substitution refuses; absent/mismatched capture counters remain incomplete.
+
+Focused source fixtures exercise actual controlled-reader invocation, retained capture/export, crash-style
+retry, executable-pin mismatch, a direct-process analyzer route, and a two-item 100-token allocation yielding
+50 and 100 final tokens after the second item's separate 50-token cost. Role substitution, counter
+substitution and imported self-hashed snapshots cannot reproduce the qualified result. These source fixtures
+are not installed receiver, provider-signature or live experiment evidence. The current Coordination
+installation-v1 preparation remains UNKNOWN; explicit v2 installer adoption, published artifacts, protected
+host configuration and native-root custody are required before a live qualified window.
