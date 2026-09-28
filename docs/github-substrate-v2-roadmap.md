@@ -20,7 +20,8 @@ and rationale.
 
 > **Accepted clean-start amendment — 2026-09-28:** [ADR-0091](adr/0091-speed-first-clean-v2-start.md)
 > replaces the active fleet-migration sequence with a speed-first clean v2 start. Deliver the source
-> through ordinary GitHub protections, open a fresh `.github` v2 generation, prove one real journey and
+> through ordinary GitHub protections, append a fresh shared v2 generation in the authority repository,
+> activate `.github` policy against it, prove one real journey and
 > one normal rerun, then add repositories explicitly and repair forward. `.github` alone is continuously
 > activated at first; generated and scaffolded defaults do not change. The detailed GS2-09–GS2-14 plan
 > below is retained as historical work. Its unfinished units are cancelled or superseded, not complete.
@@ -64,7 +65,7 @@ and rationale.
 | Build and qualification | [`.github#2963`](https://github.com/FS-GG/.github/issues/2963) |
 | Bridge and cutover ledger | [`.github#2964`](https://github.com/FS-GG/.github/issues/2964) |
 | Fleet cutover and retirement | [`.github#2965`](https://github.com/FS-GG/.github/issues/2965) |
-| Point of no return | Direct `OperatingV1` to fresh `OpenV2` clean-start generation for `.github` |
+| Point of no return | Direct `OperatingV1` to fresh shared `OpenV2` generation in the authority repository |
 | Current production authority | v1 until the clean-start epoch write is read back; then `.github` v2 only |
 
 ## 1. How work is executed
@@ -1520,11 +1521,11 @@ GS2-11.3 through the switch and verification window, do not start or advance
 independent telemetry mutations: stop ingress, drain active work, and preserve
 the fleet freeze until the roadmap explicitly releases deferred programs.
 
-### GS2-09 — Build migration, archive, and rollback tooling (historical; superseded)
+### GS2-09 — Build migration, archive, and rollback tooling
 
 ADR-0091 cancels the unfinished mandatory migration, archive, rollback, callable-v1 admission and
 rehearsal work for the clean-start route. Checked units below retain their accepted historical meaning;
-unchecked units remain unchecked and are not prerequisites for the new `.github` generation.
+unchecked units remain unchecked and are not prerequisites for the shared generation or `.github` activation.
 
 **Parents:** `.github#2954`, `.github#2963`, `.github#2965`
 **Owner:** `FS.GG.Coordination`
@@ -1576,7 +1577,9 @@ unchecked units remain unchecked and are not prerequisites for the new `.github`
 - [ ] **GS2-09.8 — Prove idempotency and no omission.** Re-running an exact manifest changes nothing;
   adding one unknown live subject or losing one page prevents qualification.
 
-### GS2-10 — Qualify the exact candidate and prepare the fleet (historical; superseded)
+### GS2-10 — Qualify the exact candidate and prepare the fleet
+
+*Historical staged work, superseded for the ADR-0091 clean-start route.*
 
 **Parent:** `.github#2965`
 **Owner:** `FS.GG.Coordination`, `.github`, and every receiver
@@ -1617,7 +1620,9 @@ unchecked units remain unchecked and are not prerequisites for the new `.github`
   repository-settings mutation, or release saga expected to cross the cutover window. Defer each remaining
   row until `OperatingV2` or mint a new candidate and repeat the complete Q0–Q7 matrix.
 
-### GS2-11 — Freeze the production fleet (historical; superseded)
+### GS2-11 — Freeze the production fleet
+
+*Historical staged work, superseded for the ADR-0091 clean-start route.*
 
 **Parent:** `.github#2965`
 **Owner:** protected cutover operators
@@ -1642,7 +1647,9 @@ unchecked units remain unchecked and are not prerequisites for the new `.github`
 - [ ] **GS2-11.8 — Decide continue or rollback.** Any active writer, unreadable authority, manifest drift,
   unplanned head/settings change, or unsettled operation executes the rollback plan before switch.
 
-### GS2-12 — Switch and verify while the fleet remains closed (historical; superseded)
+### GS2-12 — Switch and verify while the fleet remains closed
+
+*Historical staged work, superseded for the ADR-0091 clean-start route.*
 
 **Parent:** `.github#2965`
 **Owner:** protected cutover operators
@@ -1672,7 +1679,9 @@ unchecked units remain unchecked and are not prerequisites for the new `.github`
 - [ ] **GS2-12.10 — Commit verification.** Independent reviewers accept Q8 and the operator commits/anchors
   `VerifiedV2(evidence)`. Failure chooses repair-and-reverify or rollback while writes remain closed.
 
-### GS2-13 — Open v2, fence v1, and enter observation (historical; superseded)
+### GS2-13 — Open v2, fence v1, and enter observation
+
+*Historical staged work, superseded for the ADR-0091 clean-start route.*
 
 **Parent:** `.github#2965`
 **Owner:** protected cutover operators followed by repository maintainers
@@ -1705,7 +1714,9 @@ unchecked units remain unchecked and are not prerequisites for the new `.github`
   operations, action items, old-client attempts, and the later contraction; no destructive v1 deletion is
   allowed before the 15-item Q10 gate.
 
-### GS2-14 — Observe, improve, and close the renovation (historical; superseded)
+### GS2-14 — Observe, improve, and close the renovation
+
+*Historical staged work, superseded for the ADR-0091 clean-start route.*
 
 **Parent:** `.github#2965` and Epic `.github#2952`
 **Owner:** `FS.GG.Coordination` and `.github`

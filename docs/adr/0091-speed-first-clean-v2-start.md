@@ -24,17 +24,19 @@ Use this four-step clean-start route:
 1. Deliver source conventionally after the exact head and required checks pass. Send one synchronous,
    head-conditioned GitHub merge request, then read the merged PR state independently. Do not use
    `--admin`, force pushes or protection bypasses, and do not repeat an uncertain mutation blindly.
-2. Start a fresh v2 generation in `.github`. The repository moves directly from the historical
-   `OperatingV1` state to a new `OpenV2` clean-start generation. This decision does not fabricate a
-   `VerifiedV2` state, migration receipt, human-run receipt or proof that old data was transformed.
+2. Append a fresh shared `OpenV2` generation in the dedicated authority repository, directly from the
+   historical `OperatingV1` state. The installed CLI 0.1.2 and workflow consume that epoch to activate
+   `.github` policy first. This decision does not fabricate a `VerifiedV2` state, migration receipt,
+   human-run receipt or proof that old data was transformed.
 3. Run one real working journey through the installed v2 path, then run the same ordinary path again
    as a normal rerun smoke test. Repair defects found by either journey before expanding adoption.
 4. Add repositories explicitly, one at a time, and repair forward. `.github` is the only continuously
    activated repository initially. Generated and scaffolded defaults remain unchanged until a later
    repository-specific adoption decision.
 
-The owner authorizes the repository administrator to create the clean epoch using a narrow temporary
-writer grant for the exact cutover ref and to restore that ref's rules immediately after the write.
+The owner authorizes the repository administrator to append the clean epoch using a narrow temporary
+writer grant for the exact cutover ref in the authority repository and to restore that ref's rules
+immediately after the write.
 The operation must read back both the new epoch and restored rules. Native source branch protections
 remain in force throughout; this authority does not permit an admin merge, forced update or broader
 ruleset bypass.

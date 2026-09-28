@@ -14,7 +14,7 @@ Authored: **2026-09-07 15:42:10 UTC**. Section 0 evidence reconciliation: **2026
 Status: **active programme; the ADR-0091 clean-start `.github` V2 pilot is the critical path**.
 
 **Start from completed development simplification and the existing v2 implementation. Deliver checked,
-head-conditioned source changes, open one fresh `.github` V2 epoch, prove one real journey and one normal
+head-conditioned source changes, append one fresh shared V2 epoch and activate `.github` policy, prove one real journey and one normal
 rerun, then roll forward to explicitly selected repositories.** This document specifies
 which development process applies to each kind of work, where its behavior belongs, what evidence is
 needed, and how the programmes join.
@@ -55,7 +55,8 @@ reviewed public aggregate releases on GitHub.
 
 **Current frontier: the accepted clean-start route uses the existing published Coordination CLI 0.1.2
 and workflow to pilot V2 in `.github`.** Its next steps are conventional checked and head-conditioned
-source delivery, a fresh `.github` `OpenV2` epoch, one real working journey, and one normal rerun smoke.
+source delivery, a fresh shared `OpenV2` epoch with `.github` policy activated first, one real working
+journey, and one normal rerun smoke.
 The earlier callable, GS2-09 and OperatingV1 evidence remains valid at its recorded scope but no longer
 forms the active dependency chain. No clean-start step may relabel that evidence as migration completion,
 `VerifiedV2`, or a human-run receipt.
@@ -1085,8 +1086,8 @@ ADR-0091 replaces the active V0–V6 cutover sequence with this bounded clean-st
 | Stage | Work | Observable exit |
 |---|---|---|
 | **C0 — Deliver source** | Use ordinary GitHub delivery with current authenticated identity, applicable checks and an exact-head merge condition. Preserve native branch protections; do not force-update or use an admin merge. | The intended source is merged at the checked head and independently read back. |
-| **C1 — Start `.github` clean** | From `OperatingV1`, create a fresh `.github` `OpenV2` generation with the existing published CLI 0.1.2 and workflow. A repository administrator may grant the narrow cutover-ref writer temporarily, then must restore and read back the exact prior permission. | The new generation and restored permission are independently observed. No migration or `VerifiedV2` receipt is invented. |
-| **C2 — Smoke real use** | Run one real working journey and one ordinary rerun through the new `.github` generation. | Both journeys complete with native provider readback; failures are repaired forward. |
+| **C1 — Start `.github` clean** | From `OperatingV1`, a one-shot repository administrator appends a fresh shared `OpenV2` generation in the authority repository under a temporary narrow cutover-ref writer grant, then restores and reads back the exact prior permission. The existing published CLI 0.1.2 and workflow consume that epoch to activate `.github` policy. | The shared generation, restored permission and `.github` policy activation are independently observed. No migration or `VerifiedV2` receipt is invented. |
+| **C2 — Smoke real use** | Run one real working journey and one ordinary rerun through the activated `.github` policy. | Both journeys complete with native provider readback; failures are repaired forward. |
 | **C3 — Roll out explicitly** | Select each additional repository explicitly and repeat its bounded adoption. Keep generated/scaffold defaults unchanged. | Each selected repository has its own observed working journey; unselected repositories retain their current behavior. |
 
 The V0–V6 table, dependency graph and migration lanes below are retained as historical design context.
@@ -1109,7 +1110,7 @@ unfinished GS2-09 through GS2-14 work is cancelled or superseded rather than rec
 
 ### 9.1 Dependencies and parallelism
 
-The active dependency chain is `C0 checked source → C1 .github clean epoch → C2 journey and rerun → C3
+The active dependency chain is `C0 checked source → C1 shared clean epoch and .github activation → C2 journey and rerun → C3
 explicit-repository adoption`. Repair forward within that chain; do not require migration, archive,
 rollback, retained-state transformation, GS2-10 candidate freeze, or GS2-11–GS2-14 gates.
 
@@ -1369,6 +1370,8 @@ For the active clean-start route, plan one bounded part: **clean `.github` V2 ac
 through C2 with the existing CLI 0.1.2 and workflow. C3 is selected repository by repository after the
 smoke passes. The migration, candidate-freeze, controlled-cutover and observation parts in the table below
 are historical entries and must not be dispatched for the clean-start route.
+The active implementation plan is Coordination's
+[GS2-09.7 representative rehearsal plan](https://github.com/FS-GG/FS.GG.Coordination/blob/main/docs/roadmaps/gs2-09-7-representative-rehearsal.md), as amended for this clean-start route.
 
 These are the default **parts for Astra planning**, named by deliverable. Select independent
 dependency-ready parts concurrently when programme advancement is requested; use a fresh Astra-high

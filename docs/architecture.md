@@ -34,6 +34,10 @@ to the org feed and nuget.org — [§5](#5-the-contract-registry--the-single-sou
 the versions, generated from the registry. A ninth organization repository,
 **FS.GG.Coordination**, is the inert, independently qualified new-only v2 product approved by
 ADR-0078; it is rostered but is not a framework or v1-fabric participant.
+[ADR-0091](adr/0091-speed-first-clean-v2-start.md) now enables its existing ordinary V2
+settlement path first in `.github`, using a fresh shared authority epoch and checked native GitHub
+source delivery. Historical V1 admission and migration proofs no longer gate that route; other
+repositories and generated workspace defaults require separate adoption.
 
 This page is a map. Authoritative detail lives in each component repository and in
 the decision records linked throughout.

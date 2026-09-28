@@ -18,7 +18,8 @@ is not a permanent compatibility burden on the v2 runtime.
 
 > **Accepted clean-start amendment — 2026-09-28:** [ADR-0091](../adr/0091-speed-first-clean-v2-start.md)
 > supersedes this document's staged migration and fleet-cutover requirements for the active route.
-> `.github` starts a fresh v2 generation, proves one real journey and one ordinary rerun, and then
+> a one-shot administrator appends a fresh shared v2 generation in the authority repository, `.github`
+> policy activates against it and proves one real journey and one ordinary rerun, and then
 > adopts other repositories explicitly with forward repair. The older design remains below as historical
 > rationale and accepted evidence; unfinished work is cancelled or superseded, not complete.
 
@@ -366,9 +367,10 @@ shell table.
 
 ### 4.9 Cutover epoch
 
-For the active clean-start route, the repository administrator writes one new `.github` `OpenV2`
-generation directly from the historical `OperatingV1` head under a narrow temporary cutover-ref writer
-grant, reads it back, and restores the exact rules immediately. No `VerifiedV2`, migration or human-run
+For the active clean-start route, the repository administrator appends one new shared `OpenV2`
+generation directly from the historical `OperatingV1` head in the dedicated authority repository under
+a narrow temporary cutover-ref writer grant, reads it back, and restores the exact rules immediately.
+The existing CLI 0.1.2 and workflow consume that epoch to activate `.github` policy first. No `VerifiedV2`, migration or human-run
 receipt is invented. Source branch protections remain unchanged, and the operation uses no forced update
 or admin merge. The staged state machine below applies only to the superseded fleet-migration route.
 
