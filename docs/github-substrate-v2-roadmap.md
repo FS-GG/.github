@@ -1,22 +1,19 @@
 ---
-title: "Roadmap: GitHub Substrate v2 fleet cutover"
+title: "Roadmap: GitHub Substrate v2 clean start and explicit adoption"
 category: Design
 categoryindex: 4
 index: 26
-description: "The complete execution sequence for independently building and qualifying FS.GG.Coordination, cutting the fleet to GitHub Substrate v2, and retiring v1."
+description: "The current clean-start sequence for `.github` V2 operation and explicit repository-by-repository adoption, with the former fleet-cutover plan retained as history."
 ---
 
-# Roadmap: GitHub Substrate v2 fleet cutover
+# Roadmap: GitHub Substrate v2 clean start and explicit adoption
 
-This is the living execution roadmap for replacing the current FS-GG coordination system. V2 is built in
-a new `FS.GG.Coordination` repository, consumes the published FS.GG.SDD specification kernel, and is
-qualified independently of the v1 lifecycle it replaces. The fleet is prepared additively, frozen once,
-switched and verified while normal writes remain closed, opened at one explicit point of no return, and
-then observed through 15 distinct completed v2 work items before destructive v1 contraction. V1 authoring is fenced immediately at
-open; retained assets are inert forensic/recovery evidence and cannot restart v1. This document owns
-cross-repository sequence and exit gates; the
-[governing design](coordination/2026-08-25-github-substrate-v2-fleet-cutover-design.md) owns the architecture
-and rationale.
+This is the living execution roadmap for the ADR-0091 clean start. `.github` now runs ordinary V2
+settlement against the fresh shared `OpenV2` generation after completing checked source delivery, one real
+settlement and one normal rerun. Additional repositories join only through explicit, bounded adoption;
+generated and scaffolded defaults remain unchanged. The former fleet migration, freeze, switch and V1
+contraction sequence remains below as historical design and accepted evidence. Its unfinished work does
+not schedule or gate the current route, and it is not reported as completed.
 
 > **Accepted clean-start amendment — 2026-09-28:** [ADR-0091](adr/0091-speed-first-clean-v2-start.md)
 > replaces the active fleet-migration sequence with a speed-first clean v2 start. Deliver the source
@@ -66,13 +63,14 @@ and rationale.
 | Bridge and cutover ledger | [`.github#2964`](https://github.com/FS-GG/.github/issues/2964) |
 | Fleet cutover and retirement | [`.github#2965`](https://github.com/FS-GG/.github/issues/2965) |
 | Point of no return | Direct `OperatingV1` to fresh shared `OpenV2` generation in the authority repository |
-| Current production authority | v1 until the clean-start epoch write is read back; then `.github` v2 only |
+| Current production authority | Shared generation 2 `OpenV2`; `.github` ordinary V2 settlement active, with other repositories retaining their current behavior until explicit adoption |
 
 ## Active strategy: start clean and repair forward
 
 The owner selected speed over backward validity on 2026-09-28. No V1 workload requires preserving
-its old execution guarantees. Use the existing published Coordination CLI `0.1.2` and ordinary V2
-workflow; do not build a new admission service or migration runtime to start using them.
+its old execution guarantees. `.github` uses the published Coordination CLI 0.1.2 and its ordinary V2
+workflow. Each later repository receives an explicit source profile, immutable published CLI, dedicated
+credential custody and separate activation.
 
 1. **Deliver source normally.** Check the current PR head and required checks, merge through native
    GitHub protections, and read the merged result back. Legacy V1 admission is no longer required.
@@ -91,10 +89,9 @@ Native credentials, source branch protections, required checks and honest result
 The authority epoch is shared, but runtime activation is repository-specific. This strategy does not
 change generated workspace defaults or promise compatibility with old clients.
 
-The [active pilot plan](https://github.com/FS-GG/FS.GG.Coordination/blob/main/docs/roadmaps/gs2-09-7-representative-rehearsal.md)
-owns the concrete journey. [ADR-0091](adr/0091-speed-first-clean-v2-start.md) records the decision.
-Everything below describing the older GS2-09–GS2-14 migration sequence is retained historical design,
-not a second set of prerequisites. Superseded work is not reported as completed.
+[ADR-0091](adr/0091-speed-first-clean-v2-start.md) records the decision. Everything below describing the
+older GS2-09–GS2-14 migration sequence is retained historical design, not a second set of prerequisites.
+Superseded work is not reported as completed.
 
 ### Observed clean-start result — 2026-09-28
 
@@ -107,6 +104,20 @@ the original cutover-ref writer rule is restored and the conflicting V1 workflow
 
 The bounded pilot and rerun criteria are complete. Continue `.github` use and select further repositories
 explicitly; backward migration and the historical milestones below remain superseded.
+
+Audio is the first selected C3 repository. [Coordination PR #865](https://github.com/FS-GG/FS.GG.Coordination/pull/865)
+merged at `a7ac52aa63b62fe192642b7f74006c6a0797a307`; [`.github` PR #3919](https://github.com/FS-GG/.github/pull/3919) merged
+at `4ac2224cbefa55387ab1273a09ef23daf462628c`, and
+[Audio PR #326](https://github.com/FS-GG/FS.GG.Audio/pull/326) merged at
+`08a46576320b0043d43a0ce4eeffb3cd2e736e56`; all three passed their native required checks. The durable
+[Audio receiver plan](https://github.com/FS-GG/FS.GG.Audio/blob/main/docs/roadmaps/v2-ordinary-adoption.md)
+keeps the workflow disabled. [Coordination CLI 0.1.3](https://github.com/FS-GG/FS.GG.Coordination/releases/tag/v0.1.3)
+is published from protected source `eb464f5215d8b1696842eecd367027724add6923`, with both-feed
+payload readback and anonymous installation in [publisher run 36407941780](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36407941780).
+Audio's `ordinary-v2` environment
+has been created and read back with an exact `main` branch policy, but it contains zero secrets, so
+credential enrollment is still absent. No installed Audio activation, settlement, historical migration
+completion or fleet result is established.
 
 ## 1. How work is executed
 
@@ -1563,19 +1574,22 @@ the fleet freeze until the roadmap explicitly releases deferred programs.
 
 ### GS2-09 — Build migration, archive, and rollback tooling
 
+*Historical staged work, superseded for the ADR-0091 clean-start route. The metadata and unchecked boxes
+below describe former-route prerequisites and do not schedule current work.*
+
 ADR-0091 cancels the unfinished mandatory migration, archive, rollback, callable-v1 admission and
 rehearsal work for the clean-start route. Checked units below retain their accepted historical meaning;
 unchecked units remain unchecked and are not prerequisites for the shared generation or `.github` activation.
 
-**Parents:** `.github#2954`, `.github#2963`, `.github#2965`
-**Owner:** `FS.GG.Coordination`
-**Depends on:** GS2-05–GS2-08
-**Exit gates:** Q5 and Q6 over full snapshots
+**Historical parents:** `.github#2954`, `.github#2963`, `.github#2965`
+**Historical owner:** `FS.GG.Coordination`
+**Former dependencies:** GS2-05–GS2-08
+**Former exit gates:** Q5 and Q6 over full snapshots
 
 - [ ] **GS2-09.9 — Qualify callable ordinary v2 execution.** The protected Coordination delivery supplies
   the installed ordinary-delivery command, durable recovery behavior, one accepted isolated native operation,
   and the exact callable-readiness handoff consumed by discovery. It performs no fleet migration, does not open
-  v2, and remains an additive prerequisite before representative rehearsal. The exact GS2-09.9 qualification
+  v2, and was an additive prerequisite before representative rehearsal in the former route. The exact GS2-09.9 qualification
   and custom acceptance receipt are pending.
 
   [Protected callable discovery handoff](https://github.com/FS-GG/FS.GG.Coordination/blob/main/evidence/github-substrate-v2/gs2-09-9/callable-discovery-handoff.json)
@@ -1619,12 +1633,13 @@ unchecked units remain unchecked and are not prerequisites for the shared genera
 
 ### GS2-10 — Qualify the exact candidate and prepare the fleet
 
-*Historical staged work, superseded for the ADR-0091 clean-start route.*
+*Historical staged work, superseded for the ADR-0091 clean-start route. The metadata and unchecked boxes
+below describe former-route prerequisites and do not schedule current work.*
 
-**Parent:** `.github#2965`
-**Owner:** `FS.GG.Coordination`, `.github`, and every receiver
-**Depends on:** GS2-03–GS2-09
-**Exit gates:** Q0–Q7 accepted against one immutable candidate
+**Historical parent:** `.github#2965`
+**Historical owner:** `FS.GG.Coordination`, `.github`, and every receiver
+**Former dependencies:** GS2-03–GS2-09
+**Former exit gates:** Q0–Q7 accepted against one immutable candidate
 
 - [ ] **GS2-10.1 — Freeze candidate identities.** Record source commits, dependency locks, model/compiler
   fingerprints, packages, container/tool assets if any, workflows, App build, verifier artifacts, Typed
@@ -1662,12 +1677,13 @@ unchecked units remain unchecked and are not prerequisites for the shared genera
 
 ### GS2-11 — Freeze the production fleet
 
-*Historical staged work, superseded for the ADR-0091 clean-start route.*
+*Historical staged work, superseded for the ADR-0091 clean-start route. The metadata and unchecked boxes
+below describe former-route prerequisites and do not schedule current work.*
 
-**Parent:** `.github#2965`
-**Owner:** protected cutover operators
-**Depends on:** GS2-10; approved cutover window
-**Exit:** authoritative `Frozen(snapshot)`; all normal writes demonstrably closed
+**Historical parent:** `.github#2965`
+**Historical owner:** protected cutover operators
+**Former dependencies:** GS2-10; approved cutover window
+**Former exit:** authoritative `Frozen(snapshot)`; all normal writes demonstrably closed
 
 - [ ] **GS2-11.1 — Announce and verify the window.** Confirm operators, approvers, communication channel,
   status page, abort criteria, rate budget, credentials, backups, and candidate/manifest fingerprints.
@@ -1689,12 +1705,13 @@ unchecked units remain unchecked and are not prerequisites for the shared genera
 
 ### GS2-12 — Switch and verify while the fleet remains closed
 
-*Historical staged work, superseded for the ADR-0091 clean-start route.*
+*Historical staged work, superseded for the ADR-0091 clean-start route. The metadata and unchecked boxes
+below describe former-route prerequisites and do not schedule current work.*
 
-**Parent:** `.github#2965`
-**Owner:** protected cutover operators
-**Depends on:** authoritative Frozen state
-**Exit gate:** Q8 and authoritative `VerifiedV2(evidence)`
+**Historical parent:** `.github#2965`
+**Historical owner:** protected cutover operators
+**Former dependency:** authoritative Frozen state
+**Former exit gate:** Q8 and authoritative `VerifiedV2(evidence)`
 
 - [ ] **GS2-12.1 — Activate exact v2 artifacts.** Promote/install only the accepted candidate; verify
   package bytes, model identity, App build, workflow SHAs, and receiver resolution.
@@ -1721,12 +1738,13 @@ unchecked units remain unchecked and are not prerequisites for the shared genera
 
 ### GS2-13 — Open v2, fence v1, and enter observation
 
-*Historical staged work, superseded for the ADR-0091 clean-start route.*
+*Historical staged work, superseded for the ADR-0091 clean-start route. The metadata and unchecked boxes
+below describe former-route prerequisites and do not schedule current work.*
 
-**Parent:** `.github#2965`
-**Owner:** protected cutover operators followed by repository maintainers
-**Depends on:** authoritative VerifiedV2 state and final human approval
-**Exit gate:** Q9 authoring-fence proof and authoritative `ObservingV2`
+**Historical parent:** `.github#2965`
+**Historical owner:** protected cutover operators followed by repository maintainers
+**Former dependencies:** authoritative VerifiedV2 state and final human approval
+**Former exit gate:** Q9 authoring-fence proof and authoritative `ObservingV2`
 
 - [ ] **GS2-13.1 — Present the irreversible decision.** Show exact manifest/candidate, Q0–Q8 roll-up,
   open risks, rollback status, operational ownership, and the consequence that v1 cannot resume afterward.
@@ -1756,12 +1774,13 @@ unchecked units remain unchecked and are not prerequisites for the shared genera
 
 ### GS2-14 — Observe, improve, and close the renovation
 
-*Historical staged work, superseded for the ADR-0091 clean-start route.*
+*Historical staged work, superseded for the ADR-0091 clean-start route. The metadata and unchecked boxes
+below describe former-route prerequisites and do not schedule current work.*
 
-**Parent:** `.github#2965` and Epic `.github#2952`
-**Owner:** `FS.GG.Coordination` and `.github`
-**Depends on:** ObservingV2
-**Exit gate:** Q10, authoritative `OperatingV2`, and closed Epic
+**Historical parent:** `.github#2965` and Epic `.github#2952`
+**Historical owner:** `FS.GG.Coordination` and `.github`
+**Former dependency:** ObservingV2
+**Former exit gate:** Q10, authoritative `OperatingV2`, and closed Epic
 
 - [ ] **GS2-14.1 — Record the immediate reading.** At entry to `ObservingV2`, capture journey success, incident count,
   partial/indeterminate operations, old-client attempts, API cost, event repair, queue/CI/release latency,

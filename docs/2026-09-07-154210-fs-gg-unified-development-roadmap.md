@@ -11,11 +11,11 @@ Short name: **Unified Roadmap**. In FS-GG development discussions, **“the road
 and **“compacted roadmap”** refer to this document unless another roadmap is explicitly named.
 
 Authored: **2026-09-07 15:42:10 UTC**. Section 0 evidence reconciliation: **2026-09-28**.
-Status: **active programme; the ADR-0091 clean-start `.github` V2 pilot is the critical path**.
+Status: **active programme; `.github` C0–C2 are complete and Audio C3 receiver source is delivered with cross-repository integration pending**.
 
-**Start from completed development simplification and the existing v2 implementation. Deliver checked,
-head-conditioned source changes, append one fresh shared V2 epoch and activate `.github` policy, prove one real journey and one normal
-rerun, then roll forward to explicitly selected repositories.** This document specifies
+**Start from completed development simplification and the existing v2 implementation. Keep the proven
+`.github` settlement active, then add explicitly selected repositories through checked source, dedicated
+credential custody, separate activation and observed ordinary use.** This document specifies
 which development process applies to each kind of work, where its behavior belongs, what evidence is
 needed, and how the programmes join.
 
@@ -70,6 +70,22 @@ replay, attempt 4, both binding `96eebd38b0639d4c446d62dcfa413adffae32c839b38700
 C0–C2 are complete for this bounded path; C3 is continuous `.github` use and explicit later repository
 adoption. Earlier attempts stopped at observation/artifact acquisition and did not establish settlement.
 This does not establish fleet-wide activation or any historical migration result.
+
+Audio is the first selected C3 repository. [Coordination PR #865](https://github.com/FS-GG/FS.GG.Coordination/pull/865)
+delivered the `audio-v1` settlement profile at `a7ac52aa63b62fe192642b7f74006c6a0797a307`.
+[`.github` PR #3919](https://github.com/FS-GG/.github/pull/3919) delivered explicit
+Audio observation at `4ac2224cbefa55387ab1273a09ef23daf462628c`, and
+[Audio PR #326](https://github.com/FS-GG/FS.GG.Audio/pull/326) delivered the disabled receiver at
+`08a46576320b0043d43a0ce4eeffb3cd2e736e56`; all three passed their native required checks. The
+[durable Audio receiver plan](https://github.com/FS-GG/FS.GG.Audio/blob/main/docs/roadmaps/v2-ordinary-adoption.md)
+owns the remaining adoption boundaries. [Coordination CLI 0.1.3](https://github.com/FS-GG/FS.GG.Coordination/releases/tag/v0.1.3)
+was published from reviewed source `eb464f5215d8b1696842eecd367027724add6923`; its protected
+[publisher run](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36407941780) verified both feeds and
+an anonymous install of package payload `c505159023f0740c885696ebe24f8e066e197d9cf09cc3e64050d4210bcd0cdb`.
+Audio has no dedicated ordinary-v2 credential enrollment, and the receiver remains disabled. The Audio `ordinary-v2` environment
+has been created and read back with an exact `main` branch policy, but it contains zero secrets and therefore
+does not establish credential custody. These source merges and the empty environment establish no
+installed activation, settlement, migration completion or fleet result.
 
 The source and publication frontier was updated from protected evidence on **2026-09-27**. The broader
 [code audit](reports/2026-09-24-v2-roadmap-code-audit.md) records its 2026-09-24 revisions, implementation boundaries,
@@ -173,30 +189,22 @@ This audit neither requalified a live Host nor measured an efficiency cohort.
 
 ### 0.4 Active work and immediate critical path
 
-1. **Qualify the delivered GS2-09.9 callable source.** Keep the proposed workflows disabled until the
-   versioned operator, contract, validator and typed index bind the repaired negative controls. Run fresh
-   registered Q3/Q6 and protected qualification before recording GS2-09.9 acceptance.
-2. **In parallel, complete post-genesis admission/effect readiness and prepare V0/V3 inputs.**
-   The protected OperatingV1 genesis is installed and may be read as an accepted input. Its owner still
-   owes the scoped append/CAS path, incumbent inventory, identity and one-shot issuer controls, provider
-   reconciliation and copy-specific effect authority; ordinary CLI writes remain fenced. Read-only
-   research, controlled source tests, receiver inventory and omission controls can proceed independently.
-3. **Qualify GS2-09.7 on the registered cohort.** Use the merged migration, parser and host source; complete
-   the missing claim/event producers and copy-specific discovery, manifest, journal, effects, archive and
-   rollback, then execute all interruption
-   cuts, cleanup and a second round under the protected Q5/Q6 controls.
-4. **Prove no omission and close GS2-09.** Establish independent .8 idempotency/no-omission evidence and
-   parent closure from the representative .7 result.
-5. **Freeze only the qualified candidate.** Finish or explicitly defer competing publications/default/pin
-   changes, then execute GS2-10–14 under their existing contracts and operating authority.
+1. **Complete Audio credential custody and activate separately.** The Audio-capable Coordination CLI 0.1.3
+   is published and anonymously installable. The `ordinary-v2` environment exists with
+   an exact `main` branch policy and zero secrets. Enroll dedicated credentials, bind the immutable CLI, and
+   review the source change that removes the Audio receiver's false guard and adds its bounded credential
+   job. The current receiver remains disabled.
+2. **Observe bounded Audio use.** After activation, observe one protected-main settlement and its normal
+   already-complete rerun. Repair forward on failure. Only that repository-specific evidence can complete
+   Audio's C3 adoption; it does not imply fleet-wide activation.
 
 The [lane table](#91-dependencies-and-parallelism) names each owner, ready work and join condition.
 
 ### 0.5 Known limits and decision state
 
 This is an evidence-backed planning reconciliation, not a new contract or effect authorization.
-The digest-bound [GS2 execution roadmap](github-substrate-v2-roadmap.md) and accepted receipts remain
-unchanged. Historical “pending” fields in a sealed handoff describe its observation time; new accepted
+The [GS2 execution roadmap](github-substrate-v2-roadmap.md) preserves accepted migration evidence as
+history while ADR-0091 governs the current clean-start route. Historical “pending” fields in a sealed handoff describe its observation time; new accepted
 receipts supersede their status without rewriting those bytes.
 
 No stage-wide percentage is asserted: pure contracts, isolated provider execution, installed receivers and
@@ -1382,8 +1390,14 @@ For the active clean-start route, plan one bounded part: **clean `.github` V2 ac
 through C2 with the existing CLI 0.1.2 and workflow. C3 is selected repository by repository after the
 smoke passes. The migration, candidate-freeze, controlled-cutover and observation parts in the table below
 are historical entries and must not be dispatched for the clean-start route.
-The active implementation plan is Coordination's
-[GS2-09.7 representative rehearsal plan](https://github.com/FS-GG/FS.GG.Coordination/blob/main/docs/roadmaps/gs2-09-7-representative-rehearsal.md), as amended for this clean-start route.
+The `.github` C0–C2 path is complete. Audio is the first selected C3 repository. Coordination #865
+delivered its source profile, `.github` #3919 delivered Audio observation at
+`4ac2224cbefa55387ab1273a09ef23daf462628c`, and Audio #326 delivered the disabled receiver at
+`08a46576320b0043d43a0ce4eeffb3cd2e736e56`. Its
+[receiver plan is durable on `main`](https://github.com/FS-GG/FS.GG.Audio/blob/main/docs/roadmaps/v2-ordinary-adoption.md).
+CLI 0.1.3 is published; dedicated Audio credential enrollment, activation and observed settlement remain
+later boundaries. The
+`ordinary-v2` environment has an exact `main` branch policy but zero secrets.
 
 These are the default **parts for Astra planning**, named by deliverable. Select independent
 dependency-ready parts concurrently when programme advancement is requested; use a fresh Astra-high
@@ -1400,6 +1414,7 @@ Entry conditions constrain the dependent execution; earlier read-only planning m
 
 | Part Astra plans | Stage and bounded outcome | Accountable planning owner and entry | Feature subroadmap |
 |---|---|---|---|
+| **Audio explicit ordinary V2 adoption — C3-AUDIO-01** | C3: publish immutable Coordination CLI 0.1.3, enroll dedicated Audio credentials, activate the receiver separately, then observe one settlement and one normal rerun | Coordination, `.github` and Audio owners; [Coordination #865](https://github.com/FS-GG/FS.GG.Coordination/pull/865), [`.github` #3919](https://github.com/FS-GG/.github/pull/3919) and [Audio #326](https://github.com/FS-GG/FS.GG.Audio/pull/326) delivered the three-repository source profile. [CLI 0.1.3](https://github.com/FS-GG/FS.GG.Coordination/releases/tag/v0.1.3) is published. The receiver is disabled; its `ordinary-v2` environment has an exact `main` branch policy but zero secrets | [Audio receiver plan on `main`](https://github.com/FS-GG/FS.GG.Audio/blob/main/docs/roadmaps/v2-ordinary-adoption.md). No credential enrollment, installed Audio activation, settlement or fleet result is claimed |
 | **Simplified baseline and v2 policy binding** | V0: bind adopted routine policy, actual enforcement/receiver wiring and R5 population; keep current merge-writer availability explicit | `.github`, Coordination, Governance and receivers; source qualification can proceed while the existing operation owner restores admitted effect readiness | [R0–R5 source plan](2026-09-07-074251-radical-development-bureaucracy-reduction-design-and-roadmap.md), [UTEL correctness](roadmaps/utel-01-telemetry-correctness.md), [local store](roadmaps/utel-local-telemetry-store.md), [operational completeness](roadmaps/utel-operational-completeness.md), [dashboard](roadmaps/utel-telemetry-dashboard.md), [release successor](roadmaps/utel-release-successor.md) and [current audit](reports/2026-09-24-v2-roadmap-code-audit.md). Reuse delivered source; verify the selected published/installed versions and prospective coverage without inferring complete native usage or efficiency |
 | **Skill Python to F# conversion — SKILL-FS-01** | Independent source and receiver track: replace the four current distinct Python implementation files across both tracked skill roots with packaged F# commands; preserve telemetry and preflight refusal behavior, then remove Python skill executables | `.github` tool and skill owner, with selected receivers; can proceed beside V2 source work, while the skill flip and deletion require coherent publication and installed parity | [SKILL-FS-01 subroadmap](roadmaps/skill-python-fsharp-conversion.md). The four legacy helpers in the September telemetry design are already absent; this part covers the different Python code that remains in the current skill trees and does not reopen removed routine obligations |
 | **Event and queue qualification** | V1, GS2-07.6–07.7: qualify the queue and measure narrow reconciliation, coalescing and audit repair | Coordination; preserve accepted native units and resume only unfinished scope | [GS2-07.7 event-benefit subroadmap](https://github.com/FS-GG/FS.GG.Coordination/blob/main/docs/roadmaps/gs2-07-7-event-benefit.md), scoped to 07.7; native acceptance is recorded in [PR #329](https://github.com/FS-GG/FS.GG.Coordination/pull/329) |
