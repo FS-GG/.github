@@ -66,5 +66,26 @@ class CandidateUniquenessTests(unittest.TestCase):
         self.nuget_read.assert_not_called()
 
 
+class SuccessorRailBindingTests(unittest.TestCase):
+    def test_candidate_binds_the_next_version_and_exact_predecessor(self) -> None:
+        workflow = (ROOT / ".github/workflows/release-successor-candidate.yml").read_text()
+        self.assertIn('test "$version" = 0.92.0', workflow)
+        self.assertIn("gh release download coherent-set/v0.91.5", workflow)
+        self.assertIn("--tag-source 941a82c0e06c9afe9db4c88fc29997d7627a5895", workflow)
+        self.assertEqual(workflow.count("--predecessor 0.91.5"), 2)
+        self.assertIn("dotnet tool install FS.GG.Coord.Cli", workflow)
+        self.assertIn("skill telemetry-config discover", workflow)
+        self.assertIn("test ! -e \"$store\"", workflow)
+        self.assertIn("skill preflight assess", workflow)
+
+    def test_publisher_and_journal_bind_one_unused_successor(self) -> None:
+        publisher = (ROOT / "scripts/release-successor-publish.py").read_text()
+        journal = (ROOT / "scripts/release_successor_journal.py").read_text()
+        self.assertEqual(publisher.count('"version": "0.92.0"'), 1)
+        self.assertIn('manifest["descriptor"]["version"] == "0.92.0"', publisher)
+        self.assertIn('"--version", "0.92.0", "--predecessor", "0.91.5"', publisher)
+        self.assertIn('REF = "refs/heads/fsgg/v2/journal/release/utel-rel-07"', journal)
+
+
 if __name__ == "__main__":
     unittest.main()

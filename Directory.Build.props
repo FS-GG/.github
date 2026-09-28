@@ -592,8 +592,11 @@
   <!-- 0.91.4 -> 0.91.5: PATCH coherent successor. Rebuild the CLI against the
        centrally pinned FSharp.Core 10.1.401 required by FCS 43.12.401, and ship
        accumulated compatible telemetry and driver updates in all three members. -->
+  <!-- 0.91.5 -> 0.92.0 (SKILL-FS-01.5): MINOR coherent successor. The CLI adds
+       read-only, bounded telemetry configuration discovery for installed skill
+       workflows. Drivers and Kit move with it as one coherent set. -->
   <PropertyGroup>
-    <FsggCoherentSetVersion>0.91.5</FsggCoherentSetVersion>
+    <FsggCoherentSetVersion>0.92.0</FsggCoherentSetVersion>
   </PropertyGroup>
 
 </Project>

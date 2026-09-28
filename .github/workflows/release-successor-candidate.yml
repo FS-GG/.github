@@ -1,6 +1,6 @@
 name: release-successor-candidate
 
-# Source/byte qualification for coherent set 0.91.5 only. This route has no tag, release,
+# Source/byte qualification for coherent set 0.92.0 only. This route has no tag, release,
 # journal, package-feed, OIDC or promotion write. Its retained Actions artifact
 # is an unpromoted candidate, not a published release or an admission receipt.
 on:
@@ -43,7 +43,7 @@ jobs:
           test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
           test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$SOURCE_SHA"
           version="$(dotnet msbuild src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj -getProperty:Version | tr -d '[:space:]')"
-          test "$version" = 0.91.5
+          test "$version" = 0.92.0
           echo "version=$version" >> "$GITHUB_OUTPUT"
       - name: Verify the stable predecessor and unused package version
         env:
@@ -53,24 +53,24 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p artifacts/predecessor artifacts/packages
-          gh release download coherent-set/v0.91.4 --repo "$GITHUB_REPOSITORY" \
+          gh release download coherent-set/v0.91.5 --repo "$GITHUB_REPOSITORY" \
             --pattern stable-channel.json --dir artifacts/predecessor
           python3 scripts/release-saga.py predecessor \
             --channel artifacts/predecessor/stable-channel.json \
-            --release-tag coherent-set/v0.91.4 \
-            --tag-source f0b1bb8748cbb7b27aeaf7346b8690c82ed03343 \
+            --release-tag coherent-set/v0.91.5 \
+            --tag-source 941a82c0e06c9afe9db4c88fc29997d7627a5895 \
             > artifacts/predecessor/identity.json
-          test "$(jq -r .version artifacts/predecessor/identity.json)" = 0.91.4
+          test "$(jq -r .version artifacts/predecessor/identity.json)" = 0.91.5
           python3 scripts/check-release-candidate-uniqueness.py \
-            --version "$VERSION" --predecessor 0.91.4
+            --version "$VERSION" --predecessor 0.91.5
           release_status="$(curl --silent --show-error --location -o /dev/null -w '%{http_code}' \
             -H "Authorization: Bearer $GH_TOKEN" \
             -H 'Accept: application/vnd.github+json' \
-            "https://api.github.com/repos/$GITHUB_REPOSITORY/releases/tags/coherent-set/v0.91.5")"
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/releases/tags/coherent-set/v0.92.0")"
           test "$release_status" = 404
           test -z "$(git ls-remote --tags origin \
-            'refs/tags/coherent-set/v0.91.5' 'refs/tags/kit/v0.91.5' \
-            'refs/tags/drivers/v0.91.5' 'refs/tags/coord-engine/v0.91.5')"
+            'refs/tags/coherent-set/v0.92.0' 'refs/tags/kit/v0.92.0' \
+            'refs/tags/drivers/v0.92.0' 'refs/tags/coord-engine/v0.92.0')"
       - name: Test the telemetry producer and prepare the browser fixture
         run: |
           set -euo pipefail
@@ -91,6 +91,46 @@ jobs:
           dotnet pack src/FS.GG.Drivers/FS.GG.Drivers.csproj -c Release \
             -p:RepositoryCommit="$SOURCE_SHA" -o artifacts/packages
           test "$(find artifacts/packages -maxdepth 1 -name '*.nupkg' | wc -l)" -eq 3
+      - name: Prove the installed candidate command surface
+        env:
+          VERSION: ${{ steps.identity.outputs.version }}
+        run: |
+          set -euo pipefail
+          tool="$RUNNER_TEMP/fsgg-coord-engine"
+          home="$RUNNER_TEMP/installed-home"
+          mkdir -p "$tool" "$home"
+          cat > "$RUNNER_TEMP/candidate-nuget.config" <<EOF
+          <configuration><packageSources><clear/><add key="candidate" value="$PWD/artifacts/packages"/></packageSources></configuration>
+          EOF
+          dotnet tool install FS.GG.Coord.Cli --version "$VERSION" --tool-path "$tool" \
+            --configfile "$RUNNER_TEMP/candidate-nuget.config"
+          set +e
+          output="$(HOME="$home" XDG_CONFIG_HOME="$home" "$tool/fsgg-coord-engine" \
+            skill telemetry-config discover 2> "$RUNNER_TEMP/discovery.err")"
+          status=$?
+          set -e
+          test "$status" -eq 2
+          test "$output" = '{"schema":"fsgg.telemetry.config-discovery/1","status":"not-configured"}'
+          test ! -s "$RUNNER_TEMP/discovery.err"
+          config="$RUNNER_TEMP/telemetry.json"
+          store="$RUNNER_TEMP/telemetry-store"
+          jq -cn --arg store "$store" \
+            '{schema:"fsgg.telemetry.host-config/1",storeRoot:$store,engine:"candidate-host-engine"}' \
+            > "$config"
+          chmod 600 "$config"
+          config_sha="$(sha256sum "$config" | cut -d' ' -f1)"
+          "$tool/fsgg-coord-engine" skill telemetry-config discover --config "$config" \
+            > "$RUNNER_TEMP/discovery.json"
+          test "$(jq -r .schema "$RUNNER_TEMP/discovery.json")" = fsgg.telemetry.config-discovery/1
+          test "$(jq -r .status "$RUNNER_TEMP/discovery.json")" = configured
+          test "$(jq -r .storeRoot "$RUNNER_TEMP/discovery.json")" = "$store"
+          test "$(jq -r .engine "$RUNNER_TEMP/discovery.json")" = candidate-host-engine
+          test "$(sha256sum "$config" | cut -d' ' -f1)" = "$config_sha"
+          test ! -e "$store"
+          "$tool/fsgg-coord-engine" skill preflight assess \
+            tests/skill-fsharp/contracts/fixtures/assess-positive.json \
+            > "$RUNNER_TEMP/preflight.json"
+          test "$(jq -r .decision "$RUNNER_TEMP/preflight.json")" = pilot-candidate
       - name: Qualify the retained CLI bytes and bind the manifest
         env:
           SOURCE_SHA: ${{ github.sha }}
@@ -126,7 +166,7 @@ jobs:
           set -euo pipefail
           test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$SOURCE_SHA"
           python3 scripts/check-release-candidate-uniqueness.py \
-            --version "$VERSION" --predecessor 0.91.4
+            --version "$VERSION" --predecessor 0.91.5
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: release-successor-candidate-${{ github.sha }}-${{ github.run_id }}
