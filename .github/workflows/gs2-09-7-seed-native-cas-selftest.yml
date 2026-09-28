@@ -1,0 +1,31 @@
+name: GS2-09.7 seed native CAS source self-test
+
+on:
+  pull_request:
+    paths:
+      - "scripts/gs2-09-7-seed-native-cas.py"
+      - "tests/gs2-09-7-seed-native-cas/**"
+      - ".github/workflows/gs2-09-7-seed-native-cas-selftest.yml"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/gs2-09-7-seed-native-cas.py"
+      - "tests/gs2-09-7-seed-native-cas/**"
+      - ".github/workflows/gs2-09-7-seed-native-cas-selftest.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gs2-09-7-seed-native-cas-selftest-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  selftest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - name: Exercise exact local Git CAS and fail-closed provenance
+        run: python3 -m unittest discover -s tests/gs2-09-7-seed-native-cas -p 'test_*.py'

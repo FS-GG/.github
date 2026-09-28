@@ -29,6 +29,7 @@ WORKFLOW_PATH = ".github/workflows/github-substrate-v2-sandbox-qualification.yml
 WORKFLOW_REF = "refs/heads/main"
 PROTECTED_ENVIRONMENT = "github-substrate-v2-sandbox"
 BUILDER_PATH = "scripts/gs2-09-7-seed-execution-binding.py"
+NATIVE_CAS_PATH = "scripts/gs2-09-7-seed-native-cas.py"
 SANDBOX_ID = 1353050537
 SANDBOX_NODE = "R_kgDOUKXpqQ"
 SANDBOX_NAME = "FS-GG/FS.GG.GitHub.Substrate.Sandbox"
@@ -159,7 +160,8 @@ def checked_out_provenance(workflow_sha: str) -> dict:
     require(HEX40.fullmatch(head) is not None and head == workflow_sha,
             "protected-checkout-head")
     blobs = {}
-    for label, relative in (("builder", BUILDER_PATH), ("workflow", WORKFLOW_PATH)):
+    for label, relative in (("builder", BUILDER_PATH), ("workflow", WORKFLOW_PATH),
+                            ("nativeCas", NATIVE_CAS_PATH)):
         current = read_regular(checkout / relative, MAX_JSON_BYTES)
         committed = git_bytes(checkout, ["show", f"{head}:{relative}"], MAX_JSON_BYTES)
         require(current == committed, f"protected-{label}-drift")
@@ -204,7 +206,7 @@ def cas_profile(ref: str) -> dict:
         "repository": {"id": SANDBOX_ID, "nodeId": SANDBOX_NODE,
                        "fullName": SANDBOX_NAME, "visibility": "private"},
         "ref": ref,
-        "object": {"path": "journal.json", "encoding": "canonical-json-utf8",
+        "object": {"path": "state.json", "encoding": "s1-exact-raw-state-bytes",
                    "maxBytes": MAX_JSON_BYTES},
         "compareAndSwap": {
             "lease": "expected-absent-or-exact-old-oid",
@@ -212,8 +214,8 @@ def cas_profile(ref: str) -> dict:
             "update": "old-oid-exact",
             "conflict": "refused-no-retry-as-create",
         },
-        "chain": {"journalGeneration": "strict-successor",
-                  "stateGeneration": "strict-successor",
+        "chain": {"journalGeneration": "genesis-zero-then-strict-successor",
+                  "stateGeneration": "genesis-zero-then-strict-successor",
                   "commitParent": "exact-previous-head-or-none"},
         "outcomes": ["applied", "already-applied", "pending", "conflict", "refused"],
         "nativeReadback": {
@@ -381,6 +383,8 @@ def build_document() -> bytes:
     mint = validate_mint(mint_raw, os.environ.get("FSGG_SANDBOX_TOKEN", ""), utc_now())
     builder = Path(__file__).resolve().parents[1] / BUILDER_PATH
     builder_raw = read_regular(builder, MAX_JSON_BYTES)
+    native_cas = Path(__file__).resolve().parents[1] / NATIVE_CAS_PATH
+    native_cas_raw = read_regular(native_cas, MAX_JSON_BYTES)
     binding = {
         "schema": SCHEMA,
         "status": "bound-no-write-authority",
@@ -389,6 +393,8 @@ def build_document() -> bytes:
             "repository": HOST_REPOSITORY,
             "builderPath": BUILDER_PATH,
             "builderSha256": sha256(builder_raw),
+            "nativeCasPath": NATIVE_CAS_PATH,
+            "nativeCasSha256": sha256(native_cas_raw),
             **context,
         },
         "sandbox": {

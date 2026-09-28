@@ -81,6 +81,7 @@ class SeedExecutionBindingTests(unittest.TestCase):
             "checkoutHead": self.workflow_sha,
             "builder": {"path": binding.BUILDER_PATH, "sha256": "1" * 64},
             "workflow": {"path": binding.WORKFLOW_PATH, "sha256": "2" * 64},
+            "nativeCas": {"path": binding.NATIVE_CAS_PATH, "sha256": "3" * 64},
         }
 
     def installed(self):
@@ -119,6 +120,9 @@ class SeedExecutionBindingTests(unittest.TestCase):
         self.assertFalse(value["activation"])
         self.assertEqual("bound-no-write-authority", value["status"])
         self.assertEqual(self.workflow_sha, value["source"]["workflowSha"])
+        self.assertEqual(binding.NATIVE_CAS_PATH, value["source"]["nativeCasPath"])
+        self.assertEqual(self.provenance["nativeCas"],
+                         value["source"]["protectedCheckout"]["nativeCas"])
         self.assertEqual(self.candidate_sha, value["source"]["candidateSha"])
         self.assertEqual(binding.PROTECTED_ENVIRONMENT,
                          value["source"]["protectedEnvironment"])
@@ -263,6 +267,14 @@ class SeedExecutionBindingTests(unittest.TestCase):
             with self.assertRaisesRegex(binding.Refused, "protected-workflow-drift"):
                 binding.checked_out_provenance(self.workflow_sha)
 
+        with mock.patch.object(binding, "git_bytes", side_effect=[
+                    self.workflow_sha.encode() + b"\n", current_builder,
+                    current_workflow, b"changed-native-cas"]), \
+                mock.patch.object(binding, "read_regular",
+                                  side_effect=[current_builder, current_workflow, b"native-cas"]):
+            with self.assertRaisesRegex(binding.Refused, "protected-nativeCas-drift"):
+                binding.checked_out_provenance(self.workflow_sha)
+
     def test_duplicate_json_and_noncanonical_binding_refuse(self):
         with self.assertRaisesRegex(binding.Refused, "duplicate-json-member"):
             binding.strict_json(b'{"schema":"x","schema":"y"}')
@@ -275,8 +287,9 @@ class SeedExecutionBindingTests(unittest.TestCase):
 
     def test_cas_profile_ref_and_generation_contract_fail_closed(self):
         profile = binding.cas_profile(self.journal_ref)
-        self.assertEqual("strict-successor", profile["chain"]["journalGeneration"])
-        self.assertEqual("strict-successor", profile["chain"]["stateGeneration"])
+        self.assertEqual("genesis-zero-then-strict-successor", profile["chain"]["journalGeneration"])
+        self.assertEqual("genesis-zero-then-strict-successor", profile["chain"]["stateGeneration"])
+        self.assertEqual("state.json", profile["object"]["path"])
         self.assertEqual("pending-until-exact-readback",
                          profile["nativeReadback"]["lostResponse"])
         for bad in ("refs/heads/main",
