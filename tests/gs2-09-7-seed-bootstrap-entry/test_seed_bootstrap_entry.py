@@ -88,6 +88,26 @@ class EntryTests(unittest.TestCase):
             entry.preflight(self.host, self.candidate, self.env)
         self.assertFalse(self.source_path.exists())
 
+    def test_coordination_bootstrap_runtime_is_an_explicit_uninstalled_port(self):
+        with self.assertRaisesRegex(entry.Refused, "coordination-bootstrap-runtime-uninstalled"):
+            entry.require_bootstrap_runtime()
+        port = SimpleNamespace(describe=lambda: {
+            "schema": "fsgg.gs2-09-7.trusted-bootstrap-runtime/1",
+            "sha256": "a" * 64, "candidateCode": False,
+            "credentialHostOnly": True, "bootstrapVerifier": "VerifyBootstrapExact",
+            "admission": "establishBootstrapAdmission", "nativeTransport": "PushExact",
+            "readback": "writeGenesisAndRead", "privatePrestateEvidence": True},
+            establish_and_write=mock.Mock())
+        with mock.patch.object(entry, "TRUSTED_COORDINATION_BOOTSTRAP_PORT", port), \
+             mock.patch.object(entry, "TRUSTED_COORDINATION_BOOTSTRAP_STATUS",
+                               "installed-protected-verified-runtime"), \
+             mock.patch.object(entry, "PINNED_COORDINATION_BOOTSTRAP_SHA256", "a" * 64):
+            self.assertIs(port, entry.require_bootstrap_runtime())
+            port.describe = lambda: {"candidateCode": True}
+            with self.assertRaisesRegex(entry.Refused, "coordination-bootstrap-runtime-identity"):
+                entry.require_bootstrap_runtime()
+        port.establish_and_write.assert_not_called()
+
     def test_static_source_digest_files_and_admission_refuse(self):
         with mock.patch.object(entry, "INSTALLATION_STATUS", "installed-protected-bootstrap"):
             with self.assertRaisesRegex(entry.Refused, "source-producer-uninstalled"):
@@ -328,10 +348,12 @@ class EntryTests(unittest.TestCase):
         entry.write_private(root / "installation-token.private", b"t" * 30)
         env = {**self.env, "FSGG_SEED_PRIVATE_DIR": str(root), "GH_TOKEN": "g" * 30}
         subject = {"runId": 12345}
+        final_port = SimpleNamespace(read_decision=lambda *_: {"schema": "fixture"})
         bridge = SimpleNamespace(
             GitHubReadPort=lambda _: object(),
             require_protected_main=lambda *_: None,
-            wait_decision=lambda *_args, **_kwargs: object())
+            wait_decision=lambda *_args, **_kwargs: final_port,
+            authorizer=SimpleNamespace(canonical=lambda _: b"{}"))
         execute = mock.Mock()
         with mock.patch.object(entry, "INSTALLATION_STATUS", "installed-protected-bootstrap"), \
              mock.patch.object(entry, "read_request", return_value=subject), \
@@ -404,7 +426,7 @@ class EntryTests(unittest.TestCase):
              mock.patch.object(entry, "load_sibling", side_effect=lambda name, _: modules[name]):
             with self.assertRaisesRegex(RuntimeError, "no authority"):
                 entry.execute_source(self.env, self.candidate, self.runtime, b"mint", "token",
-                                     repository, project, object(), object(),
+                                     repository, project, object(),
                                      dt.datetime.now(dt.timezone.utc))
         native_apply.assert_not_called()
         admission.require_admitted.assert_called_once()

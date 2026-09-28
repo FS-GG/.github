@@ -32,6 +32,9 @@ INSTALLATION_STATUS = "source-only-uninstalled"
 PREPARE_ADMISSION_PORT = None
 FINAL_ADMISSION_PORT = None
 PRESTATE_PRODUCER_PORT = None
+TRUSTED_COORDINATION_BOOTSTRAP_PORT = None
+TRUSTED_COORDINATION_BOOTSTRAP_STATUS = "source-only-uninstalled"
+PINNED_COORDINATION_BOOTSTRAP_SHA256 = ""
 COORDINATION_CLI_PROJECT = "src/FS.GG.Coordination.Cli/FS.GG.Coordination.Cli.fsproj"
 PRESTATE_SCHEMA = "fsgg.gs2-09-7.sandbox-seed-prestate/1"
 
@@ -55,6 +58,28 @@ def require(condition: bool, reason: str) -> None:
 
 def digest(raw: bytes) -> str:
     return hashlib.sha256(raw).hexdigest()
+
+
+def require_bootstrap_runtime():
+    """A reviewed protected runtime must own S1 verification and PushExact."""
+    port = TRUSTED_COORDINATION_BOOTSTRAP_PORT
+    require(TRUSTED_COORDINATION_BOOTSTRAP_STATUS == "installed-protected-verified-runtime"
+            and type(PINNED_COORDINATION_BOOTSTRAP_SHA256) is str
+            and HEX64.fullmatch(PINNED_COORDINATION_BOOTSTRAP_SHA256) is not None
+            and port is not None and callable(getattr(port, "describe", None))
+            and callable(getattr(port, "establish_and_write", None)),
+            "coordination-bootstrap-runtime-uninstalled")
+    require(port.describe() == {
+        "schema": "fsgg.gs2-09-7.trusted-bootstrap-runtime/1",
+        "sha256": PINNED_COORDINATION_BOOTSTRAP_SHA256,
+        "candidateCode": False, "credentialHostOnly": True,
+        "bootstrapVerifier": "VerifyBootstrapExact",
+        "admission": "establishBootstrapAdmission",
+        "nativeTransport": "PushExact",
+        "readback": "writeGenesisAndRead",
+        "privatePrestateEvidence": True,
+    }, "coordination-bootstrap-runtime-identity")
+    return port
 
 
 def strict_json(raw: bytes, limit: int = 1024 * 1024) -> dict:
@@ -277,9 +302,9 @@ def require_postmint_ready(host_checkout: Path, candidate_checkout: Path,
     binding = load_sibling("gs2_seed_execution_binding", "gs2-09-7-seed-execution-binding.py")
     cas = load_sibling("gs2_seed_native_cas", "gs2-09-7-seed-native-cas.py")
     admission = load_sibling("gs2_seed_bootstrap_admission", "gs2-09-7-seed-bootstrap-admission.py")
-    require(binding.INSTALLATION_STATUS == "installed-fixed-main-workflow"
-            and cas.INSTALLATION_STATUS == "installed-protected-host",
+    require(binding.INSTALLATION_STATUS == "installed-fixed-main-workflow",
             "postmint-source-uninstalled")
+    require_bootstrap_runtime()
     try:
         if final_port is None:
             require(all(type(value) is str and value for value in (
@@ -877,9 +902,12 @@ def stage_final_apply(host_checkout: Path, candidate_checkout: Path,
         final_port = bridge.wait_decision(
             read_port, "final", subject, facts["workflowSha"],
             max_seconds=min(13 * 60, deadline_remaining(root, facts)))
+        decision = final_port.read_decision(facts["runId"], facts["runAttempt"])
+        write_private(root / "final-admission.private.json",
+                      bridge.authorizer.canonical(decision))
         deadline_remaining(root, facts)
         bridge.require_protected_main(read_port, facts["workflowSha"])
-        _, cas, _ = require_postmint_ready(
+        require_postmint_ready(
             host_checkout, candidate_checkout, facts["workflowSha"],
             final_port=final_port,
             prestate_port=load_sibling("gs2_seed_prestate", "gs2-09-7-seed-prestate.py"))
@@ -902,11 +930,9 @@ def stage_final_apply(host_checkout: Path, candidate_checkout: Path,
         actual_subject = attach_final_prestate(actual_subject, root, sealed, facts)
         require(actual_subject == subject, "final-request-drift")
         deadline_remaining(root, facts, reserve_seconds=5 * 60)
-        with cas.authenticated_port(token) as git_port:
-            report = execute_source(environment, candidate_checkout, sealed,
-                                    proof, token, repository_raw, project_raw,
-                                    final_port, git_port,
-                                    dt.datetime.now(dt.timezone.utc))
+        report = execute_source(environment, candidate_checkout, sealed,
+                                proof, token, repository_raw, project_raw,
+                                final_port, dt.datetime.now(dt.timezone.utc))
         cas = load_sibling("gs2_seed_native_cas", "gs2-09-7-seed-native-cas.py")
         write_private(root / "cas-readback.private.json", cas.canonical(report))
         write_revocation_pending(root, report, environment)
@@ -997,19 +1023,49 @@ def inspect_source(environment: dict[str, str], candidate_checkout: Path,
 def execute_source(environment: dict[str, str], candidate_checkout: Path,
                    runtime_dir: Path, mint_proof_bytes: bytes, token: str,
                    repository_readback_bytes: bytes, project_readback_bytes: bytes,
-                   admission_port, git_port, now: dt.datetime) -> dict:
+                   admission_port, now: dt.datetime) -> dict:
     proposal, declaration_bytes, seed_plan_bytes, subject = inspect_source(
         environment, candidate_checkout, runtime_dir, mint_proof_bytes, token,
         repository_readback_bytes, project_readback_bytes, now)
-    subject = attach_final_prestate(subject, private_root(environment), runtime_dir,
-                                    context(environment))
+    root = private_root(environment)
+    facts = context(environment)
+    subject = attach_final_prestate(subject, root, runtime_dir, facts)
     admission = load_sibling("gs2_seed_bootstrap_admission", "gs2-09-7-seed-bootstrap-admission.py")
-    cas = load_sibling("gs2_seed_native_cas", "gs2-09-7-seed-native-cas.py")
-    admission.require_admitted(admission_port, subject, now)
-    # The CAS module's separate installation flag must also be armed by the
-    # protected owner. No caller-controlled manifest can switch it on.
-    return cas.apply(proposal, declaration_bytes, seed_plan_bytes, git_port,
-                     protected_grant_verified=True)
+    decision = admission.require_admitted(admission_port, subject, now)
+    decision_bytes = read_private(root / "final-admission.private.json")
+    authorizer = load_sibling("gs2_seed_admission_authorizer",
+                              "gs2-09-7-seed-admission-authorizer.py")
+    require(decision_bytes == authorizer.canonical(decision),
+            "final-admission-private-drift")
+    initial_summary = read_private(root / "prestate.json")
+    initial_evidence = read_private(root / "prestate-evidence.private.json",
+                                    64 * 1024 * 1024)
+    fresh_summary = read_private(root / "final-prestate.private.json")
+    fresh_evidence = read_private(root / "final-prestate-evidence.private.json",
+                                  64 * 1024 * 1024)
+    validate_prestate(fresh_summary, facts)
+    fresh = strict_json(fresh_evidence, 64 * 1024 * 1024)
+    require(fresh.get("runNonce") == facts["runNonce"]
+            and fresh.get("refName") == subject["refName"]
+            and fresh.get("expectedRefAbsent") is True
+            and fresh.get("summarySha256") == digest(fresh_summary)
+            and fresh.get("snapshotSha256") == subject["prestateSnapshotSha256"],
+            "final-prestate-drift")
+    runtime = require_bootstrap_runtime()
+    report = runtime.establish_and_write(
+        proposal=proposal, binding_bytes=declaration_bytes,
+        seed_plan_bytes=seed_plan_bytes, final_admission_bytes=decision_bytes,
+        prestate_bytes=initial_summary, initial_evidence_bytes=initial_evidence,
+        fresh_prestate_bytes=fresh_summary, fresh_evidence_bytes=fresh_evidence,
+        token=token, facts=facts)
+    require(type(report) is dict and report.get("schema") ==
+            "fsgg.gs2-09-7.sandbox-nonce-ref-cas-readback/1"
+            and report.get("repositoryId") == 1353050537
+            and report.get("refName") == subject["refName"]
+            and report.get("runNonce") == facts["runNonce"]
+            and report.get("newOid") == proposal["commitOid"],
+            "trusted-bootstrap-readback")
+    return report
 
 
 def main(arguments: list[str]) -> int:
