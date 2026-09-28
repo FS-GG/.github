@@ -3,8 +3,9 @@
 Backlink: [Unified Development Roadmap section 9.8](../2026-09-07-154210-fs-gg-unified-development-roadmap.md#98-feature-parts-and-subroadmap-index)
 
 Owner: `.github` tool and skill integrator, with selected receiver owners. Stage: independent source and
-receiver track beside V2. Status: .1–.4 source complete; additive .5 discovery published in coherent
-0.92.0; the caller switch, changed Drivers release, wider receiver adoption and .6 retirement remain open.
+receiver track beside V2. Status: .1–.6 complete at the selected public SDD clean and retained
+receiver boundary on 2026-09-28. Other materializers require their own declared adoption; no fleet or
+private telemetry activation is inferred.
 All milestones use the routine route through [work-roadmap](../../.agents/skills/work-roadmap/SKILL.md).
 This plan grants no publication, telemetry activation or production-write authority.
 
@@ -143,8 +144,8 @@ Drivers and Coord.Cli from `eb0f7318` to GitHub Packages and nuget.org; the
 [registry update](https://github.com/FS-GG/.github/pull/3926) records exact public pins. The first
 [SDD receiver update](https://github.com/FS-GG/FS.GG.SDD/pull/1075) uses Coord.Cli 0.92.0 for clean
 scaffolds and preserves byte-level refusal for retained 0.91.5 manifests. Its Kit and Drivers pins remain
-0.91.5, so it does not yet execute replacement skill callers from a changed Drivers package. These are
-the current .5 boundaries, not .5 or .6 closure.
+0.91.5, so it does not yet execute replacement skill callers from a changed Drivers package. These were
+the earlier .5 preparation boundaries, before the caller switch and retirement below.
 
 Use an additive capability release before changing callers that would otherwise run against an old tool.
 Then land the skill/tool caller switch, publish the changed Drivers/coherent set, and qualify installed
@@ -162,6 +163,36 @@ gate over both skill roots and their entries in new staged packages, plus a stal
 manifests and tests. An injected Python skill script or live reference to a removed script must fail;
 historical documentation and fixture labels are not executable callers. Publish changed artifacts and prove
 clean and retained receivers again before claiming absence in the delivered set.
+
+### Selected .5–.6 closure
+
+The F# caller switch and Python retirement source merged in
+[.github #3941](https://github.com/FS-GG/.github/pull/3941) at `f38a0ec1`.
+The coherent [0.94.0 release](https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.94.0)
+published the replacement Coord.Cli, Kit and Drivers; the canonical receiver pin was reconciled by
+[.github #3954](https://github.com/FS-GG/.github/pull/3954).
+
+The selected SDD receiver merged in [SDD #1083](https://github.com/FS-GG/FS.GG.SDD/pull/1083)
+at `0c26ac591e76d2839177da823b3f6ada5c09a698`; immutable `v2.0.3` resolves to that source.
+Retained candidate [36475182052](https://github.com/FS-GG/FS.GG.SDD/actions/runs/36475182052)
+passed. Publication [36475881724](https://github.com/FS-GG/FS.GG.SDD/actions/runs/36475881724)
+pushed the original archives and compared both feeds before its clean install raced public indexing.
+Supported readback-only [recovery 36478312479](https://github.com/FS-GG/FS.GG.SDD/actions/runs/36478312479)
+passed; no repack, retag or repeated package push occurred. Independent archive inspection found equal
+normalized payload bytes and source metadata on both feeds for Artifacts and CLI.
+
+The receiver owner observed a fresh detached-main public-package qualification with no target-command
+override: `SKILL-FS SDD clean + retained receiver qualification (public package): PASS`. Its clean
+path used public SDD 2.0.3, Coord.Cli 0.94.0 and Templates 0.15.0, checked both skill-root mirrors,
+retired-helper absence and replacement invocation. Its retained 2.0.2 path proved guarded retirement,
+interruption/resume, idempotence, user/co-tenant preservation and upgraded body equality. The installed
+0.94.0 adapter also replayed exact Python-created schema-v1 pending state. The local evidence record
+SHA-256 is `5de581260ebf9bda813b6727f29e54573cdd0b2145d5311d90ffc75b9e29aebc`.
+
+This closes .5, .6 and SKILL-FS-01 at the selected SDD receiver boundary. Wider unqualified materializers
+remain separate adoption work. Telemetry discovery returned not-configured; usage, completeness and
+efficiency remain unknown. The [owning receiver plan](https://github.com/FS-GG/FS.GG.SDD/blob/0c26ac591e76d2839177da823b3f6ada5c09a698/docs/roadmaps/skill-fs-receiver-qualification.md)
+retains its native acceptance contract.
 
 ## Generated-workspace impact and observation
 
