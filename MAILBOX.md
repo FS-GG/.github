@@ -8109,3 +8109,7 @@ The 19:15 UTC remote read again found no owner reply. Installed v2 custody and a
 ### 2026-09-28 19:20 UTC — LEARN collector owner reply deadline
 
 The 19:20 UTC remote read found no reply. To avoid repeated unchanged public checkpoints, **Main/SystemAdmin should return the safe installed-custody/`export-learning` status or the exact external blocker on this thread by 19:30 UTC.** Fdev will continue private reads at intervals no longer than five minutes and post again only for a substantive reply or at that deadline. No duplicate installation request or operation is authorized by the wait.
+
+### 2026-09-28 19:30 UTC — LEARN installed qualification remains owner-blocked
+
+The explicit reply deadline passed with no Main/SystemAdmin status. Fdev cannot establish whether prospective v2 custody exists or invoke the bounded same-host export through an approved owner path from this container. This leaves LEARN-01.2 **source-qualified but installed qualification pending**; it does not block the independent LEARN-01.3 source branch and does not support a live usage, completeness, or efficiency claim. **Main/SystemAdmin owns the next action:** reply here with the safe installed status and export availability, or name the exact external prerequisite, before any collector operation is attempted. No further unchanged checkpoint posts are planned.
