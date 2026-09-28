@@ -92,17 +92,53 @@ def required_checks(repository: str, policy: dict) -> list[str]:
     return names
 
 
-def equivalent_tree(repository: str, head: str, source: str) -> str:
-    trees = []
+def equivalent_tree(repository: str, head: str, source: str, base: str) -> str:
+    """Prove that a squash contains exactly the qualified head applied to its parent.
+
+    Another PR may reach main after this PR was qualified. In that case the
+    source tree need not equal the head tree, but it must equal Git's clean
+    three-way merge of the qualified head and the squash commit's sole parent.
+    """
+    commits = []
     for sha in (head, source):
         commit = api(f"repos/{repository}/git/commits/{sha}")
         tree = commit.get("tree", {}).get("sha") if isinstance(commit, dict) else None
         if not isinstance(tree, str) or not QUALIFICATION.SHA.fullmatch(tree):
             raise QUALIFICATION.Refusal("native commit tree is malformed")
-        trees.append(tree)
-    if trees[0] != trees[1]:
-        raise QUALIFICATION.Refusal("merged source tree differs from qualified PR head")
-    return trees[0]
+        commits.append((commit, tree))
+    source_commit, source_tree = commits[1]
+    head_tree = commits[0][1]
+    if source_tree == head_tree:
+        return head_tree
+
+    parents = source_commit.get("parents") if isinstance(source_commit, dict) else None
+    if not isinstance(parents, list) or len(parents) != 1:
+        raise QUALIFICATION.Refusal("merged source has no unique squash parent")
+    parent = parents[0].get("sha") if isinstance(parents[0], dict) else None
+    if (not isinstance(parent, str) or not QUALIFICATION.SHA.fullmatch(parent)
+            or not isinstance(base, str) or not QUALIFICATION.SHA.fullmatch(base)):
+        raise QUALIFICATION.Refusal("merged source parent or qualified base is malformed")
+    comparison = api(f"repos/{repository}/compare/{parent}...{head}")
+    merge_base = comparison.get("merge_base_commit", {}).get("sha") if isinstance(comparison, dict) else None
+    if merge_base != base:
+        raise QUALIFICATION.Refusal("qualified base differs from native merge base")
+    fetched = subprocess.run(
+        ["git", "-c", "credential.helper=", "fetch", "--no-tags", "--depth=1",
+         f"https://github.com/{repository}.git", base, parent, head],
+        check=False, capture_output=True, text=True, timeout=90, cwd=ROOT,
+    )
+    if fetched.returncode:
+        raise QUALIFICATION.Refusal("qualified merge inputs are unavailable")
+    merged = subprocess.run(
+        ["git", "merge-tree", "--write-tree", f"--merge-base={base}", parent, head],
+        check=False, capture_output=True, text=True, timeout=30, cwd=ROOT,
+    )
+    candidate = merged.stdout.strip()
+    if merged.returncode or not QUALIFICATION.SHA.fullmatch(candidate):
+        raise QUALIFICATION.Refusal("qualified source does not merge cleanly")
+    if candidate != source_tree:
+        raise QUALIFICATION.Refusal("merged source tree differs from qualified three-way merge")
+    return head_tree
 
 
 def observe(environ: dict[str, str], rehearsal: bool = False) -> dict:
@@ -159,7 +195,7 @@ def observe(environ: dict[str, str], rehearsal: bool = False) -> dict:
     head = current_pull["head"]["sha"]
     if not QUALIFICATION.SHA.fullmatch(head):
         raise QUALIFICATION.Refusal("invalid associated PR head")
-    tree = equivalent_tree(repository, head, source)
+    tree = equivalent_tree(repository, head, source, current_pull["base"]["sha"])
     required_checks(repository, policy)
 
     checks_response = api(f"repos/{repository}/commits/{head}/check-runs?per_page=100")

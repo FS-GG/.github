@@ -49,6 +49,10 @@ class NativeObservationTests(unittest.TestCase):
             self.native_identity(check)
         self.run_overrides = {}
         self.tree = "c" * 40
+        self.parent = "b" * 40
+        self.merged_tree = "e" * 40
+        self.merge_base = self.pull["base"]["sha"]
+        self.merge_status = 0
         self.current_policy = MODULE.POLICY_PATH.read_bytes()
         self.live_checks = [{"context": name, "app_id": 15368}
                             for name in qualification["requiredGateChecks"]]
@@ -63,6 +67,10 @@ class NativeObservationTests(unittest.TestCase):
         def fake_run(args, **_kwargs):
             if args[:2] == ["git", "rev-parse"]:
                 return subprocess.CompletedProcess(args, 0, SOURCE + "\n", "")
+            if args[:4] == ["git", "-c", "credential.helper=", "fetch"]:
+                return subprocess.CompletedProcess(args, 0, "", "")
+            if args[:2] == ["git", "merge-tree"]:
+                return subprocess.CompletedProcess(args, self.merge_status, self.merged_tree + "\n", "")
             path = args[-1]
             if path.endswith("/pulls?per_page=100"):
                 body = [self.pull]
@@ -78,6 +86,8 @@ class NativeObservationTests(unittest.TestCase):
                 body = {"encoding": "base64", "content": base64.b64encode((ROOT / ".github/workflows/v2-ci-ordinary-settlement.yml").read_bytes()).decode()}
             elif path.endswith("/branches/main"):
                 body = {"protected": True, "protection": {"required_status_checks": {"checks": self.live_checks}}}
+            elif path.endswith(f"/compare/{self.parent}...{HEAD}"):
+                body = {"merge_base_commit": {"sha": self.merge_base}}
             elif match := re.search(r"/actions/runs/(\d+)$", path):
                 check = next(x for x in self.checks["check_runs"] if 1000 + x["id"] == int(match.group(1)))
                 producer = MODULE.QUALIFICATION.read_json(str(MODULE.POLICY_PATH))["qualification"]["checkProducers"][check["name"]]
@@ -94,6 +104,8 @@ class NativeObservationTests(unittest.TestCase):
                         "check_run_url": f"https://api.github.com/repos/FS-GG/.github/check-runs/{check['id']}"}
             elif path.endswith("/git/commits/" + HEAD) or path.endswith("/git/commits/" + SOURCE):
                 body = {"tree": {"sha": self.tree if path.endswith(SOURCE) else getattr(self, "head_tree", self.tree)}}
+                if path.endswith(SOURCE):
+                    body["parents"] = [{"sha": self.parent}]
             else:
                 raise AssertionError(path)
             return subprocess.CompletedProcess(args, 0, json.dumps(body), "")
@@ -176,7 +188,24 @@ class NativeObservationTests(unittest.TestCase):
             self.run_observation()
         self.live_checks.pop()
         self.head_tree = "d" * 40
-        with self.assertRaisesRegex(MODULE.QUALIFICATION.Refusal, "merged source tree differs"):
+        with self.assertRaisesRegex(MODULE.QUALIFICATION.Refusal, "qualified three-way merge"):
+            self.run_observation()
+
+    def test_concurrent_main_change_accepts_only_exact_clean_merge(self):
+        self.head_tree = "d" * 40
+        self.merged_tree = self.tree
+        receipt = self.run_observation()
+        self.assertEqual(self.head_tree, receipt["qualifiedTreeSha"])
+        self.merged_tree = "e" * 40
+        with self.assertRaisesRegex(MODULE.QUALIFICATION.Refusal, "qualified three-way merge"):
+            self.run_observation()
+        self.merged_tree = self.tree
+        self.merge_base = "f" * 40
+        with self.assertRaisesRegex(MODULE.QUALIFICATION.Refusal, "native merge base"):
+            self.run_observation()
+        self.merge_base = self.pull["base"]["sha"]
+        self.merge_status = 1
+        with self.assertRaisesRegex(MODULE.QUALIFICATION.Refusal, "does not merge cleanly"):
             self.run_observation()
 
     def test_current_policy_revocation_refuses_old_run(self):
