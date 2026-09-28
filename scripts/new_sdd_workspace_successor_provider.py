@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import os
 import pathlib
 import subprocess
 import sys
@@ -41,15 +42,23 @@ class WizardProvider(LiveProvider):
     def _public_install(self) -> bool:
         """Read the independent nuget.org consumer route from an empty tool path."""
         with tempfile.TemporaryDirectory(prefix="wizard-public-install-") as temporary:
+            root = pathlib.Path(temporary)
+            config = root / "NuGet.Config"
+            config.write_text("""<?xml version="1.0" encoding="utf-8"?>
+<configuration><packageSources><clear/><add key="nuget.org" value="https://api.nuget.org/v3/index.json"/></packageSources></configuration>
+""")
+            env = {**os.environ, "NUGET_PACKAGES": str(root / "packages"),
+                   "NUGET_HTTP_CACHE_PATH": str(root / "http-cache"),
+                   "DOTNET_CLI_HOME": str(root / "dotnet-home")}
             command = ["dotnet", "tool", "install", PACKAGE, "--version", VERSION,
-                       "--tool-path", temporary, "--source", "https://api.nuget.org/v3/index.json"]
-            installed = subprocess.run(command, capture_output=True, text=True, timeout=180)
+                       "--tool-path", str(root / "tool"), "--configfile", str(config)]
+            installed = subprocess.run(command, capture_output=True, text=True, timeout=180, env=env)
             if installed.returncode != 0:
                 return False
-            tool = pathlib.Path(temporary) / "new-sdd-workspace"
+            tool = root / "tool" / "new-sdd-workspace"
             if not tool.is_file():
                 return False
-            help_result = subprocess.run([str(tool), "--help"], capture_output=True, text=True, timeout=60)
+            help_result = subprocess.run([str(tool), "--help"], capture_output=True, text=True, timeout=60, env=env)
             return help_result.returncode == 0 and "new-sdd-workspace" in (help_result.stdout + help_result.stderr)
 
     def _download_package(self, feed: str, package: str = PACKAGE) -> pathlib.Path | None:

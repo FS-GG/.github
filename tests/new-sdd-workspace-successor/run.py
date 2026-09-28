@@ -187,6 +187,31 @@ class WizardReleaseTests(unittest.TestCase):
                 self.assertEqual(provider.dispatch(self.ordered[-1]).state, "applied")
                 self.assertEqual(len(api.writes), 1)
 
+    def test_public_install_uses_isolated_public_only_nuget_state(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary)
+            path = root / "manifest.json"
+            path.write_text(json.dumps(manifest()))
+            provider = WizardProvider(object(), path, "github-token", "nuget-key")
+            calls = []
+            def run(command, **kwargs):
+                calls.append((command, kwargs))
+                if command[:3] == ["dotnet", "tool", "install"]:
+                    tool = pathlib.Path(command[command.index("--tool-path") + 1]) / "new-sdd-workspace"
+                    tool.parent.mkdir(parents=True)
+                    tool.write_text("fixture")
+                    config = pathlib.Path(command[command.index("--configfile") + 1]).read_text()
+                    self.assertIn("<clear/>", config)
+                    self.assertIn("https://api.nuget.org/v3/index.json", config)
+                return type("Result", (), {"returncode": 0, "stdout": "new-sdd-workspace", "stderr": ""})()
+            with patch("new_sdd_workspace_successor_provider.subprocess.run", side_effect=run):
+                self.assertTrue(provider._public_install())
+            self.assertEqual(len(calls), 2)
+            install, kwargs = calls[0]
+            self.assertEqual(install[:3], ["dotnet", "tool", "install"])
+            for name in ("NUGET_PACKAGES", "NUGET_HTTP_CACHE_PATH", "DOTNET_CLI_HOME"):
+                self.assertTrue(kwargs["env"][name].startswith(install[install.index("--tool-path") + 1].rsplit("/tool", 1)[0]))
+
     def test_live_tag_draft_and_original_asset_readback(self):
         class API:
             tag = None
