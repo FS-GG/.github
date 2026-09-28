@@ -4,6 +4,7 @@ open System
 open System.IO
 open System.Text
 open System.Text.Json
+open System.Text.Json.Nodes
 open SkillTelemetryAdapter
 
 module SkillCommandApplication =
@@ -20,6 +21,12 @@ module SkillCommandApplication =
 
     let private text (value: string) = utf8.GetBytes value
     let private telemetryError message = write 1 [||] (text $"fsgg roadmap telemetry: {message}\n")
+    let private configDiscoveryError () =
+        write 1 [||] (text "fsgg skill telemetry-config: configuration discovery failed\n")
+
+    let private configDiscoverySyntax () =
+        write 2 [||] (text "usage: telemetry-config discover [--config PATH]\ntelemetry-config: error: invalid arguments\n")
+
     let private syntax command message =
         write 2 [||] (text $"usage: {command}\n{command}: error: {message}\n")
 
@@ -168,10 +175,46 @@ module SkillCommandApplication =
         | "graph", _ -> syntax "preflight" "the following arguments are required: path, --requires"
         | _ -> syntax "preflight" $"invalid choice: '{command}'"
 
+    let private configDiscovery args =
+        let explicitConfig =
+            match args with
+            | [] -> Ok None
+            | [ "--config"; path ] when not (path.StartsWith("--", StringComparison.Ordinal)) -> Ok(Some path)
+            | _ -> Error()
+
+        match explicitConfig with
+        | Error _ -> configDiscoverySyntax ()
+        | Ok path ->
+            match SkillTelemetryReaders.Configuration.discover path with
+            | Error _ -> configDiscoveryError ()
+            | Ok None ->
+                write
+                    2
+                    (text "{\"schema\":\"fsgg.telemetry.config-discovery/1\",\"status\":\"not-configured\"}\n")
+                    [||]
+            | Ok(Some config) ->
+                let result = JsonObject()
+                result.Add("schema", "fsgg.telemetry.config-discovery/1")
+                result.Add("status", "configured")
+                result.Add("configPath", config.Path)
+                result.Add("storeRoot", config.StoreRoot)
+                result.Add("engine", config.Engine)
+
+                match config.Repository with
+                | Some repository ->
+                    result.Add("repository", SkillTelemetryReaders.Configuration.repositoryValue repository)
+                | None -> result.Add("repository", null)
+
+                result.Add("workspace", config.Workspace)
+                let output = text (result.ToJsonString(JsonSerializerOptions(WriteIndented = false)) + "\n")
+                if output.Length > 16 * 1024 then configDiscoveryError () else write 0 output [||]
+
     let tryRun argv =
         let args = match argv with "skill" :: rest -> rest | _ -> argv
         match args with
         | "roadmap-telemetry" :: rest -> Some(roadmap rest)
+        | "telemetry-config" :: "discover" :: rest -> Some(configDiscovery rest)
+        | "telemetry-config" :: _ -> Some(configDiscoverySyntax ())
         | "preflight" :: command :: rest -> Some(preflight command rest)
         | [ "preflight" ] -> Some(syntax "preflight" "the following arguments are required: command")
         | _ -> None

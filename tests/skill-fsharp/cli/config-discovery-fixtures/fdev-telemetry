@@ -1,0 +1,4 @@
+#!/bin/sh
+set -eu
+: > "${CONFIG_DISCOVERY_WRAPPER_MARKER:?}"
+exit 91
