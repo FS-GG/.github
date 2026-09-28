@@ -12,7 +12,8 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  probe:
+  gs2-09-7-receiver-observer-probe:
+    name: gs2-09-7-receiver-observer-probe
     if: github.repository == 'FS-GG/.github' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 12
