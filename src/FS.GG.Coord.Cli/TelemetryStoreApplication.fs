@@ -26,6 +26,16 @@ module TelemetryStoreApplication =
             ReceiptKeyComputed: unit -> unit
         }
 
+    type NativeCollectorDispatch =
+        {
+            ItemId: string
+            OriginalItemId: string
+            InvocationId: string
+            RootInvocationId: string
+            RequestedModel: string
+            RequestedEffort: string
+        }
+
     let databaseFileName = "telemetry.sqlite3"
     let private minimumEngine = Version(3, 51, 3)
     let private busyMilliseconds = 750
@@ -3943,6 +3953,78 @@ ON CONFLICT(key) DO UPDATE SET value=excluded.value;"""
 
     let drainReceipts path assessment workspace =
         drainReceiptsWithHook path assessment workspace ignore
+
+    let resolveNativeCollectorDispatch path assessment dispatchId nativeAgentId =
+        if not (TelemetryReceipt.validId dispatchId) || not (TelemetryReceipt.validId nativeAgentId) then
+            Error [ "invalid-request" ]
+        else
+            match validateRoot path assessment with
+            | Error errors -> Error errors
+            | Ok root ->
+                try
+                    match connect root SqliteOpenMode.ReadOnly with
+                    | Error _ -> Error [ "storage-unavailable" ]
+                    | Ok(connection, _) ->
+                        use connection = connection
+
+                        if scalarText connection "PRAGMA user_version;" <> string currentSchemaVersion then
+                            Error [ "unsupported-version" ]
+                        else
+                            use command = connection.CreateCommand()
+                            command.CommandText <-
+                                """
+SELECT d.item_id,l.invocation_id,l.root_invocation_id,a.requested_model,a.requested_effort
+FROM expected_dispatches d
+JOIN invocation_lineage l ON l.item_id=d.item_id AND l.dispatch_id=d.dispatch_id
+JOIN runtime_admissions a ON a.item_id=l.item_id AND a.invocation_id=l.invocation_id
+JOIN runtime_terminals t ON t.item_id=l.item_id AND t.invocation_id=l.invocation_id
+JOIN runtime_starts s ON s.item_id=l.item_id AND s.invocation_id=l.invocation_id AND s.phase='process'
+WHERE d.dispatch_id=$dispatch AND d.relation='child' AND d.runtime='collaboration-spawn-agent'
+  AND l.relation=d.relation AND l.runtime=d.runtime AND a.backend='codex-collaboration'
+  AND s.thread_id=$native;
+"""
+                            parameter command "$dispatch" dispatchId
+                            parameter command "$native" nativeAgentId
+                            use reader = command.ExecuteReader()
+
+                            if not (reader.Read()) then
+                                Error [ "native collector dispatch is unavailable" ]
+                            else
+                                let item = reader.GetString 0
+                                let invocation = reader.GetString 1
+                                let rootInvocation = reader.GetString 2
+                                let model = if reader.IsDBNull 3 then "" else reader.GetString 3
+                                let effort = if reader.IsDBNull 4 then "" else reader.GetString 4
+
+                                if reader.Read() || String.IsNullOrWhiteSpace model || String.IsNullOrWhiteSpace effort then
+                                    Error [ "native collector dispatch is ambiguous" ]
+                                else
+                                    reader.Close()
+                                    use originals = connection.CreateCommand()
+                                    originals.CommandText <-
+                                        "SELECT DISTINCT original_item_id FROM budget_population_facts WHERE item_id=$item;"
+                                    parameter originals "$item" item
+                                    use originalReader = originals.ExecuteReader()
+
+                                    if not (originalReader.Read()) then
+                                        Error [ "native collector original item is unavailable" ]
+                                    else
+                                        let original = originalReader.GetString 0
+
+                                        if originalReader.Read() then
+                                            Error [ "native collector original item is ambiguous" ]
+                                        else
+                                            Ok
+                                                {
+                                                    ItemId = item
+                                                    OriginalItemId = original
+                                                    InvocationId = invocation
+                                                    RootInvocationId = rootInvocation
+                                                    RequestedModel = model
+                                                    RequestedEffort = effort
+                                                }
+                with _ ->
+                    Error [ "storage-unavailable" ]
 
     let private fileDigest path =
         use stream = File.OpenRead path

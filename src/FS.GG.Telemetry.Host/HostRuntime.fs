@@ -60,6 +60,18 @@ type AuthEntry =
         Revoked: bool
     }
 
+type NativeCollectorInstallationConfig =
+    {
+        Schema: string
+        CredentialReference: string
+        ExecutablePath: string
+        CodexHome: string
+        EvidenceRoot: string
+        Provider: string
+        Model: string
+        Effort: string
+    }
+
 module Configuration =
     let private privateRegularFile (path: string) =
         if not (Path.IsPathFullyQualified path) || not (File.Exists path) then
@@ -87,7 +99,7 @@ module Configuration =
                 else
                     Ok()
 
-    let validate config =
+    let validate (config: HostConfig) =
         let errors = ResizeArray<string>()
 
         if config.Schema <> "fsgg.telemetry.host-config/1" && config.Schema <> "fsgg.telemetry.host-config/2" then
@@ -150,6 +162,7 @@ module Configuration =
         let producers = Dictionary<string, string>(StringComparer.Ordinal)
         let references = HashSet<string>(StringComparer.Ordinal)
         let tokens = Dictionary<string, TelemetryReceipt.Principal>(StringComparer.Ordinal)
+        let authorities = Dictionary<TelemetryReceipt.Scope, TelemetryReceipt.Principal>()
 
         for credential in config.Credentials do
             if
@@ -209,6 +222,11 @@ module Configuration =
                       Role = role |> Option.defaultValue TelemetryReceipt.Generic
                       GrantId = if config.Schema = "fsgg.telemetry.host-config/2" then Some credential.GrantId else None
                       GrantGeneration = if config.Schema = "fsgg.telemetry.host-config/2" then Some credential.GrantGeneration else None }
+
+                match authorities.TryGetValue scope with
+                | true, prior when prior <> principal -> errors.Add "credential scope is assigned to incompatible authority"
+                | false, _ -> authorities[scope] <- principal
+                | _ -> ()
 
                 match tokens.TryGetValue token with
                 | true, prior when prior <> principal -> errors.Add "credential secret is assigned to incompatible authority"
@@ -387,7 +405,7 @@ module Configuration =
         with _ ->
             Error [ "invalid host configuration" ]
 
-    let credentials config =
+    let credentials (config: HostConfig) =
         config.Credentials
         |> Array.map (fun c ->
             let token = File.ReadAllText(c.SecretFile).Trim()
@@ -407,7 +425,97 @@ module Configuration =
             })
         |> Map.ofArray
 
-    let browserKeyHashes config =
+    let loadNativeCollectorInstallation (hostConfigPath: string) (hostConfig: HostConfig) =
+        let installationPath = hostConfigPath + ".native-collector.json"
+
+        try
+            match privateRegularFile installationPath with
+            | Error error -> Error [ error ]
+            | Ok() ->
+                let bytes = File.ReadAllBytes installationPath
+
+                if bytes.Length > 16384 then
+                    Error [ "native collector installation is oversized" ]
+                else
+                    use document = JsonDocument.Parse bytes
+                    let root = document.RootElement
+                    let names = root.EnumerateObject() |> Seq.map _.Name |> Seq.toArray
+                    let expected =
+                        set [ "Schema"; "CredentialReference"; "ExecutablePath"; "CodexHome";
+                              "EvidenceRoot"; "Provider"; "Model"; "Effort" ]
+
+                    if root.ValueKind <> JsonValueKind.Object
+                       || names.Length <> expected.Count
+                       || Array.distinct names |> Array.length <> names.Length
+                       || Set.ofArray names <> expected then
+                        Error [ "native collector installation schema is invalid" ]
+                    else
+                        let options =
+                            JsonSerializerOptions(
+                                PropertyNameCaseInsensitive = false,
+                                UnmappedMemberHandling = Serialization.JsonUnmappedMemberHandling.Disallow
+                            )
+
+                        let installation = JsonSerializer.Deserialize<NativeCollectorInstallationConfig>(bytes, options)
+                        let bounded value =
+                            not (String.IsNullOrWhiteSpace value)
+                            && value.Length <= 128
+                            && value |> Seq.forall (fun c -> Char.IsAsciiLetterOrDigit c || ".:_-/@+".Contains c)
+
+                        let executable = FileInfo installation.ExecutablePath
+                        let codexHome = DirectoryInfo installation.CodexHome
+                        let evidenceRoot = DirectoryInfo installation.EvidenceRoot
+                        let credential =
+                            hostConfig.Credentials
+                            |> Array.filter (fun entry ->
+                                entry.Reference = installation.CredentialReference
+                                && entry.Role = "native-collector"
+                                && not entry.Revoked)
+
+                        let privateDirectory (directory: DirectoryInfo) =
+                            directory.Exists
+                            && isNull directory.LinkTarget
+                            && Path.IsPathFullyQualified directory.FullName
+                            && (File.GetUnixFileMode directory.FullName
+                                &&& (UnixFileMode.GroupRead ||| UnixFileMode.GroupWrite ||| UnixFileMode.GroupExecute
+                                     ||| UnixFileMode.OtherRead ||| UnixFileMode.OtherWrite ||| UnixFileMode.OtherExecute)) = enum 0
+
+                        let executableSafe =
+                            executable.Exists
+                            && isNull executable.LinkTarget
+                            && Path.IsPathFullyQualified executable.FullName
+                            && (File.GetUnixFileMode executable.FullName
+                                &&& (UnixFileMode.UserExecute ||| UnixFileMode.GroupExecute ||| UnixFileMode.OtherExecute)) <> enum 0
+                            && (File.GetUnixFileMode executable.FullName
+                                &&& (UnixFileMode.GroupWrite ||| UnixFileMode.OtherWrite)) = enum 0
+
+                        if hostConfig.Schema <> "fsgg.telemetry.host-config/2"
+                           || installation.Schema <> "fsgg.telemetry.native-collector-installation/1"
+                           || not (TelemetryReceipt.validId installation.CredentialReference)
+                           || not executableSafe
+                           || not (privateDirectory codexHome)
+                           || not (privateDirectory evidenceRoot)
+                           || not (bounded installation.Provider)
+                           || not (bounded installation.Model)
+                           || not (bounded installation.Effort)
+                           || credential.Length <> 1 then
+                            Error [ "native collector installation is invalid" ]
+                        else
+                            let entry = credential[0]
+                            let principal: TelemetryReceipt.Principal =
+                                { Scope =
+                                    { Workspace = entry.WorkspaceId
+                                      Producer = entry.ProducerId
+                                      Stream = entry.StreamId }
+                                  Role = TelemetryReceipt.NativeCollector
+                                  GrantId = Some entry.GrantId
+                                  GrantGeneration = Some entry.GrantGeneration }
+
+                            Ok(installation, principal)
+        with _ ->
+            Error [ "native collector installation is invalid" ]
+
+    let browserKeyHashes (config: HostConfig) =
         config.BrowserPrincipals
         |> Array.map (fun principal ->
             use document = JsonDocument.Parse(File.ReadAllBytes principal.KeyHashFile)
@@ -551,10 +659,34 @@ module Runtime =
                                                     )
                                                 with
                                                 | Ok receipt when receipt.Digest = envelope.Digest ->
-                                                    {
-                                                        Status = 200
-                                                        Body = System.Text.Encoding.UTF8.GetBytes json
-                                                    }
+                                                    // A scope-only read proves the receipt identity, but not that the
+                                                    // current credential retains its original role and grant.
+                                                    match
+                                                        TelemetryStoreApplication.submitReceiptPrincipal
+                                                            root
+                                                            (approved root)
+                                                            principal
+                                                            body
+                                                    with
+                                                    | Ok confirmed ->
+                                                        {
+                                                            Status = 200
+                                                            Body = System.Text.Encoding.UTF8.GetBytes confirmed
+                                                        }
+                                                    | Error errors ->
+                                                        let code =
+                                                            errors
+                                                            |> List.tryFind
+                                                                FS.GG.Telemetry.RemoteContract.validErrorCode
+                                                            |> Option.defaultValue "storage-unavailable" in
+
+                                                        error
+                                                            code
+                                                            (if code = "identity-conflict" then 409
+                                                             elif code = "unauthorized-scope" then 403
+                                                             elif code = "invalid-request" then 400
+                                                             elif code = "overload" then 429
+                                                             else 503)
                                                 | Ok _ -> error "identity-conflict" 409
                                                 | Error _ -> error "storage-unavailable" 503
                                             | Error [ "receipt-unavailable" ] ->
@@ -590,6 +722,8 @@ module Runtime =
                                                         error
                                                             code
                                                             (if code = "identity-conflict" then 409
+                                                             elif code = "unauthorized-scope" then 403
+                                                             elif code = "invalid-request" then 400
                                                              elif code = "overload" then 429
                                                              else 503)
                                                 | Ok _ -> error "overload" 429

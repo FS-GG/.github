@@ -43,6 +43,8 @@ DASHBOARD_HEALTH_SCHEMA = "fsgg.telemetry.dashboard-event-health/1"
 ORIGINAL_ASSIGNMENTS = "docs/coordination/telemetry-original-item-assignments.json"
 ORIGINAL_ASSIGNMENTS_SCHEMA = "fsgg.telemetry.original-item-assignments/1"
 ORIGINAL_BINDING_STATE_SCHEMA = "fsgg.telemetry.original-binding-state/1"
+NATIVE_COLLECTOR_CONFIG_ENV = "FSGG_TELEMETRY_NATIVE_COLLECTOR_CONFIG"
+NATIVE_COLLECTOR_RESULT_SCHEMA = "fsgg.telemetry.native-collector-result/1"
 
 
 def now() -> str:
@@ -352,7 +354,11 @@ def refresh_dashboard(config: HostConfig) -> dict[str, object]:
         )
         if completed.returncode != 0 or len(completed.stdout.encode("utf-8")) > 8192:
             return {"status": "advisory-failure", "reason": "publisher-event-subprocess-failed"}
-        value = json.loads(completed.stdout)
+        def closed_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
+            if len(pairs) != len({name for name, _ in pairs}):
+                raise ValueError("duplicate native collector result field")
+            return dict(pairs)
+        value = json.loads(completed.stdout, object_pairs_hook=closed_object)
         fields={"schema","status","reason","observedAt","publicRevision","commit"}
         if not isinstance(value,dict) or set(value)!=fields or value.get("schema")!=DASHBOARD_HEALTH_SCHEMA:
             return {"status": "advisory-failure", "reason": "publisher-event-result-invalid"}
@@ -911,7 +917,7 @@ def _publish_roster_entries(config: HostConfig, state: dict[str, object], native
 
 
 def _publish_turn_roster(config: HostConfig, state: dict[str, object], native: dict[str, object],
-                         eligible_ids: list[str]) -> None:
+                         eligible_ids: list[str], *, publish_authority: bool = True) -> None:
     binding_record = native.get("sourceBinding")
     binding = json.loads(base64.b64decode(binding_record["bytesBase64"], validate=True))
     if (binding.get("rootInvocationId") != state.get("rootInvocationId") or
@@ -952,7 +958,7 @@ def _publish_turn_roster(config: HostConfig, state: dict[str, object], native: d
     if observed_provider is not None or "nativeProvider" not in state:
         state["nativeProvider"] = observed_provider
         state["nativeProviderProvenance"] = observed_provider_provenance
-    fact_ready = (observed_provider is not None and native.get("model") == state.get("model") and
+    fact_ready = (publish_authority and observed_provider is not None and native.get("model") == state.get("model") and
                   native.get("effort") == state.get("effort") and len(native["inventoryPaging"]) == 1)
     inventory_id = digest("native-inventory-", str(state["invocationId"]))
     inventory_fact = event(
@@ -974,8 +980,9 @@ def _publish_turn_roster(config: HostConfig, state: dict[str, object], native: d
         originalItemId=state["originalItemId"], invocationId=state["invocationId"],
         sourceDigest=native["inventorySourceDigest"], sourceBinding=binding_record) if fact_ready else None
     state["nativeInventoryIntegration"] = {
-        "status": "ready" if fact_ready else "incomplete-source-provenance",
-        "reason": (None if fact_ready else
+        "status": ("ready" if fact_ready else
+                   "protected-host-applied" if not publish_authority else "incomplete-source-provenance"),
+        "reason": (None if fact_ready or not publish_authority else
                    "provider/profile provenance or a stable single-page inventory is unavailable"),
         "collectorProducer": native["collectorProducer"],
         "sourceDigest": native["inventorySourceDigest"],
@@ -984,12 +991,45 @@ def _publish_turn_roster(config: HostConfig, state: dict[str, object], native: d
         "sourceFact": source_fact,
     }
     save_state(config, state)
-    if fact_ready:
+    if fact_ready and publish_authority:
         publish(config, state, [inventory_fact, source_fact], operation="native-inventory-authority")
         state["nativeInventoryPublished"] = True
         state["nativeInventoryIntegration"]["status"] = "published"
         save_state(config, state)
     _publish_roster_entries(config, state, native, eligible_ids)
+
+
+def request_protected_native_collection(state: dict[str, object]) -> bool:
+    """Ask an installed v2 Host to collect by durable selectors only."""
+    configured = os.environ.get(NATIVE_COLLECTOR_CONFIG_ENV)
+    if not configured:
+        return False
+    path = pathlib.Path(configured)
+    try:
+        info = path.lstat()
+        if (not path.is_absolute() or path.is_symlink() or not path.is_file() or
+                info.st_size > 65536 or (os.name != "nt" and (info.st_mode & 0o777) != 0o600)):
+            return False
+        command = [
+            "fsgg-telemetry-host", "collect-native", "--config", str(path),
+            "--dispatch", str(state["dispatchId"]),
+            "--parent-thread", str(state["hostParentThreadId"]),
+            "--native-agent", str(state["nativeId"]),
+        ]
+        completed = subprocess.run(command, text=True, capture_output=True, timeout=30, check=False)
+        if completed.returncode != 0 or len(completed.stdout.encode("utf-8")) > 4096:
+            return False
+        value = json.loads(completed.stdout)
+        fields = {"schema", "status", "dispatchId", "invocationId", "sourceVerification",
+                  "snapshotOrigin", "sharedCostCompleteness"}
+        return (isinstance(value, dict) and set(value) == fields and
+                value.get("schema") == NATIVE_COLLECTOR_RESULT_SCHEMA and value.get("status") == "applied" and
+                value.get("dispatchId") == state.get("dispatchId") and
+                value.get("invocationId") == state.get("invocationId") and
+                value.get("sourceVerification") == "unknown" and value.get("snapshotOrigin") == "unknown" and
+                value.get("sharedCostCompleteness") == "unknown")
+    except (OSError, subprocess.SubprocessError, UnicodeError, ValueError, KeyError, TypeError):
+        return False
 
 
 def reconcile_usage(config: HostConfig, state: dict[str, object]) -> str:
@@ -1017,6 +1057,8 @@ def reconcile_usage(config: HostConfig, state: dict[str, object]) -> str:
         ledger[intent["turnId"]] = {"revision": intent["revision"], "hash": intent["hash"]}
         del state["usageIntent"]
         save_state(config, state)
+    protected = state.get("relation") == "child" and request_protected_native_collection(state)
+    state["protectedNativeCollector"] = "applied" if protected else "unavailable"
     try:
         native = native_snapshot(collect_native_usage(
             str(state["hostParentThreadId"]), str(state["nativeId"]),
@@ -1045,7 +1087,7 @@ def reconcile_usage(config: HostConfig, state: dict[str, object]) -> str:
             (state.get("baselineThreadId") and state["baselineThreadId"] != native["threadId"])):
         return "native-collaboration-usage-unknown"
     eligible_ids = list(native["allTurnIds"][len(baseline):])
-    _publish_turn_roster(config, state, native, eligible_ids)
+    _publish_turn_roster(config, state, native, eligible_ids, publish_authority=not protected)
     eligible_set = set(eligible_ids)
     eligible = [turn for turn in native["turns"] if turn["turnId"] in eligible_set]
     for turn in eligible:

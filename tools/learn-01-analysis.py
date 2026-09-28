@@ -830,11 +830,16 @@ def analyze_private_snapshot(contract: dict, envelope: dict) -> dict:
                 raise Refusal(cost + ": allocations disagree with frozen equal allocation rule")
             source_provenance = receipt_provenance[source_event["identity"]]
             authority_provenance = receipt_provenance[authority["identity"]]
+            if (source_provenance is not None and authority_provenance is not None and
+                    source_provenance[2] == "native-collector" and
+                    authority_provenance[2] == "native-collector" and
+                    source_provenance[:5] != authority_provenance[:5]):
+                raise Refusal(cost + ": collector principal or grant mismatch")
             protected_collector = (
                 source_provenance is not None and authority_provenance is not None and
                 source_provenance[2] == "native-collector" and
                 authority_provenance[2] == "native-collector" and
-                source_provenance[3:5] == authority_provenance[3:5]
+                source_provenance[:5] == authority_provenance[:5]
             )
             for original in seen_originals:
                 incomplete[original].add("independent-shared-cost-authority-unavailable")
