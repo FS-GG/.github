@@ -314,9 +314,9 @@ module HistoricalLossRegistry =
         native: NativeApprovalReadbackV2 ->
             Result<BoundLoss, string list>
 
-    /// Binds a v3 present-day retained-subject census to the existing detached v2 approval.
-    /// Search results, inferred absence, historical estimates, incomplete pages, live claims,
-    /// and any attempt to treat the observation horizon as producer history refuse.
+    /// Validates a proposal-only v3 retained-subject census and detached v2 approval.
+    /// Positive binding deterministically refuses with native-census-proof-unavailable until
+    /// a production raw-to-typed collector and exact endpoint/roster proof are integrated.
     val bindV3:
         expectedFamily: string ->
         expectedScope: string ->

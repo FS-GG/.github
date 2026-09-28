@@ -34,8 +34,8 @@ module HistoricalLossApprovalRead =
             SecondPass: RawResponse list
         }
 
-    /// Validates raw/typed equality and terminal page binding for a direct v3 census.
-    /// Search and audit-absence populations always refuse.
+    /// Checks structural raw/typed stability for a direct v3 census, then refuses because
+    /// no production raw-to-typed decoder and exact endpoint/roster proof exists yet.
     val validateV3CensusCapture:
         expectedRepositories: HistoricalLossRegistry.RepositoryIdentityV3 list ->
         capture: V3CensusCapture ->

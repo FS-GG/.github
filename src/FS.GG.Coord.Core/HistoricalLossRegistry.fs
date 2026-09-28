@@ -1626,9 +1626,12 @@ module HistoricalLossRegistry =
         refuse entry.ExclusionAppliesToLiveClaims "historical-loss-live-claim-exclusion"
 
         let sourceRoles = entry.RecoverySources |> List.map _.Role |> Set.ofList
+        let requiredSourceRoles =
+            match entry.Family with
+            | "intake-receipt" -> Set.singleton ProtocolAuthoringSource
+            | _ -> Set.ofList [ RecoveredWriterSource; ProtocolAuthoringSource ]
         refuse
-            (not (Set.contains RecoveredWriterSource sourceRoles)
-             || not (Set.contains ProtocolAuthoringSource sourceRoles))
+            (not (Set.isSubset requiredSourceRoles sourceRoles))
             "historical-loss-recovery-source-role"
 
         refuse
@@ -1662,14 +1665,19 @@ module HistoricalLossRegistry =
             let subjectIds = census.Subjects |> List.map (fun subject -> subject.Repository, subject.NativeId)
             let nativeIds = census.Subjects |> List.map _.NativeId
             let pagesSequential =
-                census.Pages
-                |> List.mapi (fun index page ->
-                    page.Index = index + 1
-                    && page.ItemCount >= 0
-                    && oid 64 page.RawSha256
-                    && Set.contains page.Repository repositorySet
-                    && page.Terminal = (index = census.Pages.Length - 1))
-                |> List.forall id
+                census.SelectedRepositories
+                |> List.forall (fun repository ->
+                    let pages = census.Pages |> List.filter (fun page -> page.Repository = repository)
+                    not pages.IsEmpty
+                    && pages
+                       |> List.mapi (fun index page ->
+                           page.Index = index + 1
+                           && page.ItemCount >= 0
+                           && oid 64 page.RawSha256
+                           && page.Terminal = (index = pages.Length - 1))
+                       |> List.forall id
+                    && (pages |> List.sumBy _.ItemCount)
+                       = (census.Subjects |> List.filter (fun subject -> subject.Repository = repository) |> List.length))
 
             let subjectsValid =
                 census.Subjects
@@ -1689,6 +1697,7 @@ module HistoricalLossRegistry =
             && census.Complete
             && census.DeclaredCount = census.Subjects.Length
             && not census.Pages.IsEmpty
+            && (census.Pages |> List.forall (fun page -> Set.contains page.Repository repositorySet))
             && (census.Pages |> List.sumBy _.ItemCount) = census.Subjects.Length
             && pagesSequential
             && subjectsValid
@@ -1704,10 +1713,14 @@ module HistoricalLossRegistry =
             (not (censusValid entry.CensusFirst) || not (censusValid entry.CensusSecond))
             "historical-loss-retained-census-incomplete"
         refuse (entry.CensusFirst <> entry.CensusSecond) "historical-loss-retained-census-drift"
+        // V3 intentionally remains a proposal-only format until a production collector can
+        // derive every retained subject from fixed native endpoints and carry that proof here.
+        // Typed registry fields plus approval evidence cannot establish native completeness.
+        errors.Add "historical-loss-native-census-proof-unavailable"
 
         let retainedIds = entry.CensusFirst.Subjects |> List.map _.NativeId |> Set.ofList
         refuse
-            (entry.KnownSurvivorIds.IsEmpty
+            ((not entry.CensusFirst.Subjects.IsEmpty && entry.KnownSurvivorIds.IsEmpty)
              || entry.KnownSurvivorIds.Length <> (entry.KnownSurvivorIds |> Set.ofList |> Set.count)
              || entry.KnownSurvivorIds |> List.exists (fun nativeId -> not (Set.contains nativeId retainedIds)))
             "historical-loss-known-survivor-missing"

@@ -779,16 +779,84 @@ module HistoricalLossRegistryTests =
         HistoricalLossRegistry.bindV3 item.Family item.Scope item.ObservationHorizon [ v3Repository ] bytes item native
 
     [<Fact>]
-    let ``v3 binds only the complete retained population and keeps history unknown`` () =
+    let ``v3 positive binding stays unavailable without native census proof`` () =
         let item = v3Entry ()
         let bytes, native = v3Fixture item
         Assert.Equal(Ok({ Schema = HistoricalLossRegistry.SchemaV3; Entries = [ item ] }: HistoricalLossRegistry.RegistryV3), HistoricalLossRegistry.parseV3 (Encoding.UTF8.GetString bytes))
-        match bindV3 item bytes native with
-        | Ok bound ->
-            Assert.Equal(1, bound.RetainedCount)
-            Assert.Equal<HistoricalLossRegistry.RepositoryIdentityV3 list>([ v3Repository ], bound.SelectedRepositories)
-            Assert.Equal(cutoff, bound.ObservationHorizon)
-        | Error errors -> failwithf "valid v3 refused: %A" errors
+        Assert.Contains("historical-loss-native-census-proof-unavailable", bindV3 item bytes native |> expectError)
+
+    [<Fact>]
+    let ``v3 validates pagination independently for each repository before proof refusal`` () =
+        let original = v3Entry ()
+        let repositoryB: HistoricalLossRegistry.RepositoryIdentityV3 =
+            { FullName = "FS-GG/FS.GG.Tools"; DatabaseId = 1353050538L; NodeId = "R_fixture_tools" }
+        let subjectA = original.CensusFirst.Subjects.Head
+        let subjectB = { subjectA with Repository = repositoryB; NativeId = "retained-subject:fixture-2" }
+        let draft =
+            { original.CensusFirst with
+                SelectedRepositories = [ v3Repository; repositoryB ]
+                DeclaredCount = 2
+                Pages =
+                    [
+                        { Repository = v3Repository; Index = 1; ItemCount = 0; RawSha256 = hex '6' 64; Terminal = false }
+                        { Repository = v3Repository; Index = 2; ItemCount = 1; RawSha256 = hex '7' 64; Terminal = true }
+                        { Repository = repositoryB; Index = 1; ItemCount = 0; RawSha256 = hex '8' 64; Terminal = false }
+                        { Repository = repositoryB; Index = 2; ItemCount = 1; RawSha256 = hex '9' 64; Terminal = true }
+                    ]
+                Subjects = [ subjectA; subjectB ]
+                Digest = "" }
+        let census = { draft with Digest = HistoricalLossRegistry.retainedCensusDigestV3 draft }
+        let item =
+            { original with
+                KnownSurvivorIds = [ subjectA.NativeId; subjectB.NativeId ]
+                CensusFirst = census
+                CensusSecond = census }
+        let bytes, native = v3Fixture item
+        let errors =
+            HistoricalLossRegistry.bindV3 item.Family item.Scope item.ObservationHorizon [ v3Repository; repositoryB ] bytes item native
+            |> expectError
+        Assert.Equal<string list>([ "historical-loss-native-census-proof-unavailable" ], errors)
+
+        let missingPageDraft = { census with Pages = census.Pages |> List.removeAt 1; Digest = "" }
+        let missingPage = { missingPageDraft with Digest = HistoricalLossRegistry.retainedCensusDigestV3 missingPageDraft }
+        let missingItem = { item with CensusFirst = missingPage; CensusSecond = missingPage }
+        let missingBytes, missingNative = v3Fixture missingItem
+        let missingErrors =
+            HistoricalLossRegistry.bindV3 missingItem.Family missingItem.Scope missingItem.ObservationHorizon [ v3Repository; repositoryB ] missingBytes missingItem missingNative
+            |> expectError
+        Assert.Contains("historical-loss-retained-census-incomplete", missingErrors)
+
+        let duplicatePageDraft = { census with Pages = census.Pages.Head :: census.Pages; Digest = "" }
+        let duplicatePage = { duplicatePageDraft with Digest = HistoricalLossRegistry.retainedCensusDigestV3 duplicatePageDraft }
+        let duplicateItem = { item with CensusFirst = duplicatePage; CensusSecond = duplicatePage }
+        let duplicateBytes, duplicateNative = v3Fixture duplicateItem
+        let duplicateErrors =
+            HistoricalLossRegistry.bindV3 duplicateItem.Family duplicateItem.Scope duplicateItem.ObservationHorizon [ v3Repository; repositoryB ] duplicateBytes duplicateItem duplicateNative
+            |> expectError
+        Assert.Contains("historical-loss-retained-census-incomplete", duplicateErrors)
+
+    [<Fact>]
+    let ``v3 represents an observed-zero intake census without a fabricated writer or survivor`` () =
+        let original = v3Entry ()
+        let draft =
+            { original.CensusFirst with
+                DeclaredCount = 0
+                Pages = [ { original.CensusFirst.Pages.Head with ItemCount = 0 } ]
+                Subjects = []
+                Digest = "" }
+        let census = { draft with Digest = HistoricalLossRegistry.retainedCensusDigestV3 draft }
+        let item =
+            { original with
+                Family = "intake-receipt"
+                RecoverySources = original.RecoverySources |> List.filter (fun source -> source.Role = HistoricalLossRegistry.ProtocolAuthoringSource)
+                KnownSurvivorIds = []
+                CensusFirst = census
+                CensusSecond = census }
+        let bytes, native = v3Fixture item
+        let errors =
+            HistoricalLossRegistry.bindV3 item.Family item.Scope item.ObservationHorizon [ v3Repository ] bytes item native
+            |> expectError
+        Assert.Equal<string list>([ "historical-loss-native-census-proof-unavailable" ], errors)
 
     [<Fact>]
     let ``v3 refuses search audit absence pagination loss and missing known survivors`` () =
