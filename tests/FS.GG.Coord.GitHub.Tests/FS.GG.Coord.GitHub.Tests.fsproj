@@ -40,6 +40,7 @@
     <Compile Include="DoneTests.fs" />
     <Compile Include="HttpTransportTests.fs" />
     <Compile Include="CiReadsTests.fs" />
+    <Compile Include="HistoricalLossRetainedNativeCensusTests.fs" />
     <Compile Include="HistoricalLossApprovalReadTests.fs" />
     <Compile Include="ScanBoardTests.fs" />
     <Compile Include="BlockerGraphTests.fs" />

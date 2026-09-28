@@ -81,6 +81,8 @@
     <Compile Include="BoardIntake.fs" />
     <Compile Include="CiReads.fsi" />
     <Compile Include="CiReads.fs" />
+    <Compile Include="HistoricalLossRetainedNativeCensus.fsi" />
+    <Compile Include="HistoricalLossRetainedNativeCensus.fs" />
     <Compile Include="HistoricalLossApprovalRead.fsi" />
     <Compile Include="HistoricalLossApprovalRead.fs" />
     <Compile Include="Writes.fsi" />
