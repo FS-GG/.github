@@ -10,7 +10,7 @@ description: "A researched successor plan from the current v2 frontier: process 
 Short name: **Unified Roadmap**. In FS-GG development discussions, **“the roadmap”**, **“current roadmap”**
 and **“compacted roadmap”** refer to this document unless another roadmap is explicitly named.
 
-Authored: **2026-09-07 15:42:10 UTC**. Section 0 evidence reconciliation: **2026-09-27**.
+Authored: **2026-09-07 15:42:10 UTC**. Section 0 source-progress readback: **2026-09-28**; broader evidence reconciliation: **2026-09-27**.
 Status: **active programme; V2 migration implementation and rehearsal remain the critical path**.
 
 **Start from completed development simplification and the existing v2 implementation. Finish and qualify
@@ -125,7 +125,16 @@ is public from exact source `941a82c0e06c9afe9db4c88fc29997d7627a5895`; the [pro
 verified GitHub Packages and nuget.org readback. Publication does not establish a specific receiver's
 installed version. [Cross-repository `verify-paths` #3894](https://github.com/FS-GG/.github/pull/3894)
 merged on protected main at `b583fa65`; [SKILL-FS-01 #3893](https://github.com/FS-GG/.github/pull/3893)
-remains an open source PR. The F# caller switch, Python retirement and updated CLI adoption remain separate work.
+merged at `0cc2082dd3fa6636f232d59fc1e6d849a989051c`, completing the .1–.4 source window.
+The typed readers, telemetry adapter and preflight commands passed their source qualification; the
+[owning plan](roadmaps/skill-python-fsharp-conversion.md) retains .5 publication/caller adoption and .6
+Python retirement as open. Coherent 0.91.5 predates this merge and does not publish the conversion.
+
+[LEARN-01.2 source #3884](https://github.com/FS-GG/.github/pull/3884) merged at
+`02bfd323ba8f272d668e30f77964281b3c8c9184`. Its observation, native-source binding and reproducible
+analysis are source-delivered, but .2 remains open: independent shared-cost authority is missing and
+current v3 analysis explicitly leaves token comparisons unqualified. No measured benefit, publication
+or installed observation is inferred from the source tests.
 
 Prospective telemetry can join native usage only where the configured runtime exposes a verifiable record.
 Missing parent/child population, terminal usage, CI attribution or Host acknowledgment remains an explicit
@@ -1349,7 +1358,7 @@ Entry conditions constrain the dependent execution; earlier read-only planning m
 | Part Astra plans | Stage and bounded outcome | Accountable planning owner and entry | Feature subroadmap |
 |---|---|---|---|
 | **Simplified baseline and v2 policy binding** | V0: bind adopted routine policy, actual enforcement/receiver wiring and R5 population; keep current merge-writer availability explicit | `.github`, Coordination, Governance and receivers; source qualification can proceed while the existing operation owner restores admitted effect readiness | [R0–R5 source plan](2026-09-07-074251-radical-development-bureaucracy-reduction-design-and-roadmap.md), [UTEL correctness](roadmaps/utel-01-telemetry-correctness.md), [local store](roadmaps/utel-local-telemetry-store.md), [operational completeness](roadmaps/utel-operational-completeness.md), [dashboard](roadmaps/utel-telemetry-dashboard.md), [release successor](roadmaps/utel-release-successor.md) and [current audit](reports/2026-09-24-v2-roadmap-code-audit.md). Reuse delivered source; verify the selected published/installed versions and prospective coverage without inferring complete native usage or efficiency |
-| **Skill Python to F# conversion — SKILL-FS-01** | Independent source and receiver track: replace the four current distinct Python implementation files across both tracked skill roots with packaged F# commands; preserve telemetry and preflight refusal behavior, then remove Python skill executables | `.github` tool and skill owner, with selected receivers; can proceed beside V2 source work, while the skill flip and deletion require coherent publication and installed parity | [SKILL-FS-01 subroadmap](roadmaps/skill-python-fsharp-conversion.md). The four legacy helpers in the September telemetry design are already absent; this part covers the different Python code that remains in the current skill trees and does not reopen removed routine obligations |
+| **Skill Python to F# conversion — SKILL-FS-01** | Independent source and receiver track: replace the four current distinct Python implementation files across both tracked skill roots with packaged F# commands; preserve telemetry and preflight refusal behavior, then remove Python skill executables | `.github` tool and skill owner, with selected receivers; can proceed beside V2 source work, while the skill flip and deletion require coherent publication and installed parity | [SKILL-FS-01 subroadmap](roadmaps/skill-python-fsharp-conversion.md). .1–.4 source delivered by [#3893](https://github.com/FS-GG/.github/pull/3893); .5 additive discovery and coherent installed adoption are next, followed by .6 published retirement. The four legacy helpers in the September telemetry design are already absent; this part covers the different Python code that remains in the current skill trees and does not reopen removed routine obligations |
 | **Event and queue qualification** | V1, GS2-07.6–07.7: qualify the queue and measure narrow reconciliation, coalescing and audit repair | Coordination; preserve accepted native units and resume only unfinished scope | [GS2-07.7 event-benefit subroadmap](https://github.com/FS-GG/FS.GG.Coordination/blob/main/docs/roadmaps/gs2-07-7-event-benefit.md), scoped to 07.7; native acceptance is recorded in [PR #329](https://github.com/FS-GG/FS.GG.Coordination/pull/329) |
 | **Runtime operations qualification** | V1 / GS2-07.8: accepted selected no-host operation/audit scope | Coordination; preserve the accepted disposition, qualify only newly included runtime behavior | [GS2-07.8 owning plan](https://github.com/FS-GG/FS.GG.Coordination/blob/e96f4821a40c595ebe960e6cf126ace748852f30/docs/roadmaps/gs2-07-8-runtime-operations.md) and its accepted receipt |
 | **Universal bridge and receiver fencing** | V1, GS2-08: protected epoch ledger, complete current-writer coverage, published bridge, receiver adoption and old-client refusal | `.github` bridge owner, with Coordination and receiver owners; GS2-08.1–08.9 are accepted, active installed bypasses are retired and Q4 remains unclaimed | [GS2-08.8 receiver adoption horizon](roadmaps/gs2-08-universal-v1-bridge.md#gs2-088-receiver-adoption--window-a), [receiver acceptance](https://github.com/FS-GG/FS.GG.Coordination/pull/417) and [residual-writer acceptance](https://github.com/FS-GG/FS.GG.Coordination/pull/419) |
