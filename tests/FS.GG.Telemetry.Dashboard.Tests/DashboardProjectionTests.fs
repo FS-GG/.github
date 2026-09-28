@@ -118,6 +118,32 @@ module DashboardProjectionTests =
         | Ok value -> value
         | Error error -> failwithf "%A" error
 
+    let private scopedEnvelope (workspace: string) value =
+        let root = JsonNode.Parse(envelope value).AsObject()
+        root["workspaceId"] <- JsonValue.Create workspace
+        JsonSerializer.SerializeToUtf8Bytes root
+
+    [<Theory>]
+    [<InlineData(3)>]
+    [<InlineData(4)>]
+    let ``learning snapshot provenance stays private across supported markers`` version =
+        let value = snapshot "item-a"
+        value["workspaceId"] <- "workspace-a"
+        value["learningSnapshotSchema"] <- $"fsgg.telemetry.learn-item-detail/{version}"
+        value["store"]["schemaVersion"] <- 12
+        value["learningObservations"] <-
+            nodes
+                [|
+                    row
+                        """{"kind":"runtime-native-inventory-source/1","receipt_role":"native-collector","receipt_grant_id":"PRIVATE-GRANT","receipt_envelope_digest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}"""
+                |]
+        let bytes = DashboardProjection.project "workspace-a" (scopedEnvelope "workspace-a" value) |> unwrap
+        Assert.DoesNotContain("PRIVATE-GRANT", Encoding.UTF8.GetString bytes)
+
+        value["learningObservations"] <-
+            JsonArray([| for index in 0..10000 -> JsonValue.Create(index) :> JsonNode |])
+        Assert.Equal(Error InvalidSnapshot, DashboardProjection.project "workspace-a" (scopedEnvelope "workspace-a" value))
+
     [<Fact>]
     let ``private item steps expose bounded timing and direct tokens without evidence text`` () =
         let value = snapshot "item-a"

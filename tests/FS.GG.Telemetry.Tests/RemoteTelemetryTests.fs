@@ -287,11 +287,33 @@ module RemoteTelemetryTests =
             database.Close()
             Assert.Equal<Map<string, int64>>(beforeVacuum, orders ())
 
+            // A schema-11 store keeps its durable order, but migration cannot invent receipt provenance.
+            use downgrade11 = new SqliteConnection($"Data Source={databasePath};Pooling=False")
+            downgrade11.Open()
+            use downgrade11Command = downgrade11.CreateCommand()
+            downgrade11Command.CommandText <-
+                "DROP TABLE fact_admissions; DROP TABLE receipt_admissions; ALTER TABLE receipt_producers DROP COLUMN grant_generation; ALTER TABLE receipt_producers DROP COLUMN grant_id; ALTER TABLE receipt_producers DROP COLUMN authority_role; DELETE FROM schema_migrations WHERE version=12; PRAGMA user_version=11;"
+            downgrade11Command.ExecuteNonQuery() |> ignore
+            downgrade11.Close()
+            TelemetryStoreApplication.initialize root TelemetryStore.ApprovedLocalDurable
+            |> Result.defaultWith (String.concat "; " >> failwith) |> ignore
+            Assert.Equal<Map<string, int64>>(beforeVacuum, orders ())
+            let migrated11 =
+                TelemetryStoreApplication.dashboardSnapshot root TelemetryStore.ApprovedLocalDurable None
+                |> Result.defaultWith (String.concat "; " >> failwith)
+            use migrated11Envelope = JsonDocument.Parse migrated11
+            let migrated11Compressed = Convert.FromBase64String(migrated11Envelope.RootElement.GetProperty("canonicalSnapshotGzip").GetString())
+            use migrated11Input = new MemoryStream(migrated11Compressed)
+            use migrated11Gzip = new GZipStream(migrated11Input, CompressionMode.Decompress)
+            use migrated11Canonical = JsonDocument.Parse migrated11Gzip
+            for row in migrated11Canonical.RootElement.GetProperty("learningObservations").EnumerateArray() do
+                Assert.Equal(JsonValueKind.Null, row.GetProperty("receipt_role").ValueKind)
+
             use downgrade = new SqliteConnection($"Data Source={databasePath};Pooling=False")
             downgrade.Open()
             use downgradeCommand = downgrade.CreateCommand()
             downgradeCommand.CommandText <-
-                "DROP TABLE learning_fact_order; DELETE FROM schema_migrations WHERE version=11; PRAGMA user_version=10;"
+                "DROP TABLE fact_admissions; DROP TABLE receipt_admissions; ALTER TABLE receipt_producers DROP COLUMN grant_generation; ALTER TABLE receipt_producers DROP COLUMN grant_id; ALTER TABLE receipt_producers DROP COLUMN authority_role; DELETE FROM schema_migrations WHERE version=12; DROP TABLE learning_fact_order; DELETE FROM schema_migrations WHERE version=11; PRAGMA user_version=10;"
             downgradeCommand.ExecuteNonQuery() |> ignore
             downgrade.Close()
             TelemetryStoreApplication.initialize root TelemetryStore.ApprovedLocalDurable
@@ -416,7 +438,7 @@ module RemoteTelemetryTests =
             use gzip = new GZipStream(input, CompressionMode.Decompress)
             use canonical = JsonDocument.Parse gzip
             Assert.Equal("workspace-private", canonical.RootElement.GetProperty("workspaceId").GetString())
-            Assert.Equal("fsgg.telemetry.learn-item-detail/3", canonical.RootElement.GetProperty("learningSnapshotSchema").GetString())
+            Assert.Equal("fsgg.telemetry.learn-item-detail/4", canonical.RootElement.GetProperty("learningSnapshotSchema").GetString())
             Assert.Equal(3, canonical.RootElement.GetProperty("learningObservations").GetArrayLength())
 
             TelemetryStoreApplication.exportPublic root TelemetryStore.ApprovedLocalDurable None exported
@@ -439,6 +461,7 @@ module RemoteTelemetryTests =
     let ``LEARN private analysis retains chronology but refuses generic producer authority`` () =
         let root = Path.Combine(Path.GetTempPath(), "learn-v3-e2e-" + Guid.NewGuid().ToString("N"))
         let authorityRoot = Path.Combine(Path.GetTempPath(), "learn-v3-authority-" + Guid.NewGuid().ToString("N"))
+        let collectorRoot = Path.Combine(Path.GetTempPath(), "learn-v4-collector-" + Guid.NewGuid().ToString("N"))
         let foreignRoot = Path.Combine(Path.GetTempPath(), "learn-v3-foreign-" + Guid.NewGuid().ToString("N"))
         let futureRoot = Path.Combine(Path.GetTempPath(), "learn-v3-future-" + Guid.NewGuid().ToString("N"))
         let ciRoot = Path.Combine(Path.GetTempPath(), "learn-v3-ci-" + Guid.NewGuid().ToString("N"))
@@ -534,6 +557,49 @@ module RemoteTelemetryTests =
                 |> Seq.map _.GetString()
                 |> Set.ofSeq
             Assert.Contains("independent-shared-cost-authority-unavailable", authorityReasons)
+            Assert.Contains("collector-principal-unavailable", authorityReasons)
+            Assert.Contains("snapshot-origin-unverified", authorityReasons)
+
+            let collectorScope = { privateScope with Producer = "collector-v3"; Stream = "native-inventory" }
+            let collectorPrincipal: TelemetryReceipt.Principal =
+                { Scope = collectorScope; Role = TelemetryReceipt.NativeCollector
+                  GrantId = Some "collector-grant"; GrantGeneration = Some 1L }
+            let collectorCompletion =
+                Encoding.UTF8.GetString(completionEnvelope)
+                    .Replace("\"producerId\":\"producer-v3\"", "\"producerId\":\"collector-v3\"")
+                    .Replace("\"streamId\":\"runtime\"", "\"streamId\":\"native-inventory\"")
+                |> Encoding.UTF8.GetBytes
+            TelemetryStoreApplication.initialize collectorRoot TelemetryStore.ApprovedLocalDurable
+            |> Result.defaultWith (String.concat "; " >> failwith) |> ignore
+            TelemetryStoreApplication.enrollReceiptProducer collectorRoot TelemetryStore.ApprovedLocalDurable privateScope
+            |> Result.defaultWith (String.concat "; " >> failwith) |> ignore
+            TelemetryStoreApplication.enrollReceiptPrincipal collectorRoot TelemetryStore.ApprovedLocalDurable collectorPrincipal
+            |> Result.defaultWith (String.concat "; " >> failwith) |> ignore
+            for envelopeBytes in [ allocationEnvelope; baseEnvelope ] do
+                TelemetryStoreApplication.submitReceipt collectorRoot TelemetryStore.ApprovedLocalDurable privateScope envelopeBytes
+                |> Result.defaultWith (String.concat "; " >> failwith) |> ignore
+                TelemetryStoreApplication.drainReceipts collectorRoot TelemetryStore.ApprovedLocalDurable privateScope.Workspace
+                |> Result.defaultWith (String.concat "; " >> failwith) |> ignore
+            TelemetryStoreApplication.submitReceiptPrincipal collectorRoot TelemetryStore.ApprovedLocalDurable collectorPrincipal collectorCompletion
+            |> Result.defaultWith (String.concat "; " >> failwith) |> ignore
+            TelemetryStoreApplication.drainReceipts collectorRoot TelemetryStore.ApprovedLocalDurable privateScope.Workspace
+            |> Result.defaultWith (String.concat "; " >> failwith) |> ignore
+            TelemetryStoreApplication.scopedDashboardSnapshot collectorRoot TelemetryStore.ApprovedLocalDurable privateScope.Workspace None
+            |> Result.defaultWith (String.concat "; " >> failwith)
+            |> fun value -> File.WriteAllText(snapshotPath, value)
+            use collectorProcess = Process.Start start
+            let collectorOutput = collectorProcess.StandardOutput.ReadToEnd()
+            let collectorErrors = collectorProcess.StandardError.ReadToEnd()
+            collectorProcess.WaitForExit()
+            Assert.True(collectorProcess.ExitCode = 0, collectorErrors)
+            use collectorReport = JsonDocument.Parse collectorOutput
+            let collectorReasons =
+                collectorReport.RootElement.GetProperty("incompleteTokenReasons").GetProperty("I-001").EnumerateArray()
+                |> Seq.map _.GetString() |> Set.ofSeq
+            Assert.False(collectorReport.RootElement.GetProperty("tokenComparisonQualified").GetBoolean())
+            Assert.DoesNotContain("collector-principal-unavailable", collectorReasons)
+            Assert.Contains("native-source-verification-unavailable", collectorReasons)
+            Assert.Contains("snapshot-origin-unverified", collectorReasons)
 
             let foreignTerminal =
                 Encoding.UTF8.GetString(bytes)
@@ -606,6 +672,7 @@ module RemoteTelemetryTests =
         finally
             if Directory.Exists root then Directory.Delete(root, true)
             if Directory.Exists authorityRoot then Directory.Delete(authorityRoot, true)
+            if Directory.Exists collectorRoot then Directory.Delete(collectorRoot, true)
             if Directory.Exists foreignRoot then Directory.Delete(foreignRoot, true)
             if Directory.Exists futureRoot then Directory.Delete(futureRoot, true)
             if Directory.Exists ciRoot then Directory.Delete(ciRoot, true)
@@ -882,12 +949,12 @@ module RemoteTelemetryTests =
 
         let entry =
             {
-                Scope = scope
+                Principal = TelemetryReceipt.genericPrincipal scope
                 TokenHash = hash
                 Revoked = false
             }
 
-        Assert.Equal(Some scope, Runtime.authenticate (Map.ofList [ "old", entry; "new", entry ]) token)
+        Assert.Equal(Some(TelemetryReceipt.genericPrincipal scope), Runtime.authenticate (Map.ofList [ "old", entry; "new", entry ]) token)
         Assert.Equal(None, Runtime.authenticate (Map.ofList [ "revoked", { entry with Revoked = true } ]) token)
 
     [<Fact>]
@@ -988,6 +1055,9 @@ module RemoteTelemetryTests =
                                 WorkspaceId = "workspace-a"
                                 ProducerId = "producer-a"
                                 StreamId = "runtime"
+                                Role = null
+                                GrantId = null
+                                GrantGeneration = 0L
                                 Revoked = false
                             }
                         |]
@@ -1002,6 +1072,58 @@ module RemoteTelemetryTests =
 
             Assert.Contains<string>(errors, fun e -> e.Contains("symbolic link"))
             Assert.Contains<string>(errors, fun e -> e.Contains("permissions"))
+        finally
+            Directory.Delete(root, true)
+
+    [<Fact>]
+    let ``host config v2 binds collector role and grant to the protected credential`` () =
+        let root = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"))
+        Directory.CreateDirectory root |> ignore
+        let privateFile name (content: string) =
+            let path = Path.Combine(root, name)
+            File.WriteAllText(path, content)
+            File.SetUnixFileMode(path, UnixFileMode.UserRead ||| UnixFileMode.UserWrite)
+            path
+        try
+            let secret = privateFile "secret" (String('s', 32))
+            let certificate = privateFile "certificate" "fixture"
+            let password = privateFile "password" "fixture"
+            let credential role grant generation =
+                { Reference = role; SecretFile = secret; WorkspaceId = "workspace-a"; ProducerId = "producer-a"
+                  StreamId = "native-inventory"; Role = role; GrantId = grant
+                  GrantGeneration = generation; Revoked = false }
+            let config credentials =
+                { Schema = "fsgg.telemetry.host-config/2"; ListenUrl = "https://127.0.0.1:1"
+                  CertificatePath = certificate; CertificatePasswordFile = password
+                  ServiceLockPath = Path.Combine(root, "lock")
+                  Stores = [| { WorkspaceId = "workspace-a"; Root = Path.Combine(root, "store") } |]
+                  Credentials = credentials; BrowserPrincipals = [||]; BrowserSession = browserSession }
+
+            let collector = credential "native-collector" "grant-a" 1L
+            let valid = config [| collector |] |> Configuration.validate |> Result.defaultWith (String.concat "; " >> failwith)
+            let configPath = privateFile "host.json" (JsonSerializer.Serialize(config [| collector |]))
+            let loaded = Configuration.load configPath |> Result.defaultWith (String.concat "; " >> failwith)
+            Assert.Equal("fsgg.telemetry.host-config/2", loaded.Schema)
+            Assert.Equal("native-collector", loaded.Credentials[0].Role)
+            let authenticated = Configuration.credentials valid |> fun entries -> Runtime.authenticate entries (String('s', 32))
+            match authenticated with
+            | Some principal ->
+                Assert.Equal(TelemetryReceipt.NativeCollector, principal.Role)
+                Assert.Equal(Some "grant-a", principal.GrantId)
+                Assert.Equal(Some 1L, principal.GrantGeneration)
+            | None -> Assert.Fail "protected collector credential did not authenticate"
+
+            let alias = credential "generic" "grant-b" 2L
+            let errors =
+                match config [| collector; alias |] |> Configuration.validate with
+                | Error values -> values
+                | Ok _ -> failwith "alias accepted"
+            Assert.Contains("credential secret is assigned to incompatible authority", errors)
+            let injected = { collector with Role = "administrator" }
+            Assert.True(config [| injected |] |> Configuration.validate |> Result.isError)
+            let revoked = { collector with Revoked = true }
+            let revokedConfig = config [| revoked |] |> Configuration.validate |> Result.defaultWith (String.concat "; " >> failwith)
+            Assert.True(Configuration.credentials revokedConfig |> fun entries -> Runtime.authenticate entries (String('s', 32)) |> Option.isNone)
         finally
             Directory.Delete(root, true)
 
@@ -1240,7 +1362,7 @@ module RemoteTelemetryTests =
         Assert.False(Capacity.admitsNewIdentity 0L 0L (64L * 1024L * 1024L) 1L)
 
     [<Fact>]
-    let ``Host restores a 0.1.2 schema 9 backup into separate schema 11 state`` () =
+    let ``Host restores a 0.1.2 schema 9 backup into separate schema 12 state`` () =
         let root = Path.Combine(Path.GetTempPath(), "host-schema-restore-" + Guid.NewGuid().ToString("N"))
         Directory.CreateDirectory root |> ignore
 
@@ -1285,7 +1407,7 @@ module RemoteTelemetryTests =
                     (fun _ -> TelemetryStore.ApprovedLocalDurable)
             )
 
-            Assert.Equal(11, version target)
+            Assert.Equal(12, version target)
             Assert.Equal(9, version source)
             Assert.Equal<byte>(sourceDigest, SHA256.HashData(File.ReadAllBytes source))
             let receiptScope: TelemetryReceipt.Scope =

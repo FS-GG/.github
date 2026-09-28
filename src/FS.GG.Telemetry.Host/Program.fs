@@ -13,6 +13,7 @@ open Microsoft.Extensions.Hosting
 open Microsoft.AspNetCore.Hosting
 open Microsoft.Extensions.Configuration
 open Microsoft.Extensions.Logging
+open FS.GG.Coord
 open FS.GG.Coord.Cli
 open FS.GG.Telemetry.Dashboard
 
@@ -101,7 +102,8 @@ module Endpoints =
                 task {
                     match auth context with
                     | None -> do! unauthorized context
-                    | Some scope ->
+                    | Some principal ->
+                        let scope = principal.Scope
                         if not (state.TryAcquireSlot()) then
                             context.Response.StatusCode <- 429
                             do! context.Response.Body.WriteAsync(FS.GG.Telemetry.RemoteContract.writeError "overload")
@@ -153,7 +155,7 @@ module Endpoints =
                                             transferred <- true
 
                                             let! reply =
-                                                Runtime.submitAcquired state scope (stream.ToArray()) deadline.Token
+                                                Runtime.submitPrincipalAcquired state principal (stream.ToArray()) deadline.Token
 
                                             context.Response.StatusCode <- reply.Status
                                             context.Response.ContentType <- "application/json"
@@ -174,13 +176,13 @@ module Endpoints =
                 task {
                     match auth context with
                     | None -> do! unauthorized context
-                    | Some scope ->
+                    | Some principal ->
                         if not (state.TryAcquireSlot()) then
                             context.Response.StatusCode <- 429
                             do! context.Response.Body.WriteAsync(FS.GG.Telemetry.RemoteContract.writeError "overload")
                         else
                             // From this point the actor completion owns the admission slot, even if the client disconnects.
-                            let! reply = Runtime.lookupAcquired state scope batch context.RequestAborted
+                            let! reply = Runtime.lookupAcquired state principal.Scope batch context.RequestAborted
                             context.Response.StatusCode <- reply.Status
                             context.Response.ContentType <- "application/json"
                             do! context.Response.Body.WriteAsync(reply.Body)
@@ -376,7 +378,7 @@ module Operations =
                                 stores = config.Stores.Length
                                 dashboardAuthentication = "ready"
                                 supportedStoreSchemaMin = 10
-                                supportedStoreSchemaMax = 10
+                                supportedStoreSchemaMax = 12
                             |}
                         + "\n"
                     )
@@ -436,7 +438,7 @@ module Operations =
                     recovery = "unknown"
                     dashboardAuthentication = dashboardState
                     supportedStoreSchemaMin = 10
-                    supportedStoreSchemaMax = 10
+                    supportedStoreSchemaMax = 12
                     stores = stores
                 |}
             + "\n"
@@ -494,7 +496,7 @@ module Operations =
                             && entry.Revoked = revoked),
                         storeFor config workspace
                     with
-                    | Some _, Some store ->
+                    | Some entry, Some store ->
                         match
                             TelemetryStoreApplication.provisionReceiptWorkspace
                                 store.Root
@@ -503,14 +505,15 @@ module Operations =
                         with
                         | Error errors -> resultExit "storage-unavailable" (Error errors)
                         | Ok _ ->
-                            TelemetryStoreApplication.enrollReceiptProducer
+                            let principal: TelemetryReceipt.Principal =
+                                { Scope = { Workspace = workspace; Producer = producer; Stream = stream }
+                                  Role = if config.Schema = "fsgg.telemetry.host-config/2" && entry.Role = "native-collector" then TelemetryReceipt.NativeCollector else TelemetryReceipt.Generic
+                                  GrantId = if config.Schema = "fsgg.telemetry.host-config/2" then Some entry.GrantId else None
+                                  GrantGeneration = if config.Schema = "fsgg.telemetry.host-config/2" then Some entry.GrantGeneration else None }
+                            TelemetryStoreApplication.enrollReceiptPrincipal
                                 store.Root
                                 (assessmentFor store.Root)
-                                {
-                                    Workspace = workspace
-                                    Producer = producer
-                                    Stream = stream
-                                }
+                                principal
                             |> resultExit "storage-unavailable"
                     | _ -> resultExit "invalid-configuration" (Error [ "enrollment is not declared by config" ]))
         | [ "preflight"; "--config"; path ] ->
@@ -592,7 +595,7 @@ module Operations =
                                                 schema = "fsgg.telemetry.host-backup-set/1"
                                                 hostVersion = "0.1.7"
                                                 supportedStoreSchemaMin = 10
-                                                supportedStoreSchemaMax = 10
+                                                supportedStoreSchemaMax = 12
                                                 configMetadataSha256 = configMetadataDigest config
                                                 createdAt = DateTimeOffset.UtcNow.ToString("O")
                                                 workspaces = workspaces

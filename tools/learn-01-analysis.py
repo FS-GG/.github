@@ -10,6 +10,7 @@ import io
 import json
 import math
 import pathlib
+import re
 import sys
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta
@@ -265,8 +266,13 @@ def analyze_private_snapshot(contract: dict, envelope: dict) -> dict:
         {"contractId": contract.get("contractId"), "items": roots},
         {"schema": "fsgg.learn.observation-snapshot/v1", "workspaceId": workspace, "events": observation_events},
     )
-    is_v3 = content.get("learningSnapshotSchema") == "fsgg.telemetry.learn-item-detail/3"
+    snapshot_schema = content.get("learningSnapshotSchema")
+    is_v3 = snapshot_schema in {
+        "fsgg.telemetry.learn-item-detail/3", "fsgg.telemetry.learn-item-detail/4"
+    }
+    is_v4 = snapshot_schema == "fsgg.telemetry.learn-item-detail/4"
     ingest_order = {}
+    receipt_provenance = {}
     if is_v3:
         seen_orders = set()
         for row, event in zip(learning_rows, events):
@@ -283,6 +289,29 @@ def analyze_private_snapshot(contract: dict, envelope: dict) -> dict:
                     raise Refusal("v3 learning facts require unique retained ingest order")
                 seen_orders.add(order)
             ingest_order[event["identity"]] = order
+            if is_v4:
+                fields = (
+                    row.get("receipt_producer"), row.get("receipt_stream"), row.get("receipt_role"),
+                    row.get("receipt_grant_id"), row.get("receipt_grant_generation"),
+                    row.get("receipt_key"), row.get("receipt_envelope_digest"),
+                )
+                if all(value is None for value in fields):
+                    receipt_provenance[event["identity"]] = None
+                else:
+                    producer, stream, role, grant, generation, receipt_key, envelope_digest = fields
+                    if (not all(isinstance(value, str) and value for value in
+                                (producer, stream, role, receipt_key, envelope_digest)) or
+                            role not in {"generic", "native-collector"} or
+                            not re.fullmatch(r"[0-9a-f]{64}", receipt_key) or
+                            not re.fullmatch(r"[0-9a-f]{64}", envelope_digest) or
+                            ((grant is None) != (generation is None)) or
+                            (grant is not None and
+                             (not isinstance(grant, str) or not grant or
+                              not isinstance(generation, int) or isinstance(generation, bool) or generation < 1))):
+                        raise Refusal("v4 learning fact receipt provenance is malformed")
+                    receipt_provenance[event["identity"]] = fields
+            else:
+                receipt_provenance[event["identity"]] = None
 
     original_by_item = {item: item for item in assignments}
     for row in content.get("populations", []):
@@ -799,8 +828,21 @@ def analyze_private_snapshot(contract: dict, envelope: dict) -> dict:
             actual_allocations = {row["originalItemId"]: row["tokens"] for row in allocations}
             if actual_allocations != expected_allocations:
                 raise Refusal(cost + ": allocations disagree with frozen equal allocation rule")
+            source_provenance = receipt_provenance[source_event["identity"]]
+            authority_provenance = receipt_provenance[authority["identity"]]
+            protected_collector = (
+                source_provenance is not None and authority_provenance is not None and
+                source_provenance[2] == "native-collector" and
+                authority_provenance[2] == "native-collector" and
+                source_provenance[3:5] == authority_provenance[3:5]
+            )
             for original in seen_originals:
                 incomplete[original].add("independent-shared-cost-authority-unavailable")
+                incomplete[original].add("snapshot-origin-unverified")
+                if protected_collector:
+                    incomplete[original].add("native-source-verification-unavailable")
+                else:
+                    incomplete[original].add("collector-principal-unavailable")
 
         for cost in shared_authority_by_cost.keys() - shared_by_cost.keys():
             raise Refusal("shared cost authority has no matching cost: " + cost)

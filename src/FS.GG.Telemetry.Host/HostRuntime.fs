@@ -23,6 +23,9 @@ type CredentialConfig =
         WorkspaceId: string
         ProducerId: string
         StreamId: string
+        Role: string
+        GrantId: string
+        GrantGeneration: int64
         Revoked: bool
     }
 
@@ -52,7 +55,7 @@ type HostConfig =
 
 type AuthEntry =
     {
-        Scope: TelemetryReceipt.Scope
+        Principal: TelemetryReceipt.Principal
         TokenHash: byte array
         Revoked: bool
     }
@@ -87,7 +90,7 @@ module Configuration =
     let validate config =
         let errors = ResizeArray<string>()
 
-        if config.Schema <> "fsgg.telemetry.host-config/1" then
+        if config.Schema <> "fsgg.telemetry.host-config/1" && config.Schema <> "fsgg.telemetry.host-config/2" then
             errors.Add "host configuration schema is invalid"
 
         if
@@ -146,7 +149,7 @@ module Configuration =
 
         let producers = Dictionary<string, string>(StringComparer.Ordinal)
         let references = HashSet<string>(StringComparer.Ordinal)
-        let tokens = Dictionary<string, TelemetryReceipt.Scope>(StringComparer.Ordinal)
+        let tokens = Dictionary<string, TelemetryReceipt.Principal>(StringComparer.Ordinal)
 
         for credential in config.Credentials do
             if
@@ -157,6 +160,19 @@ module Configuration =
                 )
             then
                 errors.Add "invalid credential scope"
+
+            let role =
+                if config.Schema = "fsgg.telemetry.host-config/1" then
+                    Some TelemetryReceipt.Generic
+                elif credential.Role = "generic" then
+                    Some TelemetryReceipt.Generic
+                elif credential.Role = "native-collector" then
+                    Some TelemetryReceipt.NativeCollector
+                else None
+
+            if config.Schema = "fsgg.telemetry.host-config/2"
+               && (role.IsNone || not (TelemetryReceipt.validId credential.GrantId) || credential.GrantGeneration <= 0L) then
+                errors.Add "invalid credential authority grant"
 
             if
                 String.IsNullOrWhiteSpace credential.Reference
@@ -188,9 +204,15 @@ module Configuration =
                         Stream = credential.StreamId
                     }
 
+                let principal: TelemetryReceipt.Principal =
+                    { Scope = scope
+                      Role = role |> Option.defaultValue TelemetryReceipt.Generic
+                      GrantId = if config.Schema = "fsgg.telemetry.host-config/2" then Some credential.GrantId else None
+                      GrantGeneration = if config.Schema = "fsgg.telemetry.host-config/2" then Some credential.GrantGeneration else None }
+
                 match tokens.TryGetValue token with
-                | true, prior when prior <> scope -> errors.Add "credential secret is assigned to incompatible scopes"
-                | false, _ -> tokens[token] <- scope
+                | true, prior when prior <> principal -> errors.Add "credential secret is assigned to incompatible authority"
+                | false, _ -> tokens[token] <- principal
                 | _ -> ()
 
         if producers.Count > 128 then
@@ -322,12 +344,11 @@ module Configuration =
                                 "Root"]
 
                         let credential =
-                            set["Reference"
-                                "SecretFile"
-                                "WorkspaceId"
-                                "ProducerId"
-                                "StreamId"
-                                "Revoked"]
+                            if document.RootElement.GetProperty("Schema").GetString() = "fsgg.telemetry.host-config/2" then
+                                set["Reference"; "SecretFile"; "WorkspaceId"; "ProducerId"; "StreamId";
+                                    "Role"; "GrantId"; "GrantGeneration"; "Revoked"]
+                            else
+                                set["Reference"; "SecretFile"; "WorkspaceId"; "ProducerId"; "StreamId"; "Revoked"]
 
                         let principal =
                             set["PrincipalId"
@@ -376,12 +397,11 @@ module Configuration =
 
             c.Reference,
             {
-                Scope =
-                    {
-                        Workspace = c.WorkspaceId
-                        Producer = c.ProducerId
-                        Stream = c.StreamId
-                    }
+                Principal =
+                    { Scope = { Workspace = c.WorkspaceId; Producer = c.ProducerId; Stream = c.StreamId }
+                      Role = if c.Role = "native-collector" then TelemetryReceipt.NativeCollector else TelemetryReceipt.Generic
+                      GrantId = if config.Schema = "fsgg.telemetry.host-config/2" then Some c.GrantId else None
+                      GrantGeneration = if config.Schema = "fsgg.telemetry.host-config/2" then Some c.GrantGeneration else None }
                 TokenHash = SHA256.HashData(System.Text.Encoding.UTF8.GetBytes token)
                 Revoked = c.Revoked
             })
@@ -399,7 +419,7 @@ module Configuration =
         |> Map.ofArray
 
 type private Command =
-    | Submit of TelemetryReceipt.Scope * byte array
+    | Submit of TelemetryReceipt.Principal * byte array
     | Lookup of TelemetryReceipt.Scope * string
     | Drain
 
@@ -501,7 +521,8 @@ module Runtime =
                             let! command = mailbox.Receive()
 
                             match command with
-                            | Submit(scope, body) ->
+                            | Submit(principal, body) ->
+                                let scope = principal.Scope
                                 let reply =
                                     match stores.TryFind scope.Workspace, TelemetryReceipt.parse body with
                                     | None, _ -> error "unauthorized-scope" 403
@@ -548,10 +569,10 @@ module Runtime =
                                                         ))
                                                     ->
                                                     match
-                                                        TelemetryStoreApplication.submitReceipt
+                                                        TelemetryStoreApplication.submitReceiptPrincipal
                                                             root
                                                             (approved root)
-                                                            scope
+                                                            principal
                                                             body
                                                     with
                                                     | Ok json ->
@@ -665,7 +686,7 @@ module Runtime =
                     ReadOnlySpan<byte>(candidate)
                 )
             then
-                Some entry.Scope
+                Some entry.Principal
             else
                 None)
 
@@ -713,15 +734,30 @@ module Runtime =
                     }
         }
 
+    let submitPrincipalAcquired state principal bytes ct =
+        askAcquired state (Submit(principal, bytes)) ct
+
     let submitAcquired state scope bytes ct =
-        askAcquired state (Submit(scope, bytes)) ct
+        submitPrincipalAcquired state (TelemetryReceipt.genericPrincipal scope) bytes ct
 
     let lookupAcquired state scope batch ct =
         askAcquired state (Lookup(scope, batch)) ct
 
     let submit (state: HostState) scope bytes ct =
+        let principal = TelemetryReceipt.genericPrincipal scope
         if state.TryAcquireSlot() then
-            submitAcquired state scope bytes ct
+            submitPrincipalAcquired state principal bytes ct
+        else
+            Task.FromResult(
+                {
+                    Status = 429
+                    Body = FS.GG.Telemetry.RemoteContract.writeError "overload"
+                }
+            )
+
+    let submitPrincipal (state: HostState) principal bytes ct =
+        if state.TryAcquireSlot() then
+            submitPrincipalAcquired state principal bytes ct
         else
             Task.FromResult(
                 {

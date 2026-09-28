@@ -23,8 +23,12 @@ versioned prospective contract/window; the current store does not claim correcti
 The facts remain in `ingest_facts`. Schema 11 adds only `learning_fact_order`, whose explicit autoincrement sequence
 proves prospective ordering without depending on mutable SQLite row IDs. Upgrade does not backfill historical facts;
 their ordering remains unknown rather than inferred. The bounded private dashboard read exposes them as
-`learningObservations`. The containing item-detail/2
-envelope carries the negotiated `fsgg.telemetry.learn-item-detail/3` marker inside its hashed private bytes.
+`learningObservations`. Schema 12 adds protected receipt authority and first-fact admission tables. It does not
+backfill authority for existing facts, while schema-11 order survives the upgrade. New admissions retain the
+authenticated producer, stream, role, grant identifier and generation, receiver receipt key, and original envelope
+digest. The containing item-detail/2 envelope carries the negotiated
+`fsgg.telemetry.learn-item-detail/4` marker inside its hashed private bytes. The marker and snapshot hash protect
+reproducibility and integrity; they do not authenticate who acquired the snapshot.
 Public projections remain
 unchanged: learning-only item identities are excluded from public enumeration and learning facts do not
 contribute to the public `factCount`.
@@ -54,13 +58,23 @@ bytes and producer identity. The roadmap native collector now retains a canonica
 binding beside the exact App Server and rollout bytes. Those bound bytes name the producer, root invocation,
 invocation, native parent/thread, ordered turn roster and immutable inventory revision; the roadmap adapter
 recomputes their digest and checks them against durable dispatch state. It publishes the inventory and a distinct
-`runtime-native-inventory-source/1` candidate authority in one applied schema-11 batch. The store validates canonical binding
+`runtime-native-inventory-source/1` candidate authority in one applied batch. The store validates canonical binding
 bytes and digest, keeps the fact immutable, includes it only in the bounded private read, and excludes it from
 public fact counts. Analysis joins it to exact inventory revision/source digest, root lineage, native thread and
 ordered turn suffix after the declared follow-up baseline. Missing authority remains visibly incomplete; mismatch
-or substitution refuses the analysis. The receipt store currently authenticates only a caller-selected enrolled
-producer scope; it does not retain a protected collector role with each fact. The embedded producer label and its
-self-computed hash therefore cannot independently authenticate the collector.
+or substitution refuses the analysis. Embedded producer labels and self-computed hashes still do not authenticate
+the collector.
+
+Host configuration v2 binds each credential to a typed `generic` or `native-collector` role and a versioned grant.
+Version-1 credentials remain generic. The role is loaded only from the protected host configuration: callers cannot
+select it on the HTTP request or enrollment command. A receiver-owned `fsgg.telemetry.receipt-admission/1` artifact
+wraps the original canonical envelope with the authenticated non-secret principal before acknowledgement. Receipt
+index recovery persists that provenance atomically with the transport obligation. First fact admission is then
+persisted in the same transaction as the fact. An exact replay, later credential change, or higher-revision mutable
+fact cannot upgrade that first provenance. A `native-collector` batch is restricted to native inventory/source and
+shared-cost/authority observations; it cannot submit assignments or general telemetry. Revocation and the existing
+scope checks remain at the protected credential boundary. Schema-11 pending artifacts migrate as generic, and
+historical/direct-ingest facts retain unknown provenance.
 
 Shared allocation uses one fixed rule, `equal-largest-remainder-v1`. Its sorted original-item roster, policy,
 window and freeze time are immutable and must agree with every member's prospective accounting inventory and
@@ -77,18 +91,18 @@ invocation's validated `runtime-native-inventory-source/1`, exact source digest,
 It propagates incomplete native evidence to every allocated recipient and proves the proposed allocation would
 consume one native invocation at most once. One native invocation can appear in only one shared-cost candidate.
 Self-consistent caller hashes, an asserted total, a late or foreign roster, a second allocation of the invocation,
-or a binding without independently authenticated producer provenance cannot qualify. Every otherwise complete
-shared-cost candidate therefore remains visibly incomplete as `independent-shared-cost-authority-unavailable`;
-mismatched evidence refuses the analysis. An invocation without a validated source candidate similarly reports
-`independent-inventory-source-unavailable`.
-
-Qualification requires one further prospective authority boundary: a protected enrollment role bound to the
-collector credential, retained with both the native-source and shared-cost-authority facts, and exposed through the
-private snapshot for exact analysis. The current arbitrary producer-name enrollment cannot supply that proof.
+or a binding without independently authenticated producer provenance cannot qualify. Missing or generic provenance
+reports `collector-principal-unavailable`. Matching protected collector grants on the native-source and authority
+facts pass that provenance check, but shared costs remain visibly incomplete as
+`independent-shared-cost-authority-unavailable`, `native-source-verification-unavailable`, and
+`snapshot-origin-unverified`. Those reasons distinguish retained credential provenance from the still-missing
+native collector/custody verification and trusted snapshot acquisition. Mismatched evidence refuses the analysis.
+An invocation without a validated source candidate similarly reports `independent-inventory-source-unavailable`.
 
 The private snapshot counts learning rows before it emits `selection.complete`. More than 10,000 matching rows are
 refused rather than truncated or described as complete.
 
-The synthetic fixture proves source behavior only. Telemetry configuration, publication, installation, live
-collection, and any efficiency conclusion remain pending. Current native usage is `not-configured`, so no live
-token total is claimed.
+The synthetic fixture proves source behavior only. The protected native collector command and custody installation,
+adapter adoption, published version/configuration and credential, and trusted snapshot acquisition remain later
+source or operational gates. Live collection and any efficiency conclusion remain pending. Current native usage is
+`not-configured`, so no live token total is claimed.

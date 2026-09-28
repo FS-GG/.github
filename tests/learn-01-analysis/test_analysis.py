@@ -21,11 +21,16 @@ def private_envelope(content, workspace="workspace-a", version=2):
     body = copy.deepcopy(content)
     body["workspaceId"] = workspace
     body.setdefault("selection", {"mode": "all", "complete": True})
-    if version == 3:
-        body["learningSnapshotSchema"] = "fsgg.telemetry.learn-item-detail/3"
+    if version in {3, 4}:
+        body["learningSnapshotSchema"] = f"fsgg.telemetry.learn-item-detail/{version}"
         for index, row in enumerate(body.get("learningObservations", []), 100):
             row.setdefault("content_digest", hashlib.sha256(row["canonical"].encode()).hexdigest())
             row.setdefault("ingest_order", index)
+            if version == 4:
+                for field in (
+                        "receipt_producer", "receipt_stream", "receipt_role", "receipt_grant_id",
+                        "receipt_grant_generation", "receipt_key", "receipt_envelope_digest"):
+                    row.setdefault(field, None)
     canonical = json.dumps(body, separators=(",", ":"), sort_keys=True).encode()
     return {
         "schema": "fsgg.telemetry.item-detail/2",
@@ -240,10 +245,51 @@ class Learn01ContractTests(unittest.TestCase):
         unqualified = MODULE.analyze_private_snapshot(CONTRACT, private_envelope(content, version=3))
         self.assertFalse(unqualified["tokenComparisonQualified"])
         self.assertEqual(
-            ["independent-shared-cost-authority-unavailable"],
-            unqualified["incompleteTokenReasons"]["I-001"],
+            {"collector-principal-unavailable", "independent-shared-cost-authority-unavailable",
+             "snapshot-origin-unverified"},
+            set(unqualified["incompleteTokenReasons"]["I-001"]),
         )
         self.assertEqual({}, unqualified["providerTotalTokensByOriginalItem"])
+
+        generic = copy.deepcopy(content)
+        for row in generic["learningObservations"]:
+            row.update({
+                "receipt_producer": "producer-v3", "receipt_stream": "runtime",
+                "receipt_role": "generic", "receipt_grant_id": "generic-grant",
+                "receipt_grant_generation": 1, "receipt_key": "c" * 64,
+                "receipt_envelope_digest": "d" * 64,
+            })
+        generic_report = MODULE.analyze_private_snapshot(CONTRACT, private_envelope(generic, version=4))
+        self.assertIn("collector-principal-unavailable", generic_report["incompleteTokenReasons"]["I-001"])
+        self.assertIn("snapshot-origin-unverified", generic_report["incompleteTokenReasons"]["I-001"])
+
+        partial = copy.deepcopy(content)
+        partial["learningObservations"][0]["receipt_role"] = "native-collector"
+        with self.assertRaisesRegex(MODULE.Refusal, "receipt provenance is malformed"):
+            MODULE.analyze_private_snapshot(CONTRACT, private_envelope(partial, version=4))
+
+        protected = copy.deepcopy(generic)
+        for row in protected["learningObservations"]:
+            if json.loads(row["canonical"])["kind"] in {
+                    "runtime-native-inventory-source/1", "learn-shared-cost-authority/1"}:
+                row.update({
+                    "receipt_producer": "collector", "receipt_stream": "native-inventory",
+                    "receipt_role": "native-collector", "receipt_grant_id": "collector-grant",
+                    "receipt_grant_generation": 1,
+                })
+        protected_report = MODULE.analyze_private_snapshot(CONTRACT, private_envelope(protected, version=4))
+        self.assertNotIn("collector-principal-unavailable", protected_report["incompleteTokenReasons"]["I-001"])
+        self.assertIn("native-source-verification-unavailable", protected_report["incompleteTokenReasons"]["I-001"])
+        self.assertIn("snapshot-origin-unverified", protected_report["incompleteTokenReasons"]["I-001"])
+        self.assertFalse(protected_report["tokenComparisonQualified"])
+
+        mismatched_grant = copy.deepcopy(protected)
+        for row in mismatched_grant["learningObservations"]:
+            if json.loads(row["canonical"])["kind"] == "learn-shared-cost-authority/1":
+                row["receipt_grant_generation"] = 2
+        mismatched_report = MODULE.analyze_private_snapshot(
+            CONTRACT, private_envelope(mismatched_grant, version=4))
+        self.assertIn("collector-principal-unavailable", mismatched_report["incompleteTokenReasons"]["I-001"])
 
         for field, changed in (("rootInvocationId", "foreign-root"),
                                ("orderedTurnIds", ["foreign-turn"]),
