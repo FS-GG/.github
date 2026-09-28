@@ -64,7 +64,7 @@ not schedule or gate the current route, and it is not reported as completed.
 | Bridge and cutover ledger | [`.github#2964`](https://github.com/FS-GG/.github/issues/2964) |
 | Fleet cutover and retirement | [`.github#2965`](https://github.com/FS-GG/.github/issues/2965) |
 | Point of no return | Direct `OperatingV1` to fresh shared `OpenV2` generation in the authority repository |
-| Current production authority | Shared generation 2 `OpenV2`; `.github` ordinary V2 settlement active, with other repositories retaining their current behavior until explicit adoption |
+| Current production authority | Shared generation 2 `OpenV2`; `.github` and explicitly selected receivers, including Rendering, run ordinary V2 settlement |
 
 ## Active strategy: start clean and repair forward
 
@@ -101,7 +101,19 @@ capabilities; other existing installations receive repair-forward treatment. Lon
 readings and claims follow separately and cannot delay an observed working repository. Missing
 measurements remain unknown.
 
-Rendering's CLI 0.1.4 remains its own published candidate. The first combined Net/Governance/Game
+Rendering's selected C3 adoption is complete. Its disabled receiver
+[PR #1361](https://github.com/FS-GG/FS.GG.Rendering/pull/1361) merged at `cd8f9472fe44dfa648a1b293be535bfb8b5e68a6`,
+and activation [PR #1362](https://github.com/FS-GG/FS.GG.Rendering/pull/1362) merged at protected main
+`c04e509413bc4362c67b20cf93c85b5cf5929fa6` through native required checks. The
+[published CLI 0.1.4](https://github.com/FS-GG/FS.GG.Coordination/releases/tag/v0.1.4) package is pinned
+to SHA-256 `10a51295db43e454b7692196533cceda48508165a8023dc98e87639be89f5c50`, with dedicated
+three-secret custody and a `main`-only receiver environment. [Run 36432736356](https://github.com/FS-GG/FS.GG.Rendering/actions/runs/36432736356)
+returned `SettlementSucceeded` on attempt 1 and `SettlementAlreadyComplete` on its normal whole-run rerun,
+both binding `d02f30b55baa7a07ae956902e1c9e470d8468272490095553cb98e04661e29ce`.
+Independent [Authority readback](https://github.com/FS-GG/FS.GG.Coordination.Authority/blob/00e1b26c63b150712d8cffbdc266b9711d3c2095/ordinary-v2/7eba1f934e32151d6c17f402afbca7325f4cba65c2836fc38d44f9a1d7b9e699.json)
+found the matching complete operation/7e entry and effect. This is a selected-receiver result, not fleet activation.
+
+The first combined Net/Governance/Game
 [CLI 0.1.5 release](https://github.com/FS-GG/FS.GG.Coordination/releases/tag/v0.1.5) passed anonymous
 installation and dual-feed readback in its [publisher run](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36437778484).
 Net [#107](https://github.com/FS-GG/FS.GG.Net/pull/107), Governance
