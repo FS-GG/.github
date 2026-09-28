@@ -171,7 +171,7 @@ do not require a roadmap edit.
 ## Observe without creating another delivery ceremony
 
 Telemetry is prospectively on by default for repository-owned dispatches. At driver entry, use the installed
-`work-roadmap/scripts/roadmap-telemetry.py begin` adapter (exposed as `tools/roadmap-telemetry.py` in `.github`)
+`fsgg-coord-engine skill roadmap-telemetry begin` command
 with the feature, item, attempt, selected model and effort. Pass a stable `--original-item` for a root member
 when distinct roadmap items belong to one canonical original; otherwise the item is its own original. Bind the
 non-self root mapping through the protected `docs/coordination/telemetry-original-item-assignments.json`

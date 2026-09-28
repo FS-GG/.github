@@ -28,7 +28,7 @@ Cost estimates cannot waive required formal, release, security or authority chec
 ## Bound the investment
 
 Read [economics and ergonomics](references/economics.md) before building a custom check.
-Use `python3 <this-skill>/scripts/preflight.py assess <estimate.json>` when arithmetic helps.
+Use `fsgg-coord-engine skill preflight assess <estimate.json>` when arithmetic helps.
 It is an advisory sensitivity calculator, not approval to run, skip or cancel a gate.
 Missing inputs are unknown, not zero. Separate engineering/agent effort, billed runner minutes,
 critical-path latency and maintenance; convert costs only with explicit rates.
@@ -44,8 +44,8 @@ control, not demonstrated CI savings.
 
 For literal GitHub Actions dependencies, the helper's `graph` command checks the **actual YAML**
 against independently stated ordering requirements. See [examples](references/examples.md).
-It requires PyYAML in the existing environment; never installs dependencies itself. It refuses
-unsupported dependency expressions rather than calling an unexamined graph safe. It checks
+It uses the parser packaged with the installed coordination engine and never installs dependencies.
+It refuses unsupported dependency expressions rather than calling an unexamined graph safe. It checks
 ordering only, not job success, conditions, reusable-workflow internals or GitHub expression semantics.
 
 For Quint, use the available Quint modeling/language guidance and the public

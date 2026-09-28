@@ -20,10 +20,10 @@ Roadmap telemetry uses an explicitly selected or
 discovered private host configuration; without one, it reports
 `not-configured` and exits 2 without creating a store. Preflight reads bounded
 inputs and returns an advisory cost assessment or a literal workflow dependency
-check. These compiled commands are additive source capability. The existing
-Python skill entry points remain in use until a published tool and selected
-receivers are switched under the
-[conversion roadmap](../../docs/roadmaps/skill-python-fsharp-conversion.md).
+check. The repository skill instructions and supported tool callers select these
+compiled commands from the published tool. The frozen Python implementations
+remain only as compatibility and differential-test inputs until their separate
+retirement under the [conversion roadmap](../../docs/roadmaps/skill-python-fsharp-conversion.md).
 
 ## What it is for
 
@@ -153,8 +153,9 @@ prints only a candidate document and never confers acceptance. `verify` addition
 `--source-digest`, and proves that the candidate changed no bytes outside the marked unit block.
 
 Version 0.81.0 established the publish-before-adopt boundary. Current callers and cycle-ledger provider
-validation use these compiled commands directly; the frozen Python differential corpus remains an
-independent test oracle, while no Python compatibility helper is packaged or invoked at runtime.
+validation use these compiled commands directly. The frozen skill-helper Python corpus remains packaged
+for the bounded compatibility release and as an independent test oracle, but supported callers no longer
+invoke it; its package removal is the conversion roadmap's retirement step.
 
 ## License
 

@@ -22,10 +22,6 @@
       "path": "scripts/lib/gate.py"
     },
     {
-      "source": ".claude/skills/work-roadmap/scripts/fsgg_telemetry_defaults.py",
-      "path": "tools/fsgg_telemetry_defaults.py"
-    },
-    {
       "source": "tools/routine-delivery.py",
       "path": "tools/routine-delivery.py"
     }

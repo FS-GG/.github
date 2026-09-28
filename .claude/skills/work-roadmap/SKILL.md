@@ -125,8 +125,8 @@ This native collaboration route applies when the opt-in `codex-exec` route above
 owns expected dispatches for its root and descendants; do not also call this section's `begin`, `started` or
 `finish` commands for those invocations.
 
-At driver entry, start one root observation with this skill's `scripts/roadmap-telemetry.py begin` adapter
-(also exposed as `tools/roadmap-telemetry.py` in `.github`), supplying the roadmap
+At driver entry, start one root observation with the installed
+`fsgg-coord-engine skill roadmap-telemetry begin` command, supplying the roadmap
 feature/item/attempt and selected model/effort. For distinct member items under one canonical original, pass
 the same `--original-item` at each root; child and follow-up observations inherit it. For non-self originals,
 first merge the exact member/original mapping into the protected
@@ -141,7 +141,8 @@ discovers the private host configuration and creates its CI assignment automatic
 Observation is asynchronous and never adds delivery ceremony. Missing configuration, publication, start or
 terminal evidence is reported once as a coverage gap. With a Codex parent thread identity, the adapter joins
 native child thread and turn records to the dispatch and verifies their final usage from private host records.
-After late usage or a follow-up, call `usage-reconcile --token <private-token>` for the affected terminal attempt.
+After late usage or a follow-up, call
+`fsgg-coord-engine skill roadmap-telemetry usage-reconcile --token <private-token>` for the affected terminal attempt.
 Until all turns are verified, report native usage as unknown; hosts without a joinable parent retain
 `native-collaboration-usage-unsupported`. Expected population, lineage, requested model/effort and terminal
 outcome alone do not establish complete usage.
