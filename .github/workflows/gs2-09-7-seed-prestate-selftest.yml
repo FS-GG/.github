@@ -1,0 +1,31 @@
+name: GS2-09.7 seed prestate producer self-test
+
+on:
+  pull_request:
+    paths:
+      - "scripts/gs2-09-7-seed-prestate.py"
+      - "tests/gs2-09-7-seed-prestate/**"
+      - ".github/workflows/gs2-09-7-seed-prestate-selftest.yml"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/gs2-09-7-seed-prestate.py"
+      - "tests/gs2-09-7-seed-prestate/**"
+      - ".github/workflows/gs2-09-7-seed-prestate-selftest.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gs2-09-7-seed-prestate-selftest-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  selftest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Exercise complete, stable native prestate capture and refusals
+        run: python3 tests/gs2-09-7-seed-prestate/test_seed_prestate.py
