@@ -192,6 +192,24 @@ module HistoricalLossRetainedNativeCensusTests =
         | actual -> failwithf "unexpected result %A" actual
 
     [<Fact>]
+    let ``unknown intake marker version refuses in issue body and comment`` () =
+        let badIssue = Fixture(bodyFor = (fun (request, _) body ->
+            if request.Path = "repos/FS-GG/Rendering/issues" then
+                body.Replace("fsgg:intake:v1", "fsgg:intake:v2")
+            else body))
+        match collectTwoPass badIssue api horizon with
+        | Error(MalformedCandidate _) -> ()
+        | actual -> failwithf "unknown intake issue version was accepted: %A" actual
+
+        let badComment = Fixture(bodyFor = (fun (request, _) body ->
+            if request.Path = "repos/FS-GG/Rendering/issues/comments" then
+                body.Replace("fsgg:done-receipt v=1", "fsgg:intake:v2")
+            else body))
+        match collectTwoPass badComment api horizon with
+        | Error(MalformedCandidate _) -> ()
+        | actual -> failwithf "unknown intake comment version was accepted: %A" actual
+
+    [<Fact>]
     let ``duplicate native ids and changed second pass both fail closed`` () =
         let duplicate = Fixture(bodyFor = (fun (request, _) body ->
             if request.Path = "repos/FS-GG/Audio/issues/events" then "[{\"id\":1},{\"id\":1}]" else body))
@@ -322,6 +340,33 @@ module HistoricalLossRetainedNativeCensusTests =
            ExclusionAppliesToLiveClaims = false; Consequence = HistoricalLossRegistry.RequiredConsequence
            Approval = { Subject = approvalSubject; PullRequest = 4001; BaseSha = baseSha; RegistryPath = "policy/historical-loss-registry.json" } }: HistoricalLossRegistry.EntryV3)
 
+    let private providerApproval (approval: HistoricalLossRegistry.NativeApprovalReadbackV2) =
+        let response body =
+            Ok { Status = 200; Body = body; Headers = Map.empty; ETag = None; NextLink = None }
+        let pr = approval.PullRequestFirst.PullRequest
+        let pull =
+            $"{{\"number\":{pr.PullRequest},\"state\":{quote pr.State},\"merged\":true,\"merged_at\":{quote approval.PullRequestFirst.MergedAt},\"merge_commit_sha\":{quote pr.MergeCommitSha},\"head\":{{\"sha\":{quote pr.HeadSha}}},\"base\":{{\"sha\":{quote pr.BaseSha},\"repo\":{{\"full_name\":{quote pr.Repository}}}}}}}"
+        let comment (item: HistoricalLossRegistry.NativeReviewComment) createdAt =
+            $"{{\"id\":{item.DatabaseId},\"node_id\":{quote item.NodeId},\"html_url\":{quote item.Url},\"created_at\":{quote createdAt},\"body\":{quote item.Body}}}"
+        let envelope = approval.ApprovalEnvelopeFirst
+        let envelopeComment: HistoricalLossRegistry.NativeReviewComment =
+            { DatabaseId = envelope.DatabaseId; NodeId = envelope.NodeId; Url = envelope.Url; Body = envelope.Body; BodySha256 = envelope.BodySha256 }
+        let comments =
+            (approval.ReviewCommentsFirst |> List.map (fun item -> comment item "2026-09-27T01:01:00.0000000+00:00"))
+            @ [ comment envelopeComment envelope.CreatedAt ]
+            |> String.concat ","
+            |> fun rows -> "[" + rows + "]"
+        let file = approval.File
+        let contents =
+            $"{{\"type\":\"file\",\"path\":{quote file.Path},\"sha\":{quote file.BlobSha},\"encoding\":\"base64\",\"size\":{file.Bytes.Length},\"content\":{quote (Convert.ToBase64String file.Bytes)}}}"
+        let blob = approval.Blob
+        let blobBody =
+            $"{{\"sha\":{quote blob.BlobSha},\"encoding\":\"base64\",\"size\":{blob.Bytes.Length},\"content\":{quote (Convert.ToBase64String blob.Bytes)}}}"
+        let pass = [ response pull; response comments; response contents; response blobBody ]
+        let queue = Queue<FS.GG.Coord.GitHub.Errors.IoResult<Response>>(pass @ pass)
+        { new ISinglePageGitHubTransport with
+            member _.SendSingle _ = queue.Dequeue() }
+
     [<Fact>]
     let ``verified native multi-repo census and detached approval bind while fabricated empty rows refuse`` () =
         let fixture = Fixture()
@@ -335,6 +380,9 @@ module HistoricalLossRetainedNativeCensusTests =
         match bindV3Captured api capture entry.Family entry.Scope approvedHorizon bytes entry approval with
         | Ok bound -> Assert.Equal(2, bound.RetainedCount)
         | Error errors -> failwithf "valid native proof refused: %A" errors
+        match HistoricalLossApprovalRead.collectAndBindV3 (providerApproval approval) api capture entry.Family entry.Scope approvedHorizon bytes entry with
+        | Ok bound -> Assert.Equal(2, bound.RetainedCount)
+        | Error error -> failwithf "provider-backed v3 approval refused: %A" error
 
         let wrongRevisionDraft = { census with Revision = String.replicate 40 "9"; Digest = "" }
         let wrongRevision = { wrongRevisionDraft with Digest = HistoricalLossRegistry.retainedCensusDigestV3 wrongRevisionDraft }
@@ -416,3 +464,22 @@ module HistoricalLossRetainedNativeCensusTests =
         match collectTwoPass fixture api approvedHorizon with
         | Error(PassDrift _) -> ()
         | actual -> failwithf "marker disappearance was accepted: %A" actual
+
+    [<Fact>]
+    let ``verified zero intake census binds without inventing an intake writer`` () =
+        let fixture = Fixture(bodyFor = (fun (request, _) body ->
+            if request.Path = "repos/FS-GG/Rendering/issues" then
+                body.Replace("fsgg:intake:v1", "plain:intake:v1")
+            else body))
+        let capture = match collectTwoPass fixture api approvedHorizon with Ok value -> value | Error error -> failwithf "%A" error
+        Assert.DoesNotContain(capture.First.Draft.Subjects, fun subject -> subject.Family = IntakeReceipt)
+        let first = censusFromCapture capture.First []
+        let second = censusFromCapture capture.Second []
+        let initial = nativeEntry first
+        let entry =
+            { initial with Family = "intake-receipt"; CensusSecond = second; KnownSurvivorIds = []
+                           RecoverySources = initial.RecoverySources |> List.filter (fun source -> source.Role = HistoricalLossRegistry.ProtocolAuthoringSource) }
+        let bytes, approval = approvedFixture entry
+        match bindV3Captured api capture entry.Family entry.Scope approvedHorizon bytes entry approval with
+        | Ok bound -> Assert.Equal(0, bound.RetainedCount)
+        | Error errors -> failwithf "verified zero intake refused: %A" errors

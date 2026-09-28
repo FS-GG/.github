@@ -171,19 +171,15 @@ module HistoricalLossApprovalRead =
         |> Array.map Uri.EscapeDataString
         |> String.concat "/"
 
-    let collectAndBind
+    let private collectReadback
         (transport: ISinglePageGitHubTransport)
         (apiBase: string)
         (owner: string)
         (repositoryName: string)
-        (expectedFamily: string)
-        (expectedScope: string)
-        (expectedCutoff: string)
-        (registryBytes: byte array)
-        (entry: HistoricalLossRegistry.EntryV2)
+        (approvalBinding: HistoricalLossRegistry.ApprovalBindingV2)
         =
         let repository = $"%s{owner}/%s{repositoryName}"
-        let prNumber = entry.Approval.PullRequest
+        let prNumber = approvalBinding.PullRequest
         let subject = $"%s{repository} historical-loss approval PR #%d{prNumber}"
         let baseUri = Uri(apiBase.TrimEnd('/') + "/")
         let commentsPath = $"repos/%s{owner}/%s{repositoryName}/issues/%d{prNumber}/comments"
@@ -346,7 +342,7 @@ module HistoricalLossApprovalRead =
                     Ok(List.ofSeq comments, envelopes[0], List.ofSeq rawPages))
 
         let readFile (pass: int) (mergeSha: string) =
-            let path = $"repos/%s{owner}/%s{repositoryName}/contents/%s{escapePath entry.Approval.RegistryPath}"
+            let path = $"repos/%s{owner}/%s{repositoryName}/contents/%s{escapePath approvalBinding.RegistryPath}"
             send ($"pass-%d{pass}:contents") path [ "ref", mergeSha ]
             |> Result.bind (fun (_, raw) ->
                 parse subject raw.Body
@@ -355,7 +351,7 @@ module HistoricalLossApprovalRead =
                     let root = document.RootElement
 
                     match text root "type", text root "path", text root "sha", text root "encoding", text root "content", integer64 root "size" with
-                    | Some "file", Some filePath, Some blobSha, Some "base64", Some encoded, Some size when filePath = entry.Approval.RegistryPath ->
+                    | Some "file", Some filePath, Some blobSha, Some "base64", Some encoded, Some size when filePath = approvalBinding.RegistryPath ->
                         decodeBase64 subject encoded
                         |> Result.bind (fun bytes ->
                             if int64 bytes.LongLength <> size then
@@ -439,7 +435,7 @@ module HistoricalLossApprovalRead =
             && first.Blob = second.Blob
             && rawStable
 
-        if owner <> "FS-GG" || repositoryName <> ".github" || prNumber <= 0 || String.IsNullOrWhiteSpace entry.Approval.RegistryPath then
+        if owner <> "FS-GG" || repositoryName <> ".github" || prNumber <= 0 || String.IsNullOrWhiteSpace approvalBinding.RegistryPath then
             Error(Malformed(subject, "v2 approval collector is bound to one valid FS-GG/.github approval"))
         else
             readPass 1
@@ -463,19 +459,29 @@ module HistoricalLossApprovalRead =
                                 Blob = first.Blob
                             }
 
-                        HistoricalLossRegistry.bindV2 expectedFamily expectedScope expectedCutoff registryBytes entry readback
-                        |> Result.mapError (fun reasons -> Malformed(subject, String.concat "; " reasons))
-                        |> Result.map (fun bound ->
-                            let fingerprintMaterial =
-                                first.Raw
-                                |> List.collect (fun raw ->
-                                    [ raw.Resource; raw.Path; sprintf "%A" raw.Query; raw.BodySha256; defaultArg raw.NextLink "terminal" ])
-                                |> String.concat "\n"
+                        Ok(readback, first.Raw, second.Raw)))
 
-                            {
-                                BoundLoss = bound
-                                Readback = readback
-                                FirstPass = first.Raw
-                                SecondPass = second.Raw
-                                Fingerprint = shaText (repository + "\n" + fingerprintMaterial)
-                            })))
+    let collectAndBind transport apiBase owner repositoryName expectedFamily expectedScope expectedCutoff registryBytes (entry: HistoricalLossRegistry.EntryV2) =
+        collectReadback transport apiBase owner repositoryName entry.Approval
+        |> Result.bind (fun (readback, firstRaw, secondRaw) ->
+            HistoricalLossRegistry.bindV2 expectedFamily expectedScope expectedCutoff registryBytes entry readback
+            |> Result.mapError (fun reasons -> Malformed("historical-loss v2 approval", String.concat "; " reasons))
+            |> Result.map (fun bound ->
+                let fingerprintMaterial =
+                    firstRaw
+                    |> List.collect (fun raw ->
+                        [ raw.Resource; raw.Path; sprintf "%A" raw.Query; raw.BodySha256; defaultArg raw.NextLink "terminal" ])
+                    |> String.concat "\n"
+                { BoundLoss = bound
+                  Readback = readback
+                  FirstPass = firstRaw
+                  SecondPass = secondRaw
+                  Fingerprint = shaText ($"%s{owner}/%s{repositoryName}\n" + fingerprintMaterial) }))
+
+    let collectAndBindV3 transport apiBase (retained: HistoricalLossRetainedNativeCensus.Capture)
+        expectedFamily expectedScope expectedObservationHorizon registryBytes (entry: HistoricalLossRegistry.EntryV3) =
+        collectReadback transport apiBase "FS-GG" ".github" entry.Approval
+        |> Result.bind (fun (approval, _, _) ->
+            HistoricalLossRetainedNativeCensus.bindV3Captured
+                apiBase retained expectedFamily expectedScope expectedObservationHorizon registryBytes entry approval
+            |> Result.mapError (fun reasons -> Malformed("historical-loss v3 native approval", String.concat "; " reasons)))

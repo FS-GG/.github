@@ -485,7 +485,7 @@ module HistoricalLossRetainedNativeCensus =
             if created > horizon then Ok None
             else
                 let line = leadingLine subject.Body
-                if line.StartsWith("<!-- fsgg:intake:v1", StringComparison.Ordinal) then
+                if line.StartsWith("<!-- fsgg:intake", StringComparison.Ordinal) then
                     let matched = intake.Match subject.Body
                     if not matched.Success || subject.IsPullRequest then
                         Error(MalformedCandidate($"%s{repository.FullName}#%d{subject.Number}", "intake receipt is malformed or bound to a pull request"))
@@ -533,7 +533,7 @@ module HistoricalLossRetainedNativeCensus =
                                   NativeId = comment.NodeId; Family = LegacyDoneReceipt; Origin = IssueComment
                                   CreatedAt = created.ToString("O", CultureInfo.InvariantCulture); PayloadSha256 = sha256 comment.Body; PayloadBlobSha = blobSha comment.Body
                                   SessionOperationId = None })
-                    elif line.StartsWith("<!-- fsgg:intake:v1", StringComparison.Ordinal) then
+                    elif line.StartsWith("<!-- fsgg:intake", StringComparison.Ordinal) then
                         Error(MalformedCandidate(label, "intake receipt is bound to the wrong native origin"))
                     elif comment.Body.StartsWith("<!-- fsgg:done-receipt", StringComparison.Ordinal) then
                         Error(MalformedCandidate(label, "legacy done receipt marker is malformed"))

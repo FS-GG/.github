@@ -55,3 +55,16 @@ module HistoricalLossApprovalRead =
         registryBytes: byte array ->
         entry: HistoricalLossRegistry.EntryV2 ->
             Errors.IoResult<Capture>
+
+    /// Replays a retained v3 native census and independently reads the complete v2 approval
+    /// evidence from the provider before binding. The result is limited to the capture horizon.
+    val collectAndBindV3:
+        transport: Transport.ISinglePageGitHubTransport ->
+        apiBase: string ->
+        retained: HistoricalLossRetainedNativeCensus.Capture ->
+        expectedFamily: string ->
+        expectedScope: string ->
+        expectedObservationHorizon: string ->
+        registryBytes: byte array ->
+        entry: HistoricalLossRegistry.EntryV3 ->
+            Errors.IoResult<HistoricalLossRegistry.BoundLossV3>
