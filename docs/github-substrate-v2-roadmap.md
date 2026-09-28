@@ -113,9 +113,9 @@ Authority readback and a normal unchanged `SettlementAlreadyComplete` rerun
 [Game](https://github.com/FS-GG/FS.GG.Game/actions/runs/36444699657)). Their clean-path adoption is
 complete; efficiency measurements and historical-upgrade claims remain separate.
 
-The next shared release selects SDD and Templates. Their disabled receivers merged at
+The next shared release selected SDD and Templates. Their disabled receivers merged at
 [SDD #1080](https://github.com/FS-GG/FS.GG.SDD/pull/1080) and
-[Templates #638](https://github.com/FS-GG/FS.GG.Templates/pull/638); neither has a package pin or
+[Templates #638](https://github.com/FS-GG/FS.GG.Templates/pull/638); at that stage neither had a package pin or
 active settlement. [Coordination #877](https://github.com/FS-GG/FS.GG.Coordination/pull/877) merged both
 profiles at protected source `275cccb30a5c9ade4b3bba344ede13d7df446d13`. Its exact-source
 [CLI 0.1.6 preparation](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36450952246)
@@ -125,8 +125,14 @@ read back its three dedicated secret names. [SDD #1081](https://github.com/FS-GG
 protected `1a081fdef954f08f8cacf44b26c80fac784e0c28`. Its [ordinary run](https://github.com/FS-GG/FS.GG.SDD/actions/runs/36460253176)
 settled once and the normal rerun returned `SettlementAlreadyComplete`; independent Authority readback
 showed one completed effect and an unchanged journal head. SDD is adopted at this clean-path boundary.
-[Templates #643](https://github.com/FS-GG/FS.GG.Templates/pull/643) remains separately pending its
-native checks, protected merge, settlement and readback within the bounded wave.
+[Templates #643](https://github.com/FS-GG/FS.GG.Templates/pull/643) then merged at protected
+`938f9b11ee1f148ff495774d346b011c9f23d394` after native checks passed. Its
+[ordinary run](https://github.com/FS-GG/FS.GG.Templates/actions/runs/36463172201) settled once;
+the normal whole-workflow rerun returned `SettlementAlreadyComplete` with identical receipt
+`95e74b3d8652c83c1b856e3b1e58474c2688761e2aed6acb3d68a9457386a506`. Independent
+Authority shard `b6` readback found the same journal head
+`71bf408a68ca0758746fc08f716a1caacc6b0d5f` and one completed effect. Templates is adopted
+at this clean-path boundary.
 
 Coordination self-adoption is a later receiver. Its current main protection is supplied by applicable
 rulesets rather than the classic branch-protection check list, and its Bootstrap qualification can
