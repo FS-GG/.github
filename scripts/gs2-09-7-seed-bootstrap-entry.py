@@ -457,7 +457,7 @@ def attach_final_prestate(subject: dict, root: Path, sealed: Path,
             "expectedRefAbsent": True}
 
 
-def mint_private(mint_module, environment: dict[str, str]) -> tuple[str, bytes]:
+def mint_private(mint_module, environment: dict[str, str]) -> tuple[str, bytes, bytes, bytes]:
     """Keep provider raw responses and the token in this protected process."""
     app_id = int(environment["FSGG_DISPATCH_APP_ID"])
     private_key = environment["FSGG_DISPATCH_APP_PRIVATE_KEY"]
@@ -495,7 +495,8 @@ def mint_private(mint_module, environment: dict[str, str]) -> tuple[str, bytes]:
             "mintResponseSha256": digest(mint_raw),
             "viewerResponseSha256": digest(viewer_raw),
         })
-        return token, (json.dumps(proof, sort_keys=True, separators=(",", ":")) + "\n").encode()
+        return (token, (json.dumps(proof, sort_keys=True, separators=(",", ":")) + "\n").encode(),
+                mint_raw, viewer_raw)
     except BaseException:
         mint_module.revoke_token(token)
         raise
@@ -540,6 +541,33 @@ def native_host_start(port, facts: dict) -> tuple[int, dt.datetime]:
     require(now >= started and now - started < dt.timedelta(minutes=35),
             "host-job-start-expired")
     return job["id"], started
+
+
+def retain_protected_runtime_evidence(root: Path, host_checkout: Path,
+                                      actions_read, binding, facts: dict) -> None:
+    """Keep exact provider and protected source bytes for the later trusted CLI."""
+    bridge = bridge_module()
+    raw = actions_read.get(
+        f'{bridge.REPO}/actions/runs/{facts["runId"]}/attempts/{facts["runAttempt"]}')
+    run = strict_json(raw)
+    require(run.get("id") == facts["runId"]
+            and run.get("run_attempt") == facts["runAttempt"]
+            and run.get("head_sha") == facts["workflowSha"]
+            and run.get("head_branch") == "main"
+            and run.get("event") == "workflow_dispatch"
+            and type(run.get("repository")) is dict
+            and run["repository"].get("id") == bridge.authorizer.REPOSITORY_ID,
+            "protected-run-response")
+    write_private(root / "run-response.private.json", raw)
+    for name, relative in (("workflow-blob.private", binding.WORKFLOW_PATH),
+                           ("binding-builder-blob.private", binding.BUILDER_PATH)):
+        current = binding.read_regular(regular_inside(host_checkout, relative),
+                                       1024 * 1024)
+        committed = binding.git_bytes(host_checkout,
+                                      ["show", f'{facts["workflowSha"]}:{relative}'],
+                                      1024 * 1024)
+        require(current == committed, "protected-runtime-blob-drift")
+        write_private(root / name, current)
 
 
 def deadline_remaining(root: Path, facts: dict, *, reserve_seconds: int = 0,
@@ -702,14 +730,17 @@ def stage_seal_input(host_checkout: Path, candidate_checkout: Path,
     deadline_remaining(root, facts)
     bridge.require_protected_main(actions_read, facts["workflowSha"])
     preflight(host_checkout, candidate_checkout, environment, port)
+    retain_protected_runtime_evidence(root, host_checkout, actions_read, binding, facts)
     mint_module = load_sibling("gs2_seed_mint", "gs2-09-7-mint-sandbox-token.py")
     token = None
     token_path = root / "installation-token.private"
     try:
-        token, proof = mint_private(mint_module, environment)
+        token, proof, mint_raw, viewer_raw = mint_private(mint_module, environment)
         # Persist first. Every later failure leaves a retryable private token
         # until native revoke confirms success.
         write_private(token_path, token.encode("ascii"))
+        write_private(root / "mint-response.private.json", mint_raw)
+        write_private(root / "viewer-response.private.json", viewer_raw)
         proof_path = root / "mint-grants.json"
         plan_path = root / "seed-plan.json"
         corpus_path = root / "corpus.json"
@@ -922,6 +953,8 @@ def stage_final_apply(host_checkout: Path, candidate_checkout: Path,
         deadline_remaining(root, facts)
         proof = read_private(root / "mint-grants.json")
         repository_raw, project_raw = target_readbacks(mint_module, token)
+        write_private(root / "repository-response.private.json", repository_raw)
+        write_private(root / "project-response.private.json", project_raw)
         deadline_remaining(root, facts)
         sealed = root / "sealed"
         _, _, _, actual_subject = inspect_source(
@@ -1043,6 +1076,27 @@ def execute_source(environment: dict[str, str], candidate_checkout: Path,
     fresh_summary = read_private(root / "final-prestate.private.json")
     fresh_evidence = read_private(root / "final-prestate-evidence.private.json",
                                   64 * 1024 * 1024)
+    mint_response = read_private(root / "mint-response.private.json")
+    viewer_response = read_private(root / "viewer-response.private.json")
+    run_response = read_private(root / "run-response.private.json")
+    workflow_blob = read_private(root / "workflow-blob.private")
+    builder_blob = read_private(root / "binding-builder-blob.private")
+    require(repository_readback_bytes == read_private(root / "repository-response.private.json")
+            and project_readback_bytes == read_private(root / "project-response.private.json"),
+            "target-response-private-drift")
+    proof = strict_json(mint_proof_bytes)
+    require(proof.get("mintResponseSha256") == digest(mint_response)
+            and proof.get("viewerResponseSha256") == digest(viewer_response),
+            "mint-response-private-drift")
+    manifest = strict_json(declaration_bytes)
+    source = manifest.get("source")
+    protected = source.get("protectedCheckout") if type(source) is dict else None
+    require(type(protected) is dict
+            and type(protected.get("workflow")) is dict
+            and type(protected.get("builder")) is dict
+            and protected["workflow"].get("sha256") == digest(workflow_blob)
+            and protected["builder"].get("sha256") == digest(builder_blob),
+            "protected-blob-private-drift")
     validate_prestate(fresh_summary, facts)
     fresh = strict_json(fresh_evidence, 64 * 1024 * 1024)
     require(fresh.get("runNonce") == facts["runNonce"]
@@ -1057,6 +1111,11 @@ def execute_source(environment: dict[str, str], candidate_checkout: Path,
         seed_plan_bytes=seed_plan_bytes, final_admission_bytes=decision_bytes,
         prestate_bytes=initial_summary, initial_evidence_bytes=initial_evidence,
         fresh_prestate_bytes=fresh_summary, fresh_evidence_bytes=fresh_evidence,
+        mint_response_bytes=mint_response, viewer_response_bytes=viewer_response,
+        run_response_bytes=run_response, workflow_blob_bytes=workflow_blob,
+        builder_blob_bytes=builder_blob,
+        repository_response_bytes=repository_readback_bytes,
+        project_response_bytes=project_readback_bytes,
         token=token, facts=facts)
     require(type(report) is dict and report.get("schema") ==
             "fsgg.gs2-09-7.sandbox-nonce-ref-cas-readback/1"

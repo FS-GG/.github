@@ -342,6 +342,38 @@ class EntryTests(unittest.TestCase):
             entry.deadline_remaining(root, facts, reserve_seconds=300,
                                      now=now + dt.timedelta(minutes=31))
 
+    def test_runtime_evidence_retains_exact_private_run_and_protected_blobs(self):
+        facts = entry.context(self.env)
+        root = self.root / "private"
+        root.mkdir(mode=0o700)
+        paths = (".github/workflows/github-substrate-v2-sandbox-qualification.yml",
+                 "scripts/gs2-09-7-seed-execution-binding.py")
+        for relative in paths:
+            path = self.host / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(relative.encode())
+        run = {"id": facts["runId"], "run_attempt": facts["runAttempt"],
+               "head_sha": facts["workflowSha"], "head_branch": "main",
+               "event": "workflow_dispatch", "repository": {"id": 1269292704}}
+        raw = json.dumps(run, separators=(",", ":")).encode()
+        port = SimpleNamespace(get=lambda *_: raw)
+        bridge = SimpleNamespace(REPO="repos/FS-GG/.github",
+                                 authorizer=SimpleNamespace(REPOSITORY_ID=1269292704))
+        binding = SimpleNamespace(WORKFLOW_PATH=paths[0], BUILDER_PATH=paths[1],
+                                  read_regular=lambda path, _: path.read_bytes(),
+                                  git_bytes=lambda _, args, limit: args[1].split(":", 1)[1].encode())
+        with mock.patch.object(entry, "bridge_module", return_value=bridge):
+            entry.retain_protected_runtime_evidence(root, self.host, port, binding, facts)
+            self.assertEqual(raw, (root / "run-response.private.json").read_bytes())
+            self.assertEqual(paths[0].encode(), (root / "workflow-blob.private").read_bytes())
+            self.assertEqual(paths[1].encode(), (root / "binding-builder-blob.private").read_bytes())
+            self.assertEqual(0o600, (root / "run-response.private.json").stat().st_mode & 0o777)
+            run["run_attempt"] += 1
+            with self.assertRaisesRegex(entry.Refused, "protected-run-response"):
+                entry.retain_protected_runtime_evidence(
+                    self.root / "unused", self.host,
+                    SimpleNamespace(get=lambda *_: json.dumps(run).encode()), binding, facts)
+
     def test_final_nonce_prestate_drift_refuses_before_cas(self):
         root = self.root / "private"
         root.mkdir(mode=0o700)
@@ -369,7 +401,7 @@ class EntryTests(unittest.TestCase):
         execute.assert_not_called()
         revoke.assert_called_once_with(root)
 
-    def test_private_mint_retains_only_sanitized_proof_and_revokes_on_failure(self):
+    def test_private_mint_returns_raw_custody_separately_from_sanitized_proof(self):
         token = "t" * 30
         minted_raw = json.dumps({"token": token}).encode()
         responses = [
@@ -391,9 +423,11 @@ class EntryTests(unittest.TestCase):
             revoke_token=mock.Mock())
         environment = {"FSGG_DISPATCH_APP_ID": "4166418",
                        "FSGG_DISPATCH_APP_PRIVATE_KEY": "PRIVATE KEY"}
-        returned, proof = entry.mint_private(module, environment)
+        returned, proof, mint_response, viewer_response = entry.mint_private(module, environment)
         self.assertEqual(token, returned)
         self.assertNotIn(token.encode(), proof)
+        self.assertEqual(minted_raw, mint_response)
+        self.assertEqual(b'{"viewer":"raw"}', viewer_response)
         self.assertEqual(entry.digest(minted_raw), json.loads(proof)["mintResponseSha256"])
         module.revoke_token.assert_not_called()
         responses[-1] = ({"data": {"viewer": {"login": "foreign", "databaseId": 9}}}, b"{}")
