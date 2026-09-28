@@ -159,6 +159,9 @@ module HistoricalLossRegistry =
             DeclaredCount: int
             Pages: RetainedPageV3 list
             Subjects: RetainedSubjectV3 list
+            RawEvidenceDigest: string
+            TypedPopulationDigest: string
+            EligibleInventoryDigest: string
             HistoricalEmissions: string
             HistoricalDeletions: string
             LostCount: string

@@ -2,8 +2,8 @@ namespace FS.GG.Coord.GitHub
 
 /// Direct, read-only GitHub evidence capture for the retained historical receipt census.
 ///
-/// This module deliberately stops at an untrusted draft. It neither constructs a
-/// `HistoricalLossRegistry` value nor grants approval or bounded-loss authority.
+/// Collection yields an untrusted draft. Binding requires replay of both retained raw
+/// passes and the independently approved v3 registry and v2 approval envelope.
 module HistoricalLossRetainedNativeCensus =
 
     open Transport
@@ -39,6 +39,8 @@ module HistoricalLossRetainedNativeCensus =
             Resource: string
             Body: string
             RawSha256: string
+            LinkHeader: string option
+            ObservedAt: string
             NextLink: string option
             ItemCount: int
             Terminal: bool
@@ -53,7 +55,7 @@ module HistoricalLossRetainedNativeCensus =
         | IssueBody
         | IssueComment
 
-    /// A row derived by this module from native response bodies. Callers cannot supply these rows.
+    /// A row derived by this module from native response bodies. The binder recomputes these rows.
     type DraftSubject =
         {
             Repository: RepositoryIdentity
@@ -75,6 +77,7 @@ module HistoricalLossRetainedNativeCensus =
             Repositories: RepositoryIdentity list
             Subjects: DraftSubject list
             EvidenceFingerprint: string
+            EligibleInventoryDigest: string
         }
 
     type PassCapture =
@@ -82,6 +85,7 @@ module HistoricalLossRetainedNativeCensus =
             Number: int
             Pages: RawPage list
             Draft: UntrustedDraft
+            RawEvidenceDigest: string
         }
 
     type Capture =
@@ -107,19 +111,18 @@ module HistoricalLossRetainedNativeCensus =
     val repositories: RepositoryIdentity list
 
     /// Capture two complete direct-enumeration passes. Every request is a GET through the single-page
-    /// transport seam. The result remains non-authoritative until a separate repaired registry binder
-    /// recomputes it from `RawPage` and joins independent approval evidence.
+    /// transport seam. Raw pages may differ while the eligible native roster and typed receipt set remain stable.
     val collectTwoPass:
         transport: ISinglePageGitHubTransport ->
         apiBase: string ->
         observationHorizon: string ->
         Result<Capture, CollectorError>
 
-    /// Captures fresh native pages, recomputes the typed census from their bodies, and binds
-    /// one exact approved v3 entry. The caller cannot supply a draft or substitute typed rows.
-    val bindV3Native:
-        transport: ISinglePageGitHubTransport ->
+    /// Replays the exact two retained raw passes through the production decoder before binding.
+    /// Caller-supplied typed drafts are ignored; missing or altered raw pages refuse.
+    val bindV3Captured:
         apiBase: string ->
+        capture: Capture ->
         expectedFamily: string ->
         expectedScope: string ->
         expectedObservationHorizon: string ->

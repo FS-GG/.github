@@ -37,6 +37,8 @@ module HistoricalLossRetainedNativeCensus =
           Resource: string
           Body: string
           RawSha256: string
+          LinkHeader: string option
+          ObservedAt: string
           NextLink: string option
           ItemCount: int
           Terminal: bool }
@@ -66,12 +68,14 @@ module HistoricalLossRetainedNativeCensus =
         { ObservationHorizon: string
           Repositories: RepositoryIdentity list
           Subjects: DraftSubject list
-          EvidenceFingerprint: string }
+          EvidenceFingerprint: string
+          EligibleInventoryDigest: string }
 
     type PassCapture =
         { Number: int
           Pages: RawPage list
-          Draft: UntrustedDraft }
+          Draft: UntrustedDraft
+          RawEvidenceDigest: string }
 
     type Capture =
         { First: PassCapture
@@ -141,6 +145,22 @@ module HistoricalLossRetainedNativeCensus =
 
     let private ioDetail (error: IoError) = Errors.explain error
 
+    let private validLinkHeader (value: string option) (next: string option) =
+        match value with
+        | None -> next.IsNone
+        | Some raw ->
+            let parts = raw.Split(',', StringSplitOptions.RemoveEmptyEntries) |> Array.map _.Trim()
+            let pattern = Regex(@"\A<(?<url>https?://[^<>\s]+)>;\s*rel=""(?<rel>next|prev|first|last)""\z", RegexOptions.CultureInvariant)
+            let matches = parts |> Array.map pattern.Match
+            if parts.Length = 0 || matches |> Array.exists (fun item -> not item.Success) then false
+            else
+                let nextValues =
+                    matches |> Array.choose (fun item -> if item.Groups.["rel"].Value = "next" then Some item.Groups.["url"].Value else None)
+                match next, nextValues with
+                | None, [||] -> true
+                | Some expected, [| observed |] -> expected = observed
+                | _ -> false
+
     let private send (transport: ISinglePageGitHubTransport) (repository: RepositoryIdentity) (stream: Stream) (index: int) (path: string) (query: (string * string) list) =
         let subject = requestSubject repository stream index
         let request =
@@ -163,6 +183,8 @@ module HistoricalLossRetainedNativeCensus =
             | 403 -> Error(Forbidden subject)
             | 404 -> Error(NotFound subject)
             | status when status <> 200 -> Error(ProviderStatus(subject, status))
+            | _ when not (validLinkHeader (header "Link" response) response.NextLink) ->
+                Error(UnsafeContinuation(subject, "Link header is missing, malformed, or disagrees with parsed next link"))
             | _ ->
                 match header "X-RateLimit-Resource" response with
                 | None -> Error(InvalidResponse(subject, "X-RateLimit-Resource is missing"))
@@ -245,13 +267,16 @@ module HistoricalLossRetainedNativeCensus =
         | _ -> Error(InvalidResponse(subject, "native row id is missing or invalid"))
 
     let private collectArrayStream (transport: ISinglePageGitHubTransport) (apiBase: string) (pass: int) (repository: RepositoryIdentity) (stream: Stream) (path: string) (baseQuery: (string * string) list) =
-        let rec loop index path query seen acc =
+        let rec loop index path query seen resourceSeen acc =
             let subject = requestSubject repository stream index
             if index > 10000 then
                 Error(InvalidResponse(subject, "pagination did not terminate within 10000 pages"))
             else
               send transport repository stream index path query
               |> Result.bind (fun (request, response, resource) ->
+                if resourceSeen |> Option.exists ((<>) resource) then
+                    Error(InvalidResponse(subject, "X-RateLimit-Resource changed during the stream"))
+                else
                 parseArray subject response.Body
                 |> Result.bind (fun rows ->
                     let ids = rows |> List.map (rowId subject)
@@ -287,15 +312,17 @@ module HistoricalLossRetainedNativeCensus =
                               Resource = resource
                               Body = response.Body
                               RawSha256 = sha256 response.Body
+                              LinkHeader = header "Link" response
+                              ObservedAt = DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture)
                               NextLink = explicitNext
                               ItemCount = count
                               Terminal = nextRequest.IsNone }
 
                         match nextRequest with
                         | None -> Ok(List.rev (page :: acc))
-                        | Some(nextPath, nextQuery) -> loop (index + 1) nextPath nextQuery (Set.union seen (Set.ofList pageIds)) (page :: acc))))
+                        | Some(nextPath, nextQuery) -> loop (index + 1) nextPath nextQuery (Set.union seen (Set.ofList pageIds)) (Some resource) (page :: acc))))
 
-        loop 1 path (baseQuery @ [ "per_page", "100"; "page", "1" ]) Set.empty []
+        loop 1 path (baseQuery @ [ "per_page", "100"; "page", "1" ]) Set.empty None []
 
     let private collectIdentity (transport: ISinglePageGitHubTransport) (pass: int) (expected: RepositoryIdentity) =
         let owner, repo =
@@ -330,6 +357,8 @@ module HistoricalLossRetainedNativeCensus =
                               Resource = resource
                               Body = response.Body
                               RawSha256 = sha256 response.Body
+                              LinkHeader = header "Link" response
+                              ObservedAt = DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture)
                               NextLink = None
                               ItemCount = 1
                               Terminal = true }
@@ -499,24 +528,64 @@ module HistoricalLossRetainedNativeCensus =
                         Error(MalformedCandidate(label, "legacy done receipt marker is malformed"))
                     else Ok None)
 
-    let private fingerprint (pages: RawPage list) (subjects: DraftSubject list) =
+    let private rawFingerprint (pages: RawPage list) =
         [ yield!
               pages
               |> List.collect (fun page ->
                   [ page.Repository.FullName; string page.Repository.DatabaseId; page.Repository.NodeId
-                    streamName page.Stream; string page.Index; page.Method; page.Path
+                    string page.Pass; streamName page.Stream; string page.Index; page.Method; page.Path
                     page.Query |> List.collect (fun (key, value) -> [ key; value ]) |> String.concat "\u001f"
-                    string page.Status; page.Resource; page.RawSha256; defaultArg page.NextLink ""
-                    string page.ItemCount; string page.Terminal ])
-          yield!
-              subjects
-              |> List.collect (fun item ->
-                  [ item.Repository.FullName; string item.SubjectNumber; string item.SubjectIsPullRequest
-                    item.NativeId; string item.Family; string item.Origin; item.CreatedAt; item.PayloadSha256; item.PayloadBlobSha
-                    defaultArg item.SessionOperationId "" ]) ]
+                    string page.Status; page.Resource; page.Body; page.RawSha256
+                    defaultArg page.LinkHeader ""; page.ObservedAt; defaultArg page.NextLink ""
+                    string page.ItemCount; string page.Terminal ]) ]
         |> List.map frame
         |> String.concat ""
         |> sha256
+
+    let private typedFingerprint (subjects: DraftSubject list) (inventoryDigest: string) =
+        inventoryDigest ::
+        (subjects
+         |> List.collect (fun item ->
+             [ item.Repository.FullName; string item.Repository.DatabaseId; item.Repository.NodeId
+               string item.SubjectNumber; string item.SubjectIsPullRequest; item.NativeId
+               string item.Family; string item.Origin; item.CreatedAt; item.PayloadSha256
+               item.PayloadBlobSha; defaultArg item.SessionOperationId "" ]))
+        |> List.map frame |> String.concat "" |> sha256
+
+    let private eligibleInventory (apiBase: string) (horizon: DateTimeOffset) (pages: RawPage list) =
+        repositories
+        |> List.fold (fun state repository ->
+            state |> Result.bind (fun accumulated ->
+                let issues = pages |> List.filter (fun page -> page.Repository = repository && page.Stream = Issues)
+                let comments = pages |> List.filter (fun page -> page.Repository = repository && page.Stream = IssueComments)
+                parseSubjects repository issues
+                |> Result.bind (fun subjects ->
+                    parseComments repository comments
+                    |> Result.bind (fun commentRows ->
+                        let subjectRows =
+                            subjects |> List.map (fun item ->
+                                parseInstant repository.FullName item.CreatedAt
+                                |> Result.map (fun created ->
+                                    if created <= horizon then
+                                        Some [ repository.FullName; "issue"; string item.Number; item.NodeId
+                                               string item.IsPullRequest; created.ToString("O", CultureInfo.InvariantCulture) ]
+                                    else None))
+                        let commentInventory =
+                            commentRows |> List.map (fun item ->
+                                parseInstant repository.FullName item.CreatedAt
+                                |> Result.bind (fun created ->
+                                    match commentNumber apiBase repository item.IssueUrl with
+                                    | None -> Error(InvalidResponse(repository.FullName, "comment parent escaped repository"))
+                                    | Some number ->
+                                        Ok(if created <= horizon then
+                                               Some [ repository.FullName; "comment"; string number; item.NodeId
+                                                      created.ToString("O", CultureInfo.InvariantCulture) ]
+                                           else None)))
+                        (subjectRows @ commentInventory)
+                        |> List.fold (fun result row ->
+                            result |> Result.bind (fun values -> row |> Result.map (fun value -> value :: values))) (Ok accumulated))))) (Ok [])
+        |> Result.map (fun values ->
+            values |> List.choose id |> List.sort |> List.collect id |> List.map frame |> String.concat "" |> sha256)
 
     let private collectRepository (transport: ISinglePageGitHubTransport) (apiBase: string) (pass: int) (horizon: DateTimeOffset) (repository: RepositoryIdentity) =
         let owner, repo = let parts = repository.FullName.Split('/', 2) in parts.[0], parts.[1]
@@ -582,16 +651,21 @@ module HistoricalLossRetainedNativeCensus =
         |> Result.bind (fun (pages, subjects) ->
             match subjects |> List.countBy _.NativeId |> List.tryFind (fun (_, count) -> count > 1) with
             | Some(nativeId, _) -> Error(DuplicateNativeId nativeId)
+            | None when pages |> List.exists (fun page -> page.Resource <> "core") ->
+                Error(InvalidResponse("collector", "native repository stream changed X-RateLimit-Resource from core"))
             | None ->
-                let ordered =
-                    subjects
-                    |> List.sortBy (fun item -> item.Repository.FullName, item.SubjectNumber, item.CreatedAt, item.NativeId)
-                let draft =
-                    { ObservationHorizon = horizonText
-                      Repositories = repositories
-                      Subjects = ordered
-                      EvidenceFingerprint = fingerprint pages ordered }
-                Ok { Number = pass; Pages = pages; Draft = draft })
+                eligibleInventory apiBase horizon pages
+                |> Result.map (fun inventoryDigest ->
+                    let ordered =
+                        subjects
+                        |> List.sortBy (fun item -> item.Repository.FullName, item.SubjectNumber, item.CreatedAt, item.NativeId)
+                    let draft =
+                        { ObservationHorizon = horizonText
+                          Repositories = repositories
+                          Subjects = ordered
+                          EligibleInventoryDigest = inventoryDigest
+                          EvidenceFingerprint = typedFingerprint ordered inventoryDigest }
+                    { Number = pass; Pages = pages; Draft = draft; RawEvidenceDigest = rawFingerprint pages }))
 
     let collectTwoPass transport apiBase observationHorizon =
         match Uri.TryCreate(apiBase, UriKind.Absolute) with
@@ -609,8 +683,10 @@ module HistoricalLossRetainedNativeCensus =
                             Error(RosterDrift "repository identity changed between passes")
                         elif first.Draft.Subjects <> second.Draft.Subjects then
                             Error(PassDrift "derived receipt subjects changed between passes")
+                        elif first.Draft.EligibleInventoryDigest <> second.Draft.EligibleInventoryDigest then
+                            Error(PassDrift "eligible native issue/comment inventory changed between passes")
                         elif first.Draft.EvidenceFingerprint <> second.Draft.EvidenceFingerprint then
-                            Error(PassDrift "raw page evidence changed between passes")
+                            Error(PassDrift "typed receipt population changed between passes")
                         else Ok { First = first; Second = second })))
 
     let private registryRepository (repository: RepositoryIdentity) : FS.GG.Coord.HistoricalLossRegistry.RepositoryIdentityV3 =
@@ -646,16 +722,15 @@ module HistoricalLossRetainedNativeCensus =
                SessionOperationId = subject.SessionOperationId
                LiveClaim = false }: FS.GG.Coord.HistoricalLossRegistry.RetainedSubjectV3))
 
-    let bindV3Native transport apiBase expectedFamily expectedScope expectedObservationHorizon registryBytes
+    let private bindValidatedCapture (capture: Capture) expectedFamily expectedScope expectedObservationHorizon registryBytes
         (entry: FS.GG.Coord.HistoricalLossRegistry.EntryV3)
         (approval: FS.GG.Coord.HistoricalLossRegistry.NativeApprovalReadbackV2)
         : Result<FS.GG.Coord.HistoricalLossRegistry.BoundLossV3, string list> =
         let expectedRepositories = repositories |> List.map registryRepository
-        // The collector owns both passes. No typed draft, page list, repository subset or
-        // completeness claim is accepted from this method's caller.
-        match collectTwoPass transport apiBase expectedObservationHorizon with
-        | Error error -> Error [ $"historical-loss-native-census: %A{error}" ]
-        | Ok capture ->
+        if capture.First.Draft.Subjects <> capture.Second.Draft.Subjects
+           || capture.First.Draft.EligibleInventoryDigest <> capture.Second.Draft.EligibleInventoryDigest then
+            Error [ "historical-loss-native-pass-drift" ]
+        else
             let firstPages = projectedPages capture.First.Pages
             let secondPages = projectedPages capture.Second.Pages
             let firstSubjects = projectedSubjects expectedFamily capture.First.Draft.Subjects
@@ -670,6 +745,13 @@ module HistoricalLossRetainedNativeCensus =
                 "historical-loss-native-revision"
             check (entry.CensusFirst.Pages = firstPages && entry.CensusSecond.Pages = secondPages)
                 "historical-loss-native-pages"
+            check (entry.CensusFirst.RawEvidenceDigest = capture.First.RawEvidenceDigest && entry.CensusSecond.RawEvidenceDigest = capture.Second.RawEvidenceDigest)
+                "historical-loss-native-raw-digests"
+            check (entry.CensusFirst.TypedPopulationDigest = capture.First.Draft.EvidenceFingerprint
+                   && entry.CensusSecond.TypedPopulationDigest = capture.Second.Draft.EvidenceFingerprint
+                   && entry.CensusFirst.EligibleInventoryDigest = capture.First.Draft.EligibleInventoryDigest
+                   && entry.CensusSecond.EligibleInventoryDigest = capture.Second.Draft.EligibleInventoryDigest)
+                "historical-loss-native-typed-digests"
             check (entry.CensusFirst.Subjects = firstSubjects && entry.CensusSecond.Subjects = secondSubjects)
                 "historical-loss-native-subjects"
             check (entry.CensusFirst.DeclaredCount = firstSubjects.Length && entry.CensusSecond.DeclaredCount = secondSubjects.Length)
@@ -689,3 +771,37 @@ module HistoricalLossRetainedNativeCensus =
                           Consequence = entry.Consequence }
                 | Error errors -> Error errors
                 | Ok _ -> Error [ "historical-loss-native-census-proof-contract" ]
+
+    let bindV3Captured apiBase (capture: Capture) expectedFamily expectedScope expectedObservationHorizon registryBytes entry approval =
+        let originals = capture.First.Pages @ capture.Second.Pages
+        let queue = Queue<RawPage>(originals)
+        let replay =
+            { new ISinglePageGitHubTransport with
+                member _.SendSingle request =
+                    if queue.Count = 0 then Error(Errors.Transport "retained raw capture ended before native enumeration")
+                    else
+                        let page = queue.Dequeue()
+                        if request.Method <> page.Method || request.Path <> page.Path || request.Query <> page.Query then
+                            Error(Errors.Transport "retained raw capture request path, method or query drifted")
+                        else
+                            let headers =
+                                Map [ "X-RateLimit-Resource", page.Resource ]
+                                |> fun values -> match page.LinkHeader with Some value -> values.Add("Link", value) | None -> values
+                            Ok { Status = page.Status; Body = page.Body; Headers = headers; ETag = None; NextLink = page.NextLink } }
+        let exactRaw (original: PassCapture) (recomputed: PassCapture) =
+            original.Number = recomputed.Number
+            && original.RawEvidenceDigest = rawFingerprint original.Pages
+            && original.Pages.Length = recomputed.Pages.Length
+            && List.forall2 (fun stored decoded ->
+                let mutable observed = DateTimeOffset.MinValue
+                DateTimeOffset.TryParseExact(stored.ObservedAt, "O", CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, &observed)
+                && stored = { decoded with ObservedAt = stored.ObservedAt }) original.Pages recomputed.Pages
+        match collectTwoPass replay apiBase expectedObservationHorizon with
+        | Error error -> Error [ $"historical-loss-retained-raw-replay: %A{error}" ]
+        | Ok decoded when queue.Count <> 0 || not (exactRaw capture.First decoded.First) || not (exactRaw capture.Second decoded.Second) ->
+            Error [ "historical-loss-retained-raw-integrity" ]
+        | Ok decoded ->
+            let sealedCapture =
+                { First = { decoded.First with Pages = capture.First.Pages; RawEvidenceDigest = capture.First.RawEvidenceDigest }
+                  Second = { decoded.Second with Pages = capture.Second.Pages; RawEvidenceDigest = capture.Second.RawEvidenceDigest } }
+            bindValidatedCapture sealedCapture expectedFamily expectedScope expectedObservationHorizon registryBytes entry approval

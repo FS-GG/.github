@@ -659,6 +659,9 @@ module HistoricalLossRegistryTests =
                         }
                     ]
                 Subjects = subjects
+                RawEvidenceDigest = hex '7' 64
+                TypedPopulationDigest = hex '8' 64
+                EligibleInventoryDigest = hex '9' 64
                 HistoricalEmissions = "unknown"
                 HistoricalDeletions = "unknown"
                 LostCount = "unknown"
@@ -739,7 +742,7 @@ module HistoricalLossRegistryTests =
             let repositories = value.SelectedRepositories |> List.map renderRepository |> String.concat ","
             let pages = value.Pages |> List.map renderPage |> String.concat ","
             let retained = value.Subjects |> List.map renderSubject |> String.concat ","
-            $"{{\"selectedRepositories\":[{repositories}],\"observationHorizon\":{quoted value.ObservationHorizon},\"revision\":{quoted value.Revision},\"enumeration\":{quoted (renderEnumeration value.Enumeration)},\"complete\":{value.Complete.ToString().ToLowerInvariant()},\"declaredCount\":{value.DeclaredCount},\"pages\":[{pages}],\"subjects\":[{retained}],\"historicalEmissions\":{quoted value.HistoricalEmissions},\"historicalDeletions\":{quoted value.HistoricalDeletions},\"lostCount\":{quoted value.LostCount},\"producerDeploymentEnd\":{quoted value.ProducerDeploymentEnd},\"digest\":{quoted value.Digest}}}"
+            $"{{\"selectedRepositories\":[{repositories}],\"observationHorizon\":{quoted value.ObservationHorizon},\"revision\":{quoted value.Revision},\"enumeration\":{quoted (renderEnumeration value.Enumeration)},\"complete\":{value.Complete.ToString().ToLowerInvariant()},\"declaredCount\":{value.DeclaredCount},\"pages\":[{pages}],\"subjects\":[{retained}],\"rawEvidenceDigest\":{quoted value.RawEvidenceDigest},\"typedPopulationDigest\":{quoted value.TypedPopulationDigest},\"eligibleInventoryDigest\":{quoted value.EligibleInventoryDigest},\"historicalEmissions\":{quoted value.HistoricalEmissions},\"historicalDeletions\":{quoted value.HistoricalDeletions},\"lostCount\":{quoted value.LostCount},\"producerDeploymentEnd\":{quoted value.ProducerDeploymentEnd},\"digest\":{quoted value.Digest}}}"
         let sources = item.RecoverySources |> List.map renderSource |> String.concat ","
         let known = item.KnownSurvivorIds |> List.map quoted |> String.concat ","
         $"{{\"schema\":{quoted HistoricalLossRegistry.SchemaV3},\"entries\":[{{\"family\":{quoted item.Family},\"scope\":{quoted item.Scope},\"observationHorizon\":{quoted item.ObservationHorizon},\"recoverySources\":[{sources}],\"knownSurvivorIds\":[{known}],\"censusFirst\":{renderCensus item.CensusFirst},\"censusSecond\":{renderCensus item.CensusSecond},\"exclusionAppliesToLiveClaims\":{item.ExclusionAppliesToLiveClaims.ToString().ToLowerInvariant()},\"consequence\":{quoted item.Consequence},\"approval\":{{\"subject\":{quoted item.Approval.Subject},\"pullRequest\":{item.Approval.PullRequest},\"baseSha\":{quoted item.Approval.BaseSha},\"registryPath\":{quoted item.Approval.RegistryPath}}}}}]}}"

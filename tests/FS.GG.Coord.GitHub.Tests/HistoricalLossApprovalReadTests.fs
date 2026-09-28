@@ -284,6 +284,9 @@ let private v3Census enumeration terminal rawDigest =
             DeclaredCount = 1
             Pages = [ { Repository = v3Repository; Index = 1; ItemCount = 1; RawSha256 = rawDigest; Terminal = terminal } ]
             Subjects = [ retained ]
+            RawEvidenceDigest = hex '7' 64
+            TypedPopulationDigest = hex '8' 64
+            EligibleInventoryDigest = hex '9' 64
             HistoricalEmissions = "unknown"
             HistoricalDeletions = "unknown"
             LostCount = "unknown"

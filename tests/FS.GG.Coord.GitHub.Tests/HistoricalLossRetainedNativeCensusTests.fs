@@ -21,7 +21,7 @@ module HistoricalLossRetainedNativeCensusTests =
     let private ok body next =
         { Status = 200
           Body = body
-          Headers = Map [ "X-RateLimit-Resource", "core" ]
+          Headers = Map ([ "X-RateLimit-Resource", "core" ] @ (next |> Option.map (fun url -> [ "Link", $"<{url}>; rel=\"next\"" ]) |> Option.defaultValue []))
           ETag = None
           NextLink = next }
 
@@ -39,12 +39,14 @@ module HistoricalLossRetainedNativeCensusTests =
     let private comment id node number body repo =
         $"{{\"id\":{id},\"node_id\":\"{node}\",\"created_at\":\"{at}\",\"body\":{System.Text.Json.JsonSerializer.Serialize body},\"issue_url\":\"{api}/repos/{repo}/issues/{number}\"}}"
 
-    type Fixture(?statusFor: Request -> int option, ?nextFor: Request -> string option option, ?bodyFor: (Request * int) -> string -> string) =
+    type Fixture(?statusFor: Request -> int option, ?nextFor: Request -> string option option, ?bodyFor: (Request * int) -> string -> string, ?resourceFor: Request -> string, ?linkFor: Request -> string option option) =
         let requests = ResizeArray<Request>()
         let calls = Dictionary<string, int>()
         let statusFor = defaultArg statusFor (fun _ -> None)
         let nextFor = defaultArg nextFor (fun _ -> None)
         let bodyFor = defaultArg bodyFor (fun _ body -> body)
+        let resourceFor = defaultArg resourceFor (fun _ -> "core")
+        let linkFor = defaultArg linkFor (fun _ -> None)
 
         let defaultBody (request: Request) =
             let repository = repoForPath request.Path
@@ -98,7 +100,14 @@ module HistoricalLossRetainedNativeCensusTests =
                             Some $"{api}/repos/FS-GG/.github/issues/events?per_page=100&page=2"
                         else None
                     let next = defaultArg (nextFor request) defaultNext
-                    Ok(ok body next)
+                    let response = ok body next
+                    let headers = response.Headers.Add("X-RateLimit-Resource", resourceFor request)
+                    let headers =
+                        match linkFor request with
+                        | None -> headers
+                        | Some(Some value) -> headers.Add("Link", value)
+                        | Some None -> headers.Remove "Link"
+                    Ok { response with Headers = headers }
 
         member _.Requests = List.ofSeq requests
 
@@ -141,6 +150,24 @@ module HistoricalLossRetainedNativeCensusTests =
         match collectTwoPass fixture api horizon with
         | Error(UnsafeContinuation _) -> ()
         | actual -> failwithf "unexpected result %A" actual
+
+    [<Fact>]
+    let ``resource drift within a paginated native stream refuses`` () =
+        let fixture = Fixture(resourceFor = (fun request ->
+            if request.Path = "repos/FS-GG/.github/issues/events" && query "page" request = "2" then "search" else "core"))
+        match collectTwoPass fixture api horizon with
+        | Error(InvalidResponse(_, detail)) -> Assert.Contains("Resource changed", detail)
+        | actual -> failwithf "resource drift was accepted: %A" actual
+
+    [<Fact>]
+    let ``malformed raw Link header refuses despite a plausible parsed continuation`` () =
+        let fixture = Fixture(linkFor = (fun request ->
+            if request.Path = "repos/FS-GG/.github/issues/events" && query "page" request = "1" then
+                Some(Some "<https://api.github.test/repos/FS-GG/.github/issues/events?page=2>; rel=next")
+            else None))
+        match collectTwoPass fixture api horizon with
+        | Error(UnsafeContinuation _) -> ()
+        | actual -> failwithf "malformed raw Link gained authority: %A" actual
 
     [<Fact>]
     let ``marker-shaped malformed comment is rejected and never becomes a draft row`` () =
@@ -221,7 +248,7 @@ module HistoricalLossRetainedNativeCensusTests =
             let rs = c.SelectedRepositories |> List.map repo |> String.concat ","
             let ps = c.Pages |> List.map page |> String.concat ","
             let ss = c.Subjects |> List.map subject |> String.concat ","
-            $"{{\"selectedRepositories\":[{rs}],\"observationHorizon\":{quote c.ObservationHorizon},\"revision\":{quote c.Revision},\"enumeration\":\"direct-repository-enumeration\",\"complete\":true,\"declaredCount\":{c.DeclaredCount},\"pages\":[{ps}],\"subjects\":[{ss}],\"historicalEmissions\":\"unknown\",\"historicalDeletions\":\"unknown\",\"lostCount\":\"unknown\",\"producerDeploymentEnd\":\"unknown\",\"digest\":{quote c.Digest}}}"
+            $"{{\"selectedRepositories\":[{rs}],\"observationHorizon\":{quote c.ObservationHorizon},\"revision\":{quote c.Revision},\"enumeration\":\"direct-repository-enumeration\",\"complete\":true,\"declaredCount\":{c.DeclaredCount},\"pages\":[{ps}],\"subjects\":[{ss}],\"rawEvidenceDigest\":{quote c.RawEvidenceDigest},\"typedPopulationDigest\":{quote c.TypedPopulationDigest},\"eligibleInventoryDigest\":{quote c.EligibleInventoryDigest},\"historicalEmissions\":\"unknown\",\"historicalDeletions\":\"unknown\",\"lostCount\":\"unknown\",\"producerDeploymentEnd\":\"unknown\",\"digest\":{quote c.Digest}}}"
         let source (s: HistoricalLossRegistry.RecoverySource) =
             let role = if s.Role = HistoricalLossRegistry.RecoveredWriterSource then "recovered-writer-source" else "protocol-authoring-source"
             $"{{\"producerId\":{quote s.ProducerId},\"revision\":{quote s.Revision},\"path\":{quote s.Path},\"blobSha\":{quote s.BlobSha},\"bytesSha256\":{quote s.BytesSha256},\"role\":{quote role}}}"
@@ -268,6 +295,8 @@ module HistoricalLossRetainedNativeCensusTests =
             { SelectedRepositories = selected; ObservationHorizon = approvedHorizon; Revision = mergeSha
               Enumeration = HistoricalLossRegistry.DirectRepositoryEnumeration; Complete = true; DeclaredCount = rows.Length
               Pages = pages; Subjects = rows; HistoricalEmissions = "unknown"; HistoricalDeletions = "unknown"
+              RawEvidenceDigest = capture.RawEvidenceDigest; TypedPopulationDigest = capture.Draft.EvidenceFingerprint
+              EligibleInventoryDigest = capture.Draft.EligibleInventoryDigest
               LostCount = "unknown"; ProducerDeploymentEnd = "unknown"; Digest = "" }
         { draft with Digest = HistoricalLossRegistry.retainedCensusDigestV3 draft }
 
@@ -287,16 +316,17 @@ module HistoricalLossRetainedNativeCensusTests =
         let capture = match collectTwoPass fixture api approvedHorizon with Ok value -> value | Error error -> failwithf "%A" error
         let delivery = capture.First.Draft.Subjects |> List.filter (fun s -> s.Family = DeliveryReceipt)
         let census = censusFromCapture capture.First delivery
-        let entry = nativeEntry census
+        let secondDelivery = capture.Second.Draft.Subjects |> List.filter (fun s -> s.Family = DeliveryReceipt)
+        let entry = { nativeEntry census with CensusSecond = censusFromCapture capture.Second secondDelivery }
         let bytes, approval = approvedFixture entry
-        match bindV3Native fixture api entry.Family entry.Scope approvedHorizon bytes entry approval with
+        match bindV3Captured api capture entry.Family entry.Scope approvedHorizon bytes entry approval with
         | Ok bound -> Assert.Equal(2, bound.RetainedCount)
         | Error errors -> failwithf "valid native proof refused: %A" errors
         let emptyDraft = { census with Subjects = []; DeclaredCount = 0; Digest = "" }
         let empty = { emptyDraft with Digest = HistoricalLossRegistry.retainedCensusDigestV3 emptyDraft }
         let fabricated = { entry with CensusFirst = empty; CensusSecond = empty; KnownSurvivorIds = [] }
         let fabricatedBytes, fabricatedApproval = approvedFixture fabricated
-        match bindV3Native fixture api fabricated.Family fabricated.Scope approvedHorizon fabricatedBytes fabricated fabricatedApproval with
+        match bindV3Captured api capture fabricated.Family fabricated.Scope approvedHorizon fabricatedBytes fabricated fabricatedApproval with
         | Error errors -> Assert.Contains("historical-loss-native-subjects", errors)
         | Ok _ -> failwith "caller-supplied empty receipt census gained authority"
 
@@ -305,7 +335,7 @@ module HistoricalLossRetainedNativeCensusTests =
         let changedPage = { changedPageDraft with Digest = HistoricalLossRegistry.retainedCensusDigestV3 changedPageDraft }
         let alteredPageEntry = { entry with CensusFirst = changedPage; CensusSecond = changedPage }
         let changedPageBytes, changedPageApproval = approvedFixture alteredPageEntry
-        match bindV3Native fixture api alteredPageEntry.Family alteredPageEntry.Scope approvedHorizon changedPageBytes alteredPageEntry changedPageApproval with
+        match bindV3Captured api capture alteredPageEntry.Family alteredPageEntry.Scope approvedHorizon changedPageBytes alteredPageEntry changedPageApproval with
         | Error errors -> Assert.Contains("historical-loss-native-pages", errors)
         | Ok _ -> failwith "altered raw page hash gained authority"
 
@@ -314,6 +344,54 @@ module HistoricalLossRetainedNativeCensusTests =
         let changedSubject = { changedSubjectDraft with Digest = HistoricalLossRegistry.retainedCensusDigestV3 changedSubjectDraft }
         let alteredSubjectEntry = { entry with CensusFirst = changedSubject; CensusSecond = changedSubject }
         let changedSubjectBytes, changedSubjectApproval = approvedFixture alteredSubjectEntry
-        match bindV3Native fixture api alteredSubjectEntry.Family alteredSubjectEntry.Scope approvedHorizon changedSubjectBytes alteredSubjectEntry changedSubjectApproval with
+        match bindV3Captured api capture alteredSubjectEntry.Family alteredSubjectEntry.Scope approvedHorizon changedSubjectBytes alteredSubjectEntry changedSubjectApproval with
         | Error errors -> Assert.Contains("historical-loss-native-subjects", errors)
         | Ok _ -> failwith "substituted typed payload hash gained authority"
+
+    [<Fact>]
+    let ``two retained raw passes bind with unrelated drift and reject a missing pass`` () =
+        let fixture = Fixture(bodyFor = (fun (request, count) body ->
+            if request.Path = "repos/FS-GG/.github/issues/comments" && count = 2 then
+                body.Replace("quoted receipt example", "updated unrelated comment")
+            elif request.Path = "repos/FS-GG/.github/issues/events" && count = 2 then
+                body.Replace("6001", "9999")
+            elif request.Path = "repos/FS-GG/Audio/issues" && count = 2 then
+                let later = issue 1502 "I_later" 4 "new ordinary issue" false
+                            |> fun value -> value.Replace(at, "2026-09-29T00:00:00Z")
+                body.TrimEnd(']') + "," + later + "]"
+            else body))
+        let capture = match collectTwoPass fixture api approvedHorizon with Ok value -> value | Error error -> failwithf "%A" error
+        Assert.True(capture.First.RawEvidenceDigest <> capture.Second.RawEvidenceDigest)
+        Assert.Equal(capture.First.Draft.EvidenceFingerprint, capture.Second.Draft.EvidenceFingerprint)
+        let delivery pass = pass.Draft.Subjects |> List.filter (fun s -> s.Family = DeliveryReceipt)
+        let first = censusFromCapture capture.First (delivery capture.First)
+        let second = censusFromCapture capture.Second (delivery capture.Second)
+        Assert.True(first.Digest <> second.Digest)
+        let entry = { nativeEntry first with CensusSecond = second }
+        let bytes, approval = approvedFixture entry
+        match bindV3Captured api capture entry.Family entry.Scope approvedHorizon bytes entry approval with
+        | Ok bound -> Assert.Equal(2, bound.RetainedCount)
+        | Error errors -> failwithf "valid dual raw pass refused: %A" errors
+
+        let forgedDrafts =
+            { capture with
+                First = { capture.First with Draft = { capture.First.Draft with Subjects = [] } }
+                Second = { capture.Second with Draft = { capture.Second.Draft with Subjects = [] } } }
+        match bindV3Captured api forgedDrafts entry.Family entry.Scope approvedHorizon bytes entry approval with
+        | Ok bound -> Assert.Equal(2, bound.RetainedCount)
+        | Error errors -> failwithf "raw replay incorrectly used caller-supplied typed rows: %A" errors
+
+        let missing = { capture with Second = { capture.Second with Pages = capture.Second.Pages.Tail } }
+        match bindV3Captured api missing entry.Family entry.Scope approvedHorizon bytes entry approval with
+        | Error _ -> ()
+        | Ok _ -> failwith "missing retained raw page gained authority"
+
+    [<Fact>]
+    let ``marker disappearance between native passes refuses`` () =
+        let fixture = Fixture(bodyFor = (fun (request, count) body ->
+            if request.Path = "repos/FS-GG/Audio/issues/comments" && count = 2 then
+                body.Replace("fsgg:delivery-receipt", "plain:delivery-receipt")
+            else body))
+        match collectTwoPass fixture api approvedHorizon with
+        | Error(PassDrift _) -> ()
+        | actual -> failwithf "marker disappearance was accepted: %A" actual

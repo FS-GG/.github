@@ -160,6 +160,9 @@ module HistoricalLossRegistry =
             DeclaredCount: int
             Pages: RetainedPageV3 list
             Subjects: RetainedSubjectV3 list
+            RawEvidenceDigest: string
+            TypedPopulationDigest: string
+            EligibleInventoryDigest: string
             HistoricalEmissions: string
             HistoricalDeletions: string
             LostCount: string
@@ -351,6 +354,9 @@ module HistoricalLossRegistry =
                         defaultArg subject.SessionOperationId ""
                         string subject.LiveClaim
                     ])
+            census.RawEvidenceDigest
+            census.TypedPopulationDigest
+            census.EligibleInventoryDigest
             census.HistoricalEmissions
             census.HistoricalDeletions
             census.LostCount
@@ -854,7 +860,7 @@ module HistoricalLossRegistry =
         exactMembers
             [
                 "selectedRepositories"; "observationHorizon"; "revision"; "enumeration"; "complete"
-                "declaredCount"; "pages"; "subjects"; "historicalEmissions"; "historicalDeletions"
+                "declaredCount"; "pages"; "subjects"; "rawEvidenceDigest"; "typedPopulationDigest"; "eligibleInventoryDigest"; "historicalEmissions"; "historicalDeletions"
                 "lostCount"; "producerDeploymentEnd"; "digest"
             ]
             value
@@ -867,6 +873,9 @@ module HistoricalLossRegistry =
             let count = integer "declaredCount" value
             let pages = array "pages" value parseRetainedPageV3
             let subjects = array "subjects" value parseRetainedSubjectV3
+            let rawEvidenceDigest = text "rawEvidenceDigest" value
+            let typedPopulationDigest = text "typedPopulationDigest" value
+            let eligibleInventoryDigest = text "eligibleInventoryDigest" value
             let emissions = text "historicalEmissions" value
             let deletions = text "historicalDeletions" value
             let lost = text "lostCount" value
@@ -874,10 +883,10 @@ module HistoricalLossRegistry =
             let digest = text "digest" value
 
             combine
-                [ repositories |> Result.map ignore; horizon |> Result.map ignore; revision |> Result.map ignore; enumeration |> Result.map ignore; complete |> Result.map ignore; count |> Result.map ignore; pages |> Result.map ignore; subjects |> Result.map ignore; emissions |> Result.map ignore; deletions |> Result.map ignore; lost |> Result.map ignore; deployment |> Result.map ignore; digest |> Result.map ignore ]
+                [ repositories |> Result.map ignore; horizon |> Result.map ignore; revision |> Result.map ignore; enumeration |> Result.map ignore; complete |> Result.map ignore; count |> Result.map ignore; pages |> Result.map ignore; subjects |> Result.map ignore; rawEvidenceDigest |> Result.map ignore; typedPopulationDigest |> Result.map ignore; eligibleInventoryDigest |> Result.map ignore; emissions |> Result.map ignore; deletions |> Result.map ignore; lost |> Result.map ignore; deployment |> Result.map ignore; digest |> Result.map ignore ]
                 (fun () ->
-                    match repositories, horizon, revision, enumeration, complete, count, pages, subjects, emissions, deletions, lost, deployment, digest with
-                    | Ok a, Ok b, Ok c, Ok d, Ok e, Ok f, Ok g, Ok h, Ok i, Ok j, Ok k, Ok l, Ok m ->
+                    match repositories, horizon, revision, enumeration, complete, count, pages, subjects, rawEvidenceDigest, typedPopulationDigest, eligibleInventoryDigest, emissions, deletions, lost, deployment, digest with
+                    | Ok a, Ok b, Ok c, Ok d, Ok e, Ok f, Ok g, Ok h, Ok i, Ok j, Ok k, Ok l, Ok m, Ok n, Ok o, Ok p ->
                         Ok
                             {
                                 SelectedRepositories = a
@@ -888,11 +897,14 @@ module HistoricalLossRegistry =
                                 DeclaredCount = f
                                 Pages = g
                                 Subjects = h
-                                HistoricalEmissions = i
-                                HistoricalDeletions = j
-                                LostCount = k
-                                ProducerDeploymentEnd = l
-                                Digest = m
+                                RawEvidenceDigest = i
+                                TypedPopulationDigest = j
+                                EligibleInventoryDigest = k
+                                HistoricalEmissions = l
+                                HistoricalDeletions = m
+                                LostCount = n
+                                ProducerDeploymentEnd = o
+                                Digest = p
                             }
                     | _ -> failwith "checked"))
 
@@ -1713,6 +1725,9 @@ module HistoricalLossRegistry =
             && (census.Pages |> List.sumBy _.ItemCount) >= census.Subjects.Length
             && pagesSequential
             && subjectsValid
+            && oid 64 census.RawEvidenceDigest
+            && oid 64 census.TypedPopulationDigest
+            && oid 64 census.EligibleInventoryDigest
             && subjectIds.Length = (subjectIds |> Set.ofList |> Set.count)
             && nativeIds.Length = (nativeIds |> Set.ofList |> Set.count)
             && census.HistoricalEmissions = "unknown"
@@ -1724,7 +1739,14 @@ module HistoricalLossRegistry =
         refuse
             (not (censusValid entry.CensusFirst) || not (censusValid entry.CensusSecond))
             "historical-loss-retained-census-incomplete"
-        refuse (entry.CensusFirst <> entry.CensusSecond) "historical-loss-retained-census-drift"
+        refuse
+            (entry.CensusFirst.SelectedRepositories <> entry.CensusSecond.SelectedRepositories
+             || entry.CensusFirst.ObservationHorizon <> entry.CensusSecond.ObservationHorizon
+             || entry.CensusFirst.Revision <> entry.CensusSecond.Revision
+             || entry.CensusFirst.TypedPopulationDigest <> entry.CensusSecond.TypedPopulationDigest
+             || entry.CensusFirst.EligibleInventoryDigest <> entry.CensusSecond.EligibleInventoryDigest
+             || entry.CensusFirst.Subjects <> entry.CensusSecond.Subjects)
+            "historical-loss-retained-census-drift"
         // V3 intentionally remains a proposal-only format until a production collector can
         // derive every retained subject from fixed native endpoints and carry that proof here.
         // Typed registry fields plus approval evidence cannot establish native completeness.
