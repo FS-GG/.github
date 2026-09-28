@@ -111,7 +111,10 @@ at `4ac2224cbefa55387ab1273a09ef23daf462628c`, and
 [Audio PR #326](https://github.com/FS-GG/FS.GG.Audio/pull/326) merged at
 `08a46576320b0043d43a0ce4eeffb3cd2e736e56`; all three passed their native required checks. The durable
 [Audio receiver plan](https://github.com/FS-GG/FS.GG.Audio/blob/main/docs/roadmaps/v2-ordinary-adoption.md)
-keeps the workflow disabled. Coordination CLI 0.1.3 is not published. Audio's `ordinary-v2` environment
+keeps the workflow disabled. [Coordination CLI 0.1.3](https://github.com/FS-GG/FS.GG.Coordination/releases/tag/v0.1.3)
+is published from protected source `eb464f5215d8b1696842eecd367027724add6923`, with both-feed
+payload readback and anonymous installation in [publisher run 36407941780](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36407941780).
+Audio's `ordinary-v2` environment
 has been created and read back with an exact `main` branch policy, but it contains zero secrets, so
 credential enrollment is still absent. No installed Audio activation, settlement, historical migration
 completion or fleet result is established.

@@ -78,8 +78,11 @@ Audio observation at `4ac2224cbefa55387ab1273a09ef23daf462628c`, and
 [Audio PR #326](https://github.com/FS-GG/FS.GG.Audio/pull/326) delivered the disabled receiver at
 `08a46576320b0043d43a0ce4eeffb3cd2e736e56`; all three passed their native required checks. The
 [durable Audio receiver plan](https://github.com/FS-GG/FS.GG.Audio/blob/main/docs/roadmaps/v2-ordinary-adoption.md)
-owns the remaining adoption boundaries. Coordination CLI 0.1.3 is not published, Audio has no dedicated
-ordinary-v2 credential enrollment, and the receiver remains disabled. The Audio `ordinary-v2` environment
+owns the remaining adoption boundaries. [Coordination CLI 0.1.3](https://github.com/FS-GG/FS.GG.Coordination/releases/tag/v0.1.3)
+was published from reviewed source `eb464f5215d8b1696842eecd367027724add6923`; its protected
+[publisher run](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36407941780) verified both feeds and
+an anonymous install of package payload `c505159023f0740c885696ebe24f8e066e197d9cf09cc3e64050d4210bcd0cdb`.
+Audio has no dedicated ordinary-v2 credential enrollment, and the receiver remains disabled. The Audio `ordinary-v2` environment
 has been created and read back with an exact `main` branch policy, but it contains zero secrets and therefore
 does not establish credential custody. These source merges and the empty environment establish no
 installed activation, settlement, migration completion or fleet result.
@@ -186,14 +189,12 @@ This audit neither requalified a live Host nor measured an efficiency cohort.
 
 ### 0.4 Active work and immediate critical path
 
-1. **Publish the Audio-capable CLI.** The three-repository source profile is merged and read back.
-   Publish immutable Coordination CLI 0.1.3 and record its exact package
-   identity. Source merge alone does not establish publication or receiver adoption.
-2. **Complete Audio credential custody and activate separately.** The `ordinary-v2` environment exists with
+1. **Complete Audio credential custody and activate separately.** The Audio-capable Coordination CLI 0.1.3
+   is published and anonymously installable. The `ordinary-v2` environment exists with
    an exact `main` branch policy and zero secrets. Enroll dedicated credentials, bind the immutable CLI, and
    review the source change that removes the Audio receiver's false guard and adds its bounded credential
    job. The current receiver remains disabled.
-3. **Observe bounded Audio use.** After activation, observe one protected-main settlement and its normal
+2. **Observe bounded Audio use.** After activation, observe one protected-main settlement and its normal
    already-complete rerun. Repair forward on failure. Only that repository-specific evidence can complete
    Audio's C3 adoption; it does not imply fleet-wide activation.
 
@@ -1394,8 +1395,8 @@ delivered its source profile, `.github` #3919 delivered Audio observation at
 `4ac2224cbefa55387ab1273a09ef23daf462628c`, and Audio #326 delivered the disabled receiver at
 `08a46576320b0043d43a0ce4eeffb3cd2e736e56`. Its
 [receiver plan is durable on `main`](https://github.com/FS-GG/FS.GG.Audio/blob/main/docs/roadmaps/v2-ordinary-adoption.md).
-CLI 0.1.3 publication,
-dedicated Audio credential enrollment, activation and observed settlement remain later boundaries. The
+CLI 0.1.3 is published; dedicated Audio credential enrollment, activation and observed settlement remain
+later boundaries. The
 `ordinary-v2` environment has an exact `main` branch policy but zero secrets.
 
 These are the default **parts for Astra planning**, named by deliverable. Select independent
@@ -1413,7 +1414,7 @@ Entry conditions constrain the dependent execution; earlier read-only planning m
 
 | Part Astra plans | Stage and bounded outcome | Accountable planning owner and entry | Feature subroadmap |
 |---|---|---|---|
-| **Audio explicit ordinary V2 adoption — C3-AUDIO-01** | C3: publish immutable Coordination CLI 0.1.3, enroll dedicated Audio credentials, activate the receiver separately, then observe one settlement and one normal rerun | Coordination, `.github` and Audio owners; [Coordination #865](https://github.com/FS-GG/FS.GG.Coordination/pull/865), [`.github` #3919](https://github.com/FS-GG/.github/pull/3919) and [Audio #326](https://github.com/FS-GG/FS.GG.Audio/pull/326) delivered the three-repository source profile. The receiver is disabled; its `ordinary-v2` environment has an exact `main` branch policy but zero secrets | [Audio receiver plan on `main`](https://github.com/FS-GG/FS.GG.Audio/blob/main/docs/roadmaps/v2-ordinary-adoption.md). No 0.1.3 publication, credential enrollment, installed activation, settlement or fleet result is claimed |
+| **Audio explicit ordinary V2 adoption — C3-AUDIO-01** | C3: publish immutable Coordination CLI 0.1.3, enroll dedicated Audio credentials, activate the receiver separately, then observe one settlement and one normal rerun | Coordination, `.github` and Audio owners; [Coordination #865](https://github.com/FS-GG/FS.GG.Coordination/pull/865), [`.github` #3919](https://github.com/FS-GG/.github/pull/3919) and [Audio #326](https://github.com/FS-GG/FS.GG.Audio/pull/326) delivered the three-repository source profile. [CLI 0.1.3](https://github.com/FS-GG/FS.GG.Coordination/releases/tag/v0.1.3) is published. The receiver is disabled; its `ordinary-v2` environment has an exact `main` branch policy but zero secrets | [Audio receiver plan on `main`](https://github.com/FS-GG/FS.GG.Audio/blob/main/docs/roadmaps/v2-ordinary-adoption.md). No credential enrollment, installed Audio activation, settlement or fleet result is claimed |
 | **Simplified baseline and v2 policy binding** | V0: bind adopted routine policy, actual enforcement/receiver wiring and R5 population; keep current merge-writer availability explicit | `.github`, Coordination, Governance and receivers; source qualification can proceed while the existing operation owner restores admitted effect readiness | [R0–R5 source plan](2026-09-07-074251-radical-development-bureaucracy-reduction-design-and-roadmap.md), [UTEL correctness](roadmaps/utel-01-telemetry-correctness.md), [local store](roadmaps/utel-local-telemetry-store.md), [operational completeness](roadmaps/utel-operational-completeness.md), [dashboard](roadmaps/utel-telemetry-dashboard.md), [release successor](roadmaps/utel-release-successor.md) and [current audit](reports/2026-09-24-v2-roadmap-code-audit.md). Reuse delivered source; verify the selected published/installed versions and prospective coverage without inferring complete native usage or efficiency |
 | **Skill Python to F# conversion — SKILL-FS-01** | Independent source and receiver track: replace the four current distinct Python implementation files across both tracked skill roots with packaged F# commands; preserve telemetry and preflight refusal behavior, then remove Python skill executables | `.github` tool and skill owner, with selected receivers; can proceed beside V2 source work, while the skill flip and deletion require coherent publication and installed parity | [SKILL-FS-01 subroadmap](roadmaps/skill-python-fsharp-conversion.md). The four legacy helpers in the September telemetry design are already absent; this part covers the different Python code that remains in the current skill trees and does not reopen removed routine obligations |
 | **Event and queue qualification** | V1, GS2-07.6–07.7: qualify the queue and measure narrow reconciliation, coalescing and audit repair | Coordination; preserve accepted native units and resume only unfinished scope | [GS2-07.7 event-benefit subroadmap](https://github.com/FS-GG/FS.GG.Coordination/blob/main/docs/roadmaps/gs2-07-7-event-benefit.md), scoped to 07.7; native acceptance is recorded in [PR #329](https://github.com/FS-GG/FS.GG.Coordination/pull/329) |
