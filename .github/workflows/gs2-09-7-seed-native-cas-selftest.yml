@@ -38,8 +38,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Exercise exact local Git CAS and fail-closed provenance
-        run: python3 -m unittest discover -s tests/gs2-09-7-seed-native-cas -p 'test_*.py'
+        run: python3 tests/gs2-09-7-seed-native-cas/test_seed_native_cas.py
       - name: Exercise independent bootstrap admission and protected route boundaries
         run: |
-          python3 -m unittest discover -s tests/gs2-09-7-seed-bootstrap-admission -p 'test_*.py'
-          python3 -m unittest discover -s tests/gs2-09-7-seed-bootstrap-entry -p 'test_*.py'
+          python3 tests/gs2-09-7-seed-bootstrap-admission/test_seed_bootstrap_admission.py
+          python3 tests/gs2-09-7-seed-bootstrap-entry/test_seed_bootstrap_entry.py
