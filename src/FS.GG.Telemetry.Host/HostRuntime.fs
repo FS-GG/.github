@@ -73,6 +73,46 @@ type NativeCollectorInstallationConfig =
     }
 
 module Configuration =
+    // Same Linux-x64 stat layout as WorkspaceTelemetryApplication's custody check.
+    module private NativeOwner =
+        [<StructLayout(LayoutKind.Sequential)>]
+        type Stat =
+            struct
+                val mutable Device: uint64
+                val mutable Inode: uint64
+                val mutable Links: uint64
+                val mutable Mode: uint32
+                val mutable User: uint32
+                val mutable Group: uint32
+                val mutable Padding: int32
+                val mutable Rdev: uint64
+                val mutable Size: int64
+                val mutable BlockSize: int64
+                val mutable Blocks: int64
+                val mutable AccessSeconds: int64
+                val mutable AccessNanoseconds: int64
+                val mutable ModifySeconds: int64
+                val mutable ModifyNanoseconds: int64
+                val mutable ChangeSeconds: int64
+                val mutable ChangeNanoseconds: int64
+                val mutable Reserved1: int64
+                val mutable Reserved2: int64
+                val mutable Reserved3: int64
+            end
+
+        [<DllImport("libc", EntryPoint = "stat", SetLastError = true)>]
+        extern int statPath(string path, Stat& value)
+
+        [<DllImport("libc")>]
+        extern uint32 geteuid()
+
+    let private ownedByHost allowRoot path =
+        if not (OperatingSystem.IsLinux()) || RuntimeInformation.ProcessArchitecture <> Architecture.X64 then false
+        else
+            let mutable value = Unchecked.defaultof<NativeOwner.Stat>
+            NativeOwner.statPath(path, &value) = 0
+            && (value.User = NativeOwner.geteuid() || (allowRoot && value.User = 0u))
+
     let private privateRegularFile (path: string) =
         if not (Path.IsPathFullyQualified path) || not (File.Exists path) then
             Error "credential file is missing"
@@ -443,6 +483,8 @@ module Configuration =
                     let expected =
                         set [ "Schema"; "CredentialReference"; "ExecutablePath"; "CodexHome";
                               "EvidenceRoot"; "Provider"; "Model"; "Effort" ]
+                    let qualified = root.GetProperty("Schema").GetString() = "fsgg.telemetry.native-collector-installation/2"
+                    let expected = if qualified then expected.Add "ExecutableSha256" else expected
 
                     if root.ValueKind <> JsonValueKind.Object
                        || names.Length <> expected.Count
@@ -456,7 +498,9 @@ module Configuration =
                                 UnmappedMemberHandling = Serialization.JsonUnmappedMemberHandling.Disallow
                             )
 
-                        let installation = JsonSerializer.Deserialize<NativeCollectorInstallationConfig>(bytes, options)
+                        let installationNode = System.Text.Json.Nodes.JsonNode.Parse(bytes)
+                        installationNode.AsObject().Remove "ExecutableSha256" |> ignore
+                        let installation = JsonSerializer.Deserialize<NativeCollectorInstallationConfig>(installationNode.ToJsonString(), options)
                         let bounded value =
                             not (String.IsNullOrWhiteSpace value)
                             && value.Length <= 128
@@ -489,12 +533,31 @@ module Configuration =
                             && (File.GetUnixFileMode executable.FullName
                                 &&& (UnixFileMode.GroupWrite ||| UnixFileMode.OtherWrite)) = enum 0
 
+                        // The protected operator owns this installation boundary. Ordinary
+                        // enrolled producers have no filesystem access beneath its private root.
+                        let anchor = DirectoryInfo(Path.GetDirectoryName(Path.GetFullPath hostConfigPath))
+                        let beneathAnchor (directory: DirectoryInfo) =
+                            let prefix = anchor.FullName.TrimEnd(Path.DirectorySeparatorChar) + string Path.DirectorySeparatorChar
+                            let rec safe (current: DirectoryInfo) =
+                                if current.FullName = anchor.FullName then privateDirectory current && ownedByHost false current.FullName
+                                elif not (current.FullName.StartsWith(prefix, StringComparison.Ordinal)) then false
+                                else privateDirectory current && ownedByHost false current.FullName && safe current.Parent
+                            safe directory
+                        let qualifiedCustody =
+                            not qualified ||
+                            (privateDirectory anchor && beneathAnchor codexHome && beneathAnchor evidenceRoot
+                             && ownedByHost false hostConfigPath && ownedByHost false installationPath
+                             && ownedByHost true executable.FullName
+                             && root.GetProperty("ExecutableSha256").GetString() =
+                                Convert.ToHexString(SHA256.HashData(File.ReadAllBytes executable.FullName)).ToLowerInvariant())
+
                         if hostConfig.Schema <> "fsgg.telemetry.host-config/2"
-                           || installation.Schema <> "fsgg.telemetry.native-collector-installation/1"
+                           || (installation.Schema <> "fsgg.telemetry.native-collector-installation/1" && not qualified)
                            || not (TelemetryReceipt.validId installation.CredentialReference)
                            || not executableSafe
                            || not (privateDirectory codexHome)
                            || not (privateDirectory evidenceRoot)
+                           || not qualifiedCustody
                            || not (bounded installation.Provider)
                            || not (bounded installation.Model)
                            || not (bounded installation.Effort)

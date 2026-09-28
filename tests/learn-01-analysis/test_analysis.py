@@ -5,6 +5,7 @@ import hashlib
 import importlib.util
 import json
 import pathlib
+import tempfile
 import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -441,6 +442,67 @@ class Learn01ContractTests(unittest.TestCase):
                 "independent-shared-cost-authority-unavailable",
                 report["incompleteTokenReasons"][original],
             )
+
+        protected = copy.deepcopy(content)
+        protected["usage"][0]["turn_sequence"] = 1
+        source = self.native_source_event()
+        for row in protected["learningObservations"]:
+            if json.loads(row["canonical"])["kind"] in {
+                    "runtime-native-inventory-source/1", "learn-shared-cost-authority/1"}:
+                row.update({"receipt_producer": "collector", "receipt_stream": "native-inventory",
+                            "receipt_role": "native-collector", "receipt_grant_id": "collector-grant",
+                            "receipt_grant_generation": 1, "receipt_key": "c" * 64,
+                            "receipt_envelope_digest": "d" * 64})
+        capture = {"receiptKey": "c" * 64, "envelopeDigest": "d" * 64,
+                   "producer": "collector", "stream": "native-inventory", "grantId": "collector-grant",
+                   "grantGeneration": 1, "events": [source], "turns": [{
+                       "threadId": "thread-I-001", "turnId": "turn-I-001", "sequence": 1,
+                       "provider": "openai", "model": "gpt-fixed", "effort": "medium",
+                       "input": 90, "cachedInput": 0, "output": 10, "reasoning": 0, "total": 100}]}
+        qualified = MODULE.analyze_private_snapshot(
+            CONTRACT, private_envelope(protected, version=4), _protected_captures=[capture])
+        self.assertTrue(qualified["tokenComparisonQualified"])
+        self.assertEqual({"I-001": 50, "I-002": 100}, qualified["providerTotalTokensByOriginalItem"])
+        self.assertEqual(150, sum(qualified["providerTotalTokensByArm"].values()))
+        with tempfile.TemporaryDirectory(prefix="learn-protected-export-") as directory:
+            root = pathlib.Path(directory)
+            config = root / "host.json"
+            config.write_text("{}")
+            config.chmod(0o600)
+            exported = {"schema": "fsgg.telemetry.protected-learning-export/1",
+                        "snapshot": private_envelope(protected, version=4), "captures": [capture]}
+            host = root / "installed-host-fixture"
+            host.write_text("#!/usr/bin/python3\nimport json,sys\n"
+                            "assert sys.argv[1:3] == ['export-learning', '--config']\n"
+                            + "print(" + repr(json.dumps(exported)) + ")\n")
+            host.chmod(0o700)
+            pin = hashlib.sha256(host.read_bytes()).hexdigest()
+            output = root / "analysis.json"
+            self.assertEqual(0, MODULE.main([
+                str(ROOT / "policy/learn-01-current-focused-v1.json"),
+                "--protected-host-executable", str(host), "--protected-host-sha256", pin,
+                "--protected-host-config", str(config), "--output", str(output)]))
+            self.assertEqual({"I-001": 50, "I-002": 100}, json.loads(output.read_text())["providerTotalTokensByOriginalItem"])
+            with self.assertRaisesRegex(MODULE.Refusal, "operator pin"):
+                MODULE.acquire_protected_export(host, config, "0" * 64)
+            config.chmod(0o644)
+            with self.assertRaisesRegex(MODULE.Refusal, "custody"):
+                MODULE.acquire_protected_export(host, config, pin)
+        imported = MODULE.analyze_private_snapshot(CONTRACT, private_envelope(protected, version=4))
+        self.assertFalse(imported["tokenComparisonQualified"])
+        self.assertIn("snapshot-origin-unverified", imported["incompleteTokenReasons"]["I-001"])
+        generic = copy.deepcopy(protected)
+        for row in generic["learningObservations"]:
+            if json.loads(row["canonical"])["identity"] == source["identity"]:
+                row["receipt_role"] = "generic"
+        with self.assertRaisesRegex(MODULE.Refusal, "first authenticated source admission"):
+            MODULE.analyze_private_snapshot(CONTRACT, private_envelope(generic, version=4), _protected_captures=[capture])
+        substituted = copy.deepcopy(capture)
+        substituted["turns"][0].update({"input": 190, "total": 200})
+        mismatch = MODULE.analyze_private_snapshot(
+            CONTRACT, private_envelope(protected, version=4), _protected_captures=[substituted])
+        self.assertFalse(mismatch["tokenComparisonQualified"])
+        self.assertIn("native-source-verification-unavailable", mismatch["incompleteTokenReasons"]["I-001"])
 
         missing_shared_turn = copy.deepcopy(content)
         missing_shared_turn["usage"] = [

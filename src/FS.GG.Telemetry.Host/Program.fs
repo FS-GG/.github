@@ -329,17 +329,19 @@ module Operations =
     let private storeFor (config: HostConfig) workspace =
         config.Stores |> Array.tryFind (fun store -> store.WorkspaceId = workspace)
 
+    let private readPrivateEvidence target =
+        let info = FileInfo target
+        if not info.Exists || not (isNull info.LinkTarget) || info.Length > 1048576L
+           || File.GetUnixFileMode target <> (UnixFileMode.UserRead ||| UnixFileMode.UserWrite) then
+            invalidOp "native collector replay artifact is invalid"
+        File.ReadAllBytes target
+
     let private writePrivateAtomic root name (bytes: byte array) =
         let target = Path.Combine(root, name)
-
         if File.Exists target then
-            let info = FileInfo target
-
-            if not (isNull info.LinkTarget) || info.Length > int64 TelemetryReceipt.MaxEnvelopeBytes then
-                invalidOp "native collector replay artifact is invalid"
-
-            File.ReadAllBytes target
+            readPrivateEvidence target
         else
+            if bytes.Length > 1048576 then invalidOp "native collector evidence exceeds the bound"
             let temporary = Path.Combine(root, "." + Guid.NewGuid().ToString("N") + ".tmp")
 
             try
@@ -433,6 +435,24 @@ module Operations =
         |> Result.map Encoding.UTF8.GetBytes
         |> Result.defaultWith (fun _ -> invalidOp "native collector envelope is invalid")
 
+    let private readCapture path (principal: TelemetryReceipt.Principal) (bytes: byte array) =
+        let capture = JsonNode.Parse(bytes).AsObject()
+        let names = capture |> Seq.map _.Key |> Set.ofSeq
+        if names <> set [ "schema"; "installationDigest"; "grantId"; "grantGeneration"; "envelope"; "turns" ]
+           || capture["schema"].GetValue<string>() <> "fsgg.telemetry.protected-native-capture/1"
+           || capture["installationDigest"].GetValue<string>() <> digestBytes(File.ReadAllBytes(path + ".native-collector.json"))
+           || capture["grantId"].GetValue<string>() <> principal.GrantId.Value
+           || capture["grantGeneration"].GetValue<int64>() <> principal.GrantGeneration.Value
+           || capture["turns"].AsArray().Count > 1000 then
+            invalidOp "native collector capture binding differs"
+        let envelopeBytes =
+            CanonicalJson.canonicalize (Encoding.UTF8.GetBytes(capture["envelope"].ToJsonString()))
+            |> Result.map Encoding.UTF8.GetBytes
+            |> Result.defaultWith (fun _ -> invalidOp "native collector capture envelope is invalid")
+        match TelemetryReceipt.parse envelopeBytes with
+        | Ok envelope when envelope.Scope = principal.Scope -> envelopeBytes, capture
+        | _ -> invalidOp "native collector capture principal differs"
+
     let private collectNative
         (path: string)
         (config: HostConfig)
@@ -466,12 +486,13 @@ module Operations =
                         ->
                         Error [ "native collector profile differs from durable admission" ]
                     | Ok resolved ->
+                        let qualified = installation.Schema = "fsgg.telemetry.native-collector-installation/2"
                         let artifactName =
                             digestBytes (Encoding.UTF8.GetBytes(String.concat "\n" [ dispatchId; parentThreadText; nativeAgent ]))
-                            + ".envelope.json"
+                            + (if qualified then ".capture.json" else ".envelope.json")
                         let artifactPath = Path.Combine(installation.EvidenceRoot, artifactName)
 
-                        let bytes =
+                        let retainedBytes =
                             if File.Exists artifactPath then
                                 writePrivateAtomic installation.EvidenceRoot artifactName Array.empty
                             else
@@ -496,15 +517,29 @@ module Operations =
                                     ->
                                     invalidOp "native collector reader evidence is incomplete"
                                 | Ok inventory ->
-                                    nativeCollectorEnvelope
-                                        installation
-                                        principal
-                                        dispatchId
-                                        parentThreadText
-                                        nativeAgent
-                                        resolved
-                                        inventory
-                                    |> writePrivateAtomic installation.EvidenceRoot artifactName
+                                    let envelopeBytes =
+                                        nativeCollectorEnvelope installation principal dispatchId parentThreadText nativeAgent resolved inventory
+                                    let evidenceBytes =
+                                        if not qualified then envelopeBytes
+                                        else
+                                            let capture = JsonObject()
+                                            capture["schema"] <- JsonValue.Create "fsgg.telemetry.protected-native-capture/1"
+                                            capture["installationDigest"] <- JsonValue.Create(digestBytes(File.ReadAllBytes(path + ".native-collector.json")))
+                                            capture["grantId"] <- JsonValue.Create principal.GrantId.Value
+                                            capture["grantGeneration"] <- JsonValue.Create principal.GrantGeneration.Value
+                                            capture["envelope"] <- JsonNode.Parse envelopeBytes
+                                            capture["turns"] <-
+                                                inventory.Turns
+                                                |> List.map (fun turn ->
+                                                    {| threadId = string inventory.ThreadId; turnId = string turn.TurnId
+                                                       sequence = turn.Sequence; provider = turn.Provider; model = turn.Model
+                                                       effort = turn.Effort; input = turn.Usage.Input; cachedInput = turn.Usage.CachedInput
+                                                       output = turn.Usage.Output; reasoning = turn.Usage.Reasoning; total = turn.Usage.Total |})
+                                                |> JsonSerializer.SerializeToNode
+                                            Encoding.UTF8.GetBytes(capture.ToJsonString())
+                                    writePrivateAtomic installation.EvidenceRoot artifactName evidenceBytes
+
+                        let bytes = if qualified then readCapture path principal retainedBytes |> fst else retainedBytes
 
                         match TelemetryReceipt.parse bytes with
                         | Error _ -> Error [ "native collector replay artifact is invalid" ]
@@ -535,6 +570,46 @@ module Operations =
                                             |}
                                         + "\n"
                                     )
+
+    let private exportLearning path config assessmentFor =
+        match Configuration.loadNativeCollectorInstallation path config with
+        | Error errors -> Error errors
+        | Ok(installation, _) when installation.Schema <> "fsgg.telemetry.native-collector-installation/2" ->
+            Error [ "qualified native collector installation is unavailable" ]
+        | Ok(installation, principal) ->
+            match storeFor config principal.Scope.Workspace with
+            | None -> Error [ "native collector workspace is unavailable" ]
+            | Some store ->
+                let files = Directory.EnumerateFiles(installation.EvidenceRoot, "*.capture.json") |> Seq.truncate 1001 |> Seq.toArray
+                if files.Length > 1000 then invalidOp "native collector capture population exceeds the bound"
+                let captures = JsonArray()
+                let mutable captureBytes = 0
+                for file in files |> Array.sort do
+                    let bytes = readPrivateEvidence file
+                    captureBytes <- captureBytes + bytes.Length
+                    if captureBytes > 3145728 then invalidOp "native collector capture bytes exceed the export bound"
+                    let envelopeBytes, capture = readCapture path principal bytes
+                    let envelope = TelemetryReceipt.parse envelopeBytes |> Result.defaultWith (fun _ -> invalidOp "invalid native capture")
+                    let exported = JsonObject()
+                    exported["receiptKey"] <- JsonValue.Create envelope.Key
+                    exported["envelopeDigest"] <- JsonValue.Create envelope.Digest
+                    exported["producer"] <- JsonValue.Create principal.Scope.Producer
+                    exported["stream"] <- JsonValue.Create principal.Scope.Stream
+                    exported["grantId"] <- capture["grantId"].DeepClone()
+                    exported["grantGeneration"] <- capture["grantGeneration"].DeepClone()
+                    exported["events"] <- capture["envelope"].["payload"].["events"].DeepClone()
+                    exported["turns"] <- capture["turns"].DeepClone()
+                    captures.Add exported
+                match TelemetryStoreApplication.scopedDashboardSnapshot store.Root (assessmentFor store.Root) principal.Scope.Workspace None with
+                | Error errors -> Error errors
+                | Ok snapshot ->
+                    let output = JsonObject()
+                    output["schema"] <- JsonValue.Create "fsgg.telemetry.protected-learning-export/1"
+                    output["snapshot"] <- JsonNode.Parse snapshot
+                    output["captures"] <- captures
+                    let json = output.ToJsonString() + "\n"
+                    if Encoding.UTF8.GetByteCount json > 4194304 then Error [ "protected learning export exceeds the bound" ]
+                    else Ok json
 
     let private preflight (config: HostConfig) assessmentFor =
         try
@@ -742,6 +817,13 @@ module Operations =
                         |> resultExit "native-collector-refused"
                     with _ ->
                         resultExit "native-collector-refused" (Error [ "native collector refused" ]))
+        | [ "export-learning"; "--config"; path ] ->
+            match load path with
+            | Error errors -> resultExit "invalid-configuration" (Error errors)
+            | Ok config ->
+                withLock config (fun () ->
+                    try exportLearning path config assessmentFor |> resultExit "native-export-refused"
+                    with _ -> resultExit "native-export-refused" (Error [ "native export refused" ]))
         | [ "preflight"; "--config"; path ] ->
             match load path with
             | Error errors -> resultExit "invalid-configuration" (Error errors)
