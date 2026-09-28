@@ -1,6 +1,6 @@
 name: release-successor-candidate
 
-# Source/byte qualification for coherent set 0.92.0 only. This route has no tag, release,
+# Source/byte qualification for coherent set 0.93.0 only. This route has no tag, release,
 # journal, package-feed, OIDC or promotion write. Its retained Actions artifact
 # is an unpromoted candidate, not a published release or an admission receipt.
 on:
@@ -43,7 +43,7 @@ jobs:
           test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
           test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$SOURCE_SHA"
           version="$(dotnet msbuild src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj -getProperty:Version | tr -d '[:space:]')"
-          test "$version" = 0.92.0
+          test "$version" = 0.93.0
           echo "version=$version" >> "$GITHUB_OUTPUT"
       - name: Verify the stable predecessor and unused package version
         env:
@@ -53,24 +53,24 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p artifacts/predecessor artifacts/packages
-          gh release download coherent-set/v0.91.5 --repo "$GITHUB_REPOSITORY" \
+          gh release download coherent-set/v0.92.0 --repo "$GITHUB_REPOSITORY" \
             --pattern stable-channel.json --dir artifacts/predecessor
           python3 scripts/release-saga.py predecessor \
             --channel artifacts/predecessor/stable-channel.json \
-            --release-tag coherent-set/v0.91.5 \
-            --tag-source 941a82c0e06c9afe9db4c88fc29997d7627a5895 \
+            --release-tag coherent-set/v0.92.0 \
+            --tag-source eb0f73186a07daf26e0f7bb5d4c1ee2054a8adaf \
             > artifacts/predecessor/identity.json
-          test "$(jq -r .version artifacts/predecessor/identity.json)" = 0.91.5
+          test "$(jq -r .version artifacts/predecessor/identity.json)" = 0.92.0
           python3 scripts/check-release-candidate-uniqueness.py \
-            --version "$VERSION" --predecessor 0.91.5
+            --version "$VERSION" --predecessor 0.92.0
           release_status="$(curl --silent --show-error --location -o /dev/null -w '%{http_code}' \
             -H "Authorization: Bearer $GH_TOKEN" \
             -H 'Accept: application/vnd.github+json' \
-            "https://api.github.com/repos/$GITHUB_REPOSITORY/releases/tags/coherent-set/v0.92.0")"
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/releases/tags/coherent-set/v0.93.0")"
           test "$release_status" = 404
           test -z "$(git ls-remote --tags origin \
-            'refs/tags/coherent-set/v0.92.0' 'refs/tags/kit/v0.92.0' \
-            'refs/tags/drivers/v0.92.0' 'refs/tags/coord-engine/v0.92.0')"
+            'refs/tags/coherent-set/v0.93.0' 'refs/tags/kit/v0.93.0' \
+            'refs/tags/drivers/v0.93.0' 'refs/tags/coord-engine/v0.93.0')"
       - name: Test the telemetry producer and prepare the browser fixture
         run: |
           set -euo pipefail
@@ -166,7 +166,7 @@ jobs:
           set -euo pipefail
           test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$SOURCE_SHA"
           python3 scripts/check-release-candidate-uniqueness.py \
-            --version "$VERSION" --predecessor 0.91.5
+            --version "$VERSION" --predecessor 0.92.0
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: release-successor-candidate-${{ github.sha }}-${{ github.run_id }}
