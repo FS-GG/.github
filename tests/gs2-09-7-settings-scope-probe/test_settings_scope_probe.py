@@ -331,6 +331,34 @@ class SettingsScopeProbeTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "response digest|raw response changed"):
                     probe.build_report(token, proof, ROOT, "b" * 40, Opener(values))
 
+    def test_repository_metadata_drift_is_reported_without_losing_diagnostics(self):
+        values = provider_values()
+        path = probe.API + f"/repos/{probe.OWNER}/{probe.REPOSITORY}"
+        original = json.loads(values[path].raw)
+        changed = {**original, "permissions": {"contents": True}}
+        revised = {**changed, "updated_at": "2026-09-28T00:00:01Z"}
+        values[path] = [Response(200, original), Response(200, changed),
+                        Response(200, changed), Response(200, changed), Response(200, revised)]
+        report = self.build(values)
+        self.assertTrue(report["diagnostic"]["collected"])
+        self.assertTrue(report["repositoryIdentity"]["stable"])
+        self.assertFalse(report["repositoryIdentity"]["rawStable"])
+        self.assertFalse(report["repositoryIdentity"]["revisionStable"])
+        self.assertEqual(["permissions", "updated_at"],
+                         report["repositoryIdentity"]["changedTopLevelKeys"])
+        self.assertEqual(5, len(report["repositoryIdentity"]["observationSha256"]))
+        self.assertFalse(report["authority"]["qualified"])
+
+    def test_registered_repository_identity_change_still_refuses(self):
+        values = provider_values()
+        path = probe.API + f"/repos/{probe.OWNER}/{probe.REPOSITORY}"
+        original = json.loads(values[path].raw)
+        foreign = {**original, "id": original["id"] + 1}
+        values[path] = [Response(200, original), Response(200, foreign),
+                        Response(200, foreign), Response(200, foreign)]
+        with self.assertRaisesRegex(ValueError, "registered sandbox"):
+            self.build(values)
+
     def test_ruleset_bypass_omission_is_partial_and_detail_drift_refuses(self):
         detail_url = probe.API + f"/repos/{probe.OWNER}/{probe.REPOSITORY}/rulesets/17"
         values = provider_values()
