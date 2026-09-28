@@ -124,3 +124,12 @@ snapshot origin and shared-cost completeness `unknown`; the analysis therefore c
 adoption, installed configuration and credential, trusted capture custody, and trusted snapshot acquisition remain
 later operational gates. Live collection and any efficiency conclusion remain pending. Current native usage is
 `not-configured`, so no live token total is claimed.
+
+The roadmap adapter adopts that boundary only for a terminal child with durable dispatch, parent-thread and
+native-agent selectors. `FSGG_TELEMETRY_NATIVE_COLLECTOR_CONFIG` may select an absolute private `0600` Host
+configuration; the adapter passes that path and the three selectors to the fixed `fsgg-telemetry-host
+collect-native` command. It passes no credential, role, grant, inventory, total, executable, source root or source
+binding. A missing selection, unsafe file, old Host, refusal, timeout or malformed result retains the existing
+generic/local reconciliation and remains `native-collaboration-usage-unknown`. A strictly validated protected
+success suppresses the adapter's generic inventory/source candidates while generic turn observations remain
+unqualified. The adapter accepts only the Host's closed UNKNOWN result and cannot promote collector authority.

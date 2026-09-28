@@ -3979,7 +3979,7 @@ JOIN invocation_lineage l ON l.item_id=d.item_id AND l.dispatch_id=d.dispatch_id
 JOIN runtime_admissions a ON a.item_id=l.item_id AND a.invocation_id=l.invocation_id
 JOIN runtime_terminals t ON t.item_id=l.item_id AND t.invocation_id=l.invocation_id
 JOIN runtime_starts s ON s.item_id=l.item_id AND s.invocation_id=l.invocation_id AND s.phase='process'
-WHERE d.dispatch_id=$dispatch AND d.relation='child' AND d.runtime='codex-collaboration'
+WHERE d.dispatch_id=$dispatch AND d.relation='child' AND d.runtime='collaboration-spawn-agent'
   AND l.relation=d.relation AND l.runtime=d.runtime AND a.backend='codex-collaboration'
   AND s.thread_id=$native;
 """

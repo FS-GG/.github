@@ -1265,8 +1265,8 @@ exec /usr/bin/python3 "{patchedFixture}" "$@"
 
             let events =
                 """{"kind":"budget-population","identity":"population-child","itemId":"LEARN-child","revision":0,"originalItemId":"LEARN-root","state":"open","sourceKind":"native-item","sourceRef":"fixture:population"},
-{"kind":"expected-dispatch","identity":"expected-child","itemId":"LEARN-child","revision":0,"dispatchId":"dispatch-child","activationId":"activation-root","relation":"child","parentDispatchId":"dispatch-root","runtime":"codex-collaboration","expectedAt":"2026-09-28T08:00:00Z","clockProvenance":"host-wall"},
-{"kind":"invocation-lineage","identity":"lineage-child","itemId":"LEARN-child","revision":0,"dispatchId":"dispatch-child","invocationId":"invocation-child","relation":"child","parentInvocationId":"invocation-root","rootInvocationId":"invocation-root","runtime":"codex-collaboration"},
+{"kind":"expected-dispatch","identity":"expected-child","itemId":"LEARN-child","revision":0,"dispatchId":"dispatch-child","activationId":"activation-root","relation":"child","parentDispatchId":"dispatch-root","runtime":"collaboration-spawn-agent","expectedAt":"2026-09-28T08:00:00Z","clockProvenance":"host-wall"},
+{"kind":"invocation-lineage","identity":"lineage-child","itemId":"LEARN-child","revision":0,"dispatchId":"dispatch-child","invocationId":"invocation-child","relation":"child","parentInvocationId":"invocation-root","rootInvocationId":"invocation-root","runtime":"collaboration-spawn-agent"},
 {"kind":"runtime-admission","identity":"admission-child","itemId":"LEARN-child","revision":0,"invocationId":"invocation-child","featureId":"LEARN-01","attemptId":"attempt-child","parentAttemptId":"attempt-root","producerStream":"roadmap","requestedModel":"fixture-model","requestedEffort":"medium","backend":"codex-collaboration"},
 {"kind":"runtime-start","identity":"process-child","itemId":"LEARN-child","revision":0,"invocationId":"invocation-child","threadId":"child_1","turnId":null,"turnSequence":null,"processId":0,"phase":"process"},
 {"kind":"runtime-terminal","identity":"terminal-child","itemId":"LEARN-child","revision":0,"invocationId":"invocation-child","threadId":"22222222-2222-2222-2222-222222222222","outcome":"completed","exitCode":0}"""
@@ -1280,8 +1280,33 @@ exec /usr/bin/python3 "{patchedFixture}" "$@"
                 )
             TelemetryStoreApplication.submitReceipt store TelemetryStore.ApprovedLocalDurable scope dispatchEnvelope
             |> Result.defaultWith (String.concat "; " >> failwith) |> ignore
-            TelemetryStoreApplication.drainReceipts store TelemetryStore.ApprovedLocalDurable scope.Workspace
-            |> Result.defaultWith (String.concat "; " >> failwith) |> ignore
+            let drained =
+                TelemetryStoreApplication.drainReceipts store TelemetryStore.ApprovedLocalDurable scope.Workspace
+                |> Result.defaultWith (String.concat "; " >> failwith)
+            Assert.Contains("\"rejected\":0", drained)
+            let resolved =
+                TelemetryStoreApplication.resolveNativeCollectorDispatch
+                    store TelemetryStore.ApprovedLocalDurable "dispatch-child" "child_1"
+                |> Result.defaultWith (String.concat "; " >> failwith)
+            Assert.Equal("invocation-child", resolved.InvocationId)
+            use runtimeConnection =
+                new SqliteConnection($"Data Source={Path.Combine(store, TelemetryStoreApplication.databaseFileName)};Pooling=False")
+            runtimeConnection.Open()
+            let setRuntime value =
+                for table in [ "expected_dispatches"; "invocation_lineage" ] do
+                    use update = runtimeConnection.CreateCommand()
+                    update.CommandText <- $"UPDATE {table} SET runtime=$runtime WHERE item_id='LEARN-child';"
+                    update.Parameters.AddWithValue("$runtime", value) |> ignore
+                    Assert.Equal(1, update.ExecuteNonQuery())
+            setRuntime "codex-exec"
+            match
+                TelemetryStoreApplication.resolveNativeCollectorDispatch
+                    store TelemetryStore.ApprovedLocalDurable "dispatch-child" "child_1"
+            with
+            | Ok _ -> Assert.Fail "unrelated durable runtime was accepted as a native collector dispatch"
+            | Error errors -> Assert.Contains("native collector dispatch is unavailable", errors)
+            setRuntime "collaboration-spawn-agent"
+            runtimeConnection.Close()
 
             let secret = privateFile "secret" (String('s', 32))
             let certificate = privateFile "certificate" "fixture"
@@ -1310,6 +1335,11 @@ exec /usr/bin/python3 "{patchedFixture}" "$@"
             let previous = Environment.GetEnvironmentVariable "LEAK_ME"
             try
                 Environment.SetEnvironmentVariable("LEAK_ME", "must-not-cross")
+                let unrelated =
+                    [| "collect-native"; "--config"; configPath; "--dispatch"; "dispatch-foreign"
+                       "--parent-thread"; "11111111-1111-1111-1111-111111111111"; "--native-agent"; "foreign_1" |]
+                Assert.Equal(3, Operations.runWithAssessment unrelated (fun _ -> TelemetryStore.ApprovedLocalDurable))
+                Assert.False(File.Exists counter)
                 File.WriteAllText(configPath, JsonSerializer.Serialize { config with Schema = "fsgg.telemetry.host-config/1" })
                 Assert.Equal(2, Operations.runWithAssessment command (fun _ -> TelemetryStore.ApprovedLocalDurable))
                 Assert.False(File.Exists counter)

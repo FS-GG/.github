@@ -8,7 +8,7 @@ identical to its `.claude` counterpart at this revision:
 |---|---|
 | `work-roadmap/scripts/fsgg_telemetry_defaults.py` | `ba04813cf1688065cbe5e2c603bf4761480e9856b965fac130c1b24c1c97eb63` |
 | `work-roadmap/scripts/native_collaboration_usage.py` | `ef81137ff93c66b744c68a2f02a48fc18bcfade7cd7cc93f16005c1ed12059c8` |
-| `work-roadmap/scripts/roadmap-telemetry.py` | `a82e04b8fbdd1a1cfee93b5582bafb6d71f43ae966ce11ef04b5bbb3588c4e14` |
+| `work-roadmap/scripts/roadmap-telemetry.py` | `1e007b8b055dba6c8b54a77ef3c5444fc87ad06fbc024906f94959d25cd49c76` |
 | `pipeline-preflight/scripts/preflight.py` | `84f6917eaea1c3cb42f9abbef7e92802f02ba7fae891957fd587a6f87705c1f3` |
 
 The executable corpus is in `tests/skill-fsharp/contracts`. It contains public synthetic identities only. It
@@ -70,6 +70,13 @@ credential-free canonical GitHub `origin`. Configuration precedence is explicit 
 closed schema. Credentials are represented only by a bounded reference. The interface never returns or prints
 credential material. Workspace mutations use an already-loaded named environment credential or an
 owner-controlled `fdev-telemetry exec` wrapper.
+
+For terminal native child reconciliation only, `FSGG_TELEMETRY_NATIVE_COLLECTOR_CONFIG` may select an absolute,
+regular, non-symlink `0600` protected Host configuration of at most 64 KiB. The adapter invokes the fixed
+`fsgg-telemetry-host collect-native` command with only config path, durable dispatch ID, parent thread ID and
+native agent ID. It accepts only the closed `fsgg.telemetry.native-collector-result/1` UNKNOWN result matching the
+durable dispatch and invocation. Missing configuration, an old or failed Host, timeout, malformed output and any
+authority or credential fields fall back to generic reconciliation with unknown coverage.
 
 ## Configuration discovery process contract
 
