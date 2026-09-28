@@ -1,7 +1,7 @@
 {
   "schema": "fsgg.github.v2-ci-ordinary-settlement-policy/1",
   "policyId": "v2-ci-i1-ordinary-settlement-v1",
-  "status": "source-qualified-not-installed",
+  "status": "installed",
   "repository": "FS-GG/.github",
   "operationClass": "ordinary-post-merge-delivery-settlement",
   "trigger": {
@@ -100,7 +100,7 @@
     "allowedBranches": [
       "main"
     ],
-    "installed": false,
+    "installed": true,
     "liveObservation": {
       "observedAt": "2026-09-24T19:45:51.967077Z",
       "environmentId": 22664505321,
@@ -144,7 +144,6 @@
     "V1_ADMISSION_APP_PRIVATE_KEY"
   ],
   "unchangedGates": [
-    "v1-admission-genesis",
     "OpenV2"
   ]
 }
