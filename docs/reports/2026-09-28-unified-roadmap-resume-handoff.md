@@ -1,5 +1,11 @@
 # Unified roadmap resume: V2 pilot cutover and preserved source evidence
 
+Latest landing readback: `.github#3914` merged as `ebb70d66db055c9a92e2627776a89dcbf4b3fbfe`;
+Coordination docs PR #864 merged as `39e18d16c1055ae6dc3cdb875fb3812929d58fff`. Both used
+head-conditioned native merges after required checks under ADR-0091. The older optional Coordination
+coherent run remains separate background evidence, not clean-start migration acceptance. Both active
+roadmaps now describe the simplified strategy; `.github` records completed pilot/replay acceptance.
+
 This session resumed the [September 27 handoff](2026-09-27-1919-unified-roadmap-handoff.md) and inspected current source, PRs and protected artifacts. The programme remains incomplete. The initial recovery phase performed no source merge, publication, installed activation or native acceptance; the later clean-start authority cutover is recorded below.
 
 ## Latest steering: use the V2 pilot frontier
