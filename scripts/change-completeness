@@ -35,7 +35,7 @@ else
 fi
 
 engine_changed=false
-if grep -Eq '^(src/FS\.GG\.(Coord|Telemetry)\.|tests/FS\.GG\.(Coord|Telemetry)\.|tests/(m6-decision-cutover|delivery-leading-line|coord-engine-|review-critic-succession-wire|change-completeness|change-risk-compatibility)/|scripts/(fsgg-coord|fsgg-coord-guards\.sh|record-board-fixture\.py|read-trx-count\.py|change-completeness|import-coordination-v1-admission\.py)|Directory\.(Build|Packages)|dist/dotnet/Directory\.Build\.props|global\.json|\.github/workflows/coord-engine\.yml)' "$PATHS"; then
+if grep -Eq '^(src/FS\.GG\.(Coord|Telemetry)\.|tests/FS\.GG\.(Coord|Telemetry)\.|tests/(m6-decision-cutover|delivery-leading-line|coord-engine-|review-critic-succession-wire|change-completeness|change-risk-compatibility)/|scripts/(fsgg-coord|fsgg-coord-guards\.sh|record-board-fixture\.py|read-trx-count\.py|change-completeness)|Directory\.(Build|Packages)|dist/dotnet/Directory\.Build\.props|global\.json|\.github/workflows/coord-engine\.yml)' "$PATHS"; then
   engine_changed=true
 fi
 [ -z "$OUTPUT_FILE" ] || printf 'engine_changed=%s\n' "$engine_changed" >>"$OUTPUT_FILE"
@@ -55,23 +55,6 @@ fi
 stage "SDD ship-verdict provenance"
 python3 "$ROOT/scripts/check-ship-verdict-provenance.py" --root "$ROOT"
 
-stage "GS2-08.5 protected source import"
-python3 "$ROOT/scripts/import-coordination-v1-admission.py" --check
-
-# Cheap and universal: this does not build or execute candidate engine bytes. It inventories the
-# tracked executable/product population and refuses an omitted, changed, or unresolved writer source.
-stage "v1 writer census structural closure"
-python3 "$ROOT/scripts/check-v1-writer-census.py" --structural
-
-stage "v1 receiver source census offline closure"
-python3 "$ROOT/scripts/check-v1-receiver-census.py"
-python3 "$ROOT/tests/v1-receiver-census/run.py"
-
-stage "GS2-08.6 independent producer fence attacks"
-python3 "$ROOT/tests/producer-fence-attacks/run.py"
-python3 "$ROOT/tests/producer-fence-attacks/selftest.py"
-python3 "$ROOT/tests/producer-fence-attacks/probe_legacy.py" --verify
-
 if [ "$engine_changed" = true ]; then
   stage "locked restore and affected-engine compile"
   dotnet restore "$ROOT/src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj" --locked-mode
@@ -84,11 +67,6 @@ if [ "$engine_changed" = true ]; then
   stage "command catalogue, parser, render, write-ness, contract, and help closure"
   dotnet test "$ROOT/tests/FS.GG.Coord.Cli.Kernel.Tests/FS.GG.Coord.Cli.Kernel.Tests.fsproj" \
     -c Release --no-restore --filter FullyQualifiedName~CommandSurfaceTests
-
-  stage "v1 writer census candidate-built metadata"
-  engine="$("$ROOT/scripts/build-gate-engine")"
-  [ -n "$engine" ] || { echo "change-completeness: candidate-built engine is unavailable" >&2; exit 1; }
-  python3 "$ROOT/scripts/check-v1-writer-census.py" --candidate "$engine"
 
   stage "handler ownership and production registration"
   dotnet test "$ROOT/tests/FS.GG.Coord.Cli.BoardOps.Tests/FS.GG.Coord.Cli.BoardOps.Tests.fsproj" \

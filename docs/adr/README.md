@@ -115,7 +115,8 @@ registry like any other, and this org gates its registries.
 | [0088](0088-ci-owned-unattended-credential-execution.md) | CI-owned unattended credential execution for a future ordinary-v2 operation class; agent critique is not credential authority | Accepted |
 | [0089](0089-reuse-the-protected-q4-sandbox-for-migration-rehearsal.md) | Reuse the protected Q4 sandbox for migration rehearsal | Accepted |
 
-| [0090](0090-single-operator-v2-cutover-execution.md) | Prepare one-operator cutover execution with a protected human OpenV2 decision | Proposed |
+| [0090](0090-single-operator-v2-cutover-execution.md) | Prepare one-operator cutover execution with a protected human OpenV2 decision | Superseded by ADR-0091 for the clean-start route |
+| [0091](0091-speed-first-clean-v2-start.md) | Start v2 clean in `.github`, prove one real journey and rerun, then adopt repositories explicitly and repair forward | Accepted |
 
 ## Supersession map
 

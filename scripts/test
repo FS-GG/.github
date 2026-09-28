@@ -195,6 +195,14 @@ UNSUPPORTED = re.compile(r"[!\[\]+{}]")
 # tree carries no inert entries; keeping it there is what lets `--assert-wired` run over a synthetic
 # root that has none of these directories.
 DELIBERATELY_UNWIRED: dict[str, str] = {
+    "tests/v1-writer-census": (
+        "DELIBERATE under ADR-0091: preserved historical V1 census qualification; "
+        "backward-validity proofs no longer gate clean-start source delivery."
+    ),
+    "tests/v1-receiver-census": (
+        "DELIBERATE under ADR-0091: preserved historical V1 receiver qualification; "
+        "the fresh V2 route does not import or certify legacy receiver state."
+    ),
     "tests/delivery-leading-line": (
         "DELIBERATE, and not a suite at all. This directory holds ONE data file — corpus.json, the "
         "single statement of the delivery-marker leading-line boundary (.github#2563) — and no runner. "

@@ -162,8 +162,8 @@ class OrdinarySettlementQualificationTests(unittest.TestCase):
         self.refuses(evidence=evidence, contains="native producer")
 
     def test_policy_inventory_is_enrolled_and_keeps_current_gates(self):
-        self.assertEqual("source-qualified-not-installed", self.policy["status"])
-        self.assertFalse(self.policy["credentialJob"]["installed"])
+        self.assertEqual("installed", self.policy["status"])
+        self.assertTrue(self.policy["credentialJob"]["installed"])
         self.assertEqual("trusted-main-push-predecessor", self.policy["qualification"]["producerStatus"])
         self.assertEqual("native-API-derived-evidence",
                          self.policy["qualification"]["currentValidatorRole"])
@@ -179,7 +179,7 @@ class OrdinarySettlementQualificationTests(unittest.TestCase):
                             for item in inventory if item["name"] != "V2_ORDINARY_AUTHORIZER_PRIVATE_KEY"))
         self.assertTrue(any(anchor["authorizer"]["publicKeySpkiSha256"] in item["publicIdentity"]
                             for item in inventory))
-        self.assertEqual({"v1-admission-genesis", "OpenV2"}, set(self.policy["unchangedGates"]))
+        self.assertEqual(["OpenV2"], self.policy["unchangedGates"])
         names = {item["name"] for item in inventory}
         self.assertFalse(names.intersection(self.policy["forbiddenCredentialReuse"]))
         observation = self.policy["credentialJob"]["liveObservation"]
@@ -193,7 +193,11 @@ class OrdinarySettlementQualificationTests(unittest.TestCase):
         self.assertEqual(3, observation["secretCount"])
         self.assertEqual("dedicated-custody-enrolled-pending-isolated-rehearsal", observation["disposition"])
 
-    def test_activation_requires_matching_status(self):
+    def test_activation_requires_matching_active_and_inactive_status(self):
+        self.policy["credentialJob"]["installed"] = False
+        self.refuses(contains="activation status differs")
+        self.policy["status"] = "source-qualified-not-installed"
+        self.assertEqual("qualified", self.qualify()["status"])
         self.policy["credentialJob"]["installed"] = True
         self.refuses(contains="activation status differs")
         self.policy["status"] = "installed"

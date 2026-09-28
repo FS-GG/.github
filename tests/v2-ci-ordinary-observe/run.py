@@ -82,6 +82,9 @@ class NativeObservationTests(unittest.TestCase):
                 body = {"object": {"sha": SOURCE}}
             elif path.endswith("/contents/policy/v2-ci-ordinary-settlement.json?ref=" + SOURCE):
                 body = {"encoding": "base64", "content": base64.b64encode(self.current_policy).decode()}
+            elif path.endswith("/contents/policy/v2-ci-ordinary-settlement-anchor.json?ref=" + SOURCE):
+                anchor = (ROOT / "policy/v2-ci-ordinary-settlement-anchor.json").read_bytes()
+                body = {"encoding": "base64", "content": base64.b64encode(anchor).decode()}
             elif path.endswith("/contents/.github/workflows/v2-ci-ordinary-settlement.yml?ref=" + SOURCE):
                 body = {"encoding": "base64", "content": base64.b64encode((ROOT / ".github/workflows/v2-ci-ordinary-settlement.yml").read_bytes()).decode()}
             elif path.endswith("/branches/main"):
@@ -112,13 +115,13 @@ class NativeObservationTests(unittest.TestCase):
         with patch.object(MODULE.subprocess, "run", side_effect=fake_run):
             return MODULE.observe(self.env, rehearsal=rehearsal)
 
-    def test_native_success_is_run_and_pr_head_bound_but_inactive(self):
+    def test_native_success_is_run_and_pr_head_bound_and_active(self):
         receipt = self.run_observation()
         self.assertEqual(SOURCE, receipt["sourceSha"])
         self.assertEqual(HEAD, receipt["qualificationSha"])
         self.assertEqual("PR_kwDOOrdinary3662", receipt["pullRequestNodeId"])
         self.assertEqual(123, receipt["runId"])
-        self.assertFalse(receipt["activation"])
+        self.assertTrue(receipt["activation"])
         self.assertEqual(self.tree, receipt["qualifiedTreeSha"])
         self.assertEqual(2, len(receipt["requiredChecks"]))
         self.assertEqual(8, len(receipt["requiredGateChecks"]))
@@ -209,7 +212,9 @@ class NativeObservationTests(unittest.TestCase):
             self.run_observation()
 
     def test_current_policy_revocation_refuses_old_run(self):
-        self.current_policy = self.current_policy.replace(b"source-qualified-not-installed", b"revoked")
+        policy = json.loads(self.current_policy)
+        policy["status"] = "revoked"
+        self.current_policy = json.dumps(policy, indent=2).encode() + b"\n"
         with self.assertRaisesRegex(MODULE.QUALIFICATION.Refusal, "current protected authority changed"):
             self.run_observation()
 
