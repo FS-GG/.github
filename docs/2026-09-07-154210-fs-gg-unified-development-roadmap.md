@@ -53,9 +53,10 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
-**Current frontier: ordinary V2 settlement is active in `.github` and the explicitly selected Audio
-receiver.** `.github` uses Coordination CLI 0.1.2; Audio uses published CLI 0.1.3. Checked source
-delivery, the shared `OpenV2` epoch, real settlement and normal rerun are observed for each receiver.
+**Current frontier: ordinary V2 settlement is active in `.github`, Audio, Net, Governance and Game.**
+`.github` uses Coordination CLI 0.1.2, Audio uses 0.1.3, and the first combined Net/Governance/Game
+wave uses 0.1.5. Checked source delivery, the shared `OpenV2` epoch, real settlement and normal rerun
+are observed for each selected receiver.
 The earlier callable, GS2-09 and OperatingV1 evidence remains valid at its recorded scope but no longer
 forms the active dependency chain. No clean-start step may relabel that evidence as migration completion,
 `VerifiedV2`, or a human-run receipt.
@@ -126,8 +127,8 @@ retain detailed milestone history in the owning plan. CI ticks and intermediate 
 ### 0.1 Stage progress
 
 The active profile is **C0–C3**: C0 checked source delivery; C1 fresh `.github` V2 pilot; C2 one real
-journey plus one normal rerun; C3 explicit-repository rollout with repair forward. `.github` and Audio
-are now the two explicitly activated targets. Other repositories join only by later selection, and
+journey plus one normal rerun; C3 explicit-repository rollout with repair forward. `.github`, Audio,
+Net, Governance and Game are now explicitly activated targets. Other repositories join by selection, and
 generated/scaffold defaults remain unchanged. The V0–V6 rows below preserve the superseded staged route
 for history and must not be used as clean-start prerequisites.
 
@@ -157,8 +158,10 @@ retain individual milestone evidence. Foundation, model qualification, scene, au
 presentation, replay, network, scale and public Releases A–C are delivered at their declared scopes.
 [SVG-WORKSPACE-01.1–.6](https://github.com/FS-GG/FS.GG.Templates/blob/273c9218960215ee856de9e59a769a0e7b63da8f/docs/roadmaps/svg-workspace-01.md)
 is frozen; [Release D.1–.4](roadmaps/svg-release-d.md) publishes and activates the compatible SVG product
-default through Templates 0.14.0 and wizard 0.11.2. Release D.5 remains open for actual `OperatingV2`
-and separately qualified lifecycle/default activation. Durable public hosting remains Templates #491.
+default through Templates 0.14.0 and wizard 0.11.2. Release D.5 is preparing its public SDD 2.0.2
+receiver in [Templates #641](https://github.com/FS-GG/FS.GG.Templates/pull/641). Its later lifecycle
+default follows the selected generation-2 clean-start route and separate receiver/activation proof;
+the historical `OperatingV2` gate is superseded. Durable public hosting remains Templates #491.
 
 SDD 2.0.0 introduced the omitted **Typed SDD backend** choice; the current inspected SDD release record is
 2.0.2. This does not change the distinct provider lifecycle tokens or prove every generated receiver adopted
@@ -218,12 +221,13 @@ start; these rows are not current prerequisites. The active C0–C3 results are 
    protected activation, one settlement, independent Authority readback and the normal already-complete
    rerun are observed. The owning [Audio plan](https://github.com/FS-GG/FS.GG.Audio/blob/main/docs/roadmaps/v2-ordinary-adoption.md)
    retains the exact evidence.
-2. **Prepare the next explicit C3 wave concurrently.** Preserve the in-flight Rendering CLI 0.1.4
-   publication. Combine the staged Net, Governance and Game profiles in one later immutable CLI release;
-   prepare their disabled receivers and dedicated credential custody in parallel. Activate at most three
-   separately after each repository's current checks and Authority binding are verified, then observe
-   its own settlement, independent journal readback and normal rerun. No repository inherits Audio's
-   activation. Independent SKILL-FS, LEARN and product work continues through its own boundaries.
+2. **Publish CLI 0.1.6, then activate the next explicit C3 wave.** Net, Governance and Game completed
+   their combined 0.1.5 wave. SDD and Templates have merged disabled receivers and independently
+   verified dedicated credential custody; the combined 0.1.6 source and preparation passed. Publish
+   that exact artifact to both feeds, verify immutable package identity, then activate each selected
+   receiver separately after its native checks and Authority binding. Observe each real settlement,
+   independent journal readback and normal rerun. Independent SKILL-FS, LEARN and product work continues
+   through its own boundaries.
 
 The [lane table](#91-dependencies-and-parallelism) names each owner, ready work and join condition.
 
@@ -1137,7 +1141,9 @@ ADR-0091 replaces the active V0–V6 cutover sequence with this bounded clean-st
 | **C2 — Smoke real use** | Run one real working journey and one ordinary rerun through the activated `.github` policy. | Both journeys complete with native provider readback; failures are repaired forward. |
 | **C3 — Roll out explicitly** | Bundle ready profiles in one immutable CLI release when practical; prepare selected receivers and dedicated credentials concurrently, then activate a bounded wave separately per repository. Keep generated/scaffold defaults unchanged. | Each selected repository has a clean pinned install, real settlement, independent Authority readback and normal already-complete rerun. Its current required checks, custody and exact-head merge remain separate; unselected repositories retain their behavior. |
 
-The first combined C3 wave uses published [Coordination CLI 0.1.5](https://github.com/FS-GG/FS.GG.Coordination/releases/tag/v0.1.5) for Net, Governance and Game. Its [publisher run](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36437778484) passed anonymous installation and dual-feed readback at the pinned source. Receiver preparation and dedicated credential custody are complete for all three. [Net #107](https://github.com/FS-GG/FS.GG.Net/pull/107) merged at its checked head; protected ordinary settlement and independent readback are pending. [Governance #439](https://github.com/FS-GG/FS.GG.Governance/pull/439) and [Game #670](https://github.com/FS-GG/FS.GG.Game/pull/670) are separate activation PRs awaiting their own required checks. None is marked adopted until its own settlement, Authority readback and normal already-complete rerun are observed.
+The first combined C3 wave used published [Coordination CLI 0.1.5](https://github.com/FS-GG/FS.GG.Coordination/releases/tag/v0.1.5) for Net, Governance and Game. Its [publisher run](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36437778484) passed anonymous installation and dual-feed readback at the pinned source. [Net #107](https://github.com/FS-GG/FS.GG.Net/pull/107), [Governance #439](https://github.com/FS-GG/FS.GG.Governance/pull/439) and [Game #670](https://github.com/FS-GG/FS.GG.Game/pull/670) each merged at its checked head and completed a real protected settlement, independent Authority readback and an unchanged `SettlementAlreadyComplete` rerun ([Net run](https://github.com/FS-GG/FS.GG.Net/actions/runs/36441643056), [Governance run](https://github.com/FS-GG/FS.GG.Governance/actions/runs/36444065570), [Game run](https://github.com/FS-GG/FS.GG.Game/actions/runs/36444699657)). All three selected receivers are adopted at that bounded clean-path boundary; this is not an efficiency or historical-upgrade claim.
+
+The next shared-release wave selects SDD and Templates. Their disabled receivers merged separately ([SDD #1080](https://github.com/FS-GG/FS.GG.SDD/pull/1080), [Templates #638](https://github.com/FS-GG/FS.GG.Templates/pull/638)); neither has a package pin or active settlement yet. [Coordination #877](https://github.com/FS-GG/FS.GG.Coordination/pull/877) combined both profiles at protected source `275cccb30a5c9ade4b3bba344ede13d7df446d13`; its exact-source [CLI 0.1.6 preparation](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36450952246) passed before immutable public publication. Sealed custody [PR #3944](https://github.com/FS-GG/.github/pull/3944) merged at `3ed9b4f8316a14c5e15bfb4c1e11554730b9ae3f`; its [SDD](https://github.com/FS-GG/.github/actions/runs/36450825631) and [Templates](https://github.com/FS-GG/.github/actions/runs/36450830306) bridge runs succeeded. Each receiver has independently read-back main-only environment policy and its three dedicated encrypted secret names. The prepared activation branches remain disabled until the immutable public CLI is verified. Each receiver then activates and proves settlement separately.
 
 Independent source lanes also advanced: [LEARN collector PR #3940](https://github.com/FS-GG/.github/pull/3940) merged at `76ae9d3e` with native capture and same-host export tests, while installer provenance and installed collector acceptance remain open. [SKILL-FS Python retirement PR #3941](https://github.com/FS-GG/.github/pull/3941) merged at `f38a0ec1` with protected checks and detached installed-closure verification; coherent successor publication and wider receiver adoption remain separate. Neither source result establishes a live efficiency reading.
 
@@ -1206,7 +1212,7 @@ flowchart TD
     Open --> Observe["V6 / GS2-14 baseline + 15 distinct items / contraction"]
     Observe --> Operating["OperatingV2"]
     Open -. actual routine population .-> R5["Separate R5 cohort and 30-day follow-up"]
-    Operating --> Lifecycle["Release D.5 lifecycle activation and receiver proof"]
+    Operating -. superseded by ADR-0091 .-> Lifecycle["Release D.5 lifecycle activation and receiver proof"]
     Foundations["Accepted O0-O3 / source-qualified Choreo"] -. reuse .-> Extensions["Optional E0/E1 / LEARN / F0-F3 preparation"]
     Extensions --> Canary["Separately selected E1 / F4 production canary"]
     Operating --> Canary
@@ -1231,7 +1237,7 @@ existing source/effect separation and does not authorize a current protected wri
 | **Omission controls — Coordination qualification owner** | Extend exact-population, added-subject, duplicate, replay and receipt-prefix controls already started in PR #507. | GS2-09.8 acceptance waits for representative .7 evidence; authoring independent controls does not. |
 | **Routine profile / receivers — `.github`, Governance, SDD, Templates and actual receivers** | Record actual enforcement call sites, tool/package/default identities, clean/upgrade cases and supported/deferred profiles. | GS2-10 accepts a coherent exact candidate; every changed input is refreshed before freeze or explicitly deferred. Pure Governance APIs alone do not qualify wiring. |
 | **Telemetry / measurement — `.github` producer, installed operator** | Repair attributed observation gaps and qualify prospective published/installed changes under their own authority. | No general migration dependency. R5 needs its actual ordinary-v2 cohort; missing efficiency evidence cannot manufacture or veto unrelated operational acceptance. |
-| **Optional/product work — owning repositories** | Authorized independent research/source work, reused O3/Choreo/FsQuint foundations, and unrelated product fixes. | Candidate-affecting changes join the same freeze disposition. Release D.5 and production canaries keep their specific `OperatingV2` gates. |
+| **Optional/product work — owning repositories** | Authorized independent research/source work, reused O3/Choreo/FsQuint foundations, and unrelated product fixes. | The historical fleet freeze does not constrain clean-start product work. Release D.5 follows its generation-2 clean-start amendment; production canaries retain their separately selected operating authority. |
 
 For programme-wide advancement, dispatch independently ready lanes in parallel within actual worker,
 integrator and hosted-CI capacity; a named-feature request stays within that feature. Give concurrent
@@ -1441,12 +1447,12 @@ CLI 0.1.3 is published. Dedicated Audio credential custody, protected activation
 its normal already-complete replay are complete, with independent Authority journal readback. This
 does not activate the fleet.
 
-Rendering's merged profile and in-flight CLI 0.1.4 publication remain one separate candidate. The
-staged Net, Governance and Game profiles form the next combined CLI release candidate, with their
-disabled receivers and credential custody prepared concurrently. Their source, package publication,
-per-repository activation and observed settlement remain distinct. The Net, Governance and Game
-receiver plans remain local preparation until delivered; each repository retains its own completion
-authority. Add durable plan links after their source lands.
+Rendering's CLI 0.1.4 remains a separate published candidate. The combined Net, Governance and Game
+CLI 0.1.5 release and all three protected receiver settlements are complete at the bounded clean-path
+boundary documented in [section 9.1](#91-dependencies-and-parallelism). SDD and Templates are the
+next selected wave: disabled source receivers and dedicated credential custody are ready, CLI 0.1.6
+preparation passed at its protected source, and publication plus separate activations remain. The
+historical migration parts below do not schedule these receivers.
 
 These are the default **parts for Astra planning**, named by deliverable. Select independent
 dependency-ready parts concurrently when programme advancement is requested; use a fresh Astra-high
@@ -1484,12 +1490,12 @@ Entry conditions constrain the dependent execution; earlier read-only planning m
 | **Cooperative enrollment and sessions** | F0–F1: protocol, bilateral enrollment, outbound client connection, capacity/job offers and reconnect without project execution | Coordination; selected cooperative need; F0 research may precede v2, while F1 needs authenticated session foundations | No subroadmap linked yet; conditional |
 | **Cooperative contribution and verification** | F2–F3: bounded sandbox assignments, local agents, quarantined submissions and owner-controlled verification through recovery | Coordination; the applicable bounded execution, session and verification foundations from section 9.7 | No subroadmap linked yet; conditional |
 | **Cooperative canary and adoption** | F4–F5: one enrolled peer and work class reaches independently verified delivery, then a measured adoption decision | Coordination with project/receiver owners; F3 evidence, OperatingV2 under the existing default and separate canary authority | No subroadmap linked yet; conditional |
-| **SVG game engine and Fable workspace completion** | Section 15 independent producer/product track: complete C01–C20, M0–M11, section 13 and Releases A–D through the accepted ordered feature sequence; no V0–V6 completion prerequisite for independent source/qualification work | `.github` planning owner with SDD, Rendering, Game, Audio, Net and Templates implementation owners. S.I.R. is strictly read-only and supplies only an audited disclosed compatibility baseline. Releases A–C and SVG-WORKSPACE-01.1–.6 are complete. Release D is selected for exact public publication, installed qualification and activation; durable hosting is deferred, while the single-lifecycle default keeps its OperatingV2/SDD authority | [accepted complete programme](2026-09-07-064259-svg-game-engine-template-design-roadmap.md), [SVG-FOUND-01 foundation](roadmaps/svg-game-engine-foundation.md), [SVG-QUAL-01 installed model qualification](roadmaps/svg-game-engine-installed-model-qualification.md), [SVG-SCENE-02 scene/renderer](roadmaps/svg-game-engine-scene-renderer.md), [SVG-PREVIEW-A publication](roadmaps/svg-preview-a.md), [SVG-PREVIEW-B release plan](roadmaps/svg-preview-b.md), [replay](roadmaps/svg-replay-01.md), [network](roadmaps/svg-network-01.md), [scale](roadmaps/svg-scale-01.md), [SVG-PREVIEW-C release plan](roadmaps/svg-preview-c.md), [SVG-WORKSPACE-01](https://github.com/FS-GG/FS.GG.Templates/blob/main/docs/roadmaps/svg-workspace-01.md), [SVG-RELEASE-D](roadmaps/svg-release-d.md), and [revision rationale](2026-09-07-121207-svg-game-engine-roadmap-revision-proposal.md) |
+| **SVG game engine and Fable workspace completion** | Section 15 independent producer/product track: complete C01–C20, M0–M11, section 13 and Releases A–D through the accepted ordered feature sequence; no V0–V6 completion prerequisite for independent source/qualification work | `.github` planning owner with SDD, Rendering, Game, Audio, Net and Templates implementation owners. S.I.R. is strictly read-only and supplies only an audited disclosed compatibility baseline. Releases A–C and SVG-WORKSPACE-01.1–.6 are complete. Release D is selected for exact public publication, installed qualification and activation; durable hosting is deferred, while the later single-lifecycle default follows the generation-2 clean-start policy and separate SDD receiver proof | [accepted complete programme](2026-09-07-064259-svg-game-engine-template-design-roadmap.md), [SVG-FOUND-01 foundation](roadmaps/svg-game-engine-foundation.md), [SVG-QUAL-01 installed model qualification](roadmaps/svg-game-engine-installed-model-qualification.md), [SVG-SCENE-02 scene/renderer](roadmaps/svg-game-engine-scene-renderer.md), [SVG-PREVIEW-A publication](roadmaps/svg-preview-a.md), [SVG-PREVIEW-B release plan](roadmaps/svg-preview-b.md), [replay](roadmaps/svg-replay-01.md), [network](roadmaps/svg-network-01.md), [scale](roadmaps/svg-scale-01.md), [SVG-PREVIEW-C release plan](roadmaps/svg-preview-c.md), [SVG-WORKSPACE-01](https://github.com/FS-GG/FS.GG.Templates/blob/main/docs/roadmaps/svg-workspace-01.md), [SVG-RELEASE-D](roadmaps/svg-release-d.md), and [revision rationale](2026-09-07-121207-svg-game-engine-roadmap-revision-proposal.md) |
 | **Fable bindings candidate generation and upstream integration assessment** | Section 15 producer track: optional Xantham candidates, exact tool qualification and skill-load upstream assessment; independent of v2 prerequisites | Templates 0.14.0 contains the public Xantham payload; [PR #635](https://github.com/FS-GG/FS.GG.Templates/pull/635) merged at `f3a7cd6ab6f035d4ba335d03fdc367db6164793f` after clean installed and retained-adoption proof, with the protected composition, kit and materialization gates green. Current live assessment remains `updates-found` / `unqualified` / `investigate`; no upstream update is accepted by that observation. | [Xantham candidate subroadmap](https://github.com/FS-GG/FS.GG.Templates/blob/main/docs/roadmaps/fable-bindings-xantham-candidates.md). FBX-05 is complete at its public installed receiver boundary; no republishing is needed. |
 | **Fable SC2 client and custom WASM control** | Section 15 product track: browser tactical client, native SC2 gateway and portable module contract; independent of v2 prerequisites | `FS.GG.SC2.Client`; .1–.2 and scripted .3a–.3c source are delivered. .3c adds the executable gateway and dynamic browser/guest journey, qualified against a scripted SC2 peer. Real SC2/data/map qualification (.3d), the parent .3 outcome and installed operation remain open | [SC2C-01 design and feature roadmap](2026-09-08-132131-fable-sc2-wasm-client-design-roadmap.md), [bounded SC2C-01.3 plan](https://github.com/FS-GG/FS.GG.SC2.Client/blob/7a3f6eaec37fa4da071cb1251ebc2525c79b9e60/docs/SC2C-01.3-plan.md), [.3c execution plan](https://github.com/FS-GG/FS.GG.SC2.Client/blob/7a3f6eaec37fa4da071cb1251ebc2525c79b9e60/docs/SC2C-01.3c-plan.md), source [PR #6](https://github.com/FS-GG/FS.GG.SC2.Client/pull/6) merged at `7a3f6eaec37fa4da071cb1251ebc2525c79b9e60` with [exact-main verification](https://github.com/FS-GG/FS.GG.SC2.Client/actions/runs/36324212682) |
-| **Fable BAR client and custom WASM control** | Section 15 product track: browser tactical client over FSBarV2/HighBarV3, including the FS.GG Fable game target; independent of v2 prerequisites | EHotwagner/FSBarV2 broker foundation .1a–.1d is source delivered: state validity and strict command admission. [PR #3](https://github.com/EHotwagner/FSBarV2/pull/3) merged at `b745e047` and its [status PR #4](https://github.com/EHotwagner/FSBarV2/pull/4) at `935ca7b9`. Multi-unit expansion, native/live BAR qualification, browser composition and installed adoption remain open; HighBarV3 owns native adapter changes. | [BARC-01 repository research, design and feature roadmap](2026-09-08-134900-fable-bar-wasm-client-design-roadmap.md), [FSBarV2 foundation plan](https://github.com/EHotwagner/FSBarV2/blob/main/docs/roadmaps/barc-01-foundation.md) |
+| **Fable BAR client and custom WASM control** | Section 15 product track: browser tactical client over FSBarV2/HighBarV3, including the FS.GG Fable game target; independent of v2 prerequisites | FSBarV2 broker foundation .1a–.1e and scripting feature projection .1g are source delivered ([#3](https://github.com/EHotwagner/FSBarV2/pull/3), [#5](https://github.com/EHotwagner/FSBarV2/pull/5), [#6](https://github.com/EHotwagner/FSBarV2/pull/6)). HighBarV3 coordinator atomic batch/provenance .1f is source delivered with focused native compilation and tests ([#1](https://github.com/EHotwagner/HighBarV3/pull/1)). Full Recoil/live BAR qualification, browser composition and installed adoption remain open. | [BARC-01 repository research, design and feature roadmap](2026-09-08-134900-fable-bar-wasm-client-design-roadmap.md), [FSBarV2 foundation plan](https://github.com/EHotwagner/FSBarV2/blob/main/docs/roadmaps/barc-01-foundation.md) |
 | **Reusable Unity shim and full Fable replacement client** | Section 15 product track: native Unity dedicated-server bridge, title adapters, complete browser gameplay and custom WASM control; independent of v2 prerequisites | Proposed Unity product owner/workspace; design delivery does not implement, publish or activate | [UNITYC-01 research, design and feature roadmap](2026-09-08-144823-unity-native-shim-fable-client-design-roadmap.md) |
-| **Four-spatial-dimensional grid tactics** | Section 15 independent product track: deterministic four-axis algorithms, tactical mechanisms and a readable playable vertical slice; no V0–V6 prerequisite | `FS.GG.FourD`; .1–.3 source is delivered. Tutorial/evaluation, qualification, publication and installed adoption remain open | [FOURD-01 algorithm design and feature roadmap](2026-09-08-152551-4d-grid-tactics-algorithms-design-roadmap.md), [FOURD-01.3 source plan](https://github.com/FS-GG/FS.GG.FourD/blob/6e8cd359d781517470949ed25281df412b59c33e/docs/FOURD-01.3.md), source [PR #3](https://github.com/FS-GG/FS.GG.FourD/pull/3), browser-readiness [PR #4](https://github.com/FS-GG/FS.GG.FourD/pull/4) and [exact-main verification](https://github.com/FS-GG/FS.GG.FourD/actions/runs/36314732410) |
+| **Four-spatial-dimensional grid tactics** | Section 15 independent product track: deterministic four-axis algorithms, tactical mechanisms and a readable playable vertical slice; no V0–V6 prerequisite | `FS.GG.FourD`; .1–.4 source and a bounded .5a AI-accounting/measurement checkpoint are delivered ([#6](https://github.com/FS-GG/FS.GG.FourD/pull/6)). The browser-startup workload repair [#7](https://github.com/FS-GG/FS.GG.FourD/pull/7) merged at `17a3492c933a4792a7d431f673ee7be4a140e06e`, and its [exact-main verify](https://github.com/FS-GG/FS.GG.FourD/actions/runs/36450700711) passed. Player evaluation .4-E, remaining .5a technical cases, full .5 acceptance, publication and installed adoption remain open. | [FOURD-01 algorithm design and feature roadmap](2026-09-08-152551-4d-grid-tactics-algorithms-design-roadmap.md), [FOURD-01.5 technical boundary](https://github.com/FS-GG/FS.GG.FourD/blob/main/docs/FOURD-01.5.md), [FOURD-01.3 source plan](https://github.com/FS-GG/FS.GG.FourD/blob/6e8cd359d781517470949ed25281df412b59c33e/docs/FOURD-01.3.md) |
 
 Each selected part produces a subroadmap in its owning repository, normally
 `docs/roadmaps/<feature-slug>.md`. Link that document in the corresponding row, using a relative link for
@@ -1750,7 +1756,7 @@ programme-wide approval. Resolve the following decisions only at the boundary th
 | GS2-09.7 | Exact representative copy set, executable candidate, missing-provider dispositions, effect authority and recovery/cleanup ownership. | Coordination and protected-operation owner |
 | GS2-10 | Freeze artifact/default identities; finish or defer concurrent candidate changes; accept the measured closed-write window, latest abort point and staffed recovery plan. | Cutover owner with producer/receiver owners |
 | GS2-13 / GS2-14 | Irreversible production open, actual observations, contraction and `OperatingV2` evidence. | Existing protected cutover authority |
-| Release D.5 | After `OperatingV2`, qualify and activate the receiver/workspace lifecycle default using its owning sources. | SDD, Templates and default-policy owner |
+| Release D.5 | Qualify the public SDD 2.0.2 clean receiver, then separately activate the omitted `typed-sdd` lifecycle default under the generation-2 clean-start policy after exact public pins, receiver proof and default readback. Historical `OperatingV2` is no longer a gate. | SDD, Templates and default-policy owner |
 | Optional E0/E1 / F0–F5 / LEARN | Select a measured residual need and bounded next window; authorize only its specific installed/canary boundary. | Owning feature and operation owners |
 
 The 10% bureaucracy ceiling and intervention definitions in section 7.4 remain in force; incomplete

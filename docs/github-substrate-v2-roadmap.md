@@ -102,14 +102,34 @@ readings and claims follow separately and cannot delay an observed working repos
 measurements remain unknown.
 
 Rendering's CLI 0.1.4 remains its own published candidate. The first combined Net/Governance/Game
-[CLI 0.1.5 release](https://github.com/FS-GG/FS.GG.Coordination/releases/tag/v0.1.5) is published from
-protected source, with anonymous installation and dual-feed readback passing in its
-[publisher run](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36437778484). Disabled receiver
-preparation and dedicated credential custody are complete for all three. Net's
-[activation PR #107](https://github.com/FS-GG/FS.GG.Net/pull/107) is merged; its protected settlement and
-readback remain pending. Governance [PR #439](https://github.com/FS-GG/FS.GG.Governance/pull/439) and
-Game [PR #670](https://github.com/FS-GG/FS.GG.Game/pull/670) await their own required checks. No selected
-receiver is complete until its separate settlement, Authority readback and normal rerun are observed.
+[CLI 0.1.5 release](https://github.com/FS-GG/FS.GG.Coordination/releases/tag/v0.1.5) passed anonymous
+installation and dual-feed readback in its [publisher run](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36437778484).
+Net [#107](https://github.com/FS-GG/FS.GG.Net/pull/107), Governance
+[#439](https://github.com/FS-GG/FS.GG.Governance/pull/439) and Game
+[#670](https://github.com/FS-GG/FS.GG.Game/pull/670) each completed protected settlement, independent
+Authority readback and a normal unchanged `SettlementAlreadyComplete` rerun
+([Net](https://github.com/FS-GG/FS.GG.Net/actions/runs/36441643056),
+[Governance](https://github.com/FS-GG/FS.GG.Governance/actions/runs/36444065570),
+[Game](https://github.com/FS-GG/FS.GG.Game/actions/runs/36444699657)). Their clean-path adoption is
+complete; efficiency measurements and historical-upgrade claims remain separate.
+
+The next shared release selects SDD and Templates. Their disabled receivers merged at
+[SDD #1080](https://github.com/FS-GG/FS.GG.SDD/pull/1080) and
+[Templates #638](https://github.com/FS-GG/FS.GG.Templates/pull/638); neither has a package pin or
+active settlement. [Coordination #877](https://github.com/FS-GG/FS.GG.Coordination/pull/877) merged both
+profiles at protected source `275cccb30a5c9ade4b3bba344ede13d7df446d13`. Its exact-source
+[CLI 0.1.6 preparation](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36450952246)
+passed; immutable public publication remains. The sealed [custody bridge #3944](https://github.com/FS-GG/.github/pull/3944)
+merged, both dedicated bridge runs succeeded, and each main-only receiver environment independently
+read back its three dedicated secret names. The separate SDD and Templates activation branches remain
+hard-disabled until public package pins are verified. Each receiver then activates and proves
+settlement separately within the bounded wave.
+
+Coordination self-adoption is a later receiver. Its current main protection is supplied by applicable
+rulesets rather than the classic branch-protection check list, and its Bootstrap qualification can
+validly reuse a prior result with skipped jobs. A ruleset-aware observer and a profile-specific
+validated-reuse receipt are needed before that repository is selected. This work can be prepared in
+parallel; it does not delay SDD/Templates or turn skipped checks into successes for other profiles.
 
 [ADR-0091](adr/0091-speed-first-clean-v2-start.md) records the decision. Everything below describing the
 older GS2-09–GS2-14 migration sequence is retained historical design, not a second set of prerequisites.

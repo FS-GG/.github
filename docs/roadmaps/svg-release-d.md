@@ -1,14 +1,15 @@
 # SVG-RELEASE-D — complete workspace publication and activation
 
-Status: complete through .4 on 2026-09-15; .5 is waiting on OperatingV2. Route: protected operation for immutable
-publication; routine for installed qualification and documentation. Durable public hosting is deferred and does
-not gate the compatible release.
+Status: complete through .4 on 2026-09-15; .5 awaits the clean-start default adoption and installed
+receiver proof selected by [ADR-0091](../adr/0091-speed-first-clean-v2-start.md). Route: protected operation
+for immutable publication; routine source delivery with required checks for default adoption. Durable public
+hosting is deferred and does not gate the compatible release.
 
 This is the executable Release D plan for the
 [accepted SVG game-engine programme](../2026-09-07-064259-svg-game-engine-template-design-roadmap.md). It
 publishes the frozen complete workspace, proves the public bytes through installed consumers, and activates
 the SVG product default within every currently supported lifecycle. The later single-lifecycle default remains
-a distinct effect gated by the actual OperatingV2/SDD authority transition.
+a distinct effect gated by ADR-0091's specific clean-start authority and public receiver acceptance.
 
 ## Frozen release inputs
 
@@ -85,16 +86,30 @@ activation and lifecycle-default activation are separate claims.
   the typed registry, and checks both effective pins against the newest archives on GitHub Packages and
   nuget.org. The installed receiver evidence is milestone .3.
 
-- [ ] **SVG-RELEASE-D.5 — Activate the single workspace lifecycle — route: protected effect**
+- [ ] **SVG-RELEASE-D.5 — Activate the single workspace lifecycle — route: routine source, gated default effect**
 
-  The owning SDD capability is complete: SDD [#927](https://github.com/FS-GG/FS.GG.SDD/issues/927),
+  The owning SDD capability is public: SDD [#927](https://github.com/FS-GG/FS.GG.SDD/issues/927),
   [#934](https://github.com/FS-GG/FS.GG.SDD/issues/934), and release
-  [2.0.0](https://github.com/FS-GG/FS.GG.SDD/releases/tag/v2.0.0) deliver the Quint-backed default,
-  explicit F# compatibility, implementation correspondence, and public package/readback qualification.
-  Proceed only after actual OperatingV2 evidence satisfies the remaining accepted lifecycle/default prerequisite.
-  Then update the lifecycle default through its authority sources, qualify clean and retained public receivers,
-  and preserve explicit compatible legacy selections. Until then, report .1–.4 as the published compatible
-  complete SVG workspace, not as full Release D closure.
+  [2.0.0](https://github.com/FS-GG/FS.GG.SDD/releases/tag/v2.0.0) deliver the Quint-backed Typed SDD
+  backend and explicit F# compatibility. The 2.0.2 [tagged release](https://github.com/FS-GG/FS.GG.SDD/actions/runs/35334648281)
+  and [read-only recovery](https://github.com/FS-GG/FS.GG.SDD/actions/runs/35336067623)
+  establish public package publication and payload readback; the [SDD release record](https://github.com/FS-GG/FS.GG.SDD/blob/83790aedc228e2158c9da7a9ac8e30195bdf9fbe/docs/release/fsquint-migration.md)
+  documents FsQuint stable adoption and replay qualification. These do not change a provider lifecycle token or a scaffold default.
+  The shared generation 2 [`OpenV2` append](https://github.com/FS-GG/FS.GG.Coordination.Authority/commit/26d1882af9293b264df17a1fa98515e108313fe5)
+  and `.github` ordinary settlement/rerun satisfy the specific clean-start epoch prerequisite selected by
+  [ADR-0091](../adr/0091-speed-first-clean-v2-start.md). No `OperatingV2` claim is made.
+
+  The SDD, Templates and wizard owners must deliver and publish the exact package composition that makes
+  omitted SVG creation select `typed-sdd` with its default `quint-specification-v1` backend. Qualify that
+  public candidate before changing the effective registry/default policy. From empty caches and public
+  feeds only, use raw `dotnet new fs-gg-fable-game` to prove omitted SVG Player product files. Use installed
+  `fsgg-sdd scaffold` and the wizard with lifecycle omitted to prove the root `typed-sdd` lifecycle and
+  refusal path; check retained explicit lifecycle tokens and SVG bundles separately. Then update the effective
+  public pins under current required checks and repeat clean creation from those pins. Bind both proofs
+  to package hashes and independently read back the activated default. Treat promised retained-workspace
+  upgrades as a separate qualification. The existing
+  Templates 0.14.0 and wizard 0.11.2 product defaults stay in force until this later change passes.
+  Until then, .1–.4 remain the published compatible complete SVG workspace, not full Release D closure.
 
 ## Completion boundary
 
@@ -103,6 +118,7 @@ choices. Release D is fully complete only when .5 also establishes the authorize
 public game hosting is deliberately outside this release boundary and may be resumed through issue #491 without
 changing the frozen package contents.
 
-Current state: the compatible complete SVG workspace is published and active through .4, and the SDD producer
-half of .5 is public as 2.0.0. Full Release D remains open only for the authoritative OperatingV2 transition and
-the receiver/default activation it authorizes; successful producer publication does not manufacture that epoch.
+Current state: the compatible complete SVG workspace is published and active through .4. SDD 2.0.2 and
+shared generation 2 `OpenV2` are public/observed at their own boundaries. Full Release D remains open for
+the separately published and qualified receiver/default activation; neither producer publication nor the
+clean epoch alone changes an omitted workspace lifecycle.
