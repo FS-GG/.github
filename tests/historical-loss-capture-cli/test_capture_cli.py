@@ -17,14 +17,14 @@ PROJECT = ROOT / "tools/HistoricalLossCapture/HistoricalLossCapture.fsproj"
 ASSEMBLY = ROOT / "tools/HistoricalLossCapture/bin/Debug/net10.0/HistoricalLossCapture.dll"
 REPOSITORIES = {
     ".github": (1269292704, "R_kgDOS6feoA"),
-    "Audio": (1292226968, "R_kgDOTQXRmA"),
-    "Coordination": (1346720714, "R_kgDOUEVTyg"),
-    "Game": (1290990429, "R_kgDOTPLzXQ"),
-    "Governance": (1273065119, "R_kgDOS-Funw"),
-    "Net": (1305845505, "R_kgDOTdWfAQ"),
-    "Rendering": (1269292235, "R_kgDOS6fcyw"),
-    "SDD": (1274272672, "R_kgDOS_PboA"),
-    "Templates": (1281961814, "R_kgDOTGkvVg"),
+    "FS.GG.Audio": (1292226968, "R_kgDOTQXRmA"),
+    "FS.GG.Coordination": (1346720714, "R_kgDOUEVTyg"),
+    "FS.GG.Game": (1290990429, "R_kgDOTPLzXQ"),
+    "FS.GG.Governance": (1273065119, "R_kgDOS-Funw"),
+    "FS.GG.Net": (1305845505, "R_kgDOTdWfAQ"),
+    "FS.GG.Rendering": (1269292235, "R_kgDOS6fcyw"),
+    "FS.GG.SDD": (1274272672, "R_kgDOS_PboA"),
+    "FS.GG.Templates": (1281961814, "R_kgDOTGkvVg"),
 }
 
 
@@ -96,6 +96,10 @@ class CaptureCliTests(unittest.TestCase):
         self.assertEqual(0, completed.returncode, completed.stderr)
         self.assertEqual(90, len(NativeFixture.requests))
         self.assertTrue(all(method == "GET" and version == "2026-03-10" for method, _, version in NativeFixture.requests))
+        requested_paths = {path for _, path, _ in NativeFixture.requests}
+        self.assertIn("/repos/FS-GG/FS.GG.Audio", requested_paths)
+        self.assertIn("/repos/FS-GG/FS.GG.Templates", requested_paths)
+        self.assertNotIn("/repos/FS-GG/Audio", requested_paths)
         self.assertEqual(0o600, stat.S_IMODE(self.output.stat().st_mode))
         self.assertGreater(self.output.stat().st_size, 0)
         self.assertNotIn("fixture-token", completed.stdout + completed.stderr)

@@ -89,6 +89,13 @@ module HistoricalLossRetainedNativeCensus =
         { First: PassCapture
           Second: PassCapture }
 
+    type PrivateCaptureSummary =
+        { ObservationHorizon: string
+          FirstPageCount: int
+          FirstRawEvidenceDigest: string
+          SecondPageCount: int
+          SecondRawEvidenceDigest: string }
+
     type CollectorError =
         | TransportFailure of subject: string * detail: string
         | Unauthorized of subject: string
@@ -106,14 +113,14 @@ module HistoricalLossRetainedNativeCensus =
     // organization enumeration, or a caller-supplied list.
     let repositories =
         [ { FullName = "FS-GG/.github"; DatabaseId = 1269292704L; NodeId = "R_kgDOS6feoA" }
-          { FullName = "FS-GG/Audio"; DatabaseId = 1292226968L; NodeId = "R_kgDOTQXRmA" }
-          { FullName = "FS-GG/Coordination"; DatabaseId = 1346720714L; NodeId = "R_kgDOUEVTyg" }
-          { FullName = "FS-GG/Game"; DatabaseId = 1290990429L; NodeId = "R_kgDOTPLzXQ" }
-          { FullName = "FS-GG/Governance"; DatabaseId = 1273065119L; NodeId = "R_kgDOS-Funw" }
-          { FullName = "FS-GG/Net"; DatabaseId = 1305845505L; NodeId = "R_kgDOTdWfAQ" }
-          { FullName = "FS-GG/Rendering"; DatabaseId = 1269292235L; NodeId = "R_kgDOS6fcyw" }
-          { FullName = "FS-GG/SDD"; DatabaseId = 1274272672L; NodeId = "R_kgDOS_PboA" }
-          { FullName = "FS-GG/Templates"; DatabaseId = 1281961814L; NodeId = "R_kgDOTGkvVg" } ]
+          { FullName = "FS-GG/FS.GG.Audio"; DatabaseId = 1292226968L; NodeId = "R_kgDOTQXRmA" }
+          { FullName = "FS-GG/FS.GG.Coordination"; DatabaseId = 1346720714L; NodeId = "R_kgDOUEVTyg" }
+          { FullName = "FS-GG/FS.GG.Game"; DatabaseId = 1290990429L; NodeId = "R_kgDOTPLzXQ" }
+          { FullName = "FS-GG/FS.GG.Governance"; DatabaseId = 1273065119L; NodeId = "R_kgDOS-Funw" }
+          { FullName = "FS-GG/FS.GG.Net"; DatabaseId = 1305845505L; NodeId = "R_kgDOTdWfAQ" }
+          { FullName = "FS-GG/FS.GG.Rendering"; DatabaseId = 1269292235L; NodeId = "R_kgDOS6fcyw" }
+          { FullName = "FS-GG/FS.GG.SDD"; DatabaseId = 1274272672L; NodeId = "R_kgDOS_PboA" }
+          { FullName = "FS-GG/FS.GG.Templates"; DatabaseId = 1281961814L; NodeId = "R_kgDOTGkvVg" } ]
 
     let private sha256 (value: string) =
         value
@@ -542,20 +549,25 @@ module HistoricalLossRetainedNativeCensus =
                         Error(MalformedCandidate(label, "legacy done receipt marker is malformed"))
                     else Ok None)
 
+    let private appendFingerprintFrame (hash: IncrementalHash) (value: string) =
+        let bytes = Encoding.UTF8.GetBytes value
+        hash.AppendData(Encoding.ASCII.GetBytes($"%d{bytes.Length}:"))
+        hash.AppendData bytes
+
+    let private appendPageFingerprint (hash: IncrementalHash) (page: RawPage) =
+        [ page.Repository.FullName; string page.Repository.DatabaseId; page.Repository.NodeId
+          string page.Pass; streamName page.Stream; string page.Index; page.Method
+          page.ApiVersionRequested; page.ApiVersionSelected; page.Path
+          page.Query |> List.collect (fun (key, value) -> [ key; value ]) |> String.concat "\u001f"
+          string page.Status; page.Resource; page.Body; page.RawSha256
+          defaultArg page.LinkHeader ""; page.ObservedAt; defaultArg page.NextLink ""
+          string page.ItemCount; string page.Terminal ]
+        |> List.iter (appendFingerprintFrame hash)
+
     let private rawFingerprint (pages: RawPage list) =
-        [ yield!
-              pages
-              |> List.collect (fun page ->
-                  [ page.Repository.FullName; string page.Repository.DatabaseId; page.Repository.NodeId
-                    string page.Pass; streamName page.Stream; string page.Index; page.Method
-                    page.ApiVersionRequested; page.ApiVersionSelected; page.Path
-                    page.Query |> List.collect (fun (key, value) -> [ key; value ]) |> String.concat "\u001f"
-                    string page.Status; page.Resource; page.Body; page.RawSha256
-                    defaultArg page.LinkHeader ""; page.ObservedAt; defaultArg page.NextLink ""
-                    string page.ItemCount; string page.Terminal ]) ]
-        |> List.map frame
-        |> String.concat ""
-        |> sha256
+        use hash = IncrementalHash.CreateHash HashAlgorithmName.SHA256
+        pages |> List.iter (appendPageFingerprint hash)
+        hash.GetHashAndReset() |> Convert.ToHexString |> _.ToLowerInvariant()
 
     let private typedFingerprint (subjects: DraftSubject list) (inventoryDigest: string) =
         inventoryDigest ::
@@ -841,7 +853,6 @@ module HistoricalLossRetainedNativeCensus =
     let private privateMode = UnixFileMode.UserRead ||| UnixFileMode.UserWrite
     let private captureMagic = Encoding.ASCII.GetBytes("FSGG-HLCAP-v1\u0000")
     let private strictUtf8 = UTF8Encoding(false, true)
-    let private maximumCaptureBytes = 512L * 1024L * 1024L
     let private maximumPages = 200000
     let private maximumPageBodyBytes = 4 * 1024 * 1024
 
@@ -871,14 +882,13 @@ module HistoricalLossRetainedNativeCensus =
                 let size = Marshal.ReadInt64(buffer, 40)
                 mode &&& 0xF000 = 0x8000
                 && mode &&& 0x1FF = 0x180
-                && size >= 0L && size <= maximumCaptureBytes
+                && size >= 0L
         finally
             Marshal.FreeHGlobal buffer
 
     let private writeText (writer: BinaryWriter) (value: string) =
         let bytes = strictUtf8.GetBytes value
-        if bytes.Length > maximumPageBodyBytes
-           || writer.BaseStream.Position + int64 bytes.Length + 4L > maximumCaptureBytes then
+        if bytes.Length > maximumPageBodyBytes then
             raise (InvalidDataException "private capture write exceeds bounds")
         writer.Write bytes.Length
         writer.Write bytes
@@ -981,11 +991,8 @@ module HistoricalLossRetainedNativeCensus =
         && pass.RawEvidenceDigest = rawFingerprint pass.Pages
 
     let savePrivate path (capture: Capture) =
-        let totalBodyBytes =
-            capture.First.Pages @ capture.Second.Pages
-            |> List.sumBy (fun page -> int64 (Encoding.UTF8.GetByteCount page.Body))
         if not (OperatingSystem.IsLinux()) then Error "private native capture requires Linux descriptor checks"
-        elif String.IsNullOrWhiteSpace path || totalBodyBytes > maximumCaptureBytes
+        elif String.IsNullOrWhiteSpace path
              || not (rawPassValid 1 capture.First && rawPassValid 2 capture.Second)
              || capture.First.Draft.ObservationHorizon <> capture.Second.Draft.ObservationHorizon then
             Error "private native capture is incomplete or inconsistent"
@@ -1008,10 +1015,8 @@ module HistoricalLossRetainedNativeCensus =
                     writeText writer pass.RawEvidenceDigest
                     writer.Write pass.Pages.Length
                     pass.Pages |> List.iter (writePage writer)
-                    if stream.Length > maximumCaptureBytes then
-                        raise (InvalidDataException "private capture write exceeds bounds")
                 writer.Flush()
-                if stream.Length > maximumCaptureBytes || File.GetUnixFileMode temporary <> privateMode then
+                if File.GetUnixFileMode temporary <> privateMode then
                     raise (InvalidDataException "private capture exceeds limits")
                 stream.Flush true
                 File.Move(temporary, target, false)
@@ -1061,3 +1066,290 @@ module HistoricalLossRetainedNativeCensus =
                             Error "private native capture failed raw integrity checks"
                         else Ok { First = first; Second = second }
             with _ -> Error "private native capture could not be loaded"
+
+    // The command-line capture uses this path rather than collectTwoPass + savePrivate. Only one
+    // response page and compact issue/comment roster rows are retained in memory at a time; raw
+    // bodies are written once to the private descriptor and then discarded.
+    let private appendRawPage (hash: IncrementalHash) (page: RawPage) =
+        appendPageFingerprint hash page
+
+    let private collectArrayProjected
+        (transport: IVersionedSinglePageGitHubTransport)
+        (apiBase: string)
+        (pass: int)
+        (repository: RepositoryIdentity)
+        (streamKind: Stream)
+        (path: string)
+        (baseQuery: (string * string) list)
+        (project: string -> JsonElement list -> Result<'a list, CollectorError>)
+        (retain: RawPage -> Result<unit, CollectorError>) =
+        let rec loop index currentPath query seen resourceSeen acc =
+            let subject = requestSubject repository streamKind index
+            if index > 10000 then
+                Error(InvalidResponse(subject, "pagination did not terminate within 10000 pages"))
+            else
+                send transport repository streamKind index currentPath query
+                |> Result.bind (fun (request, response, resource) ->
+                    if resourceSeen |> Option.exists ((<>) resource) then
+                        Error(InvalidResponse(subject, "X-RateLimit-Resource changed during the stream"))
+                    else
+                        parseArray subject response.Body
+                        |> Result.bind (fun rows ->
+                            let ids = rows |> List.map (rowId subject)
+                            let idError = ids |> List.tryPick (function Error error -> Some error | Ok _ -> None)
+                            let pageIds = ids |> List.choose (function Ok value -> Some value | Error _ -> None)
+                            let duplicate = pageIds |> List.tryFind (fun id -> Set.contains id seen)
+                            let duplicateInPage = pageIds |> List.countBy id |> List.tryFind (fun (_, count) -> count > 1) |> Option.map fst
+                            let count = rows.Length
+                            let explicitNext = response.NextLink
+                            let next =
+                                match explicitNext with
+                                | Some link -> continuation apiBase repository streamKind index request.Path request.Query link |> Result.map Some
+                                | None when count = 100 ->
+                                    Ok(Some(request.Path, request.Query |> List.map (fun (key, value) -> if key = "page" then key, string (index + 1) else key, value)))
+                                | None -> Ok None
+                            match idError, duplicate |> Option.orElse duplicateInPage with
+                            | Some error, _ -> Error error
+                            | None, Some id -> Error(DuplicateNativeId($"%s{repository.FullName}/%s{streamName streamKind}/%s{id}"))
+                            | None, None ->
+                                next
+                                |> Result.bind (fun nextRequest ->
+                                    let page =
+                                        { Pass = pass; Repository = repository; Stream = streamKind; Index = index
+                                          Method = request.Method; ApiVersionRequested = ApiVersion
+                                          ApiVersionSelected = (header "X-GitHub-Api-Version-Selected" response).Value
+                                          Path = request.Path; Query = request.Query; Status = response.Status
+                                          Resource = resource; Body = response.Body; RawSha256 = sha256 response.Body
+                                          LinkHeader = header "Link" response
+                                          ObservedAt = DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture)
+                                          NextLink = explicitNext; ItemCount = count; Terminal = nextRequest.IsNone }
+                                    retain page
+                                    |> Result.bind (fun () -> project subject rows)
+                                    |> Result.bind (fun projected ->
+                                        let accumulated = List.rev projected @ acc
+                                        match nextRequest with
+                                        | None -> Ok(List.rev accumulated)
+                                        | Some(nextPath, nextQuery) ->
+                                            loop (index + 1) nextPath nextQuery (Set.union seen (Set.ofList pageIds)) (Some resource) accumulated))))
+        loop 1 path (baseQuery @ [ "per_page", "100"; "page", "1" ]) Set.empty None []
+
+    let private markerBody (body: string) =
+        let line = leadingLine body
+        if line.StartsWith("<!-- fsgg:", StringComparison.Ordinal) then body else ""
+
+    let private projectedNativeSubjects repository subject rows =
+        rows
+        |> List.fold (fun state row ->
+            state |> Result.bind (fun values ->
+                match requiredInt subject "number" row, requiredString subject "node_id" row,
+                      requiredString subject "created_at" row, optionalBody subject row with
+                | Ok number, Ok nodeId, Ok createdAt, Ok body ->
+                    let isPr = match row.TryGetProperty "pull_request" with | true, _ -> true | _ -> false
+                    Ok({ Number = number; NodeId = nodeId; CreatedAt = createdAt; Body = markerBody body; IsPullRequest = isPr } :: values)
+                | Error error, _, _, _ | _, Error error, _, _ | _, _, Error error, _ | _, _, _, Error error -> Error error)) (Ok [])
+        |> Result.map List.rev
+
+    let private projectedPulls _subject rows =
+        rows
+        |> List.fold (fun state row -> state |> Result.bind (fun values -> requiredInt "pull roster" "number" row |> Result.map (fun number -> number :: values))) (Ok [])
+        |> Result.map List.rev
+
+    let private projectedComments repository subject rows =
+        rows
+        |> List.fold (fun state row ->
+            state |> Result.bind (fun values ->
+                match requiredString subject "node_id" row, requiredString subject "created_at" row,
+                      optionalBody subject row, requiredString subject "issue_url" row with
+                | Ok nodeId, Ok createdAt, Ok body, Ok issueUrl ->
+                    Ok({ NodeId = nodeId; CreatedAt = createdAt; Body = markerBody body; IssueUrl = issueUrl } :: values)
+                | Error error, _, _, _ | _, Error error, _, _ | _, _, Error error, _ | _, _, _, Error error -> Error error)) (Ok [])
+        |> Result.map List.rev
+
+    let private inventoryRows apiBase horizon repository (subjects: NativeSubject list) (comments: NativeComment list) =
+        let subjectRows =
+            subjects |> List.map (fun item ->
+                parseInstant repository.FullName item.CreatedAt
+                |> Result.map (fun created ->
+                    if created <= horizon then
+                        Some [ repository.FullName; "issue"; string item.Number; item.NodeId
+                               string item.IsPullRequest; created.ToString("O", CultureInfo.InvariantCulture) ]
+                    else None))
+        let commentRows =
+            comments |> List.map (fun item ->
+                parseInstant repository.FullName item.CreatedAt
+                |> Result.bind (fun created ->
+                    match commentNumber apiBase repository item.IssueUrl with
+                    | None -> Error(InvalidResponse(repository.FullName, "comment parent escaped repository"))
+                    | Some number ->
+                        Ok(if created <= horizon then
+                               Some [ repository.FullName; "comment"; string number; item.NodeId
+                                      created.ToString("O", CultureInfo.InvariantCulture) ]
+                           else None)))
+        subjectRows @ commentRows
+        |> List.fold (fun state row -> state |> Result.bind (fun values -> row |> Result.map (fun value -> value :: values))) (Ok [])
+
+    type private StreamedPass =
+        { Draft: UntrustedDraft; PageCount: int; RawEvidenceDigest: string }
+
+    let private collectPassStreamed transport apiBase pass horizonText horizon (writer: BinaryWriter) =
+        use rawHash = IncrementalHash.CreateHash HashAlgorithmName.SHA256
+        let mutable pageCount = 0
+        let retain page =
+            if pageCount >= maximumPages then Error(InvalidResponse("collector", "native capture exceeded the bounded page count"))
+            elif page.Resource <> "core" then Error(InvalidResponse("collector", "native repository stream changed X-RateLimit-Resource from core"))
+            else
+                writePage writer page
+                appendRawPage rawHash page
+                pageCount <- pageCount + 1
+                Ok()
+        let collectRepositoryStreamed repository =
+            let owner, repo = let parts = repository.FullName.Split('/', 2) in parts.[0], parts.[1]
+            let root = $"repos/%s{owner}/%s{repo}"
+            let issueQuery = [ "state", "all"; "sort", "created"; "direction", "asc" ]
+            collectIdentity transport pass repository
+            |> Result.bind (fun identity -> retain identity)
+            |> Result.bind (fun () -> collectArrayProjected transport apiBase pass repository Issues ($"%s{root}/issues") issueQuery (projectedNativeSubjects repository) retain)
+            |> Result.bind (fun subjects ->
+                collectArrayProjected transport apiBase pass repository Pulls ($"%s{root}/pulls") issueQuery projectedPulls retain
+                |> Result.bind (fun pulls ->
+                    let pullSet = Set.ofList pulls
+                    if pullSet.Count <> pulls.Length then Error(DuplicateNativeId($"%s{repository.FullName} pull roster"))
+                    elif pullSet <> (subjects |> List.filter _.IsPullRequest |> List.map _.Number |> Set.ofList) then
+                        Error(InvalidResponse(repository.FullName, "pull roster does not match pull rows in the complete issue roster"))
+                    else
+                        collectArrayProjected transport apiBase pass repository IssueComments ($"%s{root}/issues/comments") [ "sort", "created"; "direction", "asc" ] (projectedComments repository) retain
+                        |> Result.bind (fun comments ->
+                            collectArrayProjected transport apiBase pass repository IssueEvents ($"%s{root}/issues/events") [] (fun _ _ -> Ok []) retain
+                            |> Result.bind (fun (_: unit list) ->
+                                let roster = subjects |> List.map (fun item -> item.Number, item) |> Map.ofList
+                                let bodyDrafts = subjects |> List.map (classifyBody horizon repository)
+                                let commentDrafts = comments |> List.map (classifyComment apiBase horizon repository roster)
+                                match bodyDrafts @ commentDrafts |> List.tryPick (function Error error -> Some error | _ -> None) with
+                                | Some error -> Error error
+                                | None ->
+                                    let drafts = bodyDrafts @ commentDrafts |> List.choose (function Ok(Some item) -> Some item | _ -> None)
+                                    match drafts |> List.countBy _.NativeId |> List.tryFind (fun (_, count) -> count > 1) with
+                                    | Some(nativeId, _) -> Error(DuplicateNativeId nativeId)
+                                    | None ->
+                                        drafts |> List.map _.SubjectNumber |> List.distinct |> List.sort
+                                        |> List.fold (fun state number ->
+                                            state |> Result.bind (fun () ->
+                                                collectArrayProjected transport apiBase pass repository (Timeline number) ($"%s{root}/issues/%d{number}/timeline") [] (fun _ _ -> Ok []) retain
+                                                |> Result.map (fun (_: unit list) -> ()))) (Ok())
+                                        |> Result.bind (fun () -> inventoryRows apiBase horizon repository subjects comments)
+                                        |> Result.map (fun inventory -> drafts, inventory)))))
+        repositories
+        |> List.fold (fun state repository ->
+            state |> Result.bind (fun (drafts, inventory) ->
+                collectRepositoryStreamed repository
+                |> Result.map (fun (moreDrafts, moreInventory) -> moreDrafts @ drafts, moreInventory @ inventory))) (Ok([], []))
+        |> Result.bind (fun (subjects, inventory) ->
+            match subjects |> List.countBy _.NativeId |> List.tryFind (fun (_, count) -> count > 1) with
+            | Some(nativeId, _) -> Error(DuplicateNativeId nativeId)
+            | None ->
+                let ordered = subjects |> List.sortBy (fun item -> item.Repository.FullName, item.SubjectNumber, item.CreatedAt, item.NativeId)
+                let inventoryDigest = inventory |> List.choose id |> List.sort |> List.collect id |> List.map frame |> String.concat "" |> sha256
+                let draft =
+                    { ObservationHorizon = horizonText; Repositories = repositories; Subjects = ordered
+                      EligibleInventoryDigest = inventoryDigest; EvidenceFingerprint = typedFingerprint ordered inventoryDigest }
+                let rawDigest = rawHash.GetHashAndReset() |> Convert.ToHexString |> _.ToLowerInvariant()
+                Ok { Draft = draft; PageCount = pageCount; RawEvidenceDigest = rawDigest })
+
+    let private patchPassHeader (writer: BinaryWriter) (digestPosition: int64) (countPosition: int64) (digest: string) (count: int) =
+        let endPosition = writer.BaseStream.Position
+        writer.BaseStream.Position <- digestPosition
+        writeText writer digest
+        writer.BaseStream.Position <- countPosition
+        writer.Write count
+        writer.BaseStream.Position <- endPosition
+
+    let private validatePrivateStream (stream: FileStream) =
+        stream.Position <- 0L
+        use reader = new BinaryReader(stream, strictUtf8, true)
+        if reader.ReadBytes(captureMagic.Length) <> captureMagic then raise (InvalidDataException "invalid private capture magic")
+        let horizon = readText reader 128
+        let readPass expected =
+            let number = reader.ReadInt32()
+            let expectedDigest = readText reader 64
+            let count = reader.ReadInt32()
+            if number <> expected || count < 0 || count > maximumPages then raise (InvalidDataException "invalid native pass")
+            use hash = IncrementalHash.CreateHash HashAlgorithmName.SHA256
+            for _ in 1 .. count do
+                let page = readPage reader
+                if page.Pass <> expected || not (Set.contains page.Repository (Set.ofList repositories)) || page.RawSha256 <> sha256 page.Body then
+                    raise (InvalidDataException "private capture failed raw integrity checks")
+                appendRawPage hash page
+            let actualDigest = hash.GetHashAndReset() |> Convert.ToHexString |> _.ToLowerInvariant()
+            if actualDigest <> expectedDigest then raise (InvalidDataException "private capture digest mismatch")
+            count, actualDigest
+        let firstCount, firstDigest = readPass 1
+        let secondCount, secondDigest = readPass 2
+        if stream.Position <> stream.Length then raise (InvalidDataException "private capture has trailing bytes")
+        { ObservationHorizon = horizon; FirstPageCount = firstCount; FirstRawEvidenceDigest = firstDigest
+          SecondPageCount = secondCount; SecondRawEvidenceDigest = secondDigest }
+
+    let collectTwoPassPrivate transport apiBase observationHorizon path =
+        let mutable temporary = ""
+        try
+            if not (OperatingSystem.IsLinux()) then Error "private native capture requires Linux descriptor checks"
+            elif String.IsNullOrWhiteSpace path || File.Exists path || Directory.Exists path then Error "private native capture path is invalid"
+            else
+                match Uri.TryCreate(apiBase, UriKind.Absolute) with
+                | false, _ -> Error "native census refused"
+                | true, apiUri when apiUri.Scheme <> Uri.UriSchemeHttps && apiUri.Host <> "localhost" && apiUri.Host <> "127.0.0.1" -> Error "native census refused"
+                | true, _ ->
+                    match parseInstant "observation horizon" observationHorizon with
+                    | Error _ -> Error "native census refused"
+                    | Ok horizon when horizon > DateTimeOffset.UtcNow -> Error "native census refused"
+                    | Ok horizon ->
+                        let target = Path.GetFullPath path
+                        temporary <- target + ".tmp-" + Guid.NewGuid().ToString("N")
+                        let options = FileStreamOptions()
+                        options.Mode <- FileMode.CreateNew
+                        options.Access <- FileAccess.ReadWrite
+                        options.Share <- FileShare.None
+                        options.UnixCreateMode <- privateMode
+                        use stream = new FileStream(temporary, options)
+                        use writer = new BinaryWriter(stream, strictUtf8, true)
+                        writer.Write captureMagic
+                        writeText writer observationHorizon
+                        let collectPassNumber (number: int) =
+                            writer.Write number
+                            let digestPosition = stream.Position
+                            writeText writer (String.replicate 64 "0")
+                            let countPosition = stream.Position
+                            writer.Write 0
+                            collectPassStreamed transport apiBase number observationHorizon horizon writer
+                            |> Result.map (fun captured ->
+                                patchPassHeader writer digestPosition countPosition captured.RawEvidenceDigest captured.PageCount
+                                captured)
+                        match collectPassNumber 1 with
+                        | Error _ -> Error "native census refused"
+                        | Ok first ->
+                            match collectPassNumber 2 with
+                            | Error _ -> Error "native census refused"
+                            | Ok second when first.Draft.Repositories <> second.Draft.Repositories
+                                             || first.Draft.Subjects <> second.Draft.Subjects
+                                             || first.Draft.EligibleInventoryDigest <> second.Draft.EligibleInventoryDigest
+                                             || first.Draft.EvidenceFingerprint <> second.Draft.EvidenceFingerprint -> Error "native census pass drift"
+                            | Ok second ->
+                                writer.Flush()
+                                if File.GetUnixFileMode temporary <> privateMode then raise (InvalidDataException "private capture permissions changed")
+                                stream.Flush true
+                                let verified = validatePrivateStream stream
+                                if verified.FirstPageCount <> first.PageCount || verified.SecondPageCount <> second.PageCount
+                                   || verified.FirstRawEvidenceDigest <> first.RawEvidenceDigest
+                                   || verified.SecondRawEvidenceDigest <> second.RawEvidenceDigest then
+                                    raise (InvalidDataException "private capture readback mismatch")
+                                File.Move(temporary, target, false)
+                                temporary <- ""
+                                let directoryFd = unixOpen(Path.GetDirectoryName target, oDirectory ||| oNoFollow ||| oCloseOnExec)
+                                if directoryFd < 0 then raise (IOException "private capture directory could not be opened")
+                                use directoryHandle = new SafeFileHandle(nativeint directoryFd, true)
+                                if unixFsync directoryFd <> 0 then raise (IOException "private capture directory could not be synced")
+                                Ok verified
+        with _ -> Error "private native capture could not be saved"
+        |> fun result ->
+            if Result.isError result && temporary <> "" then
+                try File.Delete temporary with _ -> ()
+            result

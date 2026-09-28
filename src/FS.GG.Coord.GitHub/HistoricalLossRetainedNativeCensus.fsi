@@ -96,6 +96,16 @@ module HistoricalLossRetainedNativeCensus =
             Second: PassCapture
         }
 
+    /// Bounded-memory readback summary for a private two-pass capture.
+    type PrivateCaptureSummary =
+        {
+            ObservationHorizon: string
+            FirstPageCount: int
+            FirstRawEvidenceDigest: string
+            SecondPageCount: int
+            SecondRawEvidenceDigest: string
+        }
+
     type CollectorError =
         | TransportFailure of subject: string * detail: string
         | Unauthorized of subject: string
@@ -119,6 +129,15 @@ module HistoricalLossRetainedNativeCensus =
         apiBase: string ->
         observationHorizon: string ->
         Result<Capture, CollectorError>
+
+    /// Capture directly into a new private 0600 file. Each raw page is persisted and discarded
+    /// before the next request; the complete artifact is scanned once before atomic publication.
+    val collectTwoPassPrivate:
+        transport: IVersionedSinglePageGitHubTransport ->
+        apiBase: string ->
+        observationHorizon: string ->
+        path: string ->
+        Result<PrivateCaptureSummary, string>
 
     /// Replays the exact two retained raw passes through the production decoder before binding.
     /// Caller-supplied typed drafts are ignored; missing or altered raw pages refuse.

@@ -72,27 +72,13 @@ let main args =
             else
                 try
                     use transport = new HttpTransport(apiBase, token)
-                    match collectTwoPass (transport :> IVersionedSinglePageGitHubTransport) apiBase horizon with
+                    match collectTwoPassPrivate (transport :> IVersionedSinglePageGitHubTransport) apiBase horizon output with
                     | Error _ ->
                         Console.Error.WriteLine "historical-loss-capture: refused native-census"
                         1
-                    | Ok capture ->
-                        match savePrivate output capture with
-                        | Error _ ->
-                            Console.Error.WriteLine "historical-loss-capture: refused private-save"
-                            1
-                        | Ok () ->
-                            match loadPrivate output with
-                            | Error _ ->
-                                Console.Error.WriteLine "historical-loss-capture: refused private-readback"
-                                1
-                            | Ok loaded when loaded.First.RawEvidenceDigest <> capture.First.RawEvidenceDigest
-                                              || loaded.Second.RawEvidenceDigest <> capture.Second.RawEvidenceDigest ->
-                                Console.Error.WriteLine "historical-loss-capture: refused private-readback"
-                                1
-                            | Ok _ ->
-                                Console.WriteLine "historical-loss-capture: saved private two-pass evidence"
-                                0
+                    | Ok _ ->
+                        Console.WriteLine "historical-loss-capture: saved private two-pass evidence"
+                        0
                 with _ ->
                     Console.Error.WriteLine "historical-loss-capture: refused capture-runtime"
                     1

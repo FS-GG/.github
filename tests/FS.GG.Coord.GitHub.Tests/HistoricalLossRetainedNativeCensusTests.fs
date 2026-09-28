@@ -62,24 +62,24 @@ module HistoricalLossRetainedNativeCensusTests =
             elif request.Path = root + "/issues" then
                 if repository.FullName = "FS-GG/.github" then
                     "[" + issue 1001 "I_gh1" 1 "ordinary PR body" true + "]"
-                elif repository.FullName = "FS-GG/Audio" then
+                elif repository.FullName = "FS-GG/FS.GG.Audio" then
                     "[" + issue 1501 "I_audio3" 3 "audio PR" true + "]"
-                elif repository.FullName = "FS-GG/Rendering" then
+                elif repository.FullName = "FS-GG/FS.GG.Rendering" then
                     let marker = $"<!-- fsgg:intake:v1 id=rendering-2 digest={digest} -->\nwork item"
                     "[" + issue 2001 "I_rendering2" 2 marker false + "]"
                 else "[]"
             elif request.Path = root + "/pulls" then
                 if repository.FullName = "FS-GG/.github" then "[{\"id\":3001,\"number\":1}]"
-                elif repository.FullName = "FS-GG/Audio" then "[{\"id\":3501,\"number\":3}]"
+                elif repository.FullName = "FS-GG/FS.GG.Audio" then "[{\"id\":3501,\"number\":3}]"
                 else "[]"
             elif request.Path = root + "/issues/comments" then
                 if repository.FullName = "FS-GG/.github" then
                     let receipt = $"<!-- fsgg:delivery-receipt id=kit-1 head={head} evidence=https://example.test/a -->\n\nproof"
                     "[" + comment 4001 "IC_delivery" 1 receipt repository.FullName + "," + comment 4002 "IC_nonreceipt" 1 "quoted receipt example" repository.FullName + "]"
-                elif repository.FullName = "FS-GG/Audio" then
+                elif repository.FullName = "FS-GG/FS.GG.Audio" then
                     let receipt = $"<!-- fsgg:delivery-receipt id=audio-3 head={head} evidence=https://example.test/audio -->\nproof"
                     "[" + comment 4501 "IC_audio_delivery" 3 receipt repository.FullName + "]"
-                elif repository.FullName = "FS-GG/Rendering" then
+                elif repository.FullName = "FS-GG/FS.GG.Rendering" then
                     "[" + comment 5001 "IC_done" 2 "<!-- fsgg:done-receipt v=1 -->\nverified" repository.FullName + "]"
                 else "[]"
             elif request.Path = root + "/issues/events" && repository.FullName = "FS-GG/.github" && page = "1" then
@@ -116,6 +116,14 @@ module HistoricalLossRetainedNativeCensusTests =
         member _.Requests = List.ofSeq requests
 
     [<Fact>]
+    let ``frozen roster uses the accepted canonical repository identities`` () =
+        Assert.Equal<string list>(
+            [ "FS-GG/.github"; "FS-GG/FS.GG.Audio"; "FS-GG/FS.GG.Coordination"
+              "FS-GG/FS.GG.Game"; "FS-GG/FS.GG.Governance"; "FS-GG/FS.GG.Net"
+              "FS-GG/FS.GG.Rendering"; "FS-GG/FS.GG.SDD"; "FS-GG/FS.GG.Templates" ],
+            repositories |> List.map _.FullName)
+
+    [<Fact>]
     let ``two stable native passes retain exact pages and derive only source-bound receipts`` () =
         let fixture = Fixture()
 
@@ -133,6 +141,35 @@ module HistoricalLossRetainedNativeCensusTests =
             Assert.Contains(capture.First.Pages, fun page -> page.Stream = IssueEvents && page.Index = 2 && page.ItemCount = 0 && page.Terminal)
             Assert.Equal(3, capture.First.Pages |> List.filter (fun page -> match page.Stream with Timeline _ -> true | _ -> false) |> List.length)
             Assert.All(fixture.Requests, fun request -> Assert.Equal("GET", request.Method); Assert.Equal(NoBody, request.Body))
+
+    [<Fact>]
+    let ``streamed private capture seals and verifies large pages without retaining the capture graph`` () =
+        let padding = String.replicate 20000 "x"
+        let fixture = Fixture(bodyFor = (fun (request, _) body ->
+            if request.Path = "repos/FS-GG/.github/issues/events" && query "page" request = "1" then
+                [ 1 .. 100 ]
+                |> List.map (fun id -> $"{{\"id\":{7000 + id},\"padding\":\"{padding}\"}}")
+                |> String.concat ","
+                |> fun rows -> "[" + rows + "]"
+            else body))
+        let directory = Path.Combine(Path.GetTempPath(), "fsgg-historical-stream-" + Guid.NewGuid().ToString("N"))
+        Directory.CreateDirectory directory |> ignore
+        let path = Path.Combine(directory, "native.capture")
+        try
+            let summary =
+                match collectTwoPassPrivate fixture api horizon path with
+                | Ok value -> value
+                | Error error -> failwith error
+            Assert.Equal(UnixFileMode.UserRead ||| UnixFileMode.UserWrite, File.GetUnixFileMode path)
+            Assert.True(FileInfo(path).Length > 3L * 1024L * 1024L)
+            let loaded = match loadPrivate path with Ok value -> value | Error error -> failwith error
+            Assert.Equal(summary.FirstPageCount, loaded.First.Pages.Length)
+            Assert.Equal(summary.SecondPageCount, loaded.Second.Pages.Length)
+            Assert.Equal(summary.FirstRawEvidenceDigest, loaded.First.RawEvidenceDigest)
+            Assert.Equal(summary.SecondRawEvidenceDigest, loaded.Second.RawEvidenceDigest)
+            Assert.Empty(Directory.GetFiles(directory, "*.tmp-*"))
+        finally
+            Directory.Delete(directory, true)
 
     [<Theory>]
     [<InlineData(401)>]
@@ -203,7 +240,7 @@ module HistoricalLossRetainedNativeCensusTests =
     [<Fact>]
     let ``unknown intake marker version refuses in issue body and comment`` () =
         let badIssue = Fixture(bodyFor = (fun (request, _) body ->
-            if request.Path = "repos/FS-GG/Rendering/issues" then
+            if request.Path = "repos/FS-GG/FS.GG.Rendering/issues" then
                 body.Replace("fsgg:intake:v1", "fsgg:intake:v2")
             else body))
         match collectTwoPass badIssue api horizon with
@@ -211,7 +248,7 @@ module HistoricalLossRetainedNativeCensusTests =
         | actual -> failwithf "unknown intake issue version was accepted: %A" actual
 
         let badComment = Fixture(bodyFor = (fun (request, _) body ->
-            if request.Path = "repos/FS-GG/Rendering/issues/comments" then
+            if request.Path = "repos/FS-GG/FS.GG.Rendering/issues/comments" then
                 body.Replace("fsgg:done-receipt v=1", "fsgg:intake:v2")
             else body))
         match collectTwoPass badComment api horizon with
@@ -221,7 +258,7 @@ module HistoricalLossRetainedNativeCensusTests =
     [<Fact>]
     let ``duplicate native ids and changed second pass both fail closed`` () =
         let duplicate = Fixture(bodyFor = (fun (request, _) body ->
-            if request.Path = "repos/FS-GG/Audio/issues/events" then "[{\"id\":1},{\"id\":1}]" else body))
+            if request.Path = "repos/FS-GG/FS.GG.Audio/issues/events" then "[{\"id\":1},{\"id\":1}]" else body))
         match collectTwoPass duplicate api horizon with
         | Error(DuplicateNativeId _) -> ()
         | actual -> failwithf "duplicate was not refused: %A" actual
@@ -433,7 +470,7 @@ module HistoricalLossRetainedNativeCensusTests =
                 body.Replace("quoted receipt example", "updated unrelated comment")
             elif request.Path = "repos/FS-GG/.github/issues/events" && count = 2 then
                 body.Replace("6001", "9999")
-            elif request.Path = "repos/FS-GG/Audio/issues" && count = 2 then
+            elif request.Path = "repos/FS-GG/FS.GG.Audio/issues" && count = 2 then
                 let later = issue 1502 "I_later" 4 "new ordinary issue" false
                             |> fun value -> value.Replace(at, "2026-09-29T00:00:00Z")
                 body.TrimEnd(']') + "," + later + "]"
@@ -476,7 +513,7 @@ module HistoricalLossRetainedNativeCensusTests =
     [<Fact>]
     let ``marker disappearance between native passes refuses`` () =
         let fixture = Fixture(bodyFor = (fun (request, count) body ->
-            if request.Path = "repos/FS-GG/Audio/issues/comments" && count = 2 then
+            if request.Path = "repos/FS-GG/FS.GG.Audio/issues/comments" && count = 2 then
                 body.Replace("fsgg:delivery-receipt", "plain:delivery-receipt")
             else body))
         match collectTwoPass fixture api approvedHorizon with
@@ -486,7 +523,7 @@ module HistoricalLossRetainedNativeCensusTests =
     [<Fact>]
     let ``verified zero intake census binds without inventing an intake writer`` () =
         let fixture = Fixture(bodyFor = (fun (request, _) body ->
-            if request.Path = "repos/FS-GG/Rendering/issues" then
+            if request.Path = "repos/FS-GG/FS.GG.Rendering/issues" then
                 body.Replace("fsgg:intake:v1", "plain:intake:v1")
             else body))
         let capture = match collectTwoPass fixture api approvedHorizon with Ok value -> value | Error error -> failwithf "%A" error
@@ -563,16 +600,16 @@ module HistoricalLossRetainedNativeCensusTests =
         Directory.CreateDirectory directory |> ignore
         let path = Path.Combine(directory, "native.capture")
         let link = Path.Combine(directory, "capture-link")
-        let sparse = Path.Combine(directory, "oversized.capture")
+        let sparse = Path.Combine(directory, "malformed-sparse.capture")
         try
             Assert.Equal(Ok(), savePrivate path capture)
             File.CreateSymbolicLink(link, path) |> ignore
             Assert.True(loadPrivate link |> Result.isError)
             Assert.True(loadPrivate directory |> Result.isError)
             do
-                use oversized = new FileStream(sparse, FileMode.CreateNew, FileAccess.Write, FileShare.None)
-                oversized.SetLength(512L * 1024L * 1024L + 1L)
-                oversized.Flush true
+                use malformed = new FileStream(sparse, FileMode.CreateNew, FileAccess.Write, FileShare.None)
+                malformed.SetLength(1024L * 1024L)
+                malformed.Flush true
             File.SetUnixFileMode(sparse, UnixFileMode.UserRead ||| UnixFileMode.UserWrite)
             Assert.True(loadPrivate sparse |> Result.isError)
             Assert.True(loadPrivate path |> Result.isOk)
