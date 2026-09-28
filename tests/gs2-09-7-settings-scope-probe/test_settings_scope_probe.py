@@ -139,8 +139,16 @@ class SettingsScopeProbeTests(unittest.TestCase):
                 report = probe.build_report(token, proof, ROOT, "b" * 40, opener)
         encoded = json.dumps(report, sort_keys=True)
         self.assertFalse(report["activation"])
+        self.assertEqual("fsgg.github-substrate-v2.settings-scope-probe/2", report["schema"])
+        self.assertTrue(report["diagnostic"]["collected"])
+        self.assertTrue(report["diagnostic"]["expectedStatusSet"])
+        self.assertFalse(report["diagnostic"]["canonicalAuthorityQualified"])
         self.assertEqual("unknown", report["authority"]["installedAppGrant"])
+        self.assertFalse(report["authority"]["qualified"])
         self.assertEqual("qualified-current-token-read", report["customProperties"]["verdict"])
+        self.assertEqual("missing-from-mint-proof",
+                         report["customProperties"]["permissionEvidence"]["disposition"])
+        self.assertIsNone(report["customProperties"]["permissionEvidence"]["observedMintGrant"])
         self.assertEqual(
             {"definitionCount": 3,
              "definitionTypes": {"multi_select": 0, "single_select": 2,
@@ -372,6 +380,31 @@ class SettingsScopeProbeTests(unittest.TestCase):
                 self.assertEqual(verdict, report["repositoryRulesets"]["verdict"])
                 self.assertFalse(report["repositoryRulesets"]["bypassActorsVisible"])
 
+    def test_missing_custom_property_grant_and_private_ruleset_403_are_diagnostic_success(self):
+        values = provider_values()
+        schema_url = probe.API + f"/orgs/{probe.OWNER}/properties/schema"
+        rulesets_url = (probe.API
+                        + f"/repos/{probe.OWNER}/{probe.REPOSITORY}/rulesets"
+                        + "?includes_parents=true&per_page=100")
+        values[schema_url] = Response(403, {"message": "permission unavailable"})
+        values[rulesets_url] = Response(403, {"message": "private plan or permission unavailable"})
+
+        report = self.build(values)
+
+        self.assertTrue(report["diagnostic"]["collected"])
+        self.assertTrue(report["diagnostic"]["expectedStatusSet"])
+        self.assertFalse(report["authority"]["qualified"])
+        self.assertEqual("missing-from-mint-proof",
+                         report["customProperties"]["permissionEvidence"]["disposition"])
+        self.assertEqual("refused-forbidden", report["customProperties"]["verdict"])
+        self.assertEqual("permission-or-plan", report["customProperties"]["refusalReason"])
+        self.assertEqual(403, report["customProperties"]["schemaStatus"])
+        self.assertEqual("refused-forbidden", report["repositoryRulesets"]["verdict"])
+        self.assertEqual("permission-or-plan", report["repositoryRulesets"]["refusalReason"])
+        self.assertEqual(403, report["repositoryRulesets"]["listStatus"])
+        self.assertEqual([], report["repositoryRulesets"]["detailStatuses"])
+        self.assertIsNone(report["customProperties"]["summary"])
+
     def test_malformed_parent_rows_cannot_claim_observed_absence(self):
         token = "ghs_" + "r" * 40
         values = provider_values()
@@ -384,7 +417,7 @@ class SettingsScopeProbeTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "ruleset parent identity is incomplete"):
                     probe.build_report(token, proof, ROOT, "b" * 40, Opener(values))
 
-    def test_mint_proof_refuses_extra_write_and_token_mismatch(self):
+    def test_mint_proof_preserves_missing_optional_grant_and_refuses_extra_write_and_token_mismatch(self):
         token = "ghs_" + "a" * 40
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "proof.json"
@@ -394,10 +427,9 @@ class SettingsScopeProbeTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "unexpected write"):
                 probe.load_mint_proof(path, token)
             changed = mint_proof(token)
-            changed["permissions"].pop("organization_custom_properties")
             path.write_text(json.dumps(changed), encoding="utf-8")
-            with self.assertRaisesRegex(ValueError, "settings read grant"):
-                probe.load_mint_proof(path, token)
+            loaded = probe.load_mint_proof(path, token)
+            self.assertNotIn("organization_custom_properties", loaded["permissions"])
             path.write_text(json.dumps(mint_proof(token)), encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "differs"):
                 probe.load_mint_proof(path, token + "x")
@@ -413,10 +445,13 @@ class SettingsScopeProbeTests(unittest.TestCase):
         self.assertIn("--method DELETE installation/token", text)
         self.assertIn("if-no-files-found: error", text)
         self.assertIn("python3 -m unittest", text)
-        self.assertIn(".customProperties.verdict", text)
-        self.assertIn(".app.permissions.organization_custom_properties", text)
-        self.assertIn(".repositoryRulesets.verdict", text)
+        self.assertIn(".diagnostic.collected", text)
+        self.assertIn(".diagnostic.expectedStatusSet", text)
+        self.assertIn(".authority.qualified", text)
         self.assertIn(".repositoryRulesets.permissionEvidence.administration", text)
+        self.assertNotIn(".app.permissions.organization_custom_properties", text)
+        self.assertNotIn(".customProperties.verdict", text)
+        self.assertNotIn(".repositoryRulesets.verdict", text)
         self.assertNotIn("permission-actions:", text)
         self.assertNotIn("permission-environments:", text)
 
