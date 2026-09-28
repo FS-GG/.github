@@ -232,9 +232,34 @@ class NativeObservationTests(unittest.TestCase):
 
     def test_unavailable_native_api_refuses_without_treating_403_as_absence(self):
         unavailable = subprocess.CompletedProcess(["gh", "api"], 1, "", "HTTP 403")
-        with patch.object(MODULE.subprocess, "run", return_value=unavailable):
-            with self.assertRaisesRegex(MODULE.QUALIFICATION.Refusal, "native GitHub evidence unavailable"):
+        with patch.object(MODULE.subprocess, "run", return_value=unavailable) as run:
+            with self.assertRaisesRegex(
+                MODULE.QUALIFICATION.Refusal,
+                r"native GitHub evidence unavailable: repos/FS-GG/\.github/pulls/3662 \(HTTP 403\)",
+            ):
                 MODULE.api("repos/FS-GG/.github/pulls/3662")
+        self.assertEqual(1, run.call_count)
+
+    def test_native_api_retries_a_transient_process_failure(self):
+        unavailable = subprocess.CompletedProcess(["gh", "api"], 1, "", "temporary failure")
+        available = subprocess.CompletedProcess(["gh", "api"], 0, "{}", "")
+        with patch.object(MODULE.subprocess, "run", side_effect=[unavailable, available]) as run:
+            self.assertEqual({}, MODULE.api("repos/FS-GG/.github/pulls/3662"))
+        self.assertEqual(2, run.call_count)
+
+    def test_native_api_retries_server_failure_then_keeps_sanitized_status(self):
+        unavailable = subprocess.CompletedProcess(["gh", "api"], 1, "", "upstream failed (HTTP 503)")
+        with patch.object(MODULE.subprocess, "run", return_value=unavailable) as run:
+            with self.assertRaisesRegex(MODULE.QUALIFICATION.Refusal, r"\(HTTP 503\)"):
+                MODULE.api("repos/FS-GG/.github/pulls/3662")
+        self.assertEqual(3, run.call_count)
+
+    def test_native_api_retries_rate_limit_but_not_permanent_forbidden(self):
+        limited = subprocess.CompletedProcess(["gh", "api"], 1, "", "API rate limit exceeded (HTTP 403)")
+        available = subprocess.CompletedProcess(["gh", "api"], 0, "{}", "")
+        with patch.object(MODULE.subprocess, "run", side_effect=[limited, available]) as run:
+            self.assertEqual({}, MODULE.api("repos/FS-GG/.github/pulls/3662"))
+        self.assertEqual(2, run.call_count)
 
     def test_workflow_has_no_manual_or_pr_trigger_and_settlement_needs_receipt(self):
         workflow = (ROOT / ".github/workflows/v2-ci-ordinary-settlement.yml").read_text()

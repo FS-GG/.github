@@ -30,12 +30,33 @@ SPEC.loader.exec_module(QUALIFICATION)
 
 
 def api(path: str) -> dict | list:
-    result = subprocess.run(
-        ["gh", "api", "--header", "Accept: application/vnd.github+json", path],
-        check=False, capture_output=True, text=True, timeout=30,
-    )
-    if result.returncode:
-        raise QUALIFICATION.Refusal(f"native GitHub evidence unavailable: {path}")
+    result = None
+    last_status = None
+    for _ in range(3):
+        try:
+            result = subprocess.run(
+                ["gh", "api", "--header", "Accept: application/vnd.github+json", path],
+                check=False, capture_output=True, text=True, timeout=30,
+            )
+        except subprocess.SubprocessError:
+            continue
+        if result.returncode == 0:
+            break
+        status_match = re.search(r"\bHTTP ([1-5][0-9]{2})\b", result.stderr)
+        last_status = int(status_match.group(1)) if status_match else None
+        detail = result.stderr.lower()
+        retryable_transport = any(marker in detail for marker in (
+            "timeout", "timed out", "temporary failure", "connection reset",
+            "could not resolve", "failed to connect", "error connecting", "network",
+            "rate limit", "secondary rate",
+        ))
+        retryable_status = last_status == 429 or (last_status is not None and 500 <= last_status <= 599)
+        if not retryable_status and not retryable_transport:
+            suffix = f" (HTTP {last_status})" if last_status else ""
+            raise QUALIFICATION.Refusal(f"native GitHub evidence unavailable: {path}{suffix}")
+    if result is None or result.returncode:
+        suffix = f" (HTTP {last_status})" if last_status else ""
+        raise QUALIFICATION.Refusal(f"native GitHub evidence unavailable: {path}{suffix}")
     try:
         return json.loads(result.stdout)
     except json.JSONDecodeError as error:
