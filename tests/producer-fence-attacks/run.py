@@ -26,9 +26,10 @@ GLOBAL_JSON = ROOT / "global.json"
 
 # ADR-0091 selected a clean V2 start and explicitly removed V1 backward validity from
 # ordinary source delivery. Keep the accepted GS2-08.6 row intact as history, but do not
-# bind current routine-delivery development to the retired V1 writer's source bytes.
+# bind current routine-delivery or wizard development to retired V1 writer bytes.
 HISTORICAL_ONLY_SOURCE_HASHES = {
     "tools/routine-delivery.py": "32f7a973bd502137dd6bfecbb4fc092dacaae2dc03d6d2117cbacaa4387065d6",
+    "scripts/NewSddWorkspace/Program.fs": "b3e3ebe3b88f67b56ea7d85be4865c6f401ae4e94d9cf451c8bae957c15cea3f",
 }
 
 

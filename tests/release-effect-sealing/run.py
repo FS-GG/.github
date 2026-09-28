@@ -21,9 +21,9 @@ BOUND = {
 }
 QUALIFICATION_ONLY = (
     ".github/workflows/kit-auto-publish.yml",
-    ".github/workflows/release-new-sdd-workspace.yml",
     ".github/workflows/release-telemetry-host.yml",
 )
+WIZARD_SUCCESSOR = ".github/workflows/release-new-sdd-workspace.yml"
 FORBIDDEN = (
     "create-github-app-token",
     "NuGet/login",
@@ -63,6 +63,22 @@ for relative in QUALIFICATION_ONLY:
     assert not re.search(r"\b(?:contents|packages|actions|id-token|attestations|pull-requests|issues): write\b", text), relative
     for token in FORBIDDEN:
         assert token not in text, f"{relative} retained forbidden effect token {token!r}"
+
+# SVG-D5 0.12.0 explicitly supersedes only the wizard filename's no-effect seal.
+# Its old OIDC policy remains bound to this filename, but its new effect boundary
+# is the exact candidate, live-main and protected-journal successor adapter.
+wizard = executable_text(ROOT / WIZARD_SUCCESSOR)
+assert "workflow_dispatch:" in wizard and not re.search(r"^\s+(push|schedule):", wizard, re.MULTILINE)
+assert "github.ref == 'refs/heads/main' && github.actor == 'EHotwagner'" in wizard
+assert "environment: release-successor" in wizard
+assert "candidate_archive_sha256:" in wizard and "publish:" in wizard
+assert "verify_nuget_login:" in wizard and "uses: NuGet/login@v1" in wizard
+assert "scripts/new-sdd-workspace-successor-publish.py" in wizard
+assert "--preflight-only" in wizard and "--publish" in wizard
+for token in ("dotnet nuget push", "gh release create", "gh release upload", "gh release edit", "git push"):
+    assert token not in wizard, f"wizard workflow bypasses the successor adapter: {token}"
+admission = (ROOT / "scripts/new_sdd_workspace_successor_admission.py").read_text()
+assert f'WORKFLOW = "{WIZARD_SUCCESSOR}"' in admission
 
 with tempfile.TemporaryDirectory(prefix="gs2-08-9-release-seal.") as temporary:
     work = pathlib.Path(temporary)
