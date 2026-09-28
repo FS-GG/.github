@@ -25,14 +25,24 @@ VALIDATION_STAGES = frozenset({
     'pass-2-receiver-refs', 'pass-2-repository-repeat',
     'cross-pass', 'observation-validation',
 })
+DRIFT_CLASSES = frozenset({'key-set', 'identity', 'permission',
+                           'counter-time', 'other'})
 
 
 class ProbeRefusal(ValueError):
-    def __init__(self, code, stage, http_status=None):
+    def __init__(self, code, stage, http_status=None, drift_class=None):
         super().__init__(code)
         self.code = code
         self.stage = stage
         self.http_status = http_status
+        self.drift_class = drift_class
+
+
+class RepositoryDrift(ValueError):
+    def __init__(self, drift_class):
+        require(drift_class in DRIFT_CLASSES, 'unknown repository drift class')
+        super().__init__(drift_class)
+        self.drift_class = drift_class
 
 
 def require(ok, reason):
@@ -46,6 +56,9 @@ def at_stage(stage, action):
         return action()
     except ProbeRefusal:
         raise
+    except RepositoryDrift as error:
+        raise ProbeRefusal('validation-error', stage,
+                           drift_class=error.drift_class) from None
     except (ValueError, TypeError, KeyError, OverflowError, json.JSONDecodeError):
         raise ProbeRefusal('validation-error', stage) from None
 
@@ -65,6 +78,10 @@ def parse(raw):
 
 def digest(raw):
     return hashlib.sha256(raw).hexdigest()
+
+
+def canonical_digest(value):
+    return digest(json.dumps(value, sort_keys=True, separators=(',', ':')).encode())
 
 
 def validate_mint(raw):
@@ -93,6 +110,25 @@ def check_repo(repo):
     require(isinstance(repo, dict) and repo.get('id') == REPO_ID
             and repo.get('node_id') == NODE_ID and repo.get('full_name') == FULL_NAME,
             'sandbox repository identity drift')
+
+
+def repository_projection(repo):
+    check_repo(repo)
+    require(all(isinstance(key, str) for key in repo),
+            'repository metadata key drift')
+    stable_metadata = dict(repo)
+    if 'temp_clone_token' in stable_metadata:
+        token = stable_metadata.pop('temp_clone_token')
+        require(isinstance(token, str) and len(token) > 20 and token.isascii()
+                and not any(c.isspace() for c in token),
+                'temporary clone token shape drift')
+    # Keep the projection schema explicit and typed. The complete remaining
+    # metadata object and its key shape stay under the stable digest; only the
+    # documented short-lived clone credential is held solely by the raw digest.
+    return {'repositoryId': repo['id'], 'repositoryNodeId': repo['node_id'],
+            'repositoryFullName': repo['full_name'],
+            'metadataKeys': sorted(stable_metadata),
+            'metadata': stable_metadata}
 
 
 class Api:
@@ -126,7 +162,14 @@ def check_roster(repositories):
     require(isinstance(repositories, dict) and repositories.get('total_count') == 1
             and isinstance(repositories.get('repositories'), list)
             and len(repositories['repositories']) == 1, 'visible repository count drift')
-    check_repo(repositories['repositories'][0])
+    require(all(isinstance(key, str) for key in repositories),
+            'repository roster key drift')
+    repository = repository_projection(repositories['repositories'][0])
+    stable_metadata = {key: value for key, value in repositories.items()
+                       if key != 'repositories'}
+    return {'totalCount': repositories['total_count'],
+            'metadataKeys': sorted(stable_metadata),
+            'metadata': stable_metadata, 'repository': repository}
 
 
 def check_refs(refs):
@@ -143,8 +186,40 @@ def check_refs(refs):
 
 
 def check_repeat(repo, repo_repeat):
-    check_repo(repo_repeat)
-    require(repo == repo_repeat, 'repository metadata changed within pass')
+    require(isinstance(repo, dict) and isinstance(repo_repeat, dict),
+            'repository metadata is not an object')
+    identity_keys = ('id', 'node_id', 'full_name')
+    if any(repo.get(key) != repo_repeat.get(key) for key in identity_keys):
+        raise RepositoryDrift('identity')
+    projected = repository_projection(repo)
+    repeated = repository_projection(repo_repeat)
+    if projected != repeated:
+        first = projected['metadata']
+        second = repeated['metadata']
+        if set(first) != set(second):
+            drift_class = 'key-set'
+        else:
+            changed = {key for key in first if first[key] != second[key]}
+            counter_time = {'size', 'open_issues', 'open_issues_count', 'forks',
+                            'forks_count', 'watchers', 'watchers_count',
+                            'stargazers_count', 'subscribers_count',
+                            'network_count'}
+            if changed == {'permissions'}:
+                drift_class = 'permission'
+            elif changed and all(key.endswith('_at') or key in counter_time
+                                 for key in changed):
+                drift_class = 'counter-time'
+            else:
+                drift_class = 'other'
+        raise RepositoryDrift(drift_class)
+    return projected
+
+
+def check_cross_pass(first, second):
+    stable = ('repositoriesProjectionSha256', 'repositoryProjectionSha256',
+              'receiverRefsSha256', 'receiverRefCount')
+    require(all(first.get(key) == second.get(key) for key in stable),
+            'receiver observations drifted across passes')
 
 
 def one_pass(api, pass_number=1):
@@ -156,19 +231,24 @@ def one_pass(api, pass_number=1):
     repositories, repositories_raw = at_stage(
         prefix + 'repository-roster',
         lambda: api.get('/installation/repositories?per_page=100'))
-    at_stage(prefix + 'repository-roster', lambda: check_roster(repositories))
+    repositories_projection = at_stage(
+        prefix + 'repository-roster', lambda: check_roster(repositories))
     repo, repo_raw = at_stage(prefix + 'repository-identity',
                              lambda: api.get('/repos/' + FULL_NAME))
-    at_stage(prefix + 'repository-identity', lambda: check_repo(repo))
+    repo_projection = at_stage(
+        prefix + 'repository-identity', lambda: repository_projection(repo))
     refs, refs_raw = at_stage(prefix + 'receiver-refs',
         lambda: api.get('/repos/' + FULL_NAME + '/git/matching-refs/heads/gs2-09-7/'))
     at_stage(prefix + 'receiver-refs', lambda: check_refs(refs))
     repo_repeat, repo_repeat_raw = at_stage(
         prefix + 'repository-repeat', lambda: api.get('/repos/' + FULL_NAME))
-    at_stage(prefix + 'repository-repeat', lambda: check_repeat(repo, repo_repeat))
+    at_stage(
+        prefix + 'repository-repeat', lambda: check_repeat(repo, repo_repeat))
     return {'repositoriesSha256': digest(repositories_raw),
+            'repositoriesProjectionSha256': canonical_digest(repositories_projection),
             'repositorySha256': digest(repo_raw),
             'repositoryRepeatSha256': digest(repo_repeat_raw),
+            'repositoryProjectionSha256': canonical_digest(repo_projection),
             'receiverRefsSha256': digest(refs_raw), 'receiverRefCount': len(refs)}
 
 
@@ -177,8 +257,7 @@ def probe(raw, api_factory=Api):
     api = api_factory(token)
     first = one_pass(api, 1)
     second = one_pass(api, 2)
-    at_stage('cross-pass', lambda: require(first == second,
-                                         'receiver observations drifted across passes'))
+    at_stage('cross-pass', lambda: check_cross_pass(first, second))
     return {'schema': 'fsgg.gs2-09-7.receiver-observer-probe/1',
             'status': 'observed-no-authority', 'complete': True,
             'repositoryId': REPO_ID, 'installationId': INSTALLATION_ID,
@@ -201,12 +280,15 @@ def main():
                 and error.stage in VALIDATION_STAGES
                 and error.http_status is None):
             code, stage, http_status = error.code, error.stage, error.http_status
+            drift_class = error.drift_class
         else:
             code, stage, http_status = 'validation-error', 'observation-validation', None
+            drift_class = None
         print(json.dumps({'schema': 'fsgg.gs2-09-7.receiver-observer-probe/1',
                           'status': 'refused', 'complete': False,
                           'refusal': {'code': code, 'stage': stage,
-                                      'httpStatus': http_status},
+                                      'httpStatus': http_status,
+                                      'driftClass': drift_class},
                           'copyAuthorized': False,
                           'refMutationAuthorized': False}, sort_keys=True))
         return 1

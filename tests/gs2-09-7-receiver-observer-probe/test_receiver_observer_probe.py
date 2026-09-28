@@ -39,8 +39,10 @@ def mint_value():
 
 def pass_value():
     return {'repositoriesSha256': '1' * 64,
+            'repositoriesProjectionSha256': '4' * 64,
             'repositorySha256': '2' * 64,
             'repositoryRepeatSha256': '2' * 64,
+            'repositoryProjectionSha256': '5' * 64,
             'receiverRefsSha256': '3' * 64,
             'receiverRefCount': 1}
 
@@ -90,6 +92,64 @@ class ObserverTests(unittest.TestCase):
         self.assertEqual(api.calls.count('/installation/repositories?per_page=100'), 2)
         self.assertNotIn('/installation', api.calls)
         self.assertEqual(report['passes'][0], report['passes'][1])
+
+    def test_temporary_clone_tokens_may_rotate_while_raw_digests_remain_independent(self):
+        class RotatingCloneTokenApi(FakeApi):
+            def get(self, path):
+                value, _ = super().get(path)
+                sequence = len(self.calls)
+                token = 'temporary-clone-token-' + str(sequence).zfill(8)
+                if path == '/installation/repositories?per_page=100':
+                    value = {**value, 'repositories': [
+                        {**value['repositories'][0], 'temp_clone_token': token}]}
+                elif path == '/repos/' + observer.FULL_NAME:
+                    value = {**value, 'temp_clone_token': token}
+                return value, raw(value)
+
+        report = observer.probe(raw(mint_value()), RotatingCloneTokenApi)
+        first, second = report['passes']
+        self.assertNotEqual(first['repositoriesSha256'], second['repositoriesSha256'])
+        self.assertNotEqual(first['repositorySha256'], first['repositoryRepeatSha256'])
+        self.assertNotEqual(first['repositorySha256'], second['repositorySha256'])
+        self.assertEqual(first['repositoriesProjectionSha256'],
+                         second['repositoriesProjectionSha256'])
+        self.assertEqual(first['repositoryProjectionSha256'],
+                         second['repositoryProjectionSha256'])
+        self.assertNotIn('temp_clone_token', json.dumps(report))
+
+    def test_malformed_temporary_clone_token_refuses_at_exact_stage(self):
+        path = '/repos/' + observer.FULL_NAME
+        api = FakeApi(TOKEN, {path: {**REPO, 'temp_clone_token': 7}})
+        with self.assertRaises(observer.ProbeRefusal) as result:
+            observer.probe(raw(mint_value()), lambda token: api)
+        self.assertEqual(('validation-error', 'pass-1-repository-identity'),
+                         (result.exception.code, result.exception.stage))
+
+    def test_repository_repeat_drift_has_only_a_closed_classification(self):
+        cases = [
+            ({**REPO, 'archived': True}, {**REPO, 'archived': False}, 'other'),
+            ({**REPO, 'permissions': {'pull': True}},
+             {**REPO, 'permissions': {'pull': False}}, 'permission'),
+            ({**REPO, 'updated_at': '2026-09-28T10:00:00Z'},
+             {**REPO, 'updated_at': '2026-09-28T10:00:01Z'}, 'counter-time'),
+            ({**REPO, 'archived': True}, REPO, 'key-set'),
+            (REPO, {**REPO, 'id': 7}, 'identity'),
+        ]
+        path = '/repos/' + observer.FULL_NAME
+        for first, repeat, drift_class in cases:
+            class RepeatDriftApi(FakeApi):
+                def get(self, requested):
+                    index = len(self.calls)
+                    value, encoded = super().get(requested)
+                    if requested == path:
+                        value = first if index == 1 else repeat
+                        encoded = raw(value)
+                    return value, encoded
+            with self.subTest(drift_class=drift_class), \
+                 self.assertRaises(observer.ProbeRefusal) as result:
+                observer.probe(raw(mint_value()), RepeatDriftApi)
+            self.assertEqual(('pass-1-repository-repeat', drift_class),
+                             (result.exception.stage, result.exception.drift_class))
 
     def test_missing_installation_repositories_endpoint_refuses(self):
         path = '/installation/repositories?per_page=100'
@@ -183,8 +243,22 @@ class ObserverTests(unittest.TestCase):
                 index = len(self.calls)
                 value, encoded = super().get(path)
                 return value, encoded + b' ' if index == 4 else encoded
+        report = observer.probe(raw(mint_value()), ChangedRawSecondPass)
+        self.assertNotEqual(report['passes'][0]['repositoriesSha256'],
+                            report['passes'][1]['repositoriesSha256'])
+        self.assertEqual(report['passes'][0]['repositoriesProjectionSha256'],
+                         report['passes'][1]['repositoriesProjectionSha256'])
+
+        class ChangedStableSecondPass(FakeApi):
+            def get(self, path):
+                index = len(self.calls)
+                value, _ = super().get(path)
+                if index == 4:
+                    value = {**value, 'repositories': [
+                        {**value['repositories'][0], 'archived': True}]}
+                return value, raw(value)
         with self.assertRaises(observer.ProbeRefusal) as result:
-            observer.probe(raw(mint_value()), ChangedRawSecondPass)
+            observer.probe(raw(mint_value()), ChangedStableSecondPass)
         self.assertEqual('cross-pass', result.exception.stage)
 
     def test_main_reduces_provider_failure_to_bounded_refusal(self):
@@ -196,7 +270,8 @@ class ObserverTests(unittest.TestCase):
             self.assertEqual(observer.main(), 1)
         report = json.loads(stdout.getvalue())
         self.assertEqual(report['refusal'], {'code': 'github-http-error',
-                                             'stage': 'bearer-read', 'httpStatus': 403})
+                                             'stage': 'bearer-read', 'httpStatus': 403,
+                                             'driftClass': None})
         self.assertNotIn('reason', report)
         self.assertNotIn(TOKEN, stdout.getvalue())
 
@@ -213,7 +288,8 @@ class ObserverTests(unittest.TestCase):
             self.assertEqual(observer.main(), 1)
         report = json.loads(stdout.getvalue())
         self.assertEqual({'code': 'validation-error',
-                          'stage': 'pass-1-repository-roster', 'httpStatus': None},
+                          'stage': 'pass-1-repository-roster', 'httpStatus': None,
+                          'driftClass': None},
                          report['refusal'])
         self.assertEqual({'schema', 'status', 'complete', 'refusal',
                           'copyAuthorized', 'refMutationAuthorized'}, set(report))
@@ -251,12 +327,33 @@ class HostTests(unittest.TestCase):
         self.assertNotIn('FSGG_DISPATCH_APP_PRIVATE_KEY', str(kwargs['env']))
         self.assertEqual(kwargs['input'], raw(minted))
 
+    def test_host_keeps_raw_digest_custody_independent_of_stable_projection(self):
+        minted = mint_value()
+        report = observed_report(minted)
+        report['passes'][1]['repositoriesSha256'] = '6' * 64
+        report['passes'][1]['repositorySha256'] = '7' * 64
+        report['passes'][1]['repositoryRepeatSha256'] = '8' * 64
+        with patch.object(host.subprocess, 'run') as run:
+            run.return_value.returncode = 0
+            run.return_value.stdout = raw(report)
+            self.assertEqual(host.run_container(raw(minted)), report)
+
+    def test_host_rejects_stable_projection_drift(self):
+        minted = mint_value()
+        report = observed_report(minted)
+        report['passes'][1]['repositoryProjectionSha256'] = '6' * 64
+        with patch.object(host.subprocess, 'run') as run:
+            run.return_value.returncode = 0
+            run.return_value.stdout = raw(report)
+            with self.assertRaisesRegex(ValueError, 'unexpected data or drift'):
+                host.run_container(raw(minted))
+
     def test_container_retains_only_validated_sanitized_refusal(self):
         minted = mint_value()
         refusal = {'schema': 'fsgg.gs2-09-7.receiver-observer-probe/1',
                    'status': 'refused', 'complete': False,
                    'refusal': {'code': 'github-http-error', 'stage': 'bearer-read',
-                               'httpStatus': 403},
+                               'httpStatus': 403, 'driftClass': None},
                    'copyAuthorized': False, 'refMutationAuthorized': False}
         with patch.object(host.subprocess, 'run') as run:
             run.return_value.returncode = 1
@@ -271,7 +368,7 @@ class HostTests(unittest.TestCase):
             refusal = {'schema': 'fsgg.gs2-09-7.receiver-observer-probe/1',
                        'status': 'refused', 'complete': False,
                        'refusal': {'code': 'validation-error', 'stage': stage,
-                                   'httpStatus': None},
+                                   'httpStatus': None, 'driftClass': None},
                        'copyAuthorized': False, 'refMutationAuthorized': False}
             with self.subTest(stage=stage), patch.object(host.subprocess, 'run') as run:
                 run.return_value.returncode = 1
@@ -283,6 +380,31 @@ class HostTests(unittest.TestCase):
             run.return_value.stdout = raw(refusal)
             with self.assertRaisesRegex(ValueError, 'sanitized refusal'):
                 host.run_container(raw(minted))
+
+    def test_host_accepts_only_closed_repeat_drift_classifications(self):
+        minted = mint_value()
+        for drift_class in sorted(host.DRIFT_CLASSES):
+            refusal = {'schema': 'fsgg.gs2-09-7.receiver-observer-probe/1',
+                       'status': 'refused', 'complete': False,
+                       'refusal': {'code': 'validation-error',
+                                   'stage': 'pass-1-repository-repeat',
+                                   'httpStatus': None, 'driftClass': drift_class},
+                       'copyAuthorized': False, 'refMutationAuthorized': False}
+            with self.subTest(drift_class=drift_class), \
+                 patch.object(host.subprocess, 'run') as run:
+                run.return_value.returncode = 1
+                run.return_value.stdout = raw(refusal)
+                self.assertEqual(host.run_container(raw(minted)), refusal)
+        for stage, drift_class in (('pass-1-repository-repeat', 'updated_at'),
+                                   ('pass-1-repository-identity', 'other')):
+            refusal['refusal']['stage'] = stage
+            refusal['refusal']['driftClass'] = drift_class
+            with self.subTest(stage=stage, drift_class=drift_class), \
+                 patch.object(host.subprocess, 'run') as run:
+                run.return_value.returncode = 1
+                run.return_value.stdout = raw(refusal)
+                with self.assertRaisesRegex(ValueError, 'sanitized refusal'):
+                    host.run_container(raw(minted))
 
     def test_container_rejects_incomplete_or_unbound_success_report(self):
         minted = mint_value()
@@ -352,7 +474,7 @@ class HostTests(unittest.TestCase):
             refusal = {'schema': 'fsgg.gs2-09-7.receiver-observer-probe/1',
                        'status': 'refused', 'complete': False,
                        'refusal': {'code': 'github-http-error', 'stage': 'bearer-read',
-                                   'httpStatus': 403},
+                                   'httpStatus': 403, 'driftClass': None},
                        'copyAuthorized': False, 'refMutationAuthorized': False}
             env = {'GITHUB_REPOSITORY': 'FS-GG/.github', 'GITHUB_REF': 'refs/heads/main',
                    'GITHUB_SHA': 'a' * 40, 'FSGG_PROTECTED_SHA': 'a' * 40,

@@ -24,8 +24,12 @@ SCRIPT = Path(__file__).with_name('gs2-09-7-receiver-observer.py')
 MAX_BYTES = 1024 * 1024
 HEX64 = set('0123456789abcdef')
 PASS_KEYS = {'repositoriesSha256', 'repositorySha256',
-             'repositoryRepeatSha256', 'receiverRefsSha256',
+             'repositoryRepeatSha256', 'repositoriesProjectionSha256',
+             'repositoryProjectionSha256', 'receiverRefsSha256',
              'receiverRefCount'}
+STABLE_PASS_KEYS = {'repositoriesProjectionSha256',
+                    'repositoryProjectionSha256', 'receiverRefsSha256',
+                    'receiverRefCount'}
 VALIDATION_STAGES = frozenset({
     'mint-proof',
     'pass-1-repository-roster', 'pass-1-repository-identity',
@@ -34,6 +38,8 @@ VALIDATION_STAGES = frozenset({
     'pass-2-receiver-refs', 'pass-2-repository-repeat',
     'cross-pass', 'observation-validation',
 })
+DRIFT_CLASSES = frozenset({'key-set', 'identity', 'permission',
+                           'counter-time', 'other'})
 
 spec = importlib.util.spec_from_file_location('protected_mint', Path(__file__).with_name('gs2-09-7-mint-sandbox-token.py'))
 mint = importlib.util.module_from_spec(spec)
@@ -181,14 +187,21 @@ def run_container(raw, script=SCRIPT):
                 and report.get('status') == 'refused'
                 and report.get('complete') is False
                 and isinstance(report.get('refusal'), dict)
-                and set(report['refusal']) == {'code', 'stage', 'httpStatus'}
+                and set(report['refusal']) == {'code', 'stage', 'httpStatus',
+                                               'driftClass'}
                 and ((report['refusal']['code'] == 'github-http-error'
                       and report['refusal']['stage'] == 'bearer-read'
                       and type(report['refusal']['httpStatus']) is int
-                      and 400 <= report['refusal']['httpStatus'] <= 599)
+                      and 400 <= report['refusal']['httpStatus'] <= 599
+                      and report['refusal']['driftClass'] is None)
                      or (report['refusal']['code'] == 'validation-error'
                          and report['refusal']['stage'] in VALIDATION_STAGES
-                         and report['refusal']['httpStatus'] is None)),
+                         and report['refusal']['httpStatus'] is None
+                         and (report['refusal']['driftClass'] is None
+                              or report['refusal']['stage'] in {
+                                  'pass-1-repository-repeat',
+                                  'pass-2-repository-repeat'}
+                              and report['refusal']['driftClass'] in DRIFT_CLASSES))),
                 'isolated observer failure was not a sanitized refusal')
         require(response_token_absent(result.stdout, raw), 'observer output contains bearer')
         return report
@@ -203,7 +216,8 @@ def run_container(raw, script=SCRIPT):
             and report['repositoryId'] == REPO_ID
             and report['installationId'] == INSTALLATION_ID
             and isinstance(report['passes'], list) and len(report['passes']) == 2
-            and report['passes'][0] == report['passes'][1]
+            and all(report['passes'][0].get(key) == report['passes'][1].get(key)
+                    for key in STABLE_PASS_KEYS)
             and all(isinstance(item, dict) and set(item) == PASS_KEYS
                     and all(is_sha256(item[key]) for key in PASS_KEYS - {'receiverRefCount'})
                     and type(item['receiverRefCount']) is int
