@@ -101,11 +101,15 @@ capabilities; other existing installations receive repair-forward treatment. Lon
 readings and claims follow separately and cannot delay an observed working repository. Missing
 measurements remain unknown.
 
-The in-flight Rendering profile and CLI 0.1.4 publication remain their own candidate. The next selected
-release combines the staged Net, Governance and Game profiles once qualified on one protected source;
-their disabled receivers and credential custody can be prepared in parallel. Publication is a shared
-activation dependency, but Rendering settlement is not a preparation or activation prerequisite for
-the later wave.
+Rendering's CLI 0.1.4 remains its own published candidate. The first combined Net/Governance/Game
+[CLI 0.1.5 release](https://github.com/FS-GG/FS.GG.Coordination/releases/tag/v0.1.5) is published from
+protected source, with anonymous installation and dual-feed readback passing in its
+[publisher run](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36437778484). Disabled receiver
+preparation and dedicated credential custody are complete for all three. Net's
+[activation PR #107](https://github.com/FS-GG/FS.GG.Net/pull/107) is merged; its protected settlement and
+readback remain pending. Governance [PR #439](https://github.com/FS-GG/FS.GG.Governance/pull/439) and
+Game [PR #670](https://github.com/FS-GG/FS.GG.Game/pull/670) await their own required checks. No selected
+receiver is complete until its separate settlement, Authority readback and normal rerun are observed.
 
 [ADR-0091](adr/0091-speed-first-clean-v2-start.md) records the decision. Everything below describing the
 older GS2-09–GS2-14 migration sequence is retained historical design, not a second set of prerequisites.
