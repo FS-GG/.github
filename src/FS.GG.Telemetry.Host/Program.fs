@@ -901,7 +901,7 @@ module Operations =
                                         JsonSerializer.Serialize
                                             {|
                                                 schema = "fsgg.telemetry.host-backup-set/1"
-                                                hostVersion = "0.1.7"
+                                                hostVersion = "0.2.0"
                                                 supportedStoreSchemaMin = 10
                                                 supportedStoreSchemaMax = 12
                                                 configMetadataSha256 = configMetadataDigest config

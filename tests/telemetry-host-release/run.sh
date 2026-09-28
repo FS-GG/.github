@@ -31,6 +31,12 @@ PY
 
 TOOL=(python3 "$ROOT/scripts/telemetry-host-release.py")
 must_pass "prepare binds independent package identity and source" "${TOOL[@]}" prepare --package "$WORK/host.nupkg" --lock "$WORK/packages.lock.json" --assets "$WORK/assets" --source-sha 0123456789abcdef0123456789abcdef01234567 --version 0.1.0 --tag telemetry-host/v0.1.0 --output "$WORK/manifest.json"
+python3 - "$WORK/manifest.json" <<'PY' && ok "manifest declares the schema-10-to-12 migration boundary" || bad "manifest declares the schema-10-to-12 migration boundary"
+import json,sys
+manifest=json.load(open(sys.argv[1]))
+assert manifest["supportedStoreSchemaMin"] == 10
+assert manifest["supportedStoreSchemaMax"] == 12
+PY
 must_pass "prepared archive verifies exactly" "${TOOL[@]}" verify --manifest "$WORK/manifest.json" --package "$WORK/host.nupkg"
 python3 - "$ROOT/tests/telemetry-host-release/payload-vector.json" "$WORK/manifest.json" <<'PY' && ok "producer payload digest matches the shared no-newline canonical vector" || bad "producer payload digest matches the shared no-newline canonical vector"
 import json,sys

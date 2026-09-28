@@ -24,7 +24,7 @@ from telemetry_host_successor_provider import HostProvider, NotFound
 def manifest():
     return {
         "schema": "fsgg.telemetry.host-release/1", "packageId": "FS.GG.Telemetry.Host",
-        "version": "0.1.7", "tag": "telemetry-host/v0.1.7", "sourceSha": "a" * 40,
+        "version": "0.2.0", "tag": "telemetry-host/v0.2.0", "sourceSha": "a" * 40,
         "archiveSha256": "b" * 64, "producerPayloadSha256": "sha256:" + "c" * 64,
     }
 
@@ -81,6 +81,15 @@ class HostReleaseTests(unittest.TestCase):
     def advance(self):
         return advance_effects(self.content_id, self.ordered, self.journal, self.admission, self.provider)
 
+    def test_successor_identity_and_journal_are_coherent(self):
+        self.assertEqual(self.ordered[0].target_digest, "a" * 40)
+        publisher = (ROOT / "scripts" / "telemetry-host-successor-publish.py").read_text()
+        candidate = (ROOT / ".github" / "workflows" / "release-telemetry-host-successor-candidate.yml").read_text()
+        self.assertIn('REF = "refs/heads/fsgg/v2/journal/release/utel-host-rel-07"', publisher)
+        self.assertIn('"version": "0.2.0"', publisher)
+        self.assertIn("--version 0.2.0 --tag telemetry-host/v0.2.0", candidate)
+        self.assertIn("FS.GG.Telemetry.Host.0.2.0.nupkg", candidate)
+
     def test_every_effect_is_admitted_and_read_back_once(self):
         self.assertEqual(len(self.ordered), 8)
         for effect in self.ordered:
@@ -117,7 +126,7 @@ class HostReleaseTests(unittest.TestCase):
             with zipfile.ZipFile(archive, "w") as zipped:
                 zipped.writestr("manifest.json", json.dumps(manifest()))
                 zipped.writestr("package-evidence.json", "{}")
-                zipped.writestr("FS.GG.Telemetry.Host.0.1.7.nupkg", "fixture")
+                zipped.writestr("FS.GG.Telemetry.Host.0.2.0.nupkg", "fixture")
             digest = hashlib.sha256(archive.read_bytes()).hexdigest()
             run = {"id": 123, "path": verifier.WORKFLOW, "head_sha": source,
                    "head_branch": "main", "event": "workflow_dispatch", "conclusion": "success",
@@ -128,7 +137,7 @@ class HostReleaseTests(unittest.TestCase):
                                          "repository_id": verifier.REPOSITORY_ID,
                                          "head_repository_id": verifier.REPOSITORY_ID}}
             with patch.object(verifier.subprocess, "run"):
-                self.assertEqual(verifier.verify(artifact, run, archive, root / "good", source)["version"], "0.1.7")
+                self.assertEqual(verifier.verify(artifact, run, archive, root / "good", source)["version"], "0.2.0")
             altered = {**run, "run_attempt": 2}
             with self.assertRaisesRegex(ValueError, "first-attempt"):
                 verifier.verify(artifact, altered, archive, root / "rerun", source)
@@ -152,9 +161,9 @@ class HostReleaseTests(unittest.TestCase):
                 self.assets = {}
                 self.writes = []
             def get(self, path):
-                if path.endswith("/git/ref/tags/telemetry-host/v0.1.7") and self.tag:
+                if path.endswith("/git/ref/tags/telemetry-host/v0.2.0") and self.tag:
                     return {"object": {"sha": self.tag}}
-                if path.endswith("/releases/tags/telemetry-host/v0.1.7") and self.release and not self.release["draft"]:
+                if path.endswith("/releases/tags/telemetry-host/v0.2.0") and self.release and not self.release["draft"]:
                     return self.release
                 if path.endswith("/releases?per_page=100&page=1"):
                     return [self.release] if self.release else []
@@ -178,7 +187,7 @@ class HostReleaseTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = pathlib.Path(temporary)
             row = manifest()
-            package = root / "FS.GG.Telemetry.Host.0.1.7.nupkg"
+            package = root / "FS.GG.Telemetry.Host.0.2.0.nupkg"
             package.write_bytes(b"exact original Host archive")
             row["archiveSha256"] = hashlib.sha256(package.read_bytes()).hexdigest()
             manifest_path = root / "manifest.json"
@@ -206,10 +215,10 @@ class HostReleaseTests(unittest.TestCase):
             def __init__(self, raw):
                 self.raw = raw
             def get(self, path):
-                if path.endswith("/releases/tags/telemetry-host/v0.1.7"):
+                if path.endswith("/releases/tags/telemetry-host/v0.2.0"):
                     raise NotFound(path)
                 if path.endswith("/releases?per_page=100&page=1"):
-                    return [{"id": 1, "tag_name": "telemetry-host/v0.1.7", "draft": True}]
+                    return [{"id": 1, "tag_name": "telemetry-host/v0.2.0", "draft": True}]
                 if path.endswith("/releases/1/assets?per_page=100"):
                     return [{"id": 1, "name": "publication-journal.json"}]
                 raise AssertionError(path)

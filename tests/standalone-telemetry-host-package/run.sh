@@ -40,7 +40,7 @@ with zipfile.ZipFile(package) as archive:
 PY
 PACKAGE_ID="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["id"])' "$WORK/metadata.json")"
 PACKAGE_VERSION="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["version"])' "$WORK/metadata.json")"
-[ "$PACKAGE_ID" = FS.GG.Telemetry.Host ] && [[ "$PACKAGE_VERSION" =~ ^0\.1\.[0-9]+$ ]] && ok "candidate identity is independently versioned Host $PACKAGE_VERSION" || bad "candidate identity is independently versioned Host 0.1.x" "$PACKAGE_ID $PACKAGE_VERSION"
+[ "$PACKAGE_ID" = FS.GG.Telemetry.Host ] && [[ "$PACKAGE_VERSION" =~ ^0\.[0-9]+\.[0-9]+$ ]] && ok "candidate identity is independently versioned stable Host $PACKAGE_VERSION" || bad "candidate identity is independently versioned stable pre-1.0 Host" "$PACKAGE_ID $PACKAGE_VERSION"
 python3 - "$WORK/metadata.json" <<'PY' && ok "tool settings bind the one supported command and entry point" || bad "tool settings bind the one supported command and entry point"
 import json,sys
 m=json.load(open(sys.argv[1])); c=m['command']
@@ -90,9 +90,10 @@ BEFORE="$(find "$WORK/private" -mindepth 1 -printf '%P\t%y\n' | sort)"
 set +e
 "$ENGINE" status --config "$MISSING" >"$WORK/status.out" 2>"$WORK/status.err"; STATUS_RC=$?
 "$ENGINE" preflight --config "$MISSING" >"$WORK/preflight.out" 2>"$WORK/preflight.err"; PREFLIGHT_RC=$?
+"$ENGINE" export-learning --config "$MISSING" >"$WORK/export-learning.out" 2>"$WORK/export-learning.err"; EXPORT_RC=$?
 set -e
 AFTER="$(find "$WORK/private" -mindepth 1 -printf '%P\t%y\n' | sort)"
-[ "$STATUS_RC" -ne 0 ] && [ "$PREFLIGHT_RC" -ne 0 ] && [ "$BEFORE" = "$AFTER" ] && ok "installed status and preflight fail closed without provisioning" || bad "installed status and preflight fail closed without provisioning" "status=$STATUS_RC preflight=$PREFLIGHT_RC"
+[ "$STATUS_RC" -ne 0 ] && [ "$PREFLIGHT_RC" -ne 0 ] && [ "$EXPORT_RC" -ne 0 ] && [ "$BEFORE" = "$AFTER" ] && ok "installed status, preflight and export-learning fail closed without provisioning" || bad "installed status, preflight and export-learning fail closed without provisioning" "status=$STATUS_RC preflight=$PREFLIGHT_RC export-learning=$EXPORT_RC"
 
 HOST_PRODUCTION_PROFILE="not-run"
 export HOST_PRODUCTION_PROFILE
