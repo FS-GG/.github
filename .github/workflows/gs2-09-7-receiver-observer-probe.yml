@@ -1,0 +1,68 @@
+name: GS2-09.7 receiver observer protected probe
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: github-substrate-v2-registered-sandbox
+  queue: max
+  cancel-in-progress: false
+
+jobs:
+  gs2-09-7-receiver-observer-probe:
+    name: gs2-09-7-receiver-observer-probe
+    if: github.repository == 'FS-GG/.github' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    environment: github-substrate-v2-sandbox
+    env:
+      FSGG_PROTECTED_SHA: ${{ github.sha }}
+      FSGG_OBSERVER_PRIVATE_DIR: /tmp/fsgg-receiver-observer-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - name: Check out the exact protected source without a persisted Actions credential
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          path: protected
+
+      - name: Bind the protected checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C protected rev-parse HEAD)" = "$FSGG_PROTECTED_SHA"
+          test '${{ github.ref }}' = refs/heads/main
+
+      - name: Run narrow observer in isolated pinned container
+        env:
+          FSGG_DISPATCH_APP_ID: ${{ secrets.FSGG_DISPATCH_APP_ID }}
+          FSGG_DISPATCH_APP_PRIVATE_KEY: ${{ secrets.FSGG_DISPATCH_APP_PRIVATE_KEY }}
+        run: python3 protected/scripts/gs2-09-7-receiver-observer-host.py probe
+
+      - name: Retry token revocation from private custody
+        if: always()
+        run: python3 protected/scripts/gs2-09-7-receiver-observer-host.py cleanup
+
+      - name: Stage only sanitized observations
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -m 700 /tmp/fsgg-receiver-observer-public
+          for name in report.json cleanup.json revocation-pending.json; do
+            if test -f "$FSGG_OBSERVER_PRIVATE_DIR/$name"; then
+              install -m 600 "$FSGG_OBSERVER_PRIVATE_DIR/$name" "/tmp/fsgg-receiver-observer-public/$name"
+            fi
+          done
+
+      - name: Retain sanitized probe evidence
+        if: always()
+        uses: actions/upload-artifact@043fb65114c37b8a45b8f19c0e0be29a3b97f394
+        with:
+          name: gs2-09-7-receiver-observer-${{ github.run_id }}-${{ github.run_attempt }}
+          path: /tmp/fsgg-receiver-observer-public/
+          if-no-files-found: warn
+          retention-days: 14

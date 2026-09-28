@@ -1,0 +1,33 @@
+name: GS2-09.7 receiver observer probe self-test
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/gs2-09-7-receiver-observer.py'
+      - 'scripts/gs2-09-7-receiver-observer-host.py'
+      - 'tests/gs2-09-7-receiver-observer-probe/**'
+      - '.github/workflows/gs2-09-7-receiver-observer-probe.yml'
+      - '.github/workflows/gs2-09-7-receiver-observer-probe-selftest.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/gs2-09-7-receiver-observer.py'
+      - 'scripts/gs2-09-7-receiver-observer-host.py'
+      - 'tests/gs2-09-7-receiver-observer-probe/**'
+      - '.github/workflows/gs2-09-7-receiver-observer-probe.yml'
+      - '.github/workflows/gs2-09-7-receiver-observer-probe-selftest.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  selftest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Exercise secret-free observer refusals and isolation boundary
+        run: python3 tests/gs2-09-7-receiver-observer-probe/test_receiver_observer_probe.py
