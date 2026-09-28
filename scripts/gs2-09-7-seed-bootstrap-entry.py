@@ -15,6 +15,9 @@ import os
 import re
 import sys
 import datetime as dt
+import subprocess
+import tempfile
+from contextlib import contextmanager
 from pathlib import Path
 
 
@@ -28,6 +31,10 @@ HEX40 = re.compile(r"[0-9a-f]{40}\Z")
 HEX64 = re.compile(r"[0-9a-f]{64}\Z")
 INSTALLATION_STATUS = "source-only-uninstalled"
 PREPARE_ADMISSION_PORT = None
+FINAL_ADMISSION_PORT = None
+PRESTATE_PRODUCER_PORT = None
+COORDINATION_CLI_PROJECT = "src/FS.GG.Coordination.Cli/FS.GG.Coordination.Cli.fsproj"
+PRESTATE_SCHEMA = "fsgg.gs2-09-7.sandbox-seed-prestate/1"
 
 
 def load_sibling(name: str, filename: str):
@@ -76,6 +83,29 @@ def regular_inside(checkout: Path, relative: str) -> Path:
         require(not path.is_symlink(), "artifact-symlink")
     require(path.is_file(), "artifact-unavailable")
     return path
+
+
+def write_private(path: Path, raw: bytes) -> None:
+    require(path.is_absolute() and path.parent.is_dir() and not path.parent.is_symlink(),
+            "private-output-path")
+    descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL |
+                         getattr(os, "O_NOFOLLOW", 0), 0o600)
+    with os.fdopen(descriptor, "wb") as stream:
+        stream.write(raw)
+
+
+@contextmanager
+def temporary_environment(values: dict[str, str]):
+    prior = {name: os.environ.get(name) for name in values}
+    try:
+        os.environ.update(values)
+        yield
+    finally:
+        for name, old in prior.items():
+            if old is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = old
 
 
 FILES = ["s2-declaration.json", "seed-plan.json", "corpus.json",
@@ -232,6 +262,243 @@ def preflight(host_checkout: Path, candidate_checkout: Path,
     return facts
 
 
+def require_postmint_ready(host_checkout: Path, candidate_checkout: Path,
+                           workflow_sha: str) -> tuple[object, object, object]:
+    """Check every locally installed operation dependency before App mint."""
+    binding = load_sibling("gs2_seed_execution_binding", "gs2-09-7-seed-execution-binding.py")
+    cas = load_sibling("gs2_seed_native_cas", "gs2-09-7-seed-native-cas.py")
+    admission = load_sibling("gs2_seed_bootstrap_admission", "gs2-09-7-seed-bootstrap-admission.py")
+    require(binding.INSTALLATION_STATUS == "installed-fixed-main-workflow"
+            and cas.INSTALLATION_STATUS == "installed-protected-host",
+            "postmint-source-uninstalled")
+    try:
+        admission.check_port(FINAL_ADMISSION_PORT)
+    except admission.Refused as error:
+        raise Refused(f"final-{error}") from error
+    require(PRESTATE_PRODUCER_PORT is not None
+            and callable(getattr(PRESTATE_PRODUCER_PORT, "describe", None))
+            and callable(getattr(PRESTATE_PRODUCER_PORT, "produce", None)),
+            "prestate-producer-uninstalled")
+    require(PRESTATE_PRODUCER_PORT.describe() == {
+        "schema": "fsgg.gs2-09-7.sandbox-seed-prestate-producer/1",
+        "repositoryId": 1353050537,
+        "projectNodeId": "PVT_kwDOEYAWY84BiESo",
+        "source": "fresh-native-issue-and-project-pages",
+        "credentialScope": "protected-host-only",
+        "candidateCanWrite": False,
+    }, "prestate-producer-identity")
+    regular_inside(candidate_checkout, COORDINATION_CLI_PROJECT)
+    require(binding.checked_out_provenance(workflow_sha)["checkoutHead"] == workflow_sha,
+            "protected-binding-provenance")
+    for relative in ("scripts/gs2-09-7-seed-bootstrap-entry.py",
+                     "scripts/gs2-09-7-seed-bootstrap-admission.py",
+                     "scripts/gs2-09-7-mint-sandbox-token.py"):
+        current = binding.read_regular(regular_inside(host_checkout, relative), 1024 * 1024)
+        committed = binding.git_bytes(host_checkout, ["show", f"{workflow_sha}:{relative}"],
+                                      1024 * 1024)
+        require(current == committed, "protected-bootstrap-helper-drift")
+    return binding, cas, admission
+
+
+def validate_prestate(raw: bytes, facts: dict) -> None:
+    value = strict_json(raw)
+    require(set(value) == {"schema", "complete", "repositoryId", "projectNodeId",
+                           "nonceIssueCount", "nonceProjectItemCount", "snapshotSha256"}
+            and value["schema"] == PRESTATE_SCHEMA
+            and value["complete"] is True
+            and value["repositoryId"] == 1353050537
+            and value["projectNodeId"] == "PVT_kwDOEYAWY84BiESo"
+            and type(value["nonceIssueCount"]) is int and value["nonceIssueCount"] == 0
+            and type(value["nonceProjectItemCount"]) is int
+            and value["nonceProjectItemCount"] == 0
+            and type(value["snapshotSha256"]) is str
+            and HEX64.fullmatch(value["snapshotSha256"]) is not None,
+            "fresh-prestate")
+
+
+def produce_prestate(token: str, facts: dict) -> bytes:
+    try:
+        result = PRESTATE_PRODUCER_PORT.produce(token, facts)
+    except Exception as error:
+        raise Refused("prestate-producer-readback") from error
+    require(type(result) is dict and set(result) == {
+        "runNonce", "raw", "captureId", "observedAt", "source"}
+        and result["runNonce"] == facts["runNonce"]
+        and type(result["raw"]) is bytes
+        and type(result["captureId"]) is str
+        and HEX64.fullmatch(result["captureId"]) is not None
+        and result["source"] == "fresh-native-issue-and-project-pages",
+        "prestate-producer-capture")
+    try:
+        observed = dt.datetime.fromisoformat(result["observedAt"].replace("Z", "+00:00"))
+    except (TypeError, ValueError, OverflowError) as error:
+        raise Refused("prestate-capture-time") from error
+    now = dt.datetime.now(dt.timezone.utc)
+    require(result["observedAt"].endswith("Z")
+            and observed.tzinfo is not None
+            and now - dt.timedelta(minutes=5) <= observed <= now,
+            "prestate-capture-time")
+    validate_prestate(result["raw"], facts)
+    return result["raw"]
+
+
+def mint_private(mint_module, environment: dict[str, str]) -> tuple[str, bytes]:
+    """Keep provider raw responses and the token in this protected process."""
+    app_id = int(environment["FSGG_DISPATCH_APP_ID"])
+    private_key = environment["FSGG_DISPATCH_APP_PRIVATE_KEY"]
+    require(app_id == 4166418 and "PRIVATE KEY" in private_key, "protected-app-identity")
+    jwt = mint_module.app_jwt(app_id, private_key)
+    app, _ = mint_module.request_json("GET", "/app", jwt)
+    require(app.get("id") == app_id and app.get("slug") == mint_module.APP_SLUG,
+            "app-readback")
+    installation, _ = mint_module.request_json(
+        "GET", f"/repos/{mint_module.OWNER}/{mint_module.REPOSITORY}/installation", jwt)
+    require(installation.get("id") == 143110413
+            and installation.get("app_id") == app_id
+            and installation.get("app_slug") == mint_module.APP_SLUG
+            and installation.get("account", {}).get("login") == mint_module.OWNER,
+            "installation-readback")
+    response, mint_raw = mint_module.request_json(
+        "POST", "/app/installations/143110413/access_tokens", jwt,
+        {"repository_ids": [1353050537], "permissions": mint_module.PERMISSIONS})
+    token = response.get("token")
+    require(type(token) is str, "token-unavailable")
+    try:
+        proof = mint_module.validate_mint_response(response)
+        viewer_response, viewer_raw = mint_module.request_json(
+            "POST", "/graphql", token, {"query": "{viewer{login databaseId}}"})
+        viewer = viewer_response.get("data", {}).get("viewer", {})
+        require(not viewer_response.get("errors")
+                and viewer.get("login") == mint_module.APP_ACTOR
+                and viewer.get("databaseId") == mint_module.APP_ACTOR_ID,
+                "mint-actor")
+        proof.update({
+            "schema": "fsgg.github-substrate-v2.sandbox-mint-grants/1",
+            "appId": app_id, "appSlug": mint_module.APP_SLUG,
+            "actor": {"login": viewer["login"], "databaseId": viewer["databaseId"]},
+            "installationId": 143110413,
+            "mintResponseSha256": digest(mint_raw),
+            "viewerResponseSha256": digest(viewer_raw),
+        })
+        return token, (json.dumps(proof, sort_keys=True, separators=(",", ":")) + "\n").encode()
+    except BaseException:
+        mint_module.revoke_token(token)
+        raise
+
+
+def seal_with_coordination(candidate_checkout: Path, facts: dict, private_root: Path,
+                           source: dict, s2_path: Path, proof_path: Path,
+                           prestate_path: Path) -> Path:
+    output = private_root / "sealed"
+    require(not output.exists(), "seal-output-exists")
+    source_root = candidate_checkout / Path(SOURCE_MANIFEST).parent
+    command = ["dotnet", "run", "--project", COORDINATION_CLI_PROJECT, "--",
+               "seed-bootstrap-artifacts", "seal",
+               "--candidate-sha", facts["candidateSha"],
+               "--workflow-run-id", str(facts["runId"]),
+               "--workflow-run-attempt", str(facts["runAttempt"]),
+               "--workflow-sha", facts["workflowSha"],
+               "--source-manifest", str(source_root / "source-manifest.json"),
+               "--s2-declaration", str(s2_path),
+               "--mint-proof", str(proof_path),
+               "--seed-plan", str(source_root / source["seedPlan"]["path"]),
+               "--corpus", str(source_root / source["corpus"]["path"]),
+               "--prestate", str(prestate_path),
+               "--output-dir", str(output)]
+    # Candidate code receives only SDK/runtime settings. In particular, the
+    # App key, installation token and Actions runtime credentials stay outside
+    # the Coordination process and its child processes.
+    allowed = {"PATH", "HOME", "DOTNET_ROOT", "DOTNET_CLI_HOME", "NUGET_PACKAGES",
+               "LANG", "LC_ALL", "CI"}
+    clean_env = {key: value for key, value in os.environ.items() if key in allowed}
+    try:
+        completed = subprocess.run(command, cwd=candidate_checkout, env=clean_env,
+                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                   timeout=180, check=False)
+    except (OSError, subprocess.SubprocessError) as error:
+        raise Refused("coordination-seal-unavailable") from error
+    require(completed.returncode == 0 and len(completed.stdout) <= 4096
+            and completed.stdout.strip() == str(output / DERIVED_MANIFEST).encode(),
+            "coordination-seal-refused")
+    return output
+
+
+def run_protected(host_checkout: Path, candidate_checkout: Path,
+                  environment: dict[str, str]) -> dict:
+    """One protected run; all missing installation dependencies refuse before mint."""
+    facts = preflight(host_checkout, candidate_checkout, environment)
+    binding, cas, _ = require_postmint_ready(host_checkout, candidate_checkout,
+                                             facts["workflowSha"])
+    source, retained = validate_source_artifacts(candidate_checkout, facts)
+    sanitized_dir = Path(environment["FSGG_SEED_SANITIZED_EVIDENCE_DIR"])
+    require(sanitized_dir.is_absolute() and not sanitized_dir.exists(),
+            "sanitized-output-path")
+    mint_module = load_sibling("gs2_seed_mint", "gs2-09-7-mint-sandbox-token.py")
+    token = None
+    with tempfile.TemporaryDirectory(prefix="gs2-seed-bootstrap-") as temporary:
+        private_root = Path(temporary).resolve()
+        os.chmod(private_root, 0o700)
+        try:
+            token, proof = mint_private(mint_module, environment)
+            proof_path = private_root / "mint-grants.json"
+            write_private(proof_path, proof)
+            plan_path = private_root / "seed-plan.json"
+            corpus_path = private_root / "corpus.json"
+            write_private(plan_path, retained["seed-plan.json"])
+            write_private(corpus_path, retained["corpus.json"])
+            prestate = produce_prestate(token, facts)
+            prestate_path = private_root / "prestate.json"
+            write_private(prestate_path, prestate)
+            with temporary_environment({
+                "FSGG_SANDBOX_EVIDENCE_DIR": str(private_root),
+                "FSGG_SEED_PLAN_PATH": str(plan_path),
+                "FSGG_SEED_CORPUS_PATH": str(corpus_path),
+                "FSGG_SANDBOX_MINT_PROOF": str(proof_path),
+                "FSGG_SANDBOX_TOKEN": token,
+                "FSGG_APPROVED_ARTIFACT_SOURCE_SHA256": source["approvedArtifactSourceSha256"],
+                "FSGG_PROTECTED_ENVIRONMENT": "github-substrate-v2-sandbox",
+                "FSGG_SANDBOX_RUN_NONCE": facts["runNonce"],
+                "FSGG_SANDBOX_REPOSITORY_ID": "1353050537",
+                "FSGG_SANDBOX_REPOSITORY_NODE_ID": "R_kgDOUKXpqQ",
+                "FSGG_SANDBOX_PROJECT_NUMBER": "2",
+                "FSGG_SANDBOX_PROJECT_NODE_ID": "PVT_kwDOEYAWY84BiESo",
+                "FSGG_SEED_JOURNAL_REF": f'refs/heads/gs2-09-7/{facts["runNonce"]}/seed-journal',
+            }):
+                declaration = binding.build_document()
+            s2_path = private_root / "s2-declaration.json"
+            write_private(s2_path, declaration)
+            sealed_dir = seal_with_coordination(candidate_checkout, facts, private_root,
+                                                source, s2_path, proof_path, prestate_path)
+            repository, repository_raw = mint_module.request_json(
+                "GET", "/repos/FS-GG/FS.GG.GitHub.Substrate.Sandbox", token)
+            require(type(repository) is dict, "sandbox-repository-readback")
+            project_response, _ = mint_module.request_json(
+                "POST", "/graphql", token,
+                {"query": "query($owner:String!,$number:Int!){organization(login:$owner){projectV2(number:$number){id title closed public}}}",
+                 "variables": {"owner": "FS-GG", "number": 2}})
+            require(not project_response.get("errors")
+                    and type(project_response.get("data")) is dict
+                    and type(project_response["data"].get("organization")) is dict
+                    and type(project_response["data"]["organization"].get("projectV2")) is dict,
+                    "sandbox-project-readback")
+            project_raw = json.dumps(project_response["data"]["organization"]["projectV2"],
+                                     sort_keys=True, separators=(",", ":")).encode()
+            with cas.authenticated_port(token) as git_port:
+                report = execute_source(environment, candidate_checkout, sealed_dir,
+                                        proof, token, repository_raw, project_raw,
+                                        FINAL_ADMISSION_PORT, git_port,
+                                        dt.datetime.now(dt.timezone.utc))
+        finally:
+            if token is not None:
+                mint_module.revoke_token(token)
+        # A complete native envelope is retained only after token revocation.
+        # Pending readback is likewise retained, but remains non-authorizing.
+        sanitized_dir.mkdir(mode=0o700)
+        write_private(sanitized_dir / "native-readback.json", cas.canonical(report))
+        require(report.get("complete") is True, "native-readback-pending")
+        return report
+
+
 def execute_source(environment: dict[str, str], candidate_checkout: Path,
                    runtime_dir: Path,
                    mint_proof_bytes: bytes,
@@ -318,9 +585,12 @@ def execute_source(environment: dict[str, str], candidate_checkout: Path,
 
 def main(arguments: list[str]) -> int:
     try:
-        require(arguments == ["preflight"], "mode")
-        preflight(Path("host"), Path("coordination"), dict(os.environ))
-    except (Refused, OSError) as error:
+        require(arguments in (["preflight"], ["run"]), "mode")
+        if arguments == ["preflight"]:
+            preflight(Path("host"), Path("coordination"), dict(os.environ))
+        else:
+            run_protected(Path("host"), Path("coordination"), dict(os.environ))
+    except (Refused, OSError, KeyError, ValueError, TypeError, subprocess.SubprocessError) as error:
         print(f"GS2-SEED-BOOTSTRAP: refused {error}", file=sys.stderr)
         return 1
     return 0

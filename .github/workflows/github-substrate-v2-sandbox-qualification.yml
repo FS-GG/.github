@@ -183,9 +183,11 @@ jobs:
     timeout-minutes: 10
     environment: github-substrate-v2-sandbox
     env:
+      GITHUB_WORKFLOW_SHA: ${{ github.workflow_sha }}
       FSGG_PROTECTED_SHA: ${{ github.sha }}
       FSGG_CANDIDATE_SHA: ${{ inputs.candidate_sha }}
       FSGG_SEED_SOURCE_MANIFEST_SHA256: ${{ inputs.seed_source_manifest_sha256 }}
+      FSGG_SEED_SANITIZED_EVIDENCE_DIR: /tmp/fsgg-seed-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - name: Check out the exact protected bootstrap source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -213,3 +215,23 @@ jobs:
 
       - name: Require the installed retained plan and independent bootstrap admission
         run: python3 host/scripts/gs2-09-7-seed-bootstrap-entry.py preflight
+
+      - name: Set up the pinned Coordination SDK
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          global-json-file: coordination/global.json
+
+      - name: Seal immutable S2 and S1, then apply journal-only CAS
+        env:
+          FSGG_DISPATCH_APP_ID: ${{ secrets.FSGG_DISPATCH_APP_ID }}
+          FSGG_DISPATCH_APP_PRIVATE_KEY: ${{ secrets.FSGG_DISPATCH_APP_PRIVATE_KEY }}
+        run: python3 host/scripts/gs2-09-7-seed-bootstrap-entry.py run
+
+      - name: Retain sanitized native journal readback
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: gs2-09-7-seed-journal-${{ inputs.candidate_sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.FSGG_SEED_SANITIZED_EVIDENCE_DIR }}/native-readback.json
+          if-no-files-found: ignore
+          retention-days: 90
