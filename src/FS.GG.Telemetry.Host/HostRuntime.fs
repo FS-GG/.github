@@ -150,6 +150,7 @@ module Configuration =
         let producers = Dictionary<string, string>(StringComparer.Ordinal)
         let references = HashSet<string>(StringComparer.Ordinal)
         let tokens = Dictionary<string, TelemetryReceipt.Principal>(StringComparer.Ordinal)
+        let authorities = Dictionary<TelemetryReceipt.Scope, TelemetryReceipt.Principal>()
 
         for credential in config.Credentials do
             if
@@ -209,6 +210,11 @@ module Configuration =
                       Role = role |> Option.defaultValue TelemetryReceipt.Generic
                       GrantId = if config.Schema = "fsgg.telemetry.host-config/2" then Some credential.GrantId else None
                       GrantGeneration = if config.Schema = "fsgg.telemetry.host-config/2" then Some credential.GrantGeneration else None }
+
+                match authorities.TryGetValue scope with
+                | true, prior when prior <> principal -> errors.Add "credential scope is assigned to incompatible authority"
+                | false, _ -> authorities[scope] <- principal
+                | _ -> ()
 
                 match tokens.TryGetValue token with
                 | true, prior when prior <> principal -> errors.Add "credential secret is assigned to incompatible authority"
@@ -551,10 +557,34 @@ module Runtime =
                                                     )
                                                 with
                                                 | Ok receipt when receipt.Digest = envelope.Digest ->
-                                                    {
-                                                        Status = 200
-                                                        Body = System.Text.Encoding.UTF8.GetBytes json
-                                                    }
+                                                    // A scope-only read proves the receipt identity, but not that the
+                                                    // current credential retains its original role and grant.
+                                                    match
+                                                        TelemetryStoreApplication.submitReceiptPrincipal
+                                                            root
+                                                            (approved root)
+                                                            principal
+                                                            body
+                                                    with
+                                                    | Ok confirmed ->
+                                                        {
+                                                            Status = 200
+                                                            Body = System.Text.Encoding.UTF8.GetBytes confirmed
+                                                        }
+                                                    | Error errors ->
+                                                        let code =
+                                                            errors
+                                                            |> List.tryFind
+                                                                FS.GG.Telemetry.RemoteContract.validErrorCode
+                                                            |> Option.defaultValue "storage-unavailable" in
+
+                                                        error
+                                                            code
+                                                            (if code = "identity-conflict" then 409
+                                                             elif code = "unauthorized-scope" then 403
+                                                             elif code = "invalid-request" then 400
+                                                             elif code = "overload" then 429
+                                                             else 503)
                                                 | Ok _ -> error "identity-conflict" 409
                                                 | Error _ -> error "storage-unavailable" 503
                                             | Error [ "receipt-unavailable" ] ->
@@ -590,6 +620,8 @@ module Runtime =
                                                         error
                                                             code
                                                             (if code = "identity-conflict" then 409
+                                                             elif code = "unauthorized-scope" then 403
+                                                             elif code = "invalid-request" then 400
                                                              elif code = "overload" then 429
                                                              else 503)
                                                 | Ok _ -> error "overload" 429

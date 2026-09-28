@@ -287,9 +287,15 @@ class Learn01ContractTests(unittest.TestCase):
         for row in mismatched_grant["learningObservations"]:
             if json.loads(row["canonical"])["kind"] == "learn-shared-cost-authority/1":
                 row["receipt_grant_generation"] = 2
-        mismatched_report = MODULE.analyze_private_snapshot(
-            CONTRACT, private_envelope(mismatched_grant, version=4))
-        self.assertIn("collector-principal-unavailable", mismatched_report["incompleteTokenReasons"]["I-001"])
+        with self.assertRaisesRegex(MODULE.Refusal, "collector principal or grant mismatch"):
+            MODULE.analyze_private_snapshot(CONTRACT, private_envelope(mismatched_grant, version=4))
+
+        mismatched_principal = copy.deepcopy(protected)
+        for row in mismatched_principal["learningObservations"]:
+            if json.loads(row["canonical"])["kind"] == "learn-shared-cost-authority/1":
+                row["receipt_producer"] = "foreign-collector"
+        with self.assertRaisesRegex(MODULE.Refusal, "collector principal or grant mismatch"):
+            MODULE.analyze_private_snapshot(CONTRACT, private_envelope(mismatched_principal, version=4))
 
         for field, changed in (("rootInvocationId", "foreign-root"),
                                ("orderedTurnIds", ["foreign-turn"]),

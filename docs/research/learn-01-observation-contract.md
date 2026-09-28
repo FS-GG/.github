@@ -76,6 +76,12 @@ shared-cost/authority observations; it cannot submit assignments or general tele
 scope checks remain at the protected credential boundary. Schema-11 pending artifacts migrate as generic, and
 historical/direct-ingest facts retain unknown provenance.
 
+Exact receipt retries remain bound to the receiver-retained role and grant. The Host may use a scope-only read to
+find the receipt identity, but it re-enters the principal-aware store path before acknowledging matching bytes; a
+later credential with the same scope and a different role, grant identifier or generation is refused. Host
+configuration also refuses two credentials that assign incompatible authority to one scope, even when their secret
+files differ.
+
 Shared allocation uses one fixed rule, `equal-largest-remainder-v1`. Its sorted original-item roster, policy,
 window and freeze time are immutable and must agree with every member's prospective accounting inventory and
 assignment. The store accepts it only while every roster member remains unassigned, and the bounded read carries

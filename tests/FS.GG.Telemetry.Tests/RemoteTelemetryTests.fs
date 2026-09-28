@@ -1086,6 +1086,7 @@ module RemoteTelemetryTests =
             path
         try
             let secret = privateFile "secret" (String('s', 32))
+            let secondSecret = privateFile "second-secret" (String('t', 32))
             let certificate = privateFile "certificate" "fixture"
             let password = privateFile "password" "fixture"
             let credential role grant generation =
@@ -1119,6 +1120,12 @@ module RemoteTelemetryTests =
                 | Error values -> values
                 | Ok _ -> failwith "alias accepted"
             Assert.Contains("credential secret is assigned to incompatible authority", errors)
+            let distinctSecretAlias = { alias with SecretFile = secondSecret }
+            let scopeErrors =
+                match config [| collector; distinctSecretAlias |] |> Configuration.validate with
+                | Error values -> values
+                | Ok _ -> failwith "incompatible authority accepted for one credential scope"
+            Assert.Contains("credential scope is assigned to incompatible authority", scopeErrors)
             let injected = { collector with Role = "administrator" }
             Assert.True(config [| injected |] |> Configuration.validate |> Result.isError)
             let revoked = { collector with Revoked = true }
@@ -1126,6 +1133,69 @@ module RemoteTelemetryTests =
             Assert.True(Configuration.credentials revokedConfig |> fun entries -> Runtime.authenticate entries (String('s', 32)) |> Option.isNone)
         finally
             Directory.Delete(root, true)
+
+    [<Fact>]
+    let ``host exact retry refuses a different credential role or grant`` () =
+        task {
+            let root = Path.Combine(Path.GetTempPath(), "collector-replay-" + Guid.NewGuid().ToString("N"))
+
+            try
+                TelemetryStoreApplication.initialize root TelemetryStore.ApprovedLocalDurable
+                |> Result.defaultWith (String.concat "; " >> failwith)
+                |> ignore
+
+                let collector: TelemetryReceipt.Principal =
+                    { Scope = scope; Role = TelemetryReceipt.NativeCollector
+                      GrantId = Some "collector-grant"; GrantGeneration = Some 1L }
+
+                TelemetryStoreApplication.enrollReceiptPrincipal
+                    root
+                    TelemetryStore.ApprovedLocalDurable
+                    collector
+                |> Result.defaultWith (String.concat "; " >> failwith)
+                |> ignore
+
+                let bytes = envelope "principal-bound-replay"
+
+                TelemetryStoreApplication.submitReceiptPrincipal
+                    root
+                    TelemetryStore.ApprovedLocalDurable
+                    collector
+                    bytes
+                |> Result.defaultWith (String.concat "; " >> failwith)
+                |> ignore
+
+                let config =
+                    { Schema = "fsgg.telemetry.host-config/2"; ListenUrl = "https://127.0.0.1:1"
+                      CertificatePath = "/unused"; CertificatePasswordFile = "/unused"
+                      ServiceLockPath = "/unused"; Stores = [| { WorkspaceId = scope.Workspace; Root = root } |]
+                      Credentials = [||]; BrowserPrincipals = [||]; BrowserSession = browserSession }
+
+                use state = new Runtime.HostState(config, fun _ -> TelemetryStore.ApprovedLocalDurable)
+                let! accepted = Runtime.submitPrincipal state collector bytes CancellationToken.None
+                Assert.Equal(200, accepted.Status)
+
+                let! wrongRole =
+                    Runtime.submitPrincipal
+                        state
+                        (TelemetryReceipt.genericPrincipal scope)
+                        bytes
+                        CancellationToken.None
+                Assert.Equal(403, wrongRole.Status)
+                Assert.Equal(Some "unauthorized-scope", RemoteContract.parseError wrongRole.Body)
+
+                let! wrongGrant =
+                    Runtime.submitPrincipal
+                        state
+                        { collector with GrantGeneration = Some 2L }
+                        bytes
+                        CancellationToken.None
+                Assert.Equal(403, wrongGrant.Status)
+                Assert.Equal(Some "unauthorized-scope", RemoteContract.parseError wrongGrant.Body)
+            finally
+                if Directory.Exists root then
+                    Directory.Delete(root, true)
+        }
 
     [<Fact>]
     let ``host global census fails closed on inconsistent accepted obligations`` () =
