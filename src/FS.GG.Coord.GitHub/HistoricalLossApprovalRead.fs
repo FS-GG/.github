@@ -30,6 +30,14 @@ module HistoricalLossApprovalRead =
             Fingerprint: string
         }
 
+    type V3CensusCapture =
+        {
+            First: HistoricalLossRegistry.RetainedNativeCensusV3
+            Second: HistoricalLossRegistry.RetainedNativeCensusV3
+            FirstPass: RawResponse list
+            SecondPass: RawResponse list
+        }
+
     type private Pass =
         {
             PullRequest: HistoricalLossRegistry.NativeMergedPullRequestV2
@@ -44,6 +52,51 @@ module HistoricalLossApprovalRead =
         bytes |> SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
 
     let private shaText (value: string) = value |> Encoding.UTF8.GetBytes |> shaBytes
+
+    let validateV3CensusCapture
+        (expectedRepositories: HistoricalLossRegistry.RepositoryIdentityV3 list)
+        (capture: V3CensusCapture)
+        =
+        let subject = "historical-loss v3 retained native census"
+        let rawStable =
+            capture.FirstPass.Length = capture.SecondPass.Length
+            && List.forall2
+                (fun first second ->
+                    first.Path = second.Path
+                    && first.Query = second.Query
+                    && first.Status = second.Status
+                    && first.Body = second.Body
+                    && first.BodySha256 = second.BodySha256
+                    && first.NextLink = second.NextLink)
+                capture.FirstPass
+                capture.SecondPass
+
+        let pageBound
+            (census: HistoricalLossRegistry.RetainedNativeCensusV3)
+            (raw: RawResponse list)
+            =
+            not census.Pages.IsEmpty
+            && census.Pages.Length = raw.Length
+            && census.Pages |> List.last |> _.Terminal
+            && List.forall2
+                (fun (page: HistoricalLossRegistry.RetainedPageV3) (response: RawResponse) ->
+                    response.Status = 200
+                    && response.BodySha256 = shaText response.Body
+                    && response.BodySha256 = page.RawSha256
+                    && response.NextLink.IsNone = page.Terminal)
+                census.Pages
+                raw
+
+        if capture.First.Enumeration <> HistoricalLossRegistry.DirectRepositoryEnumeration then
+            Error(Malformed(subject, "search or audit-absence census cannot establish retained population completeness"))
+        elif capture.First <> capture.Second || not rawStable then
+            Error(Malformed(subject, "retained census drifted between complete passes"))
+        elif capture.First.SelectedRepositories <> expectedRepositories then
+            Error(Malformed(subject, "retained census repository roster differs from the frozen scope"))
+        elif capture.FirstPass.IsEmpty || not (pageBound capture.First capture.FirstPass) || not (pageBound capture.Second capture.SecondPass) then
+            Error(Malformed(subject, "retained census raw pages are incomplete, nonterminal, or unbound"))
+        else
+            Ok capture.First
 
     let private text (node: JsonElement) (name: string) =
         match node.TryGetProperty name with

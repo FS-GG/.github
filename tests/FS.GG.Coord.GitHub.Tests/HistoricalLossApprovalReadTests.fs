@@ -259,3 +259,84 @@ let ``v2 collector refuses raw or typed drift after a complete first pass`` () =
     match collect fake item.Bytes with
     | Error(Malformed(_, detail)) -> Assert.Contains("drifted", detail)
     | result -> failwithf "expected two-pass refusal, got %A" result
+
+let private v3Repository: HistoricalLossRegistry.RepositoryIdentityV3 =
+    { FullName = "FS-GG/FS.GG.Coordination"; DatabaseId = 1353050537L; NodeId = "R_fixture_coordination" }
+
+let private v3Census enumeration terminal rawDigest =
+    let retained: HistoricalLossRegistry.RetainedSubjectV3 =
+        {
+            Repository = v3Repository
+            NativeId = "retained-subject:fixture-1"
+            Family = "delivery-receipt"
+            CreatedAt = cutoff
+            PayloadBlobSha = hex '2' 40
+            SessionOperationId = Some "operation-1"
+            LiveClaim = false
+        }
+    let draft: HistoricalLossRegistry.RetainedNativeCensusV3 =
+        {
+            SelectedRepositories = [ v3Repository ]
+            ObservationHorizon = cutoff
+            Revision = hex '3' 40
+            Enumeration = enumeration
+            Complete = true
+            DeclaredCount = 1
+            Pages = [ { Repository = v3Repository; Index = 1; ItemCount = 1; RawSha256 = rawDigest; Terminal = terminal } ]
+            Subjects = [ retained ]
+            HistoricalEmissions = "unknown"
+            HistoricalDeletions = "unknown"
+            LostCount = "unknown"
+            ProducerDeploymentEnd = "unknown"
+            Digest = ""
+        }
+    { draft with Digest = HistoricalLossRegistry.retainedCensusDigestV3 draft }
+
+let private v3Raw terminal body =
+    ({
+        Resource = "retained-subjects:FS-GG/FS.GG.Coordination:1"
+        Path = "repos/FS-GG/FS.GG.Coordination/issues/1/comments"
+        Query = [ "per_page", "100"; "page", "1" ]
+        Status = 200
+        Body = body
+        BodySha256 = shaText body
+        NextLink = if terminal then None else Some "https://api.github.com/next"
+    }: HistoricalLossApprovalRead.RawResponse)
+
+[<Fact>]
+let ``v3 census capture binds two stable terminal direct pages`` () =
+    let raw = v3Raw true "[{\"id\":1}]"
+    let census = v3Census HistoricalLossRegistry.DirectRepositoryEnumeration true raw.BodySha256
+    let capture: HistoricalLossApprovalRead.V3CensusCapture =
+        { First = census; Second = census; FirstPass = [ raw ]; SecondPass = [ raw ] }
+    Assert.Equal(Ok census, HistoricalLossApprovalRead.validateV3CensusCapture [ v3Repository ] capture)
+
+[<Fact>]
+let ``v3 census capture refuses search and audit absence even when stable`` () =
+    let raw = v3Raw true "[]"
+    for kind in [ HistoricalLossRegistry.SearchOnly; HistoricalLossRegistry.AuditNotFoundInference ] do
+        let census = v3Census kind true raw.BodySha256
+        let capture: HistoricalLossApprovalRead.V3CensusCapture =
+            { First = census; Second = census; FirstPass = [ raw ]; SecondPass = [ raw ] }
+        match HistoricalLossApprovalRead.validateV3CensusCapture [ v3Repository ] capture with
+        | Error(Malformed(_, detail)) -> Assert.Contains("cannot establish", detail)
+        | result -> failwithf "expected source refusal, got %A" result
+
+[<Fact>]
+let ``v3 census capture refuses pagination loss and raw drift`` () =
+    let openRaw = v3Raw false "[{\"id\":1}]"
+    let census = v3Census HistoricalLossRegistry.DirectRepositoryEnumeration false openRaw.BodySha256
+    let incomplete: HistoricalLossApprovalRead.V3CensusCapture =
+        { First = census; Second = census; FirstPass = [ openRaw ]; SecondPass = [ openRaw ] }
+    match HistoricalLossApprovalRead.validateV3CensusCapture [ v3Repository ] incomplete with
+    | Error(Malformed(_, detail)) -> Assert.Contains("incomplete", detail)
+    | result -> failwithf "expected pagination refusal, got %A" result
+
+    let terminalRaw = v3Raw true "[{\"id\":1}]"
+    let terminal = v3Census HistoricalLossRegistry.DirectRepositoryEnumeration true terminalRaw.BodySha256
+    let changedRaw = v3Raw true "[{\"id\":2}]"
+    let drifted: HistoricalLossApprovalRead.V3CensusCapture =
+        { First = terminal; Second = terminal; FirstPass = [ terminalRaw ]; SecondPass = [ changedRaw ] }
+    match HistoricalLossApprovalRead.validateV3CensusCapture [ v3Repository ] drifted with
+    | Error(Malformed(_, detail)) -> Assert.Contains("drifted", detail)
+    | result -> failwithf "expected raw drift refusal, got %A" result
