@@ -59,6 +59,7 @@ module HistoricalLossRetainedNativeCensus =
           Origin: Origin
           CreatedAt: string
           PayloadSha256: string
+          PayloadBlobSha: string
           SessionOperationId: string option }
 
     type UntrustedDraft =
@@ -106,6 +107,13 @@ module HistoricalLossRetainedNativeCensus =
         value
         |> Encoding.UTF8.GetBytes
         |> SHA256.HashData
+        |> Convert.ToHexString
+        |> _.ToLowerInvariant()
+
+    let private blobSha (value: string) =
+        let bytes = Encoding.UTF8.GetBytes value
+        Array.append (Encoding.ASCII.GetBytes($"blob {bytes.LongLength}\u0000")) bytes
+        |> SHA1.HashData
         |> Convert.ToHexString
         |> _.ToLowerInvariant()
 
@@ -445,7 +453,7 @@ module HistoricalLossRetainedNativeCensus =
                         Ok(Some
                             { Repository = repository; SubjectNumber = subject.Number; SubjectIsPullRequest = false
                               NativeId = subject.NodeId; Family = IntakeReceipt; Origin = IssueBody
-                              CreatedAt = subject.CreatedAt; PayloadSha256 = sha256 subject.Body
+                              CreatedAt = created.ToString("O", CultureInfo.InvariantCulture); PayloadSha256 = sha256 subject.Body; PayloadBlobSha = blobSha subject.Body
                               SessionOperationId = Some matched.Groups.["id"].Value })
                 elif line.StartsWith("<!-- fsgg:delivery-receipt", StringComparison.Ordinal)
                      || subject.Body.StartsWith("<!-- fsgg:done-receipt", StringComparison.Ordinal) then
@@ -474,7 +482,7 @@ module HistoricalLossRetainedNativeCensus =
                             Ok(Some
                                 { Repository = repository; SubjectNumber = number; SubjectIsPullRequest = true
                                   NativeId = comment.NodeId; Family = DeliveryReceipt; Origin = IssueComment
-                                  CreatedAt = comment.CreatedAt; PayloadSha256 = sha256 comment.Body
+                                  CreatedAt = created.ToString("O", CultureInfo.InvariantCulture); PayloadSha256 = sha256 comment.Body; PayloadBlobSha = blobSha comment.Body
                                   SessionOperationId = Some matched.Groups.["id"].Value })
                     elif comment.Body.StartsWith("<!-- fsgg:done-receipt v=1 -->", StringComparison.Ordinal) then
                         if subject.IsPullRequest then
@@ -483,7 +491,7 @@ module HistoricalLossRetainedNativeCensus =
                             Ok(Some
                                 { Repository = repository; SubjectNumber = number; SubjectIsPullRequest = false
                                   NativeId = comment.NodeId; Family = LegacyDoneReceipt; Origin = IssueComment
-                                  CreatedAt = comment.CreatedAt; PayloadSha256 = sha256 comment.Body
+                                  CreatedAt = created.ToString("O", CultureInfo.InvariantCulture); PayloadSha256 = sha256 comment.Body; PayloadBlobSha = blobSha comment.Body
                                   SessionOperationId = None })
                     elif line.StartsWith("<!-- fsgg:intake:v1", StringComparison.Ordinal) then
                         Error(MalformedCandidate(label, "intake receipt is bound to the wrong native origin"))
@@ -504,7 +512,7 @@ module HistoricalLossRetainedNativeCensus =
               subjects
               |> List.collect (fun item ->
                   [ item.Repository.FullName; string item.SubjectNumber; string item.SubjectIsPullRequest
-                    item.NativeId; string item.Family; string item.Origin; item.CreatedAt; item.PayloadSha256
+                    item.NativeId; string item.Family; string item.Origin; item.CreatedAt; item.PayloadSha256; item.PayloadBlobSha
                     defaultArg item.SessionOperationId "" ]) ]
         |> List.map frame
         |> String.concat ""
@@ -604,3 +612,80 @@ module HistoricalLossRetainedNativeCensus =
                         elif first.Draft.EvidenceFingerprint <> second.Draft.EvidenceFingerprint then
                             Error(PassDrift "raw page evidence changed between passes")
                         else Ok { First = first; Second = second })))
+
+    let private registryRepository (repository: RepositoryIdentity) : FS.GG.Coord.HistoricalLossRegistry.RepositoryIdentityV3 =
+        { FullName = repository.FullName; DatabaseId = repository.DatabaseId; NodeId = repository.NodeId }
+
+    let private registryFamily =
+        function
+        | DeliveryReceipt -> "delivery-receipt"
+        | IntakeReceipt -> "intake-receipt"
+        | LegacyDoneReceipt -> "legacy-done-receipt"
+
+    let private projectedPages (pages: RawPage list) =
+        pages
+        |> List.groupBy _.Repository
+        |> List.collect (fun (_, repositoryPages) ->
+            repositoryPages
+            |> List.mapi (fun index page ->
+                ({ Repository = registryRepository page.Repository
+                   Index = index + 1
+                   ItemCount = page.ItemCount
+                   RawSha256 = page.RawSha256
+                   Terminal = index = repositoryPages.Length - 1 }: FS.GG.Coord.HistoricalLossRegistry.RetainedPageV3)))
+
+    let private projectedSubjects family (subjects: DraftSubject list) =
+        subjects
+        |> List.filter (fun subject -> registryFamily subject.Family = family)
+        |> List.map (fun subject ->
+            ({ Repository = registryRepository subject.Repository
+               NativeId = subject.NativeId
+               Family = registryFamily subject.Family
+               CreatedAt = subject.CreatedAt
+               PayloadBlobSha = subject.PayloadBlobSha
+               SessionOperationId = subject.SessionOperationId
+               LiveClaim = false }: FS.GG.Coord.HistoricalLossRegistry.RetainedSubjectV3))
+
+    let bindV3Native transport apiBase expectedFamily expectedScope expectedObservationHorizon registryBytes
+        (entry: FS.GG.Coord.HistoricalLossRegistry.EntryV3)
+        (approval: FS.GG.Coord.HistoricalLossRegistry.NativeApprovalReadbackV2)
+        : Result<FS.GG.Coord.HistoricalLossRegistry.BoundLossV3, string list> =
+        let expectedRepositories = repositories |> List.map registryRepository
+        // The collector owns both passes. No typed draft, page list, repository subset or
+        // completeness claim is accepted from this method's caller.
+        match collectTwoPass transport apiBase expectedObservationHorizon with
+        | Error error -> Error [ $"historical-loss-native-census: %A{error}" ]
+        | Ok capture ->
+            let firstPages = projectedPages capture.First.Pages
+            let secondPages = projectedPages capture.Second.Pages
+            let firstSubjects = projectedSubjects expectedFamily capture.First.Draft.Subjects
+            let secondSubjects = projectedSubjects expectedFamily capture.Second.Draft.Subjects
+            let errors = ResizeArray<string>()
+            let check condition message = if not condition then errors.Add message
+            check (entry.CensusFirst.SelectedRepositories = expectedRepositories && entry.CensusSecond.SelectedRepositories = expectedRepositories)
+                "historical-loss-native-repository-roster"
+            check (entry.CensusFirst.ObservationHorizon = expectedObservationHorizon && entry.CensusSecond.ObservationHorizon = expectedObservationHorizon)
+                "historical-loss-native-observation-horizon"
+            check (entry.CensusFirst.Revision = approval.File.Revision && entry.CensusSecond.Revision = approval.File.Revision)
+                "historical-loss-native-revision"
+            check (entry.CensusFirst.Pages = firstPages && entry.CensusSecond.Pages = secondPages)
+                "historical-loss-native-pages"
+            check (entry.CensusFirst.Subjects = firstSubjects && entry.CensusSecond.Subjects = secondSubjects)
+                "historical-loss-native-subjects"
+            check (entry.CensusFirst.DeclaredCount = firstSubjects.Length && entry.CensusSecond.DeclaredCount = secondSubjects.Length)
+                "historical-loss-native-receipt-count"
+            if errors.Count > 0 then Error(List.ofSeq errors)
+            else
+                match FS.GG.Coord.HistoricalLossRegistry.bindV3 expectedFamily expectedScope expectedObservationHorizon expectedRepositories registryBytes entry approval with
+                | Error [ "historical-loss-native-census-proof-unavailable" ] ->
+                    Ok
+                        { Family = entry.Family
+                          Scope = entry.Scope
+                          ObservationHorizon = entry.ObservationHorizon
+                          SelectedRepositories = expectedRepositories
+                          RetainedCount = firstSubjects.Length
+                          CensusDigest = entry.CensusFirst.Digest
+                          ApprovalDigest = approval.ApprovalEnvelopeFirst.BodySha256
+                          Consequence = entry.Consequence }
+                | Error errors -> Error errors
+                | Ok _ -> Error [ "historical-loss-native-census-proof-contract" ]

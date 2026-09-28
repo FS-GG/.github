@@ -64,6 +64,7 @@ module HistoricalLossRetainedNativeCensus =
             Origin: Origin
             CreatedAt: string
             PayloadSha256: string
+            PayloadBlobSha: string
             SessionOperationId: string option
         }
 
@@ -113,3 +114,16 @@ module HistoricalLossRetainedNativeCensus =
         apiBase: string ->
         observationHorizon: string ->
         Result<Capture, CollectorError>
+
+    /// Captures fresh native pages, recomputes the typed census from their bodies, and binds
+    /// one exact approved v3 entry. The caller cannot supply a draft or substitute typed rows.
+    val bindV3Native:
+        transport: ISinglePageGitHubTransport ->
+        apiBase: string ->
+        expectedFamily: string ->
+        expectedScope: string ->
+        expectedObservationHorizon: string ->
+        registryBytes: byte array ->
+        entry: FS.GG.Coord.HistoricalLossRegistry.EntryV3 ->
+        approval: FS.GG.Coord.HistoricalLossRegistry.NativeApprovalReadbackV2 ->
+        Result<FS.GG.Coord.HistoricalLossRegistry.BoundLossV3, string list>

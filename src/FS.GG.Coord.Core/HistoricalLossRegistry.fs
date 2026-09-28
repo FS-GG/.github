@@ -1685,8 +1685,10 @@ module HistoricalLossRegistry =
                            && oid 64 page.RawSha256
                            && page.Terminal = (index = pages.Length - 1))
                        |> List.forall id
+                    // Native page counts include ordinary issues, pulls, comments and events.
+                    // Receipt rows are a typed subset checked against those pages by the native binder.
                     && (pages |> List.sumBy _.ItemCount)
-                       = (census.Subjects |> List.filter (fun subject -> subject.Repository = repository) |> List.length))
+                       >= (census.Subjects |> List.filter (fun subject -> subject.Repository = repository) |> List.length))
 
             let subjectsValid =
                 census.Subjects
@@ -1708,7 +1710,7 @@ module HistoricalLossRegistry =
             && census.DeclaredCount = census.Subjects.Length
             && not census.Pages.IsEmpty
             && (census.Pages |> List.forall (fun page -> Set.contains page.Repository repositorySet))
-            && (census.Pages |> List.sumBy _.ItemCount) = census.Subjects.Length
+            && (census.Pages |> List.sumBy _.ItemCount) >= census.Subjects.Length
             && pagesSequential
             && subjectsValid
             && subjectIds.Length = (subjectIds |> Set.ofList |> Set.count)
