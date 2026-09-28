@@ -68,6 +68,34 @@ and rationale.
 | Point of no return | Direct `OperatingV1` to fresh shared `OpenV2` generation in the authority repository |
 | Current production authority | v1 until the clean-start epoch write is read back; then `.github` v2 only |
 
+## Active strategy: start clean and repair forward
+
+The owner selected speed over backward validity on 2026-09-28. No V1 workload requires preserving
+its old execution guarantees. Use the existing published Coordination CLI `0.1.2` and ordinary V2
+workflow; do not build a new admission service or migration runtime to start using them.
+
+1. **Deliver source normally.** Check the current PR head and required checks, merge through native
+   GitHub protections, and read the merged result back. Legacy V1 admission is no longer required.
+2. **Start one fresh V2 pilot.** Append a new shared authority generation without importing V1 claims,
+   queues, settings or history. Activate only `FS-GG/.github` initially. Preserve old data and evidence
+   as historical records; their completeness does not gate activation.
+3. **Prove useful operation.** Observe one actual merged change through ordinary V2 settlement and
+   one normal rerun. Fix defects blocking that path. Exhaustive interruption, migration, historical
+   replay, omission and rollback proofs are no longer required.
+4. **Continue and expand explicitly.** Leave successful `.github` settlement enabled. Enroll other
+   repositories when selected, checking each changed entrypoint once. Disable conflicting V1 writers
+   and handle ordinary defects through follow-up fixes. Recovery is disable the writer, revert a
+   source change where useful, or repair forward; no fleet-wide rollback apparatus is required.
+
+Native credentials, source branch protections, required checks and honest result reporting remain.
+The authority epoch is shared, but runtime activation is repository-specific. This strategy does not
+change generated workspace defaults or promise compatibility with old clients.
+
+The [active pilot plan](https://github.com/FS-GG/FS.GG.Coordination/blob/main/docs/roadmaps/gs2-09-7-representative-rehearsal.md)
+owns the concrete journey. [ADR-0091](adr/0091-speed-first-clean-v2-start.md) records the decision.
+Everything below describing the older GS2-09–GS2-14 migration sequence is retained historical design,
+not a second set of prerequisites. Superseded work is not reported as completed.
+
 ## 1. How work is executed
 
 The three program issues are too large to hand directly to a general worker. They are durable anchors for
