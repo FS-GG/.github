@@ -6,16 +6,22 @@ This session resumed the [September 27 handoff](2026-09-27-1919-unified-roadmap-
 
 The September 28 user steering prioritizes speed before correctness and explicitly removes backwards-validity and V1-critical requirements from the active frontier. The native-admission and migration continuation recorded below is superseded as an execution plan. Keep it as historical source and qualification evidence; do not resume it as the current route.
 
-The active replacements are:
+The V2 pilot source from [`.github` PR #3913](https://github.com/FS-GG/.github/pull/3913), exact head `09e1347e4f9b266ff2056d62aae34cc5365460f9`, merged as `a98162fb119c43f2e5d60c2b284d01e81ac468db`. Workflow run [36395767759](https://github.com/FS-GG/.github/actions/runs/36395767759) then produced the following bounded sequence:
 
-- [`.github` PR #3913](https://github.com/FS-GG/.github/pull/3913), exact head `b3b74920374ff2843f0e869d0213ab4d26006e6d`, carries ADR-0091 and the native-checked source plus active V2 pilot.
-- [Coordination PR #864](https://github.com/FS-GG/FS.GG.Coordination/pull/864), exact head `de2880aa01b0dba8ea34cc9ee87bcbffb39bb909`, carries the pilot documentation.
+- attempt 1 stopped on an observer failure before any effect;
+- attempt 2 retried failed jobs only and found no artifact;
+- full attempt 3 returned `SettlementSucceeded`;
+- full attempt 4 returned `SettlementAlreadyComplete` with the same settlement digest, `96eebd38b0639d4c446d62dcfa413adffae32c839b387006d68322b1ca7399d6`.
 
-Superseded [`.github` PR #3911](https://github.com/FS-GG/.github/pull/3911) and [Coordination PR #863](https://github.com/FS-GG/FS.GG.Coordination/pull/863) are closed. Their branches and the evidence recorded below remain preserved. V1 workflow run `365481455` was observed in `disabled_manually` state.
+Independent native-journal readback found `refs/heads/fsgg/v2/journal/operation/a1` at commit `16aad7f7d7bb64885a929a98230b31724fab3603`, generation 3, stage `complete`. Replay left that ref unchanged. Clean pilot checkpoints C0–C2 are complete. Continuous operation is enabled for `.github` only; enabling any other repository is an explicit later action.
+
+The current follow-up is [`.github` PR #3914](https://github.com/FS-GG/.github/pull/3914), exact head `85ca91fe00859ed5c62ec26b692e3d7182cfbf61`. It contains the artifact helper and bounded read-retry repairs plus both roadmap completion projections. Its CI is pending, so this report does not claim it merged. [Coordination PR #864](https://github.com/FS-GG/FS.GG.Coordination/pull/864), exact head `de2880aa01b0dba8ea34cc9ee87bcbffb39bb909`, also remains open; its coherent required checks have passed, but this report does not claim it merged.
+
+Superseded `.github` PRs [#3911](https://github.com/FS-GG/.github/pull/3911) and [#3912](https://github.com/FS-GG/.github/pull/3912), and Coordination PRs [#862](https://github.com/FS-GG/FS.GG.Coordination/pull/862) and [#863](https://github.com/FS-GG/FS.GG.Coordination/pull/863), are closed with their branches preserved. V1 workflow run `365481455` was observed in `disabled_manually` state. No V1 work remains active.
 
 The native clean-start authority cutover completed at ref `26d1882af9293b264df17a1fa98515e108313fe5`, parent `42a25b1480203207183f37c56d315c4161fb627b`, with generation 2 open for V2. Exact original rule `22627740` was restored with sole App `4882399` and `current_user_can_bypass=never`; ordinary and integrity settings were unchanged. The retained receipt is `/tmp/gs2-clean-authority-prestate/execution-20260928T075750Z-508098/receipt.json`, SHA-256 `e4c6b9736dce16eb7b3434c3b9c394d77aab61b010db250a19f02234ef88df58`.
 
-Activation remains incomplete. Await `.github` PR #3913 checks and merge, then real settlement and rerun evidence; none of those later steps is claimed here. The production workflow reuses CLI `0.1.2`. This rollout changes only continuous operation in `.github`; it does not expand the registry or runtime. Focused qualification passed in three groups: 41, 9 and 13 tests.
+The production workflow reuses CLI `0.1.2`. The completed rollout changes only continuous operation in `.github`; it does not expand the registry or runtime. Focused qualification passed in three groups: 41, 9 and 13 tests. The parent source worktree is `/tmp/roadmap-gs2-pilot-integration`. Telemetry remained `not-configured` throughout.
 
 ## Superseded V1 delivery boundary
 
