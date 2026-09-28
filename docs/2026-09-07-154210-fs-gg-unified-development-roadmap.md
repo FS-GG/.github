@@ -10,7 +10,7 @@ description: "A researched successor plan from the current v2 frontier: process 
 Short name: **Unified Roadmap**. In FS-GG development discussions, **“the roadmap”**, **“current roadmap”**
 and **“compacted roadmap”** refer to this document unless another roadmap is explicitly named.
 
-Authored: **2026-09-07 15:42:10 UTC**. Section 0 evidence reconciliation: **2026-09-27**.
+Authored: **2026-09-07 15:42:10 UTC**. Section 0 evidence reconciliation: **2026-09-28**.
 Status: **active programme; the ADR-0091 clean-start `.github` V2 pilot is the critical path**.
 
 **Start from completed development simplification and the existing v2 implementation. Deliver checked,
@@ -60,6 +60,13 @@ journey, and one normal rerun smoke.
 The earlier callable, GS2-09 and OperatingV1 evidence remains valid at its recorded scope but no longer
 forms the active dependency chain. No clean-start step may relabel that evidence as migration completion,
 `VerifiedV2`, or a human-run receipt.
+
+On **2026-09-28**, the shared authority advanced by one fast-forward append to generation 2 `OpenV2`
+at [commit `26d1882`](https://github.com/FS-GG/FS.GG.Coordination.Authority/commit/26d1882af9293b264df17a1fa98515e108313fe5).
+The exact original cutover-ref writer rule was restored and independently read back. The conflicting
+V1 genesis workflow is disabled. The `.github` activation source is prepared; successful ordinary
+settlement and its normal rerun remain the next live acceptance steps. This does not establish
+fleet-wide activation or any historical migration result.
 
 The source and publication frontier was updated from protected evidence on **2026-09-27**. The broader
 [code audit](reports/2026-09-24-v2-roadmap-code-audit.md) records its 2026-09-24 revisions, implementation boundaries,
