@@ -14,6 +14,46 @@ from typing import Any
 
 SHA = re.compile(r"^[0-9a-f]{40}$")
 
+AUDIO_SOURCE_PROFILE = {
+    "key": "audio-v1",
+    "repository": "FS-GG/FS.GG.Audio",
+    "repositoryId": 1292226968,
+    "requiredCheckAppId": 15368,
+    "requiredChecks": [
+        "Build + test (locked restore, net10.0, headless)",
+        "lock-ranges / lock-ranges",
+        "kit / coordination-kit",
+        "materialize / receiver-validate",
+        "routine-eligibility",
+    ],
+    "requiredGateChecks": [
+        "Build + test (locked restore, net10.0, headless)",
+        "lock-ranges / lock-ranges",
+        "kit / coordination-kit",
+        "materialize / receiver-validate",
+    ],
+    "checkProducers": {
+        "Build + test (locked restore, net10.0, headless)": {
+            "workflowId": 308685627, "path": ".github/workflows/gate.yml", "event": "pull_request",
+        },
+        "lock-ranges / lock-ranges": {
+            "workflowId": 308685627, "path": ".github/workflows/gate.yml", "event": "pull_request",
+        },
+        "kit / coordination-kit": {
+            "workflowId": 310136059,
+            "path": ".github/workflows/coordination-coherence.yml", "event": "pull_request",
+        },
+        "materialize / receiver-validate": {
+            "workflowId": 316870238,
+            "path": ".github/workflows/kit-materialize.yml", "event": "pull_request",
+        },
+        "routine-eligibility": {
+            "workflowId": 357682791,
+            "path": ".github/workflows/routine-eligibility.yml", "event": "pull_request_target",
+        },
+    },
+}
+
 
 class Refusal(ValueError):
     pass
@@ -39,8 +79,29 @@ def require_equal(actual: Any, expected: Any, message: str) -> None:
         raise Refusal(message)
 
 
+def source_profile(policy: dict[str, Any], selector: str) -> dict[str, Any]:
+    """Resolve a bounded selector to code-owned source identity and check policy."""
+    if selector in ("", "dotgithub-v1"):
+        require_equal(policy.get("repository"), "FS-GG/.github",
+                      "legacy source repository differs from policy")
+        qualification = policy["qualification"]
+        return {
+            "key": "dotgithub-v1",
+            "repository": "FS-GG/.github",
+            "repositoryId": 1269292704,
+            "requiredCheckAppId": qualification["requiredCheckAppId"],
+            "requiredChecks": qualification["requiredChecks"],
+            "requiredGateChecks": qualification["requiredGateChecks"],
+            "checkProducers": qualification["checkProducers"],
+        }
+    if selector == AUDIO_SOURCE_PROFILE["key"]:
+        return AUDIO_SOURCE_PROFILE
+    raise Refusal("unknown ordinary-v2 source profile")
+
+
 def qualify(policy: dict[str, Any], digest: str, runtime: dict[str, Any],
-            associations: list[dict[str, Any]], evidence: dict[str, Any]) -> dict[str, Any]:
+            associations: list[dict[str, Any]], evidence: dict[str, Any],
+            source_profile_key: str = "dotgithub-v1") -> dict[str, Any]:
     require_equal(policy.get("schema"), "fsgg.github.v2-ci-ordinary-settlement-policy/1",
                   "unsupported policy schema")
     installed = policy.get("credentialJob", {}).get("installed")
@@ -53,12 +114,16 @@ def qualify(policy: dict[str, Any], digest: str, runtime: dict[str, Any],
     workflow = policy["workflow"]
     job = policy["credentialJob"]
     qualification = policy["qualification"]
+    selected_source = source_profile(policy, source_profile_key)
     source = runtime.get("sourceSha")
     if not isinstance(source, str) or not SHA.fullmatch(source):
         raise Refusal("source SHA is missing or malformed")
     require_equal(runtime.get("schema"), "fsgg.github.v2-ci-runtime/1", "unsupported runtime schema")
     require_equal(runtime.get("eventName"), trigger["event"], "wrong event for the selected policy")
-    require_equal(runtime.get("repository"), policy["repository"], "wrong source repository")
+    require_equal(runtime.get("sourceProfile"), selected_source["key"], "wrong source profile")
+    require_equal(runtime.get("repository"), selected_source["repository"], "wrong source repository")
+    require_equal(runtime.get("repositoryId"), selected_source["repositoryId"],
+                  "wrong source repository identity")
     require_equal(runtime.get("ref"), trigger["ref"], "wrong source ref: protected main is required")
     require_equal(runtime.get("eventAfter"), source, "wrong source: push after SHA differs from the runtime source")
     require_equal(runtime.get("workflowPath"), workflow["path"], "wrong workflow")
@@ -76,7 +141,7 @@ def qualify(policy: dict[str, Any], digest: str, runtime: dict[str, Any],
         raise Refusal("associated pull request is not merged")
     require_equal(pull.get("merge_commit_sha"), source, "wrong source: associated merge commit differs")
     require_equal((pull.get("base") or {}).get("ref"), "main", "associated pull request did not merge to main")
-    require_equal(((pull.get("base") or {}).get("repo") or {}).get("full_name"), policy["repository"],
+    require_equal(((pull.get("base") or {}).get("repo") or {}).get("full_name"), selected_source["repository"],
                   "associated pull request belongs to the wrong repository")
     number = pull.get("number")
     if not isinstance(number, int) or isinstance(number, bool) or number < 1:
@@ -103,7 +168,8 @@ def qualify(policy: dict[str, Any], digest: str, runtime: dict[str, Any],
         "policySha256": digest,
     }
     require_equal(subject, expected_subject, "stale or mismatched qualification evidence")
-    if set(qualification["checkProducers"]) != set(qualification["requiredChecks"] + qualification["requiredGateChecks"]):
+    if set(selected_source["checkProducers"]) != set(
+            selected_source["requiredChecks"] + selected_source["requiredGateChecks"]):
         raise Refusal("check-producer policy population is incomplete")
 
     def validate_checks(field: str, expected: str) -> list[dict[str, Any]]:
@@ -115,13 +181,13 @@ def qualify(policy: dict[str, Any], digest: str, runtime: dict[str, Any],
             if not isinstance(check, dict) or not isinstance(check.get("name"), str) or check["name"] in check_map:
                 raise Refusal(f"qualification {field} are malformed or duplicated")
             check_map[check["name"]] = check
-        if set(check_map) != set(qualification[expected]):
+        if set(check_map) != set(selected_source[expected]):
             raise Refusal(f"qualification {field} population is incomplete or unexpected")
         for name, check in check_map.items():
             if (check.get("conclusion") != "success" or check.get("sourceSha") != head_sha
-                    or check.get("appId") != qualification["requiredCheckAppId"]):
+                    or check.get("appId") != selected_source["requiredCheckAppId"]):
                 raise Refusal(f"qualification check {name} is failed or stale")
-            producer = qualification["checkProducers"][name]
+            producer = selected_source["checkProducers"][name]
             if (check.get("workflowId") != producer["workflowId"]
                     or check.get("workflowPath") != producer["path"]
                     or any(not isinstance(check.get(key), int) or isinstance(check.get(key), bool)
@@ -137,6 +203,9 @@ def qualify(policy: dict[str, Any], digest: str, runtime: dict[str, Any],
         "status": "qualified",
         "policyId": policy["policyId"],
         "policySha256": digest,
+        "sourceProfile": selected_source["key"],
+        "sourceRepository": selected_source["repository"],
+        "sourceRepositoryId": selected_source["repositoryId"],
         "sourceSha": source,
         "pullRequest": number,
         "pullRequestNodeId": node_id,
@@ -160,11 +229,13 @@ def main() -> int:
     parser.add_argument("--runtime", required=True)
     parser.add_argument("--associations", required=True)
     parser.add_argument("--evidence", required=True)
+    parser.add_argument("--source-profile", choices=("dotgithub-v1", "audio-v1"),
+                        default="dotgithub-v1")
     parser.add_argument("--output")
     args = parser.parse_args()
     try:
         receipt = qualify(read_json(args.policy), policy_digest(args.policy), read_json(args.runtime),
-                          read_json(args.associations), read_json(args.evidence))
+                          read_json(args.associations), read_json(args.evidence), args.source_profile)
         encoded = json.dumps(receipt, sort_keys=True, separators=(",", ":")) + "\n"
         if args.output:
             output = pathlib.Path(args.output)

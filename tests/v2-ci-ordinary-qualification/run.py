@@ -27,7 +27,9 @@ class OrdinarySettlementQualificationTests(unittest.TestCase):
         self.runtime = {
             "schema": "fsgg.github.v2-ci-runtime/1",
             "eventName": "push",
+            "sourceProfile": "dotgithub-v1",
             "repository": "FS-GG/.github",
+            "repositoryId": 1269292704,
             "ref": "refs/heads/main",
             "eventAfter": SOURCE,
             "sourceSha": SOURCE,
@@ -81,6 +83,25 @@ class OrdinarySettlementQualificationTests(unittest.TestCase):
                               associations if associations is not None else self.associations,
                               evidence or self.evidence)
 
+    def select_audio(self):
+        profile = MODULE.AUDIO_SOURCE_PROFILE
+        self.runtime["sourceProfile"] = profile["key"]
+        self.runtime["repository"] = profile["repository"]
+        self.runtime["repositoryId"] = profile["repositoryId"]
+        self.associations[0]["base"]["repo"]["full_name"] = profile["repository"]
+
+        def check(name, index):
+            producer = profile["checkProducers"][name]
+            return {"name": name, "conclusion": "success", "sourceSha": HEAD, "appId": 15368,
+                    "checkRunId": index + 1, "workflowRunId": 1000 + index,
+                    "runAttempt": 1, "checkSuiteId": 2000 + index,
+                    "workflowId": producer["workflowId"], "workflowPath": producer["path"]}
+
+        self.evidence["checks"] = [check(name, index)
+                                   for index, name in enumerate(profile["requiredChecks"])]
+        self.evidence["gateChecks"] = [check(name, index)
+                                       for index, name in enumerate(profile["requiredGateChecks"])]
+
     def refuses(self, *, runtime=None, associations=None, evidence=None, contains=None):
         with self.assertRaisesRegex(MODULE.Refusal, contains or "."):
             self.qualify(runtime, associations, evidence)
@@ -88,11 +109,37 @@ class OrdinarySettlementQualificationTests(unittest.TestCase):
     def test_accepts_live_single_merged_pr_association_and_emits_secret_free_receipt(self):
         receipt = self.qualify()
         self.assertEqual(3662, receipt["pullRequest"])
+        self.assertEqual("dotgithub-v1", receipt["sourceProfile"])
+        self.assertEqual(1269292704, receipt["sourceRepositoryId"])
         self.assertEqual(SOURCE, receipt["mergeCommitSha"])
         self.assertFalse(receipt["credentialAccess"])
         self.assertEqual({"contract-coherence / coherence", "routine-eligibility"},
                          {check["name"] for check in receipt["requiredChecks"]})
         self.assertEqual(8, len(receipt["requiredGateChecks"]))
+
+    def test_audio_profile_uses_only_code_owned_identity_checks_and_producers(self):
+        self.select_audio()
+        receipt = MODULE.qualify(
+            self.policy, self.digest, self.runtime, self.associations, self.evidence, "audio-v1")
+        self.assertEqual("audio-v1", receipt["sourceProfile"])
+        self.assertEqual("FS-GG/FS.GG.Audio", receipt["sourceRepository"])
+        self.assertEqual(1292226968, receipt["sourceRepositoryId"])
+        self.assertEqual(5, len(receipt["requiredChecks"]))
+        self.assertEqual(4, len(receipt["requiredGateChecks"]))
+
+        runtime = copy.deepcopy(self.runtime)
+        runtime["sourceProfile"] = "dotgithub-v1"
+        with self.assertRaisesRegex(MODULE.Refusal, "wrong source profile"):
+            MODULE.qualify(self.policy, self.digest, runtime, self.associations,
+                           self.evidence, "audio-v1")
+        runtime = copy.deepcopy(self.runtime)
+        runtime["repositoryId"] = 1269292704
+        with self.assertRaisesRegex(MODULE.Refusal, "wrong source repository identity"):
+            MODULE.qualify(self.policy, self.digest, runtime, self.associations,
+                           self.evidence, "audio-v1")
+        with self.assertRaisesRegex(MODULE.Refusal, "unknown ordinary-v2 source profile"):
+            MODULE.qualify(self.policy, self.digest, self.runtime, self.associations,
+                           self.evidence, "untrusted-runtime-profile")
 
     def test_refuses_request_and_manual_events(self):
         for event in ("pull_request", "pull_request_target", "workflow_dispatch", "repository_dispatch"):

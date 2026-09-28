@@ -92,7 +92,7 @@ def current_authority(repository: str, policy: dict, policy_path: pathlib.Path =
         raise QUALIFICATION.Refusal("current main ref moved during authority read")
 
 
-def required_checks(repository: str, policy: dict) -> list[str]:
+def required_checks(repository: str, selected_source: dict) -> list[str]:
     branch = api(f"repos/{repository}/branches/main")
     if not isinstance(branch, dict) or branch.get("protected") is not True:
         raise QUALIFICATION.Refusal("live main branch protection unavailable")
@@ -103,12 +103,13 @@ def required_checks(repository: str, policy: dict) -> list[str]:
         raise QUALIFICATION.Refusal("live required-check population unavailable")
     names = []
     for check in checks:
-        if not isinstance(check, dict) or check.get("app_id") != policy["qualification"]["requiredCheckAppId"]:
+        if (not isinstance(check, dict)
+                or check.get("app_id") != selected_source["requiredCheckAppId"]):
             raise QUALIFICATION.Refusal("live required-check App differs from policy")
         names.append(check.get("context"))
     if (not all(isinstance(name, str) and name for name in names)
             or len(names) != len(set(names))
-            or set(names) != set(policy["qualification"]["requiredGateChecks"])):
+            or set(names) != set(selected_source["requiredGateChecks"])):
         raise QUALIFICATION.Refusal("live required-check population differs from policy")
     return names
 
@@ -166,12 +167,16 @@ def observe(environ: dict[str, str], rehearsal: bool = False) -> dict:
     policy_path = REHEARSAL_POLICY_PATH if rehearsal else POLICY_PATH
     policy = QUALIFICATION.read_json(str(policy_path))
     source = environ.get("GITHUB_SHA", "")
-    repository = policy["repository"]
+    profile_key = environ.get("FSGG_V2_SOURCE_PROFILE", "").strip()
+    selected_source = QUALIFICATION.source_profile(policy, profile_key)
+    repository = selected_source["repository"]
+    if rehearsal and selected_source["key"] != "dotgithub-v1":
+        raise QUALIFICATION.Refusal("selected source profile has no rehearsal activation")
     expected_workflow = (".github/workflows/v2-ci-ordinary-rehearsal.yml" if rehearsal
                          else ".github/workflows/v2-ci-ordinary-settlement.yml")
     expected_event = "workflow_dispatch" if rehearsal else "push"
     expected_environment = "ordinary-v2-rehearsal" if rehearsal else "ordinary-v2"
-    if (repository != "FS-GG/.github"
+    if (policy["repository"] != "FS-GG/.github"
             or policy["workflow"]["path"] != expected_workflow
             or policy["trigger"]["event"] != expected_event
             or policy["credentialJob"]["environment"] != expected_environment
@@ -182,6 +187,12 @@ def observe(environ: dict[str, str], rehearsal: bool = False) -> dict:
         raise QUALIFICATION.Refusal("invalid triggering SHA")
     if environ.get("GITHUB_REPOSITORY") != repository:
         raise QUALIFICATION.Refusal("wrong triggering repository")
+    repository_read = api(f"repos/{repository}")
+    if (not isinstance(repository_read, dict)
+            or repository_read.get("id") != selected_source["repositoryId"]
+            or repository_read.get("full_name") != repository
+            or repository_read.get("default_branch") != "main"):
+        raise QUALIFICATION.Refusal("selected source repository identity differs")
     if environ.get("GITHUB_EVENT_NAME") != expected_event or environ.get("GITHUB_REF") != "refs/heads/main":
         raise QUALIFICATION.Refusal("only the pinned protected-main event is admitted")
     if environ.get("EXPECTED_WORKFLOW_SHA") != source:
@@ -193,7 +204,7 @@ def observe(environ: dict[str, str], rehearsal: bool = False) -> dict:
                               capture_output=True, text=True, cwd=ROOT).stdout.strip()
     if checkout != source:
         raise QUALIFICATION.Refusal("checkout differs from triggering source")
-    current_authority(repository, policy, policy_path)
+    current_authority(policy["repository"], policy, policy_path)
     run_id, attempt = environ.get("GITHUB_RUN_ID", ""), environ.get("GITHUB_RUN_ATTEMPT", "")
     if not run_id.isdecimal() or not attempt.isdecimal() or int(run_id) < 1 or int(attempt) < 1:
         raise QUALIFICATION.Refusal("invalid workflow run identity")
@@ -217,7 +228,7 @@ def observe(environ: dict[str, str], rehearsal: bool = False) -> dict:
     if not QUALIFICATION.SHA.fullmatch(head):
         raise QUALIFICATION.Refusal("invalid associated PR head")
     tree = equivalent_tree(repository, head, source, current_pull["base"]["sha"])
-    required_checks(repository, policy)
+    required_checks(repository, selected_source)
 
     checks_response = api(f"repos/{repository}/commits/{head}/check-runs?per_page=100")
     if not isinstance(checks_response, dict) or checks_response.get("total_count", 101) > 100:
@@ -225,8 +236,8 @@ def observe(environ: dict[str, str], rehearsal: bool = False) -> dict:
     checks = checks_response.get("check_runs")
     if not isinstance(checks, list) or len(checks) != checks_response["total_count"]:
         raise QUALIFICATION.Refusal("incomplete native check-run population")
-    expected_producers = policy["qualification"]["checkProducers"]
-    expected_names = set(policy["qualification"]["requiredChecks"] + policy["qualification"]["requiredGateChecks"])
+    expected_producers = selected_source["checkProducers"]
+    expected_names = set(selected_source["requiredChecks"] + selected_source["requiredGateChecks"])
     if set(expected_producers) != expected_names:
         raise QUALIFICATION.Refusal("check-producer population differs from required checks")
     run_cache: dict[int, dict] = {}
@@ -272,7 +283,7 @@ def observe(environ: dict[str, str], rehearsal: bool = False) -> dict:
     def select(name: str) -> dict:
         matches = [check for check in checks if check.get("name") == name]
         if not matches or any(
-            check.get("app", {}).get("id") != policy["qualification"]["requiredCheckAppId"]
+            check.get("app", {}).get("id") != selected_source["requiredCheckAppId"]
             or check.get("head_sha") != head
             for check in matches
         ):
@@ -296,13 +307,15 @@ def observe(environ: dict[str, str], rehearsal: bool = False) -> dict:
                 "sourceSha": check["head_sha"], "appId": check["app"]["id"],
                 **native[check["id"]]}
 
-    selected = [select(name) for name in policy["qualification"]["requiredChecks"]]
-    gate_selected = [select(name) for name in policy["qualification"]["requiredGateChecks"]]
+    selected = [select(name) for name in selected_source["requiredChecks"]]
+    gate_selected = [select(name) for name in selected_source["requiredGateChecks"]]
 
     digest = hashlib.sha256(policy_path.read_bytes()).hexdigest()
     runtime = {
         "schema": "fsgg.github.v2-ci-runtime/1", "eventName": environ["GITHUB_EVENT_NAME"],
-        "repository": repository, "ref": environ["GITHUB_REF"],
+        "sourceProfile": selected_source["key"],
+        "repository": repository, "repositoryId": selected_source["repositoryId"],
+        "ref": environ["GITHUB_REF"],
         "eventAfter": source, "sourceSha": source,
         "workflowPath": policy["workflow"]["path"], "workflowRevision": source,
         "environment": policy["credentialJob"]["environment"],
@@ -320,10 +333,13 @@ def observe(environ: dict[str, str], rehearsal: bool = False) -> dict:
         "checks": selected,
         "gateChecks": gate_selected,
     }
-    receipt = QUALIFICATION.qualify(policy, digest, runtime, [current_pull], evidence)
+    receipt = QUALIFICATION.qualify(
+        policy, digest, runtime, [current_pull], evidence, selected_source["key"])
     receipt["runId"] = int(run_id)
     receipt["runAttempt"] = int(attempt)
-    receipt["activation"] = bool(policy["credentialJob"]["installed"])
+    receipt["activation"] = (
+        selected_source["key"] == "dotgithub-v1" and bool(policy["credentialJob"]["installed"])
+    )
     receipt["qualifiedTreeSha"] = tree
     return receipt
 
