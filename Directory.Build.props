@@ -595,8 +595,11 @@
   <!-- 0.91.5 -> 0.92.0 (SKILL-FS-01.5): MINOR coherent successor. The CLI adds
        read-only, bounded telemetry configuration discovery for installed skill
        workflows. Drivers and Kit move with it as one coherent set. -->
+  <!-- 0.92.0 -> 0.93.0 (SKILL-FS-01.5): MINOR coherent successor. Supported
+       skill callers use the packaged F# telemetry and preflight commands, while
+       protected native collection provenance advances with the coherent set. -->
   <PropertyGroup>
-    <FsggCoherentSetVersion>0.92.0</FsggCoherentSetVersion>
+    <FsggCoherentSetVersion>0.93.0</FsggCoherentSetVersion>
   </PropertyGroup>
 
 </Project>

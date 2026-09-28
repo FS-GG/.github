@@ -130,12 +130,13 @@ bytes under 0.52.0 would make the same version identify different artifacts. Ado
 coherent set cut from corrected source. All three partial sets are recorded in
 `registry/dependencies.yml`.</FsggStandingAdvisories>
 
-    <PackageReleaseNotes>0.92.0 — add bounded, read-only telemetry configuration discovery for installed skill workflows.
+    <PackageReleaseNotes>0.93.0 — switch supported skill workflows to packaged F# telemetry and preflight commands.
 
-The installed `skill telemetry-config discover` command reports either the selected public
-configuration fields or a closed not-configured result. It validates file bounds, permissions,
-schema and workspace binding without loading credentials or mutating telemetry state. Kit and
-Drivers advance with the CLI under the coherent-set version contract.
+Roadmap telemetry, routine delivery, dashboards, and pipeline preflight now invoke the installed
+coordination tool for bounded discovery and command execution. Clean Drivers installations no
+longer need the Python telemetry-defaults module. This cut also carries protected native telemetry
+collection provenance accumulated since 0.92.0. Kit and Drivers advance with the CLI under the
+coherent-set version contract.
 
 $(FsggStandingAdvisories)
 
