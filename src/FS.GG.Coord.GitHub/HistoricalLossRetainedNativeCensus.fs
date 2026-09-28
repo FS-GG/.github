@@ -5,6 +5,7 @@ module HistoricalLossRetainedNativeCensus =
     open System
     open System.Collections.Generic
     open System.Globalization
+    open System.IO
     open System.Security.Cryptography
     open System.Text
     open System.Text.Json
@@ -831,3 +832,181 @@ module HistoricalLossRetainedNativeCensus =
                 { First = { decoded.First with Pages = capture.First.Pages; RawEvidenceDigest = capture.First.RawEvidenceDigest }
                   Second = { decoded.Second with Pages = capture.Second.Pages; RawEvidenceDigest = capture.Second.RawEvidenceDigest } }
             bindValidatedCapture sealedCapture expectedFamily expectedScope expectedObservationHorizon registryBytes entry approval
+
+    // A private local artifact for the interval between direct collection and the independent
+    // postmerge approval. The binary format stores only raw pages and their digests. Typed Draft
+    // fields are never deserialized as evidence; bindV3Captured reconstructs them by replay.
+    let private privateMode = UnixFileMode.UserRead ||| UnixFileMode.UserWrite
+    let private captureMagic = Encoding.ASCII.GetBytes("FSGG-HLCAP-v1\u0000")
+    let private strictUtf8 = UTF8Encoding(false, true)
+    let private maximumCaptureBytes = 512L * 1024L * 1024L
+    let private maximumPages = 200000
+
+    let private writeText (writer: BinaryWriter) (value: string) =
+        let bytes = strictUtf8.GetBytes value
+        writer.Write bytes.Length
+        writer.Write bytes
+
+    let private writeOptional (writer: BinaryWriter) =
+        function
+        | None -> writer.Write false
+        | Some value -> writer.Write true; writeText writer value
+
+    let private readText (reader: BinaryReader) maximum =
+        let length = reader.ReadInt32()
+        if length < 0 || length > maximum || int64 length > reader.BaseStream.Length - reader.BaseStream.Position then
+            raise (InvalidDataException "invalid private capture field length")
+        strictUtf8.GetString(reader.ReadBytes length)
+
+    let private readOptional (reader: BinaryReader) maximum =
+        if reader.ReadBoolean() then Some(readText reader maximum) else None
+
+    let private writePage (writer: BinaryWriter) (page: RawPage) =
+        writer.Write page.Pass
+        writeText writer page.Repository.FullName
+        writer.Write page.Repository.DatabaseId
+        writeText writer page.Repository.NodeId
+        match page.Stream with
+        | Identity -> writer.Write 0
+        | Issues -> writer.Write 1
+        | Pulls -> writer.Write 2
+        | IssueComments -> writer.Write 3
+        | IssueEvents -> writer.Write 4
+        | Timeline number -> writer.Write 5; writer.Write number
+        writer.Write page.Index
+        writeText writer page.Method
+        writeText writer page.ApiVersionRequested
+        writeText writer page.ApiVersionSelected
+        writeText writer page.Path
+        writer.Write page.Query.Length
+        for name, value in page.Query do writeText writer name; writeText writer value
+        writer.Write page.Status
+        writeText writer page.Resource
+        writeText writer page.Body
+        writeText writer page.RawSha256
+        writeOptional writer page.LinkHeader
+        writeText writer page.ObservedAt
+        writeOptional writer page.NextLink
+        writer.Write page.ItemCount
+        writer.Write page.Terminal
+
+    let private readPage (reader: BinaryReader) =
+        let pass = reader.ReadInt32()
+        let repository =
+            { FullName = readText reader 512
+              DatabaseId = reader.ReadInt64()
+              NodeId = readText reader 512 }
+        let stream =
+            match reader.ReadInt32() with
+            | 0 -> Identity
+            | 1 -> Issues
+            | 2 -> Pulls
+            | 3 -> IssueComments
+            | 4 -> IssueEvents
+            | 5 ->
+                let number = reader.ReadInt32()
+                if number <= 0 then raise (InvalidDataException "invalid timeline number")
+                Timeline number
+            | _ -> raise (InvalidDataException "invalid native stream")
+        let index = reader.ReadInt32()
+        let method = readText reader 16
+        let requested = readText reader 32
+        let selected = readText reader 32
+        let path = readText reader 4096
+        let queryCount = reader.ReadInt32()
+        if queryCount < 0 || queryCount > 32 then raise (InvalidDataException "invalid query count")
+        let query = [ for _ in 1 .. queryCount -> readText reader 256, readText reader 4096 ]
+        { Pass = pass
+          Repository = repository
+          Stream = stream
+          Index = index
+          Method = method
+          ApiVersionRequested = requested
+          ApiVersionSelected = selected
+          Path = path
+          Query = query
+          Status = reader.ReadInt32()
+          Resource = readText reader 256
+          Body = readText reader (4 * 1024 * 1024)
+          RawSha256 = readText reader 64
+          LinkHeader = readOptional reader 16384
+          ObservedAt = readText reader 128
+          NextLink = readOptional reader 8192
+          ItemCount = reader.ReadInt32()
+          Terminal = reader.ReadBoolean() }
+
+    let private rawPassValid number (pass: PassCapture) =
+        pass.Number = number
+        && pass.Pages.Length <= maximumPages
+        && pass.Pages |> List.forall (fun page ->
+            page.Pass = number && Set.contains page.Repository (Set.ofList repositories)
+            && page.RawSha256 = sha256 page.Body)
+        && pass.RawEvidenceDigest = rawFingerprint pass.Pages
+
+    let savePrivate path (capture: Capture) =
+        if OperatingSystem.IsWindows() then Error "private native capture requires Unix file modes"
+        elif String.IsNullOrWhiteSpace path || not (rawPassValid 1 capture.First && rawPassValid 2 capture.Second)
+             || capture.First.Draft.ObservationHorizon <> capture.Second.Draft.ObservationHorizon then
+            Error "private native capture is incomplete or inconsistent"
+        else
+            let mutable temporary = ""
+            try
+                let target = Path.GetFullPath path
+                temporary <- target + ".tmp-" + Guid.NewGuid().ToString("N")
+                let options = FileStreamOptions()
+                options.Mode <- FileMode.CreateNew
+                options.Access <- FileAccess.Write
+                options.Share <- FileShare.None
+                options.UnixCreateMode <- privateMode
+                use stream = new FileStream(temporary, options)
+                use writer = new BinaryWriter(stream, strictUtf8, true)
+                writer.Write captureMagic
+                writeText writer capture.First.Draft.ObservationHorizon
+                for pass in [ capture.First; capture.Second ] do
+                    writer.Write pass.Number
+                    writeText writer pass.RawEvidenceDigest
+                    writer.Write pass.Pages.Length
+                    pass.Pages |> List.iter (writePage writer)
+                writer.Flush()
+                stream.Flush true
+                if stream.Length > maximumCaptureBytes || File.GetUnixFileMode temporary <> privateMode then
+                    raise (InvalidDataException "private capture exceeds limits")
+                File.Move(temporary, target, false)
+                Ok()
+            with _ ->
+                if temporary <> "" then
+                    try File.Delete temporary with _ -> ()
+                Error "private native capture could not be saved"
+
+    let loadPrivate path =
+        if OperatingSystem.IsWindows() then Error "private native capture requires Unix file modes"
+        elif String.IsNullOrWhiteSpace path then Error "private native capture path is invalid"
+        else
+            try
+                let file = FileInfo(Path.GetFullPath path)
+                if not file.Exists || file.LinkTarget <> null || File.GetUnixFileMode file.FullName <> privateMode
+                   || file.Length > maximumCaptureBytes then
+                    Error "private native capture is missing, non-private, or too large"
+                else
+                    use stream = new FileStream(file.FullName, FileMode.Open, FileAccess.Read, FileShare.Read)
+                    use reader = new BinaryReader(stream, strictUtf8, true)
+                    if reader.ReadBytes(captureMagic.Length) <> captureMagic then
+                        Error "private native capture format is invalid"
+                    else
+                        let horizon = readText reader 128
+                        let draft =
+                            { ObservationHorizon = horizon; Repositories = repositories; Subjects = []
+                              EvidenceFingerprint = ""; EligibleInventoryDigest = "" }
+                        let readPass expected =
+                            let number = reader.ReadInt32()
+                            let digest = readText reader 64
+                            let count = reader.ReadInt32()
+                            if number <> expected || count < 0 || count > maximumPages then
+                                raise (InvalidDataException "invalid native pass")
+                            let pages = [ for _ in 1 .. count -> readPage reader ]
+                            { Number = number; Pages = pages; Draft = draft; RawEvidenceDigest = digest }
+                        let first, second = readPass 1, readPass 2
+                        if stream.Position <> stream.Length || not (rawPassValid 1 first && rawPassValid 2 second) then
+                            Error "private native capture failed raw integrity checks"
+                        else Ok { First = first; Second = second }
+            with _ -> Error "private native capture could not be loaded"

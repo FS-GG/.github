@@ -2,6 +2,7 @@ namespace FS.GG.Coord.GitHub.Tests
 
 open System
 open System.Collections.Generic
+open System.IO
 open System.Security.Cryptography
 open System.Text
 open Xunit
@@ -500,3 +501,56 @@ module HistoricalLossRetainedNativeCensusTests =
         match bindV3Captured api capture entry.Family entry.Scope approvedHorizon bytes entry approval with
         | Ok bound -> Assert.Equal(0, bound.RetainedCount)
         | Error errors -> failwithf "verified zero intake refused: %A" errors
+
+    [<Fact>]
+    let ``private capture roundtrips exact raw pages and rejects replacement and body tampering`` () =
+        let fixture = Fixture()
+        let capture = match collectTwoPass fixture api approvedHorizon with Ok value -> value | Error error -> failwithf "%A" error
+        let directory = Path.Combine(Path.GetTempPath(), "fsgg-historical-capture-" + Guid.NewGuid().ToString("N"))
+        Directory.CreateDirectory directory |> ignore
+        let path = Path.Combine(directory, "native.capture")
+        try
+            Assert.Equal(Ok(), savePrivate path capture)
+            Assert.Equal(UnixFileMode.UserRead ||| UnixFileMode.UserWrite, File.GetUnixFileMode path)
+            let loaded = match loadPrivate path with Ok value -> value | Error error -> failwith error
+            Assert.True(capture.First.Pages = loaded.First.Pages)
+            Assert.True(capture.Second.Pages = loaded.Second.Pages)
+            Assert.Empty(loaded.First.Draft.Subjects)
+            Assert.Empty(loaded.Second.Draft.Subjects)
+            let delivery pass = pass.Draft.Subjects |> List.filter (fun subject -> subject.Family = DeliveryReceipt)
+            let first = censusFromCapture capture.First (delivery capture.First)
+            let second = censusFromCapture capture.Second (delivery capture.Second)
+            let entry = { nativeEntry first with CensusSecond = second }
+            let registryBytes, approval = approvedFixture entry
+            match bindV3Captured api loaded entry.Family entry.Scope approvedHorizon registryBytes entry approval with
+            | Ok bound -> Assert.Equal(2, bound.RetainedCount)
+            | Error errors -> failwithf "loaded private capture did not replay: %A" errors
+            Assert.True(savePrivate path capture |> Result.isError)
+            match loadPrivate path with
+            | Ok preserved -> Assert.True(capture.First.Pages = preserved.First.Pages)
+            | Error error -> failwith error
+
+            let bytes = File.ReadAllBytes path
+            let needle = Encoding.UTF8.GetBytes "ordinary PR body"
+            let offset = bytes |> Array.windowed needle.Length |> Array.findIndex ((=) needle)
+            bytes.[offset] <- bytes.[offset] ^^^ 1uy
+            File.WriteAllBytes(path, bytes)
+            match loadPrivate path with
+            | Error message -> Assert.DoesNotContain("ordinary PR body", message)
+            | Ok _ -> failwith "tampered raw response body was loaded"
+        finally
+            Directory.Delete(directory, true)
+
+    [<Fact>]
+    let ``private capture refuses a file readable by other users`` () =
+        let fixture = Fixture()
+        let capture = match collectTwoPass fixture api approvedHorizon with Ok value -> value | Error error -> failwithf "%A" error
+        let directory = Path.Combine(Path.GetTempPath(), "fsgg-historical-permission-" + Guid.NewGuid().ToString("N"))
+        Directory.CreateDirectory directory |> ignore
+        let path = Path.Combine(directory, "native.capture")
+        try
+            Assert.Equal(Ok(), savePrivate path capture)
+            File.SetUnixFileMode(path, UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.GroupRead)
+            Assert.True(loadPrivate path |> Result.isError)
+        finally
+            Directory.Delete(directory, true)

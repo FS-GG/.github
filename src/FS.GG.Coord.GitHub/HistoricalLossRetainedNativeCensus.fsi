@@ -132,3 +132,11 @@ module HistoricalLossRetainedNativeCensus =
         entry: FS.GG.Coord.HistoricalLossRegistry.EntryV3 ->
         approval: FS.GG.Coord.HistoricalLossRegistry.NativeApprovalReadbackV2 ->
         Result<FS.GG.Coord.HistoricalLossRegistry.BoundLossV3, string list>
+
+    /// Atomically create a private 0600 capture file. Raw bodies are stored only in that file;
+    /// errors contain no response body. An existing path is never replaced.
+    val savePrivate: path: string -> capture: Capture -> Result<unit, string>
+
+    /// Load a private 0600 capture file and verify its exact raw hashes. The returned Draft values
+    /// are deliberately empty placeholders; bindV3Captured replays and recomputes them from raw pages.
+    val loadPrivate: path: string -> Result<Capture, string>
