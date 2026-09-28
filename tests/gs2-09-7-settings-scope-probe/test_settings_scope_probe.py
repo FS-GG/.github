@@ -3,7 +3,6 @@ import importlib.util
 import json
 import tempfile
 import unittest
-import urllib.error
 from email.message import Message
 from pathlib import Path
 from unittest import mock
@@ -64,7 +63,7 @@ def provider_values():
     for name, path, _, _ in probe.STATIC_PROBES:
         body = {}
         if name == "organization-identity":
-            body = {"login": probe.OWNER, "id": 1, "node_id": "O_1"}
+            body = {"login": probe.OWNER, "id": 1, "node_id": "O_1", "plan": {"name": "team"}}
         elif name == "repository-identity":
             body = {"id": probe.REPOSITORY_ID, "node_id": probe.REPOSITORY_NODE_ID,
                     "full_name": f"{probe.OWNER}/{probe.REPOSITORY}", "private": True,
@@ -74,31 +73,34 @@ def provider_values():
         elif name == "repository-environments":
             body = {"total_count": 1, "environments": [{"id": 9, "node_id": "ENV_9", "name": "protected/test"}]}
         elif name == "repository-rulesets":
-            body = [{"id": 17, "node_id": "RRS_17", "source_type": "Organization"}]
+            body = [{"id": 17, "node_id": "RRS_17", "source_type": "Repository",
+                     "source": f"{probe.OWNER}/{probe.REPOSITORY}"}]
         elif name == "organization-custom-property-schema":
             body = [
-                {"property_name": "team", "value_type": "single_select", "required": False,
+                {"property_name": "sensitive_team_property", "value_type": "single_select", "required": False,
                  "default_value": "core", "allowed_values": ["core", "edge"],
                  "values_editable_by": "org_and_repo_actors", "require_explicit_values": False,
                  "source_type": "organization",
-                 "url": f"{probe.API}/orgs/{probe.OWNER}/properties/schema/team"},
-                {"property_name": "tier", "value_type": "single_select", "required": False,
+                 "url": f"{probe.API}/orgs/{probe.OWNER}/properties/schema/sensitive_team_property"},
+                {"property_name": "sensitive_tier_property", "value_type": "single_select", "required": False,
                  "default_value": None, "allowed_values": ["gold", "silver"],
                  "values_editable_by": "org_actors", "require_explicit_values": False,
                  "source_type": "organization",
-                 "url": f"{probe.API}/orgs/{probe.OWNER}/properties/schema/tier"},
-                {"property_name": "omitted", "value_type": "string", "required": False,
+                 "url": f"{probe.API}/orgs/{probe.OWNER}/properties/schema/sensitive_tier_property"},
+                {"property_name": "sensitive_omitted_property", "value_type": "string", "required": False,
                  "default_value": "fallback", "allowed_values": [],
                  "values_editable_by": "org_actors", "require_explicit_values": False,
                  "source_type": "organization",
-                 "url": f"{probe.API}/orgs/{probe.OWNER}/properties/schema/omitted"},
+                 "url": f"{probe.API}/orgs/{probe.OWNER}/properties/schema/sensitive_omitted_property"},
             ]
         elif name == "repository-custom-property-values":
-            body = [{"property_name": "team", "value": "core"},
-                    {"property_name": "tier", "value": "gold"}]
+            body = [{"property_name": "sensitive_team_property", "value": "core"},
+                    {"property_name": "sensitive_tier_property", "value": "gold"}]
         values[probe.API + path] = Response(200, body)
     values[probe.API + f"/repos/{probe.OWNER}/{probe.REPOSITORY}/environments/protected%2Ftest/secrets?per_page=100"] = \
         Response(200, {"total_count": 1, "secrets": [{"name": "DO_NOT_RETAIN"}]})
+    values[probe.API + f"/repos/{probe.OWNER}/{probe.REPOSITORY}/rulesets/17"] = \
+        Response(200, ruleset_detail())
     return values
 
 
@@ -106,7 +108,27 @@ def links(**relations):
     return {"Link": ", ".join(f'<{url}>; rel="{relation}"' for relation, url in relations.items())}
 
 
+def ruleset_detail(**changes):
+    value = {
+        "id": 17, "node_id": "RRS_17", "name": "protected branch", "target": "branch",
+        "source_type": "Repository", "source": f"{probe.OWNER}/{probe.REPOSITORY}",
+        "enforcement": "active", "bypass_actors": [],
+        "conditions": {"ref_name": {"include": ["~DEFAULT_BRANCH"], "exclude": []}},
+        "rules": [{"type": "non_fast_forward"}],
+    }
+    value.update(changes)
+    return value
+
+
 class SettingsScopeProbeTests(unittest.TestCase):
+    def build(self, values):
+        token = "ghs_" + "v" * 40
+        with tempfile.TemporaryDirectory() as directory:
+            proof = Path(directory) / "mint.json"
+            proof.write_text(json.dumps(mint_proof(token)), encoding="utf-8")
+            with mock.patch.object(probe, "source_binding", return_value={"headSha": "b" * 40}):
+                return probe.build_report(token, proof, ROOT, "b" * 40, Opener(values))
+
     def test_report_binds_identity_and_never_retains_sensitive_payloads(self):
         token = "ghs_" + "t" * 40
         opener = Opener(provider_values())
@@ -129,14 +151,17 @@ class SettingsScopeProbeTests(unittest.TestCase):
              "returnedValueCount": 2},
             report["customProperties"]["summary"])
         self.assertEqual(
-            [{"kind": "environment", "id": 9, "nodeId": "ENV_9"},
-             {"kind": "ruleset", "id": 17, "nodeId": "RRS_17", "sourceType": "Organization"}],
+            [{"kind": "environment", "id": 9, "nodeId": "ENV_9"}],
             report["conditionalParents"])
+        self.assertEqual("qualified-current-token-read", report["repositoryRulesets"]["verdict"])
+        self.assertTrue(report["repositoryRulesets"]["bypassActorsVisible"])
+        self.assertEqual([200], report["repositoryRulesets"]["detailStatuses"])
         self.assertNotIn(token, encoded)
         self.assertNotIn("DO_NOT_RETAIN", encoded)
         self.assertNotIn("fallback", encoded)
         self.assertNotIn("gold", encoded)
-        self.assertNotIn('"team"', encoded)
+        self.assertNotIn("sensitive_team_property", encoded)
+        self.assertNotIn("protected branch", encoded)
         self.assertTrue(all(request.get_method() == "GET" for request in opener.requests))
         self.assertTrue(all(request.data is None for request in opener.requests))
         self.assertTrue(all(request.headers["X-github-api-version"] == probe.API_VERSION
@@ -153,10 +178,7 @@ class SettingsScopeProbeTests(unittest.TestCase):
                             for page in item["pages"]))
 
     def test_denials_preserve_access_and_unknown_applicability(self):
-        headers = Message()
-        denied = urllib.error.HTTPError(
-            probe.API + f"/orgs/{probe.OWNER}/actions/permissions", 403, "forbidden", headers, None)
-        denied.read = lambda _limit: b'{"message":"permission or plan"}'
+        denied = Response(403, {"message": "permission or plan"})
         opener = Opener({probe.API + f"/orgs/{probe.OWNER}/actions/permissions": denied})
         result, bodies = probe.probe_pages("organization-actions",
                                            f"/orgs/{probe.OWNER}/actions/permissions", False,
@@ -167,10 +189,7 @@ class SettingsScopeProbeTests(unittest.TestCase):
         self.assertEqual("unknown", result["classification"]["feature"])
         self.assertEqual(403, result["pages"][0]["status"])
 
-        unauthorized = urllib.error.HTTPError(
-            probe.API + f"/orgs/{probe.OWNER}/properties/schema",
-            401, "unauthorized", headers, None)
-        unauthorized.read = lambda _limit: b'{"message":"credential"}'
+        unauthorized = Response(401, {"message": "credential"})
         result, _ = probe.probe_pages(
             "organization-custom-property-schema",
             f"/orgs/{probe.OWNER}/properties/schema", False,
@@ -178,10 +197,7 @@ class SettingsScopeProbeTests(unittest.TestCase):
             Opener({probe.API + f"/orgs/{probe.OWNER}/properties/schema": unauthorized}))
         self.assertEqual("unauthorized", result["classification"]["access"])
 
-        missing = urllib.error.HTTPError(
-            probe.API + f"/repos/{probe.OWNER}/{probe.REPOSITORY}/properties/values",
-            404, "missing", headers, None)
-        missing.read = lambda _limit: b'{"message":"ambiguous"}'
+        missing = Response(404, {"message": "ambiguous"})
         result, _ = probe.probe_pages(
             "repository-custom-property-values",
             f"/repos/{probe.OWNER}/{probe.REPOSITORY}/properties/values", False,
@@ -198,6 +214,12 @@ class SettingsScopeProbeTests(unittest.TestCase):
         self.assertFalse(probe.allowed_url(probe.API + f"/repos/{probe.OWNER}/{probe.REPOSITORY}/environments/x/secrets/name"))
         self.assertFalse(probe.allowed_url(
             probe.API + f"/repos/{probe.OWNER}/{probe.REPOSITORY}/properties/values?per_page=100"))
+        self.assertTrue(probe.allowed_url(
+            probe.API + f"/repos/{probe.OWNER}/{probe.REPOSITORY}/rulesets/17"))
+        self.assertFalse(probe.allowed_url(
+            probe.API + f"/repos/{probe.OWNER}/{probe.REPOSITORY}/rulesets/17?includes_parents=true"))
+        self.assertFalse(probe.allowed_url(
+            probe.API + f"/repos/{probe.OWNER}/{probe.REPOSITORY}/rulesets/%31%37"))
         with self.assertRaisesRegex(ValueError, "allowlist"):
             probe.get("https://evil.example/value", "token", Opener({}))
         path = f"/repos/{probe.OWNER}/{probe.REPOSITORY}/environments?per_page=100"
@@ -281,7 +303,7 @@ class SettingsScopeProbeTests(unittest.TestCase):
         unknown = json.dumps([{"property_name": "foreign", "value": "x"}]).encode()
         with self.assertRaisesRegex(ValueError, "unknown or duplicated"):
             probe.custom_property_summary([schema], [unknown])
-        invalid = json.dumps([{"property_name": "tier", "value": "bronze"}]).encode()
+        invalid = json.dumps([{"property_name": "sensitive_tier_property", "value": "bronze"}]).encode()
         with self.assertRaisesRegex(ValueError, "violates"):
             probe.custom_property_summary([schema], [invalid])
 
@@ -289,17 +311,66 @@ class SettingsScopeProbeTests(unittest.TestCase):
         token = "ghs_" + "s" * 40
         values = provider_values()
         path = probe.API + f"/repos/{probe.OWNER}/{probe.REPOSITORY}/properties/values"
-        first = Response(200, [{"property_name": "team", "value": "core"},
-                               {"property_name": "tier", "value": "gold"}])
+        first = Response(200, [{"property_name": "sensitive_team_property", "value": "core"},
+                               {"property_name": "sensitive_tier_property", "value": "gold"}])
         second = Response(200, [])
-        second.raw = b'[ {"property_name":"team","value":"core"},{"property_name":"tier","value":"gold"} ]'
+        second.raw = b'[ {"property_name":"sensitive_team_property","value":"core"},{"property_name":"sensitive_tier_property","value":"gold"} ]'
         values[path] = [first, second]
         with tempfile.TemporaryDirectory() as directory:
             proof = Path(directory) / "mint.json"
             proof.write_text(json.dumps(mint_proof(token)), encoding="utf-8")
             with mock.patch.object(probe, "source_binding", return_value={"headSha": "b" * 40}):
-                with self.assertRaisesRegex(ValueError, "raw response changed"):
+                with self.assertRaisesRegex(ValueError, "response digest|raw response changed"):
                     probe.build_report(token, proof, ROOT, "b" * 40, Opener(values))
+
+    def test_ruleset_bypass_omission_is_partial_and_detail_drift_refuses(self):
+        detail_url = probe.API + f"/repos/{probe.OWNER}/{probe.REPOSITORY}/rulesets/17"
+        values = provider_values()
+        omitted = ruleset_detail()
+        omitted.pop("bypass_actors")
+        values[detail_url] = Response(200, omitted)
+        report = self.build(values)
+        self.assertEqual("partial-bypass-actors-omitted", report["repositoryRulesets"]["verdict"])
+        self.assertFalse(report["repositoryRulesets"]["bypassActorsVisible"])
+
+        values = provider_values()
+        values[detail_url] = [Response(200, ruleset_detail()),
+                              Response(200, ruleset_detail(enforcement="disabled"))]
+        with self.assertRaisesRegex(ValueError, "detail request URI|detail bytes changed"):
+            self.build(values)
+
+    def test_ruleset_detail_rejects_inherited_push_and_unknown_shapes(self):
+        cases = {
+            "inherited": (ruleset_detail(source_type="Organization", source=probe.OWNER), "inherited or foreign"),
+            "push": (ruleset_detail(target="push"), "push or unknown"),
+            "conditions": (ruleset_detail(conditions={"repository_name": {}}), "conditions have an unknown"),
+            "rule": (ruleset_detail(rules=[{"type": "future_rule"}]), "unknown rule shape"),
+            "actor": (ruleset_detail(bypass_actors=[{"actor_id": 1, "actor_type": "FutureActor",
+                                                       "bypass_mode": "always"}]), "actor is unsupported"),
+        }
+        for name, (detail, message) in cases.items():
+            with self.subTest(name=name), self.assertRaisesRegex(ValueError, message):
+                values = provider_values()
+                values[probe.API + f"/repos/{probe.OWNER}/{probe.REPOSITORY}/rulesets/17"] = Response(200, detail)
+                self.build(values)
+
+        values = provider_values()
+        list_url = probe.API + f"/repos/{probe.OWNER}/{probe.REPOSITORY}/rulesets?includes_parents=true&per_page=100"
+        values[list_url] = Response(200, [{"id": 17, "node_id": "RRS_17",
+                                           "source_type": "Organization", "source": probe.OWNER}])
+        with self.assertRaisesRegex(ValueError, "inherited or foreign ruleset list"):
+            self.build(values)
+
+    def test_ruleset_detail_denials_are_not_authority(self):
+        expected = {401: "refused-unauthorized", 403: "refused-forbidden", 404: "unknown-not-found"}
+        detail_url = probe.API + f"/repos/{probe.OWNER}/{probe.REPOSITORY}/rulesets/17"
+        for status, verdict in expected.items():
+            values = provider_values()
+            values[detail_url] = Response(status, {"message": "unavailable"})
+            with self.subTest(status=status):
+                report = self.build(values)
+                self.assertEqual(verdict, report["repositoryRulesets"]["verdict"])
+                self.assertFalse(report["repositoryRulesets"]["bypassActorsVisible"])
 
     def test_malformed_parent_rows_cannot_claim_observed_absence(self):
         token = "ghs_" + "r" * 40
@@ -344,6 +415,8 @@ class SettingsScopeProbeTests(unittest.TestCase):
         self.assertIn("python3 -m unittest", text)
         self.assertIn(".customProperties.verdict", text)
         self.assertIn(".app.permissions.organization_custom_properties", text)
+        self.assertIn(".repositoryRulesets.verdict", text)
+        self.assertIn(".repositoryRulesets.permissionEvidence.administration", text)
         self.assertNotIn("permission-actions:", text)
         self.assertNotIn("permission-environments:", text)
 

@@ -25,6 +25,7 @@ PROJECT_NUMBER = 2
 PROJECT_NODE_ID = "PVT_kwDOEYAWY84BiESo"
 MAX_BODY = 1024 * 1024
 MAX_PAGES = 100
+MAX_RULESETS = 1000
 EXPECTED_WRITES = {
     "administration": "write",
     "contents": "write",
@@ -44,7 +45,7 @@ STATIC_PROBES = (
     ("repository-actions-access", f"/repos/{OWNER}/{REPOSITORY}/actions/permissions/access", False, "administration:read"),
     ("repository-private-fork-workflows", f"/repos/{OWNER}/{REPOSITORY}/actions/permissions/fork-pr-workflows-private-repos", False, "administration:read"),
     ("repository-environments", f"/repos/{OWNER}/{REPOSITORY}/environments?per_page=100", True, "actions:read"),
-    ("repository-rulesets", f"/repos/{OWNER}/{REPOSITORY}/rulesets?includes_parents=true&per_page=100", True, "administration:read"),
+    ("repository-rulesets", f"/repos/{OWNER}/{REPOSITORY}/rulesets?includes_parents=true&per_page=100", True, "metadata:read"),
     ("organization-actions", f"/orgs/{OWNER}/actions/permissions", False, "organization_administration:read"),
     ("organization-private-fork-workflows", f"/orgs/{OWNER}/actions/permissions/fork-pr-workflows-private-repos", False, "organization_administration:read"),
     ("organization-custom-property-schema", f"/orgs/{OWNER}/properties/schema", False, "organization_custom_properties:read"),
@@ -56,6 +57,16 @@ CUSTOM_PROPERTY_PROBES = {
     name: (path, paginated, permission)
     for name, path, paginated, permission in STATIC_PROBES
     if name in {"organization-custom-property-schema", "repository-custom-property-values"}
+}
+RULESET_TYPES = {
+    "creation", "update", "deletion", "required_linear_history", "required_deployments",
+    "required_signatures", "pull_request", "required_status_checks", "non_fast_forward",
+    "merge_queue", "code_scanning", "commit_message_pattern", "commit_author_email_pattern",
+    "committer_email_pattern", "branch_name_pattern", "tag_name_pattern",
+}
+RULESET_ACTOR_TYPES = {
+    "Integration", "OrganizationAdmin", "RepositoryRole", "Team", "DeployKey",
+    "EnterpriseOwner", "EnterpriseRole", "User",
 }
 
 
@@ -81,12 +92,19 @@ def allowed_url(value: str, allow_page_one: bool = False) -> bool:
         rf"/repos/{re.escape(OWNER)}/{re.escape(REPOSITORY)}/environments/[^/]+/secrets",
         parsed.path,
     )
+    ruleset_detail = re.fullmatch(
+        rf"/repos/{re.escape(OWNER)}/{re.escape(REPOSITORY)}/rulesets/([1-9][0-9]*)",
+        parsed.path,
+    )
     query = urllib.parse.parse_qs(parsed.query, keep_blank_values=True)
     if any(len(values) != 1 for values in query.values()):
         return False
     if environment_secrets is not None:
         expected = {"per_page": ["100"]}
         paginated = True
+    elif ruleset_detail is not None:
+        expected = {}
+        paginated = False
     else:
         matched = [item for item in STATIC_PROBES
                    if urllib.parse.urlsplit(API + item[1]).path == parsed.path]
@@ -264,6 +282,14 @@ def page_record(url: str, status: int, raw: bytes, relations: dict[str, str], in
     }
 
 
+def page_shapes(result: dict) -> list[dict]:
+    return [
+        {key: page[key] for key in (
+            "index", "endpoint", "status", "responseSha256", "links", "nextEndpoint", "terminal")}
+        for page in result["pages"]
+    ]
+
+
 def probe_pages(name: str, path: str, paginated: bool, permission: str, token: str, opener=None) -> tuple[dict, list[bytes]]:
     url = API + path
     pages = []
@@ -395,6 +421,106 @@ def custom_property_summary(schema_bodies: list[bytes], value_bodies: list[bytes
     }
 
 
+def ruleset_population(bodies: list[bytes]) -> list[dict]:
+    population = []
+    identities = set()
+    node_ids = set()
+    for raw in bodies:
+        for item in decode_collection(raw, None, "repository-rulesets"):
+            require(isinstance(item, dict) and type(item.get("id")) is int and item["id"] > 0
+                    and isinstance(item.get("node_id"), str) and item["node_id"],
+                    "ruleset identity is incomplete")
+            require(item["id"] not in identities and item["node_id"] not in node_ids,
+                    "ruleset identity is duplicated")
+            require(item.get("source_type") == "Repository"
+                    and item.get("source") == f"{OWNER}/{REPOSITORY}",
+                    "inherited or foreign ruleset list row is unsupported")
+            identities.add(item["id"])
+            node_ids.add(item["node_id"])
+            population.append(item)
+    require(len(population) <= MAX_RULESETS, "ruleset population exceeded its bound")
+    return population
+
+
+def validate_ruleset_detail(value: dict, expected: dict) -> bool:
+    require(value.get("id") == expected["id"] and value.get("node_id") == expected["node_id"],
+            "ruleset detail identity differs from its list row")
+    require(value.get("source_type") == "Repository" and value.get("source") == f"{OWNER}/{REPOSITORY}",
+            "inherited or foreign ruleset cannot qualify repository-local authority")
+    require(value.get("target") in {"branch", "tag"}, "push or unknown ruleset target is unsupported")
+    require(value.get("enforcement") in {"disabled", "active", "evaluate"},
+            "ruleset enforcement is unsupported")
+
+    conditions = value.get("conditions")
+    require(isinstance(conditions, dict) and set(conditions) == {"ref_name"},
+            "ruleset conditions have an unknown shape")
+    refs = conditions["ref_name"]
+    require(isinstance(refs, dict) and set(refs) == {"include", "exclude"},
+            "ruleset ref-name condition has an unknown shape")
+    for field in ("include", "exclude"):
+        entries = refs[field]
+        require(isinstance(entries, list) and all(isinstance(item, str) and item for item in entries)
+                and len(entries) == len(set(entries)), "ruleset ref-name condition is malformed")
+
+    rules = value.get("rules")
+    require(isinstance(rules, list), "ruleset rules are unavailable")
+    for rule in rules:
+        require(isinstance(rule, dict) and set(rule).issubset({"type", "parameters"})
+                and rule.get("type") in RULESET_TYPES,
+                "ruleset contains an unknown rule shape")
+        require("parameters" not in rule or isinstance(rule["parameters"], dict),
+                "ruleset rule parameters are malformed")
+
+    if "bypass_actors" not in value:
+        return False
+    actors = value["bypass_actors"]
+    require(isinstance(actors, list), "ruleset bypass actors are malformed")
+    seen = set()
+    for actor in actors:
+        require(isinstance(actor, dict) and set(actor) == {"actor_id", "actor_type", "bypass_mode"},
+                "ruleset bypass actor has an unknown shape")
+        actor_type = actor["actor_type"]
+        actor_id = actor["actor_id"]
+        require(actor_type in RULESET_ACTOR_TYPES and actor["bypass_mode"] in {"always", "pull_request", "exempt"},
+                "ruleset bypass actor is unsupported")
+        if actor_type == "DeployKey":
+            require(actor_id is None, "deploy-key bypass actor has an unexpected identity")
+        elif actor_type in {"OrganizationAdmin", "EnterpriseOwner"}:
+            require(actor_id is None or type(actor_id) is int and actor_id > 0,
+                    "administrative bypass actor identity is malformed")
+        else:
+            require(type(actor_id) is int and actor_id > 0, "ruleset bypass actor identity is incomplete")
+        require(actor["bypass_mode"] != "pull_request"
+                or value["target"] == "branch" and actor_type != "DeployKey",
+                "ruleset bypass mode is incompatible with its actor or target")
+        marker = (actor_type, actor_id, actor["bypass_mode"])
+        require(marker not in seen, "ruleset bypass actor is duplicated")
+        seen.add(marker)
+    return True
+
+
+def probe_ruleset_details(population: list[dict], token: str, pass_number: int, opener=None) -> tuple[list[dict], dict[int, bytes], bool]:
+    results = []
+    bodies = {}
+    bypass_visible = True
+    for item in population:
+        identifier = item["id"]
+        result, raw = probe_pages(
+            f"repository-ruleset-{identifier}-pass-{pass_number}",
+            f"/repos/{OWNER}/{REPOSITORY}/rulesets/{identifier}", False,
+            "metadata:read+administration:write-for-bypass-visibility", token, opener)
+        results.append(result)
+        status = result["pages"][-1]["status"]
+        if status == 200:
+            require(len(raw) == 1, "ruleset detail response population is malformed")
+            detail = decode_object(raw[0], result["name"])
+            bypass_visible = validate_ruleset_detail(detail, item) and bypass_visible
+            bodies[identifier] = raw[0]
+        else:
+            bypass_visible = False
+    return results, bodies, bypass_visible
+
+
 def load_mint_proof(path: Path, token: str) -> dict:
     value = json.loads(path.read_text(encoding="utf-8"))
     require(isinstance(value, dict) and value.get("schema") == "fsgg.github-substrate-v2.sandbox-mint-grants/1",
@@ -514,6 +640,95 @@ def build_report(token: str, mint_path: Path, workspace: Path, revision: str, op
     owner = validate_repository(repository)
     account = validate_organization(organization, owner)
 
+    first_ruleset_result, first_ruleset_bodies = observations["repository-rulesets"]
+    first_ruleset_status = first_ruleset_result["pages"][-1]["status"]
+    first_population = ruleset_population(first_ruleset_bodies) if first_ruleset_status == 200 else []
+    first_details, first_detail_bodies, first_bypass_visible = \
+        probe_ruleset_details(first_population, token, 1, opener)
+    probes.extend(first_details)
+
+    repo_path, repo_paginated, repo_permission = next(
+        (path, paginated, permission) for name, path, paginated, permission in STATIC_PROBES
+        if name == "repository-identity")
+    close_one, close_one_bodies = probe_pages(
+        "repository-identity-ruleset-pass-1-close", repo_path, repo_paginated,
+        repo_permission, token, opener)
+    start_two, start_two_bodies = probe_pages(
+        "repository-identity-ruleset-pass-2-start", repo_path, repo_paginated,
+        repo_permission, token, opener)
+    probes.extend([close_one, start_two])
+
+    rules_path, rules_paginated, rules_permission = next(
+        (path, paginated, permission) for name, path, paginated, permission in STATIC_PROBES
+        if name == "repository-rulesets")
+    second_ruleset_result, second_ruleset_bodies = probe_pages(
+        "repository-rulesets-pass-2", rules_path, rules_paginated, rules_permission, token, opener)
+    probes.append(second_ruleset_result)
+    second_ruleset_status = second_ruleset_result["pages"][-1]["status"]
+    second_population = ruleset_population(second_ruleset_bodies) if second_ruleset_status == 200 else []
+    second_details, second_detail_bodies, second_bypass_visible = \
+        probe_ruleset_details(second_population, token, 2, opener)
+    probes.extend(second_details)
+    close_two, close_two_bodies = probe_pages(
+        "repository-identity-ruleset-pass-2-close", repo_path, repo_paginated,
+        repo_permission, token, opener)
+    probes.append(close_two)
+
+    first_repository_bytes = observations["repository-identity"][1]
+    require(first_repository_bytes == close_one_bodies == start_two_bodies == close_two_bodies,
+            "repository identity changed during ruleset reads")
+    for label, bodies in (("ruleset-pass-1-close", close_one_bodies),
+                          ("ruleset-pass-2-start", start_two_bodies),
+                          ("ruleset-pass-2-close", close_two_bodies)):
+        require(len(bodies) == 1, f"{label} repository response is unavailable")
+        validate_repository(decode_object(bodies[0], label))
+
+    require([page["status"] for page in first_ruleset_result["pages"]]
+            == [page["status"] for page in second_ruleset_result["pages"]],
+            "repository ruleset status changed between reads")
+    require(page_shapes(first_ruleset_result) == page_shapes(second_ruleset_result),
+            "repository ruleset request URI or terminal pagination changed between reads")
+    if first_ruleset_status == 200:
+        require(first_ruleset_bodies == second_ruleset_bodies,
+                "repository ruleset raw population changed between reads")
+        require(first_population == second_population,
+                "repository ruleset typed population changed between reads")
+        require(first_detail_bodies.keys() == second_detail_bodies.keys(),
+                "repository ruleset detail population changed between reads")
+        require(len(first_details) == len(second_details),
+                "repository ruleset detail evidence changed between reads")
+        for first_detail, second_detail in zip(first_details, second_details):
+            require(page_shapes(first_detail) == page_shapes(second_detail),
+                    "repository ruleset detail request URI or terminal state changed between reads")
+        for identifier in first_detail_bodies:
+            require(first_detail_bodies[identifier] == second_detail_bodies[identifier],
+                    "repository ruleset detail bytes changed between reads")
+            require(decode_json(first_detail_bodies[identifier], "repository-ruleset-detail")
+                    == decode_json(second_detail_bodies[identifier], "repository-ruleset-detail"),
+                    "repository ruleset typed detail changed between reads")
+
+    ruleset_statuses = [first_ruleset_status, second_ruleset_status]
+    ruleset_statuses.extend(
+        item["pages"][-1]["status"] for item in first_details + second_details)
+    plan = organization.get("plan")
+    qualifying_plan = isinstance(plan, dict) and plan.get("name") in {"team", "enterprise"}
+    if 401 in ruleset_statuses:
+        ruleset_verdict = "refused-unauthorized"
+    elif 403 in ruleset_statuses:
+        ruleset_verdict = "refused-forbidden"
+    elif 404 in ruleset_statuses:
+        ruleset_verdict = "unknown-not-found"
+    elif any(status != 200 for status in ruleset_statuses):
+        ruleset_verdict = "refused-provider-status"
+    elif not first_population:
+        ruleset_verdict = "unknown-empty-population"
+    elif not qualifying_plan:
+        ruleset_verdict = "unknown-private-plan"
+    elif not (first_bypass_visible and second_bypass_visible):
+        ruleset_verdict = "partial-bypass-actors-omitted"
+    else:
+        ruleset_verdict = "qualified-current-token-read"
+
     confirmation_specs = {
         **CUSTOM_PROPERTY_PROBES,
         "organization-identity": next((path, paginated, permission) for name, path, paginated, permission
@@ -529,6 +744,8 @@ def build_report(token: str, mint_path: Path, workspace: Path, revision: str, op
         first, first_bodies = observations[name]
         require([page["status"] for page in confirmation["pages"]]
                 == [page["status"] for page in first["pages"]], f"{name} status changed between reads")
+        require(page_shapes(confirmation) == page_shapes(first),
+                f"{name} request URI, response digest, or terminal state changed between reads")
         if first["pages"][-1]["status"] == 200:
             require(first_bodies == bodies, f"{name} raw response changed between reads")
             require([decode_json(raw, name) for raw in first_bodies]
@@ -579,6 +796,19 @@ def build_report(token: str, mint_path: Path, workspace: Path, revision: str, op
             "verdict": property_verdict,
             "summary": property_summary,
             "provenanceRule": "equal-default-and-omitted-values-remain-unknown",
+        },
+        "repositoryRulesets": {
+            "listStatus": first_ruleset_status,
+            "rulesetCount": len(first_population),
+            "detailStatuses": sorted(item["pages"][-1]["status"]
+                                     for item in first_details),
+            "bypassActorsVisible": first_bypass_visible and second_bypass_visible,
+            "permissionEvidence": {
+                "metadata": mint["permissions"].get("metadata"),
+                "administration": mint["permissions"].get("administration"),
+            },
+            "privatePlan": plan.get("name") if qualifying_plan else "unknown",
+            "verdict": ruleset_verdict,
         },
         "authority": {
             "installedAppGrant": "unknown",

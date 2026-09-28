@@ -112,3 +112,6 @@ jobs:
           test "$(jq -r .customProperties.verdict "$report")" = qualified-current-token-read
           test "$(jq -r .customProperties.schemaStatus "$report")" = 200
           test "$(jq -r .customProperties.repositoryValuesStatus "$report")" = 200
+          test "$(jq -r .repositoryRulesets.permissionEvidence.metadata "$report")" = read
+          test "$(jq -r .repositoryRulesets.permissionEvidence.administration "$report")" = write
+          test "$(jq -r .repositoryRulesets.verdict "$report")" = qualified-current-token-read
