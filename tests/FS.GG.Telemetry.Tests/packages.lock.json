@@ -218,6 +218,13 @@
           "FSharp.Core": "[10.1.401, )"
         }
       },
+      "fs.gg.coord.github": {
+        "type": "Project",
+        "dependencies": {
+          "FS.GG.Coord.Core": "[1.0.0, )",
+          "FSharp.Core": "[10.1.401, )"
+        }
+      },
       "fs.gg.telemetry.client": {
         "type": "Project",
         "dependencies": {
@@ -243,6 +250,7 @@
         "dependencies": {
           "Akka": "[1.5.71, )",
           "Akka.FSharp": "[1.5.71, )",
+          "FS.GG.Coord.GitHub": "[1.0.0, )",
           "FS.GG.Telemetry.Contracts": "[1.0.0, )",
           "FS.GG.Telemetry.Dashboard": "[1.0.0, )",
           "FS.GG.Telemetry.Store": "[1.0.0, )",
