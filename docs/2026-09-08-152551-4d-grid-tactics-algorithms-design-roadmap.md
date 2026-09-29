@@ -51,7 +51,7 @@ is accepted for bounded **Commitment versus Pressure** prototyping as of 2026-09
 remains a later alternative. The [delivered owning implementation amendment](https://github.com/FS-GG/FS.GG.FourD/blob/main/docs/FOURD-01.design-v2.md)
 records source-delivered .V2.1–.V2.3 at [PR #11](https://github.com/FS-GG/FS.GG.FourD/pull/11),
 `b9126588db10469ef51b7cec7433567db0471485`, with [native verify](https://github.com/FS-GG/FS.GG.FourD/actions/runs/36525153306).
-Opt-in browser/save2, final technical comparison and actual evaluation task wiring remain open.
+Opt-in browser/save2 and technical comparison are now delivered through [PR #12](https://github.com/FS-GG/FS.GG.FourD/pull/12) at `7739f9bd8830e09b4644efa7e45b2cb3ac61b81f`; [native verify](https://github.com/FS-GG/FS.GG.FourD/actions/runs/36531113993) passed 28 Chromium journeys and full parity. Actual evaluation-pack delivery and consenting player evidence remain open.
 This is a material rules amendment within **FOURD-01**, preserving its delivered work and cost lineage.
 The existing `fourd-tactics-v1` encounter remains the default until a separately qualified selection.
 Proposal X/Y/Z/H maps to runtime x/y/w/z; it does not rename the coordinate ABI. Earlier numerical
