@@ -78,7 +78,198 @@
         "predeclaredUnresolvedOriginals": [],
         "scope": "User-selected independent hello world app; only prospectively selected whole-app originals count. Existing examples, planning, scaffolding alone, test jobs, source checkpoints and enrollment projections do not count."
       }
-    ]
+    ],
+    "followupAccounting": {
+      "through": "2026-09-29T07:15:35Z",
+      "method": "Enumerate the owning source and native pull-request/check histories available through the fixed cutoff for every enrolled original. A complete follow-up means that bounded enumeration is complete; it does not change delivery state or supply missing usage, population, repair-cost, or private-provider evidence.",
+      "costStatus": "unknown",
+      "sources": [
+        {
+          "originalItems": ["LEARN-01.3"],
+          "source": "https://github.com/FS-GG/FS.GG.Coordination/pull/886",
+          "head": "23aef131d3c66845dc41ffc5d3a17db80a3d0cbd",
+          "nativeRuns": [
+            "https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36518018697",
+            "https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36518018765",
+            "https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36518014784"
+          ],
+          "repairRevisions": [
+            "476a4db7bcd853abd1f7f2402cd4f26c4377d034",
+            "68efa146d03616175e0ab8e3ced9cad9875af471",
+            "e265ac246e8eaa7637d87f15ea422a4b409e39b8",
+            "4c236a186eefd2b999aafa8782d3d2eda6c9f633",
+            "8a41c569fcea5a1946b18ca272ba716a203554ae",
+            "23aef131d3c66845dc41ffc5d3a17db80a3d0cbd"
+          ],
+          "result": "Source corrections were retained as repair facts; all three final-head native runs succeeded on their first attempt before completion. No severe event or process-attributable rollback was present in the enumerated history."
+        },
+        {
+          "originalItems": ["BARC-01.4"],
+          "sources": [
+            "https://github.com/FS-GG/FSBarV2/pull/5",
+            "https://github.com/FS-GG/HighBarV3/pull/2"
+          ],
+          "mergedRevisions": [
+            "f1a18c52246b88e958344cb3bcc87f3c2035a62e",
+            "680b624b87bf6b09d979fa0bfe01ea39218abaca"
+          ],
+          "repairRevisions": [
+            "ff8d91dfebc1d5e0edf4b27aad26e2a8ea7981cb",
+            "979bffc21e332f296a8d73870e676dbaf142c28d",
+            "d7fecb42ca88e78d336de040c51bc88a99d371fd",
+            "ecd858fdcd680a7ff1806c74897e0c0dd3fe9ce8",
+            "eceeaaaa395f92fa8af80fe1d95e9eb410a4cb2f",
+            "33045b37c079143f3e537b795ad89657cd49698c",
+            "63c5799b8faf094d162795c1c8a7a3b72756d6ca",
+            "eeed37a77a69c7b609b8631b957df6a751976edd",
+            "1b2da281ecc2634b7dadedb047a058353d0dbd16"
+          ],
+          "result": "The paired private source histories and delivered qualification evidence enumerate the browser and live-authority repairs. No hosted checks, severe event, or process-attributable rollback were present; private execution and repair cost remain unavailable."
+        },
+        {
+          "originalItems": ["SC2C-01.4e"],
+          "source": "local FS.GG.SC2.Client source history; the inspected revisions were not authoritative remote delivery at the cutoff",
+          "inspectedThroughRevision": "5be392ad8f725d6c749ca75a2d2e3e62b80f11b8",
+          "repairRevisions": [
+            "36668cbe4c656d8dabbc7cdaf6f14948b5f02857",
+            "b10ae0080e965fb79cbdb0ad12c9b21c6ee1dc8e",
+            "28823d4785a819b1492ed74bf7ec046a02390a74",
+            "79a7d10b36d480328d10cb373daefef89eb0e449",
+            "855f3d4f713a9f859c0637260fc0e1aa9e21b216",
+            "674929450828dbbd4433cf2ef9f9626af2c90938"
+          ],
+          "nativeObservations": [
+            {
+              "kind": "private-production-pointer-run",
+              "failureArtifactRecordedAt": "2026-09-29T07:07:15.908Z",
+              "runnerEndedAt": "2026-09-29T07:07:16.022Z",
+              "failureArtifactSha256": "6af4f8479cf0cb9f2d629970b3fed72890598083c6827bd1fb42a7c5e2060588",
+              "runnerLogSha256": "6da9d5c9b9032b8fb4aa5a407e40309254bc7b60cce24246010bcda8c99bdf22",
+              "outcome": "failed: the final pause control remained disabled until the 30-second click timeout",
+              "partialEvidence": "The run reached six acknowledged journal commands and a 256-entry global-history observation before failing. This is positive partial native evidence, not whole-original acceptance or delivery."
+            }
+          ],
+          "result": "The available source history, recorded 27-browser gate, and the production pointer run that ended before the cutoff were enumerated. Delivery remains pending; the genuine pre-Action and final pause-control failures and private driver/proxy repairs remain preserved but their raw cost is unavailable, so no cost, incident-free, or acceptance inference is made."
+        },
+        {
+          "originalItems": ["FOURD-01.V2.1", "FOURD-01.V2.2", "FOURD-01.V2.3"],
+          "source": "https://github.com/FS-GG/FS.GG.FourD/pull/11",
+          "head": "98d44564c59e68c6a6ba95ebcd3f398e5a7cca70",
+          "nativeRuns": ["https://github.com/FS-GG/FS.GG.FourD/actions/runs/36525153306"],
+          "repairRevisions": [
+            "c81c3f5372200fbf8a2c197da18a306b3c2b1b23",
+            "086d7ea1bc9872e52cad56715d0436f6d6c67d9c",
+            "669dfc561f6c8b95330c5c155f6463bdfdf357ce",
+            "d5ffd7de822500d041e8fcb91238edecc1cdabaf"
+          ],
+          "result": "Shared validation and API-isolation corrections were retained as repair facts; the final-head native run succeeded on its first attempt. No severe event or process-attributable rollback was present in the enumerated history."
+        },
+        {
+          "originalItems": ["FOURD-01.V2.4", "FOURD-01.V2.5"],
+          "source": "https://github.com/FS-GG/FS.GG.FourD/pull/12",
+          "head": "364cecbd96fe53f3144fb1ce138b9fe87392d697",
+          "nativeRuns": ["https://github.com/FS-GG/FS.GG.FourD/actions/runs/36531113993"],
+          "repairRevisions": [
+            "794849e4f229e485931544ccb683c73225a8fa11",
+            "f5364efddb54740e7576cc9810adf56558301275",
+            "e7bc26cb1c83c0ec0f9121ed7109aea74ae65899"
+          ],
+          "result": "Shared preview, startup-workload, and browser-qualification corrections were retained as repair facts; the final-head native run succeeded on its first attempt. No severe event or process-attributable rollback was present in the enumerated history."
+        },
+        {
+          "originalItems": ["FOURD-01.V2.6"],
+          "source": "https://github.com/FS-GG/FS.GG.FourD/pull/13",
+          "head": "15c2e83af27a21c242eaabc9d2f5115bce809723",
+          "nativeRuns": ["https://github.com/FS-GG/FS.GG.FourD/actions/runs/36534310893"],
+          "repairRevisions": [],
+          "result": "The complete three-commit pull-request history and final-head native run were enumerated; the run succeeded on its first attempt and no repair, severe event, or process-attributable rollback was present."
+        },
+        {
+          "originalItems": ["BARC-01.5"],
+          "sources": [
+            "local FSBarV2 tactical receiver and native-journey source histories",
+            "local HighBarV3 tactical native/plugin and callback source histories",
+            "local RecoilEngine typed-command-queue source history"
+          ],
+          "inspectedThroughRevisions": {
+            "FSBarV2": "c77d80ce6bebbcc84f1a5600f5944eb7e19b5c56",
+            "HighBarV3": "bd7458119d8c172b32bde83073d97227ac27c486",
+            "RecoilEngine": "7555c836e0457b04100b20149497d088dd9c2ca7"
+          },
+          "repairRevisions": [
+            "165f69a7232b123ec56e4dbe2d84ac92ea3ead72",
+            "04306b04bb571dbeb8219e9a1ed9995017f535fe",
+            "d7522dab6e4c445c9509ccedb058712f80b5c969",
+            "8061d727b291906c83eb3a10ba49784e35abcb25",
+            "7453ae0db17e306cfb47f953a3144806b6669e64",
+            "c77d80ce6bebbcc84f1a5600f5944eb7e19b5c56",
+            "2e832a09857409b50cd0216b23c85b6049c2c18c",
+            "1c245229ecf6fb6f57c864e3f682810a3ea03238",
+            "fd578b04f043a88eb93095eb87ae0d4b4fec26fc",
+            "e7601e19abe6b1df190fe8d5cedeb71efaea51f9",
+            "9f98c8dccad7e540cd36bffc537d851b8fe96ca6",
+            "fe5d2c235ba784092de6a65ef8a4e0f868e2cbf8",
+            "cd9e630a3194831a3a33b955ded4aba17dd416ea",
+            "e8bdf32fbf261a9660f4e43e79d2bf6004e0e44e",
+            "62b6f034cc4a19f0e68a6d3f2e97502cd231712c",
+            "8cbcdd75062ceaabf34e713f0a7fe82d56272806",
+            "e023017b3304b3b3ec23fd48e624b3c3dcea88a2",
+            "35b0735fe6e5355d4caafa036c0514653a48c2fe",
+            "ba1bfdc8fca9515be9b20e7ac1865d173494c5c9",
+            "fe4b181b2fc79645c721a755e28a5b54efa35216",
+            "e498ecf27f28ed5a4614fc0923f40628fac2b808",
+            "bd7458119d8c172b32bde83073d97227ac27c486",
+            "7555c836e0457b04100b20149497d088dd9c2ca7"
+          ],
+          "nativeObservations": [
+            {
+              "kind": "engine-full-build-and-test",
+              "endedAt": "2026-09-29T05:52:43Z",
+              "result": "completed before cutoff; retained pre-join/full-build, CTest, standalone-build, and standalone-CTest logs",
+              "ctestLogSha256": "58e89754269f83f145eca11453b5b11fe8c72f1ae6359919cae2f789979428a3"
+            },
+            {
+              "kind": "old-callback-and-full-plugin-build",
+              "callbackEvidenceEndedAt": "2026-09-29T06:08:58Z",
+              "fullPluginBuildEndedAt": "2026-09-29T06:10:56Z",
+              "result": "completed before cutoff; callback identity fencing and the full plugin build were retained as preparation evidence",
+              "fullPluginBuildLogSha256": "379934f87f5ce9a12a0e85e9b098f9ab7805be97d96a8377aa6db1a40d7b6d3a"
+            }
+          ],
+          "result": "Available FSBarV2, HighBarV3, and RecoilEngine source histories through the cutoff were enumerated, including admission fixtures, duplicate/rebased correction lineages, native queue/control integration, engine full-build preparation, and callback identity fencing. Delivery remains pending; unpublished/private execution and repair cost remain unavailable, so no cost or no-incident inference is made."
+        },
+        {
+          "originalItems": ["LEARN-01.4"],
+          "source": "https://github.com/FS-GG/FS.GG.Coordination/pull/887",
+          "head": "6558949469f7a58872201f67a3a2f231a254339e",
+          "nativeRuns": [
+            "https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36535183320",
+            "https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36535183649",
+            "https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36535180755"
+          ],
+          "repairRevisions": [
+            "52cb5d53eeb9319f867cc8049488216e5ed88453",
+            "95385902d449859fc5e375236ced2d8f4be08684",
+            "3b48e6a175173de37fc15c31ce11846d7ccc3df6",
+            "6558949469f7a58872201f67a3a2f231a254339e"
+          ],
+          "result": "Source reconciliation was enumerated. At the cutoff deterministic-build and the PostgreSQL orchestration checks had succeeded, while longer final-head jobs were still running; delivery therefore remains pending and later completions are not credited."
+        },
+        {
+          "originalItems": ["TODO-01.1", "TTT-01.1", "SNAKE-01.1", "HELLO-01.1"],
+          "source": "https://github.com/FS-GG/FS.GG.Templates/pull/648",
+          "head": "1225ffb33f2f74ed0c79413299328d055154d295",
+          "nativeRuns": [
+            "https://github.com/FS-GG/FS.GG.Templates/actions/runs/36534240553",
+            "https://github.com/FS-GG/FS.GG.Templates/actions/runs/36534240755",
+            "https://github.com/FS-GG/FS.GG.Templates/actions/runs/36534242081",
+            "https://github.com/FS-GG/FS.GG.Templates/actions/runs/36534241828"
+          ],
+          "repairRevisions": ["4181f1a6dacf92151fff7f6217d045137d4546cc"],
+          "result": "The shared route/favicon correction was retained as a repair fact; the final-head enrollment, composition, coherence, and materialization runs succeeded on their first attempts before the cutoff. No severe event or process-attributable rollback was present in the enumerated history."
+        }
+      ]
+    }
   },
   "currentSelection": {
     "revision": "r5-completed-items/1",
@@ -223,8 +414,10 @@
         ]
       },
       "repairFollowup": {
-        "status": "pending",
-        "observedThrough": "2026-09-29T04:12:46Z",
+        "status": "complete",
+        "through": "2026-09-29T07:15:35Z",
+        "observedThrough": "2026-09-29T07:15:35Z",
+        "accountingSource": "repairObservation.followupAccounting:LEARN-01.3",
         "severeEvents": [],
         "processAttributableRollbackEvents": []
       }
@@ -426,8 +619,12 @@
         "upperBoundTokens": null
       },
       "repairFollowup": {
-        "status": "pending",
-        "observedThrough": "2026-09-29T04:19:56Z"
+        "status": "complete",
+        "through": "2026-09-29T07:15:35Z",
+        "observedThrough": "2026-09-29T07:15:35Z",
+        "accountingSource": "repairObservation.followupAccounting:BARC-01.4",
+        "severeEvents": [],
+        "processAttributableRollbackEvents": []
       },
       "finalCompletion": {
         "owningAcceptance": "Done",
@@ -472,8 +669,12 @@
         "upperBoundTokens": null
       },
       "repairFollowup": {
-        "status": "pending",
-        "observedThrough": "2026-09-29T04:19:56Z"
+        "status": "complete",
+        "through": "2026-09-29T07:15:35Z",
+        "observedThrough": "2026-09-29T07:15:35Z",
+        "accountingSource": "repairObservation.followupAccounting:SC2C-01.4e",
+        "severeEvents": [],
+        "processAttributableRollbackEvents": []
       },
       "qualificationBoundary": "Reviewed source674929450828dbbd4433cf2ef9f9626af2c90938 passed full27-browser gate. Genuine pre-Action failures and private driver/proxy repairs remain preserved/excluded under this original. Full production/fault native cohort and authoritative source delivery remain pending."
     },
@@ -492,8 +693,12 @@
         "upperBoundTokens": null
       },
       "repairFollowup": {
-        "status": "pending",
-        "observedThrough": "2026-09-29T05:18:42Z"
+        "status": "complete",
+        "through": "2026-09-29T07:15:35Z",
+        "observedThrough": "2026-09-29T07:15:35Z",
+        "accountingSource": "repairObservation.followupAccounting:FOURD-01.V2.1",
+        "severeEvents": [],
+        "processAttributableRollbackEvents": []
       },
       "qualificationBoundary": "Accepted plan540f41b selects this original before its outcome. Shared foundation source is active; frozen seam, qualification and authoritative source delivery remain pending. Native PR11 merged after exact-head verify; protected owning checked source outcome and exact qualified/default tree independently read back. Browser/save2, final comparison and human evidence are separate.",
       "completedAt": "2026-09-29T05:18:42Z",
@@ -537,8 +742,10 @@
         "upperBoundTokens": null
       },
       "repairFollowup": {
-        "status": "pending",
-        "observedThrough": "2026-09-29T07:10:28Z",
+        "status": "complete",
+        "through": "2026-09-29T07:15:35Z",
+        "observedThrough": "2026-09-29T07:15:35Z",
+        "accountingSource": "repairObservation.followupAccounting:FOURD-01.V2.6",
         "severeEvents": [],
         "processAttributableRollbackEvents": []
       },
@@ -584,8 +791,12 @@
         "upperBoundTokens": null
       },
       "repairFollowup": {
-        "status": "pending",
-        "observedThrough": "2026-09-29T05:18:42Z"
+        "status": "complete",
+        "through": "2026-09-29T07:15:35Z",
+        "observedThrough": "2026-09-29T07:15:35Z",
+        "accountingSource": "repairObservation.followupAccounting:FOURD-01.V2.2",
+        "severeEvents": [],
+        "processAttributableRollbackEvents": []
       },
       "qualificationBoundary": "Commitment lane isolated branch was created from frozen1936122 at this actual retained reflog time, before implementation945b1eb at04:56:13Z; the substantive original is in accepted plan540f41b. Namespace repairs remain this original. Native PR11 merged after exact-head verify; protected owning checked source outcome and exact qualified/default tree independently read back. Browser/save2, final comparison and human evidence are separate.",
       "completedAt": "2026-09-29T05:18:42Z",
@@ -629,8 +840,12 @@
         "upperBoundTokens": null
       },
       "repairFollowup": {
-        "status": "pending",
-        "observedThrough": "2026-09-29T05:18:42Z"
+        "status": "complete",
+        "through": "2026-09-29T07:15:35Z",
+        "observedThrough": "2026-09-29T07:15:35Z",
+        "accountingSource": "repairObservation.followupAccounting:FOURD-01.V2.3",
+        "severeEvents": [],
+        "processAttributableRollbackEvents": []
       },
       "qualificationBoundary": "Pressure lane isolated branch was created from frozen1936122 at this actual retained reflog time, before implementationecb9456 at04:58:43Z; the substantive original is in accepted plan540f41b. Namespace repairs remain this original. Native PR11 merged after exact-head verify; protected owning checked source outcome and exact qualified/default tree independently read back. Browser/save2, final comparison and human evidence are separate.",
       "completedAt": "2026-09-29T05:18:42Z",
@@ -674,8 +889,12 @@
         "upperBoundTokens": null
       },
       "repairFollowup": {
-        "status": "pending",
-        "observedThrough": "2026-09-29T05:17:20Z"
+        "status": "complete",
+        "through": "2026-09-29T07:15:35Z",
+        "observedThrough": "2026-09-29T07:15:35Z",
+        "accountingSource": "repairObservation.followupAccounting:BARC-01.5",
+        "severeEvents": [],
+        "processAttributableRollbackEvents": []
       },
       "qualificationBoundary": "Prospectively selected in the04:42 parent mailbox declaration before its Astra plan and implementation outcomes. Contract and native/broker/browser windows do not separately count; whole native useful-play and paired delivery remain pending."
     },
@@ -694,8 +913,12 @@
         "upperBoundTokens": null
       },
       "repairFollowup": {
-        "status": "pending",
-        "observedThrough": "2026-09-29T05:17:20Z"
+        "status": "complete",
+        "through": "2026-09-29T07:15:35Z",
+        "observedThrough": "2026-09-29T07:15:35Z",
+        "accountingSource": "repairObservation.followupAccounting:LEARN-01.4",
+        "severeEvents": [],
+        "processAttributableRollbackEvents": []
       },
       "qualificationBoundary": "Prospectively selected in the04:42 parent mailbox declaration before its Astra plan and implementation outcomes. Discovery/admission/source preparation does not complete the installed observation window."
     },
@@ -714,8 +937,10 @@
         "upperBoundTokens": null
       },
       "repairFollowup": {
-        "status": "pending",
-        "observedThrough": "2026-09-29T06:35:44Z",
+        "status": "complete",
+        "through": "2026-09-29T07:15:35Z",
+        "observedThrough": "2026-09-29T07:15:35Z",
+        "accountingSource": "repairObservation.followupAccounting:FOURD-01.V2.5",
         "severeEvents": [],
         "processAttributableRollbackEvents": []
       },
@@ -761,8 +986,10 @@
         "upperBoundTokens": null
       },
       "repairFollowup": {
-        "status": "pending",
+        "status": "complete",
+        "through": "2026-09-29T07:15:35Z",
         "observedThrough": "2026-09-29T07:15:35Z",
+        "accountingSource": "repairObservation.followupAccounting:TODO-01.1",
         "severeEvents": [],
         "processAttributableRollbackEvents": []
       },
@@ -813,8 +1040,10 @@
         "upperBoundTokens": null
       },
       "repairFollowup": {
-        "status": "pending",
+        "status": "complete",
+        "through": "2026-09-29T07:15:35Z",
         "observedThrough": "2026-09-29T07:15:35Z",
+        "accountingSource": "repairObservation.followupAccounting:TTT-01.1",
         "severeEvents": [],
         "processAttributableRollbackEvents": []
       },
@@ -865,8 +1094,10 @@
         "upperBoundTokens": null
       },
       "repairFollowup": {
-        "status": "pending",
+        "status": "complete",
+        "through": "2026-09-29T07:15:35Z",
         "observedThrough": "2026-09-29T07:15:35Z",
+        "accountingSource": "repairObservation.followupAccounting:SNAKE-01.1",
         "severeEvents": [],
         "processAttributableRollbackEvents": []
       },
@@ -917,8 +1148,10 @@
         "upperBoundTokens": null
       },
       "repairFollowup": {
-        "status": "pending",
+        "status": "complete",
+        "through": "2026-09-29T07:15:35Z",
         "observedThrough": "2026-09-29T07:15:35Z",
+        "accountingSource": "repairObservation.followupAccounting:HELLO-01.1",
         "severeEvents": [],
         "processAttributableRollbackEvents": []
       },
@@ -974,8 +1207,10 @@
       "tree": "dff90af27b8218b872c98b9d0ce0ce8d65cc6979",
       "qualificationBoundary": "Prospectively selected before implementation outcomes. Exact-head whole-source native verify passed; protected owning checked outcome and exact qualified/main tree independently read back. Human comparison and publication remain separate.",
       "repairFollowup": {
-        "status": "pending",
-        "observedThrough": "2026-09-29T06:35:44Z",
+        "status": "complete",
+        "through": "2026-09-29T07:15:35Z",
+        "observedThrough": "2026-09-29T07:15:35Z",
+        "accountingSource": "repairObservation.followupAccounting:FOURD-01.V2.4",
         "severeEvents": [],
         "processAttributableRollbackEvents": []
       },
