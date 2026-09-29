@@ -1,7 +1,7 @@
 {
   "schema": "fsgg.routine-cohort-observation/2",
   "cohort": "routine-route-first-ten-code-items",
-  "asOf": "2026-09-29T04:19:56Z",
+  "asOf": "2026-09-29T04:34:57Z",
   "targetPerArm": 10,
   "repairObservation": {
     "mode": "completed-items",
@@ -439,7 +439,47 @@
         "status": "pending",
         "observedThrough": "2026-09-29T04:19:56Z"
       },
-      "qualificationBoundary": "Source gates passed; genuine production/fault cohort and authoritative source delivery remain pending. Earlier partial code/native outcomes are not a completion."
+      "qualificationBoundary": "Full source gates passed at b10ae008. Two fresh genuine pre-Action intervals exposed a truthful-catalogue/decoder mismatch; both failed intervals remain excluded and their repair stays under SC2C-01.4e. Reviewed repaired-source gates, genuine production/fault cohort and authoritative source delivery remain pending."
+    },
+    {
+      "id": "FOURD-01.V2.1",
+      "lane": "FOURD-01",
+      "originalItem": "FOURD-01.V2.1",
+      "arm": "routine",
+      "kind": "code",
+      "eligible": true,
+      "selectedBeforeOutcome": true,
+      "selectedAt": "2026-09-29T04:34:57Z",
+      "delivery": "pending",
+      "usage": {
+        "status": "missing",
+        "upperBoundTokens": null
+      },
+      "repairFollowup": {
+        "status": "pending",
+        "observedThrough": "2026-09-29T04:34:57Z"
+      },
+      "qualificationBoundary": "Accepted plan540f41b selects this original before its outcome. Shared foundation source is active; frozen seam, qualification and authoritative source delivery remain pending."
+    },
+    {
+      "id": "FOURD-01.V2.6",
+      "lane": "FOURD-01",
+      "originalItem": "FOURD-01.V2.6",
+      "arm": "routine",
+      "kind": "code",
+      "eligible": true,
+      "selectedBeforeOutcome": true,
+      "selectedAt": "2026-09-29T04:34:57Z",
+      "delivery": "pending",
+      "usage": {
+        "status": "missing",
+        "upperBoundTokens": null
+      },
+      "repairFollowup": {
+        "status": "pending",
+        "observedThrough": "2026-09-29T04:34:57Z"
+      },
+      "qualificationBoundary": "Accepted plan540f41b selects this original before its outcome. Source preparation is active; whole-item acceptance and authoritative source delivery are pending. V2.6 additionally waits actual map/browser wiring; synthetic preparation does not prove human evidence."
     }
   ]
 }
