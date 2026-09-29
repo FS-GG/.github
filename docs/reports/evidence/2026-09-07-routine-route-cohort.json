@@ -1,7 +1,7 @@
 {
   "schema": "fsgg.routine-cohort-observation/2",
   "cohort": "routine-route-first-ten-code-items",
-  "asOf": "2026-09-29T06:35:44Z",
+  "asOf": "2026-09-29T07:10:28Z",
   "targetPerArm": 10,
   "repairObservation": {
     "mode": "completed-items",
@@ -531,16 +531,43 @@
       "eligible": true,
       "selectedBeforeOutcome": true,
       "selectedAt": "2026-09-29T04:34:57Z",
-      "delivery": "pending",
+      "delivery": "delivered",
       "usage": {
         "status": "missing",
         "upperBoundTokens": null
       },
       "repairFollowup": {
         "status": "pending",
-        "observedThrough": "2026-09-29T04:34:57Z"
+        "observedThrough": "2026-09-29T07:10:28Z",
+        "severeEvents": [],
+        "processAttributableRollbackEvents": []
       },
-      "qualificationBoundary": "Versioned protocol/scorer preparation is source-delivered with PR11, but whole source-ready evaluation pack remains pending actual map/browser task wiring. Synthetic preparation proves no human evidence and does not count as completion."
+      "qualificationBoundary": "Prospectively selected before implementation outcomes. Source-ready evaluation pack is native-qualified and owning checked source outcome independently read back; consenting human sessions and design selection remain separate.",
+      "completedAt": "2026-09-29T07:10:28Z",
+      "url": "https://github.com/FS-GG/FS.GG.FourD/pull/13",
+      "mergeCommit": "b7afd577b0669d8a25b2e4b8ecc52c80d581c2e9",
+      "tree": "c214abf8941bf58430194c876cb7eaf0ec944e46",
+      "finalCompletion": {
+        "owningAcceptance": "Done",
+        "nativeDoneReadback": {
+          "state": "Done",
+          "readAt": "2026-09-29T07:10:28Z",
+          "url": "https://github.com/FS-GG/FS.GG.FourD/blob/b7afd577b0669d8a25b2e4b8ecc52c80d581c2e9/docs/FOURD-01.design-v2.md"
+        },
+        "sourceDelivery": {
+          "url": "https://github.com/FS-GG/FS.GG.FourD/pull/13",
+          "commit": "b7afd577b0669d8a25b2e4b8ecc52c80d581c2e9",
+          "tree": "c214abf8941bf58430194c876cb7eaf0ec944e46",
+          "mergedAt": "2026-09-29T07:09:54Z"
+        },
+        "checks": [
+          {
+            "name": "verify \u2014 full native/Fable/Node qualification and 30 Chromium journeys",
+            "status": "SUCCESS",
+            "url": "https://github.com/FS-GG/FS.GG.FourD/actions/runs/36534310893"
+          }
+        ]
+      }
     },
     {
       "id": "FOURD-01.V2.2",
