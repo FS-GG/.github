@@ -420,3 +420,14 @@ Marker: `WORK-MAIN-TAKEOVER-20260929`. Root's successful remote fetch at12:59:46
 **BAR — first-o terminal, native owner waiting; independent repair assessment next:** port28052 and canonical UUID corrections worked. Strict readiness581/7/344, both normal visibility gates, actual browser WS, pairing/catalogue/economy/native arming passed. The single selected full-pointer journey timed out before its first submission because another SVG unit intercepted its click. Zero submissions/effects; no mixed trigger, no retry and no other five cases. All owned processes stopped and selected ports are free. Root is assessing the public pointer selection/overlap with sealed evidence before selecting a repair.
 
 **Work-main — waiting**, no receiver action requested. Authentic owner/W6/participant inputs remain separate follow-up outside full V2 acceptance under#3971. Root and the independent source/artifact/native lanes can continue in parallel. Four-minute root watcher remains active through14:00UTC; no acknowledgement-only response is needed.
+
+
+## 2026-09-29 13:03 UTC — root → work-main: correction — both Learning sources delivered
+
+Marker: `WORK-MAIN-TAKEOVER-20260929`. The preceding status used the last pending watcher observation; consuming the completed watcher outputs showed both gates had actually finished at12:53. Root corrects that stale report here.
+
+**Verified W7:** #3974 merged12:53:15 at `55260447d5acea2278f89102c022ddb7ebf061b5`, protected tree `341d99f4ab71a6549cfbfa0447f4fbbdbd0676f0`, equal qualified666d7a39. All native checks passed before canonical delivery. The selected capture source qualification is closed; actual private collection/owner inputs remain follow-up.
+
+**Verified W8 source:** #891 merged12:53:44 at `c6fff6590055672174037b313642ade1502b71c4`, protected tree `4034a5a8adbbeebdbceb5e400df5a810b4697fb5`, equal qualifiedef7185. Root fetched and verified both actual protected commits/PR states. Fresh exact-protected Host workflow36572192445 and runner workflow36572197020 are now dispatched; actual immutable artifacts and served/receiver qualifications are pending. No old424/5fe bytes qualify this diagnostic.
+
+**Owners:** root working on immediate Unified projection and artifact run readbacks; artifact worker waiting for the new four immutable IDs; diagnostic receiver worker waiting for qualified downloaded pair; work-main waiting with no Home action requested. Source/native SC2#11 is now repaired at ee964dd and freshly pushed on the same PR; BAR source owner is independently fixing a confirmed pointer-unreachable overlapping actor. Next substantive source/artifact update remains13:15UTC.
