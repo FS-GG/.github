@@ -1,7 +1,7 @@
 {
   "schema": "fsgg.routine-cohort-observation/2",
   "cohort": "routine-route-first-ten-code-items",
-  "asOf": "2026-09-29T05:21:18Z",
+  "asOf": "2026-09-29T06:35:44Z",
   "targetPerArm": 10,
   "repairObservation": {
     "mode": "completed-items",
@@ -45,6 +45,38 @@
         "priorUsage": "missing",
         "predeclaredUnresolvedOriginals": [],
         "scope": "Only original items selected prospectively after this lane enrollment can enter the cohort. FOURD-01.1-.5a and the unresolved .4-E player acceptance predate enrollment and cannot count; projection-only documentation cannot count."
+      },
+      {
+        "id": "TODO-01",
+        "enrolledAt": "2026-09-29T06:31:33Z",
+        "statusAtDeclaration": "future-selection",
+        "priorUsage": "missing",
+        "predeclaredUnresolvedOriginals": [],
+        "scope": "User-selected independent todo app; only prospectively selected whole-app originals count. Existing examples, planning, scaffolding alone, test jobs, source checkpoints and enrollment projections do not count."
+      },
+      {
+        "id": "TTT-01",
+        "enrolledAt": "2026-09-29T06:31:33Z",
+        "statusAtDeclaration": "future-selection",
+        "priorUsage": "missing",
+        "predeclaredUnresolvedOriginals": [],
+        "scope": "User-selected independent tic tac toe game; only prospectively selected whole-app originals count. Existing examples, planning, scaffolding alone, test jobs, source checkpoints and enrollment projections do not count."
+      },
+      {
+        "id": "SNAKE-01",
+        "enrolledAt": "2026-09-29T06:31:33Z",
+        "statusAtDeclaration": "future-selection",
+        "priorUsage": "missing",
+        "predeclaredUnresolvedOriginals": [],
+        "scope": "User-selected independent snake game; only prospectively selected whole-app originals count. Existing examples, planning, scaffolding alone, test jobs, source checkpoints and enrollment projections do not count."
+      },
+      {
+        "id": "HELLO-01",
+        "enrolledAt": "2026-09-29T06:31:33Z",
+        "statusAtDeclaration": "future-selection",
+        "priorUsage": "missing",
+        "predeclaredUnresolvedOriginals": [],
+        "scope": "User-selected independent hello world app; only prospectively selected whole-app originals count. Existing examples, planning, scaffolding alone, test jobs, source checkpoints and enrollment projections do not count."
       }
     ]
   },
@@ -52,11 +84,15 @@
     "revision": "r5-completed-items/1",
     "declaredAt": "2026-09-29T04:06:41Z",
     "outcomesKnownAtSelection": false,
-    "rule": "The first ten distinct canonical original items completed after their lane enrollment. BARC-01.4, SC2C-01.4e and LEARN-01.3 were explicitly enrolled while unresolved; later originals and every FOURD-01 original must be selected prospectively before outcome.",
+    "rule": "The first ten distinct canonical original items completed after their lane enrollment. Explicit unresolved declarations are preserved; all later originals, including FOURD-01 and the four additional apps, must be selected prospectively before outcome. No planning, scaffolding, test job or projection is a completion.",
     "amendments": [
       {
         "declaredAt": "2026-09-29T04:15:52Z",
         "change": "Enroll future-selected FOURD-01 original items without retroactively admitting completed v1 stages or the pre-existing .4-E acceptance."
+      },
+      {
+        "declaredAt": "2026-09-29T06:31:33Z",
+        "change": "Prospectively enroll TODO-01.1, TTT-01.1, SNAKE-01.1 and HELLO-01.1 as four independent whole-app originals before planning or implementation outcomes. Existing four lanes remain enrolled; target remains ten completed originals."
       }
     ]
   },
@@ -645,6 +681,53 @@
       "eligible": true,
       "selectedBeforeOutcome": true,
       "selectedAt": "2026-09-29T05:17:20Z",
+      "delivery": "delivered",
+      "usage": {
+        "status": "missing",
+        "upperBoundTokens": null
+      },
+      "repairFollowup": {
+        "status": "pending",
+        "observedThrough": "2026-09-29T06:35:44Z",
+        "severeEvents": [],
+        "processAttributableRollbackEvents": []
+      },
+      "qualificationBoundary": "Prospectively selected before implementation outcomes. Exact-head whole-source native verify passed; protected owning checked outcome and exact qualified/main tree independently read back. Human comparison and publication remain separate.",
+      "completedAt": "2026-09-29T06:35:44Z",
+      "url": "https://github.com/FS-GG/FS.GG.FourD/pull/12",
+      "mergeCommit": "7739f9bd8830e09b4644efa7e45b2cb3ac61b81f",
+      "tree": "dff90af27b8218b872c98b9d0ce0ce8d65cc6979",
+      "finalCompletion": {
+        "owningAcceptance": "Done",
+        "nativeDoneReadback": {
+          "state": "Done",
+          "readAt": "2026-09-29T06:35:44Z",
+          "url": "https://github.com/FS-GG/FS.GG.FourD/blob/7739f9bd8830e09b4644efa7e45b2cb3ac61b81f/docs/FOURD-01.design-v2.md"
+        },
+        "sourceDelivery": {
+          "url": "https://github.com/FS-GG/FS.GG.FourD/pull/12",
+          "commit": "7739f9bd8830e09b4644efa7e45b2cb3ac61b81f",
+          "tree": "dff90af27b8218b872c98b9d0ce0ce8d65cc6979",
+          "mergedAt": "2026-09-29T06:35:21Z"
+        },
+        "checks": [
+          {
+            "name": "verify \u2014 full .NET/Fable/Node parity, 132 comparison transcripts and 28 Chromium journeys",
+            "status": "SUCCESS",
+            "url": "https://github.com/FS-GG/FS.GG.FourD/actions/runs/36531113993"
+          }
+        ]
+      }
+    },
+    {
+      "id": "TODO-01.1",
+      "lane": "TODO-01",
+      "originalItem": "TODO-01.1",
+      "arm": "routine",
+      "kind": "code",
+      "eligible": true,
+      "selectedBeforeOutcome": true,
+      "selectedAt": "2026-09-29T06:31:33Z",
       "delivery": "pending",
       "usage": {
         "status": "missing",
@@ -652,9 +735,116 @@
       },
       "repairFollowup": {
         "status": "pending",
-        "observedThrough": "2026-09-29T05:17:20Z"
+        "observedThrough": "2026-09-29T06:31:33Z"
       },
-      "qualificationBoundary": "Parent prospectively selects the accepted independent technical-comparison preparation window now, before outcomes. Final technical comparison depends on actual opt-in browser integration; preparation cannot count as whole completion."
+      "qualificationBoundary": "Add, edit, complete, filter and delete tasks with retained local state and accessible browser controls. Whole-app controls-driven qualification, owning native Done, source delivery and protected readback are required; publication and installed scaffold defaults remain separate. No previous completed example is admitted."
+    },
+    {
+      "id": "TTT-01.1",
+      "lane": "TTT-01",
+      "originalItem": "TTT-01.1",
+      "arm": "routine",
+      "kind": "code",
+      "eligible": true,
+      "selectedBeforeOutcome": true,
+      "selectedAt": "2026-09-29T06:31:33Z",
+      "delivery": "pending",
+      "usage": {
+        "status": "missing",
+        "upperBoundTokens": null
+      },
+      "repairFollowup": {
+        "status": "pending",
+        "observedThrough": "2026-09-29T06:31:33Z"
+      },
+      "qualificationBoundary": "Play a complete local two-player game, detect wins and draws, refuse occupied/post-terminal moves and restart. Whole-app controls-driven qualification, owning native Done, source delivery and protected readback are required; publication and installed scaffold defaults remain separate. No previous completed example is admitted."
+    },
+    {
+      "id": "SNAKE-01.1",
+      "lane": "SNAKE-01",
+      "originalItem": "SNAKE-01.1",
+      "arm": "routine",
+      "kind": "code",
+      "eligible": true,
+      "selectedBeforeOutcome": true,
+      "selectedAt": "2026-09-29T06:31:33Z",
+      "delivery": "pending",
+      "usage": {
+        "status": "missing",
+        "upperBoundTokens": null
+      },
+      "repairFollowup": {
+        "status": "pending",
+        "observedThrough": "2026-09-29T06:31:33Z"
+      },
+      "qualificationBoundary": "Play with keyboard direction controls, food and growth, deterministic collision and score, pause and restart. Whole-app controls-driven qualification, owning native Done, source delivery and protected readback are required; publication and installed scaffold defaults remain separate. No previous completed example is admitted."
+    },
+    {
+      "id": "HELLO-01.1",
+      "lane": "HELLO-01",
+      "originalItem": "HELLO-01.1",
+      "arm": "routine",
+      "kind": "code",
+      "eligible": true,
+      "selectedBeforeOutcome": true,
+      "selectedAt": "2026-09-29T06:31:33Z",
+      "delivery": "pending",
+      "usage": {
+        "status": "missing",
+        "upperBoundTokens": null
+      },
+      "repairFollowup": {
+        "status": "pending",
+        "observedThrough": "2026-09-29T06:31:33Z"
+      },
+      "qualificationBoundary": "Run a real accessible browser application that renders Hello, world! from its application entry point. Whole-app controls-driven qualification, owning native Done, source delivery and protected readback are required; publication and installed scaffold defaults remain separate. No previous completed example is admitted."
+    },
+    {
+      "id": "FOURD-01.V2.4",
+      "lane": "FOURD-01",
+      "originalItem": "FOURD-01.V2.4",
+      "arm": "routine",
+      "kind": "code",
+      "eligible": true,
+      "selectedBeforeOutcome": true,
+      "selectedAt": "2026-09-29T05:26:02Z",
+      "usage": {
+        "status": "missing",
+        "upperBoundTokens": null
+      },
+      "delivery": "delivered",
+      "completedAt": "2026-09-29T06:35:44Z",
+      "url": "https://github.com/FS-GG/FS.GG.FourD/pull/12",
+      "mergeCommit": "7739f9bd8830e09b4644efa7e45b2cb3ac61b81f",
+      "tree": "dff90af27b8218b872c98b9d0ce0ce8d65cc6979",
+      "qualificationBoundary": "Prospectively selected before implementation outcomes. Exact-head whole-source native verify passed; protected owning checked outcome and exact qualified/main tree independently read back. Human comparison and publication remain separate.",
+      "repairFollowup": {
+        "status": "pending",
+        "observedThrough": "2026-09-29T06:35:44Z",
+        "severeEvents": [],
+        "processAttributableRollbackEvents": []
+      },
+      "finalCompletion": {
+        "owningAcceptance": "Done",
+        "nativeDoneReadback": {
+          "state": "Done",
+          "readAt": "2026-09-29T06:35:44Z",
+          "url": "https://github.com/FS-GG/FS.GG.FourD/blob/7739f9bd8830e09b4644efa7e45b2cb3ac61b81f/docs/FOURD-01.design-v2.md"
+        },
+        "sourceDelivery": {
+          "url": "https://github.com/FS-GG/FS.GG.FourD/pull/12",
+          "commit": "7739f9bd8830e09b4644efa7e45b2cb3ac61b81f",
+          "tree": "dff90af27b8218b872c98b9d0ce0ce8d65cc6979",
+          "mergedAt": "2026-09-29T06:35:21Z"
+        },
+        "checks": [
+          {
+            "name": "verify \u2014 full .NET/Fable/Node parity, 132 comparison transcripts and 28 Chromium journeys",
+            "status": "SUCCESS",
+            "url": "https://github.com/FS-GG/FS.GG.FourD/actions/runs/36531113993"
+          }
+        ]
+      }
     }
   ]
 }
