@@ -15,7 +15,7 @@ Date: 2026-09-28
 
 Status: Accepted on 2026-09-29 for bounded Commitment/Pressure prototyping under FOURD-01; neither a selected final ruleset nor a claim of balance or completed playtesting.
 
-Scope: This document owns game design and player-facing interaction. The separately owned [implementation amendment](/tmp/fourd-design-v2-implementation-20260929/docs/FOURD-01.design-v2.md) supplies the authorized bounded source plan; implementation and technical architecture are outside this document's scope. That plan is a local draft on `routine/fourd-design-v2-implementation-20260929` until integrated with implementation; replace the local link with its protected source link after landing.
+Scope: This document owns game design and player-facing interaction. The separately owned [implementation amendment](https://github.com/FS-GG/FS.GG.FourD/blob/540f41baa0c7a9cb9fe6005d836c5290ee8cc408/docs/FOURD-01.design-v2.md) supplies the authorized bounded source plan; implementation and technical architecture are outside this document's scope. The plan is a published branch draft at the exact commit linked above; it will land with substantive implementation rather than a planning-only PR.
 
 This companion to the [FOURD-01 design and roadmap](../2026-09-08-152551-4d-grid-tactics-algorithms-design-roadmap.md) uses X, Y and Z for the three base axes and H for height. The existing algorithm roadmap calls those axes x, y and w, with z for height. This is a naming map for comparing proposals, not a change to the adopted coordinate contract or current source rules. The alternatives below are playtest candidates; their reaction, damage and information rules do not retroactively describe the current implementation.
 
