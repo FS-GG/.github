@@ -11,6 +11,7 @@ from typing import Any
 
 
 INPUT_SCHEMA = "fsgg.routine-cohort-observation/1"
+INPUT_SCHEMA_V2 = "fsgg.routine-cohort-observation/2"
 OUTPUT_SCHEMA = "fsgg.routine-cohort-result/1"
 
 
@@ -54,8 +55,87 @@ def measured_usage(unit: dict[str, Any]) -> tuple[int, int, int] | None:
     return productive, overhead + unclassified, headline
 
 
-def arm_result(arm: str, units: list[dict[str, Any]], target: int, as_of: datetime) -> dict[str, Any]:
+def completed_item_policy(document: dict[str, Any]) -> dict[str, Any] | None:
+    if document["schema"] == INPUT_SCHEMA:
+        return None
+    policy = document.get("repairObservation")
+    require(isinstance(policy, dict), "repairObservation must be an object for schema 2")
+    require(policy.get("mode") == "completed-items", "repairObservation.mode is unsupported")
+    declared_at = instant(policy.get("declaredAt"), "repairObservation.declaredAt")
+    target = policy.get("completedItemTarget")
+    require(type(target) is int and target == 10, "repairObservation.completedItemTarget must be 10")
+    lanes = policy.get("enrolledLanes")
+    require(isinstance(lanes, list) and lanes, "repairObservation.enrolledLanes must be non-empty")
+    lane_ids: set[str] = set()
+    for lane in lanes:
+        require(isinstance(lane, dict), "every enrolled lane must be an object")
+        lane_id = lane.get("id")
+        require(isinstance(lane_id, str) and lane_id, "every enrolled lane needs an id")
+        require(lane_id not in lane_ids, f"duplicate enrolled lane: {lane_id}")
+        lane_ids.add(lane_id)
+        require(lane.get("statusAtDeclaration") == "unresolved", f"{lane_id} was not unresolved at declaration")
+        require(lane.get("priorUsage") in ("measured", "missing"), f"{lane_id}.priorUsage is unsupported")
+    return {"declaredAt": declared_at, "target": target, "laneIds": lane_ids}
+
+
+def completed_item_window(
+    units: list[dict[str, Any]], policy: dict[str, Any], as_of: datetime
+) -> dict[str, Any]:
+    completions: dict[str, datetime] = {}
+    for unit in units:
+        if unit["arm"] != "routine":
+            continue
+        lane = unit.get("lane")
+        original = unit.get("originalItem")
+        require(lane in policy["laneIds"], f"{unit['id']}.lane is not enrolled")
+        require(isinstance(original, str) and original, f"{unit['id']}.originalItem must be non-empty")
+        selected_at = instant(unit.get("selectedAt"), f"{unit['id']}.selectedAt")
+        require(selected_at <= as_of, f"{unit['id']}.selectedAt is after asOf")
+        completed_at_value = unit.get("completedAt")
+        if completed_at_value is None or unit["delivery"] != "delivered":
+            continue
+        completed_at = instant(completed_at_value, f"{unit['id']}.completedAt")
+        require(completed_at <= as_of, f"{unit['id']}.completedAt is after asOf")
+        require(completed_at >= selected_at, f"{unit['id']}.completedAt precedes selection")
+        if completed_at < policy["declaredAt"] or (
+            selected_at < policy["declaredAt"] and original != lane
+        ):
+            continue
+        completion = unit.get("finalCompletion")
+        if not isinstance(completion, dict):
+            continue
+        if (
+            completion.get("owningAcceptance") != "Done"
+            or completion.get("nativeDoneReadback") is not True
+            or completion.get("sourceDelivered") is not True
+        ):
+            continue
+        previous = completions.get(original)
+        if previous is None or completed_at < previous:
+            completions[original] = completed_at
+    ordered = sorted(completions.items(), key=lambda value: (value[1], value[0]))
+    cutoff = ordered[policy["target"] - 1][1] if len(ordered) >= policy["target"] else None
+    return {
+        "target": policy["target"],
+        "completedDistinctItems": len(ordered),
+        "countedOriginalItems": [item for item, _ in ordered[: policy["target"]]],
+        "cutoff": cutoff,
+    }
+
+
+def arm_result(
+    arm: str,
+    units: list[dict[str, Any]],
+    target: int,
+    as_of: datetime,
+    item_window: dict[str, Any] | None,
+) -> dict[str, Any]:
     selected = [unit for unit in units if unit["arm"] == arm]
+    if arm == "routine" and item_window is not None and item_window["cutoff"] is not None:
+        selected = [
+            unit for unit in selected
+            if instant(unit.get("selectedAt"), f"{unit['id']}.selectedAt") <= item_window["cutoff"]
+        ]
     delivered = [unit for unit in selected if unit["delivery"] == "delivered"]
     measured: list[tuple[dict[str, Any], tuple[int, int, int]]] = []
     bounded_missing = 0
@@ -75,7 +155,7 @@ def arm_result(arm: str, units: list[dict[str, Any]], target: int, as_of: dateti
             productive, overhead, total = usage
             if total and overhead / total > 0.20:
                 over_budget.append(unit["id"])
-        if unit["delivery"] == "delivered":
+        if unit["delivery"] == "delivered" and item_window is None:
             followup = unit.get("repairFollowup")
             if not isinstance(followup, dict) or followup.get("status") != "complete":
                 followup_pending.append(unit["id"])
@@ -83,6 +163,14 @@ def arm_result(arm: str, units: list[dict[str, Any]], target: int, as_of: dateti
                 through = instant(followup.get("through"), f"{unit['id']}.repairFollowup.through")
                 delivered_at = instant(unit.get("deliveredAt"), f"{unit['id']}.deliveredAt")
                 if (through - delivered_at).total_seconds() < 30 * 24 * 60 * 60 or through > as_of:
+                    followup_pending.append(unit["id"])
+        elif arm == "routine" and item_window is not None and item_window["cutoff"] is not None:
+            followup = unit.get("repairFollowup")
+            if not isinstance(followup, dict) or followup.get("status") != "complete":
+                followup_pending.append(unit["id"])
+            else:
+                through = instant(followup.get("through"), f"{unit['id']}.repairFollowup.through")
+                if through != item_window["cutoff"] or through > as_of:
                     followup_pending.append(unit["id"])
     productive = sum(value[0] for _, value in measured)
     overhead = sum(value[1] for _, value in measured)
@@ -110,7 +198,7 @@ def arm_result(arm: str, units: list[dict[str, Any]], target: int, as_of: dateti
 
 
 def evaluate(document: dict[str, Any]) -> dict[str, Any]:
-    require(document.get("schema") == INPUT_SCHEMA, "unsupported cohort schema")
+    require(document.get("schema") in (INPUT_SCHEMA, INPUT_SCHEMA_V2), "unsupported cohort schema")
     cohort = document.get("cohort")
     require(isinstance(cohort, str) and cohort, "cohort must be non-empty")
     as_of = instant(document.get("asOf"), "asOf")
@@ -127,15 +215,17 @@ def evaluate(document: dict[str, Any]) -> dict[str, Any]:
         ids.add(unit_id)
         require(unit.get("arm") in ("routine", "baseline"), f"{unit_id}.arm is unsupported")
         require(unit.get("kind") == "code", f"{unit_id}.kind must be code")
-        require(unit.get("delivery") in ("delivered", "not-delivered", "pending"), f"{unit_id}.delivery is unsupported")
+        require(unit.get("delivery") in ("delivered", "not-delivered", "cancelled", "pending"), f"{unit_id}.delivery is unsupported")
         require(type(unit.get("eligible")) is bool, f"{unit_id}.eligible must be boolean")
         require(unit["eligible"], f"{unit_id} is not eligible for this cohort")
         if unit["arm"] == "routine":
             require(unit.get("selectedBeforeOutcome") is True, f"{unit_id} was not selected before its outcome")
         measured_usage(unit)
 
-    routine = arm_result("routine", units, target, as_of)
-    baseline = arm_result("baseline", units, target, as_of)
+    policy = completed_item_policy(document)
+    item_window = completed_item_window(units, policy, as_of) if policy is not None else None
+    routine = arm_result("routine", units, target, as_of, item_window)
+    baseline = arm_result("baseline", units, target, as_of, None)
     population = document.get("providerPopulation")
     require(isinstance(population, dict), "providerPopulation must be an object")
     population_status = population.get("status")
@@ -163,8 +253,47 @@ def evaluate(document: dict[str, Any]) -> dict[str, Any]:
         reasons.append("routine-overhead-ceiling-not-met")
     if routine["overBudgetUnits"]:
         reasons.append("routine-unit-over-budget")
-    if routine["followupPendingUnits"]:
-        reasons.append("routine-30-day-followup-pending")
+    if item_window is None:
+        if routine["followupPendingUnits"]:
+            reasons.append("routine-30-day-followup-pending")
+    else:
+        if item_window["completedDistinctItems"] < item_window["target"]:
+            reasons.append("routine-completed-item-window-pending")
+        if routine["followupPendingUnits"]:
+            reasons.append("routine-completed-item-repair-accounting-pending")
+        cohort_units = [unit for unit in units if unit["arm"] == "routine"]
+        if item_window["cutoff"] is not None:
+            cohort_units = [
+                unit for unit in cohort_units
+                if instant(unit.get("selectedAt"), f"{unit['id']}.selectedAt") <= item_window["cutoff"]
+            ]
+        severe_events: list[dict[str, Any]] = []
+        rollbacks = 0
+        allowed_severe_events = {"credential-exposure", "irreversible-data-loss", "authority-breach"}
+        for unit in cohort_units:
+            followup = unit.get("repairFollowup")
+            if not isinstance(followup, dict):
+                continue
+            events = followup.get("severeEvents", [])
+            require(isinstance(events, list), f"{unit['id']}.repairFollowup.severeEvents must be an array")
+            for event in events:
+                require(isinstance(event, dict), f"{unit['id']}.repairFollowup.severeEvents entries must be objects")
+                require(
+                    event.get("kind") in allowed_severe_events,
+                    f"{unit['id']}.repairFollowup.severeEvents contains an unsupported event",
+                )
+                observed_at = instant(event.get("observedAt"), f"{unit['id']}.repairFollowup.severeEvents.observedAt")
+                require(observed_at <= as_of, f"{unit['id']} has a severe event after asOf")
+                if item_window["cutoff"] is None or observed_at <= item_window["cutoff"]:
+                    severe_events.append(event)
+            rollbacks += nonnegative(
+                followup.get("processAttributableRollbacks", 0),
+                f"{unit['id']}.repairFollowup.processAttributableRollbacks",
+            )
+        if severe_events:
+            reasons.append("candidate-admission-stopped-severe-event")
+        if rollbacks >= 2:
+            reasons.append("candidate-expansion-stopped-two-process-rollbacks")
     if routine["deliveryFraction"] is None or baseline["deliveryFraction"] is None or routine["deliveryFraction"] < baseline["deliveryFraction"]:
         reasons.append("delivery-fraction-not-preserved")
     routine_cost, baseline_cost = routine["costPerDeliveredUnit"], baseline["costPerDeliveredUnit"]
@@ -179,6 +308,13 @@ def evaluate(document: dict[str, Any]) -> dict[str, Any]:
         "reasons": reasons,
         "providerPopulation": {"status": population_status, "totalHeadlineTokens": population_total, "coverage": coverage},
         "arms": {"routine": routine, "baseline": baseline},
+        "repairObservation": None if item_window is None else {
+            "mode": "completed-items",
+            "target": item_window["target"],
+            "completedDistinctItems": item_window["completedDistinctItems"],
+            "countedOriginalItems": item_window["countedOriginalItems"],
+            "cutoff": None if item_window["cutoff"] is None else item_window["cutoff"].isoformat().replace("+00:00", "Z"),
+        },
         "deliveryAuthority": "none-observer-only",
     }
 

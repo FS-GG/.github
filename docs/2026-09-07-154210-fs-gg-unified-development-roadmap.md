@@ -159,7 +159,7 @@ for history and must not be used as clean-start prerequisites.
 | **V3 — Exact candidate and receivers** | Not accepted. Existing publication, provider, tool and receiver evidence can support preparation. | GS2-10 freezes exact inputs, qualifies the complete candidate and clean/retained receivers, rehearses the cutover, and closes concurrent changes. |
 | **V4 — Closed switch** | Not entered by this audit. | GS2-11–12: authorized freeze/drain, exact switch, verification, and executable rollback while still closed. |
 | **V5 — Open and ordinary use** | No fleet production `OpenV2` acceptance identified. The synthetic callable target is not the fleet. | GS2-13 owns irreversible open, permanent v1 fence, real ordinary journeys and `ObservingV2`. |
-| **V6 — Observation and retirement** | No accepted post-open window identified. | GS2-14 owns baseline plus 15 distinct completed-work readings, contraction and `OperatingV2`; R5's independent cohort/30-day follow-up remains separate. |
+| **V6 — Observation and retirement** | R5's prospective completed-item observation window was declared at `2026-09-29T04:06:41Z`; GS2-14's post-open window remains separate. | GS2-14 owns baseline plus 15 distinct completed-work readings, contraction and `OperatingV2`; R5 separately uses its first ten distinct completed canonical originals across BARC-01, SC2C-01 and LEARN-01. |
 | **E0/E1 and O0–O3** | Selected single-host O0–O3 is accepted; Choreo C0–C6 is source/formal-qualified. | Reuse these foundations. Exact installed inclusion of later Choreo fixes and comparative-value claims require their own evidence; neither blocks migration source work. |
 | **F0–F5 / LEARN-01** | LEARN-01.1's baseline is source-delivered through [PR #3845](https://github.com/FS-GG/.github/pull/3845). LEARN-01.2's analysis and durable-fact source merged in [PR #3916](https://github.com/FS-GG/.github/pull/3916), followed by protected credential-role and receiver-authored admission provenance source in [PR #3927](https://github.com/FS-GG/.github/pull/3927) at `09dd7c6b619c7df73b9b3a4e09309e6fe020b277`. LEARN-01.3 now has the inert proposal/context compiler and canonical durable pre-dispatch treatment assignment source through Coordination [#882](https://github.com/FS-GG/FS.GG.Coordination/pull/882) and [#885](https://github.com/FS-GG/FS.GG.Coordination/pull/885). Native-source verification, trusted snapshot origin, protected collector installation, shared-cost completeness, comparative result and live experiment remain unestablished; F0–F5 are conditional. | Complete LEARN-01.2's private collector authentication, custody/source and snapshot-origin work. LEARN-01.3 still needs executor dispatch plus observation/usage/efficiency joins and requested-versus-observed provider correspondence. .4–.5 and production canaries retain their installed-artifact, operating-epoch and effect-authority gates. |
 
@@ -753,7 +753,28 @@ sufficiency and stopping rules before reviewing results.
 Ten items per route is a viability check, not p95/p99 or rare-defect equivalence evidence. Keep runtime
 absolute caps separate from distributional promotion targets. Small samples return insufficient-data;
 they can justify a bounded continuation, not a general tail-latency claim. Retain the predecessor's
-30-day repair observation before broad default claims and its severe-incident/early-rollback stop rules.
+severe-incident and early-rollback stop rules.
+
+**Current R5 observation amendment, declared prospectively at 2026-09-29T04:06:41Z.** The first ten
+distinct completed canonical roadmap/original items across independently progressing BARC-01, SC2C-01
+and LEARN-01 replace R5's fixed 30-day repair gate. The unresolved full named outcomes in all three lanes
+are enrolled now. Their known partial results and missing earlier usage stay with those lineages; no
+already completed item is selected retrospectively. Stable original identity spans retries and repairs.
+Actions, games, CI jobs, worker turns, projection-only documentation and failed attempts do not count.
+
+A completion requires the owning acceptance's native `Done` readback and actual source delivery.
+Publication, installation and activation remain separate claims. Failed, cancelled and pending attempts
+stay in the denominator and repair cost without advancing the count. The tenth completion fixes the
+cohort cutoff; charge all escaped regressions, interruptions and repairs observed by that cutoff to their
+originating items. There is no fixed elapsed wait. Credential exposure, irreversible data loss or an
+authority breach stops candidate admission immediately; two process-attributable rollbacks in the first
+ten completed items stop expansion for focused diagnosis.
+
+The independent baseline-ten plus candidate-ten comparison, at least 95% usage coverage, predecessor
+10% objective and broader 20% ceiling remain separate. Completion of the item window does not certify
+efficiency or adoption, change operation authority, or satisfy Q10's 15-item gate. Missing usage remains
+unknown; no counter or collector installation is inferred. Historical schema-1 snapshots retain the
+30-day rule, and the current schema-2 cohort record applies this completed-item policy.
 
 Missing efficiency evidence blocks an efficiency claim and applicable controller promotion. It does not
 independently block a valid routine merge or add a numerical gate to OpenV2/OperatingV2. Existing Q10 gates
@@ -1242,7 +1263,7 @@ flowchart TD
     Closed --> Open["V5 / GS2-13 separately authorized OpenV2"]
     Open --> Observe["V6 / GS2-14 baseline + 15 distinct items / contraction"]
     Observe --> Operating["OperatingV2"]
-    Open -. actual routine population .-> R5["Separate R5 cohort and 30-day follow-up"]
+    Open -. actual routine population .-> R5["Separate R5 cohort / 10 completed originals"]
     Operating -. superseded by ADR-0091 .-> Lifecycle["Release D.5 lifecycle activation and receiver proof"]
     Foundations["Accepted O0-O3 / source-qualified Choreo"] -. reuse .-> Extensions["Optional E0/E1 / LEARN / F0-F3 preparation"]
     Extensions --> Canary["Separately selected E1 / F4 production canary"]
@@ -1375,9 +1396,10 @@ before destructive retirement. Delete obsolete callers, policy contexts and arti
 profile, preserving forensic history and still-needed automatic records. Verify that a clean installation
 cannot resolve a v1 production route and that an upgrade does not restore removed ceremony.
 
-R5's independent routine cohort and 30-day attributed repairs may finish on a different date from the 15-item Q10 gate.
-Neither completion is inferred from the other. If adoption happens later, start that population's follow-up
-then. Claim each outcome at its actual scope; no efficiency-success label is needed to admit a valid repair.
+R5's independent routine cohort closes its repair-accounting window at the tenth distinct completed
+canonical original enrolled across BARC-01, SC2C-01 and LEARN-01. It may finish on a different date from
+the 15-item Q10 gate. Neither completion is inferred from the other. Claim each outcome at its actual
+scope; no efficiency-success label is needed to admit a valid repair.
 
 ### 9.6 E0–E1: later capability development
 
@@ -1705,7 +1727,7 @@ still settle. Stopping a prototype or leaving a class unsupported is a valid out
 | V2 candidate qualified | Exact candidate and installed receiver evidence meet the accepted GS2 contract, including any profile actually claimed |
 | V2 opened | Authoritative OpenV2 and permanent v1 writer fence; normal v2 classes enabled under their actual authority |
 | Migration complete | Existing Q10, contraction, clean-install/old-client proofs and OperatingV2; no unowned required follow-up |
-| Simplification programme complete | R5's actual ordinary-v2 journeys, clean/upgrade adoption and independently sufficient cohort/follow-up evidence |
+| Simplification programme complete | R5's actual ordinary-v2 journeys, clean/upgrade adoption and independently sufficient cohort/completed-item-cutoff evidence |
 | Execution experiment successful | A measured residual need is improved at acceptable total cost; all applicable correctness/budget/recovery claims pass |
 | OR/PB capability adopted | One exact operation class and policy has authorized canary, receiver/fallback qualification and an explicit default decision |
 

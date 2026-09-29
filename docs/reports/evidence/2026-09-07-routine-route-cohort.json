@@ -1,8 +1,33 @@
 {
-  "schema": "fsgg.routine-cohort-observation/1",
+  "schema": "fsgg.routine-cohort-observation/2",
   "cohort": "routine-route-first-ten-code-items",
-  "asOf": "2026-09-07T22:25:22Z",
+  "asOf": "2026-09-29T04:06:41Z",
   "targetPerArm": 10,
+  "repairObservation": {
+    "mode": "completed-items",
+    "declaredAt": "2026-09-29T04:06:41Z",
+    "completedItemTarget": 10,
+    "enrolledLanes": [
+      {
+        "id": "BARC-01",
+        "statusAtDeclaration": "unresolved",
+        "priorUsage": "missing",
+        "scope": "The unresolved full canonical BARC-01 outcome and its prospectively selected original items. Earlier source/native and fork-preview results remain partial evidence; they are not retroactive completions."
+      },
+      {
+        "id": "SC2C-01",
+        "statusAtDeclaration": "unresolved",
+        "priorUsage": "missing",
+        "scope": "The unresolved full canonical SC2C-01 outcome and its prospectively selected original items. Earlier playable and tactical slices remain partial evidence; they are not retroactive completions."
+      },
+      {
+        "id": "LEARN-01",
+        "statusAtDeclaration": "unresolved",
+        "priorUsage": "missing",
+        "scope": "The unresolved full canonical LEARN-01 outcome and its prospectively selected original items. Earlier baseline, analysis and inert compiler source remains partial evidence; it is not a retroactive completion."
+      }
+    ]
+  },
   "selection": {
     "routine": "The next ten eligible ordinary reversible code requests admitted by the shared routine policy after this declaration, excluding roadmap-bootstrap and protected-operation work.",
     "baseline": "The ten most recently merged pre-activation code items that meet the routine route's current path and operation exclusions. Qualification-only fixtures are excluded. This historical arm is observational and remains unmatched until the routine arm is selected.",
