@@ -143,6 +143,182 @@ class Learn01ContractTests(unittest.TestCase):
             "runtimeGaps": [], "ciRuns": [], "ciPopulationCoverage": [],
         }
 
+    def protected_v4_fixture(self):
+        content = self.complete_v3_content()
+        source = self.native_source_event()
+        events = [json.loads(row["canonical"]) for row in content["learningObservations"]]
+        events.extend([self.shared_allocation_event(), source, self.shared_authority_event()])
+        content["learningObservations"] = [
+            {"canonical": json.dumps(event, separators=(",", ":"), sort_keys=True)}
+            for event in events
+        ]
+        content["usage"][0]["turn_sequence"] = 1
+        envelope = private_envelope(content, version=4)
+        decoded = json.loads(gzip.decompress(base64.b64decode(envelope["canonicalSnapshotGzip"])))
+        for row in decoded["learningObservations"]:
+            event = json.loads(row["canonical"])
+            if event["kind"] == "learn-shared-cost-allocation/1":
+                row["ingest_order"] = 1
+            elif event["kind"] == "runtime-native-inventory-source/1":
+                row["ingest_order"] = 300
+            elif event["kind"] == "learn-shared-cost-authority/1":
+                row["ingest_order"] = 301
+            elif event["kind"] == "learn-shared-cost/1":
+                row["ingest_order"] = 302
+            if event["kind"] in {"runtime-native-inventory-source/1", "learn-shared-cost-authority/1"}:
+                row.update({
+                    "receipt_producer": "collector", "receipt_stream": "native-inventory",
+                    "receipt_role": "native-collector", "receipt_grant_id": "collector-grant",
+                    "receipt_grant_generation": 1, "receipt_key": "c" * 64,
+                    "receipt_envelope_digest": "d" * 64,
+                })
+        envelope = private_envelope(decoded, version=4)
+        capture = {
+            "receiptKey": "c" * 64, "envelopeDigest": "d" * 64,
+            "producer": "collector", "stream": "native-inventory", "grantId": "collector-grant",
+            "grantGeneration": 1, "events": [source], "turns": [{
+                "threadId": "thread-I-001", "turnId": "turn-I-001", "sequence": 1,
+                "provider": "openai", "model": "gpt-fixed", "effort": "medium",
+                "input": 90, "cachedInput": 0, "output": 10, "reasoning": 0, "total": 100,
+            }],
+        }
+        return envelope, capture
+
+    def test_pre_admission_assessment_is_honest_stable_and_non_circular(self):
+        empty = {
+            "learningObservations": [], "populations": [], "outcomes": [], "admissions": [],
+            "expectedDispatches": [], "lineage": [], "usage": [], "terminals": [],
+            "runtimeGaps": [], "ciRuns": [], "ciPopulationCoverage": [],
+        }
+        first = MODULE.assess_pre_admission_owner_evidence(
+            CONTRACT, private_envelope(empty, version=4), [], original_item="NEW-001",
+            window_id="window-2026-01", repository="FS-GG/.github")
+        self.assertEqual("unassigned", first["assignmentState"])
+        self.assertFalse(first["operationalReady"])
+        self.assertIsNone(first["predicates"]["completeNativeUsageSupport"]["value"])
+        self.assertIn("operational-window-authority-unavailable", first["missingOwnerInputs"])
+        self.assertIn(
+            "prospective-root-and-descendant-native-capability-certification-unavailable",
+            first["missingOwnerInputs"],
+        )
+
+        unrelated = copy.deepcopy(empty)
+        unrelated["learningObservations"] = [{
+            "canonical": json.dumps(OBSERVATIONS["events"][3], separators=(",", ":"), sort_keys=True)
+        }]
+        second = MODULE.assess_pre_admission_owner_evidence(
+            CONTRACT, private_envelope(unrelated, version=4), [], original_item="NEW-001",
+            window_id="window-2026-01", repository="FS-GG/.github")
+        self.assertEqual(first["evidenceDigest"], second["evidenceDigest"])
+
+        changed = copy.deepcopy(empty)
+        changed["outcomes"] = [{
+            "identity": "outcome-new", "item_id": "NEW-001", "repository": "FS-GG/.github",
+            "outcome": "delivered", "head_sha": "a" * 40,
+        }]
+        third = MODULE.assess_pre_admission_owner_evidence(
+            CONTRACT, private_envelope(changed, version=4), [], original_item="NEW-001",
+            window_id="window-2026-01", repository="FS-GG/.github")
+        self.assertNotEqual(first["evidenceDigest"], third["evidenceDigest"])
+
+    def test_pre_admission_reconciles_capture_but_does_not_promote_candidate_records(self):
+        envelope, capture = self.protected_v4_fixture()
+        result = MODULE.assess_pre_admission_owner_evidence(
+            CONTRACT, envelope, [capture], original_item="I-001",
+            window_id="window-2026-01", repository="FS-GG/.github")
+        self.assertEqual(1, result["selectedEvidence"]["reconciledProtectedNativeCaptures"])
+        self.assertEqual(
+            {"status": "established", "verifiedInvocations": ["inv-I-001"]},
+            result["predicates"]["postOutcomeProtectedNativeCapture"],
+        )
+        self.assertEqual(1, result["predicates"]["independentProspectiveDispatchCensus"]["retainedCandidateRecords"])
+        self.assertEqual(1, result["predicates"]["independentProspectiveSharedAllocation"]["retainedCandidateRecords"])
+        self.assertEqual("missing", result["predicates"]["independentProspectiveDispatchCensus"]["status"])
+        self.assertEqual("missing", result["predicates"]["independentProspectiveSharedAllocation"]["status"])
+        self.assertFalse(result["operationalReady"])
+
+        with tempfile.TemporaryDirectory(prefix="learn-owner-capture-") as directory:
+            root = pathlib.Path(directory)
+            config = root / "host.json"
+            config.write_text("{}")
+            config.chmod(0o600)
+            exported = {"schema": "fsgg.telemetry.protected-learning-export/1",
+                        "snapshot": envelope, "captures": [capture]}
+            host = root / "installed-host-fixture"
+            host.write_text("#!/usr/bin/python3\nimport json,sys\n"
+                            "assert sys.argv[1:3] == ['export-learning', '--config']\n"
+                            + "print(" + repr(json.dumps(exported)) + ")\n")
+            host.chmod(0o700)
+            pin = hashlib.sha256(host.read_bytes()).hexdigest()
+            output = root / "assessment.json"
+            self.assertEqual(0, MODULE.main([
+                str(ROOT / "policy/learn-01-current-focused-v1.json"),
+                "--protected-host-executable", str(host), "--protected-host-sha256", pin,
+                "--protected-host-config", str(config), "--assess-pre-admission",
+                "--original-item", "I-001", "--window", "window-2026-01",
+                "--repository", "FS-GG/.github", "--output", str(output),
+            ]))
+            self.assertEqual(
+                1, json.loads(output.read_text())["selectedEvidence"]["reconciledProtectedNativeCaptures"])
+
+        stale = copy.deepcopy(capture)
+        stale["grantGeneration"] = 2
+        with self.assertRaisesRegex(MODULE.Refusal, "first authenticated source admission"):
+            MODULE.assess_pre_admission_owner_evidence(
+                CONTRACT, envelope, [stale], original_item="I-001",
+                window_id="window-2026-01", repository="FS-GG/.github")
+
+        truncated = json.loads(gzip.decompress(base64.b64decode(envelope["canonicalSnapshotGzip"])))
+        truncated["selection"]["complete"] = False
+        with self.assertRaisesRegex(MODULE.Refusal, "selection is incomplete"):
+            MODULE.assess_pre_admission_owner_evidence(
+                CONTRACT, private_envelope(truncated, version=4), [capture], original_item="I-001",
+                window_id="window-2026-01", repository="FS-GG/.github")
+
+    def test_pre_admission_cli_requires_direct_pinned_host_export(self):
+        empty = {
+            "learningObservations": [], "populations": [], "outcomes": [], "admissions": [],
+            "expectedDispatches": [], "lineage": [], "usage": [], "terminals": [],
+            "runtimeGaps": [], "ciRuns": [], "ciPopulationCoverage": [],
+        }
+        exported = {"schema": "fsgg.telemetry.protected-learning-export/1",
+                    "snapshot": private_envelope(empty, version=4), "captures": []}
+        with tempfile.TemporaryDirectory(prefix="learn-pre-admission-") as directory:
+            root = pathlib.Path(directory)
+            config = root / "host.json"
+            config.write_text("{}")
+            config.chmod(0o600)
+            host = root / "installed-host-fixture"
+            host.write_text("#!/usr/bin/python3\nimport json,sys\n"
+                            "assert sys.argv[1:3] == ['export-learning', '--config']\n"
+                            + "print(" + repr(json.dumps(exported)) + ")\n")
+            host.chmod(0o700)
+            pin = hashlib.sha256(host.read_bytes()).hexdigest()
+            output = root / "assessment.json"
+            args = [str(ROOT / "policy/learn-01-current-focused-v1.json"),
+                    "--protected-host-executable", str(host), "--protected-host-sha256", pin,
+                    "--protected-host-config", str(config), "--assess-pre-admission",
+                    "--original-item", "NEW-001", "--window", "window-2026-01",
+                    "--repository", "FS-GG/.github", "--output", str(output)]
+            self.assertEqual(0, MODULE.main(args))
+            self.assertFalse(json.loads(output.read_text())["operationalReady"])
+            drifted = list(args)
+            drifted[drifted.index(pin)] = "0" * 64
+            self.assertEqual(2, MODULE.main(drifted))
+
+        imported = tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False)
+        try:
+            json.dump(exported["snapshot"], imported)
+            imported.close()
+            self.assertEqual(2, MODULE.main([
+                str(ROOT / "policy/learn-01-current-focused-v1.json"),
+                "--observations", imported.name, "--assess-pre-admission",
+                "--original-item", "NEW-001", "--window", "window-2026-01",
+                "--repository", "FS-GG/.github",
+            ]))
+        finally:
+            pathlib.Path(imported.name).unlink(missing_ok=True)
+
     def test_complete_v3_structure_remains_unqualified_without_independent_sources(self):
         content = self.complete_v3_content()
         result = MODULE.analyze_private_snapshot(CONTRACT, private_envelope(content, version=3))

@@ -193,3 +193,51 @@ substitution and imported self-hashed snapshots cannot reproduce the qualified r
 are not installed receiver, provider-signature or live experiment evidence. The current Coordination
 installation-v1 preparation remains UNKNOWN; explicit v2 installer adoption, published artifacts, protected
 host configuration and native-root custody are required before a live qualified window.
+
+## Bounded pre-admission owner assessment
+
+The analyzer also exposes a source-preparation mode on the same protected process acquisition route:
+
+```text
+python3 tools/learn-01-analysis.py policy/learn-01-current-focused-v1.json \
+  --protected-host-executable /absolute/installed/fsgg-telemetry-host \
+  --protected-host-sha256 <operator-verified-executable-sha256> \
+  --protected-host-config /absolute/private/host.json \
+  --assess-pre-admission --original-item <original> --window <window> \
+  --repository <owner/repository>
+```
+
+The three final values are lookup selectors. The caller cannot submit readiness, an evidence hash, counters,
+rosters, authority, observation time, expiry, revocation, capability or plan attestation. Imported observations
+and a second corpus remain refused. The mode requires the existing complete v4 private snapshot, receipt
+provenance and protected captures from `export-learning`; the closed export v1 schema is unchanged.
+
+The result is `fsgg.learn.pre-admission-owner-assessment/1`, not a
+`LearningOperationalReadinessSnapshot`. It always keeps `operationalReady` false in this source window and
+represents complete native usage support as `unknown`, never as an inferred true value. The assessment records
+whether the selected original is unassigned, assigned in the selected window or conflicts with an assignment
+in another window. An unassigned original does not need future invocations, terminal outcomes or token counters.
+Empty dispatch, shared-cost or observation arrays do not prove prospective completeness.
+
+`evidenceDigest` is the canonical digest of the selectors and the actual retained records selected for the
+original: exact learning canonical bytes and receipt bindings, related population/outcome/dispatch/lineage/usage
+rows and relevant protected captures. It excludes the changing whole-snapshot revision, export time and rows for
+unrelated originals. Repeated acquisition of the same selected records therefore preserves the digest; a change
+to a selected record changes it. Selection truncation, conflicting retained identities, executable-pin drift,
+capture/first-admission grant mismatch and imported self-hashed JSON refuse rather than degrade into readiness.
+Verified protected captures remain reported as post-outcome evidence only.
+
+The assessment names these missing owner inputs independently:
+
+| Missing input | Existing owner that must supply or bind it |
+| --- | --- |
+| Protected operation/window authority, including bounded epoch, expiry and revocation | The `.github` policy/telemetry owner must identify a genuine protected authority record and its custody; the frozen research policy and original-item mapping registry do not supply it. |
+| Independent prospective original/descendant dispatch census | The existing `.github` roadmap/routine telemetry producer must add or identify its independently retained census source. `tools/routine-observer.py` currently reports that collector as absent. |
+| Prospective shared-cost membership and allocation frozen before assignment | The existing accounting/shared-cost producer must emit the already-defined allocation record from independently retained membership. A generic or self-authored fact is only a candidate record. |
+| Root and descendant native-counter capability certification for each selected execution route | Main/SystemAdmin's installed provider, native-root custody and adopter owners must bind qualified route capability before admission. Post-outcome inventory and counters cannot certify unborn descendants prospectively. |
+| Exact native delivery identity and source provenance for original, repository, head and merge | The existing routine-delivery/CI producer must retain and export that exact binding. A repository-labelled outcome row alone is insufficient. |
+
+Coordinator-validated plan and WorkItem authority remain Coordination inputs at the later consumer boundary and
+are not duplicated in telemetry. No independent window authority, prospective census/allocation emitter or
+route-capability certification was found in the existing retained export, so this assessment does not make the
+production Host operationally ready or close LEARN-01.4.
