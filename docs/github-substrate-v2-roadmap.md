@@ -231,6 +231,29 @@ board cannot become delivery authority or a synchronous source-merge gate. Refre
 reviewed jobs under the host execution boundary. This follow-on feature adds no board migration
 prerequisite to full V2 acceptance.
 
+### Language-independent product workspaces — 2026-09-29
+
+Select **V2-LANG-01** as a prospective product-integration extension. Product workspaces choose
+their own languages and toolchains, including multiple components in one repository; the coordination
+runtime and agent SDK do not become product dependencies. The
+[selected amendment and subroadmap](roadmaps/2026-09-29-language-independent-workspaces-and-agent-integration.md)
+owns portable schemas and standalone tooling, reviewed toolchain profiles, native product verification,
+fresh/retained/local-only qualification and a separately identified cross-language fixture population.
+The accepted selected-profile result and frozen R5 cohort retain their original scope.
+
+Reuse the selected Akka.NET core and CLI/workflow route. Keep work-item ownership, capacity, effect
+settlement and original budgets authoritative there, with independent scheduling across roadmap lanes.
+Evaluate AG-UI as a read-only presentation adapter and Microsoft Agent Framework inside one bounded
+attempt; its synchronized workflow steps must not block unrelated work items. Package adoption needs
+measured benefit and exact qualification. Framework checkpoints and UI completion events cannot certify
+delivery. These trials create no host-resident autonomous agent or new mandatory workspace service.
+
+The language contract and UI trial can progress independently. Required language-route qualification
+uses executable enrollment, build/test/product, artifact, cancellation, duplicate and recovery cases;
+Agent Framework adoption remains optional. SDD/Templates and product owners publish and adopt their
+actual bindings before reporting support. The [product-board design](coordination/2026-09-29-coordination-v2-board-design.md#product-workspace-use)
+uses the same language-independent integration boundary.
+
 ## 1. How work is executed
 
 The three program issues are too large to hand directly to a general worker. They are durable anchors for
