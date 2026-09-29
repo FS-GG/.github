@@ -80,7 +80,6 @@
 1 tests/release-coherence/run.sh
 372 tests/repos-audit/run.sh
 4 tests/repos-registry/run.sh
-5 tests/rest-budget-preflight/run.sh
 5 tests/retirement-order-coherence/run.sh
 7 tests/review-critic-succession-wire/run.sh
 13 tests/shell-lint/run.sh
