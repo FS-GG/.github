@@ -193,6 +193,40 @@ The [Audio receiver plan](https://github.com/FS-GG/FS.GG.Audio/blob/main/docs/ro
 closed by [PR #333](https://github.com/FS-GG/FS.GG.Audio/pull/333), records this completed selected
 adoption. It establishes neither historical migration nor fleet-wide activation.
 
+### Required host execution boundary — 2026-09-29
+
+V2 must operate and qualify without unattended, general-purpose AI agents on operational
+Home/Main hosts. Roles such as `work-main` and `home-main` must not be prerequisites for
+acceptance, installation, diagnostics or recovery. Planning, coding and agent coordination
+belong in isolated development environments. Disposable qualification machines run fixed test
+jobs; moving unrestricted agent execution into CI does not satisfy this requirement.
+
+Host work must use pre-reviewed, versioned, one-shot operations run by an operator or a restricted
+job runner. Each operation binds exact artifact identities, allowlisted parameters, narrowly scoped
+credentials, a bounded runtime and owned cleanup. The runner must reject arbitrary shell commands,
+uploaded executable recipes and autonomous follow-up work. Development agents must not require
+standing general SSH or broad sudo access to operational hosts. Existing operation selection,
+authentication, custody and effect-authority checks remain enforced.
+
+The required acceptance outcome is source, artifact and bounded diagnostic qualification through
+these fixed jobs without a host-resident autonomous agent. Retain the selected recipe revision,
+artifact pins, scope, result and cleanup evidence. This requirement is not a claim that the boundary
+is already implemented or qualified. Genuine installed-host validation and experiments remain
+explicitly selected follow-up work under the
+[full V2 acceptance amendment](2026-09-07-154210-fs-gg-unified-development-roadmap.md#full-v2-acceptance-amendment--2026-09-29);
+deferral supplies no installed-readiness evidence. Historical receipts retain their original scope.
+
+### Coordination V2 board — 2026-09-29
+
+Select a fresh **Coordination V2** planning project and carry over existing issues only when current
+native evidence and their owning roadmap show a relevant remaining outcome. The
+[selected design and subroadmap](coordination/2026-09-29-coordination-v2-board-design.md) owns
+COORD-BOARD-V2-01.1–.4: design, bounded import, restricted projection and explicit consumer adoption.
+Creation, import and adoption remain pending. The legacy automatic V1 writer stays retired; the new
+board cannot become delivery authority or a synchronous source-merge gate. Refresh uses fixed,
+reviewed jobs under the host execution boundary. This follow-on feature adds no board migration
+prerequisite to full V2 acceptance.
+
 ## 1. How work is executed
 
 The three program issues are too large to hand directly to a general worker. They are durable anchors for

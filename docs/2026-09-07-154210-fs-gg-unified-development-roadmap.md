@@ -96,6 +96,17 @@ experiment and FourD player study, including requirements recorded in linked own
   source/diagnostic qualification; verify protected delivery and update their roadmap evidence.
   Record unavailable installed, human and economic evidence explicitly. Historical economics may
   close with an insufficient-evidence disposition and no efficiency claim.
+- **Host execution boundary:** V2 must qualify and operate without unattended, general-purpose
+  AI agents on operational Home/Main hosts. `work-main` and `home-main` are not acceptance or
+  runtime prerequisites. Development agents remain in isolated development environments; host
+  actions use fixed, pre-reviewed, versioned operations with pinned artifacts, allowlisted
+  parameters, narrowly scoped credentials, bounded runtime and owned cleanup. An operator or
+  restricted job runner performs those actions under existing authority; arbitrary shell execution,
+  broad standing SSH/sudo access and autonomous follow-up work do not meet this boundary. Source,
+  artifact and diagnostic qualification must demonstrate this execution path. Genuine installed
+  validation remains explicitly selected follow-up work, with missing evidence kept unknown. The
+  [V2 execution roadmap](github-substrate-v2-roadmap.md#required-host-execution-boundary--2026-09-29)
+  owns the requirement and its acceptance evidence; recording it does not claim implementation.
 
 These removed requirements are outside the full V2 acceptance gate, rather than completed tests.
 The frozen R5 cohort, cutoff and historical original-item outcomes stay intact. Required native
@@ -1642,6 +1653,7 @@ Entry conditions constrain the dependent execution; earlier read-only planning m
 | **Tic-tac-toe — TTT-01** | Independent local two-player game; whole TTT-01.1 covers moves, wins/draws, terminal refusal and restart | Templates source owner; whole TTT-01.1 delivered through [#648](https://github.com/FS-GG/FS.GG.Templates/pull/648), native checks and protected owning/tree readback verified | [Owning plan](https://github.com/FS-GG/FS.GG.Templates/blob/ba760d7725fe64b9311c20b57a05ef8630533804/docs/roadmaps/tic-tac-toe.md); [prospective enrollment](roadmaps/2026-09-29-r5-additional-app-enrollment.md) |
 | **Snake — SNAKE-01** | Independent keyboard game; whole SNAKE-01.1 covers food/growth/score, collision, pause and restart | Templates source owner; whole SNAKE-01.1 delivered through [#648](https://github.com/FS-GG/FS.GG.Templates/pull/648), native checks and protected owning/tree readback verified | [Owning plan](https://github.com/FS-GG/FS.GG.Templates/blob/ba760d7725fe64b9311c20b57a05ef8630533804/docs/roadmaps/snake-app.md); [prospective enrollment](roadmaps/2026-09-29-r5-additional-app-enrollment.md) |
 | **Hello-world app — HELLO-01** | Independent browser app; whole HELLO-01.1 renders an accessible greeting through its actual entry point | Templates source owner; whole HELLO-01.1 delivered through [#648](https://github.com/FS-GG/FS.GG.Templates/pull/648), native checks and protected owning/tree readback verified | [Owning plan](https://github.com/FS-GG/FS.GG.Templates/blob/ba760d7725fe64b9311c20b57a05ef8630533804/docs/roadmaps/hello-world-app.md); [prospective enrollment](roadmaps/2026-09-29-r5-additional-app-enrollment.md) |
+| **Coordination V2 board — COORD-BOARD-V2-01** | Follow-on V2 planning surface: fresh project, selective existing-issue carryover, fixed restricted refresh and explicit consumer adoption; no new full-acceptance prerequisite | `.github` owns the design and organization planning surface; .1 design is selected, .2–.4 creation/import/projection/adoption remain pending. Repository owners retain delivery authority. No Home/Main autonomous agent is required | [Design and subroadmap](coordination/2026-09-29-coordination-v2-board-design.md) |
 
 Each selected part produces a subroadmap in its owning repository, normally
 `docs/roadmaps/<feature-slug>.md`. Link that document in the corresponding row, using a relative link for
@@ -1706,6 +1718,7 @@ than assuming every family updates together.
 | **Complete SVG workspace — SVG-WORKSPACE-01** | The complete [Templates plan](https://github.com/FS-GG/FS.GG.Templates/blob/main/docs/roadmaps/svg-workspace-01.md) adds owner-published guidance, installed SDD selection, a default SVG player and optional studio/tactical/arcade/complete bundles | .1–.6 are frozen. Clean and retained installed/development proof, local containerized Caddy deployment/rollback and evidence freeze pass. Durable public hosting is deferred. Public Templates/wizard adoption and activation proceed through [Release D](roadmaps/svg-release-d.md). |
 | **Unity replacement client — UNITYC-01** | Explicit opt-in Unity bridge, browser gameplay and WASM authoring composition in `fs-gg-fable-game` | .2 enables the selected source product's reference game; .6 publishes/adopts coherent producer and template bytes and proves separate clean/upgrade receiver journeys. Source merge alone has no installed effect |
 | **4D grid tactics — FOURD-01** | No general scaffold/default change; the accepted Commitment/Pressure comparison adds explicit opt-in product prototypes | .V2.4 first exposes revised gameplay in product source while v1 stays default. Bounded .6 P1 changes source startup to the fixture-free product entry; P3 qualifies a local static candidate and P2 proves same-origin old-save readers. These are source/local-candidate changes, not installed adoption. Producer publication, clean creation and retained upgrade adoption remain separate. Product ownership is retained; no template extraction is selected without receiver demand |
+| **Coordination V2 board — COORD-BOARD-V2-01** | No generated workspace or scaffold/default change; .2 first exposes the selected organization project pilot | .3 qualifies the explicit projection route and .4 switches selected consumers. Any distributed adapter needs pinned publication and receiver qualification; existing-workspace upgrade is separately selected. |
 | **Enrolled browser apps — TODO-01 / TTT-01 / SNAKE-01 / HELLO-01** | Explicit source samples outside packaged template content; each app first changes behavior when a user runs its source entry point | No generated-family/default change or producer release is selected. Clean source-checkout/browser proof is required; public scaffold adoption and retained generated-workspace upgrade are separate, unselected work. |
 
 For every subroadmap, state **which workspace families change, what the user sees before and after,
