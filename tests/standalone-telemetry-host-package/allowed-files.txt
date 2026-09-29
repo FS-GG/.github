@@ -9,6 +9,9 @@ tools/net10.0/linux-x64/DotnetToolSettings.xml
 tools/net10.0/linux-x64/FS.GG.Coord.Core.dll
 tools/net10.0/linux-x64/FS.GG.Coord.Core.pdb
 tools/net10.0/linux-x64/FS.GG.Coord.Core.xml
+tools/net10.0/linux-x64/FS.GG.Coord.GitHub.dll
+tools/net10.0/linux-x64/FS.GG.Coord.GitHub.pdb
+tools/net10.0/linux-x64/FS.GG.Coord.GitHub.xml
 tools/net10.0/linux-x64/FS.GG.Telemetry.Contracts.dll
 tools/net10.0/linux-x64/FS.GG.Telemetry.Contracts.pdb
 tools/net10.0/linux-x64/FS.GG.Telemetry.Contracts.xml

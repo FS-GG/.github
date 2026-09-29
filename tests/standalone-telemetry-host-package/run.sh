@@ -49,7 +49,7 @@ PY
 python3 - "$WORK/metadata.json" <<'PY' && ok "package contains required runtime and project-reference closure" || bad "package contains required runtime and project-reference closure"
 import json,sys
 names=json.load(open(sys.argv[1]))['names']
-required=['FS.GG.Telemetry.Host.dll','FS.GG.Telemetry.Dashboard.dll','FS.GG.Telemetry.Contracts.dll','FS.GG.Telemetry.Store.dll','FS.GG.Coord.Core.dll','Akka.dll','Akka.FSharp.dll','Microsoft.Data.Sqlite.dll','FS.GG.Telemetry.Host.deps.json','FS.GG.Telemetry.Host.runtimeconfig.json','README.md']
+required=['FS.GG.Telemetry.Host.dll','FS.GG.Telemetry.Dashboard.dll','FS.GG.Telemetry.Contracts.dll','FS.GG.Telemetry.Store.dll','FS.GG.Coord.Core.dll','FS.GG.Coord.GitHub.dll','Akka.dll','Akka.FSharp.dll','Microsoft.Data.Sqlite.dll','FS.GG.Telemetry.Host.deps.json','FS.GG.Telemetry.Host.runtimeconfig.json','README.md']
 for item in required:
     assert any(n.endswith('/'+item) or n==item for n in names), item
 PY
