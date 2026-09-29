@@ -106,6 +106,8 @@ def decode_private_snapshot(observations: dict) -> tuple[dict, str]:
         if revision != digest:
             raise Refusal("telemetry snapshot revision does not bind canonical bytes")
         content = json.loads(raw)
+        if not isinstance(content, dict):
+            raise Refusal("telemetry snapshot canonical root must be an object")
     except Refusal:
         raise
     except (ValueError, TypeError, OSError, EOFError, json.JSONDecodeError) as error:
@@ -335,6 +337,265 @@ def verified_capture_invocations(content: dict, captures: list) -> set[str]:
         if expected and expected == observed:
             verified.add(invocation)
     return verified
+
+
+def assess_pre_admission_owner_evidence(
+        contract: dict, envelope: dict, captures: list, *, original_item: str,
+        window_id: str, repository: str) -> dict:
+    """Inventory retained evidence for admission without asserting operational readiness.
+
+    This deliberately does not call the post-outcome analyzer: an original that has not
+    run cannot be required to have terminal invocations or token counters. The digest
+    binds only records selected for this original, so unrelated store traffic and the
+    enclosing export timestamp/revision do not invalidate a pre-intent reread.
+    """
+    for name, value in (("original item", original_item), ("window", window_id),
+                        ("repository", repository)):
+        if not isinstance(value, str) or not value or len(value) > 256:
+            raise Refusal(f"pre-admission {name} selector is invalid")
+    if not re.fullmatch(r"[^/\s]+/[^/\s]+", repository):
+        raise Refusal("pre-admission repository selector must be OWNER/REPOSITORY")
+
+    content, workspace = decode_private_snapshot(envelope)
+    rows = content.get("learningObservations", [])
+    if not isinstance(rows, list) or len(rows) > 10000:
+        raise Refusal("pre-admission learning selection exceeds the bound")
+    if content.get("learningSnapshotSchema") != "fsgg.telemetry.learn-item-detail/4":
+        raise Refusal("pre-admission assessment requires retained v4 receipt provenance")
+
+    relation_names = ("populations", "outcomes", "admissions", "expectedDispatches", "lineage",
+                      "usage", "terminals", "runtimeGaps", "ciRuns", "ciPopulationCoverage")
+    relations = {}
+    for name in relation_names:
+        values = content.get(name, [])
+        if not isinstance(values, list) or any(not isinstance(row, dict) for row in values):
+            raise Refusal("pre-admission retained relation is malformed: " + name)
+        for row in values:
+            for field in ("item_id", "original_item_id", "invocation_id", "dispatch_id",
+                          "window_id", "repository"):
+                value = row.get(field)
+                if value is not None and (not isinstance(value, str) or not value):
+                    raise Refusal(f"pre-admission retained relation {name} has malformed {field}")
+        relations[name] = values
+    if not isinstance(captures, list) or len(captures) > 1000:
+        raise Refusal("protected capture selection is malformed")
+
+    parsed = []
+    seen_identities = {}
+
+    def validate_event_fields(event: dict, context: str) -> None:
+        for field in ("identity", "kind", "itemId", "originalItemId", "invocationId",
+                      "windowId", "repository"):
+            value = event.get(field)
+            if value is not None and (not isinstance(value, str) or not value):
+                raise Refusal(f"{context} has malformed {field}")
+        roster = event.get("allocationRoster")
+        if (roster is not None and
+                (not isinstance(roster, list) or
+                 any(not isinstance(value, str) or not value for value in roster))):
+            raise Refusal(f"{context} allocation roster is malformed")
+        allocations = event.get("allocations")
+        if (allocations is not None and
+                (not isinstance(allocations, list) or
+                 any(not isinstance(allocation, dict) for allocation in allocations))):
+            raise Refusal(f"{context} allocations are malformed")
+        for allocation in allocations or []:
+            value = allocation.get("originalItemId")
+            if value is not None and (not isinstance(value, str) or not value):
+                raise Refusal(f"{context} allocation has malformed originalItemId")
+
+    for row in rows:
+        if not isinstance(row, dict):
+            raise Refusal("pre-admission learning observation is malformed")
+        try:
+            canonical = row["canonical"]
+            event = json.loads(canonical)
+        except (KeyError, TypeError, json.JSONDecodeError) as error:
+            raise Refusal("pre-admission learning observation is malformed") from error
+        if not isinstance(event, dict):
+            raise Refusal("pre-admission learning canonical value must be an object")
+        validate_event_fields(event, "pre-admission learning observation")
+        identity = event.get("identity")
+        if (not isinstance(canonical, str) or not isinstance(identity, str) or not identity or
+                row.get("content_digest") != hashlib.sha256(canonical.encode()).hexdigest()):
+            raise Refusal("pre-admission learning observation is not bound to canonical bytes")
+        prior = seen_identities.setdefault(identity, canonical)
+        if prior != canonical:
+            raise Refusal("pre-admission learning identity has conflicting retained bytes")
+        parsed.append((row, event))
+
+    def event_matches(event: dict) -> bool:
+        if event.get("itemId") == original_item or event.get("originalItemId") == original_item:
+            return True
+        if original_item in (event.get("allocationRoster") or []):
+            return True
+        return any(allocation.get("originalItemId") == original_item
+                   for allocation in event.get("allocations", [])
+                   if isinstance(allocation, dict))
+
+    def scope_disposition(value: dict) -> str:
+        retained_window = value.get("windowId", value.get("window_id"))
+        retained_repository = value.get("repository")
+        if ((retained_window is not None and retained_window != window_id) or
+                (retained_repository is not None and retained_repository != repository)):
+            return "foreign"
+        if retained_window is None or retained_repository is None:
+            return "unknown"
+        return "matched"
+
+    matching_original = [(row, event) for row, event in parsed if event_matches(event)]
+    assignments = [event for _, event in matching_original
+                   if event.get("kind") == "learn-experiment-assignment" and
+                   event.get("itemId") == original_item]
+    if len(assignments) > 1:
+        raise Refusal("pre-admission original has conflicting retained assignments")
+    if assignments:
+        assignment = assignments[0]
+        assignment_state = (
+            "assigned" if assignment.get("windowId") == window_id and
+            assignment.get("repository") in {None, repository} else "conflict"
+        )
+    else:
+        assignment_state = "unassigned"
+    selected_learning = [
+        (row, event) for row, event in matching_original
+        if event.get("kind") == "learn-experiment-assignment" or
+        scope_disposition(event) != "foreign"
+    ]
+
+    item_ids = {original_item}
+    for row in relations["populations"]:
+        if scope_disposition(row) != "foreign" and row.get("original_item_id") == original_item:
+            item = row.get("item_id")
+            if isinstance(item, str) and item:
+                item_ids.add(item)
+    invocation_ids = {
+        row.get("invocation_id") for row in relations["admissions"]
+        if (scope_disposition(row) != "foreign" and row.get("item_id") in item_ids and
+            isinstance(row.get("invocation_id"), str))
+    }
+    dispatch_ids = {
+        row.get("dispatch_id") for row in relations["expectedDispatches"]
+        if (scope_disposition(row) != "foreign" and row.get("item_id") in item_ids and
+            isinstance(row.get("dispatch_id"), str))
+    }
+
+    selected_relations = {}
+    for name, values in relations.items():
+        selected_relations[name] = [
+            row for row in values if scope_disposition(row) != "foreign" and (
+                row.get("item_id") in item_ids or
+                row.get("invocation_id") in invocation_ids or
+                row.get("dispatch_id") in dispatch_ids)
+        ]
+
+    relevant_captures = []
+    capture_scopes = {}
+    for capture in captures:
+        if not isinstance(capture, dict) or not isinstance(capture.get("events"), list):
+            raise Refusal("protected capture schema is invalid")
+        if any(not isinstance(event, dict) for event in capture["events"]):
+            raise Refusal("protected capture event is malformed")
+        for event in capture["events"]:
+            validate_event_fields(event, "protected capture event")
+            if (event.get("kind") == "runtime-native-inventory-source/1" and
+                    (not isinstance(event.get("identity"), str) or not event["identity"] or
+                     not isinstance(event.get("invocationId"), str) or not event["invocationId"])):
+                raise Refusal("protected capture native source identifiers are malformed")
+        matching_events = [event for event in capture["events"] if event_matches(event)]
+        dispositions = {scope_disposition(event) for event in matching_events}
+        if matching_events and "foreign" not in dispositions:
+            relevant_captures.append(capture)
+            capture_scopes[id(capture)] = "matched" if dispositions == {"matched"} else "unknown"
+    verified = {
+        invocation for invocation in verified_capture_invocations(content, relevant_captures)
+        if isinstance(invocation, str) and invocation
+    }
+    scoped_verified = set()
+    unknown_scope_verified = set()
+    for capture in relevant_captures:
+        sources = [event for event in capture["events"]
+                   if event.get("kind") == "runtime-native-inventory-source/1"]
+        if len(sources) == 1 and sources[0].get("invocationId") in verified:
+            target = scoped_verified if capture_scopes[id(capture)] == "matched" else unknown_scope_verified
+            target.add(sources[0]["invocationId"])
+
+    bound_learning = [{
+        "canonical": row["canonical"], "contentDigest": row["content_digest"],
+        "ingestOrder": row.get("ingest_order"), "receiptProducer": row.get("receipt_producer"),
+        "receiptStream": row.get("receipt_stream"), "receiptRole": row.get("receipt_role"),
+        "receiptGrantId": row.get("receipt_grant_id"),
+        "receiptGrantGeneration": row.get("receipt_grant_generation"),
+        "receiptKey": row.get("receipt_key"),
+        "receiptEnvelopeDigest": row.get("receipt_envelope_digest"),
+    } for row, _ in selected_learning]
+    evidence = {
+        "workspaceId": workspace, "originalItemId": original_item,
+        "windowId": window_id, "repository": repository,
+        "learning": sorted(bound_learning, key=lambda row: row["canonical"]),
+        "relations": {
+            name: sorted(values, key=lambda value: json.dumps(value, separators=(",", ":"), sort_keys=True))
+            for name, values in sorted(selected_relations.items())
+        },
+        "captures": sorted(relevant_captures,
+                           key=lambda value: json.dumps(value, separators=(",", ":"), sort_keys=True)),
+    }
+    canonical = json.dumps(evidence, separators=(",", ":"), sort_keys=True).encode()
+
+    accounting = [event for _, event in selected_learning
+                  if event.get("kind") == "learn-accounting-inventory/1" and
+                  event.get("itemId") == original_item and event.get("windowId") == window_id]
+    allocations = [event for _, event in selected_learning
+                   if event.get("kind") == "learn-shared-cost-allocation/1" and
+                   event.get("windowId") == window_id and
+                   original_item in (event.get("allocationRoster") or [])]
+    native_inventory = [event for _, event in selected_learning
+                        if event.get("kind") == "runtime-native-inventory/1"]
+    delivery_rows = [row for row in selected_relations["outcomes"]
+                     if row.get("repository") == repository]
+    missing = [
+        "operational-window-authority-unavailable",
+        "independent-prospective-dispatch-census-authority-unavailable",
+        "independent-prospective-shared-allocation-authority-unavailable",
+        "prospective-root-and-descendant-native-capability-certification-unavailable",
+        "native-delivery-identity-and-provenance-unavailable",
+    ]
+    if assignment_state == "conflict":
+        missing.append("selected-scope-conflicts-with-retained-assignment")
+    return {
+        "schema": "fsgg.learn.pre-admission-owner-assessment/1",
+        "contractId": contract["contractId"], "workspaceId": workspace,
+        "selection": {"originalItemId": original_item, "windowId": window_id,
+                      "repository": repository},
+        "assignmentState": assignment_state,
+        "evidenceDigest": hashlib.sha256(canonical).hexdigest(),
+        "selectedEvidence": {
+            "learningRecords": len(selected_learning), "accountingInventories": len(accounting),
+            "sharedAllocationRecords": len(allocations),
+            "postOutcomeNativeInventories": len(native_inventory),
+            "reconciledProtectedNativeCaptures": len(verified),
+            "nativeDeliveryRows": len(delivery_rows),
+        },
+        "predicates": {
+            "operationalWindowAuthority": {"status": "missing"},
+            "independentProspectiveDispatchCensus": {
+                "status": "missing", "retainedCandidateRecords": len(accounting)},
+            "independentProspectiveSharedAllocation": {
+                "status": "missing", "retainedCandidateRecords": len(allocations)},
+            "completeNativeUsageSupport": {
+                "status": "unknown", "value": None,
+                "postOutcomeInventories": len(native_inventory)},
+            "postOutcomeProtectedNativeCapture": {
+                "status": "established" if scoped_verified else
+                          ("scope-unknown" if unknown_scope_verified else "missing"),
+                "verifiedInvocations": sorted(scoped_verified),
+                "scopeUnknownInvocations": sorted(unknown_scope_verified)},
+            "nativeDeliveryIdentity": {
+                "status": "missing", "retainedOutcomeRows": len(delivery_rows)},
+        },
+        "operationalReady": False, "missingOwnerInputs": missing,
+        "claim": "bounded-owner-evidence-assessment-no-operational-readiness-authority",
+    }
 
 
 def analyze_private_snapshot(contract: dict, envelope: dict, *, _protected_captures: list | None = None) -> dict:
@@ -1300,6 +1561,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--protected-host-executable", type=pathlib.Path)
     parser.add_argument("--protected-host-sha256")
     parser.add_argument("--protected-host-config", type=pathlib.Path)
+    parser.add_argument("--assess-pre-admission", action="store_true")
+    parser.add_argument("--original-item")
+    parser.add_argument("--window")
+    parser.add_argument("--repository")
     parser.add_argument("--output", type=pathlib.Path)
     args = parser.parse_args(argv)
     try:
@@ -1310,7 +1575,18 @@ def main(argv: list[str] | None = None) -> int:
             if not all(protected_options) or args.observations or args.corpus:
                 raise Refusal("protected host analysis requires all installation selectors and refuses imported inputs")
             exported = acquire_protected_export(args.protected_host_executable, args.protected_host_config, args.protected_host_sha256)
-            result = analyze_private_snapshot(contract, exported["snapshot"], _protected_captures=exported["captures"])
+            assessment_selectors = [args.original_item, args.window, args.repository]
+            if args.assess_pre_admission:
+                if not all(assessment_selectors):
+                    raise Refusal("pre-admission assessment requires original, window and repository selectors")
+                result = assess_pre_admission_owner_evidence(
+                    contract, exported["snapshot"], exported["captures"],
+                    original_item=args.original_item, window_id=args.window,
+                    repository=args.repository)
+            elif any(assessment_selectors):
+                raise Refusal("pre-admission selectors require --assess-pre-admission")
+            else:
+                result = analyze_private_snapshot(contract, exported["snapshot"], _protected_captures=exported["captures"])
             rendered = json.dumps(result, indent=2, sort_keys=True) + "\n"
             if len(rendered.encode()) > 1024 * 1024:
                 raise Refusal("analysis output exceeds the bound")
@@ -1319,6 +1595,8 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 print(rendered, end="")
             return 0
+        if args.assess_pre_admission or any((args.original_item, args.window, args.repository)):
+            raise Refusal("pre-admission assessment requires direct protected host acquisition")
         observation_input = load(args.observations) if args.observations else None
         if observation_input and observation_input.get("schema") == "fsgg.telemetry.item-detail/2":
             if args.corpus is not None:
