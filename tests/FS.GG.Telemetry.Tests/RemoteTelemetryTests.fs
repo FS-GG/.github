@@ -19,6 +19,7 @@ open System.Threading
 open System.Threading.Tasks
 open Xunit
 open FS.GG.Coord
+open FS.GG.Coord.GitHub
 open FS.GG.Telemetry
 open FS.GG.Telemetry.Host
 open FS.GG.Coord.Cli
@@ -108,6 +109,15 @@ type private SlowContent(started: TaskCompletionSource<unit>) =
             do! Task.Delay(Timeout.Infinite, cancellationToken)
         }
         :> Task
+
+type private CountedSinglePageTransport(response: Transport.Response) =
+    let requests = ResizeArray<Transport.Request>()
+    member _.Requests = requests |> Seq.toArray
+    interface Transport.ISinglePageGitHubTransport with
+        member _.SendSingle request =
+            requests.Add request
+            Ok response
+    interface IDisposable with member _.Dispose() = ()
 
 module RemoteTelemetryTests =
     let scope: TelemetryReceipt.Scope =
@@ -1414,6 +1424,169 @@ exec /usr/bin/python3 "{patchedFixture}" "$@"
             Assert.Equal(2, observations.Length)
             Assert.All(observations, fun row -> Assert.Equal("native-collector", row.GetProperty("receipt_role").GetString()))
             Assert.All(observations, fun row -> Assert.Equal("collector-grant", row.GetProperty("receipt_grant_id").GetString()))
+        finally
+            if Directory.Exists root then Directory.Delete(root, true)
+
+    [<Fact>]
+    let ``native delivery command retains one primary read and exports only by explicit negotiation`` () =
+        let root = Path.Combine(Path.GetTempPath(), "native-delivery-command-" + Guid.NewGuid().ToString("N"))
+        Directory.CreateDirectory root |> ignore
+        File.SetUnixFileMode(root, UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute)
+        let privateFile name (content: string) mode =
+            let path = Path.Combine(root, name)
+            File.WriteAllText(path, content)
+            File.SetUnixFileMode(path, mode)
+            path
+        let privateDirectory name =
+            let path = Path.Combine(root, name)
+            Directory.CreateDirectory path |> ignore
+            File.SetUnixFileMode(path, UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute)
+            path
+        try
+            let store = Path.Combine(root, "store")
+            let codexHome = privateDirectory "codex-home"
+            let evidence = privateDirectory "evidence"
+            let executable = privateFile "collector" "#!/bin/sh\nexit 0\n" (UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute)
+            let secret = privateFile "secret" (String('s', 32)) (UnixFileMode.UserRead ||| UnixFileMode.UserWrite)
+            let githubToken = privateFile "github-token" "fixture-token" (UnixFileMode.UserRead ||| UnixFileMode.UserWrite)
+            let certificate = privateFile "certificate" "fixture" (UnixFileMode.UserRead ||| UnixFileMode.UserWrite)
+            let password = privateFile "password" "fixture" (UnixFileMode.UserRead ||| UnixFileMode.UserWrite)
+            TelemetryStoreApplication.initialize store TelemetryStore.ApprovedLocalDurable
+            |> Result.defaultWith (String.concat "; " >> failwith) |> ignore
+            TelemetryStoreApplication.provisionReceiptWorkspace store TelemetryStore.ApprovedLocalDurable scope.Workspace
+            |> Result.defaultWith (String.concat "; " >> failwith) |> ignore
+            TelemetryStoreApplication.enrollReceiptProducer store TelemetryStore.ApprovedLocalDurable scope
+            |> Result.defaultWith (String.concat "; " >> failwith) |> ignore
+            let sourceRef = "routine-delivery:delivery-item"
+            let candidateBatch =
+                Encoding.UTF8.GetBytes
+                    $"""{{"schema":"{TelemetryStore.BatchSchema}","ingestId":"delivery-candidate","sourceIdentity":"routine-delivery","generation":"g1","cursor":"1","eventCount":1,"events":[{{"kind":"native-item-outcome","identity":"native-delivery-candidate","itemId":"delivery-item","revision":1,"repository":"FS-GG/.github","prNumber":7,"baseRef":"main","baseSha":"dddddddddddddddddddddddddddddddddddddddd","head":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","outcome":"delivered","codeDelivery":"delivered","mergeCommit":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","occurredAt":"2026-09-29T08:00:00Z","observedAt":"2026-09-29T08:00:01Z","sourceKind":"routine-delivery","sourceRef":"{sourceRef}"}}]}}"""
+            let candidateEnvelope =
+                Encoding.UTF8.GetBytes
+                    $"""{{"schema":"{TelemetryReceipt.Schema}","workspaceId":"{scope.Workspace}","producerId":"{scope.Producer}","streamId":"{scope.Stream}","batchId":"delivery-candidate","payload":{Encoding.UTF8.GetString candidateBatch}}}"""
+            TelemetryStoreApplication.submitReceipt store TelemetryStore.ApprovedLocalDurable scope candidateEnvelope
+            |> Result.defaultWith (String.concat "; " >> failwith) |> ignore
+            TelemetryStoreApplication.drainReceipts store TelemetryStore.ApprovedLocalDurable scope.Workspace
+            |> Result.defaultWith (String.concat "; " >> failwith) |> ignore
+            let collectorScope = { scope with Producer = "delivery-collector"; Stream = "native-delivery" }
+            let collector: TelemetryReceipt.Principal =
+                { Scope = collectorScope; Role = TelemetryReceipt.NativeCollector
+                  GrantId = Some "collector-grant"; GrantGeneration = Some 1L }
+            TelemetryStoreApplication.enrollReceiptPrincipal store TelemetryStore.ApprovedLocalDurable collector
+            |> Result.defaultWith (String.concat "; " >> failwith) |> ignore
+            let config =
+                { Schema = "fsgg.telemetry.host-config/2"; ListenUrl = "https://127.0.0.1:1"
+                  CertificatePath = certificate; CertificatePasswordFile = password
+                  ServiceLockPath = Path.Combine(root, "service.lock")
+                  Stores = [| { WorkspaceId = scope.Workspace; Root = store } |]
+                  Credentials =
+                    [| { Reference = "collector"; SecretFile = secret; WorkspaceId = scope.Workspace
+                         ProducerId = collectorScope.Producer; StreamId = collectorScope.Stream
+                         Role = "native-collector"; GrantId = "collector-grant"; GrantGeneration = 1L; Revoked = false } |]
+                  BrowserPrincipals = [||]; BrowserSession = browserSession }
+            let configPath = privateFile "host.json" (JsonSerializer.Serialize config) (UnixFileMode.UserRead ||| UnixFileMode.UserWrite)
+            let installation =
+                { Schema = "fsgg.telemetry.native-collector-installation/2"; CredentialReference = "collector"
+                  ExecutablePath = executable; CodexHome = codexHome; EvidenceRoot = evidence
+                  Provider = "openai"; Model = "fixture-model"; Effort = "medium" }
+            let installNode = JsonSerializer.SerializeToNode(installation).AsObject()
+            installNode["ExecutableSha256"] <- System.Text.Json.Nodes.JsonValue.Create(
+                Convert.ToHexString(SHA256.HashData(File.ReadAllBytes executable)).ToLowerInvariant())
+            privateFile "host.json.native-collector.json" (installNode.ToJsonString()) (UnixFileMode.UserRead ||| UnixFileMode.UserWrite) |> ignore
+            let sourceInstallation =
+                { Schema = "fsgg.telemetry.native-delivery-source-installation/1"
+                  CredentialReference = "collector"; GitHubCredentialFile = githubToken
+                  AllowedRepositories = [| "FS-GG/.github" |] }
+            let sourceInstallationPath =
+                privateFile "host.json.native-delivery-source.json" (JsonSerializer.Serialize sourceInstallation)
+                    (UnixFileMode.UserRead ||| UnixFileMode.UserWrite)
+            let response: Transport.Response =
+                { Status = 200
+                  Body = """{"number":7,"state":"closed","merged":true,"head":{"sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},"base":{"ref":"main","sha":"dddddddddddddddddddddddddddddddddddddddd","repo":{"full_name":"FS-GG/.github"}},"merge_commit_sha":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","merged_at":"2026-09-29T08:00:00Z"}"""
+                  Headers = Map.empty; ETag = None; NextLink = None }
+            let transport = new CountedSinglePageTransport(response)
+            let transportFor _ = (transport :> IDisposable), (transport :> Transport.ISinglePageGitHubTransport)
+            let run args = Operations.runWithDependencies args (fun _ -> TelemetryStore.ApprovedLocalDurable) transportFor
+            let command = [| "collect-native-delivery"; "--config"; configPath; "--source-ref"; sourceRef |]
+            Configuration.load configPath
+            |> Result.bind (Configuration.loadNativeDeliverySourceInstallation configPath)
+            |> Result.defaultWith (String.concat "; " >> failwith) |> ignore
+            let resolvedCandidate =
+                TelemetryStoreApplication.resolveNativeDeliveryCandidate store TelemetryStore.ApprovedLocalDurable sourceRef
+                |> Result.defaultWith (String.concat "; " >> failwith)
+            let changedResponse =
+                { response with Body = response.Body.Replace(String('a', 40), String('c', 40), StringComparison.Ordinal) }
+            let changedTransport = new CountedSinglePageTransport(changedResponse)
+            Assert.True(
+                NativeDeliverySource.acquire (changedTransport :> Transport.ISinglePageGitHubTransport) resolvedCandidate
+                |> Result.isError)
+            Assert.Single changedTransport.Requests |> ignore
+            let closedResponse =
+                { response with
+                    Body = """{"number":7,"state":"closed","merged":false,"head":{"sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},"base":{"ref":"main","sha":"dddddddddddddddddddddddddddddddddddddddd","repo":{"full_name":"FS-GG/.github"}},"merge_commit_sha":"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee","merged_at":null}""" }
+            let closedTransport = new CountedSinglePageTransport(closedResponse)
+            let closed =
+                NativeDeliverySource.acquire (closedTransport :> Transport.ISinglePageGitHubTransport) resolvedCandidate
+                |> Result.defaultWith (String.concat "; " >> failwith)
+            Assert.Equal("closed-unmerged", closed.State)
+            Assert.Null(closed.MergeCommit |> Option.toObj)
+            let openResponse =
+                { closedResponse with Body = closedResponse.Body.Replace("\"state\":\"closed\"", "\"state\":\"open\"") }
+            let opened = NativeDeliverySource.decodeResponse resolvedCandidate openResponse.Body
+                         |> Result.defaultWith (String.concat "; " >> failwith)
+            Assert.Equal("open", opened.State)
+            Assert.Null(opened.MergeCommit |> Option.toObj)
+            for malformed in
+                [ openResponse.Body.Replace(String('e', 40), "not-a-sha", StringComparison.Ordinal)
+                  openResponse.Body.Replace("\"merged_at\":null", "\"merged_at\":\"2026-09-29T08:00:00Z\"") ] do
+                Assert.True(NativeDeliverySource.decodeResponse resolvedCandidate malformed |> Result.isError)
+            let paginatedTransport = new CountedSinglePageTransport({ response with NextLink = Some "https://example.invalid/next" })
+            Assert.True(
+                NativeDeliverySource.acquire (paginatedTransport :> Transport.ISinglePageGitHubTransport) resolvedCandidate
+                |> Result.isError)
+            File.WriteAllText(sourceInstallationPath, JsonSerializer.Serialize { sourceInstallation with AllowedRepositories = [| "FS-GG/foreign" |] })
+            Assert.Equal(3, run command)
+            Assert.Empty transport.Requests
+            File.WriteAllText(sourceInstallationPath, JsonSerializer.Serialize sourceInstallation)
+            Assert.Equal(0, run command)
+            Assert.Equal(0, run command)
+            Assert.Single transport.Requests |> ignore
+            let request = transport.Requests[0]
+            Assert.Equal("GET", request.Method)
+            Assert.Equal("repos/FS-GG/.github/pulls/7", request.Path)
+            Assert.Equal(Transport.NoBody, request.Body)
+            let export args =
+                let original = Console.Out
+                use output = new StringWriter()
+                try
+                    Console.SetOut output
+                    Assert.Equal(0, run args)
+                    output.ToString()
+                finally Console.SetOut original
+            use v1 = JsonDocument.Parse(export [| "export-learning"; "--config"; configPath |])
+            Assert.Equal("fsgg.telemetry.protected-learning-export/1", v1.RootElement.GetProperty("schema").GetString())
+            Assert.False(v1.RootElement.TryGetProperty("deliveryCaptures") |> fst)
+            use v2 = JsonDocument.Parse(export [| "export-learning"; "--config"; configPath; "--include-native-delivery" |])
+            Assert.Equal("fsgg.telemetry.protected-learning-export/2", v2.RootElement.GetProperty("schema").GetString())
+            let deliveryCaptures = v2.RootElement.GetProperty("deliveryCaptures").EnumerateArray() |> Seq.toArray
+            Assert.Single deliveryCaptures |> ignore
+            let candidateBinding = deliveryCaptures[0].GetProperty("candidateBinding")
+            Assert.Equal("generic", candidateBinding.GetProperty("receiptRole").GetString())
+            Assert.Equal(TelemetryReceipt.key scope.Producer "delivery-candidate",
+                         candidateBinding.GetProperty("receiptKey").GetString())
+            let deliveryFile = Assert.Single(Directory.GetFiles(evidence, "*.delivery-capture.json"))
+            let retainedBytes = File.ReadAllBytes deliveryFile
+            let changedCapture = System.Text.Json.Nodes.JsonNode.Parse(retainedBytes).AsObject()
+            changedCapture["responseBody"] <- System.Text.Json.Nodes.JsonValue.Create openResponse.Body
+            changedCapture["sourceDigest"] <- System.Text.Json.Nodes.JsonValue.Create(
+                Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes openResponse.Body)).ToLowerInvariant())
+            File.WriteAllText(deliveryFile, changedCapture.ToJsonString())
+            Assert.Equal(3, run [| "export-learning"; "--config"; configPath; "--include-native-delivery" |])
+            File.WriteAllBytes(deliveryFile, retainedBytes)
+            File.WriteAllText(githubToken, "changed-token")
+            Assert.Equal(3, run command)
+            Assert.Equal(3, run [| "export-learning"; "--config"; configPath; "--include-native-delivery" |])
+            Assert.Equal(1, transport.Requests.Length)
         finally
             if Directory.Exists root then Directory.Delete(root, true)
 

@@ -333,6 +333,11 @@ module TelemetryStore =
             allocationRule: string * allocationRoster: string
         | LearnSharedCostAuthority of
             nativeCostId: string * sourceInventoryId: string * sourceInvocationId: string * sourceDigest: string
+        | LearnNativeDeliverySource of
+            candidateIdentity: string * candidateSourceRef: string * candidateDigest: string *
+            repository: string * pullRequest: int64 * expectedHead: string * observedHead: string *
+            baseRef: string * baseSha: string * state: string * mergeCommit: string option *
+            mergedAt: string option * sourceDigest: string
 
     type Fact =
         {
@@ -2176,6 +2181,54 @@ module TelemetryStore =
                         (LearnSharedCostAuthority(cost, inventory, invocation, digest))
                 | Ok _, Ok _, Ok _, Ok _, Ok _ ->
                     Error $"%s{label} has unsupported source kind or digest"
+                | values -> Error(sprintf "%A" values)
+            | "learn-native-delivery-source/1" ->
+                match
+                    requiredText label node "candidateIdentity",
+                    requiredText label node "candidateSourceRef",
+                    requiredText label node "candidateDigest",
+                    requiredText label node "repository",
+                    requiredInt label node "pullRequest",
+                    requiredText label node "expectedHead",
+                    requiredText label node "observedHead",
+                    requiredText label node "baseRef",
+                    requiredText label node "baseSha",
+                    requiredText label node "state",
+                    optionalText label node "mergeCommit",
+                    optionalTimestamp label node "mergedAt",
+                    requiredText label node "sourceKind",
+                    requiredText label node "sourceDigest",
+                    requiredText label node "originalWindowBinding"
+                with
+                | Ok candidate, Ok sourceRef, Ok candidateDigest, Ok repository, Ok pullRequest,
+                  Ok expectedHead, Ok observedHead, Ok baseRef, Ok baseSha, Ok state,
+                  Ok mergeCommit, Ok mergedAt, Ok sourceKind, Ok sourceDigest, Ok binding
+                    when itemId.IsSome && pullRequest > 0L
+                        && Regex.IsMatch(candidateDigest, "^[0-9a-f]{64}$")
+                        && candidateDigest <> String('0', 64)
+                        && Regex.IsMatch(repository, "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
+                        && Regex.IsMatch(expectedHead, "^[0-9a-f]{40}$")
+                        && Regex.IsMatch(observedHead, "^[0-9a-f]{40}$")
+                        && expectedHead = observedHead
+                        && Regex.IsMatch(baseSha, "^[0-9a-f]{40}$")
+                        && mergeCommit |> Option.forall (fun value -> Regex.IsMatch(value, "^[0-9a-f]{40}$"))
+                        && sourceKind = "github-pull-request-readback"
+                        && Regex.IsMatch(sourceDigest, "^[0-9a-f]{64}$")
+                        && sourceDigest <> String('0', 64)
+                        && binding = "unverified"
+                        && (state = "merged" || state = "closed-unmerged" || state = "open")
+                        && ((state = "merged" && mergeCommit.IsSome && mergedAt.IsSome)
+                            || (state <> "merged" && mergeCommit.IsNone && mergedAt.IsNone)) ->
+                    make
+                        [ "candidateIdentity"; "candidateSourceRef"; "candidateDigest"; "repository";
+                          "pullRequest"; "expectedHead"; "observedHead"; "baseRef"; "baseSha";
+                          "state"; "mergeCommit"; "mergedAt"; "sourceKind"; "sourceDigest";
+                          "originalWindowBinding" ]
+                        (LearnNativeDeliverySource(candidate, sourceRef, candidateDigest, repository,
+                                                   pullRequest, expectedHead, observedHead, baseRef,
+                                                   baseSha, state, mergeCommit, mergedAt, sourceDigest))
+                | Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _ ->
+                    Error $"%s{label} has invalid native delivery source evidence"
                 | values -> Error(sprintf "%A" values)
             | _ -> Error $"%s{label}.kind is unsupported"
         | values -> Error(sprintf "%A" values)

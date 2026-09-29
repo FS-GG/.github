@@ -250,3 +250,48 @@ Coordinator-validated plan and WorkItem authority remain Coordination inputs at 
 are not duplicated in telemetry. No independent window authority, prospective census/allocation emitter or
 route-capability certification was found in the existing retained export, so this assessment does not make the
 production Host operationally ready or close LEARN-01.4.
+
+## Protected native delivery source readback
+
+The optional private sidecar `host.json.native-delivery-source.json` installs one bounded source adapter. Its
+closed `fsgg.telemetry.native-delivery-source-installation/1` shape names the existing native-collector credential,
+an absolute private GitHub credential file and at most 64 allowed `owner/repository` values. It is valid only with
+the qualified native collector installation and the same protected credential and grant. There is no implicit
+token, inherited CLI endpoint or caller-provided URL.
+
+`collect-native-delivery --config ABSOLUTE_PATH --source-ref RETAINED_SOURCE_REF` resolves exactly one existing
+immutable `native-item-outcome` by its retained source reference. The resolver compares the projection to the
+original canonical fact and binds its digest and first receiver provenance. An absent, ambiguous or changed
+projection refuses. The command then performs exactly one unconditional GET to the fixed GitHub API pull-request
+path for that fact's repository and PR. It accepts only the same PR number, repository and expected head and
+retains the exact response bytes, digest, base identity and open, closed-unmerged or merged state. The caller
+cannot provide response bytes, repository, PR, head, merge state, observation time or a readiness claim.
+GitHub may return a speculative test-merge SHA in `merge_commit_sha` while an open or closed PR has
+`merged=false`. That raw SHA remains only inside the retained response bytes. It is validated when present but
+never becomes protected merge identity; `mergeCommit` and `mergedAt` remain null until GitHub reports
+`merged=true`. A non-null `merged_at` on an unmerged response refuses.
+
+Before receipt submission, the Host atomically writes one
+`fsgg.telemetry.protected-native-delivery-capture/1` record under the existing private evidence root. Its identity
+derives from the exact candidate binding. Retry reuses those bytes without another GitHub read or a new observed
+time. Changed installation, token file, grant, candidate bytes, response bytes or envelope binding refuses the old
+capture. A later primary state therefore needs a new immutable candidate/source reference and produces a distinct
+history record; it cannot overwrite a failed state or upgrade a generic first admission.
+
+The new `learn-native-delivery-source/1` learning fact is admitted only through the existing native-collector
+role. It records the candidate binding, exact primary response digest and derived native state while fixing
+`originalWindowBinding` to `unverified`. GitHub's pull-request API establishes repository, PR, head, base and merge
+state only. It does not establish the experiment's original/window association, prospective census, allocation,
+native-counter capability or operational authority.
+
+The closed default `export-learning` response remains
+`fsgg.telemetry.protected-learning-export/1`; it continues to emit the same three members and can carry the new
+learning fact in its existing snapshot without exposing delivery capture bytes. Explicit
+`--include-native-delivery` negotiation emits `fsgg.telemetry.protected-learning-export/2` with bounded
+`deliveryCaptures`. Export revalidates current installation, grant, exact candidate binding, source digest and
+envelope before releasing each capture. The analyzer requests v2 only with `--include-native-delivery`, joins the
+capture to the exact first admitted source fact and reports
+`native-state-verified/original-window-binding-unverified`. Imported self-hashed records, stale grants, source or
+candidate drift and malformed response bytes refuse. This evidence removes only the missing native delivery state
+and provenance input; `operationalReady` remains false because independent original/window binding and the other
+owner inputs above are still absent.

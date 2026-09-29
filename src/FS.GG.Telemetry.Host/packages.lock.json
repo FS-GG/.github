@@ -140,6 +140,13 @@
           "FSharp.Core": "[10.1.401, )"
         }
       },
+      "fs.gg.coord.github": {
+        "type": "Project",
+        "dependencies": {
+          "FS.GG.Coord.Core": "[1.0.0, )",
+          "FSharp.Core": "[10.1.401, )"
+        }
+      },
       "fs.gg.telemetry.contracts": {
         "type": "Project",
         "dependencies": {

@@ -233,7 +233,8 @@ def validate_observations(corpus: dict, observations: dict) -> dict:
     }
 
 
-def acquire_protected_export(executable: pathlib.Path, config: pathlib.Path, executable_sha256: str) -> dict:
+def acquire_protected_export(executable: pathlib.Path, config: pathlib.Path, executable_sha256: str,
+                             *, include_native_delivery: bool = False) -> dict:
     """Read directly from the operator-selected installed Host, never from an imported attestation.
 
     The protected host operator is the trust anchor. Enrolled remote producers cannot
@@ -249,7 +250,10 @@ def acquire_protected_export(executable: pathlib.Path, config: pathlib.Path, exe
     if (not re.fullmatch(r"[0-9a-f]{64}", executable_sha256) or
             hashlib.sha256(executable.read_bytes()).hexdigest() != executable_sha256):
         raise Refusal("protected host executable differs from the operator pin")
-    process = subprocess.Popen([str(executable), "export-learning", "--config", str(config)],
+    command = [str(executable), "export-learning", "--config", str(config)]
+    if include_native_delivery:
+        command.append("--include-native-delivery")
+    process = subprocess.Popen(command,
                                stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                env={"PATH": os.defpath, "LANG": "C.UTF-8"}, start_new_session=True)
     buffers = {"stdout": bytearray(), "stderr": bytearray()}
@@ -279,11 +283,119 @@ def acquire_protected_export(executable: pathlib.Path, config: pathlib.Path, exe
         process.stdout.close()
         process.stderr.close()
     exported = json.loads(buffers["stdout"])
-    if (not isinstance(exported, dict) or set(exported) != {"schema", "snapshot", "captures"} or
-            exported["schema"] != "fsgg.telemetry.protected-learning-export/1" or
+    expected = ({"schema", "snapshot", "captures", "deliveryCaptures"}
+                if include_native_delivery else {"schema", "snapshot", "captures"})
+    schema = ("fsgg.telemetry.protected-learning-export/2" if include_native_delivery
+              else "fsgg.telemetry.protected-learning-export/1")
+    if (not isinstance(exported, dict) or set(exported) != expected or
+            exported["schema"] != schema or
             not isinstance(exported["captures"], list) or len(exported["captures"]) > 1000):
         raise Refusal("protected host export schema is invalid")
+    if include_native_delivery and (not isinstance(exported["deliveryCaptures"], list) or
+                                    len(exported["deliveryCaptures"]) > 1000):
+        raise Refusal("protected host delivery export schema is invalid")
     return exported
+
+
+def verified_native_delivery_sources(content: dict, captures: list) -> list[dict]:
+    """Verify protected PR readback against its exact source fact and first admission."""
+    rows = {json.loads(row["canonical"])["identity"]: row
+            for row in content.get("learningObservations", [])}
+    verified = []
+    identities = set()
+    for capture in captures:
+        required = {"receiptKey", "envelopeDigest", "producer", "stream", "grantId",
+                    "grantGeneration", "candidateBinding", "candidateDigest", "responseBody",
+                    "sourceDigest", "events"}
+        if not isinstance(capture, dict) or set(capture) != required:
+            raise Refusal("protected native delivery capture schema is invalid")
+        events = capture["events"]
+        if not isinstance(events, list) or len(events) != 1 or not isinstance(events[0], dict):
+            raise Refusal("protected native delivery capture requires one source event")
+        event = events[0]
+        if event.get("kind") != "learn-native-delivery-source/1":
+            raise Refusal("protected native delivery capture event kind is invalid")
+        identity = event.get("identity")
+        if not isinstance(identity, str) or not identity or identity in identities:
+            raise Refusal("protected native delivery source identity is invalid or duplicated")
+        identities.add(identity)
+        if (not isinstance(capture.get("responseBody"), str) or
+                not isinstance(capture.get("sourceDigest"), str) or
+                not re.fullmatch(r"[0-9a-f]{64}", capture["sourceDigest"]) or
+                not isinstance(capture.get("candidateDigest"), str) or
+                not re.fullmatch(r"[0-9a-f]{64}", capture["candidateDigest"])):
+            raise Refusal("protected native delivery capture digests are malformed")
+        row = rows.get(identity)
+        if row is None:
+            continue
+        provenance = tuple(row.get(name) for name in (
+            "receipt_producer", "receipt_stream", "receipt_role", "receipt_grant_id",
+            "receipt_grant_generation", "receipt_key", "receipt_envelope_digest"))
+        if (json.loads(row["canonical"]) != event or provenance !=
+                (capture["producer"], capture["stream"], "native-collector", capture["grantId"],
+                 capture["grantGeneration"], capture["receiptKey"], capture["envelopeDigest"])):
+            raise Refusal("protected native delivery capture differs from first source admission")
+        binding = capture["candidateBinding"]
+        if not isinstance(binding, dict) or set(binding) != {
+                "schema", "canonicalFact", "factDigest", "receiptRole", "receiptGrantId",
+                "receiptGrantGeneration", "receiptKey", "receiptEnvelopeDigest"}:
+            raise Refusal("protected native delivery candidate binding is malformed")
+        canonical_binding = json.dumps(binding, separators=(",", ":"), sort_keys=True)
+        if (binding.get("schema") != "fsgg.telemetry.native-delivery-candidate-binding/1" or
+                hashlib.sha256(canonical_binding.encode()).hexdigest() != capture["candidateDigest"] or
+                event.get("candidateDigest") != capture["candidateDigest"]):
+            raise Refusal("protected native delivery candidate digest differs")
+        canonical_fact = binding.get("canonicalFact")
+        if (not isinstance(canonical_fact, str) or
+                hashlib.sha256(canonical_fact.encode()).hexdigest() != binding.get("factDigest")):
+            raise Refusal("protected native delivery candidate fact digest differs")
+        try:
+            candidate = json.loads(canonical_fact)
+            response = json.loads(capture["responseBody"])
+        except (TypeError, KeyError, json.JSONDecodeError) as error:
+            raise Refusal("protected native delivery source bytes are malformed") from error
+        if not isinstance(candidate, dict) or not isinstance(response, dict):
+            raise Refusal("protected native delivery source bytes are malformed")
+        head = response.get("head")
+        base = response.get("base")
+        base_repository = base.get("repo") if isinstance(base, dict) else None
+        if (not isinstance(head, dict) or not isinstance(base, dict) or
+                not isinstance(base_repository, dict) or
+                hashlib.sha256(capture["responseBody"].encode()).hexdigest() != capture["sourceDigest"] or
+                capture["sourceDigest"] != event.get("sourceDigest") or
+                candidate.get("identity") != event.get("candidateIdentity") or
+                candidate.get("sourceRef") != event.get("candidateSourceRef") or
+                candidate.get("repository") != event.get("repository") or
+                candidate.get("prNumber") != event.get("pullRequest") or
+                candidate.get("head") != event.get("expectedHead") or
+                response.get("number") != event.get("pullRequest") or
+                head.get("sha") != event.get("observedHead") or
+                base.get("ref") != event.get("baseRef") or base.get("sha") != event.get("baseSha") or
+                base_repository.get("full_name") != event.get("repository") or
+                event.get("originalWindowBinding") != "unverified"):
+            raise Refusal("protected native delivery source disagrees with candidate or response")
+        raw_state = response.get("state")
+        merged_value = response.get("merged")
+        raw_merge = response.get("merge_commit_sha")
+        merged_at = response.get("merged_at")
+        if (raw_state not in {"open", "closed"} or not isinstance(merged_value, bool) or
+                (raw_merge is not None and
+                 (not isinstance(raw_merge, str) or not re.fullmatch(r"[0-9a-f]{40}", raw_merge)))):
+            raise Refusal("protected native delivery primary state is malformed")
+        if merged_value:
+            if raw_state != "closed" or raw_merge is None or not isinstance(merged_at, str) or not merged_at:
+                raise Refusal("protected native delivery merged identity is incomplete")
+            state, merge_commit, protected_merged_at = "merged", raw_merge, merged_at
+        else:
+            if merged_at is not None:
+                raise Refusal("protected native delivery unmerged response carries merged time")
+            state = "closed-unmerged" if raw_state == "closed" else "open"
+            merge_commit, protected_merged_at = None, None
+        if (state != event.get("state") or merge_commit != event.get("mergeCommit") or
+                protected_merged_at != event.get("mergedAt")):
+            raise Refusal("protected native delivery state differs from primary response")
+        verified.append(event)
+    return verified
 
 
 def verified_capture_invocations(content: dict, captures: list) -> set[str]:
@@ -341,7 +453,7 @@ def verified_capture_invocations(content: dict, captures: list) -> set[str]:
 
 def assess_pre_admission_owner_evidence(
         contract: dict, envelope: dict, captures: list, *, original_item: str,
-        window_id: str, repository: str) -> dict:
+        window_id: str, repository: str, delivery_captures: list | None = None) -> dict:
     """Inventory retained evidence for admission without asserting operational readiness.
 
     This deliberately does not call the post-outcome analyzer: an original that has not
@@ -511,6 +623,10 @@ def assess_pre_admission_owner_evidence(
         invocation for invocation in verified_capture_invocations(content, relevant_captures)
         if isinstance(invocation, str) and invocation
     }
+    delivery_sources = verified_native_delivery_sources(content, delivery_captures or [])
+    selected_delivery_sources = [event for event in delivery_sources
+                                 if event.get("itemId") == original_item and
+                                 event.get("repository") == repository]
     scoped_verified = set()
     unknown_scope_verified = set()
     for capture in relevant_captures:
@@ -539,6 +655,11 @@ def assess_pre_admission_owner_evidence(
         },
         "captures": sorted(relevant_captures,
                            key=lambda value: json.dumps(value, separators=(",", ":"), sort_keys=True)),
+        "deliveryCaptures": sorted(
+            [capture for capture in (delivery_captures or [])
+             if any(event.get("identity") in {source["identity"] for source in selected_delivery_sources}
+                    for event in capture.get("events", []) if isinstance(event, dict))],
+            key=lambda value: json.dumps(value, separators=(",", ":"), sort_keys=True)),
     }
     canonical = json.dumps(evidence, separators=(",", ":"), sort_keys=True).encode()
 
@@ -560,6 +681,9 @@ def assess_pre_admission_owner_evidence(
         "prospective-root-and-descendant-native-capability-certification-unavailable",
         "native-delivery-identity-and-provenance-unavailable",
     ]
+    if selected_delivery_sources:
+        missing.remove("native-delivery-identity-and-provenance-unavailable")
+        missing.append("native-delivery-original-window-binding-unavailable")
     if assignment_state == "conflict":
         missing.append("selected-scope-conflicts-with-retained-assignment")
     return {
@@ -591,7 +715,10 @@ def assess_pre_admission_owner_evidence(
                 "verifiedInvocations": sorted(scoped_verified),
                 "scopeUnknownInvocations": sorted(unknown_scope_verified)},
             "nativeDeliveryIdentity": {
-                "status": "missing", "retainedOutcomeRows": len(delivery_rows)},
+                "status": ("native-state-verified/original-window-binding-unverified"
+                           if selected_delivery_sources else "missing"),
+                "states": sorted({event["state"] for event in selected_delivery_sources}),
+                "retainedOutcomeRows": len(delivery_rows)},
         },
         "operationalReady": False, "missingOwnerInputs": missing,
         "claim": "bounded-owner-evidence-assessment-no-operational-readiness-authority",
@@ -612,7 +739,8 @@ def analyze_private_snapshot(contract: dict, envelope: dict, *, _protected_captu
     supported_kinds = observation_kinds | {
         "learn-accounting-inventory/1", "runtime-native-inventory/1",
         "runtime-native-inventory-source/1", "learn-shared-cost/1",
-        "learn-shared-cost-allocation/1", "learn-shared-cost-authority/1"
+        "learn-shared-cost-allocation/1", "learn-shared-cost-authority/1",
+        "learn-native-delivery-source/1"
     }
     unknown_kinds = {event.get("kind") for event in events} - supported_kinds
     if unknown_kinds:
@@ -1565,6 +1693,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--original-item")
     parser.add_argument("--window")
     parser.add_argument("--repository")
+    parser.add_argument("--include-native-delivery", action="store_true")
     parser.add_argument("--output", type=pathlib.Path)
     args = parser.parse_args(argv)
     try:
@@ -1574,7 +1703,11 @@ def main(argv: list[str] | None = None) -> int:
         if any(protected_options):
             if not all(protected_options) or args.observations or args.corpus:
                 raise Refusal("protected host analysis requires all installation selectors and refuses imported inputs")
-            exported = acquire_protected_export(args.protected_host_executable, args.protected_host_config, args.protected_host_sha256)
+            if args.include_native_delivery and not args.assess_pre_admission:
+                raise Refusal("native delivery export is only available for pre-admission assessment")
+            exported = acquire_protected_export(
+                args.protected_host_executable, args.protected_host_config,
+                args.protected_host_sha256, include_native_delivery=args.include_native_delivery)
             assessment_selectors = [args.original_item, args.window, args.repository]
             if args.assess_pre_admission:
                 if not all(assessment_selectors):
@@ -1582,7 +1715,8 @@ def main(argv: list[str] | None = None) -> int:
                 result = assess_pre_admission_owner_evidence(
                     contract, exported["snapshot"], exported["captures"],
                     original_item=args.original_item, window_id=args.window,
-                    repository=args.repository)
+                    repository=args.repository,
+                    delivery_captures=exported.get("deliveryCaptures"))
             elif any(assessment_selectors):
                 raise Refusal("pre-admission selectors require --assess-pre-admission")
             else:
@@ -1595,7 +1729,7 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 print(rendered, end="")
             return 0
-        if args.assess_pre_admission or any((args.original_item, args.window, args.repository)):
+        if args.assess_pre_admission or args.include_native_delivery or any((args.original_item, args.window, args.repository)):
             raise Refusal("pre-admission assessment requires direct protected host acquisition")
         observation_input = load(args.observations) if args.observations else None
         if observation_input and observation_input.get("schema") == "fsgg.telemetry.item-detail/2":

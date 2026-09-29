@@ -72,6 +72,14 @@ type NativeCollectorInstallationConfig =
         Effort: string
     }
 
+type NativeDeliverySourceInstallationConfig =
+    {
+        Schema: string
+        CredentialReference: string
+        GitHubCredentialFile: string
+        AllowedRepositories: string array
+    }
+
 module Configuration =
     // Same Linux-x64 stat layout as WorkspaceTelemetryApplication's custody check.
     module private NativeOwner =
@@ -577,6 +585,44 @@ module Configuration =
                             Ok(installation, principal)
         with _ ->
             Error [ "native collector installation is invalid" ]
+
+    let loadNativeDeliverySourceInstallation (hostConfigPath: string) (hostConfig: HostConfig) =
+        let sourcePath = hostConfigPath + ".native-delivery-source.json"
+        try
+            match privateRegularFile sourcePath, loadNativeCollectorInstallation hostConfigPath hostConfig with
+            | Error error, _ -> Error [ error ]
+            | _, Error errors -> Error errors
+            | Ok(), Ok(native, principal) ->
+                let bytes = File.ReadAllBytes sourcePath
+                if bytes.Length > 16384 then Error [ "native delivery source installation is oversized" ]
+                else
+                    use document = JsonDocument.Parse bytes
+                    let root = document.RootElement
+                    let names = root.EnumerateObject() |> Seq.map _.Name |> Seq.toArray
+                    let expected = set [ "Schema"; "CredentialReference"; "GitHubCredentialFile"; "AllowedRepositories" ]
+                    if root.ValueKind <> JsonValueKind.Object
+                       || names.Length <> expected.Count
+                       || Set.ofArray names <> expected
+                       || Array.distinct names |> Array.length <> names.Length then
+                        Error [ "native delivery source installation schema is invalid" ]
+                    else
+                        let options = JsonSerializerOptions(PropertyNameCaseInsensitive = false,
+                                                            UnmappedMemberHandling = Serialization.JsonUnmappedMemberHandling.Disallow)
+                        let source = JsonSerializer.Deserialize<NativeDeliverySourceInstallationConfig>(bytes, options)
+                        let repository value =
+                            not (String.IsNullOrWhiteSpace value) && value.Length <= 256
+                            && System.Text.RegularExpressions.Regex.IsMatch(value, "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
+                        match privateRegularFile source.GitHubCredentialFile with
+                        | Error _ -> Error [ "native delivery GitHub credential is unavailable" ]
+                        | Ok() when source.Schema <> "fsgg.telemetry.native-delivery-source-installation/1"
+                                   || source.CredentialReference <> native.CredentialReference
+                                   || source.AllowedRepositories.Length = 0
+                                   || source.AllowedRepositories.Length > 64
+                                   || source.AllowedRepositories |> Array.exists (repository >> not)
+                                   || source.AllowedRepositories |> Array.distinct |> Array.length <> source.AllowedRepositories.Length ->
+                            Error [ "native delivery source installation is invalid" ]
+                        | Ok() -> Ok(source, native, principal)
+        with _ -> Error [ "native delivery source installation is invalid" ]
 
     let browserKeyHashes (config: HostConfig) =
         config.BrowserPrincipals

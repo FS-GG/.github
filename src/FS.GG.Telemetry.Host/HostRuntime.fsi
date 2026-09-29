@@ -63,6 +63,14 @@ type NativeCollectorInstallationConfig =
         Effort: string
     }
 
+type NativeDeliverySourceInstallationConfig =
+    {
+        Schema: string
+        CredentialReference: string
+        GitHubCredentialFile: string
+        AllowedRepositories: string array
+    }
+
 module Configuration =
     val validate: HostConfig -> Result<HostConfig, string list>
     val load: string -> Result<HostConfig, string list>
@@ -71,6 +79,10 @@ module Configuration =
         hostConfigPath: string ->
         hostConfig: HostConfig ->
             Result<NativeCollectorInstallationConfig * TelemetryReceipt.Principal, string list>
+    val loadNativeDeliverySourceInstallation:
+        hostConfigPath: string ->
+        hostConfig: HostConfig ->
+            Result<NativeDeliverySourceInstallationConfig * NativeCollectorInstallationConfig * TelemetryReceipt.Principal, string list>
     val browserKeyHashes: HostConfig -> Map<string, byte array * Set<string> * bool>
 
 type Reply = { Status: int; Body: byte array }

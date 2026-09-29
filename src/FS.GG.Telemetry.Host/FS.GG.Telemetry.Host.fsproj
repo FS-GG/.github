@@ -35,6 +35,8 @@
     <Compile Include="BrowserSecurity.fs" />
     <Compile Include="HostRuntime.fsi" />
     <Compile Include="HostRuntime.fs" />
+    <Compile Include="NativeDeliverySource.fsi" />
+    <Compile Include="NativeDeliverySource.fs" />
     <Compile Include="BrowserEndpoints.fsi" />
     <Compile Include="BrowserEndpoints.fs" />
     <Compile Include="Program.fsi" />
@@ -45,6 +47,7 @@
     <ProjectReference Include="../FS.GG.Telemetry.Contracts/FS.GG.Telemetry.Contracts.fsproj" />
     <ProjectReference Include="../FS.GG.Telemetry.Dashboard/FS.GG.Telemetry.Dashboard.fsproj" />
     <ProjectReference Include="../FS.GG.Telemetry.Store/FS.GG.Telemetry.Store.fsproj" />
+    <ProjectReference Include="../FS.GG.Coord.GitHub/FS.GG.Coord.GitHub.fsproj" />
     <PackageReference Include="Akka" />
     <PackageReference Include="Akka.FSharp" />
     <PackageReference Include="FSharp.Core" />
