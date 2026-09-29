@@ -61,6 +61,14 @@ The earlier callable, GS2-09 and OperatingV1 evidence remains valid at its recor
 forms the active dependency chain. No clean-start step may relabel that evidence as migration completion,
 `VerifiedV2`, or a human-run receipt.
 
+The accepted 2026-09-29 amendment separates the selected profile's functional result from historical
+economics. The bounded profile covers native protected ordinary-source delivery, actual ordinary V2
+settlement, unchanged normal replay, truthful observer-loss behavior and C0–C3 evidence for `.github`,
+Audio, Rendering, Net, Governance, Game, SDD, Templates and Coordination. Its five-gate evidence is joined
+in the [R5 functional V2 acceptance report](reports/2026-09-29-r5-functional-v2-acceptance.md). Functional
+closure does not assert installed collection, complete usage, every operation class, fleet-wide adoption or
+an efficiency benefit. Historical economics remains insufficient.
+
 On **2026-09-28**, the shared authority advanced by one fast-forward append to generation 2 `OpenV2`
 at [commit `26d1882`](https://github.com/FS-GG/FS.GG.Coordination.Authority/commit/26d1882af9293b264df17a1fa98515e108313fe5).
 The exact original cutover-ref writer rule was restored and independently read back. The conflicting
@@ -291,7 +299,7 @@ Broader portfolio proposals remain visible in section 15 without becoming hidden
 
 The predecessor is the [R0–R5 simplification programme](2026-09-07-074251-radical-development-bureaucracy-reduction-design-and-roadmap.md).
 This successor takes its **adopted policy, working current-route delivery, applicable release/recovery
-behavior, measured incumbent results, and published receiver contract** as inputs. R0–R4 implementation
+behavior, truthful incumbent observation, and published receiver contract** as inputs. R0–R4 implementation
 is predecessor work, not the first phase of this roadmap.
 
 There is a necessary dependency distinction: R5 includes an actual ordinary-v2 journey and its measured
@@ -308,7 +316,7 @@ The handoff consists of existing source references, not a new report family:
 | Adopted routine policy and trust boundary | Eligible work can use one owner and one PR with selected technical checks; protected operations retain their authority | Bind that exact policy to v2 semantics and installed receiver behavior |
 | Native code and operation outcomes | Code delivery, publication pending, verified publication and unknown outcome are distinguishable | Preserve those meanings through v2 journals, adapters and recovery |
 | Working observation path | Original events and usage can be joined; incomplete coverage is visible; observer loss does not block delivery | Independently measure ordinary-v2 use and any later controller |
-| Current-route comparison | R4's declared cohort and follow-up requirements are satisfied for the completed handoff claim; missing results remain pending predecessor work | Do not reuse the incumbent score as v2 performance evidence |
+| Current-route observation | R4's effective supported route and repair follow-up are functionally qualified; the declared comparison remains insufficient where usage or cost evidence is missing | Do not reuse the incumbent observation as v2 performance evidence or claim an efficiency benefit |
 | Removed obligations and retained predicates | The owning policy says what was deleted, made advisory, moved asynchronous or retained blocking | No generated guidance or v2 caller silently restores removed ceremony |
 | Receiver ownership | Policy publisher, runtime owner and installation families are identified | Qualify clean installs, upgrades and retained protected paths |
 
@@ -726,6 +734,12 @@ needed; no per-item agent writes a measurement certificate. Aggregate public cou
 private conversations, credentials or raw usage receipts. Retention and access should fit the existing
 private evidence contract and cohort follow-up period.
 
+Functional acceptance is separate from measurement qualification. For the selected clean-start
+ordinary-source profile, typed missing, corrupt, unsupported or unreachable observation can leave otherwise
+valid native delivery intact while measurement remains unknown or not evaluated. Observation never supplies
+source, check or protected-effect authority. The R2 functional gate can therefore pass while the economics
+qualification remains insufficient.
+
 Use separate populations for the migration workflow, incumbent routine development, ordinary v2, and each
 optional controller experiment. Initial v2 R5 measurement uses the predecessor's common definitions:
 productive work P, process overhead O, and quantified unknown usage U. Charge planning, semantic review,
@@ -789,6 +803,12 @@ The independent baseline-ten plus candidate-ten comparison, at least 95% usage c
 efficiency or adoption, change operation authority, or satisfy Q10's 15-item gate. Missing usage remains
 unknown; no counter or collector installation is inferred. Historical schema-1 snapshots retain the
 30-day rule, and the current schema-2 cohort record applies this completed-item policy.
+
+The cutoff accounting covers all 15 enrolled originals through `2026-09-29T07:15:35Z`, including the 12
+delivered originals and pending SC2C-01.4e, BARC-01.5 and LEARN-01.4. Completing repair observation does not
+mark a pending original delivered. Usage and repair cost remain missing and provider population remains
+unknown. The evaluator removes only `routine-completed-item-repair-accounting-pending`; its remaining
+insufficiency reasons continue to block an efficiency claim.
 
 Missing efficiency evidence blocks an efficiency claim and applicable controller promotion. It does not
 independently block a valid routine merge or add a numerical gate to OpenV2/OperatingV2. Existing Q10 gates
@@ -1535,7 +1555,7 @@ Entry conditions constrain the dependent execution; earlier read-only planning m
 | Part Astra plans | Stage and bounded outcome | Accountable planning owner and entry | Feature subroadmap |
 |---|---|---|---|
 | **Audio explicit ordinary V2 adoption — C3-AUDIO-01** | C3: publish immutable Coordination CLI 0.1.3, enroll dedicated Audio credentials, activate the receiver separately, then observe one settlement and one normal rerun | Coordination, `.github` and Audio owners; source profiles [Coordination #865](https://github.com/FS-GG/FS.GG.Coordination/pull/865), [`.github` #3919](https://github.com/FS-GG/.github/pull/3919), [Audio #326](https://github.com/FS-GG/FS.GG.Audio/pull/326), [CLI 0.1.3](https://github.com/FS-GG/FS.GG.Coordination/releases/tag/v0.1.3), dedicated custody and activated Audio main are delivered. [Run `36413290713`](https://github.com/FS-GG/FS.GG.Audio/actions/runs/36413290713) settled once and its normal rerun was already complete; the Authority journal head remained unchanged. | [Audio receiver plan on `main`](https://github.com/FS-GG/FS.GG.Audio/blob/main/docs/roadmaps/v2-ordinary-adoption.md). Selected Audio adoption complete; no fleet-wide result or V1 migration is claimed. |
-| **Simplified baseline and v2 policy binding** | V0: bind adopted routine policy, actual enforcement/receiver wiring and R5 population; keep current merge-writer availability explicit | `.github`, Coordination, Governance and receivers; source qualification can proceed while the existing operation owner restores admitted effect readiness | [R0–R5 source plan](2026-09-07-074251-radical-development-bureaucracy-reduction-design-and-roadmap.md), [UTEL correctness](roadmaps/utel-01-telemetry-correctness.md), [local store](roadmaps/utel-local-telemetry-store.md), [operational completeness](roadmaps/utel-operational-completeness.md), [dashboard](roadmaps/utel-telemetry-dashboard.md), [release successor](roadmaps/utel-release-successor.md), [Host 0.2.0 successor](roadmaps/utel-host-release-020.md) and [current audit](reports/2026-09-24-v2-roadmap-code-audit.md). Reuse delivered source; verify the selected published/installed versions and prospective coverage without inferring complete native usage or efficiency |
+| **Simplified baseline and v2 policy binding** | V0: accepted selected-profile functional V2; bind adopted routine policy, actual enforcement/receiver wiring and the frozen 15-original R5 population; keep economics separate | `.github`, Coordination, Governance and receivers; the nine selected receivers are accepted at C0–C3, while future operations/defaults retain their own authority | [R0–R5 source plan](2026-09-07-074251-radical-development-bureaucracy-reduction-design-and-roadmap.md), [functional acceptance report](reports/2026-09-29-r5-functional-v2-acceptance.md), [UTEL correctness](roadmaps/utel-01-telemetry-correctness.md), [local store](roadmaps/utel-local-telemetry-store.md), [operational completeness](roadmaps/utel-operational-completeness.md), [dashboard](roadmaps/utel-telemetry-dashboard.md), [release successor](roadmaps/utel-release-successor.md), [Host 0.2.0 successor](roadmaps/utel-host-release-020.md) and [current audit](reports/2026-09-24-v2-roadmap-code-audit.md). Functional acceptance claims no complete native usage or efficiency benefit |
 | **Skill Python to F# conversion — SKILL-FS-01** | Independent source and receiver track: replace the four current distinct Python implementation files across both tracked skill roots with packaged F# commands; preserve telemetry and preflight refusal behavior, then remove Python skill executables | `.github` tool and skill owner, with selected receivers; can proceed beside V2 source work, while the skill flip and deletion require coherent publication and installed parity | [SKILL-FS-01 subroadmap](roadmaps/skill-python-fsharp-conversion.md). Complete at the selected public SDD 2.0.3 clean and retained receiver boundary: coherent 0.94.0 supplies the replacement callers and the retired implementations are absent. Wider materializers use their own adoption path; no removed routine obligation is reopened |
 | **Event and queue qualification** | V1, GS2-07.6–07.7: qualify the queue and measure narrow reconciliation, coalescing and audit repair | Coordination; preserve accepted native units and resume only unfinished scope | [GS2-07.7 event-benefit subroadmap](https://github.com/FS-GG/FS.GG.Coordination/blob/main/docs/roadmaps/gs2-07-7-event-benefit.md), scoped to 07.7; native acceptance is recorded in [PR #329](https://github.com/FS-GG/FS.GG.Coordination/pull/329) |
 | **Runtime operations qualification** | V1 / GS2-07.8: accepted selected no-host operation/audit scope | Coordination; preserve the accepted disposition, qualify only newly included runtime behavior | [GS2-07.8 owning plan](https://github.com/FS-GG/FS.GG.Coordination/blob/e96f4821a40c595ebe960e6cf126ace748852f30/docs/roadmaps/gs2-07-8-runtime-operations.md) and its accepted receipt |
@@ -1742,11 +1762,12 @@ still settle. Stopping a prototype or leaving a class unsupported is a valid out
 
 | Claim | What must be true |
 |---|---|
-| Current-route simplification handed over | The predecessor's applicable current-route outcomes and comparison are complete, with R5 explicitly distinguished |
+| Current-route simplification handed over | The predecessor's functional current-route outcomes and truthful observation are complete; historical comparison remains explicitly insufficient |
 | V2 candidate qualified | Exact candidate and installed receiver evidence meet the accepted GS2 contract, including any profile actually claimed |
 | V2 opened | Authoritative OpenV2 and permanent v1 writer fence; normal v2 classes enabled under their actual authority |
 | Migration complete | Existing Q10, contraction, clean-install/old-client proofs and OperatingV2; no unowned required follow-up |
-| Simplification programme complete | R5's actual ordinary-v2 journeys, clean/upgrade adoption and independently sufficient cohort/completed-item-cutoff evidence |
+| Selected-profile functional V2 accepted | R2 observer-loss behavior, R4 effective routine route, all-15 repair accounting and native settlement/replay/Authority evidence pass for the nine selected receivers |
+| Simplification efficiency benefit established | Independently sufficient comparable usage, population, cost and delivery evidence passes the declared economics predicates; the current verdict is insufficient and no benefit is claimed |
 | Execution experiment successful | A measured residual need is improved at acceptable total cost; all applicable correctness/budget/recovery claims pass |
 | OR/PB capability adopted | One exact operation class and policy has authorized canary, receiver/fallback qualification and an explicit default decision |
 

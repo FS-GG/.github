@@ -66,6 +66,29 @@ receiver explicitly promises those capabilities. Other existing installations re
 treatment. Long-running efficiency readings and claims remain separate from repository adoption; missing
 measurements remain unknown.
 
+## R2/R4/R5 functional acceptance clarification — 2026-09-29
+
+The accountable programme owner accepts a bounded functional V2 profile independently from the historical
+economics claim. The selected profile consists of native protected ordinary-source delivery; actual ordinary
+post-merge V2 settlement; the unchanged normal replay; truthful, nonblocking observation when usage is
+unavailable; and C0–C3 acceptance for `.github`, Audio, Rendering, Net, Governance, Game, SDD, Templates and
+Coordination. It does not assert support for every repository, provider, operation class, workspace default
+or telemetry deployment. An unsupported PR-less operation is outside this selected source/settlement profile.
+
+Functional closure requires all five owning gates: this contract amendment; bounded R2 qualification of
+missing, corrupt, unsupported and unreachable observation; an R4 audit showing that effective supported
+callers implement the routine route and ADR-0084 qualification; repair accounting for all 15 enrolled R5
+originals through the frozen `2026-09-29T07:15:35Z` cutoff; and the existing native settlement, replay and
+Authority readback for all nine selected receivers. Observation loss cannot supply delivery authority, and
+missing usage remains unknown rather than zero. Exact-head checks, current required checks, protected-effect
+authority, replay, loss, duplication and collision safeguards keep their existing meaning.
+
+The two final results are reported separately: **functional V2 accepted for the selected profile; historical
+economics insufficient and no efficiency benefit claimed**. R2 natural scheduling and joined usage, plus
+R4/R5 comparative cost coverage, remain unqualified claim dimensions rather than prerequisites for this
+bounded functional result. Existing severe-incident and rollback stop rules remain effective. The unfinished
+GS2-09–GS2-14 sequence stays cancelled or superseded for the clean-start route and is not marked complete.
+
 ## Release D.5 workspace default under the clean-start epoch
 
 The accountable programme owner selects `typed-sdd` as the later omitted workspace lifecycle for the
