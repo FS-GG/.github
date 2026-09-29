@@ -75,6 +75,33 @@ in the [R5 functional V2 acceptance report](reports/2026-09-29-r5-functional-v2-
 closure does not assert installed collection, complete usage, every operation class, fleet-wide adoption or
 an efficiency benefit. Historical economics remains insufficient.
 
+### Full V2 acceptance amendment — 2026-09-29
+
+The user removed authentic-owner and human-participation gates from full V2 acceptance.
+This instruction supersedes earlier full-acceptance dependencies on the Learning installed
+experiment and FourD player study, including requirements recorded in linked owning roadmaps.
+
+- **Owner inputs:** no fresh owner attestation, provision of protected custody/configuration,
+  independent window authority, prospective census/shared-cost records, per-route owner capability
+  certification or live experiment enrollment is required for full V2 acceptance. LEARN-01.4's
+  remaining installed experiment and W6 composition are follow-up work. Missing inputs remain
+  unknown; source and diagnostic qualification do not assert installed operational readiness.
+- **Human participation:** FourD's unfamiliar-player recruitment, six consenting participants,
+  four completed paired comparisons and participant-derived design selection are follow-up work.
+  Full V2 acceptance uses the automated technical comparison, actual downloaded runtime and
+  retained-save/browser qualification. Keeping both qualified candidates opt-in is a valid
+  disposition; it does not establish a player preference or usability result.
+- **Remaining closure:** finish the selected source, artifact and native technical windows,
+  including BAR useful-play cases, SC2 full-session/fault-recovery cases and Learning's bounded
+  source/diagnostic qualification; verify protected delivery and update their roadmap evidence.
+  Record unavailable installed, human and economic evidence explicitly. Historical economics may
+  close with an insufficient-evidence disposition and no efficiency claim.
+
+These removed requirements are outside the full V2 acceptance gate, rather than completed tests.
+The frozen R5 cohort, cutoff and historical original-item outcomes stay intact. Required native
+checks and existing runtime authentication, custody and effect-authority enforcement still apply
+to any operation actually performed; this amendment grants no credentials or access.
+
 [Functional acceptance #3966](https://github.com/FS-GG/.github/pull/3966) delivered the selected profile at protected `ddb2e3284dc250442580b95e49594e5289f23026`. Its automatic post-merge [ordinary run 36541554972](https://github.com/FS-GG/.github/actions/runs/36541554972) succeeded with receipt `488130cb9441b7d3d5b9c081b1a55cbd2509b4ab4244246b5cbb0220a47a6949`. Independent observer verification ran from that exact protected checkout. Fresh Authority readback in `FS-GG/FS.GG.Coordination.Authority` found one completed generation-3 entry and one matching effect at `operation/c9`, head `f9bf3cb03cd7f12519141e6256d852ef71527015`. This supplements the unchanged normal-replay proof above; it does not upgrade installed telemetry or historical economics.
 
 On **2026-09-28**, the shared authority advanced by one fast-forward append to generation 2 `OpenV2`
