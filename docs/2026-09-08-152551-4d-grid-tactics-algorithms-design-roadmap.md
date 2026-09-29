@@ -48,9 +48,10 @@ remaining player evaluation are recorded in section 16.
 
 The [three-direction Version 2 skirmish design](roadmaps/2026-09-28-four-dimensional-skirmish-design-v2.md)
 is accepted for bounded **Commitment versus Pressure** prototyping as of 2026-09-29. Firelanes
-remains a later alternative. The [owning implementation amendment](https://github.com/FS-GG/FS.GG.FourD/blob/540f41baa0c7a9cb9fe6005d836c5290ee8cc408/docs/FOURD-01.design-v2.md)
-records the executable source window; it is a local draft on `routine/fourd-design-v2-implementation-20260929`
-until integrated with implementation. Replace the local link with its protected source link after landing.
+remains a later alternative. The [delivered owning implementation amendment](https://github.com/FS-GG/FS.GG.FourD/blob/main/docs/FOURD-01.design-v2.md)
+records source-delivered .V2.1–.V2.3 at [PR #11](https://github.com/FS-GG/FS.GG.FourD/pull/11),
+`b9126588db10469ef51b7cec7433567db0471485`, with [native verify](https://github.com/FS-GG/FS.GG.FourD/actions/runs/36525153306).
+Opt-in browser/save2, final technical comparison and actual evaluation task wiring remain open.
 This is a material rules amendment within **FOURD-01**, preserving its delivered work and cost lineage.
 The existing `fourd-tactics-v1` encounter remains the default until a separately qualified selection.
 Proposal X/Y/Z/H maps to runtime x/y/w/z; it does not rename the coordinate ABI. Earlier numerical

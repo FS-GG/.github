@@ -1,7 +1,7 @@
 {
   "schema": "fsgg.routine-cohort-observation/2",
   "cohort": "routine-route-first-ten-code-items",
-  "asOf": "2026-09-29T04:34:57Z",
+  "asOf": "2026-09-29T05:21:18Z",
   "targetPerArm": 10,
   "repairObservation": {
     "mode": "completed-items",
@@ -439,7 +439,7 @@
         "status": "pending",
         "observedThrough": "2026-09-29T04:19:56Z"
       },
-      "qualificationBoundary": "Full source gates passed at b10ae008. Two fresh genuine pre-Action intervals exposed a truthful-catalogue/decoder mismatch; both failed intervals remain excluded and their repair stays under SC2C-01.4e. Reviewed repaired-source gates, genuine production/fault cohort and authoritative source delivery remain pending."
+      "qualificationBoundary": "Reviewed source674929450828dbbd4433cf2ef9f9626af2c90938 passed full27-browser gate. Genuine pre-Action failures and private driver/proxy repairs remain preserved/excluded under this original. Full production/fault native cohort and authoritative source delivery remain pending."
     },
     {
       "id": "FOURD-01.V2.1",
@@ -450,16 +450,41 @@
       "eligible": true,
       "selectedBeforeOutcome": true,
       "selectedAt": "2026-09-29T04:34:57Z",
-      "delivery": "pending",
+      "delivery": "delivered",
       "usage": {
         "status": "missing",
         "upperBoundTokens": null
       },
       "repairFollowup": {
         "status": "pending",
-        "observedThrough": "2026-09-29T04:34:57Z"
+        "observedThrough": "2026-09-29T05:18:42Z"
       },
-      "qualificationBoundary": "Accepted plan540f41b selects this original before its outcome. Shared foundation source is active; frozen seam, qualification and authoritative source delivery remain pending."
+      "qualificationBoundary": "Accepted plan540f41b selects this original before its outcome. Shared foundation source is active; frozen seam, qualification and authoritative source delivery remain pending. Native PR11 merged after exact-head verify; protected owning checked source outcome and exact qualified/default tree independently read back. Browser/save2, final comparison and human evidence are separate.",
+      "completedAt": "2026-09-29T05:18:42Z",
+      "url": "https://github.com/FS-GG/FS.GG.FourD/pull/11",
+      "mergeCommit": "b9126588db10469ef51b7cec7433567db0471485",
+      "tree": "c87f9e98efa1d8d91a683d1cb327546f8e78c867",
+      "finalCompletion": {
+        "owningAcceptance": "Done",
+        "nativeDoneReadback": {
+          "state": "Done",
+          "readAt": "2026-09-29T05:18:42Z",
+          "url": "https://github.com/FS-GG/FS.GG.FourD/blob/b9126588db10469ef51b7cec7433567db0471485/docs/FOURD-01.design-v2.md"
+        },
+        "sourceDelivery": {
+          "url": "https://github.com/FS-GG/FS.GG.FourD/pull/11",
+          "commit": "b9126588db10469ef51b7cec7433567db0471485",
+          "tree": "c87f9e98efa1d8d91a683d1cb327546f8e78c867",
+          "mergedAt": "2026-09-29T05:18:17Z"
+        },
+        "checks": [
+          {
+            "name": "verify \u2014 whole .NET/Fable/Node qualification and 22 retained Chromium journeys",
+            "status": "SUCCESS",
+            "url": "https://github.com/FS-GG/FS.GG.FourD/actions/runs/36525153306"
+          }
+        ]
+      }
     },
     {
       "id": "FOURD-01.V2.6",
@@ -479,7 +504,157 @@
         "status": "pending",
         "observedThrough": "2026-09-29T04:34:57Z"
       },
-      "qualificationBoundary": "Accepted plan540f41b selects this original before its outcome. Source preparation is active; whole-item acceptance and authoritative source delivery are pending. V2.6 additionally waits actual map/browser wiring; synthetic preparation does not prove human evidence."
+      "qualificationBoundary": "Versioned protocol/scorer preparation is source-delivered with PR11, but whole source-ready evaluation pack remains pending actual map/browser task wiring. Synthetic preparation proves no human evidence and does not count as completion."
+    },
+    {
+      "id": "FOURD-01.V2.2",
+      "lane": "FOURD-01",
+      "originalItem": "FOURD-01.V2.2",
+      "arm": "routine",
+      "kind": "code",
+      "eligible": true,
+      "selectedBeforeOutcome": true,
+      "selectedAt": "2026-09-29T04:44:56Z",
+      "delivery": "delivered",
+      "usage": {
+        "status": "missing",
+        "upperBoundTokens": null
+      },
+      "repairFollowup": {
+        "status": "pending",
+        "observedThrough": "2026-09-29T05:18:42Z"
+      },
+      "qualificationBoundary": "Commitment lane isolated branch was created from frozen1936122 at this actual retained reflog time, before implementation945b1eb at04:56:13Z; the substantive original is in accepted plan540f41b. Namespace repairs remain this original. Native PR11 merged after exact-head verify; protected owning checked source outcome and exact qualified/default tree independently read back. Browser/save2, final comparison and human evidence are separate.",
+      "completedAt": "2026-09-29T05:18:42Z",
+      "url": "https://github.com/FS-GG/FS.GG.FourD/pull/11",
+      "mergeCommit": "b9126588db10469ef51b7cec7433567db0471485",
+      "tree": "c87f9e98efa1d8d91a683d1cb327546f8e78c867",
+      "finalCompletion": {
+        "owningAcceptance": "Done",
+        "nativeDoneReadback": {
+          "state": "Done",
+          "readAt": "2026-09-29T05:18:42Z",
+          "url": "https://github.com/FS-GG/FS.GG.FourD/blob/b9126588db10469ef51b7cec7433567db0471485/docs/FOURD-01.design-v2.md"
+        },
+        "sourceDelivery": {
+          "url": "https://github.com/FS-GG/FS.GG.FourD/pull/11",
+          "commit": "b9126588db10469ef51b7cec7433567db0471485",
+          "tree": "c87f9e98efa1d8d91a683d1cb327546f8e78c867",
+          "mergedAt": "2026-09-29T05:18:17Z"
+        },
+        "checks": [
+          {
+            "name": "verify \u2014 whole .NET/Fable/Node qualification and 22 retained Chromium journeys",
+            "status": "SUCCESS",
+            "url": "https://github.com/FS-GG/FS.GG.FourD/actions/runs/36525153306"
+          }
+        ]
+      }
+    },
+    {
+      "id": "FOURD-01.V2.3",
+      "lane": "FOURD-01",
+      "originalItem": "FOURD-01.V2.3",
+      "arm": "routine",
+      "kind": "code",
+      "eligible": true,
+      "selectedBeforeOutcome": true,
+      "selectedAt": "2026-09-29T04:46:29Z",
+      "delivery": "delivered",
+      "usage": {
+        "status": "missing",
+        "upperBoundTokens": null
+      },
+      "repairFollowup": {
+        "status": "pending",
+        "observedThrough": "2026-09-29T05:18:42Z"
+      },
+      "qualificationBoundary": "Pressure lane isolated branch was created from frozen1936122 at this actual retained reflog time, before implementationecb9456 at04:58:43Z; the substantive original is in accepted plan540f41b. Namespace repairs remain this original. Native PR11 merged after exact-head verify; protected owning checked source outcome and exact qualified/default tree independently read back. Browser/save2, final comparison and human evidence are separate.",
+      "completedAt": "2026-09-29T05:18:42Z",
+      "url": "https://github.com/FS-GG/FS.GG.FourD/pull/11",
+      "mergeCommit": "b9126588db10469ef51b7cec7433567db0471485",
+      "tree": "c87f9e98efa1d8d91a683d1cb327546f8e78c867",
+      "finalCompletion": {
+        "owningAcceptance": "Done",
+        "nativeDoneReadback": {
+          "state": "Done",
+          "readAt": "2026-09-29T05:18:42Z",
+          "url": "https://github.com/FS-GG/FS.GG.FourD/blob/b9126588db10469ef51b7cec7433567db0471485/docs/FOURD-01.design-v2.md"
+        },
+        "sourceDelivery": {
+          "url": "https://github.com/FS-GG/FS.GG.FourD/pull/11",
+          "commit": "b9126588db10469ef51b7cec7433567db0471485",
+          "tree": "c87f9e98efa1d8d91a683d1cb327546f8e78c867",
+          "mergedAt": "2026-09-29T05:18:17Z"
+        },
+        "checks": [
+          {
+            "name": "verify \u2014 whole .NET/Fable/Node qualification and 22 retained Chromium journeys",
+            "status": "SUCCESS",
+            "url": "https://github.com/FS-GG/FS.GG.FourD/actions/runs/36525153306"
+          }
+        ]
+      }
+    },
+    {
+      "id": "BARC-01.5",
+      "lane": "BARC-01",
+      "originalItem": "BARC-01.5",
+      "arm": "routine",
+      "kind": "code",
+      "eligible": true,
+      "selectedBeforeOutcome": true,
+      "selectedAt": "2026-09-29T04:42:00Z",
+      "delivery": "pending",
+      "usage": {
+        "status": "missing",
+        "upperBoundTokens": null
+      },
+      "repairFollowup": {
+        "status": "pending",
+        "observedThrough": "2026-09-29T05:17:20Z"
+      },
+      "qualificationBoundary": "Prospectively selected in the04:42 parent mailbox declaration before its Astra plan and implementation outcomes. Contract and native/broker/browser windows do not separately count; whole native useful-play and paired delivery remain pending."
+    },
+    {
+      "id": "LEARN-01.4",
+      "lane": "LEARN-01",
+      "originalItem": "LEARN-01.4",
+      "arm": "routine",
+      "kind": "code",
+      "eligible": true,
+      "selectedBeforeOutcome": true,
+      "selectedAt": "2026-09-29T04:42:00Z",
+      "delivery": "pending",
+      "usage": {
+        "status": "missing",
+        "upperBoundTokens": null
+      },
+      "repairFollowup": {
+        "status": "pending",
+        "observedThrough": "2026-09-29T05:17:20Z"
+      },
+      "qualificationBoundary": "Prospectively selected in the04:42 parent mailbox declaration before its Astra plan and implementation outcomes. Discovery/admission/source preparation does not complete the installed observation window."
+    },
+    {
+      "id": "FOURD-01.V2.5",
+      "lane": "FOURD-01",
+      "originalItem": "FOURD-01.V2.5",
+      "arm": "routine",
+      "kind": "code",
+      "eligible": true,
+      "selectedBeforeOutcome": true,
+      "selectedAt": "2026-09-29T05:17:20Z",
+      "delivery": "pending",
+      "usage": {
+        "status": "missing",
+        "upperBoundTokens": null
+      },
+      "repairFollowup": {
+        "status": "pending",
+        "observedThrough": "2026-09-29T05:17:20Z"
+      },
+      "qualificationBoundary": "Parent prospectively selects the accepted independent technical-comparison preparation window now, before outcomes. Final technical comparison depends on actual opt-in browser integration; preparation cannot count as whole completion."
     }
   ]
 }
