@@ -1,14 +1,16 @@
 # Coordination V2 board design
 
-Create a fresh organization project named **Coordination V2** and carry forward only work with a
-verified remaining outcome. Reuse existing repository issues, discussions and dependency identities.
+Use V2 boards for organization coordination and GitHub-coordinated product workspaces. Create a
+fresh organization project named **Coordination V2** and product-scoped V2 boards, carrying forward
+only work with a verified remaining outcome. Reuse existing repository issue and dependency identities.
 The board provides planning and visibility; native delivery and the selected V2 operation authorities
 remain the sources of delivery truth.
 
 **Status:** selected design, 2026-09-29. This document does not create the project, import items,
 activate a writer or switch consumers. Those outcomes remain unchecked below.
-**Owner:** `.github` owns the organization planning surface and consumer coordination; repository
-owners retain their deliverables and evidence. This is **COORD-BOARD-V2-01** in the
+**Owner:** `.github` owns the organization planning surface and shared consumer contract; SDD and
+Templates own published workspace integration, and product owners adopt their scoped boards.
+Repository owners retain their deliverables and evidence. This is **COORD-BOARD-V2-01** in the
 [Unified roadmap](../2026-09-07-154210-fs-gg-unified-development-roadmap.md#98-feature-parts-and-subroadmap-index)
 and the [V2 execution roadmap](../github-substrate-v2-roadmap.md#coordination-v2-board--2026-09-29).
 
@@ -85,7 +87,8 @@ repository scope. Use narrowly scoped project-write and source-read access, seri
 bounded batches, pagination, runtime and retry limits. Select trusted reviewed code independently of
 untrusted PR bytes. Refuse unknown targets, field drift or missing authorization before affected writes;
 never fall back to Project 1 or title discovery. Activation of credentials remains a separately
-authorized operation under existing controls.
+authorized operation under existing controls. Bind the actual project owner kind and identity for
+product boards as well; a product workspace must never inherit the organization target implicitly.
 
 The writer may update only selected project membership and owned projection fields. It cannot mutate
 source refs, issue lifecycle, dependency authority, claims, grants or settlement journals. Retain
@@ -100,6 +103,45 @@ each selected consumer deliberately. Leave the legacy writer retired. After adop
 board as a labeled legacy reference and stop routine consumer writes to it. Preserving or
 [archiving historical items](https://docs.github.com/en/issues/planning-and-tracking-with-projects/managing-items-in-your-project/archiving-items-from-your-project)
 is preferable to deleting their context; any archive operation needs its own selected scope.
+
+## Product workspace use
+
+GitHub-coordinated product workspaces must use the same V2 planning and projection contract through
+their own selected board. Use a product-scoped project by default when board integration is selected;
+an explicitly selected shared project with a repository-scoped view is also supported. Keep the
+repository allowlist enforced in the adapter: a view filter alone is not a write boundary. Product
+work and cross-repository coordination can reference the same native issues without copying them.
+The organization board includes only selected organization-relevant outcomes, not every product task.
+
+Product-local board commands and the materialized `work-board` guidance must resolve the selected
+V2 binding and smaller schema. They must not route through Project 1, require legacy claim fields or
+dispatch an organization-wide board driver from a product tree. A board offers planning candidates;
+the owning roadmap, native dependencies and protected delivery still determine actual work and
+completion. Routine source delivery remains possible without a project item or a healthy refresh job.
+
+For new GitHub-coordinated workspaces, publish the shared adapter and update the owning SDD/Templates
+materialization and initialization routes to select V2 board integration. Record the repository,
+project owner kind, immutable project and field identities, schema version and adapter version in the
+existing workspace configuration/provenance surfaces. Templates carry no access credentials or
+organization-specific project ID. Initialization resolves and verifies the selected binding; it never
+creates a GitHub resource or grants access without the existing operation authorization. The
+[current initialization skill](../../.agents/skills/initialize-sdd-workspace/SKILL.md) remains the
+source boundary until the owning implementation and publication are delivered.
+
+Existing coordinated workspaces need a bounded adopter that checks their current binding, previews
+the V2 change, preserves owner-authored configuration and refuses conflicting edits. Apply selective
+carryover to their old boards too; stop their selected legacy writers only after verified adoption.
+Retain old board history and unresolved operations without reviving V1 authority. Local-only and
+uncoordinated workspaces remain supported without GitHub or a board; this requirement changes the
+selected board route, not provider or lifecycle defaults.
+
+Qualify one freshly generated coordinated workspace and one retained workspace against the actual
+published artifacts. Verify product-local commands, native issue identity, selected-board writes,
+stale/unknown display, repeat initialization/adoption and conflicting-config refusal. Include two
+different product bindings and negative tests for wrong project, foreign repository and denied access;
+prove neither workspace can mutate the other's board through the configured adapter. Also retain a
+local-only initialization case with no GitHub dependency. Source and organization-board qualification
+alone cannot close product adoption.
 
 ## Delivery and acceptance
 
@@ -117,13 +159,24 @@ is preferable to deleting their context; any archive operation needs its own sel
   switch selected consumers with independent readback, and label the old board as legacy reference.
   Verify no automatic V1 writer resumes and no host-resident autonomous agent is required. Retain the
   actual adopted scope and unresolved items; do not report unselected consumers as migrated.
+- [ ] **COORD-BOARD-V2-01.5 — Publish product workspace integration.** SDD/Templates and the shared
+  adapter owner implement and publish the V2 binding, initialization, product-local commands and
+  materialized guidance. Record exact coherent package identities and the selected coordinated-board
+  default; preserve local-only operation and existing provider/lifecycle choices. Depends on .3's
+  qualified shared contract; preparation can run alongside .2 and .4.
+- [ ] **COORD-BOARD-V2-01.6 — Qualify and adopt product boards.** Prove fresh and retained published
+  workspace journeys, separate product bindings and scope refusals. Selectively import each enrolled
+  product's relevant issues, switch its consumers and stop its legacy projection after readback.
+  Record adopted workspace/board identities and any unresolved consumers. Depends on .5; each
+  product's own verified binding permits its adoption without waiting for all other products.
 
 This feature is follow-on planning work, not a new prerequisite for the already selected full V2
 acceptance profile. The host execution requirement has its own required qualification outcome;
 design delivery or board adoption cannot stand in for that proof.
 
-No generated SDD/Templates workspace family, scaffold default or published package changes with this
-design. The first visible planning change is the selected pilot in .2; tooling changes arrive through
-.3 and explicit adoption in .4. Producer publication is required only if the selected adapter is
-distributed, with exact published identity and receiver qualification recorded at that milestone.
-Existing-workspace upgrade is separately selected and never implied by a project rename.
+This design delivery changes no generated files or published packages. The planned workspace effect
+is V2 board configuration and guidance for GitHub-coordinated SDD/Templates families. The organization
+pilot first changes planning in .2; shared tooling follows in .3 and explicit organization adoption
+in .4. Product integration is published in .5 and first changes fresh and retained receivers through
+.6's qualified adoption. Public package identities and actual materialized bytes must be read back;
+a project rename or producer source merge cannot qualify an existing-workspace upgrade.

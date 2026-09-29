@@ -218,11 +218,15 @@ deferral supplies no installed-readiness evidence. Historical receipts retain th
 
 ### Coordination V2 board — 2026-09-29
 
-Select a fresh **Coordination V2** planning project and carry over existing issues only when current
-native evidence and their owning roadmap show a relevant remaining outcome. The
+Select a fresh **Coordination V2** planning project and V2 boards for GitHub-coordinated product
+workspaces. Carry over existing issues only when current native evidence and their owning roadmap
+show a relevant remaining outcome. The
 [selected design and subroadmap](coordination/2026-09-29-coordination-v2-board-design.md) owns
-COORD-BOARD-V2-01.1–.4: design, bounded import, restricted projection and explicit consumer adoption.
-Creation, import and adoption remain pending. The legacy automatic V1 writer stays retired; the new
+COORD-BOARD-V2-01.1–.6: design, bounded import, restricted projection, explicit organization adoption,
+published product workspace integration and qualified fresh/retained product adoption. Product-local
+commands and materialized guidance must use their selected V2 board and enforced repository scope;
+local-only workspaces remain supported. Creation, publication, import and adoption remain pending.
+The legacy automatic V1 writer stays retired; the new
 board cannot become delivery authority or a synchronous source-merge gate. Refresh uses fixed,
 reviewed jobs under the host execution boundary. This follow-on feature adds no board migration
 prerequisite to full V2 acceptance.
