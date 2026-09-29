@@ -106,6 +106,14 @@ is preferable to deleting their context; any archive operation needs its own sel
 
 ## Product workspace use
 
+Product board integration follows the
+[V2-LANG-01 language-independent contract](../roadmaps/2026-09-29-language-independent-workspaces-and-agent-integration.md#portable-workspace-contract).
+Product language and toolchain choices remain independent of the shared adapter's runtime. Publish
+standalone commands or a versioned wire interface; qualify non-.NET and mixed-language receivers
+without requiring product code to import Akka or Microsoft Agent Framework. Shared tooling declares
+its own runtime prerequisites. Native product checks remain component-specific and feed the existing
+delivery evidence; board status or an agent/UI completion event cannot replace those checks.
+
 GitHub-coordinated product workspaces must use the same V2 planning and projection contract through
 their own selected board. Use a product-scoped project by default when board integration is selected;
 an explicitly selected shared project with a repository-scoped view is also supported. Keep the
