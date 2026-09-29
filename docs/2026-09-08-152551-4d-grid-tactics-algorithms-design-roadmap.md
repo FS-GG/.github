@@ -6,7 +6,7 @@ index: 38
 description: A grid-based squad tactics foundation with four spatial coordinates, dimension-aware movement, visibility, cover, combat, AI and readable battlefield views.
 status: active
 document-type: research-design-and-roadmap
-last-updated: 2026-09-27
+last-updated: 2026-09-29
 ---
 
 # Four-spatial-dimensional grid tactics
@@ -45,6 +45,17 @@ proposals. Subsequent `FS.GG.FourD` source work adopted the contracts recorded f
 No package, template default or installed contract is established by that source delivery. The
 initial research executed no playable 4D prototype or player study; the current source encounter and
 remaining player evaluation are recorded in section 16.
+
+The [three-direction Version 2 skirmish design](roadmaps/2026-09-28-four-dimensional-skirmish-design-v2.md)
+is accepted for bounded **Commitment versus Pressure** prototyping as of 2026-09-29. Firelanes
+remains a later alternative. The [owning implementation amendment](/tmp/fourd-design-v2-implementation-20260929/docs/FOURD-01.design-v2.md)
+records the executable source window; it is a local draft on `routine/fourd-design-v2-implementation-20260929`
+until integrated with implementation. Replace the local link with its protected source link after landing.
+This is a material rules amendment within **FOURD-01**, preserving its delivered work and cost lineage.
+The existing `fourd-tactics-v1` encounter remains the default until a separately qualified selection.
+Proposal X/Y/Z/H maps to runtime x/y/w/z; it does not rename the coordinate ABI. Earlier numerical
+combat, omnidirectional sensing, sample-based cover and grenade requirements below describe v1 or
+its historical design, not the new comparison rules. See section 16.4 for the precise boundary.
 
 This is an independent section 15 product/algorithm track in the
 [Unified Development Roadmap](2026-09-07-154210-fs-gg-unified-development-roadmap.md), indexed under
@@ -878,7 +889,8 @@ this feature's completion requirements.
 
 The roadmap was developed with a fresh `gpt-6-astra` high-effort feature planner and integrated with
 the geometry/gameplay design above. Use the **routine** route for future delivery. FOURD-01.1–.3 are
-source delivered in the private `FS.GG.FourD` product workspace. The initial document did not itself
+source delivered in the private `FS.GG.FourD` product workspace; .4 source and bounded .5a technical
+cases are also delivered as recorded in section 16.4. The initial document did not itself
 start implementation or publication; publication and installed adoption remain separate.
 
 ### 16.1 FOURD-01.1 — Grid, support and movement kernel
@@ -954,8 +966,8 @@ complete FOURD-01.4–.6, publish an artifact or establish installed adoption.
 | Milestone | Outcome | Entry evidence and completion examples |
 |---|---|---|
 | **FOURD-01.3 — Play one deterministic tactical encounter** | Source delivered: squad, knowledge-limited opposing AI, move/shoot/overwatch/end-turn, cover, one 4D radial breach effect and win/loss objectives | .NET, emitted Fable/Node and Chromium verification covers per-step reactions, death/occupancy, bounded terrain change and canonical save/replay; exact source evidence is linked above |
-| **FOURD-01.4 — Teach and evaluate fourth-axis tactics** | A short tutorial suite and complete mouse/keyboard interaction support intentional dimensional play | Playable .3 build. Compare views on matched tasks with a small formative player group; record correct predictions, coordinate mistakes and explanations. Players deliberately use at least two fourth-axis tactics. Set acceptance criteria before the evaluated round; repair clustered failures |
-| **FOURD-01.5 — Qualify the tactical vertical slice** | Correct and responsive route/shot/AI queries, coherent observations, usable views and reproducible encounters at a measured map/unit budget | .3–.4 outcomes determine the real load and usability limits. Measure the proposed benchmark on named devices/browsers, retain correctness oracles through optimization, test restart/save/replay and invalidation after terrain changes |
+| **FOURD-01.4 — Teach and evaluate fourth-axis tactics** | Tutorial, mouse/keyboard interaction and evaluation instrumentation are source delivered; genuine .4-E player evidence remains pending | Playable .3/.4 build. Compare views on matched tasks with a small formative player group; record correct predictions, coordinate mistakes and explanations. Players deliberately use at least two fourth-axis tactics. Set acceptance criteria before the evaluated round; repair clustered failures |
+| **FOURD-01.5 — Qualify the tactical vertical slice** | Bounded .5a technical cases are complete; full slice qualification remains open for the selected rules and supported performance/recovery envelope | .3–.4 outcomes and the design-v2 comparison determine the real load and usability limits. Measure the proposed benchmark on named devices/browsers, retain correctness oracles through optimization, test restart/save/replay and invalidation after terrain changes |
 | **FOURD-01.6 — Deliver the foundation and decide optional reuse** | Documented supported encounter, algorithms, tests, measurements and source/product handoff; evidence-based extraction decision | .5 evidence and chosen distribution. Identify proven candidates for Game/Rendering and whether a maintained Fable template sample is wanted. Publication and installed adoption remain separately evidenced if selected; they are not speculative prerequisites to the vertical-slice result |
 
 FOURD-01 is complete when four-dimensional position, movement, range, visibility, cover and a complete
@@ -963,13 +975,52 @@ bounded encounter work; players can perceive and deliberately exploit the extra 
 .NET/browser rule behavior is qualified; and scope, performance and reproducibility are documented.
 It does not mean a full campaign, arbitrary 4D physics, multiplayer, mod support or retail polish.
 
-The .1–.3 source window is delivered. Future implementation should use the owning `work-roadmap`
-process with a `gpt-5.6-sol` medium worker. Reuse the valid plan and expand .4 from observed results.
-Replan for a material change to grid, gravity, information or numeric/geometry rules, not an ordinary
-failed test or source revision change. Completing this source window is distinct from delivering the
-whole foundation.
+The .1–.4 source window and bounded .5a technical cases are delivered. Future implementation uses
+`work-roadmap` with `gpt-5.6-sol` medium workers and the bounded amendment below. It supplies the
+material replan for the changed information, geometry and rules; ordinary failures or source revision
+changes do not require another planning pass. Source qualification and the remaining human evaluation
+are distinct from delivering the whole foundation.
+
+### 16.4 Accepted design-v2 amendment and current source boundary
+
+Protected FourD source `9109bfe061ece3637cad8e3fcafcfc6643458b43` includes .1–.4 and all bounded
+.5a technical cases through [PR #10](https://github.com/FS-GG/FS.GG.FourD/pull/10); exact-main
+[verification 36473282583](https://github.com/FS-GG/FS.GG.FourD/actions/runs/36473282583) passed,
+including 22 Chromium cases. The [owning .5 evidence](https://github.com/FS-GG/FS.GG.FourD/blob/9109bfe061ece3637cad8e3fcafcfc6643458b43/docs/FOURD-01.5.md)
+qualifies accounting, breach, replay, opponent continuation and browser restart/recovery at the v1
+boundary. It does not establish player comprehension, balance, a product latency envelope or adoption.
+
+The amendment selects separate `fourd-commitment-v2.1` and `fourd-pressure-v2.1` prototypes with
+`fsgg.fourd.skirmish-save/2` replay identity. The v1 reader and exact v1 replays retain their existing
+semantics; cross-rules migration is refused. Both candidates use static known terrain, six facings,
+the same two-anchor sight/cover model, personal firing observation, private enemy readiness,
+Guard/Ambush/Hold, bounded contact-stop decisions and the shared six-round occupancy mission.
+Commitment uses seeded one-die combat and reserved AP; Pressure uses deterministic wounds/pressure
+and Watch. Five units per side and ramp transitions require an explicit new content/geometry profile.
+V1 roster, movement, destructible terrain and evaluation contracts are not silently widened.
+
+The owning amendment has six meaningful source outcomes: shared space/information resolution;
+Commitment; Pressure; playable browser and replay integration; controlled comparison/qualification;
+and a versioned evaluation pack. Its native milestones carry their own completion authority. They
+are not new top-level programme features and must not be split further to fill a ten-item R5 cohort.
+Prospective cohort admission and original-item attribution are programme-owned; planning, partial
+checkpoints and historical source do not count as newly completed observed originals.
+
+The existing [FOURD-01.4-E/1 protocol](https://github.com/FS-GG/FS.GG.FourD/blob/9109bfe061ece3637cad8e3fcafcfc6643458b43/docs/FOURD-01.4-evaluation.md)
+still lacks consenting unfamiliar paired-player sessions. Preserve that pending historical gate and
+its instrumentation. It does not block new rules research or source qualification. Its blast/area
+expectations cannot judge the new static-terrain prototypes: prepare separately identified v2
+matched tasks for facing, contact, cover and fourth-axis maneuver. Never pool rounds/rules or call
+scripted agents participants. Selecting a successor changes future product evaluation tasks, not
+the truth of unperformed v1 sessions. Full .5 and .6 stay open until the selected slice has honest
+player evidence, a supported performance/recovery envelope and its documented delivery boundary.
 
 ## 17. Workspace effect and optional publication
+
+The design-v2 amendment has no generated-workspace or installed effect. Its browser integration
+milestone first exposes explicit opt-in prototype selection in product source; v1 remains the default.
+General scaffold families and lifecycle defaults remain unchanged. The same publication, clean
+creation and separate upgrade boundaries below apply to any eventual v2 adoption.
 
 This design has no installed workspace effect. .1–.2 create capability in the selected product source;
 .3 first enables a complete encounter there. Other freshly generated FS-GG workspaces do not receive
@@ -1001,9 +1052,9 @@ and deliver the validated foundation without creating a package fleet solely for
 | Gravity/support | `−z` gravity; lateral `x/y/w` moves | A clear gameplay need for flight, alternate gravity or a different spatial fiction |
 | Movement neighborhood | Cardinal lateral moves and explicit height transitions | Playtests show a benefit that justifies diagonal collision/cost complexity |
 | Fourth-axis budget | Ordinary `w` movement has ordinary cost | Measured dominant tactics persist after map and opponent counterplay changes |
-| Visibility | Finite-range omnidirectional 4D sensing with occlusion | Readability or stealth goals justify a declared directional/special sensor profile |
-| Cover | Nine target anchors and one geometric chance factor | Artifacts or balance tests justify different authored anchors/bands without losing predictability |
-| Reactions | Per committed grid-step endpoints | A specific mechanic requires continuous swept interception and its costs are justified |
+| Visibility | Delivered v1 finite-range omnidirectional sensing; v2 comparison adopts facing-limited observation without a separate range cap | Versioned comparison/player evidence justifies a different sector or sensor profile |
+| Cover | Delivered v1 nine-anchor chance factor; v2 comparison uses shared upper/lower sight/protection anchors | Independent geometry or player evidence justifies a new identified profile |
+| Reactions | V1 per-step overwatch; v2 starting/entered cells and active-action exchanges with locked automatic policies | Observed pacing or policy failures justify a separately versioned alternative |
 | Rendering | Fixed slices with linked context first | Comparative player tasks support another display or oblique views |
 | Reuse | Product-first implementation | At least one real consumer benefits from a stable extracted seam |
 
