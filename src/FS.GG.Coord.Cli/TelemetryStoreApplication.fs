@@ -36,6 +36,25 @@ module TelemetryStoreApplication =
             RequestedEffort: string
         }
 
+    type NativeDeliveryCandidate =
+        {
+            Identity: string
+            ItemId: string
+            Repository: string
+            PullRequest: int64
+            ExpectedHead: string
+            SourceRef: string
+            CanonicalFact: string
+            FactDigest: string
+            ReceiptRole: string option
+            ReceiptGrantId: string option
+            ReceiptGrantGeneration: int64 option
+            ReceiptKey: string option
+            ReceiptEnvelopeDigest: string option
+            Binding: string
+            BindingDigest: string
+        }
+
     let databaseFileName = "telemetry.sqlite3"
     let private minimumEngine = Version(3, 51, 3)
     let private busyMilliseconds = 750
@@ -1729,7 +1748,8 @@ PRAGMA user_version=12;
         | TelemetryStore.RuntimeNativeInventory _
         | TelemetryStore.RuntimeNativeInventorySource _
         | TelemetryStore.LearnSharedCost _
-        | TelemetryStore.LearnSharedCostAuthority _ -> ()
+        | TelemetryStore.LearnSharedCostAuthority _
+        | TelemetryStore.LearnNativeDeliverySource _ -> ()
 
         match fact.ItemId, fact.Payload with
         | Some item,
@@ -2610,7 +2630,8 @@ ON CONFLICT(key) DO UPDATE SET value=excluded.value;"""
                             | Some(admission: TelemetryReceipt.Admission) when admission.Principal.Role = TelemetryReceipt.NativeCollector ->
                                 let allowed =
                                     set [ "runtime-native-inventory/1"; "runtime-native-inventory-source/1";
-                                          "learn-shared-cost/1"; "learn-shared-cost-authority/1" ]
+                                          "learn-shared-cost/1"; "learn-shared-cost-authority/1";
+                                          "learn-native-delivery-source/1" ]
                                 if batch.Facts |> List.exists (fun fact -> not (allowed.Contains fact.Kind)) then
                                     invalidOp "invalid-request"
                             | _ -> ()
@@ -4026,6 +4047,94 @@ WHERE d.dispatch_id=$dispatch AND d.relation='child' AND d.runtime='collaboratio
                 with _ ->
                     Error [ "storage-unavailable" ]
 
+    let resolveNativeDeliveryCandidate path assessment (sourceRef: string) =
+        if String.IsNullOrWhiteSpace sourceRef || sourceRef.Length > 1024 || sourceRef |> Seq.exists Char.IsControl then
+            Error [ "invalid-request" ]
+        else
+            match validateRoot path assessment with
+            | Error errors -> Error errors
+            | Ok root ->
+                try
+                    match connect root SqliteOpenMode.ReadOnly with
+                    | Error _ -> Error [ "storage-unavailable" ]
+                    | Ok(connection, _) ->
+                        use connection = connection
+                        if scalarText connection "PRAGMA user_version;" <> string currentSchemaVersion then
+                            Error [ "unsupported-version" ]
+                        else
+                            use command = connection.CreateCommand()
+                            command.CommandText <-
+                                """
+SELECT n.identity,n.item_id,n.repository,n.pr_number,n.head,n.source_ref,
+       f.canonical,f.content_digest,a.authority_role,a.grant_id,a.grant_generation,
+       a.receipt_key,a.envelope_digest
+FROM native_item_outcomes n
+JOIN ingest_facts f ON f.identity=n.identity AND f.kind='native-item-outcome'
+LEFT JOIN fact_admissions a ON a.identity=f.identity
+WHERE n.source_ref=$source;
+"""
+                            parameter command "$source" sourceRef
+                            use reader = command.ExecuteReader()
+                            if not (reader.Read()) then
+                                Error [ "native delivery candidate is unavailable" ]
+                            else
+                                let optionalText index = if reader.IsDBNull index then None else Some(reader.GetString index)
+                                let optionalInt index = if reader.IsDBNull index then None else Some(reader.GetInt64 index)
+                                let identity = reader.GetString 0
+                                let item = reader.GetString 1
+                                let repository = reader.GetString 2
+                                let pullRequest = reader.GetInt64 3
+                                let head = reader.GetString 4
+                                let retainedSource = reader.GetString 5
+                                let canonicalFact = reader.GetString 6
+                                let factDigest = reader.GetString 7
+                                let role = optionalText 8
+                                let grant = optionalText 9
+                                let generation = optionalInt 10
+                                let receiptKey = optionalText 11
+                                let envelopeDigest = optionalText 12
+                                if reader.Read() then
+                                    Error [ "native delivery candidate is ambiguous" ]
+                                elif CanonicalJson.sha256(Encoding.UTF8.GetBytes canonicalFact) <> factDigest then
+                                    Error [ "native delivery candidate fact digest differs" ]
+                                else
+                                    use factDocument = JsonDocument.Parse canonicalFact
+                                    let fact = factDocument.RootElement
+                                    let agrees =
+                                        fact.ValueKind = JsonValueKind.Object
+                                        && fact.GetProperty("identity").GetString() = identity
+                                        && fact.GetProperty("kind").GetString() = "native-item-outcome"
+                                        && fact.GetProperty("itemId").GetString() = item
+                                        && fact.GetProperty("repository").GetString() = repository
+                                        && fact.GetProperty("prNumber").GetInt64() = pullRequest
+                                        && fact.GetProperty("head").GetString() = head
+                                        && fact.GetProperty("sourceRef").GetString() = retainedSource
+                                    if not agrees then
+                                        Error [ "native delivery candidate differs from immutable fact" ]
+                                    else
+                                        let binding = JsonObject()
+                                        binding["schema"] <- JsonValue.Create "fsgg.telemetry.native-delivery-candidate-binding/1"
+                                        binding["canonicalFact"] <- JsonValue.Create canonicalFact
+                                        binding["factDigest"] <- JsonValue.Create factDigest
+                                        binding["receiptRole"] <- role |> Option.map JsonValue.Create |> Option.defaultValue null
+                                        binding["receiptGrantId"] <- grant |> Option.map JsonValue.Create |> Option.defaultValue null
+                                        binding["receiptGrantGeneration"] <- generation |> Option.map JsonValue.Create |> Option.defaultValue null
+                                        binding["receiptKey"] <- receiptKey |> Option.map JsonValue.Create |> Option.defaultValue null
+                                        binding["receiptEnvelopeDigest"] <- envelopeDigest |> Option.map JsonValue.Create |> Option.defaultValue null
+                                        let canonicalBinding =
+                                            CanonicalJson.canonicalize(Encoding.UTF8.GetBytes(binding.ToJsonString()))
+                                            |> Result.defaultWith invalidOp
+                                        Ok {
+                                            Identity = identity; ItemId = item; Repository = repository
+                                            PullRequest = pullRequest; ExpectedHead = head; SourceRef = retainedSource
+                                            CanonicalFact = canonicalFact; FactDigest = factDigest
+                                            ReceiptRole = role; ReceiptGrantId = grant
+                                            ReceiptGrantGeneration = generation; ReceiptKey = receiptKey
+                                            ReceiptEnvelopeDigest = envelopeDigest; Binding = canonicalBinding
+                                            BindingDigest = CanonicalJson.sha256(Encoding.UTF8.GetBytes canonicalBinding)
+                                        }
+                with _ -> Error [ "storage-unavailable" ]
+
     let private fileDigest path =
         use stream = File.OpenRead path
         Convert.ToHexString(System.Security.Cryptography.SHA256.HashData stream).ToLowerInvariant()
@@ -4483,7 +4592,7 @@ WHERE d.dispatch_id=$dispatch AND d.relation='child' AND d.runtime='collaboratio
             ItemId = itemId
             FactCount =
                 runtimeScalar
-                    "SELECT count(*) FROM ingest_facts WHERE item_id=$item AND kind NOT IN ('learn-task-snapshot','learn-context-manifest','learn-experiment-assignment','learn-accounting-inventory/1','runtime-native-inventory/1','runtime-native-inventory-source/1','learn-shared-cost/1','learn-shared-cost-allocation/1','learn-shared-cost-authority/1');"
+                    "SELECT count(*) FROM ingest_facts WHERE item_id=$item AND kind NOT IN ('learn-task-snapshot','learn-context-manifest','learn-experiment-assignment','learn-accounting-inventory/1','runtime-native-inventory/1','runtime-native-inventory-source/1','learn-shared-cost/1','learn-shared-cost-allocation/1','learn-shared-cost-authority/1','learn-native-delivery-source/1');"
             UsageObservations = usageCount
             DeliveryObservations = count "delivery_observations"
             Input = sum "input_count" + runtimeSum "input_count"
@@ -4892,7 +5001,7 @@ WHERE d.dispatch_id=$dispatch AND d.relation='child' AND d.runtime='collaboratio
                             use learningCount = connection.CreateCommand()
                             learningCount.Transaction <- transaction
                             learningCount.CommandText <-
-                                $"SELECT count(*) FROM ingest_facts WHERE kind IN ('learn-task-snapshot','learn-context-manifest','learn-experiment-assignment','learn-accounting-inventory/1','runtime-native-inventory/1','runtime-native-inventory-source/1','learn-shared-cost/1','learn-shared-cost-allocation/1','learn-shared-cost-authority/1')%s{learningItemFilter};"
+                                $"SELECT count(*) FROM ingest_facts WHERE kind IN ('learn-task-snapshot','learn-context-manifest','learn-experiment-assignment','learn-accounting-inventory/1','runtime-native-inventory/1','runtime-native-inventory-source/1','learn-shared-cost/1','learn-shared-cost-allocation/1','learn-shared-cost-authority/1','learn-native-delivery-source/1')%s{learningItemFilter};"
                             itemId |> Option.iter (parameter learningCount "$selected")
 
                             if Convert.ToInt64(learningCount.ExecuteScalar()) > 10000L then
@@ -4980,7 +5089,7 @@ WHERE d.dispatch_id=$dispatch AND d.relation='child' AND d.runtime='collaboratio
                                 "reviews", table "process_reviews" "item_id,scope,attempt_id,fact_revision"
                                 "learningObservations",
                                 rows
-                                    ($"SELECT o.sequence AS ingest_order,a.producer AS receipt_producer,a.stream AS receipt_stream,a.authority_role AS receipt_role,a.grant_id AS receipt_grant_id,a.grant_generation AS receipt_grant_generation,a.receipt_key,a.envelope_digest AS receipt_envelope_digest,f.identity,f.kind,f.item_id,f.revision,f.content_digest,f.canonical FROM ingest_facts f LEFT JOIN learning_fact_order o ON o.identity=f.identity LEFT JOIN fact_admissions a ON a.identity=f.identity WHERE f.kind IN ('learn-task-snapshot','learn-context-manifest','learn-experiment-assignment','learn-accounting-inventory/1','runtime-native-inventory/1','runtime-native-inventory-source/1','learn-shared-cost/1','learn-shared-cost-allocation/1','learn-shared-cost-authority/1')%s{learningFactItemFilter} ORDER BY f.item_id,f.kind,f.identity LIMIT 10001;")
+                                    ($"SELECT o.sequence AS ingest_order,a.producer AS receipt_producer,a.stream AS receipt_stream,a.authority_role AS receipt_role,a.grant_id AS receipt_grant_id,a.grant_generation AS receipt_grant_generation,a.receipt_key,a.envelope_digest AS receipt_envelope_digest,f.identity,f.kind,f.item_id,f.revision,f.content_digest,f.canonical FROM ingest_facts f LEFT JOIN learning_fact_order o ON o.identity=f.identity LEFT JOIN fact_admissions a ON a.identity=f.identity WHERE f.kind IN ('learn-task-snapshot','learn-context-manifest','learn-experiment-assignment','learn-accounting-inventory/1','runtime-native-inventory/1','runtime-native-inventory-source/1','learn-shared-cost/1','learn-shared-cost-allocation/1','learn-shared-cost-authority/1','learn-native-delivery-source/1')%s{learningFactItemFilter} ORDER BY f.item_id,f.kind,f.identity LIMIT 10001;")
                             ]
                             |> List.iter (fun (name, value) -> content[name] <- value)
 
@@ -5803,7 +5912,7 @@ WHERE d.dispatch_id=$dispatch AND d.relation='child' AND d.runtime='collaboratio
                         use command = connection.CreateCommand()
 
                         command.CommandText <-
-                            "SELECT DISTINCT item_id FROM ingest_facts WHERE item_id IS NOT NULL AND kind NOT IN ('learn-task-snapshot','learn-context-manifest','learn-experiment-assignment','learn-accounting-inventory/1','runtime-native-inventory/1','runtime-native-inventory-source/1','learn-shared-cost/1','learn-shared-cost-allocation/1','learn-shared-cost-authority/1') ORDER BY item_id;"
+                            "SELECT DISTINCT item_id FROM ingest_facts WHERE item_id IS NOT NULL AND kind NOT IN ('learn-task-snapshot','learn-context-manifest','learn-experiment-assignment','learn-accounting-inventory/1','runtime-native-inventory/1','runtime-native-inventory-source/1','learn-shared-cost/1','learn-shared-cost-allocation/1','learn-shared-cost-authority/1','learn-native-delivery-source/1') ORDER BY item_id;"
 
                         use reader = command.ExecuteReader()
                         let items = ResizeArray<string>()

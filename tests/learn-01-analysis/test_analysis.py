@@ -316,6 +316,150 @@ class Learn01ContractTests(unittest.TestCase):
                 CONTRACT, private_envelope(truncated, version=4), [capture], original_item="I-001",
                 window_id="window-2026-01", repository="FS-GG/.github")
 
+    def test_native_delivery_readback_is_verified_without_becoming_readiness_authority(self):
+        envelope, native_capture = self.protected_v4_fixture()
+        content, _ = MODULE.decode_private_snapshot(envelope)
+        candidate = {
+            "kind": "native-item-outcome", "identity": "candidate-I-001", "itemId": "I-001",
+            "revision": 1, "repository": "FS-GG/.github", "prNumber": 7,
+            "baseRef": "main", "baseSha": "d" * 40, "head": "a" * 40,
+            "outcome": "delivered", "codeDelivery": "delivered", "mergeCommit": "b" * 40,
+            "occurredAt": "2026-01-01T00:00:00Z", "observedAt": "2026-01-01T00:00:01Z",
+            "sourceKind": "routine-delivery", "sourceRef": "routine-delivery:I-001",
+        }
+        candidate_canonical = json.dumps(candidate, separators=(",", ":"), sort_keys=True)
+        binding = {
+            "schema": "fsgg.telemetry.native-delivery-candidate-binding/1",
+            "canonicalFact": candidate_canonical,
+            "factDigest": hashlib.sha256(candidate_canonical.encode()).hexdigest(),
+            "receiptRole": "generic", "receiptGrantId": None, "receiptGrantGeneration": None,
+            "receiptKey": "e" * 64, "receiptEnvelopeDigest": "f" * 64,
+        }
+        binding_digest = hashlib.sha256(
+            json.dumps(binding, separators=(",", ":"), sort_keys=True).encode()).hexdigest()
+        response = {
+            "number": 7, "state": "closed", "merged": True,
+            "head": {"sha": "a" * 40},
+            "base": {"ref": "main", "sha": "d" * 40,
+                     "repo": {"full_name": "FS-GG/.github"}},
+            "merge_commit_sha": "b" * 40, "merged_at": "2026-01-01T00:00:00Z",
+        }
+        response_body = json.dumps(response, separators=(",", ":"))
+        source_digest = hashlib.sha256(response_body.encode()).hexdigest()
+        event = {
+            "kind": "learn-native-delivery-source/1", "identity": "native-delivery-I-001",
+            "itemId": "I-001", "revision": 0, "candidateIdentity": candidate["identity"],
+            "candidateSourceRef": candidate["sourceRef"], "candidateDigest": binding_digest,
+            "repository": candidate["repository"], "pullRequest": 7,
+            "expectedHead": "a" * 40, "observedHead": "a" * 40,
+            "baseRef": "main", "baseSha": "d" * 40, "state": "merged",
+            "mergeCommit": "b" * 40, "mergedAt": "2026-01-01T00:00:00Z",
+            "sourceKind": "github-pull-request-readback", "sourceDigest": source_digest,
+            "originalWindowBinding": "unverified",
+        }
+        canonical = json.dumps(event, separators=(",", ":"), sort_keys=True)
+        content["learningObservations"].append({
+            "canonical": canonical, "content_digest": hashlib.sha256(canonical.encode()).hexdigest(),
+            "ingest_order": 400, "receipt_producer": "collector",
+            "receipt_stream": "native-inventory", "receipt_role": "native-collector",
+            "receipt_grant_id": "collector-grant", "receipt_grant_generation": 1,
+            "receipt_key": "1" * 64, "receipt_envelope_digest": "2" * 64,
+        })
+        delivery_capture = {
+            "receiptKey": "1" * 64, "envelopeDigest": "2" * 64,
+            "producer": "collector", "stream": "native-inventory",
+            "grantId": "collector-grant", "grantGeneration": 1,
+            "candidateBinding": binding, "candidateDigest": binding_digest,
+            "responseBody": response_body, "sourceDigest": source_digest, "events": [event],
+        }
+        result = MODULE.assess_pre_admission_owner_evidence(
+            CONTRACT, private_envelope(content, version=4), [native_capture],
+            original_item="I-001", window_id="window-2026-01", repository="FS-GG/.github",
+            delivery_captures=[delivery_capture])
+        self.assertEqual("native-state-verified/original-window-binding-unverified",
+                         result["predicates"]["nativeDeliveryIdentity"]["status"])
+        self.assertEqual(["merged"], result["predicates"]["nativeDeliveryIdentity"]["states"])
+        self.assertFalse(result["operationalReady"])
+        self.assertIn("native-delivery-original-window-binding-unavailable",
+                      result["missingOwnerInputs"])
+
+        def assess_unmerged(raw_state):
+            unmerged_response = copy.deepcopy(response)
+            unmerged_response.update({
+                "state": raw_state, "merged": False,
+                "merge_commit_sha": "e" * 40, "merged_at": None,
+            })
+            unmerged_body = json.dumps(unmerged_response, separators=(",", ":"))
+            unmerged_event = copy.deepcopy(event)
+            unmerged_event.update({
+                "state": "closed-unmerged" if raw_state == "closed" else "open",
+                "mergeCommit": None, "mergedAt": None,
+                "sourceDigest": hashlib.sha256(unmerged_body.encode()).hexdigest(),
+            })
+            unmerged_canonical = json.dumps(unmerged_event, separators=(",", ":"), sort_keys=True)
+            unmerged_content = copy.deepcopy(content)
+            row = next(row for row in unmerged_content["learningObservations"]
+                       if json.loads(row["canonical"]).get("identity") == event["identity"])
+            row["canonical"] = unmerged_canonical
+            row["content_digest"] = hashlib.sha256(unmerged_canonical.encode()).hexdigest()
+            unmerged_capture = copy.deepcopy(delivery_capture)
+            unmerged_capture.update({
+                "responseBody": unmerged_body,
+                "sourceDigest": unmerged_event["sourceDigest"], "events": [unmerged_event],
+            })
+            return MODULE.assess_pre_admission_owner_evidence(
+                CONTRACT, private_envelope(unmerged_content, version=4), [native_capture],
+                original_item="I-001", window_id="window-2026-01",
+                repository="FS-GG/.github", delivery_captures=[unmerged_capture])
+
+        self.assertEqual(["open"], assess_unmerged("open")["predicates"]["nativeDeliveryIdentity"]["states"])
+        self.assertEqual(["closed-unmerged"],
+                         assess_unmerged("closed")["predicates"]["nativeDeliveryIdentity"]["states"])
+
+        with tempfile.TemporaryDirectory(prefix="learn-native-delivery-export-") as directory:
+            root = pathlib.Path(directory)
+            config = root / "host.json"
+            config.write_text("{}")
+            config.chmod(0o600)
+            exported = {
+                "schema": "fsgg.telemetry.protected-learning-export/2",
+                "snapshot": private_envelope(content, version=4),
+                "captures": [native_capture], "deliveryCaptures": [delivery_capture],
+            }
+            host = root / "installed-host-fixture"
+            host.write_text(
+                "#!/usr/bin/python3\nimport json,sys\n"
+                "assert sys.argv[1] == 'export-learning'\n"
+                "assert sys.argv[2] == '--config'\n"
+                "assert sys.argv[4:] == ['--include-native-delivery']\n"
+                + "print(" + repr(json.dumps(exported)) + ")\n")
+            host.chmod(0o700)
+            pin = hashlib.sha256(host.read_bytes()).hexdigest()
+            output = root / "assessment.json"
+            self.assertEqual(0, MODULE.main([
+                str(ROOT / "policy/learn-01-current-focused-v1.json"),
+                "--protected-host-executable", str(host), "--protected-host-sha256", pin,
+                "--protected-host-config", str(config), "--assess-pre-admission",
+                "--include-native-delivery", "--original-item", "I-001",
+                "--window", "window-2026-01", "--repository", "FS-GG/.github",
+                "--output", str(output),
+            ]))
+            self.assertEqual(
+                "native-state-verified/original-window-binding-unverified",
+                json.loads(output.read_text())["predicates"]["nativeDeliveryIdentity"]["status"])
+
+        for label, mutate in (
+                ("candidate", lambda value: value["candidateBinding"].update({"factDigest": "0" * 64})),
+                ("response", lambda value: value.update({"responseBody": "{}"})),
+                ("provenance", lambda value: value.update({"grantGeneration": 2}))):
+            changed = copy.deepcopy(delivery_capture)
+            mutate(changed)
+            with self.subTest(label=label), self.assertRaises(MODULE.Refusal):
+                MODULE.assess_pre_admission_owner_evidence(
+                    CONTRACT, private_envelope(content, version=4), [native_capture],
+                    original_item="I-001", window_id="window-2026-01",
+                    repository="FS-GG/.github", delivery_captures=[changed])
+
     def test_pre_admission_cli_requires_direct_pinned_host_export(self):
         empty = {
             "learningObservations": [], "populations": [], "outcomes": [], "admissions": [],

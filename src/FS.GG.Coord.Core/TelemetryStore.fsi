@@ -325,6 +325,11 @@ module TelemetryStore =
             allocationRule: string * allocationRoster: string
         | LearnSharedCostAuthority of
             nativeCostId: string * sourceInventoryId: string * sourceInvocationId: string * sourceDigest: string
+        | LearnNativeDeliverySource of
+            candidateIdentity: string * candidateSourceRef: string * candidateDigest: string *
+            repository: string * pullRequest: int64 * expectedHead: string * observedHead: string *
+            baseRef: string * baseSha: string * state: string * mergeCommit: string option *
+            mergedAt: string option * sourceDigest: string
 
     type Fact =
         {

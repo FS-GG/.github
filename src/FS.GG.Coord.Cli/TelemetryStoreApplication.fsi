@@ -27,6 +27,25 @@ module TelemetryStoreApplication =
             RequestedEffort: string
         }
 
+    type NativeDeliveryCandidate =
+        {
+            Identity: string
+            ItemId: string
+            Repository: string
+            PullRequest: int64
+            ExpectedHead: string
+            SourceRef: string
+            CanonicalFact: string
+            FactDigest: string
+            ReceiptRole: string option
+            ReceiptGrantId: string option
+            ReceiptGrantGeneration: int64 option
+            ReceiptKey: string option
+            ReceiptEnvelopeDigest: string option
+            Binding: string
+            BindingDigest: string
+        }
+
     val databaseFileName: string
     val assessProductionRoot: path: string -> TelemetryStore.DurabilityAssessment
     val initialize: path: string -> assessment: TelemetryStore.DurabilityAssessment -> Result<string, string list>
@@ -132,6 +151,12 @@ module TelemetryStoreApplication =
         dispatchId: string ->
         nativeAgentId: string ->
             Result<NativeCollectorDispatch, string list>
+
+    val resolveNativeDeliveryCandidate:
+        path: string ->
+        assessment: TelemetryStore.DurabilityAssessment ->
+        sourceRef: string ->
+            Result<NativeDeliveryCandidate, string list>
 
     val backupReceiptStore:
         path: string ->

@@ -16,6 +16,7 @@ open Microsoft.Extensions.Configuration
 open Microsoft.Extensions.Logging
 open FS.GG.Coord
 open FS.GG.Coord.Cli
+open FS.GG.Coord.GitHub
 open FS.GG.Telemetry.Dashboard
 
 module private BrowserComposition =
@@ -453,6 +454,133 @@ module Operations =
         | Ok envelope when envelope.Scope = principal.Scope -> envelopeBytes, capture
         | _ -> invalidOp "native collector capture principal differs"
 
+    let private nativeDeliveryEnvelope (principal: TelemetryReceipt.Principal)
+                                      (candidate: TelemetryStoreApplication.NativeDeliveryCandidate)
+                                      (observation: NativeDeliverySource.Observation) =
+        let optionNode (value: string option) = value |> Option.map (fun text -> JsonValue.Create(text) :> JsonNode) |> Option.defaultValue null
+        let identity = "native-delivery-" + candidate.BindingDigest[..31]
+        let fact = JsonObject()
+        fact["kind"] <- JsonValue.Create "learn-native-delivery-source/1"
+        fact["identity"] <- JsonValue.Create identity
+        fact["itemId"] <- JsonValue.Create candidate.ItemId
+        fact["revision"] <- JsonValue.Create 0
+        fact["candidateIdentity"] <- JsonValue.Create candidate.Identity
+        fact["candidateSourceRef"] <- JsonValue.Create candidate.SourceRef
+        fact["candidateDigest"] <- JsonValue.Create candidate.BindingDigest
+        fact["repository"] <- JsonValue.Create observation.Repository
+        fact["pullRequest"] <- JsonValue.Create observation.PullRequest
+        fact["expectedHead"] <- JsonValue.Create observation.ExpectedHead
+        fact["observedHead"] <- JsonValue.Create observation.ObservedHead
+        fact["baseRef"] <- JsonValue.Create observation.BaseRef
+        fact["baseSha"] <- JsonValue.Create observation.BaseSha
+        fact["state"] <- JsonValue.Create observation.State
+        fact["mergeCommit"] <- optionNode observation.MergeCommit
+        fact["mergedAt"] <- optionNode observation.MergedAt
+        fact["sourceKind"] <- JsonValue.Create "github-pull-request-readback"
+        fact["sourceDigest"] <- JsonValue.Create observation.SourceDigest
+        fact["originalWindowBinding"] <- JsonValue.Create "unverified"
+        let payload = JsonObject()
+        payload["schema"] <- JsonValue.Create TelemetryStore.BatchSchema
+        payload["ingestId"] <- JsonValue.Create("receipt-" + identity)
+        payload["sourceIdentity"] <- JsonValue.Create "protected-native-delivery-source"
+        payload["generation"] <- JsonValue.Create(string principal.GrantGeneration.Value)
+        payload["cursor"] <- JsonValue.Create candidate.SourceRef
+        payload["eventCount"] <- JsonValue.Create 1
+        payload["events"] <- JsonArray(fact)
+        let envelope = JsonObject()
+        envelope["schema"] <- JsonValue.Create TelemetryReceipt.Schema
+        envelope["workspaceId"] <- JsonValue.Create principal.Scope.Workspace
+        envelope["producerId"] <- JsonValue.Create principal.Scope.Producer
+        envelope["streamId"] <- JsonValue.Create principal.Scope.Stream
+        envelope["batchId"] <- JsonValue.Create("native-delivery-" + candidate.BindingDigest[..31])
+        envelope["payload"] <- payload
+        CanonicalJson.canonicalize(Encoding.UTF8.GetBytes(envelope.ToJsonString()))
+        |> Result.map Encoding.UTF8.GetBytes
+        |> Result.defaultWith (fun _ -> invalidOp "native delivery envelope is invalid")
+
+    let private readNativeDeliveryCapture
+        (principal: TelemetryReceipt.Principal)
+        (installationDigest: string)
+        (candidate: TelemetryStoreApplication.NativeDeliveryCandidate)
+        (bytes: byte array) =
+        let capture = JsonNode.Parse(bytes).AsObject()
+        let names = capture |> Seq.map _.Key |> Set.ofSeq
+        if names <> set [ "schema"; "installationDigest"; "grantId"; "grantGeneration";
+                          "candidateBinding"; "candidateDigest"; "responseBody"; "sourceDigest"; "envelope" ]
+           || capture["schema"].GetValue<string>() <> "fsgg.telemetry.protected-native-delivery-capture/1"
+           || capture["installationDigest"].GetValue<string>() <> installationDigest
+           || capture["grantId"].GetValue<string>() <> principal.GrantId.Value
+           || capture["grantGeneration"].GetValue<int64>() <> principal.GrantGeneration.Value
+           || capture["candidateDigest"].GetValue<string>() <> candidate.BindingDigest
+           || CanonicalJson.canonicalize(Encoding.UTF8.GetBytes(capture["candidateBinding"].ToJsonString())) <> Ok candidate.Binding
+           || digestBytes(Encoding.UTF8.GetBytes(capture["responseBody"].GetValue<string>())) <> capture["sourceDigest"].GetValue<string>() then
+            invalidOp "native delivery capture binding differs"
+        let envelopeBytes =
+            CanonicalJson.canonicalize(Encoding.UTF8.GetBytes(capture["envelope"].ToJsonString()))
+            |> Result.map Encoding.UTF8.GetBytes |> Result.defaultWith invalidOp
+        let observation =
+            NativeDeliverySource.decodeResponse candidate (capture["responseBody"].GetValue<string>())
+            |> Result.defaultWith (String.concat "; " >> invalidOp)
+        let expectedEnvelope = nativeDeliveryEnvelope principal candidate observation
+        if not (CryptographicOperations.FixedTimeEquals(envelopeBytes, expectedEnvelope)) then
+            invalidOp "native delivery capture response and envelope differ"
+        let envelope =
+            TelemetryReceipt.parse envelopeBytes
+            |> Result.defaultWith (String.concat "; " >> invalidOp)
+        match envelope.Batch.Facts with
+        | [ { Payload = TelemetryStore.LearnNativeDeliverySource(_, sourceRef, candidateDigest, _, _, _, _, _, _, _, _, _, sourceDigest) } ]
+            when envelope.Scope = principal.Scope && sourceRef = candidate.SourceRef
+                 && candidateDigest = candidate.BindingDigest
+                 && sourceDigest = capture["sourceDigest"].GetValue<string>() ->
+            envelopeBytes, envelope, capture
+        | _ -> invalidOp "native delivery capture envelope binding differs"
+
+    let private collectNativeDelivery path config assessmentFor transportFor sourceRef =
+        match Configuration.loadNativeDeliverySourceInstallation path config with
+        | Error errors -> Error errors
+        | Ok(sourceInstallation, nativeInstallation, principal) ->
+            match storeFor config principal.Scope.Workspace with
+            | None -> Error [ "native delivery source workspace is unavailable" ]
+            | Some store ->
+                match TelemetryStoreApplication.resolveNativeDeliveryCandidate store.Root (assessmentFor store.Root) sourceRef with
+                | Error errors -> Error errors
+                | Ok candidate when not (sourceInstallation.AllowedRepositories |> Array.contains candidate.Repository) ->
+                    Error [ "native delivery candidate repository is outside the installed scope" ]
+                | Ok candidate ->
+                    let installationDigest =
+                        String.concat "\n" [ digestFile(path + ".native-collector.json")
+                                             digestFile(path + ".native-delivery-source.json")
+                                             digestFile(sourceInstallation.GitHubCredentialFile) ]
+                        |> Encoding.UTF8.GetBytes |> digestBytes
+                    let artifactName = candidate.BindingDigest + ".delivery-capture.json"
+                    let artifactPath = Path.Combine(nativeInstallation.EvidenceRoot, artifactName)
+                    let retained =
+                        if File.Exists artifactPath then writePrivateAtomic nativeInstallation.EvidenceRoot artifactName Array.empty
+                        else
+                            let token = File.ReadAllText(sourceInstallation.GitHubCredentialFile).Trim()
+                            if token.Length < 1 || token.Length > 4096 then invalidOp "native delivery GitHub credential is invalid"
+                            let disposable, transport = transportFor token
+                            use _transport = disposable
+                            let observation =
+                                NativeDeliverySource.acquire transport candidate
+                                |> Result.defaultWith (String.concat "; " >> invalidOp)
+                            let envelope = nativeDeliveryEnvelope principal candidate observation
+                            let capture = JsonObject()
+                            capture["schema"] <- JsonValue.Create "fsgg.telemetry.protected-native-delivery-capture/1"
+                            capture["installationDigest"] <- JsonValue.Create installationDigest
+                            capture["grantId"] <- JsonValue.Create principal.GrantId.Value
+                            capture["grantGeneration"] <- JsonValue.Create principal.GrantGeneration.Value
+                            capture["candidateBinding"] <- JsonNode.Parse candidate.Binding
+                            capture["candidateDigest"] <- JsonValue.Create candidate.BindingDigest
+                            capture["responseBody"] <- JsonValue.Create observation.ResponseBody
+                            capture["sourceDigest"] <- JsonValue.Create observation.SourceDigest
+                            capture["envelope"] <- JsonNode.Parse envelope
+                            writePrivateAtomic nativeInstallation.EvidenceRoot artifactName (Encoding.UTF8.GetBytes(capture.ToJsonString()))
+                    let envelopeBytes, _, _ = readNativeDeliveryCapture principal installationDigest candidate retained
+                    TelemetryStoreApplication.submitReceiptPrincipal store.Root (assessmentFor store.Root) principal envelopeBytes
+                    |> Result.bind (fun _ -> TelemetryStoreApplication.drainReceipts store.Root (assessmentFor store.Root) principal.Scope.Workspace)
+                    |> Result.map (fun _ -> JsonSerializer.Serialize({| schema = "fsgg.telemetry.native-delivery-result/1"; status = "applied"; sourceRef = sourceRef |}) + "\n")
+
     let private collectNative
         (path: string)
         (config: HostConfig)
@@ -571,7 +699,7 @@ module Operations =
                                         + "\n"
                                     )
 
-    let private exportLearning path config assessmentFor =
+    let private exportLearning path config assessmentFor includeNativeDelivery =
         match Configuration.loadNativeCollectorInstallation path config with
         | Error errors -> Error errors
         | Ok(installation, _) when installation.Schema <> "fsgg.telemetry.native-collector-installation/2" ->
@@ -580,7 +708,10 @@ module Operations =
             match storeFor config principal.Scope.Workspace with
             | None -> Error [ "native collector workspace is unavailable" ]
             | Some store ->
-                let files = Directory.EnumerateFiles(installation.EvidenceRoot, "*.capture.json") |> Seq.truncate 1001 |> Seq.toArray
+                let files =
+                    Directory.EnumerateFiles(installation.EvidenceRoot, "*.capture.json")
+                    |> Seq.filter (fun file -> not (file.EndsWith(".delivery-capture.json", StringComparison.Ordinal)))
+                    |> Seq.truncate 1001 |> Seq.toArray
                 if files.Length > 1000 then invalidOp "native collector capture population exceeds the bound"
                 let captures = JsonArray()
                 let mutable captureBytes = 0
@@ -607,6 +738,54 @@ module Operations =
                     output["schema"] <- JsonValue.Create "fsgg.telemetry.protected-learning-export/1"
                     output["snapshot"] <- JsonNode.Parse snapshot
                     output["captures"] <- captures
+                    if includeNativeDelivery then
+                        match Configuration.loadNativeDeliverySourceInstallation path config with
+                        | Error errors -> raise (InvalidOperationException(String.concat "; " errors))
+                        | Ok(_, _, deliveryPrincipal) when deliveryPrincipal <> principal ->
+                            invalidOp "native delivery source principal differs"
+                        | Ok(sourceInstallation, _, _) ->
+                            let installationDigest =
+                                String.concat "\n" [ digestFile(path + ".native-collector.json")
+                                                     digestFile(path + ".native-delivery-source.json")
+                                                     digestFile(sourceInstallation.GitHubCredentialFile) ]
+                                |> Encoding.UTF8.GetBytes |> digestBytes
+                            let files =
+                                Directory.EnumerateFiles(installation.EvidenceRoot, "*.delivery-capture.json")
+                                |> Seq.truncate 1001 |> Seq.toArray
+                            if files.Length > 1000 then invalidOp "native delivery capture population exceeds the bound"
+                            let deliveryCaptures = JsonArray()
+                            for file in files |> Array.sort do
+                                let bytes = readPrivateEvidence file
+                                captureBytes <- captureBytes + bytes.Length
+                                if captureBytes > 3145728 then invalidOp "protected capture bytes exceed the export bound"
+                                let preliminary = JsonNode.Parse(bytes).AsObject()
+                                let envelopeBytes =
+                                    CanonicalJson.canonicalize(Encoding.UTF8.GetBytes(preliminary["envelope"].ToJsonString()))
+                                    |> Result.map Encoding.UTF8.GetBytes |> Result.defaultWith invalidOp
+                                let preliminaryEnvelope = TelemetryReceipt.parse envelopeBytes |> Result.defaultWith (String.concat "; " >> invalidOp)
+                                let sourceRef =
+                                    match preliminaryEnvelope.Batch.Facts with
+                                    | [ { Payload = TelemetryStore.LearnNativeDeliverySource(_, value, _, _, _, _, _, _, _, _, _, _, _) } ] -> value
+                                    | _ -> invalidOp "native delivery capture source is invalid"
+                                let candidate =
+                                    TelemetryStoreApplication.resolveNativeDeliveryCandidate store.Root (assessmentFor store.Root) sourceRef
+                                    |> Result.defaultWith (String.concat "; " >> invalidOp)
+                                let _, envelope, capture = readNativeDeliveryCapture principal installationDigest candidate bytes
+                                let exported = JsonObject()
+                                exported["receiptKey"] <- JsonValue.Create envelope.Key
+                                exported["envelopeDigest"] <- JsonValue.Create envelope.Digest
+                                exported["producer"] <- JsonValue.Create principal.Scope.Producer
+                                exported["stream"] <- JsonValue.Create principal.Scope.Stream
+                                exported["grantId"] <- capture["grantId"].DeepClone()
+                                exported["grantGeneration"] <- capture["grantGeneration"].DeepClone()
+                                exported["candidateBinding"] <- capture["candidateBinding"].DeepClone()
+                                exported["candidateDigest"] <- capture["candidateDigest"].DeepClone()
+                                exported["responseBody"] <- capture["responseBody"].DeepClone()
+                                exported["sourceDigest"] <- capture["sourceDigest"].DeepClone()
+                                exported["events"] <- capture["envelope"].["payload"].["events"].DeepClone()
+                                deliveryCaptures.Add exported
+                            output["schema"] <- JsonValue.Create "fsgg.telemetry.protected-learning-export/2"
+                            output["deliveryCaptures"] <- deliveryCaptures
                     let json = output.ToJsonString() + "\n"
                     if Encoding.UTF8.GetByteCount json > 4194304 then Error [ "protected learning export exceeds the bound" ]
                     else Ok json
@@ -727,7 +906,10 @@ module Operations =
             + "\n"
         )
 
-    let runWithAssessment (argv: string array) assessmentFor =
+    let runWithDependencies
+        (argv: string array)
+        (assessmentFor: string -> TelemetryStore.DurabilityAssessment)
+        (deliveryTransportFor: string -> IDisposable * Transport.ISinglePageGitHubTransport) =
         match List.ofArray argv with
         | [ "init"; "--root"; root; "--workspace"; workspace ] ->
             match TelemetryStoreApplication.initialize root (assessmentFor root) with
@@ -817,12 +999,28 @@ module Operations =
                         |> resultExit "native-collector-refused"
                     with _ ->
                         resultExit "native-collector-refused" (Error [ "native collector refused" ]))
+        | [ "collect-native-delivery"; "--config"; path; "--source-ref"; sourceRef ] ->
+            match load path with
+            | Error errors -> resultExit "invalid-configuration" (Error errors)
+            | Ok config ->
+                withLock config (fun () ->
+                    try
+                        collectNativeDelivery path config assessmentFor deliveryTransportFor sourceRef
+                        |> resultExit "native-delivery-source-refused"
+                    with _ -> resultExit "native-delivery-source-refused" (Error [ "native delivery source refused" ]))
         | [ "export-learning"; "--config"; path ] ->
             match load path with
             | Error errors -> resultExit "invalid-configuration" (Error errors)
             | Ok config ->
                 withLock config (fun () ->
-                    try exportLearning path config assessmentFor |> resultExit "native-export-refused"
+                    try exportLearning path config assessmentFor false |> resultExit "native-export-refused"
+                    with _ -> resultExit "native-export-refused" (Error [ "native export refused" ]))
+        | [ "export-learning"; "--config"; path; "--include-native-delivery" ] ->
+            match load path with
+            | Error errors -> resultExit "invalid-configuration" (Error errors)
+            | Ok config ->
+                withLock config (fun () ->
+                    try exportLearning path config assessmentFor true |> resultExit "native-export-refused"
                     with _ -> resultExit "native-export-refused" (Error [ "native export refused" ]))
         | [ "preflight"; "--config"; path ] ->
             match load path with
@@ -1129,8 +1327,14 @@ module Operations =
             writeError "usage" [ "invalid command" ]
             2
 
-    let run argv =
-        runWithAssessment argv TelemetryStoreApplication.assessProductionRoot
+    let private productionDeliveryTransport token =
+        let transport = new Transport.HttpTransport("https://api.github.com", token)
+        (transport :> IDisposable), (transport :> Transport.ISinglePageGitHubTransport)
+
+    let runWithAssessment argv assessmentFor =
+        runWithDependencies argv assessmentFor productionDeliveryTransport
+
+    let run argv = runWithAssessment argv TelemetryStoreApplication.assessProductionRoot
 
 module Program =
     [<EntryPoint>]
