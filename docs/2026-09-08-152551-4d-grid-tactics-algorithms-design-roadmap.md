@@ -1007,6 +1007,8 @@ are not new top-level programme features and must not be split further to fill a
 Prospective cohort admission and original-item attribution are programme-owned; planning, partial
 checkpoints and historical source do not count as newly completed observed originals.
 
+All six source outcomes are now delivered in the [owning plan](https://github.com/FS-GG/FS.GG.FourD/blob/b7afd577b0669d8a25b2e4b8ecc52c80d581c2e9/docs/FOURD-01.design-v2.md). Browser/comparison [#12](https://github.com/FS-GG/FS.GG.FourD/pull/12) and evaluation-pack [#13](https://github.com/FS-GG/FS.GG.FourD/pull/13) passed exact native checks and independent tree/owning-outcome readback. The evaluation pack identifies actual artifacts and freezes public task answers; synthetic incomplete rehearsals cannot supply human evidence. V1 remains the default and revised prototypes require explicit opt-in.
+
 The existing [FOURD-01.4-E/1 protocol](https://github.com/FS-GG/FS.GG.FourD/blob/9109bfe061ece3637cad8e3fcafcfc6643458b43/docs/FOURD-01.4-evaluation.md)
 still lacks consenting unfamiliar paired-player sessions. Preserve that pending historical gate and
 its instrumentation. It does not block new rules research or source qualification. Its blast/area

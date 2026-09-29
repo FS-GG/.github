@@ -1,7 +1,7 @@
 {
   "schema": "fsgg.routine-cohort-observation/2",
   "cohort": "routine-route-first-ten-code-items",
-  "asOf": "2026-09-29T06:35:44Z",
+  "asOf": "2026-09-29T07:15:35Z",
   "targetPerArm": 10,
   "repairObservation": {
     "mode": "completed-items",
@@ -531,16 +531,43 @@
       "eligible": true,
       "selectedBeforeOutcome": true,
       "selectedAt": "2026-09-29T04:34:57Z",
-      "delivery": "pending",
+      "delivery": "delivered",
       "usage": {
         "status": "missing",
         "upperBoundTokens": null
       },
       "repairFollowup": {
         "status": "pending",
-        "observedThrough": "2026-09-29T04:34:57Z"
+        "observedThrough": "2026-09-29T07:10:28Z",
+        "severeEvents": [],
+        "processAttributableRollbackEvents": []
       },
-      "qualificationBoundary": "Versioned protocol/scorer preparation is source-delivered with PR11, but whole source-ready evaluation pack remains pending actual map/browser task wiring. Synthetic preparation proves no human evidence and does not count as completion."
+      "qualificationBoundary": "Prospectively selected before implementation outcomes. Source-ready evaluation pack is native-qualified and owning checked source outcome independently read back; consenting human sessions and design selection remain separate.",
+      "completedAt": "2026-09-29T07:10:28Z",
+      "url": "https://github.com/FS-GG/FS.GG.FourD/pull/13",
+      "mergeCommit": "b7afd577b0669d8a25b2e4b8ecc52c80d581c2e9",
+      "tree": "c214abf8941bf58430194c876cb7eaf0ec944e46",
+      "finalCompletion": {
+        "owningAcceptance": "Done",
+        "nativeDoneReadback": {
+          "state": "Done",
+          "readAt": "2026-09-29T07:10:28Z",
+          "url": "https://github.com/FS-GG/FS.GG.FourD/blob/b7afd577b0669d8a25b2e4b8ecc52c80d581c2e9/docs/FOURD-01.design-v2.md"
+        },
+        "sourceDelivery": {
+          "url": "https://github.com/FS-GG/FS.GG.FourD/pull/13",
+          "commit": "b7afd577b0669d8a25b2e4b8ecc52c80d581c2e9",
+          "tree": "c214abf8941bf58430194c876cb7eaf0ec944e46",
+          "mergedAt": "2026-09-29T07:09:54Z"
+        },
+        "checks": [
+          {
+            "name": "verify \u2014 full native/Fable/Node qualification and 30 Chromium journeys",
+            "status": "SUCCESS",
+            "url": "https://github.com/FS-GG/FS.GG.FourD/actions/runs/36534310893"
+          }
+        ]
+      }
     },
     {
       "id": "FOURD-01.V2.2",
@@ -728,16 +755,48 @@
       "eligible": true,
       "selectedBeforeOutcome": true,
       "selectedAt": "2026-09-29T06:31:33Z",
-      "delivery": "pending",
+      "delivery": "delivered",
       "usage": {
         "status": "missing",
         "upperBoundTokens": null
       },
       "repairFollowup": {
         "status": "pending",
-        "observedThrough": "2026-09-29T06:31:33Z"
+        "observedThrough": "2026-09-29T07:15:35Z",
+        "severeEvents": [],
+        "processAttributableRollbackEvents": []
       },
-      "qualificationBoundary": "Add, edit, complete, filter and delete tasks with retained local state and accessible browser controls. Whole-app controls-driven qualification, owning native Done, source delivery and protected readback are required; publication and installed scaffold defaults remain separate. No previous completed example is admitted."
+      "qualificationBoundary": "Add, edit, complete, filter and delete tasks with retained local state and accessible browser controls. Whole-app controls-driven qualification, owning native Done, source delivery and protected readback are required; publication and installed scaffold defaults remain separate. No previous completed example is admitted. Complete staged browser qualification and required native checks passed; owning checked outcome and exact qualified/main tree independently read back. All four whole apps share one coherent source delivery; they retain four original identities.",
+      "completedAt": "2026-09-29T07:15:35Z",
+      "url": "https://github.com/FS-GG/FS.GG.Templates/pull/648",
+      "mergeCommit": "ba760d7725fe64b9311c20b57a05ef8630533804",
+      "tree": "b79dbd9513ea3c0b77ab8b9558003e05addee5cd",
+      "finalCompletion": {
+        "owningAcceptance": "Done",
+        "nativeDoneReadback": {
+          "state": "Done",
+          "readAt": "2026-09-29T07:15:35Z",
+          "url": "https://github.com/FS-GG/FS.GG.Templates/blob/ba760d7725fe64b9311c20b57a05ef8630533804/docs/roadmaps/todo-app.md"
+        },
+        "sourceDelivery": {
+          "url": "https://github.com/FS-GG/FS.GG.Templates/pull/648",
+          "commit": "ba760d7725fe64b9311c20b57a05ef8630533804",
+          "tree": "b79dbd9513ea3c0b77ab8b9558003e05addee5cd",
+          "mergedAt": "2026-09-29T07:14:45Z"
+        },
+        "checks": [
+          {
+            "name": "composition \u2014 required whole composed product qualification",
+            "status": "SUCCESS",
+            "url": "https://github.com/FS-GG/FS.GG.Templates/actions/runs/36534240755"
+          },
+          {
+            "name": "Enrollment apps \u2014 18 domain and 14 real Chromium cases",
+            "status": "SUCCESS",
+            "url": "https://github.com/FS-GG/FS.GG.Templates/actions/runs/36534240553"
+          }
+        ]
+      }
     },
     {
       "id": "TTT-01.1",
@@ -748,16 +807,48 @@
       "eligible": true,
       "selectedBeforeOutcome": true,
       "selectedAt": "2026-09-29T06:31:33Z",
-      "delivery": "pending",
+      "delivery": "delivered",
       "usage": {
         "status": "missing",
         "upperBoundTokens": null
       },
       "repairFollowup": {
         "status": "pending",
-        "observedThrough": "2026-09-29T06:31:33Z"
+        "observedThrough": "2026-09-29T07:15:35Z",
+        "severeEvents": [],
+        "processAttributableRollbackEvents": []
       },
-      "qualificationBoundary": "Play a complete local two-player game, detect wins and draws, refuse occupied/post-terminal moves and restart. Whole-app controls-driven qualification, owning native Done, source delivery and protected readback are required; publication and installed scaffold defaults remain separate. No previous completed example is admitted."
+      "qualificationBoundary": "Play a complete local two-player game, detect wins and draws, refuse occupied/post-terminal moves and restart. Whole-app controls-driven qualification, owning native Done, source delivery and protected readback are required; publication and installed scaffold defaults remain separate. No previous completed example is admitted. Complete staged browser qualification and required native checks passed; owning checked outcome and exact qualified/main tree independently read back. All four whole apps share one coherent source delivery; they retain four original identities.",
+      "completedAt": "2026-09-29T07:15:35Z",
+      "url": "https://github.com/FS-GG/FS.GG.Templates/pull/648",
+      "mergeCommit": "ba760d7725fe64b9311c20b57a05ef8630533804",
+      "tree": "b79dbd9513ea3c0b77ab8b9558003e05addee5cd",
+      "finalCompletion": {
+        "owningAcceptance": "Done",
+        "nativeDoneReadback": {
+          "state": "Done",
+          "readAt": "2026-09-29T07:15:35Z",
+          "url": "https://github.com/FS-GG/FS.GG.Templates/blob/ba760d7725fe64b9311c20b57a05ef8630533804/docs/roadmaps/tic-tac-toe.md"
+        },
+        "sourceDelivery": {
+          "url": "https://github.com/FS-GG/FS.GG.Templates/pull/648",
+          "commit": "ba760d7725fe64b9311c20b57a05ef8630533804",
+          "tree": "b79dbd9513ea3c0b77ab8b9558003e05addee5cd",
+          "mergedAt": "2026-09-29T07:14:45Z"
+        },
+        "checks": [
+          {
+            "name": "composition \u2014 required whole composed product qualification",
+            "status": "SUCCESS",
+            "url": "https://github.com/FS-GG/FS.GG.Templates/actions/runs/36534240755"
+          },
+          {
+            "name": "Enrollment apps \u2014 18 domain and 14 real Chromium cases",
+            "status": "SUCCESS",
+            "url": "https://github.com/FS-GG/FS.GG.Templates/actions/runs/36534240553"
+          }
+        ]
+      }
     },
     {
       "id": "SNAKE-01.1",
@@ -768,16 +859,48 @@
       "eligible": true,
       "selectedBeforeOutcome": true,
       "selectedAt": "2026-09-29T06:31:33Z",
-      "delivery": "pending",
+      "delivery": "delivered",
       "usage": {
         "status": "missing",
         "upperBoundTokens": null
       },
       "repairFollowup": {
         "status": "pending",
-        "observedThrough": "2026-09-29T06:31:33Z"
+        "observedThrough": "2026-09-29T07:15:35Z",
+        "severeEvents": [],
+        "processAttributableRollbackEvents": []
       },
-      "qualificationBoundary": "Play with keyboard direction controls, food and growth, deterministic collision and score, pause and restart. Whole-app controls-driven qualification, owning native Done, source delivery and protected readback are required; publication and installed scaffold defaults remain separate. No previous completed example is admitted."
+      "qualificationBoundary": "Play with keyboard direction controls, food and growth, deterministic collision and score, pause and restart. Whole-app controls-driven qualification, owning native Done, source delivery and protected readback are required; publication and installed scaffold defaults remain separate. No previous completed example is admitted. Complete staged browser qualification and required native checks passed; owning checked outcome and exact qualified/main tree independently read back. All four whole apps share one coherent source delivery; they retain four original identities.",
+      "completedAt": "2026-09-29T07:15:35Z",
+      "url": "https://github.com/FS-GG/FS.GG.Templates/pull/648",
+      "mergeCommit": "ba760d7725fe64b9311c20b57a05ef8630533804",
+      "tree": "b79dbd9513ea3c0b77ab8b9558003e05addee5cd",
+      "finalCompletion": {
+        "owningAcceptance": "Done",
+        "nativeDoneReadback": {
+          "state": "Done",
+          "readAt": "2026-09-29T07:15:35Z",
+          "url": "https://github.com/FS-GG/FS.GG.Templates/blob/ba760d7725fe64b9311c20b57a05ef8630533804/docs/roadmaps/snake-app.md"
+        },
+        "sourceDelivery": {
+          "url": "https://github.com/FS-GG/FS.GG.Templates/pull/648",
+          "commit": "ba760d7725fe64b9311c20b57a05ef8630533804",
+          "tree": "b79dbd9513ea3c0b77ab8b9558003e05addee5cd",
+          "mergedAt": "2026-09-29T07:14:45Z"
+        },
+        "checks": [
+          {
+            "name": "composition \u2014 required whole composed product qualification",
+            "status": "SUCCESS",
+            "url": "https://github.com/FS-GG/FS.GG.Templates/actions/runs/36534240755"
+          },
+          {
+            "name": "Enrollment apps \u2014 18 domain and 14 real Chromium cases",
+            "status": "SUCCESS",
+            "url": "https://github.com/FS-GG/FS.GG.Templates/actions/runs/36534240553"
+          }
+        ]
+      }
     },
     {
       "id": "HELLO-01.1",
@@ -788,16 +911,48 @@
       "eligible": true,
       "selectedBeforeOutcome": true,
       "selectedAt": "2026-09-29T06:31:33Z",
-      "delivery": "pending",
+      "delivery": "delivered",
       "usage": {
         "status": "missing",
         "upperBoundTokens": null
       },
       "repairFollowup": {
         "status": "pending",
-        "observedThrough": "2026-09-29T06:31:33Z"
+        "observedThrough": "2026-09-29T07:15:35Z",
+        "severeEvents": [],
+        "processAttributableRollbackEvents": []
       },
-      "qualificationBoundary": "Run a real accessible browser application that renders Hello, world! from its application entry point. Whole-app controls-driven qualification, owning native Done, source delivery and protected readback are required; publication and installed scaffold defaults remain separate. No previous completed example is admitted."
+      "qualificationBoundary": "Run a real accessible browser application that renders Hello, world! from its application entry point. Whole-app controls-driven qualification, owning native Done, source delivery and protected readback are required; publication and installed scaffold defaults remain separate. No previous completed example is admitted. Complete staged browser qualification and required native checks passed; owning checked outcome and exact qualified/main tree independently read back. All four whole apps share one coherent source delivery; they retain four original identities.",
+      "completedAt": "2026-09-29T07:15:35Z",
+      "url": "https://github.com/FS-GG/FS.GG.Templates/pull/648",
+      "mergeCommit": "ba760d7725fe64b9311c20b57a05ef8630533804",
+      "tree": "b79dbd9513ea3c0b77ab8b9558003e05addee5cd",
+      "finalCompletion": {
+        "owningAcceptance": "Done",
+        "nativeDoneReadback": {
+          "state": "Done",
+          "readAt": "2026-09-29T07:15:35Z",
+          "url": "https://github.com/FS-GG/FS.GG.Templates/blob/ba760d7725fe64b9311c20b57a05ef8630533804/docs/roadmaps/hello-world-app.md"
+        },
+        "sourceDelivery": {
+          "url": "https://github.com/FS-GG/FS.GG.Templates/pull/648",
+          "commit": "ba760d7725fe64b9311c20b57a05ef8630533804",
+          "tree": "b79dbd9513ea3c0b77ab8b9558003e05addee5cd",
+          "mergedAt": "2026-09-29T07:14:45Z"
+        },
+        "checks": [
+          {
+            "name": "composition \u2014 required whole composed product qualification",
+            "status": "SUCCESS",
+            "url": "https://github.com/FS-GG/FS.GG.Templates/actions/runs/36534240755"
+          },
+          {
+            "name": "Enrollment apps \u2014 18 domain and 14 real Chromium cases",
+            "status": "SUCCESS",
+            "url": "https://github.com/FS-GG/FS.GG.Templates/actions/runs/36534240553"
+          }
+        ]
+      }
     },
     {
       "id": "FOURD-01.V2.4",
