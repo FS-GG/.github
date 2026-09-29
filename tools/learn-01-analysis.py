@@ -370,12 +370,40 @@ def assess_pre_admission_owner_evidence(
         values = content.get(name, [])
         if not isinstance(values, list) or any(not isinstance(row, dict) for row in values):
             raise Refusal("pre-admission retained relation is malformed: " + name)
+        for row in values:
+            for field in ("item_id", "original_item_id", "invocation_id", "dispatch_id",
+                          "window_id", "repository"):
+                value = row.get(field)
+                if value is not None and (not isinstance(value, str) or not value):
+                    raise Refusal(f"pre-admission retained relation {name} has malformed {field}")
         relations[name] = values
     if not isinstance(captures, list) or len(captures) > 1000:
         raise Refusal("protected capture selection is malformed")
 
     parsed = []
     seen_identities = {}
+
+    def validate_event_fields(event: dict, context: str) -> None:
+        for field in ("identity", "kind", "itemId", "originalItemId", "invocationId",
+                      "windowId", "repository"):
+            value = event.get(field)
+            if value is not None and (not isinstance(value, str) or not value):
+                raise Refusal(f"{context} has malformed {field}")
+        roster = event.get("allocationRoster")
+        if (roster is not None and
+                (not isinstance(roster, list) or
+                 any(not isinstance(value, str) or not value for value in roster))):
+            raise Refusal(f"{context} allocation roster is malformed")
+        allocations = event.get("allocations")
+        if (allocations is not None and
+                (not isinstance(allocations, list) or
+                 any(not isinstance(allocation, dict) for allocation in allocations))):
+            raise Refusal(f"{context} allocations are malformed")
+        for allocation in allocations or []:
+            value = allocation.get("originalItemId")
+            if value is not None and (not isinstance(value, str) or not value):
+                raise Refusal(f"{context} allocation has malformed originalItemId")
+
     for row in rows:
         if not isinstance(row, dict):
             raise Refusal("pre-admission learning observation is malformed")
@@ -386,12 +414,7 @@ def assess_pre_admission_owner_evidence(
             raise Refusal("pre-admission learning observation is malformed") from error
         if not isinstance(event, dict):
             raise Refusal("pre-admission learning canonical value must be an object")
-        if ("allocationRoster" in event and not isinstance(event["allocationRoster"], list)):
-            raise Refusal("pre-admission learning allocation roster is malformed")
-        if ("allocations" in event and
-                (not isinstance(event["allocations"], list) or
-                 any(not isinstance(allocation, dict) for allocation in event["allocations"]))):
-            raise Refusal("pre-admission learning allocations are malformed")
+        validate_event_fields(event, "pre-admission learning observation")
         identity = event.get("identity")
         if (not isinstance(canonical, str) or not isinstance(identity, str) or not identity or
                 row.get("content_digest") != hashlib.sha256(canonical.encode()).hexdigest()):
@@ -402,7 +425,7 @@ def assess_pre_admission_owner_evidence(
         parsed.append((row, event))
 
     def event_matches(event: dict) -> bool:
-        if original_item in {event.get("itemId"), event.get("originalItemId")}:
+        if event.get("itemId") == original_item or event.get("originalItemId") == original_item:
             return True
         if original_item in (event.get("allocationRoster") or []):
             return True
@@ -427,7 +450,11 @@ def assess_pre_admission_owner_evidence(
     if len(assignments) > 1:
         raise Refusal("pre-admission original has conflicting retained assignments")
     if assignments:
-        assignment_state = "assigned" if assignments[0].get("windowId") == window_id else "conflict"
+        assignment = assignments[0]
+        assignment_state = (
+            "assigned" if assignment.get("windowId") == window_id and
+            assignment.get("repository") in {None, repository} else "conflict"
+        )
     else:
         assignment_state = "unassigned"
     selected_learning = [
@@ -469,12 +496,21 @@ def assess_pre_admission_owner_evidence(
             raise Refusal("protected capture schema is invalid")
         if any(not isinstance(event, dict) for event in capture["events"]):
             raise Refusal("protected capture event is malformed")
+        for event in capture["events"]:
+            validate_event_fields(event, "protected capture event")
+            if (event.get("kind") == "runtime-native-inventory-source/1" and
+                    (not isinstance(event.get("identity"), str) or not event["identity"] or
+                     not isinstance(event.get("invocationId"), str) or not event["invocationId"])):
+                raise Refusal("protected capture native source identifiers are malformed")
         matching_events = [event for event in capture["events"] if event_matches(event)]
         dispositions = {scope_disposition(event) for event in matching_events}
         if matching_events and "foreign" not in dispositions:
             relevant_captures.append(capture)
             capture_scopes[id(capture)] = "matched" if dispositions == {"matched"} else "unknown"
-    verified = verified_capture_invocations(content, relevant_captures)
+    verified = {
+        invocation for invocation in verified_capture_invocations(content, relevant_captures)
+        if isinstance(invocation, str) and invocation
+    }
     scoped_verified = set()
     unknown_scope_verified = set()
     for capture in relevant_captures:
@@ -525,7 +561,7 @@ def assess_pre_admission_owner_evidence(
         "native-delivery-identity-and-provenance-unavailable",
     ]
     if assignment_state == "conflict":
-        missing.append("selected-window-conflicts-with-retained-assignment")
+        missing.append("selected-scope-conflicts-with-retained-assignment")
     return {
         "schema": "fsgg.learn.pre-admission-owner-assessment/1",
         "contractId": contract["contractId"], "workspaceId": workspace,

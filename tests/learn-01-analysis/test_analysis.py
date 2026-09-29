@@ -369,18 +369,26 @@ class Learn01ContractTests(unittest.TestCase):
         cases = []
         for label, canonical in (
                 ("canonical-list", "[]"), ("canonical-scalar", "1"),
-                ("canonical-nested-shape", '{"identity":"bad","allocations":1}')):
+                ("canonical-nested-shape", '{"identity":"bad","allocations":1}'),
+                ("canonical-unhashable-id", '{"identity":"bad","itemId":[]}')):
             content = copy.deepcopy(empty)
             content["learningObservations"] = [{"canonical": canonical}]
             cases.append((label, private_envelope(content, version=4), []))
         for label, relation, value in (
                 ("relation-array", "populations", {}),
                 ("relation-row", "admissions", [42]),
+                ("relation-unhashable-id", "populations",
+                 [{"item_id": [], "original_item_id": "I-001"}]),
                 ("dispatch-array", "expectedDispatches", "not-a-list")):
             content = copy.deepcopy(empty)
             content[relation] = value
             cases.append((label, private_envelope(content, version=4), []))
-        cases.append(("capture-event", private_envelope(empty, version=4), [{"events": [[]]}]))
+        cases.extend([
+            ("capture-event", private_envelope(empty, version=4), [{"events": [[]]}]),
+            ("capture-nested-id", private_envelope(empty, version=4), [{"events": [{
+                "identity": "capture-bad", "itemId": "I-001", "allocationRoster": [[]],
+            }]}]),
+        ])
 
         with tempfile.TemporaryDirectory(prefix="learn-malformed-owner-export-") as directory:
             root = pathlib.Path(directory)
@@ -393,6 +401,26 @@ class Learn01ContractTests(unittest.TestCase):
                     self.assertEqual("", stdout)
                     self.assertTrue(stderr.startswith("refused: "), stderr)
                     self.assertNotIn("Traceback", stderr)
+
+            foreign_assignment = {
+                "kind": "learn-experiment-assignment", "identity": "assignment-I-001",
+                "itemId": "I-001", "revision": 1, "policyId": "learn-01-current-focused-v1",
+                "windowId": "window-2026-01", "arm": "current",
+                "assignedAt": "2026-01-01T00:00:00Z", "repository": "FS-GG/foreign",
+            }
+            content = copy.deepcopy(empty)
+            content["learningObservations"] = [{
+                "canonical": json.dumps(foreign_assignment, separators=(",", ":"), sort_keys=True)
+            }]
+            exported = {"schema": "fsgg.telemetry.protected-learning-export/1",
+                        "snapshot": private_envelope(content, version=4), "captures": []}
+            result, stdout, stderr = self.run_pre_admission_export(exported, root)
+            self.assertEqual(0, result, stderr)
+            assessment = json.loads(stdout)
+            self.assertEqual("conflict", assessment["assignmentState"])
+            self.assertFalse(assessment["operationalReady"])
+            self.assertIn("selected-scope-conflicts-with-retained-assignment",
+                          assessment["missingOwnerInputs"])
 
     def test_complete_v3_structure_remains_unqualified_without_independent_sources(self):
         content = self.complete_v3_content()

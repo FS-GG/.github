@@ -230,7 +230,9 @@ unrelated originals. Repeated acquisition of the same selected records therefore
 to a selected record changes it. Selection truncation, conflicting retained identities, executable-pin drift,
 capture/first-admission grant mismatch and imported self-hashed JSON refuse rather than degrade into readiness.
 Non-object canonical JSON, malformed relation containers or rows and malformed capture events also refuse with a
-typed result. Verified protected captures remain post-outcome evidence only; existing capture records do not
+typed result. Identifier and scope fields used by selection must be non-empty strings when present; malformed
+nested rosters and allocations refuse before lookup. Verified protected captures remain post-outcome evidence
+only; existing capture records do not
 retain repository/window scope, so their reconciliation is reported as `scope-unknown`, not as selected-scope
 readiness evidence.
 
