@@ -1,7 +1,7 @@
 {
   "schema": "fsgg.routine-cohort-observation/2",
   "cohort": "routine-route-first-ten-code-items",
-  "asOf": "2026-09-29T04:15:52Z",
+  "asOf": "2026-09-29T04:19:56Z",
   "targetPerArm": 10,
   "repairObservation": {
     "mode": "completed-items",
@@ -372,6 +372,74 @@
         "status": "pending",
         "observedThrough": "2026-09-07T22:25:22Z"
       }
+    },
+    {
+      "id": "FSBarV2#5+HighBarV3#2",
+      "lane": "BARC-01",
+      "originalItem": "BARC-01.4",
+      "arm": "routine",
+      "kind": "code",
+      "eligible": true,
+      "selectedBeforeOutcome": true,
+      "selectedAt": "2026-09-29T04:06:41Z",
+      "delivery": "delivered",
+      "deliveredAt": "2026-09-29T04:19:53Z",
+      "completedAt": "2026-09-29T04:19:56Z",
+      "usage": {
+        "status": "missing",
+        "upperBoundTokens": null
+      },
+      "repairFollowup": {
+        "status": "pending",
+        "observedThrough": "2026-09-29T04:19:56Z"
+      },
+      "finalCompletion": {
+        "owningAcceptance": "Done",
+        "nativeDoneReadback": {
+          "state": "Done",
+          "readAt": "2026-09-29T04:19:56Z",
+          "url": "https://github.com/FS-GG/FSBarV2/pull/5"
+        },
+        "sourceDelivery": {
+          "url": "https://github.com/FS-GG/FSBarV2/pull/5",
+          "commit": "f1a18c52246b88e958344cb3bcc87f3c2035a62e",
+          "tree": "51140c912b0cc58f7b795094fce3eb4712eee963",
+          "mergedAt": "2026-09-29T04:19:53Z"
+        },
+        "checks": [
+          {
+            "name": "six real-engine journeys; 78 linked file hashes and native identity joins",
+            "status": "SUCCESS",
+            "url": "https://github.com/FS-GG/FSBarV2/blob/f1a18c52246b88e958344cb3bcc87f3c2035a62e/docs/roadmaps/evidence/barc-01.4-live-control.md"
+          },
+          {
+            "name": "paired native source delivery and exact qualified tree readback",
+            "status": "SUCCESS",
+            "url": "https://github.com/FS-GG/HighBarV3/pull/2"
+          }
+        ]
+      },
+      "qualificationBoundary": "Qualified broker code at698dacd8 differs from delivered FSBar tree only in two prose paths. Native master680b6248 tree0c5d8b0 matches qualified488d57f6 exactly. Publication and installed fleet adoption remain pending; prior whole-item usage is missing."
+    },
+    {
+      "id": "SC2C-01.4e",
+      "lane": "SC2C-01",
+      "originalItem": "SC2C-01.4e",
+      "arm": "routine",
+      "kind": "code",
+      "eligible": true,
+      "selectedBeforeOutcome": true,
+      "selectedAt": "2026-09-29T04:06:41Z",
+      "delivery": "pending",
+      "usage": {
+        "status": "missing",
+        "upperBoundTokens": null
+      },
+      "repairFollowup": {
+        "status": "pending",
+        "observedThrough": "2026-09-29T04:19:56Z"
+      },
+      "qualificationBoundary": "Source gates passed; genuine production/fault cohort and authoritative source delivery remain pending. Earlier partial code/native outcomes are not a completion."
     }
   ]
 }
