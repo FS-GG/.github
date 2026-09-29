@@ -1,7 +1,7 @@
 {
   "schema": "fsgg.routine-cohort-observation/2",
   "cohort": "routine-route-first-ten-code-items",
-  "asOf": "2026-09-29T04:06:41Z",
+  "asOf": "2026-09-29T04:15:52Z",
   "targetPerArm": 10,
   "repairObservation": {
     "mode": "completed-items",
@@ -10,21 +10,53 @@
     "enrolledLanes": [
       {
         "id": "BARC-01",
+        "enrolledAt": "2026-09-29T04:06:41Z",
         "statusAtDeclaration": "unresolved",
         "priorUsage": "missing",
+        "predeclaredUnresolvedOriginals": [
+          "BARC-01.4"
+        ],
         "scope": "The unresolved full canonical BARC-01 outcome and its prospectively selected original items. Earlier source/native and fork-preview results remain partial evidence; they are not retroactive completions."
       },
       {
         "id": "SC2C-01",
+        "enrolledAt": "2026-09-29T04:06:41Z",
         "statusAtDeclaration": "unresolved",
         "priorUsage": "missing",
+        "predeclaredUnresolvedOriginals": [
+          "SC2C-01.4e"
+        ],
         "scope": "The unresolved full canonical SC2C-01 outcome and its prospectively selected original items. Earlier playable and tactical slices remain partial evidence; they are not retroactive completions."
       },
       {
         "id": "LEARN-01",
+        "enrolledAt": "2026-09-29T04:06:41Z",
         "statusAtDeclaration": "unresolved",
         "priorUsage": "missing",
+        "predeclaredUnresolvedOriginals": [
+          "LEARN-01.3"
+        ],
         "scope": "The unresolved full canonical LEARN-01 outcome and its prospectively selected original items. Earlier baseline, analysis and inert compiler source remains partial evidence; it is not a retroactive completion."
+      },
+      {
+        "id": "FOURD-01",
+        "enrolledAt": "2026-09-29T04:15:52Z",
+        "statusAtDeclaration": "future-selection",
+        "priorUsage": "missing",
+        "predeclaredUnresolvedOriginals": [],
+        "scope": "Only original items selected prospectively after this lane enrollment can enter the cohort. FOURD-01.1-.5a and the unresolved .4-E player acceptance predate enrollment and cannot count; projection-only documentation cannot count."
+      }
+    ]
+  },
+  "currentSelection": {
+    "revision": "r5-completed-items/1",
+    "declaredAt": "2026-09-29T04:06:41Z",
+    "outcomesKnownAtSelection": false,
+    "rule": "The first ten distinct canonical original items completed after their lane enrollment. BARC-01.4, SC2C-01.4e and LEARN-01.3 were explicitly enrolled while unresolved; later originals and every FOURD-01 original must be selected prospectively before outcome.",
+    "amendments": [
+      {
+        "declaredAt": "2026-09-29T04:15:52Z",
+        "change": "Enroll future-selected FOURD-01 original items without retroactively admitting completed v1 stages or the pre-existing .4-E acceptance."
       }
     ]
   },
@@ -110,6 +142,57 @@
     }
   ],
   "units": [
+    {
+      "id": "FS.GG.Coordination#886",
+      "arm": "routine",
+      "lane": "LEARN-01",
+      "originalItem": "LEARN-01.3",
+      "kind": "code",
+      "eligible": true,
+      "selectedBeforeOutcome": true,
+      "selectedAt": "2026-09-29T04:06:41Z",
+      "delivery": "delivered",
+      "completedAt": "2026-09-29T04:12:46Z",
+      "url": "https://github.com/FS-GG/FS.GG.Coordination/pull/886",
+      "mergeCommit": "513acdbddcb52b6f3e219619605de458070e033f",
+      "tree": "be070b7955cb5d63fe1b4b4b69509bc9b42e0a43",
+      "usage": {
+        "status": "missing",
+        "upperBoundTokens": null
+      },
+      "finalCompletion": {
+        "owningAcceptance": "Done",
+        "nativeDoneReadback": {
+          "state": "Done",
+          "readAt": "2026-09-29T04:12:46Z",
+          "url": "https://github.com/FS-GG/FS.GG.Coordination/pull/886"
+        },
+        "sourceDelivery": {
+          "url": "https://github.com/FS-GG/FS.GG.Coordination/pull/886",
+          "commit": "513acdbddcb52b6f3e219619605de458070e033f",
+          "tree": "be070b7955cb5d63fe1b4b4b69509bc9b42e0a43",
+          "mergedAt": "2026-09-29T04:12:42Z"
+        },
+        "checks": [
+          {
+            "name": "Bootstrap",
+            "status": "SUCCESS",
+            "url": "https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36518018697"
+          },
+          {
+            "name": "coherent",
+            "status": "SUCCESS",
+            "url": "https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36518018765"
+          }
+        ]
+      },
+      "repairFollowup": {
+        "status": "pending",
+        "observedThrough": "2026-09-29T04:12:46Z",
+        "severeEvents": [],
+        "processAttributableRollbackEvents": []
+      }
+    },
     {
       "id": "FS.GG.Templates#448",
       "arm": "baseline",

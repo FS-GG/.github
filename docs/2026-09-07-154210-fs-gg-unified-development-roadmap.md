@@ -159,7 +159,7 @@ for history and must not be used as clean-start prerequisites.
 | **V3 — Exact candidate and receivers** | Not accepted. Existing publication, provider, tool and receiver evidence can support preparation. | GS2-10 freezes exact inputs, qualifies the complete candidate and clean/retained receivers, rehearses the cutover, and closes concurrent changes. |
 | **V4 — Closed switch** | Not entered by this audit. | GS2-11–12: authorized freeze/drain, exact switch, verification, and executable rollback while still closed. |
 | **V5 — Open and ordinary use** | No fleet production `OpenV2` acceptance identified. The synthetic callable target is not the fleet. | GS2-13 owns irreversible open, permanent v1 fence, real ordinary journeys and `ObservingV2`. |
-| **V6 — Observation and retirement** | R5's prospective completed-item observation window was declared at `2026-09-29T04:06:41Z`; GS2-14's post-open window remains separate. | GS2-14 owns baseline plus 15 distinct completed-work readings, contraction and `OperatingV2`; R5 separately uses its first ten distinct completed canonical originals across BARC-01, SC2C-01 and LEARN-01. |
+| **V6 — Observation and retirement** | R5's prospective completed-item observation window was declared at `2026-09-29T04:06:41Z`, with future-selected FOURD-01 originals enrolled at `2026-09-29T04:15:52Z`; GS2-14's post-open window remains separate. | GS2-14 owns baseline plus 15 distinct completed-work readings, contraction and `OperatingV2`; R5 separately uses its first ten distinct completed canonical originals across the enrolled lanes. |
 | **E0/E1 and O0–O3** | Selected single-host O0–O3 is accepted; Choreo C0–C6 is source/formal-qualified. | Reuse these foundations. Exact installed inclusion of later Choreo fixes and comparative-value claims require their own evidence; neither blocks migration source work. |
 | **F0–F5 / LEARN-01** | LEARN-01.1's baseline is source-delivered through [PR #3845](https://github.com/FS-GG/.github/pull/3845). LEARN-01.2's analysis and durable-fact source merged in [PR #3916](https://github.com/FS-GG/.github/pull/3916), followed by protected credential-role and receiver-authored admission provenance source in [PR #3927](https://github.com/FS-GG/.github/pull/3927) at `09dd7c6b619c7df73b9b3a4e09309e6fe020b277`. LEARN-01.3 now has the inert proposal/context compiler and canonical durable pre-dispatch treatment assignment source through Coordination [#882](https://github.com/FS-GG/FS.GG.Coordination/pull/882) and [#885](https://github.com/FS-GG/FS.GG.Coordination/pull/885). Native-source verification, trusted snapshot origin, protected collector installation, shared-cost completeness, comparative result and live experiment remain unestablished; F0–F5 are conditional. | Complete LEARN-01.2's private collector authentication, custody/source and snapshot-origin work. LEARN-01.3 still needs executor dispatch plus observation/usage/efficiency joins and requested-versus-observed provider correspondence. .4–.5 and production canaries retain their installed-artifact, operating-epoch and effect-authority gates. |
 
@@ -757,10 +757,12 @@ severe-incident and early-rollback stop rules.
 
 **Current R5 observation amendment, declared prospectively at 2026-09-29T04:06:41Z.** The first ten
 distinct completed canonical roadmap/original items across independently progressing BARC-01, SC2C-01
-and LEARN-01 replace R5's fixed 30-day repair gate. The unresolved full named outcomes in all three lanes
-are enrolled now. Their known partial results and missing earlier usage stay with those lineages; no
-already completed item is selected retrospectively. Stable original identity spans retries and repairs.
-Actions, games, CI jobs, worker turns, projection-only documentation and failed attempts do not count.
+and LEARN-01 replace R5's fixed 30-day repair gate; future-selected FOURD-01 originals join prospectively
+at `2026-09-29T04:15:52Z`. BARC-01.4, SC2C-01.4e and LEARN-01.3 were unresolved and explicitly enrolled
+at the first declaration. Their known partial results and missing earlier usage stay with those lineages;
+no already completed item is selected retrospectively. Completed FOURD-01.1–.5a work and its pre-existing
+.4-E acceptance cannot count. Stable original identity spans retries and repairs. Actions, games, CI jobs,
+worker turns, projection-only documentation and failed attempts do not count.
 
 A completion requires the owning acceptance's native `Done` readback and actual source delivery.
 Publication, installation and activation remain separate claims. Failed, cancelled and pending attempts
@@ -1397,9 +1399,9 @@ profile, preserving forensic history and still-needed automatic records. Verify 
 cannot resolve a v1 production route and that an upgrade does not restore removed ceremony.
 
 R5's independent routine cohort closes its repair-accounting window at the tenth distinct completed
-canonical original enrolled across BARC-01, SC2C-01 and LEARN-01. It may finish on a different date from
-the 15-item Q10 gate. Neither completion is inferred from the other. Claim each outcome at its actual
-scope; no efficiency-success label is needed to admit a valid repair.
+canonical original across its prospectively enrolled BARC-01, SC2C-01, LEARN-01 and FOURD-01 lanes. It
+may finish on a different date from the 15-item Q10 gate. Neither completion is inferred from the other.
+Claim each outcome at its actual scope; no efficiency-success label is needed to admit a valid repair.
 
 ### 9.6 E0–E1: later capability development
 

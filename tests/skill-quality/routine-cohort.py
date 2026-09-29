@@ -88,21 +88,27 @@ else:
 print("routine-cohort: fixed denominators, conservative gaps, per-unit ceiling, and 30-day follow-up pass")
 
 
-def item_unit(index: int, *, original: str | None = None, selected_day: int = 0,
+def item_unit(index: int, *, lane: str = "BARC-01", original: str | None = None, selected_day: int = 0,
               completed_day: int | None = None, delivery: str = "delivered") -> dict:
     value = unit(index, "routine", 90, 10)
     value.update({
-        "id": f"attempt-{index}", "lane": "BARC-01",
-        "originalItem": original or f"BARC-01.{index}", "selectedAt": at(selected_day),
+        "id": f"attempt-{index}", "lane": lane,
+        "originalItem": original or f"{lane}.item-{index}", "selectedAt": at(selected_day),
         "delivery": delivery,
         "repairFollowup": {"status": "complete", "through": at(10),
-                           "processAttributableRollbacks": 0, "severeEvents": []},
+                           "processAttributableRollbackEvents": [], "severeEvents": []},
     })
     value.pop("deliveredAt", None)
     if completed_day is not None:
         value["completedAt"] = at(completed_day)
         value["finalCompletion"] = {
-            "owningAcceptance": "Done", "nativeDoneReadback": True, "sourceDelivered": True,
+            "owningAcceptance": "Done",
+            "nativeDoneReadback": {"state": "Done", "readAt": at(completed_day),
+                                   "url": f"https://example.test/items/{index}"},
+            "sourceDelivery": {"url": f"https://example.test/pulls/{index}", "commit": f"{index:040x}",
+                               "tree": f"{index + 100:040x}", "mergedAt": at(completed_day)},
+            "checks": [{"name": "verify", "status": "SUCCESS",
+                        "url": f"https://example.test/runs/{index}"}],
         }
     return value
 
@@ -113,10 +119,18 @@ item_document = {
     "repairObservation": {
         "mode": "completed-items", "declaredAt": at(0), "completedItemTarget": 10,
         "enrolledLanes": [
-            {"id": lane, "statusAtDeclaration": "unresolved", "priorUsage": "missing"}
-            for lane in ("BARC-01", "SC2C-01", "LEARN-01")
+            {"id": "BARC-01", "enrolledAt": at(0), "statusAtDeclaration": "unresolved", "priorUsage": "missing",
+             "predeclaredUnresolvedOriginals": ["BARC-01.4"]},
+            {"id": "SC2C-01", "enrolledAt": at(0), "statusAtDeclaration": "unresolved", "priorUsage": "missing",
+             "predeclaredUnresolvedOriginals": ["SC2C-01.4e"]},
+            {"id": "LEARN-01", "enrolledAt": at(0), "statusAtDeclaration": "unresolved", "priorUsage": "missing",
+             "predeclaredUnresolvedOriginals": ["LEARN-01.3"]},
+            {"id": "FOURD-01", "enrolledAt": at(2), "statusAtDeclaration": "future-selection",
+             "priorUsage": "missing", "predeclaredUnresolvedOriginals": []},
         ],
     },
+    "currentSelection": {"revision": "r5-completed-items/1", "declaredAt": at(0),
+                         "outcomesKnownAtSelection": False},
     "units": [item_unit(i, completed_day=i + 1) for i in range(10)]
              + [unit(i, "baseline", 150, 50) for i in range(10)],
 }
@@ -149,17 +163,38 @@ duplicate_lineage["units"][9]["originalItem"] = duplicate_lineage["units"][8]["o
 result = module.evaluate(duplicate_lineage)
 assert result["repairObservation"]["completedDistinctItems"] == 9
 assert "routine-completed-item-window-pending" in result["reasons"]
+assert result["arms"]["routine"]["selectedAttempts"] == 10
+assert result["arms"]["routine"]["selected"] == 9
+assert result["arms"]["routine"]["costPerDeliveredUnit"] == 1000 / 9
 
 pre_enrollment = copy.deepcopy(item_document)
 pre_enrollment["units"][9]["selectedAt"] = at(-2)
 result = module.evaluate(pre_enrollment)
 assert result["repairObservation"]["completedDistinctItems"] == 9
-pre_enrollment["units"][9]["originalItem"] = "BARC-01"
+pre_enrollment["units"][9]["originalItem"] = "BARC-01.4"
 result = module.evaluate(pre_enrollment)
 assert result["repairObservation"]["completedDistinctItems"] == 10
 
+retro_completed = copy.deepcopy(item_document)
+retro_completed["units"][9] = item_unit(
+    9, original="BARC-01.4", selected_day=-2, completed_day=-1,
+)
+result = module.evaluate(retro_completed)
+assert result["repairObservation"]["completedDistinctItems"] == 9
+
+later_lane = copy.deepcopy(item_document)
+later_lane["units"][9] = item_unit(
+    9, lane="FOURD-01", original="FOURD-01.6", selected_day=1, completed_day=10,
+)
+result = module.evaluate(later_lane)
+assert result["repairObservation"]["completedDistinctItems"] == 9
+later_lane["units"][9]["selectedAt"] = at(2)
+result = module.evaluate(later_lane)
+assert result["repairObservation"]["completedDistinctItems"] == 10
+
 unfinished = copy.deepcopy(item_document)
-unfinished["units"][9]["finalCompletion"]["nativeDoneReadback"] = False
+unfinished["units"][9]["finalCompletion"]["owningAcceptance"] = "Pending"
+unfinished["units"][9]["finalCompletion"]["nativeDoneReadback"]["state"] = "Pending"
 result = module.evaluate(unfinished)
 assert result["repairObservation"]["completedDistinctItems"] == 9
 
@@ -169,6 +204,8 @@ cutoff["units"].insert(10, item_unit(10, selected_day=11, completed_day=11))
 result = module.evaluate(cutoff)
 assert "routine-completed-item-repair-accounting-pending" in result["reasons"]
 assert result["arms"]["routine"]["selected"] == 10
+assert result["repairObservation"]["cutoff"] == at(10)
+assert "BARC-01.item-10" not in result["repairObservation"]["countedOriginalItems"]
 
 severe = copy.deepcopy(item_document)
 severe["units"][0]["repairFollowup"]["severeEvents"] = [
@@ -178,8 +215,17 @@ result = module.evaluate(severe)
 assert "candidate-admission-stopped-severe-event" in result["reasons"]
 
 rollbacks = copy.deepcopy(item_document)
-rollbacks["units"][0]["repairFollowup"]["processAttributableRollbacks"] = 2
+rollbacks["units"][0]["repairFollowup"]["processAttributableRollbackEvents"] = [
+    {"observedAt": at(3)}, {"observedAt": at(4)},
+]
 result = module.evaluate(rollbacks)
 assert "candidate-expansion-stopped-two-process-rollbacks" in result["reasons"]
+
+late_rollback = copy.deepcopy(item_document)
+late_rollback["units"][0]["repairFollowup"]["processAttributableRollbackEvents"] = [
+    {"observedAt": at(11)}, {"observedAt": at(12)},
+]
+result = module.evaluate(late_rollback)
+assert "candidate-expansion-stopped-two-process-rollbacks" not in result["reasons"]
 
 print("routine-cohort: completed-item policy covers 9/10, lineage, enrollment, completion, cutoff, and stops")
