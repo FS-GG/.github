@@ -1,8 +1,10 @@
 import copy
 import base64
+import contextlib
 import gzip
 import hashlib
 import importlib.util
+import io
 import json
 import pathlib
 import tempfile
@@ -184,6 +186,28 @@ class Learn01ContractTests(unittest.TestCase):
         }
         return envelope, capture
 
+    def run_pre_admission_export(self, exported, root, *, original="I-001",
+                                 window="window-2026-01", repository="FS-GG/.github"):
+        config = root / "host.json"
+        config.write_text("{}")
+        config.chmod(0o600)
+        host = root / "installed-host-fixture"
+        host.write_text("#!/usr/bin/python3\nimport json,sys\n"
+                        "assert sys.argv[1:3] == ['export-learning', '--config']\n"
+                        + "print(" + repr(json.dumps(exported)) + ")\n")
+        host.chmod(0o700)
+        pin = hashlib.sha256(host.read_bytes()).hexdigest()
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            result = MODULE.main([
+                str(ROOT / "policy/learn-01-current-focused-v1.json"),
+                "--protected-host-executable", str(host), "--protected-host-sha256", pin,
+                "--protected-host-config", str(config), "--assess-pre-admission",
+                "--original-item", original, "--window", window,
+                "--repository", repository,
+            ])
+        return result, stdout.getvalue(), stderr.getvalue()
+
     def test_pre_admission_assessment_is_honest_stable_and_non_circular(self):
         empty = {
             "learningObservations": [], "populations": [], "outcomes": [], "admissions": [],
@@ -228,7 +252,8 @@ class Learn01ContractTests(unittest.TestCase):
             window_id="window-2026-01", repository="FS-GG/.github")
         self.assertEqual(1, result["selectedEvidence"]["reconciledProtectedNativeCaptures"])
         self.assertEqual(
-            {"status": "established", "verifiedInvocations": ["inv-I-001"]},
+            {"status": "scope-unknown", "verifiedInvocations": [],
+             "scopeUnknownInvocations": ["inv-I-001"]},
             result["predicates"]["postOutcomeProtectedNativeCapture"],
         )
         self.assertEqual(1, result["predicates"]["independentProspectiveDispatchCensus"]["retainedCandidateRecords"])
@@ -260,6 +285,22 @@ class Learn01ContractTests(unittest.TestCase):
             ]))
             self.assertEqual(
                 1, json.loads(output.read_text())["selectedEvidence"]["reconciledProtectedNativeCaptures"])
+
+        foreign_envelope = json.loads(gzip.decompress(base64.b64decode(
+            envelope["canonicalSnapshotGzip"])))
+        foreign_capture = copy.deepcopy(capture)
+        foreign_source = copy.deepcopy(foreign_capture["events"][0])
+        foreign_source.update({"windowId": "foreign-window", "repository": "FS-GG/foreign"})
+        foreign_capture["events"][0] = foreign_source
+        for row in foreign_envelope["learningObservations"]:
+            if json.loads(row["canonical"])["kind"] == "runtime-native-inventory-source/1":
+                row["canonical"] = json.dumps(foreign_source, separators=(",", ":"), sort_keys=True)
+                row["content_digest"] = hashlib.sha256(row["canonical"].encode()).hexdigest()
+        foreign = MODULE.assess_pre_admission_owner_evidence(
+            CONTRACT, private_envelope(foreign_envelope, version=4), [foreign_capture],
+            original_item="I-001", window_id="window-2026-01", repository="FS-GG/.github")
+        self.assertEqual(0, foreign["selectedEvidence"]["reconciledProtectedNativeCaptures"])
+        self.assertEqual("missing", foreign["predicates"]["postOutcomeProtectedNativeCapture"]["status"])
 
         stale = copy.deepcopy(capture)
         stale["grantGeneration"] = 2
@@ -318,6 +359,40 @@ class Learn01ContractTests(unittest.TestCase):
             ]))
         finally:
             pathlib.Path(imported.name).unlink(missing_ok=True)
+
+    def test_pre_admission_cli_refuses_malformed_retained_structures_cleanly(self):
+        empty = {
+            "learningObservations": [], "populations": [], "outcomes": [], "admissions": [],
+            "expectedDispatches": [], "lineage": [], "usage": [], "terminals": [],
+            "runtimeGaps": [], "ciRuns": [], "ciPopulationCoverage": [],
+        }
+        cases = []
+        for label, canonical in (
+                ("canonical-list", "[]"), ("canonical-scalar", "1"),
+                ("canonical-nested-shape", '{"identity":"bad","allocations":1}')):
+            content = copy.deepcopy(empty)
+            content["learningObservations"] = [{"canonical": canonical}]
+            cases.append((label, private_envelope(content, version=4), []))
+        for label, relation, value in (
+                ("relation-array", "populations", {}),
+                ("relation-row", "admissions", [42]),
+                ("dispatch-array", "expectedDispatches", "not-a-list")):
+            content = copy.deepcopy(empty)
+            content[relation] = value
+            cases.append((label, private_envelope(content, version=4), []))
+        cases.append(("capture-event", private_envelope(empty, version=4), [{"events": [[]]}]))
+
+        with tempfile.TemporaryDirectory(prefix="learn-malformed-owner-export-") as directory:
+            root = pathlib.Path(directory)
+            for label, snapshot, captures in cases:
+                with self.subTest(label=label):
+                    exported = {"schema": "fsgg.telemetry.protected-learning-export/1",
+                                "snapshot": snapshot, "captures": captures}
+                    result, stdout, stderr = self.run_pre_admission_export(exported, root)
+                    self.assertEqual(2, result)
+                    self.assertEqual("", stdout)
+                    self.assertTrue(stderr.startswith("refused: "), stderr)
+                    self.assertNotIn("Traceback", stderr)
 
     def test_complete_v3_structure_remains_unqualified_without_independent_sources(self):
         content = self.complete_v3_content()

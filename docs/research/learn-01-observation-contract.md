@@ -211,6 +211,10 @@ The three final values are lookup selectors. The caller cannot submit readiness,
 rosters, authority, observation time, expiry, revocation, capability or plan attestation. Imported observations
 and a second corpus remain refused. The mode requires the existing complete v4 private snapshot, receipt
 provenance and protected captures from `export-learning`; the closed export v1 schema is unchanged.
+An original can be reused across repositories or windows. A retained record with an explicit foreign repository
+or window is excluded from positive evidence for the requested scope. When the retained record has no repository
+or window field, the assessment reports its scope as unknown rather than treating the lookup selector as proof
+that the record belongs to that scope. A foreign retained assignment remains visible as an assignment conflict.
 
 The result is `fsgg.learn.pre-admission-owner-assessment/1`, not a
 `LearningOperationalReadinessSnapshot`. It always keeps `operationalReady` false in this source window and
@@ -225,7 +229,10 @@ rows and relevant protected captures. It excludes the changing whole-snapshot re
 unrelated originals. Repeated acquisition of the same selected records therefore preserves the digest; a change
 to a selected record changes it. Selection truncation, conflicting retained identities, executable-pin drift,
 capture/first-admission grant mismatch and imported self-hashed JSON refuse rather than degrade into readiness.
-Verified protected captures remain reported as post-outcome evidence only.
+Non-object canonical JSON, malformed relation containers or rows and malformed capture events also refuse with a
+typed result. Verified protected captures remain post-outcome evidence only; existing capture records do not
+retain repository/window scope, so their reconciliation is reported as `scope-unknown`, not as selected-scope
+readiness evidence.
 
 The assessment names these missing owner inputs independently:
 
