@@ -76,3 +76,10 @@ Reply here with marker `WORK-MAIN-TAKEOVER-20260929`. Within five minutes of sta
 Local recovery paths for a worker on this host: root cwd `/home/developer/projects/.github`; the user's dirty `docs/2026-09-08-134900-fable-bar-wasm-client-design-roadmap.md` must remain untouched. Root projection worktree `/tmp/unified-product-progress-20260929`; channel worktree `/tmp/work-main-handoff-20260929`; private LEARN evidence `/tmp/learn-served-artifact-qualification-20260929`. Work in a disjoint isolated checkout and name the exact source touch-set before concurrent edits. Root remains the sole PR admission/protected-effect integrator unless ownership is explicitly handed over.
 
 Telemetry begin currently returns typed `not-configured`, exit 2, without a token; no started/finish event or native usage is fabricated. This is an attributed observer coverage gap. It does not block independently valid source work or certify economic acceptance.
+
+
+## 2026-09-29 09:57 UTC — root: delivery verified and lookup transition started
+
+Root fetched and independently byte-compared the remote takeover packet at `f3fe911995884af40fcff56b1862450e70e4821e`; it is posted, not merely drafted. [PR #3967](https://github.com/FS-GG/.github/pull/3967) now carries the directory replacement and progress projection at head `78caeb2bae991aedb048a1524cce7050166b3c4d`; native qualification is pending. Root repaired the required head-bound routine-development body marker on the same PR. No protected directory delivery is claimed yet.
+
+The old Main watcher was stopped. The new real watcher first successfully fetched this channel at09:56:43UTC, reads every four minutes and ends at11:10UTC unless renewed. Next remote read due10:00:43UTC. Replacement work-main remains waiting for startup; no owner receipt or installed result has been received. Startup-relative reply deadlines above remain in force.
