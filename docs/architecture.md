@@ -1180,24 +1180,28 @@ install is what keeps the composition honest. See the
 
 ## Routine development and selected ordinary V2 authority
 
-`FS-GG/.github` owns one prospective routine-development profile alongside the existing strict route.
-The machine contract is [`.fsgg/routine-development.json`](../.fsgg/routine-development.json), and the
-shared [`work-roadmap`](../.agents/skills/work-roadmap/SKILL.md) driver selects it only when a roadmap
-explicitly marks a new unit routine and neither its operation nor its changed paths are protected.
-Existing strict items and publication, deployment, credential, destructive, migration/cutover, and
-external-contract operations remain on the strict authority path.
+`FS-GG/.github` owns an active routine-development default and a human-selected heavyweight route. The
+machine contract is [`.fsgg/routine-development.json`](../.fsgg/routine-development.json): absence or
+ambiguity selects routine delivery, and heavyweight process requires a recorded explicit human instruction
+for named scope. Strict labels, GS2 registration, protected or sensitive paths, policy or modeled changes,
+protected operations and inherited strict state do not select heavyweight ceremony.
 
 The default-branch [`routine-eligibility`](../.github/workflows/routine-eligibility.yml) workflow reads the
-pull request base and head as Git objects, executes policy and validator bytes extracted from the exact
-base SHA, and refuses a stale head or protected surface. It does not read an issue, claim, SDD family,
-phase ledger, critique, feedback cycle, receipt cycle, or metadata-Done state. Candidate-side
-`claim-generation` remains the strict item gate and is not routine authority.
+pull request base and head as Git objects and executes policy and validator bytes extracted from the exact
+base SHA. It validates the routine branch and single exact-head marker, allowed source operation, changed
+paths and required-check set without executing candidate bytes or reading an issue, claim, SDD family,
+phase ledger, critique, feedback cycle, receipt cycle or metadata-Done state. A moved head refuses until the
+marker is reviewed and rebound. Candidate-side `claim-generation` applies only to an explicitly selected
+strict item route and is not routine authority.
 
-This is deliberately a trusted-repository-writer reliability boundary. It prevents accidental mistakes
-and drift, but it does not claim adversarial protection from a repository writer able to alter Actions
-workflows or spoof a name-based check context. The human owner accepted that smaller guarantee for
-eligible routine work; protected and high-assurance operations retain their stronger boundaries. The
-exact activation state, deferred stronger alternatives, and observed platform limitations are recorded in
+Technical checks and operation authority remain independent and fail closed. Sensitive paths select their
+applicable technical checks without changing the process route. Publication, deployment, credential,
+destructive, migration/cutover and external-contract effects remain pending until their actual authority is
+satisfied; naming a protected operation in a routine marker refuses that effect without selecting
+heavyweight ceremony. This is deliberately a trusted-repository-writer reliability boundary: it prevents
+accidental mistakes and drift, but does not claim adversarial protection from a repository writer able to
+alter Actions workflows or spoof a name-based check context. The exact activation state, deferred stronger
+alternatives, and observed platform limitations are recorded in
 [`.fsgg/routine-eligibility-activation.json`](../.fsgg/routine-eligibility-activation.json).
 
 The former automatic legacy board writer is retired under ADR-0091. The tracked
