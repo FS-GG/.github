@@ -32,23 +32,29 @@ render-independent transport component (protobuf over WebSocket / gRPC) onboarde
 [ADR-0052](adr/0052-onboard-fs-gg-net-transport-component.md). All three are **published**
 to the org feed and nuget.org — [§5](#5-the-contract-registry--the-single-source-of-truth) carries
 the versions, generated from the registry. A ninth organization repository,
-**FS.GG.Coordination**, is the inert, independently qualified new-only v2 product approved by
-ADR-0078; it is rostered but is not a framework or v1-fabric participant.
-[ADR-0091](adr/0091-speed-first-clean-v2-start.md) now enables its existing ordinary V2
-settlement path first in `.github`, using a fresh shared authority epoch and checked native GitHub
-source delivery. Historical V1 admission and migration proofs no longer gate that route; other
-repositories and generated workspace defaults require separate adoption.
+**FS.GG.Coordination**, is the independently qualified new-only v2 product approved by
+ADR-0078; it is rostered and active at its selected clean-path boundary, but is not a framework or
+v1-fabric participant.
+[ADR-0091](adr/0091-speed-first-clean-v2-start.md) enables the clean-start ordinary V2 settlement path
+through checked native GitHub source delivery and a fresh shared authority epoch. Its selected C0–C3
+functional profile is accepted for `.github`, Audio, Rendering, Net, Governance, Game, SDD, Templates and
+Coordination: each selected receiver has checked source delivery, one real ordinary settlement, independent
+Authority readback and an unchanged normal already-complete rerun. The
+[acceptance report](reports/2026-09-29-r5-functional-v2-acceptance.md) keeps that bounded result separate from
+historical economics, which remains insufficient with no efficiency benefit claimed. Historical V1 admission
+and migration proofs do not gate this route; generated workspace defaults and other receivers or operation
+classes retain their own adoption and authority.
 
 This page is a map. Authoritative detail lives in each component repository and in
 the decision records linked throughout.
 
 > **Terms (ADR-0020).** The **platform** is FS-GG as a whole — the current nine
-> organization repositories below (seven framework components + `.github` + the inert v2 product; the sixth,
+> organization repositories below (seven framework components + `.github` + the selected v2 product; the sixth,
 > **FS.GG.Game**, was extracted under ADR-0022 and published at P5; the seventh,
 > **FS.GG.Audio**, was onboarded as a standalone component under ADR-0023; the eighth,
-> **FS.GG.Net**, the transport component, under ADR-0052). ADR-0078 approves a
-> early-provisioned but inert component, **FS.GG.Coordination**, is the ninth repository and exists for the independently
-> qualified v2 coordination runtime. Each repository is a
+> **FS.GG.Net**, the transport component, under ADR-0052). ADR-0078 approved the
+> early-provisioned **FS.GG.Coordination** component; ADR-0091 now governs its selected clean-path
+> activation as the ninth repository and independently qualified v2 coordination runtime. Each repository is a
 > **component**. What a consumer *scaffolds* with the platform is a **workspace** —
 > the generated repo with a runnable **app**, the `.fsgg/` lifecycle, skills, and
 > optional governance. This page uses those words precisely; see
@@ -1172,27 +1178,44 @@ install is what keeps the composition honest. See the
 > protocol), then this page. See the
 > [coordination protocol](coordination/README.md#system-overview--the-architecture-map).
 
-## Prospective routine-development authority
+## Routine development and selected ordinary V2 authority
 
-`FS-GG/.github` owns one prospective routine-development profile alongside the existing strict route.
-The machine contract is [`.fsgg/routine-development.json`](../.fsgg/routine-development.json), and the
-shared [`work-roadmap`](../.agents/skills/work-roadmap/SKILL.md) driver selects it only when a roadmap
-explicitly marks a new unit routine and neither its operation nor its changed paths are protected.
-Existing strict items and publication, deployment, credential, destructive, migration/cutover, and
-external-contract operations remain on the strict authority path.
+`FS-GG/.github` owns an active routine-development default and a human-selected heavyweight route. The
+machine contract is [`.fsgg/routine-development.json`](../.fsgg/routine-development.json): absence or
+ambiguity selects routine delivery, and heavyweight process requires a recorded explicit human instruction
+for named scope. Strict labels, GS2 registration, protected or sensitive paths, policy or modeled changes,
+protected operations and inherited strict state do not select heavyweight ceremony.
 
 The default-branch [`routine-eligibility`](../.github/workflows/routine-eligibility.yml) workflow reads the
-pull request base and head as Git objects, executes policy and validator bytes extracted from the exact
-base SHA, and refuses a stale head or protected surface. It does not read an issue, claim, SDD family,
-phase ledger, critique, feedback cycle, receipt cycle, or metadata-Done state. Candidate-side
-`claim-generation` remains the strict item gate and is not routine authority.
+pull request base and head as Git objects and executes policy and validator bytes extracted from the exact
+base SHA. It validates the routine branch and single exact-head marker, allowed source operation, changed
+paths and required-check set without executing candidate bytes or reading an issue, claim, SDD family,
+phase ledger, critique, feedback cycle, receipt cycle or metadata-Done state. A moved head refuses until the
+marker is reviewed and rebound. Candidate-side `claim-generation` applies only to an explicitly selected
+strict item route and is not routine authority.
 
-This is deliberately a trusted-repository-writer reliability boundary. It prevents accidental mistakes
-and drift, but it does not claim adversarial protection from a repository writer able to alter Actions
-workflows or spoof a name-based check context. The human owner accepted that smaller guarantee for
-eligible routine work; protected and high-assurance operations retain their stronger boundaries. The
-exact activation state, deferred stronger alternatives, and observed platform limitations are recorded in
+Technical checks and operation authority remain independent and fail closed. Sensitive paths select their
+applicable technical checks without changing the process route. Publication, deployment, credential,
+destructive, migration/cutover and external-contract effects remain pending until their actual authority is
+satisfied; naming a protected operation in a routine marker refuses that effect without selecting
+heavyweight ceremony. This is deliberately a trusted-repository-writer reliability boundary: it prevents
+accidental mistakes and drift, but does not claim adversarial protection from a repository writer able to
+alter Actions workflows or spoof a name-based check context. The exact activation state, deferred stronger
+alternatives, and observed platform limitations are recorded in
 [`.fsgg/routine-eligibility-activation.json`](../.fsgg/routine-eligibility-activation.json).
+
+The former automatic legacy board writer is retired under ADR-0091. The tracked
+[`coord-board-reconcile`](../.github/workflows/coord-board-reconcile.yml) workflow is now a manual-only,
+credential-free diagnostic: it has no repository permissions, checkout, App/token/secret access, REST client
+or `reconcile --apply` path. It reports that board state was not evaluated and does not claim an empty or
+clean board, project Ready state, successful legacy reconciliation, or activation of a V2 board writer. The
+historical failed writer run remains failed. No `reconcile` context is added to native protection.
+
+For the accepted selected profile, observer failure stays outside delivery authority. Missing, corrupt,
+unsupported, inconsistent or unreachable telemetry produces a typed unavailable/invalid result and cannot
+authorize source or a protected effect. An otherwise valid native exact-head delivery remains valid. Missing
+usage remains unknown and cannot establish collection coverage or an efficiency result; the current
+functional/economics boundary is recorded in the [acceptance report](reports/2026-09-29-r5-functional-v2-acceptance.md).
 
 ## Compiled telemetry and bounded roadmap projection
 

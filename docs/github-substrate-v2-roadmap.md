@@ -146,11 +146,14 @@ Authority shard `b6` readback found the same journal head
 `71bf408a68ca0758746fc08f716a1caacc6b0d5f` and one completed effect. Templates is adopted
 at this clean-path boundary.
 
-Coordination self-adoption is a later receiver. Its current main protection is supplied by applicable
-rulesets rather than the classic branch-protection check list, and its Bootstrap qualification can
-validly reuse a prior result with skipped jobs. A ruleset-aware observer and a profile-specific
-validated-reuse receipt are needed before that repository is selected. This work can be prepared in
-parallel; it does not delay SDD/Templates or turn skipped checks into successes for other profiles.
+Coordination is adopted at its selected clean-path C3 boundary. Public CLI 0.1.7, activation
+[#881](https://github.com/FS-GG/FS.GG.Coordination/pull/881), observer repair
+[#883](https://github.com/FS-GG/FS.GG.Coordination/pull/883) and owning closure
+[#884](https://github.com/FS-GG/FS.GG.Coordination/pull/884) are on protected main. [Settlement run
+36484724833](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36484724833) settled once and returned
+`SettlementAlreadyComplete` on its normal unchanged rerun; independent Authority readback found one effect
+and an unchanged journal head. This closes the selected receiver boundary, not historical upgrade or
+measured efficiency.
 
 [ADR-0091](adr/0091-speed-first-clean-v2-start.md) records the decision. Everything below describing the
 older GS2-09–GS2-14 migration sequence is retained historical design, not a second set of prerequisites.
@@ -2099,6 +2102,14 @@ candidate's measured workload and policy, not from the historical migration-toke
 
 ### 12.4 Carryover, performance and operating-epoch decisions
 
+The 2026-09-29 acceptance clarification selects one bounded clean-start ordinary-source profile. Its
+functional result covers native protected source delivery, ordinary post-merge settlement, unchanged normal
+replay, truthful observer-loss behavior and the nine explicitly adopted receivers: `.github`, Audio,
+Rendering, Net, Governance, Game, SDD, Templates and Coordination. The owning five-gate report is
+[R5 functional V2 acceptance](reports/2026-09-29-r5-functional-v2-acceptance.md). This amendment does not
+add a registry or runtime gate, authorize another effect, promise every operation class, or revive the
+superseded GS2-09–GS2-14 sequence.
+
 R5 carryover needs actual ordinary v2 execution and the effective published receiver guidance. Source
 adapters, generated fixtures, a current-v1 pilot or one comprehensive migration journey cannot substitute.
 The example set includes an ordinary code PR, same-PR source repair, unrelated base advance under the chosen
@@ -2130,10 +2141,19 @@ explicitly defer it from that candidate. Any later inclusion mints a new candida
 requalification route; never modify a frozen candidate in place. Workspace-default changes deferred until
 `OperatingV2` remain so.
 A later default/profile adoption starts its own applicable receiver and repair observation; earlier Q10
-readings do not magically cover users who only receive it afterward. R4 current-route completion and R5
-ordinary-v2 completion remain separate, with pending work owned rather than counted as delivered.
+readings do not cover users who only receive it afterward. R4 functional route acceptance and R5
+selected-profile acceptance are separate from the unqualified historical cost comparison. Missing usage and
+insufficient population coverage retain an economics verdict of insufficient and support no efficiency
+benefit claim.
 
 ### 12.5 Adoption order and roadmap identity
+
+For the accepted selected profile, the effective adoption order has completed through C0–C3 and all nine
+selected receivers. Existing exact historical pins and receipts continue to identify their original bytes.
+The 2026-09-29 clarification is an owning-contract amendment and aggregate evidence join; it does not require
+a new candidate, refresh historical pins, restart active workers or re-run cancelled migration ceremony.
+Future receiver families, defaults or operation classes must qualify their own source, publication,
+installation and protected effects under their then-current authority.
 
 The implementation order is: decide policy/guarantee scope; amend the governing design/ADR
 where needed; publish affected producer contracts and runtime behavior; update receiver guidance/settings;
