@@ -10,7 +10,7 @@ description: "A researched successor plan from the current v2 frontier: process 
 Short name: **Unified Roadmap**. In FS-GG development discussions, **“the roadmap”**, **“current roadmap”**
 and **“compacted roadmap”** refer to this document unless another roadmap is explicitly named.
 
-Authored: **2026-09-07 15:42:10 UTC**. Section 0 evidence reconciliation: **2026-09-28**.
+Authored: **2026-09-07 15:42:10 UTC**. Section 0 evidence reconciliation: **2026-09-29**.
 Status: **active programme; `.github` C0–C2 and selected C3 ordinary-V2 adoptions, including Rendering, are complete**.
 
 **Start from completed development simplification and the existing v2 implementation. Keep the proven
