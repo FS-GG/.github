@@ -53,6 +53,17 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**V2-HOST-01.8 private finalization registration source delivered.**
+[Private substrate PR #23](https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/pull/23)
+merged at `7abd3ab1219607cc73c6d2532c2ec3e0b4326e86`, tree
+`3037793fdd4f1552eb07d7ad4c5c375fecd71ee7`, independently equal to reviewed candidate
+`541101b713d67cdbcbb606ae39d3ef42d3323aa1`. Thirteen source tests and exact template
+comparison confirm public recipe `9577ed6f2f00f576f72a3debff8dd9e580a346f0`, preserved
+public-input custody and failure-path finalization. The previous operation remains incomplete;
+its temporary credentials are removed. A new bounded operation must establish encrypted custody,
+actual Podman diagnosis and genuine capture/recovery acceptance before .9 routing and .10 scoped
+Main retirement. Registration does not activate an installed service or change a workspace default.
+
 **V2-LANG-01.5 FourD native image qualification source delivered; native gate remains open.**
 [FourD PR #21](https://github.com/FS-GG/FS.GG.FourD/pull/21) merged at
 `deb375127f3ab08ee6749911c05023542b187b74`, tree
