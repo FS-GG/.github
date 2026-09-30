@@ -208,6 +208,9 @@ class NativeNetworkTests(unittest.TestCase):
         self.assertIn("RECEIVER_TRUST_CERT_SHA256", recipe)
         self.assertIn("update-ca-certificates", recipe)
         self.assertIn("install -d -o 32768 -g 32768 -m 0700 /qualification", recipe)
+        self.assertIn("find /opt/fsgg/coord -type f -exec chmod 0444", recipe)
+        self.assertIn("find /opt/fsgg/telemetry-host -type f -exec chmod 0444", recipe)
+        self.assertIn("chmod 0555 /opt/fsgg/telemetry-host/fsgg-telemetry-host", recipe)
         self.assertNotIn(":latest", recipe)
         self.assertNotIn("apt-get", recipe)
         for argument, path in (

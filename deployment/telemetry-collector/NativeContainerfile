@@ -34,6 +34,8 @@ RUN test "$NATIVE_ELF_SHA256" = "167c0148a849d2444f1b5a7fb5f8bb2de1de5ae13a2a504
     && printf '%s  %s\n' "$COORD_ENGINE_SHA256" /opt/fsgg/coord/fsgg-coord-engine | sha256sum --check --status \
     && printf '%s  %s\n' "$RECEIVER_TRUST_CERT_SHA256" /usr/local/share/ca-certificates/native-receiver.crt | sha256sum --check --status \
     && update-ca-certificates \
+    && find /opt/fsgg/coord -type d -exec chmod 0555 {} + \
+    && find /opt/fsgg/coord -type f -exec chmod 0444 {} + \
     && chmod 0555 /opt/fsgg/codex/codex /opt/fsgg/qualify_native.py /opt/fsgg/coord/fsgg-coord-engine \
     && chmod 0444 /opt/fsgg/native_producer_support.py /opt/fsgg/native-operation-v1.json /opt/fsgg/native-producer-config.toml \
     && test -x /opt/fsgg/coord/fsgg-coord-engine \
@@ -64,7 +66,9 @@ COPY --chown=0:0 native/codex /opt/fsgg/codex/codex
 RUN test "$HOST_VERSION" = "0.2.1" \
     && printf '%s  %s\n' "$NATIVE_ELF_SHA256" /opt/fsgg/codex/codex | sha256sum --check --status \
     && chmod 0555 /opt/fsgg/codex/codex \
-    && chmod -R a-w /opt/fsgg/telemetry-host \
+    && find /opt/fsgg/telemetry-host -type d -exec chmod 0555 {} + \
+    && find /opt/fsgg/telemetry-host -type f -exec chmod 0444 {} + \
+    && if test -f /opt/fsgg/telemetry-host/fsgg-telemetry-host; then chmod 0555 /opt/fsgg/telemetry-host/fsgg-telemetry-host; fi \
     && test -f /opt/fsgg/telemetry-host/FS.GG.Telemetry.Host.dll \
     && install -d -o 32768 -g 32768 -m 0700 /qualification
 LABEL org.opencontainers.image.title="FS.GG native telemetry collector" \
