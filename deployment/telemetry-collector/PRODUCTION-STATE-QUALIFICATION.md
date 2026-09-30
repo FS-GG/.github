@@ -35,7 +35,10 @@ Run this only on the supported Linux x64 qualification host with:
 - an absolute `dotnet` executable; and
 - an ephemeral localhost server PFX, its private password file, and the matching CA certificate.
 
-The state root and evidence file must not exist. The HTTPS certificate must authenticate
+The state root and evidence file must not exist, and their parent directories must already exist.
+All input and output paths must be normalized absolute paths without symbolic-link components. The
+script cleans a state root only after its own exclusive leaf-directory creation succeeds; a
+preexisting state root or evidence file is never changed. The HTTPS certificate must authenticate
 `localhost`. The caller selects a free loopback port and retains only the resulting evidence file.
 The script never writes credential material, certificate passwords, request authorization headers,
 or a payload body to evidence or command output.

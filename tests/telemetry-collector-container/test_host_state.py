@@ -6,6 +6,7 @@ import pathlib
 import tempfile
 import unittest
 from types import SimpleNamespace
+from unittest import mock
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -23,6 +24,25 @@ class HostStateQualificationTests(unittest.TestCase):
 
     def tearDown(self):
         self.temporary.cleanup()
+
+    def arguments(self, state=None, evidence=None):
+        repository = self.root / "repository"
+        repository.mkdir(exist_ok=True)
+        paths = {}
+        for name in ("package", "manifest", "journal", "dotnet", "certificate", "password", "ca"):
+            path = self.root / name
+            if not path.exists():
+                path.write_bytes(b"fixture")
+            paths[name] = path
+        paths["dotnet"].chmod(0o700)
+        return SimpleNamespace(
+            repository=repository, package=paths["package"], manifest=paths["manifest"],
+            journal=paths["journal"], dotnet=paths["dotnet"],
+            state_root=state or self.root / "state", evidence=evidence or self.root / "evidence",
+            certificate=paths["certificate"], certificate_password_file=paths["password"],
+            ca_certificate=paths["ca"], version="0.2.1", source_sha="1" * 40,
+            package_sha256="2" * 64, manifest_sha256="3" * 64, journal_sha256="4" * 64,
+            listen_url="https://localhost:7443")
 
     def test_config_owns_exact_native_collector_grants_and_revocation(self):
         config = qualification.host_config(
@@ -89,7 +109,17 @@ class HostStateQualificationTests(unittest.TestCase):
             self.assertIn(exact, source)
         self.assertIn("release_tools.verify_release", source)
         self.assertIn('["serve", "--config", str(config_path)]', source)
-        self.assertIn('shutil.rmtree(state)', source)
+        self.assertIn('remove_owned_directory(state, state_identity)', source)
+
+    def test_cleanup_refuses_a_replaced_state_identity(self):
+        state = self.root / "state"
+        state.mkdir()
+        original = state.lstat()
+        sentinel = state / "sentinel"
+        sentinel.write_text("replacement", encoding="utf-8")
+        with self.assertRaisesRegex(qualification.Refusal, "identity changed"):
+            qualification.remove_owned_directory(state, (original.st_dev, original.st_ino + 1))
+        self.assertEqual("replacement", sentinel.read_text(encoding="utf-8"))
 
     def test_qualification_refuses_relative_custody_paths_before_io(self):
         arguments = SimpleNamespace(
@@ -99,8 +129,52 @@ class HostStateQualificationTests(unittest.TestCase):
             evidence=self.root / "evidence", certificate=self.root / "certificate",
             certificate_password_file=self.root / "password", ca_certificate=self.root / "ca",
         )
-        with self.assertRaisesRegex(qualification.Refusal, "paths must be absolute"):
+        with self.assertRaisesRegex(qualification.Refusal, "absolute normalized path"):
             qualification.qualify(arguments)
+
+    def test_main_never_removes_preexisting_state(self):
+        state = self.root / "state"
+        state.mkdir(mode=0o700)
+        sentinel = state / "sentinel"
+        sentinel.write_text("retained", encoding="utf-8")
+        arguments = self.arguments(state=state)
+        parser = mock.Mock()
+        parser.parse_args.return_value = arguments
+        with mock.patch.object(qualification, "parser", return_value=parser):
+            self.assertEqual(2, qualification.main())
+        self.assertEqual("retained", sentinel.read_text(encoding="utf-8"))
+
+    def test_main_never_removes_preexisting_evidence_or_creates_state(self):
+        evidence = self.root / "evidence"
+        evidence.write_text("retained", encoding="utf-8")
+        arguments = self.arguments(evidence=evidence)
+        parser = mock.Mock()
+        parser.parse_args.return_value = arguments
+        with mock.patch.object(qualification, "parser", return_value=parser):
+            self.assertEqual(2, qualification.main())
+        self.assertEqual("retained", evidence.read_text(encoding="utf-8"))
+        self.assertFalse(arguments.state_root.exists())
+
+    def test_symlinked_release_input_refuses_before_state_creation(self):
+        arguments = self.arguments()
+        target = self.root / "package-target"
+        target.write_bytes(b"fixture")
+        arguments.package.unlink()
+        arguments.package.symlink_to(target)
+        with self.assertRaisesRegex(qualification.Refusal, "symbolic-link path component"):
+            qualification.qualify(arguments)
+        self.assertFalse(arguments.state_root.exists())
+
+    def test_failure_after_exclusive_state_creation_cleans_only_owned_root(self):
+        arguments = self.arguments()
+        release = {"version": "0.2.1", "sourceSha": "1" * 40}
+        with mock.patch.object(qualification.release_tools, "verify_release", return_value=release), \
+             mock.patch.object(qualification, "extract_host",
+                               side_effect=qualification.Refusal("fixture refusal")):
+            with self.assertRaisesRegex(qualification.Refusal, "fixture refusal"):
+                qualification.qualify(arguments)
+        self.assertFalse(arguments.state_root.exists())
+        self.assertFalse(arguments.evidence.exists())
 
 
 if __name__ == "__main__":

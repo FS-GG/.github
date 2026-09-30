@@ -39,6 +39,30 @@ def regular(path: pathlib.Path, maximum: int, executable: bool = False) -> None:
     require(not executable or os.access(path, os.X_OK), f"executable required: {path}")
 
 
+def lexical_absolute(path: pathlib.Path) -> None:
+    require(path.is_absolute() and path == pathlib.Path(os.path.normpath(path)),
+            f"absolute normalized path required: {path}")
+    current = pathlib.Path(path.anchor)
+    for part in path.parts[1:]:
+        current /= part
+        if current.is_symlink():
+            raise Refusal(f"symbolic-link path component refused: {current}")
+        if not current.exists():
+            break
+
+
+def existing_directory(path: pathlib.Path, label: str) -> None:
+    info = path.lstat()
+    require(stat.S_ISDIR(info.st_mode) and not path.is_symlink(), f"{label} directory required: {path}")
+
+
+def remove_owned_directory(path: pathlib.Path, identity: tuple[int, int]) -> None:
+    info = path.lstat()
+    require(stat.S_ISDIR(info.st_mode) and not path.is_symlink()
+            and (info.st_dev, info.st_ino) == identity, "owned state identity changed")
+    shutil.rmtree(path)
+
+
 def sha256(path: pathlib.Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as stream:
@@ -155,151 +179,168 @@ def qualify(args: argparse.Namespace) -> dict:
     supplied_paths = (args.repository, args.package, args.manifest, args.journal, args.dotnet,
                       args.state_root, args.evidence, args.certificate,
                       args.certificate_password_file, args.ca_certificate)
-    require(all(path.is_absolute() for path in supplied_paths), "all paths must be absolute")
-    repository = args.repository.resolve()
-    package, manifest, journal = args.package.resolve(), args.manifest.resolve(), args.journal.resolve()
-    dotnet, state, evidence = args.dotnet.resolve(), args.state_root.resolve(), args.evidence.resolve()
+    for path in supplied_paths:
+        lexical_absolute(path)
+    repository = args.repository
+    package, manifest, journal = args.package, args.manifest, args.journal
+    dotnet, state, evidence = args.dotnet, args.state_root, args.evidence
+    existing_directory(repository, "repository")
+    existing_directory(state.parent, "state parent")
+    existing_directory(evidence.parent, "evidence parent")
+    for path, maximum in ((package, 32 * 1024 * 1024), (manifest, 1024 * 1024),
+                          (journal, 1024 * 1024), (args.certificate, 1024 * 1024),
+                          (args.certificate_password_file, 4096), (args.ca_certificate, 1024 * 1024)):
+        regular(path, maximum)
     regular(dotnet, 128 * 1024 * 1024, executable=True)
-    require(not state.exists() and not evidence.exists(), "state and evidence outputs must not exist")
+    require(not state.exists() and not state.is_symlink(), "state output must not exist")
+    require(not evidence.exists() and not evidence.is_symlink(), "evidence output must not exist")
     require(args.listen_url.startswith("https://localhost:"), "loopback HTTPS listen URL required")
     release = release_tools.verify_release(repository, package, manifest, journal, args.version,
                                            args.source_sha, args.package_sha256,
                                            args.manifest_sha256, args.journal_sha256)
-    state.mkdir(mode=0o700, parents=True)
-    config_root, store, home = state / "config", state / "store", state / "home"
-    for directory in (config_root, home):
-        directory.mkdir(mode=0o700)
-    certificate, password, ca = config_root / "server.pfx", config_root / "password", config_root / "ca.pem"
-    active_secret, revoked_secret = config_root / "active.secret", config_root / "revoked.secret"
-    copy_private(args.certificate.resolve(), certificate, 1024 * 1024)
-    copy_private(args.certificate_password_file.resolve(), password, 4096)
-    copy_private(args.ca_certificate.resolve(), ca, 1024 * 1024)
-    active_token, revoked_token, invalid_token = secrets.token_urlsafe(48), secrets.token_urlsafe(48), secrets.token_urlsafe(48)
-    write_private(active_secret, (active_token + "\n").encode())
-    write_private(revoked_secret, (revoked_token + "\n").encode())
-    dll = extract_host(package, state / "host")
-    command = [str(dotnet), str(dll)]
-    environment = {"HOME": str(home), "DOTNET_CLI_HOME": str(home), "DOTNET_NOLOGO": "1",
-                   "DOTNET_SKIP_FIRST_TIME_EXPERIENCE": "1", "PATH": "/usr/bin:/bin", "LANG": "C.UTF-8"}
-    config_path, invalid_path = config_root / "host.json", config_root / "invalid.json"
-    config = host_config(args.listen_url, certificate, password, state / "service.lock", store,
-                         active_secret, revoked_secret)
-    invalid = host_config(args.listen_url, certificate, password, state / "invalid.lock", store,
-                          active_secret, revoked_secret, generation=0)
-    write_private(config_path, (json.dumps(config, separators=(",", ":")) + "\n").encode())
-    write_private(invalid_path, (json.dumps(invalid, separators=(",", ":")) + "\n").encode())
-    run(command + ["status", "--config", str(invalid_path)], environment, expected=2)
-    require(not store.exists(), "invalid configuration wrote store state")
-    run(command + ["init", "--root", str(store), "--workspace", "controlled-state"], environment)
-    for reference, secret_file, producer, revoked in (
-        ("active", active_secret, "controlled-active", False),
-        ("revoked", revoked_secret, "controlled-revoked", True),
-    ):
-        enroll = command + ["enroll-producer", "--config", str(config_path), "--reference", reference,
-                            "--secret-file", str(secret_file), "--workspace", "controlled-state",
-                            "--producer", producer, "--stream", "runtime"]
-        if revoked:
-            enroll.append("--revoked")
-        run(enroll, environment)
-    ready = json.loads(run(command + ["status", "--config", str(config_path)], environment).stdout)
-    require(len(ready.get("stores") or []) == 1 and ready["stores"][0].get("status") == "ready",
-            "initialized Host store is not ready")
+    state.mkdir(mode=0o700, parents=False)
+    state_info = state.lstat()
+    state_identity = (state_info.st_dev, state_info.st_ino)
+    try:
+        config_root, store, home = state / "config", state / "store", state / "home"
+        for directory in (config_root, home):
+            directory.mkdir(mode=0o700)
+        certificate, password, ca = config_root / "server.pfx", config_root / "password", config_root / "ca.pem"
+        active_secret, revoked_secret = config_root / "active.secret", config_root / "revoked.secret"
+        copy_private(args.certificate, certificate, 1024 * 1024)
+        copy_private(args.certificate_password_file, password, 4096)
+        copy_private(args.ca_certificate, ca, 1024 * 1024)
+        active_token, revoked_token, invalid_token = secrets.token_urlsafe(48), secrets.token_urlsafe(48), secrets.token_urlsafe(48)
+        write_private(active_secret, (active_token + "\n").encode())
+        write_private(revoked_secret, (revoked_token + "\n").encode())
+        dll = extract_host(package, state / "host")
+        command = [str(dotnet), str(dll)]
+        environment = {"HOME": str(home), "DOTNET_CLI_HOME": str(home), "DOTNET_NOLOGO": "1",
+                       "DOTNET_SKIP_FIRST_TIME_EXPERIENCE": "1", "PATH": "/usr/bin:/bin", "LANG": "C.UTF-8"}
+        config_path, invalid_path = config_root / "host.json", config_root / "invalid.json"
+        config = host_config(args.listen_url, certificate, password, state / "service.lock", store,
+                             active_secret, revoked_secret)
+        invalid = host_config(args.listen_url, certificate, password, state / "invalid.lock", store,
+                              active_secret, revoked_secret, generation=0)
+        write_private(config_path, (json.dumps(config, separators=(",", ":")) + "\n").encode())
+        write_private(invalid_path, (json.dumps(invalid, separators=(",", ":")) + "\n").encode())
+        run(command + ["status", "--config", str(invalid_path)], environment, expected=2)
+        require(not store.exists(), "invalid configuration wrote store state")
+        run(command + ["init", "--root", str(store), "--workspace", "controlled-state"], environment)
+        for reference, secret_file, producer, revoked in (
+            ("active", active_secret, "controlled-active", False),
+            ("revoked", revoked_secret, "controlled-revoked", True),
+        ):
+            enroll = command + ["enroll-producer", "--config", str(config_path), "--reference", reference,
+                                "--secret-file", str(secret_file), "--workspace", "controlled-state",
+                                "--producer", producer, "--stream", "runtime"]
+            if revoked:
+                enroll.append("--revoked")
+            run(enroll, environment)
+        ready = json.loads(run(command + ["status", "--config", str(config_path)], environment).stdout)
+        require(len(ready.get("stores") or []) == 1 and ready["stores"][0].get("status") == "ready",
+                "initialized Host store is not ready")
 
-    context = ssl.create_default_context(cafile=str(ca))
-    context.check_hostname = True
-    envelope = controlled_envelope()
-    envelope_digest = hashlib.sha256(envelope).hexdigest()
-    url = args.listen_url.rstrip("/")
+        context = ssl.create_default_context(cafile=str(ca))
+        context.check_hostname = True
+        envelope = controlled_envelope()
+        envelope_digest = hashlib.sha256(envelope).hexdigest()
+        url = args.listen_url.rstrip("/")
 
-    def start_and_wait() -> subprocess.Popen[bytes]:
-        process = subprocess.Popen(command + ["serve", "--config", str(config_path)], env=environment,
-                                   stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        def start_and_wait() -> subprocess.Popen[bytes]:
+            process = subprocess.Popen(command + ["serve", "--config", str(config_path)], env=environment,
+                                       stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            try:
+                deadline = time.monotonic() + 20
+                while time.monotonic() < deadline:
+                    require(process.poll() is None, "Host exited before becoming ready")
+                    try:
+                        if request(url + "/private/health", active_token, context)[0] == 200:
+                            return process
+                    except (OSError, TimeoutError):
+                        pass
+                    time.sleep(0.1)
+                raise Refusal("Host readiness deadline elapsed")
+            except BaseException:
+                if process.poll() is None:
+                    process.terminate()
+                    try:
+                        process.wait(timeout=5)
+                    except subprocess.TimeoutExpired:
+                        process.kill()
+                        process.wait(timeout=5)
+                raise
+
+        def stop(process: subprocess.Popen[bytes]) -> None:
+            process.terminate()
+            try:
+                process.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=5)
+
+        process = start_and_wait()
         try:
+            require(request(url + "/private/health", invalid_token, context)[0] == 401,
+                    "undeclared principal was accepted")
+            require(request(url + "/private/health", revoked_token, context)[0] == 401,
+                    "revoked principal was accepted")
+            status, first_bytes = request(url + "/v1/batches", active_token, context, "POST", envelope)
+            require(status == 202, "new controlled batch was not durably admitted")
+            first = receipt(first_bytes, "controlled-empty-1", "durably-received", envelope_digest)
             deadline = time.monotonic() + 20
+            applied_bytes = b""
             while time.monotonic() < deadline:
-                require(process.poll() is None, "Host exited before becoming ready")
-                try:
-                    if request(url + "/private/health", active_token, context)[0] == 200:
-                        return process
-                except (OSError, TimeoutError):
-                    pass
+                code, candidate = request(url + "/v1/receipts/controlled-empty-1", active_token, context)
+                if code == 200 and json.loads(candidate).get("status") == "applied":
+                    applied_bytes = candidate
+                    break
                 time.sleep(0.1)
-            raise Refusal("Host readiness deadline elapsed")
-        except BaseException:
-            if process.poll() is None:
-                process.terminate()
-                try:
-                    process.wait(timeout=5)
-                except subprocess.TimeoutExpired:
-                    process.kill()
-                    process.wait(timeout=5)
-            raise
+            require(bool(applied_bytes), "controlled receipt did not reach applied")
+            applied = receipt(applied_bytes, "controlled-empty-1", "applied", envelope_digest)
+            require(first["digest"] == applied["digest"], "receipt digest changed while applying")
+            code, duplicate_bytes = request(url + "/v1/batches", active_token, context, "POST", envelope)
+            require(code == 200 and duplicate_bytes == applied_bytes, "live exact replay acknowledgement differs")
+        finally:
+            stop(process)
 
-    def stop(process: subprocess.Popen[bytes]) -> None:
-        process.terminate()
+        before = json.loads(run(command + ["status", "--config", str(config_path)], environment).stdout)
+        process = start_and_wait()
         try:
-            process.wait(timeout=10)
-        except subprocess.TimeoutExpired:
-            process.kill()
-            process.wait(timeout=5)
+            code, recovered_bytes = request(url + "/v1/receipts/controlled-empty-1", active_token, context)
+            require(code == 200 and recovered_bytes == applied_bytes, "restart receipt history differs")
+            code, replay_bytes = request(url + "/v1/batches", active_token, context, "POST", envelope)
+            require(code == 200 and replay_bytes == applied_bytes, "restart exact replay acknowledgement differs")
+        finally:
+            stop(process)
+        after = json.loads(run(command + ["status", "--config", str(config_path)], environment).stdout)
+        for observed in (before, after):
+            stores = observed.get("stores") or []
+            require(len(stores) == 1 and stores[0].get("lifetimeReceipts") == 1
+                    and stores[0].get("pendingReceipts") == 0, "retained Host receipt history differs")
 
-    process = start_and_wait()
-    try:
-        require(request(url + "/private/health", invalid_token, context)[0] == 401,
-                "undeclared principal was accepted")
-        require(request(url + "/private/health", revoked_token, context)[0] == 401,
-                "revoked principal was accepted")
-        status, first_bytes = request(url + "/v1/batches", active_token, context, "POST", envelope)
-        require(status == 202, "new controlled batch was not durably admitted")
-        first = receipt(first_bytes, "controlled-empty-1", "durably-received", envelope_digest)
-        deadline = time.monotonic() + 20
-        applied_bytes = b""
-        while time.monotonic() < deadline:
-            code, candidate = request(url + "/v1/receipts/controlled-empty-1", active_token, context)
-            if code == 200 and json.loads(candidate).get("status") == "applied":
-                applied_bytes = candidate
-                break
-            time.sleep(0.1)
-        require(bool(applied_bytes), "controlled receipt did not reach applied")
-        applied = receipt(applied_bytes, "controlled-empty-1", "applied", envelope_digest)
-        require(first["digest"] == applied["digest"], "receipt digest changed while applying")
-        code, duplicate_bytes = request(url + "/v1/batches", active_token, context, "POST", envelope)
-        require(code == 200 and duplicate_bytes == applied_bytes, "live exact replay acknowledgement differs")
-    finally:
-        stop(process)
-
-    before = json.loads(run(command + ["status", "--config", str(config_path)], environment).stdout)
-    process = start_and_wait()
-    try:
-        code, recovered_bytes = request(url + "/v1/receipts/controlled-empty-1", active_token, context)
-        require(code == 200 and recovered_bytes == applied_bytes, "restart receipt history differs")
-        code, replay_bytes = request(url + "/v1/batches", active_token, context, "POST", envelope)
-        require(code == 200 and replay_bytes == applied_bytes, "restart exact replay acknowledgement differs")
-    finally:
-        stop(process)
-    after = json.loads(run(command + ["status", "--config", str(config_path)], environment).stdout)
-    for observed in (before, after):
-        stores = observed.get("stores") or []
-        require(len(stores) == 1 and stores[0].get("lifetimeReceipts") == 1
-                and stores[0].get("pendingReceipts") == 0, "retained Host receipt history differs")
-
-    result = {
-        "schema": "fsgg.telemetry.collector-host-state-qualification/1",
-        "verdict": "controlled-production-state-passed", "hostVersion": release["version"],
-        "hostSourceSha": release["sourceSha"], "hostPackageSha256": args.package_sha256,
-        "hostDllSha256": sha256(dll), "configSchema": "fsgg.telemetry.host-config/2",
-        "principalRole": "native-collector", "grantId": "grant-controlled-active", "grantGeneration": 1,
-        "receiptDigest": applied["digest"], "receiptStatus": applied["status"], "lifetimeReceipts": 1,
-        "invalidPrincipalRefused": True, "revokedPrincipalRefused": True,
-        "exactReplayStable": True, "restartReceiptStable": True, "retainedStateReopened": True,
-        "nativeAccessQualified": False, "modelSupportObserved": False,
-        "captureApplied": False, "activationAuthorized": False,
-        "controlledPayloadFacts": 0, "stateRemoved": True,
-    }
-    shutil.rmtree(state)
-    evidence.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-    write_private(evidence, (json.dumps(result, sort_keys=True, separators=(",", ":")) + "\n").encode())
-    return result
+        result = {
+            "schema": "fsgg.telemetry.collector-host-state-qualification/1",
+            "verdict": "controlled-production-state-passed", "hostVersion": release["version"],
+            "hostSourceSha": release["sourceSha"], "hostPackageSha256": args.package_sha256,
+            "hostDllSha256": sha256(dll), "configSchema": "fsgg.telemetry.host-config/2",
+            "principalRole": "native-collector", "grantId": "grant-controlled-active", "grantGeneration": 1,
+            "receiptDigest": applied["digest"], "receiptStatus": applied["status"], "lifetimeReceipts": 1,
+            "invalidPrincipalRefused": True, "revokedPrincipalRefused": True,
+            "exactReplayStable": True, "restartReceiptStable": True, "retainedStateReopened": True,
+            "nativeAccessQualified": False, "modelSupportObserved": False,
+            "captureApplied": False, "activationAuthorized": False,
+            "controlledPayloadFacts": 0, "stateRemoved": True,
+        }
+        remove_owned_directory(state, state_identity)
+        write_private(evidence, (json.dumps(result, sort_keys=True, separators=(",", ":")) + "\n").encode())
+        return result
+    except BaseException:
+        try:
+            remove_owned_directory(state, state_identity)
+        except (FileNotFoundError, Refusal):
+            pass
+        raise
 
 
 def parser() -> argparse.ArgumentParser:
@@ -324,10 +365,6 @@ def main() -> int:
         return 0
     except (Refusal, release_tools.Refusal, OSError, ValueError, json.JSONDecodeError,
             subprocess.SubprocessError, zipfile.BadZipFile) as error:
-        # The root was required to be absent before qualification, so any root now present is
-        # exclusively owned by this failed attempt and may be removed without touching prior state.
-        if args.state_root.exists() and args.state_root.is_dir() and not args.state_root.is_symlink():
-            shutil.rmtree(args.state_root)
         print(f"collector-host-state-refused: {error}", file=sys.stderr)
         return 2
 
