@@ -8,6 +8,7 @@ import hashlib
 import json
 import os
 import pathlib
+import re
 import secrets
 import shutil
 import ssl
@@ -67,6 +68,21 @@ def remove_owned_directory(path: pathlib.Path, identity: tuple[int, int]) -> Non
     shutil.rmtree(path)
 
 
+def create_owned_directory(path: pathlib.Path) -> tuple[int, int]:
+    lexical_absolute(path)
+    parent = path.parent
+    existing_directory(parent, "owned state parent")
+    parent_info = parent.lstat()
+    require(parent_info.st_uid == os.geteuid(), "owned state parent owner differs")
+    require(not parent_info.st_mode & (stat.S_IWGRP | stat.S_IWOTH),
+            "owned state parent permits group/other writes")
+    os.mkdir(path, mode=0o700)
+    info = path.lstat()
+    require(stat.S_ISDIR(info.st_mode) and not path.is_symlink() and info.st_uid == os.geteuid()
+            and stat.S_IMODE(info.st_mode) == 0o700, "exclusive owned state creation differs")
+    return info.st_dev, info.st_ino
+
+
 def sha256(path: pathlib.Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as stream:
@@ -105,14 +121,32 @@ def copy_private(source: pathlib.Path, destination: pathlib.Path, maximum: int) 
     write_private(destination, source.read_bytes())
 
 
-def run(command: list[str], environment: dict[str, str], timeout: int = 30,
+def command_output_summary(stage: str, completed: subprocess.CompletedProcess[str]) -> str:
+    stdout = completed.stdout.encode()
+    stderr = completed.stderr.encode()
+    error_code = "unavailable"
+    try:
+        value = json.loads(completed.stderr)
+        candidate = value.get("code") if isinstance(value, dict) else None
+        if isinstance(candidate, str) and re.fullmatch(r"[a-z0-9-]{1,64}", candidate):
+            error_code = candidate
+    except (json.JSONDecodeError, UnicodeError):
+        pass
+    return (
+        f"stage={stage} exitCode={completed.returncode} errorCode={error_code} "
+        f"stdoutBytes={len(stdout)} stdoutSha256={hashlib.sha256(stdout).hexdigest()} "
+        f"stderrBytes={len(stderr)} stderrSha256={hashlib.sha256(stderr).hexdigest()}"
+    )
+
+
+def run(command: list[str], environment: dict[str, str], stage: str, timeout: int = 30,
         expected: int = 0) -> subprocess.CompletedProcess[str]:
     completed = subprocess.run(command, text=True, capture_output=True, env=environment,
                                timeout=timeout, check=False)
     require(len(completed.stdout.encode()) <= 256 * 1024 and len(completed.stderr.encode()) <= 256 * 1024,
             "Host command output exceeded its custody bound")
     require(completed.returncode == expected,
-            f"Host command returned {completed.returncode}, expected {expected}")
+            f"Host command refused; expectedExitCode={expected} " + command_output_summary(stage, completed))
     return completed
 
 
@@ -253,9 +287,11 @@ def qualify(args: argparse.Namespace) -> dict:
                               active_secret, revoked_secret, browser_key_hash, generation=0)
         write_private(config_path, (json.dumps(config, separators=(",", ":")) + "\n").encode())
         write_private(invalid_path, (json.dumps(invalid, separators=(",", ":")) + "\n").encode())
-        run(command + ["status", "--config", str(invalid_path)], environment, expected=2)
+        run(command + ["status", "--config", str(invalid_path)], environment,
+            "invalid-config-status", expected=2)
         require(not store.exists(), "invalid configuration wrote store state")
-        run(command + ["init", "--root", str(store), "--workspace", "controlled-state"], environment)
+        run(command + ["init", "--root", str(store), "--workspace", "controlled-state"],
+            environment, "initialize-store")
         for reference, secret_file, producer, revoked in (
             ("active", active_secret, "controlled-active", False),
             ("revoked", revoked_secret, "controlled-revoked", True),
@@ -265,8 +301,9 @@ def qualify(args: argparse.Namespace) -> dict:
                                 "--producer", producer, "--stream", "runtime"]
             if revoked:
                 enroll.append("--revoked")
-            run(enroll, environment)
-        ready = json.loads(run(command + ["status", "--config", str(config_path)], environment).stdout)
+            run(enroll, environment, "enroll-revoked" if revoked else "enroll-active")
+        ready = json.loads(run(command + ["status", "--config", str(config_path)],
+                               environment, "ready-status").stdout)
         require(len(ready.get("stores") or []) == 1 and ready["stores"][0].get("status") == "ready",
                 "initialized Host store is not ready")
 
@@ -345,7 +382,8 @@ def qualify(args: argparse.Namespace) -> dict:
         finally:
             stop(process)
 
-        before = json.loads(run(command + ["status", "--config", str(config_path)], environment).stdout)
+        before = json.loads(run(command + ["status", "--config", str(config_path)],
+                                environment, "pre-restart-status").stdout)
         process = start_and_wait()
         try:
             code, recovered_bytes = request(url + "/v1/receipts/controlled-empty-1", active_token, context)
@@ -354,7 +392,8 @@ def qualify(args: argparse.Namespace) -> dict:
             require(code == 200 and replay_bytes == applied_bytes, "restart exact replay acknowledgement differs")
         finally:
             stop(process)
-        after = json.loads(run(command + ["status", "--config", str(config_path)], environment).stdout)
+        after = json.loads(run(command + ["status", "--config", str(config_path)],
+                               environment, "post-restart-status").stdout)
         for observed in (before, after):
             stores = observed.get("stores") or []
             require(len(stores) == 1 and stores[0].get("lifetimeReceipts") == 1
@@ -398,7 +437,34 @@ def parser() -> argparse.ArgumentParser:
     return value
 
 
+def ownership_main(arguments: list[str]) -> int | None:
+    if not arguments or arguments[0] not in {"create-owned-directory", "cleanup-owned-directory"}:
+        return None
+    value = argparse.ArgumentParser()
+    value.add_argument("operation", choices=("create-owned-directory", "cleanup-owned-directory"))
+    value.add_argument("--path", type=pathlib.Path, required=True)
+    value.add_argument("--identity")
+    args = value.parse_args(arguments)
+    try:
+        if args.operation == "create-owned-directory":
+            require(args.identity is None, "create ownership identity must be omitted")
+            device, inode = create_owned_directory(args.path)
+            print(f"{device}:{inode}")
+        else:
+            require(args.identity is not None and re.fullmatch(r"[0-9]+:[0-9]+", args.identity),
+                    "cleanup ownership identity is invalid")
+            device, inode = (int(part) for part in args.identity.split(":"))
+            remove_owned_directory(args.path, (device, inode))
+        return 0
+    except (Refusal, FileExistsError, FileNotFoundError, OSError, ValueError) as error:
+        print(f"collector-host-state-refused: {error}", file=sys.stderr)
+        return 2
+
+
 def main() -> int:
+    ownership_result = ownership_main(sys.argv[1:])
+    if ownership_result is not None:
+        return ownership_result
     args = parser().parse_args()
     try:
         result = qualify(args)

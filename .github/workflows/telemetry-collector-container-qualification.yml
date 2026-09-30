@@ -157,6 +157,18 @@ jobs:
         run: |
           set -euo pipefail
           umask 077
+          host_state_parent="$HOME/.local/state/fsgg-host-state-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          mkdir -p -- "$HOME/.local/state"
+          host_state_identity="$(python3 deployment/telemetry-collector/qualify_host_state.py \
+            create-owned-directory --path "$host_state_parent")"
+          printf 'HOST_STATE_OWNERSHIP=%s|%s\n' "$host_state_parent" "$host_state_identity" >>"$GITHUB_ENV"
+          host_state_fs="$(findmnt -n -o FSTYPE --target "$host_state_parent")"
+          case "$host_state_fs" in
+            nfs*|cifs*|smb3*|9p*|tmpfs*|overlay*|fuse*)
+              echo "Host state filesystem is not qualified: $host_state_fs" >&2
+              exit 1
+              ;;
+          esac
           install -d -m 0700 "$WORK_ROOT/tls"
           python3 - "$WORK_ROOT/tls/password" <<'PY'
           import pathlib, secrets, sys
@@ -174,7 +186,7 @@ jobs:
             --repository "$GITHUB_WORKSPACE" --package "$WORK_ROOT/release/host.nupkg" \
             --manifest "$WORK_ROOT/release/manifest.json" \
             --journal "$WORK_ROOT/release/publication-journal.json" \
-            --dotnet "$dotnet_path" --state-root "$WORK_ROOT/host-state" \
+            --dotnet "$dotnet_path" --state-root "$host_state_parent/state" \
             --evidence "$EVIDENCE_ROOT/host-state.json" \
             --certificate "$WORK_ROOT/tls/server.pfx" \
             --certificate-password-file "$WORK_ROOT/tls/password" \
@@ -202,7 +214,7 @@ jobs:
           retention-days: 14
           compression-level: 6
 
-      - name: Remove owned disposable release and TLS material
+      - name: Remove owned disposable release, TLS, and Host state material
         if: always()
         run: |
           set -euo pipefail
@@ -210,3 +222,12 @@ jobs:
           test "$WORK_ROOT" = "$expected"
           test ! -L "$WORK_ROOT"
           if test -d "$WORK_ROOT"; then rm -rf -- "$WORK_ROOT"; fi
+          if test -n "${HOST_STATE_OWNERSHIP:-}"; then
+            IFS='|' read -r host_state_parent host_state_identity extra <<<"$HOST_STATE_OWNERSHIP"
+            test -z "$extra"
+            test "$(dirname -- "$host_state_parent")" = "$HOME/.local/state"
+            test "$(basename -- "$host_state_parent")" = "fsgg-host-state-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+            test ! -L "$host_state_parent"
+            python3 deployment/telemetry-collector/qualify_host_state.py \
+              cleanup-owned-directory --path "$host_state_parent" --identity "$host_state_identity"
+          fi
