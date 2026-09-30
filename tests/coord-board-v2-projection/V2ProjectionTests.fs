@@ -58,7 +58,12 @@ let private issue =
         Number = 2963
     }
 
-let private request source = { Issue = issue; Source = source }
+let private request = { Issue = issue }
+
+let private verified revision : SourceVerifier =
+    fun actual ->
+        Assert.Equal(issue, actual)
+        Ok(Current revision)
 
 let private exactProject projectId observationFieldId =
     $"""{{"data":{{"organization":{{"login":"FS-GG","projectV2":{{"id":"{projectId}","number":77,"title":"Coordination V2","fields":{{"totalCount":4,"nodes":[
@@ -91,11 +96,19 @@ let private scripted (responses: IoResult<Response> list) =
 [<Fact>]
 let ``one shot writes only the reviewed Observation field`` () =
     let transport = scripted [ target; membership; observation (Some "Stale"); mutationSuccess ]
+    let mutable sourceChecks = 0
+    let verifier: SourceVerifier =
+        fun actual ->
+            sourceChecks <- sourceChecks + 1
+            Assert.Equal(issue, actual)
+            Ok(Current "issue-etag-1")
 
-    match runOneShot transport binding (request (Fresh "issue-etag-1")) with
+    match runOneShot verifier transport binding request with
     | Ok report ->
+        Assert.Equal(1, sourceChecks)
         Assert.Equal(Updated "PVTI_2963", report.Outcome)
-        Assert.Equal(3, report.Reads)
+        Assert.Equal(1, report.SourceChecks)
+        Assert.Equal(3, report.ProjectReads)
         Assert.Equal(1, report.Mutations)
         Assert.Equal(4, transport.GraphQlCalls)
         Assert.Single(transport.Mutations) |> ignore
@@ -113,11 +126,11 @@ let ``duplicate retry re-reads and emits no second mutation`` () =
             [ target; membership; observation None; mutationSuccess
               target; membership; observation (Some "Verified") ]
 
-    match runOneShot transport binding (request (Fresh "issue-etag-1")) with
+    match runOneShot (verified "issue-etag-1") transport binding request with
     | Ok { Outcome = Updated _ } -> ()
     | other -> failwith $"first pass must update, got %A{other}"
 
-    match runOneShot transport binding (request (Fresh "issue-etag-1")) with
+    match runOneShot (verified "issue-etag-1") transport binding request with
     | Ok report ->
         Assert.Equal(AlreadyCurrent "PVTI_2963", report.Outcome)
         Assert.Equal(0, report.Mutations)
@@ -131,11 +144,11 @@ let ``lost response remains unknown and retry first resolves live state`` () =
             [ target; membership; observation None; Error(Transport "response lost")
               target; membership; observation (Some "Verified") ]
 
-    match runOneShot transport binding (request (Fresh "issue-etag-1")) with
+    match runOneShot (verified "issue-etag-1") transport binding request with
     | Error(Transport "response lost") -> ()
     | other -> failwith $"a lost response must not be reported applied, got %A{other}"
 
-    match runOneShot transport binding (request (Fresh "issue-etag-1")) with
+    match runOneShot (verified "issue-etag-1") transport binding request with
     | Ok { Outcome = AlreadyCurrent "PVTI_2963"; Mutations = 0 } ->
         Assert.Single(transport.Mutations) |> ignore
     | other -> failwith $"retry must read the applied value before considering another mutation, got %A{other}"
@@ -150,7 +163,7 @@ let ``wrong target field drift and denied access all fail before mutation`` () =
     for responses in cases do
         let transport = scripted responses
 
-        match runOneShot transport binding (request (Fresh "issue-etag-1")) with
+        match runOneShot (verified "issue-etag-1") transport binding request with
         | Error _ -> Assert.Empty(transport.Mutations)
         | Ok report -> failwith $"unsafe target read produced a projection report: %A{report}"
 
@@ -161,34 +174,60 @@ let ``incomplete membership pagination cannot become absence or license a mutati
 
     let transport = scripted [ target; incomplete ]
 
-    match runOneShot transport binding (request (Fresh "issue-etag-1")) with
+    match runOneShot (verified "issue-etag-1") transport binding request with
     | Error(Malformed _) ->
         Assert.Equal(2, transport.GraphQlCalls)
         Assert.Empty(transport.Mutations)
     | other -> failwith $"an incomplete connection must fail closed, got %A{other}"
 
-[<Theory>]
-[<InlineData("stale")>]
-[<InlineData("unknown")>]
-[<InlineData("foreign")>]
-let ``stale unknown and foreign source requests fail before target IO`` caseName =
+[<Fact>]
+let ``source verifier false result refuses before target IO`` () =
     let transport = scripted []
+    let verifier: SourceVerifier = fun _ -> Ok(Refused "canonical evidence did not validate")
 
-    let candidate =
-        match caseName with
-        | "stale" -> request (Stale(Some "issue-etag-0"))
-        | "unknown" -> request (Unknown "source read denied")
-        | _ ->
-            {
-                Issue = { issue with Repository = "foreign" }
-                Source = Fresh "issue-etag-1"
-            }
-
-    match runOneShot transport binding candidate with
-    | Error _ ->
+    match runOneShot verifier transport binding request with
+    | Error(Http(403, message)) ->
+        Assert.Contains("verification refused", message)
         Assert.Equal(0, transport.GraphQlCalls)
         Assert.Empty(transport.Mutations)
-    | Ok report -> failwith $"unverified input produced a projection report: %A{report}"
+    | other -> failwith $"a false source verification must refuse, got %A{other}"
+
+[<Fact>]
+let ``source verifier stale result refuses before target IO`` () =
+    let transport = scripted []
+    let verifier: SourceVerifier = fun _ -> Ok(Stale(Some "issue-etag-0"))
+
+    match runOneShot verifier transport binding request with
+    | Error(Http(409, message)) ->
+        Assert.Contains("stale", message)
+        Assert.Equal(0, transport.GraphQlCalls)
+        Assert.Empty(transport.Mutations)
+    | other -> failwith $"stale source evidence must refuse, got %A{other}"
+
+[<Fact>]
+let ``lost source verifier response remains an error and cannot reach target IO`` () =
+    let transport = scripted []
+    let verifier: SourceVerifier = fun _ -> Error(Transport "canonical source response lost")
+
+    match runOneShot verifier transport binding request with
+    | Error(Transport "canonical source response lost") ->
+        Assert.Equal(0, transport.GraphQlCalls)
+        Assert.Empty(transport.Mutations)
+    | other -> failwith $"a lost source-verifier response must remain unknown, got %A{other}"
+
+[<Fact>]
+let ``foreign repository refuses before invoking source verifier`` () =
+    let transport = scripted []
+    let mutable called = false
+    let verifier: SourceVerifier = fun _ -> called <- true; Ok(Current "issue-etag-1")
+    let candidate = { Issue = { issue with Repository = "foreign" } }
+
+    match runOneShot verifier transport binding candidate with
+    | Error(Http(403, _)) ->
+        Assert.False(called)
+        Assert.Equal(0, transport.GraphQlCalls)
+        Assert.Empty(transport.Mutations)
+    | other -> failwith $"a foreign repository must refuse, got %A{other}"
 
 [<Fact>]
 let ``legacy exact Project 1 cannot be supplied as a V2 binding`` () =
@@ -208,6 +247,6 @@ let ``legacy exact Project 1 cannot be supplied as a V2 binding`` () =
 let ``an unknown live Observation option fails without rewriting it`` () =
     let transport = scripted [ target; membership; observation (Some "Surprising") ]
 
-    match runOneShot transport binding (request (Fresh "issue-etag-1")) with
+    match runOneShot (verified "issue-etag-1") transport binding request with
     | Error(Malformed _) -> Assert.Empty(transport.Mutations)
     | other -> failwith $"an unknown live value must refuse, got %A{other}"

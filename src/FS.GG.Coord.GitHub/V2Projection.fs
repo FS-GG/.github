@@ -37,15 +37,16 @@ module V2Projection =
             Number: int
         }
 
-    type SourceEvidence =
-        | Fresh of observedRevision: string
+    type SourceVerification =
+        | Current of observedRevision: string
         | Stale of lastVerifiedRevision: string option
-        | Unknown of reason: string
+        | Refused of reason: string
+
+    type SourceVerifier = IssueRef -> IoResult<SourceVerification>
 
     type Request =
         {
             Issue: IssueRef
-            Source: SourceEvidence
         }
 
     type Outcome =
@@ -60,7 +61,8 @@ module V2Projection =
             ObservedRevision: string
             Observation: string
             Outcome: Outcome
-            Reads: int
+            SourceChecks: int
+            ProjectReads: int
             Mutations: int
         }
 
@@ -179,7 +181,7 @@ module V2Projection =
         let candidate = $"%s{issue.Owner}/%s{issue.Repository}"
         binding.Repositories |> Seq.exists (fun allowed -> String.Equals(allowed, candidate, StringComparison.OrdinalIgnoreCase))
 
-    let runOneShot (transport: IGitHubTransport) (binding: Binding) (request: Request) =
+    let runOneShot (verifySource: SourceVerifier) (transport: IGitHubTransport) (binding: Binding) (request: Request) =
         match validateBinding binding with
         | Error error -> Error error
         | Ok() when request.Issue.Number <= 0 || not (nonBlank request.Issue.Owner) || not (nonBlank request.Issue.Repository) ->
@@ -187,16 +189,17 @@ module V2Projection =
         | Ok() when not (repositoryAllowed binding request.Issue) ->
             Error(Http(403, $"repository %s{request.Issue.Owner}/%s{request.Issue.Repository} is outside the reviewed V2 projection allowlist"))
         | Ok() ->
-            match request.Source with
-            | Stale last ->
+            match verifySource request.Issue with
+            | Error error -> Error error
+            | Ok(Stale last) ->
                 let suffix = last |> Option.map (fun revision -> $"; last verified revision %s{revision}") |> Option.defaultValue ""
                 Error(Http(409, $"source observation is stale%s{suffix}; refusing to write Verified"))
-            | Unknown reason ->
+            | Ok(Refused reason) ->
                 let detail = if nonBlank reason then reason else "no reason supplied"
-                Error(Http(409, $"source observation is unknown (%s{detail}); refusing to write Verified"))
-            | Fresh revision when not (nonBlank revision) ->
-                invalid "the projection request" "the fresh source revision is missing"
-            | Fresh revision ->
+                Error(Http(403, $"authoritative source verification refused (%s{detail}); refusing to write Verified"))
+            | Ok(Current revision) when not (nonBlank revision) ->
+                invalid "the source verification" "the current source revision is missing"
+            | Ok(Current revision) ->
                 let expected: ExactProject =
                     {
                         Owner = binding.Owner
@@ -226,7 +229,8 @@ module V2Projection =
                                         ObservedRevision = revision
                                         Observation = "Verified"
                                         Outcome = AlreadyCurrent itemId
-                                        Reads = 3
+                                        SourceChecks = 1
+                                        ProjectReads = 3
                                         Mutations = 0
                                     }
                             | Ok(Some value) when not (binding.Observation.Options.ContainsKey value) ->
@@ -243,6 +247,7 @@ module V2Projection =
                                             ObservedRevision = revision
                                             Observation = "Verified"
                                             Outcome = Updated itemId
-                                            Reads = 3
+                                            SourceChecks = 1
+                                            ProjectReads = 3
                                             Mutations = 1
                                         }
