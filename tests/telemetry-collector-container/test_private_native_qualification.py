@@ -115,14 +115,14 @@ class Tests(unittest.TestCase):
            "'native-readonly-source'",'read-only-source-compatible',"'collect-native'","'export-learning'",'learn-01-analysis.py','wrong-native-selector-was-admitted',
            'receiver-restart-export-drift']
   for value in ordered: self.assertIn(value,source)
-  self.assertIn('op.preflight(); op.prepare_context_and_images(); op.r=Runner(time.monotonic()+600); op.materialize(); op.execute()',source)
+  self.assertIn('op.preflight(); op.prepare_context_and_images(); op.r=Runner(time.monotonic()+600,op.command_diagnostic); op.materialize(); op.execute()',source)
   self.assertIn("probe('prospective.token',False); probe('collector.token',True); probe('revoked.token',True)",source)
   self.assertIn('cleanup=Runner(time.monotonic()+60)',source)
   self.assertIn("signal.signal(signal.SIGTERM,interrupted)",source)
   self.assertNotIn('prepared-source-only',source)
-  for token in ('inspect_container(\'fsgg-native-collector\',t.inspect_receiver)',
-                "inspect_container('fsgg-native-egress',t.inspect_egress)",
-                "inspect_container('fsgg-native-development',t.inspect_native)",
+  for token in ("inspect_container('fsgg-native-collector',t.inspect_receiver,'receiver-inspect')",
+                "inspect_container('fsgg-native-egress',t.inspect_egress,'egress-inspect')",
+                "inspect_container('fsgg-native-development',t.inspect_native,'native-inspect')",
                 'require_collection_handoff','--userns=keep-id:uid=32768,gid=32768'):
    self.assertIn(token,source)
  def test_materialization_creates_driver_output_before_native_start(self):
@@ -161,8 +161,8 @@ class Tests(unittest.TestCase):
     if auth=='not-materialized': self.assertTrue(value['preservationComplete'])
  def test_workflow_finalization_propagates_seal_failure_and_preserves_plaintext(self):
   script=self.operation_shell(); self.assertEqual(0,subprocess.run(['bash','-n'],input=script,text=True).returncode)
-  for seal_fail,expected_rc in ((False,0),(True,86)):
-   with self.subTest(seal_fail=seal_fail), tempfile.TemporaryDirectory() as td:
+  for operation_fail,seal_fail,expected_rc in ((False,False,0),(False,True,86),(True,False,2)):
+   with self.subTest(operation_fail=operation_fail,seal_fail=seal_fail), tempfile.TemporaryDirectory() as td:
     t=pathlib.Path(td); fake=t/'bin'; fake.mkdir(); (t/'placement/_private-inputs/custody').mkdir(parents=True)
     (t/'placement/_private-inputs/custody/root-public.pem').write_text('public-test-only')
     (t/'recipe').symlink_to(ROOT,target_is_directory=True)
@@ -171,7 +171,7 @@ if [[ "$1" == recipe/deployment/telemetry-collector/qualify_native_container.py 
   mkdir -p "$PRIVATE_ROOT/native/.codex" "$PRIVATE_ROOT/native/qualification-output/run-0001" "$PRIVATE_ROOT/output"
   printf '{}\\n' > "$PRIVATE_ROOT/native/.codex/auth.json"
   printf '{"schema":"fsgg.telemetry.private-native-qualification/1","runNonce":"run-0001","sourceSha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","phases":[{"name":"private-material-ready"}],"disposition":"source-operation-complete","cleanupComplete":true}\\n' > "$RESULT_ROOT/result.json"
-  exit 0
+  test "${OPERATION_FAIL:-0}" = 0 && exit 0 || exit 2
 fi
 exec /usr/bin/python3 "$@"
 ''')
@@ -189,8 +189,8 @@ exit 2
     env={'PATH':str(fake)+':/usr/bin:/bin','RESULT_ROOT':str(t/'result'),'PRIVATE_ROOT':str(t/'private'),
          'STAGING_ROOT':str(t/'staging'),'RUN_NONCE':'run-0001','RECIPE_SHA':'a'*40,'PLACEMENT_SHA':'d'*40,
          'PROFILE_SHA':q.PROFILE_SHA,'GITHUB_WORKSPACE':str(t),'FSGG_NATIVE_AUTH_JSON_B64':'test',
-         'FSGG_PRIVATE_EFFECT_ADMISSION':'test','SEAL_FAIL':'1' if seal_fail else '0'}
-    completed=subprocess.run(['bash'],input=script,text=True,cwd=t,env=env,capture_output=True)
+         'FSGG_PRIVATE_EFFECT_ADMISSION':'test','SEAL_FAIL':'1' if seal_fail else '0','OPERATION_FAIL':'1' if operation_fail else '0'}
+    completed=subprocess.run(['bash','-e','-o','pipefail'],input=script,text=True,cwd=t,env=env,capture_output=True)
     self.assertEqual(expected_rc,completed.returncode,completed.stderr)
     result=json.loads((t/'result/result.json').read_text())
     if seal_fail:
@@ -198,6 +198,9 @@ exit 2
      self.assertTrue((t/'private/native/.codex/auth.json').exists())
     else:
      self.assertTrue(result['custodySealed']); self.assertFalse((t/'private').exists())
+     self.assertEqual(2 if operation_fail else 0,result['operationExit'])
+     self.assertEqual('sealed',result['evidenceCustody'])
+     self.assertTrue((t/'result/auth-capsule.json').is_file()); self.assertTrue((t/'result/evidence-capsule.json').is_file())
  def test_cleanup_checks_every_owned_resource_and_reports_survivors(self):
   class CleanupRunner:
    def __init__(self,survives=False): self.calls=[]; self.survives=survives
@@ -227,6 +230,7 @@ exit 2
    def materialize(self): pass
    def execute(self): pass
    def cleanup(self): FakeOperation.cleaned=True; return []
+   def write_private_diagnostics(self): pass
    def write_result(self): pass
   with tempfile.TemporaryDirectory() as td:
    a=type('A',(),{'operation_id':q.OPERATION,'source_root':ROOT,'source_sha':'a'*40,'private_placement_sha':'d'*40,
@@ -278,8 +282,8 @@ exit 2
    class IntegratedOperation(q.Operation):
     def topology(self): return topology
     def initialize_store(self): pass
-    def inspect_container(self,name,inspector): topology.inspected.append(inspector.__name__)
-    def container_running(self,name): return False
+    def inspect_container(self,name,inspector,diagnostic): topology.inspected.append(inspector.__name__)
+    def container_running(self,name,diagnostic): return False
     def admin(self,*args,check=True):
      if args[0]=='export-learning': return subprocess.CompletedProcess(args,0,b'{"stable":true}',b'')
      if args[0]=='collect-native' and 'wrong-selector' in args: return subprocess.CompletedProcess(args,2,b'',b'')
@@ -290,6 +294,45 @@ exit 2
    self.assertTrue(topology.same); self.assertEqual('source-operation-complete',op.result['disposition'])
    analyzer=next(call for call in runner.calls if any(item.endswith('/learn-01-analysis.py') for item in call))
    self.assertIn('--userns=keep-id:uid=32768,gid=32768',analyzer); self.assertIn('--read-only',analyzer)
+ def test_private_command_diagnostics_are_bounded_and_never_store_command_or_output(self):
+  records=[]
+  completed=subprocess.CompletedProcess(['podman'],7,b'private-stdout',b'Error: name demo already in use')
+  with mock.patch.object(q.subprocess,'run',return_value=completed):
+   runner=q.Runner(q.time.monotonic()+10,records.append)
+   with self.assertRaisesRegex(q.Refusal,'command-failed:podman'):
+    runner.run(['podman','create','--env','PRIVATE=value','image'],diagnostic='readonly-probe-create')
+  self.assertEqual(1,len(records)); record=records[0]
+  self.assertEqual(('readonly-probe-create','podman',7,'name-conflict'),(record['command'],record['executable'],record['exitCode'],record['stderrCategory']))
+  encoded=json.dumps(record)
+  for forbidden in ('PRIVATE=value','private-stdout','already in use','podman create','image'):
+   self.assertNotIn(forbidden,encoded)
+  self.assertEqual(hashlib.sha256(b'private-stdout').hexdigest(),record['stdoutSha256'])
+ def test_private_diagnostics_file_is_not_added_to_public_result(self):
+  with tempfile.TemporaryDirectory() as td:
+   root=pathlib.Path(td)/'private'; (root/'output').mkdir(parents=True,mode=0o700)
+   a=type('A',(),{'private_root':root,'run_nonce':'run-0001','source_sha':'a'*40,'private_placement_sha':'d'*40})()
+   op=q.Operation(a,FakeRunner()); op.command_diagnostic({'command':'readonly-probe-create','executable':'podman','exitCode':125,'stdoutBytes':0,'stdoutSha256':hashlib.sha256(b'').hexdigest(),'stderrBytes':1,'stderrSha256':hashlib.sha256(b'x').hexdigest(),'stderrCategory':'unclassified'})
+   op.write_private_diagnostics(); value=json.loads((root/'output/command-diagnostics.json').read_text())
+   self.assertEqual('fsgg.telemetry.private-command-diagnostics/1',value['schema'])
+   self.assertEqual('before-first-phase',value['records'][0]['phase'])
+   self.assertNotIn('commandDiagnostics',op.result); self.assertEqual(0o600,(root/'output/command-diagnostics.json').stat().st_mode&0o777)
+ def test_diagnostic_write_failure_cannot_skip_cleanup(self):
+  class FakeOperation:
+   cleaned=False
+   def __init__(self,args,runner): self.result={'schema':q.SCHEMA,'runNonce':args.run_nonce,'sourceSha':args.source_sha,'phases':[],'disposition':'incomplete'}
+   def preflight(self): pass
+   def prepare_context_and_images(self): pass
+   def materialize(self): pass
+   def execute(self): pass
+   def command_diagnostic(self,value): pass
+   def write_private_diagnostics(self): raise OSError('private detail')
+   def cleanup(self): FakeOperation.cleaned=True; return []
+   def write_result(self): pass
+  with tempfile.TemporaryDirectory() as td:
+   a=type('A',(),{'operation_id':q.OPERATION,'source_root':ROOT,'source_sha':'a'*40,'private_placement_sha':'d'*40,
+                  'private_root':pathlib.Path(td)/'private','staging_root':pathlib.Path(td)/'staging','run_nonce':'run-0001'})()
+   with mock.patch.object(q,'parse',return_value=a), mock.patch.object(q,'Operation',FakeOperation): self.assertEqual(2,q.main([]))
+  self.assertTrue(FakeOperation.cleaned)
  def test_receipt_probe_requires_exact_applied_receipt_without_disclosing_token(self):
   batch='a'*32+'-000004'; digest='b'*64
   receipt={'schema':'fsgg.telemetry.receipt/1','workspaceId':q.SCOPE[0],'producerId':q.SCOPE[1],

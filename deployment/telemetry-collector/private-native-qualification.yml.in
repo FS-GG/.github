@@ -68,11 +68,12 @@ jobs:
           FSGG_PRIVATE_EFFECT_ADMISSION: ${{ secrets.FSGG_V2_HOST_018_EFFECT_ADMISSION }}
         run: |
           set -uo pipefail
+          set +e
           umask 077
           mkdir -m 0700 "$RESULT_ROOT"
           interrupted=0
           trap 'interrupted=1' INT TERM
-          python3 recipe/deployment/telemetry-collector/qualify_native_container.py \
+          if python3 recipe/deployment/telemetry-collector/qualify_native_container.py \
             --operation-id v2-host-01.8a-native-collaboration-v1 \
             --source-root "$GITHUB_WORKSPACE/recipe" --source-sha "$RECIPE_SHA" \
             --private-placement-sha "$PLACEMENT_SHA" \
@@ -88,8 +89,11 @@ jobs:
             --native-source-pins "$GITHUB_WORKSPACE/placement/_private-inputs/native/source-pins.json" \
             --native-executable "$GITHUB_WORKSPACE/placement/_private-inputs/native/codex" \
             --seal-public-key "$GITHUB_WORKSPACE/placement/_private-inputs/custody/root-public.pem" \
-            --result "$RESULT_ROOT/result.json"
-          operation_rc=$?
+            --result "$RESULT_ROOT/result.json"; then
+            operation_rc=0
+          else
+            operation_rc=$?
+          fi
           trap '' INT TERM
           unset FSGG_NATIVE_AUTH_JSON_B64 FSGG_PRIVATE_EFFECT_ADMISSION
 
