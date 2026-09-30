@@ -40,6 +40,20 @@ def stable_json(value):
 def regular(path,maximum,mode=None):
     s=path.lstat(); require(stat.S_ISREG(s.st_mode) and not path.is_symlink() and 0<s.st_size<=maximum,'unsafe-input')
     if mode is not None: require(stat.S_IMODE(s.st_mode)==mode,'input-mode-refused')
+def native_operation_result(summary_bytes,path,nonce):
+    summary=json.loads(summary_bytes)
+    require(set(summary)=={'schema','status','resultSha256'}
+            and summary['schema']=='fsgg.telemetry.native-operation-result/1'
+            and summary['status']=='qualified'
+            and re.fullmatch(r'[0-9a-f]{64}',summary['resultSha256'])!=None,'native-operation-summary-refused')
+    regular(path,MAX_OUTPUT,0o600); require(digest(path)==summary['resultSha256'],'native-operation-result-digest-refused')
+    result=json.loads(path.read_text())
+    require(result.get('schema')==summary['schema'] and result.get('status')==summary['status']
+            and result.get('operationId')==OPERATION and result.get('runNonce')==nonce
+            and re.fullmatch(r'[0-9a-f-]{36}',result.get('parentThreadId',''))!=None
+            and re.fullmatch(r'[a-zA-Z0-9_.-]{1,128}',result.get('nativeAgent',''))!=None,
+            'native-operation-result-refused')
+    return result
 def fixed_env(extra=None):
     result={'PATH':'/usr/local/bin:/usr/bin:/bin','LANG':'C.UTF-8','LC_ALL':'C.UTF-8'}
     result.update(extra or {}); return result
@@ -71,6 +85,24 @@ def receipt_probe(argv):
                     'streamId':SCOPE[2],'batchId':a.batch,'digest':a.expected_digest,'status':'applied','code':None},
             'receipt-content-refused')
     print(json.dumps({'receiptRecovered':True,'batchId':a.batch,'digest':a.expected_digest},sort_keys=True,separators=(',',':'))); return 0
+
+def custody_status(argv):
+    p=argparse.ArgumentParser(); p.add_argument('--result',type=pathlib.Path,required=True); p.add_argument('--run-nonce',required=True)
+    p.add_argument('--source-sha',required=True); p.add_argument('--operation-exit',type=int,required=True)
+    p.add_argument('--cleanup-ok',choices=('true','false'),required=True); p.add_argument('--interrupted',choices=('true','false'),required=True)
+    p.add_argument('--auth-state',choices=('not-materialized','sealed','missing','seal-failed','writer-stop-failed'),required=True)
+    p.add_argument('--evidence-state',choices=('not-present','sealed','seal-failed','writer-stop-failed'),required=True); a=p.parse_args(argv)
+    require(re.fullmatch(r'[a-z0-9][a-z0-9-]{7,63}',a.run_nonce)!=None and re.fullmatch(r'[0-9a-f]{40}',a.source_sha)!=None,'custody-identity-refused')
+    value=json.loads(a.result.read_text()) if a.result.exists() else {
+        'schema':SCHEMA,'runNonce':a.run_nonce,'sourceSha':a.source_sha,'phases':[],'disposition':'incomplete'}
+    require(value.get('schema')==SCHEMA and value.get('runNonce')==a.run_nonce and value.get('sourceSha')==a.source_sha,'custody-result-identity-refused')
+    cleanup=a.cleanup_ok=='true'; interrupted=a.interrupted=='true'; sealed=a.auth_state in {'sealed','not-materialized'}
+    value.update({'operationExit':a.operation_exit,'writerCleanupComplete':cleanup,'interrupted':interrupted,
+                  'authCustody':a.auth_state,'custodySealed':sealed,'evidenceCustody':a.evidence_state})
+    if a.operation_exit!=0 or not cleanup or interrupted or not sealed or a.evidence_state in {'seal-failed','writer-stop-failed'}:
+        value['disposition']='custody-incomplete'
+    temporary=a.result.with_suffix('.tmp'); private_write(temporary,canonical(value)); os.replace(temporary,a.result)
+    return 0
 
 class Runner:
     def __init__(self,deadline): self.deadline=deadline
@@ -109,6 +141,8 @@ class Operation:
         observations=journal.get('observations',{})
         require(set(observations)=={'github','nuget'} and all(x.get('producerPayloadEqual') is True and x.get('payloadSha256')=='sha256:'+HOST_PAYLOAD for x in observations.values()),'host-readback-drift')
         require(digest(self.a.native_executable)==NATIVE_SHA,'native-drift')
+        regular(self.a.seal_public_key,64*1024)
+        self.r.run(['openssl','pkey','-pubin','-in',str(self.a.seal_public_key),'-noout'],limit=4096)
         self.phase('pre-auth-preflight',hostSource=HOST_SOURCE,coordSource=COORD_SOURCE,nativeSha256=NATIVE_SHA)
     def prepare_context_and_images(self):
         """Verify all public bytes and build/smoke immutable images before auth restoration."""
@@ -160,7 +194,7 @@ class Operation:
         admission=os.environ.pop('FSGG_PRIVATE_EFFECT_ADMISSION',None)
         require(admission is not None and secrets.compare_digest(admission,expected),'effect-admission-refused')
         private_dir(self.root); self.created.append(self.root)
-        for n in ('native','producer-spool','store-seed','evidence','tls','credentials','output','build/collector/host','build/native/fsgg-coord-engine'):
+        for n in ('native','native/qualification-output','producer-spool','store-seed','evidence','tls','credentials','output','build/collector/host','build/native/fsgg-coord-engine'):
             p=self.root/n; p.mkdir(mode=0o700,parents=True,exist_ok=False)
         # Restore only auth.json; the secret is removed before any child starts.
         encoded=os.environ.pop('FSGG_NATIVE_AUTH_JSON_B64',None); require(encoded is not None,'auth-capsule-unavailable')
@@ -185,6 +219,12 @@ class Operation:
     def topology(self):
         path=self.a.source_root/'deployment/telemetry-collector/native_topology.py'
         spec=importlib.util.spec_from_file_location('private_native_topology',path); module=importlib.util.module_from_spec(spec); spec.loader.exec_module(module); return module
+    def inspect_container(self,name,inspector):
+        value=json.loads(self.r.run(['podman','inspect','--type','container','--format','{{json .}}',name],limit=256*1024).stdout)
+        require(isinstance(value,dict),'container-inspection-refused'); inspector(value)
+    def container_running(self,name):
+        value=self.r.run(['podman','inspect','--type','container','--format','{{.State.Running}}',name],limit=128).stdout.decode().strip()
+        require(value in {'true','false'},'container-state-refused'); return value=='true'
     def admin(self,*args,check=True):
         mounts=['--volume',f'{self.root}/host.json:/qualification/host.json:ro,rprivate',
                 '--volume',f'{self.root}/host.json.native-collector.json:/qualification/host.json.native-collector.json:ro,rprivate',
@@ -222,14 +262,20 @@ class Operation:
             self.admin(*command)
         self.admin('preflight','--config','/qualification/host.json')
         collector=t.collector_create(self.images['native-collector'],self.root); self.r.run(collector); self.containers.append('fsgg-native-collector')
-        self.r.run(t.receiver_connect_command()); self.r.run(['podman','start','fsgg-native-collector'])
-        ecreate,econnect=t.egress_create(self.images['native-egress']); self.r.run(ecreate); self.containers.append('fsgg-native-egress'); self.r.run(econnect); self.r.run(['podman','start','fsgg-native-egress'])
+        self.r.run(t.receiver_connect_command()); self.inspect_container('fsgg-native-collector',t.inspect_receiver)
+        self.r.run(['podman','start','fsgg-native-collector'])
+        ecreate,econnect=t.egress_create(self.images['native-egress']); self.r.run(ecreate); self.containers.append('fsgg-native-egress'); self.r.run(econnect)
+        self.inspect_container('fsgg-native-egress',t.inspect_egress); self.r.run(['podman','start','fsgg-native-egress'])
         ncreate=t.native_create(self.images['native-development'],self.root/'native',self.root/'roadmap.json',self.root/'producer-spool',self.a.run_nonce)
         self.r.run(ncreate,env=fixed_env({CREDENTIAL_ENV:os.environ[CREDENTIAL_ENV]})); self.containers.append('fsgg-native-development')
+        self.inspect_container('fsgg-native-development',t.inspect_native)
+        self.phase('effective-topology-inspected',native=True,receiver=True,egress=True)
         run=self.r.run(['podman','start','-a','fsgg-native-development'],limit=MAX_OUTPUT)
-        operation=json.loads(run.stdout); require(operation.get('status')=='qualified','native-operation-refused')
+        operation=native_operation_result(run.stdout,self.root/'native/qualification-output'/self.a.run_nonce/'result.json',self.a.run_nonce)
         # Stop all writers before protected collection over the same original volume.
         self.r.run(['podman','stop','--time','10','fsgg-native-collector']); self.r.run(['podman','stop','--time','10','fsgg-native-egress'],check=False)
+        t.require_collection_handoff(self.container_running('fsgg-native-development'),self.container_running('fsgg-native-collector'))
+        require(not self.container_running('fsgg-native-egress'),'egress-writer-still-running')
         before=self.topology().snapshot_native_volume(self.root/'native')
         receipts=json.loads((self.root/'native/qualification-output'/self.a.run_nonce/'telemetry-receipts.json').read_text())
         child=next(x for x in receipts['receipts'] if x['operation']=='child-started'); dispatch=child['batchId'].rsplit('-',1)[0]
@@ -244,7 +290,10 @@ class Operation:
         require(replay.stdout==collected.stdout,'collection-replay-drift')
         # Trusted analyzer acquires through the exact Host process inside the collector image.
         analysis=self.a.source_root/'tools/learn-01-analysis.py'; policy=self.a.source_root/'policy/learn-01-current-focused-v1.json'
-        analyzer=self.r.run(['podman','run','--rm','--network','none','--entrypoint','/usr/local/bin/python3',
+        analyzer=self.r.run(['podman','run','--rm','--pull=never','--network','none','--read-only','--cap-drop=all',
+            '--security-opt=no-new-privileges','--pids-limit','128','--memory','1g','--cpus','1',
+            '--userns=keep-id:uid=32768,gid=32768','--user=32768:32768','--tmpfs','/tmp:rw,noexec,nosuid,nodev,size=64m',
+            '--entrypoint','/usr/local/bin/python3',
             '--volume',f'{self.a.source_root}:/qualification/source:ro,rprivate',
             '--volume',f'{self.root}/host.json:/qualification/host.json:ro,rprivate',
             '--volume',f'{self.root}/host.json.native-collector.json:/qualification/host.json.native-collector.json:ro,rprivate',
@@ -286,9 +335,18 @@ class Operation:
         return {'Schema':'fsgg.telemetry.host-config/2','ListenUrl':'https://0.0.0.0:7443','CertificatePath':'/qualification/tls/receiver.pfx','CertificatePasswordFile':'/qualification/tls/password','ServiceLockPath':'/qualification/store/host.lock','Stores':[{'WorkspaceId':SCOPE[0],'Root':'/qualification/store'}],'Credentials':[c(SCOPE[1],'prospective.token',SCOPE[1],SCOPE[2],'generic','grant-prospective-v1'),c('native-collector-v1','collector.token','native-collector-v1','native-inventory','native-collector','grant-native-collector-v1'),c('native-revoked-v1','revoked.token','native-revoked-v1','native-inventory','native-collector','grant-native-revoked-v1',True)],'BrowserPrincipals':[{'PrincipalId':'private-preflight','KeyHashFile':'/qualification/credentials/browser.sha256','WorkspaceIds':[SCOPE[0]],'Revoked':False}],'BrowserSession':{'IdleSeconds':300,'AbsoluteSeconds':600,'MaximumSessions':2,'LoginAttemptsPerMinute':2,'LoginAdmission':1,'QueryAdmission':1,'QueryTimeoutSeconds':10}}
     def cleanup(self):
         cleanup=Runner(time.monotonic()+60)
-        for name in reversed(self.containers): cleanup.run(['podman','rm','-f',name],check=False,limit=4096)
-        for name in reversed(self.networks): cleanup.run(['podman','network','rm','-f',name],check=False,limit=4096)
+        failures=[]
+        for kind,names in (('container',reversed(self.containers)),('network',reversed(self.networks))):
+            for name in names:
+                try:
+                    command=(['podman','rm','-f',name] if kind=='container'
+                             else ['podman','network','rm','-f',name])
+                    removed=cleanup.run(command,check=False,limit=4096)
+                    exists=cleanup.run(['podman',kind,'exists',name],check=False,limit=4096)
+                    if removed.returncode!=0 or exists.returncode!=1: failures.append(kind+':'+name)
+                except Exception: failures.append(kind+':'+name)
         for key in ('FSGG_NATIVE_AUTH_JSON_B64','FSGG_PRIVATE_EFFECT_ADMISSION',CREDENTIAL_ENV): os.environ.pop(key,None)
+        return failures
     def write_result(self):
         self.a.result.parent.mkdir(mode=0o700,parents=True,exist_ok=True)
         private_write(self.a.result,canonical(self.result))
@@ -298,6 +356,7 @@ def parse(argv):
 def main(argv=None):
     argv=list(sys.argv[1:] if argv is None else argv)
     if argv and argv[0]=='receipt-probe': return receipt_probe(argv[1:])
+    if argv and argv[0]=='custody-status': return custody_status(argv[1:])
     a=parse(argv); require(a.operation_id==OPERATION,'operation-refused'); a.source_root=a.source_root.resolve()
     require(re.fullmatch(r'[0-9a-f]{40}',a.private_placement_sha)!=None,'private-placement-sha-refused')
     require(a.staging_root.is_absolute() and not a.staging_root.exists(),'staging-root-refused')
@@ -306,10 +365,17 @@ def main(argv=None):
     a.staging_root.mkdir(mode=0o700,parents=True); op=Operation(a,Runner(time.monotonic()+1200))
     def interrupted(signum,frame): raise Refusal('operation-interrupted')
     signal.signal(signal.SIGINT,interrupted); signal.signal(signal.SIGTERM,interrupted)
+    succeeded=False; failure=None
     try:
         op.preflight(); op.prepare_context_and_images(); op.r=Runner(time.monotonic()+600); op.materialize(); op.execute()
-        op.write_result(); return 0
+        succeeded=True
     except Refusal as e:
-        print('private-native-qualification-refused:'+str(e),file=sys.stderr); return 2
-    finally: op.cleanup()
+        failure=str(e); print('private-native-qualification-refused:'+failure,file=sys.stderr)
+    except (OSError,ValueError,KeyError,json.JSONDecodeError,subprocess.TimeoutExpired) as e:
+        failure=type(e).__name__; print('private-native-qualification-refused:'+failure,file=sys.stderr)
+    cleanup_failures=op.cleanup(); op.result['cleanupComplete']=not cleanup_failures
+    op.result['cleanupFailureCount']=len(cleanup_failures)
+    if failure is not None: op.result['disposition']='incomplete'; op.result['failureCode']=failure
+    if cleanup_failures: op.result['disposition']='cleanup-incomplete'
+    op.write_result(); return 0 if succeeded and not cleanup_failures else 2
 if __name__=='__main__': raise SystemExit(main())
