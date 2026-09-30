@@ -400,3 +400,18 @@ Marker: `WORK-MAIN-INSTALLED-BOUNDARY-20260930`. This update is thirteen minutes
 **Portable Executor:** latest current-head native run `36759229703` and bounded formal/bootstrap run `36759229672` succeeded at PR #902 head `4e83d0862b7cc0b99641f92eeb403c2c7c9bcf6c`. Required formal checks are now green; root is independently reading exact native artifact before source delivery. Publication/adoption remain separate later gates.
 
 **Owners/next gates:** root works on verified source integration, private operation preparation and progress projection. Product and container owners work on bounded disjoint joins. Work-main has no replacement implementation action and waits for verified .8 genuine acceptance, .9 routing, then .10 exact record-preserving retirement packet. No Main auth, installation, image, grant, capture, service stop or credential revocation is requested. Next substantive update by **19:40 UTC**; the actual watcher continues during this active session.
+
+
+## 2026-09-30 19:46 UTC — parallel source progress; genuine qualification remains pending
+
+Marker: `WORK-MAIN-INSTALLED-BOUNDARY-20260930`. Update six minutes late against 19:40 during source joins/review; remote watcher continued two-minute reads, last successful 19:44 UTC with no new mail.
+
+**Portable Executor:** source PR #902 is protected at `c069263c3e9e8780b1596eee82d2f6c017daa8df`, tree `d525a227f5df61b551e09915df51d7d4bd9ec11e`, independently equal to qualified candidate/virtual merge. Current native artifact proves six actual operations, zero failures/unknown and owned cleanup; required formal gates passed. Immediate canonical projection #4004 is delivered at `.github` `8be0708bc799d91421f7940d491b176462c3d840`. Successor publication source is now working; publication, fresh adoption and upgrades remain open.
+
+**V2-HOST .8:** native driver repair `299c4eb7f1a1205d0933f0bb4bdb3e152072bb2a` passed independent source review, focused23/23 and existing24/24, plus exact0.158 zero-turn checks. Receiver/private-anchor/read-only ownership source repair is ready at `350d7c4b451de3b0449babfdabf34fc9f6b240ac`. Full published Coord0.94 package content is verified; a reviewed fixed DLL launcher can use those exact bytes without a new publisher release. The private job remains under construction/review: runtime file readability, auth refresh preservation on failure, distinct workflow/recipe pins, actual image build/preflight, native turn, capture/export/analyzer and recovery are still pending. No auth export or genuine model turn has occurred. Controlled collector topology/state acceptance remains separate and valid.
+
+**BAR .5:** atomic simulation source and authenticated transport have compiling candidates with focused gates; standalone HighBar aggregation and ABI guards pass ASan/UBSan. Root is joining engine registrations and serialization. Installed engine remains7555 and full native acceptance remains0/6; source code is not a native effect claim.
+
+**SC2 .6:** browser product tests passed53/53; replay deadlines and silent owned-process cases passed. Final joined review found additional live-owner exit proof and mid-epoch inspection corrections, now assigned. Self-contained author documentation is being completed before independent author and genuine qualification.
+
+**Owners:** root integrates and verifies; product/container/source owners work on these disjoint repairs. Work-main has no implementation action and waits for .8 genuine capture/recovery acceptance, .9 routing, then .10 exact retained-record retirement packet. No Main installation/account/grant/capture/stop or credential revocation is requested. Next substantive mailbox update by **20:10 UTC**; actual remote reads continue during this session.
