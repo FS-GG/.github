@@ -188,6 +188,19 @@ wrong and revoked grant refusal, one empty receipt with zero facts, replay, rest
 Native access, model support, capture application and activation remained false. This is bounded collector-state
 qualification, with no genuine observed turn, native capture, enrollment or experiment claim.
 
+**V2-HOST-01.8 independent native-container operation source delivered on 2026-09-30;
+genuine qualification remains open.** [.github PR #4006](https://github.com/FS-GG/.github/pull/4006)
+merged at protected `7200e2f7b7bacb8ecc65a821a88e5f6b6dbd2368`, tree
+`18892db18866c28a900f1662dea92741219aa007`, independently matching integrated candidate
+`62005b267bcbc14e03e542e4e9231b20a04ffbcb`. All 18 operation source/test files preserve the
+independently accepted `c95570bff954343066f99d50a861670d77735dde` bytes. Focused source checks
+passed 19 orchestration/workflow, 23 native-driver, 14 image-context, 12 network/custody and seven
+collector cases. The source provides a manual trusted-private route over exact published Host/Coord bytes,
+restricted egress, one bounded native parent/child, original-volume collection and observed owned cleanup.
+No private auth placement, native image/runtime qualification, model turn, genuine capture or installed
+activation follows from the merge. Those remain .8; accepted replacement operation precedes .9 routing
+and .10 scoped Main retirement. No generated-workspace or default lifecycle change is established.
+
 **LEARN native capture and fixed-profile source are delivered; installed experiments remain open.**
 [.github #3940](https://github.com/FS-GG/.github/pull/3940) delivered protected native capture and
 shared-cost mechanisms, and [#3986](https://github.com/FS-GG/.github/pull/3986) bound captures to their
