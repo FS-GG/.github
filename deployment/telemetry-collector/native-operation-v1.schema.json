@@ -11,13 +11,14 @@
     "provider": {"const": "openai"},
     "model": {"const": "gpt-5.6-sol"},
     "effort": {"const": "medium"},
-    "prompt": {"const": "Use the native collaboration spawn tool exactly once. Spawn one child with model gpt-5.6-sol and reasoning effort medium. Give it only this task: return exactly NATIVE-CHILD-ACK; do not read files, use any other tool, contact a service, or spawn another agent. Wait for that child to reach one terminal turn. Do not send a follow-up or retry. Then return exactly NATIVE-PARENT-ACK."},
+    "prompt": {"const": "Use the native collaboration spawn tool exactly once. Spawn one child with model gpt-5.6-sol and reasoning effort medium. Give it exactly this task text without adding anything: Return exactly NATIVE-CHILD-ACK; do not read files, use any other tool, contact a service, or spawn another agent. Wait for that child to reach one terminal turn. Do not send a follow-up or retry. Then return exactly NATIVE-PARENT-ACK."},
     "native": {
       "type": "object", "additionalProperties": false,
-      "required": ["executable", "sha256", "version", "config", "configSha256", "protocolSchemaSha256", "sessionFlagsSha256"],
+      "required": ["executable", "sha256", "bytes", "version", "config", "configSha256", "protocolSchemaSha256", "sessionFlagsSha256"],
       "properties": {
         "executable": {"const": "/opt/fsgg/codex/codex"},
         "sha256": {"const": "167c0148a849d2444f1b5a7fb5f8bb2de1de5ae13a2a504b833fc765980f5cd9"},
+        "bytes": {"const": 286594376},
         "version": {"const": "0.158.0"},
         "config": {"const": "/opt/fsgg/native-producer-config.toml"},
         "configSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},

@@ -5,10 +5,11 @@
   "provider": "openai",
   "model": "gpt-5.6-sol",
   "effort": "medium",
-  "prompt": "Use the native collaboration spawn tool exactly once. Spawn one child with model gpt-5.6-sol and reasoning effort medium. Give it only this task: return exactly NATIVE-CHILD-ACK; do not read files, use any other tool, contact a service, or spawn another agent. Wait for that child to reach one terminal turn. Do not send a follow-up or retry. Then return exactly NATIVE-PARENT-ACK.",
+  "prompt": "Use the native collaboration spawn tool exactly once. Spawn one child with model gpt-5.6-sol and reasoning effort medium. Give it exactly this task text without adding anything: Return exactly NATIVE-CHILD-ACK; do not read files, use any other tool, contact a service, or spawn another agent. Wait for that child to reach one terminal turn. Do not send a follow-up or retry. Then return exactly NATIVE-PARENT-ACK.",
   "native": {
     "executable": "/opt/fsgg/codex/codex",
     "sha256": "167c0148a849d2444f1b5a7fb5f8bb2de1de5ae13a2a504b833fc765980f5cd9",
+    "bytes": 286594376,
     "version": "0.158.0",
     "config": "/opt/fsgg/native-producer-config.toml",
     "configSha256": "11171d89fdf531a772c063df9c126538ebf62c47ebf8bae3f319d28d70966fb0",
