@@ -161,6 +161,17 @@ That earlier proof remains bound to its source identity. The current portable pr
 no portable successor is published. P3 producer publication, P4 fresh-receiver adoption and P5 upgrade/matrix
 closure remain open. No complete .5 language-route adoption or generated-workspace change is claimed.
 
+**V2-LANG-01.5 FourD portable image preparation source delivered on 2026-09-30; native binding remains open.**
+[FourD PR #20](https://github.com/FS-GG/FS.GG.FourD/pull/20) merged at protected
+`40151b49199aad872460c0585f3075ffa30fa1a3`, tree `dcedc7bb2b03c77b524c64887fef59d36dea7e09`,
+independently matching reviewed candidate `48d23b4c7a02b69b9dfb87bdb1d590a4739afab6`.
+The product-owned source pins .NET SDK 10.0.401, Fable 5.13.0, Node 24.8.0, Playwright 1.55.1
+and Chromium 140/revision 1193; it prepares offline dependency custody, an exact source snapshot
+and a fixed production-P2 operation. Source validation, package hash and provenance refusal cases,
+.NET/Fable parity, retained saves and the actual local-tool resolver-cache layout passed.
+No OCI image build or native P2 execution is established. Image qualification, BIND, publication,
+installed adoption and the independent consenting-player comparison remain open; v1 stays default.
+
 **V2-LANG-01.2 P3 publication tooling source delivered on 2026-09-30; publication remains open.**
 [Coordination PR #903](https://github.com/FS-GG/FS.GG.Coordination/pull/903) merged at protected
 `47761d86601de6c5c22b9e79f19084eb4b070e1e`, tree `cc6bb7a315fde6761073f950e6fa87d7bf69555b`,
