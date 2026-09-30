@@ -66,9 +66,10 @@ COPY --chown=0:0 native/codex /opt/fsgg/codex/codex
 RUN test "$HOST_VERSION" = "0.2.1" \
     && printf '%s  %s\n' "$NATIVE_ELF_SHA256" /opt/fsgg/codex/codex | sha256sum --check --status \
     && chmod 0555 /opt/fsgg/codex/codex \
+    && printf '%s\n' '#!/bin/sh' 'exec /usr/bin/dotnet /opt/fsgg/telemetry-host/FS.GG.Telemetry.Host.dll "$@"' > /opt/fsgg/telemetry-host/fsgg-telemetry-host \
     && find /opt/fsgg/telemetry-host -type d -exec chmod 0555 {} + \
     && find /opt/fsgg/telemetry-host -type f -exec chmod 0444 {} + \
-    && if test -f /opt/fsgg/telemetry-host/fsgg-telemetry-host; then chmod 0555 /opt/fsgg/telemetry-host/fsgg-telemetry-host; fi \
+    && chmod 0555 /opt/fsgg/telemetry-host/fsgg-telemetry-host \
     && test -f /opt/fsgg/telemetry-host/FS.GG.Telemetry.Host.dll \
     && install -d -o 32768 -g 32768 -m 0700 /qualification
 LABEL org.opencontainers.image.title="FS.GG native telemetry collector" \

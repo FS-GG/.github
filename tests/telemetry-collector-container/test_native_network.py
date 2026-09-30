@@ -211,6 +211,7 @@ class NativeNetworkTests(unittest.TestCase):
         self.assertIn("find /opt/fsgg/coord -type f -exec chmod 0444", recipe)
         self.assertIn("find /opt/fsgg/telemetry-host -type f -exec chmod 0444", recipe)
         self.assertIn("chmod 0555 /opt/fsgg/telemetry-host/fsgg-telemetry-host", recipe)
+        self.assertIn("exec /usr/bin/dotnet /opt/fsgg/telemetry-host/FS.GG.Telemetry.Host.dll", recipe)
         self.assertNotIn(":latest", recipe)
         self.assertNotIn("apt-get", recipe)
         for argument, path in (
