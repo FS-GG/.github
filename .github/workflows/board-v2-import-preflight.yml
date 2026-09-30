@@ -1,0 +1,39 @@
+name: board-v2-import-preflight
+
+# Pure source/manifest validation. This workflow has no Projects token or mutation route.
+# Keep the pull_request and push path lists identical.
+on:
+  pull_request:
+    paths:
+      - "tools/board-v2-import.py"
+      - "tools/board-v2-import.schema.json"
+      - "docs/coordination/board-v2-import-manifest.json"
+      - "docs/coordination/board-v2-import-preparation.md"
+      - "tests/board-v2-import/**"
+      - ".github/workflows/board-v2-import-preflight.yml"
+  push:
+    branches: [main]
+    paths:
+      - "tools/board-v2-import.py"
+      - "tools/board-v2-import.schema.json"
+      - "docs/coordination/board-v2-import-manifest.json"
+      - "docs/coordination/board-v2-import-preparation.md"
+      - "tests/board-v2-import/**"
+      - ".github/workflows/board-v2-import-preflight.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fixture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - name: Validate exact import manifest
+        run: python3 tools/board-v2-import.py docs/coordination/board-v2-import-manifest.json
+      - name: Validate bounded pilot plan
+        run: python3 tools/board-v2-import.py docs/coordination/board-v2-import-manifest.json --pilot-plan
+      - name: Exercise negative controls
+        run: python3 tests/board-v2-import/run.py
