@@ -210,9 +210,15 @@ authentication, custody and effect-authority checks remain enforced.
 
 The required acceptance outcome is source, artifact and bounded diagnostic qualification through
 these fixed jobs without a host-resident autonomous agent. Retain the selected recipe revision,
-artifact pins, scope, result and cleanup evidence. This requirement is not a claim that the boundary
-is already implemented or qualified. Genuine installed-host validation and experiments remain
-explicitly selected follow-up work under the
+artifact pins, scope, result and cleanup evidence. The selected `executor-compatibility/1` boundary is implemented and qualified through
+[Coordination #893](https://github.com/FS-GG/FS.GG.Coordination/pull/893),
+[#895](https://github.com/FS-GG/FS.GG.Coordination/pull/895) and the
+[owning fixed-job evidence](https://github.com/FS-GG/FS.GG.Coordination/blob/main/docs/roadmaps/evidence/v2-host-01-fixed-qualification.md):
+protected source, exact served Host/runner candidates, reviewed profile, fixed
+result and cleanup, with postmerge coherent run `36681361583` successful. This
+closes the bounded source/artifact/diagnostic requirement, not every later host
+operation. Genuine installed-host validation and experiments remain explicitly
+selected follow-up work under the
 [full V2 acceptance amendment](2026-09-07-154210-fs-gg-unified-development-roadmap.md#full-v2-acceptance-amendment--2026-09-29);
 deferral supplies no installed-readiness evidence. Historical receipts retain their original scope.
 
