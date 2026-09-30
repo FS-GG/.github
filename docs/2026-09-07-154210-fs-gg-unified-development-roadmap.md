@@ -212,6 +212,16 @@ on cross-origin asset redirects. Registration supplies no credential grant, nati
 capture acceptance. Dedicated environment admission and the genuine .8 operation remain open; .9 routing
 and .10 scoped Main retirement follow accepted replacement operation.
 
+**V2-HOST-01.8 workflow context repair source checkpoint.**
+[PR #4009](https://github.com/FS-GG/.github/pull/4009) replaces job-level `runner.temp` expressions
+with absolute temporary roots scoped to the actual GitHub run and attempt. Twenty focused checks
+validate rendered YAML, shell blocks and context availability. GitHub rejected the earlier private
+dispatch before any job started; no model turn or native capture occurred. Both temporary environment
+secrets were removed and the independent source authentication cache stayed unchanged. The private
+workflow must be rendered from the corrected protected recipe before the next bounded operation.
+Genuine .8 acceptance, .9 routing and .10 scoped Main retirement remain open.
+
+
 
 **LEARN native capture and fixed-profile source are delivered; installed experiments remain open.**
 [.github #3940](https://github.com/FS-GG/.github/pull/3940) delivered protected native capture and
