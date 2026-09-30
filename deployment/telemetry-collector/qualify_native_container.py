@@ -301,11 +301,13 @@ def main(argv=None):
     a=parse(argv); require(a.operation_id==OPERATION,'operation-refused'); a.source_root=a.source_root.resolve()
     require(re.fullmatch(r'[0-9a-f]{40}',a.private_placement_sha)!=None,'private-placement-sha-refused')
     require(a.staging_root.is_absolute() and not a.staging_root.exists(),'staging-root-refused')
-    a.staging_root.mkdir(mode=0o700,parents=True); op=Operation(a,Runner(time.monotonic()+600))
+    # Public verification/build has its own finite allowance; credentialed work starts a fresh
+    # ten-minute deadline, matching the admitted operation bound that excludes prior builds.
+    a.staging_root.mkdir(mode=0o700,parents=True); op=Operation(a,Runner(time.monotonic()+1200))
     def interrupted(signum,frame): raise Refusal('operation-interrupted')
     signal.signal(signal.SIGINT,interrupted); signal.signal(signal.SIGTERM,interrupted)
     try:
-        op.preflight(); op.prepare_context_and_images(); op.materialize(); op.execute()
+        op.preflight(); op.prepare_context_and_images(); op.r=Runner(time.monotonic()+600); op.materialize(); op.execute()
         op.write_result(); return 0
     except Refusal as e:
         print('private-native-qualification-refused:'+str(e),file=sys.stderr); return 2

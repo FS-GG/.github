@@ -54,7 +54,7 @@ class Tests(unittest.TestCase):
            "'native-readonly-source'",'read-only-source-compatible',"'collect-native'","'export-learning'",'learn-01-analysis.py','wrong-native-selector-was-admitted',
            'receiver-restart-export-drift']
   for value in ordered: self.assertIn(value,source)
-  self.assertIn('op.preflight(); op.prepare_context_and_images(); op.materialize(); op.execute()',source)
+  self.assertIn('op.preflight(); op.prepare_context_and_images(); op.r=Runner(time.monotonic()+600); op.materialize(); op.execute()',source)
   self.assertIn("probe('prospective.token',False); probe('collector.token',True); probe('revoked.token',True)",source)
   self.assertIn('cleanup=Runner(time.monotonic()+60)',source)
   self.assertIn("signal.signal(signal.SIGTERM,interrupted)",source)
