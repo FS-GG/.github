@@ -53,6 +53,27 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**V2-LANG-01.2 P3 retained-archive and cleanup repair source delivered.**
+[Coordination PR #904](https://github.com/FS-GG/FS.GG.Coordination/pull/904) merged at
+`3ef375808a896dd307aab59fe50604dc73c6a56b`, tree
+`85785094efa1d087a01f51c0227442dd6d17402c`, independently equal to reviewed candidate
+`8c3c86ba2fe6431004d6f80d0a6e381aadaaa6e0`. Its exact-head
+[coherent validation 36784956850](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36784956850)
+passed. The source separates build-store references from retained OCI archive references while
+joining config identity, bounds failed-load diagnostics, and uses scoped rootless cleanup.
+Fresh protected preparation, retained archive loading, packaged six-operation qualification,
+0.2.0 publication and receiver adoption remain open; source delivery does not establish those gates.
+
+**V2-HOST-01.8 corrected private workflow registration source delivered.**
+[Private substrate PR #22](https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/pull/22)
+merged at `d79548bac5edfca766dfcd43f28aa39cbc48456b`, tree
+`d17beed5f34d97f8581aa9d493d53f5461c80410`, independently equal to candidate
+`3b0cdabea1b478066cb006b6b28385a91720bfa4`. Thirteen source tests validate exact rendering
+from public recipe `39cb10da44168a44acee77d9d8fc91ca1d7f93d6`, context availability and
+unchanged public-input custody. The preceding dispatch was refused before any job; temporary
+credentials were removed. Genuine .8 capture/recovery acceptance, .9 routing and .10 scoped
+Main retirement remain open. Registration changes no installed runtime or workspace default.
+
 **UNITYC-01.1a–.1b source and admission closed on 2026-09-30.** The new private
 `FS-GG/FS.GG.Unity.Client` owner delivered a locked .NET 6, `netstandard2.1`
 tactical reference and a dated Nebulous admission in
