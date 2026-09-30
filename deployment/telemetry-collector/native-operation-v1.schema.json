@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fs.gg/schemas/telemetry-native-operation-profile-v1.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "operationId", "supportedOperations", "provider", "model", "effort", "prompt", "native", "producer", "runtime", "network"],
+  "properties": {
+    "schema": {"const": "fsgg.telemetry.native-operation-profile/1"},
+    "operationId": {"const": "v2-host-01.8a-native-collaboration-v1"},
+    "supportedOperations": {"const": ["v2-host-01.8a-native-collaboration-v1", "v2-host-01.8a-readonly-source-compatibility-v1"]},
+    "provider": {"const": "openai"},
+    "model": {"const": "gpt-5.6-sol"},
+    "effort": {"const": "medium"},
+    "prompt": {"const": "Use the native collaboration spawn tool exactly once. Spawn one child with model gpt-5.6-sol and reasoning effort medium. Give it exactly this task text without adding anything: Return exactly NATIVE-CHILD-ACK; do not read files, use any other tool, contact a service, or spawn another agent. Wait for that child to reach one terminal turn. Do not send a follow-up or retry. Then return exactly NATIVE-PARENT-ACK."},
+    "native": {
+      "type": "object", "additionalProperties": false,
+      "required": ["executable", "sha256", "bytes", "version", "config", "configSha256", "protocolSchemaSha256", "sessionFlagsSha256"],
+      "properties": {
+        "executable": {"const": "/opt/fsgg/codex/codex"},
+        "sha256": {"const": "167c0148a849d2444f1b5a7fb5f8bb2de1de5ae13a2a504b833fc765980f5cd9"},
+        "bytes": {"const": 286594376},
+        "version": {"const": "0.158.0"},
+        "config": {"const": "/opt/fsgg/native-producer-config.toml"},
+        "configSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "protocolSchemaSha256": {"const": "5742a9a7dd41a8b44dca3138f506e013620d4a93573c792b1e5881c053f169a7"},
+        "sessionFlagsSha256": {"const": "6961dbfc2ddce5988b3e567a8d3e4a9680450f25b7648029f790e6a7975fbe49"}
+      }
+    },
+    "producer": {
+      "type": "object", "additionalProperties": false,
+      "required": ["executable", "version", "executableVersion", "coherentPayloadSha256", "coherentMarker", "telemetryConfig", "workspaceId", "producerId", "streamId", "repository", "receiverOrigin", "credentialReference", "credentialEnvironment", "spoolRoot", "feature", "item", "rootAttempt", "childAttempt"],
+      "properties": {
+        "executable": {"const": "/opt/fsgg/coord/fsgg-coord-engine"},
+        "version": {"const": "0.94.0"},
+        "executableVersion": {"const": "0.94.0.0"},
+        "coherentPayloadSha256": {"const": "9b9486a54e014fd5d21b65ed71a00b9021562a56909a1303f89c9646bca4a585"},
+        "coherentMarker": {"const": "/opt/fsgg/coord/coherent-content.sha256"},
+        "telemetryConfig": {"const": "/qualification/native/telemetry/roadmap.json"},
+        "workspaceId": {"const": "v2-host-native-qualification"},
+        "producerId": {"const": "native-prospective-v1"},
+        "streamId": {"const": "roadmap"},
+        "repository": {"const": "FS-GG/.github"},
+        "receiverOrigin": {"const": "https://native-receiver:7443/"},
+        "credentialReference": {"const": "native-prospective-v1"},
+        "credentialEnvironment": {"const": "FSGG_TELEMETRY_CREDENTIAL_NATIVE_PROSPECTIVE_V1"},
+        "spoolRoot": {"const": "/qualification/native/telemetry/spool"},
+        "feature": {"const": "V2-HOST-01"}, "item": {"const": "V2-HOST-01.8a"},
+        "rootAttempt": {"const": "native-operation-root"}, "childAttempt": {"const": "native-operation-child"}
+      }
+    },
+    "runtime": {
+      "type": "object", "additionalProperties": false,
+      "required": ["home", "codexHome", "cwd", "timeoutSeconds", "maximumLineBytes", "maximumEvents", "python"],
+      "properties": {
+        "home": {"const": "/qualification/native"}, "codexHome": {"const": "/qualification/native/.codex"},
+        "cwd": {"const": "/qualification/native/work"}, "timeoutSeconds": {"const": 300},
+        "maximumLineBytes": {"const": 1048576}, "maximumEvents": {"const": 4096}, "python": {"const": "3.14.0"}
+      }
+    },
+    "network": {
+      "type": "object", "additionalProperties": false,
+      "required": ["policySchema", "policyId", "privateNetworkId", "httpsProxy", "noProxy"],
+      "properties": {
+        "policySchema": {"const": "fsgg.telemetry.native-network-policy/1"}, "policyId": {"const": "fsgg-native-egress-v1"},
+        "privateNetworkId": {"const": "fsgg-native-private-v1"},
+        "httpsProxy": {"const": "http://native-egress:3128"}, "noProxy": {"const": "localhost,127.0.0.1,[::1],native-receiver"}
+      }
+    }
+  }
+}

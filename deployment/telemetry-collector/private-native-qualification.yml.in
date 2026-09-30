@@ -1,0 +1,188 @@
+name: V2-HOST-01.8 private native qualification
+on:
+  workflow_dispatch:
+    inputs:
+      placement_sha:
+        description: Exact admitted private workflow commit
+        required: true
+        type: string
+      run_nonce:
+        description: Owner-issued single-attempt nonce
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: v2-host-01-8-private-native-custody
+  cancel-in-progress: false
+jobs:
+  qualify:
+    if: github.repository == 'FS-GG/FS.GG.GitHub.Substrate.Sandbox' && github.ref == 'refs/heads/@@QUALIFICATION_REF@@'
+    environment: v2-host-01-8-native-private
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      RESULT_ROOT: ${{ runner.temp }}/v2-host-result-${{ github.run_id }}-${{ github.run_attempt }}
+      PRIVATE_ROOT: ${{ runner.temp }}/v2-host-native-${{ github.run_id }}-${{ github.run_attempt }}
+      STAGING_ROOT: ${{ runner.temp }}/v2-host-staging-${{ github.run_id }}-${{ github.run_attempt }}
+      RUN_NONCE: ${{ inputs.run_nonce }}
+      PLACEMENT_SHA: ${{ inputs.placement_sha }}
+      RECIPE_SHA: '@@RECIPE_SOURCE_SHA@@'
+      PROFILE_SHA: 5a30fc507f023d542521aac66c8f49c5ae6ee8d9e34dc90c1a3bf3ab30f6b08f
+    steps:
+      - name: Checkout admitted private placement
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          path: placement
+          persist-credentials: false
+      - name: Checkout immutable public recipe
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: FS-GG/.github
+          ref: '@@RECIPE_SOURCE_SHA@@'
+          path: recipe
+          persist-credentials: false
+      - name: Refuse non-exact placement and prepare public runtime
+        run: |
+          set -euo pipefail
+          test "$GITHUB_EVENT_NAME" = workflow_dispatch
+          test "$GITHUB_REPOSITORY" = FS-GG/FS.GG.GitHub.Substrate.Sandbox
+          [[ "$PLACEMENT_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$RUN_NONCE" =~ ^[a-z0-9][a-z0-9-]{7,63}$ ]]
+          test "$GITHUB_SHA" = "$PLACEMENT_SHA"
+          test "$(git -C placement rev-parse HEAD)" = "$PLACEMENT_SHA"
+          test "$(git -C recipe rev-parse HEAD)" = "$RECIPE_SHA"
+          test "$(git -C placement status --porcelain)" = ""
+          test "$(git -C recipe status --porcelain)" = ""
+          openssl pkey -pubin -in placement/_private-inputs/custody/root-public.pem -noout
+          test "$(podman info --format '{{.Host.Security.Rootless}}')" = true
+          test "$(podman info --format '{{.Host.Arch}}')" = amd64
+          test "$(podman info --format '{{.Host.CgroupsVersion}}')" = v2
+          podman pull --platform linux/amd64 \
+            docker.io/library/python@sha256:9bbb8720ae0a24a6ca8dd678bfdf57818fe70caf54c52a53ec01d8db43405056
+          podman pull --platform linux/amd64 \
+            mcr.microsoft.com/dotnet/aspnet:10.0.12-noble-amd64@sha256:ed6a2d26633ddcd3d42a1d9f9866214ecbbc11ba6ac5e0e843da02c13da24072
+      - name: Run once, preserve custody, and return an exact disposition
+        env:
+          FSGG_NATIVE_AUTH_JSON_B64: ${{ secrets.FSGG_V2_HOST_018_NATIVE_AUTH_JSON_B64 }}
+          FSGG_PRIVATE_EFFECT_ADMISSION: ${{ secrets.FSGG_V2_HOST_018_EFFECT_ADMISSION }}
+        run: |
+          set -uo pipefail
+          umask 077
+          mkdir -m 0700 "$RESULT_ROOT"
+          interrupted=0
+          trap 'interrupted=1' INT TERM
+          python3 recipe/deployment/telemetry-collector/qualify_native_container.py \
+            --operation-id v2-host-01.8a-native-collaboration-v1 \
+            --source-root "$GITHUB_WORKSPACE/recipe" --source-sha "$RECIPE_SHA" \
+            --private-placement-sha "$PLACEMENT_SHA" \
+            --private-root "$PRIVATE_ROOT" --staging-root "$STAGING_ROOT" --run-nonce "$RUN_NONCE" \
+            --host-package "$GITHUB_WORKSPACE/placement/_private-inputs/host/package.nupkg" \
+            --host-manifest "$GITHUB_WORKSPACE/placement/_private-inputs/host/manifest.json" \
+            --host-journal "$GITHUB_WORKSPACE/placement/_private-inputs/host/publication-journal.json" \
+            --host-served "$GITHUB_WORKSPACE/placement/_private-inputs/host" \
+            --coord-packages "$GITHUB_WORKSPACE/placement/_private-inputs/coord/packages" \
+            --coord-manifest "$GITHUB_WORKSPACE/placement/_private-inputs/coord/release-manifest.json" \
+            --coord-stable "$GITHUB_WORKSPACE/placement/_private-inputs/coord/stable-channel.json" \
+            --context-helper "$GITHUB_WORKSPACE/recipe/deployment/telemetry-collector/prepare_native_image_context.py" \
+            --native-source-pins "$GITHUB_WORKSPACE/placement/_private-inputs/native/source-pins.json" \
+            --native-executable "$GITHUB_WORKSPACE/placement/_private-inputs/native/codex" \
+            --seal-public-key "$GITHUB_WORKSPACE/placement/_private-inputs/custody/root-public.pem" \
+            --result "$RESULT_ROOT/result.json"
+          operation_rc=$?
+          trap '' INT TERM
+          unset FSGG_NATIVE_AUTH_JSON_B64 FSGG_PRIVATE_EFFECT_ADMISSION
+
+          cleanup_ok=1
+          for resource in fsgg-native-development fsgg-native-readonly-probe fsgg-native-egress fsgg-native-collector; do
+            podman container exists "$resource"
+            state=$?
+            test "$state" = 1 || cleanup_ok=0
+          done
+          for resource in fsgg-native-private-v1 fsgg-native-uplink-v1 fsgg-collector-private-v1; do
+            podman network exists "$resource"
+            state=$?
+            test "$state" = 1 || cleanup_ok=0
+          done
+          owned_containers="$(podman ps -aq --filter "label=fsgg.private-run=$RUN_NONCE")"
+          state=$?
+          test "$state" = 0 -a -z "$owned_containers" || cleanup_ok=0
+          if test -f "$RESULT_ROOT/result.json"; then
+            python3 -c 'import json,sys; sys.exit(0 if json.load(open(sys.argv[1])).get("cleanupComplete") is True else 1)' \
+              "$RESULT_ROOT/result.json"
+            test "$?" = 0 || cleanup_ok=0
+          fi
+
+          materialized=0
+          test -d "$PRIVATE_ROOT" && materialized=1
+
+          auth_state=not-materialized
+          seal_rc=0
+          auth="$PRIVATE_ROOT/native/.codex/auth.json"
+          capsule="$RESULT_ROOT/auth-capsule.json"
+          if test "$materialized" = 1; then
+            if test "$cleanup_ok" != 1; then
+              auth_state=writer-stop-failed
+              seal_rc=86
+            elif ! test -s "$auth"; then
+              auth_state=missing
+              seal_rc=86
+            elif timeout 30 node recipe/deployment/telemetry-collector/seal_native_custody.mjs seal \
+                "$auth" placement/_private-inputs/custody/root-public.pem "$capsule" \
+                "$RUN_NONCE" "$RECIPE_SHA" "$PROFILE_SHA" && test -s "$capsule"; then
+              auth_state=sealed
+            else
+              auth_state=seal-failed
+              seal_rc=86
+            fi
+          fi
+
+          evidence_state=not-present
+          evidence_rc=0
+          evidence_capsule="$RESULT_ROOT/evidence-capsule.json"
+          evidence_tar="$STAGING_ROOT/private-evidence.tar"
+          if test -d "$PRIVATE_ROOT/output" -a -d "$PRIVATE_ROOT/native/qualification-output"; then
+            if test "$cleanup_ok" != 1; then
+              evidence_state=writer-stop-failed
+              evidence_rc=86
+            else
+              mkdir -p -m 0700 "$STAGING_ROOT"
+              if tar --format=posix --sort=name --mtime='@0' --owner=0 --group=0 --numeric-owner \
+                  -cf "$evidence_tar" -C "$PRIVATE_ROOT" output native/qualification-output \
+                && timeout 30 node recipe/deployment/telemetry-collector/seal_native_custody.mjs seal \
+                  "$evidence_tar" placement/_private-inputs/custody/root-public.pem "$evidence_capsule" \
+                  "$RUN_NONCE" "$RECIPE_SHA" "$PROFILE_SHA" && test -s "$evidence_capsule"; then
+                evidence_state=sealed
+              else
+                evidence_state=seal-failed
+                evidence_rc=86
+              fi
+            fi
+          fi
+
+          python3 recipe/deployment/telemetry-collector/qualify_native_container.py custody-status \
+            --result "$RESULT_ROOT/result.json" --run-nonce "$RUN_NONCE" --source-sha "$RECIPE_SHA" \
+            --operation-exit "$operation_rc" --cleanup-ok "$(test "$cleanup_ok" = 1 && echo true || echo false)" \
+            --interrupted "$(test "$interrupted" = 1 && echo true || echo false)" \
+            --auth-state "$auth_state" --evidence-state "$evidence_state"
+          custody_status_rc=$?
+
+          final_rc=$operation_rc
+          test "$cleanup_ok" = 1 || final_rc=86
+          test "$seal_rc" = 0 || final_rc=86
+          test "$evidence_rc" = 0 || final_rc=86
+          test "$custody_status_rc" = 0 || final_rc=86
+          test "$interrupted" = 0 || final_rc=86
+          if test "$seal_rc" = 0 -a "$evidence_rc" = 0; then
+            rm -rf -- "$PRIVATE_ROOT" "$STAGING_ROOT"
+          fi
+          exit "$final_rc"
+      - name: Upload ciphertext and sanitized bounded result
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: private-native-qualification-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.RESULT_ROOT }}
+          if-no-files-found: error
+          retention-days: 1
+          include-hidden-files: false
