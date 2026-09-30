@@ -1,0 +1,55 @@
+{
+  "schema": "fsgg.telemetry.native-operation-profile/1",
+  "operationId": "v2-host-01.8a-native-collaboration-v1",
+  "supportedOperations": ["v2-host-01.8a-native-collaboration-v1", "v2-host-01.8a-readonly-source-compatibility-v1"],
+  "provider": "openai",
+  "model": "gpt-5.6-sol",
+  "effort": "medium",
+  "prompt": "Use the native collaboration spawn tool exactly once. Spawn one child with model gpt-5.6-sol and reasoning effort medium. Give it exactly this task text without adding anything: Return exactly NATIVE-CHILD-ACK; do not read files, use any other tool, contact a service, or spawn another agent. Wait for that child to reach one terminal turn. Do not send a follow-up or retry. Then return exactly NATIVE-PARENT-ACK.",
+  "native": {
+    "executable": "/opt/fsgg/codex/codex",
+    "sha256": "167c0148a849d2444f1b5a7fb5f8bb2de1de5ae13a2a504b833fc765980f5cd9",
+    "bytes": 286594376,
+    "version": "0.158.0",
+    "config": "/opt/fsgg/native-producer-config.toml",
+    "configSha256": "11171d89fdf531a772c063df9c126538ebf62c47ebf8bae3f319d28d70966fb0",
+    "protocolSchemaSha256": "5742a9a7dd41a8b44dca3138f506e013620d4a93573c792b1e5881c053f169a7",
+    "sessionFlagsSha256": "6961dbfc2ddce5988b3e567a8d3e4a9680450f25b7648029f790e6a7975fbe49"
+  },
+  "producer": {
+    "executable": "/opt/fsgg/coord/fsgg-coord-engine",
+    "version": "0.94.0",
+    "executableVersion": "0.94.0.0",
+    "coherentPayloadSha256": "9b9486a54e014fd5d21b65ed71a00b9021562a56909a1303f89c9646bca4a585",
+    "coherentMarker": "/opt/fsgg/coord/coherent-content.sha256",
+    "telemetryConfig": "/qualification/native/telemetry/roadmap.json",
+    "workspaceId": "v2-host-native-qualification",
+    "producerId": "native-prospective-v1",
+    "streamId": "roadmap",
+    "repository": "FS-GG/.github",
+    "receiverOrigin": "https://native-receiver:7443/",
+    "credentialReference": "native-prospective-v1",
+    "credentialEnvironment": "FSGG_TELEMETRY_CREDENTIAL_NATIVE_PROSPECTIVE_V1",
+    "spoolRoot": "/qualification/native/telemetry/spool",
+    "feature": "V2-HOST-01",
+    "item": "V2-HOST-01.8a",
+    "rootAttempt": "native-operation-root",
+    "childAttempt": "native-operation-child"
+  },
+  "runtime": {
+    "home": "/qualification/native",
+    "codexHome": "/qualification/native/.codex",
+    "cwd": "/qualification/native/work",
+    "timeoutSeconds": 300,
+    "maximumLineBytes": 1048576,
+    "maximumEvents": 4096,
+    "python": "3.14.0"
+  },
+  "network": {
+    "policySchema": "fsgg.telemetry.native-network-policy/1",
+    "policyId": "fsgg-native-egress-v1",
+    "privateNetworkId": "fsgg-native-private-v1",
+    "httpsProxy": "http://native-egress:3128",
+    "noProxy": "localhost,127.0.0.1,[::1],native-receiver"
+  }
+}
