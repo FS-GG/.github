@@ -1,0 +1,64 @@
+name: V2-HOST-01.8 private native qualification
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: v2-host-01-8-private-native-custody
+  cancel-in-progress: false
+jobs:
+  qualify:
+    if: github.repository == 'FS-GG/FS.GG.GitHub.Substrate.Sandbox' && github.ref == 'refs/heads/@@QUALIFICATION_REF@@'
+    environment: v2-host-01-8-native-private
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: '@@SOURCE_SHA@@'
+          persist-credentials: false
+      - name: Refuse non-exact manual placement
+        env:
+          EXPECTED_SHA: '@@SOURCE_SHA@@'
+        run: |
+          set -euo pipefail
+          test "$GITHUB_EVENT_NAME" = workflow_dispatch
+          test "$GITHUB_REPOSITORY" = FS-GG/FS.GG.GitHub.Substrate.Sandbox
+          test "$GITHUB_SHA" = "$EXPECTED_SHA"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          test "$(git status --porcelain)" = ""
+      - name: Run one bounded private operation
+        env:
+          FSGG_NATIVE_AUTH_JSON_B64: ${{ secrets.FSGG_V2_HOST_018_NATIVE_AUTH_JSON_B64 }}
+          FSGG_PRIVATE_EFFECT_ADMISSION: ${{ secrets.FSGG_V2_HOST_018_EFFECT_ADMISSION }}
+        run: |
+          set -euo pipefail
+          umask 077
+          private_root="$RUNNER_TEMP/v2-host-native-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          result_root="$RUNNER_TEMP/v2-host-result-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          mkdir -m 0700 "$result_root"
+          cleanup() { unset FSGG_NATIVE_AUTH_JSON_B64 FSGG_PRIVATE_EFFECT_ADMISSION; rm -rf -- "$private_root"; }
+          trap cleanup EXIT INT TERM
+          python3 deployment/telemetry-collector/qualify_native_container.py \
+            --operation-id v2-host-01.8a-native-collaboration-v1 \
+            --source-root "$GITHUB_WORKSPACE" --source-sha '@@SOURCE_SHA@@' \
+            --private-root "$private_root" --run-nonce "run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" \
+            --host-package "$GITHUB_WORKSPACE/_private-inputs/host/package.nupkg" \
+            --host-manifest "$GITHUB_WORKSPACE/_private-inputs/host/manifest.json" \
+            --host-journal "$GITHUB_WORKSPACE/_private-inputs/host/publication-journal.json" \
+            --coord-root "$GITHUB_WORKSPACE/_private-inputs/coord" \
+            --native-executable "$GITHUB_WORKSPACE/_private-inputs/native/codex" \
+            --seal-public-key "$GITHUB_WORKSPACE/_private-inputs/custody/root-public.pem" \
+            --result "$result_root/result.json"
+          node deployment/telemetry-collector/seal_native_custody.mjs seal \
+            "$private_root/native/.codex/auth.json" "$GITHUB_WORKSPACE/_private-inputs/custody/root-public.pem" \
+            "$result_root/auth-capsule.json" "run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" '@@SOURCE_SHA@@' \
+            8990f6b43f217f7ee21832f3f704ce44af8d25d58b674171ec796a890c87d7c4
+          test -s "$result_root/result.json" -a -s "$result_root/auth-capsule.json"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: private-native-qualification-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/v2-host-result-${{ github.run_id }}-${{ github.run_attempt }}
+          if-no-files-found: error
+          retention-days: 1
+          include-hidden-files: false
