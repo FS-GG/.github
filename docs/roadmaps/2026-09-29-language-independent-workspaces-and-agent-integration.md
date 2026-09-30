@@ -7,7 +7,8 @@ AG-UI at the presentation boundary and Microsoft Agent Framework inside bounded 
 **Status:** amendment selected on 2026-09-29; .3 read-only AG-UI source qualification and the .4
 bounded Agent Framework evaluation closed on 2026-09-30. The .4 trial rejects production adoption of
 Microsoft Agent Framework 1.22.0 for this path. The .2 qualification-image source is merged, its P2
-executor candidate has passed the actual six-case native gate but remains unmerged, and Rust/Go image
+executor candidate passed the actual six-case native gate at its prior exact head, remains unmerged after
+a conflict-free rebase whose current-head qualification is pending, and Rust/Go image
 profiles are protected with a passing strict native run. P2 source delivery, P3 publication, P4 receiver
 adoption, P5 matrix closure and full .5 language-route adoption remain open.
 **Part:** **V2-LANG-01**, indexed in the
@@ -169,10 +170,11 @@ Source delivery and native qualification are separate gates:
   [native run 36744671457](https://github.com/FS-GG/FS.GG.Templates/actions/runs/36744671457)
   passed both actual built entry points. This qualifies those source/image fixtures without adopting
   installed routes.
-- Coordination [PR #902](https://github.com/FS-GG/FS.GG.Coordination/pull/902) remains open at exact
-  head `9ec9535d6e4b5da5c0840caeb17dd5abb0331c27`. Its
+- Coordination [PR #902](https://github.com/FS-GG/FS.GG.Coordination/pull/902) remains open at current
+  rebased head `241a2a25b8eacf867fc3bdd37f740cea4457ebf8`, whose hosted qualification is pending. Its prior
   [native run 36747384736](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36747384736)
-  completed six actual isolated operations with 6 passed, 0 failed and 0 unknown, plus complete cleanup.
+  belongs to exact source `9ec9535d6e4b5da5c0840caeb17dd5abb0331c27` and completed six actual
+  isolated operations with 6 passed, 0 failed and 0 unknown, plus complete cleanup.
   Independently downloaded artifact `11113157066` had SHA-256
   `cafe68ba23e26489ebe0d741887c15e94ac2400314d3f564ecf14f19bb33f18c`.
   The successful native gate does not close P2 before protected source delivery.
@@ -185,8 +187,9 @@ Source delivery and native qualification are separate gates:
   publish the schemas, adapters and toolchain profiles. Qualify cross-language serialization, fresh
   creation, retained adoption, mixed components and local-only operation against exact artifacts.
   P1 utility and installed-package preparation are present on the #902 candidate. #900 supplies the
-  merged qualification-image source, and #902's exact head passed its separate six-case native executor
-  run. #902 remains unmerged, so P2 source delivery is pending; P3 publication, P4 adoption and P5
+  merged qualification-image source, and #902's prior exact head passed its separate six-case native
+  executor run. The rebased current head awaits hosted qualification and remains unmerged, so P2 source
+  delivery is pending; P3 publication, P4 adoption and P5
   closure remain future gates.
 - [x] **V2-LANG-01.3 — Qualify the AG-UI projection.**
   [Coordination PR #894](https://github.com/FS-GG/FS.GG.Coordination/pull/894) merged the optional

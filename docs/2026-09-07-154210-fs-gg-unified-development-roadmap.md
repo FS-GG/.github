@@ -143,7 +143,7 @@ then merged fixed Rust and Go image profiles at protected
 [native run 36744671457](https://github.com/FS-GG/FS.GG.Templates/actions/runs/36744671457)
 passed both actual built-entrypoint routes. Coordination
 [PR #902](https://github.com/FS-GG/FS.GG.Coordination/pull/902) remains open, now rebased onto protected capability source at
-`241a2a25b8eacf867fc3bdd37f740cea4457ebf8`. Its earlier exact-head
+`241a2a25b8eacf867fc3bdd37f740cea4457ebf8`, with current-head hosted qualification pending. Its earlier exact-head
 [native executor run 36747384736](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36747384736)
 on `9ec9535d6e4b5da5c0840caeb17dd5abb0331c27` passed six actual isolated operations with no failed or unknown result and complete cleanup; independently
 downloaded artifact `11113157066` had SHA-256
