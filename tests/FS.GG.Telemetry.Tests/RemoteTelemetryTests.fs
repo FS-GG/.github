@@ -10,6 +10,7 @@ open System.Diagnostics
 open System.Security.Cryptography
 open System.Security.Cryptography.X509Certificates
 open System.Text.Json
+open System.Text.Json.Nodes
 open Microsoft.AspNetCore.Builder
 open Microsoft.AspNetCore.Http
 open Microsoft.AspNetCore.Hosting
@@ -1406,6 +1407,30 @@ exec /usr/bin/python3 "{patchedFixture}" "$@"
                     Assert.Equal(11L, turns |> Array.sumBy (fun turn -> turn.GetProperty("total").GetInt64()))
                     Assert.DoesNotContain(secret, output.ToString())
                     Assert.DoesNotContain(String('s', 32), output.ToString())
+                    let retainedFile = Assert.Single(Directory.GetFiles(evidenceRoot, "*.capture.json"))
+                    let retainedBytes = File.ReadAllBytes retainedFile
+                    use retainedDocument = JsonDocument.Parse retainedBytes
+                    Assert.Equal("fsgg.telemetry.protected-native-capture/2",
+                                 retainedDocument.RootElement.GetProperty("schema").GetString())
+                    Assert.NotEmpty(retainedDocument.RootElement.GetProperty("appServerResponses").EnumerateArray())
+                    Assert.Equal(2, retainedDocument.RootElement.GetProperty("rolloutRecords").GetArrayLength())
+
+                    let tamperedSource = JsonNode.Parse(retainedBytes).AsObject()
+                    let firstRollout = (tamperedSource["rolloutRecords"].AsArray()[0]).AsObject()
+                    let replacement = Encoding.UTF8.GetBytes("{}\n")
+                    firstRollout["bytesBase64"] <- JsonValue.Create(Convert.ToBase64String replacement)
+                    firstRollout["sha256"] <- JsonValue.Create(
+                        Convert.ToHexString(SHA256.HashData replacement).ToLowerInvariant())
+                    File.WriteAllText(retainedFile, tamperedSource.ToJsonString())
+                    Assert.Equal(3, Operations.runWithAssessment exportCommand (fun _ -> TelemetryStore.ApprovedLocalDurable))
+                    File.WriteAllBytes(retainedFile, retainedBytes)
+
+                    let tamperedTurn = JsonNode.Parse(retainedBytes).AsObject()
+                    let firstTurn = (tamperedTurn["turns"].AsArray()[0]).AsObject()
+                    firstTurn["total"] <- JsonValue.Create(firstTurn["total"].GetValue<int64>() + 1L)
+                    File.WriteAllText(retainedFile, tamperedTurn.ToJsonString())
+                    Assert.Equal(3, Operations.runWithAssessment exportCommand (fun _ -> TelemetryStore.ApprovedLocalDurable))
+                    File.WriteAllBytes(retainedFile, retainedBytes)
                     // Changing the operator pin cannot qualify already retained evidence.
                     File.AppendAllText(reader, "\n# changed executable\n")
                     Assert.Equal(3, Operations.runWithAssessment exportCommand (fun _ -> TelemetryStore.ApprovedLocalDurable))

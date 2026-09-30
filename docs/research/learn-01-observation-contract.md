@@ -149,17 +149,21 @@ producer. This is protected host observation of the native provider client; it i
 receipt, isolation from a malicious host owner, or authorization for untrusted local workers to write the
 native source. An installation where ordinary producers can modify the native root is ineligible.
 
-For v2, collection retains one private immutable `fsgg.telemetry.protected-native-capture/1` record before
-submission. It contains the exact envelope, independently read per-turn counters, grant generation and
-installation digest. Crash retry reuses that record without invoking the reader again. No conversation
-content or credential enters it. A v1 envelope cannot be promoted into a v2 capture by changing its label.
+For v2, collection retains one private immutable `fsgg.telemetry.protected-native-capture/2` record before
+submission. It contains the exact envelope, independently read per-turn counters, exact bounded App Server
+request/response bytes, selected rollout usage-record bytes, grant generation and installation digest. Replay
+and export recompute the length-framed source digest, compare the source binding with the admitted immutable
+fact, and derive each final turn total from the retained rollout records. Source-byte, digest, roster or counter
+substitution therefore refuses before the snapshot leaves Host custody. Crash retry reuses that record without
+invoking the reader again. No conversation content or credential enters it. Older captures without the retained
+source bytes remain unqualified; changing their label cannot promote them.
 Changing the pin, installation or grant does not retroactively qualify old records: stale bindings refuse,
 and the operator must retain the original qualified installation/custody or select a prospective evidence
 root and collection identity. No database migration or history rewrite is introduced by this window.
 
 The protected Host's `export-learning --config ABSOLUTE_PATH` acquires its service lock, reads its existing
 bounded private snapshot and exports retained captures from the configured evidence root. There are at most
-1,000 captures, each at most 1 MiB and cumulatively at most 3 MiB, and the complete process response is bounded to 4 MiB. The export contains
+1,000 captures, each at most 2 MiB and cumulatively at most 3 MiB, and the complete process response is bounded to 4 MiB. The export contains
 non-secret receipt/grant references and counters; configuration, executable, credential and source-root paths
 are omitted. It does not submit facts or grant authority to an imported snapshot.
 
