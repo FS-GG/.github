@@ -30,6 +30,8 @@ advances the pin to that CLI.
 
 ## Entries
 
+- **2026-09-30** — Reconcile the `publishing-and-deployment` operator digest from the regenerated release inventory after Telemetry Host 0.2.1 publication. Both declared skill roots and the generated driver manifest agree; the operator-only skill remains absent from Kit and Drivers packages and creates no receiver rollout.
+
 - **2026-09-28** — Reconcile `publishing-and-deployment` operator digest from the regenerated release inventory after promoted Telemetry Host 0.2.0 registry readback. Both declared skill roots and the generated driver manifest agree; operator inventory alone creates no Kit/Drivers package or receiver rollout.
 
 - **2026-09-28** — Reconcile the publishing-and-deployment operator digest from the regenerated producer manifest after Host 0.2.0 source preparation; the public Host inventory remains 0.1.7. No materialized driver bytes change.

@@ -956,9 +956,9 @@ contracts:
     surface: "the `fsgg-coord-engine` CLI verb surface (claim/take/batch/who/widen/set-paths/say/landable/done/release/flush/…) + its exit-code contract, emitted from src/FS.GG.Coord.Core/Protocol.fs; shipped as the FS.GG.Coord.Cli dotnet tool"
     consumers: [sdd, rendering, governance, templates, game, audio, net]   # All SEVEN coordination-kit receivers (registry/repos.yml `receives: coordination-kit`). `scripts/fsgg-coord` resolves and execs this package, so every receiver is a real TOOL consumer edge. `.github` itself is not listed because it resolves the engine from source.
   - id: telemetry-host
-    version: "0.2.1"     # SOURCE candidate from protected main after #3986; binds native capture to retained delivery source. Publication remains immutable 0.2.0 until the successor rail promotes 0.2.1; schema 10..12.
-    package-version: "0.2.0" # Both feeds observed in terminal rel-07 generation 17; normalized payload sha256:bd001b8fe1509fd17112dc80b0d1f66ab040455c431d4f15baf4e532e9032cc5.
-    package-tag: "telemetry-host/v0.2.0" # Promoted three-asset release; publisher 36482933665; manifest SHA-256 504559e9dae11c07a6866225117257dec92b8ce4e534300ffcffdb1fd3aca423.
+    version: "0.2.1"     # SOURCE and immutable release bind exact protected main 0145bd2c852847d00da8b3a0c35d27cd64a87781; schema 10..12.
+    package-version: "0.2.1" # GitHub Packages archive sha256:4847c15ab207a33556462873840ad4109cf1c1e16fd7a15d5fffae5a8162f589 and signed nuget.org archive sha256:681faeca9941aaeaaad29368f1ab4f1f3c4b0c581655b8a2d8054b6448adc6f2 have equal normalized payload sha256:207843031c78c2711e85a2db14b46a83ec0da9fbd3ee0f144a736320f7e8c2c9.
+    package-tag: "telemetry-host/v0.2.1" # Promoted three-asset release; publisher 36739270730; raw manifest sha256:f16546855d4ce60060f762b6f7bed715cc115f9ef97cd7b55dad5294b2ea0816 and publication journal sha256:bce45f3f4c0701031863c6b1eb398a99982b152f585467cb2e7b06c00987c58e.
     owner: github
     surface: "optional Linux x64 FS.GG.Telemetry.Host dotnet tool — authenticated workspace-scoped ingestion, private dashboard, protected native capture and bounded learning export; independently versioned from the github coordination coherent set"
     consumers: []        # DELIBERATELY EMPTY: operators install this optional service; no repository in the contract graph restores it.

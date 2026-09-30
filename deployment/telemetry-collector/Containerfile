@@ -1,0 +1,32 @@
+# syntax=docker/dockerfile:1
+
+# Policy owned Linux x64 runtime. Callers cannot replace this base.
+FROM mcr.microsoft.com/dotnet/aspnet:10.0.12-noble-amd64@sha256:ed6a2d26633ddcd3d42a1d9f9866214ecbbc11ba6ac5e0e843da02c13da24072 AS runtime
+
+FROM runtime AS controlled-development
+COPY --chown=0:0 controlled-development.sh /opt/fsgg/controlled-development
+RUN chmod 0555 /opt/fsgg/controlled-development
+USER 32768:32768
+ENTRYPOINT ["/opt/fsgg/controlled-development"]
+
+FROM runtime AS collector
+ARG HOST_VERSION
+ARG HOST_SOURCE_SHA
+ARG HOST_PACKAGE_SHA256
+ARG HOST_MANIFEST_SHA256
+ARG HOST_JOURNAL_SHA256
+LABEL org.opencontainers.image.title="FS.GG dedicated telemetry collector" \
+      org.opencontainers.image.version="${HOST_VERSION}" \
+      org.opencontainers.image.revision="${HOST_SOURCE_SHA}" \
+      org.fsgg.telemetry.host.package-sha256="${HOST_PACKAGE_SHA256}" \
+      org.fsgg.telemetry.host.manifest-sha256="${HOST_MANIFEST_SHA256}" \
+      org.fsgg.telemetry.host.journal-sha256="${HOST_JOURNAL_SHA256}" \
+      org.fsgg.telemetry.collector.activation="disabled-before-readiness"
+COPY --chown=0:0 host/ /opt/fsgg/telemetry-host/
+COPY --chown=0:0 controlled-collector.sh /opt/fsgg/controlled-collector
+RUN chmod -R a-w /opt/fsgg/telemetry-host \
+    && chmod 0555 /opt/fsgg/controlled-collector \
+    && test -f /opt/fsgg/telemetry-host/FS.GG.Telemetry.Host.dll \
+    && test -f /opt/fsgg/telemetry-host/FS.GG.Telemetry.Host.runtimeconfig.json
+USER 32768:32768
+ENTRYPOINT ["/usr/bin/dotnet", "/opt/fsgg/telemetry-host/FS.GG.Telemetry.Host.dll"]

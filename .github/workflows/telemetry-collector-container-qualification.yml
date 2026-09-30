@@ -1,0 +1,212 @@
+name: Telemetry collector container qualification
+
+on:
+  workflow_dispatch:
+    inputs:
+      host_version:
+        description: Exact published telemetry Host version
+        required: true
+        default: 0.2.1
+        type: string
+      host_source_sha:
+        description: Exact 40 character published Host source revision
+        required: true
+        type: string
+      host_package_sha256:
+        description: Exact GitHub release Host package SHA-256
+        required: true
+        type: string
+      host_manifest_sha256:
+        description: Exact GitHub release manifest SHA-256
+        required: true
+        type: string
+      host_journal_sha256:
+        description: Exact GitHub release publication journal SHA-256
+        required: true
+        type: string
+  pull_request:
+    paths:
+      - .github/workflows/telemetry-collector-container-qualification.yml
+      - deployment/telemetry-collector/**
+      - tests/telemetry-collector-container/**
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/telemetry-collector-container-qualification.yml
+      - deployment/telemetry-collector/**
+      - tests/telemetry-collector-container/**
+
+permissions:
+  contents: read
+
+concurrency:
+  group: telemetry-collector-container-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+# Preflight choice: this is a linear, read-only qualification with no fan-out,
+# cache, retry, publication, or shared mutable state. A static exact-selection
+# check catches stale/placeholder release inputs before downloads and the costly
+# rootless builds. A custom state model would duplicate the literal sequence.
+jobs:
+  source-check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Check the fixed recipe and refusal boundary
+        run: bash tests/telemetry-collector-container/run.sh
+
+  strict-rootless-qualification:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    needs: source-check
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      HOST_VERSION: ${{ inputs.host_version }}
+      HOST_SOURCE_SHA: ${{ inputs.host_source_sha }}
+      HOST_PACKAGE_SHA256: ${{ inputs.host_package_sha256 }}
+      HOST_MANIFEST_SHA256: ${{ inputs.host_manifest_sha256 }}
+      HOST_JOURNAL_SHA256: ${{ inputs.host_journal_sha256 }}
+      PODMAN_ROOT: /tmp/tcr-${{ github.run_id }}-${{ github.run_attempt }}
+      PODMAN_RUNROOT: /tmp/tcu-${{ github.run_id }}-${{ github.run_attempt }}
+      WORK_ROOT: /tmp/tcw-${{ github.run_id }}-${{ github.run_attempt }}
+      EVIDENCE_ROOT: /tmp/tce-${{ github.run_id }}-${{ github.run_attempt }}
+      RUNTIME_IMAGE: mcr.microsoft.com/dotnet/aspnet:10.0.12-noble-amd64@sha256:ed6a2d26633ddcd3d42a1d9f9866214ecbbc11ba6ac5e0e843da02c13da24072
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Refuse stale or placeholder selection before downloads
+        run: |
+          set -euo pipefail
+          python3 deployment/telemetry-collector/telemetry_collector.py selection-preflight \
+            --version "$HOST_VERSION" --source-sha "$HOST_SOURCE_SHA" \
+            --package-sha256 "$HOST_PACKAGE_SHA256" --manifest-sha256 "$HOST_MANIFEST_SHA256" \
+            --journal-sha256 "$HOST_JOURNAL_SHA256"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test -z "$(git status --porcelain)"
+          test "$(podman info --format '{{.Host.Security.Rootless}}')" = true
+          test "$(podman info --format '{{.Host.Arch}}')" = amd64
+          test "$(podman info --format '{{.Host.CgroupsVersion}}')" = v2
+
+      - name: Download the fixed published Host assets
+        run: |
+          set -euo pipefail
+          install -d -m 0700 "$WORK_ROOT/release" "$EVIDENCE_ROOT"
+          base="https://github.com/FS-GG/.github/releases/download/telemetry-host/v${HOST_VERSION}"
+          curl --fail --silent --show-error --location --retry 2 --max-time 120 \
+            "$base/FS.GG.Telemetry.Host.${HOST_VERSION}.nupkg" -o "$WORK_ROOT/release/host.nupkg"
+          curl --fail --silent --show-error --location --retry 2 --max-time 30 \
+            "$base/manifest.json" -o "$WORK_ROOT/release/manifest.json"
+          curl --fail --silent --show-error --location --retry 2 --max-time 30 \
+            "$base/publication-journal.json" -o "$WORK_ROOT/release/publication-journal.json"
+
+      - name: Verify release, both feeds, capture v2, and build binding
+        run: |
+          set -euo pipefail
+          python3 deployment/telemetry-collector/telemetry_collector.py preflight \
+            --repository "$GITHUB_WORKSPACE" --package "$WORK_ROOT/release/host.nupkg" \
+            --manifest "$WORK_ROOT/release/manifest.json" \
+            --journal "$WORK_ROOT/release/publication-journal.json" \
+            --version "$HOST_VERSION" --source-sha "$HOST_SOURCE_SHA" \
+            --package-sha256 "$HOST_PACKAGE_SHA256" --manifest-sha256 "$HOST_MANIFEST_SHA256" \
+            --journal-sha256 "$HOST_JOURNAL_SHA256" --output "$EVIDENCE_ROOT/preflight.json"
+          python3 deployment/telemetry-collector/telemetry_collector.py prepare-context \
+            --package "$WORK_ROOT/release/host.nupkg" --preflight "$EVIDENCE_ROOT/preflight.json" \
+            --output "$WORK_ROOT/context"
+
+      - name: Pull only the policy owned runtime base
+        run: |
+          set -euo pipefail
+          podman --storage-driver=vfs --root "$PODMAN_ROOT" --runroot "$PODMAN_RUNROOT" \
+            pull --platform linux/amd64 "$RUNTIME_IMAGE"
+
+      - name: Qualify strict controlled custody and cleanup
+        run: |
+          set -euo pipefail
+          python3 deployment/telemetry-collector/telemetry_collector.py qualify \
+            --podman /usr/bin/podman --podman-root "$PODMAN_ROOT" --podman-runroot "$PODMAN_RUNROOT" \
+            --context "$WORK_ROOT/context" --state-root "$WORK_ROOT/state" \
+            --evidence "$EVIDENCE_ROOT/runtime" --run-id "${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            --output "$EVIDENCE_ROOT/qualification.json"
+          python3 - "$EVIDENCE_ROOT/qualification.json" <<'PY'
+          import json, sys
+          value = json.load(open(sys.argv[1], encoding="utf-8"))
+          assert value["schema"] == "fsgg.telemetry.collector-container-qualification/1"
+          assert value["verdict"] == "controlled-topology-passed"
+          assert value["strictRuntimeFences"] is True
+          assert value["restartReceiptStable"] is True
+          assert value["stateRemoved"] is True and value["containersRemoved"] is True
+          assert value["nativeAccessQualified"] is False
+          assert value["modelSupportObserved"] is False
+          assert value["captureApplied"] is False
+          assert value["activationAuthorized"] is False
+          PY
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      - name: Qualify published Host grant and retained receipt state
+        run: |
+          set -euo pipefail
+          umask 077
+          install -d -m 0700 "$WORK_ROOT/tls"
+          python3 - "$WORK_ROOT/tls/password" <<'PY'
+          import pathlib, secrets, sys
+          pathlib.Path(sys.argv[1]).write_text(secrets.token_urlsafe(32) + "\n")
+          PY
+          openssl req -x509 -newkey rsa:2048 -nodes -days 1 \
+            -subj /CN=localhost -addext subjectAltName=DNS:localhost \
+            -keyout "$WORK_ROOT/tls/key.pem" -out "$WORK_ROOT/tls/ca.pem" \
+            >/dev/null 2>&1
+          openssl pkcs12 -export -inkey "$WORK_ROOT/tls/key.pem" \
+            -in "$WORK_ROOT/tls/ca.pem" -out "$WORK_ROOT/tls/server.pfx" \
+            -passout "file:$WORK_ROOT/tls/password" >/dev/null 2>&1
+          dotnet_path="$(readlink -f "$(command -v dotnet)")"
+          python3 deployment/telemetry-collector/qualify_host_state.py \
+            --repository "$GITHUB_WORKSPACE" --package "$WORK_ROOT/release/host.nupkg" \
+            --manifest "$WORK_ROOT/release/manifest.json" \
+            --journal "$WORK_ROOT/release/publication-journal.json" \
+            --dotnet "$dotnet_path" --state-root "$WORK_ROOT/host-state" \
+            --evidence "$EVIDENCE_ROOT/host-state.json" \
+            --certificate "$WORK_ROOT/tls/server.pfx" \
+            --certificate-password-file "$WORK_ROOT/tls/password" \
+            --ca-certificate "$WORK_ROOT/tls/ca.pem" --listen-url https://localhost:55001 \
+            --version "$HOST_VERSION" --source-sha "$HOST_SOURCE_SHA" \
+            --package-sha256 "$HOST_PACKAGE_SHA256" --manifest-sha256 "$HOST_MANIFEST_SHA256" \
+            --journal-sha256 "$HOST_JOURNAL_SHA256"
+          python3 - "$EVIDENCE_ROOT/host-state.json" <<'PY'
+          import json, sys
+          value = json.load(open(sys.argv[1], encoding="utf-8"))
+          assert value["verdict"] == "controlled-production-state-passed"
+          assert value["lifetimeReceipts"] == 1 and value["controlledPayloadFacts"] == 0
+          assert value["stateRemoved"] and value["restartReceiptStable"]
+          for key in ("nativeAccessQualified", "modelSupportObserved", "captureApplied", "activationAuthorized"):
+              assert value[key] is False
+          PY
+
+      - name: Retain bounded non-secret qualification evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: telemetry-collector-container-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ env.EVIDENCE_ROOT }}/**/*.json
+          if-no-files-found: warn
+          retention-days: 14
+          compression-level: 6
+
+      - name: Remove owned disposable release and TLS material
+        if: always()
+        run: |
+          set -euo pipefail
+          expected="/tmp/tcw-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          test "$WORK_ROOT" = "$expected"
+          test ! -L "$WORK_ROOT"
+          if test -d "$WORK_ROOT"; then rm -rf -- "$WORK_ROOT"; fi
