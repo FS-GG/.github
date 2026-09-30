@@ -6,8 +6,10 @@ AG-UI at the presentation boundary and Microsoft Agent Framework inside bounded 
 
 **Status:** amendment selected on 2026-09-29; .3 read-only AG-UI source qualification and the .4
 bounded Agent Framework evaluation closed on 2026-09-30. The .4 trial rejects production adoption of
-Microsoft Agent Framework 1.22.0 for this path. Portable publication, receiver adoption and .5 remain
-open; native TypeScript, Rust and Go fixture preparation is source-delivered.
+Microsoft Agent Framework 1.22.0 for this path. The .2 qualification-image source is merged, its P2
+executor candidate has passed the actual six-case native gate but remains unmerged, and Rust/Go image
+profiles are protected with a passing strict native run. P2 source delivery, P3 publication, P4 receiver
+adoption, P5 matrix closure and full .5 language-route adoption remain open.
 **Part:** **V2-LANG-01**, indexed in the
 [Unified roadmap](../2026-09-07-154210-fs-gg-unified-development-roadmap.md#98-feature-parts-and-subroadmap-index)
 and the [V2 execution roadmap](../github-substrate-v2-roadmap.md#language-independent-product-workspaces--2026-09-29).
@@ -150,6 +152,31 @@ cancellation, duplicate delivery and recovery. Include an unsupported-toolchain 
 non-.NET product environment that uses the distributed integration tooling without a .NET SDK or
 product-library dependency. Record any tooling runtime requirement explicitly.
 
+### Current source and native evidence
+
+Source delivery and native qualification are separate gates:
+
+- [Coordination PR #900](https://github.com/FS-GG/FS.GG.Coordination/pull/900) merged the pinned
+  qualification-image source at protected
+  `aca2093cf7186eee2f57f4bba8ff55c8563ab861`. It does not publish or install a producer.
+- [Coordination PR #901](https://github.com/FS-GG/FS.GG.Coordination/pull/901) independently merged
+  fixed native-capability diagnostic source at protected
+  `6210dc1612e38acc7f16a6a6ce62bfad9f280c97`. Its authenticated development result advertised
+  `gpt-5.6-sol` / `medium`, started zero model sessions and completed owned cleanup. This is
+  capability-source evidence, not a collector installation, native capture or language-route adoption.
+- [Templates PR #650](https://github.com/FS-GG/FS.GG.Templates/pull/650) merged fixed Rust and Go image
+  profiles at protected `66ce4faacc122ef4a2d2331a0c10fe388e7c3b69`. The strict hosted
+  [native run 36744671457](https://github.com/FS-GG/FS.GG.Templates/actions/runs/36744671457)
+  passed both actual built entry points. This qualifies those source/image fixtures without adopting
+  installed routes.
+- Coordination [PR #902](https://github.com/FS-GG/FS.GG.Coordination/pull/902) remains open at exact
+  head `9ec9535d6e4b5da5c0840caeb17dd5abb0331c27`. Its
+  [native run 36747384736](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36747384736)
+  completed six actual isolated operations with 6 passed, 0 failed and 0 unknown, plus complete cleanup.
+  Independently downloaded artifact `11113157066` had SHA-256
+  `cafe68ba23e26489ebe0d741887c15e94ac2400314d3f564ecf14f19bb33f18c`.
+  The successful native gate does not close P2 before protected source delivery.
+
 ## Delivery windows and closure
 
 - [x] **V2-LANG-01.1 — Select the amendment.** Record language independence, durable ownership,
@@ -157,6 +184,10 @@ product-library dependency. Record any tooling runtime requirement explicitly.
 - [ ] **V2-LANG-01.2 — Publish portable workspace integration.** Coordination and SDD/Templates
   publish the schemas, adapters and toolchain profiles. Qualify cross-language serialization, fresh
   creation, retained adoption, mixed components and local-only operation against exact artifacts.
+  P1 utility and installed-package preparation are present on the #902 candidate. #900 supplies the
+  merged qualification-image source, and #902's exact head passed its separate six-case native executor
+  run. #902 remains unmerged, so P2 source delivery is pending; P3 publication, P4 adoption and P5
+  closure remain future gates.
 - [x] **V2-LANG-01.3 — Qualify the AG-UI projection.**
   [Coordination PR #894](https://github.com/FS-GG/FS.GG.Coordination/pull/894) merged the optional
   read-only projection at protected `5d86daf3898be683bd6720bdd36da479a29a0260` after exact-head
@@ -183,8 +214,13 @@ product-library dependency. Record any tooling runtime requirement explicitly.
   passed all three jobs with Rust 1.98.1, Go 1.27.1, Node 24.8.0 and TypeScript 5.9.2; the
   [composition run 36713489579](https://github.com/FS-GG/FS.GG.Templates/actions/runs/36713489579)
   also passed.
-  The [owning language-routes plan](https://github.com/FS-GG/FS.GG.Templates/blob/b517903b0c03a99d33150b9f7f959a08683e6bcb/docs/roadmaps/v2-lang-language-routes.md)
-  keeps published `.2` integration, portable execution and installed route adoption open.
+  [Templates PR #650](https://github.com/FS-GG/FS.GG.Templates/pull/650) subsequently merged fixed
+  Rust and Go image profiles at protected `66ce4faacc122ef4a2d2331a0c10fe388e7c3b69`. Its strict
+  hosted [native run 36744671457](https://github.com/FS-GG/FS.GG.Templates/actions/runs/36744671457)
+  passed both actual built-entrypoint routes. This advances source/image and native gates only.
+  The [owning language-routes plan](https://github.com/FS-GG/FS.GG.Templates/blob/66ce4faacc122ef4a2d2331a0c10fe388e7c3b69/docs/roadmaps/v2-lang-language-routes.md)
+  keeps protected P2 delivery, P3 publication, P4 receiver adoption, P5 matrix closure and full
+  installed route adoption open.
 
 The .2 integration and .3 projection proceeded independently after .1, and .4 closed as a bounded
 source evaluation without selecting framework adoption. Each .5 product route depends on its own
