@@ -21,6 +21,19 @@ HEX64 = re.compile(r"^[0-9a-f]{64}$")
 SHA40 = re.compile(r"^[0-9a-f]{40}$")
 RUN_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 TOOLS_PREFIX = "tools/net10.0/linux-x64/"
+PODMAN_DEFAULT_CAPABILITIES = frozenset({
+    "CAP_CHOWN",
+    "CAP_DAC_OVERRIDE",
+    "CAP_FOWNER",
+    "CAP_FSETID",
+    "CAP_KILL",
+    "CAP_NET_BIND_SERVICE",
+    "CAP_SETFCAP",
+    "CAP_SETGID",
+    "CAP_SETPCAP",
+    "CAP_SETUID",
+    "CAP_SYS_CHROOT",
+})
 
 
 class Refusal(Exception):
@@ -180,6 +193,29 @@ def run(command: list[str], timeout: int = 30) -> subprocess.CompletedProcess[st
     return subprocess.run(command, check=True, text=True, capture_output=True, timeout=timeout)
 
 
+def capability_names(value: object, label: str) -> list[str]:
+    require(isinstance(value, list) and all(isinstance(item, str) for item in value),
+            f"{label} capability shape differs")
+    require(len(value) == len(set(value)), f"{label} capability duplicates refused")
+    return value
+
+
+def inspect_capability_fence(value: dict) -> None:
+    host = value["HostConfig"]
+    added = capability_names(host.get("CapAdd"), "added")
+    dropped = capability_names(host.get("CapDrop"), "dropped")
+    effective_value = value.get("EffectiveCaps")
+    effective = [] if effective_value is None else capability_names(effective_value, "effective")
+    require(not added, "added capabilities refused")
+    require(not effective, "effective capabilities refused")
+    observed = set(dropped)
+    all_sentinel = observed in ({"ALL"}, {"CAP_ALL"})
+    # Podman 4 inspect expands "all" by subtracting the OCI bounding set from
+    # these defaults. An exact expansion plus no additions proves it is empty.
+    require(all_sentinel or observed == PODMAN_DEFAULT_CAPABILITIES,
+            "capability bounding fence differs")
+
+
 def inspect_container(value: dict, expected_mounts: set[tuple[str, bool]]) -> None:
     config, host = value["Config"], value["HostConfig"]
     observed = {(row["Destination"], bool(row["RW"])) for row in value["Mounts"]}
@@ -191,7 +227,7 @@ def inspect_container(value: dict, expected_mounts: set[tuple[str, bool]]) -> No
             and "32768:0:1" in (mappings.get("GidMap") or []), "keep-id mapping differs")
     require(host["NetworkMode"] == "none" and host["ReadonlyRootfs"] is True, "container isolation differs")
     require(host.get("PidMode") != "host" and host.get("UTSMode") != "host", "host namespace refused")
-    require(any(item in ("ALL", "CAP_ALL") for item in (host.get("CapDrop") or [])), "capability fence differs")
+    inspect_capability_fence(value)
     require(any(item.startswith("no-new-privileges") for item in (host.get("SecurityOpt") or [])),
             "privilege fence differs")
     require(host["PidsLimit"] == 64 and host["Memory"] == 256 * 1024 * 1024
