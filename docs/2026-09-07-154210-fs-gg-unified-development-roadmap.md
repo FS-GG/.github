@@ -201,6 +201,18 @@ No private auth placement, native image/runtime qualification, model turn, genui
 activation follows from the merge. Those remain .8; accepted replacement operation precedes .9 routing
 and .10 scoped Main retirement. No generated-workspace or default lifecycle change is established.
 
+**V2-HOST-01.8 trusted-private placement source delivered on 2026-09-30; genuine operation remains open.**
+[Private substrate PR #21](https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/pull/21) merged at
+`e8a32a61723626153a979edc533d075d09ebb0fa`, tree `2034c1ac197177d5df94b733987473664ef2798c`,
+independently matching reviewed candidate `d6188e705683692de6c13a3a4e8e8cd3b9f4acc6`.
+The registered workflow is manual only and refuses every ref except the dedicated qualification branch
+at its exact admitted placement commit. Twelve source tests passed; private release input readback
+verified the public-only archive and its eleven member identities. Scoped API authentication is removed
+on cross-origin asset redirects. Registration supplies no credential grant, native run, model turn or
+capture acceptance. Dedicated environment admission and the genuine .8 operation remain open; .9 routing
+and .10 scoped Main retirement follow accepted replacement operation.
+
+
 **LEARN native capture and fixed-profile source are delivered; installed experiments remain open.**
 [.github #3940](https://github.com/FS-GG/.github/pull/3940) delivered protected native capture and
 shared-cost mechanisms, and [#3986](https://github.com/FS-GG/.github/pull/3986) bound captures to their
@@ -453,6 +465,20 @@ SC2C-01.1 and SC2C-01.2 are source delivered in the private [SC2 Client PR #2](h
 **SC2C-01.6a source contracts and author-toolchain qualification are complete.** [SC2 Client #17](https://github.com/FS-GG/FS.GG.SC2.Client/pull/17) merged at protected `4be9a4c18598f8e63d5624a422f5f28621d68cd3`, tree `c9044372fb12858d10a12215047d317e7b2438cd`, matching qualified candidate `4ffe2cc296dabdda4e3c2f5d0ba07a1513cfa6b7`; its [protected verification `36757984221`](https://github.com/FS-GG/FS.GG.SC2.Client/actions/runs/36757984221) passed. The [owning .6 plan](https://github.com/FS-GG/FS.GG.SC2.Client/blob/main/docs/SC2C-01.6-plan.md) records the bounded contract, schema and freestanding author-toolchain scope. This closes `.6a` only. The later `.6b–.6e` source delivery is recorded below. `.6f` genuine acceptance and `.7` release, installation and platform qualification remain open.
 
 **SC2C-01.6b–.6e joined product source is delivered.** [SC2 Client #18](https://github.com/FS-GG/FS.GG.SC2.Client/pull/18) merged at protected `bfe7c45bbcf605a278d65988b78af7330ef0f9d8`, tree `9bb21c0368d7dad5244f79ebc1428da3f007ce5b`, exactly equal candidate `b0905f4aaea8c2fcb28697e67e573d9f982ed96e`. Its [exact-head verification `36775549734`](https://github.com/FS-GG/FS.GG.SC2.Client/actions/runs/36775549734) passed; complete local verification passed contracts, Native, Gateway, guest builds and 55/55 browser cases with bounded concurrency. The source delivers reusable C/Rust authoring helpers and a self-contained public packet, public module admission/controller/advisor handling, actual-call private recording and isolated exact reexecution, and owned read-only native replay with deadlines, authority invalidation and confirmed cleanup. Source-only `.6f` qualification helpers do not establish a genuine journey. Independent guest ABI/vector checks remain separate from actual product acceptance. `.6f` still requires the new modules through genuine SC2, replay, recording and offline comparison; `.7` publication, installation and platform qualification remain open. Raw traces, replay bytes, native assets and credentials remain private.
+
+**SC2C-01.6f replay-audit and qualification source delivered on 2026-09-30; genuine acceptance remains open.**
+[SC2 Client #19](https://github.com/FS-GG/FS.GG.SC2.Client/pull/19) merged at protected
+`e378e7363c0b96891430950230dd36b1e7ddbe10`, tree `6ce71bdae4897062d7fa6d5babe7e0db466b22fd`,
+independently equal to reviewed candidate `3dace6037106dbd65ed8411554416cbfd7090729`.
+Its [exact-head verification 36783056368](https://github.com/FS-GG/FS.GG.SC2.Client/actions/runs/36783056368)
+passed; complete local verification passed 57 browser cases, and the repaired native replay test passed
+20 consecutive repetitions. The source records actual owned replay transport calls, joins replay audit
+identity and confirmed process cleanup, and supplies actual UI capture and offline comparison helpers.
+A scripted test peer now remains alive through response classification. The
+[qualification recipe](https://github.com/FS-GG/FS.GG.SC2.Client/blob/e378e7363c0b96891430950230dd36b1e7ddbe10/docs/SC2C-01.6f-authoring-qualification.md)
+retains the genuine independent-module, live command, recording/reexecution and replay journey.
+No genuine SC2 run, native acceptance, publication, installation or workspace change follows from this source merge.
+
 
 
 FOURD-01.1 and FOURD-01.2 are source delivered in the private [FourD PR #1](https://github.com/FS-GG/FS.GG.FourD/pull/1) and [PR #2](https://github.com/FS-GG/FS.GG.FourD/pull/2), merged at `5661d85ce62264b84a56a4fb32716cd1350408ff` and `8096fd19431a74fff7366217142908c4bf226496`. FOURD-01.3's deterministic tactical encounter was delivered in private [PR #3](https://github.com/FS-GG/FS.GG.FourD/pull/3), followed by the browser-readiness repair in [PR #4](https://github.com/FS-GG/FS.GG.FourD/pull/4). FOURD-01.4's browser teaching and local evaluation source merged in [PR #5](https://github.com/FS-GG/FS.GG.FourD/pull/5) at `f3b16d748b67ee665c8ca521ebf93aa9da607d45`; its exact-main [`verify`](https://github.com/FS-GG/FS.GG.FourD/actions/runs/36320371608) passed. The bounded .5a-2 finite-wall breach, cross-runtime query and replay qualification merged in [PR #8](https://github.com/FS-GG/FS.GG.FourD/pull/8) at `9b3dfad568e31ee5433c26634bb7acdbe63b72e1`; its [exact-main verify](https://github.com/FS-GG/FS.GG.FourD/actions/runs/36453144626) passed. The .5a-3 active-opponent turn and replay qualification merged in [PR #9](https://github.com/FS-GG/FS.GG.FourD/pull/9) at `f9243e02889364e6f465b59bdb6f6a6ba142c809`; its [exact-main verify](https://github.com/FS-GG/FS.GG.FourD/actions/runs/36469755250) passed, including 21 browser cases and .NET/Fable/Node parity. The .5a-4 native-control browser restart and active-opponent recovery case merged in [PR #10](https://github.com/FS-GG/FS.GG.FourD/pull/10) at `9109bfe061ece3637cad8e3fcafcfc6643458b43`; its [exact-main verify](https://github.com/FS-GG/FS.GG.FourD/actions/runs/36473282583) passed with 22 browser cases and cross-runtime parity. This closes the bounded .5a technical source cases. Consenting-player evaluation (.4-E), full .5–.6, publication and installed adoption remain open. The September28 [Three Design Directions Version2](roadmaps/2026-09-28-four-dimensional-skirmish-design-v2.md) is now incorporated for bounded Commitment-versus-Pressure prototyping, with Firelanes deferred. Facing, hidden enemy readiness, automatic Guard/Ambush/Hold and contact stops are selected design requirements; the default entry remains `fourd-tactics-v1`, with separately qualified Commitment/Pressure and save/2 available through explicit opt-in. The source plan has separate geometry/information, reducer, browser/replay, technical comparison and evaluation-pack outcomes; no human comparison or revised runtime completion is inferred.
