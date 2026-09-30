@@ -11,7 +11,7 @@ last-updated: 2026-09-30
 
 # Fable SC2 client with custom WASM control — design and roadmap
 
-**Feature: SC2C-01. Status: active product roadmap; SC2C-01.1–.5 are complete for their declared bounded profiles.**
+**Feature: SC2C-01. Status: active product roadmap; SC2C-01.1–.5 and the bounded .6a source/toolchain window are complete for their declared profiles.**
 This document recommends a browser-first Fable/Elmish tactical client connected to a native
 StarCraft II process through an F# gateway. Custom WebAssembly modules receive game data and
 normalized user input, then return command intentions which the host and gateway validate before
@@ -881,6 +881,8 @@ The bounded SC2C-01.4 outcome is complete through [SC2 Client #13](https://githu
 The bounded SC2C-01.5 outcome and its final genuine native acceptance are complete through [SC2 Client #16](https://github.com/FS-GG/FS.GG.SC2.Client/pull/16), merged at `b94dd753bfd0e41ba1e3b22690c7f7a25d0ac18c` from source `ad50425dcdcc526215fce1904e33015369b2ac69`; [exact-source verification `36734647781`](https://github.com/FS-GG/FS.GG.SC2.Client/actions/runs/36734647781) passed. Fresh pointer commit and keyboard abort journeys against SC2 4.10.0.75689 and pinned Simple64 each recovered a new socket and generation-2 authority before a real query and command admission. Each received an accepted `Sc2Result` with action result `1`, wrote exactly one native action, retained one durable completed journal entry and disposed cleanly with no dropped audit records or writer failure. The pointer command was admitted at `0:791` and acknowledged at `0:811`; the keyboard command was admitted at `0:597` and acknowledged at `0:619`.
 
 The genuine journeys exercised candidate `e20d37488ff71e019a9af7227302107dfc46f3c4`. The accepted source differs from it only by four assertions in two browser test files, so product source is unchanged; its tree is `6ea5ef7029d5369b6f52481202ff90c0a34b4581`. Independent readback verified the private evidence manifest and summary; the summary SHA-256 is `0121ab824b1fb4eee2ee1b30453fdb3b7138e74d111bad80a385c9c1d15373cc`. Licensed assets and raw traces remain private. This closes the declared third seam from a real query result through publication of newer post-query authority to command admission. It does not qualify wider races, maps, multiplayer or remote hosting. SC2C-01.6 custom-module authoring and recordings and SC2C-01.7 release, installation and platform qualification remain open.
+
+SC2C-01.6a source contracts and author-toolchain qualification are complete through [SC2 Client #17](https://github.com/FS-GG/FS.GG.SC2.Client/pull/17), merged at protected `4be9a4c18598f8e63d5624a422f5f28621d68cd3`, tree `c9044372fb12858d10a12215047d317e7b2438cd`, matching qualified candidate `4ffe2cc296dabdda4e3c2f5d0ba07a1513cfa6b7`; [protected verification `36757984221`](https://github.com/FS-GG/FS.GG.SC2.Client/actions/runs/36757984221) passed. The [owning .6 plan](https://github.com/FS-GG/FS.GG.SC2.Client/blob/main/docs/SC2C-01.6-plan.md) defines this bounded contract, schema and freestanding author-toolchain window. `.6b–.6e` remain locally tested preparation awaiting production joins and independent-author acceptance. `.6f` native acceptance and `.7` release, installation and platform qualification remain open.
 
 Each expanded milestone names the product files/components it owns, its useful behavior, dependencies
 and substantive tests. SC2C-01.4 should select a representative scenario rather than equating a move
