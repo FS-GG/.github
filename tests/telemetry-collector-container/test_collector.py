@@ -93,12 +93,17 @@ class CollectorRecipeTests(unittest.TestCase):
                        "producerPayloadEqual": True, "payloadSha256": "sha256:" + "b" * 64}
         journal.write_text(json.dumps({"schema": "fsgg.telemetry-host-release-journal/v1",
                                        "observations": {"github": observation, "nuget": observation}}))
+        journal_before = journal.read_bytes()
         with mock.patch.object(collector.subprocess, "run") as verifier:
             release = collector.verify_release(
                 ROOT, package, manifest, journal, "0.2.1", source_sha, package_sha,
                 collector.sha256(manifest), collector.sha256(journal))
         self.assertEqual("0.2.1", release["version"])
         verifier.assert_called_once()
+        command = verifier.call_args.args[0]
+        self.assertEqual("prepared", command[command.index("--feed") + 1])
+        self.assertNotIn("--journal", command)
+        self.assertEqual(journal_before, journal.read_bytes())
         broken = json.loads(journal.read_text())
         broken["observations"]["nuget"]["producerPayloadEqual"] = False
         journal.write_text(json.dumps(broken))

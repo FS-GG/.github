@@ -16,7 +16,7 @@ import sys
 import zipfile
 
 REQUIRED_VERSION = "0.2.1"
-CAPTURE_V2 = b"fsgg.telemetry.native-collector-capture/2"
+CAPTURE_V2 = b"fsgg.telemetry.protected-native-capture/2"
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
 SHA40 = re.compile(r"^[0-9a-f]{40}$")
 RUN_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
@@ -130,7 +130,7 @@ def verify_release(repository: pathlib.Path, package: pathlib.Path, manifest: pa
     verifier = repository / "scripts/telemetry-host-release.py"
     regular(verifier, 1024 * 1024)
     subprocess.run([sys.executable, str(verifier), "verify", "--manifest", str(manifest), "--package", str(package),
-                    "--feed", "github", "--journal", str(journal)], cwd=repository, check=True,
+                    "--feed", "prepared"], cwd=repository, check=True,
                    stdout=subprocess.DEVNULL)
     package_members(package)
     return release
