@@ -25,6 +25,7 @@ on:
     paths:
       - "src/FS.GG.Coord.GitHub/**"
       - "tests/FS.GG.Coord.GitHub.Tests/**"
+      - "tests/coord-board-v2-projection/**"
       - "tests/producer-fence-attacks/**"
       - "src/FS.GG.Coord.Core/**"
       - "Directory.Build.props"
@@ -37,6 +38,7 @@ on:
     paths:
       - "src/FS.GG.Coord.GitHub/**"
       - "tests/FS.GG.Coord.GitHub.Tests/**"
+      - "tests/coord-board-v2-projection/**"
       - "tests/producer-fence-attacks/**"
       - "src/FS.GG.Coord.Core/**"
       - "Directory.Build.props"
@@ -69,14 +71,20 @@ jobs:
       # Locked restore, like every other project in the org. A silent version SUBSTITUTION fails here
       # rather than quietly changing what the tests ran against (ADR-0006; NU1603/NU1608 are errors).
       - name: Restore (locked)
-        run: dotnet restore tests/FS.GG.Coord.GitHub.Tests/FS.GG.Coord.GitHub.Tests.fsproj --locked-mode
+        run: |
+          dotnet restore tests/FS.GG.Coord.GitHub.Tests/FS.GG.Coord.GitHub.Tests.fsproj --locked-mode
+          dotnet restore tests/coord-board-v2-projection/coord-board-v2-projection.fsproj --locked-mode
 
       - name: Build
-        run: dotnet build tests/FS.GG.Coord.GitHub.Tests/FS.GG.Coord.GitHub.Tests.fsproj --no-restore -c Release
+        run: |
+          dotnet build tests/FS.GG.Coord.GitHub.Tests/FS.GG.Coord.GitHub.Tests.fsproj --no-restore -c Release
+          dotnet build tests/coord-board-v2-projection/coord-board-v2-projection.fsproj --no-restore -c Release
 
       # Every failure here is a refusal the org paid for once already.
       - name: Test — the edge must refuse
-        run: dotnet test tests/FS.GG.Coord.GitHub.Tests/FS.GG.Coord.GitHub.Tests.fsproj --no-build -c Release --logger "console;verbosity=normal"
+        run: |
+          dotnet test tests/FS.GG.Coord.GitHub.Tests/FS.GG.Coord.GitHub.Tests.fsproj --no-build -c Release --logger "console;verbosity=normal"
+          dotnet test tests/coord-board-v2-projection/coord-board-v2-projection.fsproj --no-build -c Release --logger "console;verbosity=normal"
 
       - name: Verify GS2-08.6 producer attack oracle
         run: |
