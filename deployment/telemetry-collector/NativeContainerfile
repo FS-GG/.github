@@ -65,7 +65,8 @@ RUN test "$HOST_VERSION" = "0.2.1" \
     && printf '%s  %s\n' "$NATIVE_ELF_SHA256" /opt/fsgg/codex/codex | sha256sum --check --status \
     && chmod 0555 /opt/fsgg/codex/codex \
     && chmod -R a-w /opt/fsgg/telemetry-host \
-    && test -f /opt/fsgg/telemetry-host/FS.GG.Telemetry.Host.dll
+    && test -f /opt/fsgg/telemetry-host/FS.GG.Telemetry.Host.dll \
+    && install -d -o 32768 -g 32768 -m 0700 /qualification
 LABEL org.opencontainers.image.title="FS.GG native telemetry collector" \
       org.opencontainers.image.version="${HOST_VERSION}" \
       org.opencontainers.image.revision="${HOST_SOURCE_SHA}" \

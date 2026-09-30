@@ -90,6 +90,7 @@ class NativeNetworkTests(unittest.TestCase):
         collector = " ".join(topology.collector_create("sha256:" + "c" * 64, pathlib.Path("/private/q")))
         self.assertIn("--memory 1g --cpus 1", collector)
         self.assertIn("/private/q/native:/qualification/native:ro,rprivate", collector)
+        self.assertIn("/private/q/host.json.native-collector.json:/qualification/host.json.native-collector.json:ro,rprivate", collector)
         self.assertTrue(collector.endswith("serve --config /qualification/host.json"))
         self.assertEqual(
             ["podman", "network", "connect", "--alias", "native-receiver",
@@ -103,7 +104,7 @@ class NativeNetworkTests(unittest.TestCase):
             "sha256:" + "d" * 64, pathlib.Path("/private/native"), "readonlynonce1"))
         self.assertIn("--network none", probe)
         self.assertIn("/private/native:/qualification/native:ro,rprivate", probe)
-        self.assertIn("/qualification/readback-output:rw,noexec,nosuid,nodev,size=8m,mode=0700", probe)
+        self.assertIn("/qualification/readback-output:rw,noexec,nosuid,nodev,size=8m,mode=0700,uid=32768,gid=32768", probe)
         self.assertIn("--run-nonce readonlynonce1", probe)
 
     def test_inspection_refuses_direct_route_extra_mount_and_environment(self):
@@ -146,6 +147,7 @@ class NativeNetworkTests(unittest.TestCase):
                 topology.COLLECTOR_NETWORK: {}, topology.NATIVE_NETWORK: {}}},
             "Mounts": [{"Destination": path, "RW": path in {"/qualification/evidence", "/qualification/store"}}
                        for path in ("/qualification/host.json", topology.NATIVE_MOUNT,
+                                    "/qualification/host.json.native-collector.json",
                                     "/qualification/evidence", "/qualification/store",
                                     "/qualification/tls", "/qualification/credentials")],
         }
@@ -205,6 +207,7 @@ class NativeNetworkTests(unittest.TestCase):
         self.assertIn("native/native-receiver.crt", recipe)
         self.assertIn("RECEIVER_TRUST_CERT_SHA256", recipe)
         self.assertIn("update-ca-certificates", recipe)
+        self.assertIn("install -d -o 32768 -g 32768 -m 0700 /qualification", recipe)
         self.assertNotIn(":latest", recipe)
         self.assertNotIn("apt-get", recipe)
         for argument, path in (

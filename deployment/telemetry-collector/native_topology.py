@@ -99,7 +99,7 @@ def readonly_probe_create(image: str, native_volume: pathlib.Path, run_nonce: st
         "--volume", f"{native_volume.resolve()}:{NATIVE_MOUNT}:ro,rprivate",
         "--env", "HOME=/qualification/native",
         "--env", "CODEX_HOME=/qualification/native/.codex",
-        "--tmpfs", "/qualification/readback-output:rw,noexec,nosuid,nodev,size=8m,mode=0700",
+        "--tmpfs", "/qualification/readback-output:rw,noexec,nosuid,nodev,size=8m,mode=0700,uid=32768,gid=32768",
     ]
     command.extend(["--run-nonce", run_nonce])
     return command
@@ -117,6 +117,8 @@ def collector_create(image: str, qualification: pathlib.Path) -> list[str]:
     insertion = len(command) - 1
     mounts = [
         (qualification / "host.json", "/qualification/host.json", "ro"),
+        (qualification / "host.json.native-collector.json",
+         "/qualification/host.json.native-collector.json", "ro"),
         (qualification / "native", NATIVE_MOUNT, "ro"),
         (qualification / "evidence", "/qualification/evidence", "rw"),
         (qualification / "store", "/qualification/store", "rw"),
@@ -194,7 +196,8 @@ def inspect_receiver(value: dict) -> None:
                     for name in environment), "receiver-environment-route-refused")
     mounts = {(row["Destination"], bool(row["RW"])) for row in value.get("Mounts", [])}
     require(mounts == {
-        ("/qualification/host.json", False), (NATIVE_MOUNT, False),
+        ("/qualification/host.json", False),
+        ("/qualification/host.json.native-collector.json", False), (NATIVE_MOUNT, False),
         ("/qualification/evidence", True), ("/qualification/store", True),
         ("/qualification/tls", False), ("/qualification/credentials", False),
     }, "receiver-mount-custody-refused")
