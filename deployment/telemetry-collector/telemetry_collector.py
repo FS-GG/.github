@@ -166,7 +166,8 @@ def create_command(podman: pathlib.Path, root: pathlib.Path, runroot: pathlib.Pa
     command = podman_command(
         podman, root, runroot, "create", "--name", name, "--pull=never", "--read-only", "--network=none",
         "--cap-drop=all", "--security-opt=no-new-privileges", "--pids-limit=64", "--memory=256m", "--cpus=1",
-        "--http-proxy=false", "--user=32768:32768", "--tmpfs", "/tmp:rw,noexec,nosuid,nodev,size=16m")
+        "--http-proxy=false", "--userns=keep-id:uid=32768,gid=32768", "--user=32768:32768",
+        "--tmpfs", "/tmp:rw,noexec,nosuid,nodev,size=16m")
     if entrypoint:
         command.extend(["--entrypoint", entrypoint])
     for source, target, writable in mounts:
@@ -184,6 +185,10 @@ def inspect_container(value: dict, expected_mounts: set[tuple[str, bool]]) -> No
     observed = {(row["Destination"], bool(row["RW"])) for row in value["Mounts"]}
     require(observed == expected_mounts, "container mount topology differs")
     require(config["User"] == "32768:32768", "container user differs")
+    require(host.get("UsernsMode") == "private", "container user namespace differs")
+    mappings = host.get("IDMappings") or {}
+    require("32768:0:1" in (mappings.get("UidMap") or [])
+            and "32768:0:1" in (mappings.get("GidMap") or []), "keep-id mapping differs")
     require(host["NetworkMode"] == "none" and host["ReadonlyRootfs"] is True, "container isolation differs")
     require(host.get("PidMode") != "host" and host.get("UTSMode") != "host", "host namespace refused")
     require(any(item in ("ALL", "CAP_ALL") for item in (host.get("CapDrop") or [])), "capability fence differs")
@@ -235,7 +240,6 @@ def qualify(args: argparse.Namespace) -> dict:
                  directories["config"] / "credential-boundary.sentinel"):
         path.chmod(0o600)
     try:
-        run(podman_command(podman, podman_root, podman_runroot, "unshare", "chown", "-R", "32768:32768", str(state)))
         common = ["build", "--quiet", "--pull=never", "--network=none", "--timestamp=0",
                   "--file", str(context / "Containerfile")]
         run(podman_command(podman, podman_root, podman_runroot, *common, "--target", "controlled-development",

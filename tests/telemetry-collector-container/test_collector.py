@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 import importlib.util
 import json
+import os
 import pathlib
+import shutil
 import tempfile
 import unittest
 import zipfile
@@ -114,12 +116,49 @@ class CollectorRecipeTests(unittest.TestCase):
         rendered = " ".join(map(str, command))
         for required in ("--pull=never", "--read-only", "--network=none", "--cap-drop=all",
                          "--security-opt=no-new-privileges", "--pids-limit=64", "--memory=256m",
-                         "--http-proxy=false", "--user=32768:32768", "/private/config:/collector-config:ro",
+                         "--http-proxy=false", "--userns=keep-id:uid=32768,gid=32768",
+                         "--user=32768:32768", "/private/config:/collector-config:ro",
                          "/private/source:/collector-config/native-codex-home:ro"):
             self.assertIn(required, rendered)
         self.assertNotIn("--pid=host", rendered)
         self.assertNotIn("--uts=host", rendered)
         self.assertNotIn("podman.sock", rendered)
+
+    def test_keep_id_contract_preserves_outer_receipt_custody_and_cleanup(self):
+        state = self.root / "state"
+        state.mkdir(mode=0o700)
+        receipt = state / "config/native-evidence/controlled-custody.json"
+        receipt.parent.mkdir(mode=0o700, parents=True)
+        self.assertEqual(0o700, state.stat().st_mode & 0o777)
+        receipt.write_text('{"verdict":"controlled-topology-only"}\n', encoding="utf-8")
+        receipt.chmod(0o600)
+        self.assertEqual(os.getuid(), receipt.stat().st_uid)
+        self.assertEqual("controlled-topology-only", json.loads(receipt.read_text())["verdict"])
+
+        inspected = {
+            "Config": {"User": "32768:32768", "Env": []},
+            "HostConfig": {
+                "UsernsMode": "private",
+                "IDMappings": {"UidMap": ["0:1:32768", "32768:0:1"],
+                               "GidMap": ["0:1:32768", "32768:0:1"]},
+                "NetworkMode": "none",
+                "ReadonlyRootfs": True, "PidMode": "private", "UTSMode": "private",
+                "CapDrop": ["CAP_ALL"], "SecurityOpt": ["no-new-privileges"],
+                "PidsLimit": 64, "Memory": 256 * 1024 * 1024, "NanoCpus": 1_000_000_000,
+            },
+            "Mounts": [{"Destination": "/collector-config/native-evidence", "RW": True}],
+        }
+        collector.inspect_container(inspected, {("/collector-config/native-evidence", True)})
+        inspected["HostConfig"]["UsernsMode"] = "host"
+        with self.assertRaisesRegex(collector.Refusal, "user namespace"):
+            collector.inspect_container(inspected, {("/collector-config/native-evidence", True)})
+        inspected["HostConfig"]["UsernsMode"] = "private"
+        inspected["HostConfig"]["IDMappings"]["UidMap"] = ["0:1:32768"]
+        with self.assertRaisesRegex(collector.Refusal, "keep-id mapping"):
+            collector.inspect_container(inspected, {("/collector-config/native-evidence", True)})
+
+        shutil.rmtree(state)
+        self.assertFalse(state.exists())
 
     def test_controlled_receipt_cannot_claim_native_qualification(self):
         script = (ROOT / "deployment/telemetry-collector/controlled-collector.sh").read_text()

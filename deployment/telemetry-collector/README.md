@@ -10,7 +10,10 @@ native-source mount. The collector sees that original mount read-only and sees
 separate configuration, store, and evidence mounts. The development container
 cannot see those receiver-owned mounts. Both containers use read-only images,
 no network, no capabilities, no new privileges, a numeric non-root user, finite
-resources, and no host namespace fallback.
+resources, and no host namespace fallback. Rootless `keep-id` maps the runner's
+UID and GID to container user `32768:32768`, so 0600 receipts and 0700 state
+remain readable and removable by the runner without a privileged ownership
+rewrite.
 
 The verdict is `controlled-topology-passed` and explicitly records
 `nativeAccessQualified=false`, `modelSupportObserved=false`,
