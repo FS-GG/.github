@@ -79,6 +79,23 @@ def write_private(path: pathlib.Path, value: bytes) -> None:
         os.fsync(stream.fileno())
 
 
+def open_private_output(path: pathlib.Path):
+    descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    return os.fdopen(descriptor, "wb")
+
+
+def startup_output_summary(process: subprocess.Popen[bytes], stdout: pathlib.Path,
+                           stderr: pathlib.Path) -> str:
+    fields = []
+    for label, path in (("stdout", stdout), ("stderr", stderr)):
+        info = path.lstat()
+        require(stat.S_ISREG(info.st_mode) and not path.is_symlink(),
+                f"Host startup {label} is not a regular file")
+        require(info.st_size <= 256 * 1024, f"Host startup {label} exceeded its custody bound")
+        fields.append(f"{label}Bytes={info.st_size} {label}Sha256={sha256(path)}")
+    return f"exitCode={process.returncode} " + " ".join(fields)
+
+
 def copy_private(source: pathlib.Path, destination: pathlib.Path, maximum: int) -> None:
     regular(source, maximum)
     write_private(destination, source.read_bytes())
@@ -126,7 +143,8 @@ def receipt(payload: bytes, batch: str, expected_status: str, expected_digest: s
 
 def host_config(listen_url: str, certificate: pathlib.Path, password: pathlib.Path,
                 lock: pathlib.Path, store: pathlib.Path, secret: pathlib.Path,
-                revoked_secret: pathlib.Path, generation: int = 1) -> dict:
+                revoked_secret: pathlib.Path, browser_key_hash: pathlib.Path,
+                generation: int = 1) -> dict:
     def credential(reference: str, secret_file: pathlib.Path, producer: str, revoked: bool) -> dict:
         return {
             "Reference": reference, "SecretFile": str(secret_file), "WorkspaceId": "controlled-state",
@@ -140,7 +158,9 @@ def host_config(listen_url: str, certificate: pathlib.Path, password: pathlib.Pa
         "Stores": [{"WorkspaceId": "controlled-state", "Root": str(store)}],
         "Credentials": [credential("active", secret, "controlled-active", False),
                         credential("revoked", revoked_secret, "controlled-revoked", True)],
-        "BrowserPrincipals": [],
+        "BrowserPrincipals": [{"PrincipalId": "controlled-browser-preflight",
+                               "KeyHashFile": str(browser_key_hash),
+                               "WorkspaceIds": ["controlled-state"], "Revoked": False}],
         "BrowserSession": {"IdleSeconds": 300, "AbsoluteSeconds": 3600, "MaximumSessions": 16,
                            "LoginAttemptsPerMinute": 8, "LoginAdmission": 2,
                            "QueryAdmission": 2, "QueryTimeoutSeconds": 10},
@@ -207,21 +227,26 @@ def qualify(args: argparse.Namespace) -> dict:
             directory.mkdir(mode=0o700)
         certificate, password, ca = config_root / "server.pfx", config_root / "password", config_root / "ca.pem"
         active_secret, revoked_secret = config_root / "active.secret", config_root / "revoked.secret"
+        browser_key_hash = config_root / "browser-key-hash.json"
         copy_private(args.certificate, certificate, 1024 * 1024)
         copy_private(args.certificate_password_file, password, 4096)
         copy_private(args.ca_certificate, ca, 1024 * 1024)
         active_token, revoked_token, invalid_token = secrets.token_urlsafe(48), secrets.token_urlsafe(48), secrets.token_urlsafe(48)
         write_private(active_secret, (active_token + "\n").encode())
         write_private(revoked_secret, (revoked_token + "\n").encode())
+        write_private(browser_key_hash, (json.dumps({
+            "schema": "fsgg.telemetry.browser-key/1", "algorithm": "sha256",
+            "keyHash": hashlib.sha256(secrets.token_bytes(32)).hexdigest(),
+        }, separators=(",", ":")) + "\n").encode())
         dll = extract_host(package, state / "host")
         command = [str(dotnet), str(dll)]
         environment = {"HOME": str(home), "DOTNET_CLI_HOME": str(home), "DOTNET_NOLOGO": "1",
                        "DOTNET_SKIP_FIRST_TIME_EXPERIENCE": "1", "PATH": "/usr/bin:/bin", "LANG": "C.UTF-8"}
         config_path, invalid_path = config_root / "host.json", config_root / "invalid.json"
         config = host_config(args.listen_url, certificate, password, state / "service.lock", store,
-                             active_secret, revoked_secret)
+                             active_secret, revoked_secret, browser_key_hash)
         invalid = host_config(args.listen_url, certificate, password, state / "invalid.lock", store,
-                              active_secret, revoked_secret, generation=0)
+                              active_secret, revoked_secret, browser_key_hash, generation=0)
         write_private(config_path, (json.dumps(config, separators=(",", ":")) + "\n").encode())
         write_private(invalid_path, (json.dumps(invalid, separators=(",", ":")) + "\n").encode())
         run(command + ["status", "--config", str(invalid_path)], environment, expected=2)
@@ -247,13 +272,25 @@ def qualify(args: argparse.Namespace) -> dict:
         envelope_digest = hashlib.sha256(envelope).hexdigest()
         url = args.listen_url.rstrip("/")
 
+        serve_attempt = 0
+
         def start_and_wait() -> subprocess.Popen[bytes]:
-            process = subprocess.Popen(command + ["serve", "--config", str(config_path)], env=environment,
-                                       stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            nonlocal serve_attempt
+            serve_attempt += 1
+            stdout_path = state / f"serve-{serve_attempt}.stdout"
+            stderr_path = state / f"serve-{serve_attempt}.stderr"
+            with open_private_output(stdout_path) as stdout, open_private_output(stderr_path) as stderr:
+                process = subprocess.Popen(command + ["serve", "--config", str(config_path)], env=environment,
+                                           stdin=subprocess.DEVNULL, stdout=stdout, stderr=stderr)
             try:
                 deadline = time.monotonic() + 20
                 while time.monotonic() < deadline:
-                    require(process.poll() is None, "Host exited before becoming ready")
+                    if process.poll() is not None:
+                        raise Refusal("Host exited before becoming ready; "
+                                      + startup_output_summary(process, stdout_path, stderr_path))
+                    for output in (stdout_path, stderr_path):
+                        require(output.stat().st_size <= 256 * 1024,
+                                "Host startup output exceeded its custody bound")
                     try:
                         if request(url + "/private/health", active_token, context)[0] == 200:
                             return process

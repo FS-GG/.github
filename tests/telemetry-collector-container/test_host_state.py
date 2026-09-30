@@ -45,12 +45,16 @@ class HostStateQualificationTests(unittest.TestCase):
             listen_url="https://localhost:7443")
 
     def test_config_owns_exact_native_collector_grants_and_revocation(self):
+        browser_key_hash = self.root / "browser-key-hash.json"
         config = qualification.host_config(
             "https://localhost:7443", self.root / "server.pfx", self.root / "password",
             self.root / "host.lock", self.root / "store", self.root / "active.secret",
-            self.root / "revoked.secret")
+            self.root / "revoked.secret", browser_key_hash)
         self.assertEqual("fsgg.telemetry.host-config/2", config["Schema"])
-        self.assertEqual([], config["BrowserPrincipals"])
+        self.assertEqual([{
+            "PrincipalId": "controlled-browser-preflight", "KeyHashFile": str(browser_key_hash),
+            "WorkspaceIds": ["controlled-state"], "Revoked": False,
+        }], config["BrowserPrincipals"])
         self.assertEqual(2, len(config["Credentials"]))
         active, revoked = config["Credentials"]
         self.assertEqual(("native-collector", "grant-controlled-active", 1, False),
@@ -60,8 +64,23 @@ class HostStateQualificationTests(unittest.TestCase):
         invalid = qualification.host_config(
             "https://localhost:7443", self.root / "server.pfx", self.root / "password",
             self.root / "host.lock", self.root / "store", self.root / "active.secret",
-            self.root / "revoked.secret", generation=0)
+            self.root / "revoked.secret", browser_key_hash, generation=0)
         self.assertTrue(all(row["GrantGeneration"] == 0 for row in invalid["Credentials"]))
+
+    def test_startup_summary_is_bounded_and_never_discloses_output(self):
+        stdout, stderr = self.root / "stdout", self.root / "stderr"
+        stdout.write_bytes(b"private startup detail")
+        stderr.write_bytes(b"private failure detail")
+        summary = qualification.startup_output_summary(SimpleNamespace(returncode=2), stdout, stderr)
+        self.assertIn("exitCode=2", summary)
+        self.assertIn("stdoutBytes=22", summary)
+        self.assertIn("stderrBytes=22", summary)
+        self.assertNotIn("private", summary)
+        self.assertNotIn("detail", summary)
+
+        stdout.write_bytes(b"x" * (256 * 1024 + 1))
+        with self.assertRaisesRegex(qualification.Refusal, "exceeded its custody bound"):
+            qualification.startup_output_summary(SimpleNamespace(returncode=2), stdout, stderr)
 
     def test_controlled_envelope_exercises_receipts_without_native_claims(self):
         envelope = json.loads(qualification.controlled_envelope())
