@@ -22,9 +22,9 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     env:
-      RESULT_ROOT: ${{ runner.temp }}/v2-host-result-${{ github.run_id }}-${{ github.run_attempt }}
-      PRIVATE_ROOT: ${{ runner.temp }}/v2-host-native-${{ github.run_id }}-${{ github.run_attempt }}
-      STAGING_ROOT: ${{ runner.temp }}/v2-host-staging-${{ github.run_id }}-${{ github.run_attempt }}
+      RESULT_ROOT: /tmp/v2-host-result-${{ github.run_id }}-${{ github.run_attempt }}
+      PRIVATE_ROOT: /tmp/v2-host-native-${{ github.run_id }}-${{ github.run_attempt }}
+      STAGING_ROOT: /tmp/v2-host-staging-${{ github.run_id }}-${{ github.run_attempt }}
       RUN_NONCE: ${{ inputs.run_nonce }}
       PLACEMENT_SHA: ${{ inputs.placement_sha }}
       RECIPE_SHA: '@@RECIPE_SOURCE_SHA@@'

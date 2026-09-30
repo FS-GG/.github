@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import base64, contextlib, hashlib, importlib.util, io, json, os, pathlib, subprocess, tempfile, types, unittest
+import base64, contextlib, hashlib, importlib.util, io, json, os, pathlib, re, subprocess, tempfile, types, unittest
 from unittest import mock
 ROOT=pathlib.Path(__file__).resolve().parents[2]
 def load():
@@ -73,6 +73,22 @@ class Tests(unittest.TestCase):
   for script in scripts:
    checked=subprocess.run(['bash','-n'],input=script,text=True,capture_output=True)
    self.assertEqual(0,checked.returncode,checked.stderr)
+ def test_job_environment_uses_only_contexts_available_at_job_scope(self):
+  if importlib.util.find_spec('yaml') is None: self.skipTest('PyYAML unavailable')
+  import yaml
+  template=(ROOT/'deployment/telemetry-collector/private-native-qualification.yml.in').read_text()
+  rendered=template.replace('@@RECIPE_SOURCE_SHA@@','a'*40).replace('@@QUALIFICATION_REF@@','qualification-v1')
+  workflow=yaml.safe_load(rendered)
+  job_env=workflow['jobs']['qualify']['env']
+  allowed={'github','needs','strategy','matrix','vars','secrets','inputs'}
+  def unavailable(values):
+   return sorted({match.group(1) for value in values.values() for match in re.finditer(r'\$\{\{\s*([a-zA-Z_][a-zA-Z0-9_]*)\.',str(value)) if match.group(1) not in allowed})
+  self.assertEqual([],unavailable(job_env))
+  self.assertEqual('/tmp/v2-host-result-${{ github.run_id }}-${{ github.run_attempt }}',job_env['RESULT_ROOT'])
+  invalid=dict(job_env,RESULT_ROOT='${{ runner.temp }}/v2-host-result')
+  self.assertEqual(['runner'],unavailable(invalid))
+  step_env={'RESULT_ROOT':'${{ runner.temp }}/v2-host-result'}
+  self.assertIn('runner', {match.group(1) for value in step_env.values() for match in re.finditer(r'\$\{\{\s*([a-zA-Z_][a-zA-Z0-9_]*)\.',value)})
  def test_malformed_placement_is_refused_before_git_or_podman(self):
   script=self.workflow_shell('Refuse non-exact placement')
   with tempfile.TemporaryDirectory() as td:
