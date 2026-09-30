@@ -4,7 +4,7 @@ Product workspaces choose their own languages and toolchains, including multiple
 repository. Keep the existing coordination core and expose portable integration contracts. Evaluate
 AG-UI at the presentation boundary and Microsoft Agent Framework inside bounded agent attempts.
 
-**Status:** selected roadmap amendment, 2026-09-29; implementation and qualification remain pending.
+**Status:** amendment selected on 2026-09-29; .3 read-only AG-UI source qualification closed on 2026-09-30. Portable publication, receiver adoption and .4–.5 remain open.
 **Part:** **V2-LANG-01**, indexed in the
 [Unified roadmap](../2026-09-07-154210-fs-gg-unified-development-roadmap.md#98-feature-parts-and-subroadmap-index)
 and the [V2 execution roadmap](../github-substrate-v2-roadmap.md#language-independent-product-workspaces--2026-09-29).
@@ -142,9 +142,13 @@ product-library dependency. Record any tooling runtime requirement explicitly.
 - [ ] **V2-LANG-01.2 — Publish portable workspace integration.** Coordination and SDD/Templates
   publish the schemas, adapters and toolchain profiles. Qualify cross-language serialization, fresh
   creation, retained adoption, mixed components and local-only operation against exact artifacts.
-- [ ] **V2-LANG-01.3 — Qualify the AG-UI projection.** Project one work item through the existing
-  read-only evidence boundary and exercise a different-language client, replay, duplicates, stale
-  generations and observation gaps. Compare integration and maintenance cost before adopting it.
+- [x] **V2-LANG-01.3 — Qualify the AG-UI projection.**
+  [Coordination PR #894](https://github.com/FS-GG/FS.GG.Coordination/pull/894) merged the optional
+  read-only projection at protected `5d86daf3898be683bd6720bdd36da479a29a0260` after exact-head
+  hosted checks. The [owning source plan](https://github.com/FS-GG/FS.GG.Coordination/blob/5d86daf3898be683bd6720bdd36da479a29a0260/docs/roadmaps/v2-lang-agui-projection.md)
+  records a Python SSE client, durable replay, duplicate/reconnect, gap, stale-generation and
+  observer-loss qualification and the pinned SDK/dependency cost. Adoption is limited to the source
+  adapter; no endpoint, package publication, receiver activation or write/approval interface is selected.
 - [ ] **V2-LANG-01.4 — Evaluate bounded Agent Framework execution.** Trial one compatible adapter
   and collaboration, including checkpoint recovery, unknown external outcomes, cancellation and a
   slow branch beside an independently progressing work item. Record adopt, defer or reject with
