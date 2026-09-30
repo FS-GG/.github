@@ -23,6 +23,10 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import telemetry_collector as release_tools  # noqa: E402
 
 
+# Protocol identity for the generated empty controlled request; no raw ingest is retained.
+INGEST_SCHEMA = "fsgg.telemetry.ingest/1"
+
+
 class Refusal(Exception):
     pass
 
@@ -173,7 +177,7 @@ def controlled_envelope() -> bytes:
     value = {
         "schema": "fsgg.telemetry.envelope/1", "workspaceId": "controlled-state",
         "producerId": "controlled-active", "streamId": "runtime", "batchId": "controlled-empty-1",
-        "payload": {"schema": "fsgg.telemetry.ingest/1", "ingestId": "controlled-empty-1",
+        "payload": {"schema": INGEST_SCHEMA, "ingestId": "controlled-empty-1",
                     "sourceIdentity": "controlled-state", "generation": "g1", "cursor": "1",
                     "eventCount": 0, "events": []},
     }
