@@ -1212,7 +1212,7 @@ module Operations =
                                         JsonSerializer.Serialize
                                             {|
                                                 schema = "fsgg.telemetry.host-backup-set/1"
-                                                hostVersion = "0.2.0"
+                                                hostVersion = "0.2.1"
                                                 supportedStoreSchemaMin = 10
                                                 supportedStoreSchemaMax = 12
                                                 configMetadataSha256 = configMetadataDigest config
