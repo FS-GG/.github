@@ -161,6 +161,19 @@ That earlier proof remains bound to its source identity. The current portable pr
 no portable successor is published. P3 producer publication, P4 fresh-receiver adoption and P5 upgrade/matrix
 closure remain open. No complete .5 language-route adoption or generated-workspace change is claimed.
 
+**V2-LANG-01.2 P3 publication tooling source delivered on 2026-09-30; publication remains open.**
+[Coordination PR #903](https://github.com/FS-GG/FS.GG.Coordination/pull/903) merged at protected
+`47761d86601de6c5c22b9e79f19084eb4b070e1e`, tree `cc6bb7a315fde6761073f950e6fa87d7bf69555b`,
+independently equal to reviewed candidate `698b60638eb6c2a262601f75a7b99bf53ffed21a`.
+The [current bootstrap/build run 36777300676](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36777300676)
+succeeded after correcting stale current execution-pin digests; all eight focused immutable-pin guard tests passed.
+The source prepares coherent CLI 0.2.0, retained OCI/CLI assets, fresh packaged-assembly qualification,
+exact release-asset collision checks and both-feed publication/readback. Publisher pins remain disabled
+until protected preparation produces the exact artifacts and qualification evidence. No successor is published
+or installed by this merge. P3 protected preparation/publication, P4 compiled runtime entry point and fresh
+receiver adoption, and P5 retained upgrades/matrix remain open. This source delivery changes no generated
+workspace, default execution route or lifecycle.
+
 **Fixed native capability diagnostic source and controlled collector qualification delivered on 2026-09-30;
 genuine native capture remains open.**
 [Coordination PR #901](https://github.com/FS-GG/FS.GG.Coordination/pull/901) merged the fixed
