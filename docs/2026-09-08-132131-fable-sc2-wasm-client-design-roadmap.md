@@ -6,12 +6,12 @@ index: 35
 description: Proposed browser tactical client, native StarCraft II gateway, portable WASM controller boundary, mouse and keyboard interaction, and staged product delivery.
 status: active
 document-type: design-and-roadmap
-last-updated: 2026-09-27
+last-updated: 2026-09-30
 ---
 
 # Fable SC2 client with custom WASM control — design and roadmap
 
-**Feature: SC2C-01. Status: active product roadmap; SC2C-01.1–.2 and the .3a–.3b source slices are delivered.**
+**Feature: SC2C-01. Status: active product roadmap; SC2C-01.1–.5 are complete for their declared bounded profiles.**
 This document recommends a browser-first Fable/Elmish tactical client connected to a native
 StarCraft II process through an F# gateway. Custom WebAssembly modules receive game data and
 normalized user input, then return command intentions which the host and gateway validate before
@@ -867,7 +867,7 @@ installation, data volume and command-coverage evidence.
   only the next useful roadmap window. An unavailable binary/map blocks this live evidence, not a
   fabricated green result or unrelated browser work.
 
-### 12.3 Remaining core outcomes
+### 12.3 Core outcomes
 
 | Milestone | Product outcome and principal scope | Entry evidence | Exit examples |
 |---|---|---|---|
@@ -876,7 +876,11 @@ installation, data volume and command-coverage evidence.
 | **SC2C-01.6 — Supported custom-module workflow and recordings** | SDK/documentation, second-language conformance, configuration, controller/advisor roles, bounded overlays, offline traces and native replay integration | ABI exercised in real play; host faults and role boundaries qualified | A new author builds/imports a custom module without host changes, reads data/input and controls a real unit; an advisor cannot act; sanitized trace opens offline; compatible native replay stays read-only |
 | **SC2C-01.7 — Qualified product release** | Install/upgrade experience, supported local platform matrix, measured envelope, privacy/retention, user help, recovery diagnostics and release artifacts | All core journeys above; explicit platform/dependency/asset decisions and required release authority | Clean installation reaches play; both input methods complete the defined scenario; hostile/stale module tests pass; version incompatibility is actionable; supported combinations and limitations match actual evidence |
 
-The bounded .4a–.4d worker-squad window is source/native accepted through [SC2 Client #10](https://github.com/FS-GG/FS.GG.SC2.Client/pull/10) at `4b834ff8c20450f7f327c05a19ec43cf1d608155`, with green [exact-main verification](https://github.com/FS-GG/FS.GG.SC2.Client/actions/runs/36507053735) and fresh merged-source pointer, keyboard and post-write-loss/rearm qualification. All 13 coverage checks passed with no omissions; receipt SHA-256 is `d2b6f84f89ac0c2c075650c399a583d25f5f62886ca287875cb8fcfa9aac24eb`. The [owning tactical plan](https://github.com/FS-GG/FS.GG.SC2.Client/blob/4b834ff8c20450f7f327c05a19ec43cf1d608155/docs/SC2C-01.4-plan.md) retains the acceptance scope. Full .4 remains open for production/placement (.4e) and the representative dual-input scenario (.4f); publication and installed adoption remain separate.
+The bounded SC2C-01.4 outcome is complete through [SC2 Client #13](https://github.com/FS-GG/FS.GG.SC2.Client/pull/13) at `a40b564f3742a19872712d43137ee9d5457eb303`. Genuine pointer and keyboard sessions completed the declared Terran/Simple64 tactical and production scenario through the public browser/WASM route. This does not qualify other races or maps.
+
+The bounded SC2C-01.5 outcome and its final genuine native acceptance are complete through [SC2 Client #16](https://github.com/FS-GG/FS.GG.SC2.Client/pull/16), merged at `b94dd753bfd0e41ba1e3b22690c7f7a25d0ac18c` from source `ad50425dcdcc526215fce1904e33015369b2ac69`; [exact-source verification `36734647781`](https://github.com/FS-GG/FS.GG.SC2.Client/actions/runs/36734647781) passed. Fresh pointer commit and keyboard abort journeys against SC2 4.10.0.75689 and pinned Simple64 each recovered a new socket and generation-2 authority before a real query and command admission. Each received an accepted `Sc2Result` with action result `1`, wrote exactly one native action, retained one durable completed journal entry and disposed cleanly with no dropped audit records or writer failure. The pointer command was admitted at `0:791` and acknowledged at `0:811`; the keyboard command was admitted at `0:597` and acknowledged at `0:619`.
+
+The genuine journeys exercised candidate `e20d37488ff71e019a9af7227302107dfc46f3c4`. The accepted source differs from it only by four assertions in two browser test files, so product source is unchanged; its tree is `6ea5ef7029d5369b6f52481202ff90c0a34b4581`. Independent readback verified the private evidence manifest and summary; the summary SHA-256 is `0121ab824b1fb4eee2ee1b30453fdb3b7138e74d111bad80a385c9c1d15373cc`. Licensed assets and raw traces remain private. This closes the declared third seam from a real query result through publication of newer post-query authority to command admission. It does not qualify wider races, maps, multiplayer or remote hosting. SC2C-01.6 custom-module authoring and recordings and SC2C-01.7 release, installation and platform qualification remain open.
 
 Each expanded milestone names the product files/components it owns, its useful behavior, dependencies
 and substantive tests. SC2C-01.4 should select a representative scenario rather than equating a move
