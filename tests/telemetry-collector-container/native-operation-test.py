@@ -73,8 +73,38 @@ class NativeOperationTests(unittest.TestCase):
 
     def test_clean_environment_drops_credentials_and_bypass_proxies(self):
         profile = support.load_profile(PROFILE_PATH)
-        environment = support.clean_environment(profile, {"PATH": "/bin", "GITHUB_TOKEN": "secret", "HTTP_PROXY": "bad", "ALL_PROXY": "bad", "OPENAI_API_KEY": "secret"})
+        environment = support.clean_environment(profile, {"PATH": "/bin", "GITHUB_TOKEN": "secret", "HTTP_PROXY": "bad", "ALL_PROXY": "bad", "OPENAI_API_KEY": "secret",
+                                                          "FSGG_TELEMETRY_CREDENTIAL_NATIVE_PROSPECTIVE_V1": "receiver-secret"})
         self.assertEqual({"PATH", "HOME", "CODEX_HOME", "HTTPS_PROXY", "NO_PROXY", "LANG", "LC_ALL"}, set(environment))
+        self.assertEqual("localhost,127.0.0.1,[::1],native-receiver", environment["NO_PROXY"])
+
+    def test_producer_environment_passes_only_fixed_credential(self):
+        profile = support.load_profile(PROFILE_PATH)
+        name = "FSGG_TELEMETRY_CREDENTIAL_NATIVE_PROSPECTIVE_V1"
+        parent = {"PATH": "/bin", name: "receiver-secret", "OPENAI_API_KEY": "model-secret"}
+        environment = support.producer_environment(profile, PARENT, parent)
+        self.assertEqual("receiver-secret", environment[name])
+        self.assertEqual(PARENT, environment["CODEX_THREAD_ID"])
+        self.assertNotIn("OPENAI_API_KEY", environment)
+        with self.assertRaisesRegex(support.Refusal, "unavailable"):
+            support.producer_environment(profile, PARENT, {"PATH": "/bin"})
+        parent["FSGG_TELEMETRY_CREDENTIAL_OTHER"] = "wrong-scope"
+        with self.assertRaisesRegex(support.Refusal, "unreviewed telemetry credential"):
+            support.producer_environment(profile, PARENT, parent)
+
+    def test_workspace_config_is_exact_and_contains_no_secret(self):
+        profile = support.load_profile(PROFILE_PATH)
+        producer = profile["producer"]
+        value = {"schema": "fsgg.telemetry.workspace-config/1", "engine": "fsgg-coord-engine", "associations": [{
+            "workspaceId": producer["workspaceId"], "producerId": producer["producerId"], "streamId": producer["streamId"],
+            "repositories": [producer["repository"]], "destination": {"kind": "remote", "endpoint": producer["receiverOrigin"],
+            "credentialReference": producer["credentialReference"], "spoolRoot": producer["spoolRoot"]}}], "retiredAssociations": []}
+        driver.workspace_config_value(value, profile)
+        encoded = json.dumps(value)
+        self.assertNotIn("receiver-secret", encoded)
+        changed = json.loads(encoded); changed["associations"][0]["destination"]["endpoint"] = "https://native-receiver:7443"
+        with self.assertRaisesRegex(support.Refusal, "fixed receiver binding"):
+            driver.workspace_config_value(changed, profile)
 
     def test_begin_must_be_applied_and_child_precedes_spawn(self):
         value = support.OperationEvidence("op", "nonce")
@@ -169,6 +199,8 @@ class NativeOperationTests(unittest.TestCase):
             self.assertNotIn(private, encoded)
         with self.assertRaisesRegex(support.Refusal, "lifecycle events"):
             driver.source_readback_result([], [{"method": "thread/started"}], "owner-nonce-01")
+        compatible = driver.source_readback_result([], [{"method": "configWarning"}, {"method": "remoteControl/status/changed"}], "owner-nonce-01")
+        self.assertEqual((0, 0), (compatible["threadStarts"], compatible["turnStarts"]))
 
 
 if __name__ == "__main__":

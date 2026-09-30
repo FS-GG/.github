@@ -22,6 +22,14 @@
     "coherentPayloadSha256": "9b9486a54e014fd5d21b65ed71a00b9021562a56909a1303f89c9646bca4a585",
     "coherentMarker": "/opt/fsgg/coord/coherent-content.sha256",
     "telemetryConfig": "/qualification/native/telemetry/roadmap.json",
+    "workspaceId": "v2-host-native-qualification",
+    "producerId": "native-prospective-v1",
+    "streamId": "roadmap",
+    "repository": "FS-GG/.github",
+    "receiverOrigin": "https://native-receiver:7443/",
+    "credentialReference": "native-prospective-v1",
+    "credentialEnvironment": "FSGG_TELEMETRY_CREDENTIAL_NATIVE_PROSPECTIVE_V1",
+    "spoolRoot": "/qualification/native/telemetry/spool",
     "feature": "V2-HOST-01",
     "item": "V2-HOST-01.8a",
     "rootAttempt": "native-operation-root",
@@ -41,6 +49,6 @@
     "policyId": "fsgg-native-egress-v1",
     "privateNetworkId": "fsgg-native-private-v1",
     "httpsProxy": "http://native-egress:3128",
-    "noProxy": "localhost,127.0.0.1,[::1]"
+    "noProxy": "localhost,127.0.0.1,[::1],native-receiver"
   }
 }

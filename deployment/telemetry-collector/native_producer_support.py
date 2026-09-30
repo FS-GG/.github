@@ -62,7 +62,9 @@ def load_profile(path: pathlib.Path) -> dict:
     require(profile["prompt"] == FIXED_PROMPT, "fixed prompt differs")
     native, producer, runtime, network = profile["native"], profile["producer"], profile["runtime"], profile["network"]
     closed(native, {"executable", "sha256", "version", "config", "configSha256", "protocolSchemaSha256", "sessionFlagsSha256"}, "native")
-    closed(producer, {"executable", "version", "executableVersion", "coherentPayloadSha256", "coherentMarker", "telemetryConfig", "feature", "item", "rootAttempt", "childAttempt"}, "producer")
+    closed(producer, {"executable", "version", "executableVersion", "coherentPayloadSha256", "coherentMarker", "telemetryConfig",
+                      "workspaceId", "producerId", "streamId", "repository", "receiverOrigin", "credentialReference",
+                      "credentialEnvironment", "spoolRoot", "feature", "item", "rootAttempt", "childAttempt"}, "producer")
     closed(runtime, {"home", "codexHome", "cwd", "timeoutSeconds", "maximumLineBytes", "maximumEvents", "python"}, "runtime")
     closed(network, {"policySchema", "policyId", "privateNetworkId", "httpsProxy", "noProxy"}, "network")
     require(native == {
@@ -74,10 +76,17 @@ def load_profile(path: pathlib.Path) -> dict:
     require(producer["executable"] == "/opt/fsgg/coord/fsgg-coord-engine" and producer["version"] == "0.94.0"
             and producer["executableVersion"] == "0.94.0.0" and producer["coherentMarker"] == "/opt/fsgg/coord/coherent-content.sha256"
             and producer["coherentPayloadSha256"] == "9b9486a54e014fd5d21b65ed71a00b9021562a56909a1303f89c9646bca4a585", "producer pin differs")
+    require({key: producer[key] for key in ("workspaceId", "producerId", "streamId", "repository", "receiverOrigin",
+                                             "credentialReference", "credentialEnvironment", "spoolRoot")} == {
+        "workspaceId": "v2-host-native-qualification", "producerId": "native-prospective-v1", "streamId": "roadmap",
+        "repository": "FS-GG/.github", "receiverOrigin": "https://native-receiver:7443/",
+        "credentialReference": "native-prospective-v1",
+        "credentialEnvironment": "FSGG_TELEMETRY_CREDENTIAL_NATIVE_PROSPECTIVE_V1",
+        "spoolRoot": "/qualification/native/telemetry/spool"}, "producer receiver binding differs")
     require(runtime == {"home": "/qualification/native", "codexHome": "/qualification/native/.codex", "cwd": "/qualification/native/work",
                         "timeoutSeconds": 300, "maximumLineBytes": 1048576, "maximumEvents": 4096, "python": "3.14.0"}, "runtime profile differs")
     require(network == {"policySchema": "fsgg.telemetry.native-network-policy/1", "policyId": "fsgg-native-egress-v1", "privateNetworkId": "fsgg-native-private-v1",
-                        "httpsProxy": "http://native-egress:3128", "noProxy": "localhost,127.0.0.1,[::1]"}, "network profile differs")
+                        "httpsProxy": "http://native-egress:3128", "noProxy": "localhost,127.0.0.1,[::1],native-receiver"}, "network profile differs")
     return profile
 
 
@@ -88,6 +97,19 @@ def clean_environment(profile: dict, parent: dict[str, str] | None = None) -> di
                 "NO_PROXY": profile["network"]["noProxy"], "LANG": "C.UTF-8", "LC_ALL": "C.UTF-8"}
     require("HTTP_PROXY" not in required and "ALL_PROXY" not in required, "proxy bypass present")
     return required
+
+
+def producer_environment(profile: dict, parent_thread: str, parent: dict[str, str] | None = None) -> dict[str, str]:
+    parent = parent or os.environ
+    credential_name = profile["producer"]["credentialEnvironment"]
+    unexpected = [name for name in parent if name.startswith("FSGG_TELEMETRY_CREDENTIAL_") and name != credential_name]
+    require(not unexpected, "unreviewed telemetry credential environment refused")
+    credential = parent.get(credential_name)
+    require(isinstance(credential, str) and 0 < len(credential) <= 16 * 1024, "fixed telemetry credential is unavailable")
+    environment = clean_environment(profile, parent)
+    environment["CODEX_THREAD_ID"] = parent_thread
+    environment[credential_name] = credential
+    return environment
 
 
 @dataclass

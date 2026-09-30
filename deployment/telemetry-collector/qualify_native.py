@@ -8,6 +8,7 @@ import json
 import os
 import pathlib
 import re
+import stat
 import subprocess
 import sys
 import time
@@ -15,7 +16,7 @@ import tomllib
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from native_producer_support import (JsonLineAppServer, OperationEvidence, Refusal, canonical_bytes,
-                                     clean_environment, load_profile, regular, require, sha256, telemetry)
+                                     clean_environment, load_profile, producer_environment, regular, require, sha256, telemetry)
 
 
 def private_directory(path: pathlib.Path, create: bool = False) -> None:
@@ -30,6 +31,33 @@ def private_write(path: pathlib.Path, value: bytes) -> None:
     descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     with os.fdopen(descriptor, "wb") as stream:
         stream.write(value); stream.flush(); os.fsync(stream.fileno())
+
+
+def workspace_config_value(value: object, profile: dict) -> None:
+    require(isinstance(value, dict), "telemetry workspace config must be an object")
+    producer = profile["producer"]
+    destination = {"kind": "remote", "endpoint": producer["receiverOrigin"],
+                   "credentialReference": producer["credentialReference"], "spoolRoot": producer["spoolRoot"]}
+    association = {"workspaceId": producer["workspaceId"], "producerId": producer["producerId"],
+                   "streamId": producer["streamId"], "repositories": [producer["repository"]], "destination": destination}
+    expected = {"schema": "fsgg.telemetry.workspace-config/1", "engine": "fsgg-coord-engine",
+                "associations": [association], "retiredAssociations": []}
+    require(value == expected, "telemetry workspace config differs from fixed receiver binding")
+
+
+def private_workspace_config(path: pathlib.Path, profile: dict) -> None:
+    require(path.is_absolute() and path == pathlib.Path(os.path.normpath(path)), "normalized absolute telemetry config required")
+    for ancestor in (path, *path.parents[:-1]):
+        info = ancestor.lstat()
+        require(not ancestor.is_symlink(), f"telemetry config symlink ancestry refused: {ancestor}")
+        if ancestor == path:
+            require(stat.S_ISREG(info.st_mode) and info.st_uid == os.geteuid() and info.st_mode & 0o777 == 0o600,
+                    "telemetry config must be owner-private 0600")
+            require(0 < info.st_size <= 64 * 1024, "telemetry config size refused")
+        else:
+            require(stat.S_ISDIR(info.st_mode) and info.st_mode & 0o022 == 0,
+                    f"unsafe telemetry config ancestor refused: {ancestor}")
+    workspace_config_value(json.loads(path.read_text(encoding="utf-8")), profile)
 
 
 def toml_argument(value: object) -> str:
@@ -93,7 +121,8 @@ def effective_config(value: dict, profile: dict) -> None:
 
 def source_readback_result(rows: object, notifications: list[dict], nonce: str) -> dict:
     require(isinstance(rows, list) and len(rows) <= 100, "read-only thread inventory differs")
-    require(not notifications, "readback unexpectedly emitted lifecycle events")
+    require(len(notifications) <= 8 and all(row.get("method") in {"configWarning", "remoteControl/status/changed"}
+                                               for row in notifications), "readback unexpectedly emitted lifecycle events")
     summary = [{"sourceKind": "subAgent" if isinstance(row.get("source"), dict) and "subAgent" in row["source"] else row.get("source"),
                 "persistent": row.get("ephemeral") is False} for row in rows]
     require(all(row["sourceKind"] in {"cli", "vscode", "exec", "appServer", "unknown", "subAgent"} for row in summary), "readback source kind differs")
@@ -122,7 +151,7 @@ def perform(profile: dict, nonce: str, run_root: pathlib.Path) -> dict:
     native = pathlib.Path(profile["native"]["executable"]); engine = pathlib.Path(profile["producer"]["executable"])
     config = pathlib.Path(profile["native"]["config"]); telemetry_config = pathlib.Path(profile["producer"]["telemetryConfig"])
     regular(native, 256 * 1024 * 1024, True); require(sha256(native) == profile["native"]["sha256"], "native executable digest differs")
-    regular(engine, 256 * 1024 * 1024, True); regular(telemetry_config, 64 * 1024)
+    regular(engine, 256 * 1024 * 1024, True); private_workspace_config(telemetry_config, profile)
     private_directory(pathlib.Path(profile["runtime"]["home"])); private_directory(pathlib.Path(profile["runtime"]["codexHome"]))
     cwd = pathlib.Path(profile["runtime"]["cwd"]); private_directory(cwd)
     environment = clean_environment(profile)
@@ -143,7 +172,7 @@ def perform(profile: dict, nonce: str, run_root: pathlib.Path) -> dict:
                                 "approvalPolicy": "never", "sandbox": "read-only", "ephemeral": False,
                                 "baseInstructions": "Perform only the fixed collaboration acknowledgement operation. Do not read files or use non-collaboration tools."}, deadline)
         parent = evidence.thread_started(thread_result)
-        telemetry_environment = dict(environment, CODEX_THREAD_ID=parent)
+        telemetry_environment = producer_environment(profile, parent)
         root = evidence.begin("root", command_result(engine, telemetry_config, telemetry_environment,
                               begin_arguments(profile, profile["producer"]["rootAttempt"], nonce)))
         root_started = command_result(engine, telemetry_config, telemetry_environment, ["started", "--token", root, "--native-id", parent])

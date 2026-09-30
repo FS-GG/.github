@@ -27,7 +27,7 @@
     },
     "producer": {
       "type": "object", "additionalProperties": false,
-      "required": ["executable", "version", "executableVersion", "coherentPayloadSha256", "coherentMarker", "telemetryConfig", "feature", "item", "rootAttempt", "childAttempt"],
+      "required": ["executable", "version", "executableVersion", "coherentPayloadSha256", "coherentMarker", "telemetryConfig", "workspaceId", "producerId", "streamId", "repository", "receiverOrigin", "credentialReference", "credentialEnvironment", "spoolRoot", "feature", "item", "rootAttempt", "childAttempt"],
       "properties": {
         "executable": {"const": "/opt/fsgg/coord/fsgg-coord-engine"},
         "version": {"const": "0.94.0"},
@@ -35,6 +35,14 @@
         "coherentPayloadSha256": {"const": "9b9486a54e014fd5d21b65ed71a00b9021562a56909a1303f89c9646bca4a585"},
         "coherentMarker": {"const": "/opt/fsgg/coord/coherent-content.sha256"},
         "telemetryConfig": {"const": "/qualification/native/telemetry/roadmap.json"},
+        "workspaceId": {"const": "v2-host-native-qualification"},
+        "producerId": {"const": "native-prospective-v1"},
+        "streamId": {"const": "roadmap"},
+        "repository": {"const": "FS-GG/.github"},
+        "receiverOrigin": {"const": "https://native-receiver:7443/"},
+        "credentialReference": {"const": "native-prospective-v1"},
+        "credentialEnvironment": {"const": "FSGG_TELEMETRY_CREDENTIAL_NATIVE_PROSPECTIVE_V1"},
+        "spoolRoot": {"const": "/qualification/native/telemetry/spool"},
         "feature": {"const": "V2-HOST-01"}, "item": {"const": "V2-HOST-01.8a"},
         "rootAttempt": {"const": "native-operation-root"}, "childAttempt": {"const": "native-operation-child"}
       }
@@ -54,7 +62,7 @@
       "properties": {
         "policySchema": {"const": "fsgg.telemetry.native-network-policy/1"}, "policyId": {"const": "fsgg-native-egress-v1"},
         "privateNetworkId": {"const": "fsgg-native-private-v1"},
-        "httpsProxy": {"const": "http://native-egress:3128"}, "noProxy": {"const": "localhost,127.0.0.1,[::1]"}
+        "httpsProxy": {"const": "http://native-egress:3128"}, "noProxy": {"const": "localhost,127.0.0.1,[::1],native-receiver"}
       }
     }
   }
