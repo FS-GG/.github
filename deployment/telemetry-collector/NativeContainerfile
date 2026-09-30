@@ -1,0 +1,86 @@
+# syntax=docker/dockerfile:1
+
+FROM docker.io/library/python@sha256:9bbb8720ae0a24a6ca8dd678bfdf57818fe70caf54c52a53ec01d8db43405056 AS python-runtime
+RUN test "$(python3 --version)" = "Python 3.14.0"
+
+FROM mcr.microsoft.com/dotnet/aspnet:10.0.12-noble-amd64@sha256:ed6a2d26633ddcd3d42a1d9f9866214ecbbc11ba6ac5e0e843da02c13da24072 AS native-base
+COPY --from=python-runtime /usr/local/ /usr/local/
+RUN test "$(/usr/local/bin/python3 --version)" = "Python 3.14.0" \
+    && /usr/local/bin/python3 -c 'import hashlib, json, socket, ssl; assert ssl.OPENSSL_VERSION'
+
+FROM native-base AS native-development
+ARG NATIVE_ELF_SHA256=167c0148a849d2444f1b5a7fb5f8bb2de1de5ae13a2a504b833fc765980f5cd9
+ARG NATIVE_DRIVER_SHA256
+ARG NATIVE_SUPPORT_SHA256
+ARG NATIVE_PROFILE_SHA256
+ARG NATIVE_CONFIG_SHA256
+ARG COORD_ENGINE_SHA256
+ARG COORD_SOURCE_SHA=337b6a1d53571b07ca8e1417e18e52546ad319a7
+ARG COORD_PAYLOAD_SHA256=9b9486a54e014fd5d21b65ed71a00b9021562a56909a1303f89c9646bca4a585
+COPY --chown=0:0 native/codex /opt/fsgg/codex/codex
+COPY --chown=0:0 native/qualify_native.py /opt/fsgg/qualify_native.py
+COPY --chown=0:0 native/native_producer_support.py /opt/fsgg/native_producer_support.py
+COPY --chown=0:0 native/native-operation-v1.json /opt/fsgg/native-operation-v1.json
+COPY --chown=0:0 native/native-producer-config.toml /opt/fsgg/native-producer-config.toml
+COPY --chown=0:0 native/fsgg-coord-engine/ /opt/fsgg/coord/
+RUN test "$NATIVE_ELF_SHA256" = "167c0148a849d2444f1b5a7fb5f8bb2de1de5ae13a2a504b833fc765980f5cd9" \
+    && printf '%s  %s\n' "$NATIVE_ELF_SHA256" /opt/fsgg/codex/codex | sha256sum --check --status \
+    && printf '%s  %s\n' "$NATIVE_DRIVER_SHA256" /opt/fsgg/qualify_native.py | sha256sum --check --status \
+    && printf '%s  %s\n' "$NATIVE_SUPPORT_SHA256" /opt/fsgg/native_producer_support.py | sha256sum --check --status \
+    && printf '%s  %s\n' "$NATIVE_PROFILE_SHA256" /opt/fsgg/native-operation-v1.json | sha256sum --check --status \
+    && printf '%s  %s\n' "$NATIVE_CONFIG_SHA256" /opt/fsgg/native-producer-config.toml | sha256sum --check --status \
+    && printf '%s  %s\n' "$COORD_ENGINE_SHA256" /opt/fsgg/coord/fsgg-coord-engine | sha256sum --check --status \
+    && chmod 0555 /opt/fsgg/codex/codex /opt/fsgg/qualify_native.py /opt/fsgg/coord/fsgg-coord-engine \
+    && chmod 0444 /opt/fsgg/native_producer_support.py /opt/fsgg/native-operation-v1.json /opt/fsgg/native-producer-config.toml \
+    && test -x /opt/fsgg/coord/fsgg-coord-engine \
+    && test "$(/opt/fsgg/codex/codex --version)" = "codex-cli 0.158.0"
+LABEL org.opencontainers.image.title="FS.GG fixed native telemetry qualification" \
+      org.opencontainers.image.version="0.158.0" \
+      org.opencontainers.image.revision="${COORD_SOURCE_SHA}" \
+      org.fsgg.coord.payload-sha256="${COORD_PAYLOAD_SHA256}" \
+      org.fsgg.native.elf-sha256="${NATIVE_ELF_SHA256}" \
+      org.fsgg.native.profile-sha256="${NATIVE_PROFILE_SHA256}"
+ENV HOME=/qualification/native \
+    CODEX_HOME=/qualification/native/.codex \
+    HTTPS_PROXY=http://native-egress:3128 \
+    NO_PROXY=localhost,127.0.0.1,[::1]
+USER 32768:32768
+ENTRYPOINT ["/usr/local/bin/python3", "/opt/fsgg/qualify_native.py", "--operation-id", "v2-host-01.8a-native-collaboration-v1", "--profile", "/opt/fsgg/native-operation-v1.json", "--output-root", "/qualification/native/qualification-output"]
+
+FROM native-development AS native-readonly-source
+ENTRYPOINT ["/usr/local/bin/python3", "/opt/fsgg/qualify_native.py", "--operation-id", "v2-host-01.8a-readonly-source-compatibility-v1", "--profile", "/opt/fsgg/native-operation-v1.json", "--output-root", "/qualification/readback-output"]
+
+FROM native-base AS native-collector
+ARG NATIVE_ELF_SHA256=167c0148a849d2444f1b5a7fb5f8bb2de1de5ae13a2a504b833fc765980f5cd9
+ARG HOST_VERSION=0.2.1
+ARG HOST_SOURCE_SHA
+ARG HOST_PACKAGE_SHA256
+COPY --chown=0:0 collector/host/ /opt/fsgg/telemetry-host/
+COPY --chown=0:0 native/codex /opt/fsgg/codex/codex
+RUN test "$HOST_VERSION" = "0.2.1" \
+    && printf '%s  %s\n' "$NATIVE_ELF_SHA256" /opt/fsgg/codex/codex | sha256sum --check --status \
+    && chmod 0555 /opt/fsgg/codex/codex \
+    && chmod -R a-w /opt/fsgg/telemetry-host \
+    && test -f /opt/fsgg/telemetry-host/FS.GG.Telemetry.Host.dll
+LABEL org.opencontainers.image.title="FS.GG native telemetry collector" \
+      org.opencontainers.image.version="${HOST_VERSION}" \
+      org.opencontainers.image.revision="${HOST_SOURCE_SHA}" \
+      org.fsgg.telemetry.host.package-sha256="${HOST_PACKAGE_SHA256}" \
+      org.fsgg.native.elf-sha256="${NATIVE_ELF_SHA256}"
+USER 32768:32768
+ENTRYPOINT ["/usr/bin/dotnet", "/opt/fsgg/telemetry-host/FS.GG.Telemetry.Host.dll"]
+
+FROM native-base AS native-egress
+ARG EGRESS_GATE_SHA256=41de45684d84d108106df0a1730c3d1915479f204cf3baca481859305d3e3f71
+ARG NETWORK_POLICY_SHA256=39a93b576d016dbc4932d6ede5218694cefe29f025c19eb8e78f368b5ed864ce
+COPY --chown=0:0 native_egress_gate.py /opt/fsgg/native-egress-gate.py
+COPY --chown=0:0 native-network-policy.json /opt/fsgg/native-network-policy.json
+RUN printf '%s  %s\n' "$EGRESS_GATE_SHA256" /opt/fsgg/native-egress-gate.py | sha256sum --check --status \
+    && printf '%s  %s\n' "$NETWORK_POLICY_SHA256" /opt/fsgg/native-network-policy.json | sha256sum --check --status \
+    && chmod 0555 /opt/fsgg/native-egress-gate.py \
+    && chmod 0444 /opt/fsgg/native-network-policy.json
+LABEL org.opencontainers.image.title="FS.GG native fixed HTTPS CONNECT gate" \
+      org.fsgg.native.egress-gate-sha256="${EGRESS_GATE_SHA256}" \
+      org.fsgg.native.network-policy-sha256="${NETWORK_POLICY_SHA256}"
+USER 32768:32768
+ENTRYPOINT ["/usr/local/bin/python3", "/opt/fsgg/native-egress-gate.py"]
