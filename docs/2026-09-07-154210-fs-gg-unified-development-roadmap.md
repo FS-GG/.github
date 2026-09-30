@@ -161,6 +161,18 @@ That earlier proof remains bound to its source identity. The current portable pr
 no portable successor is published. P3 producer publication, P4 fresh-receiver adoption and P5 upgrade/matrix
 closure remain open. No complete .5 language-route adoption or generated-workspace change is claimed.
 
+**V2-LANG-01.5 Rust/Go P2 binding source delivered on 2026-09-30; native BIND remains open.**
+[Templates PR #652](https://github.com/FS-GG/FS.GG.Templates/pull/652) merged at protected
+`ffb5798b4e8d055883671fd7b0e505d7929db9df`, tree `65cbf03f124374f2ad9e619a52c432322e2b5e11`,
+independently equal to reviewed candidate `8fb6a7f23d8de6be040fa681324ca60b66cf5be9`.
+Its [exact-source composition run 36784421322](https://github.com/FS-GG/FS.GG.Templates/actions/runs/36784421322)
+passed. Ten focused source/preparation tests and the real P2 command/codec, duplicate and recovery
+behavior checks passed locally. Committed policy selects the qualified build images, separately binds
+retained OCI/config/archive identities and refuses caller image substitution; exact source tree and
+microsecond receipt clocks are checked. The original retained archive reference annotation still
+requires a declared import disposition and fresh native load/execution proof. Publication, installed
+adoption and generated workspace behavior remain unchanged.
+
 **V2-LANG-01.5 FourD portable image preparation source delivered on 2026-09-30; native binding remains open.**
 [FourD PR #20](https://github.com/FS-GG/FS.GG.FourD/pull/20) merged at protected
 `40151b49199aad872460c0585f3075ffa30fa1a3`, tree `dcedc7bb2b03c77b524c64887fef59d36dea7e09`,
@@ -499,6 +511,19 @@ A scripted test peer now remains alive through response classification. The
 [qualification recipe](https://github.com/FS-GG/FS.GG.SC2.Client/blob/e378e7363c0b96891430950230dd36b1e7ddbe10/docs/SC2C-01.6f-authoring-qualification.md)
 retains the genuine independent-module, live command, recording/reexecution and replay journey.
 No genuine SC2 run, native acceptance, publication, installation or workspace change follows from this source merge.
+
+**SC2C-01.6f replay-transition capture source checkpoint; hosted repair remains open.**
+[SC2 Client PR #20](https://github.com/FS-GG/FS.GG.SC2.Client/pull/20) merged at
+`8b59d118a0e8d9ca84045d1d0d4d9d00121e6560`, tree `d81bed3d053f86c43b31a6094b242fdaa887e2ff`,
+independently matching reviewed candidate `9af5b4efd21301ca11a08078ffeda163449c3e5c`.
+Twenty-three focused capture/qualification tests passed. The join recognizes the actual confirmed
+live-to-replay cleanup, binds its PID and Action count and refuses mixed or mismatched evidence.
+Full [hosted verification 36785615852](https://github.com/FS-GG/FS.GG.SC2.Client/actions/runs/36785615852)
+then failed an existing mixed tactical/production test at a truthful stale-ability-query refusal.
+[PR #21](https://github.com/FS-GG/FS.GG.SC2.Client/pull/21) prepares a test-only causal authority wait;
+its local repeated test passed 10/10, guard suite 12/12 and full browser suite 57/57. Hosted repair,
+genuine .6f acceptance and .7 publication/installation remain open; no native runtime follows this checkpoint.
+
 
 
 
