@@ -302,6 +302,8 @@ def main(argv=None):
     require(re.fullmatch(r'[0-9a-f]{40}',a.private_placement_sha)!=None,'private-placement-sha-refused')
     require(a.staging_root.is_absolute() and not a.staging_root.exists(),'staging-root-refused')
     a.staging_root.mkdir(mode=0o700,parents=True); op=Operation(a,Runner(time.monotonic()+600))
+    def interrupted(signum,frame): raise Refusal('operation-interrupted')
+    signal.signal(signal.SIGINT,interrupted); signal.signal(signal.SIGTERM,interrupted)
     try:
         op.preflight(); op.prepare_context_and_images(); op.materialize(); op.execute()
         op.write_result(); return 0

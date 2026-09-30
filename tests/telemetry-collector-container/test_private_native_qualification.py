@@ -57,6 +57,7 @@ class Tests(unittest.TestCase):
   self.assertIn('op.preflight(); op.prepare_context_and_images(); op.materialize(); op.execute()',source)
   self.assertIn("probe('prospective.token',False); probe('collector.token',True); probe('revoked.token',True)",source)
   self.assertIn('cleanup=Runner(time.monotonic()+60)',source)
+  self.assertIn("signal.signal(signal.SIGTERM,interrupted)",source)
   self.assertNotIn('prepared-source-only',source)
  def test_receipt_probe_requires_exact_applied_receipt_without_disclosing_token(self):
   batch='a'*32+'-000004'; digest='b'*64
