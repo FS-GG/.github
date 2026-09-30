@@ -53,6 +53,30 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**V2-LANG-01.5 FourD native image qualification source delivered; native gate remains open.**
+[FourD PR #21](https://github.com/FS-GG/FS.GG.FourD/pull/21) merged at
+`deb375127f3ab08ee6749911c05023542b187b74`, tree
+`51911e46d03c90f7c03f3b3a259b76e06000d329`, independently equal to reviewed candidate
+`430bcf34ae648f6b976b67f3f164741093824223`. Exact-head
+[verification 36790066063](https://github.com/FS-GG/FS.GG.FourD/actions/runs/36790066063)
+and source preparation passed. Source enforces the pinned P2 image environment, clean Python
+imports, scoped rootless cleanup in both image stores, and build/archive/load config equality.
+The protected manual job must now prove actual retained-image execution, duplicate and settled
+recovery. Those bounded results do not close cancellation, interrupted recovery, installed
+adoption or the consenting unfamiliar-player comparison.
+
+**V2-HOST-01.8 operational finalization repair source checkpoint.**
+The private run `36789531119` built all four images and passed the target-runtime zero-auth
+smokes, then returned an incomplete Podman disposition after materialization. Cleanup was
+reported complete, both temporary secrets were independently removed, and the source auth
+cache was unchanged. The underlying command refusal remains unknown. GitHub's inherited
+shell error handling stopped the earlier wrapper before custody finalization. This repair
+captures failure status, runs checked finalization under the actual default shell, and retains
+bounded command/phase diagnostics only within encrypted private evidence. Fifty-nine related
+source tests include failure-path capsule preservation and exact exit truth. A fresh corrected
+private registration and genuine capture/recovery acceptance remain required; .9 routing and
+.10 scoped Main retirement remain open. No native success or installed activation is claimed.
+
 **V2-LANG-01.5 Todo browser image source and hosted image qualification delivered.**
 [Templates PR #651](https://github.com/FS-GG/FS.GG.Templates/pull/651) merged at
 `5838d9c9656074768affc6f7187f0b06742af93f`, tree
