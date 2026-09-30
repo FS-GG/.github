@@ -142,18 +142,41 @@ class CollectorRecipeTests(unittest.TestCase):
 
         inspected = {
             "Config": {"User": "32768:32768", "Env": []},
+            "EffectiveCaps": [],
             "HostConfig": {
                 "UsernsMode": "private",
                 "IDMappings": {"UidMap": ["0:1:32768", "32768:0:1"],
                                "GidMap": ["0:1:32768", "32768:0:1"]},
                 "NetworkMode": "none",
                 "ReadonlyRootfs": True, "PidMode": "private", "UTSMode": "private",
-                "CapDrop": ["CAP_ALL"], "SecurityOpt": ["no-new-privileges"],
+                "CapAdd": [], "CapDrop": ["CAP_ALL"], "SecurityOpt": ["no-new-privileges"],
                 "PidsLimit": 64, "Memory": 256 * 1024 * 1024, "NanoCpus": 1_000_000_000,
             },
             "Mounts": [{"Destination": "/collector-config/native-evidence", "RW": True}],
         }
         collector.inspect_container(inspected, {("/collector-config/native-evidence", True)})
+        for equivalent in (["ALL"], sorted(collector.PODMAN_DEFAULT_CAPABILITIES)):
+            inspected["HostConfig"]["CapDrop"] = equivalent
+            collector.inspect_container(inspected, {("/collector-config/native-evidence", True)})
+        inspected["EffectiveCaps"] = None
+        collector.inspect_container(inspected, {("/collector-config/native-evidence", True)})
+        inspected["EffectiveCaps"] = []
+
+        inspected["HostConfig"]["CapDrop"] = sorted(collector.PODMAN_DEFAULT_CAPABILITIES)[:-1]
+        with self.assertRaisesRegex(collector.Refusal, "bounding fence"):
+            collector.inspect_container(inspected, {("/collector-config/native-evidence", True)})
+
+        inspected["HostConfig"]["CapDrop"] = sorted(collector.PODMAN_DEFAULT_CAPABILITIES)
+        inspected["HostConfig"]["CapAdd"] = ["CAP_SYS_ADMIN"]
+        with self.assertRaisesRegex(collector.Refusal, "added capabilities"):
+            collector.inspect_container(inspected, {("/collector-config/native-evidence", True)})
+
+        inspected["HostConfig"]["CapAdd"] = []
+        inspected["EffectiveCaps"] = ["CAP_CHOWN"]
+        with self.assertRaisesRegex(collector.Refusal, "effective capabilities"):
+            collector.inspect_container(inspected, {("/collector-config/native-evidence", True)})
+
+        inspected["EffectiveCaps"] = []
         inspected["HostConfig"]["UsernsMode"] = "host"
         with self.assertRaisesRegex(collector.Refusal, "user namespace"):
             collector.inspect_container(inspected, {("/collector-config/native-evidence", True)})
