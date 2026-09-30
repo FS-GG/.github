@@ -107,14 +107,31 @@ def custody_status(argv):
     return 0
 
 class Runner:
-    def __init__(self,deadline): self.deadline=deadline
-    def run(self,args,*,env=None,input_bytes=None,limit=MAX_OUTPUT,check=True):
+    def __init__(self,deadline,recorder=None): self.deadline=deadline; self.recorder=recorder
+    @staticmethod
+    def stderr_category(value):
+        text=value.decode('utf-8','replace')
+        for category,pattern in (
+            ('permission-refused',r'(?i)(permission denied|operation not permitted)'),
+            ('name-conflict',r'(?i)(name .* already in use|container.* already exists)'),
+            ('missing-path',r'(?i)(statfs|no such file or directory|not a directory)'),
+            ('network-refused',r'(?i)(network.*(?:not found|error|failed)|unable to connect)'),
+            ('option-refused',r'(?i)(unknown flag|unrecognized option|invalid argument)')):
+            if re.search(pattern,text): return category
+        return 'empty' if not value else 'unclassified'
+    def run(self,args,*,env=None,input_bytes=None,limit=MAX_OUTPUT,check=True,diagnostic=None):
         require(isinstance(args,list) and all(isinstance(x,str) and x for x in args),'command-refused')
+        if self.recorder is not None: require(isinstance(diagnostic,str) and re.fullmatch(r'[a-z0-9-]{1,64}',diagnostic)!=None,'command-diagnostic-refused')
         remaining=self.deadline-time.monotonic()
         require(remaining>0,'operation-deadline')
         left=max(1,min(120,int(remaining)))
         p=subprocess.run(args,input=input_bytes,stdout=subprocess.PIPE,stderr=subprocess.PIPE,env=env or fixed_env(),timeout=left,check=False)
         require(len(p.stdout)<=limit and len(p.stderr)<=limit,'command-output-limit')
+        if self.recorder is not None:
+            self.recorder({'command':diagnostic,'executable':pathlib.Path(args[0]).name,'exitCode':p.returncode,
+                           'stdoutBytes':len(p.stdout),'stdoutSha256':hashlib.sha256(p.stdout).hexdigest(),
+                           'stderrBytes':len(p.stderr),'stderrSha256':hashlib.sha256(p.stderr).hexdigest(),
+                           'stderrCategory':self.stderr_category(p.stderr)})
         if check: require(p.returncode==0,'command-failed:'+args[0])
         return p
 
@@ -123,14 +140,24 @@ class Operation:
         self.a=args; self.r=runner; self.root=args.private_root.resolve(); self.created=[]; self.containers=[]; self.networks=[]
         self.result={'schema':SCHEMA,'runNonce':args.run_nonce,'sourceSha':args.source_sha,
                      'privatePlacementSha':args.private_placement_sha,'phases':[],'disposition':'incomplete'}
-        self.images={}; self.owned_run_ordinal=0
+        self.images={}; self.owned_run_ordinal=0; self.command_diagnostics=[]
     def phase(self,name,**facts): self.result['phases'].append({'ordinal':len(self.result['phases'])+1,'name':name,**facts})
-    def owned_run(self,args,**kwargs):
+    def command_diagnostic(self,value):
+        require(len(self.command_diagnostics)<128,'command-diagnostic-capacity-refused')
+        phase=self.result['phases'][-1]['name'] if self.result['phases'] else 'before-first-phase'
+        self.command_diagnostics.append({'ordinal':len(self.command_diagnostics)+1,'phase':phase,**value})
+    def write_private_diagnostics(self):
+        output=self.root/'output'
+        if output.is_dir():
+            private_write(output/'command-diagnostics.json',canonical({
+                'schema':'fsgg.telemetry.private-command-diagnostics/1','runNonce':self.a.run_nonce,
+                'records':self.command_diagnostics}))
+    def owned_run(self,args,*,diagnostic=None,**kwargs):
         require(args[:2]==['podman','run'],'owned-run-command-refused')
         self.owned_run_ordinal+=1; require(self.owned_run_ordinal<=64,'owned-run-capacity-refused')
         name=f'fsgg-native-owned-{self.owned_run_ordinal:03d}'; self.containers.append(name)
         command=[*args[:2],'--name',name,'--label',f'fsgg.private-run={self.a.run_nonce}',*args[2:]]
-        return self.r.run(command,**kwargs)
+        return self.r.run(command,diagnostic=diagnostic,**kwargs)
     def preflight(self):
         require(re.fullmatch(r'[a-z0-9][a-z0-9-]{7,63}',self.a.run_nonce)!=None,'run-nonce-refused')
         require(re.fullmatch(r'[0-9a-f]{40}',self.a.source_sha)!=None,'source-sha-refused')
@@ -232,11 +259,11 @@ class Operation:
         try: spec.loader.exec_module(module)
         except Exception: sys.modules.pop(spec.name,None); raise
         self._topology=module; return module
-    def inspect_container(self,name,inspector):
-        value=json.loads(self.r.run(['podman','inspect','--type','container','--format','{{json .}}',name],limit=256*1024).stdout)
+    def inspect_container(self,name,inspector,diagnostic):
+        value=json.loads(self.r.run(['podman','inspect','--type','container','--format','{{json .}}',name],limit=256*1024,diagnostic=diagnostic).stdout)
         require(isinstance(value,dict),'container-inspection-refused'); inspector(value)
-    def container_running(self,name):
-        value=self.r.run(['podman','inspect','--type','container','--format','{{.State.Running}}',name],limit=128).stdout.decode().strip()
+    def container_running(self,name,diagnostic):
+        value=self.r.run(['podman','inspect','--type','container','--format','{{.State.Running}}',name],limit=128,diagnostic=diagnostic).stdout.decode().strip()
         require(value in {'true','false'},'container-state-refused'); return value=='true'
     def admin(self,*args,check=True):
         mounts=['--volume',f'{self.root}/host.json:/qualification/host.json:ro,rprivate',
@@ -246,26 +273,26 @@ class Operation:
                 '--volume',f'{self.root}/credentials:/qualification/credentials:ro,rprivate']
         return self.owned_run(['podman','run','--rm','--network','none','--read-only','--cap-drop=all','--security-opt=no-new-privileges',
                            '--userns=keep-id:uid=32768,gid=32768','--user=32768:32768',*mounts,
-                           self.images['native-collector'],*args],limit=MAX_OUTPUT,check=check)
+                           self.images['native-collector'],*args],diagnostic='host-'+args[0],limit=MAX_OUTPUT,check=check)
     def initialize_store(self):
         seed=self.root/'store-seed'
         self.owned_run(['podman','run','--rm','--network','none','--read-only','--cap-drop=all',
                     '--security-opt=no-new-privileges','--userns=keep-id:uid=32768,gid=32768','--user=32768:32768',
                     '--volume',f'{seed}:/qualification/state:rw,rprivate',self.images['native-collector'],
-                    'init','--root','/qualification/state/store','--workspace',SCOPE[0]])
+                    'init','--root','/qualification/state/store','--workspace',SCOPE[0]],diagnostic='initialize-store')
         created=seed/'store'; require(created.is_dir() and not created.is_symlink(),'initialized-store-refused')
         created.rename(self.root/'store'); seed.rmdir()
     def execute(self):
         t=self.topology()
         readback=t.readonly_probe_create(self.images['native-readonly-source'],self.root/'native',self.a.run_nonce)
-        self.r.run(readback); self.containers.append('fsgg-native-readonly-probe')
-        readback_result=json.loads(self.r.run(['podman','start','-a','fsgg-native-readonly-probe'],limit=4096).stdout)
+        self.r.run(readback,diagnostic='readonly-probe-create'); self.containers.append('fsgg-native-readonly-probe')
+        readback_result=json.loads(self.r.run(['podman','start','-a','fsgg-native-readonly-probe'],limit=4096,diagnostic='readonly-probe-start').stdout)
         require(readback_result.get('schema')=='fsgg.telemetry.native-source-readback/1'
                 and readback_result.get('status')=='compatible'
                 and re.fullmatch(r'[0-9a-f]{64}',readback_result.get('resultSha256',''))!=None,
                 'read-only-source-compatibility-refused')
         self.phase('read-only-source-compatible',resultSha256=readback_result['resultSha256'],fullReportRetained=False)
-        for command in t.network_create_commands(): self.r.run(command); self.networks.append(command[-1])
+        for ordinal,command in enumerate(t.network_create_commands(),1): self.r.run(command,diagnostic=f'network-create-{ordinal}'); self.networks.append(command[-1])
         # Fresh schema-12 receiver and exact three declared principals.
         self.initialize_store()
         for row in self.host_config()['Credentials']:
@@ -274,21 +301,21 @@ class Operation:
             if row['Revoked']: command.append('--revoked')
             self.admin(*command)
         self.admin('preflight','--config','/qualification/host.json')
-        collector=t.collector_create(self.images['native-collector'],self.root); self.r.run(collector); self.containers.append('fsgg-native-collector')
-        self.r.run(t.receiver_connect_command()); self.inspect_container('fsgg-native-collector',t.inspect_receiver)
-        self.r.run(['podman','start','fsgg-native-collector'])
-        ecreate,econnect=t.egress_create(self.images['native-egress']); self.r.run(ecreate); self.containers.append('fsgg-native-egress'); self.r.run(econnect)
-        self.inspect_container('fsgg-native-egress',t.inspect_egress); self.r.run(['podman','start','fsgg-native-egress'])
+        collector=t.collector_create(self.images['native-collector'],self.root); self.r.run(collector,diagnostic='receiver-create'); self.containers.append('fsgg-native-collector')
+        self.r.run(t.receiver_connect_command(),diagnostic='receiver-connect'); self.inspect_container('fsgg-native-collector',t.inspect_receiver,'receiver-inspect')
+        self.r.run(['podman','start','fsgg-native-collector'],diagnostic='receiver-start')
+        ecreate,econnect=t.egress_create(self.images['native-egress']); self.r.run(ecreate,diagnostic='egress-create'); self.containers.append('fsgg-native-egress'); self.r.run(econnect,diagnostic='egress-connect')
+        self.inspect_container('fsgg-native-egress',t.inspect_egress,'egress-inspect'); self.r.run(['podman','start','fsgg-native-egress'],diagnostic='egress-start')
         ncreate=t.native_create(self.images['native-development'],self.root/'native',self.root/'roadmap.json',self.root/'producer-spool',self.a.run_nonce)
-        self.r.run(ncreate,env=fixed_env({CREDENTIAL_ENV:os.environ[CREDENTIAL_ENV]})); self.containers.append('fsgg-native-development')
-        self.inspect_container('fsgg-native-development',t.inspect_native)
+        self.r.run(ncreate,env=fixed_env({CREDENTIAL_ENV:os.environ[CREDENTIAL_ENV]}),diagnostic='native-create'); self.containers.append('fsgg-native-development')
+        self.inspect_container('fsgg-native-development',t.inspect_native,'native-inspect')
         self.phase('effective-topology-inspected',native=True,receiver=True,egress=True)
-        run=self.r.run(['podman','start','-a','fsgg-native-development'],limit=MAX_OUTPUT)
+        run=self.r.run(['podman','start','-a','fsgg-native-development'],limit=MAX_OUTPUT,diagnostic='native-start')
         operation=native_operation_result(run.stdout,self.root/'native/qualification-output'/self.a.run_nonce/'result.json',self.a.run_nonce)
         # Stop all writers before protected collection over the same original volume.
-        self.r.run(['podman','stop','--time','10','fsgg-native-collector']); self.r.run(['podman','stop','--time','10','fsgg-native-egress'],check=False)
-        t.require_collection_handoff(self.container_running('fsgg-native-development'),self.container_running('fsgg-native-collector'))
-        require(not self.container_running('fsgg-native-egress'),'egress-writer-still-running')
+        self.r.run(['podman','stop','--time','10','fsgg-native-collector'],diagnostic='receiver-stop'); self.r.run(['podman','stop','--time','10','fsgg-native-egress'],check=False,diagnostic='egress-stop')
+        t.require_collection_handoff(self.container_running('fsgg-native-development','native-state'),self.container_running('fsgg-native-collector','receiver-state'))
+        require(not self.container_running('fsgg-native-egress','egress-state'),'egress-writer-still-running')
         before=self.topology().snapshot_native_volume(self.root/'native')
         receipts=json.loads((self.root/'native/qualification-output'/self.a.run_nonce/'telemetry-receipts.json').read_text())
         child=next(x for x in receipts['receipts'] if x['operation']=='child-started'); dispatch=child['batchId'].rsplit('-',1)[0]
@@ -316,12 +343,12 @@ class Operation:
             '/qualification/source/tools/learn-01-analysis.py','/qualification/source/policy/learn-01-current-focused-v1.json',
             '--protected-host-executable','/opt/fsgg/telemetry-host/fsgg-telemetry-host','--protected-host-sha256',
             HOST_LAUNCHER_SHA,
-            '--protected-host-config','/qualification/host.json'],limit=MAX_OUTPUT)
+            '--protected-host-config','/qualification/host.json'],diagnostic='trusted-analysis',limit=MAX_OUTPUT)
         private_write(self.root/'output/analysis.json',analyzer.stdout)
         refused=self.admin('collect-native','--config','/qualification/host.json','--dispatch',dispatch,
                            '--parent-thread',operation['parentThreadId'],'--native-agent','wrong-selector',check=False)
         require(refused.returncode!=0,'wrong-native-selector-was-admitted')
-        self.r.run(['podman','start','fsgg-native-collector'])
+        self.r.run(['podman','start','fsgg-native-collector'],diagnostic='receiver-restart')
         probe_mount=f'{pathlib.Path(__file__).resolve()}:/qualification/receipt-probe.py:ro,rprivate'
         def probe(token_file,refused):
             args=['podman','run','--rm','--pull=never','--read-only','--cap-drop=all','--security-opt=no-new-privileges',
@@ -333,10 +360,10 @@ class Operation:
             if refused: args.append('--expect-refusal')
             else: args += ['--expected-digest',child['digest']]
             token=(self.root/'credentials'/token_file).read_text().strip()
-            reply=json.loads(self.owned_run(args,env=fixed_env({'FSGG_RECEIPT_TOKEN':token}),limit=4096).stdout); token=''
+            reply=json.loads(self.owned_run(args,diagnostic='receipt-refusal' if refused else 'receipt-recovery',env=fixed_env({'FSGG_RECEIPT_TOKEN':token}),limit=4096).stdout); token=''
             require(reply.get('receiptRefused') is True if refused else reply.get('receiptRecovered') is True,'receipt-probe-refused')
         probe('prospective.token',False); probe('collector.token',True); probe('revoked.token',True)
-        self.r.run(['podman','stop','--time','10','fsgg-native-collector'])
+        self.r.run(['podman','stop','--time','10','fsgg-native-collector'],diagnostic='receiver-final-stop')
         recovered=self.admin('export-learning','--config','/qualification/host.json')
         require(stable_json(json.loads(recovered.stdout))==stable_json(json.loads(export.stdout)),'receiver-restart-export-drift')
         self.phase('genuine-operation-collected',dispatchSha256=hashlib.sha256(dispatch.encode()).hexdigest(),
@@ -381,13 +408,17 @@ def main(argv=None):
     succeeded=False; failure=None
     cleanup_failures=[]
     try:
-        op.preflight(); op.prepare_context_and_images(); op.r=Runner(time.monotonic()+600); op.materialize(); op.execute()
+        op.preflight(); op.prepare_context_and_images(); op.r=Runner(time.monotonic()+600,op.command_diagnostic); op.materialize(); op.execute()
         succeeded=True
     except Exception as e:
         failure=(str(e) if isinstance(e,Refusal) else type(e).__name__)
         print('private-native-qualification-refused:'+failure,file=sys.stderr)
     finally:
-        cleanup_failures=op.cleanup()
+        try: op.write_private_diagnostics()
+        except Exception:
+            if failure is None: failure='private-diagnostics-write-refused'
+            succeeded=False
+        finally: cleanup_failures=op.cleanup()
     op.result['cleanupComplete']=not cleanup_failures
     op.result['cleanupFailureCount']=len(cleanup_failures)
     if failure is not None: op.result['disposition']='incomplete'; op.result['failureCode']=failure
