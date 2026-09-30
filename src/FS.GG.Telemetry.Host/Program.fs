@@ -1,6 +1,8 @@
 namespace FS.GG.Telemetry.Host
 
 open System
+open System.Buffers.Binary
+open System.Collections.Generic
 open System.IO
 open System.Runtime.InteropServices
 open System.Security.Cryptography
@@ -332,7 +334,7 @@ module Operations =
 
     let private readPrivateEvidence target =
         let info = FileInfo target
-        if not info.Exists || not (isNull info.LinkTarget) || info.Length > 1048576L
+        if not info.Exists || not (isNull info.LinkTarget) || info.Length > 2097152L
            || File.GetUnixFileMode target <> (UnixFileMode.UserRead ||| UnixFileMode.UserWrite) then
             invalidOp "native collector replay artifact is invalid"
         File.ReadAllBytes target
@@ -342,7 +344,7 @@ module Operations =
         if File.Exists target then
             readPrivateEvidence target
         else
-            if bytes.Length > 1048576 then invalidOp "native collector evidence exceeds the bound"
+            if bytes.Length > 2097152 then invalidOp "native collector evidence exceeds the bound"
             let temporary = Path.Combine(root, "." + Guid.NewGuid().ToString("N") + ".tmp")
 
             try
@@ -357,6 +359,112 @@ module Operations =
             finally
                 if File.Exists temporary then
                     File.Delete temporary
+
+    let private framedDigest (chunks: byte array seq) =
+        use hash = IncrementalHash.CreateHash HashAlgorithmName.SHA256
+
+        for chunk in chunks do
+            let length = Array.zeroCreate<byte> 8
+            BinaryPrimitives.WriteInt64BigEndian(length, int64 chunk.Length)
+            hash.AppendData length
+            hash.AppendData chunk
+
+        hash.GetHashAndReset() |> Convert.ToHexString |> _.ToLowerInvariant()
+
+    let private exactNames (value: JsonNode) expected =
+        let objectValue = value.AsObject()
+        let names = objectValue |> Seq.map _.Key |> Seq.toArray
+        names.Length = Set.count expected
+        && Array.distinct names |> Array.length = names.Length
+        && Set.ofArray names = expected
+
+    let private retainedBytes (value: JsonNode) (digestName: string) (bytesName: string) =
+        let bytes = Convert.FromBase64String(value[bytesName].GetValue<string>())
+        if digestBytes bytes <> value[digestName].GetValue<string>() then
+            invalidOp "native collector retained source digest differs"
+        bytes
+
+    let private validateRetainedNativeSource (capture: JsonObject) =
+        let binding = capture["sourceBinding"]
+        if not (exactNames binding (set [ "schema"; "producerIdentity"; "sha256"; "bytesBase64" ]))
+           || binding["schema"].GetValue<string>() <> "fsgg.telemetry.native-inventory-source-binding/1"
+           || binding["producerIdentity"].GetValue<string>() <> "fsgg-work-roadmap-native-collector/1" then
+            invalidOp "native collector retained source binding is invalid"
+
+        let chunks = ResizeArray<byte array>()
+        chunks.Add(retainedBytes binding "sha256" "bytesBase64")
+
+        let exchanges = capture["appServerResponses"].AsArray()
+        if exchanges.Count = 0 || exchanges.Count > 256 then
+            invalidOp "native collector retained App Server evidence is invalid"
+
+        for exchange in exchanges do
+            if not (exactNames exchange (set [ "method"; "threadId"; "requestCursor"; "requestSha256";
+                                                 "requestBytesBase64"; "responseSha256"; "responseBytesBase64" ])) then
+                invalidOp "native collector retained App Server evidence is invalid"
+            chunks.Add(retainedBytes exchange "requestSha256" "requestBytesBase64")
+            chunks.Add(retainedBytes exchange "responseSha256" "responseBytesBase64")
+
+        let finalTurnTotals = Dictionary<struct (string * string), struct (int64 * int64 * int64 * int64 * int64)>()
+        let rolloutRecords = capture["rolloutRecords"].AsArray()
+        if rolloutRecords.Count = 0 || rolloutRecords.Count > 1000 then
+            invalidOp "native collector retained rollout evidence is invalid"
+
+        for record in rolloutRecords do
+            if not (exactNames record (set [ "sha256"; "bytesBase64" ])) then
+                invalidOp "native collector retained rollout evidence is invalid"
+            let bytes = retainedBytes record "sha256" "bytesBase64"
+            chunks.Add bytes
+            use document = JsonDocument.Parse bytes
+            let root = document.RootElement
+            if root.GetProperty("type").GetString() <> "token_usage_record" then
+                invalidOp "native collector retained rollout record is invalid"
+            let payload = root.GetProperty("payload")
+            let threadId = payload.GetProperty("thread_id").GetString()
+            let turnId = payload.GetProperty("turn_id").GetString()
+            let totals = payload.GetProperty("turn_token_usage")
+            let counters =
+                struct (
+                    totals.GetProperty("input_tokens").GetInt64(),
+                    totals.GetProperty("cached_input_tokens").GetInt64(),
+                    totals.GetProperty("output_tokens").GetInt64(),
+                    totals.GetProperty("reasoning_output_tokens").GetInt64(),
+                    totals.GetProperty("total_tokens").GetInt64()
+                )
+            let struct (input, cached, output, reasoning, total) = counters
+            if String.IsNullOrWhiteSpace threadId || String.IsNullOrWhiteSpace turnId
+               || input < 0L || cached < 0L || output < 0L || reasoning < 0L
+               || cached > input || reasoning > output || total <> input + output then
+                invalidOp "native collector retained rollout counters are invalid"
+            finalTurnTotals[struct (threadId, turnId)] <- counters
+
+        let turns = capture["turns"].AsArray()
+        if turns.Count = 0 || turns.Count <> finalTurnTotals.Count then
+            invalidOp "native collector retained turn projection is incomplete"
+        let seen = HashSet<struct (string * string)>()
+        for turn in turns do
+            let key = struct (turn["threadId"].GetValue<string>(), turn["turnId"].GetValue<string>())
+            let expected =
+                match finalTurnTotals.TryGetValue key with
+                | true, value -> value
+                | _ -> invalidOp "native collector retained turn projection differs from rollout evidence"
+            let actual =
+                struct (turn["input"].GetValue<int64>(), turn["cachedInput"].GetValue<int64>(),
+                        turn["output"].GetValue<int64>(), turn["reasoning"].GetValue<int64>(),
+                        turn["total"].GetValue<int64>())
+            if not (seen.Add key) || actual <> expected then
+                invalidOp "native collector retained turn projection differs from rollout evidence"
+
+        let events = capture["envelope"].["payload"].["events"].AsArray()
+        let sources =
+            events
+            |> Seq.filter (fun event -> event["kind"].GetValue<string>() = "runtime-native-inventory-source/1")
+            |> Seq.toArray
+        if sources.Length <> 1
+           || CanonicalJson.canonicalize(Encoding.UTF8.GetBytes(sources[0].["sourceBinding"].ToJsonString()))
+                <> CanonicalJson.canonicalize(Encoding.UTF8.GetBytes(binding.ToJsonString()))
+           || sources[0].["sourceDigest"].GetValue<string>() <> framedDigest chunks then
+            invalidOp "native collector retained source evidence differs from admitted source"
 
     let private nativeCollectorEnvelope
         (installation: NativeCollectorInstallationConfig)
@@ -439,13 +547,15 @@ module Operations =
     let private readCapture path (principal: TelemetryReceipt.Principal) (bytes: byte array) =
         let capture = JsonNode.Parse(bytes).AsObject()
         let names = capture |> Seq.map _.Key |> Set.ofSeq
-        if names <> set [ "schema"; "installationDigest"; "grantId"; "grantGeneration"; "envelope"; "turns" ]
-           || capture["schema"].GetValue<string>() <> "fsgg.telemetry.protected-native-capture/1"
+        if names <> set [ "schema"; "installationDigest"; "grantId"; "grantGeneration"; "envelope"; "turns";
+                          "sourceBinding"; "appServerResponses"; "rolloutRecords" ]
+           || capture["schema"].GetValue<string>() <> "fsgg.telemetry.protected-native-capture/2"
            || capture["installationDigest"].GetValue<string>() <> digestBytes(File.ReadAllBytes(path + ".native-collector.json"))
            || capture["grantId"].GetValue<string>() <> principal.GrantId.Value
            || capture["grantGeneration"].GetValue<int64>() <> principal.GrantGeneration.Value
            || capture["turns"].AsArray().Count > 1000 then
             invalidOp "native collector capture binding differs"
+        validateRetainedNativeSource capture
         let envelopeBytes =
             CanonicalJson.canonicalize (Encoding.UTF8.GetBytes(capture["envelope"].ToJsonString()))
             |> Result.map Encoding.UTF8.GetBytes
@@ -651,11 +761,14 @@ module Operations =
                                         if not qualified then envelopeBytes
                                         else
                                             let capture = JsonObject()
-                                            capture["schema"] <- JsonValue.Create "fsgg.telemetry.protected-native-capture/1"
+                                            capture["schema"] <- JsonValue.Create "fsgg.telemetry.protected-native-capture/2"
                                             capture["installationDigest"] <- JsonValue.Create(digestBytes(File.ReadAllBytes(path + ".native-collector.json")))
                                             capture["grantId"] <- JsonValue.Create principal.GrantId.Value
                                             capture["grantGeneration"] <- JsonValue.Create principal.GrantGeneration.Value
                                             capture["envelope"] <- JsonNode.Parse envelopeBytes
+                                            capture["sourceBinding"] <- JsonNode.Parse(inventory.SourceBinding.GetRawText())
+                                            capture["appServerResponses"] <- JsonNode.Parse(inventory.AppServerResponses.GetRawText())
+                                            capture["rolloutRecords"] <- JsonNode.Parse(inventory.RolloutRecords.GetRawText())
                                             capture["turns"] <-
                                                 inventory.Turns
                                                 |> List.map (fun turn ->
