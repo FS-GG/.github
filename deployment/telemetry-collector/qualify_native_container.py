@@ -225,8 +225,13 @@ class Operation:
         private_write(self.root/'roadmap.json',canonical(workspace))
         self.phase('private-material-ready',receiverScope='/'.join(SCOPE))
     def topology(self):
+        if hasattr(self,'_topology'): return self._topology
         path=self.a.source_root/'deployment/telemetry-collector/native_topology.py'
-        spec=importlib.util.spec_from_file_location('private_native_topology',path); module=importlib.util.module_from_spec(spec); spec.loader.exec_module(module); return module
+        spec=importlib.util.spec_from_file_location('private_native_topology',path); require(spec is not None and spec.loader is not None,'topology-loader-refused')
+        module=importlib.util.module_from_spec(spec); sys.modules[spec.name]=module
+        try: spec.loader.exec_module(module)
+        except Exception: sys.modules.pop(spec.name,None); raise
+        self._topology=module; return module
     def inspect_container(self,name,inspector):
         value=json.loads(self.r.run(['podman','inspect','--type','container','--format','{{json .}}',name],limit=256*1024).stdout)
         require(isinstance(value,dict),'container-inspection-refused'); inspector(value)

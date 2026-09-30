@@ -36,6 +36,11 @@ class Tests(unittest.TestCase):
   p=c['Credentials'][0]; self.assertEqual(('v2-host-native-qualification','native-prospective-v1','roadmap','generic'),(p['WorkspaceId'],p['ProducerId'],p['StreamId'],p['Role']))
   n=c['Credentials'][1]; self.assertEqual(('native-collector','grant-native-collector-v1'),(n['Role'],n['GrantId']))
   self.assertTrue(c['Credentials'][2]['Revoked'])
+ def test_production_topology_loader_registers_dataclass_module_and_reuses_it(self):
+  a=type('A',(),{})(); a.private_root=pathlib.Path('/private/run'); a.run_nonce='run-0001'; a.source_sha='a'*40; a.private_placement_sha='d'*40; a.source_root=ROOT
+  op=q.Operation(a,FakeRunner()); first=op.topology(); second=op.topology()
+  self.assertIs(first,second); self.assertEqual('private_native_topology',first.__name__)
+  self.assertTrue(hasattr(first,'CustodySnapshot'))
  def test_preflight_happens_before_auth_access(self):
   source=ROOT; r=FakeRunner(); r.head='b'*40
   with tempfile.TemporaryDirectory() as td:
