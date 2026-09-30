@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/FS-GG/.github/blob/main/tools/board-v2-import.schema.json",
+  "title": "FS.GG Coordination V2 bounded import manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "observedAt", "source", "target", "fields", "items"],
+  "properties": {
+    "schema": { "const": "fsgg.coordination-board-v2-import/v1" },
+    "observedAt": { "type": "string", "format": "date-time" },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["owner", "title", "number", "id", "treatment"],
+      "properties": {
+        "owner": { "const": "FS-GG" },
+        "title": { "const": "Coordination" },
+        "number": { "const": 1 },
+        "id": { "const": "PVT_kwDOEYAWY84Bb08W" },
+        "treatment": { "const": "retain-as-legacy" }
+      }
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ownerKind", "owner", "title", "schemaVersion", "creationState", "number", "id"],
+      "properties": {
+        "ownerKind": { "const": "organization" },
+        "owner": { "const": "FS-GG" },
+        "title": { "const": "Coordination V2" },
+        "schemaVersion": { "const": 1 },
+        "creationState": { "enum": ["pending-authorized-operation", "created-and-read-back"] },
+        "number": { "type": ["integer", "null"], "minimum": 1 },
+        "id": { "type": ["string", "null"], "pattern": "^PVT_" }
+      }
+    },
+    "fields": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "kind", "options", "owner", "importerMaySeed", "refreshMayWrite", "id"],
+        "properties": {
+          "name": { "enum": ["Status", "Roadmap", "Track", "Observation"] },
+          "kind": { "enum": ["single-select", "text"] },
+          "options": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+          "owner": { "enum": ["human-scheduling", "owning-plan", "restricted-refresh"] },
+          "importerMaySeed": { "const": true },
+          "refreshMayWrite": { "type": "boolean" },
+          "id": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "items": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["issue", "nodeId", "title", "observedUpdatedAt", "observedState", "decision", "reason", "remainingOutcome", "roadmap", "status", "track", "observation", "dependencies", "pilot"],
+        "properties": {
+          "issue": { "type": "string", "pattern": "^[^/]+/[^#]+#[1-9][0-9]*$" },
+          "nodeId": { "type": "string", "pattern": "^I_" },
+          "title": { "type": "string", "minLength": 1 },
+          "observedUpdatedAt": { "type": "string", "format": "date-time" },
+          "observedState": { "enum": ["open", "closed"] },
+          "decision": { "enum": ["import", "follow-up", "omit-delivered", "omit-superseded", "adjudicate"] },
+          "reason": { "type": "string", "minLength": 1 },
+          "remainingOutcome": { "type": ["string", "null"] },
+          "roadmap": { "type": ["string", "null"] },
+          "status": { "enum": ["Backlog", "Ready", "In progress", "Blocked", "Done"] },
+          "track": { "enum": ["Active delivery", "Follow-up"] },
+          "observation": { "enum": ["Verified", "Stale", "Unknown"] },
+          "dependencies": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["issue", "observedState", "evidence"],
+              "properties": {
+                "issue": { "type": "string", "pattern": "^[^/]+/[^#]+#[1-9][0-9]*$" },
+                "observedState": { "enum": ["open", "closed", "unknown"] },
+                "evidence": { "enum": ["native", "issue-body", "owning-plan", "unknown"] }
+              }
+            }
+          },
+          "pilot": { "type": "boolean" }
+        }
+      }
+    }
+  }
+}
