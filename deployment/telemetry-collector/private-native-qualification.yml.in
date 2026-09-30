@@ -1,6 +1,15 @@
 name: V2-HOST-01.8 private native qualification
 on:
   workflow_dispatch:
+    inputs:
+      placement_sha:
+        description: Exact admitted private workflow commit
+        required: true
+        type: string
+      run_nonce:
+        description: Owner-issued single-attempt nonce
+        required: true
+        type: string
 permissions:
   contents: read
 concurrency:
@@ -12,53 +21,112 @@ jobs:
     environment: v2-host-01-8-native-private
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    env:
+      RESULT_ROOT: ${{ runner.temp }}/v2-host-result-${{ github.run_id }}-${{ github.run_attempt }}
+      PRIVATE_ROOT: ${{ runner.temp }}/v2-host-native-${{ github.run_id }}-${{ github.run_attempt }}
+      STAGING_ROOT: ${{ runner.temp }}/v2-host-staging-${{ github.run_id }}-${{ github.run_attempt }}
+      RUN_NONCE: ${{ inputs.run_nonce }}
+      RECIPE_SHA: '@@RECIPE_SOURCE_SHA@@'
+      PROFILE_SHA: 5a30fc507f023d542521aac66c8f49c5ae6ee8d9e34dc90c1a3bf3ab30f6b08f
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Checkout admitted private placement
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: '@@SOURCE_SHA@@'
+          path: placement
+          persist-credentials: false
+      - name: Checkout immutable public recipe
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: FS-GG/.github
+          ref: '@@RECIPE_SOURCE_SHA@@'
+          path: recipe
           persist-credentials: false
       - name: Refuse non-exact manual placement
-        env:
-          EXPECTED_SHA: '@@SOURCE_SHA@@'
         run: |
           set -euo pipefail
           test "$GITHUB_EVENT_NAME" = workflow_dispatch
           test "$GITHUB_REPOSITORY" = FS-GG/FS.GG.GitHub.Substrate.Sandbox
-          test "$GITHUB_SHA" = "$EXPECTED_SHA"
-          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
-          test "$(git status --porcelain)" = ""
-      - name: Run one bounded private operation
+          test "$GITHUB_SHA" = '${{ inputs.placement_sha }}'
+          [[ "$RUN_NONCE" =~ ^[a-z0-9][a-z0-9-]{7,63}$ ]]
+          test "$(git -C placement rev-parse HEAD)" = '${{ inputs.placement_sha }}'
+          test "$(git -C recipe rev-parse HEAD)" = "$RECIPE_SHA"
+          test "$(git -C placement status --porcelain)" = ""
+          test "$(git -C recipe status --porcelain)" = ""
+      - name: Run one bounded private operation and seal refreshed custody
         env:
           FSGG_NATIVE_AUTH_JSON_B64: ${{ secrets.FSGG_V2_HOST_018_NATIVE_AUTH_JSON_B64 }}
           FSGG_PRIVATE_EFFECT_ADMISSION: ${{ secrets.FSGG_V2_HOST_018_EFFECT_ADMISSION }}
         run: |
           set -euo pipefail
           umask 077
-          private_root="$RUNNER_TEMP/v2-host-native-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
-          result_root="$RUNNER_TEMP/v2-host-result-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
-          mkdir -m 0700 "$result_root"
-          cleanup() { unset FSGG_NATIVE_AUTH_JSON_B64 FSGG_PRIVATE_EFFECT_ADMISSION; rm -rf -- "$private_root"; }
-          trap cleanup EXIT INT TERM
-          python3 deployment/telemetry-collector/qualify_native_container.py \
+          mkdir -m 0700 "$RESULT_ROOT"
+          finalizing=0
+          finalize() {
+            rc=$?
+            test "$finalizing" = 0 || return "$rc"
+            finalizing=1
+            set +e
+            unset FSGG_NATIVE_AUTH_JSON_B64 FSGG_PRIVATE_EFFECT_ADMISSION
+            auth="$PRIVATE_ROOT/native/.codex/auth.json"
+            capsule="$RESULT_ROOT/auth-capsule.json"
+            if test -f "$auth" && ! test -e "$capsule"; then
+              timeout 30 node recipe/deployment/telemetry-collector/seal_native_custody.mjs seal \
+                "$auth" placement/_private-inputs/custody/root-public.pem "$capsule" \
+                "$RUN_NONCE" "$RECIPE_SHA" "$PROFILE_SHA"
+              seal_rc=$?
+            else
+              seal_rc=0
+            fi
+            evidence_capsule="$RESULT_ROOT/evidence-capsule.json"
+            evidence_tar="$STAGING_ROOT/private-evidence.tar"
+            if test -d "$PRIVATE_ROOT/output" -a -d "$PRIVATE_ROOT/native/qualification-output" && ! test -e "$evidence_capsule"; then
+              mkdir -p -m 0700 "$STAGING_ROOT"
+              tar --format=posix --sort=name --mtime='@0' --owner=0 --group=0 --numeric-owner \
+                -cf "$evidence_tar" -C "$PRIVATE_ROOT" output native/qualification-output
+              timeout 30 node recipe/deployment/telemetry-collector/seal_native_custody.mjs seal \
+                "$evidence_tar" placement/_private-inputs/custody/root-public.pem "$evidence_capsule" \
+                "$RUN_NONCE" "$RECIPE_SHA" "$PROFILE_SHA"
+              evidence_rc=$?
+            else
+              evidence_rc=0
+            fi
+            if ! test -f "$RESULT_ROOT/result.json"; then
+              RESULT_ROOT="$RESULT_ROOT" RUN_NONCE="$RUN_NONCE" RECIPE_SHA="$RECIPE_SHA" RC="$rc" SEAL_RC="$seal_rc" \
+              python3 - <<'PY'
+import json, os, pathlib
+p=pathlib.Path(os.environ['RESULT_ROOT'])/'result.json'
+p.write_text(json.dumps({'schema':'fsgg.telemetry.private-native-qualification/1','runNonce':os.environ['RUN_NONCE'],'sourceSha':os.environ['RECIPE_SHA'],'disposition':'incomplete','operationExit':int(os.environ['RC']),'custodySealed':int(os.environ['SEAL_RC'])==0},sort_keys=True,separators=(',',':'))+'\n')
+p.chmod(0o600)
+PY
+            fi
+            rm -rf -- "$PRIVATE_ROOT" "$STAGING_ROOT"
+            test "$seal_rc" = 0 -a "$evidence_rc" = 0 || rc=86
+            return "$rc"
+          }
+          trap finalize EXIT INT TERM
+          python3 recipe/deployment/telemetry-collector/qualify_native_container.py \
             --operation-id v2-host-01.8a-native-collaboration-v1 \
-            --source-root "$GITHUB_WORKSPACE" --source-sha '@@SOURCE_SHA@@' \
-            --private-root "$private_root" --run-nonce "run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" \
-            --host-package "$GITHUB_WORKSPACE/_private-inputs/host/package.nupkg" \
-            --host-manifest "$GITHUB_WORKSPACE/_private-inputs/host/manifest.json" \
-            --host-journal "$GITHUB_WORKSPACE/_private-inputs/host/publication-journal.json" \
-            --coord-root "$GITHUB_WORKSPACE/_private-inputs/coord" \
-            --native-executable "$GITHUB_WORKSPACE/_private-inputs/native/codex" \
-            --seal-public-key "$GITHUB_WORKSPACE/_private-inputs/custody/root-public.pem" \
-            --result "$result_root/result.json"
-          node deployment/telemetry-collector/seal_native_custody.mjs seal \
-            "$private_root/native/.codex/auth.json" "$GITHUB_WORKSPACE/_private-inputs/custody/root-public.pem" \
-            "$result_root/auth-capsule.json" "run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" '@@SOURCE_SHA@@' \
-            8990f6b43f217f7ee21832f3f704ce44af8d25d58b674171ec796a890c87d7c4
-          test -s "$result_root/result.json" -a -s "$result_root/auth-capsule.json"
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+            --source-root "$GITHUB_WORKSPACE/recipe" --source-sha "$RECIPE_SHA" \
+            --private-placement-sha '${{ inputs.placement_sha }}' \
+            --private-root "$PRIVATE_ROOT" --staging-root "$STAGING_ROOT" --run-nonce "$RUN_NONCE" \
+            --host-package "$GITHUB_WORKSPACE/placement/_private-inputs/host/package.nupkg" \
+            --host-manifest "$GITHUB_WORKSPACE/placement/_private-inputs/host/manifest.json" \
+            --host-journal "$GITHUB_WORKSPACE/placement/_private-inputs/host/publication-journal.json" \
+            --host-served "$GITHUB_WORKSPACE/placement/_private-inputs/host" \
+            --coord-packages "$GITHUB_WORKSPACE/placement/_private-inputs/coord/packages" \
+            --coord-manifest "$GITHUB_WORKSPACE/placement/_private-inputs/coord/release-manifest.json" \
+            --coord-stable "$GITHUB_WORKSPACE/placement/_private-inputs/coord/stable-channel.json" \
+            --context-helper "$GITHUB_WORKSPACE/recipe/deployment/telemetry-collector/prepare_native_image_context.py" \
+            --native-source-pins "$GITHUB_WORKSPACE/placement/_private-inputs/native/source-pins.json" \
+            --native-executable "$GITHUB_WORKSPACE/placement/_private-inputs/native/codex" \
+            --seal-public-key "$GITHUB_WORKSPACE/placement/_private-inputs/custody/root-public.pem" \
+            --result "$RESULT_ROOT/result.json"
+      - name: Upload ciphertext and sanitized bounded result
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: private-native-qualification-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/v2-host-result-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.RESULT_ROOT }}
           if-no-files-found: error
           retention-days: 1
           include-hidden-files: false
