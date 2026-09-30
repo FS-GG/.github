@@ -70,45 +70,39 @@ class ContextTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'symlink'):
             m.members(path, 'tools/')
 
-    def distribution(self):
-        package = self.archive({'tools/net10.0/any/fsgg-coord-engine.dll': b'dll', 'tools/net10.0/any/runtimes/linux-x64/native/sqlite.so': b'native'})
-        distribution = self.root / 'distribution'
-        for name, raw in m.members(package, 'tools/net10.0/any/').items():
-            self.write('distribution/' + name, raw)
-        engine = self.write('distribution/fsgg-coord-engine', b'publisher executable')
-        marker = self.write('distribution/coherent-content.sha256', (m.COORD_CONTENT + '\n').encode())
-        evidence = {'schema': 'fsgg.coord.publisher-distribution/1', 'sourceSha': m.COORD_SOURCE, 'contentSha256': m.COORD_CONTENT, 'executableSha256': m.digest(engine), 'markerSha256': m.digest(marker)}
-        provenance = self.write('publisher.json', json.dumps(evidence).encode())
-        return distribution, package, m.digest(engine), provenance, m.digest(provenance)
+    def distribution(self, extras=None):
+        entries = {'tools/net10.0/any/fsgg-coord-engine.dll': b'dll', 'tools/net10.0/any/fsgg-coord-engine.deps.json': b'deps', 'tools/net10.0/any/fsgg-coord-engine.runtimeconfig.json': b'runtimeconfig', 'tools/net10.0/any/runtimes/linux-x64/native/sqlite.so': b'native'}
+        entries.update(extras or {})
+        return self.archive(entries)
 
-    def test_full_publisher_distribution_passes(self):
-        inputs = self.distribution()
-        self.assertEqual(len(m.verify_distribution(*inputs)), 4)
+    def test_packaged_distribution_preserves_every_byte(self):
+        package = self.distribution()
+        before = m.members(package, 'tools/net10.0/any/')
+        after = m.packaged_distribution(package)
+        self.assertEqual(len(after), len(before) + 2)
+        for name, raw in before.items():
+            self.assertEqual(after[name], raw)
+        self.assertEqual(after['fsgg-coord-engine'], b'#!/bin/sh\nexec /usr/bin/dotnet /opt/fsgg/coord/fsgg-coord-engine.dll "$@"\n')
+        self.assertEqual(after['coherent-content.sha256'], (m.COORD_CONTENT + '\n').encode())
 
-    def test_apphost_only_refuses(self):
-        inputs = self.distribution()
-        (inputs[0] / 'fsgg-coord-engine.dll').unlink()
-        with self.assertRaisesRegex(ValueError, 'full publisher distribution'):
-            m.verify_distribution(*inputs)
+    def test_packaged_runtime_incomplete_refuses(self):
+        with self.assertRaisesRegex(ValueError, 'runtime incomplete'):
+            m.packaged_distribution(self.archive({'tools/net10.0/any/fsgg-coord-engine.dll': b'dll'}))
 
-    def test_dependency_drift_refuses(self):
-        inputs = self.distribution()
-        (inputs[0] / 'fsgg-coord-engine.dll').write_bytes(b'rebuild')
-        with self.assertRaisesRegex(ValueError, 'dependency bytes'):
-            m.verify_distribution(*inputs)
+    def test_publisher_launcher_collision_refuses(self):
+        with self.assertRaisesRegex(ValueError, 'collides'):
+            m.packaged_distribution(self.distribution({'tools/net10.0/any/fsgg-coord-engine': b'apphost'}))
 
-    def test_marker_drift_refuses(self):
-        inputs = self.distribution()
-        (inputs[0] / 'coherent-content.sha256').write_text('0' * 64)
-        with self.assertRaisesRegex(ValueError, 'marker differs'):
-            m.verify_distribution(*inputs)
+    def test_publisher_marker_collision_refuses(self):
+        with self.assertRaisesRegex(ValueError, 'collides'):
+            m.packaged_distribution(self.distribution({'tools/net10.0/any/coherent-content.sha256': b'marker'}))
 
     def test_availability_packet_is_private_and_does_not_make_context(self):
-        args = argparse.Namespace(host_served='/unused/host', coord_packages='/unused/coord', coord_manifest='/unused/manifest', codex='/unused/codex', output=str(self.root / 'packet'), coord_distribution=None, receiver_cert=None, native_source=None)
+        args = argparse.Namespace(host_served='/unused/host', coord_packages='/unused/coord', coord_manifest='/unused/manifest', coord_stable='/unused/stable', codex='/unused/codex', output=str(self.root / 'packet'), coord_distribution=None, receiver_cert=None, native_source=None)
         with patch.object(m, 'verify_public_artifacts', return_value={'verified': True}):
             result = m.prepare(args)
         self.assertFalse(result['contextPrepared'])
-        self.assertEqual(len(result['gaps']), 3)
+        self.assertEqual(len(result['gaps']), 2)
         self.assertFalse((Path(args.output) / 'context').exists())
         self.assertEqual(Path(args.output).stat().st_mode & 0o777, 0o700)
         self.assertEqual((Path(args.output) / 'availability.json').stat().st_mode & 0o777, 0o600)
@@ -127,19 +121,33 @@ class ContextTests(unittest.TestCase):
         host.mkdir()
         with zipfile.ZipFile(host / 'package.nupkg', 'w') as archive:
             archive.writestr('tools/net10.0/linux-x64/FS.GG.Telemetry.Host.dll', b'host')
-        args = argparse.Namespace(host_served=str(host), coord_packages=str(self.root), coord_manifest='/unused/manifest', codex=str(codex), output=str(self.root / 'complete'), coord_distribution=str(distribution), coord_provenance='/unused/provenance', coord_provenance_sha256='a' * 64, coord_engine_sha256=m.digest(distribution / 'fsgg-coord-engine'), receiver_cert=str(cert), native_source=str(source), native_source_pins=str(pin_file), native_source_revision='b' * 40)
+        args = argparse.Namespace(host_served=str(host), coord_packages=str(self.root), coord_manifest='/unused/manifest', coord_stable='/unused/stable', codex=str(codex), output=str(self.root / 'complete'), coord_distribution=str(distribution), coord_provenance='/unused/provenance', coord_provenance_sha256='a' * 64, coord_engine_sha256=m.digest(distribution / 'fsgg-coord-engine'), receiver_cert=str(cert), native_source=str(source), native_source_pins=str(pin_file), native_source_revision='b' * 40)
         def committed(command, **kwargs):
             name = command[-1].split('/')[-1]
             return argparse.Namespace(stdout=name.encode())
-        with patch.object(m, 'verify_public_artifacts', return_value={}), patch.object(m, 'verify_distribution', return_value={'fsgg-coord-engine'}), patch.object(m.ssl, 'PEM_cert_to_DER_cert'), patch.object(m.subprocess, 'run', side_effect=committed):
+        with patch.object(m, 'verify_public_artifacts', return_value={'coordManifestSha256': 'a' * 64}), patch.object(m, 'packaged_distribution', return_value={'fsgg-coord-engine': m.COORD_LAUNCHER, 'coherent-content.sha256': (m.COORD_CONTENT + '\n').encode()}), patch.object(m.ssl, 'PEM_cert_to_DER_cert'), patch.object(m.subprocess, 'run', side_effect=committed):
             result = m.prepare(args)
         self.assertTrue(result['contextPrepared'])
+        self.assertEqual(result['contextPath'], str(Path(args.output) / 'context'))
         packet = json.loads((Path(args.output) / 'manifest.json').read_text())
+        self.assertFalse(packet['adapterRuntimeQualified'])
+        self.assertFalse(packet['coordDerivedInputs']['launcher']['publisherBytes'])
+        self.assertFalse(packet['coordDerivedInputs']['contentProjection']['publisherBytes'])
         expected = set(m.SOURCE_ARGS.values()) | {'NATIVE_ELF_SHA256', 'COORD_ENGINE_SHA256', 'RECEIVER_TRUST_CERT_SHA256', 'COORD_SOURCE_SHA', 'COORD_PAYLOAD_SHA256'}
         self.assertEqual(set(packet['buildArguments']['native-development']), expected)
         self.assertEqual(set(packet['buildArguments']['native-collector']), {'NATIVE_ELF_SHA256', 'HOST_VERSION', 'HOST_SOURCE_SHA', 'HOST_PACKAGE_SHA256'})
         self.assertIn('collector/host/FS.GG.Telemetry.Host.dll', packet['files'])
         self.assertEqual((Path(args.output) / 'context/native/codex').stat().st_mode & 0o777, 0o500)
+
+    def test_vacuous_host_journal_refuses(self):
+        release = {'producerPayloadSha256': 'sha256:' + 'b' * 64}
+        journal = {'schema': 'fsgg.telemetry-host-release-journal/v1', 'manifestSha256': 'sha256:' + 'a' * 64, 'observations': {'github': {}, 'nuget': {}}}
+        with self.assertRaisesRegex(ValueError, 'identity missing'):
+            m.validate_host_journal(release, journal, 'a' * 64, {})
+
+    def test_host_journal_unbound_manifest_refuses(self):
+        with self.assertRaisesRegex(ValueError, 'manifest binding'):
+            m.validate_host_journal({}, {'schema': 'fsgg.telemetry-host-release-journal/v1', 'manifestSha256': 'sha256:' + 'b' * 64}, 'a' * 64, {})
 
     def test_private_executable_copy_mode(self):
         path = self.root / 'context/native/codex'
