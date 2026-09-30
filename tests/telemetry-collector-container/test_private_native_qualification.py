@@ -127,7 +127,7 @@ class Tests(unittest.TestCase):
    summary['resultSha256']='0'*64
    with self.assertRaisesRegex(q.Refusal,'digest'): q.native_operation_result(json.dumps(summary).encode(),path,nonce)
  def test_custody_status_never_calls_missing_or_failed_auth_sealed(self):
-  for auth,cleanup,interrupted,expected in (('sealed','true','false',True),('not-materialized','true','false',True),
+  for auth,cleanup,interrupted,expected in (('sealed','true','false',True),('not-materialized','true','false',False),
                                             ('missing','true','false',False),('seal-failed','true','false',False),
                                             ('writer-stop-failed','false','true',False)):
    with self.subTest(auth=auth), tempfile.TemporaryDirectory() as td:
@@ -135,7 +135,9 @@ class Tests(unittest.TestCase):
     q.custody_status(['--result',str(path),'--run-nonce',nonce,'--source-sha',source,'--operation-exit','0',
                       '--cleanup-ok',cleanup,'--interrupted',interrupted,'--auth-state',auth,'--evidence-state','not-present'])
     value=json.loads(path.read_text()); self.assertEqual(expected,value['custodySealed'])
-    if not expected or cleanup=='false' or interrupted=='true': self.assertEqual('custody-incomplete',value['disposition'])
+    if auth not in {'sealed','not-materialized'} or cleanup=='false' or interrupted=='true':
+     self.assertEqual('custody-incomplete',value['disposition'])
+    if auth=='not-materialized': self.assertTrue(value['preservationComplete'])
  def test_workflow_finalization_propagates_seal_failure_and_preserves_plaintext(self):
   script=self.operation_shell(); self.assertEqual(0,subprocess.run(['bash','-n'],input=script,text=True).returncode)
   for seal_fail,expected_rc in ((False,0),(True,86)):
@@ -152,7 +154,7 @@ if [[ "$1" == recipe/deployment/telemetry-collector/qualify_native_container.py 
 fi
 exec /usr/bin/python3 "$@"
 ''')
-    (fake/'podman').write_text('#!/bin/bash\nexit 1\n')
+    (fake/'podman').write_text('#!/bin/bash\n[[ "$1" == ps ]] && exit 0\nexit 1\n')
     (fake/'timeout').write_text('#!/bin/bash\nshift\nexec "$@"\n')
     (fake/'node').write_text('''#!/bin/bash
 test "${SEAL_FAIL:-0}" = 0 || exit 7
@@ -188,6 +190,29 @@ exit 2
   dirty=CleanupRunner(True)
   with mock.patch.object(q,'Runner',return_value=dirty): failures=op.cleanup()
   self.assertEqual(3,len(failures))
+ def test_owned_run_is_registered_before_timeout_and_dynamic_refusal_still_cleans(self):
+  class TimeoutRunner:
+   def run(self,args,**kw): raise subprocess.TimeoutExpired(args,1)
+  a=type('A',(),{'private_root':pathlib.Path('/private/run'),'run_nonce':'run-0001','source_sha':'a'*40,'private_placement_sha':'d'*40})()
+  op=q.Operation(a,TimeoutRunner())
+  with self.assertRaises(subprocess.TimeoutExpired): op.owned_run(['podman','run','--rm','image'])
+  self.assertEqual(['fsgg-native-owned-001'],op.containers)
+  class DynamicTopologyRefusal(Exception): pass
+  class FakeOperation:
+   cleaned=False
+   def __init__(self,args,runner): self.result={'schema':q.SCHEMA,'runNonce':args.run_nonce,'sourceSha':args.source_sha,'phases':[],'disposition':'incomplete'}
+   def preflight(self): raise DynamicTopologyRefusal('private topology detail')
+   def prepare_context_and_images(self): pass
+   def materialize(self): pass
+   def execute(self): pass
+   def cleanup(self): FakeOperation.cleaned=True; return []
+   def write_result(self): pass
+  with tempfile.TemporaryDirectory() as td:
+   a=type('A',(),{'operation_id':q.OPERATION,'source_root':ROOT,'source_sha':'a'*40,'private_placement_sha':'d'*40,
+                  'private_root':pathlib.Path(td)/'private','staging_root':pathlib.Path(td)/'staging','run_nonce':'run-0001'})()
+   with mock.patch.object(q,'parse',return_value=a), mock.patch.object(q,'Operation',FakeOperation):
+    self.assertEqual(2,q.main([]))
+  self.assertTrue(FakeOperation.cleaned)
  def test_execute_dataflow_uses_full_driver_result_inspection_handoff_and_analyzer(self):
   nonce='run-0001'; parent='11111111-1111-1111-1111-111111111111'; batch='b'*32+'-000004'; dg='c'*64
   class ProcessRunner:

@@ -96,10 +96,12 @@ def custody_status(argv):
     value=json.loads(a.result.read_text()) if a.result.exists() else {
         'schema':SCHEMA,'runNonce':a.run_nonce,'sourceSha':a.source_sha,'phases':[],'disposition':'incomplete'}
     require(value.get('schema')==SCHEMA and value.get('runNonce')==a.run_nonce and value.get('sourceSha')==a.source_sha,'custody-result-identity-refused')
-    cleanup=a.cleanup_ok=='true'; interrupted=a.interrupted=='true'; sealed=a.auth_state in {'sealed','not-materialized'}
+    cleanup=a.cleanup_ok=='true'; interrupted=a.interrupted=='true'; sealed=a.auth_state=='sealed'
     value.update({'operationExit':a.operation_exit,'writerCleanupComplete':cleanup,'interrupted':interrupted,
                   'authCustody':a.auth_state,'custodySealed':sealed,'evidenceCustody':a.evidence_state})
-    if a.operation_exit!=0 or not cleanup or interrupted or not sealed or a.evidence_state in {'seal-failed','writer-stop-failed'}:
+    preservation_complete=a.auth_state in {'sealed','not-materialized'}
+    value['preservationComplete']=preservation_complete
+    if a.operation_exit!=0 or not cleanup or interrupted or not preservation_complete or a.evidence_state in {'seal-failed','writer-stop-failed'}:
         value['disposition']='custody-incomplete'
     temporary=a.result.with_suffix('.tmp'); private_write(temporary,canonical(value)); os.replace(temporary,a.result)
     return 0
@@ -121,8 +123,14 @@ class Operation:
         self.a=args; self.r=runner; self.root=args.private_root.resolve(); self.created=[]; self.containers=[]; self.networks=[]
         self.result={'schema':SCHEMA,'runNonce':args.run_nonce,'sourceSha':args.source_sha,
                      'privatePlacementSha':args.private_placement_sha,'phases':[],'disposition':'incomplete'}
-        self.images={}
+        self.images={}; self.owned_run_ordinal=0
     def phase(self,name,**facts): self.result['phases'].append({'ordinal':len(self.result['phases'])+1,'name':name,**facts})
+    def owned_run(self,args,**kwargs):
+        require(args[:2]==['podman','run'],'owned-run-command-refused')
+        self.owned_run_ordinal+=1; require(self.owned_run_ordinal<=64,'owned-run-capacity-refused')
+        name=f'fsgg-native-owned-{self.owned_run_ordinal:03d}'; self.containers.append(name)
+        command=[*args[:2],'--name',name,'--label',f'fsgg.private-run={self.a.run_nonce}',*args[2:]]
+        return self.r.run(command,**kwargs)
     def preflight(self):
         require(re.fullmatch(r'[a-z0-9][a-z0-9-]{7,63}',self.a.run_nonce)!=None,'run-nonce-refused')
         require(re.fullmatch(r'[0-9a-f]{40}',self.a.source_sha)!=None,'source-sha-refused')
@@ -179,12 +187,12 @@ class Operation:
             image=iid.read_text().strip(); require(re.fullmatch(r'sha256:[0-9a-f]{64}',image)!=None,'built-image-id-refused')
             self.images[target]=image
         # Actual target-runtime smoke as the fixed nonroot user; no auth or network.
-        python=self.r.run(['podman','run','--rm','--network','none','--entrypoint','/usr/local/bin/python3',
+        python=self.owned_run(['podman','run','--rm','--network','none','--entrypoint','/usr/local/bin/python3',
                            self.images['native-development'],'-c','import hashlib,json,socket,ssl; print(ssl.OPENSSL_VERSION)'],limit=4096)
         require(bool(python.stdout.strip()),'target-python-runtime-refused')
-        self.r.run(['podman','run','--rm','--network','none','--entrypoint','/opt/fsgg/coord/fsgg-coord-engine',
+        self.owned_run(['podman','run','--rm','--network','none','--entrypoint','/opt/fsgg/coord/fsgg-coord-engine',
                     self.images['native-development'],'--version'],limit=1024)
-        host_smoke=self.r.run(['podman','run','--rm','--network','none','--entrypoint','/usr/bin/dotnet',
+        host_smoke=self.owned_run(['podman','run','--rm','--network','none','--entrypoint','/usr/bin/dotnet',
                     self.images['native-collector'],'/opt/fsgg/telemetry-host/FS.GG.Telemetry.Host.dll','status','--config','/missing'],
                    limit=4096,check=False)
         require(host_smoke.returncode==2,'target-host-runtime-refused')
@@ -231,12 +239,12 @@ class Operation:
                 '--volume',f'{self.root}/native:/qualification/native:rw,rprivate','--volume',f'{self.root}/evidence:/qualification/evidence:rw,rprivate',
                 '--volume',f'{self.root}/store:/qualification/store:rw,rprivate','--volume',f'{self.root}/tls:/qualification/tls:ro,rprivate',
                 '--volume',f'{self.root}/credentials:/qualification/credentials:ro,rprivate']
-        return self.r.run(['podman','run','--rm','--network','none','--read-only','--cap-drop=all','--security-opt=no-new-privileges',
+        return self.owned_run(['podman','run','--rm','--network','none','--read-only','--cap-drop=all','--security-opt=no-new-privileges',
                            '--userns=keep-id:uid=32768,gid=32768','--user=32768:32768',*mounts,
                            self.images['native-collector'],*args],limit=MAX_OUTPUT,check=check)
     def initialize_store(self):
         seed=self.root/'store-seed'
-        self.r.run(['podman','run','--rm','--network','none','--read-only','--cap-drop=all',
+        self.owned_run(['podman','run','--rm','--network','none','--read-only','--cap-drop=all',
                     '--security-opt=no-new-privileges','--userns=keep-id:uid=32768,gid=32768','--user=32768:32768',
                     '--volume',f'{seed}:/qualification/state:rw,rprivate',self.images['native-collector'],
                     'init','--root','/qualification/state/store','--workspace',SCOPE[0]])
@@ -290,7 +298,7 @@ class Operation:
         require(replay.stdout==collected.stdout,'collection-replay-drift')
         # Trusted analyzer acquires through the exact Host process inside the collector image.
         analysis=self.a.source_root/'tools/learn-01-analysis.py'; policy=self.a.source_root/'policy/learn-01-current-focused-v1.json'
-        analyzer=self.r.run(['podman','run','--rm','--pull=never','--network','none','--read-only','--cap-drop=all',
+        analyzer=self.owned_run(['podman','run','--rm','--pull=never','--network','none','--read-only','--cap-drop=all',
             '--security-opt=no-new-privileges','--pids-limit','128','--memory','1g','--cpus','1',
             '--userns=keep-id:uid=32768,gid=32768','--user=32768:32768','--tmpfs','/tmp:rw,noexec,nosuid,nodev,size=64m',
             '--entrypoint','/usr/local/bin/python3',
@@ -320,7 +328,7 @@ class Operation:
             if refused: args.append('--expect-refusal')
             else: args += ['--expected-digest',child['digest']]
             token=(self.root/'credentials'/token_file).read_text().strip()
-            reply=json.loads(self.r.run(args,env=fixed_env({'FSGG_RECEIPT_TOKEN':token}),limit=4096).stdout); token=''
+            reply=json.loads(self.owned_run(args,env=fixed_env({'FSGG_RECEIPT_TOKEN':token}),limit=4096).stdout); token=''
             require(reply.get('receiptRefused') is True if refused else reply.get('receiptRecovered') is True,'receipt-probe-refused')
         probe('prospective.token',False); probe('collector.token',True); probe('revoked.token',True)
         self.r.run(['podman','stop','--time','10','fsgg-native-collector'])
@@ -343,7 +351,7 @@ class Operation:
                              else ['podman','network','rm','-f',name])
                     removed=cleanup.run(command,check=False,limit=4096)
                     exists=cleanup.run(['podman',kind,'exists',name],check=False,limit=4096)
-                    if removed.returncode!=0 or exists.returncode!=1: failures.append(kind+':'+name)
+                    if exists.returncode!=1: failures.append(kind+':'+name)
                 except Exception: failures.append(kind+':'+name)
         for key in ('FSGG_NATIVE_AUTH_JSON_B64','FSGG_PRIVATE_EFFECT_ADMISSION',CREDENTIAL_ENV): os.environ.pop(key,None)
         return failures
@@ -366,14 +374,16 @@ def main(argv=None):
     def interrupted(signum,frame): raise Refusal('operation-interrupted')
     signal.signal(signal.SIGINT,interrupted); signal.signal(signal.SIGTERM,interrupted)
     succeeded=False; failure=None
+    cleanup_failures=[]
     try:
         op.preflight(); op.prepare_context_and_images(); op.r=Runner(time.monotonic()+600); op.materialize(); op.execute()
         succeeded=True
-    except Refusal as e:
-        failure=str(e); print('private-native-qualification-refused:'+failure,file=sys.stderr)
-    except (OSError,ValueError,KeyError,json.JSONDecodeError,subprocess.TimeoutExpired) as e:
-        failure=type(e).__name__; print('private-native-qualification-refused:'+failure,file=sys.stderr)
-    cleanup_failures=op.cleanup(); op.result['cleanupComplete']=not cleanup_failures
+    except Exception as e:
+        failure=(str(e) if isinstance(e,Refusal) else type(e).__name__)
+        print('private-native-qualification-refused:'+failure,file=sys.stderr)
+    finally:
+        cleanup_failures=op.cleanup()
+    op.result['cleanupComplete']=not cleanup_failures
     op.result['cleanupFailureCount']=len(cleanup_failures)
     if failure is not None: op.result['disposition']='incomplete'; op.result['failureCode']=failure
     if cleanup_failures: op.result['disposition']='cleanup-incomplete'

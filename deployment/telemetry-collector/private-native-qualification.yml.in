@@ -104,6 +104,9 @@ jobs:
             state=$?
             test "$state" = 1 || cleanup_ok=0
           done
+          owned_containers="$(podman ps -aq --filter "label=fsgg.private-run=$RUN_NONCE")"
+          state=$?
+          test "$state" = 0 -a -z "$owned_containers" || cleanup_ok=0
           if test -f "$RESULT_ROOT/result.json"; then
             python3 -c 'import json,sys; sys.exit(0 if json.load(open(sys.argv[1])).get("cleanupComplete") is True else 1)' \
               "$RESULT_ROOT/result.json"
