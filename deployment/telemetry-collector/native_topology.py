@@ -33,6 +33,7 @@ def require(condition: bool, detail: str) -> None:
 
 
 def common_create(name: str, image: str, memory: str, cpus: str, network: str, alias: str) -> list[str]:
+    image = normalize_image_id(image)
     return [
         "podman", "create", "--name", name, "--pull=never", "--read-only",
         "--cap-drop=all", "--security-opt=no-new-privileges", "--pids-limit=128",
@@ -57,9 +58,9 @@ def normalize_image_id(value: str) -> str:
 
 
 def native_create(image: str, native_volume: pathlib.Path, run_nonce: str) -> list[str]:
-    require(run_nonce.isascii() and run_nonce.isalnum() and 1 <= len(run_nonce) <= 64, "run-nonce-refused")
+    require(re.fullmatch(r"[a-z0-9][a-z0-9-]{7,63}", run_nonce) is not None, "run-nonce-refused")
     command = common_create("fsgg-native-development", image, "2g", "2", NATIVE_NETWORK, "native-development")
-    insertion = command.index(image)
+    insertion = len(command) - 1
     additions = ["--volume", f"{native_volume.resolve()}:{NATIVE_MOUNT}:rw,rprivate"]
     for item in FIXED_ENV:
         additions.extend(["--env", item])
@@ -69,11 +70,11 @@ def native_create(image: str, native_volume: pathlib.Path, run_nonce: str) -> li
 
 
 def readonly_probe_create(image: str, native_volume: pathlib.Path, run_nonce: str) -> list[str]:
-    require(run_nonce.isascii() and run_nonce.isalnum() and 1 <= len(run_nonce) <= 64, "run-nonce-refused")
+    require(re.fullmatch(r"[a-z0-9][a-z0-9-]{7,63}", run_nonce) is not None, "run-nonce-refused")
     command = common_create("fsgg-native-readonly-probe", image, "1g", "1", "none", "unused")
     network_index = command.index("--network")
     command[network_index:network_index + 2] = ["--network", "none"]
-    insertion = command.index(image)
+    insertion = len(command) - 1
     command[insertion:insertion] = [
         "--volume", f"{native_volume.resolve()}:{NATIVE_MOUNT}:ro,rprivate",
         "--env", "HOME=/qualification/native",
@@ -93,7 +94,7 @@ def egress_create(image: str) -> tuple[list[str], list[str]]:
 
 def collector_create(image: str, qualification: pathlib.Path) -> list[str]:
     command = common_create("fsgg-native-collector", image, "1g", "1", COLLECTOR_NETWORK, "native-collector")
-    insertion = command.index(image)
+    insertion = len(command) - 1
     mounts = [
         (qualification / "host.json", "/qualification/host.json", "ro"),
         (qualification / "native", NATIVE_MOUNT, "ro"),

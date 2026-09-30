@@ -69,7 +69,7 @@ class NativeNetworkTests(unittest.TestCase):
                 gate.load_policy(path)
 
     def test_topology_gives_only_proxy_route_and_disjoint_mounts(self):
-        native = topology.native_create("sha256:" + "a" * 64, pathlib.Path("/private/native"), "nonce1")
+        native = topology.native_create("sha256:" + "a" * 64, pathlib.Path("/private/native"), "nonce-001")
         rendered = " ".join(native)
         self.assertIn("fsgg-native-private-v1:alias=native-development", rendered)
         self.assertIn("/private/native:/qualification/native:rw,rprivate", rendered)
@@ -140,6 +140,10 @@ class NativeNetworkTests(unittest.TestCase):
         for refused in ("native:latest", "sha256:abc", "0" * 64, ""):
             with self.assertRaisesRegex(topology.Refusal, "image-id-refused"):
                 topology.normalize_image_id(refused)
+        with self.assertRaisesRegex(topology.Refusal, "image-id-refused"):
+            topology.native_create("native:latest", pathlib.Path("/private/native"), "nonce-001")
+        rendered = " ".join(topology.native_create(digest, pathlib.Path("/private/native"), "nonce-001"))
+        self.assertIn("sha256:" + digest, rendered)
 
     def test_native_recipe_has_pins_runtime_checks_and_no_floating_identity(self):
         recipe = (ROOT / "deployment/telemetry-collector/NativeContainerfile").read_text()
