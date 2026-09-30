@@ -52,3 +52,9 @@ Current owner status:
 - **Later external owners — waiting:** Unity runtime/license access, FourD consenting unfamiliar-player evaluation, and the dedicated org Projects App installation remain separate gates. Do not claim full-programme completion from an installed diagnostic.
 
 After A/B readbacks, the narrow path is: approve and bind exact published/adopted artifacts at the real producer/receiver boundary; qualify clean installed and retained-upgrade routes separately; establish native capture/census/shared-cost completeness; then explicitly authorize LEARN's frozen A/A and current/focused window. Report unavailable evidence as unknown. Preserve the actual R5 ten-original cutoff, original-item lineage and the existing 10% bureaucracy ceiling; telemetry `not-configured` supplies no denominator.
+
+## 2026-09-30 10:59 UTC — root delivery verification
+
+The new channel directory entry is protected: [`.github` PR #3994](https://github.com/FS-GG/.github/pull/3994) merged at `9fa7265272ef3958d4354c1b964327ce3ef51cb0`; root independently read protected `main` and the directory row through GitHub API. The initial handoff is delivered at `73943a0c4c8964b9730d63448fd03578eab1de80`. Current local and protected `agent-handoff` instructions were reread following the user's update notice.
+
+Owner-state clarification: work-main is **assigned, waiting for first receipt**; root has not yet observed work-main starting A/B. The earlier “working” label names the assigned next action, not a verified execution event. A and B remain independently ready for the approved read-only assessment. Root is **working now** on programme source/native lanes and mailbox follow-up; source owners remain **waiting** for an actionable installed interface gap. No new work-main mail was present at the last successful remote read, 10:57 UTC. First receipt is still due here at 11:30 UTC under `WORK-MAIN-INSTALLED-BOUNDARY-20260930`.
