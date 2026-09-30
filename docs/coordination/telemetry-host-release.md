@@ -1,11 +1,10 @@
 # Telemetry host package and release boundary
 
 `FS.GG.Telemetry.Host` is an optional, independently versioned .NET tool. The
-next candidate is `0.2.0`, carrying protected native capture and bounded
-same-host learning export in addition to the `0.1.7` observed-runtime and
-classified-pipeline behavior. Published `0.1.7` remains immutable; the
-successor host's failed 0.1.3→0.1.5 attempt remains held with its journal and
-backup. Its command is `fsgg-telemetry-host`, and
+next candidate is `0.2.1`, carrying the protected native capture provenance
+hardening merged after the immutable `0.2.0` release. Published `0.2.0` remains
+immutable; the successor host's failed 0.1.3→0.1.5 attempt remains held with
+its journal and backup. Its command is `fsgg-telemetry-host`, and
 its tag namespace is `telemetry-host/v*`. It is not a fourth member of the
 `FS.GG.Kit`/`FS.GG.Drivers`/`FS.GG.Coord.Cli` coherent release set.
 
@@ -47,15 +46,15 @@ bytes are equal when signing changes them.
 
 ## Protected release
 
-The next successor Host candidate is `0.2.0`. Its candidate workflow, archive
+The next successor Host candidate is `0.2.1`. Its candidate workflow, archive
 verifier, publisher and effect identities bind that version and
-`telemetry-host/v0.2.0` together. Its release journal uses the unused
-`fsgg/v2/journal/release/utel-host-rel-07` ref. The 0.1.7 release journal
-remains at `fsgg/v2/journal/release/utel-host-rel-06`. The default publisher dispatch
+`telemetry-host/v0.2.1` together. Its release journal uses the unused
+`fsgg/v2/journal/release/utel-host-rel-08` ref. The 0.2.0 release journal
+remains at `fsgg/v2/journal/release/utel-host-rel-07`. The default publisher dispatch
 remains a no-effect preflight. A candidate run and protected publication must
 qualify the exact merged source before Main updates the local successor Host.
 The installed successor Host remains on its last qualified schema-10 release
-until a separately qualified update. Host 0.2.0 declares release schema range
+until a separately qualified update. Host 0.2.1 declares release schema range
 10 through 12 and migrates an accepted schema-10 store through migrations 11
 and 12. The existing same-schema updater must therefore refuse an unchanged
 in-place update. Main must use a stopped backup and qualified migration path,
@@ -67,7 +66,7 @@ Its current manual workflow qualifies source and package locally and has no
 credential, tag, feed, journal, artifact-upload or release effect. Do not use
 its old publication instructions for a new Host version.
 
-For Host 0.2.0, the independent
+For Host 0.2.1, the independent
 `release-telemetry-host-successor-candidate.yml` qualifies an exact current
 `main` commit, the package, installed tool, manifest, and Host/browser tests.
 It retains one unpromoted Actions artifact and has read-only repository and
@@ -77,11 +76,12 @@ uses a protected release journal to admit and read back each tag, feed,
 release-asset and promotion effect. Its default dispatch is read-only
 preflight. A fresh publication requires the candidate source to equal current
 `main`; recovery from a newer publisher must reuse the same retained archive
-and protected intent. The new workflow needs its own nuget.org Trusted
-Publishing registration before `publish=true` can obtain a feed credential.
+and protected intent. The existing nuget.org Trusted Publishing policy must
+remain bound to this workflow and `release-successor` environment before
+`publish=true` can obtain a feed credential.
 
-The 0.2.0 publication release contains exactly the original
-`FS.GG.Telemetry.Host.0.2.0.nupkg`, `manifest.json`, and
+The 0.2.1 publication release contains exactly the original
+`FS.GG.Telemetry.Host.0.2.1.nupkg`, `manifest.json`, and
 `publication-journal.json` required by Main's protected updater. The journal
 records independently observed external archive and normalized payload
 hashes for both feeds. Main adopts only after the release is promoted and
