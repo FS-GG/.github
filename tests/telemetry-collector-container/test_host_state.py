@@ -82,6 +82,29 @@ class HostStateQualificationTests(unittest.TestCase):
         with self.assertRaisesRegex(qualification.Refusal, "exceeded its custody bound"):
             qualification.startup_output_summary(SimpleNamespace(returncode=2), stdout, stderr)
 
+    def test_command_summary_exposes_only_bounded_stage_code_size_and_digest(self):
+        completed = SimpleNamespace(
+            returncode=3, stdout="private stdout", stderr=json.dumps({
+                "schema": "fsgg.telemetry.host-error/1", "code": "storage-unavailable",
+                "errors": ["private path detail"],
+            }) + "\n")
+        summary = qualification.command_output_summary("initialize-store", completed)
+        self.assertIn("stage=initialize-store", summary)
+        self.assertIn("exitCode=3", summary)
+        self.assertIn("errorCode=storage-unavailable", summary)
+        self.assertIn("stdoutBytes=14", summary)
+        self.assertRegex(summary, r"stderrSha256=[0-9a-f]{64}")
+        for private in ("private stdout", "private path detail", "host-error"):
+            self.assertNotIn(private, summary)
+
+    def test_command_summary_refuses_to_project_unbounded_error_code(self):
+        completed = SimpleNamespace(returncode=3, stdout="", stderr=json.dumps({
+            "code": "PRIVATE/PATH/../../secret",
+        }))
+        summary = qualification.command_output_summary("initialize-store", completed)
+        self.assertIn("errorCode=unavailable", summary)
+        self.assertNotIn("PRIVATE", summary)
+
     def test_controlled_envelope_exercises_receipts_without_native_claims(self):
         envelope = json.loads(qualification.controlled_envelope())
         self.assertEqual("fsgg.telemetry.envelope/1", envelope["schema"])
@@ -130,6 +153,21 @@ class HostStateQualificationTests(unittest.TestCase):
         self.assertIn('["serve", "--config", str(config_path)]', source)
         self.assertIn('remove_owned_directory(state, state_identity)', source)
 
+    def test_hosted_state_is_outside_temp_and_has_exact_owned_cleanup(self):
+        workflow = (ROOT / ".github/workflows/telemetry-collector-container-qualification.yml").read_text(
+            encoding="utf-8")
+        state_parent = '$HOME/.local/state/fsgg-host-state-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}'
+        self.assertEqual(1, workflow.count(state_parent))
+        self.assertIn('--state-root "$host_state_parent/state"', workflow)
+        self.assertNotIn('--state-root "$WORK_ROOT/host-state"', workflow)
+        self.assertIn('nfs*|cifs*|smb3*|9p*|tmpfs*|overlay*|fuse*', workflow)
+        self.assertIn('test ! -L "$host_state_parent"', workflow)
+        self.assertIn('create-owned-directory --path "$host_state_parent"', workflow)
+        self.assertIn('HOST_STATE_OWNERSHIP=%s|%s', workflow)
+        self.assertIn('cleanup-owned-directory --path "$host_state_parent" --identity "$host_state_identity"',
+                      workflow)
+        self.assertNotIn('rm -rf -- "$host_state_parent"', workflow)
+
     def test_cleanup_refuses_a_replaced_state_identity(self):
         state = self.root / "state"
         state.mkdir()
@@ -139,6 +177,29 @@ class HostStateQualificationTests(unittest.TestCase):
         with self.assertRaisesRegex(qualification.Refusal, "identity changed"):
             qualification.remove_owned_directory(state, (original.st_dev, original.st_ino + 1))
         self.assertEqual("replacement", sentinel.read_text(encoding="utf-8"))
+
+    def test_exclusive_owned_creation_preserves_preexisting_leaf(self):
+        parent = self.root / "private-state"
+        parent.mkdir(mode=0o700)
+        leaf = parent / "fixed-run"
+        leaf.mkdir(mode=0o700)
+        sentinel = leaf / "sentinel"
+        sentinel.write_text("preexisting", encoding="utf-8")
+        with self.assertRaises(FileExistsError):
+            qualification.create_owned_directory(leaf)
+        self.assertEqual("preexisting", sentinel.read_text(encoding="utf-8"))
+
+    def test_owned_creation_and_cleanup_require_exact_identity(self):
+        parent = self.root / "private-state"
+        parent.mkdir(mode=0o700)
+        leaf = parent / "fixed-run"
+        identity = qualification.create_owned_directory(leaf)
+        self.assertEqual(0o700, leaf.stat().st_mode & 0o777)
+        with self.assertRaisesRegex(qualification.Refusal, "identity changed"):
+            qualification.remove_owned_directory(leaf, (identity[0], identity[1] + 1))
+        self.assertTrue(leaf.is_dir())
+        qualification.remove_owned_directory(leaf, identity)
+        self.assertFalse(leaf.exists())
 
     def test_qualification_refuses_relative_custody_paths_before_io(self):
         arguments = SimpleNamespace(
