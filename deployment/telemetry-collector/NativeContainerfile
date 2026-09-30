@@ -15,6 +15,7 @@ ARG NATIVE_SUPPORT_SHA256
 ARG NATIVE_PROFILE_SHA256
 ARG NATIVE_CONFIG_SHA256
 ARG COORD_ENGINE_SHA256
+ARG RECEIVER_TRUST_CERT_SHA256
 ARG COORD_SOURCE_SHA=337b6a1d53571b07ca8e1417e18e52546ad319a7
 ARG COORD_PAYLOAD_SHA256=9b9486a54e014fd5d21b65ed71a00b9021562a56909a1303f89c9646bca4a585
 COPY --chown=0:0 native/codex /opt/fsgg/codex/codex
@@ -23,6 +24,7 @@ COPY --chown=0:0 native/native_producer_support.py /opt/fsgg/native_producer_sup
 COPY --chown=0:0 native/native-operation-v1.json /opt/fsgg/native-operation-v1.json
 COPY --chown=0:0 native/native-producer-config.toml /opt/fsgg/native-producer-config.toml
 COPY --chown=0:0 native/fsgg-coord-engine/ /opt/fsgg/coord/
+COPY --chown=0:0 native/native-receiver.crt /usr/local/share/ca-certificates/native-receiver.crt
 RUN test "$NATIVE_ELF_SHA256" = "167c0148a849d2444f1b5a7fb5f8bb2de1de5ae13a2a504b833fc765980f5cd9" \
     && printf '%s  %s\n' "$NATIVE_ELF_SHA256" /opt/fsgg/codex/codex | sha256sum --check --status \
     && printf '%s  %s\n' "$NATIVE_DRIVER_SHA256" /opt/fsgg/qualify_native.py | sha256sum --check --status \
@@ -30,6 +32,8 @@ RUN test "$NATIVE_ELF_SHA256" = "167c0148a849d2444f1b5a7fb5f8bb2de1de5ae13a2a504
     && printf '%s  %s\n' "$NATIVE_PROFILE_SHA256" /opt/fsgg/native-operation-v1.json | sha256sum --check --status \
     && printf '%s  %s\n' "$NATIVE_CONFIG_SHA256" /opt/fsgg/native-producer-config.toml | sha256sum --check --status \
     && printf '%s  %s\n' "$COORD_ENGINE_SHA256" /opt/fsgg/coord/fsgg-coord-engine | sha256sum --check --status \
+    && printf '%s  %s\n' "$RECEIVER_TRUST_CERT_SHA256" /usr/local/share/ca-certificates/native-receiver.crt | sha256sum --check --status \
+    && update-ca-certificates \
     && chmod 0555 /opt/fsgg/codex/codex /opt/fsgg/qualify_native.py /opt/fsgg/coord/fsgg-coord-engine \
     && chmod 0444 /opt/fsgg/native_producer_support.py /opt/fsgg/native-operation-v1.json /opt/fsgg/native-producer-config.toml \
     && test -x /opt/fsgg/coord/fsgg-coord-engine \
@@ -43,7 +47,7 @@ LABEL org.opencontainers.image.title="FS.GG fixed native telemetry qualification
 ENV HOME=/qualification/native \
     CODEX_HOME=/qualification/native/.codex \
     HTTPS_PROXY=http://native-egress:3128 \
-    NO_PROXY=localhost,127.0.0.1,[::1]
+    NO_PROXY=localhost,127.0.0.1,[::1],native-receiver
 USER 32768:32768
 ENTRYPOINT ["/usr/local/bin/python3", "/opt/fsgg/qualify_native.py", "--operation-id", "v2-host-01.8a-native-collaboration-v1", "--profile", "/opt/fsgg/native-operation-v1.json", "--output-root", "/qualification/native/qualification-output"]
 

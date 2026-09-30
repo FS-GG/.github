@@ -69,13 +69,20 @@ class NativeNetworkTests(unittest.TestCase):
                 gate.load_policy(path)
 
     def test_topology_gives_only_proxy_route_and_disjoint_mounts(self):
-        native = topology.native_create("sha256:" + "a" * 64, pathlib.Path("/private/native"), "nonce-001")
+        native = topology.native_create(
+            "sha256:" + "a" * 64, pathlib.Path("/private/native"),
+            pathlib.Path("/private/producer/roadmap.json"), pathlib.Path("/private/producer/spool"),
+            "nonce-001")
         rendered = " ".join(native)
         self.assertIn("fsgg-native-private-v1:alias=native-development", rendered)
         self.assertIn("/private/native:/qualification/native:rw,rprivate", rendered)
         self.assertIn("HTTPS_PROXY=http://native-egress:3128", rendered)
+        self.assertIn("NO_PROXY=localhost,127.0.0.1,[::1],native-receiver", rendered)
+        self.assertIn("/private/producer/roadmap.json:/qualification/native/telemetry/roadmap.json:ro,rprivate", rendered)
+        self.assertIn("/private/producer/spool:/qualification/native/telemetry/spool:rw,rprivate", rendered)
+        self.assertIn("--env FSGG_TELEMETRY_CREDENTIAL_NATIVE_PROSPECTIVE_V1", rendered)
         for absent in ("/qualification/store", "/qualification/evidence", "/qualification/host.json",
-                       "api.openai.com", "--network host"):
+                       "/qualification/credentials", "/qualification/tls", "api.openai.com", "--network host"):
             self.assertNotIn(absent, rendered)
         create, connect = topology.egress_create("sha256:" + "b" * 64)
         self.assertIn("fsgg-native-private-v1:alias=native-egress", " ".join(create))
@@ -83,6 +90,11 @@ class NativeNetworkTests(unittest.TestCase):
         collector = " ".join(topology.collector_create("sha256:" + "c" * 64, pathlib.Path("/private/q")))
         self.assertIn("--memory 1g --cpus 1", collector)
         self.assertIn("/private/q/native:/qualification/native:ro,rprivate", collector)
+        self.assertTrue(collector.endswith("serve --config /qualification/host.json"))
+        self.assertEqual(
+            ["podman", "network", "connect", "--alias", "native-receiver",
+             "fsgg-native-private-v1", "fsgg-native-collector"],
+            topology.receiver_connect_command())
         commands = topology.network_create_commands()
         self.assertIn("--internal", commands[0])
         self.assertNotIn("--internal", commands[1])
@@ -96,14 +108,19 @@ class NativeNetworkTests(unittest.TestCase):
 
     def test_inspection_refuses_direct_route_extra_mount_and_environment(self):
         value = {
-            "Config": {"User": "32768:32768", "Env": list(topology.FIXED_ENV)},
+            "Config": {"User": "32768:32768", "Env": [
+                *topology.FIXED_ENV, topology.PRODUCER_CREDENTIAL_ENV + "=secret-not-logged"]},
             "HostConfig": {"NetworkMode": topology.NATIVE_NETWORK, "ReadonlyRootfs": True,
                            "PidsLimit": 128, "Memory": 2 * 1024 ** 3, "NanoCpus": 2_000_000_000,
                            "CapAdd": [], "CapDrop": ["ALL"], "UsernsMode": "private",
                            "PidMode": "private", "UTSMode": "private",
                            "SecurityOpt": ["no-new-privileges"]},
             "NetworkSettings": {"Networks": {topology.NATIVE_NETWORK: {}}},
-            "Mounts": [{"Destination": topology.NATIVE_MOUNT, "RW": True}],
+            "Mounts": [
+                {"Destination": topology.NATIVE_MOUNT, "RW": True},
+                {"Destination": topology.PRODUCER_CONFIG_MOUNT, "RW": False},
+                {"Destination": topology.PRODUCER_SPOOL_MOUNT, "RW": True},
+            ],
         }
         topology.inspect_native(value)
         value["NetworkSettings"]["Networks"]["bridge"] = {}
@@ -113,6 +130,33 @@ class NativeNetworkTests(unittest.TestCase):
         value["Mounts"].append({"Destination": "/qualification/store", "RW": False})
         with self.assertRaisesRegex(topology.Refusal, "mount-custody"):
             topology.inspect_native(value)
+        value["Mounts"].pop()
+        value["Config"]["Env"].append("FSGG_TELEMETRY_CREDENTIAL_OTHER=bad")
+        with self.assertRaisesRegex(topology.Refusal, "producer-credential"):
+            topology.inspect_native(value)
+
+    def test_receiver_is_private_dual_homed_and_holds_all_receiver_secrets(self):
+        value = {
+            "Config": {"User": "32768:32768", "Env": [],
+                       "Cmd": ["serve", "--config", "/qualification/host.json"]},
+            "HostConfig": {"NetworkMode": topology.COLLECTOR_NETWORK, "ReadonlyRootfs": True,
+                           "PidsLimit": 128, "Memory": 1024 ** 3, "NanoCpus": 1_000_000_000,
+                           "PortBindings": {}},
+            "NetworkSettings": {"Networks": {
+                topology.COLLECTOR_NETWORK: {}, topology.NATIVE_NETWORK: {}}},
+            "Mounts": [{"Destination": path, "RW": path in {"/qualification/evidence", "/qualification/store"}}
+                       for path in ("/qualification/host.json", topology.NATIVE_MOUNT,
+                                    "/qualification/evidence", "/qualification/store",
+                                    "/qualification/tls", "/qualification/credentials")],
+        }
+        topology.inspect_receiver(value)
+        value["NetworkSettings"]["Networks"][topology.UPLINK_NETWORK] = {}
+        with self.assertRaisesRegex(topology.Refusal, "network-set"):
+            topology.inspect_receiver(value)
+        value["NetworkSettings"]["Networks"].pop(topology.UPLINK_NETWORK)
+        value["Config"]["Env"] = ["HTTPS_PROXY=http://native-egress:3128"]
+        with self.assertRaisesRegex(topology.Refusal, "environment-route"):
+            topology.inspect_receiver(value)
 
     def test_original_volume_identity_and_digest_are_preserved(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -141,8 +185,12 @@ class NativeNetworkTests(unittest.TestCase):
             with self.assertRaisesRegex(topology.Refusal, "image-id-refused"):
                 topology.normalize_image_id(refused)
         with self.assertRaisesRegex(topology.Refusal, "image-id-refused"):
-            topology.native_create("native:latest", pathlib.Path("/private/native"), "nonce-001")
-        rendered = " ".join(topology.native_create(digest, pathlib.Path("/private/native"), "nonce-001"))
+            topology.native_create("native:latest", pathlib.Path("/private/native"),
+                                   pathlib.Path("/private/producer/config"),
+                                   pathlib.Path("/private/producer/spool"), "nonce-001")
+        rendered = " ".join(topology.native_create(
+            digest, pathlib.Path("/private/native"), pathlib.Path("/private/producer/config"),
+            pathlib.Path("/private/producer/spool"), "nonce-001"))
         self.assertIn("sha256:" + digest, rendered)
 
     def test_native_recipe_has_pins_runtime_checks_and_no_floating_identity(self):
@@ -154,6 +202,9 @@ class NativeNetworkTests(unittest.TestCase):
         self.assertIn("codex-cli 0.158.0", recipe)
         self.assertIn("FROM native-development AS native-readonly-source", recipe)
         self.assertIn("v2-host-01.8a-readonly-source-compatibility-v1", recipe)
+        self.assertIn("native/native-receiver.crt", recipe)
+        self.assertIn("RECEIVER_TRUST_CERT_SHA256", recipe)
+        self.assertIn("update-ca-certificates", recipe)
         self.assertNotIn(":latest", recipe)
         self.assertNotIn("apt-get", recipe)
         for argument, path in (

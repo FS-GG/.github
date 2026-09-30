@@ -14,11 +14,18 @@ NATIVE_NETWORK = "fsgg-native-private-v1"
 UPLINK_NETWORK = "fsgg-native-uplink-v1"
 COLLECTOR_NETWORK = "fsgg-collector-private-v1"
 NATIVE_MOUNT = "/qualification/native"
+PRODUCER_CONFIG_MOUNT = "/qualification/native/telemetry/roadmap.json"
+PRODUCER_SPOOL_MOUNT = "/qualification/native/telemetry/spool"
+RECEIVER_ALIAS = "native-receiver"
+RECEIVER_PORT = 7443
+RECEIVER_ENDPOINT = f"https://{RECEIVER_ALIAS}:{RECEIVER_PORT}/"
+PRODUCER_CREDENTIAL_REFERENCE = "native-prospective-v1"
+PRODUCER_CREDENTIAL_ENV = "FSGG_TELEMETRY_CREDENTIAL_NATIVE_PROSPECTIVE_V1"
 FIXED_ENV = (
     "HOME=/qualification/native",
     "CODEX_HOME=/qualification/native/.codex",
     "HTTPS_PROXY=http://native-egress:3128",
-    "NO_PROXY=localhost,127.0.0.1,[::1]",
+    f"NO_PROXY=localhost,127.0.0.1,[::1],{RECEIVER_ALIAS}",
 )
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
 
@@ -57,11 +64,24 @@ def normalize_image_id(value: str) -> str:
     return "sha256:" + normalized
 
 
-def native_create(image: str, native_volume: pathlib.Path, run_nonce: str) -> list[str]:
+def native_create(
+    image: str,
+    native_volume: pathlib.Path,
+    producer_config: pathlib.Path,
+    producer_spool: pathlib.Path,
+    run_nonce: str,
+) -> list[str]:
     require(re.fullmatch(r"[a-z0-9][a-z0-9-]{7,63}", run_nonce) is not None, "run-nonce-refused")
     command = common_create("fsgg-native-development", image, "2g", "2", NATIVE_NETWORK, "native-development")
     insertion = len(command) - 1
-    additions = ["--volume", f"{native_volume.resolve()}:{NATIVE_MOUNT}:rw,rprivate"]
+    additions = [
+        "--volume", f"{native_volume.resolve()}:{NATIVE_MOUNT}:rw,rprivate",
+        "--volume", f"{producer_config.resolve()}:{PRODUCER_CONFIG_MOUNT}:ro,rprivate",
+        "--volume", f"{producer_spool.resolve()}:{PRODUCER_SPOOL_MOUNT}:rw,rprivate",
+        # Podman inherits this one named value from its own environment.  The value is never
+        # rendered into argv and the native driver must expose it only to the telemetry engine.
+        "--env", PRODUCER_CREDENTIAL_ENV,
+    ]
     for item in FIXED_ENV:
         additions.extend(["--env", item])
     command[insertion:insertion] = additions
@@ -107,7 +127,15 @@ def collector_create(image: str, qualification: pathlib.Path) -> list[str]:
     for source, target, mode in mounts:
         arguments.extend(["--volume", f"{source.resolve()}:{target}:{mode},rprivate"])
     command[insertion:insertion] = arguments
+    command.extend(["serve", "--config", "/qualification/host.json"])
     return command
+
+
+def receiver_connect_command() -> list[str]:
+    return [
+        "podman", "network", "connect", "--alias", RECEIVER_ALIAS,
+        NATIVE_NETWORK, "fsgg-native-collector",
+    ]
 
 
 def inspect_networks(value: dict, expected: set[str]) -> None:
@@ -131,8 +159,15 @@ def inspect_native(value: dict) -> None:
     forbidden = {"HTTP_PROXY", "ALL_PROXY", "FSGG_TELEMETRY_CONFIG", "FSGG_TELEMETRY_STORE",
                  "FSGG_TELEMETRY_NATIVE_COLLECTOR_CONFIG", "GITHUB_TOKEN", "GH_TOKEN"}
     require(not (forbidden & set(environment)), "native-sensitive-environment-refused")
+    credentials = {name for name in environment if name.startswith("FSGG_TELEMETRY_CREDENTIAL_")}
+    require(credentials == {PRODUCER_CREDENTIAL_ENV}
+            and bool(environment.get(PRODUCER_CREDENTIAL_ENV)), "native-producer-credential-refused")
     mounts = {(row["Destination"], bool(row["RW"])) for row in value.get("Mounts", [])}
-    require(mounts == {(NATIVE_MOUNT, True)}, "native-mount-custody-refused")
+    require(mounts == {
+        (NATIVE_MOUNT, True),
+        (PRODUCER_CONFIG_MOUNT, False),
+        (PRODUCER_SPOOL_MOUNT, True),
+    }, "native-mount-custody-refused")
     require(not host.get("CapAdd") and set(host.get("CapDrop") or []) in ({"ALL"}, {"CAP_ALL"}),
             "native-capability-fence-refused")
     require(host.get("UsernsMode") == "private" and host.get("PidMode") != "host"
@@ -144,6 +179,29 @@ def inspect_native(value: dict) -> None:
 def inspect_egress(value: dict) -> None:
     inspect_networks(value, {NATIVE_NETWORK, UPLINK_NETWORK})
     require(not value.get("Mounts"), "egress-mount-refused")
+
+
+def inspect_receiver(value: dict) -> None:
+    inspect_networks(value, {NATIVE_NETWORK, COLLECTOR_NETWORK})
+    host, config = value["HostConfig"], value["Config"]
+    require(host.get("ReadonlyRootfs") is True and host.get("PidsLimit") == 128,
+            "receiver-runtime-fence-refused")
+    require(host.get("Memory") == 1024 ** 3 and host.get("NanoCpus") == 1_000_000_000,
+            "receiver-resource-fence-refused")
+    require(config.get("User") == "32768:32768", "receiver-user-refused")
+    environment = dict(item.split("=", 1) for item in (config.get("Env") or []) if "=" in item)
+    require(not any(name.endswith("_PROXY") or name.startswith("FSGG_TELEMETRY_CREDENTIAL_")
+                    for name in environment), "receiver-environment-route-refused")
+    mounts = {(row["Destination"], bool(row["RW"])) for row in value.get("Mounts", [])}
+    require(mounts == {
+        ("/qualification/host.json", False), (NATIVE_MOUNT, False),
+        ("/qualification/evidence", True), ("/qualification/store", True),
+        ("/qualification/tls", False), ("/qualification/credentials", False),
+    }, "receiver-mount-custody-refused")
+    require(not host.get("PortBindings") and host.get("NetworkMode") != "host",
+            "receiver-public-route-refused")
+    require(config.get("Cmd") == ["serve", "--config", "/qualification/host.json"],
+            "receiver-command-refused")
 
 
 @dataclass(frozen=True)
