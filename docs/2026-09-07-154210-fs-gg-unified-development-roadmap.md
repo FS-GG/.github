@@ -53,6 +53,19 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**V2-LANG-01.5 Todo browser image source and hosted image qualification delivered.**
+[Templates PR #651](https://github.com/FS-GG/FS.GG.Templates/pull/651) merged at
+`5838d9c9656074768affc6f7187f0b06742af93f`, tree
+`87cc63bc6e95fad532a165d6c85d55b4f11ad87c`. All nineteen changed-path blobs from reviewed
+candidate `fbe94e266bc1baef925aa60c657052d30f123715` are preserved; concurrent protected
+Rust/Go bindings account for the remaining tree difference. Exact-head
+[image qualification 36787773047](https://github.com/FS-GG/FS.GG.Templates/actions/runs/36787773047)
+and [composition 36787773149](https://github.com/FS-GG/FS.GG.Templates/actions/runs/36787773149)
+passed. Rootless private output ownership is explicit; build-store and exported OCI manifest
+identities remain separate and share a verified config identity. The retained archive has full
+safe descriptor/blob closure. Production P2 binding, publication and fresh installed Todo receiver
+adoption remain open; a browser image run does not prove those outcomes or change workspace defaults.
+
 **V2-LANG-01.2 P3 retained-archive and cleanup repair source delivered.**
 [Coordination PR #904](https://github.com/FS-GG/FS.GG.Coordination/pull/904) merged at
 `3ef375808a896dd307aab59fe50604dc73c6a56b`, tree
