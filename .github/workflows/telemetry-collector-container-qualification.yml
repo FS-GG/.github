@@ -149,6 +149,49 @@ jobs:
           assert value["activationAuthorized"] is False
           PY
 
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      - name: Qualify published Host grant and retained receipt state
+        run: |
+          set -euo pipefail
+          umask 077
+          install -d -m 0700 "$WORK_ROOT/tls"
+          python3 - "$WORK_ROOT/tls/password" <<'PY'
+          import pathlib, secrets, sys
+          pathlib.Path(sys.argv[1]).write_text(secrets.token_urlsafe(32) + "\n")
+          PY
+          openssl req -x509 -newkey rsa:2048 -nodes -days 1 \
+            -subj /CN=localhost -addext subjectAltName=DNS:localhost \
+            -keyout "$WORK_ROOT/tls/key.pem" -out "$WORK_ROOT/tls/ca.pem" \
+            >/dev/null 2>&1
+          openssl pkcs12 -export -inkey "$WORK_ROOT/tls/key.pem" \
+            -in "$WORK_ROOT/tls/ca.pem" -out "$WORK_ROOT/tls/server.pfx" \
+            -passout "file:$WORK_ROOT/tls/password" >/dev/null 2>&1
+          dotnet_path="$(readlink -f "$(command -v dotnet)")"
+          python3 deployment/telemetry-collector/qualify_host_state.py \
+            --repository "$GITHUB_WORKSPACE" --package "$WORK_ROOT/release/host.nupkg" \
+            --manifest "$WORK_ROOT/release/manifest.json" \
+            --journal "$WORK_ROOT/release/publication-journal.json" \
+            --dotnet "$dotnet_path" --state-root "$WORK_ROOT/host-state" \
+            --evidence "$EVIDENCE_ROOT/host-state.json" \
+            --certificate "$WORK_ROOT/tls/server.pfx" \
+            --certificate-password-file "$WORK_ROOT/tls/password" \
+            --ca-certificate "$WORK_ROOT/tls/ca.pem" --listen-url https://localhost:55001 \
+            --version "$HOST_VERSION" --source-sha "$HOST_SOURCE_SHA" \
+            --package-sha256 "$HOST_PACKAGE_SHA256" --manifest-sha256 "$HOST_MANIFEST_SHA256" \
+            --journal-sha256 "$HOST_JOURNAL_SHA256"
+          python3 - "$EVIDENCE_ROOT/host-state.json" <<'PY'
+          import json, sys
+          value = json.load(open(sys.argv[1], encoding="utf-8"))
+          assert value["verdict"] == "controlled-production-state-passed"
+          assert value["lifetimeReceipts"] == 1 and value["controlledPayloadFacts"] == 0
+          assert value["stateRemoved"] and value["restartReceiptStable"]
+          for key in ("nativeAccessQualified", "modelSupportObserved", "captureApplied", "activationAuthorized"):
+              assert value[key] is False
+          PY
+
       - name: Retain bounded non-secret qualification evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
@@ -158,3 +201,12 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
           compression-level: 6
+
+      - name: Remove owned disposable release and TLS material
+        if: always()
+        run: |
+          set -euo pipefail
+          expected="/tmp/tcw-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          test "$WORK_ROOT" = "$expected"
+          test ! -L "$WORK_ROOT"
+          if test -d "$WORK_ROOT"; then rm -rf -- "$WORK_ROOT"; fi
