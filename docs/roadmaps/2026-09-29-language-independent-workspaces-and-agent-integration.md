@@ -4,7 +4,10 @@ Product workspaces choose their own languages and toolchains, including multiple
 repository. Keep the existing coordination core and expose portable integration contracts. Evaluate
 AG-UI at the presentation boundary and Microsoft Agent Framework inside bounded agent attempts.
 
-**Status:** amendment selected on 2026-09-29; .3 read-only AG-UI source qualification closed on 2026-09-30. Portable publication, receiver adoption and .4–.5 remain open.
+**Status:** amendment selected on 2026-09-29; .3 read-only AG-UI source qualification and the .4
+bounded Agent Framework evaluation closed on 2026-09-30. The .4 trial rejects production adoption of
+Microsoft Agent Framework 1.22.0 for this path. Portable publication, receiver adoption and .5 remain
+open; native TypeScript, Rust and Go fixture preparation is source-delivered.
 **Part:** **V2-LANG-01**, indexed in the
 [Unified roadmap](../2026-09-07-154210-fs-gg-unified-development-roadmap.md#98-feature-parts-and-subroadmap-index)
 and the [V2 execution roadmap](../github-substrate-v2-roadmap.md#language-independent-product-workspaces--2026-09-29).
@@ -113,6 +116,18 @@ custom code. Use the existing [bounded investment rule](../2026-09-07-154210-fs-
 Record adopt, defer or reject from that comparison; language independence does not depend on adoption.
 Pin adopted packages and retain MIT notices when copying substantial framework or SDK source.
 
+The bounded trial closed through [Coordination PR #899](https://github.com/FS-GG/FS.GG.Coordination/pull/899)
+at protected `9516006663393709e8f96ecd1f21b9ce16d729bd`. Its
+[coherent run 36709064662](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36709064662)
+succeeded on attempt 2 after one bounded Apalache timeout rerun. The
+[owning trial record](https://github.com/FS-GG/FS.GG.Coordination/blob/9516006663393709e8f96ecd1f21b9ce16d729bd/docs/roadmaps/v2-lang-agent-framework-trial.md)
+retains the actual `AIAgent` and fixed-workflow tests, fail-closed checkpoint handling, durable
+coordinator recovery, cancellation and unknown-effect cases, package footprint and reproducible runtime
+measurements. The decision is **reject production adoption of Microsoft Agent Framework 1.22.0 for this
+path**: the existing coordinator already owns launch and durable reconciliation, while the framework adds
+dependencies and runtime and maintenance cost without a demonstrated unmet product need. The optional
+source trial remains evidence; it is not published, installed, activated or added to generated workspaces.
+
 ## Language qualification population
 
 Use the enrolled app journeys as reusable functional cases, with separately identified language
@@ -149,17 +164,31 @@ product-library dependency. Record any tooling runtime requirement explicitly.
   records a Python SSE client, durable replay, duplicate/reconnect, gap, stale-generation and
   observer-loss qualification and the pinned SDK/dependency cost. Adoption is limited to the source
   adapter; no endpoint, package publication, receiver activation or write/approval interface is selected.
-- [ ] **V2-LANG-01.4 — Evaluate bounded Agent Framework execution.** Trial one compatible adapter
-  and collaboration, including checkpoint recovery, unknown external outcomes, cancellation and a
-  slow branch beside an independently progressing work item. Record adopt, defer or reject with
-  evidence; do not require framework adoption to close language qualification.
+- [x] **V2-LANG-01.4 — Evaluate bounded Agent Framework execution.**
+  [Coordination PR #899](https://github.com/FS-GG/FS.GG.Coordination/pull/899) merged the bounded
+  `AIAgent` facade, real fixed workflow, adverse-lifecycle qualification and retained measurement
+  evidence at protected `9516006663393709e8f96ecd1f21b9ce16d729bd`. Exact inputs permit one existing
+  coordinator launch; wrong or duplicate calls create no extra launch, and workflow completion never
+  claims delivery. Recovery remains with the durable coordinator. Framework session and workflow
+  checkpoint replay fail closed, cancellation and deadlines propagate, and unknown provider effects
+  remain explicit. The measured decision rejects production adoption of version 1.22.0 for this path;
+  no package publication, installation, activation or generated-workspace change follows.
 - [ ] **V2-LANG-01.5 — Qualify and adopt language routes.** Run the selected matrix through .2's
   actual published contract, verify native product journeys and scoped results, and record supported
   and unresolved routes. Include .3's UI and .4's framework cases only for routes selected for adoption.
+  [Templates PR #649](https://github.com/FS-GG/FS.GG.Templates/pull/649) source-delivered the native
+  TypeScript, Rust and Go fixtures at protected `b517903b0c03a99d33150b9f7f959a08683e6bcb` from exact
+  head `ae0a370e0a9d08dd010ffb492a6abf852804ce5b`. The
+  [native fixture run 36713489760](https://github.com/FS-GG/FS.GG.Templates/actions/runs/36713489760)
+  passed all three jobs with Rust 1.98.1, Go 1.27.1, Node 24.8.0 and TypeScript 5.9.2; the
+  [composition run 36713489579](https://github.com/FS-GG/FS.GG.Templates/actions/runs/36713489579)
+  also passed.
+  The [owning language-routes plan](https://github.com/FS-GG/FS.GG.Templates/blob/b517903b0c03a99d33150b9f7f959a08683e6bcb/docs/roadmaps/v2-lang-language-routes.md)
+  keeps published `.2` integration, portable execution and installed route adoption open.
 
-The .2 integration and .3 projection windows can proceed independently after .1; .4 preparation can
-also proceed independently, while an integration claim requires .2's qualified contract. Each .5
-product route depends on its own qualified binding and does not wait for unrelated products. Declare
+The .2 integration and .3 projection proceeded independently after .1, and .4 closed as a bounded
+source evaluation without selecting framework adoption. Each .5 product route depends on its own
+qualified .2 binding and does not wait for unrelated products. Declare
 the matrix before closing the parent: partial route delivery cannot prove complete language coverage.
 All remaining windows have executable technical cases; no elapsed-time observation or human study is
 required. Source delivery, package publication and verified receiver adoption remain separate outcomes.
