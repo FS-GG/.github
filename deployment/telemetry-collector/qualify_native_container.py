@@ -112,6 +112,7 @@ class Runner:
     def stderr_category(value):
         text=value.decode('utf-8','replace')
         for category,pattern in (
+            ('tmpfs-owner-option-refused',r'(?i)unknown mount option "(?:uid|gid)=[0-9]+": invalid mount option'),
             ('permission-refused',r'(?i)(permission denied|operation not permitted)'),
             ('name-conflict',r'(?i)(name .* already in use|container.* already exists)'),
             ('missing-path',r'(?i)(statfs|no such file or directory|not a directory)'),
@@ -131,7 +132,7 @@ class Runner:
             self.recorder({'command':diagnostic,'executable':pathlib.Path(args[0]).name,'exitCode':p.returncode,
                            'stdoutBytes':len(p.stdout),'stdoutSha256':hashlib.sha256(p.stdout).hexdigest(),
                            'stderrBytes':len(p.stderr),'stderrSha256':hashlib.sha256(p.stderr).hexdigest(),
-                           'stderrCategory':self.stderr_category(p.stderr)})
+                           'stderrCategory':self.stderr_category(p.stderr),'requiredSuccess':check})
         if check: require(p.returncode==0,'command-failed:'+args[0])
         return p
 
@@ -152,6 +153,13 @@ class Operation:
             private_write(output/'command-diagnostics.json',canonical({
                 'schema':'fsgg.telemetry.private-command-diagnostics/1','runNonce':self.a.run_nonce,
                 'records':self.command_diagnostics}))
+    def public_failure_diagnostic(self):
+        row=next((item for item in reversed(self.command_diagnostics)
+                  if item['requiredSuccess'] and item['exitCode']!=0),None)
+        if row is None: return None
+        keys=['command','executable','exitCode','stdoutBytes','stderrBytes','stderrCategory']
+        if row['command'].startswith('zero-auth-'): keys.extend(('stdoutSha256','stderrSha256'))
+        return {key:row[key] for key in keys}
     def owned_run(self,args,*,diagnostic=None,**kwargs):
         require(args[:2]==['podman','run'],'owned-run-command-refused')
         self.owned_run_ordinal+=1; require(self.owned_run_ordinal<=64,'owned-run-capacity-refused')
@@ -213,17 +221,43 @@ class Operation:
             args.append(str(build)); self.r.run(args,limit=2*1024*1024)
             image=iid.read_text().strip(); require(re.fullmatch(r'sha256:[0-9a-f]{64}',image)!=None,'built-image-id-refused')
             self.images[target]=image
-        # Actual target-runtime smoke as the fixed nonroot user; no auth or network.
+        # Record only bounded argument-free diagnostics from this point.  Every child
+        # still receives the closed fixed environment, never the workflow secrets.
+        self.r=Runner(self.r.deadline,self.command_diagnostic)
+        podman_version=self.r.run(['podman','version','--format','{{.Client.Version}}'],diagnostic='podman-version',limit=128).stdout.decode().strip()
+        require(re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+',podman_version)!=None,'podman-version-refused')
+        self.result['podmanVersion']=podman_version
+        # Actual target-runtime smokes as the fixed nonroot user; no auth or network.
         python=self.owned_run(['podman','run','--rm','--network','none','--entrypoint','/usr/local/bin/python3',
-                           self.images['native-development'],'-c','import hashlib,json,socket,ssl; print(ssl.OPENSSL_VERSION)'],limit=4096)
+                           self.images['native-development'],'-c','import hashlib,json,socket,ssl; print(ssl.OPENSSL_VERSION)'],diagnostic='zero-auth-python',limit=4096)
         require(bool(python.stdout.strip()),'target-python-runtime-refused')
         self.owned_run(['podman','run','--rm','--network','none','--entrypoint','/opt/fsgg/coord/fsgg-coord-engine',
-                    self.images['native-development'],'--version'],limit=1024)
+                    self.images['native-development'],'--version'],diagnostic='zero-auth-coord',limit=1024)
         host_smoke=self.owned_run(['podman','run','--rm','--network','none','--entrypoint','/usr/bin/dotnet',
                     self.images['native-collector'],'/opt/fsgg/telemetry-host/FS.GG.Telemetry.Host.dll','status','--config','/missing'],
-                   limit=4096,check=False)
+                   diagnostic='zero-auth-host',limit=4096,check=False)
         require(host_smoke.returncode==2,'target-host-runtime-refused')
+        self.qualify_zero_auth_readonly()
         self.result['images']=dict(self.images); self.phase('zero-auth-images-qualified',contextSha256=digest(manifest_path))
+    def qualify_zero_auth_readonly(self):
+        """Exercise the exact read-only topology before private auth materialization."""
+        require(not self.root.exists(),'zero-auth-private-root-present')
+        public_native=self.a.staging_root/'zero-auth-readonly-native'
+        for relative in ('','.codex','work'):
+            path=public_native/relative; path.mkdir(mode=0o700,parents=True,exist_ok=False if relative=='' else True)
+        t=self.topology()
+        create=t.readonly_probe_create(self.images['native-readonly-source'],public_native,self.a.run_nonce)
+        self.containers.append('fsgg-native-readonly-probe')
+        self.r.run(create,diagnostic='zero-auth-readonly-create')
+        readback=json.loads(self.r.run(['podman','start','-a','fsgg-native-readonly-probe'],diagnostic='zero-auth-readonly-start',limit=4096).stdout)
+        require(readback.get('schema')=='fsgg.telemetry.native-source-readback/1'
+                and readback.get('status')=='compatible'
+                and re.fullmatch(r'[0-9a-f]{64}',readback.get('resultSha256',''))!=None,
+                'zero-auth-readonly-start-refused')
+        self.r.run(['podman','rm','fsgg-native-readonly-probe'],diagnostic='zero-auth-readonly-remove',limit=4096)
+        absent=self.r.run(['podman','container','exists','fsgg-native-readonly-probe'],diagnostic='zero-auth-readonly-refusal',limit=4096,check=False)
+        require(absent.returncode==1,'zero-auth-readonly-removal-refused')
+        self.phase('zero-auth-readonly-topology-qualified',resultSha256=readback['resultSha256'])
     def materialize(self):
         expected=hashlib.sha256((self.a.run_nonce+'\0'+self.a.source_sha+'\0'+PROFILE_SHA+'\0'+OPERATION).encode()).hexdigest()
         admission=os.environ.pop('FSGG_PRIVATE_EFFECT_ADMISSION',None)
@@ -285,7 +319,8 @@ class Operation:
     def execute(self):
         t=self.topology()
         readback=t.readonly_probe_create(self.images['native-readonly-source'],self.root/'native',self.a.run_nonce)
-        self.r.run(readback,diagnostic='readonly-probe-create'); self.containers.append('fsgg-native-readonly-probe')
+        self.containers.append('fsgg-native-readonly-probe')
+        self.r.run(readback,diagnostic='readonly-probe-create')
         readback_result=json.loads(self.r.run(['podman','start','-a','fsgg-native-readonly-probe'],limit=4096,diagnostic='readonly-probe-start').stdout)
         require(readback_result.get('schema')=='fsgg.telemetry.native-source-readback/1'
                 and readback_result.get('status')=='compatible'
@@ -412,6 +447,8 @@ def main(argv=None):
         succeeded=True
     except Exception as e:
         failure=(str(e) if isinstance(e,Refusal) else type(e).__name__)
+        diagnostic=op.public_failure_diagnostic()
+        if diagnostic is not None: op.result['failureDiagnostic']=diagnostic
         print('private-native-qualification-refused:'+failure,file=sys.stderr)
     finally:
         try: op.write_private_diagnostics()

@@ -99,7 +99,9 @@ def readonly_probe_create(image: str, native_volume: pathlib.Path, run_nonce: st
         "--volume", f"{native_volume.resolve()}:{NATIVE_MOUNT}:ro,rprivate",
         "--env", "HOME=/qualification/native",
         "--env", "CODEX_HOME=/qualification/native/.codex",
-        "--tmpfs", "/qualification/readback-output:rw,noexec,nosuid,nodev,size=8m,mode=0700,uid=32768,gid=32768",
+        # Podman 4.9 rejects uid=/gid= in --tmpfs before create.  Its supported U
+        # option maps tmpfs ownership to the already fixed container user.
+        "--tmpfs", "/qualification/readback-output:rw,noexec,nosuid,nodev,size=8m,mode=0700,U",
     ]
     command.extend(["--run-nonce", run_nonce])
     return command

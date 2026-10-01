@@ -104,7 +104,12 @@ class NativeNetworkTests(unittest.TestCase):
             "sha256:" + "d" * 64, pathlib.Path("/private/native"), "readonlynonce1"))
         self.assertIn("--network none", probe)
         self.assertIn("/private/native:/qualification/native:ro,rprivate", probe)
-        self.assertIn("/qualification/readback-output:rw,noexec,nosuid,nodev,size=8m,mode=0700,uid=32768,gid=32768", probe)
+        self.assertIn("/qualification/readback-output:rw,noexec,nosuid,nodev,size=8m,mode=0700,U", probe)
+        tmpfs = topology.readonly_probe_create(
+            "sha256:" + "d" * 64, pathlib.Path("/private/native"), "readonlynonce1")
+        output_options = tmpfs[tmpfs.index("--tmpfs", tmpfs.index("--tmpfs") + 1) + 1]
+        self.assertNotIn("uid=", output_options)
+        self.assertNotIn("gid=", output_options)
         self.assertIn("--run-nonce readonlynonce1", probe)
 
     def test_inspection_refuses_direct_route_extra_mount_and_environment(self):

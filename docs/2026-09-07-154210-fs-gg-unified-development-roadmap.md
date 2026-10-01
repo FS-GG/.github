@@ -53,6 +53,21 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**V2-HOST-01.8 readonly topology repair source; genuine capture remains open.**
+The corrected private run [36792381598](https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/actions/runs/36792381598)
+built four images, passed the earlier zero-auth smokes, then failed the first readonly container
+create with Podman exit 125. Both encrypted custody capsules were preserved; cleanup and
+preservation completed, both temporary secrets were independently removed, and the original
+source auth cache remained unchanged. Its retained 62-byte stderr fingerprint identifies the
+unsupported explicit tmpfs ownership option. Podman's supported ownership mapping now preserves
+the fixed container user and existing isolation. The exact readonly create/start/remove/absence
+topology is tested against an empty public source before private materialization. Actual Podman
+version and allowlisted diagnostics are retained without credentialed raw output or hashes.
+Sixty-two source tests and bounded source review passed for `46ea340874554881b48f34b5a051dc687df95431`;
+the private registration must bind this successor recipe before another bounded credentialed run.
+Native parent/child capture and restart/recovery, .9 routing and .10 scoped Main retirement remain
+open. No installed activation or workspace default changes are claimed.
+
 **V2-LANG-01.2 P3 packaged dependency repair source delivered; publication remains open.**
 [Coordination PR #906](https://github.com/FS-GG/FS.GG.Coordination/pull/906) merged at
 `d25b9eaec991c94593adcecda6869d07dabdfb43`, tree
