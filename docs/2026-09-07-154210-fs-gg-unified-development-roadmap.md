@@ -65,6 +65,24 @@ independent and open. This dated clarification is not a current fleet-health att
 profile acceptance or waiver of exact artifact, authentication, custody, settlement/replay or effect
 authority for any operation actually performed.
 
+**2026-10-01: HOST operation-profile pin repair source closed; attempt-n refused before native execution.**
+[Private Sandbox #37](https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/pull/37) merged at
+`9b157bb400c85d07ac6bd6394c76982175ceedd9`; root authenticated tree
+`a79a3896d6d0d2269f50c67436ddba8130d69ada`, equal reviewed candidate
+`18b04d47c46249a664232d773294103f85a0ae9f`. The workflow now pins profile
+`1ef6d54eb3f9572580407efe9f266f643645af3af17c33723c0aa8368e5f4f34`, required by the
+unchanged protected public recipe `61d55d8807da02b702ca97467f703640d9a59662`.
+Fourteen focused local tests passed, including actual PyYAML parsing, shell syntax and the joined
+recipe/profile regression; no hosted PR workflow applies in this private repository. Genuine
+[attempt-n 36884618279](https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/actions/runs/36884618279)
+refused effect admission because its predecessor profile differed. Authentication materialization
+and native execution never started. Retained result and authenticated readback show cleanup and
+secret retirement completed; root credential metadata remains exact. No result capsule exists.
+Release `401047616` and both input assets remain unchanged; all earlier attempts remain history.
+This closes the pin repair source only. A new exact-placement attempt must still establish `.8`
+capture, persistence and recovery; `.9`, `.10`, LEARN and Main receive no acceptance or action.
+
+
 **2026-10-01: HOST original-rollout-audit public input registration source closed; genuine qualification remains open.**
 [Private Sandbox #36](https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/pull/36) merged at
 `5b381c3c1a732247cb80ad1370d37f7f0c4a650f`; root API readback confirmed tree
