@@ -21,6 +21,65 @@ from native_producer_support import (JsonLineAppServer, OperationEvidence, Refus
 
 
 NATIVE_ELF_MAXIMUM = 320 * 1024 * 1024
+ITEM_TYPE_TOKEN = re.compile(r"[A-Za-z][A-Za-z0-9]{0,63}")
+PERMITTED_ITEM_TYPES = {"userMessage", "agentMessage", "reasoning", "collabAgentToolCall"}
+
+
+class RejectedItemRefusal(Refusal):
+    def __init__(self, diagnostic: dict):
+        super().__init__("prohibited or unknown native item observed")
+        self.diagnostic = diagnostic
+
+
+def rejected_item_diagnostic(method: object, params: object, evidence: OperationEvidence) -> dict:
+    event_kind = "started" if method == "item/started" else "completed"
+    parameters = params if isinstance(params, dict) else {}
+    item_present = "item" in parameters
+    item = parameters.get("item")
+    item_object = isinstance(item, dict)
+    discriminator = item.get("type") if item_object else None
+    if not item_object or "type" not in item:
+        discriminator_shape = "missing"
+    elif not isinstance(discriminator, str):
+        discriminator_shape = "non-string"
+    elif len(discriminator) > 64:
+        discriminator_shape = "overlength"
+    elif ITEM_TYPE_TOKEN.fullmatch(discriminator) is None:
+        discriminator_shape = "invalid"
+    else:
+        discriminator_shape = "token"
+    thread_id = parameters.get("threadId")
+    relationship = ("parent" if thread_id == evidence.parent_thread else
+                    "child" if evidence.child_thread is not None and thread_id == evidence.child_thread else
+                    "other" if isinstance(thread_id, str) else "unbound")
+    result = {
+        "schema": "fsgg.telemetry.native-rejected-item/1",
+        "eventKind": event_kind,
+        "itemShape": "object" if item_object else ("missing" if not item_present else "non-object"),
+        "itemMemberCount": min(len(item), 64) if item_object else 0,
+        "itemMemberCountTruncated": item_object and len(item) > 64,
+        "discriminatorShape": discriminator_shape,
+        "relationship": relationship,
+    }
+    if discriminator_shape == "token":
+        result["discriminator"] = discriminator
+    return result
+
+
+def checked_item(method: object, params: object, evidence: OperationEvidence) -> dict:
+    item = params.get("item") if isinstance(params, dict) else None
+    item_type = item.get("type") if isinstance(item, dict) else None
+    if not isinstance(item_type, str) or item_type not in PERMITTED_ITEM_TYPES:
+        raise RejectedItemRefusal(rejected_item_diagnostic(method, params, evidence))
+    return item
+
+
+def error_envelope(error: Exception) -> dict:
+    value = {"schema": "fsgg.telemetry.native-operation-error/1",
+             "code": "qualification-refused", "message": str(error)}
+    if isinstance(error, RejectedItemRefusal):
+        value["diagnostic"] = error.diagnostic
+    return value
 
 
 def pinned_native(path: pathlib.Path, profile: dict) -> None:
@@ -313,8 +372,7 @@ def perform(profile: dict, nonce: str, run_root: pathlib.Path) -> dict:
                 prebind_bytes = buffer_prebind_event(prebind_events, value, evidence.parent_thread, prebind_bytes)
                 continue
             if method in {"item/started", "item/completed"}:
-                item = params.get("item", {})
-                require(item.get("type") in {"userMessage", "agentMessage", "reasoning", "collabAgentToolCall"}, "prohibited or unknown native item observed")
+                item = checked_item(method, params, evidence)
                 if item.get("type") == "collabAgentToolCall":
                     require(item.get("tool") in {"spawnAgent", "wait"}, "prohibited collaboration operation observed")
                 if item.get("type") == "collabAgentToolCall" and method == "item/completed":
@@ -389,7 +447,7 @@ def main() -> int:
         print(json.dumps({"schema": result["schema"], "status": result["status"], "resultSha256": sha256(run_root / "result.json")}, separators=(",", ":")))
         return 0
     except (Refusal, OSError, ValueError, json.JSONDecodeError, subprocess.TimeoutExpired) as error:
-        print(json.dumps({"schema": "fsgg.telemetry.native-operation-error/1", "code": "qualification-refused", "message": str(error)}, separators=(",", ":")), file=sys.stderr)
+        print(json.dumps(error_envelope(error), separators=(",", ":")), file=sys.stderr)
         return 2
 
 
