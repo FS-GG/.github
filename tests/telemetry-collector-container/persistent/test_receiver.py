@@ -10,11 +10,16 @@ def write_private(path,data=b'x'):
  r.write_new(path,data)
 def seal_source(root,data=b'original-source'):
  source=root/'receiver/private/codex-home'; write_private(source/'native.json',data); (source/'native.json').chmod(0o400); source.chmod(0o500)
+FSHARP_SIDECAR=b'{"CodexHome":"/receiver/private/codex-home","CredentialReference":"learn-native-collector-v1","Effort":"medium","EvidenceRoot":"/receiver/private/evidence","ExecutablePath":"/opt/fsgg/codex/codex","ExecutableSha256":"167c0148a849d2444f1b5a7fb5f8bb2de1de5ae13a2a504b833fc765980f5cd9","Model":"gpt-5.6-sol","Provider":"openai","Schema":"fsgg.telemetry.native-collector-installation/2"}'
+def fsharp_receipt(profile,root,sidecar=FSHARP_SIDECAR):
+ # Observed System.Text.Json anonymous-record property order from the production F# manager.
+ values=[('activationAuthorized',False),('credentialReference','learn-native-collector-v1'),('executableSha256',profile['reader']['executableSha256']),('grantGeneration',1),('grantId','grant-learn-native-collector-v1'),('hostConfigSha256',r.sha_file(root/'receiver/private/host.json')),('ownerUid',os.getuid()),('producerId',profile['producerId']),('schema','fsgg.telemetry.native-collector-installation-receipt/2'),('sharedCostCompleteness','unknown'),('sidecarSha256',r.sha_bytes(sidecar)),('snapshotOrigin','unknown'),('sourceVerification','unknown'),('status','installed'),('streamId',profile['streamId']),('workspaceId',profile['workspaceId'])]
+ return ('{'+','.join(json.dumps(key)+':'+json.dumps(value,separators=(',',':')) for key,value in values)+'}').encode()
 def prepare_runtime(profile,root):
  store=root/'receiver/private/store'; store.mkdir(mode=0o700); write_private(store/'host.lock'); write_private(store/'receipts.db',b'sqlite-fixture')
  # The configured service lock is adjacent to host.json, matching the real Host config.
  write_private(root/'receiver/private/host.lock')
- sidecar,receipt=r.expected_installer_outputs(profile,root); write_private(root/'receiver/private/host.json.native-collector.json',sidecar); write_private(root/'receiver/private/host.json.native-collector.receipt.json',receipt)
+ write_private(root/'receiver/private/host.json.native-collector.json',FSHARP_SIDECAR); write_private(root/'receiver/private/host.json.native-collector.receipt.json',fsharp_receipt(profile,root))
  seal_source(root)
 class ReceiverTests(unittest.TestCase):
  def profile(self): return json.loads(PROFILE.read_text())
@@ -37,7 +42,27 @@ class ReceiverTests(unittest.TestCase):
   with tempfile.TemporaryDirectory() as t:
    parent=private_parent(t); root=parent/'receiver'; r.initialize(self.profile(),root,True); prepare_runtime(self.profile(),root)
    r.validate_installer_outputs(self.profile(),root)
+   self.assertEqual(FSHARP_SIDECAR,(root/'receiver/private/host.json.native-collector.json').read_bytes())
    sidecar=json.loads((root/'receiver/private/host.json.native-collector.json').read_text()); self.assertEqual('/receiver/private/codex-home',sidecar['CodexHome']); self.assertEqual('/receiver/private/evidence',sidecar['EvidenceRoot'])
+   served=FSHARP_SIDECAR+b'\n'; (root/'receiver/private/host.json.native-collector.json').write_bytes(served); (root/'receiver/private/host.json.native-collector.receipt.json').write_bytes(fsharp_receipt(self.profile(),root,served))
+   r.validate_installer_outputs(self.profile(),root)
+ def test_production_fsharp_serializer_fixture_has_observed_field_order(self):
+  source='''open System.Text.Json\nprintf "%s" (JsonSerializer.Serialize {| Schema = "fsgg.telemetry.native-collector-installation/2"; CredentialReference = "learn-native-collector-v1"; ExecutablePath = "/opt/fsgg/codex/codex"; CodexHome = "/receiver/private/codex-home"; EvidenceRoot = "/receiver/private/evidence"; Provider = "openai"; Model = "gpt-5.6-sol"; Effort = "medium"; ExecutableSha256 = "167c0148a849d2444f1b5a7fb5f8bb2de1de5ae13a2a504b833fc765980f5cd9" |})\n'''
+  with tempfile.TemporaryDirectory() as t:
+   script=pathlib.Path(t)/'fixture.fsx'; script.write_text(source)
+   actual=subprocess.run(['dotnet','fsi','--exec',str(script)],capture_output=True,check=True).stdout
+  self.assertEqual(FSHARP_SIDECAR,actual)
+ def test_installer_outputs_refuse_duplicate_fields_types_paths_and_unbound_bytes(self):
+  with tempfile.TemporaryDirectory() as t:
+   parent=private_parent(t); root=parent/'receiver'; p=self.profile(); r.initialize(p,root,True); prepare_runtime(p,root)
+   sidecar=root/'receiver/private/host.json.native-collector.json'; receipt=root/'receiver/private/host.json.native-collector.receipt.json'
+   valid_sidecar=sidecar.read_bytes(); valid_receipt=receipt.read_bytes()
+   mutations=[(sidecar,b'{"Schema":"fsgg.telemetry.native-collector-installation/2","Schema":"fsgg.telemetry.native-collector-installation/2"}'),(sidecar,valid_sidecar[:-1]+b',"Extra":false}'),(sidecar,valid_sidecar.replace(b'installation/2',b'installation/1')),(sidecar,valid_sidecar.replace(b'"CodexHome":"/receiver/private/codex-home"',b'"CodexHome":"/producer/native-source"')),(sidecar,valid_sidecar.replace(b'"Provider":"openai"',b'"Provider":false')),(receipt,valid_receipt.replace(b'"credentialReference":"learn-native-collector-v1"',b'"credentialReference":"other-role"')),(receipt,valid_receipt.replace(b'"ownerUid":'+str(os.getuid()).encode(),b'"ownerUid":"'+str(os.getuid()).encode()+b'"')),(receipt,valid_receipt[:-1]+b',"status":"installed"}')]
+   for path,data in mutations:
+    sidecar.write_bytes(valid_sidecar); receipt.write_bytes(fsharp_receipt(p,root,valid_sidecar)); path.write_bytes(data)
+    with self.assertRaises(r.Refusal): r.validate_installer_outputs(p,root)
+   sidecar.write_bytes(valid_sidecar+b' '); receipt.write_bytes(fsharp_receipt(p,root,valid_sidecar))
+   with self.assertRaisesRegex(r.Refusal,'installer-receipt-sidecarSha256-refused'): r.validate_installer_outputs(p,root)
  def test_dotdot_repeated_separator_and_private_alias_refuse(self):
   for value in ('/producer/../receiver/private','/producer//native-source','/producer/./native-source'):
    p=self.profile(); p['containerPaths']['nativeSource']=value

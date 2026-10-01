@@ -183,16 +183,34 @@ def initialize(profile,root,apply=False,token_factory=lambda:secrets.token_urlsa
         except BaseException:
             parent.remove_created(stage,created); raise
 
-def expected_installer_outputs(profile,root):
-    p=profile["reader"]; cp=profile["containerPaths"]; config=root/"receiver/private/host.json"; sidecar={"Schema":INSTALL_SCHEMA,"CredentialReference":"learn-native-collector-v1","ExecutablePath":p["executablePath"],"CodexHome":cp["codexHome"],"EvidenceRoot":cp["evidence"],"Provider":p["provider"],"Model":p["model"],"Effort":p["effort"],"ExecutableSha256":p["executableSha256"]}
-    sidecar_bytes=json.dumps(sidecar,separators=(",",":")).encode() # System.Text.Json emits declaration order and no newline.
-    receipt={"schema":"fsgg.telemetry.native-collector-installation-receipt/2","status":"installed","ownerUid":os.getuid(),"hostConfigSha256":sha_file(config),"sidecarSha256":sha_bytes(sidecar_bytes),"executableSha256":p["executableSha256"],"credentialReference":"learn-native-collector-v1","workspaceId":profile["workspaceId"],"producerId":profile["producerId"],"streamId":profile["streamId"],"grantId":"grant-learn-native-collector-v1","grantGeneration":1,"sourceVerification":"unknown","snapshotOrigin":"unknown","sharedCostCompleteness":"unknown","activationAuthorized":False}
-    return sidecar_bytes,json.dumps(receipt,separators=(",",":")).encode()
+def strict_json_bytes(data,label):
+    require(isinstance(data,bytes) and len(data)<=MAX_FILE,f"{label}-size-refused")
+    def closed_pairs(pairs):
+        result={}
+        for key,value in pairs:
+            require(isinstance(key,str) and key not in result,f"{label}-duplicate-field-refused")
+            result[key]=value
+        return result
+    try:
+        text=data.decode("utf-8")
+        return json.loads(text,object_pairs_hook=closed_pairs,parse_constant=lambda _value: (_ for _ in ()).throw(Refusal(f"{label}-constant-refused")))
+    except Refusal: raise
+    except (UnicodeDecodeError,json.JSONDecodeError) as error: raise Refusal(f"{label}-json-refused") from error
+
+def exact_object(value,expected,label,types):
+    require(isinstance(value,dict) and set(value)==set(expected),f"{label}-shape-refused")
+    for key,expected_value in expected.items():
+        require(type(value[key]) is types[key] and value[key]==expected_value,f"{label}-{key}-refused")
 
 def validate_installer_outputs(profile,root):
     config=root/"receiver/private/host.json"; sidecar=config.with_name(config.name+".native-collector.json"); receipt=config.with_name(config.name+".native-collector.receipt.json")
-    private_file(sidecar,"installer-sidecar"); private_file(receipt,"installer-receipt"); expected_sidecar,expected_receipt=expected_installer_outputs(profile,root)
-    require(sidecar.read_bytes()==expected_sidecar and receipt.read_bytes()==expected_receipt,"installer-output-refused")
+    private_file(sidecar,"installer-sidecar"); private_file(receipt,"installer-receipt")
+    sidecar_bytes=sidecar.read_bytes(); receipt_bytes=receipt.read_bytes(); p=profile["reader"]; cp=profile["containerPaths"]
+    expected_sidecar={"Schema":INSTALL_SCHEMA,"CredentialReference":"learn-native-collector-v1","ExecutablePath":p["executablePath"],"CodexHome":cp["codexHome"],"EvidenceRoot":cp["evidence"],"Provider":p["provider"],"Model":p["model"],"Effort":p["effort"],"ExecutableSha256":p["executableSha256"]}
+    exact_object(strict_json_bytes(sidecar_bytes,"installer-sidecar"),expected_sidecar,"installer-sidecar",{key:str for key in expected_sidecar})
+    expected_receipt={"schema":"fsgg.telemetry.native-collector-installation-receipt/2","status":"installed","ownerUid":os.getuid(),"hostConfigSha256":sha_file(config),"sidecarSha256":sha_bytes(sidecar_bytes),"executableSha256":p["executableSha256"],"credentialReference":"learn-native-collector-v1","workspaceId":profile["workspaceId"],"producerId":profile["producerId"],"streamId":profile["streamId"],"grantId":"grant-learn-native-collector-v1","grantGeneration":1,"sourceVerification":"unknown","snapshotOrigin":"unknown","sharedCostCompleteness":"unknown","activationAuthorized":False}
+    receipt_types={key:str for key in expected_receipt}; receipt_types.update({"ownerUid":int,"grantGeneration":int,"activationAuthorized":bool})
+    exact_object(strict_json_bytes(receipt_bytes,"installer-receipt"),expected_receipt,"installer-receipt",receipt_types)
 
 def sealed_source(root):
     source=root/"receiver/private/codex-home"; with_held=HeldDirectory(source,"native-source",readonly=True)
