@@ -65,6 +65,23 @@ independent and open. This dated clarification is not a current fleet-health att
 profile acceptance or waiver of exact artifact, authentication, custody, settlement/replay or effect
 authority for any operation actually performed.
 
+**2026-10-01: FourD admitted private-source and encrypted-custody qualification source closed; genuine qualification remains open.**
+[Coordination #913](https://github.com/FS-GG/FS.GG.Coordination/pull/913) merged at
+`47d0833d88cbeaea9d38a7e927c837974c80352d`, equal reviewed candidate
+`ae67e2dd7d47ebb70d5b15d45ceee5b144782600` tree `ca012ff34d4ba0c55d14b125f57b2117ee0d3142`.
+Full [optimistic validation 36858877130](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36858877130),
+bootstrap and CodeQL passed. Root independently verified equal merged trees. The coherent route
+binds actual server/checkout identities, exact attempt-scoped admission, read-only acquisition,
+unchanged T2/P2 qualification, descriptor-owned private custody, and verified sealed-only upload.
+Focused qualification/custody/capacity checks passed 57/57; the unchanged execution-pin validator
+passed 20 controls. Unknown adopted descendants remain sticky unknown and never signalable; cleanup
+and stream draining fit the total deadline. Exclusive descriptor leases protect preexisting and
+replacement paths, and wipe held plaintext before deleting only owned staging.
+This closes source only. No key, private source acquisition, SDK/native operation, capsule upload,
+root archive readback, credential revocation, provider qualification or installed adoption is proved.
+Reservation and exact later admission precede a genuine operation; capability refusal still skips
+SDK/build/P2. The already accepted FourD design documentation remains independent of this gate.
+
 **2026-10-01: portable runtime and staging source closed; real successor preparation remains open.**
 [Coordination #912](https://github.com/FS-GG/FS.GG.Coordination/pull/912) merged at
 `0dd4aa26aca6697f1cc3cece762a4ecae60b5b81`, equal reviewed candidate
