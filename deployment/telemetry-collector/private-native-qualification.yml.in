@@ -28,7 +28,7 @@ jobs:
       RUN_NONCE: ${{ inputs.run_nonce }}
       PLACEMENT_SHA: ${{ inputs.placement_sha }}
       RECIPE_SHA: '@@RECIPE_SOURCE_SHA@@'
-      PROFILE_SHA: 1ef6d54eb3f9572580407efe9f266f643645af3af17c33723c0aa8368e5f4f34
+      PROFILE_SHA: '@@HOST_BINDING_PROFILE_SHA256@@'
     steps:
       - name: Checkout admitted private placement
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -42,7 +42,13 @@ jobs:
           ref: '@@RECIPE_SOURCE_SHA@@'
           path: recipe
           persist-credentials: false
+      - name: Set up exact HOST binding SDK
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
+        with:
+          dotnet-version: 10.0.401
       - name: Refuse non-exact placement and prepare public runtime
+        env:
+          HOSTED_RUNNER_CUSTODY: ${{ runner.environment }}
         run: |
           set -euo pipefail
           test "$GITHUB_EVENT_NAME" = workflow_dispatch
@@ -54,6 +60,91 @@ jobs:
           test "$(git -C recipe rev-parse HEAD)" = "$RECIPE_SHA"
           test "$(git -C placement status --porcelain)" = ""
           test "$(git -C recipe status --porcelain)" = ""
+          # BEGIN hosted runner SDK custody normalization
+          sdk_refuse() {
+            printf 'hosted-sdk-guard-refused stage=%s\n' "$1" >&2
+            exit 1
+          }
+          sdk_path_guard() {
+            local stage="$1" path="$2" uid mode
+            uid="$(stat -c %u -- "$path")" || sdk_refuse "$stage-stat"
+            mode="$(stat -c %a -- "$path")" || sdk_refuse "$stage-stat"
+            printf 'hosted-sdk-guard stage=%s path=%s uid=%s mode=%s\n' "$stage" "$path" "$uid" "$mode"
+            test "$uid" = 0 || sdk_refuse "$stage-owner"
+            test "$((8#$mode & 022))" = 0 || sdk_refuse "$stage-mode"
+          }
+          test "$HOSTED_RUNNER_CUSTODY" = github-hosted || sdk_refuse runner-environment
+          test "$DOTNET_ROOT" = /usr/share/dotnet || sdk_refuse dotnet-root-environment
+          sdk_root="$(readlink -f -- "$DOTNET_ROOT")" || sdk_refuse dotnet-root-resolve
+          resolved_dotnet="$(readlink -f -- /usr/bin/dotnet)" || sdk_refuse usr-bin-dotnet-resolve
+          path_dotnet="$(readlink -f -- "$(command -v dotnet)")" || sdk_refuse path-dotnet-resolve
+          printf 'hosted-sdk-placement sdk-root=%s resolved-dotnet=%s path-dotnet=%s\n' "$sdk_root" "$resolved_dotnet" "$path_dotnet"
+          test "$sdk_root" = /usr/share/dotnet || sdk_refuse dotnet-root-placement
+          test "$resolved_dotnet" = "$sdk_root/dotnet" || sdk_refuse usr-bin-dotnet-placement
+          test "$path_dotnet" = "$resolved_dotnet" || sdk_refuse path-dotnet-placement
+          test "$("$resolved_dotnet" --version)" = 10.0.401 || sdk_refuse dotnet-version-before-normalization
+          sudo chown -hR root:root -- "$sdk_root" || sdk_refuse dotnet-tree-chown
+          sudo chmod -R go-w -- "$sdk_root" || sdk_refuse dotnet-tree-chmod
+          usr_share_uid="$(stat -c %u -- /usr/share)" || sdk_refuse usr-share-stat-before-normalization
+          usr_share_mode="$(stat -c %a -- /usr/share)" || sdk_refuse usr-share-stat-before-normalization
+          printf 'hosted-sdk-ancestor-normalize path=/usr/share uid=%s mode-before=%s\n' "$usr_share_uid" "$usr_share_mode"
+          test "$usr_share_uid" = 0 || sdk_refuse usr-share-owner-before-normalization
+          sudo chmod go-w -- /usr/share || sdk_refuse usr-share-chmod
+          invalid_sdk_entry="$(find "$sdk_root" -xdev \( ! -uid 0 -o \( ! -type l -a -perm /022 \) \) -print -quit)" || sdk_refuse dotnet-tree-scan
+          if test -n "$invalid_sdk_entry"; then
+            printf '%s\n' hosted-sdk-custody-refused >&2
+            sdk_refuse dotnet-tree-custody
+          fi
+          sdk_path_guard resolved-dotnet "$resolved_dotnet"
+          sdk_path_guard dotnet-root "$sdk_root"
+          sdk_path_guard usr-share /usr/share
+          sdk_path_guard usr /usr
+          sdk_path_guard filesystem-root /
+          # END hosted runner SDK custody normalization
+          # The compiled binding owns every child only in a dedicated Linux x86_64
+          # process. Record and validate its exact process/runtime dependencies
+          # before any credential is restored.
+          test "$(uname -s)" = Linux
+          test "$(uname -m)" = x86_64
+          test -r /proc/thread-self/children
+          test "$(cat /proc/sys/kernel/pid_max)" -ge 1024
+          test ! -e "$RESULT_ROOT"
+          mkdir -m 0700 "$RESULT_ROOT"
+          test "$(stat -c %a "$RESULT_ROOT")" = 700
+          dependency_manifest="$RESULT_ROOT/host-binding-dependencies.txt"
+          : > "$dependency_manifest"
+          chmod 600 "$dependency_manifest"
+          for selected in /usr/bin/dotnet /usr/bin/git /usr/bin/setsid; do
+            test -e "$selected"
+            resolved="$(readlink -f -- "$selected")"
+            test -n "$resolved"
+            test -f "$resolved"
+            test "$(stat -c %u -- "$resolved")" = 0
+            mode="$(stat -c %a -- "$resolved")"
+            test "$((8#$mode & 022))" = 0
+            parent="$(dirname -- "$resolved")"
+            while test "$parent" != /; do
+              test "$(stat -c %u -- "$parent")" = 0
+              parent_mode="$(stat -c %a -- "$parent")"
+              test "$((8#$parent_mode & 022))" = 0
+              parent="$(dirname -- "$parent")"
+            done
+            printf '%s %s %s\n' "$selected" "$resolved" "$(sha256sum -- "$resolved" | cut -d' ' -f1)" >> "$dependency_manifest"
+          done
+          test "$(/usr/bin/dotnet --version)" = 10.0.401 || sdk_refuse usr-bin-dotnet-version-after-normalization
+          /usr/bin/dotnet restore recipe/deployment/telemetry-collector/host-binding/HostBinding.fsproj --locked-mode
+          /usr/bin/dotnet build recipe/deployment/telemetry-collector/host-binding/HostBinding.fsproj --no-restore --configuration Release
+          HOST_BINDING="$GITHUB_WORKSPACE/recipe/deployment/telemetry-collector/host-binding/bin/Release/net10.0/HostBinding.dll"
+          for produced in "$HOST_BINDING" "${HOST_BINDING%.dll}.deps.json" "${HOST_BINDING%.dll}.runtimeconfig.json" "$(dirname "$HOST_BINDING")/FSharp.Core.dll"; do
+            test -f "$produced"
+            test ! -L "$produced"
+            printf '%s %s %s\n' host-binding-file "$produced" "$(sha256sum -- "$produced" | cut -d' ' -f1)" >> "$dependency_manifest"
+          done
+          binding="$(/usr/bin/dotnet "$HOST_BINDING" render \
+            --source-root "$GITHUB_WORKSPACE/recipe" --source-sha "$RECIPE_SHA" \
+            --profile "$GITHUB_WORKSPACE/recipe/deployment/telemetry-collector/native-operation-v1.json" \
+            --source-pins "$GITHUB_WORKSPACE/placement/_private-inputs/native/source-pins.json")"
+          python3 -c 'import json,os,sys; v=json.loads(sys.argv[1]); assert v["schema"]=="fsgg.telemetry.host-binding-render/1" and v["recipeSourceSha"]==os.environ["RECIPE_SHA"] and v["profileSha256"]==os.environ["PROFILE_SHA"]' "$binding"
           openssl pkey -pubin -in placement/_private-inputs/custody/root-public.pem -noout
           test "$(podman info --format '{{.Host.Security.Rootless}}')" = true
           test "$(podman info --format '{{.Host.Arch}}')" = amd64
@@ -67,10 +158,13 @@ jobs:
           FSGG_NATIVE_AUTH_JSON_B64: ${{ secrets.FSGG_V2_HOST_018_NATIVE_AUTH_JSON_B64 }}
           FSGG_PRIVATE_EFFECT_ADMISSION: ${{ secrets.FSGG_V2_HOST_018_EFFECT_ADMISSION }}
         run: |
-          set -uo pipefail
-          set +e
+          set -euo pipefail
           umask 077
-          mkdir -m 0700 "$RESULT_ROOT"
+          test -d "$RESULT_ROOT"
+          test ! -L "$RESULT_ROOT"
+          test "$(stat -c %a "$RESULT_ROOT")" = 700
+          test "$(stat -c %u "$RESULT_ROOT")" = "$(id -u)"
+          set +e
           interrupted=0
           trap 'interrupted=1' INT TERM
           if python3 recipe/deployment/telemetry-collector/qualify_native_container.py \
@@ -87,6 +181,7 @@ jobs:
             --coord-stable "$GITHUB_WORKSPACE/placement/_private-inputs/coord/stable-channel.json" \
             --context-helper "$GITHUB_WORKSPACE/recipe/deployment/telemetry-collector/prepare_native_image_context.py" \
             --native-source-pins "$GITHUB_WORKSPACE/placement/_private-inputs/native/source-pins.json" \
+            --host-binding "$GITHUB_WORKSPACE/recipe/deployment/telemetry-collector/host-binding/bin/Release/net10.0/HostBinding.dll" \
             --native-executable "$GITHUB_WORKSPACE/placement/_private-inputs/native/codex" \
             --seal-public-key "$GITHUB_WORKSPACE/placement/_private-inputs/custody/root-public.pem" \
             --result "$RESULT_ROOT/result.json"; then

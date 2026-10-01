@@ -30,6 +30,11 @@ on:
       - "scripts/release_successor_execution.py"
       - "scripts/release_successor_journal.py"
       - "tests/telemetry-host-successor/**"
+      - "deployment/telemetry-collector/host-binding/**"
+      - "deployment/telemetry-collector/qualify_native_container.py"
+      - "deployment/telemetry-collector/private-native-qualification.yml.in"
+      - "tests/telemetry-collector-container/test_private_native_qualification.py"
+      - "docs/roadmaps/2026-10-01-typed-administrative-fsharp-quint.md"
       - ".github/workflows/release-telemetry-host-successor-*.yml"
       - ".github/workflows/telemetry-host-package.yml"
       - ".github/workflows/release-telemetry-host.yml"
@@ -63,6 +68,11 @@ on:
       - "scripts/release_successor_execution.py"
       - "scripts/release_successor_journal.py"
       - "tests/telemetry-host-successor/**"
+      - "deployment/telemetry-collector/host-binding/**"
+      - "deployment/telemetry-collector/qualify_native_container.py"
+      - "deployment/telemetry-collector/private-native-qualification.yml.in"
+      - "tests/telemetry-collector-container/test_private_native_qualification.py"
+      - "docs/roadmaps/2026-10-01-typed-administrative-fsharp-quint.md"
       - ".github/workflows/release-telemetry-host-successor-*.yml"
       - ".github/workflows/telemetry-host-package.yml"
       - ".github/workflows/release-telemetry-host.yml"
@@ -80,9 +90,75 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-dotnet@v6
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
         with:
-          global-json-file: global.json
+          dotnet-version: 10.0.401
+      - name: Qualify the typed HOST binding and private template
+        env:
+          NUGET_PACKAGES: ${{ runner.temp }}/host-binding-nuget
+          HOSTED_RUNNER_CUSTODY: ${{ runner.environment }}
+        run: |
+          set -euo pipefail
+          # BEGIN hosted runner SDK custody normalization
+          sdk_refuse() {
+            printf 'hosted-sdk-guard-refused stage=%s\n' "$1" >&2
+            exit 1
+          }
+          sdk_path_guard() {
+            local stage="$1" path="$2" uid mode
+            uid="$(stat -c %u -- "$path")" || sdk_refuse "$stage-stat"
+            mode="$(stat -c %a -- "$path")" || sdk_refuse "$stage-stat"
+            printf 'hosted-sdk-guard stage=%s path=%s uid=%s mode=%s\n' "$stage" "$path" "$uid" "$mode"
+            test "$uid" = 0 || sdk_refuse "$stage-owner"
+            test "$((8#$mode & 022))" = 0 || sdk_refuse "$stage-mode"
+          }
+          test "$HOSTED_RUNNER_CUSTODY" = github-hosted || sdk_refuse runner-environment
+          test "$DOTNET_ROOT" = /usr/share/dotnet || sdk_refuse dotnet-root-environment
+          sdk_root="$(readlink -f -- "$DOTNET_ROOT")" || sdk_refuse dotnet-root-resolve
+          resolved_dotnet="$(readlink -f -- /usr/bin/dotnet)" || sdk_refuse usr-bin-dotnet-resolve
+          path_dotnet="$(readlink -f -- "$(command -v dotnet)")" || sdk_refuse path-dotnet-resolve
+          printf 'hosted-sdk-placement sdk-root=%s resolved-dotnet=%s path-dotnet=%s\n' "$sdk_root" "$resolved_dotnet" "$path_dotnet"
+          test "$sdk_root" = /usr/share/dotnet || sdk_refuse dotnet-root-placement
+          test "$resolved_dotnet" = "$sdk_root/dotnet" || sdk_refuse usr-bin-dotnet-placement
+          test "$path_dotnet" = "$resolved_dotnet" || sdk_refuse path-dotnet-placement
+          test "$("$resolved_dotnet" --version)" = 10.0.401 || sdk_refuse dotnet-version-before-normalization
+          sudo chown -hR root:root -- "$sdk_root" || sdk_refuse dotnet-tree-chown
+          sudo chmod -R go-w -- "$sdk_root" || sdk_refuse dotnet-tree-chmod
+          usr_share_uid="$(stat -c %u -- /usr/share)" || sdk_refuse usr-share-stat-before-normalization
+          usr_share_mode="$(stat -c %a -- /usr/share)" || sdk_refuse usr-share-stat-before-normalization
+          printf 'hosted-sdk-ancestor-normalize path=/usr/share uid=%s mode-before=%s\n' "$usr_share_uid" "$usr_share_mode"
+          test "$usr_share_uid" = 0 || sdk_refuse usr-share-owner-before-normalization
+          sudo chmod go-w -- /usr/share || sdk_refuse usr-share-chmod
+          invalid_sdk_entry="$(find "$sdk_root" -xdev \( ! -uid 0 -o \( ! -type l -a -perm /022 \) \) -print -quit)" || sdk_refuse dotnet-tree-scan
+          if test -n "$invalid_sdk_entry"; then
+            printf '%s\n' hosted-sdk-custody-refused >&2
+            sdk_refuse dotnet-tree-custody
+          fi
+          sdk_path_guard resolved-dotnet "$resolved_dotnet"
+          sdk_path_guard dotnet-root "$sdk_root"
+          sdk_path_guard usr-share /usr/share
+          sdk_path_guard usr /usr
+          sdk_path_guard filesystem-root /
+          # END hosted runner SDK custody normalization
+          test "$(dotnet --version)" = 10.0.401 || sdk_refuse path-dotnet-version-after-normalization
+          test "$(/usr/bin/dotnet --version)" = 10.0.401 || sdk_refuse usr-bin-dotnet-version-after-normalization
+          test "$(readlink -f "$(command -v dotnet)")" = "$(readlink -f /usr/bin/dotnet)" || sdk_refuse dotnet-selection-after-normalization
+          python3 -c 'import yaml; print(yaml.__version__)' > "$RUNNER_TEMP/host-binding-pyyaml-version.txt" || sdk_refuse pyyaml-import
+          /usr/bin/dotnet restore deployment/telemetry-collector/host-binding/tests/HostBinding.Tests.fsproj --locked-mode
+          /usr/bin/dotnet test deployment/telemetry-collector/host-binding/tests/HostBinding.Tests.fsproj \
+            --configuration Release --no-restore --logger "trx;LogFileName=host-binding.trx" \
+            --results-directory "$RUNNER_TEMP/host-binding-results"
+          python3 - "$RUNNER_TEMP/host-binding-results/host-binding.trx" <<'PY'
+          import sys, xml.etree.ElementTree as ET
+          counters = ET.parse(sys.argv[1]).getroot().find('.//{*}Counters')
+          assert counters is not None
+          assert (counters.get('total'), counters.get('executed'), counters.get('passed'), counters.get('failed')) == ('26', '26', '26', '0')
+          PY
+          python3 -m unittest tests/telemetry-collector-container/test_private_native_qualification.py \
+            2>&1 | tee "$RUNNER_TEMP/host-binding-python-tests.log"
+          grep -F 'Ran 38 tests' "$RUNNER_TEMP/host-binding-python-tests.log"
+          grep -F 'OK' "$RUNNER_TEMP/host-binding-python-tests.log"
+          ! grep -F 'skipped=' "$RUNNER_TEMP/host-binding-python-tests.log"
       - name: Refuse malformed Host release effect policy before costly qualification
         run: |
           set -euo pipefail

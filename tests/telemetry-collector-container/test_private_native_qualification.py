@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import base64, contextlib, hashlib, importlib.util, io, json, os, pathlib, re, subprocess, tempfile, types, unittest
+import base64, contextlib, hashlib, importlib.util, io, json, os, pathlib, re, shutil, subprocess, tempfile, types, unittest
 from unittest import mock
 ROOT=pathlib.Path(__file__).resolve().parents[2]
 def load():
@@ -14,6 +14,37 @@ class FakeRunner:
   elif args[-1]=='--version': out=b'0.94.0.0\n'
   return subprocess.CompletedProcess(args,0,out,b'')
 class Tests(unittest.TestCase):
+ @classmethod
+ def setUpClass(cls):
+  project=ROOT/'deployment/telemetry-collector/host-binding/HostBinding.fsproj'
+  cls.package_cache=tempfile.TemporaryDirectory(); env=dict(os.environ,NUGET_PACKAGES=cls.package_cache.name)
+  subprocess.run(['dotnet','restore',str(project),'--locked-mode'],cwd=ROOT,env=env,check=True,capture_output=True)
+  subprocess.run(['dotnet','build',str(project),'--no-restore'],cwd=ROOT,env=env,check=True,capture_output=True)
+  cls.binding_dll=project.parent/'bin/Debug/net10.0/HostBinding.dll'
+ @classmethod
+ def tearDownClass(cls): cls.package_cache.cleanup()
+ @classmethod
+ def copy_binding_closure(cls,root):
+  root.mkdir(parents=True,exist_ok=True)
+  for name in ('HostBinding','HostBinding.dll','HostBinding.deps.json','HostBinding.runtimeconfig.json','FSharp.Core.dll'):
+   shutil.copy2(cls.binding_dll.parent/name,root/name)
+  return root/'HostBinding.dll'
+ @classmethod
+ def binding_fixture(cls,root):
+  repository=root/'repository'; native=repository/'deployment/telemetry-collector'; native.mkdir(parents=True)
+  names=('qualify_native.py','native_producer_support.py','native-operation-v1.json','native-producer-config.toml')
+  pins={}
+  for name in names:
+   raw=(ROOT/'deployment/telemetry-collector'/name).read_bytes(); (native/name).write_bytes(raw); pins[name]=hashlib.sha256(raw).hexdigest()
+  pin_file=root/'source-pins.json'; pin_file.write_text(json.dumps(pins,separators=(',',':')))
+  subprocess.run(['git','init','--quiet'],cwd=repository,check=True); subprocess.run(['git','config','user.email','test@example.invalid'],cwd=repository,check=True)
+  subprocess.run(['git','config','user.name','host-binding-test'],cwd=repository,check=True); subprocess.run(['git','add','.'],cwd=repository,check=True)
+  subprocess.run(['git','commit','--quiet','-m','fixture'],cwd=repository,check=True)
+  source=subprocess.check_output(['git','rev-parse','HEAD'],cwd=repository,text=True).strip()
+  command=['/usr/bin/dotnet',str(cls.binding_dll),'inspect','--source-root',str(repository),'--source-sha',source,
+           '--profile',str(native/'native-operation-v1.json'),'--source-pins',str(pin_file)]
+  binding=json.loads(subprocess.check_output(command,text=True))
+  return repository,pin_file,source,binding
  @staticmethod
  def workflow_shell(label):
   lines=(ROOT/'deployment/telemetry-collector/private-native-qualification.yml.in').read_text().splitlines()
@@ -52,6 +83,7 @@ class Tests(unittest.TestCase):
     self.assertIn('FSGG_NATIVE_AUTH_JSON_B64',os.environ)
  def test_template_is_manual_private_exact_and_never_logs_secret(self):
   text=(ROOT/'deployment/telemetry-collector/private-native-qualification.yml.in').read_text()
+  public=(ROOT/'.github/workflows/telemetry-host-package.yml').read_text()
   self.assertIn('workflow_dispatch:',text); self.assertNotIn('pull_request:',text); self.assertNotIn('push:',text)
   self.assertIn("github.repository == 'FS-GG/FS.GG.GitHub.Substrate.Sandbox'",text)
   self.assertIn('persist-credentials: false',text); self.assertIn('retention-days: 1',text)
@@ -60,19 +92,94 @@ class Tests(unittest.TestCase):
   self.assertNotIn("@@SOURCE_SHA@@",text)
   self.assertEqual(1,text.count('${{ inputs.placement_sha }}')); self.assertIn('[[ "$PLACEMENT_SHA" =~ ^[0-9a-f]{40}$ ]]',text)
   self.assertIn('podman pull --platform linux/amd64',text); self.assertIn('timeout-minutes: 40',text)
+  self.assertIn('actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68',text)
+  self.assertIn('dotnet-version: 10.0.401',text); self.assertIn('test "$(/usr/bin/dotnet --version)" = 10.0.401',text)
+  marker='# BEGIN hosted runner SDK custody normalization'
+  self.assertEqual(1,text.count(marker)); self.assertEqual(1,public.count(marker))
+  for workflow in (text,public):
+   self.assertIn('HOSTED_RUNNER_CUSTODY: ${{ runner.environment }}',workflow)
+   self.assertIn('test "$HOSTED_RUNNER_CUSTODY" = github-hosted',workflow)
+   self.assertIn('test "$DOTNET_ROOT" = /usr/share/dotnet',workflow)
+   self.assertIn('test "$resolved_dotnet" = "$sdk_root/dotnet"',workflow)
+   self.assertIn('sudo chown -hR root:root -- "$sdk_root"',workflow)
+   self.assertIn('sudo chmod -R go-w -- "$sdk_root"',workflow)
+   self.assertIn('! -uid 0 -o \\( ! -type l -a -perm /022 \\)',workflow)
+   self.assertIn("printf '%s\\n' hosted-sdk-custody-refused >&2",workflow)
+   self.assertIn("printf 'hosted-sdk-guard-refused stage=%s\\n'",workflow)
+   self.assertIn('test "$usr_share_uid" = 0 || sdk_refuse usr-share-owner-before-normalization',workflow)
+   self.assertIn('sudo chmod go-w -- /usr/share || sdk_refuse usr-share-chmod',workflow)
+   self.assertNotIn('sudo chmod -R go-w -- /usr/share',workflow)
+   self.assertLess(workflow.index('test "$HOSTED_RUNNER_CUSTODY" = github-hosted'),workflow.index('sudo chmod go-w -- /usr/share'))
+   self.assertLess(workflow.index('test "$usr_share_uid" = 0'),workflow.index('sudo chmod go-w -- /usr/share'))
+   for stage in ('resolved-dotnet','dotnet-root','usr-share','usr','filesystem-root'):
+    self.assertIn(f'sdk_path_guard {stage}',workflow)
+  self.assertLess(public.index(marker),public.index('python3 -c'))
+  self.assertLess(text.index(marker),text.index('/usr/bin/dotnet restore'))
+  end='# END hosted runner SDK custody normalization'
+  for name,workflow in (('private',text),('public',public)):
+   with self.subTest(workflow=name), tempfile.TemporaryDirectory() as td:
+    root=pathlib.Path(td); system=root/'system'; sdk=system/'usr/share/dotnet'; binary=sdk/'dotnet'; link=sdk/'dotnet-link'; usr_bin=system/'usr/bin'
+    sdk.mkdir(parents=True); usr_bin.mkdir(parents=True)
+    binary.write_text('#!/bin/sh\nprintf "10.0.401\\n"\n'); binary.chmod(0o755)
+    link.symlink_to(binary)
+    (usr_bin/'dotnet').symlink_to(binary)
+    subprocess.run(['/usr/bin/sudo','chown','root:root',str(system),str(system/'usr'),str(system/'usr/share'),str(usr_bin)],check=True)
+    subprocess.run(['/usr/bin/sudo','chmod','755',str(system),str(system/'usr'),str(system/'usr/share'),str(usr_bin)],check=True)
+    block=workflow.split(marker,1)[1].split(end,1)[0]
+    block=block.replace('/usr/share/dotnet',str(sdk)).replace('/usr/bin/dotnet',str(usr_bin/'dotnet'))
+    block=block.replace('stat -c %u -- /usr/share',f'stat -c %u -- {system}/usr/share')
+    block=block.replace('stat -c %a -- /usr/share',f'stat -c %a -- {system}/usr/share')
+    block=block.replace('path=/usr/share uid=',f'path={system}/usr/share uid=')
+    block=block.replace('sudo chmod go-w -- /usr/share',f'sudo chmod go-w -- {system}/usr/share')
+    block=block.replace('sdk_path_guard usr-share /usr/share',f'sdk_path_guard usr-share {system}/usr/share')
+    block=block.replace('sdk_path_guard usr /usr',f'sdk_path_guard usr {system}/usr')
+    block=block.replace('sdk_path_guard filesystem-root /',f'sdk_path_guard filesystem-root {system}')
+    env=dict(os.environ,DOTNET_ROOT=str(sdk),HOSTED_RUNNER_CUSTODY='github-hosted',PATH=str(sdk)+':/usr/bin:/bin')
+    marker_path=root/'sudo-called'; fake=root/'fake'; fake.mkdir()
+    (fake/'sudo').write_text(f'#!/bin/sh\ntouch "{marker_path}"\nexit 0\n'); (fake/'sudo').chmod(0o755)
+    fake_path=str(fake)+':'+env['PATH']
+    wrong_runner=subprocess.run(['bash','-e','-o','pipefail'],input=block,text=True,
+                                env=dict(env,HOSTED_RUNNER_CUSTODY='self-hosted',PATH=fake_path),capture_output=True)
+    self.assertNotEqual(0,wrong_runner.returncode); self.assertFalse(marker_path.exists())
+    self.assertIn('hosted-sdk-guard-refused stage=runner-environment',wrong_runner.stderr)
+    refused=subprocess.run(['bash','-e','-o','pipefail'],input=block,text=True,env=dict(env,PATH=fake_path),capture_output=True)
+    self.assertNotEqual(0,refused.returncode,'runner-owned SDK closure must be refused without normalization')
+    self.assertTrue(marker_path.exists())
+    self.assertIn('hosted-sdk-guard-refused stage=dotnet-tree-custody',refused.stderr)
+    subprocess.run(['/usr/bin/sudo','chown',f'{os.getuid()}:{os.getgid()}',str(system/'usr/share')],check=True)
+    subprocess.run(['/usr/bin/sudo','chmod','777',str(system/'usr/share')],check=True)
+    owner_refused=subprocess.run(['bash','-e','-o','pipefail'],input=block,text=True,env=env,capture_output=True)
+    self.assertNotEqual(0,owner_refused.returncode)
+    self.assertIn('hosted-sdk-guard-refused stage=usr-share-owner-before-normalization',owner_refused.stderr)
+    self.assertEqual(0o777,(system/'usr/share').stat().st_mode&0o777)
+    subprocess.run(['/usr/bin/sudo','chown','root:root',str(system/'usr/share')],check=True)
+    accepted=subprocess.run(['bash','-e','-o','pipefail'],input=block,text=True,env=env,capture_output=True)
+    owner=binary.stat().st_uid; writes=binary.stat().st_mode&0o022; link_state=link.lstat(); share_mode=(system/'usr/share').stat().st_mode&0o777
+    subprocess.run(['/usr/bin/sudo','chown','-hR',f'{os.getuid()}:{os.getgid()}',str(system)],check=True)
+    self.assertEqual(0,accepted.returncode,accepted.stderr)
+    self.assertEqual(0,owner); self.assertEqual(0,writes)
+    self.assertEqual(0,link_state.st_uid); self.assertEqual(0o022,link_state.st_mode&0o022)
+    self.assertEqual(0o755,share_mode)
+    self.assertIn(f'hosted-sdk-ancestor-normalize path={system}/usr/share uid=0 mode-before=777',accepted.stdout)
+  self.assertIn('test -r /proc/thread-self/children',text)
+  self.assertIn('mcr.microsoft.com/dotnet/aspnet:10.0.12-noble-amd64@sha256:ed6a2d26633ddcd3d42a1d9f9866214ecbbc11ba6ac5e0e843da02c13da24072',text)
+  for selected in ('/usr/bin/dotnet','/usr/bin/git','/usr/bin/setsid'): self.assertIn(selected,text)
   self.assertNotIn('trap finalize EXIT',text); self.assertIn('exit "$final_rc"',text)
   self.assertNotIn('echo $FSGG_NATIVE_AUTH',text); self.assertNotIn('--auth-json',text)
  def test_rendered_workflow_parses_and_each_shell_block_has_valid_syntax(self):
   if importlib.util.find_spec('yaml') is None: self.skipTest('PyYAML unavailable')
   import yaml
-  text=(ROOT/'deployment/telemetry-collector/private-native-qualification.yml.in').read_text()
-  rendered=text.replace('@@RECIPE_SOURCE_SHA@@','a'*40).replace('@@QUALIFICATION_REF@@','qualification-v1')
-  value=yaml.safe_load(rendered); jobs=value.get('jobs'); self.assertIsInstance(jobs,dict)
-  scripts=[step['run'] for step in jobs['qualify']['steps'] if 'run' in step]
-  self.assertEqual(2,len(scripts))
-  for script in scripts:
-   checked=subprocess.run(['bash','-n'],input=script,text=True,capture_output=True)
-   self.assertEqual(0,checked.returncode,checked.stderr)
+  workflows=((ROOT/'deployment/telemetry-collector/private-native-qualification.yml.in',2),
+             (ROOT/'.github/workflows/telemetry-host-package.yml',6))
+  for path,count in workflows:
+   with self.subTest(workflow=path.name):
+    rendered=path.read_text().replace('@@RECIPE_SOURCE_SHA@@','a'*40).replace('@@QUALIFICATION_REF@@','qualification-v1')
+    value=yaml.safe_load(rendered); jobs=value.get('jobs'); self.assertIsInstance(jobs,dict)
+    scripts=[step['run'] for job in jobs.values() for step in job['steps'] if 'run' in step]
+    self.assertEqual(count,len(scripts))
+    for script in scripts:
+     checked=subprocess.run(['bash','-n'],input=script,text=True,capture_output=True)
+     self.assertEqual(0,checked.returncode,checked.stderr)
  def test_job_environment_uses_only_contexts_available_at_job_scope(self):
   if importlib.util.find_spec('yaml') is None: self.skipTest('PyYAML unavailable')
   import yaml
@@ -102,13 +209,106 @@ class Tests(unittest.TestCase):
    self.assertNotEqual(0,refused.returncode); self.assertFalse(marker.exists())
  def test_effect_admission_is_bound_before_private_root_or_auth_read(self):
   with tempfile.TemporaryDirectory() as td:
-   t=pathlib.Path(td); a=type('A',(),{'private_root':t/'private','run_nonce':'run-0001','source_sha':'a'*40,'private_placement_sha':'d'*40})()
-   op=q.Operation(a,FakeRunner())
+   t=pathlib.Path(td); repository,pins,source,binding=self.binding_fixture(t)
+   a=type('A',(),{'private_root':t/'private','run_nonce':'run-0001','source_sha':source,'private_placement_sha':'d'*40,
+                  'source_root':repository,'native_source_pins':pins,'host_binding':self.binding_dll,'result':t/'result.json'})()
+   op=q.Operation(a,q.Runner(__import__('time').monotonic()+100)); op.host_binding=binding
+   op.record_host_binding_dependencies()
    with mock.patch.dict(os.environ,{'FSGG_NATIVE_AUTH_JSON_B64':base64.b64encode(b'{}').decode(),
                                     'FSGG_PRIVATE_EFFECT_ADMISSION':'0'*64},clear=True):
     with self.assertRaisesRegex(q.Refusal,'effect-admission-refused'): op.materialize()
     self.assertFalse((t/'private').exists())
     self.assertIn('FSGG_NATIVE_AUTH_JSON_B64',os.environ)
+ def test_materialization_policy_is_only_in_compiled_binding_verifier(self):
+  source=(ROOT/'deployment/telemetry-collector/qualify_native_container.py').read_text()
+  self.assertNotIn("run_nonce+'\\0'+self.a.source_sha",source)
+  self.assertNotIn('compare_digest(admission',source)
+  self.assertIn("'/usr/bin/dotnet',str(self.a.host_binding),'verify'",source)
+  self.assertIn("input_bytes=(admission+'\\n').encode()",source)
+ def test_compiled_renderer_derives_recipe_profile_and_producer_slots(self):
+  with tempfile.TemporaryDirectory() as td:
+   repository,pins,source,binding=self.binding_fixture(pathlib.Path(td))
+   command=['/usr/bin/dotnet',str(self.binding_dll),'render','--source-root',str(repository),'--source-sha',source,
+            '--profile',str(repository/'deployment/telemetry-collector/native-operation-v1.json'),'--source-pins',str(pins)]
+   rendered=json.loads(subprocess.check_output(command,text=True))
+   self.assertEqual('fsgg.telemetry.host-binding-render/1',rendered['schema'])
+   self.assertEqual((source,binding['profileSha256'],binding['producerSha256'],binding['bindingSha256']),
+                    (rendered['recipeSourceSha'],rendered['profileSha256'],rendered['producerSha256'],rendered['bindingSha256']))
+ def test_compiled_verifier_refuses_oversized_or_padded_admission_frame(self):
+  with tempfile.TemporaryDirectory() as td:
+   repository,pins,source,binding=self.binding_fixture(pathlib.Path(td)); nonce='run-0001'
+   admission=hashlib.sha256((nonce+'\0'+source+'\0'+binding['profileSha256']+'\0'+q.OPERATION).encode()).hexdigest()
+   command=['/usr/bin/dotnet',str(self.binding_dll),'verify','--source-root',str(repository),'--source-sha',source,
+            '--profile',str(repository/'deployment/telemetry-collector/native-operation-v1.json'),'--source-pins',str(pins),
+            '--nonce',nonce,'--expected-binding-sha',binding['bindingSha256']]
+   for candidate in (' '*(1024*1024)+admission+'\n',' '+admission+'\n',admission+'\r\n',admission+'\nextra'):
+    with self.subTest(bytes=len(candidate)):
+     refused=subprocess.run(command,input=candidate.encode(),capture_output=True,timeout=10)
+     self.assertEqual(2,refused.returncode); self.assertEqual(b'',refused.stdout)
+   accepted=subprocess.run(command,input=(admission+'\n').encode(),capture_output=True,timeout=10)
+   self.assertEqual(0,accepted.returncode)
+ def test_python_adapter_refuses_oversized_admission_before_child_or_auth(self):
+  class NoChild:
+   def run(self,*args,**kwargs): raise AssertionError('verifier child must not start')
+  with tempfile.TemporaryDirectory() as td:
+   t=pathlib.Path(td); a=type('A',(),{'private_root':t/'private','run_nonce':'run-0001','source_sha':'a'*40,'private_placement_sha':'d'*40})()
+   op=q.Operation(a,NoChild()); op.host_binding={'bindingSha256':'b'*64}
+   with mock.patch.dict(os.environ,{'FSGG_NATIVE_AUTH_JSON_B64':'synthetic-auth','FSGG_PRIVATE_EFFECT_ADMISSION':' '*(1024*1024)+'0'*64},clear=True):
+    with self.assertRaisesRegex(q.Refusal,'effect-admission-refused'): op.materialize()
+    self.assertFalse((t/'private').exists()); self.assertIn('FSGG_NATIVE_AUTH_JSON_B64',os.environ)
+ def test_host_binding_budget_and_dependency_drift_refuse_before_auth(self):
+  with tempfile.TemporaryDirectory() as td:
+   root=pathlib.Path(td); helper=self.copy_binding_closure(root/'binding')
+   a=type('A',(),{'private_root':root/'private','run_nonce':'run-0001','source_sha':'a'*40,
+                  'private_placement_sha':'d'*40,'host_binding':helper,'result':root/'result.json'})()
+   short=q.Operation(a,q.Runner(__import__('time').monotonic()+10)); short.host_binding={'bindingSha256':'b'*64}
+   with mock.patch.dict(os.environ,{'FSGG_NATIVE_AUTH_JSON_B64':'synthetic-auth','FSGG_PRIVATE_EFFECT_ADMISSION':'0'*64},clear=True):
+    with self.assertRaisesRegex(q.Refusal,'host-binding-budget-refused'): short.materialize()
+    self.assertIn('FSGG_NATIVE_AUTH_JSON_B64',os.environ); self.assertFalse((root/'private').exists())
+   stable=q.Operation(a,q.Runner(__import__('time').monotonic()+100)); stable.host_binding={'bindingSha256':'b'*64}
+   stable.record_host_binding_dependencies()
+   (helper.parent/'HostBinding.runtimeconfig.json').write_text('{}')
+   with mock.patch.dict(os.environ,{'FSGG_NATIVE_AUTH_JSON_B64':'synthetic-auth','FSGG_PRIVATE_EFFECT_ADMISSION':'0'*64},clear=True):
+    with self.assertRaisesRegex(q.Refusal,'effect-admission-refused'): stable.materialize()
+    self.assertIn('FSGG_NATIVE_AUTH_JSON_B64',os.environ); self.assertFalse((root/'private').exists())
+ def test_each_local_runtime_closure_class_and_manifest_are_revalidated(self):
+  for changed in ('HostBinding.deps.json','HostBinding.runtimeconfig.json','FSharp.Core.dll','HostBinding','manifest'):
+   with self.subTest(changed=changed), tempfile.TemporaryDirectory() as td:
+    root=pathlib.Path(td); helper=self.copy_binding_closure(root/'binding')
+    a=type('A',(),{'private_root':root/'private','run_nonce':'run-0001','source_sha':'a'*40,
+                   'private_placement_sha':'d'*40,'host_binding':helper,'result':root/'result.json'})()
+    op=q.Operation(a,q.Runner(__import__('time').monotonic()+100)); op.host_binding={'bindingSha256':'b'*64}
+    op.record_host_binding_dependencies()
+    target=root/'host-binding-dependencies.json' if changed=='manifest' else helper.parent/changed
+    target.write_bytes(target.read_bytes()+b'drift')
+    with mock.patch.dict(os.environ,{'FSGG_NATIVE_AUTH_JSON_B64':'synthetic-auth','FSGG_PRIVATE_EFFECT_ADMISSION':'0'*64},clear=True):
+     with self.assertRaisesRegex(q.Refusal,'effect-admission-refused'): op.materialize()
+     self.assertIn('FSGG_NATIVE_AUTH_JSON_B64',os.environ); self.assertFalse((root/'private').exists())
+ def test_real_compiled_pre_materialization_boundary_has_seven_closed_probes(self):
+  class ReachedBoundary(Exception): pass
+  cases=('valid','old-profile','profile-mutated','pins-mutated','source-revision','producer-mutated','producer-missing')
+  for case in cases:
+   with self.subTest(case=case), tempfile.TemporaryDirectory() as td:
+    root=pathlib.Path(td); repository,pins,source,binding=self.binding_fixture(root); nonce='run-0001'
+    admission_profile=binding['profileSha256'] if case!='old-profile' else '5a30fc507f023d542521aac66c8f49c5ae6ee8d9e34dc90c1a3bf3ab30f6b08f'
+    admission=hashlib.sha256((nonce+'\0'+source+'\0'+admission_profile+'\0'+q.OPERATION).encode()).hexdigest()
+    executable=self.copy_binding_closure(root/'binding'); selected_source=source
+    a=type('A',(),{'private_root':root/'private','run_nonce':nonce,'source_sha':selected_source,'private_placement_sha':'d'*40,
+                   'source_root':repository,'native_source_pins':pins,'host_binding':executable,'result':root/'result.json'})()
+    op=q.Operation(a,q.Runner(__import__('time').monotonic()+100)); op.host_binding=binding
+    op.record_host_binding_dependencies()
+    if case=='profile-mutated': (repository/'deployment/telemetry-collector/native-operation-v1.json').write_text('{}')
+    elif case=='pins-mutated': pins.write_text('{}')
+    elif case=='source-revision': a.source_sha='a'*40
+    elif case=='producer-mutated': executable.write_bytes(executable.read_bytes()+b'changed')
+    elif case=='producer-missing': executable.unlink()
+    with mock.patch.object(q,'private_dir',side_effect=ReachedBoundary), mock.patch.dict(os.environ,{
+         'FSGG_NATIVE_AUTH_JSON_B64':'synthetic-auth-not-read','FSGG_PRIVATE_EFFECT_ADMISSION':admission},clear=True):
+     if case=='valid':
+      with self.assertRaises(ReachedBoundary): op.materialize()
+     else:
+      with self.assertRaisesRegex(q.Refusal,'effect-admission-refused'): op.materialize()
+     self.assertFalse((root/'private').exists()); self.assertIn('FSGG_NATIVE_AUTH_JSON_B64',os.environ)
  def test_full_operation_sequence_is_real_and_bounded(self):
   source=(ROOT/'deployment/telemetry-collector/qualify_native_container.py').read_text()
   ordered=['prepare_context_and_images','zero-auth-readonly-topology-qualified','zero-auth-images-qualified','materialize(); op.execute()',
@@ -128,14 +328,16 @@ class Tests(unittest.TestCase):
    self.assertIn(token,source)
  def test_materialization_creates_driver_output_before_native_start(self):
   with tempfile.TemporaryDirectory() as td:
-   root=pathlib.Path(td); staging=root/'staging'; (staging/'tls').mkdir(parents=True)
+   root=pathlib.Path(td); repository,pins,source,binding=self.binding_fixture(root); staging=root/'staging'; (staging/'tls').mkdir(parents=True)
    for name in ('password','key.pem','native-receiver.crt','receiver.pfx'): (staging/'tls'/name).write_bytes(b'x')
-   nonce='run-0001'; source='a'*40
-   a=type('A',(),{'private_root':root/'private','staging_root':staging,'run_nonce':nonce,'source_sha':source,'private_placement_sha':'d'*40})()
-   admission=hashlib.sha256((nonce+'\0'+source+'\0'+q.PROFILE_SHA+'\0'+q.OPERATION).encode()).hexdigest()
+   nonce='run-0001'
+   a=type('A',(),{'private_root':root/'private','staging_root':staging,'run_nonce':nonce,'source_sha':source,'private_placement_sha':'d'*40,
+                  'source_root':repository,'native_source_pins':pins,'host_binding':self.binding_dll,'result':root/'result.json'})()
+   admission=hashlib.sha256((nonce+'\0'+source+'\0'+binding['profileSha256']+'\0'+q.OPERATION).encode()).hexdigest()
    with mock.patch.dict(os.environ,{'FSGG_PRIVATE_EFFECT_ADMISSION':admission,
                                     'FSGG_NATIVE_AUTH_JSON_B64':base64.b64encode(b'{}').decode()},clear=True):
-    q.Operation(a,FakeRunner()).materialize()
+    op=q.Operation(a,q.Runner(__import__('time').monotonic()+100)); op.host_binding=binding
+    op.record_host_binding_dependencies(); op.materialize()
    output=root/'private/native/qualification-output'
    self.assertTrue(output.is_dir()); self.assertEqual(0o700,output.stat().st_mode&0o777)
  def test_exact_readonly_topology_is_qualified_before_private_root_exists(self):
@@ -189,9 +391,26 @@ class Tests(unittest.TestCase):
     if auth=='not-materialized': self.assertTrue(value['preservationComplete'])
  def test_workflow_finalization_propagates_seal_failure_and_preserves_plaintext(self):
   script=self.operation_shell(); self.assertEqual(0,subprocess.run(['bash','-n'],input=script,text=True).returncode)
+  prefix=script.split('if python3 recipe/deployment/telemetry-collector/qualify_native_container.py',1)[0]+'printf OPERATION_SENTINEL\\n\n'
+  with tempfile.TemporaryDirectory() as td:
+   t=pathlib.Path(td); cases=[]
+   cases.append(('missing',t/'missing',None))
+   mode=t/'mode'; mode.mkdir(mode=0o755); cases.append(('mode0755',mode,None))
+   target=t/'target'; target.mkdir(mode=0o700); link=t/'link'; link.symlink_to(target); cases.append(('symlink',link,None))
+   owner=t/'owner'; owner.mkdir(mode=0o700); fake=t/'fake'; fake.mkdir(); identity=fake/'id'
+   identity.write_text('#!/bin/sh\nprintf 999999\\n\n'); identity.chmod(0o700); cases.append(('wrong-owner',owner,str(fake)+':/usr/bin:/bin'))
+   valid=t/'valid'; valid.mkdir(mode=0o700); cases.append(('valid',valid,None))
+   for name,root,path in cases:
+    env=dict(os.environ,RESULT_ROOT=str(root));
+    if path: env['PATH']=path
+    checked=subprocess.run(['bash'],input=prefix,text=True,env=env,capture_output=True)
+    reached='OPERATION_SENTINEL' in checked.stdout
+    if name=='valid': self.assertEqual((0,True),(checked.returncode,reached),checked.stderr)
+    else: self.assertNotEqual(0,checked.returncode,name); self.assertFalse(reached,name)
   for operation_fail,seal_fail,expected_rc in ((False,False,0),(False,True,86),(True,False,2)):
    with self.subTest(operation_fail=operation_fail,seal_fail=seal_fail), tempfile.TemporaryDirectory() as td:
     t=pathlib.Path(td); fake=t/'bin'; fake.mkdir(); (t/'placement/_private-inputs/custody').mkdir(parents=True)
+    (t/'result').mkdir(mode=0o700)
     (t/'placement/_private-inputs/custody/root-public.pem').write_text('public-test-only')
     (t/'recipe').symlink_to(ROOT,target_is_directory=True)
     (fake/'python3').write_text('''#!/bin/bash
@@ -216,7 +435,7 @@ exit 2
     for path in fake.iterdir(): path.chmod(0o700)
     env={'PATH':str(fake)+':/usr/bin:/bin','RESULT_ROOT':str(t/'result'),'PRIVATE_ROOT':str(t/'private'),
          'STAGING_ROOT':str(t/'staging'),'RUN_NONCE':'run-0001','RECIPE_SHA':'a'*40,'PLACEMENT_SHA':'d'*40,
-         'PROFILE_SHA':q.PROFILE_SHA,'GITHUB_WORKSPACE':str(t),'FSGG_NATIVE_AUTH_JSON_B64':'test',
+         'PROFILE_SHA':'1ef6d54eb3f9572580407efe9f266f643645af3af17c33723c0aa8368e5f4f34','GITHUB_WORKSPACE':str(t),'FSGG_NATIVE_AUTH_JSON_B64':'test',
          'FSGG_PRIVATE_EFFECT_ADMISSION':'test','SEAL_FAIL':'1' if seal_fail else '0','OPERATION_FAIL':'1' if operation_fail else '0'}
     completed=subprocess.run(['bash','-e','-o','pipefail'],input=script,text=True,cwd=t,env=env,capture_output=True)
     self.assertEqual(expected_rc,completed.returncode,completed.stderr)

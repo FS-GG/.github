@@ -12,7 +12,6 @@ HOST_PAYLOAD="207843031c78c2711e85a2db14b46a83ec0da9fbd3ee0f144a736320f7e8c2c9"
 COORD_SOURCE="337b6a1d53571b07ca8e1417e18e52546ad319a7"
 COORD_PAYLOAD="9b9486a54e014fd5d21b65ed71a00b9021562a56909a1303f89c9646bca4a585"
 NATIVE_SHA="167c0148a849d2444f1b5a7fb5f8bb2de1de5ae13a2a504b833fc765980f5cd9"
-PROFILE_SHA="1ef6d54eb3f9572580407efe9f266f643645af3af17c33723c0aa8368e5f4f34"
 LEARN_CONTRACT="91713679fd486459188f2144e75cc69b77720c7841b6e75cd5d4d35620ed4179"
 HOST_LAUNCHER_SHA="6b881a6f1b346776ca5cb974a655ac041802ed27ad80e44dee92faeed59cc1bb"
 SCOPE=("v2-host-native-qualification","native-prospective-v1","roadmap")
@@ -130,12 +129,13 @@ class Runner:
         except UnicodeDecodeError: return None
         if any(character not in '\n\r\t' and not ' '<=character<='~' for character in text): return None
         return text
-    def run(self,args,*,env=None,input_bytes=None,limit=MAX_OUTPUT,check=True,diagnostic=None):
+    def run(self,args,*,env=None,input_bytes=None,limit=MAX_OUTPUT,check=True,diagnostic=None,timeout_seconds=120):
         require(isinstance(args,list) and all(isinstance(x,str) and x for x in args),'command-refused')
         if self.recorder is not None: require(isinstance(diagnostic,str) and re.fullmatch(r'[a-z0-9-]{1,64}',diagnostic)!=None,'command-diagnostic-refused')
         remaining=self.deadline-time.monotonic()
         require(remaining>0,'operation-deadline')
-        left=max(1,min(120,int(remaining)))
+        require(isinstance(timeout_seconds,int) and 1<=timeout_seconds<=120,'command-timeout-refused')
+        left=max(1,min(timeout_seconds,int(remaining)))
         p=subprocess.run(args,input=input_bytes,stdout=subprocess.PIPE,stderr=subprocess.PIPE,env=env or fixed_env(),timeout=left,check=False)
         require(len(p.stdout)<=limit and len(p.stderr)<=limit,'command-output-limit')
         if self.recorder is not None:
@@ -159,6 +159,9 @@ class Operation:
                      'privatePlacementSha':args.private_placement_sha,'phases':[],'disposition':'incomplete'}
         self.images={}; self.owned_run_ordinal=0; self.command_diagnostics=[]; self.inspection_diagnostics=[]
         self.native_start_failure_diagnostic=None
+        self.host_binding=None
+        self.host_binding_dependencies=None
+        self.host_binding_dependency_manifest_sha=None
     def phase(self,name,**facts): self.result['phases'].append({'ordinal':len(self.result['phases'])+1,'name':name,**facts})
     def command_diagnostic(self,value):
         require(len(self.command_diagnostics)<128,'command-diagnostic-capacity-refused')
@@ -178,6 +181,67 @@ class Operation:
                 'command':'native-start','encoding':'base64','maximumDecodedBytes':MAX_PRIVATE_NATIVE_START_STDERR,
                 'stderrBytes':len(decoded),'stderrSha256':value['stderrSha256'],'stderrBase64':private_stderr}
         self.command_diagnostics.append({'ordinal':len(self.command_diagnostics)+1,'phase':phase,**value})
+    def host_binding_dependency_snapshot(self):
+        require(self.r.deadline-time.monotonic()>=85,'host-binding-budget-refused')
+        try:
+            def entry(name,path,maximum,system):
+                path=pathlib.Path(path); link=path.readlink().as_posix() if path.is_symlink() else None
+                resolved=path.resolve(strict=True); regular(resolved,maximum); value=resolved.stat()
+                ancestors=[]; parent=resolved.parent
+                while True:
+                    state=parent.stat(); ancestors.append((str(parent),state.st_uid,state.st_gid,stat.S_IMODE(state.st_mode)))
+                    if parent==parent.parent: break
+                    require(len(ancestors)<=32,'host-binding-dependency-refused'); parent=parent.parent
+                if system:
+                    require(value.st_uid==0 and not (stat.S_IMODE(value.st_mode)&0o022)
+                            and all(owner==0 and not (mode&0o022) for _,owner,_,mode in ancestors),
+                            'host-binding-dependency-refused')
+                return (name,str(path),link,str(resolved),value.st_uid,value.st_gid,stat.S_IMODE(value.st_mode),
+                        value.st_size,digest(resolved),tuple(ancestors))
+            binding=pathlib.Path(self.a.host_binding); stem=binding.with_suffix('')
+            local=(binding,stem.with_suffix('.deps.json'),stem.with_suffix('.runtimeconfig.json'),
+                   binding.parent/'FSharp.Core.dll',binding.parent/'HostBinding')
+            runtime=json.loads(local[2].read_text())['runtimeOptions']['framework']
+            require(runtime=={'name':'Microsoft.NETCore.App','version':'10.0.0'},'host-binding-runtime-refused')
+            listed=subprocess.run(['/usr/bin/dotnet','--list-runtimes'],stdout=subprocess.PIPE,stderr=subprocess.PIPE,
+                                  env=fixed_env(),timeout=5,check=False)
+            require(listed.returncode==0 and len(listed.stdout)<=65536 and listed.stderr==b'',
+                    'host-binding-runtime-refused')
+            candidates=[]
+            for line in listed.stdout.decode('ascii').splitlines():
+                match=re.fullmatch(r'Microsoft\.NETCore\.App ([0-9]+\.[0-9]+\.[0-9]+) \[([^\]]+)\]',line)
+                if match and match.group(1).split('.')[0]=='10':
+                    candidates.append((tuple(map(int,match.group(1).split('.'))),pathlib.Path(match.group(2))/match.group(1)))
+            require(bool(candidates),'host-binding-runtime-refused'); runtime_root=max(candidates)[1]
+            dotnet=pathlib.Path('/usr/bin/dotnet'); dotnet_root=dotnet.resolve(strict=True).parent
+            fxr_candidates=[value for value in (dotnet_root/'host/fxr').iterdir()
+                            if value.is_dir() and re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+',value.name)]
+            require(bool(fxr_candidates),'host-binding-runtime-refused')
+            fxr_root=max(fxr_candidates,key=lambda value:tuple(map(int,value.name.split('.'))))
+            libc_paths={pathlib.Path(line.split()[-1]).resolve() for line in pathlib.Path('/proc/self/maps').read_text().splitlines()
+                        if line.split() and line.split()[-1].endswith('/libc.so.6')}
+            require(len(libc_paths)==1,'host-binding-runtime-refused')
+            result=[]
+            for index,path in enumerate(local): result.append(entry(('dll','deps','runtimeconfig','fsharp','apphost')[index],path,256*1024*1024,False))
+            for name,path,maximum in (('dotnet',dotnet,256*1024*1024),('git','/usr/bin/git',64*1024*1024),
+                                      ('setsid','/usr/bin/setsid',4*1024*1024),('libc',next(iter(libc_paths)),32*1024*1024)):
+                result.append(entry(name,path,maximum,True))
+            closure=[]
+            for label,root in (('runtime',runtime_root),('hostfxr',fxr_root)):
+                files=sorted(path for path in root.rglob('*') if path.is_file())
+                require(0<len(files)<=512,'host-binding-runtime-refused')
+                closure.extend(entry(f'{label}:{path.relative_to(root)}',path,256*1024*1024,True) for path in files)
+            require(len(result)+len(closure)<=1024,'host-binding-runtime-refused')
+            return tuple(result+closure)
+        except (OSError,ValueError,KeyError,UnicodeError,subprocess.SubprocessError,Refusal):
+            raise Refusal('host-binding-dependency-refused')
+    def record_host_binding_dependencies(self):
+        inventory=self.host_binding_dependency_snapshot()
+        manifest=canonical({'schema':'fsgg.telemetry.host-binding-dependencies/1','entries':inventory})
+        path=self.a.result.parent/'host-binding-dependencies.json'
+        private_write(path,manifest)
+        self.host_binding_dependencies=inventory
+        self.host_binding_dependency_manifest_sha=hashlib.sha256(manifest).hexdigest()
     def write_private_diagnostics(self):
         output=self.root/'output'
         if output.is_dir():
@@ -216,7 +280,19 @@ class Operation:
         require(dirty==b'','source-worktree-dirty')
         profile=self.a.source_root/'deployment/telemetry-collector/native-operation-v1.json'
         contract=self.a.source_root/'policy/learn-01-current-focused-v1.json'
-        require(digest(profile)==PROFILE_SHA and digest(contract)==LEARN_CONTRACT,'source-payload-drift')
+        require(digest(contract)==LEARN_CONTRACT,'source-payload-drift')
+        regular(self.a.host_binding,16*1024*1024)
+        self.record_host_binding_dependencies()
+        binding=json.loads(self.r.run(['/usr/bin/dotnet',str(self.a.host_binding),'inspect',
+                    '--source-root',str(self.a.source_root),'--source-sha',self.a.source_sha,
+                    '--profile',str(profile),'--source-pins',str(self.a.native_source_pins)],limit=4096,timeout_seconds=90).stdout)
+        require(set(binding)=={'schema','sourceSha','sourceTree','profileSha256','operationId','sourcePinsSha256','producerSha256','bindingSha256'}
+                and binding['schema']=='fsgg.telemetry.validated-host-binding/1'
+                and binding['sourceSha']==self.a.source_sha and binding['operationId']==OPERATION
+                and all(re.fullmatch(r'[0-9a-f]{40}',binding[key])!=None for key in ('sourceSha','sourceTree'))
+                and all(re.fullmatch(r'[0-9a-f]{64}',binding[key])!=None for key in ('profileSha256','sourcePinsSha256','producerSha256','bindingSha256')),
+                'host-binding-refused')
+        self.host_binding=binding
         manifest=json.loads(self.a.host_manifest.read_text())
         require(manifest=={**manifest,'version':'0.2.1'},'host-version-drift')
         require(manifest.get('sourceSha')==HOST_SOURCE and manifest.get('archiveSha256')==HOST_ARCHIVE and manifest.get('producerPayloadSha256')=='sha256:'+HOST_PAYLOAD,'host-manifest-drift')
@@ -300,9 +376,32 @@ class Operation:
         require(absent.returncode==1,'zero-auth-readonly-removal-refused')
         self.phase('zero-auth-readonly-topology-qualified',resultSha256=readback['resultSha256'])
     def materialize(self):
-        expected=hashlib.sha256((self.a.run_nonce+'\0'+self.a.source_sha+'\0'+PROFILE_SHA+'\0'+OPERATION).encode()).hexdigest()
         admission=os.environ.pop('FSGG_PRIVATE_EFFECT_ADMISSION',None)
-        require(admission is not None and secrets.compare_digest(admission,expected),'effect-admission-refused')
+        require(isinstance(admission,str) and re.fullmatch(r'[0-9a-f]{64}',admission)!=None
+                and self.host_binding is not None,'effect-admission-refused')
+        try: current_dependencies=self.host_binding_dependency_snapshot()
+        except Refusal as error:
+            if str(error)=='host-binding-budget-refused': raise
+            raise Refusal('effect-admission-refused')
+        require(self.host_binding_dependencies is not None
+                and current_dependencies==self.host_binding_dependencies,'effect-admission-refused')
+        dependency_manifest=self.a.result.parent/'host-binding-dependencies.json'
+        regular(dependency_manifest,4*1024*1024,0o600)
+        require(self.host_binding_dependency_manifest_sha is not None
+                and digest(dependency_manifest)==self.host_binding_dependency_manifest_sha,
+                'effect-admission-refused')
+        profile=self.a.source_root/'deployment/telemetry-collector/native-operation-v1.json'
+        verified=self.r.run(['/usr/bin/dotnet',str(self.a.host_binding),'verify',
+                    '--source-root',str(self.a.source_root),'--source-sha',self.a.source_sha,
+                    '--profile',str(profile),'--source-pins',str(self.a.native_source_pins),
+                    '--nonce',self.a.run_nonce,'--expected-binding-sha',self.host_binding['bindingSha256']],
+                    input_bytes=(admission+'\n').encode(),limit=4096,check=False,diagnostic='host-binding-verify',timeout_seconds=90)
+        admission=''
+        try: verification=json.loads(verified.stdout)
+        except (UnicodeDecodeError,json.JSONDecodeError): verification=None
+        require(verified.returncode==0 and verification=={
+                    'schema':'fsgg.telemetry.host-binding-verification/1','verified':True},
+                'effect-admission-refused')
         private_dir(self.root); self.created.append(self.root)
         for n in ('native','native/qualification-output','producer-spool','store-seed','evidence','tls','credentials','output','build/collector/host','build/native/fsgg-coord-engine'):
             p=self.root/n; p.mkdir(mode=0o700,parents=True,exist_ok=False)
@@ -481,7 +580,7 @@ class Operation:
         private_write(self.a.result,canonical(self.result))
 
 def parse(argv):
-    p=argparse.ArgumentParser(); p.add_argument('--operation-id',required=True); p.add_argument('--source-root',type=pathlib.Path,required=True); p.add_argument('--source-sha',required=True); p.add_argument('--private-placement-sha',required=True); p.add_argument('--private-root',type=pathlib.Path,required=True); p.add_argument('--staging-root',type=pathlib.Path,required=True); p.add_argument('--run-nonce',required=True); p.add_argument('--host-package',type=pathlib.Path,required=True); p.add_argument('--host-manifest',type=pathlib.Path,required=True); p.add_argument('--host-journal',type=pathlib.Path,required=True); p.add_argument('--host-served',type=pathlib.Path,required=True); p.add_argument('--coord-packages',type=pathlib.Path,required=True); p.add_argument('--coord-manifest',type=pathlib.Path,required=True); p.add_argument('--coord-stable',type=pathlib.Path,required=True); p.add_argument('--context-helper',type=pathlib.Path,required=True); p.add_argument('--native-source-pins',type=pathlib.Path,required=True); p.add_argument('--native-executable',type=pathlib.Path,required=True); p.add_argument('--seal-public-key',type=pathlib.Path,required=True); p.add_argument('--result',type=pathlib.Path,required=True); return p.parse_args(argv)
+    p=argparse.ArgumentParser(); p.add_argument('--operation-id',required=True); p.add_argument('--source-root',type=pathlib.Path,required=True); p.add_argument('--source-sha',required=True); p.add_argument('--private-placement-sha',required=True); p.add_argument('--private-root',type=pathlib.Path,required=True); p.add_argument('--staging-root',type=pathlib.Path,required=True); p.add_argument('--run-nonce',required=True); p.add_argument('--host-package',type=pathlib.Path,required=True); p.add_argument('--host-manifest',type=pathlib.Path,required=True); p.add_argument('--host-journal',type=pathlib.Path,required=True); p.add_argument('--host-served',type=pathlib.Path,required=True); p.add_argument('--coord-packages',type=pathlib.Path,required=True); p.add_argument('--coord-manifest',type=pathlib.Path,required=True); p.add_argument('--coord-stable',type=pathlib.Path,required=True); p.add_argument('--context-helper',type=pathlib.Path,required=True); p.add_argument('--native-source-pins',type=pathlib.Path,required=True); p.add_argument('--host-binding',type=pathlib.Path,required=True); p.add_argument('--native-executable',type=pathlib.Path,required=True); p.add_argument('--seal-public-key',type=pathlib.Path,required=True); p.add_argument('--result',type=pathlib.Path,required=True); return p.parse_args(argv)
 def main(argv=None):
     argv=list(sys.argv[1:] if argv is None else argv)
     if argv and argv[0]=='receipt-probe': return receipt_probe(argv[1:])
