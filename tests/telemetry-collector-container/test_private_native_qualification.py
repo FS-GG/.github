@@ -382,6 +382,44 @@ exit 2
    self.assertEqual('fsgg.telemetry.private-command-diagnostics/1',value['schema'])
    self.assertEqual('before-first-phase',value['records'][0]['phase'])
    self.assertNotIn('commandDiagnostics',op.result); self.assertEqual(0o600,(root/'output/command-diagnostics.json').stat().st_mode&0o777)
+ def test_failed_native_start_stderr_is_bounded_private_extension_only(self):
+  sentinel=b'private native-start sentinel: exact failure bytes\x00\xff'
+  with tempfile.TemporaryDirectory() as td:
+   root=pathlib.Path(td)/'private'; (root/'output').mkdir(parents=True,mode=0o700)
+   a=type('A',(),{'private_root':root,'run_nonce':'run-0001','source_sha':'a'*40,'private_placement_sha':'d'*40})()
+   op=q.Operation(a,FakeRunner()); op.phase('effective-topology-inspected')
+   failed=subprocess.CompletedProcess(['podman'],2,b'',sentinel)
+   with mock.patch.object(q.subprocess,'run',return_value=failed):
+    runner=q.Runner(q.time.monotonic()+10,op.command_diagnostic)
+    with self.assertRaisesRegex(q.Refusal,'command-failed:podman'):
+     runner.run(['podman','start','-a','fsgg-native-development'],diagnostic='native-start')
+   op.write_private_diagnostics(); raw=(root/'output/command-diagnostics.json').read_text(); saved=json.loads(raw)
+   extension=saved['extensions']['fsgg.telemetry.private-native-start-failure/1']
+   self.assertEqual(1,len(extension['records'])); private=extension['records'][0]
+   self.assertEqual({'command','encoding','maximumDecodedBytes','stderrBytes','stderrSha256','stderrBase64'},set(private))
+   self.assertEqual(('native-start','base64',4096,len(sentinel),hashlib.sha256(sentinel).hexdigest()),
+                    (private['command'],private['encoding'],private['maximumDecodedBytes'],private['stderrBytes'],private['stderrSha256']))
+   self.assertEqual(sentinel,base64.b64decode(private['stderrBase64'],validate=True))
+   self.assertNotIn('_privateNativeStartStderrBase64',raw)
+   public=json.dumps({'result':op.result,'failureDiagnostic':op.public_failure_diagnostic()},sort_keys=True)
+   self.assertNotIn(base64.b64encode(sentinel).decode(),public); self.assertNotIn(sentinel.decode('utf-8','replace'),public)
+   self.assertNotIn('stderrBase64',public); self.assertNotIn('private-native-start-failure',public)
+ def test_private_native_start_extension_is_exact_command_failure_and_limit(self):
+  cases=(
+   ('native-start',2,True,b'x'*4096,True),
+   ('native-start',2,True,b'x'*4097,False),
+   ('native-start',0,True,b'x',False),
+   ('native-start',2,False,b'x',False),
+   ('receiver-start',2,True,b'x',False),
+  )
+  for diagnostic,exit_code,required,stderr,retained in cases:
+   with self.subTest(diagnostic=diagnostic,exit_code=exit_code,required=required,size=len(stderr)):
+    records=[]; completed=subprocess.CompletedProcess(['podman'],exit_code,b'',stderr)
+    with mock.patch.object(q.subprocess,'run',return_value=completed):
+     runner=q.Runner(q.time.monotonic()+10,records.append)
+     try: runner.run(['podman','start','-a','fixed'],diagnostic=diagnostic,check=required)
+     except q.Refusal: pass
+    self.assertEqual(retained,'_privateNativeStartStderrBase64' in records[0])
  def test_receiver_refusal_adds_only_namespaced_projection_to_sealed_diagnostics(self):
   with tempfile.TemporaryDirectory() as td:
    root=pathlib.Path(td)/'private'; (root/'output').mkdir(parents=True,mode=0o700)
