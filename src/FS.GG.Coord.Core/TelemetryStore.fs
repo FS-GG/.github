@@ -2237,7 +2237,8 @@ module TelemetryStore =
                     Error $"%s{label} has invalid native delivery source evidence"
                 | values -> Error(sprintf "%A" values)
             | "learn-installed-origin/1" ->
-                let digest value = Regex.IsMatch(value, "^[0-9a-f]{64}$") && value <> String('0', 64)
+                let digest (value: string) =
+                    Regex.IsMatch(value, "^[0-9a-f]{64}$") && value <> String('0', 64)
                 match
                     requiredText label node "workspaceId",
                     requiredText label node "producerId",

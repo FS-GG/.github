@@ -4079,7 +4079,7 @@ WHERE d.dispatch_id=$dispatch AND d.relation='child' AND d.runtime='collaboratio
                     Error [ "storage-unavailable" ]
 
     let resolveInstalledOrigin path assessment (query: InstalledOriginQuery) =
-        let hash value =
+        let hash (value: string) =
             not (String.IsNullOrWhiteSpace value)
             && System.Text.RegularExpressions.Regex.IsMatch(value, "^[0-9a-f]{64}$")
             && value <> String('0', 64)
@@ -4148,8 +4148,8 @@ LIMIT 2;
                                 else
                                     use document = JsonDocument.Parse canonical
                                     let root = document.RootElement
-                                    let text name = root.GetProperty(name).GetString()
-                                    let number name = root.GetProperty(name).GetInt64()
+                                    let text (name: string) = root.GetProperty(name).GetString()
+                                    let number (name: string) = root.GetProperty(name).GetInt64()
                                     if
                                         text "workspaceId" <> query.WorkspaceId
                                         || text "producerId" <> query.ProducerId

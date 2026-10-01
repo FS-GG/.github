@@ -1431,6 +1431,113 @@ exec /usr/bin/python3 "{patchedFixture}" "$@"
                     File.WriteAllText(retainedFile, tamperedTurn.ToJsonString())
                     Assert.Equal(3, Operations.runWithAssessment exportCommand (fun _ -> TelemetryStore.ApprovedLocalDurable))
                     File.WriteAllBytes(retainedFile, retainedBytes)
+
+                    let hashBytes (bytes: byte array) =
+                        Convert.ToHexString(SHA256.HashData bytes).ToLowerInvariant()
+                    let writeEvidence (name: string) (bytes: byte array) =
+                        let target = Path.Combine(evidenceRoot, name)
+                        File.WriteAllBytes(target, bytes)
+                        File.SetUnixFileMode(target, UnixFileMode.UserRead ||| UnixFileMode.UserWrite)
+                        target
+                    let serialize (value: 'value) =
+                        JsonSerializer.SerializeToUtf8Bytes<'value> value
+                    let observed = DateTimeOffset.UtcNow.AddMinutes(-1.).ToString("O")
+                    let expires = DateTimeOffset.UtcNow.AddMinutes(5.).ToString("O")
+                    let executableSha = hashBytes(File.ReadAllBytes reader)
+                    let profileBytes =
+                        serialize
+                            {| schema = "fsgg.orchestration.host-fixed-native-capability/1"
+                               operation = "codex-native-capability/1"; revision = "fixture-profile-1"
+                               hostExecutableSha256 = executableSha; providerExecutable = reader
+                               providerExecutableSha256 = executableSha; expectedAdapterVersion = "fixture-adapter/1"
+                               expectedCodexVersion = "fixture-version"; environmentAllowList = [| "PATH" |]
+                               credentialScope = "fixture-read-only"; maximumRuntimeSeconds = 10
+                               maximumStreamBytes = 65536; expiresAt = expires
+                               disposableWorkspace = Path.Combine(root, "disposable")
+                               cleanup = "delete-owned-workspace/1" |}
+                    let profileSha = hashBytes profileBytes
+                    writeEvidence "fixed-native-capability-profile.json" profileBytes |> ignore
+                    let cleanup =
+                        {| processTreeTerminationRequired = true; processTreeTerminated = true
+                           workspaceRemovalAttempted = true; workspaceRemoved = true |}
+                    let resultBytes =
+                        serialize
+                            {| schema = "fsgg.orchestration.host-fixed-native-capability-result/1"
+                               operation = "codex-native-capability/1"; profileRevision = "fixture-profile-1"
+                               profileSha256 = profileSha; hostExecutableSha256 = executableSha
+                               providerExecutableSha256 = executableSha; adapterVersion = "fixture-adapter/1"
+                               credentialScope = "fixture-read-only"; environmentAllowList = [| "PATH" |]
+                               maximumRuntimeSeconds = 10; maximumStreamBytes = 65536
+                               requestedModel = installation.Model; requestedEffort = installation.Effort
+                               startedAt = observed; completedAt = observed; disposition = "advertised-supported"
+                               detail = "requested-selection-advertised"; authenticationState = "authenticated"
+                               authenticationProvenance = "installed-account"; evidenceSchema = "fsgg.learning-selection-evidence/1"
+                               evidenceProvenance = "fixture"; evidenceObservedAt = observed; evidenceExpiresAt = expires
+                               modelSessionStarts = 0; cleanup = cleanup |}
+                    writeEvidence "fixed-native-capability-result.json" resultBytes |> ignore
+                    let captureDigest = String('c', 64)
+                    let captureBytes =
+                        serialize
+                            {| schema = "fsgg.learn.native-source-capture/1"
+                               outcome = "native-census-and-usage-reconciled-at-capture"
+                               rootThreadId = "11111111-1111-1111-1111-111111111111"
+                               limits = {| maximum = 1 |}; initialExchanges = [||]; confirmationExchanges = [||]
+                               rollouts = [||]
+                               projection =
+                                {| threads = [| {| provider = installation.Provider; model = installation.Model; effort = installation.Effort |} |]
+                                   turnUsage = [||] |}
+                               captureDigest = captureDigest |}
+                    writeEvidence "native-source-capture.json" captureBytes |> ignore
+                    let verificationBytes =
+                        serialize
+                            {| schema = "fsgg.learn.native-source-verification/1"; status = "verified"
+                               outcome = "native-census-and-usage-reconciled-at-capture"; captureDigest = captureDigest
+                               missingDescendants = [||]; foreignDescendants = [||]; mismatchedThreads = [||]
+                               missingTurns = [||]; foreignTurns = [||]; missingUsage = [||]
+                               foreignUsage = [||]; mismatchedUsage = [||] |}
+                    let verificationPath = writeEvidence "native-source-verification.json" verificationBytes
+                    privateFile
+                        "source-reference.json"
+                        (JsonSerializer.Serialize
+                            {| schema = "fsgg.telemetry.persistent-source-references/2"; profileSha256 = profileSha
+                               nativeSourceVolume = "fixture"; developmentTarget = "/fixture"
+                               collectorReadOnlyTarget = codexHome; readerProfileSha256 = profileSha
+                               captureQualified = true |})
+                    |> ignore
+                    privateFile
+                        "host.json.native-collector.receipt.json"
+                        (JsonSerializer.Serialize
+                            {| schema = "fsgg.telemetry.native-collector-installation-receipt/2"; status = "installed"
+                               ownerUid = 0; hostConfigSha256 = hashBytes(File.ReadAllBytes configPath)
+                               sidecarSha256 = hashBytes(File.ReadAllBytes installationPath); executableSha256 = executableSha
+                               credentialReference = installation.CredentialReference; workspaceId = collectorScope.Workspace
+                               producerId = collectorScope.Producer; streamId = collectorScope.Stream
+                               grantId = collector.GrantId.Value; grantGeneration = collector.GrantGeneration.Value
+                               sourceVerification = "unknown"; snapshotOrigin = "unknown"
+                               sharedCostCompleteness = "unknown"; activationAuthorized = false |})
+                    |> ignore
+                    let captureOutput (argv: string array) =
+                        let current = Console.Out
+                        use writer = new StringWriter()
+                        try
+                            Console.SetOut writer
+                            Assert.Equal(0, Operations.runWithAssessment argv (fun _ -> TelemetryStore.ApprovedLocalDurable))
+                            writer.ToString()
+                        finally Console.SetOut current
+                    use installed =
+                        JsonDocument.Parse(captureOutput [| "collect-installed-origin"; "--config"; configPath |])
+                    Assert.Equal("fsgg.learn.installed-producer-receipt/1",
+                                 installed.RootElement.GetProperty("schema").GetString())
+                    use reread =
+                        JsonDocument.Parse(captureOutput [| "read-installed-origin"; "--config"; configPath |])
+                    Assert.Equal(
+                        installed.RootElement.GetProperty("source").GetProperty("recordId").GetString(),
+                        reread.RootElement.GetProperty("source").GetProperty("recordId").GetString())
+                    let changedVerification = JsonNode.Parse(verificationBytes).AsObject()
+                    changedVerification["status"] <- JsonValue.Create "unverified"
+                    File.WriteAllText(verificationPath, changedVerification.ToJsonString())
+                    Assert.Equal(3, Operations.runWithAssessment [| "read-installed-origin"; "--config"; configPath |]
+                                        (fun _ -> TelemetryStore.ApprovedLocalDurable))
                     // Changing the operator pin cannot qualify already retained evidence.
                     File.AppendAllText(reader, "\n# changed executable\n")
                     Assert.Equal(3, Operations.runWithAssessment exportCommand (fun _ -> TelemetryStore.ApprovedLocalDurable))

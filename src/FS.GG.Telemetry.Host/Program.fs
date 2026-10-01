@@ -656,16 +656,16 @@ module Operations =
     let private installedOriginMaterial path (config: HostConfig)
                                               (installation: NativeCollectorInstallationConfig)
                                               (principal: TelemetryReceipt.Principal) =
-        let readBounded maximum file =
+        let readBounded (maximum: int) (file: string) =
             let info = FileInfo file
             if not info.Exists || isNull info.Directory || not (isNull info.LinkTarget)
                || info.Length <= 0L || info.Length > int64 maximum
                || File.GetUnixFileMode file <> (UnixFileMode.UserRead ||| UnixFileMode.UserWrite) then
                 invalidOp "installed origin evidence is unavailable"
             File.ReadAllBytes file
-        let parse bytes = JsonNode.Parse(bytes).AsObject()
-        let text (value: JsonObject) name = value[name].GetValue<string>()
-        let integer (value: JsonObject) name = value[name].GetValue<int64>()
+        let parse (bytes: byte array) = JsonNode.Parse(bytes).AsObject()
+        let text (value: JsonObject) (name: string) = value[name].GetValue<string>()
+        let integer (value: JsonObject) (name: string) = value[name].GetValue<int64>()
         let sidecarBytes = readBounded 16384 (path + ".native-collector.json")
         let configBytes = readBounded 1048576 path
         let managerBytes = readBounded 65536 (path + ".native-collector.receipt.json")
@@ -690,7 +690,7 @@ module Operations =
            || integer manager "grantGeneration" <> principal.GrantGeneration.Value then
             invalidOp "installed origin manager receipt differs"
 
-        let evidence name maximum = readBounded maximum (Path.Combine(installation.EvidenceRoot, name))
+        let evidence (name: string) maximum = readBounded maximum (Path.Combine(installation.EvidenceRoot, name))
         let profileBytes = evidence "fixed-native-capability-profile.json" 65536
         let resultBytes = evidence "fixed-native-capability-result.json" 65536
         let captureBytes = evidence "native-source-capture.json" (64 * 1024 * 1024)
@@ -773,8 +773,8 @@ module Operations =
            || not (sourceReference["captureQualified"].GetValue<bool>())
            || not routeSupported || observedAt > DateTimeOffset.UtcNow || expiresAt <= observedAt then
             invalidOp "installed origin retained evidence differs"
-        let query =
-            { TelemetryStoreApplication.InstalledOriginQuery.WorkspaceId = principal.Scope.Workspace
+        let query: TelemetryStoreApplication.InstalledOriginQuery =
+            { WorkspaceId = principal.Scope.Workspace
               ProducerId = principal.Scope.Producer; StreamId = principal.Scope.Stream
               Role = "native-collector"; GrantId = principal.GrantId.Value
               GrantGeneration = principal.GrantGeneration.Value
