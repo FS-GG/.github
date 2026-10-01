@@ -65,6 +65,19 @@ independent and open. This dated clarification is not a current fleet-health att
 profile acceptance or waiver of exact artifact, authentication, custody, settlement/replay or effect
 authority for any operation actually performed.
 
+**2026-10-01: P4 manifest-v2 private receiver source delivered; genuine runtime qualification remains open.**
+[Sandbox PR #39](https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/pull/39) merged on protected main
+as `ae4d216d2818f2b4dcaa5136a15e2debab9abfed`, tree
+`c32d43490b5cec4b5100100ffbc66a55baadeada`, equal to qualified `6c9fa72`.
+The receiver separately authenticates protected H2 `f794d1a`, tree `c76d7df`, and F# manifest helper
+`cbc558054805dac0e305e842e845a2803106113694ac82f991ce8a3e2a67c922` while retaining original
+producer `b06c187` and its eleven role bodies. Eighteen focused helper/custody/process/settlement,
+closed-result, workflow and source-boundary controls passed. There is no hosted source PR workflow in
+this Sandbox; hosted SDK 10.0.400 custody and actual private execution are not inferred from local tests.
+The owning `.github` template/registry join, protected placement, authenticated twelve-asset manifest
+census, genuine facts/grant and native qualification remain open. No private upload, operation,
+publication or installed adoption is claimed. Selected V2 platform acceptance remains complete.
+
 **2026-10-01: FABLE-ADOPT-01.3 reference composition qualification and read-only feed census source delivered; publication remains open.**
 [Templates PR #662](https://github.com/FS-GG/FS.GG.Templates/pull/662) merged on protected main as
 `40a1bfd992a4d040181af3e196a26afa07be6d62`, tree
