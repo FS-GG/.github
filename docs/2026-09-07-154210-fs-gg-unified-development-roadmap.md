@@ -53,6 +53,20 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-01: FourD credential-free public capacity-screen source delivered; measured screen is next.**
+[Coordination #911](https://github.com/FS-GG/FS.GG.Coordination/pull/911) merged at
+`c14715d48fec86eb4e799640d4f8f2cec6be32a5`, equal candidate
+`2f9330be176f7106bc445528592380df612a2b9b` with tree
+`a5759b54e3a1c978ae57e84a61d6f28a13a7c6d7`; root independently verified merge-tree equality.
+Full formal and aggregate checks passed in
+[optimistic 36837176343](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36837176343),
+with [bootstrap 36837176254](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36837176254)
+and [CodeQL 36837174651](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36837174651)
+also successful. The source adds a credential-free, read-only public capacity screen. Its first actual
+measured run follows this documentary projection. The screen is not qualification: `qualified=false`,
+and no key access, private-source acquisition, native execution or player acceptance is established.
+The existing FourD private-capacity refusals and later gated work remain unchanged.
+
 **2026-10-01: coherent stock BAR producer delivered; original native journeys remain open.**
 [HighBarV3 #12](https://github.com/FS-GG/HighBarV3/pull/12) merged at owning master `03de478075a588bcc93b8a9ca25cb05006a7355a`, equal reviewed coherent candidate `b2ed29534b08c2bc856922a951caaf93e2b1db65` tree `5f4c436a45e3acfe2ce3008735f88a025db7667c`; root independently read merge-tree equality. Actual [ci36838356388](https://github.com/FS-GG/HighBarV3/actions/runs/36838356388) passed all five hosted proto/arm/Python/shell/runbook jobs; five optional self-hosted jobs skipped because no runner was selected. No hosted engine-run acceptance is claimed. Initial workflow-active and Actions-enabled readbacks still produced no run; explicit repository Actions enablement followed by same-head PR reopening produced this actual run without source changes. Owning master has no branch protection.
 The native/Lua/paired-contract blobs remain exact independently accepted c7/c147/4ff. Fresh plugin-only build against pristine Recoil2639 yielded SHA256 `d08be63906849bd9e83f758d80e42b78dec96c45f0dc889073cb57e9c7e0137a`,11,901,160bytes, with49native tests; deterministic production observer overlayr3 yielded `c7d6b583a954e7c2b0fdbb9c697355aaf1d2a1cd24049c3d30b9e01dfdd99d4c`,5,019bytes, with14Lua tests and actual stockLua5.1FLOAT ABI vectors. Actual CallRules reader is synced; stock Append uses shift32. The loaded engine, plugin/content discovery, genuine trace custody and original six native journeys remain unaccepted. Next source window prepares a real bounded queue trace, stock-ready selected smoke harness and private supervisor; no official engine executable rebuild, installed default change or source-only gameplay success. Optional customFR remains inactive OPEN0/6.
