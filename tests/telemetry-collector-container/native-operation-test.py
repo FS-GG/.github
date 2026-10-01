@@ -3,6 +3,7 @@ import importlib.util
 import json
 import os
 import pathlib
+import subprocess
 import tempfile
 import time
 import unittest
@@ -318,6 +319,128 @@ class NativeOperationTests(unittest.TestCase):
         self.assertEqual([event], buffer); self.assertLess(remaining, 2048)
         with self.assertRaisesRegex(support.Refusal, "identity differs"):
             driver.buffer_prebind_event([], {"method": "turn/completed", "params": {"threadId": PARENT}}, PARENT, 2048)
+
+    def test_rejected_item_diagnostic_is_closed_bounded_and_content_free(self):
+        evidence, _ = self.ready()
+        sentinel = "PRIVATE item text /tmp/private --secret credential argument"
+        cases = (
+            ("item/started", {"threadId": PARENT, "item": {"type": "webSearch", "text": sentinel, "arguments": {"secret": sentinel}}},
+             ("started", "object", "token", "webSearch", "parent")),
+            ("item/completed", {"threadId": CHILD, "item": {}},
+             ("completed", "object", "missing", None, "other")),
+            ("item/started", {"threadId": PARENT, "item": [sentinel]},
+             ("started", "non-object", "missing", None, "parent")),
+            ("item/completed", {"threadId": PARENT, "item": {"type": {"private": sentinel}}},
+             ("completed", "object", "non-string", None, "parent")),
+            ("item/completed", {"item": {"type": sentinel * 8}},
+             ("completed", "object", "overlength", None, "unbound")),
+            ("item/started", {"threadId": PARENT, "item": {"type": "unsafe/type", sentinel: sentinel}},
+             ("started", "object", "invalid", None, "parent")),
+        )
+        for method, params, expected in cases:
+            with self.subTest(method=method, expected=expected):
+                with self.assertRaises(driver.RejectedItemRefusal) as caught:
+                    driver.checked_item(method, params, evidence)
+                diagnostic = caught.exception.diagnostic
+                self.assertEqual({"schema", "eventKind", "itemShape", "itemMemberCount",
+                                  "itemMemberCountTruncated", "discriminatorShape", "relationship"}
+                                 | ({"discriminator"} if expected[3] else set()), set(diagnostic))
+                self.assertEqual(expected, (diagnostic["eventKind"], diagnostic["itemShape"],
+                                             diagnostic["discriminatorShape"], diagnostic.get("discriminator"),
+                                             diagnostic["relationship"]))
+                encoded = json.dumps(driver.error_envelope(caught.exception), separators=(",", ":"))
+                self.assertLess(len(encoded.encode("utf-8")), 1024)
+                self.assertNotIn(sentinel, encoded)
+                for forbidden in ("text", "arguments", "secret", "/tmp/private", PARENT, CHILD):
+                    self.assertNotIn(forbidden, encoded)
+        evidence.spawn(spawn()); evidence.bind_child(child_thread())
+        for thread_id, relationship in ((CHILD, "child"), ("33333333-3333-7333-8333-333333333333", "other")):
+            with self.assertRaises(driver.RejectedItemRefusal) as caught:
+                driver.checked_item("item/started", {"threadId": thread_id, "item": {"type": "unknownItem"}}, evidence)
+            self.assertEqual(relationship, caught.exception.diagnostic["relationship"])
+            self.assertNotIn(thread_id, json.dumps(caught.exception.diagnostic))
+
+    def test_item_guard_preserves_permitted_types_and_generic_error_shape(self):
+        evidence, _ = self.ready()
+        for item_type in driver.PERMITTED_ITEM_TYPES:
+            item = {"type": item_type, "text": "private", "arguments": {"private": True}}
+            self.assertIs(item, driver.checked_item("item/completed", {"threadId": PARENT, "item": item}, evidence))
+        generic = driver.error_envelope(support.Refusal("fixed refusal"))
+        self.assertEqual({"schema": "fsgg.telemetry.native-operation-error/1",
+                          "code": "qualification-refused", "message": "fixed refusal"}, generic)
+
+    def test_rejected_item_count_is_capped_without_key_or_value_disclosure(self):
+        evidence, _ = self.ready()
+        item = {f"private-{index}": f"secret-{index}" for index in range(80)}
+        item["type"] = "unknownItem"
+        with self.assertRaises(driver.RejectedItemRefusal) as caught:
+            driver.checked_item("item/completed", {"threadId": PARENT, "item": item}, evidence)
+        diagnostic = caught.exception.diagnostic
+        self.assertEqual((64, True, "unknownItem"),
+                         (diagnostic["itemMemberCount"], diagnostic["itemMemberCountTruncated"],
+                          diagnostic["discriminator"]))
+        encoded = json.dumps(diagnostic)
+        self.assertNotIn("private-", encoded); self.assertNotIn("secret-", encoded)
+
+    def test_perform_event_loop_closes_and_stops_on_both_rejected_item_events(self):
+        profile = support.load_profile(PROFILE_PATH)
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary)
+            marker = root / "marker"; marker.write_text(profile["producer"]["coherentPayloadSha256"] + "\n")
+            profile = json.loads(json.dumps(profile)); profile["producer"]["coherentMarker"] = str(marker)
+            profile["native"]["executable"] = str(root / "native")
+            profile["native"]["config"] = str(root / "config")
+            profile["producer"]["executable"] = str(root / "engine")
+            profile["producer"]["telemetryConfig"] = str(root / "telemetry.json")
+            profile["runtime"]["home"] = str(root / "home")
+            profile["runtime"]["codexHome"] = str(root / "codex-home")
+            profile["runtime"]["cwd"] = str(root / "cwd")
+            for method in ("item/started", "item/completed"):
+                with self.subTest(method=method):
+                    class FakeServer:
+                        def __init__(self): self.notifications = []; self.closed = False
+                        def notify(self, _method): pass
+                        def request(self, name, _params, _deadline):
+                            if name == "initialize": return {}
+                            if name == "config/read": return {}
+                            if name == "thread/start": return parent_response()
+                            if name == "turn/start": return {"turn": {"id": "turn-parent"}}
+                            raise AssertionError(f"unexpected request after refusal: {name}")
+                        def read(self, _deadline):
+                            return {"method": method, "params": {"threadId": PARENT,
+                                    "item": {"type": "webSearch", "text": "PRIVATE-SENTINEL"}}}
+                        def close(self): self.closed = True
+                    server = FakeServer(); commands = []
+                    def command_result(_engine, _config, _environment, arguments):
+                        commands.append(arguments)
+                        if arguments[0] == "begin":
+                            begin_count = sum(row[0] == "begin" for row in commands)
+                            return receipt(token=("a" if begin_count == 1 else "b") * 32)
+                        if arguments[0] == "started": return {"status": "started"}
+                        raise AssertionError(f"unexpected command after refusal: {arguments[0]}")
+                    version = subprocess.CompletedProcess([], 0, profile["producer"]["executableVersion"] + "\n", "")
+                    with mock.patch.object(driver, "pinned_native"), \
+                         mock.patch.object(driver, "regular"), \
+                         mock.patch.object(driver, "private_workspace_config"), \
+                         mock.patch.object(driver, "private_directory"), \
+                         mock.patch.object(driver, "clean_environment", return_value={}), \
+                         mock.patch.object(driver, "config_arguments", return_value=[]), \
+                         mock.patch.object(driver, "effective_config"), \
+                         mock.patch.object(driver, "producer_environment", return_value={}), \
+                         mock.patch.object(driver, "workspace_binding", return_value={}), \
+                         mock.patch.object(driver, "require_applied", return_value={}), \
+                         mock.patch.object(driver, "command_result", side_effect=command_result), \
+                         mock.patch.object(driver, "JsonLineAppServer", return_value=server), \
+                         mock.patch.object(driver.subprocess, "run", return_value=version), \
+                         mock.patch.object(driver, "private_write") as private_write:
+                        with self.assertRaises(driver.RejectedItemRefusal) as caught:
+                            driver.perform(profile, "owner-nonce-01", root)
+                    self.assertEqual((method.split("/")[1], "webSearch", "parent"),
+                                     (caught.exception.diagnostic["eventKind"],
+                                      caught.exception.diagnostic["discriminator"],
+                                      caught.exception.diagnostic["relationship"]))
+                    self.assertTrue(server.closed); private_write.assert_not_called()
+                    self.assertEqual(["begin", "started", "begin"], [row[0] for row in commands])
 
     def test_input_surface_has_no_prompt_model_url_or_executable(self):
         text = DRIVER_PATH.read_text()
