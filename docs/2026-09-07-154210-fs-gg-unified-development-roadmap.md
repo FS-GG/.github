@@ -79,6 +79,21 @@ downloaded bytes, and all 13 local source checks passed; this private repository
 hosted workflow. This closes registration source only. Genuine `.8` capture, replay, persistence and
 recovery remain open; `.9`, `.10`, LEARN and Main receive no acceptance or action from this merge.
 
+**2026-10-01: P4 stable-image and authenticated-custody source closed; genuine 0.2.1 convergence remains open.**
+[Coordination #914](https://github.com/FS-GG/FS.GG.Coordination/pull/914) merged at
+`3a02e1e2ea77d5ab1a94d1a3e2dee1004015a594`; root API readback confirmed tree
+`c2bb62f5cc2c2942fcfdbec4be7fb4e4220a3291` equal to reviewed head
+`6b9c71510d8b1d033d11d2205135fdb138cf21ec`. Full coherent
+[verification 36873822598](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36873822598)
+passed, together with bootstrap [run 36873822720](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36873822720)
+and the provider, image and executor checks. Policy now fixes inner image
+`e76e01afa06a325beb74f7f55c32ed13aebe140c82a37e17c67f2d3217da4c3e` and config
+`b9390f800c77e35aa2d1d124f4b416142270a6f1063aa80543077275e0a52c53`, while each preparation
+must still supply its authenticated run-specific archive and complete receipt hashes. The coherent
+compiler identity is bound, and missing bootstrap subjects now refuse locally before external tool
+download. This closes source only; the original 0.2.0 release remains immutable. Fresh coherent 0.2.1
+P2 preparation, convergence readback, staging, facts, genuine qualification and adoption remain open.
+
 **2026-10-01: comprehensive BAR development audit and its two immediate source corrections delivered; gameplay remains open.**
 The requested Astra-high audit is retained in the private revisioned knowledge database and published
 with [FSBar #13](https://github.com/FS-GG/FSBarV2/pull/13), merged at
