@@ -53,6 +53,67 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**Portable P3 frozen publication route source delivered; publication remains next.**
+[Coordination PR #907](https://github.com/FS-GG/FS.GG.Coordination/pull/907) merged at
+`b6fc8f86e11a0b3d67197e231a1f368f636e00ef`, tree
+`4bafd59f3e6efb6f11b4c2534b74227e65cd54b5`, independently equal to qualified candidate
+`31836edee1d0e897fc4b31eb0d0acbd02ee35230`. Full coherent execution
+[36803594176](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36803594176)
+and bootstrap 36803594079 passed. The joined source preserves the accepted P4 changes while
+publishing only the qualified P3 0.2.0 artifacts from source
+`d25b9eaec991c94593adcecda6869d07dabdfb43` and preparation run 36794564231.
+Artifact acquisition, provenance, collision checks and six-operation requalification precede
+publication. Dual-feed publication/readback and installed adoption remain open; P4 successor
+work is not rebuilt under version 0.2.0.
+
+**SC2 genuine pointer viewport source delivered; native acceptance remains open.**
+[SC2 Client PR #23](https://github.com/FS-GG/FS.GG.SC2.Client/pull/23) merged at
+`39b921054939d17245ec6c1c2a9d0c4e0bd85e75`, tree
+`d33ebd0df0186f262a4ca7e57ab18aacf598d3fa`, independently equal to candidate
+`08ec3ed367f3db8ae6e09656d244d542709086ec`. Full hosted
+[verification 36806457189](https://github.com/FS-GG/FS.GG.SC2.Client/actions/runs/36806457189)
+passed all 60 browser cases. The driver scrolls validated owned unit circles into the viewport,
+requires an actual topmost hit coordinate, uses the real mouse and confirms the stable selected
+tag. A below-fold uppercase-tag fixture checks the actual route. The viewport explanation for
+the previous native refusal remains a source hypothesis; a freshly pinned and rebuilt genuine
+attempt, ordinary cleanup and all later acceptance gates remain open.
+
+**V2-HOST-01.8 attempt f refused before auth materialization; genuine operation remains open.**
+Actual private run 36806546554 at private `2cafa3dc11ca27cff06a95ec129d4695465bef36`
+and public recipe `f71c56b146642b44fb2a0d3e542fa14b6d6f0d7a` completed pre-auth
+preflight and then refused a Python helper command. No compatibility or credentialed capture
+result was produced. Root retained its result privately and independently verified removal
+of both temporary environment secrets. Writer cleanup and preservation reported complete;
+the specific helper cause remains under source investigation. Main `.9` routing and `.10`
+retirement remain gated by genuine `.8` acceptance.
+
+**Rust/Go pinned SDK directory source delivered; native BIND remains open.**
+[Templates PR #655](https://github.com/FS-GG/FS.GG.Templates/pull/655)
+merged at `ffd14538bbc2b4a1352bb2795e39973883f78918`, tree
+`717b630f2e682e4addccdbbe27d513cf69ad406a`, independently equal to candidate
+`8e7be4b5e13404e0e62f635c7816e3b1526ac573`. Full
+[composition 36804923621](https://github.com/FS-GG/FS.GG.Templates/actions/runs/36804923621)
+and required checks passed. Actual run 36803643714 reproduced both expected executor and
+Akka digests; its remaining refusal was SDK selection from the outer workspace. The exact
+version probe and actual build now both run from the reviewed fixed Coordination directory.
+A regression distinguishes outer SDK 10.0.401 from pinned-directory 10.0.400 and proves both
+invocations use the latter; all 24 source checks passed. SDK/package/image/source pins remain
+unchanged. A fresh protected native run, both language journeys, cancellation/recovery and
+installed adoption remain open.
+
+**FourD pinned Node extraction prerequisite source delivered; runtime gates remain open.**
+[FourD PR #26](https://github.com/FS-GG/FS.GG.FourD/pull/26) merged at
+`f4c3f338ed88182b5b478634d41953c172250004`, tree
+`de31c7f936bc00b3394cfaafb536856f554ca1cb`, independently equal to candidate
+`7fc16791ce4416cdd411eba1d2cb8b0e43af3697`. Full
+[verification 36805513572](https://github.com/FS-GG/FS.GG.FourD/actions/runs/36805513572)
+and source preparation passed. The image adds only `xz-utils` to its existing prerequisite
+set; a tokenized static guard checks xz/unzip declarations before extraction. The reviewed
+operation binds the exact new Containerfile digest. All 23 image source checks passed;
+pinned base/archives, private stores, cleanup/custody and runtime policy remain preserved.
+A fresh protected native image run, runtime BIND/recovery, installed adoption and human
+preference/balance acceptance remain open.
+
 **V2-HOST-01.8 bounded app-state recipe registration delivered; genuine operation remains open.**
 [Private substrate PR #26](https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/pull/26)
 merged at `2cafa3dc11ca27cff06a95ec129d4695465bef36`, tree
