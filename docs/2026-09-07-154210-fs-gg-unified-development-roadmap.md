@@ -53,6 +53,37 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**V2-HOST-01.8 exact protected source input registration delivered; genuine operation remains open.**
+[Private substrate PR #27](https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/pull/27)
+merged at `3627fa843e4af030f38cc6e9b3cfe2fa179437cd`, tree
+`01b24aea86c2a922b79d1712abe9f68697162d98`, independently equal to candidate
+`8090de36b59dc2df3054c747e6bd1dd381b3a287`. Root read back successor prerelease
+400609820, tag `v2-host-private-inputs-20261001-source-pins`, target
+`2cafa3dc11ca27cff06a95ec129d4695465bef36`, and exact two asset sizes/digests.
+The public-only archive changes only the driver source pin to match protected recipe
+`f71c56b146642b44fb2a0d3e542fa14b6d6f0d7a`; the other ten members and prior release
+remain preserved. All 13 private source tests passed without skips. Acquisition/auth/custody
+checks and workflow bytes remain unchanged. This private source repository has no hosted
+PR checks. A fresh root-owned genuine `.8` qualification remains next; `.9` routing, `.10`
+retirement and installed LEARN enrollment remain open.
+
+**Portable P3 both feed byte readbacks passed; anonymous installation and release closure remain open.**
+Actual publication [36807625482](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36807625482)
+on protected `b6fc8f86e11a0b3d67197e231a1f368f636e00ef` reproduced the retained
+0.2.0 package, reran all six packaged operations and verified provenance. It published the
+same retained bytes to GitHub Packages first and nuget.org second, and both feed payload
+readbacks passed. The later anonymous public install/schema readback failed. No final
+GitHub release/tag closure or installed adoption is claimed. Recovery must preserve the
+already-published immutable 0.2.0 bytes; the cause remains under bounded source investigation.
+
+**SC2 genuine attempt c advanced past pointer selection and refused feedback completion.**
+Protected viewport source `39b921054939d17245ec6c1c2a9d0c4e0bd85e75` rebuilt cleanly;
+root verified its seven-file private runner candidate and actual preflight ready with no gaps.
+The genuine attempt reached feedback state `accepted`, then refused the required completion
+observation. Root recorded 12 owned processes and zero survivors, and verified owned display
+cleanup with its socket removed. Acceptance remains open; `accepted` is not substituted for
+completion. Actual audit and source observation routes are under investigation.
+
 **Portable P3 frozen publication route source delivered; publication remains next.**
 [Coordination PR #907](https://github.com/FS-GG/FS.GG.Coordination/pull/907) merged at
 `b6fc8f86e11a0b3d67197e231a1f368f636e00ef`, tree
