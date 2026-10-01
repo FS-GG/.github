@@ -65,6 +65,21 @@ independent and open. This dated clarification is not a current fleet-health att
 profile acceptance or waiver of exact artifact, authentication, custody, settlement/replay or effect
 authority for any operation actually performed.
 
+**2026-10-02: SC2 typed failure-summary and Release task-loop source delivered; native advisor journeys remain open.**
+[SC2 #34](https://github.com/FS-GG/FS.GG.SC2.Client/pull/34) merged at
+`feb7ab0d9ed5afd698945c3c166778c8ce591216`, tree
+`8269e4e6385f9b29b3084c8779dcf3c28ef840cc`, equal the qualified coherent source
+`b92ea4096d53e251b0fac4d77c3654952057ed5d`. Root authenticated merge, tree and main;
+full native verify `36942709339` passed. All nine qualified producer blobs were preserved exactly.
+F# now validates received advisor projections and selects bounded causal terminal evidence;
+the browser adapter transports the compiled result. Release-safe iterative task loops retain
+production wait, cancellation, authority and nine-query bounds. SDK 10.0.400 Release solution
+built with zero warnings/errors; compiled Gateway and Contracts controls, existing Quint/FsQuint
+correspondence, generated Fable vectors and Vite passed. Real focused Chromium passed both the
+corrected baseline-to-summary journey and multibyte bounded capture. Exact protected artifact
+rebuild, private consumer succession and native advisor/replay/cleanup acceptance remain open;
+the incomplete older protected artifact is retained and cannot evidence these new exports.
+
 **2026-10-02: LEARN W6 C2 manager v3 native-verifier CI source delivered; installed runtime remains open.**
 [Coordination #921](https://github.com/FS-GG/FS.GG.Coordination/pull/921) merged at
 `aa05817cd3025ead9d574e772d5302be8cf4e2dc`, tree
