@@ -299,3 +299,50 @@ capture to the exact first admitted source fact and reports
 candidate drift and malformed response bytes refuse. This evidence removes only the missing native delivery state
 and provenance input; `operationalReady` remains false because independent original/window binding and the other
 owner inputs above are still absent.
+
+## Installed origin and native route producer contract
+
+The protected Host now exposes two additional read surfaces for the later Coordination composition. They require
+the existing qualified native collector installation and enrolled `native-collector` principal.
+
+`collect-installed-origin --config ABSOLUTE_PATH` reads the installed manager receipt and fixed capability
+profile, result, native capture, verification and source reference from their private retained paths. It compares
+their scope, grant generation, executable bytes, profile digest, requested model and effort, capture digest,
+verification status and the profile/result validity bindings before constructing `learn-installed-origin/1`.
+The constructor and reader each use one current time and refuse future observations, exact expiry and expired
+evidence. The caller supplies
+no hashes or attestation fields. The immutable fact enters through the existing receipt and fact admission tables;
+generic admission is rejected. `read-installed-origin` repeats the retained byte checks and selects the exact
+applied fact through its current workspace, principal, grant and receipt admission. Its
+`fsgg.learn.installed-producer-receipt/1` result maps directly to Coordination's existing producer receipt
+contract. Complete exact selectors are applied before the bounded match decision, so distinct immutable renewals
+under one current grant coexist while duplicate exact matches refuse. Changed retained bytes, a foreign
+installation or grant, substituted selectors, a revoked current grant or absent admission also refuse.
+
+Installed-origin construction is available only for
+`fsgg.telemetry.native-collector-installation/3`. Its closed `NativeVerifier` binding names the absolute
+interpreter, unchanged canonical native-source verifier module and bounded runtime manifest with their exact
+digests. The adjacent manager receipt/3 binds the complete sidecar, source-reference/3 and runtime manifest.
+Version 1 or 2 installation, a missing snapshot, runtime or manifest, or substituted code is explicitly
+unavailable for installed-origin collection and readback while its older collector functions remain compatible.
+
+For every collect and read, Host copies the already-read capture and retained telemetry snapshot into a fresh
+private directory, invokes the canonical verifier directly with fixed `-I -S -B ... verify --capture ...
+--telemetry-snapshot ...` arguments, clears inherited environment and closes stdin. Runtime is capped at 30
+seconds, stdout at 1 MiB and stderr at 64 KiB; timeout, overflow, nonzero exit, malformed or duplicate JSON and
+retained-output disagreement refuse and remove the owned temporary directory. Host rechecks retained inputs and
+the runtime inventory after execution. The installation digest binds config, sidecar, reader executable, source
+reference, runtime manifest and snapshot bytes. This validates capture/snapshot correspondence at the retained
+boundary; it does not promote `snapshotOrigin`, shared-cost completeness, whole-window membership, role coverage
+or allocation authority, which remain unknown or false at C2.
+
+`read-native-route --config ABSOLUTE_PATH --original-item ID` is a bounded, read-only store snapshot for an
+existing durable original mapping. It returns at most 256 dispatch rows and 256 admitted learning facts from one
+SQLite transaction and caps canonical output at 1 MiB. Every runtime/relation outside the proved
+`collaboration-spawn-agent` child route is explicitly `unsupported-runtime-or-role`. Started and terminal child
+states remain observations of that route only: the result fixes `populationComplete` and
+`terminalChildEstablishesRoleCoverage` to false. It also fixes `windowBinding` to `unknown` and
+`allocationReferenceIsAuthority` to false. Coordination must join this output with its C1 assignment/session
+owners and C3 operational window authority. A six-role roster, terminal child, allocation roster reference, or
+applied collector receipt cannot establish complete population, window authority, actual allocation, or source
+verification.

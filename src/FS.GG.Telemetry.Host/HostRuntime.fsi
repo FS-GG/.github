@@ -51,6 +51,16 @@ type AuthEntry =
         Revoked: bool
     }
 
+type NativeVerifierConfig =
+    {
+        RuntimeExecutablePath: string
+        RuntimeExecutableSha256: string
+        ModulePath: string
+        ModuleSha256: string
+        RuntimeManifestPath: string
+        RuntimeManifestSha256: string
+    }
+
 type NativeCollectorInstallationConfig =
     {
         Schema: string
@@ -61,6 +71,7 @@ type NativeCollectorInstallationConfig =
         Provider: string
         Model: string
         Effort: string
+        NativeVerifier: NativeVerifierConfig option
     }
 
 type NativeDeliverySourceInstallationConfig =

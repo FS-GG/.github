@@ -330,6 +330,12 @@ module TelemetryStore =
             repository: string * pullRequest: int64 * expectedHead: string * observedHead: string *
             baseRef: string * baseSha: string * state: string * mergeCommit: string option *
             mergedAt: string option * sourceDigest: string
+        | LearnInstalledOrigin of
+            workspaceId: string * producerId: string * streamId: string * role: string *
+            grantId: string * grantGeneration: int64 * managerReceiptSha256: string *
+            capabilityProfileSha256: string * capabilityResultSha256: string *
+            nativeCaptureSha256: string * nativeVerificationSha256: string *
+            capabilityObservedAt: string * capabilityExpiresAt: string * installationSha256: string
 
     type Fact =
         {

@@ -645,6 +645,254 @@ module Operations =
             envelopeBytes, envelope, capture
         | _ -> invalidOp "native delivery capture envelope binding differs"
 
+    type private InstalledOriginMaterial =
+        {
+            Query: TelemetryStoreApplication.InstalledOriginQuery
+            ObservedAt: string
+            ExpiresAt: string
+            InstallationSha256: string
+        }
+
+    let private installedOriginMaterial path (config: HostConfig)
+                                              (installation: NativeCollectorInstallationConfig)
+                                              (principal: TelemetryReceipt.Principal)
+                                              now =
+        let readBounded (maximum: int) (file: string) =
+            let info = FileInfo file
+            let rec realAncestors (directory: DirectoryInfo) =
+                isNull directory || (directory.Exists && isNull directory.LinkTarget && realAncestors directory.Parent)
+            if not info.Exists || isNull info.Directory || not (isNull info.LinkTarget)
+               || not (realAncestors info.Directory)
+               || info.Length <= 0L || info.Length > int64 maximum
+               || File.GetUnixFileMode file <> (UnixFileMode.UserRead ||| UnixFileMode.UserWrite) then
+                invalidOp "installed origin evidence is unavailable"
+            File.ReadAllBytes file
+        let parse (bytes: byte array) = JsonNode.Parse(bytes).AsObject()
+        let text (value: JsonObject) (name: string) = value[name].GetValue<string>()
+        let integer (value: JsonObject) (name: string) = value[name].GetValue<int64>()
+        let sidecarBytes = readBounded 16384 (path + ".native-collector.json")
+        let configBytes = readBounded 1048576 path
+        let managerBytes = readBounded 65536 (path + ".native-collector.receipt.json")
+        let manager = parse managerBytes
+        let expectedManager =
+            set [ "schema"; "status"; "ownerUid"; "hostConfigSha256"; "sidecarSha256";
+                  "executableSha256"; "credentialReference"; "workspaceId"; "producerId"; "streamId";
+                  "grantId"; "grantGeneration"; "sourceVerification"; "snapshotOrigin";
+                  "sharedCostCompleteness"; "activationAuthorized"; "sourceReferenceSha256";
+                  "verifierRuntimeManifestSha256" ]
+        let verifier = installation.NativeVerifier |> Option.defaultWith (fun () -> invalidOp "installed verifier is unavailable")
+        let sourceReferenceBytes =
+            readBounded 65536 (Path.Combine(Path.GetDirectoryName(path), "source-reference.json"))
+        let runtimeManifestBytes = readBounded (1024 * 1024) verifier.RuntimeManifestPath
+        if not (exactNames manager expectedManager)
+           || text manager "schema" <> "fsgg.telemetry.native-collector-installation-receipt/3"
+           || text manager "status" <> "installed"
+           || manager["activationAuthorized"].GetValue<bool>()
+           || text manager "hostConfigSha256" <> digestBytes configBytes
+           || text manager "sidecarSha256" <> digestBytes sidecarBytes
+           || text manager "executableSha256" <> digestBytes(File.ReadAllBytes installation.ExecutablePath)
+           || text manager "credentialReference" <> installation.CredentialReference
+           || text manager "workspaceId" <> principal.Scope.Workspace
+           || text manager "producerId" <> principal.Scope.Producer
+           || text manager "streamId" <> principal.Scope.Stream
+           || text manager "grantId" <> principal.GrantId.Value
+           || integer manager "grantGeneration" <> principal.GrantGeneration.Value
+           || text manager "sourceReferenceSha256" <> digestBytes sourceReferenceBytes
+           || text manager "verifierRuntimeManifestSha256" <> verifier.RuntimeManifestSha256
+           || digestBytes runtimeManifestBytes <> verifier.RuntimeManifestSha256 then
+            invalidOp "installed origin manager receipt differs"
+
+        let evidence (name: string) maximum = readBounded maximum (Path.Combine(installation.EvidenceRoot, name))
+        let profileBytes = evidence "fixed-native-capability-profile.json" 65536
+        let resultBytes = evidence "fixed-native-capability-result.json" 65536
+        let captureBytes = evidence "native-source-capture.json" (64 * 1024 * 1024)
+        let snapshotBytes = evidence "native-source-snapshot.json" (64 * 1024 * 1024)
+        let verificationBytes = evidence "native-source-verification.json" 1048576
+        let profile, result, capture, verification, sourceReference =
+            parse profileBytes, parse resultBytes, parse captureBytes, parse verificationBytes, parse sourceReferenceBytes
+        let profileSha = digestBytes profileBytes
+        let captureDigest = text capture "captureDigest"
+        let observed = text result "evidenceObservedAt"
+        let expires = text result "evidenceExpiresAt"
+        let observedAt, expiresAt = DateTimeOffset.Parse observed, DateTimeOffset.Parse expires
+        let profileExpiresAt = DateTimeOffset.Parse(text profile "expiresAt")
+        let startedAt, completedAt = DateTimeOffset.Parse(text result "startedAt"), DateTimeOffset.Parse(text result "completedAt")
+        let projection = (capture["projection"]).AsObject()
+        let threads = (projection["threads"]).AsArray()
+        let routeSupported =
+            threads
+            |> Seq.exists (fun thread ->
+                thread["provider"].GetValue<string>() = installation.Provider
+                && thread["model"].GetValue<string>() = installation.Model
+                && thread["effort"].GetValue<string>() = installation.Effort)
+        let profileFields =
+            set [ "schema"; "operation"; "revision"; "hostExecutableSha256"; "providerExecutable";
+                  "providerExecutableSha256"; "expectedAdapterVersion"; "expectedCodexVersion";
+                  "environmentAllowList"; "credentialScope"; "maximumRuntimeSeconds"; "maximumStreamBytes";
+                  "expiresAt"; "disposableWorkspace"; "cleanup" ]
+        let resultFields =
+            set [ "schema"; "operation"; "profileRevision"; "profileSha256"; "hostExecutableSha256";
+                  "providerExecutableSha256"; "adapterVersion"; "credentialScope"; "environmentAllowList";
+                  "maximumRuntimeSeconds"; "maximumStreamBytes"; "requestedModel"; "requestedEffort";
+                  "startedAt"; "completedAt"; "disposition"; "detail"; "authenticationState";
+                  "authenticationProvenance"; "evidenceSchema"; "evidenceProvenance"; "evidenceObservedAt";
+                  "evidenceExpiresAt"; "modelSessionStarts"; "cleanup" ]
+        let captureFields =
+            set [ "schema"; "outcome"; "rootThreadId"; "limits"; "initialExchanges";
+                  "confirmationExchanges"; "rollouts"; "projection"; "captureDigest" ]
+        let verificationFields =
+            set [ "schema"; "status"; "outcome"; "captureDigest"; "missingDescendants";
+                  "foreignDescendants"; "mismatchedThreads"; "missingTurns"; "foreignTurns";
+                  "missingUsage"; "foreignUsage"; "mismatchedUsage" ]
+        let sourceReferenceFields =
+            set [ "schema"; "profileSha256"; "nativeSourceVolume"; "developmentTarget";
+                  "collectorReadOnlyTarget"; "readerProfileSha256"; "captureQualified";
+                  "verifierRuntimeManifestSha256" ]
+        let cleanup = result["cleanup"]
+        let cleanupFields =
+            set [ "processTreeTerminationRequired"; "processTreeTerminated";
+                  "workspaceRemovalAttempted"; "workspaceRemoved" ]
+        let verificationGaps =
+            [ "missingDescendants"; "foreignDescendants"; "mismatchedThreads"; "missingTurns";
+              "foreignTurns"; "missingUsage"; "foreignUsage"; "mismatchedUsage" ]
+        if not (exactNames profile profileFields) || not (exactNames result resultFields)
+           || not (exactNames capture captureFields) || not (exactNames verification verificationFields)
+           || not (exactNames sourceReference sourceReferenceFields)
+           || text profile "schema" <> "fsgg.orchestration.host-fixed-native-capability/1"
+           || text profile "operation" <> "codex-native-capability/1"
+           || text profile "providerExecutable" <> installation.ExecutablePath
+           || text profile "providerExecutableSha256" <> digestBytes(File.ReadAllBytes installation.ExecutablePath)
+           || text result "schema" <> "fsgg.orchestration.host-fixed-native-capability-result/1"
+           || text result "operation" <> "codex-native-capability/1"
+           || text result "profileRevision" <> text profile "revision"
+           || text result "profileSha256" <> profileSha
+           || text result "hostExecutableSha256" <> text profile "hostExecutableSha256"
+           || text result "providerExecutableSha256" <> digestBytes(File.ReadAllBytes installation.ExecutablePath)
+           || text result "adapterVersion" <> text profile "expectedAdapterVersion"
+           || text result "credentialScope" <> text profile "credentialScope"
+           || integer result "maximumRuntimeSeconds" <> integer profile "maximumRuntimeSeconds"
+           || integer result "maximumStreamBytes" <> integer profile "maximumStreamBytes"
+           || not (JsonNode.DeepEquals(result["environmentAllowList"], profile["environmentAllowList"]))
+           || text result "requestedModel" <> installation.Model
+           || text result "requestedEffort" <> installation.Effort
+           || text result "disposition" <> "advertised-supported"
+           || text result "authenticationState" <> "authenticated"
+           || integer result "modelSessionStarts" <> 0L
+           || not (exactNames cleanup cleanupFields)
+           || (cleanupFields |> Seq.exists (fun name -> not (cleanup[name].GetValue<bool>())))
+           || text capture "schema" <> "fsgg.learn.native-source-capture/1"
+           || text capture "outcome" <> "native-census-and-usage-reconciled-at-capture"
+           || text verification "schema" <> "fsgg.learn.native-source-verification/1"
+           || text verification "status" <> "verified"
+           || text verification "captureDigest" <> captureDigest
+           || not (System.Text.RegularExpressions.Regex.IsMatch(captureDigest, "^[0-9a-f]{64}$"))
+           || (verificationGaps |> List.exists (fun name -> verification[name].AsArray().Count <> 0))
+           || text sourceReference "schema" <> "fsgg.telemetry.persistent-source-references/3"
+           || text sourceReference "readerProfileSha256" <> profileSha
+           || text sourceReference "collectorReadOnlyTarget" <> installation.CodexHome
+           || sourceReference["captureQualified"].GetValue<bool>()
+           || text sourceReference "verifierRuntimeManifestSha256" <> verifier.RuntimeManifestSha256
+           || not routeSupported || startedAt > observedAt || observedAt > completedAt
+           || completedAt > now || expiresAt <= observedAt
+           || profileExpiresAt <= now || expiresAt <= now then
+            invalidOp "installed origin retained evidence differs"
+        NativeSourceVerification.verifyRetained verifier installation.EvidenceRoot captureBytes snapshotBytes verificationBytes
+        |> Result.defaultWith (String.concat "; " >> invalidOp)
+        let unchanged (expected: byte array) maximum file =
+            let observed = readBounded maximum file
+            expected.Length = observed.Length && Array.forall2 (=) expected observed
+        if not (unchanged captureBytes (64 * 1024 * 1024) (Path.Combine(installation.EvidenceRoot, "native-source-capture.json")))
+           || not (unchanged snapshotBytes (64 * 1024 * 1024) (Path.Combine(installation.EvidenceRoot, "native-source-snapshot.json")))
+           || not (unchanged verificationBytes 1048576 (Path.Combine(installation.EvidenceRoot, "native-source-verification.json")))
+           || not (unchanged sourceReferenceBytes 65536 (Path.Combine(Path.GetDirectoryName(path), "source-reference.json")))
+           || not (unchanged runtimeManifestBytes (1024 * 1024) verifier.RuntimeManifestPath) then
+            invalidOp "installed origin retained evidence changed"
+        let query: TelemetryStoreApplication.InstalledOriginQuery =
+            { WorkspaceId = principal.Scope.Workspace
+              ProducerId = principal.Scope.Producer; StreamId = principal.Scope.Stream
+              Role = "native-collector"; GrantId = principal.GrantId.Value
+              GrantGeneration = principal.GrantGeneration.Value
+              ManagerReceiptSha256 = digestBytes managerBytes
+              CapabilityProfileSha256 = profileSha
+              CapabilityResultSha256 = digestBytes resultBytes
+              NativeCaptureSha256 = digestBytes captureBytes
+              NativeVerificationSha256 = digestBytes verificationBytes
+              InstallationSha256 = framedDigest [ configBytes; sidecarBytes; File.ReadAllBytes installation.ExecutablePath;
+                                                   sourceReferenceBytes; runtimeManifestBytes; snapshotBytes ] }
+        { Query = query; ObservedAt = observed; ExpiresAt = expires
+          InstallationSha256 = query.InstallationSha256 }
+
+    let private installedOriginEnvelope (principal: TelemetryReceipt.Principal) (material: InstalledOriginMaterial) =
+        let query = material.Query
+        let fields =
+            [ query.WorkspaceId; query.ProducerId; query.StreamId; query.GrantId; string query.GrantGeneration;
+              query.ManagerReceiptSha256; query.CapabilityProfileSha256; query.CapabilityResultSha256;
+              query.NativeCaptureSha256; query.NativeVerificationSha256; material.ObservedAt; material.ExpiresAt;
+              material.InstallationSha256 ]
+        let digest = framedDigest (fields |> Seq.map Encoding.UTF8.GetBytes)
+        let fact = JsonObject()
+        fact["kind"] <- JsonValue.Create "learn-installed-origin/1"
+        fact["identity"] <- JsonValue.Create("installed-origin-" + digest[..31])
+        fact["revision"] <- JsonValue.Create 0
+        fact["workspaceId"] <- JsonValue.Create query.WorkspaceId
+        fact["producerId"] <- JsonValue.Create query.ProducerId
+        fact["streamId"] <- JsonValue.Create query.StreamId
+        fact["role"] <- JsonValue.Create query.Role
+        fact["grantId"] <- JsonValue.Create query.GrantId
+        fact["grantGeneration"] <- JsonValue.Create query.GrantGeneration
+        fact["managerReceiptSha256"] <- JsonValue.Create query.ManagerReceiptSha256
+        fact["capabilityProfileSha256"] <- JsonValue.Create query.CapabilityProfileSha256
+        fact["capabilityResultSha256"] <- JsonValue.Create query.CapabilityResultSha256
+        fact["nativeCaptureSha256"] <- JsonValue.Create query.NativeCaptureSha256
+        fact["nativeVerificationSha256"] <- JsonValue.Create query.NativeVerificationSha256
+        fact["capabilityObservedAt"] <- JsonValue.Create material.ObservedAt
+        fact["capabilityExpiresAt"] <- JsonValue.Create material.ExpiresAt
+        fact["installationSha256"] <- JsonValue.Create material.InstallationSha256
+        let payload = JsonObject()
+        payload["schema"] <- JsonValue.Create TelemetryStore.BatchSchema
+        payload["ingestId"] <- JsonValue.Create("receipt-installed-origin-" + digest[..31])
+        payload["sourceIdentity"] <- JsonValue.Create "protected-installed-origin"
+        payload["generation"] <- JsonValue.Create(string query.GrantGeneration)
+        payload["cursor"] <- JsonValue.Create digest
+        payload["eventCount"] <- JsonValue.Create 1
+        payload["events"] <- JsonArray(fact)
+        let envelope = JsonObject()
+        envelope["schema"] <- JsonValue.Create TelemetryReceipt.Schema
+        envelope["workspaceId"] <- JsonValue.Create principal.Scope.Workspace
+        envelope["producerId"] <- JsonValue.Create principal.Scope.Producer
+        envelope["streamId"] <- JsonValue.Create principal.Scope.Stream
+        envelope["batchId"] <- JsonValue.Create("installed-origin-" + digest[..31])
+        envelope["payload"] <- payload
+        CanonicalJson.canonicalize(Encoding.UTF8.GetBytes(envelope.ToJsonString()))
+        |> Result.map Encoding.UTF8.GetBytes |> Result.defaultWith invalidOp
+
+    let private installedOrigin path config assessmentFor persist now =
+        match Configuration.loadNativeCollectorInstallation path config with
+        | Error errors -> Error errors
+        | Ok(installation, _) when installation.Schema <> "fsgg.telemetry.native-collector-installation/3" ->
+            Error [ "verified native collector installation is unavailable" ]
+        | Ok(installation, principal) ->
+            match storeFor config principal.Scope.Workspace with
+            | None -> Error [ "native collector workspace is unavailable" ]
+            | Some store ->
+                let material = installedOriginMaterial path config installation principal now
+                if persist then
+                    let bytes = installedOriginEnvelope principal material
+                    TelemetryStoreApplication.submitReceiptPrincipal store.Root (assessmentFor store.Root) principal bytes
+                    |> Result.bind (fun _ -> TelemetryStoreApplication.drainReceipts store.Root (assessmentFor store.Root) principal.Scope.Workspace)
+                    |> Result.bind (fun _ -> TelemetryStoreApplication.resolveInstalledOriginAt now store.Root (assessmentFor store.Root) material.Query)
+                else
+                    TelemetryStoreApplication.resolveInstalledOriginAt now store.Root (assessmentFor store.Root) material.Query
+                |> Result.map (fun origin ->
+                    JsonSerializer.Serialize
+                        {| schema = "fsgg.learn.installed-producer-receipt/1"; source = {| producerId = material.Query.ProducerId; revision = string origin.Revision; recordId = origin.RecordId; observedAt = origin.ObservedAt |};
+                           workspaceId = material.Query.WorkspaceId; producerId = material.Query.ProducerId; streamId = material.Query.StreamId;
+                           role = material.Query.Role; grantId = material.Query.GrantId; grantGeneration = material.Query.GrantGeneration;
+                           managerReceiptSha256 = material.Query.ManagerReceiptSha256; capabilityProfileSha256 = material.Query.CapabilityProfileSha256;
+                           capabilityResultSha256 = material.Query.CapabilityResultSha256; nativeCaptureSha256 = material.Query.NativeCaptureSha256;
+                           nativeVerificationSha256 = material.Query.NativeVerificationSha256; capabilityObservedAt = origin.ObservedAt;
+                           capabilityExpiresAt = origin.ExpiresAt |} + "\n")
+
     let private collectNativeDelivery path config assessmentFor transportFor sourceRef =
         match Configuration.loadNativeDeliverySourceInstallation path config with
         | Error errors -> Error errors
@@ -724,7 +972,7 @@ module Operations =
                         ->
                         Error [ "native collector profile differs from durable admission" ]
                     | Ok resolved ->
-                        let qualified = installation.Schema = "fsgg.telemetry.native-collector-installation/2"
+                        let qualified = installation.Schema <> "fsgg.telemetry.native-collector-installation/1"
                         let artifactName =
                             digestBytes (Encoding.UTF8.GetBytes(String.concat "\n" [ dispatchId; parentThreadText; nativeAgent ]))
                             + (if qualified then ".capture.json" else ".envelope.json")
@@ -823,7 +1071,10 @@ module Operations =
             | Some store ->
                 let files =
                     Directory.EnumerateFiles(installation.EvidenceRoot, "*.capture.json")
-                    |> Seq.filter (fun file -> not (file.EndsWith(".delivery-capture.json", StringComparison.Ordinal)))
+                    |> Seq.filter (fun file ->
+                        System.Text.RegularExpressions.Regex.IsMatch(
+                            Path.GetFileName file,
+                            "^[0-9a-f]{64}\\.capture\\.json$"))
                     |> Seq.truncate 1001 |> Seq.toArray
                 if files.Length > 1000 then invalidOp "native collector capture population exceeds the bound"
                 let captures = JsonArray()
@@ -1019,7 +1270,8 @@ module Operations =
             + "\n"
         )
 
-    let runWithDependencies
+    let runWithDependenciesAt
+        (now: DateTimeOffset)
         (argv: string array)
         (assessmentFor: string -> TelemetryStore.DurabilityAssessment)
         (deliveryTransportFor: string -> IDisposable * Transport.ISinglePageGitHubTransport) =
@@ -1121,6 +1373,36 @@ module Operations =
                         collectNativeDelivery path config assessmentFor deliveryTransportFor sourceRef
                         |> resultExit "native-delivery-source-refused"
                     with _ -> resultExit "native-delivery-source-refused" (Error [ "native delivery source refused" ]))
+        | [ "collect-installed-origin"; "--config"; path ] ->
+            match load path with
+            | Error errors -> resultExit "invalid-configuration" (Error errors)
+            | Ok config ->
+                withLock config (fun () ->
+                    try installedOrigin path config assessmentFor true now |> resultExit "installed-origin-refused"
+                    with _ -> resultExit "installed-origin-refused" (Error [ "installed origin refused" ]))
+        | [ "read-installed-origin"; "--config"; path ] ->
+            match load path with
+            | Error errors -> resultExit "invalid-configuration" (Error errors)
+            | Ok config ->
+                withLock config (fun () ->
+                    try installedOrigin path config assessmentFor false now |> resultExit "installed-origin-unavailable"
+                    with _ -> resultExit "installed-origin-unavailable" (Error [ "installed origin unavailable" ]))
+        | [ "read-native-route"; "--config"; path; "--original-item"; originalItem ] ->
+            match load path with
+            | Error errors -> resultExit "invalid-configuration" (Error errors)
+            | Ok config ->
+                withLock config (fun () ->
+                    try
+                        match Configuration.loadNativeCollectorInstallation path config with
+                        | Error errors -> resultExit "native-route-unavailable" (Error errors)
+                        | Ok(_, principal) ->
+                            match storeFor config principal.Scope.Workspace with
+                            | None -> resultExit "native-route-unavailable" (Error [ "native collector workspace is unavailable" ])
+                            | Some store ->
+                                TelemetryStoreApplication.readNativeRoutePopulation
+                                    store.Root (assessmentFor store.Root) originalItem
+                                |> resultExit "native-route-unavailable"
+                    with _ -> resultExit "native-route-unavailable" (Error [ "native route unavailable" ]))
         | [ "export-learning"; "--config"; path ] ->
             match load path with
             | Error errors -> resultExit "invalid-configuration" (Error errors)
@@ -1443,6 +1725,9 @@ module Operations =
     let private productionDeliveryTransport token =
         let transport = new Transport.HttpTransport("https://api.github.com", token)
         (transport :> IDisposable), (transport :> Transport.ISinglePageGitHubTransport)
+
+    let runWithDependencies argv assessmentFor deliveryTransportFor =
+        runWithDependenciesAt DateTimeOffset.UtcNow argv assessmentFor deliveryTransportFor
 
     let runWithAssessment argv assessmentFor =
         runWithDependencies argv assessmentFor productionDeliveryTransport

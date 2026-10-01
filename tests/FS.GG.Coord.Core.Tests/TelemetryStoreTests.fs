@@ -95,6 +95,22 @@ module TelemetryStoreTests =
         Assert.Contains("64 events", sprintf "%A" (TelemetryStore.parseBatch payload))
 
     [<Fact>]
+    let ``installed origin is a closed native role fact and selector hashes are evidence`` () =
+        let digest = String.replicate 64 "a"
+        let fact role extra =
+            bytes
+                $"""{{"schema":"{TelemetryStore.BatchSchema}","ingestId":"installed-origin-1","sourceIdentity":"protected-installed-origin","generation":"7","cursor":"c1","eventCount":1,"events":[{{"kind":"learn-installed-origin/1","identity":"origin-1","revision":0,"workspaceId":"workspace-1","producerId":"producer-1","streamId":"stream-1","role":"{role}","grantId":"grant-1","grantGeneration":7,"managerReceiptSha256":"{digest}","capabilityProfileSha256":"{digest}","capabilityResultSha256":"{digest}","nativeCaptureSha256":"{digest}","nativeVerificationSha256":"{digest}","capabilityObservedAt":"2026-10-01T10:00:00Z","capabilityExpiresAt":"2026-10-01T10:05:00Z","installationSha256":"{digest}"{extra}}}]}}"""
+        match TelemetryStore.parseBatch (fact "native-collector" "") with
+        | Ok { Facts = [ { Payload = TelemetryStore.LearnInstalledOrigin(_, _, _, role, _, generation, _, _, _, _, _, observed, expires, _) } ] } ->
+            Assert.Equal("native-collector", role)
+            Assert.Equal(7L, generation)
+            Assert.Equal("2026-10-01T10:00:00Z", observed)
+            Assert.Equal("2026-10-01T10:05:00Z", expires)
+        | value -> Assert.Fail($"unexpected parse result: {value}")
+        Assert.True(TelemetryStore.parseBatch (fact "generic" "") |> Result.isError)
+        Assert.Contains("unknown field", sprintf "%A" (TelemetryStore.parseBatch (fact "native-collector" ",\"callerHash\":\"self-authored\"")))
+
+    [<Fact>]
     let ``UTEL-08 review activity attribution and complication facts are closed and bounded`` () =
         let digest = String.replicate 64 "a"
 

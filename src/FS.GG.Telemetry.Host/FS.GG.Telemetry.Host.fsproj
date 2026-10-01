@@ -37,6 +37,8 @@
     <Compile Include="HostRuntime.fs" />
     <Compile Include="NativeDeliverySource.fsi" />
     <Compile Include="NativeDeliverySource.fs" />
+    <Compile Include="NativeSourceVerification.fsi" />
+    <Compile Include="NativeSourceVerification.fs" />
     <Compile Include="BrowserEndpoints.fsi" />
     <Compile Include="BrowserEndpoints.fs" />
     <Compile Include="Program.fsi" />

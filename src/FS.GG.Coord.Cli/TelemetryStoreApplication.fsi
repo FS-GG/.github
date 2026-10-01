@@ -46,6 +46,33 @@ module TelemetryStoreApplication =
             BindingDigest: string
         }
 
+    type InstalledOriginQuery =
+        {
+            WorkspaceId: string
+            ProducerId: string
+            StreamId: string
+            Role: string
+            GrantId: string
+            GrantGeneration: int64
+            ManagerReceiptSha256: string
+            CapabilityProfileSha256: string
+            CapabilityResultSha256: string
+            NativeCaptureSha256: string
+            NativeVerificationSha256: string
+            InstallationSha256: string
+        }
+
+    type InstalledOrigin =
+        {
+            RecordId: string
+            Revision: int64
+            ObservedAt: string
+            ExpiresAt: string
+            InstallationSha256: string
+            ReceiptKey: string
+            EnvelopeDigest: string
+        }
+
     val databaseFileName: string
     val assessProductionRoot: path: string -> TelemetryStore.DurabilityAssessment
     val initialize: path: string -> assessment: TelemetryStore.DurabilityAssessment -> Result<string, string list>
@@ -151,6 +178,25 @@ module TelemetryStoreApplication =
         dispatchId: string ->
         nativeAgentId: string ->
             Result<NativeCollectorDispatch, string list>
+
+    val resolveInstalledOrigin:
+        path: string ->
+        assessment: TelemetryStore.DurabilityAssessment ->
+        query: InstalledOriginQuery ->
+            Result<InstalledOrigin, string list>
+
+    val resolveInstalledOriginAt:
+        now: System.DateTimeOffset ->
+        path: string ->
+        assessment: TelemetryStore.DurabilityAssessment ->
+        query: InstalledOriginQuery ->
+            Result<InstalledOrigin, string list>
+
+    val readNativeRoutePopulation:
+        path: string ->
+        assessment: TelemetryStore.DurabilityAssessment ->
+        originalItemId: string ->
+            Result<string, string list>
 
     val resolveNativeDeliveryCandidate:
         path: string ->
