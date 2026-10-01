@@ -53,6 +53,42 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**FourD measured image-copy storage source delivered; native capacity and runtime remain open.**
+[FourD PR #28](https://github.com/FS-GG/FS.GG.FourD/pull/28) merged at
+`858dee877411ce3e4b8eb7ba6e3403a1ce5d7621`, tree
+`fa684cfdc3b71eaba30e34ca2f77320db88d86b2`, independently equal to candidate
+`a8825bd0cfcb1aec310c952b15860be31e7e91de`. Full hosted
+[verification 36811990147](https://github.com/FS-GG/FS.GG.FourD/actions/runs/36811990147)
+and source preparation 36811990196 passed. All 29 native source tests passed.
+A private run-scoped image-copy temporary directory must be on a filesystem distinct from
+VFS storage, owned by the current UID with mode 0700 and at least 5 GiB observed free.
+Creation is exclusive; unsafe preexisting paths refuse without permission changes.
+The same TMPDIR is passed through image operations and removed by scoped cleanup. The
+capacity floor is a heuristic, not proof that the build fits; live preflight and native
+qualification remain authoritative. VFS stores, source/image pins and runtime policy stay
+unchanged. A fresh protected native run remains next; installed and human gates remain open.
+
+**V2-HOST receiver diagnostic private registration delivered; genuine acceptance remains open.**
+[Private substrate PR #28](https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/pull/28)
+merged at `19aab66ca35e11f1702f75699b11863dfefd0e9e`, tree
+`67d7f021b3175e20935bcd6bab0c846a5f04520d`, independently equal to candidate
+`e3b7f204554ae099c40c1f1d838451bdf0c7b5bf`. Both recipe references select protected
+public diagnostic source `3c48983dd625c6bf2a8925db712fb29c0a69fb5c`. Root passed all
+13 private source tests without skips and independently verified the 9,552-byte protected
+template match after removing exactly the public acquisition step. Public input release
+400609820 and all four native source input pins remain unchanged. This repository has no
+hosted PR checks. A fresh root-owned operation remains next; `.8` acceptance, `.9` routing,
+`.10` retirement and installed LEARN enrollment remain open.
+
+**Portable P3 anonymous installation now passes; final tag/release closure refused.**
+Actual recovery [36812530459](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36812530459)
+on protected `c8f443e9e52af44287dd3cbb95881933c026627e` passed exact reproduction,
+six packaged operations, provenance, both feed byte readbacks and anonymous installation
+with schema readback. It reused existing immutable 0.2.0 feed payloads without new pushes.
+The later final tag/release creation failed. Root read both v0.2.0 remote endpoints as absent;
+private runtime cleanup passed. Final release assets and installed adoption remain open;
+recovery must preserve the frozen source and already-published identical bytes.
+
 **V2-HOST-01.8 private receiver inspection diagnostics added; native acceptance remains open.**
 This source change preserves every receiver acceptance predicate while retaining a bounded,
 closed diagnostic projection only in sealed private evidence when inspection refuses.
