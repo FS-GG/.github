@@ -300,3 +300,21 @@ module HostBindingTests =
         for pid in first + 1 .. first + 256 do scope.ObserveCandidateForTest(pid)
         Assert.Equal(256, scope.RejectedCandidateCount)
         Assert.True(scope.RetainedCapacityExhausted)
+
+    [<Fact>]
+    let ``unsupported pidfd capability refuses before scope and child creation`` () =
+        OwnedProcessScope.setCapabilityProbeForTest(Some(fun () -> false))
+        try
+            let before = Directory.GetDirectories("/proc/self/task") |> Array.collect (fun thread -> File.ReadAllText(Path.Combine(thread, "children")).Split(' ', StringSplitOptions.RemoveEmptyEntries)) |> Set.ofArray
+            let refusal = Assert.Throws<BindingRefusal>(fun () -> OwnedProcessScope.enterTest () |> ignore)
+            Assert.Equal("process-pidfd-refused", refusal.Data0)
+            let after = Directory.GetDirectories("/proc/self/task") |> Array.collect (fun thread -> File.ReadAllText(Path.Combine(thread, "children")).Split(' ', StringSplitOptions.RemoveEmptyEntries)) |> Set.ofArray
+            Assert.Equal<string>(before, after)
+        finally OwnedProcessScope.setCapabilityProbeForTest(None)
+
+    [<Fact>]
+    let ``successful pidfd capability probe closes its descriptor`` () =
+        let descriptors () = Directory.GetFiles("/proc/self/fd") |> Array.length
+        let before = descriptors ()
+        for _ in 1 .. 32 do Assert.True(OwnedProcessScope.probePidFdCapabilityForTest ())
+        Assert.Equal(before, descriptors ())

@@ -68,6 +68,7 @@ module internal OwnedProcessScope =
 
     let mutable private lease = 0
     let mutable private currentObject: obj option = None
+    let mutable private capabilityProbeOverride: (unit -> bool) option = None
 
     type internal Scope (deadline: int64, ignoreBaseline: bool) =
         let identities = Dictionary<int, Identity>()
@@ -340,12 +341,38 @@ module internal OwnedProcessScope =
                 handler <> 1L && (flags &&& SaNoChildWait) = 0
         finally Marshal.FreeHGlobal(buffer)
 
+    let private probePidFdCapability () =
+        match capabilityProbeOverride with
+        | Some probe -> probe ()
+        | None ->
+            let mutable fd = -1
+            let buffer = Marshal.AllocHGlobal(128)
+            try
+                try
+                    for offset in 0 .. 127 do Marshal.WriteByte(buffer, offset, 0uy)
+                    fd <- pidfd_open(Environment.ProcessId, 0u)
+                    if fd < 0 then false
+                    elif pidfd_send_signal(fd, 0, 0n, 0u) <> 0 then false
+                    else
+                        let rc = waitid(PPidFd, uint32 fd, buffer, WExited ||| WNoHang ||| WNoWait)
+                        // Self is deliberately not waitable. ECHILD proves the selected
+                        // P_PIDFD/options ABI was understood without consuming status.
+                        (rc = -1 && Marshal.GetLastPInvokeError() = EChild)
+                        || (rc = 0 && Marshal.ReadInt32(buffer, 16) = 0)
+                with
+                | :? EntryPointNotFoundException
+                | :? DllNotFoundException -> false
+            finally
+                if fd >= 0 then close(fd) |> ignore
+                Marshal.FreeHGlobal(buffer)
+
     let private enter requireEntry ignoreBaseline =
         if not (RuntimeInformation.IsOSPlatform(OSPlatform.Linux)) || RuntimeInformation.ProcessArchitecture <> Architecture.X64 || Environment.ProcessId = 1 then
             raise (BindingRefusal "process-platform-refused")
         if requireEntry && Assembly.GetEntryAssembly() <> Assembly.GetExecutingAssembly() then raise (BindingRefusal "process-entry-refused")
         if not (File.Exists("/usr/bin/setsid") && File.Exists("/usr/bin/git") && Directory.Exists("/proc/self/task")) then raise (BindingRefusal "process-dependency-refused")
         if not (compatibleSigChild ()) then raise (BindingRefusal "process-sigchild-refused")
+        if not (probePidFdCapability ()) then raise (BindingRefusal "process-pidfd-refused")
         if Interlocked.CompareExchange(&lease, 1, 0) <> 0 then raise (BindingRefusal "process-scope-busy")
         try
             if not ignoreBaseline && not (kernelEmpty ()) then raise (BindingRefusal "process-baseline-refused")
@@ -359,6 +386,8 @@ module internal OwnedProcessScope =
     let enterCli () = enter true false
     let enterTest () = enter false true
     let enterStrictTest () = enter false false
+    let probePidFdCapabilityForTest () = probePidFdCapability ()
+    let setCapabilityProbeForTest value = capabilityProbeOverride <- value
 
     let active () =
         match currentObject with
