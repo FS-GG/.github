@@ -6,7 +6,7 @@ index: 39
 description: Revised player-facing playtest proposals for Firelanes, Commitment and Pressure in a four-dimensional tactical skirmish.
 status: accepted-for-bounded-prototyping
 document-type: game-design-proposal
-last-updated: 2026-09-29
+last-updated: 2026-10-01
 ---
 
 # 4D Tactical Skirmish: Three Design Directions — Version 2
@@ -145,7 +145,7 @@ Every unit has one simple firing policy:
 
 Policies can be changed freely during the owning side's turn, between completed actions. They are locked during the opponent's turn. Setting a policy does not rotate a unit, grant sight, create readiness or trigger an attack. All units begin on Guard, adjustable during deployment.
 
-This is the entire initial policy vocabulary. There are no target scripts, health thresholds, manual defender confirmation dialogs or reaction dodges. In particular, Hold does not grant an emergency exception when attacked: the value and risk of that commitment are intentional.
+This is the entire initial policy vocabulary for the accepted prototypes. The optional programmable-reaction consideration below does not change this baseline. There are no target scripts, health thresholds, manual defender confirmation dialogs or reaction dodges. In particular, Hold does not grant an emergency exception when attacked: the value and risk of that commitment are intentional.
 
 Reaction eligibility always requires personal observation and range. A unit can only react to the currently acting enemy. Resource limits differ by design.
 
@@ -170,6 +170,51 @@ Stopping before the declared endpoint ends the Move, consumes its full cost and 
 This gives the player a response to discovery without free retreat, free scanning or cancellation of exposure. An incoming-fire indication also permits this stop after the triggered exchange. A forced stop due to collision likewise grants no final rotation.
 
 Uncommitted plans can be edited freely. Committed actions cannot be undone after gaining information or resolving combat. Save/reload policy for a future solo campaign is a separate product choice.
+
+### Design consideration — programmable reactions and streamlined turns
+
+**Considered on 2026-10-01; optional experiment, not an adopted rules change.** A player could upload a WebAssembly (WASM) module that proposes whether a unit should use an offered reaction. This may move repeated handling into standing orders while preserving responsibility for intent, position and risk. Commitment and Pressure keep Guard, Ambush and Hold, whole-side turns, current contact stops and existing saves. `fourd-tactics-v1` remains the default. Programming is never required: presets come first, a readable rule builder may follow, and upload is an optional expert route.
+
+The first experiment would keep the current reaction opportunities. When the host offers a legal choice, a policy may propose **fire at the currently acting, personally observed enemy, or decline**. It cannot move, rotate, dodge, choose another target, create readiness, interrupt an exchange or react to a reaction. Commitment still spends saved AP and observes its per-activation limit; Pressure still requires its existing Watch and pressure conditions. Policies in one simultaneous exchange decide from the same pre-exchange information.
+
+Players edit a policy during their own turn between completed actions and commit it for the opposing turn. Example richer orders include “keep my last AP” and “fire only when the observed acting enemy already has a wound.” A policy card should show conditions, fallback and examples before commitment. After resolution, presets and builder rules explain the verified condition and action. Uploaded code can supply a reason, but the interface must label it as module-supplied and never invent a rationale. The existing active-player Continue/Stop decision remains the bounded response after a contact exchange; no defender confirmation or emergency override is added.
+
+#### Compare less handling before changing turns
+
+| Candidate | Decisions retained | Reduced handling and trade-off |
+|---|---|---|
+| Intent controls under current rules | Unit, route, endpoint facing, target and readiness | Gather existing previews, edit an uncommitted plan easily and compress uneventful animation. Fewer clicks must not commit another action silently |
+| Standing orders at current reaction timing | What merits a reaction and which resource to preserve | Automatic rule application removes repeated prompts; richer orders add preparation and explanation cost. Compare presets and a builder before assuming code improves play |
+| Later short simultaneous-order windows | A short intent committed while opponents may also move or fire | Could make exposure feel more believable, but changes initiative, collisions, interruption and fog timing. Treat it as a separate rules and replay experiment |
+
+The intended realism is believable commitment: a unit follows an order, sees only what its situation permits and cannot retract exposure after learning its consequence. Extra ammunition, fatigue and status systems are unnecessary for this test. Attention should go to interpreting the situation.
+
+Concrete comparisons include:
+
+- **Crossing a watched route:** preview route, facing and known exposure, then commit. Present uneventful movement quickly. New contact still pauses after the current exchange; Stop cannot evade an already triggered shot.
+- **Saving a reserve:** a Commitment defender with one AP declines a legal shot. Its owner sees the verified reason and can revise next turn; the opponent learns neither reserve nor policy.
+- **Overlapping defenders:** two defenders decide from the same starting information and may spend readiness on one target. A module cannot see a future result to coordinate perfectly.
+- **Pressure without busywork:** summarize rally, scoring and Watch consequences together. Compare clearer presentation before adding automatic recovery or another state variable.
+
+#### Keep authority, replay and privacy with the host
+
+A module receives only a versioned view of its side's permitted observations, its own state and committed intent, plus legal candidate actions. It receives no full enemy state, hidden occupancy, opposing policy or readiness, future randomness or unobserved counters. Invocation timing and errors must not become a contact oracle, and team observation does not make an unseen target personally shootable.
+
+The host alone validates proposals, commits resources, orders exchanges, applies effects and records replay. A future experiment must pin module bytes, ABI, supported WASM features, engine and metering version, integer-only execution, fuel, memory, input/output/call limits and fallback. Start with a fresh stateless instance per decision and no filesystem, network, clocks, threads, ambient randomness or general host imports. Invalid output, deterministic traps or fuel exhaustion use the declared **decline/Hold** fallback. A wall-clock watchdog protects the application but cannot choose a combat outcome; technical recovery must repeat the same input or refuse the module. Replay must retain or securely resolve the exact module bytes and reproduce validated choices and deterministic failures.
+
+Modules, parameters, identifying hashes and detailed traces belong in private owner or authorized-host storage. Opponent projections keep the existing observation filter. Public errors disclose no code or hidden condition. A future ranked mode would need trusted enforcement, common limits and accessible presets or builders. Equal sandbox capabilities do not remove advantages from programming expertise, so ranked experiments may need to restrict authoring to shared rules.
+
+#### Select only with agency and usability evidence
+
+Compare the same maps with stock policies, richer presets or builder rules and optional modules. Keep rules and camera stable while testing presentation; test simultaneous orders separately. Measure:
+
+- correct prediction of whether and why a reaction occurs, including what remains unknown;
+- regret from unintended automation, misunderstood rules and knowingly accepted risk as separate causes;
+- setup, view switching, maintenance and inspection time alongside time spent making tactical choices;
+- meaningful commitments per round or minute, missed commitments and ability to explain the exchange;
+- input-to-feedback latency, fuel and memory use, fallback frequency and replay consistency.
+
+Select an experiment only if it reduces handling or creates a valued preparation choice while preserving understanding, deliberate control, fairness and information boundaries. Declare comparison margins before collecting results; faster turns alone are insufficient. Technical tests can establish legality, projection secrecy and replay reproducibility. They cannot establish perceived agency, enjoyment or absence of drudgery. Player evidence remains necessary for those claims, without becoming a gate for the existing automated V2 technical acceptance.
 
 ---
 
@@ -428,4 +473,5 @@ These are proposed evaluations, not completed validation. A clean ruleset is the
 
 - Version 1: tabletop-inspired directions centered on continuous reactions, reserved actions and suppression.
 - 2026-09-29 adoption: Commitment/Pressure bounded prototypes selected; v1 delivery and pending player evidence preserved; implementation governed by the separate owning amendment.
+- 2026-10-01 consideration: optional programmable reactions and reduced turn handling proposed; accepted prototype rules and implementation status unchanged.
 - Version 2: computer-first information contract, explicit geometry defaults, automatic firing policies, contact timing, hidden readiness, reduced damage variance, revised pressure recovery, a shared test mission and a conditional recommendation.
