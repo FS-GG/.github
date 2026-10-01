@@ -53,6 +53,24 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+
+**V2-HOST typed native-inspection private registration delivered; diagnostic operation is next.**
+[Private substrate PR #30](https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/pull/30)
+merged at `48f5a00f20de69b1a7d85aa794c47ad7d45001d5`, tree
+`0676ac9cf29dcecc8beae47e74b6fe887e284cb5`, independently equal to candidate
+`2459e9da8ca7f76a2ccc941a570490e104bc6949`. Both workflow references bind protected
+public diagnostic source `88d65daa1a1262d563c2312698e4a5e57109a824`. Root passed all
+13 PyYAML source tests without skips and independently compared the protected template,
+removing only the unchanged acquisition step: 9,552 bytes, SHA-256
+`7464e7470dac8c2fe0a8addf577e64d336b06639445a8bcc183f24a9010c9599`.
+The public template is byte unchanged; only embedded recipe identity changes its render.
+Input release 400609820, both acquisition assets, four native input pins and public key
+remain unchanged. This private repository has no hosted PR checks. This closes registration
+source only; a fresh root-owned diagnostic operation follows this projection's protected
+readback. Actual attempt-i remains refused after native inspection, before native start;
+its failed guard remains unknown. `.8` capture/restart/recovery, `.9` routing removal,
+`.10` retirement and installed LEARN enrollment remain open.
+
 **V2-HOST native-inspection diagnostic source repaired; genuine acceptance remains open.**
 Actual [attempt-i 36819013783](https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/actions/runs/36819013783)
 on private `443c203d` / public `5f79da7d` passed receiver and egress inspection/start,
