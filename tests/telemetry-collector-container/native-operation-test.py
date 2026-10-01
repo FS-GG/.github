@@ -270,11 +270,16 @@ class NativeOperationTests(unittest.TestCase):
             return {"type":"reasoning","id":identifier,"summary":[{"type":"summary_text","text":sentinel}],
                     "content":None,"encrypted_content":None,
                     "internal_chat_message_metadata_passthrough":stamp(turn)}
-        def completed_message(thread,turn,identifier,text):
+        def completed_item(thread,turn,item):
             return {"type":"item_completed","thread_id":thread,"turn_id":turn,
-                    "item":{"type":"AgentMessage","id":identifier,
-                            "content":[{"type":"Text","text":text}],"phase":"final_answer"},
+                    "item":item,
                     "completed_at_ms":1790812800250}
+        def completed_message(thread,turn,identifier,text):
+            return completed_item(thread,turn,{"type":"AgentMessage","id":identifier,
+                                  "content":[{"type":"Text","text":text}],"phase":"final_answer"})
+        def completed_reasoning(thread,turn,identifier,sentinel):
+            return completed_item(thread,turn,{"type":"Reasoning","id":identifier,
+                                  "summary_text":[sentinel],"raw_content":[]})
         spawn_call = {"type": "function_call", "id":"response-spawn", "name": "spawn_agent", "namespace": "functions", "call_id": "call-spawn",
                       "arguments": json.dumps({"message": support.FIXED_CHILD_PROMPT, "task_name": support.FIXED_TASK_NAME,
                                                "model": "gpt-5.6-sol", "reasoning_effort": "medium", "fork_turns": "none"}, separators=(",", ":")),
@@ -288,20 +293,31 @@ class NativeOperationTests(unittest.TestCase):
         parent_payloads = [("session_meta", parent_meta), ("turn_context", common_context),
                            ("event_msg", {"type": "turn_started", "turn_id": "turn-parent"}),
                            ("response_item", message("parent-user","turn-parent","user","input_text",support.FIXED_PROMPT)),
+                           ("event_msg", completed_item(PARENT,"turn-parent",{"type":"UserMessage","id":"parent-user",
+                                          "content":[{"type":"text","text":support.FIXED_PROMPT,"text_elements":[]}]})),
                            ("response_item", spawn_call),
+                           ("event_msg", completed_item(PARENT,"turn-parent",{"type":"SubAgentActivity","id":"call-spawn",
+                                          "kind":"started","agent_thread_id":CHILD,"agent_path":"/root/native_ack"})),
                            ("response_item", {"type": "function_call_output", "id":"response-spawn-output", "call_id": "call-spawn",
                                               "output": '{"task_name":"/root/native_ack"}',
                                               "internal_chat_message_metadata_passthrough":stamp("turn-parent")}),
                            ("response_item", wait_call),
                            ("inter_agent_communication_metadata", {"trigger_turn":False}),
                            ("response_item", agent_message("parent-completion","turn-parent","/root/native_ack","/root",completion)),
+                           ("event_msg", completed_item(PARENT,"turn-parent",{"type":"CollabAgentToolCall","id":"call-wait",
+                                          "tool":"wait","status":"completed","sender_thread_id":PARENT,
+                                          "receiver_thread_ids":[],"receiver_agents":[],"agents_states":{}})),
                            ("response_item", {"type": "function_call_output", "id":"response-wait-output", "call_id": "call-wait",
                                               "output": '{"message":"Wait completed.","timed_out":false}',
                                               "internal_chat_message_metadata_passthrough":stamp("turn-parent")}),
                            ("response_item", reasoning("parent-reasoning","turn-parent","PRIVATE-PARENT-SENTINEL")),
+                           ("event_msg", completed_reasoning(PARENT,"turn-parent","parent-reasoning","PRIVATE-PARENT-SENTINEL")),
                            ("response_item", message("parent-ack","turn-parent","assistant","output_text","NATIVE-PARENT-ACK","final_answer")),
                            ("event_msg", completed_message(PARENT,"turn-parent","parent-ack","NATIVE-PARENT-ACK")),
-                           ("event_msg", {"type": "turn_complete", "turn_id": "turn-parent", "last_agent_message": "NATIVE-PARENT-ACK", "error": None})]
+                           ("event_msg", {"type": "turn_complete", "turn_id": "turn-parent", "last_agent_message": "NATIVE-PARENT-ACK", "error": None}),
+                           ("event_msg", completed_item(PARENT,"turn-parent",{"type":"SubAgentActivity",
+                                          "id":"subagent-completed-turn-child","kind":"completed",
+                                          "agent_thread_id":CHILD,"agent_path":"/root/native_ack"}))]
         child_meta = {**parent_meta, "id": CHILD, "parent_thread_id": PARENT, "agent_path": "/root/native_ack",
                       "source": {"subagent": {"thread_spawn": {"parent_thread_id": PARENT, "depth": 1,
                                                                    "agent_path": "/root/native_ack"}}}}
@@ -310,7 +326,8 @@ class NativeOperationTests(unittest.TestCase):
                           ("event_msg", {"type": "turn_started", "turn_id": "turn-child", "root_turn_id": "turn-parent"}),
                           ("inter_agent_communication_metadata", {"trigger_turn":True}),
                           ("response_item", agent_message("child-initial","turn-child","/root","/root/native_ack",support.FIXED_CHILD_PROMPT)),
-                          ("response_item", reasoning("child-reasoning","turn-child","PRIVATE-CHILD-SENTINEL"))]
+                          ("response_item", reasoning("child-reasoning","turn-child","PRIVATE-CHILD-SENTINEL")),
+                          ("event_msg", completed_reasoning(CHILD,"turn-child","child-reasoning","PRIVATE-CHILD-SENTINEL"))]
         if child_extra: child_payloads.append(("response_item", child_extra))
         child_payloads.extend([
             ("response_item", message("child-ack","turn-child","assistant","output_text","NATIVE-CHILD-ACK","final_answer")),
@@ -327,7 +344,9 @@ class NativeOperationTests(unittest.TestCase):
     def _v2_audit_evidence(self):
         value,_=self.ready(); value.activity("item/started",activity());value.activity("item/completed",activity());value.bind_child(child_thread())
         wait=spawn(tool="wait");wait["receiverThreadIds"]=[];wait["agentsStates"]={};value.collaboration(wait)
-        value.parent_turn_started("turn-parent");value.child_turn_id="turn-child";value.child_terminal=True
+        value.parent_turn_started("turn-parent");value.child_turn_id="turn-child"
+        completed=activity("completed","subagent-completed-turn-child")
+        value.activity("item/started",completed);value.activity("item/completed",completed);value.child_terminal=True
         return value
 
     def test_original_rollout_audit_joins_exact_calls_settings_and_private_sources(self):
@@ -335,7 +354,7 @@ class NativeOperationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root=pathlib.Path(temporary);sessions,parent,child=self._write_rollouts(root);value=self._v2_audit_evidence()
             result=support.audit_original_rollouts(str(parent),str(child),sessions,value,profile)
-        self.assertTrue(value.original_audit);self.assertEqual((14,9),(result["parent"]["records"],result["child"]["records"]))
+        self.assertTrue(value.original_audit);self.assertEqual((19,10),(result["parent"]["records"],result["child"]["records"]))
         encoded=json.dumps(result)
         for private in ("PRIVATE-PARENT-SENTINEL","PRIVATE-CHILD-SENTINEL",str(parent),support.FIXED_CHILD_PROMPT):self.assertNotIn(private,encoded)
 
@@ -377,7 +396,7 @@ class NativeOperationTests(unittest.TestCase):
                     support.audit_original_rollouts(str(parent),str(child),sessions,self._v2_audit_evidence(),profile)
         with tempfile.TemporaryDirectory() as temporary:
             root=pathlib.Path(temporary);sessions,parent,child=self._write_rollouts(root);evidence=self._v2_audit_evidence();evidence.wait_call_id="foreign-wait"
-            with self.assertRaisesRegex(support.Refusal,"wait activity/call join"):
+            with self.assertRaisesRegex(support.Refusal,"wait"):
                 support.audit_original_rollouts(str(parent),str(child),sessions,evidence,profile)
 
     def test_original_completed_message_event_joins_identity_thread_turn_and_ack(self):
@@ -397,6 +416,30 @@ class NativeOperationTests(unittest.TestCase):
         for mutation in (contradictory,wrong_thread,unknown_item):
             with self.subTest(case=mutation.__name__),tempfile.TemporaryDirectory() as temporary:
                 root=pathlib.Path(temporary);sessions,parent,child=self._write_rollouts(root);self._mutate_rollout(child,mutation)
+                with self.assertRaises(support.Refusal):
+                    support.audit_original_rollouts(str(parent),str(child),sessions,self._v2_audit_evidence(),profile)
+
+    def test_original_completed_subagent_activity_joins_live_identity_and_order(self):
+        profile=support.load_profile(PROFILE_PATH)
+        def completed_activity(rows):
+            return next((index,row["payload"]) for index,row in enumerate(rows)
+                         if row["type"]=="event_msg" and row["payload"].get("type")=="item_completed"
+                         and row["payload"].get("item",{}).get("type")=="SubAgentActivity"
+                         and row["payload"]["item"].get("kind")=="completed")
+        def wrong_child(rows): completed_activity(rows)[1]["item"]["agent_thread_id"]=PARENT
+        def wrong_path(rows): completed_activity(rows)[1]["item"]["agent_path"]="/root/foreign"
+        def wrong_turn(rows): completed_activity(rows)[1]["item"]["id"]="subagent-completed-foreign-turn"
+        def wrong_kind(rows): completed_activity(rows)[1]["item"]["kind"]="interacted"
+        def malformed(rows): completed_activity(rows)[1]["item"]["agent_thread_id"]={}
+        def duplicate(rows):
+            index,_event=completed_activity(rows);rows.insert(index+1,json.loads(json.dumps(rows[index])))
+        def before_completion(rows):
+            index,_event=completed_activity(rows);record=rows.pop(index)
+            communication=next(index for index,row in enumerate(rows) if row["type"]=="inter_agent_communication_metadata")
+            rows.insert(communication,record)
+        for mutation in (wrong_child,wrong_path,wrong_turn,wrong_kind,malformed,duplicate,before_completion):
+            with self.subTest(case=mutation.__name__),tempfile.TemporaryDirectory() as temporary:
+                root=pathlib.Path(temporary);sessions,parent,child=self._write_rollouts(root);self._mutate_rollout(parent,mutation)
                 with self.assertRaises(support.Refusal):
                     support.audit_original_rollouts(str(parent),str(child),sessions,self._v2_audit_evidence(),profile)
 

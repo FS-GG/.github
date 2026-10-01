@@ -249,8 +249,11 @@ def _strict_wait_output(value: object) -> None:
             and type(value.get("timed_out")) is bool and value["timed_out"] is False, "wait did not complete")
 
 
-def _completed_message_event(payload: dict, expected_thread: str, expected_turn: str,
-                             response_items: dict[str, tuple[int, str, str | None]]) -> tuple[str, int]:
+def _completed_item_event(payload: dict, relation: str, expected_thread: str, expected_turn: str,
+                          evidence: "OperationEvidence",
+                          response_users: dict[str, int],
+                          response_messages: dict[str, tuple[int, str, str | None]],
+                          response_reasoning: dict[str, tuple[int, list[str], list[str]]]) -> tuple[str, int]:
     require(set(payload) in ({"type", "thread_id", "turn_id", "item", "completed_at_ms"},
                              {"type", "thread_id", "turn_id", "item", "started_at_ms", "completed_at_ms"})
             and payload.get("type") == "item_completed" and payload.get("thread_id") == expected_thread
@@ -262,18 +265,67 @@ def _completed_message_event(payload: dict, expected_thread: str, expected_turn:
         require(started_at is None or (type(started_at) is int and 0 <= started_at <= completed_at),
                 "original completed-item time differs")
     item = payload.get("item")
-    require(isinstance(item, dict)
-            and set(item) <= {"type", "id", "content", "phase", "memory_citation", "delivery", "questions"}
-            and set(item) >= {"type", "id", "content"} and item.get("type") == "AgentMessage",
-            "unknown original completed item")
-    identifier = _bounded_string(item.get("id"), "original completed-item ID", 128)
-    require(identifier in response_items, "unknown original completed item")
-    response_index, response_text, response_phase = response_items[identifier]
-    require(item.get("content") == [{"type": "Text", "text": response_text}]
-            and item.get("phase") == response_phase
-            and item.get("memory_citation") in (None, {}) and item.get("delivery") is None
-            and item.get("questions") in (None, []), "original completed message differs")
-    return identifier, response_index
+    require(isinstance(item, dict) and isinstance(item.get("type"), str), "unknown original completed item")
+    item_type = item["type"]
+    if item_type == "AgentMessage":
+        require(set(item) <= {"type", "id", "content", "phase", "memory_citation", "delivery", "questions"}
+                and set(item) >= {"type", "id", "content"}, "unknown original completed item")
+        identifier = _bounded_string(item.get("id"), "original completed-item ID", 128)
+        require(identifier in response_messages, "unknown original completed item")
+        response_index, response_text, response_phase = response_messages[identifier]
+        require(item.get("content") == [{"type": "Text", "text": response_text}]
+                and item.get("phase") == response_phase
+                and item.get("memory_citation") in (None, {}) and item.get("delivery") is None
+                and item.get("questions") in (None, []), "original completed message differs")
+        return "message", response_index
+    if item_type == "SubAgentActivity":
+        closed(item, {"type", "id", "kind", "agent_thread_id", "agent_path"}, "original completed activity")
+        identifier = _bounded_string(item["id"], "original completed activity ID", 128)
+        kind = item.get("kind")
+        require(relation == "parent" and kind in {"started", "completed"}
+                and item.get("agent_thread_id") == evidence.child_thread
+                and item.get("agent_path") == evidence.native_selector_path,
+                "original completed activity differs")
+        pair = evidence.activity_pairs.get(identifier)
+        signature = {"kind": kind, "child": evidence.child_thread, "path": evidence.native_selector_path}
+        require(isinstance(pair, dict) and set(pair) == {"started", "completed"}
+                and all(value == signature for value in pair.values()), "original activity/live disagreement")
+        if kind == "started":
+            require(identifier == evidence.spawn_call_id, "original spawn activity differs")
+        else:
+            require(identifier == evidence.completion_activity_id
+                    and identifier == "subagent-completed-" + evidence.child_turn_id,
+                    "original child completion activity differs")
+        return "activity-" + kind, -1
+    if item_type == "CollabAgentToolCall":
+        required = {"type", "id", "tool", "status", "sender_thread_id", "receiver_thread_ids",
+                    "receiver_agents", "agents_states"}
+        require(required <= set(item) <= required | {"prompt", "model", "reasoning_effort"},
+                "original completed wait shape differs")
+        require(relation == "parent" and item.get("id") == evidence.wait_call_id
+                and item.get("tool") == "wait" and item.get("status") == "completed"
+                and item.get("sender_thread_id") == evidence.parent_thread
+                and item.get("receiver_thread_ids") == [] and item.get("receiver_agents") == []
+                and item.get("prompt") is None and item.get("model") is None
+                and item.get("reasoning_effort") is None and item.get("agents_states") == {},
+                "original completed wait differs")
+        return "wait", -1
+    if item_type == "UserMessage":
+        require(relation == "parent" and set(item) <= {"type", "id", "client_id", "content"}
+                and set(item) >= {"type", "id", "content"} and item.get("client_id") is None
+                and isinstance(item.get("id"), str) and item["id"] in response_users
+                and item.get("content") == [{"type": "text", "text": FIXED_PROMPT, "text_elements": []}],
+                "original completed user message differs")
+        return "user", response_users[item["id"]]
+    if item_type == "Reasoning":
+        closed(item, {"type", "id", "summary_text", "raw_content"}, "original completed reasoning")
+        identifier = _bounded_string(item["id"], "original completed reasoning ID", 128)
+        require(identifier in response_reasoning, "unknown original completed item")
+        response_index, summary, raw_content = response_reasoning[identifier]
+        require(item.get("summary_text") == summary and item.get("raw_content") == raw_content,
+                "original completed reasoning differs")
+        return "reasoning", response_index
+    raise Refusal("unknown original completed item")
 
 
 def _validate_identity(meta: object, context: object, relation: str, ordinal_mode: bool,
@@ -321,8 +373,10 @@ def audit_original_rollouts(parent_path: object, child_path: object, sessions_ro
         outputs: dict[str, tuple[int, dict]] = {}
         messages: list[tuple[int, str, str]] = []
         communications: list[tuple[int, bool, dict]] = []
+        response_users: dict[str, int] = {}
         response_messages: dict[str, tuple[int, str, str | None]] = {}
-        completed_messages: dict[str, tuple[int, int]] = {}
+        response_reasoning: dict[str, tuple[int, list[str], list[str]]] = {}
+        completed_items: dict[str, tuple[int, int]] = {}
         pending_communication: tuple[int, bool] | None = None
         ordinal_mode = None; next_ordinal = 0
         expected_turn = evidence.parent_turn_id if relation == "parent" else evidence.child_turn_id
@@ -363,11 +417,12 @@ def audit_original_rollouts(parent_path: object, child_path: object, sessions_ro
                 elif event_type == "turn_complete": completed.append((index, payload))
                 elif event_type == "item_completed":
                     expected_thread = evidence.parent_thread if relation == "parent" else evidence.child_thread
-                    identifier, response_index = _completed_message_event(
-                        payload, expected_thread, expected_turn, response_messages)
-                    require(identifier not in completed_messages and response_index < index,
+                    category, response_index = _completed_item_event(
+                        payload, relation, expected_thread, expected_turn, evidence,
+                        response_users, response_messages, response_reasoning)
+                    require(category not in completed_items and (response_index < 0 or response_index < index),
                             "duplicate or misordered original completed item")
-                    completed_messages[identifier] = (index, response_index)
+                    completed_items[category] = (index, response_index)
             elif kind == "response_item":
                 _harness_metadata(row)
                 response_kind = _response_kind(payload)
@@ -385,6 +440,9 @@ def audit_original_rollouts(parent_path: object, child_path: object, sessions_ro
                     if role == "user":
                         _message(payload, expected_turn, "user", "input_text", FIXED_PROMPT)
                         message_value = FIXED_PROMPT
+                        identifier = _bounded_string(payload.get("id"), "original response ID", 128)
+                        require(identifier not in response_users, "duplicate original response ID")
+                        response_users[identifier] = index
                     else:
                         expected_ack = "NATIVE-PARENT-ACK" if relation == "parent" else "NATIVE-CHILD-ACK"
                         _message(payload, expected_turn, "assistant", "output_text", expected_ack)
@@ -409,6 +467,11 @@ def audit_original_rollouts(parent_path: object, child_path: object, sessions_ro
                 elif response_kind == "reasoning":
                     require(pending_communication is None, "original communication pair differs")
                     _reasoning(payload, expected_turn)
+                    identifier = _bounded_string(payload.get("id"), "original reasoning ID", 128)
+                    require(identifier not in response_reasoning, "duplicate original reasoning ID")
+                    summary = [part["text"] for part in payload["summary"]]
+                    raw_content = [part["text"] for part in (payload.get("content") or [])]
+                    response_reasoning[identifier] = (index, summary, raw_content)
                 else:
                     raise Refusal("prohibited original executable item")
             elif kind in {"token_usage_record", "world_state", "security_risk_score"}:
@@ -427,11 +490,16 @@ def audit_original_rollouts(parent_path: object, child_path: object, sessions_ro
                 and complete.get("last_agent_message") == ("NATIVE-PARENT-ACK" if relation == "parent" else "NATIVE-CHILD-ACK"),
                 "original terminal boundary differs")
         assistant = [item for item in messages if item[1] == "assistant"]
-        require(len(assistant) == 1 and len(completed_messages) == 1,
-                f"{relation} original completed-message census differs")
-        completed_index, response_index = next(iter(completed_messages.values()))
+        required_completed = ({"user", "activity-started", "wait", "activity-completed", "reasoning", "message"}
+                              if relation == "parent" else {"reasoning", "message"})
+        require(len(assistant) == 1 and set(completed_items) == required_completed,
+                f"{relation} original completed-item census differs")
+        completed_index, response_index = completed_items["message"]
         require(response_index == assistant[0][0] and assistant[0][0] < completed_index < complete_index,
                 f"{relation} original completed-message order differs")
+        reasoning_index, reasoning_response_index = completed_items["reasoning"]
+        require(reasoning_response_index < reasoning_index < complete_index,
+                f"{relation} original completed-reasoning order differs")
         if relation == "child":
             require(not calls and not outputs and len(communications) == 1 and communications[0][1] is True
                     and len(messages) == 1 and len(assistant) == 1
@@ -483,6 +551,12 @@ def audit_original_rollouts(parent_path: object, child_path: object, sessions_ro
                 < assistant[0][0] < complete_index
                 and start_index < communications[0][0] < assistant[0][0],
                 "original parent execution order differs")
+        require(completed_items["user"][1] == user[0][0]
+                and user[0][0] < completed_items["user"][0] < spawn_index
+                and spawn_index < completed_items["activity-started"][0] < spawn_output_index
+                and wait_index < completed_items["wait"][0] < wait_output_index
+                and communications[0][0] < completed_items["activity-completed"][0],
+                "original completed-item execution order differs")
     evidence.original_audit = True
     evidence.add("original-rollouts-audited", parentRecords=snapshots[0]["records"], childRecords=snapshots[1]["records"],
                  parentSha256=snapshots[0]["sha256"], childSha256=snapshots[1]["sha256"])
