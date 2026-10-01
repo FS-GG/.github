@@ -165,6 +165,42 @@ class NativeNetworkTests(unittest.TestCase):
         with self.assertRaisesRegex(topology.Refusal, "environment-route"):
             topology.inspect_receiver(value)
 
+    def test_receiver_refusal_projection_is_bounded_and_excludes_raw_private_values(self):
+        value = {
+            "Config": {"User": "32768:32768",
+                       "Env": ["FSGG_TELEMETRY_CREDENTIAL_PRIVATE=secret-value"],
+                       "Cmd": ["serve", "--config", "/private/secret-host.json"]},
+            "HostConfig": {"NetworkMode": topology.COLLECTOR_NETWORK, "ReadonlyRootfs": True,
+                           "PidsLimit": 128, "Memory": 1024 ** 3, "NanoCpus": 1_000_000_000,
+                           "PortBindings": {}, "CapAdd": [],
+                           "CapDrop": ["CAP_CHOWN", "CAP_SETUID"],
+                           "SecurityOpt": ["no-new-privileges"], "Privileged": False,
+                           "UsernsMode": "private", "PidMode": "private", "UTSMode": "private",
+                           "Tmpfs": {"/tmp": "rw,noexec,nosuid,nodev,size=64m"}},
+            "EffectiveCaps": [], "BoundingCaps": [],
+            "NetworkSettings": {"Networks": {
+                topology.COLLECTOR_NETWORK: {}, topology.NATIVE_NETWORK: {}, "private-network-name": {}}},
+            "Mounts": [{"Source": "/private/source-path", "Destination": path,
+                        "RW": path in {"/qualification/evidence", "/qualification/store"}}
+                       for path in topology.RECEIVER_MOUNTS] +
+                      [{"Source": "/private/unexpected", "Destination": "/private/destination", "RW": True}],
+        }
+        projection = topology.receiver_inspection_projection(value, "container-network-set-refused")
+        self.assertEqual("container-network-set-refused", projection["failureCode"])
+        self.assertEqual((3, 1), (projection["network"]["count"],
+                                 projection["network"]["unexpectedCount"]))
+        self.assertEqual("expanded", projection["privilege"]["capDropCategory"])
+        self.assertTrue(projection["environment"]["credentialPresent"])
+        self.assertFalse(projection["route"]["commandExact"])
+        self.assertEqual(1, projection["storage"]["unexpectedMountCount"])
+        encoded = json.dumps(projection, sort_keys=True)
+        self.assertLess(len(encoded), 8192)
+        for private in ("secret-value", "PRIVATE", "private-network-name", "/private/source-path",
+                        "/private/destination", "/private/secret-host.json"):
+            self.assertNotIn(private, encoded)
+        unknown = topology.receiver_inspection_projection(value, "unbounded-private-detail")
+        self.assertEqual("receiver-inspection-refused", unknown["failureCode"])
+
     def test_original_volume_identity_and_digest_are_preserved(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = pathlib.Path(temporary) / "native"

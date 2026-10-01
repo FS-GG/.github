@@ -153,7 +153,7 @@ class Operation:
         self.a=args; self.r=runner; self.root=args.private_root.resolve(); self.created=[]; self.containers=[]; self.networks=[]
         self.result={'schema':SCHEMA,'runNonce':args.run_nonce,'sourceSha':args.source_sha,
                      'privatePlacementSha':args.private_placement_sha,'phases':[],'disposition':'incomplete'}
-        self.images={}; self.owned_run_ordinal=0; self.command_diagnostics=[]
+        self.images={}; self.owned_run_ordinal=0; self.command_diagnostics=[]; self.inspection_diagnostics=[]
     def phase(self,name,**facts): self.result['phases'].append({'ordinal':len(self.result['phases'])+1,'name':name,**facts})
     def command_diagnostic(self,value):
         require(len(self.command_diagnostics)<128,'command-diagnostic-capacity-refused')
@@ -162,9 +162,13 @@ class Operation:
     def write_private_diagnostics(self):
         output=self.root/'output'
         if output.is_dir():
-            private_write(output/'command-diagnostics.json',canonical({
+            value={
                 'schema':'fsgg.telemetry.private-command-diagnostics/1','runNonce':self.a.run_nonce,
-                'records':self.command_diagnostics}))
+                'records':self.command_diagnostics}
+            if self.inspection_diagnostics:
+                value['extensions']={'fsgg.telemetry.private-container-inspection/1':{
+                    'records':self.inspection_diagnostics}}
+            private_write(output/'command-diagnostics.json',canonical(value))
     def public_failure_diagnostic(self):
         row=next((item for item in reversed(self.command_diagnostics)
                   if item['requiredSuccess'] and item['exitCode']!=0),None)
@@ -308,7 +312,18 @@ class Operation:
         self._topology=module; return module
     def inspect_container(self,name,inspector,diagnostic):
         value=json.loads(self.r.run(['podman','inspect','--type','container','--format','{{json .}}',name],limit=256*1024,diagnostic=diagnostic).stdout)
-        require(isinstance(value,dict),'container-inspection-refused'); inspector(value)
+        require(isinstance(value,dict),'container-inspection-refused')
+        try: inspector(value)
+        except Exception as error:
+            topology=self.topology()
+            if diagnostic=='receiver-inspect' and isinstance(error,topology.Refusal):
+                require(len(self.inspection_diagnostics)<8,'inspection-diagnostic-capacity-refused')
+                projection=topology.receiver_inspection_projection(value,str(error))
+                require(len(canonical(projection))<=8192,'inspection-diagnostic-size-refused')
+                phase=self.result['phases'][-1]['name'] if self.result['phases'] else 'before-first-phase'
+                self.inspection_diagnostics.append({'ordinal':len(self.inspection_diagnostics)+1,
+                    'phase':phase,'inspection':'receiver','projection':projection})
+            raise
     def container_running(self,name,diagnostic):
         value=self.r.run(['podman','inspect','--type','container','--format','{{.State.Running}}',name],limit=128,diagnostic=diagnostic).stdout.decode().strip()
         require(value in {'true','false'},'container-state-refused'); return value=='true'

@@ -382,6 +382,33 @@ exit 2
    self.assertEqual('fsgg.telemetry.private-command-diagnostics/1',value['schema'])
    self.assertEqual('before-first-phase',value['records'][0]['phase'])
    self.assertNotIn('commandDiagnostics',op.result); self.assertEqual(0o600,(root/'output/command-diagnostics.json').stat().st_mode&0o777)
+ def test_receiver_refusal_adds_only_namespaced_projection_to_sealed_diagnostics(self):
+  with tempfile.TemporaryDirectory() as td:
+   root=pathlib.Path(td)/'private'; (root/'output').mkdir(parents=True,mode=0o700)
+   a=type('A',(),{'private_root':root,'run_nonce':'run-0001','source_sha':'a'*40,
+                  'private_placement_sha':'d'*40,'source_root':ROOT})()
+   op=q.Operation(a,FakeRunner()); topology=op.topology()
+   value={'Config':{'User':'32768:32768','Env':['FSGG_TELEMETRY_CREDENTIAL_PRIVATE=secret-value'],
+                    'Cmd':['serve','--config','/private/secret.json']},
+          'HostConfig':{'NetworkMode':topology.COLLECTOR_NETWORK,'ReadonlyRootfs':True,
+                        'PidsLimit':128,'Memory':1024**3,'NanoCpus':1_000_000_000,'PortBindings':{}},
+          'NetworkSettings':{'Networks':{topology.COLLECTOR_NETWORK:{}}},
+          'Mounts':[{'Source':'/private/source','Destination':path,'RW':writable}
+                    for path,writable in topology.RECEIVER_MOUNTS.items()]}
+   class InspectRunner:
+    def run(self,args,**kwargs): return subprocess.CompletedProcess(args,0,json.dumps(value).encode(),b'')
+   op.r=InspectRunner(); op.phase('read-only-source-compatible')
+   with self.assertRaisesRegex(topology.Refusal,'network-set'):
+    op.inspect_container('fsgg-native-collector',topology.inspect_receiver,'receiver-inspect')
+   op.write_private_diagnostics(); raw=(root/'output/command-diagnostics.json').read_text(); saved=json.loads(raw)
+   extension=saved['extensions']['fsgg.telemetry.private-container-inspection/1']
+   self.assertEqual(('read-only-source-compatible','receiver','container-network-set-refused'),
+                    (extension['records'][0]['phase'],extension['records'][0]['inspection'],
+                     extension['records'][0]['projection']['failureCode']))
+   self.assertEqual([],saved['records']); self.assertNotIn('extensions',op.result)
+   for private in ('secret-value','PRIVATE','/private/source','/private/secret.json'):
+    self.assertNotIn(private,raw)
+   self.assertEqual(0o600,(root/'output/command-diagnostics.json').stat().st_mode&0o777)
  def test_diagnostic_write_failure_cannot_skip_cleanup(self):
   class FakeOperation:
    cleaned=False
