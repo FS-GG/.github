@@ -65,13 +65,32 @@ independent and open. This dated clarification is not a current fleet-health att
 profile acceptance or waiver of exact artifact, authentication, custody, settlement/replay or effect
 authority for any operation actually performed.
 
+**2026-10-01: portable runtime and staging source closed; real successor preparation remains open.**
+[Coordination #912](https://github.com/FS-GG/FS.GG.Coordination/pull/912) merged at
+`0dd4aa26aca6697f1cc3cece762a4ecae60b5b81`, equal reviewed candidate
+`6d014ae3dd725846db2eed11d51ff6d2ef527474` tree
+`05c40eb2a61fa3705896e5699cbcfe43dfec066f`. All four applicable hosted checks passed,
+including full [optimistic validation 36852977689](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36852977689),
+bootstrap validation and provider source contracts. Root independently verified the merged tree.
+The runtime allows the real .NET archive within a 128 MiB aggregate bound while retaining each
+receiver's 64 MiB limit. Staging checks actual archive SHA-256 before extraction or effects, and
+cleanup owns only a directory whose exclusive creation succeeded. The derived workflow execution
+pin was corrected without weakening the security validator. Private producer-identity source is
+prepared, not delivered. Actual telemetry 0.2.1 preparation, candidate facts, admission, collector
+grant, native hello, publication and receiver adoption remain open; frozen 0.2.0 evidence and
+unproved installed adoption remain unchanged.
+
 **2026-10-01: optional FourD programmable reactions and streamlined turns recorded as an unselected design consideration.**
 The [player-facing proposal](roadmaps/2026-09-28-four-dimensional-skirmish-design-v2.md#design-consideration--programmable-reactions-and-streamlined-turns)
 compares current-turn presentation, richer standing orders and a later simultaneous-order experiment.
 It preserves Guard/Ambush/Hold, current timing and saves, `fourd-tactics-v1` as default, and the existing
 V2 technical acceptance. No upload capability, rules selection, runtime profile, usability claim or
 implementation authority follows from this draft; player evidence remains necessary for perceived
-agency and reduced-drudgery claims.
+agency and reduced-drudgery claims. The companion [FourD #32](https://github.com/FS-GG/FS.GG.FourD/pull/32)
+merged at `60f2a41eeaf22325b6af7a264791c79644c6fb6d`, equal candidate
+`5e9817b0a6dd106d89336a84fd9a3816ea53983b` tree `713db27cb5a39e5896f7ddd82f222b26b6dbe984`;
+full [verify 36857150748](https://github.com/FS-GG/FS.GG.FourD/actions/runs/36857150748)
+passed. This closes the requested design documentation, with no implemented gameplay change.
 
 **2026-10-01: SC2 advisor selection source closed; genuine recording and replay remain open.**
 [SC2 #30](https://github.com/FS-GG/FS.GG.SC2.Client/pull/30) merged at owning main
@@ -82,10 +101,13 @@ agency and reduced-drudgery claims.
 passed, including all 69 browser tests. Root independently verified the merge and equal trees.
 The advisor now uses the shared physical selection helper to find an exposed movable unit. The
 hosted fixture repair prepares the real guest worker before its existing load; the 250 ms deadline
-and no-retry behavior remain unchanged. Actual attempt-j completed pointer and keyboard movement
-but failed at the occluded advisor click, with all owned processes and display cleaned. These source
-tests establish no native recording or replay acceptance. Exact protected artifact builds, private
-runner rebinding and a separately bounded genuine attempt remain the next gates.
+and no-retry behavior remain unchanged. Attempt-j's UI checks reported pointer and keyboard
+movement before the occluded advisor click; that did not establish distinct native commands.
+The subsequent protected attempt-k passed preflight, but its audit found only one successful native
+Action for two Step/Observation cycles: the runner could reuse a prior result and continuing motion.
+All 12 owned processes and the display were cleaned. Fresh command correlation and a regression
+for stale pending input must precede another genuine recording/replay attempt. Source tests and
+UI progress establish no native recording or replay acceptance.
 
 **2026-10-01: stock BAR trace and harness source closed; genuine Count1 smoke remains open.**
 [HighBarV3 #13](https://github.com/FS-GG/HighBarV3/pull/13) merged at owning master
