@@ -103,15 +103,17 @@ class Tests(unittest.TestCase):
    self.assertIn('test "$resolved_dotnet" = "$sdk_root/dotnet"',workflow)
    self.assertIn('sudo chown -hR root:root -- "$sdk_root"',workflow)
    self.assertIn('sudo chmod -R go-w -- "$sdk_root"',workflow)
-   self.assertIn('! -uid 0 -o -perm /022',workflow)
+   self.assertIn('! -uid 0 -o \\( ! -type l -a -perm /022 \\)',workflow)
+   self.assertIn("printf '%s\\n' hosted-sdk-custody-refused >&2",workflow)
   self.assertLess(public.index(marker),public.index('python3 -c'))
   self.assertLess(text.index(marker),text.index('/usr/bin/dotnet restore'))
   end='# END hosted runner SDK custody normalization'
   for name,workflow in (('private',text),('public',public)):
    with self.subTest(workflow=name), tempfile.TemporaryDirectory() as td:
-    root=pathlib.Path(td); system=root/'system'; sdk=system/'usr/share/dotnet'; binary=sdk/'dotnet'; usr_bin=system/'usr/bin'
+    root=pathlib.Path(td); system=root/'system'; sdk=system/'usr/share/dotnet'; binary=sdk/'dotnet'; link=sdk/'dotnet-link'; usr_bin=system/'usr/bin'
     sdk.mkdir(parents=True); usr_bin.mkdir(parents=True)
     binary.write_text('#!/bin/sh\nprintf "10.0.401\\n"\n'); binary.chmod(0o755)
+    link.symlink_to(binary)
     (usr_bin/'dotnet').symlink_to(binary)
     subprocess.run(['/usr/bin/sudo','chown','root:root',str(system),str(system/'usr'),str(system/'usr/share'),str(usr_bin)],check=True)
     subprocess.run(['/usr/bin/sudo','chmod','755',str(system),str(system/'usr'),str(system/'usr/share'),str(usr_bin)],check=True)
@@ -123,10 +125,11 @@ class Tests(unittest.TestCase):
     refused=subprocess.run(['bash','-e','-o','pipefail'],input=block,text=True,env=dict(env,PATH=str(fake)+':'+env['PATH']),capture_output=True)
     self.assertNotEqual(0,refused.returncode,'runner-owned SDK closure must be refused without normalization')
     accepted=subprocess.run(['bash','-e','-o','pipefail'],input=block,text=True,env=env,capture_output=True)
-    owner=binary.stat().st_uid; writes=binary.stat().st_mode&0o022
+    owner=binary.stat().st_uid; writes=binary.stat().st_mode&0o022; link_state=link.lstat()
     subprocess.run(['/usr/bin/sudo','chown','-hR',f'{os.getuid()}:{os.getgid()}',str(system)],check=True)
     self.assertEqual(0,accepted.returncode,accepted.stderr)
     self.assertEqual(0,owner); self.assertEqual(0,writes)
+    self.assertEqual(0,link_state.st_uid); self.assertEqual(0o022,link_state.st_mode&0o022)
   self.assertIn('test -r /proc/thread-self/children',text)
   self.assertIn('mcr.microsoft.com/dotnet/aspnet:10.0.12-noble-amd64@sha256:ed6a2d26633ddcd3d42a1d9f9866214ecbbc11ba6ac5e0e843da02c13da24072',text)
   for selected in ('/usr/bin/dotnet','/usr/bin/git','/usr/bin/setsid'): self.assertIn(selected,text)

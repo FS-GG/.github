@@ -110,7 +110,11 @@ jobs:
           test "$("$resolved_dotnet" --version)" = 10.0.401
           sudo chown -hR root:root -- "$sdk_root"
           sudo chmod -R go-w -- "$sdk_root"
-          test -z "$(find "$sdk_root" -xdev \( ! -uid 0 -o -perm /022 \) -print -quit)"
+          invalid_sdk_entry="$(find "$sdk_root" -xdev \( ! -uid 0 -o \( ! -type l -a -perm /022 \) \) -print -quit)"
+          if test -n "$invalid_sdk_entry"; then
+            printf '%s\n' hosted-sdk-custody-refused >&2
+            exit 1
+          fi
           custody_path="$resolved_dotnet"
           while true; do
             test "$(stat -c %u -- "$custody_path")" = 0
