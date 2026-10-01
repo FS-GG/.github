@@ -53,6 +53,19 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**Rust/Go hosted BIND source delivered; native qualification remains open.**
+[Templates PR #653](https://github.com/FS-GG/FS.GG.Templates/pull/653) merged at
+`e313815d9d2d4382b9abe95ff6dffca636e32404`, tree
+`204bee29262bb678c9454b1aa663dfc876c9d247`, independently equal to candidate
+`ca22bbc2760735b77960eb0f58caa91420a1b00d`. Exact-head
+[composition 36796032177](https://github.com/FS-GG/FS.GG.Templates/actions/runs/36796032177)
+and the materialization, receiver and skill checks passed. The qualification workflow now
+uses supported job contexts and short private runroots, checks actual running cancellation
+before signalling, binds receipts to immutable commands and containers, and cleans owned
+preflight stores. The accepted source and focused refusal checks do not establish native
+Rust/Go BIND, interruption recovery, runtime cancellation, installation or adoption; those
+remain separate gates. Existing Todo creation source remains preserved.
+
 **SC2C-01.6f hosted source repair delivered; genuine game acceptance remains open.**
 [SC2 client PR #21](https://github.com/FS-GG/FS.GG.SC2.Client/pull/21) merged at
 `97f783b2737c4076131f3627b9c64ce2770a0420`, tree
