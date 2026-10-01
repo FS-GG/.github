@@ -86,6 +86,30 @@ inactive, and loaded-engine identity remains unknown. Next, rebuild and repin ex
 artifacts, pass the bounded preflight and run one genuine Count1 smoke; that smoke is not six-journey
 completion or gameplay acceptance.
 
+**2026-10-01: HOST rejected-item diagnostic recipe and public-only inputs registered; runtime diagnosis remains open.**
+[Private Sandbox #34](https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/pull/34)
+merged at protected `0dc8cc6b77db2c710ed202fe7c4023eb2ab42b26`, equal candidate
+`f6f5d78cf013075e508cee65e678cdf15f0c48ae` with tree
+`59012f5211ae9425f0722b48436b1539826d96ae`; root independently read API/tree equality.
+All 13 PyYAML source tests passed without skips. Exact private rendering is 9,552 bytes, SHA-256
+`a6714988f9c90e676b3f37017a83f2eb4023ee71b96bda83c7ac5d34435c9ce4`, after removing only
+the fixed 389-byte acquisition wrapper. This private repository has no hosted workflow, so hosted
+checks were not required. The registration binds public recipe
+`59cb264ab7669587825e89c7974ff8ac621a4f88` and driver SHA-256
+`c3b1f020dbfc74fe41ab5c80bb0c65ef834472205461be9ee5885bcf3494b5a4` to immutable private
+public-only release `400857203`, tag `v2-host-private-inputs-20261001-rejected-item-diagnostic`,
+target `afc547cd33531266faf9e18d9bceec77b203602e`. Root verified its exact two-asset set and API
+digests: manifest asset `602993407` is 1,874 bytes, SHA-256
+`b335afb6c2d900c55d96d6b203ecf070874ea47000093c921b2a1e5eb91dd470`; ZIP asset
+`602993404` is 152,050,740 bytes, SHA-256
+`b9ba30250a5ea477adc709e3a8e4caf6e210ff821e62a9c80fb382a4c4c9b68f`.
+Only the native driver's pin changes among the 11 public members; native executable SHA-256
+`167c0148a849d2444f1b5a7fb5f8bb2de1de5ae13a2a504b833fc765980f5cd9` and the other ten
+members are preserved. The four HOST registration paths join without changing P4 or other private
+paths. Genuine attempt-l still failed with rejected item type unknown. A separately bounded attempt-m
+diagnostic is next; HOST `.8`, `.9`, `.10` and LEARN remain open. No Main action or authentication-guard
+waiver follows from registration.
+
 **2026-10-01: SC2 versioned recording-context source repaired; genuine completion remains open.**
 [SC2 #29](https://github.com/FS-GG/FS.GG.SC2.Client/pull/29) merged at protected
 `f1867d078da7f4db68729431a8f4479ee36e6d2d`, equal candidate
