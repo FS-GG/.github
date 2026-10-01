@@ -212,7 +212,7 @@ def receiver_inspection_projection(value: dict, refusal: str) -> dict:
     mode = host.get("NetworkMode")
     if mode == COLLECTOR_NETWORK:
         mode_category = "expected"
-    elif mode in {"host", "default", "bridge", "slirp4netns", "pasta"}:
+    elif isinstance(mode, str) and mode in {"host", "default", "bridge", "slirp4netns", "pasta"}:
         mode_category = "direct"
     elif isinstance(mode, str) and mode:
         mode_category = "other"
@@ -234,8 +234,9 @@ def receiver_inspection_projection(value: dict, refusal: str) -> dict:
             writable = rows[0]["RW"]
             mount_states[destination] = ("expected" if writable == expected_writable
                                          else "writability-differs")
-    unexpected_mounts = sum(1 for row in mounts
-                            if not isinstance(row, dict) or row.get("Destination") not in RECEIVER_MOUNTS)
+    unexpected_mounts = sum(1 for row in mounts if not (
+        isinstance(row, dict) and isinstance(row.get("Destination"), str)
+        and row["Destination"] in RECEIVER_MOUNTS))
 
     cap_drop = host.get("CapDrop") if isinstance(host.get("CapDrop"), list) else []
     cap_drop_set = {item for item in cap_drop if isinstance(item, str)}
@@ -267,7 +268,7 @@ def receiver_inspection_projection(value: dict, refusal: str) -> dict:
     bounding = value.get("BoundingCaps") if isinstance(value.get("BoundingCaps"), list) else []
     tmpfs = host.get("Tmpfs") if isinstance(host.get("Tmpfs"), dict) else {}
     return {
-        "failureCode": (refusal if refusal in RECEIVER_INSPECTION_REFUSALS
+        "failureCode": (refusal if isinstance(refusal, str) and refusal in RECEIVER_INSPECTION_REFUSALS
                         else "receiver-inspection-refused"),
         "network": {
             "count": min(len(network_names), 64),
