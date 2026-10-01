@@ -65,6 +65,34 @@ independent and open. This dated clarification is not a current fleet-health att
 profile acceptance or waiver of exact artifact, authentication, custody, settlement/replay or effect
 authority for any operation actually performed.
 
+**2026-10-01: P4 manifest-v2 private receiver source delivered; genuine runtime qualification remains open.**
+[Sandbox PR #39](https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/pull/39) merged on protected main
+as `ae4d216d2818f2b4dcaa5136a15e2debab9abfed`, tree
+`c32d43490b5cec4b5100100ffbc66a55baadeada`, equal to qualified `6c9fa72`.
+The receiver separately authenticates protected H2 `f794d1a`, tree `c76d7df`, and F# manifest helper
+`cbc558054805dac0e305e842e845a2803106113694ac82f991ce8a3e2a67c922` while retaining original
+producer `b06c187` and its eleven role bodies. Eighteen focused helper/custody/process/settlement,
+closed-result, workflow and source-boundary controls passed. There is no hosted source PR workflow in
+this Sandbox; hosted SDK 10.0.400 custody and actual private execution are not inferred from local tests.
+The owning `.github` template/registry join, protected placement, authenticated twelve-asset manifest
+census, genuine facts/grant and native qualification remain open. No private upload, operation,
+publication or installed adoption is claimed. Selected V2 platform acceptance remains complete.
+
+**2026-10-01: FABLE-ADOPT-01.3 reference composition qualification and read-only feed census source delivered; publication remains open.**
+[Templates PR #662](https://github.com/FS-GG/FS.GG.Templates/pull/662) merged on protected main as
+`40a1bfd992a4d040181af3e196a26afa07be6d62`, tree
+`599b5b0e60ac05e57c050b986980dbf0232599c8`, equal to qualified source tree `43687b0`.
+All fourteen required native checks passed, including the full Preview C browser gate
+[run `36928364765`](https://github.com/FS-GG/FS.GG.Templates/actions/runs/36928364765).
+The existing D.5 and Preview C source gates now validate actual candidate archives and producer source.
+The reviewed F# feed census enforces strict candidate syntax, bounded complete responses and cancellation;
+its 102 focused checks include trailing-newline and late-body refusal. Its separately selected
+`feed-occupancy` operation has read-only permissions and skips packaging and publication jobs.
+This closes source qualification only. A fresh successful census of both feeds, immutable release tag,
+pack-once byte-identical dual-feed publication and installed direct/provider/wizard browser proof remain
+required before consumer adoption. No feed absence, publication, installed adoption or product-native
+acceptance is inferred from the source merge; selected V2 platform acceptance remains complete.
+
 **2026-10-01: OPS-TYPED-01.5 HOST binding source integrated; native adoption remains open.**
 The [typed HOST constructor](../deployment/telemetry-collector/host-binding/README.md)
 and its existing qualification adapter now join the private workflow and owning package CI.
