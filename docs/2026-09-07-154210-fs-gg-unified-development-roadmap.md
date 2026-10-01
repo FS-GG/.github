@@ -79,6 +79,29 @@ disabled; unknown errors, schema mismatch and exhausted attempts still refuse. A
 passed byte readback in the earlier run; idempotent same-byte publication recovery, anonymous
 install/schema readback and final release/tag closure remain next.
 
+**Rust/Go canonical image identity and owned storage cleanup source delivered; native gates remain open.**
+[Templates PR #656](https://github.com/FS-GG/FS.GG.Templates/pull/656) merged at
+`566e0112f76678170b016b3a91a5b25d8814f847`, tree
+`6a09720ce272dc6fd73e97090b1008082ad13e24`, independently equal to candidate
+`c25d1d0b4cec93a44944092c39462d5dae74feb2`. Full composition
+[36808703145](https://github.com/FS-GG/FS.GG.Templates/actions/runs/36808703145)
+and required source gates passed. All 26 focused source tests passed. Loaded config identity
+accepts only the exact lowercase 64-hex value with an optional `sha256:` prefix, then still
+requires equality with the frozen expected digest. Raw identity remains in the private receipt.
+Cleanup verifies its owned, non-symlink VFS store/runroot, removes and rechecks owned containers,
+and uses the scoped Podman namespace to restore removable permissions before confirming absence.
+No global reset, pruning or unrelated paths are introduced. Executor, SDK, Akka and image pins
+remain unchanged. Genuine Rust/Go journeys and cleanup acceptance remain next.
+
+**FourD fresh diagnostic identifies image commit storage exhaustion; runtime acceptance remains open.**
+Actual [36809991606](https://github.com/FS-GG/FS.GG.FourD/actions/runs/36809991606)
+at protected `8387d43dee8986bd50fd3170303dfb2fae288826` failed during `podman-build`
+with exit 125. Its retained, untruncated stderr identifies no space left on device while
+writing a final image blob in `/var/tmp`. The bounded diagnostic repair therefore recovered
+a concrete cause for this fresh run; it does not reconstruct the missing prior-run stderr.
+An evidenced owned-storage repair remains next. Native runtime, installed and human gates
+remain open.
+
 **SC2 command feedback preservation source delivered; genuine completion remains open.**
 [SC2 Client PR #24](https://github.com/FS-GG/FS.GG.SC2.Client/pull/24) merged at
 `f1a34ff8d1715f1d10dd7aaeb6c308057ca7880b`, tree
