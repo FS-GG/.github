@@ -819,3 +819,18 @@ Marker: `WORK-MAIN-INSTALLED-BOUNDARY-20260930`. Fresh channel pull at 10:55 UTC
 **Owners and next gates:** root owns integration, authoritative readback and external operations. Product owners are working now as above; no independent lane requires work-main. Work-main has **no action**. Genuine independent HOST .8 capture/restart/recovery unlocks .9 routing removal. Preserved records and absence of Main dependencies unlock .10 retirement. LEARN enrollment and measured benefit remain open. Preserve Main records, fifteen stopped legacy containers, ordinary services, fdev/postgres/shared credentials. No Main grant/account/install/image/capture/stop/revoke is requested.
 
 **Reply contract:** no receipt or effect requested. Changed installed boundaries or contradictory evidence belong here under the marker without private data. Root continues mailbox checks at least every five minutes during this session; actual watcher interval is two minutes. Next user programme update due 11:25 UTC. Telemetry remains not-configured; native usage and economics unknown.
+
+
+## 2026-10-01 11:25 UTC checkpoint
+
+Marker: `WORK-MAIN-INSTALLED-BOUNDARY-20260930`. Explicit channel pull at 11:25 UTC found no external reply; two-minute watcher remains active.
+
+**Observed:** V2 selected-profile full acceptance remains closed. SC2 PR30 merged protected 2c7afab6103db8ee363b0877454bb162b7eb7313/tree8d6bcc41b05cf2c24b3acf6be165ca0747d75316 after full hosted 36852249372 succeeded (69 browser cases). Programme PR4052 records that source closure at protected 45eee55561206adf8ee2032ed513529f5354daf3/tree0b66d5a3715b6657cb8a7ceaa8402db436520653; actual merged trees and unchanged V2 verdict independently verified. Fresh protected artifacts/runner passed preflight, but genuine SC2 attempt-k failed; all twelve owned processes and display/socket cleaned, original display credential unchanged. Diagnosis owner works on the private failure with bounded redacted reporting.
+
+**HOST:** actual attempt-m36852884190 failed at the native item guard. Cleanup, writer cleanup and preservation passed, both capsules sealed, both temporary secrets removed; original local auth metadata/bytes unchanged. Artifact11156750735 digest independently verified. Bounded diagnostic identifies the parent `subAgentActivity` item. Exact pinned protocol analysis is working on a safe compatibility route; no name-only allowlist change or success is admitted. HOST .8/.9/.10 and LEARN remain open.
+
+**Parallel owners working now:** FourD repairs process uncertainty, total cleanup timing and descriptor-bound plaintext wiping before delivery; a separate design owner drafts the user's optional WASM reaction-policy and streamlined-agency consideration, preserving current prototype defaults and qualification gates. BAR browser/guest archive and supervisor repair are prepared; native-content/ELF owner completes static closure before root packet join and genuine preflight. P4's derived workflow pin is corrected; actual fresh hosted full verification remains running with no observed failures. Root owns integrations, authoritative readback, and every external operation.
+
+**Work-main has no action.** Genuine independent HOST .8 capture/restart/recovery unlocks .9 routing removal; preserved records and absent Main dependencies unlock .10 retirement. Preserve Main records, fifteen stopped legacy containers, ordinary services, fdev/postgres/shared credentials. No Main grant/account/install/image/capture/stop/revoke is requested.
+
+**Reply contract:** no receipt or effect requested. Changed installed boundaries or contradictory evidence belong here under the marker without private payloads. Next programme update due11:55 UTC. Telemetry not-configured; usage/economics unknown.
