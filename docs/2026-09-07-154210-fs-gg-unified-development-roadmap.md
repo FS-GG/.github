@@ -65,6 +65,20 @@ independent and open. This dated clarification is not a current fleet-health att
 profile acceptance or waiver of exact artifact, authentication, custody, settlement/replay or effect
 authority for any operation actually performed.
 
+**2026-10-01: SC2 advisor selection source closed; genuine recording and replay remain open.**
+[SC2 #30](https://github.com/FS-GG/FS.GG.SC2.Client/pull/30) merged at owning main
+`2c7afab6103db8ee363b0877454bb162b7eb7313`, equal reviewed candidate
+`0f3c590fa4c77123b18b81578928336223458989` with tree
+`8d6bcc41b05cf2c24b3acf6be165ca0747d75316`. Full hosted
+[verification 36852249372](https://github.com/FS-GG/FS.GG.SC2.Client/actions/runs/36852249372)
+passed, including all 69 browser tests. Root independently verified the merge and equal trees.
+The advisor now uses the shared physical selection helper to find an exposed movable unit. The
+hosted fixture repair prepares the real guest worker before its existing load; the 250 ms deadline
+and no-retry behavior remain unchanged. Actual attempt-j completed pointer and keyboard movement
+but failed at the occluded advisor click, with all owned processes and display cleaned. These source
+tests establish no native recording or replay acceptance. Exact protected artifact builds, private
+runner rebinding and a separately bounded genuine attempt remain the next gates.
+
 **2026-10-01: stock BAR trace and harness source closed; genuine Count1 smoke remains open.**
 [HighBarV3 #13](https://github.com/FS-GG/HighBarV3/pull/13) merged at owning master
 `f08555372168cd911f438de0be5ec2898fd1cfb5`, equal candidate
