@@ -53,6 +53,21 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**V2-HOST-01.8 bounded zero-auth diagnostics delivered; native cause remains unknown.**
+Source `c0acd6c94a3b464c364b0f81a38b1e254fa8aad1` retains at most 4096 bytes of
+printable stderr only for the three fixed, empty, zero-auth readonly container probes.
+The probes still precede private root and auth materialization; credentialed command output
+remains suppressed. All 27 private qualification source checks, topology/collector/state
+checks and a focused privacy/order review passed. Actual private
+[run 36797434094](https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/actions/runs/36797434094)
+failed at zero-auth readonly start on Podman 4.9.3 before auth materialization. Its retained
+147-byte stderr digest cannot recover the discarded failure body; no topology cause is
+inferred. Cleanup and preservation completed; root independently removed both temporary
+secrets and verified original auth metadata and bytes unchanged. Exact private recipe
+registration and the next bounded diagnostic operation remain pending. Genuine parent/child
+capture and restart/recovery acceptance, routing `.9` and retained-record retirement `.10`
+remain open; Main has no action.
+
 **Rust/Go hosted BIND source delivered; native qualification remains open.**
 [Templates PR #653](https://github.com/FS-GG/FS.GG.Templates/pull/653) merged at
 `e313815d9d2d4382b9abe95ff6dffca636e32404`, tree
