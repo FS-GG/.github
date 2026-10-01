@@ -53,6 +53,15 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**V2-HOST capability recipe private registration delivered; fresh operation remains pending.**
+[Private Sandbox #31](https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/pull/31) merged at default-branch `1762127c1f05e65264e0e57acc859563be0a0fca`, equal qualified candidate `c5fa129a3ebf532c3f0c0f6e81eb3f0b614b6fc4` tree `9854d7452b88200777938e8b1216bbd477879ca9`.
+Root independently passed all13PyYAML checks without skips and verified exact protected recipe `6d51c485539998d2bda693b2b525af46b6e49a67` rendering:9552bytes, SHA256 `d56b3f7f8a5cb28b7df1d18245f3d09c07a94d4569091c7b0e1bb488a85fef0c`, after removing only the existing acquisition step. Tools, key, four input pins, release assets, source template and credential custody are unchanged. This private repository has no hosted PR checks; the helper accurately reports coherent validation not-required, rather than claiming hosted passage. Genuine `.8` capture/restart/recovery follows another exact-source attempt; `.9`, `.10` and LEARN remain open. Main has no action.
+
+**FourD private temporary-memory capability refuses; this route ends before full qualification.**
+Credential-free capability-only [36826915975](https://github.com/FS-GG/FS.GG.FourD/actions/runs/36826915975) on exact `1316e6dce8600e1fa732659708e5cad98064875b` measured available headroom7,185,342,464bytes against unchanged requirement7,516,192,768bytes (5GiBscratch plus2GiBreserve). The isolated namespace,16MiBmount/write/child-visibility probe and mappedUID/GID32768cancellation passed; the full5GiBmount and runtime qualification were not admitted.
+Root downloaded artifact11145925729,10169bytes and verified its full archive SHA256 `2fdb52641ac6b8b6be1c1c63779800966e5a2b05e5bb73f60949ad86721b8884`. Both mount restoration and scoped store cleanup passed; all six costly SDK/source/build/image/P2/acceptance steps skipped, preflightOnly=true and qualified=false. No floor reduction, full retry, unrelated cleanup or paid runner is selected. The bounded next proposal is a credential-free public capacity screen; its resources must be measured before separately gated private-source acquisition and unchanged native preflight. Full image/P2, installed operation and player-derived acceptance remain open.
+
+
 **V2-HOST native capability metadata source repaired; genuine acceptance remains open.**
 Genuine private attempt-j [36825105280](https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/actions/runs/36825105280), on placement `48f5a00f20de69b1a7d85aa794c47ad7d45001d5` and recipe `88d65daa1a1262d563c2312698e4a5e57109a824`, failed before native-start with the closed reason `native-capability-fence-refused`.
 Its sealed private diagnostic reports expanded CapDrop, explicit empty CapAdd, present-null OCI Effective/Bounding fields, privileged false and no-new-privileges true. These are configured OCI facts, not kernel observations.
