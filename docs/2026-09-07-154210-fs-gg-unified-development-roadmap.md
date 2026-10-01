@@ -53,6 +53,22 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**Portable P3 both protected receiver pins delivered; adoption remains open.**
+[Templates PR #658](https://github.com/FS-GG/FS.GG.Templates/pull/658) merged at
+`86122a56ebbfcc98faa744df337b5ebe82cd863f`, tree
+`2470a07b432834e00d6da522a34ed71e9c62619e`, independently equal to candidate
+`1206949973988148d650668cb4c2c8eb9c3a5ea5`. Full
+[composition 36816587286](https://github.com/FS-GG/FS.GG.Templates/actions/runs/36816587286)
+and required source checks passed. Root independently verified both protected receiver
+readbacks: SDD `388e4e0dbb216de8a37687818af042030d4e26c5` and Templates `86122a56`.
+Their pin and test files are byte identical; the producer pin SHA-256 is
+`ca7f4b1f688e1fd9e2f4b9c8df4716fe669bcc91e7b9656d9a0984bc4430258c`.
+All five published 0.2.0 assets and the frozen source/tree/release/run are bound. Together
+with verified producer publication, this satisfies P3's producer/receiver-pin boundary;
+owning plan reconciliation is next. Adoption remains disabled and requires separate
+installed qualification. The P4 0.2.1 successor preparation, administrator provider,
+fresh receiver creation and P5 matrix remain open.
+
 **SC2 paused authored-movement driver source repaired; genuine acceptance remains open.**
 [SC2 Client PR #26](https://github.com/FS-GG/FS.GG.SC2.Client/pull/26) merged at
 `56dab432acb46ef04184eaaf2d3731bb51ad29b2`, tree
