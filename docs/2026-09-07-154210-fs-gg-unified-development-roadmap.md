@@ -54,6 +54,30 @@ reviewed public aggregate releases on GitHub.
 ## 0. Current progress report
 
 
+**Rust/Go bounded native BIND owning record delivered; full installed adoption remains open.**
+[Templates PR #659](https://github.com/FS-GG/FS.GG.Templates/pull/659) merged at
+`255aa7ff8adf0fe3158735e8a67921803cafa87f` after full
+[composition 36820467470](https://github.com/FS-GG/FS.GG.Templates/actions/runs/36820467470)
+and required source checks. Root independently verified protected tree equality to qualified
+candidate `6861db98d99e7af0f57a7220b9901b02a646e8a2`; both reviewed documentary blobs
+were preserved across the join with the published producer receiver pin. The owning
+[language route roadmap](https://github.com/FS-GG/FS.GG.Templates/blob/main/docs/roadmaps/v2-lang-language-routes.md)
+now closes only Rust and Go hosted BIND, using actual native run 36815503862 and its
+accepted qualification/cancellation/recovery/cleanup receipts. Publication, installed
+adoption, the other four routes and full V2-LANG-01.5 remain open.
+
+**SC2 genuine repaired-driver attempt-g refuses at disabled Step; source investigation is next.**
+Root independently verified the protected `56dab432` build, driver SHA-256 `47e22ce9`,
+new coherent private candidate and full nonlaunching preflight. Genuine attempt-g reached
+pointer-command effect stepping, then timed out because `#step-session` was disabled.
+Runner exit was 1 without outer timeout; all 12 observed owned processes exited, with zero
+survivors, and owned display cleanup removed its socket. No native acceptance is claimed.
+Earlier attempt-f stopped before product launch because root's derived output argument
+mismatched its config; that script and refusal are preserved, and the exact argument was
+corrected before fresh attempt-g. Source investigation must explain the actual Step UI
+state and retain the same visible owned-unit movement criterion before another operation.
+
+
 **Portable 0.2.1 successor preparation source delivered; installed qualification remains open.**
 [Coordination PR #909](https://github.com/FS-GG/FS.GG.Coordination/pull/909) merged at
 `daaa195ca08b46456282449ae17bf12bf4d80de4`, tree
