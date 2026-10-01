@@ -65,6 +65,23 @@ independent and open. This dated clarification is not a current fleet-health att
 profile acceptance or waiver of exact artifact, authentication, custody, settlement/replay or effect
 authority for any operation actually performed.
 
+**2026-10-01: SC2 fresh input correlation and heartbeat ordering source closed; genuine gameplay remains open.**
+[SC2 #31](https://github.com/FS-GG/FS.GG.SC2.Client/pull/31) merged at
+`e1f3fe8cdaca33a2c2e29c1aca6091b5f0a2633e`, equal reviewed candidate
+`ff47c0bb31918af5b211df121b2bf6716bc22137` tree `79ff99d0644cb7accab85dfb9b16924df2b32973`.
+Actual full [verify 36864879054](https://github.com/FS-GG/FS.GG.SC2.Client/actions/runs/36864879054)
+passed; root independently read both trees. Controller actions now require accepted module input,
+matching decoded native outcome and a distinct command ID before Step. The actual compiled product
+rejects a stale unsent decision without issuing Action. Advisor selection requires a new physical
+pointer input joined to the initialized advisor identity, frame and input sequence.
+The first hosted gate exposed renewal before Arm and reuse of its prior grant. Renewal now waits
+for accepted Arm and its matching fresh authority projection; the final regression observes an
+accepted post-Arm renewal. The repair build passed 78 browser tests; the final assertion descendant
+passed its focused regression and the full hosted gate. Protected artifact rebuilding, a new immutable
+private runner binding and a fresh genuine gameplay operation follow this source closure. Earlier
+failed windows remain retained; movement, recording, replay, publication and installed acceptance
+are not established by source checks.
+
 **2026-10-01: FourD admitted private-source and encrypted-custody qualification source closed; genuine qualification remains open.**
 [Coordination #913](https://github.com/FS-GG/FS.GG.Coordination/pull/913) merged at
 `47d0833d88cbeaea9d38a7e927c837974c80352d`, equal reviewed candidate
