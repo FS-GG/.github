@@ -1,6 +1,6 @@
 # Staged Fable game foundation adoption
 
-**FABLE-ADOPT-01 — Stage .1 accepted on 2026-10-01; Stages .2–.7 planned.** Fold
+**FABLE-ADOPT-01 — Stage .1 and the selected .3 local reference source window accepted on 2026-10-01.** Fold
 reusable findings from FourD, SC2 and BAR into their owning FS-GG producers, qualify the `fable-game` template as the reference consumer, then
 adopt its shared dependencies and conventions incrementally in the three existing products.
 The [Stage .1 disposition](evidence/fable-adopt-01.1-inventory-disposition-20261001.md) records
@@ -10,6 +10,24 @@ qualification and adoption remain open.
 The [unified roadmap](../2026-09-07-154210-fs-gg-unified-development-roadmap.md#992-staged-fable-game-foundation-adoption)
 indexes this independent product track. It adds no gate to the already accepted V2 platform profile
 and does not change historical product qualification or R5 evidence.
+
+## Selected reference source delivery
+
+[Templates #661](https://github.com/FS-GG/FS.GG.Templates/pull/661) delivered the FourD-shaped
+local reference at `1c90ac81278a8e7a98fe98aa7d01b8023a8f2278`, tree
+`e1a619ad37f87e851d57284d81ad62320a60db9a`, equal reviewed
+`4eb2cc3985be42840422ddb9cc2d72f214b17489`. Exact-head composition, typed-receiver and
+Release C hosted gates passed. Existing Game/Rendering APIs own the local session and browser
+input/lifecycle; the reference supplies four-coordinate commands and pure product projections.
+Disposed controls and hosts are inert. The source also repairs atomic adoption of the reviewed
+old/current SVG wizard root forms, retaining rollback and rejecting unsupported roots.
+
+This accepts the selected .3 source window. It does not establish feed publication, installed
+creation, product adoption or native gameplay. Stage .4 prepares the coherent published set and
+fresh installed local reference. Stage .2's external-authority capability gap and .3's broader
+external-authority/WASM examples remain open before their dependent product adoption; do not
+apply the local Game clock to native SC2/BAR. Retained upgrades require their separate preserving
+qualification. Later .5–.7 outcomes remain open.
 
 ## Inspected starting point
 
@@ -65,7 +83,7 @@ dependencies. This planning entry creates no issues, dispatch or release effects
 
 ## Stages and exit evidence
 
-Stage .1 is **accepted at source** by this documentation delivery; Stages .2–.7 remain **planned**.
+Stage .1 and the selected .3 local reference window are **accepted at source**; remaining Stage .2–.7 outcomes are **open**.
 A source merge, published package, generated workspace and installed product acceptance are separate
 results; record each exact identity when it exists.
 
@@ -79,10 +97,10 @@ results; record each exact identity when it exists.
 | **.6 — SC2 and BAR adoption** | SC2 and BAR owners migrate their selected browser surfaces in separate lanes | .5 confirms the common contract; relevant producer repairs are published | Each production browser path uses the qualified shared foundation; native authority, guest/WASM ABI, input meaning and accepted behaviors remain correct. Product-native acceptance stays separately reported |
 | **.7 — Remove superseded infrastructure** | Product owners remove replaced browser policy; Templates/producer owners reconcile documentation and dependency conventions | Each product's .5/.6 parity and adoption evidence | No active path retains a second implementation of the replaced shared policies; package pins, build/test conventions, extension documentation and ownership agree |
 
-Stage .1 closes only the inventory and disposition. The first source implementation window remains
-pending: admitted Stage .2 capability work where needed, followed by the smallest FourD-shaped
-template slice under Stage .3. Keep later product migration touch-sets as outlines until that
-boundary is qualified. Close the programme only after all three selected product surfaces and their
+Stage .1 closes inventory and disposition. The smallest FourD-shaped template slice under Stage .3
+is source-qualified. Complete admitted Stage .2 capability work and broader reference extension
+qualification where their consumers require it. Keep later product migration touch-sets as outlines
+until the relevant published boundary is qualified. Close the programme only after all three selected product surfaces and their
 installed adoption evidence pass; keep unresolved product gameplay qualification visible under its own plan.
 
 ## Parallel work and sequencing
