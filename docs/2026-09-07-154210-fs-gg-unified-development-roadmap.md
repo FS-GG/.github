@@ -53,6 +53,28 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**V2-HOST-01.8 private diagnostic recipe registration delivered.**
+[Private substrate PR #25](https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/pull/25)
+merged at `c4f21c476ff12059d199c2ddaa15374cb9a0fb1e`, tree
+`f75962cb0ec664481ea8829cf5e7a5e9121fc51e`, independently equal to candidate
+`2ec561cdb4fffca04b6b56fbddf12b2d40fa9d91`. Both recipe bindings now select
+protected public `0ede625ce3d25d836e4e14d2da3fc749b0be4f7f`; the rendered private
+workflow, minus its existing public-input acquisition step, byte-matches that protected
+template. All 13 source checks passed. Keys, admission, public input custody and credential
+boundaries remain preserved. The next root-owned operation must first reveal any bounded
+zero-auth start diagnostic; recipe registration itself establishes no genuine native
+capture, restart/recovery, installed operation or Main retirement acceptance.
+
+**SC2C-01.6f first genuine UI attempt exposed pointer occlusion; acceptance remains open.**
+The official 4.10 executable and Simple64 map matched the existing accepted hashes, the
+owned private display was verified, and non-launching preflight reported no gaps. The actual
+attempt reached rendered live friendly units but stopped when another friendly SVG circle
+intercepted the pointer click. Root verified cleanup with zero remaining owned processes;
+all private evidence remains in root custody. A narrowly tested public driver successor
+selects an actual topmost hit coordinate, sends a real pointer click and confirms its stable
+tag; full hosted verification and another genuine attempt remain pending. No synthetic UI
+or forced event establishes the native gates.
+
 **FourD private-runroot fixture source delivered; native acceptance remains open.**
 [FourD PR #24](https://github.com/FS-GG/FS.GG.FourD/pull/24) merged at
 `9be2bd10966cbf052f5ba49666bc8656bac666d7`, tree
