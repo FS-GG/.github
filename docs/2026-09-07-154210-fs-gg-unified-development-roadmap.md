@@ -53,6 +53,32 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**FourD bounded inner builder diagnostics source delivered; native cause and runtime gates remain open.**
+[FourD PR #27](https://github.com/FS-GG/FS.GG.FourD/pull/27) merged at
+`8387d43dee8986bd50fd3170303dfb2fae288826`, tree
+`0885f6e9ab75a22792dd2af4c037b39be068b16f`, independently equal to candidate
+`34740f519808d19758a4906ba80c8dacb1356ea1`. Full hosted
+[verification 36808707531](https://github.com/FS-GG/FS.GG.FourD/actions/runs/36808707531)
+and source preparation 36808707538 passed. The wrapper preserves a recognized bounded
+inner builder diagnostic instead of truncating its stderr while wrapping large stdout.
+Exact schema keys/types, declared phase, non-boolean exit code and individual tail bounds
+are checked; malformed or oversized records retain the bounded outer fallback. All 27
+native source tests passed, including real nested subprocess and rejection cases. Image
+inputs, pins, roots, cleanup and runtime policy are unchanged. The prior actual builder
+cause remains unknown because its stderr was absent from retained evidence; a fresh
+protected diagnostic run remains next, with runtime and installed acceptance open.
+
+**V2-HOST-01.8 attempt g passed repaired startup checks and refused a later condition.**
+Actual private [run 36809123976](https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/actions/runs/36809123976)
+used protected private `3627fa843e4af030f38cc6e9b3cfe2fa179437cd` and public recipe
+`f71c56b146642b44fb2a0d3e542fa14b6d6f0d7a`. It passed exact input acquisition,
+zero-auth readonly topology/image qualification, private material setup and readonly source
+compatibility. A later refusal prevented genuine operation acceptance. Both auth and
+bounded diagnostic custody were sealed; writer cleanup and preservation passed. Root
+independently verified both temporary environment secrets removed. The precise refusal
+remains under private diagnostic investigation. `.8` acceptance, `.9` routing, `.10`
+retirement and installed LEARN enrollment remain open.
+
 **V2-HOST-01.8 exact protected source input registration delivered; genuine operation remains open.**
 [Private substrate PR #27](https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/pull/27)
 merged at `3627fa843e4af030f38cc6e9b3cfe2fa179437cd`, tree
