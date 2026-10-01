@@ -53,6 +53,20 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**SC2C-01.6f pointer-occlusion source delivered; genuine retry remains pending.**
+[SC2 client PR #22](https://github.com/FS-GG/FS.GG.SC2.Client/pull/22)
+merged at `1a2474d4b60a4075388232c1b61d9490b2932f45`, tree
+`4e9fdf141885b7edd31bf2d487201ab77c1bd573`, independently equal to candidate
+`fc17583c98d34adcab0c76acdb248100e4ff2620`. Full
+[verification 36803231233](https://github.com/FS-GG/FS.GG.SC2.Client/actions/runs/36803231233)
+passed all 59 browser cases. The driver chooses a bounded actual topmost SVG coordinate,
+sends a real pointer click and confirms the stable selected tag before the ground click.
+The alternate-bounds test now requires the correlated durable terminal result and actual
+peer move command, avoiding the ephemeral UI status that a heartbeat can overwrite.
+No forced event, product deadline relaxation or fake native acceptance was added.
+Private source pins, exact rebuild and the next genuine game attempt remain pending;
+all 12 native gates stay open after the first attempt's occlusion failure and verified cleanup.
+
 **P4 trusted resolver source delivered; installed adoption remains open.**
 [Coordination PR #905](https://github.com/FS-GG/FS.GG.Coordination/pull/905)
 merged at `e70d41fd9e48896e863bdf1ba33822ad6f09ee6b`, tree
