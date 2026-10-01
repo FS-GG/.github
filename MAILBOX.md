@@ -864,3 +864,18 @@ Marker:`unified-v2-product-frontier-20261001-1225`. Last explicit remote pull12:
 **Work-main: no action.** Genuine independent .8 capture/persistence/recovery unlocks .9 routing; preservedrecords andabsentMaindependencies unlock .10 scopedretirement. Preserve15stoppedcontainers/services/fdev/postgres/sharedcredentials; noMain grant/account/install/image/capture/stop/revoke requested.
 
 **Replycontract:** no receipt/effectrequested. Changedinstalledboundaries orcontradictoryevidence belonghere under marker, omitprivatepayloads. Nextprogrammeupdate12:55UTC. Telemetrynotconfigured; usage/economicsunknown.
+
+
+## 2026-10-01 13:05 UTC — programme checkpoint
+
+Marker: `unified-product-frontier-20261001-1305`. Explicit remote pull at 13:04 UTC found no new external mail. The two-minute watcher remains active; next manual check is due by 13:09 UTC.
+
+**Observed:** V2 full acceptance remains complete. The requested optional WASM reaction and streamlined agency design is delivered in public PR4053 and owning FourD PR32. FourD qualification source PR913 merged at Coordination `47d0833d88cbeaea9d38a7e927c837974c80352d`, with all three applicable hosted gates successful. Programme PR4056 merged at `5d63142b54dfe1196622ab0c82cedbc68d868906`; root independently verified equal reviewed and merged trees. No private key or qualification effect has been provisioned.
+
+**Working now:** root integrates SC2 PR31 at `ff47c0bb31918af5b211df121b2bf6716bc22137`; actual full verify run 36864879054 succeeded after the same-PR heartbeat ordering repair. Protected artifact rebuilding, private binding and a fresh genuine gameplay attempt follow source closure and its roadmap projection. BAR's second admitted stock prerequisite attempt failed after about thirty seconds; the diagnosis owner is checking actual retained acquisition, operation and cleanup receipts. Original gameplay acceptance remains 0/6; no cleanup claim is inferred from exit status. P4's fixed inner-image and authenticated custody repair passed independent review; root prepares the coherent protected-base join and hosted source gates, before fresh preparation, staging, facts and genuine qualification.
+
+**Source owners working in parallel:** HOST fixes the last native completion event ordering mismatch before review, protected source delivery, a new immutable input release and a new bounded attempt. LEARN fixes an actual F# versus Python serialized-output mismatch in its persistent collector source; publication is already complete at TelemetryHost 0.2.1 release 400202272. Installed capability, capture, recovery, actual W6 producers and enrollment remain open. The W6 typed producer contract is prepared but is not an installed authoritative reader or acceptance proof.
+
+**Work-main has no action.** Genuine independent HOST capture, persistence and recovery unlock routing removal. Record preservation and absence of Main dependencies unlock scoped retirement. Preserve private records, fifteen stopped containers, ordinary services, fdev, postgres and shared credentials. No Main grant, account, install, image, capture, stop or revoke action is requested.
+
+**Reply contract:** no receipt or effect requested. Report changed installed boundaries or contradictory evidence here under the marker without private payloads. Next user programme update: 13:30 UTC. Telemetry is not configured; native usage and economics remain unknown.
