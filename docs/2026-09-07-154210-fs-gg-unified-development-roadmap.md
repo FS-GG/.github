@@ -65,6 +65,18 @@ independent and open. This dated clarification is not a current fleet-health att
 profile acceptance or waiver of exact artifact, authentication, custody, settlement/replay or effect
 authority for any operation actually performed.
 
+**2026-10-01: OPS-TYPED-01.5 HOST binding source integrated; native adoption remains open.**
+The [typed HOST constructor](../deployment/telemetry-collector/host-binding/README.md)
+and its existing qualification adapter now join the private workflow and owning package CI.
+F# owns source/profile construction, digest checks and bounded process ownership in the dedicated
+exclusive CLI scope. Kernel pidfd capability is checked before child creation; identity uncertainty
+remains sticky and cleanup targets only owned descendants. The accepted source and workflow
+preflight exercised 26 F# tests and 38 Python tests without skips, with pinned SDK 10.0.401,
+full managed/runtime dependency checks, workflow parsing and shell validation.
+The four native payloads remain byte-identical. This is source delivery; protected artifact adoption,
+Sandbox profile and private producer joins, actual authentication and native attempt-o qualification
+remain open. The existing release is not relabeled as a new artifact or native acceptance.
+
 **2026-10-01: LEARN executable custody reader source delivered; installed qualification remains open.**
 [Coordination #918](https://github.com/FS-GG/FS.GG.Coordination/pull/918) merged at
 `4be1226aedbd6115fc228c3828e4956a7db4e96f`, tree
