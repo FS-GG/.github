@@ -53,6 +53,95 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**Portable P3 both protected receiver pins delivered; adoption remains open.**
+[Templates PR #658](https://github.com/FS-GG/FS.GG.Templates/pull/658) merged at
+`86122a56ebbfcc98faa744df337b5ebe82cd863f`, tree
+`2470a07b432834e00d6da522a34ed71e9c62619e`, independently equal to candidate
+`1206949973988148d650668cb4c2c8eb9c3a5ea5`. Full
+[composition 36816587286](https://github.com/FS-GG/FS.GG.Templates/actions/runs/36816587286)
+and required source checks passed. Root independently verified both protected receiver
+readbacks: SDD `388e4e0dbb216de8a37687818af042030d4e26c5` and Templates `86122a56`.
+Their pin and test files are byte identical; the producer pin SHA-256 is
+`ca7f4b1f688e1fd9e2f4b9c8df4716fe669bcc91e7b9656d9a0984bc4430258c`.
+All five published 0.2.0 assets and the frozen source/tree/release/run are bound. Together
+with verified producer publication, this satisfies P3's producer/receiver-pin boundary;
+owning plan reconciliation is next. Adoption remains disabled and requires separate
+installed qualification. The P4 0.2.1 successor preparation, administrator provider,
+fresh receiver creation and P5 matrix remain open.
+
+**SC2 paused authored-movement driver source repaired; genuine acceptance remains open.**
+[SC2 Client PR #26](https://github.com/FS-GG/FS.GG.SC2.Client/pull/26) merged at
+`56dab432acb46ef04184eaaf2d3731bb51ad29b2`, tree
+`2d5fd625506ee34aa813ae0b8a22fe7580a4fa2f`, independently equal to candidate
+`13fd2fe5b4b02ea51823de6231b175be4925ad08`. Full hosted
+[verification 36816905756](https://github.com/FS-GG/FS.GG.SC2.Client/actions/runs/36816905756)
+passed. Actual attempt-e on previous protected source passed terminal Sc2Result/actionResult=1
+but failed the owned-unit effect check: only frame-zero observation and one successful Action
+were retained, with no Step or later observation. Cleanup recorded 13 owned processes and
+zero survivors; the owned display socket was removed. The public driver now requires accepted
+feedback, then at most eight single-loop paused Steps and a distinct fresh projection after
+each, succeeding only when the same visible owned tag changes coordinates. Pointer and
+keyboard regressions passed, including 12 repeated effect checks. No criterion or timeout is
+weakened. Driver SHA-256 is now
+`47e22ce955dc501479dc6c60ad6b93d324dc7b7192cb2b0af604acf158e9d68c`;
+a fresh protected build and successor runner/proof must bind it before another genuine
+operation. Prior candidates remain history; `.6`, publication and installed adoption stay open.
+
+**Portable P3 SDD receiver pin delivered; Templates pin and adoption remain open.**
+[SDD PR #1085](https://github.com/FS-GG/FS.GG.SDD/pull/1085) merged at
+`388e4e0dbb216de8a37687818af042030d4e26c5`, tree
+`ce034535cca217bf717e46aed428f598e38b5f39`, independently equal to candidate
+`8a3879c47d84dbdf10aa6e95a9f29823c4bfcaee`. Full deterministic
+[gate 36816545302](https://github.com/FS-GG/FS.GG.SDD/actions/runs/36816545302)
+and required source checks passed. The inert receiver pin binds published 0.2.0, exact
+frozen source/tree, release 400643766, publication run 36813849644 and all five asset
+SHA-256 values. Adoption stays disabled and requires separate installed qualification.
+Templates PR #658 is checking the byte-identical pin; full P3 receiver closure and P4/P5
+adoption remain open.
+
+**V2-HOST Podman network private registration delivered; genuine acceptance remains open.**
+[Private substrate PR #29](https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/pull/29)
+merged at `443c203dab1dbbba36bbbed27a297a6f805333bc`, tree
+`d05b2683ee6bcfd5e45b35627c089a59525abc9b`, independently equal to candidate
+`19ab34f283387113f00c20341ea510486db2a878`. Both recipe references bind protected
+public source `5f79da7d3a8c70ca60f3c7701eafed6ac66b478f`. Root passed all 13
+PyYAML-enabled source tests without skips and independently matched the protected public
+template after removing exactly the existing acquisition step: 9,552 bytes, SHA-256
+`83e3f69e7813b0c1da83cfc85becf439e0b6fa250ef1fd3cc21869729ddff7a4`.
+The template source bytes are unchanged; the rendered hash changes because the recipe
+commit appears twice. Input release 400609820, public key and all four native input pins
+are unchanged. This private repository has no hosted PR checks. A fresh root-owned
+operation remains next; `.8` acceptance, `.9` routing, `.10` retirement and installed
+LEARN enrollment remain open.
+
+**Rust/Go bounded hosted native qualification complete; full installed adoption remains open.**
+Actual [36815503862](https://github.com/FS-GG/FS.GG.Templates/actions/runs/36815503862)
+on protected `eb914297fdd9b6b7d7e85a18a2ee0e341451b421`, tree
+`fb15b4c244c09459da272e04a962a02d309c4458`, passed both real journeys, duplicate
+reconstruction, actual running cancellation and recovery, wrong-reference/toolchain/source
+refusals, exact evidence validation and owned VFS cleanup. Root independently read 22 JSON
+receipts using 69 bounded HTTP ranges totaling 41,590 bytes. Qualification receipt SHA-256
+`afed1c27d46d3df9a7e8c4426038e5a4a328220157e561e2cb6bc87c5db0c8be`
+is accepted, binds the exact source/tree, and matches the validator readback. Cancellation
+recovery retains observed termination and cleanup; owned containers are absent. Artifact
+11141456884 is 888,304,032 bytes with GitHub-reported digest
+`20de1e0d212146c57cfb900528e44fad9c21340e822690487bc5eb609d37076d`;
+root did not download the full wrapper. Frozen executor, SDK, Akka and retained/derived
+image pins remain unchanged. This closes the bounded Rust/Go hosted native BIND gate;
+owning documentary closure is prepared, while publication, installed adoption, other
+language routes and full `.5` remain open.
+
+**FourD measured temporary capacity refuses; alternate storage design is next.**
+Actual [36816629346](https://github.com/FS-GG/FS.GG.FourD/actions/runs/36816629346)
+on protected `d51297c4d29121fea3fb64de42e729effad202fc` failed preflight before
+downloads/build. Retained artifact 11142165458 reports a distinct temporary filesystem
+(device 26 versus state device 2049), only 4,161,896,448 free bytes against the unchanged
+5,368,709,120-byte floor, and `insufficient-free-space`. This establishes the fresh refusal;
+it does not reconstruct the previous masked failure. Repeating the same route is stopped.
+A reviewed rootless private temporary-storage capability design is next; no larger shared
+memory capacity, memory headroom or native runtime success is inferred. Installed and human
+gates remain open.
+
 **V2-HOST Podman named-network inspection source repaired; native acceptance remains open.**
 Actual private attempt-h 36813862234 refused `direct-network-route-refused` after
 receiver connection. Its sealed, closed diagnostic projection reports exactly the two
