@@ -417,6 +417,47 @@ exit 2
                    '/private/malformed-source','/private/malformed-destination'):
     self.assertNotIn(private,raw)
    self.assertEqual(0o600,(root/'output/command-diagnostics.json').stat().st_mode&0o777)
+ def test_native_refusal_preserves_exception_and_adds_only_closed_typed_projection(self):
+  with tempfile.TemporaryDirectory() as td:
+   root=pathlib.Path(td)/'private'; (root/'output').mkdir(parents=True,mode=0o700)
+   a=type('A',(),{'private_root':root,'run_nonce':'run-0001','source_sha':'a'*40,
+                  'private_placement_sha':'d'*40,'source_root':ROOT})()
+   op=q.Operation(a,FakeRunner()); topology=op.topology()
+   value={'Config':{'User':'32768:32768',
+                    'Env':['FSGG_TELEMETRY_CREDENTIAL_NATIVE_PROSPECTIVE_V1=secret-value',
+                           {'malformed':'private-env'}]},
+          'HostConfig':{'NetworkMode':'bridge','ReadonlyRootfs':True,'PidsLimit':128,
+                        'Memory':2*1024**3,'NanoCpus':2_000_000_000,
+                        'CapAdd':{'malformed':'private-cap-add'},
+                        'CapDrop':[{'malformed':'private-cap-drop'}],
+                        'SecurityOpt':['no-new-privileges'],'Privileged':False,
+                        'UsernsMode':'private','PidMode':'private','UTSMode':'private'},
+          'EffectiveCaps':{'malformed':'private-effective'},'BoundingCaps':None,
+          'NetworkSettings':{'Networks':{topology.NATIVE_NETWORK:{}}},
+          'Mounts':[{'Source':'/private/source','Destination':path,'RW':writable}
+                    for path,writable in topology.NATIVE_MOUNTS.items()]}
+   class InspectRunner:
+    def run(self,args,**kwargs): return subprocess.CompletedProcess(args,0,json.dumps(value).encode(),b'')
+   original=topology.Refusal('native-capability-fence-refused')
+   def refuse(_value): raise original
+   op.r=InspectRunner(); op.phase('private-material-ready')
+   with self.assertRaises(topology.Refusal) as refused:
+    op.inspect_container('fsgg-native-development',refuse,'native-inspect')
+   self.assertIs(refused.exception,original)
+   op.write_private_diagnostics(); raw=(root/'output/command-diagnostics.json').read_text(); saved=json.loads(raw)
+   extension=saved['extensions']['fsgg.telemetry.private-container-inspection/1']
+   record=extension['records'][0]
+   self.assertEqual(('private-material-ready','native','native-capability-fence-refused'),
+                    (record['phase'],record['inspection'],record['projection']['failureCode']))
+   self.assertEqual(('malformed','malformed','null'),
+                    (record['projection']['privilege']['capAdd']['shape'],
+                     record['projection']['privilege']['ociEffective']['shape'],
+                     record['projection']['privilege']['ociBounding']['shape']))
+   self.assertEqual([],saved['records']); self.assertNotIn('extensions',op.result)
+   for private in ('secret-value','private-env','private-cap-add','private-cap-drop',
+                   'private-effective','/private/source'):
+    self.assertNotIn(private,raw)
+   self.assertEqual(0o600,(root/'output/command-diagnostics.json').stat().st_mode&0o777)
  def test_diagnostic_write_failure_cannot_skip_cleanup(self):
   class FakeOperation:
    cleaned=False

@@ -316,13 +316,15 @@ class Operation:
         try: inspector(value)
         except Exception as error:
             topology=self.topology()
-            if diagnostic=='receiver-inspect' and isinstance(error,topology.Refusal):
+            if diagnostic in {'receiver-inspect','native-inspect'} and isinstance(error,topology.Refusal):
                 require(len(self.inspection_diagnostics)<8,'inspection-diagnostic-capacity-refused')
-                projection=topology.receiver_inspection_projection(value,str(error))
+                inspection='receiver' if diagnostic=='receiver-inspect' else 'native'
+                projection=(topology.receiver_inspection_projection(value,str(error)) if inspection=='receiver'
+                            else topology.native_inspection_projection(value,str(error)))
                 require(len(canonical(projection))<=8192,'inspection-diagnostic-size-refused')
                 phase=self.result['phases'][-1]['name'] if self.result['phases'] else 'before-first-phase'
                 self.inspection_diagnostics.append({'ordinal':len(self.inspection_diagnostics)+1,
-                    'phase':phase,'inspection':'receiver','projection':projection})
+                    'phase':phase,'inspection':inspection,'projection':projection})
             raise
     def container_running(self,name,diagnostic):
         value=self.r.run(['podman','inspect','--type','container','--format','{{.State.Running}}',name],limit=128,diagnostic=diagnostic).stdout.decode().strip()
