@@ -65,6 +65,20 @@ independent and open. This dated clarification is not a current fleet-health att
 profile acceptance or waiver of exact artifact, authentication, custody, settlement/replay or effect
 authority for any operation actually performed.
 
+**2026-10-01: OPS-TYPED-01.5 SC2 advisor diagnostic source delivered.**
+[SC2 #33](https://github.com/FS-GG/FS.GG.SC2.Client/pull/33) merged at
+`039feddc07c3c0d47802485dd51c85f3d0a9d54c`; root authenticated tree
+`80d72afdfdc7db86857e4484d729175cafd5ee0f`, equal reviewed joined head
+`bdca1e55f994bcf73889f8575dcf889a7c1ac6ea`.
+[Hosted verification 36908772155](https://github.com/FS-GG/FS.GG.SC2.Client/actions/runs/36908772155)
+passed. F# owns full advisor/input identity and terminal classification; the browser retains the
+actual obligation state, and the qualification driver requires a matching completed process record.
+Five fresh Quint ITF traces matched 21 actual reducer/window transitions; all 25 semantic mutations
+with correctly recomputed fingerprints diverged. The production compile entry and coherent gate
+now execute that harness and the compiled browser bridge fixture. This is finite source correspondence,
+not native acceptance. Historical attempt-n remains Unknown; protected artifact rebuilding, private
+failure-summary adoption, actual advisor processing and replay qualification remain open.
+
 **2026-10-01: FABLE-ADOPT-01.3 local reference composition source delivered.**
 [Templates #661](https://github.com/FS-GG/FS.GG.Templates/pull/661) merged at
 `1c90ac81278a8e7a98fe98aa7d01b8023a8f2278`; root authenticated tree
