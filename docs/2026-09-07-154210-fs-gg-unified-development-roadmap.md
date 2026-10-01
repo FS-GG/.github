@@ -53,6 +53,33 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**Rust/Go pinned SDK directory source delivered; native BIND remains open.**
+[Templates PR #655](https://github.com/FS-GG/FS.GG.Templates/pull/655)
+merged at `ffd14538bbc2b4a1352bb2795e39973883f78918`, tree
+`717b630f2e682e4addccdbbe27d513cf69ad406a`, independently equal to candidate
+`8e7be4b5e13404e0e62f635c7816e3b1526ac573`. Full
+[composition 36804923621](https://github.com/FS-GG/FS.GG.Templates/actions/runs/36804923621)
+and required checks passed. Actual run 36803643714 reproduced both expected executor and
+Akka digests; its remaining refusal was SDK selection from the outer workspace. The exact
+version probe and actual build now both run from the reviewed fixed Coordination directory.
+A regression distinguishes outer SDK 10.0.401 from pinned-directory 10.0.400 and proves both
+invocations use the latter; all 24 source checks passed. SDK/package/image/source pins remain
+unchanged. A fresh protected native run, both language journeys, cancellation/recovery and
+installed adoption remain open.
+
+**FourD pinned Node extraction prerequisite source delivered; runtime gates remain open.**
+[FourD PR #26](https://github.com/FS-GG/FS.GG.FourD/pull/26) merged at
+`f4c3f338ed88182b5b478634d41953c172250004`, tree
+`de31c7f936bc00b3394cfaafb536856f554ca1cb`, independently equal to candidate
+`7fc16791ce4416cdd411eba1d2cb8b0e43af3697`. Full
+[verification 36805513572](https://github.com/FS-GG/FS.GG.FourD/actions/runs/36805513572)
+and source preparation passed. The image adds only `xz-utils` to its existing prerequisite
+set; a tokenized static guard checks xz/unzip declarations before extraction. The reviewed
+operation binds the exact new Containerfile digest. All 23 image source checks passed;
+pinned base/archives, private stores, cleanup/custody and runtime policy remain preserved.
+A fresh protected native image run, runtime BIND/recovery, installed adoption and human
+preference/balance acceptance remain open.
+
 **V2-HOST-01.8 bounded app-state recipe registration delivered; genuine operation remains open.**
 [Private substrate PR #26](https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/pull/26)
 merged at `2cafa3dc11ca27cff06a95ec129d4695465bef36`, tree
