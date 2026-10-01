@@ -53,6 +53,20 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**V2-HOST-01.8 empty compatibility app state source repaired; native qualification stays open.**
+Reviewed source `0e719a3cae14a9416ff30ae0ce1978825e681380` redirects `CODEX_HOME`
+only for the fixed zero-auth readonly compatibility operation to its fresh private run directory
+on the bounded output tmpfs. Exact Codex 0.158 source initializes writable SQLite and installation
+identity before stdio; the original source bind cannot provide those writes. Mounted source and
+working directory remain read-only; the full credentialed operation is unchanged. The probe's
+thread count describes disposable empty state, not original persisted inventory, and cannot
+establish native capture or recovery. Original-volume parent/child histories, selector binding,
+capture and receiver-restart/replay checks remain independently required. All 24 native-operation
+and 27 private-qualification source tests passed without skips, plus image/network checks and
+an independent review scoped to the immutable container route. Private recipe registration and
+a fresh root-owned native operation remain pending; routing `.9`, retirement `.10` and LEARN
+experimental acceptance remain open.
+
 **SC2C-01.6f pointer-occlusion source delivered; genuine retry remains pending.**
 [SC2 client PR #22](https://github.com/FS-GG/FS.GG.SC2.Client/pull/22)
 merged at `1a2474d4b60a4075388232c1b61d9490b2932f45`, tree
