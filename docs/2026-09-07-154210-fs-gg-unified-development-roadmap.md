@@ -65,6 +65,24 @@ independent and open. This dated clarification is not a current fleet-health att
 profile acceptance or waiver of exact artifact, authentication, custody, settlement/replay or effect
 authority for any operation actually performed.
 
+**2026-10-01: W6 existing-authority composition source closed; installed operation remains open.**
+[Coordination #915](https://github.com/FS-GG/FS.GG.Coordination/pull/915) merged at
+`b457cab51496deb25ea99fabd0b700e367200c66`; root authenticated tree
+`c9dda659b31aab15ae3b6e68d4bb85ddb3952b59`, equal reviewed head
+`45f9debdfbf79f0113a20cc3b0a8f973963059f7`. Exact-head full coherent
+[verification 36883275832](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36883275832)
+and [bootstrap 36883275835](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36883275835)
+passed. Source joins existing journal authority, typed installed-custody and retained native-delivery
+readers with generation/cohort/WorkItem/window bindings and disabled-by-default Host composition.
+Prospective admission precedes durable assignment, then rereads the exact unlaunched assignment
+before intent; execution counters are required at their actual execution stage. Stale or future
+authority timestamps refuse. The real PostgreSQL fixture repair passed eight local checks without
+skips and the hosted bootstrap; production reservation validators remain unchanged. This is source
+delivery only. Genuine installed-origin receipts and canonical native-delivery binding producers
+remain unavailable, so absent capabilities still refuse. Installation, capture, recovery, enrollment,
+W6 live acceptance and Main-independent deployment remain open; no Main action is selected.
+
+
 **2026-10-01: HOST operation-profile pin repair source closed; attempt-n refused before native execution.**
 [Private Sandbox #37](https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/pull/37) merged at
 `9b157bb400c85d07ac6bd6394c76982175ceedd9`; root authenticated tree
