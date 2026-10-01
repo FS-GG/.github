@@ -53,6 +53,37 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**V2-HOST-01.8 bounded app-state recipe registration delivered; genuine operation remains open.**
+[Private substrate PR #26](https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/pull/26)
+merged at `2cafa3dc11ca27cff06a95ec129d4695465bef36`, tree
+`d44facfef17668ab74f05a8ccc671bbe03dbb0c2`, independently equal to candidate
+`ef0038f0f03c9b81bb574f9cc3ea9eae5e649f72`. Both recipe references select protected
+public `f71c56b146642b44fb2a0d3e542fa14b6d6f0d7a`. All 13 private source tests passed
+without skips; the rendered workflow excluding only the existing public-input acquisition
+step byte-matches its protected template, 9552 bytes and SHA-256
+`b925882b38304bf31d6382550f7ff3565a5f0f38414ea5adb1441c5e9322857e`.
+This private source repository has no hosted PR checks; local source validation and verified
+registration establish no native result. A fresh root-owned `.8` operation remains next;
+Main routing `.9`, preserved-record retirement `.10` and LEARN enrollment remain open.
+
+**SC2C-01.6f second genuine attempt refused its pointer-hit precondition; acceptance remains open.**
+The protected repaired driver at `1a2474d4b60a4075388232c1b61d9490b2932f45` rebuilt in
+a clean checkout. Its private runner pins were advanced with all seven prior files preserved;
+actual source/asset preflight reported ready with no gaps. The genuine retry refused because
+no unit had a topmost pointer hit coordinate. Root verified zero remaining owned processes
+and removed the owned display. A viewport/scroll explanation is a source hypothesis under
+a focused fixture investigation, not an observed native cause. Full native acceptance remains
+open; no forced pointer event or source test substitutes for the genuine journey.
+
+**FourD native image advanced to a missing archive prerequisite; runtime gates remain open.**
+Actual [run 36804510798](https://github.com/FS-GG/FS.GG.FourD/actions/runs/36804510798)
+on protected `e06609740f49443808f6dd1e656dec4e9e006a23` passed both pinned Node and
+Chromium archive checksums and the prior VFS disk frontier, then failed `tar -xJf` because
+`xz` was absent. A narrowly prepared image prerequisite successor adds `xz-utils` before
+extraction and statically checks both archive tool declarations. Full source verification,
+protected delivery and another native operation remain pending. No runtime BIND, installed
+adoption or human preference/balance acceptance is established.
+
 **FourD bounded private build storage and cleanup source delivered; native retry remains open.**
 [FourD PR #25](https://github.com/FS-GG/FS.GG.FourD/pull/25) merged at
 `e06609740f49443808f6dd1e656dec4e9e006a23`, tree
