@@ -53,6 +53,52 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**SC2 terminal feedback and scripted-peer lifetime source delivered; genuine acceptance remains open.**
+[SC2 Client PR #25](https://github.com/FS-GG/FS.GG.SC2.Client/pull/25) merged at
+`4b17d8582859c9c78ef2a0c074380d3e7fd1d0ea`, tree
+`a342a6b0249ca280b00f75fa32a4be7e5811e093`, independently equal to candidate
+`6198e34d04b529c07d090e6537f7eb09ba1a8525`. Full hosted
+[verification 36814254575](https://github.com/FS-GG/FS.GG.SC2.Client/actions/runs/36814254575)
+passed. Terminal command feedback survives accepted lifecycle messages while lifecycle
+state still updates; rejected messages remain visible and a new command can replace the
+old result. The compiled browser regression exercises Sc2Result followed by accepted
+Heartbeat and Step. A scripted native peer waits until its final Step response is classified
+before disposal, removing the observed response-ownership race without changing product
+criteria. Complete native fixture verification passed ten consecutive local runs; the new
+browser regression and original placement test passed six repeated cases. The driver,
+capture, join and native qualifier are unchanged. A fresh protected build and genuine
+SC2 operation remain next; `.6` completion, publication and installed adoption are open.
+
+**Portable P3 0.2.0 publication and native qualification complete; installed adoption remains open.**
+Actual [36813849644](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36813849644)
+on protected `c8f443e9e52af44287dd3cbb95881933c026627e` passed all six packaged
+operations, provenance, both feed byte readbacks, anonymous install/schema readback,
+release comparison and scoped cleanup. Existing immutable feed payloads were reused.
+The existing authorized maintainer route created signed-source tag `v0.2.0` at frozen
+`d25b9eaec991c94593adcecda6869d07dabdfb43` after the Actions token refused tag creation;
+no permission or tag policy changed. [Release 0.2.0](https://github.com/FS-GG/FS.GG.Coordination/releases/tag/v0.2.0)
+was published at 2026-10-01T04:12:48Z. Root independently verified the tag commit and all
+five frozen release assets against retained sizes and SHA-256 digests, plus the separate
+release readback asset. Its private root receipt has SHA-256
+`0b28f16f45a52d7d8f7176c83d5eceb94b889b353c996eab6a07062cc3303b9f`.
+Release metadata retains `target_commitish=main`; the existing tag identifies the actual
+frozen source. P3 publication is closed. P4 fresh-receiver adoption, successor publication
+and P5 upgrade/matrix closure remain open; installed adoption is not established.
+
+**Rust/Go cancellation shell recovery source delivered; fresh native qualification remains open.**
+[Templates PR #657](https://github.com/FS-GG/FS.GG.Templates/pull/657) merged at
+`eb914297fdd9b6b7d7e85a18a2ee0e341451b421`, tree
+`fb15b4c244c09459da272e04a962a02d309c4458`, independently equal to candidate
+`3e5b93c34af5bc9f331650cb26f360fbabc3dbe3`. Full composition
+[36812942043](https://github.com/FS-GG/FS.GG.Templates/actions/runs/36812942043)
+and required source gates passed. All 27 focused tests and 12 shell syntax checks passed.
+The previous actual native run 36811944671 completed both real language journeys and
+owned cleanup but lacked cancellation-recovered evidence: shell errexit stopped after
+an expected exit 4 despite step-level continue-on-error. The repaired shell explicitly
+requires exit 4 and a nonempty receipt for both cancellation executions; unexpected
+statuses still fail. Executor, SDK, Akka and image bindings are unchanged. A fresh
+protected native qualification remains next; full adoption is open.
+
 **FourD measured image-copy storage source delivered; native capacity and runtime remain open.**
 [FourD PR #28](https://github.com/FS-GG/FS.GG.FourD/pull/28) merged at
 `858dee877411ce3e4b8eb7ba6e3403a1ce5d7621`, tree
