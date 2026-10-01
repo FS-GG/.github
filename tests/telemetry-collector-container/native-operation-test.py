@@ -80,7 +80,7 @@ class NativeOperationTests(unittest.TestCase):
                          (provenance["native"]["version"], provenance["upstream"]["tag"], provenance["fixtureClassification"]))
         self.assertEqual({"session/mod.rs", "agent/control/api.rs", "agent/control/spawn.rs",
                           "agent/control/completion.rs", "session_prefix.rs",
-                          "context/inter_agent_completion_message.rs"},
+                          "context/inter_agent_completion_message.rs", "items.rs"},
                          set(provenance["sourceBlobs"]) - {"protocol.rs", "history/rollout_payload.rs",
                          "rollout/policy.rs", "rollout/recorder.rs", "protocol/models.rs",
                          "multi_agents_v2/spawn.rs", "multi_agents_v2/wait.rs"})
@@ -270,6 +270,11 @@ class NativeOperationTests(unittest.TestCase):
             return {"type":"reasoning","id":identifier,"summary":[{"type":"summary_text","text":sentinel}],
                     "content":None,"encrypted_content":None,
                     "internal_chat_message_metadata_passthrough":stamp(turn)}
+        def completed_message(thread,turn,identifier,text):
+            return {"type":"item_completed","thread_id":thread,"turn_id":turn,
+                    "item":{"type":"AgentMessage","id":identifier,
+                            "content":[{"type":"Text","text":text}],"phase":"final_answer"},
+                    "completed_at_ms":1790812800250}
         spawn_call = {"type": "function_call", "id":"response-spawn", "name": "spawn_agent", "namespace": "functions", "call_id": "call-spawn",
                       "arguments": json.dumps({"message": support.FIXED_CHILD_PROMPT, "task_name": support.FIXED_TASK_NAME,
                                                "model": "gpt-5.6-sol", "reasoning_effort": "medium", "fork_turns": "none"}, separators=(",", ":")),
@@ -295,6 +300,7 @@ class NativeOperationTests(unittest.TestCase):
                                               "internal_chat_message_metadata_passthrough":stamp("turn-parent")}),
                            ("response_item", reasoning("parent-reasoning","turn-parent","PRIVATE-PARENT-SENTINEL")),
                            ("response_item", message("parent-ack","turn-parent","assistant","output_text","NATIVE-PARENT-ACK","final_answer")),
+                           ("event_msg", completed_message(PARENT,"turn-parent","parent-ack","NATIVE-PARENT-ACK")),
                            ("event_msg", {"type": "turn_complete", "turn_id": "turn-parent", "last_agent_message": "NATIVE-PARENT-ACK", "error": None})]
         child_meta = {**parent_meta, "id": CHILD, "parent_thread_id": PARENT, "agent_path": "/root/native_ack",
                       "source": {"subagent": {"thread_spawn": {"parent_thread_id": PARENT, "depth": 1,
@@ -308,6 +314,7 @@ class NativeOperationTests(unittest.TestCase):
         if child_extra: child_payloads.append(("response_item", child_extra))
         child_payloads.extend([
             ("response_item", message("child-ack","turn-child","assistant","output_text","NATIVE-CHILD-ACK","final_answer")),
+            ("event_msg", completed_message(CHILD,"turn-child","child-ack","NATIVE-CHILD-ACK")),
             ("event_msg", {"type": "turn_complete", "turn_id": "turn-child", "last_agent_message": "NATIVE-CHILD-ACK", "error": None})])
         paths=[]
         for name,payloads in (("parent.jsonl",parent_payloads),("child.jsonl",child_payloads)):
@@ -328,7 +335,7 @@ class NativeOperationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root=pathlib.Path(temporary);sessions,parent,child=self._write_rollouts(root);value=self._v2_audit_evidence()
             result=support.audit_original_rollouts(str(parent),str(child),sessions,value,profile)
-        self.assertTrue(value.original_audit);self.assertEqual((13,8),(result["parent"]["records"],result["child"]["records"]))
+        self.assertTrue(value.original_audit);self.assertEqual((14,9),(result["parent"]["records"],result["child"]["records"]))
         encoded=json.dumps(result)
         for private in ("PRIVATE-PARENT-SENTINEL","PRIVATE-CHILD-SENTINEL",str(parent),support.FIXED_CHILD_PROMPT):self.assertNotIn(private,encoded)
 
@@ -372,6 +379,26 @@ class NativeOperationTests(unittest.TestCase):
             root=pathlib.Path(temporary);sessions,parent,child=self._write_rollouts(root);evidence=self._v2_audit_evidence();evidence.wait_call_id="foreign-wait"
             with self.assertRaisesRegex(support.Refusal,"wait activity/call join"):
                 support.audit_original_rollouts(str(parent),str(child),sessions,evidence,profile)
+
+    def test_original_completed_message_event_joins_identity_thread_turn_and_ack(self):
+        profile=support.load_profile(PROFILE_PATH)
+        def contradictory(rows):
+            terminal=next(index for index,row in enumerate(rows) if row["type"]=="event_msg" and row["payload"].get("type")=="turn_complete")
+            rows.insert(terminal,{"timestamp":"2026-10-01T00:00:00.000Z","type":"event_msg","payload":{
+                "type":"item_completed","thread_id":CHILD,"turn_id":"turn-child",
+                "item":{"type":"AgentMessage","id":"foreign-ack","content":[{"type":"Text","text":"NOT-THE-ACK"}],"phase":"final_answer"},
+                "completed_at_ms":1}})
+        def wrong_thread(rows):
+            event=next(row["payload"] for row in rows if row["type"]=="event_msg" and row["payload"].get("type")=="item_completed")
+            event["thread_id"]=PARENT
+        def unknown_item(rows):
+            event=next(row["payload"] for row in rows if row["type"]=="event_msg" and row["payload"].get("type")=="item_completed")
+            event["item"]={"type":"CommandExecution","id":"child-ack","command":"private"}
+        for mutation in (contradictory,wrong_thread,unknown_item):
+            with self.subTest(case=mutation.__name__),tempfile.TemporaryDirectory() as temporary:
+                root=pathlib.Path(temporary);sessions,parent,child=self._write_rollouts(root);self._mutate_rollout(child,mutation)
+                with self.assertRaises(support.Refusal):
+                    support.audit_original_rollouts(str(parent),str(child),sessions,self._v2_audit_evidence(),profile)
 
     def test_original_rollout_refuses_numeric_type_substitution_and_overflow(self):
         profile=support.load_profile(PROFILE_PATH)
@@ -445,6 +472,31 @@ class NativeOperationTests(unittest.TestCase):
                 with self.assertRaisesRegex(support.Refusal,"ancestry changed"):
                     support._private_rollout_snapshot(str(parent),sessions)
             self.assertTrue(swapped)
+
+    def test_original_rollout_directory_failures_close_every_open_descriptor(self):
+        def fd_count():return len(os.listdir("/proc/self/fd"))
+        for target in ("root","intermediate"):
+            with self.subTest(target=target),tempfile.TemporaryDirectory() as temporary:
+                root=pathlib.Path(temporary);sessions,parent,_child=self._write_rollouts(root)
+                (sessions if target=="root" else parent.parent).chmod(0o777)
+                before=fd_count()
+                with mock.patch.object(support.os,"read") as read:
+                    with self.assertRaises(support.Refusal):support._private_rollout_snapshot(str(parent),sessions)
+                self.assertEqual(before,fd_count());read.assert_not_called()
+        for failing_fstat in (1,2):
+            with self.subTest(fstat=failing_fstat),tempfile.TemporaryDirectory() as temporary:
+                root=pathlib.Path(temporary);sessions,parent,_child=self._write_rollouts(root)
+                actual_fstat=support.os.fstat;calls=0
+                def broken(descriptor):
+                    nonlocal calls
+                    calls+=1
+                    if calls==failing_fstat:raise OSError("synthetic fstat refusal")
+                    return actual_fstat(descriptor)
+                before=fd_count()
+                with mock.patch.object(support.os,"fstat",side_effect=broken):
+                    with self.assertRaisesRegex(support.Refusal,"custody"):
+                        support._private_rollout_snapshot(str(parent),sessions)
+                self.assertEqual(before,fd_count())
 
     def test_completed_wait_and_authoritative_history_cover_missing_child_notifications(self):
         value, _ = self.ready(); value.spawn(spawn()); value.bind_child(child_thread()); value.collaboration(spawn(tool="wait"))

@@ -76,10 +76,12 @@ def _private_rollout_snapshot(path_value: object, sessions_root: pathlib.Path) -
     relative = path.relative_to(root); require(all(part not in {"", ".", ".."} for part in relative.parts),
                                                "original rollout path differs")
     held: list[tuple[int, tuple[int, int, int, int]]] = []
+    owned_directories: list[int] = []
     links: list[tuple[int, str, tuple[int, int]]] = []
     descriptor = None
     try:
         root_descriptor = os.open(root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
+        owned_directories.append(root_descriptor)
         root_info = os.fstat(root_descriptor)
         require(stat.S_ISDIR(root_info.st_mode) and root_info.st_uid == os.geteuid()
                 and root_info.st_mode & 0o022 == 0, "sessions root custody differs")
@@ -88,6 +90,7 @@ def _private_rollout_snapshot(path_value: object, sessions_root: pathlib.Path) -
         for component in relative.parts[:-1]:
             child_descriptor = os.open(component, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC,
                                        dir_fd=parent_descriptor)
+            owned_directories.append(child_descriptor)
             info = os.fstat(child_descriptor)
             require(stat.S_ISDIR(info.st_mode) and info.st_uid == os.geteuid() and info.st_mode & 0o022 == 0,
                     "original rollout ancestry differs")
@@ -126,7 +129,7 @@ def _private_rollout_snapshot(path_value: object, sessions_root: pathlib.Path) -
         raise Refusal("original rollout custody differs") from error
     finally:
         if descriptor is not None: os.close(descriptor)
-        for held_descriptor, _identity in reversed(held): os.close(held_descriptor)
+        for owned_descriptor in reversed(owned_directories): os.close(owned_descriptor)
     data = b"".join(chunks); require(data.endswith(b"\n"), "original rollout has incomplete tail")
     encoded_lines = data.splitlines(); require(1 <= len(encoded_lines) <= ROLLOUT_MAX_LINES, "original rollout record capacity exceeded")
     rows = []
@@ -246,6 +249,33 @@ def _strict_wait_output(value: object) -> None:
             and type(value.get("timed_out")) is bool and value["timed_out"] is False, "wait did not complete")
 
 
+def _completed_message_event(payload: dict, expected_thread: str, expected_turn: str,
+                             response_items: dict[str, tuple[int, str, str | None]]) -> tuple[str, int]:
+    require(set(payload) in ({"type", "thread_id", "turn_id", "item", "completed_at_ms"},
+                             {"type", "thread_id", "turn_id", "item", "started_at_ms", "completed_at_ms"})
+            and payload.get("type") == "item_completed" and payload.get("thread_id") == expected_thread
+            and payload.get("turn_id") == expected_turn, "original completed-item identity differs")
+    completed_at = payload.get("completed_at_ms")
+    require(type(completed_at) is int and completed_at >= 0, "original completed-item time differs")
+    if "started_at_ms" in payload:
+        started_at = payload["started_at_ms"]
+        require(started_at is None or (type(started_at) is int and 0 <= started_at <= completed_at),
+                "original completed-item time differs")
+    item = payload.get("item")
+    require(isinstance(item, dict)
+            and set(item) <= {"type", "id", "content", "phase", "memory_citation", "delivery", "questions"}
+            and set(item) >= {"type", "id", "content"} and item.get("type") == "AgentMessage",
+            "unknown original completed item")
+    identifier = _bounded_string(item.get("id"), "original completed-item ID", 128)
+    require(identifier in response_items, "unknown original completed item")
+    response_index, response_text, response_phase = response_items[identifier]
+    require(item.get("content") == [{"type": "Text", "text": response_text}]
+            and item.get("phase") == response_phase
+            and item.get("memory_citation") in (None, {}) and item.get("delivery") is None
+            and item.get("questions") in (None, []), "original completed message differs")
+    return identifier, response_index
+
+
 def _validate_identity(meta: object, context: object, relation: str, ordinal_mode: bool,
                        evidence: "OperationEvidence", profile: dict) -> tuple[str, str]:
     require(isinstance(meta, dict) and isinstance(context, dict), "original identity record differs")
@@ -291,6 +321,8 @@ def audit_original_rollouts(parent_path: object, child_path: object, sessions_ro
         outputs: dict[str, tuple[int, dict]] = {}
         messages: list[tuple[int, str, str]] = []
         communications: list[tuple[int, bool, dict]] = []
+        response_messages: dict[str, tuple[int, str, str | None]] = {}
+        completed_messages: dict[str, tuple[int, int]] = {}
         pending_communication: tuple[int, bool] | None = None
         ordinal_mode = None; next_ordinal = 0
         expected_turn = evidence.parent_turn_id if relation == "parent" else evidence.child_turn_id
@@ -329,6 +361,13 @@ def audit_original_rollouts(parent_path: object, child_path: object, sessions_ro
                     require(payload["turn_id"] == expected_turn, "original event turn differs")
                 if event_type == "turn_started": started.append((index, payload))
                 elif event_type == "turn_complete": completed.append((index, payload))
+                elif event_type == "item_completed":
+                    expected_thread = evidence.parent_thread if relation == "parent" else evidence.child_thread
+                    identifier, response_index = _completed_message_event(
+                        payload, expected_thread, expected_turn, response_messages)
+                    require(identifier not in completed_messages and response_index < index,
+                            "duplicate or misordered original completed item")
+                    completed_messages[identifier] = (index, response_index)
             elif kind == "response_item":
                 _harness_metadata(row)
                 response_kind = _response_kind(payload)
@@ -350,6 +389,9 @@ def audit_original_rollouts(parent_path: object, child_path: object, sessions_ro
                         expected_ack = "NATIVE-PARENT-ACK" if relation == "parent" else "NATIVE-CHILD-ACK"
                         _message(payload, expected_turn, "assistant", "output_text", expected_ack)
                         message_value = expected_ack
+                        identifier = _bounded_string(payload.get("id"), "original response ID", 128)
+                        require(identifier not in response_messages, "duplicate original response ID")
+                        response_messages[identifier] = (index, expected_ack, payload.get("phase"))
                     messages.append((index, role, message_value))
                 elif response_kind == "agent_message":
                     require(pending_communication is not None, "unpaired original agent message")
@@ -385,6 +427,11 @@ def audit_original_rollouts(parent_path: object, child_path: object, sessions_ro
                 and complete.get("last_agent_message") == ("NATIVE-PARENT-ACK" if relation == "parent" else "NATIVE-CHILD-ACK"),
                 "original terminal boundary differs")
         assistant = [item for item in messages if item[1] == "assistant"]
+        require(len(assistant) == 1 and len(completed_messages) == 1,
+                f"{relation} original completed-message census differs")
+        completed_index, response_index = next(iter(completed_messages.values()))
+        require(response_index == assistant[0][0] and assistant[0][0] < completed_index < complete_index,
+                f"{relation} original completed-message order differs")
         if relation == "child":
             require(not calls and not outputs and len(communications) == 1 and communications[0][1] is True
                     and len(messages) == 1 and len(assistant) == 1

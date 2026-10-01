@@ -33,6 +33,7 @@
     "agent/control/spawn.rs": "e151ad1ec6bc8753fa6c18480e920cc3f5194a285c4e43ee23f9513c47cef808",
     "agent/control/completion.rs": "74685e1f488efaf0e03d3a8b93b9283841f60c0c85eafe7c8e88b4ade796495a",
     "session_prefix.rs": "ee14ee878910c87eb45555b5777a56f33afbbf06f878ffdf21c574a3553d0f64",
-    "context/inter_agent_completion_message.rs": "088fe92cda9882606abbdb9afa8d6d4eff8b111c0bc5ac7a6636c2f095060f39"
+    "context/inter_agent_completion_message.rs": "088fe92cda9882606abbdb9afa8d6d4eff8b111c0bc5ac7a6636c2f095060f39",
+    "items.rs": "9beedaaebaf8812ece5907cef9bb3f99e104df26770a888e888b987ac3e4b96e"
   }
 }
