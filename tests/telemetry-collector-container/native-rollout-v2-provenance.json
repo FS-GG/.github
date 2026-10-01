@@ -1,0 +1,38 @@
+{
+  "schema": "fsgg.telemetry.native-rollout-fixture-provenance/1",
+  "fixtureClassification": "synthetic-source-derived-not-runtime-evidence",
+  "native": {
+    "version": "0.158.0",
+    "sha256": "167c0148a849d2444f1b5a7fb5f8bb2de1de5ae13a2a504b833fc765980f5cd9",
+    "bytes": 286594376
+  },
+  "upstream": {
+    "repository": "openai/codex",
+    "tag": "rust-v0.158.0",
+    "tree": "064c6b8c737f5b41d171fdda80bd9ef10ad06eb3"
+  },
+  "inventories": {
+    "staticEvidence": "d66c5ae7083651209b7ceac6994f3dd95749a7620c17201c5aa219ebefce464d",
+    "rolloutAddendum": "13c8e59fd0fa0db40dce698c33748db9197edf69979224d956dd43258a386611"
+  },
+  "generatedSchemas": {
+    "ThreadReadResponse.json": "c315f60f40ddfc8dabcb60defcc6f7e0aeef16f40542ee7d372372b6e6296c91",
+    "ItemStartedNotification.json": "7574788d2a352747f50d44be3ef649011cb8de8069da4c655faff14d0aee32c4",
+    "ItemCompletedNotification.json": "d04b9153de38cd8302a2a418a44a65e8265d4c7586d46ea2cc801b594c6acf5b"
+  },
+  "sourceBlobs": {
+    "protocol.rs": "e9c35559a97d5505341ccb2ecc319a2ada18a60295cc07258fe89d9e33612fb4",
+    "history/rollout_payload.rs": "86195a73b3630997dcea137f209251f1bb2a5f31a99672682a42bd82a5c868ff",
+    "rollout/policy.rs": "9963db1dad94a26dbddcfd9792624ff975615c795bb212c12d0f9441db1ad395",
+    "rollout/recorder.rs": "3a12d4f9813ceede9e6f616d4b669ba1b4af4c03d5e89c0f4a1c30704f53933d",
+    "protocol/models.rs": "916a595e136f4d7e32ce259f50678ffe818af2ea6a92f54d8628f57bfd4d43e7",
+    "multi_agents_v2/spawn.rs": "a1fcab59a6f6f7abea77a823e2f6fd60a5042659c57d2adea8d7a321dce8bcdb",
+    "multi_agents_v2/wait.rs": "6b4c6cc9d86c915e5a591ad5103a65a28b62874c66d8aa81302e4e584f504dcb",
+    "session/mod.rs": "23e881f45ad972207695d680a13fe580d16cacc6633f9d27ce42112d349188ef",
+    "agent/control/api.rs": "f6efa3b339cdf7765c2dfd4939b45213bddeacae9ce6d724b9af155a9bd05e8f",
+    "agent/control/spawn.rs": "e151ad1ec6bc8753fa6c18480e920cc3f5194a285c4e43ee23f9513c47cef808",
+    "agent/control/completion.rs": "74685e1f488efaf0e03d3a8b93b9283841f60c0c85eafe7c8e88b4ade796495a",
+    "session_prefix.rs": "ee14ee878910c87eb45555b5777a56f33afbbf06f878ffdf21c574a3553d0f64",
+    "context/inter_agent_completion_message.rs": "088fe92cda9882606abbdb9afa8d6d4eff8b111c0bc5ac7a6636c2f095060f39"
+  }
+}

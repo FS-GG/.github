@@ -11,7 +11,7 @@
     "provider": {"const": "openai"},
     "model": {"const": "gpt-5.6-sol"},
     "effort": {"const": "medium"},
-    "prompt": {"const": "Use the native collaboration spawn tool exactly once. Spawn one child with model gpt-5.6-sol and reasoning effort medium. Give it exactly this task text without adding anything: Return exactly NATIVE-CHILD-ACK; do not read files, use any other tool, contact a service, or spawn another agent. Wait for that child to reach one terminal turn. Do not send a follow-up or retry. Then return exactly NATIVE-PARENT-ACK."},
+    "prompt": {"const": "Use the native collaboration spawn_agent tool exactly once with exactly these arguments: message=\"Return exactly NATIVE-CHILD-ACK; do not read files, use any other tool, contact a service, or spawn another agent.\", task_name=native_ack, model=gpt-5.6-sol, reasoning_effort=medium, fork_turns=none. Then use wait_agent exactly once with timeout_ms=30000. Do not use list_agents, send_message, followup_task, interrupt_agent, any other tool, a retry, or a second wait. After the child has one completed turn containing exactly NATIVE-CHILD-ACK, return exactly NATIVE-PARENT-ACK."},
     "native": {
       "type": "object", "additionalProperties": false,
       "required": ["executable", "sha256", "bytes", "version", "config", "configSha256", "protocolSchemaSha256", "sessionFlagsSha256"],
