@@ -18,6 +18,7 @@ HOST_LAUNCHER_SHA="6b881a6f1b346776ca5cb974a655ac041802ed27ad80e44dee92faeed59cc
 SCOPE=("v2-host-native-qualification","native-prospective-v1","roadmap")
 CREDENTIAL_ENV="FSGG_TELEMETRY_CREDENTIAL_NATIVE_PROSPECTIVE_V1"
 MAX_OUTPUT=4*1024*1024
+MAX_PRIVATE_NATIVE_START_STDERR=4096
 ZERO_AUTH_STDERR_DIAGNOSTICS=frozenset({
     'zero-auth-readonly-create','zero-auth-readonly-start','zero-auth-readonly-remove'})
 
@@ -142,6 +143,9 @@ class Runner:
                     'stdoutBytes':len(p.stdout),'stdoutSha256':hashlib.sha256(p.stdout).hexdigest(),
                     'stderrBytes':len(p.stderr),'stderrSha256':hashlib.sha256(p.stderr).hexdigest(),
                     'stderrCategory':self.stderr_category(p.stderr),'requiredSuccess':check}
+            if (diagnostic=='native-start' and check and p.returncode!=0
+                    and 0<len(p.stderr)<=MAX_PRIVATE_NATIVE_START_STDERR):
+                record['_privateNativeStartStderrBase64']=base64.b64encode(p.stderr).decode('ascii')
             safe_stderr=self.safe_zero_auth_stderr(diagnostic,p.stderr)
             if safe_stderr is not None: record['stderrText']=safe_stderr
             self.recorder(record)
@@ -154,10 +158,25 @@ class Operation:
         self.result={'schema':SCHEMA,'runNonce':args.run_nonce,'sourceSha':args.source_sha,
                      'privatePlacementSha':args.private_placement_sha,'phases':[],'disposition':'incomplete'}
         self.images={}; self.owned_run_ordinal=0; self.command_diagnostics=[]; self.inspection_diagnostics=[]
+        self.native_start_failure_diagnostic=None
     def phase(self,name,**facts): self.result['phases'].append({'ordinal':len(self.result['phases'])+1,'name':name,**facts})
     def command_diagnostic(self,value):
         require(len(self.command_diagnostics)<128,'command-diagnostic-capacity-refused')
         phase=self.result['phases'][-1]['name'] if self.result['phases'] else 'before-first-phase'
+        private_stderr=value.pop('_privateNativeStartStderrBase64',None)
+        if private_stderr is not None:
+            require(value.get('command')=='native-start' and value.get('requiredSuccess') is True
+                    and value.get('exitCode')!=0 and self.native_start_failure_diagnostic is None,
+                    'private-native-start-diagnostic-refused')
+            try: decoded=base64.b64decode(private_stderr,validate=True)
+            except (ValueError,base64.binascii.Error): raise Refusal('private-native-start-diagnostic-refused')
+            require(0<len(decoded)<=MAX_PRIVATE_NATIVE_START_STDERR
+                    and len(decoded)==value.get('stderrBytes')
+                    and hashlib.sha256(decoded).hexdigest()==value.get('stderrSha256'),
+                    'private-native-start-diagnostic-refused')
+            self.native_start_failure_diagnostic={
+                'command':'native-start','encoding':'base64','maximumDecodedBytes':MAX_PRIVATE_NATIVE_START_STDERR,
+                'stderrBytes':len(decoded),'stderrSha256':value['stderrSha256'],'stderrBase64':private_stderr}
         self.command_diagnostics.append({'ordinal':len(self.command_diagnostics)+1,'phase':phase,**value})
     def write_private_diagnostics(self):
         output=self.root/'output'
@@ -165,9 +184,14 @@ class Operation:
             value={
                 'schema':'fsgg.telemetry.private-command-diagnostics/1','runNonce':self.a.run_nonce,
                 'records':self.command_diagnostics}
+            extensions={}
             if self.inspection_diagnostics:
-                value['extensions']={'fsgg.telemetry.private-container-inspection/1':{
-                    'records':self.inspection_diagnostics}}
+                extensions['fsgg.telemetry.private-container-inspection/1']={
+                    'records':self.inspection_diagnostics}
+            if self.native_start_failure_diagnostic is not None:
+                extensions['fsgg.telemetry.private-native-start-failure/1']={
+                    'records':[self.native_start_failure_diagnostic]}
+            if extensions: value['extensions']=extensions
             private_write(output/'command-diagnostics.json',canonical(value))
     def public_failure_diagnostic(self):
         row=next((item for item in reversed(self.command_diagnostics)
