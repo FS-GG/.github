@@ -85,8 +85,13 @@ tests passed with real PyYAML and zero skips; no pull-request hosted workflow ap
 not required. Root independently read the equal merged tree; all four HOST paths remain unchanged.
 Actual [0.2.1 candidate preparation 36859533907](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36859533907)
 succeeded on protected producer `0dd4aa26aca6697f1cc3cece762a4ecae60b5b81`, including fresh-load
-packaged qualification and cleanup. Retained archive/member readback and the compiled image-policy
-join are still the next gates; successful preparation authorizes neither publication nor activation.
+packaged qualification and cleanup. Root downloaded artifact `11161341292` (186,619,619 bytes),
+verified its API archive digest `42ed492f7d6638b7945015934595a9b4533fc6408669dd0c9ddc9838c05834aa`,
+and retained the independently checked member inventory. The actual selected OCI digest
+`e76e01afa06a325beb74f7f55c32ed13aebe140c82a37e17c67f2d3217da4c3e` differs from the fixed
+provider policy `a994814516fa02d8ac537eed0bdade80db979ac22a415b9f55e73f931c2a7e0e`.
+Staging and facts are not admitted: a reviewed coherent image/policy successor and fresh preparation
+must repair that join. Successful preparation authorizes neither publication nor activation.
 Candidate facts, admission, collector grant, native hello, publication and receiver adoption remain
 open. Frozen 0.2.0 evidence and unproved installed adoption remain unchanged.
 
@@ -1302,8 +1307,16 @@ keeps that preparation separate from the installed fixed diagnostic described be
 
 The remaining LEARN route uses five ordered boundaries:
 
-1. Publish and read back immutable current `capture/2` Host bytes through CI. Version 0.2.1 source is
-   prepared at `9a0d17f11e63002bc67246bb819d0080f5b93799`, but is not published.
+1. Adopt the already published current `capture/2` Host bytes and verify the installed receiver join.
+   [TelemetryHost 0.2.1](https://github.com/FS-GG/.github/releases/tag/telemetry-host/v0.2.1), release
+   `400202272`, was published on 2026-09-30 from `0145bd2c852847d00da8b3a0c35d27cd64a87781`.
+   Root independently read release state and downloaded all three assets, verifying their API byte
+   digests. Package `601284936` is SHA-256
+   `4847c15ab207a33556462873840ad4109cf1c1e16fd7a15d5fffae5a8162f589`.
+   Its journal retains both-feed observations; this readback is not a fresh download from both feeds.
+   Historical prepared `9a0d17f11e63002bc67246bb819d0080f5b93799` remains evidence, superseded as
+   a future publication dependency. Published bytes do not prove persistent container installation,
+   native capability/capture, W6 or enrollment.
 2. Deploy the dedicated collector container with private persistent storage and receiver-owned config/2
    role, grant, CSPRNG secret and durable init/enroll record. Keep it independent of Main accounts and files.
 3. Feed it from development containers and observe the actual native provider/model/effort capability before
