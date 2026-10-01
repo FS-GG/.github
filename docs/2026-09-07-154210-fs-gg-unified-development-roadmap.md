@@ -75,10 +75,25 @@ bootstrap validation and provider source contracts. Root independently verified 
 The runtime allows the real .NET archive within a 128 MiB aggregate bound while retaining each
 receiver's 64 MiB limit. Staging checks actual archive SHA-256 before extraction or effects, and
 cleanup owns only a directory whose exclusive creation succeeded. The derived workflow execution
-pin was corrected without weakening the security validator. Private producer-identity source is
-prepared, not delivered. Actual telemetry 0.2.1 preparation, candidate facts, admission, collector
-grant, native hello, publication and receiver adoption remain open; frozen 0.2.0 evidence and
-unproved installed adoption remain unchanged.
+pin was corrected without weakening the security validator.
+[Private Sandbox #35](https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/pull/35) then merged
+`9382e45bb7ba4988a1534008550988201b096a68`, equal reviewed candidate
+`a153e51f088f223f7ee5df5fa298f3a86b69dd46` tree `8f1332d80fe0dd358d10b4a0169246bd847f2634`.
+The adapter independently rehashes admitted roles and distinguishes protected helper H from the
+genuine coherent 0.2.1 package/image producer P before account or provider effects. All 51 private
+tests passed with real PyYAML and zero skips; no pull-request hosted workflow applies, honestly
+not required. Root independently read the equal merged tree; all four HOST paths remain unchanged.
+Actual [0.2.1 candidate preparation 36859533907](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36859533907)
+succeeded on protected producer `0dd4aa26aca6697f1cc3cece762a4ecae60b5b81`, including fresh-load
+packaged qualification and cleanup. Root downloaded artifact `11161341292` (186,619,619 bytes),
+verified its API archive digest `42ed492f7d6638b7945015934595a9b4533fc6408669dd0c9ddc9838c05834aa`,
+and retained the independently checked member inventory. The actual selected OCI digest
+`e76e01afa06a325beb74f7f55c32ed13aebe140c82a37e17c67f2d3217da4c3e` differs from the fixed
+provider policy `a994814516fa02d8ac537eed0bdade80db979ac22a415b9f55e73f931c2a7e0e`.
+Staging and facts are not admitted: a reviewed coherent image/policy successor and fresh preparation
+must repair that join. Successful preparation authorizes neither publication nor activation.
+Candidate facts, admission, collector grant, native hello, publication and receiver adoption remain
+open. Frozen 0.2.0 evidence and unproved installed adoption remain unchanged.
 
 **2026-10-01: optional FourD programmable reactions and streamlined turns recorded as an unselected design consideration.**
 The [player-facing proposal](roadmaps/2026-09-28-four-dimensional-skirmish-design-v2.md#design-consideration--programmable-reactions-and-streamlined-turns)
@@ -1292,8 +1307,16 @@ keeps that preparation separate from the installed fixed diagnostic described be
 
 The remaining LEARN route uses five ordered boundaries:
 
-1. Publish and read back immutable current `capture/2` Host bytes through CI. Version 0.2.1 source is
-   prepared at `9a0d17f11e63002bc67246bb819d0080f5b93799`, but is not published.
+1. Adopt the already published current `capture/2` Host bytes and verify the installed receiver join.
+   [TelemetryHost 0.2.1](https://github.com/FS-GG/.github/releases/tag/telemetry-host/v0.2.1), release
+   `400202272`, was published on 2026-09-30 from `0145bd2c852847d00da8b3a0c35d27cd64a87781`.
+   Root independently read release state and downloaded all three assets, verifying their API byte
+   digests. Package `601284936` is SHA-256
+   `4847c15ab207a33556462873840ad4109cf1c1e16fd7a15d5fffae5a8162f589`.
+   Its journal retains both-feed observations; this readback is not a fresh download from both feeds.
+   Historical prepared `9a0d17f11e63002bc67246bb819d0080f5b93799` remains evidence, superseded as
+   a future publication dependency. Published bytes do not prove persistent container installation,
+   native capability/capture, W6 or enrollment.
 2. Deploy the dedicated collector container with private persistent storage and receiver-owned config/2
    role, grant, CSPRNG secret and durable init/enroll record. Keep it independent of Main accounts and files.
 3. Feed it from development containers and observe the actual native provider/model/effort capability before
