@@ -53,6 +53,25 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**V2-HOST native-inspection diagnostic source repaired; genuine acceptance remains open.**
+Actual [attempt-i 36819013783](https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/actions/runs/36819013783)
+on private `443c203d` / public `5f79da7d` passed receiver and egress inspection/start,
+then refused after successful native inspection, before native start or capture. Its retained
+28 closed command records cannot identify the failed topology predicate. Root unsealed
+only evidence, independently verified original authentication inode/mtime/size/hash unchanged,
+and read back both temporary secrets absent. Cleanup and preservation completed.
+The independently reviewed four-file source repair preserves every topology validator and
+original Refusal object/code, retaining bounded typed native-inspection facts only in the
+existing sealed private evidence namespace. Missing, null, malformed, empty and list
+capability metadata remain distinct; OCI configuration facts are not live kernel evidence.
+Root passed 14 network and 29 private qualification tests without skips. This is diagnostic
+source delivery only. Exact private recipe registration and a fresh admitted diagnostic
+operation are next; no capability hypothesis or genuine acceptance is inferred. Independent
+`.8` capture/restart/recovery, `.9` routing removal, `.10` retirement and LEARN enrollment
+remain open. Main receives no new dependency or operation.
+
+
+
 
 **Rust/Go bounded native BIND owning record delivered; full installed adoption remains open.**
 [Templates PR #659](https://github.com/FS-GG/FS.GG.Templates/pull/659) merged at

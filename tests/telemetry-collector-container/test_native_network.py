@@ -209,6 +209,55 @@ class NativeNetworkTests(unittest.TestCase):
         unknown = topology.receiver_inspection_projection(value, "unbounded-private-detail")
         self.assertEqual("receiver-inspection-refused", unknown["failureCode"])
 
+    def test_native_refusal_projection_types_capability_metadata_without_private_values(self):
+        value = {
+            "Config": {"User": {"malformed": "private-user"},
+                       "Env": ["FSGG_TELEMETRY_CREDENTIAL_NATIVE_PROSPECTIVE_V1=secret-value",
+                               {"malformed": "private-env"}]},
+            "HostConfig": {"NetworkMode": {"malformed": "private-network-mode"},
+                           "ReadonlyRootfs": True, "PidsLimit": 128,
+                           "Memory": 2 * 1024 ** 3, "NanoCpus": 2_000_000_000,
+                           "CapDrop": None, "SecurityOpt": ["no-new-privileges"],
+                           "Privileged": False, "UsernsMode": "private",
+                           "PidMode": "private", "UTSMode": "private"},
+            "EffectiveCaps": {"malformed": "private-effective-capability"},
+            "BoundingCaps": [],
+            "NetworkSettings": {"Networks": {
+                topology.NATIVE_NETWORK: {}, "private-network-name": {}}},
+            "Mounts": [{"Source": "/private/source", "Destination": path, "RW": writable}
+                       for path, writable in topology.NATIVE_MOUNTS.items()] +
+                      [{"Source": "/private/unexpected", "Destination": ["private-destination"],
+                        "RW": True}],
+        }
+        projection = topology.native_inspection_projection(value, "native-capability-fence-refused")
+        privilege = projection["privilege"]
+        self.assertEqual("native-capability-fence-refused", projection["failureCode"])
+        self.assertEqual({"shape": "missing", "count": 0}, privilege["capAdd"])
+        self.assertEqual({"shape": "null", "count": 0, "category": "unknown"},
+                         privilege["capDrop"])
+        self.assertEqual({"shape": "malformed", "count": 0}, privilege["ociEffective"])
+        self.assertEqual({"shape": "empty", "count": 0}, privilege["ociBounding"])
+        self.assertEqual("malformed", projection["environment"]["shape"])
+        self.assertEqual("malformed", projection["storage"]["shape"])
+        self.assertEqual("malformed", projection["network"]["modeCategory"])
+        encoded = json.dumps(projection, sort_keys=True)
+        self.assertLess(len(encoded), 8192)
+        for private in ("secret-value", "private-user", "private-env", "private-network-mode",
+                        "private-effective-capability", "private-network-name", "/private/source",
+                        "/private/unexpected", "private-destination"):
+            self.assertNotIn(private, encoded)
+
+        value["HostConfig"].update({"CapAdd": [], "CapDrop": ["CAP_CHOWN", "CAP_SETUID"]})
+        value["EffectiveCaps"] = []
+        value["BoundingCaps"] = ["CAP_CHOWN"]
+        typed = topology.native_inspection_projection(value, "private-refusal-detail")["privilege"]
+        self.assertEqual({"shape": "empty", "count": 0}, typed["capAdd"])
+        self.assertEqual({"shape": "list", "count": 2, "category": "expanded"}, typed["capDrop"])
+        self.assertEqual({"shape": "empty", "count": 0}, typed["ociEffective"])
+        self.assertEqual({"shape": "list", "count": 1}, typed["ociBounding"])
+        self.assertEqual("native-inspection-refused",
+                         topology.native_inspection_projection(value, "private-refusal-detail")["failureCode"])
+
     def test_original_volume_identity_and_digest_are_preserved(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = pathlib.Path(temporary) / "native"

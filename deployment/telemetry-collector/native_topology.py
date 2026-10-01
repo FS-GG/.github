@@ -44,6 +44,19 @@ RECEIVER_INSPECTION_REFUSALS = frozenset({
     "receiver-mount-custody-refused", "receiver-public-route-refused",
     "receiver-command-refused",
 })
+NATIVE_INSPECTION_REFUSALS = frozenset({
+    "container-network-set-refused", "direct-network-route-refused",
+    "native-runtime-fence-refused", "native-resource-fence-refused",
+    "native-user-refused", "native-environment-refused",
+    "native-sensitive-environment-refused", "native-producer-credential-refused",
+    "native-mount-custody-refused", "native-capability-fence-refused",
+    "native-namespace-fence-refused", "native-privilege-fence-refused",
+})
+NATIVE_MOUNTS = {
+    NATIVE_MOUNT: True,
+    PRODUCER_CONFIG_MOUNT: False,
+    PRODUCER_SPOOL_MOUNT: True,
+}
 
 
 class Refusal(Exception):
@@ -200,6 +213,181 @@ def inspect_native(value: dict) -> None:
 def inspect_egress(value: dict) -> None:
     inspect_networks(value, {NATIVE_NETWORK, UPLINK_NETWORK})
     require(not value.get("Mounts"), "egress-mount-refused")
+
+
+def _bounded_integer(candidate, maximum):
+    return candidate if type(candidate) is int and -1 <= candidate <= maximum else None
+
+
+def _list_projection(container: dict, key: str, *, capability_drop: bool = False) -> dict:
+    """Classify an inspect list without retaining any member values."""
+    def shaped(shape: str, count: int) -> dict:
+        result = {"shape": shape, "count": count}
+        if capability_drop:
+            result["category"] = "unknown"
+        return result
+
+    if key not in container:
+        return shaped("missing", 0)
+    candidate = container[key]
+    if candidate is None:
+        return shaped("null", 0)
+    if not isinstance(candidate, list):
+        return shaped("malformed", 0)
+    count = min(len(candidate), 512)
+    if not candidate:
+        result = {"shape": "empty", "count": 0}
+    elif not all(isinstance(item, str) for item in candidate):
+        result = {"shape": "malformed", "count": count}
+    else:
+        result = {"shape": "list", "count": count}
+    if capability_drop:
+        values = set(candidate) if result["shape"] in {"empty", "list"} else set()
+        if result["shape"] not in {"empty", "list"}:
+            category = "unknown"
+        elif not values:
+            category = "empty"
+        elif values == {"ALL"}:
+            category = "all"
+        elif values == {"CAP_ALL"}:
+            category = "cap-all"
+        elif all(re.fullmatch(r"CAP_[A-Z0-9_]+", item) for item in values):
+            category = "expanded"
+        else:
+            category = "other"
+        result["category"] = category
+    return result
+
+
+def native_inspection_projection(value: dict, refusal: str) -> dict:
+    """Project bounded native guard facts from OCI inspection metadata, never kernel state."""
+    host = value.get("HostConfig") if isinstance(value.get("HostConfig"), dict) else {}
+    config = value.get("Config") if isinstance(value.get("Config"), dict) else {}
+    settings = value.get("NetworkSettings") if isinstance(value.get("NetworkSettings"), dict) else {}
+    networks = settings.get("Networks") if isinstance(settings.get("Networks"), dict) else {}
+    network_names = {name for name in networks if isinstance(name, str)}
+    mode = host.get("NetworkMode")
+    if mode == "bridge":
+        mode_category = "bridge"
+    elif isinstance(mode, str) and mode in {"host", "default", "slirp4netns", "pasta"}:
+        mode_category = "direct"
+    elif isinstance(mode, str) and mode:
+        mode_category = "other"
+    elif mode is None:
+        mode_category = "missing"
+    else:
+        mode_category = "malformed"
+
+    environment_value = config.get("Env")
+    if "Env" not in config:
+        environment_shape, environment = "missing", []
+    elif environment_value is None:
+        environment_shape, environment = "null", []
+    elif not isinstance(environment_value, list):
+        environment_shape, environment = "malformed", []
+    elif not all(isinstance(item, str) for item in environment_value):
+        environment_shape, environment = "malformed", environment_value
+    elif not environment_value:
+        environment_shape, environment = "empty", environment_value
+    else:
+        environment_shape, environment = "list", environment_value
+    parsed_environment = {}
+    for item in environment:
+        if isinstance(item, str) and "=" in item:
+            name, entry_value = item.split("=", 1)
+            parsed_environment[name] = entry_value
+    credential_names = {name for name in parsed_environment
+                        if name.startswith("FSGG_TELEMETRY_CREDENTIAL_")}
+    forbidden = {"HTTP_PROXY", "ALL_PROXY", "FSGG_TELEMETRY_CONFIG", "FSGG_TELEMETRY_STORE",
+                 "FSGG_TELEMETRY_NATIVE_COLLECTOR_CONFIG", "GITHUB_TOKEN", "GH_TOKEN"}
+
+    mounts_value = value.get("Mounts")
+    if "Mounts" not in value:
+        mounts_shape, mounts = "missing", []
+    elif mounts_value is None:
+        mounts_shape, mounts = "null", []
+    elif not isinstance(mounts_value, list):
+        mounts_shape, mounts = "malformed", []
+    elif not all(isinstance(row, dict) and isinstance(row.get("Destination"), str)
+                 and type(row.get("RW")) is bool for row in mounts_value):
+        mounts_shape, mounts = "malformed", mounts_value
+    elif not mounts_value:
+        mounts_shape, mounts = "empty", mounts_value
+    else:
+        mounts_shape, mounts = "list", mounts_value
+    mount_states = {}
+    for destination, expected_writable in NATIVE_MOUNTS.items():
+        rows = [row for row in mounts if isinstance(row, dict)
+                and isinstance(row.get("Destination"), str)
+                and row["Destination"] == destination]
+        if not rows:
+            mount_states[destination] = "missing"
+        elif len(rows) != 1 or type(rows[0].get("RW")) is not bool:
+            mount_states[destination] = "ambiguous"
+        else:
+            mount_states[destination] = ("expected" if rows[0]["RW"] == expected_writable
+                                         else "writability-differs")
+    unexpected_mounts = sum(1 for row in mounts if not (
+        isinstance(row, dict) and isinstance(row.get("Destination"), str)
+        and row["Destination"] in NATIVE_MOUNTS))
+
+    user = config.get("User")
+    if user == "32768:32768":
+        user_category = "expected"
+    elif isinstance(user, str) and re.fullmatch(r"[0-9]+(?::[0-9]+)?", user):
+        user_category = "numeric-other"
+    elif user is None:
+        user_category = "missing"
+    else:
+        user_category = "other"
+    security = _list_projection(host, "SecurityOpt")
+    security_values = host.get("SecurityOpt") if security["shape"] in {"empty", "list"} else []
+    return {
+        "failureCode": (refusal if isinstance(refusal, str) and refusal in NATIVE_INSPECTION_REFUSALS
+                        else "native-inspection-refused"),
+        "network": {
+            "count": min(len(network_names), 64),
+            "nativePresent": NATIVE_NETWORK in network_names,
+            "unexpectedCount": min(len(network_names - {NATIVE_NETWORK}), 64),
+            "modeCategory": mode_category,
+        },
+        "runtime": {
+            "readonlyRootfs": host.get("ReadonlyRootfs") if type(host.get("ReadonlyRootfs")) is bool else None,
+            "pidsLimit": _bounded_integer(host.get("PidsLimit"), 1 << 30),
+            "memory": _bounded_integer(host.get("Memory"), 1 << 50),
+            "nanoCpus": _bounded_integer(host.get("NanoCpus"), 1 << 50),
+            "userCategory": user_category,
+        },
+        "environment": {
+            "shape": environment_shape,
+            "entryCount": min(len(environment), 4096),
+            "fixedEntryCount": sum(parsed_environment.get(item.split("=", 1)[0]) == item.split("=", 1)[1]
+                                   for item in FIXED_ENV),
+            "expectedCredentialPresent": PRODUCER_CREDENTIAL_ENV in credential_names,
+            "expectedCredentialValuePresent": bool(parsed_environment.get(PRODUCER_CREDENTIAL_ENV)),
+            "unexpectedCredentialCount": min(len(credential_names - {PRODUCER_CREDENTIAL_ENV}), 64),
+            "forbiddenNameCount": min(len(forbidden & set(parsed_environment)), 64),
+        },
+        "storage": {
+            "shape": mounts_shape,
+            "mountCount": min(len(mounts), 4096),
+            "unexpectedMountCount": min(unexpected_mounts, 4096),
+            "expectedMounts": mount_states,
+        },
+        "privilege": {
+            "capAdd": _list_projection(host, "CapAdd"),
+            "capDrop": _list_projection(host, "CapDrop", capability_drop=True),
+            "ociEffective": _list_projection(value, "EffectiveCaps"),
+            "ociBounding": _list_projection(value, "BoundingCaps"),
+            "securityOpt": security,
+            "noNewPrivileges": any(isinstance(item, str) and item.startswith("no-new-privileges")
+                                   for item in security_values),
+            "privileged": host.get("Privileged") if type(host.get("Privileged")) is bool else None,
+            "usernsPrivate": host.get("UsernsMode") == "private",
+            "pidHost": host.get("PidMode") == "host",
+            "utsHost": host.get("UTSMode") == "host",
+        },
+    }
 
 
 def receiver_inspection_projection(value: dict, refusal: str) -> dict:
