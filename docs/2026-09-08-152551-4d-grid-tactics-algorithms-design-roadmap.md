@@ -609,6 +609,19 @@ The 2026-10-01 representation clarification distinguishes a **column/height-map 
 **geometric projection**. First select the fixed-`w` 3D slice or another explicitly labeled 4D view;
 then choose how its spatial geometry reaches the 2D screen. Neither step changes world occupancy.
 
+The current v1 browser renders labeled fixed-`(z,w)` button panels. The opt-in v2 browser renders
+own-unit, contact and history lists with coordinate controls; it does not yet render geometric terrain.
+The v2 rules profile admits one supported actor surface per `(x,y,w)`. It therefore does not admit
+four independently occupiable surfaces at different `z` values for the same `(x,y,w)`. A full-volume
+`5×5×4` case in this section is a standalone rendering and projection fixture unless a separate
+supported play map is admitted. It does not change v1 or v2 movement, support, save or action rules.
+
+A future geometric view may consume an explicit public or side-permitted terrain-geometry adapter.
+That adapter must distinguish rendered solid voxels, known empty targetable cells, supported actor
+surfaces and actor instances. It must not synthesize solid columns beneath surfaces or derive terrain
+from hidden actors. Picking may inspect permitted geometry, but an action destination is a legal full
+`(x,y,z,w)` cell or an ability's explicit target plane validated through the existing rule path.
+
 A height map reduces each `(x,y)` column at the selected `w` to one declared value, such as its
 highest known occupied `z`. A `5×5` set of columns consequently has a `5×5` summary. This loses
 information about lower layers, gaps and overhangs unless the inspector exposes those records.
@@ -630,7 +643,7 @@ from that projected geometry rather than forcing it into a second `5×5` grid. T
 parallelogram, a hexagon-like shape or an irregular union for sparse terrain, depending on the camera
 and occupied geometry.
 
-An illustrative isometric mapping is
+An illustrative axonometric, isometric-style mapping with unequal axis scale is
 
 ```text
 u = x - y
@@ -843,7 +856,7 @@ algorithm/vertical-slice scope.
 | Cover | Sample count matches known geometry; shooter-relative values can differ; no automatic flank bonus from a different `w` |
 | Effects | Correct 4D radius membership, shrinking slices, occlusion and one result per actor; destruction has bounded extent |
 | State/knowledge | View changes reveal nothing; stale contacts stay stale; hidden-state variations do not change a knowledge-limited query |
-| View projection/picking | A `5×5×4` fixed-`w` fixture has a `5×5` column summary but shifted oblique layers; isometric `u` has nine lattice values. Projected vertex bounds fit the viewport; overlapping cells preserve distinct full identities, layer/depth selection and knowledge restrictions |
+| View projection/picking | A standalone `5×5×4` fixed-`w` rendering fixture has a `5×5` column summary but shifted oblique layers; the illustrative unequal-scale axonometric `u` has nine lattice values. Projected vertex bounds fit the viewport; overlapping cells preserve distinct full identities, layer/depth selection and knowledge restrictions |
 | Actions/reactions | Stable per-step ordering, interrupted paths, death/occupancy changes, no animation dependence and no accidental recursive reactions |
 | Cross-runtime | Authored canonical outputs match .NET, emitted Fable/Node and named browser runs; integer/rational/RNG bounds tested |
 | Save/replay | Same initial state and committed action sequence reproduce final state/events across supported runtimes |
