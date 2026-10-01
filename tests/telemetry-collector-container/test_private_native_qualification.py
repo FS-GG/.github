@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import base64, contextlib, hashlib, importlib.util, io, json, os, pathlib, re, subprocess, tempfile, types, unittest
+import base64, contextlib, hashlib, importlib.util, io, json, os, pathlib, re, shutil, subprocess, tempfile, types, unittest
 from unittest import mock
 ROOT=pathlib.Path(__file__).resolve().parents[2]
 def load():
@@ -23,6 +23,12 @@ class Tests(unittest.TestCase):
   cls.binding_dll=project.parent/'bin/Debug/net10.0/HostBinding.dll'
  @classmethod
  def tearDownClass(cls): cls.package_cache.cleanup()
+ @classmethod
+ def copy_binding_closure(cls,root):
+  root.mkdir(parents=True,exist_ok=True)
+  for name in ('HostBinding','HostBinding.dll','HostBinding.deps.json','HostBinding.runtimeconfig.json','FSharp.Core.dll'):
+   shutil.copy2(cls.binding_dll.parent/name,root/name)
+  return root/'HostBinding.dll'
  @classmethod
  def binding_fixture(cls,root):
   repository=root/'repository'; native=repository/'deployment/telemetry-collector'; native.mkdir(parents=True)
@@ -129,8 +135,9 @@ class Tests(unittest.TestCase):
   with tempfile.TemporaryDirectory() as td:
    t=pathlib.Path(td); repository,pins,source,binding=self.binding_fixture(t)
    a=type('A',(),{'private_root':t/'private','run_nonce':'run-0001','source_sha':source,'private_placement_sha':'d'*40,
-                  'source_root':repository,'native_source_pins':pins,'host_binding':self.binding_dll})()
+                  'source_root':repository,'native_source_pins':pins,'host_binding':self.binding_dll,'result':t/'result.json'})()
    op=q.Operation(a,q.Runner(__import__('time').monotonic()+100)); op.host_binding=binding
+   op.record_host_binding_dependencies()
    with mock.patch.dict(os.environ,{'FSGG_NATIVE_AUTH_JSON_B64':base64.b64encode(b'{}').decode(),
                                     'FSGG_PRIVATE_EFFECT_ADMISSION':'0'*64},clear=True):
     with self.assertRaisesRegex(q.Refusal,'effect-admission-refused'): op.materialize()
@@ -175,18 +182,32 @@ class Tests(unittest.TestCase):
     self.assertFalse((t/'private').exists()); self.assertIn('FSGG_NATIVE_AUTH_JSON_B64',os.environ)
  def test_host_binding_budget_and_dependency_drift_refuse_before_auth(self):
   with tempfile.TemporaryDirectory() as td:
-   root=pathlib.Path(td); helper=root/'HostBinding.dll'; helper.write_bytes(self.binding_dll.read_bytes())
+   root=pathlib.Path(td); helper=self.copy_binding_closure(root/'binding')
    a=type('A',(),{'private_root':root/'private','run_nonce':'run-0001','source_sha':'a'*40,
-                  'private_placement_sha':'d'*40,'host_binding':helper})()
+                  'private_placement_sha':'d'*40,'host_binding':helper,'result':root/'result.json'})()
    short=q.Operation(a,q.Runner(__import__('time').monotonic()+10)); short.host_binding={'bindingSha256':'b'*64}
    with mock.patch.dict(os.environ,{'FSGG_NATIVE_AUTH_JSON_B64':'synthetic-auth','FSGG_PRIVATE_EFFECT_ADMISSION':'0'*64},clear=True):
     with self.assertRaisesRegex(q.Refusal,'host-binding-budget-refused'): short.materialize()
     self.assertIn('FSGG_NATIVE_AUTH_JSON_B64',os.environ); self.assertFalse((root/'private').exists())
    stable=q.Operation(a,q.Runner(__import__('time').monotonic()+100)); stable.host_binding={'bindingSha256':'b'*64}
-   stable.host_binding_dependencies=stable.host_binding_dependency_snapshot(); helper.write_bytes(helper.read_bytes()+b'drift')
+   stable.record_host_binding_dependencies()
+   (helper.parent/'HostBinding.runtimeconfig.json').write_text('{}')
    with mock.patch.dict(os.environ,{'FSGG_NATIVE_AUTH_JSON_B64':'synthetic-auth','FSGG_PRIVATE_EFFECT_ADMISSION':'0'*64},clear=True):
     with self.assertRaisesRegex(q.Refusal,'effect-admission-refused'): stable.materialize()
     self.assertIn('FSGG_NATIVE_AUTH_JSON_B64',os.environ); self.assertFalse((root/'private').exists())
+ def test_each_local_runtime_closure_class_and_manifest_are_revalidated(self):
+  for changed in ('HostBinding.deps.json','HostBinding.runtimeconfig.json','FSharp.Core.dll','HostBinding','manifest'):
+   with self.subTest(changed=changed), tempfile.TemporaryDirectory() as td:
+    root=pathlib.Path(td); helper=self.copy_binding_closure(root/'binding')
+    a=type('A',(),{'private_root':root/'private','run_nonce':'run-0001','source_sha':'a'*40,
+                   'private_placement_sha':'d'*40,'host_binding':helper,'result':root/'result.json'})()
+    op=q.Operation(a,q.Runner(__import__('time').monotonic()+100)); op.host_binding={'bindingSha256':'b'*64}
+    op.record_host_binding_dependencies()
+    target=root/'host-binding-dependencies.json' if changed=='manifest' else helper.parent/changed
+    target.write_bytes(target.read_bytes()+b'drift')
+    with mock.patch.dict(os.environ,{'FSGG_NATIVE_AUTH_JSON_B64':'synthetic-auth','FSGG_PRIVATE_EFFECT_ADMISSION':'0'*64},clear=True):
+     with self.assertRaisesRegex(q.Refusal,'effect-admission-refused'): op.materialize()
+     self.assertIn('FSGG_NATIVE_AUTH_JSON_B64',os.environ); self.assertFalse((root/'private').exists())
  def test_real_compiled_pre_materialization_boundary_has_seven_closed_probes(self):
   class ReachedBoundary(Exception): pass
   cases=('valid','old-profile','profile-mutated','pins-mutated','source-revision','producer-mutated','producer-missing')
@@ -195,16 +216,16 @@ class Tests(unittest.TestCase):
     root=pathlib.Path(td); repository,pins,source,binding=self.binding_fixture(root); nonce='run-0001'
     admission_profile=binding['profileSha256'] if case!='old-profile' else '5a30fc507f023d542521aac66c8f49c5ae6ee8d9e34dc90c1a3bf3ab30f6b08f'
     admission=hashlib.sha256((nonce+'\0'+source+'\0'+admission_profile+'\0'+q.OPERATION).encode()).hexdigest()
-    executable=self.binding_dll; selected_source=source
+    executable=self.copy_binding_closure(root/'binding'); selected_source=source
+    a=type('A',(),{'private_root':root/'private','run_nonce':nonce,'source_sha':selected_source,'private_placement_sha':'d'*40,
+                   'source_root':repository,'native_source_pins':pins,'host_binding':executable,'result':root/'result.json'})()
+    op=q.Operation(a,q.Runner(__import__('time').monotonic()+100)); op.host_binding=binding
+    op.record_host_binding_dependencies()
     if case=='profile-mutated': (repository/'deployment/telemetry-collector/native-operation-v1.json').write_text('{}')
     elif case=='pins-mutated': pins.write_text('{}')
-    elif case=='source-revision': selected_source='a'*40
-    elif case=='producer-mutated':
-     executable=root/'changed.dll'; executable.write_bytes(self.binding_dll.read_bytes()+b'changed')
-    elif case=='producer-missing': executable=root/'missing.dll'
-    a=type('A',(),{'private_root':root/'private','run_nonce':nonce,'source_sha':selected_source,'private_placement_sha':'d'*40,
-                   'source_root':repository,'native_source_pins':pins,'host_binding':executable})()
-    op=q.Operation(a,q.Runner(__import__('time').monotonic()+100)); op.host_binding=binding
+    elif case=='source-revision': a.source_sha='a'*40
+    elif case=='producer-mutated': executable.write_bytes(executable.read_bytes()+b'changed')
+    elif case=='producer-missing': executable.unlink()
     with mock.patch.object(q,'private_dir',side_effect=ReachedBoundary), mock.patch.dict(os.environ,{
          'FSGG_NATIVE_AUTH_JSON_B64':'synthetic-auth-not-read','FSGG_PRIVATE_EFFECT_ADMISSION':admission},clear=True):
      if case=='valid':
@@ -235,11 +256,12 @@ class Tests(unittest.TestCase):
    for name in ('password','key.pem','native-receiver.crt','receiver.pfx'): (staging/'tls'/name).write_bytes(b'x')
    nonce='run-0001'
    a=type('A',(),{'private_root':root/'private','staging_root':staging,'run_nonce':nonce,'source_sha':source,'private_placement_sha':'d'*40,
-                  'source_root':repository,'native_source_pins':pins,'host_binding':self.binding_dll})()
+                  'source_root':repository,'native_source_pins':pins,'host_binding':self.binding_dll,'result':root/'result.json'})()
    admission=hashlib.sha256((nonce+'\0'+source+'\0'+binding['profileSha256']+'\0'+q.OPERATION).encode()).hexdigest()
    with mock.patch.dict(os.environ,{'FSGG_PRIVATE_EFFECT_ADMISSION':admission,
                                     'FSGG_NATIVE_AUTH_JSON_B64':base64.b64encode(b'{}').decode()},clear=True):
-    op=q.Operation(a,q.Runner(__import__('time').monotonic()+100)); op.host_binding=binding; op.materialize()
+    op=q.Operation(a,q.Runner(__import__('time').monotonic()+100)); op.host_binding=binding
+    op.record_host_binding_dependencies(); op.materialize()
    output=root/'private/native/qualification-output'
    self.assertTrue(output.is_dir()); self.assertEqual(0o700,output.stat().st_mode&0o777)
  def test_exact_readonly_topology_is_qualified_before_private_root_exists(self):

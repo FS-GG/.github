@@ -161,6 +161,7 @@ class Operation:
         self.native_start_failure_diagnostic=None
         self.host_binding=None
         self.host_binding_dependencies=None
+        self.host_binding_dependency_manifest_sha=None
     def phase(self,name,**facts): self.result['phases'].append({'ordinal':len(self.result['phases'])+1,'name':name,**facts})
     def command_diagnostic(self,value):
         require(len(self.command_diagnostics)<128,'command-diagnostic-capacity-refused')
@@ -183,16 +184,64 @@ class Operation:
     def host_binding_dependency_snapshot(self):
         require(self.r.deadline-time.monotonic()>=85,'host-binding-budget-refused')
         try:
-            result={}
-            for name,path,maximum in (
-                    ('hostBinding',self.a.host_binding,16*1024*1024),
-                    ('dotnet',pathlib.Path('/usr/bin/dotnet'),256*1024*1024),
-                    ('git',pathlib.Path('/usr/bin/git'),64*1024*1024),
-                    ('setsid',pathlib.Path('/usr/bin/setsid'),4*1024*1024)):
-                resolved=path.resolve(strict=True); regular(resolved,maximum)
-                result[name]=(str(resolved),digest(resolved))
-            return result
-        except (OSError,Refusal): raise Refusal('host-binding-dependency-refused')
+            def entry(name,path,maximum,system):
+                path=pathlib.Path(path); link=path.readlink().as_posix() if path.is_symlink() else None
+                resolved=path.resolve(strict=True); regular(resolved,maximum); value=resolved.stat()
+                ancestors=[]; parent=resolved.parent
+                while True:
+                    state=parent.stat(); ancestors.append((str(parent),state.st_uid,state.st_gid,stat.S_IMODE(state.st_mode)))
+                    if parent==parent.parent: break
+                    require(len(ancestors)<=32,'host-binding-dependency-refused'); parent=parent.parent
+                if system:
+                    require(value.st_uid==0 and not (stat.S_IMODE(value.st_mode)&0o022)
+                            and all(owner==0 and not (mode&0o022) for _,owner,_,mode in ancestors),
+                            'host-binding-dependency-refused')
+                return (name,str(path),link,str(resolved),value.st_uid,value.st_gid,stat.S_IMODE(value.st_mode),
+                        value.st_size,digest(resolved),tuple(ancestors))
+            binding=pathlib.Path(self.a.host_binding); stem=binding.with_suffix('')
+            local=(binding,stem.with_suffix('.deps.json'),stem.with_suffix('.runtimeconfig.json'),
+                   binding.parent/'FSharp.Core.dll',binding.parent/'HostBinding')
+            runtime=json.loads(local[2].read_text())['runtimeOptions']['framework']
+            require(runtime=={'name':'Microsoft.NETCore.App','version':'10.0.0'},'host-binding-runtime-refused')
+            listed=subprocess.run(['/usr/bin/dotnet','--list-runtimes'],stdout=subprocess.PIPE,stderr=subprocess.PIPE,
+                                  env=fixed_env(),timeout=5,check=False)
+            require(listed.returncode==0 and len(listed.stdout)<=65536 and listed.stderr==b'',
+                    'host-binding-runtime-refused')
+            candidates=[]
+            for line in listed.stdout.decode('ascii').splitlines():
+                match=re.fullmatch(r'Microsoft\.NETCore\.App ([0-9]+\.[0-9]+\.[0-9]+) \[([^\]]+)\]',line)
+                if match and match.group(1).split('.')[0]=='10':
+                    candidates.append((tuple(map(int,match.group(1).split('.'))),pathlib.Path(match.group(2))/match.group(1)))
+            require(bool(candidates),'host-binding-runtime-refused'); runtime_root=max(candidates)[1]
+            dotnet=pathlib.Path('/usr/bin/dotnet'); dotnet_root=dotnet.resolve(strict=True).parent
+            fxr_candidates=[value for value in (dotnet_root/'host/fxr').iterdir()
+                            if value.is_dir() and re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+',value.name)]
+            require(bool(fxr_candidates),'host-binding-runtime-refused')
+            fxr_root=max(fxr_candidates,key=lambda value:tuple(map(int,value.name.split('.'))))
+            libc_paths={pathlib.Path(line.split()[-1]).resolve() for line in pathlib.Path('/proc/self/maps').read_text().splitlines()
+                        if line.split() and line.split()[-1].endswith('/libc.so.6')}
+            require(len(libc_paths)==1,'host-binding-runtime-refused')
+            result=[]
+            for index,path in enumerate(local): result.append(entry(('dll','deps','runtimeconfig','fsharp','apphost')[index],path,256*1024*1024,False))
+            for name,path,maximum in (('dotnet',dotnet,256*1024*1024),('git','/usr/bin/git',64*1024*1024),
+                                      ('setsid','/usr/bin/setsid',4*1024*1024),('libc',next(iter(libc_paths)),32*1024*1024)):
+                result.append(entry(name,path,maximum,True))
+            closure=[]
+            for label,root in (('runtime',runtime_root),('hostfxr',fxr_root)):
+                files=sorted(path for path in root.rglob('*') if path.is_file())
+                require(0<len(files)<=512,'host-binding-runtime-refused')
+                closure.extend(entry(f'{label}:{path.relative_to(root)}',path,256*1024*1024,True) for path in files)
+            require(len(result)+len(closure)<=1024,'host-binding-runtime-refused')
+            return tuple(result+closure)
+        except (OSError,ValueError,KeyError,UnicodeError,subprocess.SubprocessError,Refusal):
+            raise Refusal('host-binding-dependency-refused')
+    def record_host_binding_dependencies(self):
+        inventory=self.host_binding_dependency_snapshot()
+        manifest=canonical({'schema':'fsgg.telemetry.host-binding-dependencies/1','entries':inventory})
+        path=self.a.result.parent/'host-binding-dependencies.json'
+        private_write(path,manifest)
+        self.host_binding_dependencies=inventory
+        self.host_binding_dependency_manifest_sha=hashlib.sha256(manifest).hexdigest()
     def write_private_diagnostics(self):
         output=self.root/'output'
         if output.is_dir():
@@ -233,7 +282,7 @@ class Operation:
         contract=self.a.source_root/'policy/learn-01-current-focused-v1.json'
         require(digest(contract)==LEARN_CONTRACT,'source-payload-drift')
         regular(self.a.host_binding,16*1024*1024)
-        self.host_binding_dependencies=self.host_binding_dependency_snapshot()
+        self.record_host_binding_dependencies()
         binding=json.loads(self.r.run(['/usr/bin/dotnet',str(self.a.host_binding),'inspect',
                     '--source-root',str(self.a.source_root),'--source-sha',self.a.source_sha,
                     '--profile',str(profile),'--source-pins',str(self.a.native_source_pins)],limit=4096,timeout_seconds=90).stdout)
@@ -334,8 +383,13 @@ class Operation:
         except Refusal as error:
             if str(error)=='host-binding-budget-refused': raise
             raise Refusal('effect-admission-refused')
-        if self.host_binding_dependencies is None: self.host_binding_dependencies=current_dependencies
-        require(current_dependencies==self.host_binding_dependencies,'effect-admission-refused')
+        require(self.host_binding_dependencies is not None
+                and current_dependencies==self.host_binding_dependencies,'effect-admission-refused')
+        dependency_manifest=self.a.result.parent/'host-binding-dependencies.json'
+        regular(dependency_manifest,4*1024*1024,0o600)
+        require(self.host_binding_dependency_manifest_sha is not None
+                and digest(dependency_manifest)==self.host_binding_dependency_manifest_sha,
+                'effect-admission-refused')
         profile=self.a.source_root/'deployment/telemetry-collector/native-operation-v1.json'
         verified=self.r.run(['/usr/bin/dotnet',str(self.a.host_binding),'verify',
                     '--source-root',str(self.a.source_root),'--source-sha',self.a.source_sha,

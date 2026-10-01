@@ -239,3 +239,64 @@ module HostBindingTests =
         use scope = OwnedProcessScope.enterTest ()
         let refusal = Assert.Throws<BindingRefusal>(fun () -> OwnedProcessScope.enterTest () |> ignore)
         Assert.Equal("process-scope-busy", refusal.Data0)
+
+    let private waitForFile path =
+        let timer = Stopwatch.StartNew()
+        while not (File.Exists(path)) && timer.ElapsedMilliseconds < 1500L do Threading.Thread.Sleep(10)
+        Assert.True(File.Exists(path))
+
+    [<Fact>]
+    let ``forced phase kills a child adopted only after its TERM ignoring parent`` () =
+        let owner = Path.Combine(Path.GetTempPath(), "host-binding-late-adoption-" + Guid.NewGuid().ToString("N"))
+        Directory.CreateDirectory(owner) |> ignore
+        let parentFile = Path.Combine(owner, "parent")
+        let childFile = Path.Combine(owner, "child")
+        let grandchildFile = Path.Combine(owner, "grandchild")
+        let script =
+            "import ctypes,os,pathlib,signal,time\n" +
+            "signal.signal(signal.SIGTERM,signal.SIG_IGN)\n" +
+            "pathlib.Path(" + JsonSerializer.Serialize(parentFile) + ").write_text(str(os.getpid()))\n" +
+            "p=os.fork()\n" +
+            "if p==0:\n os.setsid(); ctypes.CDLL(None).prctl(36,1,0,0,0); pathlib.Path(" + JsonSerializer.Serialize(childFile) + ").write_text(str(os.getpid())); g=os.fork();\n if g==0:\n  os.setsid(); pathlib.Path(" + JsonSerializer.Serialize(grandchildFile) + ").write_text(str(os.getpid())); time.sleep(30); os._exit(0)\n time.sleep(30); os._exit(0)\n" +
+            "time.sleep(30)\n"
+        try
+            use scope = OwnedProcessScope.enterTest ()
+            Assert.Throws<BindingRefusal>(fun () -> scope.Run("/usr/bin/python3", owner, [ "-c"; script ], 250, 128, 128) |> ignore) |> ignore
+            waitForFile parentFile; waitForFile childFile; waitForFile grandchildFile
+            Assert.False(Directory.Exists($"/proc/{Int32.Parse(File.ReadAllText(parentFile))}"))
+            Assert.False(Directory.Exists($"/proc/{Int32.Parse(File.ReadAllText(childFile))}"))
+            Assert.False(Directory.Exists($"/proc/{Int32.Parse(File.ReadAllText(grandchildFile))}"))
+        finally Directory.Delete(owner, true)
+
+    [<Fact>]
+    let ``post spawn exception retires direct and adopted children before rethrow`` () =
+        let owner = Path.Combine(Path.GetTempPath(), "host-binding-post-spawn-" + Guid.NewGuid().ToString("N"))
+        Directory.CreateDirectory(owner) |> ignore
+        let parentFile = Path.Combine(owner, "parent")
+        let childFile = Path.Combine(owner, "child")
+        let script =
+            "import os,pathlib,time\n" +
+            "pathlib.Path(" + JsonSerializer.Serialize(parentFile) + ").write_text(str(os.getpid()))\n" +
+            "p=os.fork()\n" +
+            "if p==0:\n pathlib.Path(" + JsonSerializer.Serialize(childFile) + ").write_text(str(os.getpid())); time.sleep(30); os._exit(0)\n" +
+            "time.sleep(30)\n"
+        try
+            use scope = OwnedProcessScope.enterTest ()
+            let hook () = waitForFile parentFile; waitForFile childFile; raise (InvalidOperationException("synthetic-post-spawn"))
+            let error = Assert.Throws<InvalidOperationException>(fun () -> scope.RunWithPostSpawnHook("/usr/bin/python3", owner, [ "-c"; script ], 2000, 128, 128, hook) |> ignore)
+            Assert.Equal("synthetic-post-spawn", error.Message)
+            Assert.False(Directory.Exists($"/proc/{Int32.Parse(File.ReadAllText(parentFile))}"))
+            Assert.False(Directory.Exists($"/proc/{Int32.Parse(File.ReadAllText(childFile))}"))
+        finally Directory.Delete(owner, true)
+
+    [<Fact>]
+    let ``unknown candidate is sticky and retained capacity is finite`` () =
+        use scope = OwnedProcessScope.enterTest ()
+        let first = 2000000000
+        scope.ObserveCandidateForTest(first)
+        scope.ObserveCandidateForTest(first)
+        Assert.True(scope.IsUnknown)
+        Assert.Equal(1, scope.RejectedCandidateCount)
+        for pid in first + 1 .. first + 256 do scope.ObserveCandidateForTest(pid)
+        Assert.Equal(256, scope.RejectedCandidateCount)
+        Assert.True(scope.RetainedCapacityExhausted)

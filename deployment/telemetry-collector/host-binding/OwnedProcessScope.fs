@@ -6,6 +6,7 @@ open System.Diagnostics
 open System.IO
 open System.Reflection
 open System.Runtime.InteropServices
+open System.Runtime.ExceptionServices
 open System.Text
 open System.Threading
 open System.Threading.Tasks
@@ -71,6 +72,8 @@ module internal OwnedProcessScope =
     type internal Scope (deadline: int64, ignoreBaseline: bool) =
         let identities = Dictionary<int, Identity>()
         let ignored = HashSet<int>()
+        let rejected = HashSet<int>()
+        let mutable capacityExhausted = false
         let mutable unknown = false
         let mutable cancellation = 0
         let mutable activeDirectPid = 0
@@ -118,21 +121,29 @@ module internal OwnedProcessScope =
             with _ -> poison (); [||]
 
         let acquire pid =
-            match readIdentity pid with
-            | Some(ppid, start) when ppid = supervisorPid ->
-                let fd = pidfd_open(pid, 0u)
-                if fd < 0 then poison ()
-                else
-                    match readIdentity pid with
-                    | Some(ppid2, start2) when ppid2 = ppid && start2 = start ->
-                        identities.Add(pid, { Pid = pid; Start = start; PidFd = fd; Reaped = false })
-                        if activeDirectPid <> 0 && pid <> activeDirectPid then sawDescendant <- true
-                    | _ -> close(fd) |> ignore; poison ()
-            | _ -> poison ()
+            let reject () =
+                poison ()
+                if identities.Count + rejected.Count < 256 then rejected.Add(pid) |> ignore
+                else capacityExhausted <- true
+            if capacityExhausted || identities.Count + rejected.Count >= 256 then
+                capacityExhausted <- true
+                poison ()
+            else
+                match readIdentity pid with
+                | Some(ppid, start) when ppid = supervisorPid ->
+                    let fd = pidfd_open(pid, 0u)
+                    if fd < 0 then reject ()
+                    else
+                        match readIdentity pid with
+                        | Some(ppid2, start2) when ppid2 = ppid && start2 = start ->
+                            identities.Add(pid, { Pid = pid; Start = start; PidFd = fd; Reaped = false })
+                            if activeDirectPid <> 0 && pid <> activeDirectPid then sawDescendant <- true
+                        | _ -> close(fd) |> ignore; reject ()
+                | _ -> reject ()
 
         let discover () =
             for pid in childPids () do
-                if not (ignored.Contains(pid)) && not (identities.ContainsKey(pid)) then acquire pid
+                if not (ignored.Contains(pid)) && not (rejected.Contains(pid)) && not (identities.ContainsKey(pid)) then acquire pid
 
         do
             if ignoreBaseline then
@@ -182,14 +193,23 @@ module internal OwnedProcessScope =
             discover ()
             signal SigTerm
             let termEnd = min cleanupEnd (Environment.TickCount64 + 250L)
-            while Environment.TickCount64 < termEnd && not (settledObservation direct.Id) do
-                discover (); reapAdopted direct.Id; Thread.Sleep(10)
-            signal SigKill
-            while Environment.TickCount64 < cleanupEnd && not (settledObservation direct.Id) do
+            while Environment.TickCount64 < termEnd && (not direct.HasExited || not (settledObservation direct.Id)) do
                 discover (); reapAdopted direct.Id
                 try if not direct.HasExited then direct.WaitForExit(10) |> ignore with _ -> poison ()
                 Thread.Sleep(10)
+            signal SigKill
+            while Environment.TickCount64 < cleanupEnd && (not direct.HasExited || not (settledObservation direct.Id)) do
+                // KILL every newly adopted identity during the same forced-stage
+                // budget. Later generations receive no new TERM grace.
+                signal SigKill; reapAdopted direct.Id
+                try if not direct.HasExited then direct.WaitForExit(10) |> ignore with _ -> poison ()
+                // Reaping the direct child can adopt its session-separated child
+                // synchronously; discover and KILL that generation before the
+                // loop is allowed to observe settlement.
+                signal SigKill; reapAdopted direct.Id
+                Thread.Sleep(10)
             try if not direct.HasExited then direct.WaitForExit(1) |> ignore with _ -> poison ()
+            if Environment.TickCount64 < cleanupEnd then signal SigKill
             discover (); reapAdopted direct.Id
             let clean = direct.HasExited && settledObservation direct.Id && not unknown
             if not clean then poison ()
@@ -198,8 +218,12 @@ module internal OwnedProcessScope =
         member _.RequestCancellation() = cancel ()
         member _.RemainingMilliseconds = remainingMilliseconds ()
         member _.IsUnknown = unknown
+        member internal _.ObserveCandidateForTest(pid: int) =
+            if not (rejected.Contains(pid)) && not (identities.ContainsKey(pid)) then acquire pid
+        member internal _.RejectedCandidateCount = rejected.Count
+        member internal _.RetainedCapacityExhausted = capacityExhausted
 
-        member this.Run(executable: string, root: string, arguments: string list, timeoutMilliseconds: int, stdoutMaximum: int, stderrMaximum: int) =
+        member private this.RunCore(executable: string, root: string, arguments: string list, timeoutMilliseconds: int, stdoutMaximum: int, stderrMaximum: int, postSpawnHook: (unit -> unit) option) =
             if isCancelled () || unknown then raise (BindingRefusal "process-scope-refused")
             if timeoutMilliseconds <= 0 || remainingMilliseconds () < int64 timeoutMilliseconds + 3250L then
                 raise (BindingRefusal "process-budget-refused")
@@ -219,6 +243,9 @@ module internal OwnedProcessScope =
             use direct = Process.Start(start)
             activeDirectPid <- direct.Id
             sawDescendant <- false
+            let mutable settlementComplete = false
+            let mutable stdoutTask: Task<string> option = None
+            let mutable stderrTask: Task<string> option = None
             let capture maximum (stream: Stream) =
                 Task.Run(fun () ->
                     use output = new MemoryStream()
@@ -232,31 +259,66 @@ module internal OwnedProcessScope =
                             raise (BindingRefusal "git-output-limit-refused")
                         else output.Write(buffer, 0, count)
                     UTF8Encoding(false, true).GetString(output.ToArray()))
-            let stdoutTask = capture stdoutMaximum direct.StandardOutput.BaseStream
-            let stderrTask = capture stderrMaximum direct.StandardError.BaseStream
-            let operationEnd = min (Environment.TickCount64 + int64 timeoutMilliseconds) (deadline - 3250L)
-            let mutable exited = false
-            while not exited && not (isCancelled ()) && Environment.TickCount64 < operationEnd do
-                exited <- direct.WaitForExit(10)
+            let finishReaders () =
+                try direct.StandardOutput.BaseStream.Close() with _ -> ()
+                try direct.StandardError.BaseStream.Close() with _ -> ()
+                let tasks =
+                    [ stdoutTask |> Option.map (fun value -> value :> Task)
+                      stderrTask |> Option.map (fun value -> value :> Task) ]
+                    |> List.choose id |> List.toArray
+                if tasks.Length = 0 then true
+                else
+                    try Task.WaitAll(tasks, 100) with _ -> false
+            let retire reason =
+                let clean = settle direct reason
+                let readersDone = finishReaders ()
+                settlementComplete <- clean && readersDone
+                if settlementComplete then
+                    for identity in identities.Values do close(identity.PidFd) |> ignore
+                    identities.Clear()
+                settlementComplete
+            try
+                postSpawnHook |> Option.iter (fun hook -> hook ())
+                stdoutTask <- Some(capture stdoutMaximum direct.StandardOutput.BaseStream)
+                stderrTask <- Some(capture stderrMaximum direct.StandardError.BaseStream)
+                let operationEnd = min (Environment.TickCount64 + int64 timeoutMilliseconds) (deadline - 3250L)
+                let mutable exited = false
+                while not exited && not (isCancelled ()) && Environment.TickCount64 < operationEnd do
+                    exited <- direct.WaitForExit(10)
+                    discover ()
+                let stdout = stdoutTask.Value
+                let stderr = stderrTask.Value
+                let readersEnd = min (Environment.TickCount64 + 100L) operationEnd
+                while not (isCancelled ()) && (not stdout.IsCompleted || not stderr.IsCompleted) && Environment.TickCount64 < readersEnd do
+                    Thread.Sleep(5)
+                let readersOk = stdout.IsCompletedSuccessfully && stderr.IsCompletedSuccessfully
                 discover ()
-            let readersEnd = min (Environment.TickCount64 + 100L) operationEnd
-            while not (isCancelled ()) && (not stdoutTask.IsCompleted || not stderrTask.IsCompleted) && Environment.TickCount64 < readersEnd do
-                Thread.Sleep(5)
-            let readersOk = stdoutTask.IsCompletedSuccessfully && stderrTask.IsCompletedSuccessfully
-            discover ()
-            let clean = settle direct (not exited || not readersOk || isCancelled () || sawDescendant)
-            if not clean then raise (BindingRefusal "process-cleanup-unknown")
-            for identity in identities.Values do close(identity.PidFd) |> ignore
-            identities.Clear()
-            if not exited then raise (BindingRefusal "git-timeout-refused")
-            if not readersOk || isCancelled () || sawDescendant then raise (BindingRefusal "git-output-refused")
-            activeDirectPid <- 0
-            direct.ExitCode, stdoutTask.Result, stderrTask.Result
+                if not (retire (not exited || not readersOk || isCancelled () || sawDescendant)) then
+                    raise (BindingRefusal "process-cleanup-unknown")
+                if not exited then raise (BindingRefusal "git-timeout-refused")
+                if not readersOk || isCancelled () || sawDescendant then raise (BindingRefusal "git-output-refused")
+                activeDirectPid <- 0
+                direct.ExitCode, stdout.Result, stderr.Result
+            with error ->
+                if settlementComplete then
+                    ExceptionDispatchInfo.Capture(error).Throw()
+                    Unchecked.defaultof<_>
+                elif retire true then
+                    ExceptionDispatchInfo.Capture(error).Throw()
+                    Unchecked.defaultof<_>
+                else raise (BindingRefusal "process-cleanup-unknown")
+
+        member this.Run(executable: string, root: string, arguments: string list, timeoutMilliseconds: int, stdoutMaximum: int, stderrMaximum: int) =
+            this.RunCore(executable, root, arguments, timeoutMilliseconds, stdoutMaximum, stderrMaximum, None)
+
+        member internal this.RunWithPostSpawnHook(executable: string, root: string, arguments: string list, timeoutMilliseconds: int, stdoutMaximum: int, stderrMaximum: int, hook: unit -> unit) =
+            this.RunCore(executable, root, arguments, timeoutMilliseconds, stdoutMaximum, stderrMaximum, Some hook)
 
         interface IDisposable with
             member _.Dispose() =
                 for identity in identities.Values do close(identity.PidFd) |> ignore
                 identities.Clear()
+                rejected.Clear()
                 currentObject <- None
                 Interlocked.Exchange(&lease, 0) |> ignore
 
