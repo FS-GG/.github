@@ -65,6 +65,20 @@ independent and open. This dated clarification is not a current fleet-health att
 profile acceptance or waiver of exact artifact, authentication, custody, settlement/replay or effect
 authority for any operation actually performed.
 
+**2026-10-02: FABLE feed-census failure diagnostics source delivered; publication remains open.**
+[Templates #663](https://github.com/FS-GG/FS.GG.Templates/pull/663) merged at
+`aa6fd459ec6c0904167921561b66050baa5bcb31`, tree
+`73d04773351d180a66c42350385802d04062d914`, equal qualified source
+`6b8daffcffb5b2d6c1f8d728510b9e48029119a6`. Root authenticated merge, tree and main;
+all 13 triggered native checks passed, with three expected skips. Actual F# diagnostics passed
+148 controls, including preservation of AND terms and OR alternatives in sanitized accepted
+permission evidence. The 330 unchanged release, template and public receiver input blobs retain
+the preceding qualified Preview C scope; this PR changes failure classification and tests.
+The prior read-only census remains UNKNOWN because deleted GitHub versions returned 403.
+A fresh protected read-only census and its actual sanitized capability evidence are next;
+dual-feed absence, immutable release, byte-identical publication and installed receiver adoption
+remain open. Source delivery does not supply deleted-version access or publication acceptance.
+
 **2026-10-02: HOST typed private workflow registration delivered; container adoption remains open.**
 [Sandbox #40](https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/pull/40) merged at
 `3aabcb1605c3e23032fa961b917b92c8e238522f`, tree
