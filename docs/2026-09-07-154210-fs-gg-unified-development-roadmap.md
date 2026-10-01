@@ -65,6 +65,22 @@ independent and open. This dated clarification is not a current fleet-health att
 profile acceptance or waiver of exact artifact, authentication, custody, settlement/replay or effect
 authority for any operation actually performed.
 
+**2026-10-02: LEARN W6 C2 protected-origin reader and bound native verifier source integrated; production runtime qualification remains open.**
+The installed-origin reader now joins prospective v3 manager/source-reference contracts to retained capture
+and snapshot bytes and the unchanged canonical native verifier. New F# custody and process code binds the
+verifier module and runtime inventory, uses closed arguments/environment, bounded output and timeout,
+and compares actual canonical verification with the retained result. Installation queries apply exact
+selectors before ambiguity checks; one clock governs independent profile and evidence expiry.
+Producer ordering is `started <= observed <= completed <= now`; independent review reproduced the former
+unequal-time refusal and verified its repair through the actual constructor/store/read path.
+The five focused Core/CLI/Host checks passed; the final temporal review independently passed two Host
+checks and causal freshness probes. Manager-emitted sidecar loading passed with exact frozen bytes.
+This is source integration only: the manager producer's protected delivery, actual immutable OCI/runtime
+closure, package/deployment pins, private installation/grant, C3 default-disabled composition and installed
+qualification remain open. Synthetic runtime inventories and local producer fixtures do not establish
+production image identity, snapshot origin or complete cost coverage. The canonical verifier is unchanged;
+selected V2 platform acceptance remains complete.
+
 **2026-10-01: P4 manifest-v2 private receiver source delivered; genuine runtime qualification remains open.**
 [Sandbox PR #39](https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/pull/39) merged on protected main
 as `ae4d216d2818f2b4dcaa5136a15e2debab9abfed`, tree
