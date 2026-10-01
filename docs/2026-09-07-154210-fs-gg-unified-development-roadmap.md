@@ -53,6 +53,18 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-01: V2 platform FULL ACCEPTED for the selected clean-start profile; independent products and extensions remain open.**
+The accepted platform boundary is ordinary source delivery and ordinary settlement across the nine
+named adopted receivers, truthful observer-loss behavior and the bounded fixed-job HOST diagnostic. The
+[five-gate report](reports/2026-09-29-r5-functional-v2-acceptance.md), protected
+[#3966](https://github.com/FS-GG/.github/pull/3966) delivery and its actual settlement/replay receipt
+establish this bounded acceptance. Historical economics remains insufficient, with no efficiency
+claim. BAR 0/6 useful-play cases, SC2 and FourD product journeys, HOST `.8`/`.9`/`.10` native
+capture/restart/Main retirement, LEARN installed experiments and new capability profiles remain
+independent and open. This dated clarification is not a current fleet-health attestation, universal
+profile acceptance or waiver of exact artifact, authentication, custody, settlement/replay or effect
+authority for any operation actually performed.
+
 **2026-10-01: SC2 versioned recording-context source repaired; genuine completion remains open.**
 [SC2 #29](https://github.com/FS-GG/FS.GG.SC2.Client/pull/29) merged at protected
 `f1867d078da7f4db68729431a8f4479ee36e6d2d`, equal candidate
@@ -1228,6 +1240,17 @@ an efficiency benefit. Historical economics remains insufficient.
 
 ### Full V2 acceptance amendment — 2026-09-29
 
+**Acceptance boundary clarified — 2026-10-01. V2 platform verdict: FULL ACCEPTED.** V2 platform acceptance means the already-qualified
+clean-start ordinary-source and ordinary-settlement profile, including the nine selected receivers,
+truthful observer-loss behavior and the bounded fixed-job HOST execution requirement. Its owning
+five-gate evidence and protected #3966 readback establish acceptance. BAR, SC2 and FourD gameplay
+journeys, later HOST capture/restart and LEARN installed experiments retain independent product or
+capability acceptance. They are not prerequisites of this selected platform profile. BAR remains
+0/6 native useful-play cases; no unfinished product or extension is marked complete. Historical R5
+economics remains insufficient, with no efficiency claim. Native checks, exact artifact/profile
+binding, authentication, custody, settlement/replay and effect authority remain required for every
+operation actually performed.
+
 The user removed authentic-owner and human-participation gates from full V2 acceptance.
 This instruction supersedes earlier full-acceptance dependencies on the Learning installed
 experiment and FourD player study, including requirements recorded in linked owning roadmaps.
@@ -1239,17 +1262,16 @@ experiment and FourD player study, including requirements recorded in linked own
   unknown; source and diagnostic qualification do not assert installed operational readiness.
 - **Human participation:** FourD's unfamiliar-player recruitment, six consenting participants,
   four completed paired comparisons and participant-derived design selection are follow-up work.
-  Full V2 acceptance uses the automated technical comparison, actual downloaded runtime and
-  retained-save/browser qualification. Keeping both qualified candidates opt-in is a valid
-  disposition; it does not establish a player preference or usability result.
-- **Remaining closure:** BAR useful-play acceptance remains at **0/6** required cases. SC2's selected
-  full-session/fault-recovery cases and Learning's bounded source/diagnostic qualification have passed
-  their technical gates at the scopes recorded below; SC2's bounded realtime/recovery closure and
-  protected readback are delivered, while Learning's installed operation/research work remains
-  follow-up. Verify remaining
-  protected delivery and roadmap evidence without backdating the frozen R5 cohort. Record
-  unavailable installed, human and economic evidence explicitly. Full V2 remains pending; historical
-  economics may close with an insufficient-evidence disposition and no efficiency claim.
+  FourD's technical product disposition at its recorded automated scope uses the automated comparison,
+  actual downloaded runtime and retained-save/browser qualification. Keeping both qualified candidates
+  opt-in is valid at that scope; it establishes neither a player preference nor a usability result and
+  is not a V2 platform gate.
+- **Independent product and extension frontier:** BAR useful-play acceptance remains at **0/6** required
+  cases. SC2's further native recording/replay journey, FourD's genuine product and human comparison,
+  LEARN's installed operation/research, and later HOST capture/restart and retirement retain their
+  owning evidence and authority. None blocks the accepted selected platform profile, and none is marked
+  complete by this amendment. Preserve unavailable installed, human and economic evidence as unknown;
+  historical economics closes only with its insufficient-evidence disposition and no efficiency claim.
 - **Host execution boundary:** V2 must qualify and operate without unattended, general-purpose
   AI agents on operational Home/Main hosts. `work-main` and `home-main` are not acceptance or
   runtime prerequisites. Development agents remain in isolated development environments; host
@@ -1294,9 +1316,11 @@ workspace and one-shot container absent. The older runtime remained byte-identic
 `03b349d012bd0fa6db9eaf9c7ed8623f94c196e11cf883e4d814cdfd1fdf1fac`. Root verified the public
 report delivery but could not inspect the private runtime artifacts, so this is an owner-reported installed
 version/login-readiness result. It establishes no model or resume session, general Host service activation,
-retained-runtime upgrade or LEARN collector readiness. Full V2 remains pending on its other selected gates.
+retained-runtime upgrade or LEARN collector readiness. The selected V2 platform profile is accepted at
+the bounded source/settlement/fixed-diagnostic scope above; later HOST operations and LEARN collector
+readiness retain their own acceptance gates.
 
-These removed requirements are outside the full V2 acceptance gate, rather than completed tests.
+These independent requirements are outside the selected V2 platform acceptance boundary, rather than completed tests.
 The frozen R5 cohort, cutoff and historical original-item outcomes stay intact. Required native
 checks and existing runtime authentication, custody and effect-authority enforcement still apply
 to any operation actually performed; this amendment grants no credentials or access.
@@ -1472,7 +1496,8 @@ payload `sha256:012af80fca641a38016cbe28260f86fac31c388424eed73eaaf0525e4c27a233
 Seven extracted product/profile/evaluation checks and five retained-save/origin checks passed; one
 desktop touch case was an expected skip. [FourD #19](https://github.com/FS-GG/FS.GG.FourD/pull/19)
 recorded the protected evidence at `931869236b4253b1489c4e8095a36017709194e2`.
-The 2026-09-29 full-V2 amendment accepts this automated technical scope without a player study.
+The 2026-09-29 amendment accepts this FourD product technical scope without a player study; the
+product result is independent of the selected V2 platform acceptance boundary.
 Original FOURD-01.5 still needs its player-derived usability outcome, and original .6 retains that
 prerequisite. No player preference, physical-device result, permanent publication or installed adoption
 is claimed.
