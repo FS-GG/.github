@@ -53,6 +53,22 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-01: SC2 versioned recording-context source repaired; genuine completion remains open.**
+[SC2 #29](https://github.com/FS-GG/FS.GG.SC2.Client/pull/29) merged at protected
+`f1867d078da7f4db68729431a8f4479ee36e6d2d`, equal candidate
+`0403b887e8cceef0d4918c8b733159691fd13ebf` with tree
+`5a6bbb75025e97636e5618381c9924c6699c0fc1`; root independently verified merge-tree equality.
+Full [verify 36842794937](https://github.com/FS-GG/FS.GG.SC2.Client/actions/runs/36842794937)
+passed all 64 real hosted browser cases and the full Gateway suite; the candidate also passed the
+same 64 browser cases locally. The source derives a versioned recording context from the real
+bootstrap and projects identity, observation and offer atomically. Exact worker-fixture, readiness
+and session-end handling is repaired while preserving the 250 ms deadline and no-retry boundary.
+Actual genuine attempt-i still failed at recording context; all 13 owned processes and the display
+socket cleaned with zero survivors. This source closure is not genuine runtime acceptance. Next,
+rebuild exact protected `f1867d07`, pin a fresh private runner candidate and run a new bounded
+attempt-j. Original movement, recording and replay acceptance under `.6` remains open; publication
+and installed adoption remain open.
+
 **2026-10-01: FourD public capacity screen passed; private qualification route remains unimplemented.**
 Actual credential-free read-only [capacity screen 36842162867](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36842162867)
 used protected Coordination `c14715d48fec86eb4e799640d4f8f2cec6be32a5`, tree
