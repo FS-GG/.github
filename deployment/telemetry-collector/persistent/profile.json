@@ -18,9 +18,16 @@
     "platform": "linux/amd64",
     "baseImage": "mcr.microsoft.com/dotnet/aspnet:10.0.12-noble-amd64@sha256:ed6a2d26633ddcd3d42a1d9f9866214ecbbc11ba6ac5e0e843da02c13da24072"
   },
+  "image": {
+    "containerfileSha256": "1244ba48829c8f93dedc83f2b297c7d9a968173eaf8514b7a9731ca29e0ca233",
+    "resultDigestRequiredBeforeInstall": true,
+    "activation": "disabled-before-private-readback"
+  },
   "manager": {
-    "coordinationSource": "0cdc751b2d6f9335df3d6fd9e8e6a2ac4da94a54",
+    "coordinationSource": "0dd4aa26aca6697f1cc3cece762a4ecae60b5b81",
+    "programSha256": "6d722af48f5ee45c35c047c869973345750d8c92dcf740c8d7c82c9b38e101aa",
     "command": "install-native-collector",
+    "backupCommand": "backup-stopped-host",
     "installationSchema": "fsgg.telemetry.native-collector-installation/2"
   },
   "reader": {
@@ -32,17 +39,13 @@
     "profileSha256": "5a30fc507f023d542521aac66c8f49c5ae6ee8d9e34dc90c1a3bf3ab30f6b08f"
   },
   "containerPaths": {
-    "configuration": "/receiver/configuration",
-    "credentials": "/receiver/credentials",
-    "store": "/receiver/store",
-    "evidence": "/receiver/evidence",
-    "sidecar": "/receiver/sidecar",
+    "configAnchor": "/receiver/private",
+    "hostConfig": "/receiver/private/host.json",
+    "credentials": "/receiver/private/credentials",
+    "store": "/receiver/private/store",
+    "evidence": "/receiver/private/evidence",
+    "codexHome": "/receiver/private/codex-home",
     "nativeSource": "/producer/native-source",
     "producerSpool": "/producer/spool"
-  },
-  "image": {
-    "containerfileSha256": "1244ba48829c8f93dedc83f2b297c7d9a968173eaf8514b7a9731ca29e0ca233",
-    "resultDigestRequiredBeforeInstall": true,
-    "activation": "disabled-before-private-readback"
   }
 }
