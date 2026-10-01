@@ -77,6 +77,23 @@ The four native payloads remain byte-identical. This is source delivery; protect
 Sandbox profile and private producer joins, actual authentication and native attempt-o qualification
 remain open. The existing release is not relabeled as a new artifact or native acceptance.
 
+**2026-10-01: P4 v2 manifest helper source delivered; private receiver qualification remains open.**
+[Coordination #919](https://github.com/FS-GG/FS.GG.Coordination/pull/919) merged at
+`f794d1ae14cfd41db1878ce9c362d3518dbe52c0`, tree
+`c76d7dfc564aabf597b42b6fd83bbfaaf0bcb7a3`, equal qualified source
+`cac39fcd491aee0d1d986081b8e58ca36f569943`.
+[Full validation 36925162784](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36925162784),
+[bootstrap 36925162969](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36925162969)
+and the [owning provider gate 36925162927](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36925162927)
+passed. The F# helper constructs and validates the versioned manifest without embedding its own
+not-yet-assigned server asset ID; acquired receipts and run admission retain the external ID and digest
+join. The owning workflow executes the real transport fixture under the pinned SDK. Its changed
+workflow digest is recorded in the existing immutable execution inventory, with that gate preserved.
+This closes the H2 source window. Sandbox S2 protected helper/runtime pins, canonical private upload,
+actual twelve-asset census, facts, grant, native qualification, publication and receiver adoption remain
+open. The original producer's eleven genuine roles and published 0.2.0 artifacts remain retained;
+this source delivery establishes no new private upload, grant or native acceptance.
+
 **2026-10-01: LEARN executable custody reader source delivered; installed qualification remains open.**
 [Coordination #918](https://github.com/FS-GG/FS.GG.Coordination/pull/918) merged at
 `4be1226aedbd6115fc228c3828e4956a7db4e96f`, tree
