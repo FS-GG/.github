@@ -108,6 +108,20 @@ now execute that harness and the compiled browser bridge fixture. This is finite
 not native acceptance. Historical attempt-n remains Unknown; protected artifact rebuilding, private
 failure-summary adoption, actual advisor processing and replay qualification remain open.
 
+**2026-10-01: OPS-TYPED-01.4 BAR runtime-evidence source delivered; native acceptance remains 0/6.**
+[FSBarV2 #16](https://github.com/FS-GG/FSBarV2/pull/16) merged at
+`2cd9f47dd120d43b6781b6edc7dbb1d571cc51a1`, tree
+`4fee295bf14f6b2fe2369085c1e743610709297e`, equal qualified integration
+`c709d1aaa8a66452ebd42a395072866e871918c1`.
+The qualification-local F# data-root policy and growing-prefix reducer join the existing full solution.
+Its owning gate executed 14 Quint scenarios, 500 samples of 16 steps, six regenerated ITF traces,
+actual production-reducer/FsQuint correspondence and a locked Release build. The full solution
+built with zero warnings or errors; existing live preparation checks passed. The gate records all
+five managed executable files. No hosted PR workflow applies, so no hosted pass is claimed.
+Source qualification does not establish immutable artifact adoption, selected-runtime custody,
+a configured private helper or native gameplay. Root must join those artifacts and a fresh pristine
+packet before another actual operation. Count1 and all six useful-play journeys remain open.
+
 **2026-10-01: FABLE-ADOPT-01.3 local reference composition source delivered.**
 [Templates #661](https://github.com/FS-GG/FS.GG.Templates/pull/661) merged at
 `1c90ac81278a8e7a98fe98aa7d01b8023a8f2278`; root authenticated tree
