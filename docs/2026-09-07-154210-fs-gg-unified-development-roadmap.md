@@ -65,6 +65,22 @@ independent and open. This dated clarification is not a current fleet-health att
 profile acceptance or waiver of exact artifact, authentication, custody, settlement/replay or effect
 authority for any operation actually performed.
 
+**2026-10-01: P4 private receiver source pins delivered; protected preparation and hosted staging verified.**
+[Sandbox #38](https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/pull/38) merged at
+`5ef88866bd3d72aecf98ad097ef9ce9bdc88c4e8`; root authenticated tree
+`ed15a0315a8dac71fbf26f144fbc76e96d5368fa`, equal reviewed head
+`161b013138cb9c5f402e14b444526289da969144`. The existing private workflow and adapter now
+bind protected Coordination `b06c18722b422213fe1c7cdd11cda1732605466f` and tree
+`51df48a04b6cb7971233723945e6c743e3a65147`; 39 focused checks accept that join and refuse
+predecessor manifest/admission identities. HOST paths are byte-identical; hosted validation is
+not required in this repository. Final 0.2.1 [preparation 36895926751](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36895926751)
+and public [staging 36902002387](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36902002387)
+passed. Root authenticated their exact archives/artifacts and the compiled F# release verifier,
+then verified the nine actual staged members and provider join byte for byte. Candidate facts,
+private placement/environment/reservation, genuine grant, native qualification, publication and
+receiver adoption remain open; local comparison previews are not provider authority. Original
+0.2.0 artifacts, Main preservation and the accepted V2 boundary remain unchanged.
+
 **2026-10-01: OPS-TYPED-01.2 SC2 preparation source delivered; diagnostic and native adoption remain open.**
 [SC2 #32](https://github.com/FS-GG/FS.GG.SC2.Client/pull/32) merged at
 `ee0469a2c1241d04a5e724517121e567ad5519f3`; root authenticated tree
