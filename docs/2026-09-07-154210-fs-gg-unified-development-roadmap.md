@@ -53,6 +53,43 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-01: FourD public capacity screen passed; private Stage A remains unimplemented.**
+Actual credential-free read-only [capacity screen 36842162867](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36842162867)
+used protected Coordination `c14715d48fec86eb4e799640d4f8f2cec6be32a5`, tree
+`a5759b54e3a1c978ae57e84a61d6f28a13a7c6d7`, attempt 1 and succeeded. Root downloaded
+artifact `11151638544` (1,760 bytes), verified archive SHA-256
+`ed5f3b8e328b32ae87a74e2db00c1b441c5c1a4e9aeebcc4fdf5c452696a0e19`, safely read its
+single JSON result and verified result SHA-256
+`97a9d66212e07ead348eafc80fd2d27c483c18fcfa5c61040ef144b0bc155d7e`.
+The result reports `capacityScreenPassed=true` and `qualified=false`: effective headroom
+15,246,069,760 bytes against required 7,516,192,768 bytes without swap credit; three known
+ancestors had no finite limit; free storage was 92,353,101,824 bytes with 18,426,053 free
+inodes. A Podman binary was present, but rootless capability was unmeasured and Podman was not
+started. This closes only the public capacity screen. The bounded privacy/exact-admission,
+private-acquisition and chunk-custody Stage A source route is not implemented; qualification
+continues to refuse. No key, private source, image build/load, native runtime or player operation
+was admitted.
+
+[FourD #31](https://github.com/FS-GG/FS.GG.FourD/pull/31) separately merged at
+`d5d8b6d242b13dd79007fcbbb6e5ee4069fd3264`, equal accepted documentation candidate
+`38556655a52db97cd0c19a1c0c624153e2276606` with tree
+`ae626190a30a784db8968157a1ef1c9c5c499770`; root independently verified merge-tree equality.
+Full [verify 36841689908](https://github.com/FS-GG/FS.GG.FourD/actions/runs/36841689908)
+passed. Its future geometric-presentation and evaluation window is documentation only: no renderer,
+player evidence, rules default, native result, capacity result, publication or adoption changed.
+
+**2026-10-01: HOST bounded rejected-item private diagnostic source accepted; runtime remains open.**
+Accepted source `c62454a0e001eb323e4f008d459ff70b6caa3183`, tree
+`bb4c1d6c8fa72b4ee63fbca71f81f37ddecb64f4`, adds bounded structural metadata only to the existing
+private failure envelope when one of two rejected item-event branches is reached. The actual rejected
+item type remains unknown. The four authoritative allowlisted types, generic refusal/exit 2,
+success suppression and public failure projection are unchanged; no raw item, thread ID or unrestricted
+discriminator is retained. Worker verification reported 112 tests; independent review passed 32
+committed tests and ten focused boundary/privacy cases. This source acceptance grants no item or tool
+permission. After coherent public source admission, an exact public-recipe and private-input driver-pin
+update plus private registration are required before a new diagnostic runtime. HOST `.8`, `.9`, `.10`
+and LEARN remain open; no qualification or native operation follows from this source join.
+
 **2026-10-01: FourD credential-free public capacity-screen source delivered; measured screen is next.**
 [Coordination #911](https://github.com/FS-GG/FS.GG.Coordination/pull/911) merged at
 `c14715d48fec86eb4e799640d4f8f2cec6be32a5`, equal candidate
