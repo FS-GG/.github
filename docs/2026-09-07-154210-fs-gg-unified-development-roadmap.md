@@ -65,6 +65,26 @@ independent and open. This dated clarification is not a current fleet-health att
 profile acceptance or waiver of exact artifact, authentication, custody, settlement/replay or effect
 authority for any operation actually performed.
 
+**2026-10-01: P4 compile-cache convergence and semantic image policy source closed; final 0.2.1 preparation remains open.**
+[Coordination #916](https://github.com/FS-GG/FS.GG.Coordination/pull/916) merged at
+`b06c18722b422213fe1c7cdd11cda1732605466f`; root authenticated tree
+`51df48a04b6cb7971233723945e6c743e3a65147`, equal reviewed head
+`9aab31dea75010ee9d7a310c311a7441d880ab48`. Exact-head full coherent
+[validation 36890459325](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36890459325)
+and [bootstrap 36890459430](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36890459430)
+passed. The repair disables generated Node compile cache only for the image's compiler invocation
+and checks its absence in exported layers. Two independent cold hosted qualifications
+[36886526452](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36886526452) and
+[36886549027](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36886549027)
+agreed on all 13 OCI payloads, semantic manifest
+`40085dd0a7c3c16af6b24e247cec47707bc957d6453f7e15d82636fcbf6f0755`
+and config `371d2b5db7c9708812ca8c3d752376e38aa81432a8bcbe7d99146414636dd872`.
+Their raw archives retain different timestamps and mandatory per-run custody. The existing F#
+policy now accepts this single observed semantic pair while retaining exact archive and receipt
+bindings. All 27 W6 source paths remain unchanged. Final preparation from this protected producer,
+staging, facts, grant, native qualification, publication and receiver adoption remain open.
+Original 0.2.0 artifacts are preserved; no installed behavior or accepted V2 boundary changes.
+
 **2026-10-01: OPS-TYPED-01.1 BAR qualification policy source delivered; native adoption remains open.**
 [FSBarV2 #15](https://github.com/FS-GG/FSBarV2/pull/15) merged at
 `5c4a39a0b656bd1e65503697334b01c0182e6a30`; root authenticated tree
