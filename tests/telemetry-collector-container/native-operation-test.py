@@ -6,6 +6,7 @@ import pathlib
 import tempfile
 import time
 import unittest
+from unittest import mock
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -81,6 +82,29 @@ class NativeOperationTests(unittest.TestCase):
         self.assertEqual({"PATH", "HOME", "CODEX_HOME", "HTTPS_PROXY", "NO_PROXY", "LANG", "LC_ALL"}, set(environment))
         self.assertEqual("/usr/local/bin:/usr/bin:/bin", environment["PATH"])
         self.assertEqual("localhost,127.0.0.1,[::1],native-receiver", environment["NO_PROXY"])
+
+    def test_readonly_source_uses_only_its_writable_run_root_for_app_state(self):
+        profile = support.load_profile(PROFILE_PATH); captured = {}
+        class FakeServer:
+            def __init__(self, command, environment, cwd, timeout, maximum_line):
+                captured.update(environment); self.notifications = []
+            def request(self, method, params, deadline):
+                if method == "thread/list": return {"data": []}
+                return {}
+            def notify(self, method): pass
+            def close(self): pass
+        with tempfile.TemporaryDirectory() as temporary, \
+             mock.patch.object(driver, "pinned_native"), \
+             mock.patch.object(driver, "private_directory"), \
+             mock.patch.object(driver, "config_arguments", return_value=[]), \
+             mock.patch.object(driver, "effective_config"), \
+             mock.patch.object(driver, "JsonLineAppServer", FakeServer):
+            run_root = pathlib.Path(temporary).resolve()
+            result = driver.readonly_source_compatibility(profile, "owner-nonce-01", run_root)
+        self.assertEqual(str(run_root), captured.pop("CODEX_HOME"))
+        expected = support.clean_environment(profile); expected.pop("CODEX_HOME")
+        self.assertEqual(expected, captured)
+        self.assertEqual(("compatible", 0), (result["status"], result["threadCount"]))
 
     def test_producer_environment_passes_only_fixed_credential(self):
         profile = support.load_profile(PROFILE_PATH)

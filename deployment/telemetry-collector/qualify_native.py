@@ -239,10 +239,14 @@ def buffer_prebind_event(buffer: list[dict], value: dict, parent_thread: str, ma
     return maximum_bytes - size
 
 
-def readonly_source_compatibility(profile: dict, nonce: str) -> dict:
+def readonly_source_compatibility(profile: dict, nonce: str, run_root: pathlib.Path) -> dict:
     native = pathlib.Path(profile["native"]["executable"]); config = pathlib.Path(profile["native"]["config"])
     pinned_native(native, profile)
     environment = clean_environment(profile); cwd = pathlib.Path(profile["runtime"]["cwd"]); private_directory(cwd)
+    # Codex 0.158 initializes writable SQLite and installation identity state
+    # before opening the stdio transport. Keep the source mount read-only and
+    # place this probe's empty, disposable home in its bounded output tmpfs.
+    environment["CODEX_HOME"] = str(run_root)
     command = [str(native), "app-server", "--strict-config", "--listen", "stdio://", *config_arguments(config, profile["native"]["configSha256"])]
     server = JsonLineAppServer(command, environment, cwd, 30, profile["runtime"]["maximumLineBytes"])
     deadline = time.monotonic() + 30
@@ -380,7 +384,7 @@ def main() -> int:
         run_root = args.output_root / args.run_nonce; require(not run_root.exists() and not run_root.is_symlink(), "run output already exists")
         private_directory(run_root, create=True)
         result = (perform(profile, args.run_nonce, run_root) if args.operation_id == profile["operationId"]
-                  else readonly_source_compatibility(profile, args.run_nonce))
+                  else readonly_source_compatibility(profile, args.run_nonce, run_root))
         private_write(run_root / "result.json", canonical_bytes(result))
         print(json.dumps({"schema": result["schema"], "status": result["status"], "resultSha256": sha256(run_root / "result.json")}, separators=(",", ":")))
         return 0

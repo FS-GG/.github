@@ -53,6 +53,49 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**FourD bounded private build storage and cleanup source delivered; native retry remains open.**
+[FourD PR #25](https://github.com/FS-GG/FS.GG.FourD/pull/25) merged at
+`e06609740f49443808f6dd1e656dec4e9e006a23`, tree
+`9e71c9b02e6bf6a4137792a8ce0643aaa77a5a6c`, independently equal to candidate
+`0a9ff6b74d650accf3a7d8b72dea22f765e3df3c`. Full
+[verification 36803263187](https://github.com/FS-GG/FS.GG.FourD/actions/runs/36803263187)
+and source preparation passed. Actual native run 36801170882 exhausted disk while VFS
+retained cached build layers; cleanup then encountered readonly directories after mapped
+ownership was restored. The unchanged pinned build now disables cache layers and removes
+intermediate containers. Only after verified archive/config custody, it releases images from
+its validated private build store before fresh load. Mapped cleanup restores owner write/search
+permissions only within its owned paths. All 23 source checks passed under both tested umasks.
+A fresh protected native run, runtime BIND/recovery, installed adoption and human acceptance
+remain open; no global prune, reset or broad cleanup is authorized by this source repair.
+
+**V2-HOST-01.8 empty compatibility app state source repaired; native qualification stays open.**
+Reviewed source `0e719a3cae14a9416ff30ae0ce1978825e681380` redirects `CODEX_HOME`
+only for the fixed zero-auth readonly compatibility operation to its fresh private run directory
+on the bounded output tmpfs. Exact Codex 0.158 source initializes writable SQLite and installation
+identity before stdio; the original source bind cannot provide those writes. Mounted source and
+working directory remain read-only; the full credentialed operation is unchanged. The probe's
+thread count describes disposable empty state, not original persisted inventory, and cannot
+establish native capture or recovery. Original-volume parent/child histories, selector binding,
+capture and receiver-restart/replay checks remain independently required. All 24 native-operation
+and 27 private-qualification source tests passed without skips, plus image/network checks and
+an independent review scoped to the immutable container route. Private recipe registration and
+a fresh root-owned native operation remain pending; routing `.9`, retirement `.10` and LEARN
+experimental acceptance remain open.
+
+**SC2C-01.6f pointer-occlusion source delivered; genuine retry remains pending.**
+[SC2 client PR #22](https://github.com/FS-GG/FS.GG.SC2.Client/pull/22)
+merged at `1a2474d4b60a4075388232c1b61d9490b2932f45`, tree
+`4e9fdf141885b7edd31bf2d487201ab77c1bd573`, independently equal to candidate
+`fc17583c98d34adcab0c76acdb248100e4ff2620`. Full
+[verification 36803231233](https://github.com/FS-GG/FS.GG.SC2.Client/actions/runs/36803231233)
+passed all 59 browser cases. The driver chooses a bounded actual topmost SVG coordinate,
+sends a real pointer click and confirms the stable selected tag before the ground click.
+The alternate-bounds test now requires the correlated durable terminal result and actual
+peer move command, avoiding the ephemeral UI status that a heartbeat can overwrite.
+No forced event, product deadline relaxation or fake native acceptance was added.
+Private source pins, exact rebuild and the next genuine game attempt remain pending;
+all 12 native gates stay open after the first attempt's occlusion failure and verified cleanup.
+
 **P4 trusted resolver source delivered; installed adoption remains open.**
 [Coordination PR #905](https://github.com/FS-GG/FS.GG.Coordination/pull/905)
 merged at `e70d41fd9e48896e863bdf1ba33822ad6f09ee6b`, tree
