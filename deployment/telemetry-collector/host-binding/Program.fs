@@ -45,6 +45,9 @@ let readAdmission () =
 [<EntryPoint>]
 let main argv =
     try
+        use scope = OwnedProcessScope.enterCli ()
+        Console.CancelKeyPress.Add(fun event -> event.Cancel <- true; scope.RequestCancellation())
+        use terminate = Runtime.InteropServices.PosixSignalRegistration.Create(Runtime.InteropServices.PosixSignal.SIGTERM, fun context -> context.Cancel <- true; scope.RequestCancellation())
         if argv.Length < 1 then raise (BindingRefusal "command-refused")
         let command = argv[0]
         let args = parseArgs argv[1..]

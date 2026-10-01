@@ -60,7 +60,12 @@ module private Fixture =
         interface IDisposable with member _.Dispose() = Directory.Delete(owner, true)
 
     let construct (fixture: Repository) =
+        use scope = OwnedProcessScope.enterTest ()
         HostBinding.construct fixture.Root fixture.Head fixture.Profile fixture.Pins
+
+    let inScope action =
+        use scope = OwnedProcessScope.enterTest ()
+        action scope
 
 module HostBindingTests =
     [<Fact>]
@@ -126,7 +131,7 @@ module HostBindingTests =
     [<Fact>]
     let ``wrong revision and mixed pin content are refused`` () =
         use fixture = new Fixture.Repository()
-        Assert.Throws<BindingRefusal>(fun () -> HostBinding.construct fixture.Root (String('a', 40)) fixture.Profile fixture.Pins |> ignore) |> ignore
+        Assert.Throws<BindingRefusal>(fun () -> Fixture.inScope (fun _ -> HostBinding.construct fixture.Root (String('a', 40)) fixture.Profile fixture.Pins |> ignore)) |> ignore
         let fields = JsonSerializer.Deserialize<Map<string, string>>(File.ReadAllText(fixture.Pins))
         let mixed = fields.Add("native-operation-v1.json", "5a30fc507f023d542521aac66c8f49c5ae6ee8d9e34dc90c1a3bf3ab30f6b08f")
         File.WriteAllText(fixture.Pins, JsonSerializer.Serialize(mixed))
@@ -155,14 +160,14 @@ module HostBindingTests =
     [<Fact>]
     let ``child output capture is concurrent bounded and finite`` () =
         let exitCode, stdout, stderr =
-            HostBinding.runBoundedProcess "/usr/bin/python3" "/" [ "-c"; "import sys; sys.stdout.write('ok'); sys.stderr.write('e'*4096)" ] 2000 16 4096
+            Fixture.inScope (fun scope -> scope.Run("/usr/bin/python3", "/", [ "-c"; "import sys; sys.stdout.write('ok'); sys.stderr.write('e'*4096)" ], 2000, 16, 4096))
         Assert.Equal(0, exitCode)
         Assert.Equal("ok", stdout)
         Assert.Equal(4096, stderr.Length)
-        Assert.Throws<BindingRefusal>(fun () -> HostBinding.runBoundedProcess "/usr/bin/python3" "/" [ "-c"; "import sys; sys.stderr.write('x'*70000); sys.stdout.write('unreachable')" ] 2000 64 4096 |> ignore) |> ignore
-        Assert.Throws<BindingRefusal>(fun () -> HostBinding.runBoundedProcess "/usr/bin/python3" "/" [ "-c"; "import sys; sys.stdout.write('x'*70000)" ] 2000 4096 64 |> ignore) |> ignore
+        Assert.Throws<BindingRefusal>(fun () -> Fixture.inScope (fun scope -> scope.Run("/usr/bin/python3", "/", [ "-c"; "import sys; sys.stderr.write('x'*70000); sys.stdout.write('unreachable')" ], 2000, 64, 4096) |> ignore)) |> ignore
+        Assert.Throws<BindingRefusal>(fun () -> Fixture.inScope (fun scope -> scope.Run("/usr/bin/python3", "/", [ "-c"; "import sys; sys.stdout.write('x'*70000)" ], 2000, 4096, 64) |> ignore)) |> ignore
         let timer = Stopwatch.StartNew()
-        Assert.Throws<BindingRefusal>(fun () -> HostBinding.runBoundedProcess "/usr/bin/python3" "/" [ "-c"; "import time; time.sleep(30)" ] 100 64 64 |> ignore) |> ignore
+        Assert.Throws<BindingRefusal>(fun () -> Fixture.inScope (fun scope -> scope.Run("/usr/bin/python3", "/", [ "-c"; "import time; time.sleep(30)" ], 100, 64, 64) |> ignore)) |> ignore
         Assert.True(timer.Elapsed < TimeSpan.FromSeconds(5.0))
 
     [<Fact>]
@@ -173,10 +178,64 @@ module HostBindingTests =
         let script = "import os,time,pathlib\npid=os.fork()\nif pid==0:\n time.sleep(30)\n os._exit(0)\npathlib.Path(" + JsonSerializer.Serialize(pidFile) + ").write_text(str(pid))\nos._exit(0)\n"
         try
             let timer = Stopwatch.StartNew()
-            Assert.Throws<BindingRefusal>(fun () -> HostBinding.runBoundedProcess "/usr/bin/python3" owner [ "-c"; script ] 2000 128 128 |> ignore) |> ignore
+            Assert.Throws<BindingRefusal>(fun () -> Fixture.inScope (fun scope -> scope.Run("/usr/bin/python3", owner, [ "-c"; script ], 2000, 128, 128) |> ignore)) |> ignore
             Assert.True(timer.Elapsed < TimeSpan.FromSeconds(5.0))
             Assert.True(File.Exists(pidFile))
             let descendant = Int32.Parse(File.ReadAllText(pidFile))
             Assert.False(Directory.Exists($"/proc/{descendant}"))
         finally
             Directory.Delete(owner, true)
+
+    [<Theory>]
+    [<InlineData("setsid")>]
+    [<InlineData("double-fork")>]
+    [<InlineData("closed-pipes")>]
+    [<InlineData("term-ignored")>]
+    [<InlineData("nested-subreaper")>]
+    let ``session and pipe escape variants are retired`` variant =
+        let owner = Path.Combine(Path.GetTempPath(), "host-binding-escape-" + Guid.NewGuid().ToString("N"))
+        Directory.CreateDirectory(owner) |> ignore
+        let pidFile = Path.Combine(owner, "pid")
+        let target = JsonSerializer.Serialize(pidFile)
+        let body =
+            match variant with
+            | "setsid" -> "os.setsid(); pathlib.Path(" + target + ").write_text(str(os.getpid())); time.sleep(30)"
+            | "double-fork" -> "os.setsid(); p=os.fork(); (os._exit(0) if p else None); pathlib.Path(" + target + ").write_text(str(os.getpid())); time.sleep(30)"
+            | "closed-pipes" -> "os.setsid(); os.close(1); os.close(2); pathlib.Path(" + target + ").write_text(str(os.getpid())); time.sleep(30)"
+            | "term-ignored" -> "os.setsid(); signal.signal(signal.SIGTERM, signal.SIG_IGN); pathlib.Path(" + target + ").write_text(str(os.getpid())); time.sleep(30)"
+            | "nested-subreaper" -> "os.setsid(); ctypes.CDLL(None).prctl(36,1,0,0,0); p=os.fork(); (os._exit(0) if p else None); pathlib.Path(" + target + ").write_text(str(os.getpid())); time.sleep(30)"
+            | _ -> failwith "variant"
+        let script = "import os,time,pathlib,signal,ctypes\npid=os.fork()\nif pid==0:\n " + body.Replace("\n", "\n ") + "\n os._exit(0)\nos._exit(0)\n"
+        try
+            Assert.Throws<BindingRefusal>(fun () -> Fixture.inScope (fun scope -> scope.Run("/usr/bin/python3", owner, [ "-c"; script ], 500, 128, 128) |> ignore)) |> ignore
+            let limit = Stopwatch.StartNew()
+            while not (File.Exists(pidFile)) && limit.ElapsedMilliseconds < 1000L do Threading.Thread.Sleep(10)
+            Assert.True(File.Exists(pidFile))
+            let descendant = Int32.Parse(File.ReadAllText(pidFile))
+            Assert.False(Directory.Exists($"/proc/{descendant}"))
+        finally Directory.Delete(owner, true)
+
+    [<Fact>]
+    let ``library caller cannot construct without an owned CLI scope`` () =
+        use fixture = new Fixture.Repository()
+        let refusal = Assert.Throws<BindingRefusal>(fun () -> HostBinding.construct fixture.Root fixture.Head fixture.Profile fixture.Pins |> ignore)
+        Assert.Equal("process-scope-refused", refusal.Data0)
+
+    [<Fact>]
+    let ``strict scope refuses a preexisting child without signalling it`` () =
+        let start = ProcessStartInfo("/usr/bin/sleep")
+        start.ArgumentList.Add("30")
+        use unrelated = Process.Start(start)
+        try
+            let refusal = Assert.Throws<BindingRefusal>(fun () -> OwnedProcessScope.enterStrictTest () |> ignore)
+            Assert.Equal("process-baseline-refused", refusal.Data0)
+            Assert.False(unrelated.HasExited)
+        finally
+            if not unrelated.HasExited then unrelated.Kill()
+            unrelated.WaitForExit()
+
+    [<Fact>]
+    let ``owned scope lease is non reentrant`` () =
+        use scope = OwnedProcessScope.enterTest ()
+        let refusal = Assert.Throws<BindingRefusal>(fun () -> OwnedProcessScope.enterTest () |> ignore)
+        Assert.Equal("process-scope-busy", refusal.Data0)

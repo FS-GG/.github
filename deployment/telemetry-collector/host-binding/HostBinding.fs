@@ -10,13 +10,6 @@ open System.Security.Cryptography
 open System.Text
 open System.Text.Json
 open System.Text.RegularExpressions
-open System.Threading.Tasks
-
-[<RequireQualifiedAccess>]
-type BindingError =
-    | Refused of string
-
-exception BindingRefusal of string
 
 [<CLIMutable>]
 type ValidatedHostBinding =
@@ -65,97 +58,8 @@ module HostBinding =
         require (not (info.Attributes.HasFlag(FileAttributes.ReparsePoint))) "input-symlink-refused"
         require (info.Length > 0L && info.Length <= maximum) "input-size-refused"
 
-    [<Literal>]
-    let private SigTerm = 15
-    [<Literal>]
-    let private SigKill = 9
-    [<Literal>]
-    let private Esrch = 3
-    [<Literal>]
-    let private WaitNoHang = 1
-    [<Literal>]
-    let private PrSetChildSubreaper = 36
-
-    [<DllImport("libc", SetLastError = true)>]
-    extern int private kill(int pid, int signal)
-
-    [<DllImport("libc", SetLastError = true)>]
-    extern int private waitpid(int pid, int& status, int options)
-
-    [<DllImport("libc", SetLastError = true)>]
-    extern int private prctl(int option, uint64 argument2, uint64 argument3, uint64 argument4, uint64 argument5)
-
-    let private groupExists processGroup =
-        let result = kill(-processGroup, 0)
-        result = 0 || Marshal.GetLastPInvokeError() <> Esrch
-
-    let private reapGroup processGroup =
-        let mutable status = 0
-        let mutable reaped = waitpid(-processGroup, &status, WaitNoHang)
-        while reaped > 0 do reaped <- waitpid(-processGroup, &status, WaitNoHang)
-
-    let private settleGroup (child: Process) processGroup =
-        kill(-processGroup, SigTerm) |> ignore
-        let graceful = Stopwatch.StartNew()
-        while groupExists processGroup && graceful.ElapsedMilliseconds < 250L do
-            Threading.Thread.Sleep(10)
-            reapGroup processGroup
-        if groupExists processGroup then kill(-processGroup, SigKill) |> ignore
-        try if not child.HasExited then child.WaitForExit(1500) |> ignore with _ -> ()
-        let forced = Stopwatch.StartNew()
-        while groupExists processGroup && forced.ElapsedMilliseconds < 1500L do
-            reapGroup processGroup
-            Threading.Thread.Sleep(10)
-        reapGroup processGroup
-        not (groupExists processGroup)
-
-    let runBoundedProcess executable (root: string) (arguments: string list) (timeoutMilliseconds: int) (stdoutMaximum: int) (stderrMaximum: int) =
-        require (RuntimeInformation.IsOSPlatform(OSPlatform.Linux)) "process-platform-refused"
-        require (File.Exists("/usr/bin/setsid")) "process-session-launcher-refused"
-        require (prctl(PrSetChildSubreaper, 1UL, 0UL, 0UL, 0UL) = 0) "process-subreaper-refused"
-        let start = ProcessStartInfo("/usr/bin/setsid")
-        start.WorkingDirectory <- root
-        start.UseShellExecute <- false
-        start.RedirectStandardOutput <- true
-        start.RedirectStandardError <- true
-        start.Environment.Clear()
-        start.Environment["PATH"] <- "/usr/local/bin:/usr/bin:/bin"
-        start.Environment["LANG"] <- "C.UTF-8"
-        start.Environment["LC_ALL"] <- "C.UTF-8"
-        start.ArgumentList.Add(executable)
-        for argument in arguments do start.ArgumentList.Add(argument)
-        use child = Process.Start(start)
-        let processGroup = child.Id
-        let capture maximum (stream: Stream) =
-            Task.Run(fun () ->
-                use result = new MemoryStream()
-                let buffer = Array.zeroCreate<byte> 1024
-                let mutable complete = false
-                while not complete do
-                    let count = stream.Read(buffer, 0, buffer.Length)
-                    if count = 0 then complete <- true
-                    elif result.Length + int64 count > int64 maximum then
-                        kill(-processGroup, SigKill) |> ignore
-                        refuse "git-output-limit-refused"
-                    else result.Write(buffer, 0, count)
-                UTF8Encoding(false, true).GetString(result.ToArray()))
-        let stdoutTask = capture stdoutMaximum child.StandardOutput.BaseStream
-        let stderrTask = capture stderrMaximum child.StandardError.BaseStream
-        let exited = child.WaitForExit(timeoutMilliseconds)
-        let completed =
-            try exited && Task.WaitAll([| stdoutTask :> Task; stderrTask :> Task |], 2000)
-            with :? AggregateException -> false
-        let tasksSucceeded = completed && stdoutTask.IsCompletedSuccessfully && stderrTask.IsCompletedSuccessfully
-        let descendantsRemain = exited && groupExists processGroup
-        if not exited || not tasksSucceeded || descendantsRemain then
-            require (settleGroup child processGroup) "process-cleanup-refused"
-            if not exited then refuse "git-timeout-refused" else refuse "git-output-refused"
-        let stdout = stdoutTask.Result
-        let stderr = stderrTask.Result
-        child.ExitCode, stdout, stderr
-
     let private runGit (root: string) (arguments: string list) =
-        let exitCode, stdout, _ = runBoundedProcess "git" root arguments 10000 65536 4096
+        let exitCode, stdout, _ = (OwnedProcessScope.active ()).Run("/usr/bin/git", root, arguments, 10000, 65536, 4096)
         require (exitCode = 0) "git-source-refused"
         stdout.Trim()
 

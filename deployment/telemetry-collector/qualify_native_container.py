@@ -129,12 +129,13 @@ class Runner:
         except UnicodeDecodeError: return None
         if any(character not in '\n\r\t' and not ' '<=character<='~' for character in text): return None
         return text
-    def run(self,args,*,env=None,input_bytes=None,limit=MAX_OUTPUT,check=True,diagnostic=None):
+    def run(self,args,*,env=None,input_bytes=None,limit=MAX_OUTPUT,check=True,diagnostic=None,timeout_seconds=120):
         require(isinstance(args,list) and all(isinstance(x,str) and x for x in args),'command-refused')
         if self.recorder is not None: require(isinstance(diagnostic,str) and re.fullmatch(r'[a-z0-9-]{1,64}',diagnostic)!=None,'command-diagnostic-refused')
         remaining=self.deadline-time.monotonic()
         require(remaining>0,'operation-deadline')
-        left=max(1,min(120,int(remaining)))
+        require(isinstance(timeout_seconds,int) and 1<=timeout_seconds<=120,'command-timeout-refused')
+        left=max(1,min(timeout_seconds,int(remaining)))
         p=subprocess.run(args,input=input_bytes,stdout=subprocess.PIPE,stderr=subprocess.PIPE,env=env or fixed_env(),timeout=left,check=False)
         require(len(p.stdout)<=limit and len(p.stderr)<=limit,'command-output-limit')
         if self.recorder is not None:
@@ -159,6 +160,7 @@ class Operation:
         self.images={}; self.owned_run_ordinal=0; self.command_diagnostics=[]; self.inspection_diagnostics=[]
         self.native_start_failure_diagnostic=None
         self.host_binding=None
+        self.host_binding_dependencies=None
     def phase(self,name,**facts): self.result['phases'].append({'ordinal':len(self.result['phases'])+1,'name':name,**facts})
     def command_diagnostic(self,value):
         require(len(self.command_diagnostics)<128,'command-diagnostic-capacity-refused')
@@ -178,6 +180,19 @@ class Operation:
                 'command':'native-start','encoding':'base64','maximumDecodedBytes':MAX_PRIVATE_NATIVE_START_STDERR,
                 'stderrBytes':len(decoded),'stderrSha256':value['stderrSha256'],'stderrBase64':private_stderr}
         self.command_diagnostics.append({'ordinal':len(self.command_diagnostics)+1,'phase':phase,**value})
+    def host_binding_dependency_snapshot(self):
+        require(self.r.deadline-time.monotonic()>=85,'host-binding-budget-refused')
+        try:
+            result={}
+            for name,path,maximum in (
+                    ('hostBinding',self.a.host_binding,16*1024*1024),
+                    ('dotnet',pathlib.Path('/usr/bin/dotnet'),256*1024*1024),
+                    ('git',pathlib.Path('/usr/bin/git'),64*1024*1024),
+                    ('setsid',pathlib.Path('/usr/bin/setsid'),4*1024*1024)):
+                resolved=path.resolve(strict=True); regular(resolved,maximum)
+                result[name]=(str(resolved),digest(resolved))
+            return result
+        except (OSError,Refusal): raise Refusal('host-binding-dependency-refused')
     def write_private_diagnostics(self):
         output=self.root/'output'
         if output.is_dir():
@@ -218,9 +233,10 @@ class Operation:
         contract=self.a.source_root/'policy/learn-01-current-focused-v1.json'
         require(digest(contract)==LEARN_CONTRACT,'source-payload-drift')
         regular(self.a.host_binding,16*1024*1024)
+        self.host_binding_dependencies=self.host_binding_dependency_snapshot()
         binding=json.loads(self.r.run(['/usr/bin/dotnet',str(self.a.host_binding),'inspect',
                     '--source-root',str(self.a.source_root),'--source-sha',self.a.source_sha,
-                    '--profile',str(profile),'--source-pins',str(self.a.native_source_pins)],limit=4096).stdout)
+                    '--profile',str(profile),'--source-pins',str(self.a.native_source_pins)],limit=4096,timeout_seconds=90).stdout)
         require(set(binding)=={'schema','sourceSha','sourceTree','profileSha256','operationId','sourcePinsSha256','producerSha256','bindingSha256'}
                 and binding['schema']=='fsgg.telemetry.validated-host-binding/1'
                 and binding['sourceSha']==self.a.source_sha and binding['operationId']==OPERATION
@@ -314,12 +330,18 @@ class Operation:
         admission=os.environ.pop('FSGG_PRIVATE_EFFECT_ADMISSION',None)
         require(isinstance(admission,str) and re.fullmatch(r'[0-9a-f]{64}',admission)!=None
                 and self.host_binding is not None,'effect-admission-refused')
+        try: current_dependencies=self.host_binding_dependency_snapshot()
+        except Refusal as error:
+            if str(error)=='host-binding-budget-refused': raise
+            raise Refusal('effect-admission-refused')
+        if self.host_binding_dependencies is None: self.host_binding_dependencies=current_dependencies
+        require(current_dependencies==self.host_binding_dependencies,'effect-admission-refused')
         profile=self.a.source_root/'deployment/telemetry-collector/native-operation-v1.json'
         verified=self.r.run(['/usr/bin/dotnet',str(self.a.host_binding),'verify',
                     '--source-root',str(self.a.source_root),'--source-sha',self.a.source_sha,
                     '--profile',str(profile),'--source-pins',str(self.a.native_source_pins),
                     '--nonce',self.a.run_nonce,'--expected-binding-sha',self.host_binding['bindingSha256']],
-                    input_bytes=(admission+'\n').encode(),limit=4096,check=False,diagnostic='host-binding-verify')
+                    input_bytes=(admission+'\n').encode(),limit=4096,check=False,diagnostic='host-binding-verify',timeout_seconds=90)
         admission=''
         try: verification=json.loads(verified.stdout)
         except (UnicodeDecodeError,json.JSONDecodeError): verification=None
