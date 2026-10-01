@@ -28,6 +28,22 @@ FIXED_ENV = (
     f"NO_PROXY=localhost,127.0.0.1,[::1],{RECEIVER_ALIAS}",
 )
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
+RECEIVER_MOUNTS = {
+    "/qualification/host.json": False,
+    "/qualification/host.json.native-collector.json": False,
+    NATIVE_MOUNT: False,
+    "/qualification/evidence": True,
+    "/qualification/store": True,
+    "/qualification/tls": False,
+    "/qualification/credentials": False,
+}
+RECEIVER_INSPECTION_REFUSALS = frozenset({
+    "container-network-set-refused", "direct-network-route-refused",
+    "receiver-runtime-fence-refused", "receiver-resource-fence-refused",
+    "receiver-user-refused", "receiver-environment-route-refused",
+    "receiver-mount-custody-refused", "receiver-public-route-refused",
+    "receiver-command-refused",
+})
 
 
 class Refusal(Exception):
@@ -185,6 +201,122 @@ def inspect_egress(value: dict) -> None:
     require(not value.get("Mounts"), "egress-mount-refused")
 
 
+def receiver_inspection_projection(value: dict, refusal: str) -> dict:
+    """Project only bounded, non-secret receiver guard facts for sealed evidence."""
+    host = value.get("HostConfig") if isinstance(value.get("HostConfig"), dict) else {}
+    config = value.get("Config") if isinstance(value.get("Config"), dict) else {}
+    settings = value.get("NetworkSettings") if isinstance(value.get("NetworkSettings"), dict) else {}
+    networks = settings.get("Networks") if isinstance(settings.get("Networks"), dict) else {}
+    network_names = set(networks)
+    expected_networks = {NATIVE_NETWORK, COLLECTOR_NETWORK}
+    mode = host.get("NetworkMode")
+    if mode == COLLECTOR_NETWORK:
+        mode_category = "expected"
+    elif isinstance(mode, str) and mode in {"host", "default", "bridge", "slirp4netns", "pasta"}:
+        mode_category = "direct"
+    elif isinstance(mode, str) and mode:
+        mode_category = "other"
+    else:
+        mode_category = "missing"
+
+    environment = config.get("Env") if isinstance(config.get("Env"), list) else []
+    environment_names = [item.split("=", 1)[0] for item in environment
+                         if isinstance(item, str) and "=" in item]
+    mounts = value.get("Mounts") if isinstance(value.get("Mounts"), list) else []
+    mount_states = {}
+    for destination, expected_writable in RECEIVER_MOUNTS.items():
+        rows = [row for row in mounts if isinstance(row, dict) and row.get("Destination") == destination]
+        if not rows:
+            mount_states[destination] = "missing"
+        elif len(rows) != 1 or type(rows[0].get("RW")) is not bool:
+            mount_states[destination] = "ambiguous"
+        else:
+            writable = rows[0]["RW"]
+            mount_states[destination] = ("expected" if writable == expected_writable
+                                         else "writability-differs")
+    unexpected_mounts = sum(1 for row in mounts if not (
+        isinstance(row, dict) and isinstance(row.get("Destination"), str)
+        and row["Destination"] in RECEIVER_MOUNTS))
+
+    cap_drop = host.get("CapDrop") if isinstance(host.get("CapDrop"), list) else []
+    cap_drop_set = {item for item in cap_drop if isinstance(item, str)}
+    if cap_drop_set == {"ALL"}:
+        cap_drop_category = "all"
+    elif cap_drop_set == {"CAP_ALL"}:
+        cap_drop_category = "cap-all"
+    elif cap_drop_set and all(re.fullmatch(r"CAP_[A-Z0-9_]+", item) for item in cap_drop_set):
+        cap_drop_category = "expanded"
+    elif not cap_drop_set:
+        cap_drop_category = "empty"
+    else:
+        cap_drop_category = "other"
+
+    def bounded_integer(candidate, maximum):
+        return candidate if type(candidate) is int and -1 <= candidate <= maximum else None
+
+    user = config.get("User")
+    if user == "32768:32768":
+        user_category = "expected"
+    elif isinstance(user, str) and re.fullmatch(r"[0-9]+(?::[0-9]+)?", user):
+        user_category = "numeric-other"
+    elif user is None:
+        user_category = "missing"
+    else:
+        user_category = "other"
+    security = host.get("SecurityOpt") if isinstance(host.get("SecurityOpt"), list) else []
+    effective = value.get("EffectiveCaps") if isinstance(value.get("EffectiveCaps"), list) else []
+    bounding = value.get("BoundingCaps") if isinstance(value.get("BoundingCaps"), list) else []
+    tmpfs = host.get("Tmpfs") if isinstance(host.get("Tmpfs"), dict) else {}
+    return {
+        "failureCode": (refusal if isinstance(refusal, str) and refusal in RECEIVER_INSPECTION_REFUSALS
+                        else "receiver-inspection-refused"),
+        "network": {
+            "count": min(len(network_names), 64),
+            "collectorPresent": COLLECTOR_NETWORK in network_names,
+            "nativePresent": NATIVE_NETWORK in network_names,
+            "unexpectedCount": min(len(network_names - expected_networks), 64),
+            "modeCategory": mode_category,
+        },
+        "runtime": {
+            "readonlyRootfs": host.get("ReadonlyRootfs") if type(host.get("ReadonlyRootfs")) is bool else None,
+            "pidsLimit": bounded_integer(host.get("PidsLimit"), 1 << 30),
+            "memory": bounded_integer(host.get("Memory"), 1 << 50),
+            "nanoCpus": bounded_integer(host.get("NanoCpus"), 1 << 50),
+            "userCategory": user_category,
+        },
+        "environment": {
+            "entryCount": min(len(environment), 4096),
+            "proxyPresent": any(name.endswith("_PROXY") for name in environment_names),
+            "credentialPresent": any(name.startswith("FSGG_TELEMETRY_CREDENTIAL_")
+                                     for name in environment_names),
+        },
+        "storage": {
+            "mountCount": min(len(mounts), 4096),
+            "unexpectedMountCount": min(unexpected_mounts, 4096),
+            "expectedMounts": mount_states,
+            "tmpfsCount": min(len(tmpfs), 64),
+            "temporaryMountPresent": "/tmp" in tmpfs,
+        },
+        "privilege": {
+            "capAddEmpty": not bool(host.get("CapAdd")),
+            "capDropCategory": cap_drop_category,
+            "capDropCount": min(len(cap_drop_set), 512),
+            "effectiveCapabilityCount": min(len(effective), 512),
+            "boundingCapabilityCount": min(len(bounding), 512),
+            "noNewPrivileges": any(isinstance(item, str) and item.startswith("no-new-privileges")
+                                   for item in security),
+            "privileged": host.get("Privileged") if type(host.get("Privileged")) is bool else None,
+            "usernsPrivate": host.get("UsernsMode") == "private",
+            "pidHost": host.get("PidMode") == "host",
+            "utsHost": host.get("UTSMode") == "host",
+        },
+        "route": {
+            "portBindingsPresent": bool(host.get("PortBindings")),
+            "commandExact": config.get("Cmd") == ["serve", "--config", "/qualification/host.json"],
+        },
+    }
+
+
 def inspect_receiver(value: dict) -> None:
     inspect_networks(value, {NATIVE_NETWORK, COLLECTOR_NETWORK})
     host, config = value["HostConfig"], value["Config"]
@@ -197,12 +329,7 @@ def inspect_receiver(value: dict) -> None:
     require(not any(name.endswith("_PROXY") or name.startswith("FSGG_TELEMETRY_CREDENTIAL_")
                     for name in environment), "receiver-environment-route-refused")
     mounts = {(row["Destination"], bool(row["RW"])) for row in value.get("Mounts", [])}
-    require(mounts == {
-        ("/qualification/host.json", False),
-        ("/qualification/host.json.native-collector.json", False), (NATIVE_MOUNT, False),
-        ("/qualification/evidence", True), ("/qualification/store", True),
-        ("/qualification/tls", False), ("/qualification/credentials", False),
-    }, "receiver-mount-custody-refused")
+    require(mounts == set(RECEIVER_MOUNTS.items()), "receiver-mount-custody-refused")
     require(not host.get("PortBindings") and host.get("NetworkMode") != "host",
             "receiver-public-route-refused")
     require(config.get("Cmd") == ["serve", "--config", "/qualification/host.json"],
