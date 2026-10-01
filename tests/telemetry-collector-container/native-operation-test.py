@@ -14,6 +14,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 SUPPORT_PATH = ROOT / "deployment/telemetry-collector/native_producer_support.py"
 DRIVER_PATH = ROOT / "deployment/telemetry-collector/qualify_native.py"
 PROFILE_PATH = ROOT / "deployment/telemetry-collector/native-operation-v1.json"
+PROVENANCE_PATH = ROOT / "tests/telemetry-collector-container/native-rollout-v2-provenance.json"
 
 spec = importlib.util.spec_from_file_location("native_producer_support", SUPPORT_PATH)
 import sys
@@ -48,6 +49,15 @@ def child_thread(selector="/root/native_ack"):
             "source": {"subAgent": {"thread_spawn": {"parent_thread_id": PARENT, "agent_path": selector, "depth": 1}}}}
 
 
+def activity(kind="started", identifier="call-spawn"):
+    return {"type": "subAgentActivity", "id": identifier, "kind": kind,
+            "agentThreadId": CHILD, "agentPath": "/root/native_ack"}
+
+
+def rollout_row(kind, payload, ordinal):
+    return {"timestamp": "2026-10-01T00:00:00.000Z", "ordinal": ordinal, "type": kind, "payload": payload}
+
+
 class NativeOperationTests(unittest.TestCase):
     def ready(self):
         value = support.OperationEvidence("v2-host-01.8a-native-collaboration-v1", "owner-nonce-01")
@@ -64,6 +74,17 @@ class NativeOperationTests(unittest.TestCase):
         self.assertIn("features.multi_agent=true", joined)
         for disabled in ("shell_tool", "unified_exec", "apps", "image_generation", "view_image"):
             self.assertIn(f"features.{disabled}=false", joined)
+        self.assertIn("fork_turns=none", profile["prompt"]); self.assertIn("timeout_ms=30000", profile["prompt"])
+        provenance = json.loads(PROVENANCE_PATH.read_text())
+        self.assertEqual(("0.158.0", "rust-v0.158.0", "synthetic-source-derived-not-runtime-evidence"),
+                         (provenance["native"]["version"], provenance["upstream"]["tag"], provenance["fixtureClassification"]))
+        self.assertEqual({"session/mod.rs", "agent/control/api.rs", "agent/control/spawn.rs",
+                          "agent/control/completion.rs", "session_prefix.rs",
+                          "context/inter_agent_completion_message.rs", "items.rs"},
+                         set(provenance["sourceBlobs"]) - {"protocol.rs", "history/rollout_payload.rs",
+                         "rollout/policy.rs", "rollout/recorder.rs", "protocol/models.rs",
+                         "multi_agents_v2/spawn.rs", "multi_agents_v2/wait.rs"})
+        self.assertTrue(all(len(value) == 64 for value in provenance["sourceBlobs"].values()))
 
     def test_profile_mutation_and_unknown_config_refuse(self):
         profile = json.loads(PROFILE_PATH.read_text())
@@ -203,6 +224,340 @@ class NativeOperationTests(unittest.TestCase):
         self.assertEqual((1, 1, 1, 0, 0), (result["spawnCount"], result["childTerminalTurns"], result["waitCount"], result["followups"], result["automaticRetries"]))
         for private in ("NATIVE-CHILD-ACK", "NATIVE-PARENT-ACK", "prompt", "auth.json", "OPENAI_API_KEY"):
             self.assertNotIn(private, encoded)
+
+    def test_v2_activity_pairs_bind_one_child_and_empty_wait_is_not_terminal_proof(self):
+        value, _ = self.ready(); started = activity()
+        self.assertIsNone(value.activity("item/started", started)); self.assertEqual(CHILD, value.activity("item/completed", started))
+        value.bind_child(child_thread())
+        wait = spawn(tool="wait"); wait["receiverThreadIds"] = []; wait["agentsStates"] = {}
+        value.collaboration(wait)
+        self.assertFalse(value.child_terminal)
+        completed = activity("completed", "subagent-completed-turn-child")
+        value.activity("item/started", completed); value.activity("item/completed", completed)
+        self.assertTrue(value.completion_activity)
+        for changed in ({**activity(kind="interacted"), "id": "bad"}, {**activity(), "extra": True}):
+            with self.assertRaises(support.Refusal): value.activity("item/started", changed)
+        for malformed in ({**activity(), "agentThreadId": []}, {**activity(), "kind": {}}, {**activity(), "id": 3}):
+            fresh,_=self.ready()
+            with self.assertRaises(support.Refusal): fresh.activity("item/started", malformed)
+
+    def test_strict_rollout_json_refuses_duplicate_keys_and_nonfinite_numbers(self):
+        for encoded in (b'{"type":"response_item","type":"event_msg"}', b'{"value":NaN}'):
+            with self.assertRaises(support.Refusal): support.strict_json(encoded, "fixture")
+
+    def _write_rollouts(self, root, parent_call_mutator=None, child_extra=None, terminate=True):
+        sessions = root / "sessions"; sessions.mkdir(mode=0o700); year=sessions/"2026";year.mkdir(mode=0o700);parent_dir=year/"10";parent_dir.mkdir(mode=0o700)
+        common_context = {"turn_id": "turn-parent", "root_turn_id": None, "cwd": "/qualification/native/work",
+                          "approval_policy": "never", "sandbox_policy": {"type": "read-only"},
+                          "model": "gpt-5.6-sol", "multi_agent_version": "v2", "effort": "medium", "summary": "auto"}
+        parent_meta = {"session_id": PARENT, "id": PARENT, "forked_from_id": None,
+                       "forked_from_ordinal_exclusive": None, "parent_thread_id": None,
+                       "timestamp": "2026-10-01T00:00:00Z", "cwd": "/qualification/native/work",
+                       "originator": "app-server", "cli_version": "0.158.0", "source": "mcp", "model_provider": "openai",
+                       "history_mode": "paginated", "history_base": None, "multi_agent_version": "v2"}
+        def stamp(turn):
+            return {"turn_id": turn, "create_time": 1790812800.25}
+        def message(identifier, turn, role, kind, text, phase=None):
+            value={"type":"message","id":identifier,"role":role,"content":[{"type":kind,"text":text}],
+                   "internal_chat_message_metadata_passthrough":stamp(turn)}
+            if phase is not None:value["phase"]=phase
+            return value
+        def agent_message(identifier, turn, author, recipient, text):
+            return {"type":"agent_message","id":identifier,"author":author,"recipient":recipient,
+                    "content":[{"type":"input_text","text":text}],
+                    "internal_chat_message_metadata_passthrough":stamp(turn)}
+        def reasoning(identifier, turn, sentinel):
+            return {"type":"reasoning","id":identifier,"summary":[{"type":"summary_text","text":sentinel}],
+                    "content":None,"encrypted_content":None,
+                    "internal_chat_message_metadata_passthrough":stamp(turn)}
+        def completed_item(thread,turn,item):
+            return {"type":"item_completed","thread_id":thread,"turn_id":turn,
+                    "item":item,
+                    "completed_at_ms":1790812800250}
+        def completed_message(thread,turn,identifier,text):
+            return completed_item(thread,turn,{"type":"AgentMessage","id":identifier,
+                                  "content":[{"type":"Text","text":text}],"phase":"final_answer"})
+        def completed_reasoning(thread,turn,identifier,sentinel):
+            return completed_item(thread,turn,{"type":"Reasoning","id":identifier,
+                                  "summary_text":[sentinel],"raw_content":[]})
+        spawn_call = {"type": "function_call", "id":"response-spawn", "name": "spawn_agent", "namespace": "functions", "call_id": "call-spawn",
+                      "arguments": json.dumps({"message": support.FIXED_CHILD_PROMPT, "task_name": support.FIXED_TASK_NAME,
+                                               "model": "gpt-5.6-sol", "reasoning_effort": "medium", "fork_turns": "none"}, separators=(",", ":")),
+                      "internal_chat_message_metadata_passthrough":stamp("turn-parent")}
+        wait_call = {"type": "function_call", "id":"response-wait", "name": "wait_agent", "namespace": None, "call_id": "call-wait",
+                     "arguments": json.dumps({"timeout_ms": support.FIXED_WAIT_TIMEOUT_MS}, separators=(",", ":")),
+                     "internal_chat_message_metadata_passthrough":stamp("turn-parent")}
+        if parent_call_mutator: parent_call_mutator(spawn_call, wait_call)
+        completion=("Message Type: FINAL_ANSWER\nTask name: /root\nSender: /root/native_ack\n"
+                    "Payload:\nNATIVE-CHILD-ACK")
+        parent_payloads = [("session_meta", parent_meta), ("turn_context", common_context),
+                           ("event_msg", {"type": "turn_started", "turn_id": "turn-parent"}),
+                           ("response_item", message("parent-user","turn-parent","user","input_text",support.FIXED_PROMPT)),
+                           ("event_msg", completed_item(PARENT,"turn-parent",{"type":"UserMessage","id":"parent-user",
+                                          "content":[{"type":"text","text":support.FIXED_PROMPT,"text_elements":[]}]})),
+                           ("response_item", spawn_call),
+                           ("event_msg", completed_item(PARENT,"turn-parent",{"type":"SubAgentActivity","id":"call-spawn",
+                                          "kind":"started","agent_thread_id":CHILD,"agent_path":"/root/native_ack"})),
+                           ("response_item", {"type": "function_call_output", "id":"response-spawn-output", "call_id": "call-spawn",
+                                              "output": '{"task_name":"/root/native_ack"}',
+                                              "internal_chat_message_metadata_passthrough":stamp("turn-parent")}),
+                           ("response_item", wait_call),
+                           ("event_msg", completed_item(PARENT,"turn-parent",{"type":"SubAgentActivity",
+                                          "id":"subagent-completed-turn-child","kind":"completed",
+                                          "agent_thread_id":CHILD,"agent_path":"/root/native_ack"})),
+                           ("inter_agent_communication_metadata", {"trigger_turn":False}),
+                           ("response_item", agent_message("parent-completion","turn-parent","/root/native_ack","/root",completion)),
+                           ("event_msg", completed_item(PARENT,"turn-parent",{"type":"CollabAgentToolCall","id":"call-wait",
+                                          "tool":"wait","status":"completed","sender_thread_id":PARENT,
+                                          "receiver_thread_ids":[],"receiver_agents":[],"agents_states":{}})),
+                           ("response_item", {"type": "function_call_output", "id":"response-wait-output", "call_id": "call-wait",
+                                              "output": '{"message":"Wait completed.","timed_out":false}',
+                                              "internal_chat_message_metadata_passthrough":stamp("turn-parent")}),
+                           ("response_item", reasoning("parent-reasoning","turn-parent","PRIVATE-PARENT-SENTINEL")),
+                           ("event_msg", completed_reasoning(PARENT,"turn-parent","parent-reasoning","PRIVATE-PARENT-SENTINEL")),
+                           ("response_item", message("parent-ack","turn-parent","assistant","output_text","NATIVE-PARENT-ACK","final_answer")),
+                           ("event_msg", completed_message(PARENT,"turn-parent","parent-ack","NATIVE-PARENT-ACK")),
+                           ("event_msg", {"type": "turn_complete", "turn_id": "turn-parent", "last_agent_message": "NATIVE-PARENT-ACK", "error": None})]
+        child_meta = {**parent_meta, "id": CHILD, "parent_thread_id": PARENT, "agent_path": "/root/native_ack",
+                      "source": {"subagent": {"thread_spawn": {"parent_thread_id": PARENT, "depth": 1,
+                                                                   "agent_path": "/root/native_ack"}}}}
+        child_context = {**common_context, "turn_id": "turn-child", "root_turn_id": "turn-parent"}
+        child_payloads = [("session_meta", child_meta), ("turn_context", child_context),
+                          ("event_msg", {"type": "turn_started", "turn_id": "turn-child", "root_turn_id": "turn-parent"}),
+                          ("inter_agent_communication_metadata", {"trigger_turn":True}),
+                          ("response_item", agent_message("child-initial","turn-child","/root","/root/native_ack",support.FIXED_CHILD_PROMPT)),
+                          ("response_item", reasoning("child-reasoning","turn-child","PRIVATE-CHILD-SENTINEL")),
+                          ("event_msg", completed_reasoning(CHILD,"turn-child","child-reasoning","PRIVATE-CHILD-SENTINEL"))]
+        if child_extra: child_payloads.append(("response_item", child_extra))
+        child_payloads.extend([
+            ("response_item", message("child-ack","turn-child","assistant","output_text","NATIVE-CHILD-ACK","final_answer")),
+            ("event_msg", completed_message(CHILD,"turn-child","child-ack","NATIVE-CHILD-ACK")),
+            ("event_msg", {"type": "turn_complete", "turn_id": "turn-child", "last_agent_message": "NATIVE-CHILD-ACK", "error": None})])
+        paths=[]
+        for name,payloads in (("parent.jsonl",parent_payloads),("child.jsonl",child_payloads)):
+            path=parent_dir/name
+            data=b"".join((json.dumps(rollout_row(kind,payload,index),separators=(",", ":"))+"\n").encode() for index,(kind,payload) in enumerate(payloads))
+            if not terminate and name=="child.jsonl":data=data[:-1]
+            path.write_bytes(data);path.chmod(0o600);paths.append(path)
+        return sessions,*paths
+
+    def _v2_audit_evidence(self):
+        value,_=self.ready(); value.activity("item/started",activity());value.activity("item/completed",activity());value.bind_child(child_thread())
+        wait=spawn(tool="wait");wait["receiverThreadIds"]=[];wait["agentsStates"]={};value.collaboration(wait)
+        value.parent_turn_started("turn-parent");value.child_turn_id="turn-child"
+        completed=activity("completed","subagent-completed-turn-child")
+        value.activity("item/started",completed);value.activity("item/completed",completed);value.child_terminal=True
+        return value
+
+    def test_original_rollout_audit_joins_exact_calls_settings_and_private_sources(self):
+        profile=support.load_profile(PROFILE_PATH)
+        with tempfile.TemporaryDirectory() as temporary:
+            root=pathlib.Path(temporary);sessions,parent,child=self._write_rollouts(root);value=self._v2_audit_evidence()
+            result=support.audit_original_rollouts(str(parent),str(child),sessions,value,profile)
+        self.assertTrue(value.original_audit);self.assertEqual((19,10),(result["parent"]["records"],result["child"]["records"]))
+        encoded=json.dumps(result)
+        for private in ("PRIVATE-PARENT-SENTINEL","PRIVATE-CHILD-SENTINEL",str(parent),support.FIXED_CHILD_PROMPT):self.assertNotIn(private,encoded)
+
+    def _mutate_rollout(self, path, mutation):
+        rows=[json.loads(line) for line in path.read_text().splitlines()]
+        mutation(rows)
+        for ordinal,row in enumerate(rows):row["ordinal"]=ordinal
+        path.write_text("".join(json.dumps(row,separators=(",", ":"))+"\n" for row in rows));path.chmod(0o600)
+
+    def test_native_inter_agent_communications_are_mandatory_typed_and_paired(self):
+        profile=support.load_profile(PROFILE_PATH)
+        scenarios=(
+            lambda rows: rows.__delitem__(next(index for index,row in enumerate(rows) if row["type"]=="inter_agent_communication_metadata")),
+            lambda rows: next(row for row in rows if row["type"]=="response_item" and row["payload"].get("type")=="agent_message")["payload"]["content"][0].update(type="output_text"),
+            lambda rows: next(row for row in rows if row["type"]=="inter_agent_communication_metadata")["payload"].update(trigger_turn=False),
+        )
+        for mutation in scenarios:
+            with self.subTest(case=scenarios.index(mutation)),tempfile.TemporaryDirectory() as temporary:
+                root=pathlib.Path(temporary);sessions,parent,child=self._write_rollouts(root);self._mutate_rollout(child,mutation)
+                with self.assertRaises(support.Refusal):
+                    support.audit_original_rollouts(str(parent),str(child),sessions,self._v2_audit_evidence(),profile)
+
+    def test_original_rollout_refuses_foreign_turn_order_extra_ack_and_wait_id_disagreement(self):
+        profile=support.load_profile(PROFILE_PATH)
+        def foreign_turn(rows):
+            call=next(row["payload"] for row in rows if row["type"]=="response_item" and row["payload"].get("name")=="spawn_agent")
+            call["internal_chat_message_metadata_passthrough"]["turn_id"]="foreign-turn"
+        def terminal_first(rows):
+            terminal=rows.pop(next(index for index,row in enumerate(rows) if row["type"]=="event_msg" and row["payload"].get("type")=="turn_complete"))
+            rows.insert(1,terminal)
+        def extra_ack(rows):
+            ack=next(row for row in rows if row["type"]=="response_item" and row["payload"].get("role")=="assistant")
+            extra=json.loads(json.dumps(ack));extra["payload"]["id"]="foreign-ack";extra["payload"]["content"][0]["text"]="NOT-THE-ACK"
+            rows.insert(rows.index(ack),extra)
+        for mutation in (foreign_turn,terminal_first,extra_ack):
+            with self.subTest(case=mutation.__name__),tempfile.TemporaryDirectory() as temporary:
+                root=pathlib.Path(temporary);sessions,parent,child=self._write_rollouts(root);self._mutate_rollout(parent,mutation)
+                with self.assertRaises(support.Refusal):
+                    support.audit_original_rollouts(str(parent),str(child),sessions,self._v2_audit_evidence(),profile)
+        with tempfile.TemporaryDirectory() as temporary:
+            root=pathlib.Path(temporary);sessions,parent,child=self._write_rollouts(root);evidence=self._v2_audit_evidence();evidence.wait_call_id="foreign-wait"
+            with self.assertRaisesRegex(support.Refusal,"wait"):
+                support.audit_original_rollouts(str(parent),str(child),sessions,evidence,profile)
+
+    def test_original_completed_message_event_joins_identity_thread_turn_and_ack(self):
+        profile=support.load_profile(PROFILE_PATH)
+        def contradictory(rows):
+            terminal=next(index for index,row in enumerate(rows) if row["type"]=="event_msg" and row["payload"].get("type")=="turn_complete")
+            rows.insert(terminal,{"timestamp":"2026-10-01T00:00:00.000Z","type":"event_msg","payload":{
+                "type":"item_completed","thread_id":CHILD,"turn_id":"turn-child",
+                "item":{"type":"AgentMessage","id":"foreign-ack","content":[{"type":"Text","text":"NOT-THE-ACK"}],"phase":"final_answer"},
+                "completed_at_ms":1}})
+        def wrong_thread(rows):
+            event=next(row["payload"] for row in rows if row["type"]=="event_msg" and row["payload"].get("type")=="item_completed")
+            event["thread_id"]=PARENT
+        def unknown_item(rows):
+            event=next(row["payload"] for row in rows if row["type"]=="event_msg" and row["payload"].get("type")=="item_completed")
+            event["item"]={"type":"CommandExecution","id":"child-ack","command":"private"}
+        for mutation in (contradictory,wrong_thread,unknown_item):
+            with self.subTest(case=mutation.__name__),tempfile.TemporaryDirectory() as temporary:
+                root=pathlib.Path(temporary);sessions,parent,child=self._write_rollouts(root);self._mutate_rollout(child,mutation)
+                with self.assertRaises(support.Refusal):
+                    support.audit_original_rollouts(str(parent),str(child),sessions,self._v2_audit_evidence(),profile)
+
+    def test_original_completed_subagent_activity_joins_live_identity_and_order(self):
+        profile=support.load_profile(PROFILE_PATH)
+        def completed_activity(rows):
+            return next((index,row["payload"]) for index,row in enumerate(rows)
+                         if row["type"]=="event_msg" and row["payload"].get("type")=="item_completed"
+                         and row["payload"].get("item",{}).get("type")=="SubAgentActivity"
+                         and row["payload"]["item"].get("kind")=="completed")
+        def wrong_child(rows): completed_activity(rows)[1]["item"]["agent_thread_id"]=PARENT
+        def wrong_path(rows): completed_activity(rows)[1]["item"]["agent_path"]="/root/foreign"
+        def wrong_turn(rows): completed_activity(rows)[1]["item"]["id"]="subagent-completed-foreign-turn"
+        def wrong_kind(rows): completed_activity(rows)[1]["item"]["kind"]="interacted"
+        def malformed(rows): completed_activity(rows)[1]["item"]["agent_thread_id"]={}
+        def duplicate(rows):
+            index,_event=completed_activity(rows);rows.insert(index+1,json.loads(json.dumps(rows[index])))
+        def before_started_activity(rows):
+            index,_event=completed_activity(rows);record=rows.pop(index)
+            started=next(index for index,row in enumerate(rows)
+                         if row["type"]=="event_msg" and row["payload"].get("type")=="item_completed"
+                         and row["payload"].get("item",{}).get("type")=="SubAgentActivity"
+                         and row["payload"]["item"].get("kind")=="started")
+            rows.insert(started,record)
+        for mutation in (wrong_child,wrong_path,wrong_turn,wrong_kind,malformed,duplicate,before_started_activity):
+            with self.subTest(case=mutation.__name__),tempfile.TemporaryDirectory() as temporary:
+                root=pathlib.Path(temporary);sessions,parent,child=self._write_rollouts(root);self._mutate_rollout(parent,mutation)
+                with self.assertRaises(support.Refusal):
+                    support.audit_original_rollouts(str(parent),str(child),sessions,self._v2_audit_evidence(),profile)
+
+    def test_original_completed_subagent_activity_can_arrive_late_without_terminal_authority(self):
+        profile=support.load_profile(PROFILE_PATH)
+        with tempfile.TemporaryDirectory() as temporary:
+            root=pathlib.Path(temporary);sessions,parent,child=self._write_rollouts(root)
+            def move_after_terminal(rows):
+                index=next(index for index,row in enumerate(rows)
+                           if row["type"]=="event_msg" and row["payload"].get("type")=="item_completed"
+                           and row["payload"].get("item",{}).get("type")=="SubAgentActivity"
+                           and row["payload"]["item"].get("kind")=="completed")
+                rows.append(rows.pop(index))
+            self._mutate_rollout(parent,move_after_terminal)
+            value=self._v2_audit_evidence()
+            result=support.audit_original_rollouts(str(parent),str(child),sessions,value,profile)
+        self.assertTrue(value.original_audit);self.assertEqual(19,result["parent"]["records"])
+
+    def test_original_rollout_refuses_numeric_type_substitution_and_overflow(self):
+        profile=support.load_profile(PROFILE_PATH)
+        for value in (30000.0,True,-1,30001):
+            with self.subTest(timeout=value),tempfile.TemporaryDirectory() as temporary:
+                root=pathlib.Path(temporary)
+                def mutate(_spawn,wait):wait["arguments"]=json.dumps({"timeout_ms":value},separators=(",", ":"))
+                sessions,parent,child=self._write_rollouts(root,mutate)
+                with self.assertRaisesRegex(support.Refusal,"wait arguments"):
+                    support.audit_original_rollouts(str(parent),str(child),sessions,self._v2_audit_evidence(),profile)
+        with tempfile.TemporaryDirectory() as temporary:
+            root=pathlib.Path(temporary);sessions,parent,child=self._write_rollouts(root)
+            def numeric_bool(rows):
+                output=next(row["payload"] for row in rows if row["type"]=="response_item" and row["payload"].get("call_id")=="call-wait" and "output" in row["payload"])
+                output["output"]='{"message":"Wait completed.","timed_out":0}'
+            self._mutate_rollout(parent,numeric_bool)
+            with self.assertRaisesRegex(support.Refusal,"wait did not complete"):
+                support.audit_original_rollouts(str(parent),str(child),sessions,self._v2_audit_evidence(),profile)
+        with self.assertRaisesRegex(support.Refusal,"nonfinite"):
+            support.strict_json(b'{"value":1e999}',"overflow")
+
+    def test_original_rollout_audit_refuses_hidden_tools_bad_fork_child_calls_and_incomplete_files(self):
+        profile=support.load_profile(PROFILE_PATH)
+        scenarios=(
+            (lambda _s,w:w.update(name="list_agents"),None,True),
+            (lambda s,_w:s.update(arguments=json.dumps({"message":support.FIXED_CHILD_PROMPT,"task_name":support.FIXED_TASK_NAME,"model":"gpt-5.6-sol","reasoning_effort":"medium"})),None,True),
+            (None,{"type":"function_call","name":"list_agents","call_id":"hidden","arguments":"{}"},True),
+            (None,None,False))
+        for mutate,child_extra,terminate in scenarios:
+            with self.subTest(mutate=bool(mutate),child=bool(child_extra),terminate=terminate), tempfile.TemporaryDirectory() as temporary:
+                root=pathlib.Path(temporary);sessions,parent,child=self._write_rollouts(root,mutate,child_extra,terminate)
+                with self.assertRaises(support.Refusal):support.audit_original_rollouts(str(parent),str(child),sessions,self._v2_audit_evidence(),profile)
+
+    def test_original_rollout_custody_refuses_hardlink_and_persistence_health_is_bounded(self):
+        profile=support.load_profile(PROFILE_PATH)
+        with tempfile.TemporaryDirectory() as temporary:
+            root=pathlib.Path(temporary);sessions,parent,child=self._write_rollouts(root);os.link(child,child.with_name("other.jsonl"))
+            with self.assertRaisesRegex(support.Refusal,"custody"):
+                support.audit_original_rollouts(str(parent),str(child),sessions,self._v2_audit_evidence(),profile)
+        with tempfile.TemporaryDirectory() as temporary:
+            root=pathlib.Path(temporary);worker=root/"health.py"
+            worker.write_text("#!/usr/bin/env python3\nimport os,sys\nsys.stdin.buffer.read()\nos.write(2,b'failed to flush rollout writer\\n')\n") ;worker.chmod(0o700)
+            server=support.JsonLineAppServer([str(worker)],{"PATH":os.environ["PATH"]},root,2,4096)
+            try:
+                with self.assertRaisesRegex(support.Refusal,"persistence health"):
+                    server.shutdown_and_verify_persistence(time.monotonic()+2)
+            finally:server.close()
+            clean=root/"clean.py";clean.write_text("#!/usr/bin/env python3\nimport sys\nsys.stdin.buffer.read()\n");clean.chmod(0o700)
+            server=support.JsonLineAppServer([str(clean)],{"PATH":os.environ["PATH"]},root,2,4096)
+            try:self.assertEqual(0,server.shutdown_and_verify_persistence(time.monotonic()+2)["knownPersistenceErrors"])
+            finally:server.close()
+            unknown=root/"unknown.py";unknown.write_text("#!/usr/bin/env python3\nimport os,sys\nsys.stdin.buffer.read()\nos.write(2,b'UNRECOGNIZED WRITER DIAGNOSTIC\\n')\n");unknown.chmod(0o700)
+            server=support.JsonLineAppServer([str(unknown)],{"PATH":os.environ["PATH"]},root,2,4096)
+            try:
+                with self.assertRaisesRegex(support.Refusal,"unknown app-server persistence health"):
+                    server.shutdown_and_verify_persistence(time.monotonic()+2)
+            finally:server.close()
+
+    def test_original_rollout_descriptor_walk_refuses_ancestor_symlink_swap(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root=pathlib.Path(temporary);sessions,parent,_child=self._write_rollouts(root)
+            outside=root/"outside";outside.mkdir(mode=0o700)
+            outside_file=outside/parent.name;outside_file.write_bytes(parent.read_bytes());outside_file.chmod(0o600)
+            original_open=os.open;month=parent.parent;renamed=month.with_name("10-held");swapped=False
+            def swapping_open(path,*args,dir_fd=None,**kwargs):
+                nonlocal swapped
+                if path==parent.name and dir_fd is not None and not swapped:
+                    month.rename(renamed);month.symlink_to(outside,target_is_directory=True);swapped=True
+                return original_open(path,*args,dir_fd=dir_fd,**kwargs)
+            with mock.patch.object(support.os,"open",side_effect=swapping_open):
+                with self.assertRaisesRegex(support.Refusal,"ancestry changed"):
+                    support._private_rollout_snapshot(str(parent),sessions)
+            self.assertTrue(swapped)
+
+    def test_original_rollout_directory_failures_close_every_open_descriptor(self):
+        def fd_count():return len(os.listdir("/proc/self/fd"))
+        for target in ("root","intermediate"):
+            with self.subTest(target=target),tempfile.TemporaryDirectory() as temporary:
+                root=pathlib.Path(temporary);sessions,parent,_child=self._write_rollouts(root)
+                (sessions if target=="root" else parent.parent).chmod(0o777)
+                before=fd_count()
+                with mock.patch.object(support.os,"read") as read:
+                    with self.assertRaises(support.Refusal):support._private_rollout_snapshot(str(parent),sessions)
+                self.assertEqual(before,fd_count());read.assert_not_called()
+        for failing_fstat in (1,2):
+            with self.subTest(fstat=failing_fstat),tempfile.TemporaryDirectory() as temporary:
+                root=pathlib.Path(temporary);sessions,parent,_child=self._write_rollouts(root)
+                actual_fstat=support.os.fstat;calls=0
+                def broken(descriptor):
+                    nonlocal calls
+                    calls+=1
+                    if calls==failing_fstat:raise OSError("synthetic fstat refusal")
+                    return actual_fstat(descriptor)
+                before=fd_count()
+                with mock.patch.object(support.os,"fstat",side_effect=broken):
+                    with self.assertRaisesRegex(support.Refusal,"custody"):
+                        support._private_rollout_snapshot(str(parent),sessions)
+                self.assertEqual(before,fd_count())
 
     def test_completed_wait_and_authoritative_history_cover_missing_child_notifications(self):
         value, _ = self.ready(); value.spawn(spawn()); value.bind_child(child_thread()); value.collaboration(spawn(tool="wait"))
@@ -404,6 +759,7 @@ class NativeOperationTests(unittest.TestCase):
                             if name == "initialize": return {}
                             if name == "config/read": return {}
                             if name == "thread/start": return parent_response()
+                            if name == "thread/read": return {"thread": {**parent_response()["thread"], "path": str(root / "parent.jsonl")}}
                             if name == "turn/start": return {"turn": {"id": "turn-parent"}}
                             raise AssertionError(f"unexpected request after refusal: {name}")
                         def read(self, _deadline):
@@ -441,6 +797,127 @@ class NativeOperationTests(unittest.TestCase):
                                       caught.exception.diagnostic["relationship"]))
                     self.assertTrue(server.closed); private_write.assert_not_called()
                     self.assertEqual(["begin", "started", "begin"], [row[0] for row in commands])
+
+    def test_perform_v2_event_loop_defers_finishes_until_health_and_original_audit(self):
+        profile = support.load_profile(PROFILE_PATH)
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary); marker = root / "marker"; marker.write_text(profile["producer"]["coherentPayloadSha256"] + "\n")
+            profile = json.loads(json.dumps(profile)); profile["producer"]["coherentMarker"] = str(marker)
+            profile["native"]["executable"] = str(root / "native"); profile["native"]["config"] = str(root / "config")
+            profile["producer"]["executable"] = str(root / "engine"); profile["producer"]["telemetryConfig"] = str(root / "telemetry.json")
+            profile["runtime"]["home"] = str(root / "home"); profile["runtime"]["codexHome"] = str(root / "codex-home"); profile["runtime"]["cwd"] = str(root / "cwd")
+            wait = spawn(tool="wait"); wait["receiverThreadIds"] = []; wait["agentsStates"] = {}
+            complete_activity = activity("completed", "subagent-completed-turn-child")
+            events = [
+                {"method":"item/started","params":{"threadId":PARENT,"item":activity()}},
+                {"method":"item/completed","params":{"threadId":PARENT,"item":activity()}},
+                {"method":"item/completed","params":{"threadId":CHILD,"item":{"type":"agentMessage","id":"child-ack","text":"NATIVE-CHILD-ACK"}}},
+                {"method":"turn/completed","params":{"threadId":CHILD,"turn":{"id":"turn-child","status":"completed"}}},
+                {"method":"item/started","params":{"threadId":PARENT,"item":{**wait,"status":"inProgress"}}},
+                {"method":"item/completed","params":{"threadId":PARENT,"item":wait}},
+                {"method":"item/started","params":{"threadId":PARENT,"item":complete_activity}},
+                {"method":"item/completed","params":{"threadId":PARENT,"item":complete_activity}},
+                {"method":"item/completed","params":{"threadId":PARENT,"item":{"type":"agentMessage","id":"parent-ack","text":"NATIVE-PARENT-ACK"}}},
+                {"method":"turn/completed","params":{"threadId":PARENT,"turn":{"id":"turn-parent","status":"completed"}}},
+            ]
+            child_read={**child_thread(),"path":str(root/"codex-home/sessions/child.jsonl")}
+            child_read["turns"]=[{"id":"turn-child","status":"completed","items":[{"type":"userMessage","id":"cu"},{"type":"agentMessage","id":"ca","text":"NATIVE-CHILD-ACK"}]}]
+            parent_read={"id":PARENT,"ephemeral":False,"path":str(root/"codex-home/sessions/parent.jsonl"),"turns":[{"id":"turn-parent","status":"completed","items":[
+                {"type":"userMessage","id":"pu"},activity(),wait,complete_activity,{"type":"agentMessage","id":"pa","text":"NATIVE-PARENT-ACK"}]}]}
+            class FakeServer:
+                def __init__(self):self.notifications=[];self.closed=False;self.health=False
+                def notify(self,_method):pass
+                def request(self,name,params,_deadline):
+                    if name=="initialize":return {}
+                    if name=="config/read":return {}
+                    if name=="thread/start":return parent_response()
+                    if name=="turn/start":return {"turn":{"id":"turn-parent"}}
+                    if name=="thread/read":
+                        if params["threadId"]==CHILD:return {"thread":child_read if params["includeTurns"] else {key:value for key,value in child_read.items() if key!="turns"}}
+                        return {"thread":parent_read if params["includeTurns"] else {key:value for key,value in parent_read.items() if key!="turns"}}
+                    raise AssertionError(name)
+                def read(self,_deadline):return events.pop(0)
+                def shutdown_and_verify_persistence(self,_deadline):self.health=True;return {"bytes":0,"sha256":"e"*64,"knownPersistenceErrors":0,"serverExit":0}
+                def close(self):self.closed=True
+            server=FakeServer();commands=[]
+            def command_result(_engine,_config,_environment,arguments):
+                commands.append((arguments[0],server.health))
+                if arguments[0]=="begin":return receipt(token=("a" if sum(row[0]=="begin" for row in commands)==1 else "b")*32)
+                if arguments[0]=="started":return {"status":"started"}
+                if arguments[0]=="finish":return receipt(status="terminal",token="a"*32,outcome="completed")
+                raise AssertionError(arguments)
+            def audit(_parent,_child,_root,evidence,_profile):
+                self.assertTrue(server.health);evidence.original_audit=True;return {}
+            version=subprocess.CompletedProcess([],0,profile["producer"]["executableVersion"]+"\n","")
+            with mock.patch.object(driver,"pinned_native"),mock.patch.object(driver,"regular"),mock.patch.object(driver,"private_workspace_config"), \
+                 mock.patch.object(driver,"private_directory"),mock.patch.object(driver,"clean_environment",return_value={}), \
+                 mock.patch.object(driver,"config_arguments",return_value=[]),mock.patch.object(driver,"effective_config"), \
+                 mock.patch.object(driver,"producer_environment",return_value={}),mock.patch.object(driver,"workspace_binding",return_value={}), \
+                 mock.patch.object(driver,"require_applied",return_value={}),mock.patch.object(driver,"command_result",side_effect=command_result), \
+                 mock.patch.object(driver,"JsonLineAppServer",return_value=server),mock.patch.object(driver,"audit_original_rollouts",side_effect=audit), \
+                 mock.patch.object(driver.subprocess,"run",return_value=version),mock.patch.object(driver,"private_write"):
+                result=driver.perform(profile,"owner-nonce-01",root)
+            self.assertEqual(("qualified","v2","bounded-complete"),(result["status"],result["protocolMode"],result["originalRolloutAudit"]))
+            finishes=[health for command,health in commands if command=="finish"];self.assertEqual([True,True],finishes)
+            self.assertTrue(server.closed);self.assertFalse(events)
+
+    def test_perform_v2_late_completion_mismatch_has_zero_completed_finishes(self):
+        profile=support.load_profile(PROFILE_PATH)
+        with tempfile.TemporaryDirectory() as temporary:
+            root=pathlib.Path(temporary);marker=root/"marker";marker.write_text(profile["producer"]["coherentPayloadSha256"]+"\n")
+            profile=json.loads(json.dumps(profile));profile["producer"]["coherentMarker"]=str(marker)
+            profile["native"].update(executable=str(root/"native"),config=str(root/"config"))
+            profile["producer"].update(executable=str(root/"engine"),telemetryConfig=str(root/"telemetry.json"))
+            profile["runtime"].update(home=str(root/"home"),codexHome=str(root/"codex-home"),cwd=str(root/"cwd"))
+            wait=spawn(tool="wait");wait["receiverThreadIds"]=[];wait["agentsStates"]={}
+            completion=activity("completed","subagent-completed-foreign-turn")
+            events=[
+                {"method":"item/started","params":{"threadId":PARENT,"item":activity()}},
+                {"method":"item/completed","params":{"threadId":PARENT,"item":activity()}},
+                {"method":"item/completed","params":{"threadId":CHILD,"item":{"type":"agentMessage","id":"child-ack","text":"NATIVE-CHILD-ACK"}}},
+                {"method":"turn/completed","params":{"threadId":CHILD,"turn":{"id":"turn-child","status":"completed"}}},
+                {"method":"item/started","params":{"threadId":PARENT,"item":{**wait,"status":"inProgress"}}},
+                {"method":"item/completed","params":{"threadId":PARENT,"item":wait}},
+                {"method":"item/started","params":{"threadId":PARENT,"item":completion}},
+                {"method":"item/completed","params":{"threadId":PARENT,"item":completion}},
+                {"method":"item/completed","params":{"threadId":PARENT,"item":{"type":"agentMessage","id":"parent-ack","text":"NATIVE-PARENT-ACK"}}},
+                {"method":"turn/completed","params":{"threadId":PARENT,"turn":{"id":"turn-parent","status":"completed"}}},]
+            child_read={**child_thread(),"path":str(root/"codex-home/sessions/child.jsonl"),"turns":[{"id":"turn-child","status":"completed","items":[{"type":"userMessage","id":"cu"},{"type":"agentMessage","id":"ca","text":"NATIVE-CHILD-ACK"}]}]}
+            parent_read={"id":PARENT,"ephemeral":False,"path":str(root/"codex-home/sessions/parent.jsonl"),"turns":[{"id":"turn-parent","status":"completed","items":[{"type":"userMessage","id":"pu"},activity(),wait,completion,{"type":"agentMessage","id":"pa","text":"NATIVE-PARENT-ACK"}]}]}
+            class FakeServer:
+                def __init__(self):self.notifications=[];self.closed=False
+                def notify(self,_method):pass
+                def request(self,name,params,_deadline):
+                    if name=="initialize":return {}
+                    if name=="config/read":return {}
+                    if name=="thread/start":return parent_response()
+                    if name=="turn/start":return {"turn":{"id":"turn-parent"}}
+                    if name=="thread/read":
+                        selected=child_read if params["threadId"]==CHILD else parent_read
+                        return {"thread":selected if params["includeTurns"] else {key:value for key,value in selected.items() if key!="turns"}}
+                    raise AssertionError(name)
+                def read(self,_deadline):return events.pop(0)
+                def shutdown_and_verify_persistence(self,_deadline):return {"bytes":0,"sha256":"e"*64,"knownPersistenceErrors":0,"serverExit":0}
+                def close(self):self.closed=True
+            server=FakeServer();commands=[]
+            def command_result(_engine,_config,_environment,arguments):
+                commands.append(arguments[0])
+                if arguments[0]=="begin":return receipt(token=("a" if commands.count("begin")==1 else "b")*32)
+                if arguments[0]=="started":return {"status":"started"}
+                if arguments[0]=="finish":return receipt(status="terminal",token="a"*32,outcome="completed")
+                raise AssertionError(arguments)
+            def audit(_parent,_child,_root,evidence,_profile):evidence.original_audit=True;return {}
+            version=subprocess.CompletedProcess([],0,profile["producer"]["executableVersion"]+"\n","")
+            with mock.patch.object(driver,"pinned_native"),mock.patch.object(driver,"regular"),mock.patch.object(driver,"private_workspace_config"), \
+                 mock.patch.object(driver,"private_directory"),mock.patch.object(driver,"clean_environment",return_value={}), \
+                 mock.patch.object(driver,"config_arguments",return_value=[]),mock.patch.object(driver,"effective_config"), \
+                 mock.patch.object(driver,"producer_environment",return_value={}),mock.patch.object(driver,"workspace_binding",return_value={}), \
+                 mock.patch.object(driver,"require_applied",return_value={}),mock.patch.object(driver,"command_result",side_effect=command_result), \
+                 mock.patch.object(driver,"JsonLineAppServer",return_value=server),mock.patch.object(driver,"audit_original_rollouts",side_effect=audit), \
+                 mock.patch.object(driver.subprocess,"run",return_value=version),mock.patch.object(driver,"private_write"):
+                with self.assertRaisesRegex(support.Refusal,"native operation incomplete"):
+                    driver.perform(profile,"owner-nonce-01",root)
+            self.assertNotIn("finish",commands);self.assertTrue(server.closed);self.assertFalse(events)
 
     def test_input_surface_has_no_prompt_model_url_or_executable(self):
         text = DRIVER_PATH.read_text()

@@ -65,6 +65,22 @@ independent and open. This dated clarification is not a current fleet-health att
 profile acceptance or waiver of exact artifact, authentication, custody, settlement/replay or effect
 authority for any operation actually performed.
 
+**2026-10-01: HOST native 0.158.0 original-rollout audit source repaired; independent capture remains open.**
+The coherent public source recognizes the closed native subagent activity shapes and audits the original
+rollout instead of treating projected events as persistence authority. Exact parent and child identities,
+turns, call IDs, fixed spawn/wait contract, matching communication and child/parent ACKs remain required.
+The completed activity follows its paired started activity; actual native completion may emit the
+completed activity before completion communication. A valid late post-parent completed activity remains
+non-authoritative. Wrong, duplicate, foreign and unmatched activity refuses. Empty wait states do not
+prove terminal completion. Descriptor custody and writer health preserve unknown outcomes on missing
+or contradictory evidence. Native 0.158.0 has no per-call durable persistence receipt, so arbitrary silent
+producer write loss remains UNKNOWN rather than an exhaustive durability guarantee.
+Final source verification passed 103 focused operation/image/private/topology checks with no skips;
+independent bounded review accepted the eight-file source. This is source closure only. A new immutable
+public-only input release and exact private pin registration precede a fresh bounded native attempt.
+The failed attempt-m and all earlier evidence remain unchanged. Genuine capture, restart/recovery,
+Main routing removal, installed LEARN capability and measured benefit remain open.
+
 **2026-10-01: SC2 fresh input correlation and heartbeat ordering source closed; genuine gameplay remains open.**
 [SC2 #31](https://github.com/FS-GG/FS.GG.SC2.Client/pull/31) merged at
 `e1f3fe8cdaca33a2c2e29c1aca6091b5f0a2633e`, equal reviewed candidate

@@ -17,12 +17,13 @@ import tomllib
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from native_producer_support import (JsonLineAppServer, OperationEvidence, Refusal, canonical_bytes,
-                                     clean_environment, load_profile, producer_environment, regular, require, sha256, telemetry)
+                                     audit_original_rollouts, clean_environment, load_profile, producer_environment,
+                                     regular, require, sha256, telemetry)
 
 
 NATIVE_ELF_MAXIMUM = 320 * 1024 * 1024
 ITEM_TYPE_TOKEN = re.compile(r"[A-Za-z][A-Za-z0-9]{0,63}")
-PERMITTED_ITEM_TYPES = {"userMessage", "agentMessage", "reasoning", "collabAgentToolCall"}
+PERMITTED_ITEM_TYPES = {"userMessage", "agentMessage", "reasoning", "collabAgentToolCall", "subAgentActivity"}
 
 
 class RejectedItemRefusal(Refusal):
@@ -344,6 +345,8 @@ def perform(profile: dict, nonce: str, run_root: pathlib.Path) -> dict:
                                 "approvalPolicy": "never", "sandbox": "read-only", "ephemeral": False,
                                 "baseInstructions": "Perform only the fixed collaboration acknowledgement operation. Do not read files or use non-collaboration tools."}, deadline)
         parent = evidence.thread_started(thread_result)
+        parent_read = server.request("thread/read", {"threadId": parent, "includeTurns": False}, deadline)
+        evidence.bind_rollout_path("parent", parent_read.get("thread", {}))
         telemetry_environment = producer_environment(profile, parent)
         binding = workspace_binding(engine, telemetry_config, telemetry_environment, profile, deadline)
         root = evidence.begin("root", command_result(engine, telemetry_config, telemetry_environment,
@@ -361,9 +364,10 @@ def perform(profile: dict, nonce: str, run_root: pathlib.Path) -> dict:
         turn = server.request("turn/start", {"threadId": parent, "model": profile["model"], "effort": profile["effort"],
                               "approvalPolicy": "never", "input": [{"type": "text", "text": profile["prompt"]}]}, deadline)
         parent_turn = turn.get("turn", {}).get("id"); evidence.parent_turn_started(parent_turn)
-        pending = list(server.notifications); server.notifications.clear(); event_count = 0; child_finished = False
+        pending = list(server.notifications); server.notifications.clear(); event_count = 0
         prebind_events: list[dict] = []; prebind_bytes = 2 * 1024 * 1024
-        while not (evidence.parent_terminal and child_finished):
+        while not (evidence.parent_terminal and evidence.child_terminal
+                   and (evidence.protocol_mode != "v2" or evidence.completion_activity)):
             value = pending.pop(0) if pending else (server.notifications.pop(0) if server.notifications else server.read(deadline)); event_count += 1
             require(event_count <= profile["runtime"]["maximumEvents"], "app-server event capacity exceeded")
             method, params = value.get("method"), value.get("params", {})
@@ -375,11 +379,16 @@ def perform(profile: dict, nonce: str, run_root: pathlib.Path) -> dict:
                 item = checked_item(method, params, evidence)
                 if item.get("type") == "collabAgentToolCall":
                     require(item.get("tool") in {"spawnAgent", "wait"}, "prohibited collaboration operation observed")
-                if item.get("type") == "collabAgentToolCall" and method == "item/completed":
+                child_thread = None
+                if item.get("type") == "subAgentActivity":
+                    child_thread = evidence.activity(method, item)
+                elif item.get("type") == "collabAgentToolCall" and method == "item/completed":
                     child_thread = evidence.collaboration(item)
+                if method == "item/completed" and item.get("type") in {"collabAgentToolCall", "subAgentActivity"}:
                     if child_thread:
                         child_read = server.request("thread/read", {"threadId": child_thread, "includeTurns": False}, deadline)
                         selector = evidence.bind_child(child_read.get("thread", {}))
+                        evidence.bind_rollout_path("child", child_read.get("thread", {}))
                         started = command_result(engine, telemetry_config, telemetry_environment, ["started", "--token", child, "--native-id", selector])
                         require(started.get("status") == "started", "child start was not applied")
                         receipt_rows.append({"operation": "child-started", **require_applied(engine, telemetry_config, telemetry_environment,
@@ -390,32 +399,31 @@ def perform(profile: dict, nonce: str, run_root: pathlib.Path) -> dict:
                     elif item.get("tool") == "wait":
                         child_history = server.request("thread/read", {"threadId": evidence.child_thread, "includeTurns": True}, deadline)
                         evidence.verify_turn_history("child", child_history.get("thread", {}))
-                        if not child_finished:
-                            finished = command_result(engine, telemetry_config, telemetry_environment,
-                                                      ["finish", "--token", child, "--outcome", "completed"])
-                            evidence.finish_result("child", finished)
-                            receipt_rows.append({"operation": "child-finished", **require_applied(
-                                engine, telemetry_config, telemetry_environment, profile, binding, child, deadline)})
-                            child_finished = True
                 if item.get("type") == "agentMessage" and method == "item/completed":
                     evidence.acknowledge(params.get("threadId"), item.get("text"))
             elif method == "turn/completed":
                 evidence.terminal(params.get("threadId"), params.get("turn", {}))
-                if params.get("threadId") == evidence.child_thread and not child_finished:
-                    finished = command_result(engine, telemetry_config, telemetry_environment, ["finish", "--token", child, "--outcome", "completed"])
-                    evidence.finish_result("child", finished)
-                    receipt_rows.append({"operation": "child-finished", **require_applied(engine, telemetry_config, telemetry_environment,
-                                                                                           profile, binding, child, deadline)})
-                    child_finished = True
             elif method in {"turn/started", "item/agentMessage/delta", "item/started", "thread/status/changed", "thread/tokenUsage/updated"}:
                 pass
             elif "id" in value:
                 raise Refusal("unexpected app-server response")
         require(not prebind_events, "unresolved pre-bind child events")
         child_history = server.request("thread/read", {"threadId": evidence.child_thread, "includeTurns": True}, deadline)
+        evidence.bind_rollout_path("child", child_history.get("thread", {}))
         evidence.verify_turn_history("child", child_history.get("thread", {}))
         parent_history = server.request("thread/read", {"threadId": evidence.parent_thread, "includeTurns": True}, deadline)
+        evidence.bind_rollout_path("parent", parent_history.get("thread", {}))
         evidence.verify_turn_history("root", parent_history.get("thread", {}))
+        health = server.shutdown_and_verify_persistence(deadline)
+        evidence.add("native-persistence-health", **health)
+        if evidence.protocol_mode == "v2":
+            audit_original_rollouts(evidence.parent_rollout_path, evidence.child_rollout_path,
+                                    pathlib.Path(profile["runtime"]["codexHome"]) / "sessions", evidence, profile)
+        evidence.validate_complete()
+        finished = command_result(engine, telemetry_config, telemetry_environment, ["finish", "--token", child, "--outcome", "completed"])
+        evidence.finish_result("child", finished)
+        receipt_rows.append({"operation": "child-finished", **require_applied(engine, telemetry_config, telemetry_environment,
+                                                                                   profile, binding, child, deadline)})
         root_finished = command_result(engine, telemetry_config, telemetry_environment, ["finish", "--token", root, "--outcome", "completed"])
         evidence.finish_result("root", root_finished)
         receipt_rows.append({"operation": "root-finished", **require_applied(engine, telemetry_config, telemetry_environment,
