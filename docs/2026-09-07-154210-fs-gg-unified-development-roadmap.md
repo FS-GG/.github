@@ -53,6 +53,32 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**V2-LANG-01.2 P3 packaged dependency repair source delivered; publication remains open.**
+[Coordination PR #906](https://github.com/FS-GG/FS.GG.Coordination/pull/906) merged at
+`d25b9eaec991c94593adcecda6869d07dabdfb43`, tree
+`169b7df260ee6668b8b28d43857183ad669b0e12`, independently equal to candidate
+`25b2ef7e542f93c3039dee1f7683a02418fe5b3a`. Exact-head bootstrap and
+[coherent validation 36790467933](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36790467933)
+passed. The packaged FSI qualifier verifies and references package-contained Akka and Execution
+assemblies before its six-operation script. Actual retained archive loading succeeded in the
+previous preparation, which then failed with a missing Akka reference; that failed artifact is
+nonqualifying. A fresh protected-source preparation must prove packaged operations and produce
+verified immutable publication inputs. Version 0.2.0 remains unpublished; successor runtime
+adoption and workspace defaults are unchanged.
+
+**V2-LANG-01.5 FourD early store diagnostics source delivered; native execution remains open.**
+[FourD PR #22](https://github.com/FS-GG/FS.GG.FourD/pull/22) merged at
+`168a9c9e487e60af72e5977fba5097668278da7e`, tree
+`e3b40d14bb99072e216ade3dd21c250ed0e6b9ca`, independently equal to candidate
+`99beb9396ce4d635be1f0eaa1f2a0a8788a11cb7`. Exact-head
+[verify 36792632021](https://github.com/FS-GG/FS.GG.FourD/actions/runs/36792632021)
+and source preparation passed. Both private rootless VFS stores are now probed before downloads
+and builds; bounded phase diagnostics preserve child errors and incomplete cleanup truth.
+The previous native run 36791349819 failed during image preparation and container-store cleanup,
+before any P2 operation; its underlying error was not retained. The next exact-source hosted
+run must establish actual store, image, execution, duplicate and recovery evidence. Cancellation,
+interrupted recovery, installed adoption and consenting-player acceptance remain separate gates.
+
 **V2-HOST-01.8 private finalization registration source delivered.**
 [Private substrate PR #23](https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/pull/23)
 merged at `7abd3ab1219607cc73c6d2532c2ec3e0b4326e86`, tree
