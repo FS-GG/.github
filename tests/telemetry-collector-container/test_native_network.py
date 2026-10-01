@@ -31,6 +31,22 @@ class NativeNetworkTests(unittest.TestCase):
     def setUp(self):
         self.policy = gate.load_policy(POLICY_PATH)
 
+    def valid_native_inspection(self):
+        return {
+            "Config": {"User": "32768:32768", "Env": [
+                *topology.FIXED_ENV, topology.PRODUCER_CREDENTIAL_ENV + "=fixture"]},
+            "HostConfig": {"NetworkMode": "bridge", "ReadonlyRootfs": True,
+                           "PidsLimit": 128, "Memory": 2 * 1024 ** 3,
+                           "NanoCpus": 2_000_000_000, "Privileged": False,
+                           "CapAdd": [], "CapDrop": ["ALL"], "UsernsMode": "private",
+                           "PidMode": "private", "UTSMode": "private",
+                           "SecurityOpt": ["no-new-privileges"]},
+            "EffectiveCaps": [], "BoundingCaps": [],
+            "NetworkSettings": {"Networks": {topology.NATIVE_NETWORK: {}}},
+            "Mounts": [{"Destination": path, "RW": writable}
+                       for path, writable in topology.NATIVE_MOUNTS.items()],
+        }
+
     def test_policy_accepts_only_exact_connect_authorities(self):
         for host in ("chatgpt.com", "auth.openai.com"):
             request = f"CONNECT {host}:443 HTTP/1.1\r\nHost: {host}:443\r\n\r\n".encode()
@@ -111,23 +127,12 @@ class NativeNetworkTests(unittest.TestCase):
         self.assertNotIn("uid=", output_options)
         self.assertNotIn("gid=", output_options)
         self.assertIn("--run-nonce readonlynonce1", probe)
+        self.assertEqual(1, native.count("--cap-drop=all"))
+        self.assertFalse(any(item == "--privileged" or item.startswith("--cap-add")
+                             for item in native))
 
     def test_inspection_refuses_direct_route_extra_mount_and_environment(self):
-        value = {
-            "Config": {"User": "32768:32768", "Env": [
-                *topology.FIXED_ENV, topology.PRODUCER_CREDENTIAL_ENV + "=secret-not-logged"]},
-            "HostConfig": {"NetworkMode": "bridge", "ReadonlyRootfs": True,
-                           "PidsLimit": 128, "Memory": 2 * 1024 ** 3, "NanoCpus": 2_000_000_000,
-                           "CapAdd": [], "CapDrop": ["ALL"], "UsernsMode": "private",
-                           "PidMode": "private", "UTSMode": "private",
-                           "SecurityOpt": ["no-new-privileges"]},
-            "NetworkSettings": {"Networks": {topology.NATIVE_NETWORK: {}}},
-            "Mounts": [
-                {"Destination": topology.NATIVE_MOUNT, "RW": True},
-                {"Destination": topology.PRODUCER_CONFIG_MOUNT, "RW": False},
-                {"Destination": topology.PRODUCER_SPOOL_MOUNT, "RW": True},
-            ],
-        }
+        value = self.valid_native_inspection()
         topology.inspect_native(value)
         value["NetworkSettings"]["Networks"]["bridge"] = {}
         with self.assertRaisesRegex(topology.Refusal, "network-set"):
@@ -140,6 +145,58 @@ class NativeNetworkTests(unittest.TestCase):
         value["Config"]["Env"].append("FSGG_TELEMETRY_CREDENTIAL_OTHER=bad")
         with self.assertRaisesRegex(topology.Refusal, "producer-credential"):
             topology.inspect_native(value)
+
+    def test_native_capability_metadata_accepts_only_complete_zero_capability_shapes(self):
+        accepted = (
+            (["CAP_CHOWN", "CAP_SETUID"], None, None),
+            (["CAP_NET_RAW"], [], []),
+            (["CAP_CHOWN", "CAP_SETUID", "CAP_NET_RAW"], None, []),
+            (["ALL"], None, None),
+            (["CAP_ALL"], [], []),
+        )
+        for cap_drop, effective, bounding in accepted:
+            with self.subTest(accepted=(cap_drop, effective, bounding)):
+                value = self.valid_native_inspection()
+                value["HostConfig"]["CapDrop"] = cap_drop
+                value["EffectiveCaps"], value["BoundingCaps"] = effective, bounding
+                topology.inspect_native(value)
+
+        malformed_zero_sets = (False, 0, "", {}, (), [[]], ["CAP_CHOWN"])
+        refused_changes = [
+            ("HostConfig", "CapAdd", candidate)
+            for candidate in (None, False, 0, "", {}, (), [[]], [1], ["CAP_CHOWN"])
+        ] + [
+            ("HostConfig", "Privileged", candidate)
+            for candidate in (True, None, 0, "false")
+        ] + [
+            ("root", key, candidate)
+            for key in ("EffectiveCaps", "BoundingCaps")
+            for candidate in malformed_zero_sets
+        ] + [
+            ("HostConfig", "CapDrop", candidate) for candidate in (
+                None, [], False, 0, "", {}, (), ["CAP_CHOWN", "CAP_CHOWN"],
+                ["ALL", "CAP_CHOWN"], ["CAP_ALL", "CAP_CHOWN"], ["CHOWN"],
+                ["cap_chown"], ["CAP_"], ["CAP_" + "X" * 61], ["CAP_X"] * 513,
+                [{"private": "value"}], [1], [""],
+            )
+        ]
+        for location, key, replacement in refused_changes:
+            with self.subTest(refused=(location, key, type(replacement).__name__)):
+                value = self.valid_native_inspection()
+                target = value if location == "root" else value["HostConfig"]
+                target[key] = replacement
+                with self.assertRaisesRegex(topology.Refusal, "^native-capability-fence-refused$"):
+                    topology.inspect_native(value)
+
+        for location, key in (("HostConfig", "CapAdd"), ("HostConfig", "CapDrop"),
+                              ("HostConfig", "Privileged"), ("root", "EffectiveCaps"),
+                              ("root", "BoundingCaps")):
+            with self.subTest(missing=(location, key)):
+                value = self.valid_native_inspection()
+                target = value if location == "root" else value["HostConfig"]
+                del target[key]
+                with self.assertRaisesRegex(topology.Refusal, "^native-capability-fence-refused$"):
+                    topology.inspect_native(value)
 
     def test_receiver_is_private_dual_homed_and_holds_all_receiver_secrets(self):
         value = {
