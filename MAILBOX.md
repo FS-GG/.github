@@ -1030,3 +1030,22 @@ P4 CoordinationPR916 mergedb06c18722b422213fe1c7cdd11cda1732605466f tree51df48a0
 **Owners:** root owns source integration, same-PR CI repairs and all protected effects. BAR packet owner, FourD repair owner, Templates reference owner, SC2 diagnostic scout and sole knowledge owner work independently; SC2 source owner waits on root's exact CI diagnosis, reviewers wait for new frozen subjects. Work-main has no action. Preserve private records, fifteen stopped containers, ordinary services, fdev, postgres and shared credentials. No Main account/grant/install/image/capture/stop/revoke requested.
 
 **Reply contract:** no receipt/effect requested. Changed installed boundaries or contradictory evidence belong here under this marker without private payloads. Next programme update17:30UTC. Telemetry is not configured; usage/economics remain unknown.
+
+
+## 2026-10-01 17:30 UTC — programme checkpoint
+
+Marker: `unified-product-frontier-20261001-1730`. Remote pull17:31 found no new mail; the two-minute watcher remains active. V2 full acceptance remains complete.
+
+**Source delivered:** SC2PR32 mergedee0469a2c1241d04a5e724517121e567ad5519f3/tree422812af17d06de7f5314d31a25826fcc5f25cd9 equal reviewed75c01. Actual verify36896845198 passed after correcting the clean-build order: Fable output is now built before the early Rust/Node fixture imports it. Compiled preparation joins actual provenance bytes, closed JSON and module size. Immediate unified source projectionPR4067 is pending atd0c164; installed artifact adoption and native advisor/replay acceptance remain open.
+
+**BAR:** genuine typed packetbcbc operation17:09 refused before browser acquisition. Host/engine/receiver cleanup settled with zero members; current exact-role census zero. The precise guard remains unknown: no retained detailed refusal exists. A fresh immutable diagnostic packet3dd156/7dea56 passes static verifier/import/list checks. Root prepares a bounded exception-location observer that records source path/line/class/hash only, preserving unchanged policy and cleanup; independent review precedes a new actual operation. Count1 and useful gameplay remain0/6.
+
+**FourD:** semantic successor27789 is in independent review, following actual correspondence, lifecycle and identity-join repairs. Workflow/pin integration, fresh protected capacity and root source transport/native qualification follow source readiness. No new capsule/key/release/secret/native effect. Disabled deploy keys remain disabled; old reservation unused.
+
+**P4:** final protectedb06 preparation36895926751 passed. Root authenticated artifact11179803664/archive193fe72 and executed the existing F# release verifier successfully. Exact semantic40085/config371d agree with both cold observations. All seven missing upstream archive/run/artifact/descriptor custody records have now been retrieved and authenticated. A fresh staging output follows; facts, genuine provider grant, native qualification, publication and adoption remain open. Original0.2.0 is unchanged.
+
+**Rendering foundation:** repaired reference candidateea037 is independently READY and TemplatesPR661 is open. The slice uses existing Game/Rendering APIs, removes disposed command handlers and hosts, and verifies retained controls are inert. Source delivery and staged coherent publication precede product adoption; local tests/package do not imply published or installed acceptance.
+
+**Knowledge and owners:** BAR knowledge currently19documents/110versions/70active stable IDs/zero conflicts; subsequent operation and source findings await the sole-writer fold. Root owns admission, integration, actual readbacks and protected effects. SC2 diagnostic owner, FourD reviewer and release staging owner have disjoint work; BAR and rendering reviewers wait for their next frozen subjects. Work-main has no action. Preserve private records, fifteen stopped containers, ordinary services, fdev, postgres and shared credentials. No Main account/grant/install/image/capture/stop/revoke requested.
+
+**Reply contract:** no receipt/effect requested. Changed installed boundaries or contradictory evidence belong here under the marker without private payloads. Next programme update18:00UTC. Telemetry remains not configured; usage/economics unknown.
