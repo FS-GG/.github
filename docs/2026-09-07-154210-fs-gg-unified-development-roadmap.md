@@ -53,6 +53,21 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**SC2C-01.6f hosted source repair delivered; genuine game acceptance remains open.**
+[SC2 client PR #21](https://github.com/FS-GG/FS.GG.SC2.Client/pull/21) merged at
+`97f783b2737c4076131f3627b9c64ce2770a0420`, tree
+`0d5846bd3db38bc257a4324cb49fb60fc0213acf`, independently equal to candidate
+`29b0a3808ef45705e96a15fae166a04ad483cba9`. Exact-head full
+[verification 36796405125](https://github.com/FS-GG/FS.GG.SC2.Client/actions/runs/36796405125)
+passed, including all 58 browser cases. Fixtures now select the actual correlated terminal
+feedback after intermediate admission, retain causal authority and transport evidence, and
+admit process-heavy Gateway fixtures through a bounded owned lease while pure browser checks
+remain parallel. Product 250/500ms deadlines, authority fences and native Action behavior are
+unchanged. These scripted-peer source checks launched no genuine SC2 process. The private
+qualification runner must bind this protected source before actual module authoring, consent,
+controller movement, recording and offline replay/audit acceptance. Publication, installed
+adoption and genuine .6f acceptance remain separate gates.
+
 **V2-HOST-01.8 successor private recipe registration source delivered.**
 [Private substrate PR #24](https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/pull/24)
 merged at `5ce16ae29bf92743c7cbfe51a3d57584568532ee`, tree
