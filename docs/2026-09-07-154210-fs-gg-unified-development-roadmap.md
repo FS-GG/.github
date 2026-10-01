@@ -65,6 +65,36 @@ independent and open. This dated clarification is not a current fleet-health att
 profile acceptance or waiver of exact artifact, authentication, custody, settlement/replay or effect
 authority for any operation actually performed.
 
+**2026-10-01: OPS-TYPED-01.5 SC2 advisor diagnostic source delivered.**
+[SC2 #33](https://github.com/FS-GG/FS.GG.SC2.Client/pull/33) merged at
+`039feddc07c3c0d47802485dd51c85f3d0a9d54c`; root authenticated tree
+`80d72afdfdc7db86857e4484d729175cafd5ee0f`, equal reviewed joined head
+`bdca1e55f994bcf73889f8575dcf889a7c1ac6ea`.
+[Hosted verification 36908772155](https://github.com/FS-GG/FS.GG.SC2.Client/actions/runs/36908772155)
+passed. F# owns full advisor/input identity and terminal classification; the browser retains the
+actual obligation state, and the qualification driver requires a matching completed process record.
+Five fresh Quint ITF traces matched 21 actual reducer/window transitions; all 25 semantic mutations
+with correctly recomputed fingerprints diverged. The production compile entry and coherent gate
+now execute that harness and the compiled browser bridge fixture. This is finite source correspondence,
+not native acceptance. Historical attempt-n remains Unknown; protected artifact rebuilding, private
+failure-summary adoption, actual advisor processing and replay qualification remain open.
+
+**2026-10-01: FABLE-ADOPT-01.3 local reference composition source delivered.**
+[Templates #661](https://github.com/FS-GG/FS.GG.Templates/pull/661) merged at
+`1c90ac81278a8e7a98fe98aa7d01b8023a8f2278`; root authenticated tree
+`e1a619ad37f87e851d57284d81ad62320a60db9a`, equal reviewed head
+`4eb2cc3985be42840422ddb9cc2d72f214b17489`.
+[Composition 36902928139](https://github.com/FS-GG/FS.GG.Templates/actions/runs/36902928139),
+[typed receivers 36902928176](https://github.com/FS-GG/FS.GG.Templates/actions/runs/36902928176)
+and the final [Release C qualification 36902928101](https://github.com/FS-GG/FS.GG.Templates/actions/runs/36902928101)
+passed. The FourD-shaped local reference uses the existing shared Game/Rendering APIs,
+four-coordinate semantic commands and explicit disposal; disposed controls are inert.
+The atomic SVG adopter now handles the reviewed old/current wizard root forms and refuses
+unsupported forms. This closes the selected reference source window, with no feed publication,
+installed template adoption or product migration claimed. Coherent publication and clean installed
+creation remain next; external-authority/WASM seam qualification and separate product parity remain
+open in the [staged adoption plan](roadmaps/2026-10-01-staged-fable-game-adoption.md).
+
 **2026-10-01: P4 private receiver source pins delivered; protected preparation and hosted staging verified.**
 [Sandbox #38](https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/pull/38) merged at
 `5ef88866bd3d72aecf98ad097ef9ce9bdc88c4e8`; root authenticated tree
