@@ -53,6 +53,18 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**Portable P3 SDD receiver pin delivered; Templates pin and adoption remain open.**
+[SDD PR #1085](https://github.com/FS-GG/FS.GG.SDD/pull/1085) merged at
+`388e4e0dbb216de8a37687818af042030d4e26c5`, tree
+`ce034535cca217bf717e46aed428f598e38b5f39`, independently equal to candidate
+`8a3879c47d84dbdf10aa6e95a9f29823c4bfcaee`. Full deterministic
+[gate 36816545302](https://github.com/FS-GG/FS.GG.SDD/actions/runs/36816545302)
+and required source checks passed. The inert receiver pin binds published 0.2.0, exact
+frozen source/tree, release 400643766, publication run 36813849644 and all five asset
+SHA-256 values. Adoption stays disabled and requires separate installed qualification.
+Templates PR #658 is checking the byte-identical pin; full P3 receiver closure and P4/P5
+adoption remain open.
+
 **V2-HOST Podman network private registration delivered; genuine acceptance remains open.**
 [Private substrate PR #29](https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/pull/29)
 merged at `443c203dab1dbbba36bbbed27a297a6f805333bc`, tree
