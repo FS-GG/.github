@@ -655,7 +655,8 @@ module Operations =
 
     let private installedOriginMaterial path (config: HostConfig)
                                               (installation: NativeCollectorInstallationConfig)
-                                              (principal: TelemetryReceipt.Principal) =
+                                              (principal: TelemetryReceipt.Principal)
+                                              now =
         let readBounded (maximum: int) (file: string) =
             let info = FileInfo file
             if not info.Exists || isNull info.Directory || not (isNull info.LinkTarget)
@@ -704,6 +705,7 @@ module Operations =
         let observed = text result "evidenceObservedAt"
         let expires = text result "evidenceExpiresAt"
         let observedAt, expiresAt = DateTimeOffset.Parse observed, DateTimeOffset.Parse expires
+        let startedAt, completedAt = DateTimeOffset.Parse(text result "startedAt"), DateTimeOffset.Parse(text result "completedAt")
         let projection = (capture["projection"]).AsObject()
         let threads = (projection["threads"]).AsArray()
         let routeSupported =
@@ -748,11 +750,18 @@ module Operations =
            || text profile "operation" <> "codex-native-capability/1"
            || text profile "providerExecutable" <> installation.ExecutablePath
            || text profile "providerExecutableSha256" <> digestBytes(File.ReadAllBytes installation.ExecutablePath)
+           || text profile "expiresAt" <> expires
            || text result "schema" <> "fsgg.orchestration.host-fixed-native-capability-result/1"
            || text result "operation" <> "codex-native-capability/1"
            || text result "profileRevision" <> text profile "revision"
            || text result "profileSha256" <> profileSha
+           || text result "hostExecutableSha256" <> text profile "hostExecutableSha256"
            || text result "providerExecutableSha256" <> digestBytes(File.ReadAllBytes installation.ExecutablePath)
+           || text result "adapterVersion" <> text profile "expectedAdapterVersion"
+           || text result "credentialScope" <> text profile "credentialScope"
+           || integer result "maximumRuntimeSeconds" <> integer profile "maximumRuntimeSeconds"
+           || integer result "maximumStreamBytes" <> integer profile "maximumStreamBytes"
+           || not (JsonNode.DeepEquals(result["environmentAllowList"], profile["environmentAllowList"]))
            || text result "requestedModel" <> installation.Model
            || text result "requestedEffort" <> installation.Effort
            || text result "disposition" <> "advertised-supported"
@@ -771,7 +780,8 @@ module Operations =
            || text sourceReference "readerProfileSha256" <> profileSha
            || text sourceReference "collectorReadOnlyTarget" <> installation.CodexHome
            || not (sourceReference["captureQualified"].GetValue<bool>())
-           || not routeSupported || observedAt > DateTimeOffset.UtcNow || expiresAt <= observedAt then
+           || not routeSupported || startedAt > completedAt || completedAt > observedAt
+           || observedAt > now || expiresAt <= observedAt || expiresAt <= now then
             invalidOp "installed origin retained evidence differs"
         let query: TelemetryStoreApplication.InstalledOriginQuery =
             { WorkspaceId = principal.Scope.Workspace
@@ -830,7 +840,7 @@ module Operations =
         CanonicalJson.canonicalize(Encoding.UTF8.GetBytes(envelope.ToJsonString()))
         |> Result.map Encoding.UTF8.GetBytes |> Result.defaultWith invalidOp
 
-    let private installedOrigin path config assessmentFor persist =
+    let private installedOrigin path config assessmentFor persist now =
         match Configuration.loadNativeCollectorInstallation path config with
         | Error errors -> Error errors
         | Ok(installation, _) when installation.Schema <> "fsgg.telemetry.native-collector-installation/2" ->
@@ -839,14 +849,14 @@ module Operations =
             match storeFor config principal.Scope.Workspace with
             | None -> Error [ "native collector workspace is unavailable" ]
             | Some store ->
-                let material = installedOriginMaterial path config installation principal
+                let material = installedOriginMaterial path config installation principal now
                 if persist then
                     let bytes = installedOriginEnvelope principal material
                     TelemetryStoreApplication.submitReceiptPrincipal store.Root (assessmentFor store.Root) principal bytes
                     |> Result.bind (fun _ -> TelemetryStoreApplication.drainReceipts store.Root (assessmentFor store.Root) principal.Scope.Workspace)
-                    |> Result.bind (fun _ -> TelemetryStoreApplication.resolveInstalledOrigin store.Root (assessmentFor store.Root) material.Query)
+                    |> Result.bind (fun _ -> TelemetryStoreApplication.resolveInstalledOriginAt now store.Root (assessmentFor store.Root) material.Query)
                 else
-                    TelemetryStoreApplication.resolveInstalledOrigin store.Root (assessmentFor store.Root) material.Query
+                    TelemetryStoreApplication.resolveInstalledOriginAt now store.Root (assessmentFor store.Root) material.Query
                 |> Result.map (fun origin ->
                     JsonSerializer.Serialize
                         {| schema = "fsgg.learn.installed-producer-receipt/1"; source = {| producerId = material.Query.ProducerId; revision = string origin.Revision; recordId = origin.RecordId; observedAt = origin.ObservedAt |};
@@ -1234,7 +1244,8 @@ module Operations =
             + "\n"
         )
 
-    let runWithDependencies
+    let runWithDependenciesAt
+        (now: DateTimeOffset)
         (argv: string array)
         (assessmentFor: string -> TelemetryStore.DurabilityAssessment)
         (deliveryTransportFor: string -> IDisposable * Transport.ISinglePageGitHubTransport) =
@@ -1341,14 +1352,14 @@ module Operations =
             | Error errors -> resultExit "invalid-configuration" (Error errors)
             | Ok config ->
                 withLock config (fun () ->
-                    try installedOrigin path config assessmentFor true |> resultExit "installed-origin-refused"
+                    try installedOrigin path config assessmentFor true now |> resultExit "installed-origin-refused"
                     with _ -> resultExit "installed-origin-refused" (Error [ "installed origin refused" ]))
         | [ "read-installed-origin"; "--config"; path ] ->
             match load path with
             | Error errors -> resultExit "invalid-configuration" (Error errors)
             | Ok config ->
                 withLock config (fun () ->
-                    try installedOrigin path config assessmentFor false |> resultExit "installed-origin-unavailable"
+                    try installedOrigin path config assessmentFor false now |> resultExit "installed-origin-unavailable"
                     with _ -> resultExit "installed-origin-unavailable" (Error [ "installed origin unavailable" ]))
         | [ "read-native-route"; "--config"; path; "--original-item"; originalItem ] ->
             match load path with
@@ -1688,6 +1699,9 @@ module Operations =
     let private productionDeliveryTransport token =
         let transport = new Transport.HttpTransport("https://api.github.com", token)
         (transport :> IDisposable), (transport :> Transport.ISinglePageGitHubTransport)
+
+    let runWithDependencies argv assessmentFor deliveryTransportFor =
+        runWithDependenciesAt DateTimeOffset.UtcNow argv assessmentFor deliveryTransportFor
 
     let runWithAssessment argv assessmentFor =
         runWithDependencies argv assessmentFor productionDeliveryTransport

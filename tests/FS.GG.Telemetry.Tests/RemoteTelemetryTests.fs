@@ -1441,8 +1441,9 @@ exec /usr/bin/python3 "{patchedFixture}" "$@"
                         target
                     let serialize (value: 'value) =
                         JsonSerializer.SerializeToUtf8Bytes<'value> value
-                    let observed = DateTimeOffset.UtcNow.AddMinutes(-1.).ToString("O")
-                    let expires = DateTimeOffset.UtcNow.AddMinutes(5.).ToString("O")
+                    let fixedNow = DateTimeOffset.Parse "2026-10-01T10:01:00.0000000+00:00"
+                    let observed = fixedNow.AddMinutes(-1.).ToString("O")
+                    let expires = fixedNow.AddMinutes(5.).ToString("O")
                     let executableSha = hashBytes(File.ReadAllBytes reader)
                     let profileBytes =
                         serialize
@@ -1516,28 +1517,36 @@ exec /usr/bin/python3 "{patchedFixture}" "$@"
                                sourceVerification = "unknown"; snapshotOrigin = "unknown"
                                sharedCostCompleteness = "unknown"; activationAuthorized = false |})
                     |> ignore
-                    let captureOutput (argv: string array) =
+                    let captureOutput instant (argv: string array) =
                         let current = Console.Out
                         use writer = new StringWriter()
                         try
                             Console.SetOut writer
-                            Assert.Equal(0, Operations.runWithAssessment argv (fun _ -> TelemetryStore.ApprovedLocalDurable))
+                            Assert.Equal(0, Operations.runWithDependenciesAt instant argv
+                                                (fun _ -> TelemetryStore.ApprovedLocalDurable)
+                                                (fun _ -> failwith "unexpected native delivery transport"))
                             writer.ToString()
                         finally Console.SetOut current
                     use installed =
-                        JsonDocument.Parse(captureOutput [| "collect-installed-origin"; "--config"; configPath |])
+                        JsonDocument.Parse(captureOutput fixedNow [| "collect-installed-origin"; "--config"; configPath |])
                     Assert.Equal("fsgg.learn.installed-producer-receipt/1",
                                  installed.RootElement.GetProperty("schema").GetString())
                     use reread =
-                        JsonDocument.Parse(captureOutput [| "read-installed-origin"; "--config"; configPath |])
+                        JsonDocument.Parse(captureOutput fixedNow [| "read-installed-origin"; "--config"; configPath |])
                     Assert.Equal(
                         installed.RootElement.GetProperty("source").GetProperty("recordId").GetString(),
                         reread.RootElement.GetProperty("source").GetProperty("recordId").GetString())
+                    let readAt instant =
+                        Operations.runWithDependenciesAt instant
+                            [| "read-installed-origin"; "--config"; configPath |]
+                            (fun _ -> TelemetryStore.ApprovedLocalDurable)
+                            (fun _ -> failwith "unexpected native delivery transport")
+                    Assert.Equal(3, readAt (DateTimeOffset.Parse expires))
+                    Assert.Equal(3, readAt ((DateTimeOffset.Parse expires).AddTicks(1L)))
                     let changedVerification = JsonNode.Parse(verificationBytes).AsObject()
                     changedVerification["status"] <- JsonValue.Create "unverified"
                     File.WriteAllText(verificationPath, changedVerification.ToJsonString())
-                    Assert.Equal(3, Operations.runWithAssessment [| "read-installed-origin"; "--config"; configPath |]
-                                        (fun _ -> TelemetryStore.ApprovedLocalDurable))
+                    Assert.Equal(3, readAt fixedNow)
                     // Changing the operator pin cannot qualify already retained evidence.
                     File.AppendAllText(reader, "\n# changed executable\n")
                     Assert.Equal(3, Operations.runWithAssessment exportCommand (fun _ -> TelemetryStore.ApprovedLocalDurable))

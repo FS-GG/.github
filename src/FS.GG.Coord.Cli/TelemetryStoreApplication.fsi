@@ -184,6 +184,13 @@ module TelemetryStoreApplication =
         query: InstalledOriginQuery ->
             Result<InstalledOrigin, string list>
 
+    val resolveInstalledOriginAt:
+        now: System.DateTimeOffset ->
+        path: string ->
+        assessment: TelemetryStore.DurabilityAssessment ->
+        query: InstalledOriginQuery ->
+            Result<InstalledOrigin, string list>
+
     val readNativeRoutePopulation:
         path: string ->
         assessment: TelemetryStore.DurabilityAssessment ->

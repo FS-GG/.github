@@ -4078,7 +4078,7 @@ WHERE d.dispatch_id=$dispatch AND d.relation='child' AND d.runtime='collaboratio
                 with _ ->
                     Error [ "storage-unavailable" ]
 
-    let resolveInstalledOrigin path assessment (query: InstalledOriginQuery) =
+    let resolveInstalledOriginAt now path assessment (query: InstalledOriginQuery) =
         let hash (value: string) =
             not (String.IsNullOrWhiteSpace value)
             && System.Text.RegularExpressions.Regex.IsMatch(value, "^[0-9a-f]{64}$")
@@ -4125,11 +4125,27 @@ WHERE f.kind='learn-installed-origin/1' AND f.item_id IS NULL
   AND p.authority_role=a.authority_role AND p.grant_id=a.grant_id
   AND p.grant_generation=a.grant_generation
   AND (SELECT value FROM store_metadata WHERE key='receiptWorkspace')=$workspace
+  AND json_extract(f.canonical,'$.workspaceId')=$workspace
+  AND json_extract(f.canonical,'$.producerId')=$producer
+  AND json_extract(f.canonical,'$.streamId')=$stream
+  AND json_extract(f.canonical,'$.role')='native-collector'
+  AND json_extract(f.canonical,'$.grantId')=$grant
+  AND json_extract(f.canonical,'$.grantGeneration')=$generation
+  AND json_extract(f.canonical,'$.managerReceiptSha256')=$manager
+  AND json_extract(f.canonical,'$.capabilityProfileSha256')=$profile
+  AND json_extract(f.canonical,'$.capabilityResultSha256')=$result
+  AND json_extract(f.canonical,'$.nativeCaptureSha256')=$capture
+  AND json_extract(f.canonical,'$.nativeVerificationSha256')=$verification
 LIMIT 2;
 """
                             [ "$workspace", box query.WorkspaceId; "$producer", box query.ProducerId;
                               "$stream", box query.StreamId; "$grant", box query.GrantId;
-                              "$generation", box query.GrantGeneration ]
+                              "$generation", box query.GrantGeneration;
+                              "$manager", box query.ManagerReceiptSha256;
+                              "$profile", box query.CapabilityProfileSha256;
+                              "$result", box query.CapabilityResultSha256;
+                              "$capture", box query.NativeCaptureSha256;
+                              "$verification", box query.NativeVerificationSha256 ]
                             |> List.iter (fun (name, value) -> parameter command name value)
                             use reader = command.ExecuteReader()
                             if not (reader.Read()) then
@@ -4165,16 +4181,34 @@ LIMIT 2;
                                     then
                                         Error [ "learning-installed-origin-unavailable" ]
                                     else
-                                        Ok {
-                                            RecordId = identity
-                                            Revision = revision
-                                            ObservedAt = text "capabilityObservedAt"
-                                            ExpiresAt = text "capabilityExpiresAt"
-                                            InstallationSha256 = text "installationSha256"
-                                            ReceiptKey = receiptKey
-                                            EnvelopeDigest = envelopeDigest
-                                        }
+                                        let mutable observedAt = DateTimeOffset.MinValue
+                                        let mutable expiresAt = DateTimeOffset.MinValue
+                                        let observed = text "capabilityObservedAt"
+                                        let expires = text "capabilityExpiresAt"
+                                        if
+                                            not (DateTimeOffset.TryParseExact(observed, "O", Globalization.CultureInfo.InvariantCulture,
+                                                                              Globalization.DateTimeStyles.RoundtripKind, &observedAt))
+                                            || not (DateTimeOffset.TryParseExact(expires, "O", Globalization.CultureInfo.InvariantCulture,
+                                                                                 Globalization.DateTimeStyles.RoundtripKind, &expiresAt))
+                                            || observedAt > now
+                                            || expiresAt <= observedAt
+                                            || expiresAt <= now
+                                        then
+                                            Error [ "learning-installed-origin-unavailable" ]
+                                        else
+                                            Ok {
+                                                RecordId = identity
+                                                Revision = revision
+                                                ObservedAt = observed
+                                                ExpiresAt = expires
+                                                InstallationSha256 = text "installationSha256"
+                                                ReceiptKey = receiptKey
+                                                EnvelopeDigest = envelopeDigest
+                                            }
                 with _ -> Error [ "storage-unavailable" ]
+
+    let resolveInstalledOrigin path assessment query =
+        resolveInstalledOriginAt DateTimeOffset.UtcNow path assessment query
 
     let readNativeRoutePopulation path assessment originalItemId =
         if not (TelemetryReceipt.validId originalItemId) then

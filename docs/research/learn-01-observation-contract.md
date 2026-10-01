@@ -308,13 +308,16 @@ the existing qualified native collector installation and enrolled `native-collec
 `collect-installed-origin --config ABSOLUTE_PATH` reads the installed manager receipt and fixed capability
 profile, result, native capture, verification and source reference from their private retained paths. It compares
 their scope, grant generation, executable bytes, profile digest, requested model and effort, capture digest,
-verification status and observation interval before constructing `learn-installed-origin/1`. The caller supplies
+verification status and the profile/result validity bindings before constructing `learn-installed-origin/1`.
+The constructor and reader each use one current time and refuse future observations, exact expiry and expired
+evidence. The caller supplies
 no hashes or attestation fields. The immutable fact enters through the existing receipt and fact admission tables;
 generic admission is rejected. `read-installed-origin` repeats the retained byte checks and selects the exact
 applied fact through its current workspace, principal, grant and receipt admission. Its
 `fsgg.learn.installed-producer-receipt/1` result maps directly to Coordination's existing producer receipt
-contract. Changed retained bytes, a foreign installation or grant, substituted selectors, a revoked current
-grant, absent admission, or duplicate matching facts refuse.
+contract. Complete exact selectors are applied before the bounded match decision, so distinct immutable renewals
+under one current grant coexist while duplicate exact matches refuse. Changed retained bytes, a foreign
+installation or grant, substituted selectors, a revoked current grant or absent admission also refuse.
 
 `read-native-route --config ABSOLUTE_PATH --original-item ID` is a bounded, read-only store snapshot for an
 existing durable original mapping. It returns at most 256 dispatch rows and 256 admitted learning facts from one

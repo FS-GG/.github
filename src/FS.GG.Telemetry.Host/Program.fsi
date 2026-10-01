@@ -11,6 +11,12 @@ module Endpoints =
     val configure: app: WebApplication -> state: Runtime.HostState -> credentials: Map<string, AuthEntry> -> unit
 
 module Operations =
+    val runWithDependenciesAt:
+        now: System.DateTimeOffset ->
+        argv: string array ->
+        assessmentFor: (string -> FS.GG.Coord.TelemetryStore.DurabilityAssessment) ->
+        deliveryTransportFor: (string -> System.IDisposable * FS.GG.Coord.GitHub.Transport.ISinglePageGitHubTransport) -> int
+
     val runWithDependencies:
         argv: string array ->
         assessmentFor: (string -> FS.GG.Coord.TelemetryStore.DurabilityAssessment) ->

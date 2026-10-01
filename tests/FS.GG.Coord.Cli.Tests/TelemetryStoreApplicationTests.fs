@@ -100,30 +100,47 @@ module TelemetryStoreApplicationTests =
         TelemetryStoreApplication.provisionReceiptWorkspace path approved scope.Workspace |> unwrap |> ignore
         TelemetryStoreApplication.enrollReceiptPrincipal path approved principal |> unwrap |> ignore
         let digest = String.replicate 64 "a"
-        let event identity manager =
-            $"""{{"kind":"learn-installed-origin/1","identity":"{identity}","revision":0,"workspaceId":"{scope.Workspace}","producerId":"{scope.Producer}","streamId":"{scope.Stream}","role":"native-collector","grantId":"grant-origin","grantGeneration":7,"managerReceiptSha256":"{manager}","capabilityProfileSha256":"{digest}","capabilityResultSha256":"{digest}","nativeCaptureSha256":"{digest}","nativeVerificationSha256":"{digest}","capabilityObservedAt":"2026-10-01T10:00:00Z","capabilityExpiresAt":"2026-10-01T10:05:00Z","installationSha256":"{digest}"}}"""
+        let event identity manager observed expires =
+            $"""{{"kind":"learn-installed-origin/1","identity":"{identity}","revision":0,"workspaceId":"{scope.Workspace}","producerId":"{scope.Producer}","streamId":"{scope.Stream}","role":"native-collector","grantId":"grant-origin","grantGeneration":7,"managerReceiptSha256":"{manager}","capabilityProfileSha256":"{digest}","capabilityResultSha256":"{digest}","nativeCaptureSha256":"{digest}","nativeVerificationSha256":"{digest}","capabilityObservedAt":"{observed}","capabilityExpiresAt":"{expires}","installationSha256":"{digest}"}}"""
         let envelope batch fact =
             Encoding.UTF8.GetBytes
                 $"""{{"schema":"{TelemetryReceipt.Schema}","workspaceId":"{scope.Workspace}","producerId":"{scope.Producer}","streamId":"{scope.Stream}","batchId":"{batch}","payload":{{"schema":"{TelemetryStore.BatchSchema}","ingestId":"receipt-{batch}","sourceIdentity":"protected-installed-origin","generation":"7","cursor":"{batch}","eventCount":1,"events":[{fact}]}}}}"""
-        TelemetryStoreApplication.submitReceiptPrincipal path approved principal (envelope "origin-1" (event "origin-1" digest)) |> unwrap |> ignore
-        Assert.Contains("\"rejected\":0", TelemetryStoreApplication.drainReceipts path approved scope.Workspace |> unwrap)
+        let admit identity manager observed expires =
+            TelemetryStoreApplication.submitReceiptPrincipal path approved principal
+                (envelope identity (event identity manager observed expires)) |> unwrap |> ignore
+            Assert.Contains("\"rejected\":0", TelemetryStoreApplication.drainReceipts path approved scope.Workspace |> unwrap)
+        admit "origin-1" digest "2026-10-01T10:00:00.0000000+00:00" "2026-10-01T10:05:00.0000000+00:00"
         let query: TelemetryStoreApplication.InstalledOriginQuery =
             { WorkspaceId = scope.Workspace; ProducerId = scope.Producer; StreamId = scope.Stream
               Role = "native-collector"; GrantId = "grant-origin"; GrantGeneration = 7L
               ManagerReceiptSha256 = digest; CapabilityProfileSha256 = digest
               CapabilityResultSha256 = digest; NativeCaptureSha256 = digest
               NativeVerificationSha256 = digest }
-        let resolved = TelemetryStoreApplication.resolveInstalledOrigin path approved query |> unwrap
+        let at minute candidate =
+            TelemetryStoreApplication.resolveInstalledOriginAt
+                (DateTimeOffset.Parse($"2026-10-01T10:{minute}:00.0000000+00:00")) path approved candidate
+        let resolved = at "01" query |> unwrap
         Assert.Equal("origin-1", resolved.RecordId)
         Assert.Equal(0L, resolved.Revision)
         Assert.Equal(Error [ "learning-installed-origin-unavailable" ],
-                     TelemetryStoreApplication.resolveInstalledOrigin path approved { query with ManagerReceiptSha256 = String.replicate 64 "b" })
+                     at "01" { query with ManagerReceiptSha256 = String.replicate 64 "b" })
+        Assert.Equal(Error [ "learning-installed-origin-unavailable" ], at "05" query)
+        Assert.Equal(Error [ "learning-installed-origin-unavailable" ], at "06" query)
+
+        let renewed = String.replicate 64 "b"
+        admit "origin-2" renewed "2026-10-01T10:02:00.0000000+00:00" "2026-10-01T10:10:00.0000000+00:00"
+        let renewedQuery = { query with ManagerReceiptSha256 = renewed }
+        Assert.Equal(Error [ "learning-installed-origin-unavailable" ], at "01" renewedQuery)
+        Assert.Equal("origin-1", (at "03" query |> unwrap).RecordId)
+        Assert.Equal("origin-2", (at "03" renewedQuery |> unwrap).RecordId)
+        admit "origin-3" renewed "2026-10-01T10:02:00.0000000+00:00" "2026-10-01T10:10:00.0000000+00:00"
+        Assert.Equal(Error [ "learning-installed-origin-ambiguous" ], at "03" renewedQuery)
 
         let genericScope = { scope with Producer = "generic-origin" }
         let generic = TelemetryReceipt.genericPrincipal genericScope
         TelemetryStoreApplication.enrollReceiptPrincipal path approved generic |> unwrap |> ignore
         let genericEnvelope =
-            Encoding.UTF8.GetString(envelope "origin-generic" (event "origin-generic" digest))
+            Encoding.UTF8.GetString(envelope "origin-generic" (event "origin-generic" digest "2026-10-01T10:00:00.0000000+00:00" "2026-10-01T10:05:00.0000000+00:00"))
                 .Replace(scope.Producer, genericScope.Producer)
             |> Encoding.UTF8.GetBytes
         TelemetryStoreApplication.submitReceiptPrincipal path approved generic genericEnvelope |> unwrap |> ignore
