@@ -53,6 +53,22 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**SC2 command feedback preservation source delivered; genuine completion remains open.**
+[SC2 Client PR #24](https://github.com/FS-GG/FS.GG.SC2.Client/pull/24) merged at
+`f1a34ff8d1715f1d10dd7aaeb6c308057ca7880b`, tree
+`65494371d41ae916c6d4cc291f55844a259ff8ec`, independently equal to candidate
+`c7afc4370713df6c66a3ca90ee55b5787c8b6216`. Full hosted
+[verification 36809231861](https://github.com/FS-GG/FS.GG.SC2.Client/actions/runs/36809231861)
+passed all 61 browser cases. The actual attempt-c audit contained one successful native
+action exchange, followed by a background accepted heartbeat overwriting the mutable
+command feedback slot. Accepted heartbeat messages now preserve the visible command
+outcome; rejected heartbeats remain visible. A real scripted-peer browser fixture verifies
+terminal actionResult=1 feedback, then accepted preservation and rejected visibility through
+the compiled codec and transport callback. The native runner still requires Sc2Result and
+actionResult=1 with independent audit/world-result joins; no timeout or criterion changes.
+Fresh protected build, private runner preparation and genuine acceptance remain next;
+all later native and installed gates remain open.
+
 **FourD bounded inner builder diagnostics source delivered; native cause and runtime gates remain open.**
 [FourD PR #27](https://github.com/FS-GG/FS.GG.FourD/pull/27) merged at
 `8387d43dee8986bd50fd3170303dfb2fae288826`, tree
