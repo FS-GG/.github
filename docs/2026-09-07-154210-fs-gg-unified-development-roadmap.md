@@ -53,6 +53,41 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**V2-HOST Podman named-network inspection source repaired; native acceptance remains open.**
+Actual private attempt-h 36813862234 refused `direct-network-route-refused` after
+receiver connection. Its sealed, closed diagnostic projection reports exactly the two
+expected attachments with no unexpected network, ports, proxy or credential environment;
+all expected mounts match. Root opened only evidence, preserved the authentication capsule
+sealed, independently verified both temporary secrets absent and original authentication
+bytes/inode/mtime unchanged. Cleanup and preservation completed. Podman 4.9.3 source shows
+named networks use literal `bridge` backend metadata in HostConfig.NetworkMode. This source
+repair requires that backend value together with the unchanged exact attachment set for
+receiver, native and egress inspection. Host/default/slirp/pasta, malformed modes and
+unexpected attachments refuse. Independent source review accepted exact candidate
+`3f653fc87b9e701b516fe066d4e9237b7c382a66`, report SHA-256
+`e80d4532c6ec59db58bce59b7e931b4c3633397380d2f15064c6dd463009516d`.
+Isolation still depends on successful fresh `network create --internal` without `--ignore`
+and exact attachment inspection; no separate Internal-property readback is claimed.
+All four input pins and public workflow template bytes remain unchanged. Private recipe
+registration and a fresh genuine operation remain next; `.8`, `.9`, `.10` and installed
+LEARN enrollment are open. Expanded native CapDrop metadata remains a separate unqualified
+compatibility question; its guard is unchanged.
+
+**FourD observed temporary-storage diagnostics delivered; native capacity remains unknown.**
+[FourD PR #29](https://github.com/FS-GG/FS.GG.FourD/pull/29) merged at
+`d51297c4d29121fea3fb64de42e729effad202fc`, tree
+`09f614cf0e40db0d738309b54d4765eecf35e523`, independently equal to candidate
+`bcc2d68f26287bd521bbaa8d9dae3240d1db88fc`. Full
+[verification 36815353671](https://github.com/FS-GG/FS.GG.FourD/actions/runs/36815353671)
+and source preparation 36815353555 passed; all 31 focused tests passed.
+Actual native 36813902592 failed preflight before downloads/build; a JSONDecodeError
+masked its original RuntimeError and the retained artifact contains no original refusal
+or capacity metrics. The repair preserves typed bounded failures or wraps plain refusals,
+and retains measured device IDs, free bytes and evaluated distinct/capacity predicates.
+The 5 GiB floor, VFS, input pins and scoped cleanup stay unchanged. A bounded diagnostic
+run must establish the actual refusal; insufficient capacity would require a reviewed
+alternate storage design. Native runtime, installed and human gates remain open.
+
 **SC2 terminal feedback and scripted-peer lifetime source delivered; genuine acceptance remains open.**
 [SC2 Client PR #25](https://github.com/FS-GG/FS.GG.SC2.Client/pull/25) merged at
 `4b17d8582859c9c78ef2a0c074380d3e7fd1d0ea`, tree
