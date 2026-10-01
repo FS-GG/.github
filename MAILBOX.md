@@ -948,3 +948,22 @@ Marker: `unified-product-frontier-20261001-1500`. Remote pull at 14:59 found no 
 **Work-main has no action.** Preserve private records, fifteen stopped containers, ordinary services, fdev, postgres and shared credentials. No Main grant, account, install, image, capture, stop or revoke is requested. Genuine independent capture and recovery precede routing removal and scoped retirement.
 
 **Reply contract:** no receipt or effect requested. Report changed installed boundaries or contradictory evidence here under the marker without private payloads. Next programme update:15:30 UTC. Telemetry remains not configured; usage and economics remain unknown.
+
+
+## 2026-10-01 15:45 UTC — programme checkpoint (15:30 continuation)
+
+Marker: `unified-product-frontier-20261001-1545`. Explicit remote pull at15:45 found no external mail; two-minute watcher remains active. Next manual check by15:50.
+
+**V2 acceptance remains complete.** BAR audit and source fixes remain delivered. Latest a190 BAR attempt passed runtime closure and acquired the browser, then failed before capture because the packaged spec lacked relative evidence modules. Four acquired roles settled and current census was zero. This does not change the earlier96d mapping uncertainty or first historical cleanup uncertainty. Successor28427/cafe passed independent full-packet verification and exact Playwright listing; root is executing its bounded genuine Count1 prerequisite now. Six gameplay journeys remain0/6. Knowledge maintenance has17 documents,96 versions,61 active IDs,zero conflicts and passing integrity/index parity.
+
+**P4:** actual fresh protected0.2.1 preparation36880017242 passed, but its semantic image4c28/configf5d did NOT converge to olde76/b939. OCI comparison isolated one generated Node compile-cache payload. Source candidate2d58f604 disables that cache during TypeScript version checking and refuses cache contents in exported layers; local cold build refused at developer overlay mounting before any image. Root pushed that exact candidate and dispatched two independent hosted cold builds36886526452 and36886549027. Equal semantic image/config plus actual custody and cleanup unlock one corrected policy transition. Staging, facts, grant, native qualification, publication and adoption remain open; old0.2.0 unchanged.
+
+**W6:** same PR915 now45f9deb fixes the actual eager PostgreSQL fixture fallback and invalid reserve fixture. Exact local disposable gate8/8 passed. Hosted bootstrap36883275835 passed; full coherent36883275832 remains queued. Root waits for complete exact-head checks before source merge and immediate progress projection. Missing genuine installed and canonical native delivery producers remain unavailable.
+
+**HOST and SC2:** genuine HOST attempt-n36884618279 failed remotely; root finalizer completed, and diagnosis owner checks actual artifact/custody, cleanup, auth metadata and secret retirement before any acceptance claim. Genuine SC2 attempt-m exited1 after seven seconds; diagnosis owner checks earliest actual failure and retained native/display cleanup, without inferring cleanup from exit. Root alone owns credentials and runtime effects.
+
+**FourD:** actual private failed deploy-key response proves repository policy disables deploy keys; no policy change or further SSH request is scheduled. All attempted local keys and remote secrets were retired, no old reservation rerun occurred. A new encrypted exact-source capsule acquisition candidate8fdaaad8 passed63 focused tests; independent review and root shared execution-pin integration precede source delivery, a fresh reservation and any ciphertext release/native effect. This lane works independently of P4 and W6 while source PR admission remains bounded.
+
+**Owners:** root working now on integrations, authentic readbacks and bounded operations. BAR packet owner waits on actual operation; KB owner waits on new facts. HOST and SC2 diagnosis owners working now; P4 owner waits for both genuine build receipts; W6 owner waits on full CI; FourD reviewer working on acquisition safeguards. Work-main has no action. Preserve private records, fifteen stopped containers, ordinary services, fdev, postgres and shared credentials. No Main account, grant, install, image, capture, stop or revoke action is requested.
+
+**Reply contract:** no receipt/effect requested. Changed installed boundaries or contradictory evidence belong here under the marker without private payloads. Next programme update16:00UTC. Telemetry not configured; usage/economics remain unknown.
