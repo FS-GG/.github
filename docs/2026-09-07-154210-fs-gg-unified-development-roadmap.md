@@ -65,6 +65,19 @@ independent and open. This dated clarification is not a current fleet-health att
 profile acceptance or waiver of exact artifact, authentication, custody, settlement/replay or effect
 authority for any operation actually performed.
 
+**2026-10-01: LEARN persistent collector custody and recovery source closed; installed operation remains open.**
+The optional six-file container foundation uses an independent private persistent root, normalized
+mount boundaries, descriptor-held path custody and the actual Host configuration/adjacent installer
+sidecar contract. Receipt identities hash the exact retained manager-produced bytes after closed semantic
+validation; F# JSON field order is not mistaken for a provenance mismatch. A matching exclusive store
+lock refuses live backup, while stopped recovery preserves configuration, credential files, installer
+sidecar, retained evidence and sealed native source bytes. Restored operation remains inactive.
+All 19 focused checks passed, including actual F# serializer output; independent bounded review accepted
+the exact source. The unchanged TelemetryHost 0.2.1 publication is already complete at release 400202272.
+This source merge proves no permanent placement, image digest, credential enrollment, installer readback,
+provider capability, native capture, recovery qualification, operational W6 reader or experimental benefit.
+Those genuine installation and acceptance gates remain open independently of V2 and Main.
+
 **2026-10-01: HOST native 0.158.0 original-rollout audit source repaired; independent capture remains open.**
 The coherent public source recognizes the closed native subagent activity shapes and audits the original
 rollout instead of treating projected events as persistence authority. Exact parent and child identities,
