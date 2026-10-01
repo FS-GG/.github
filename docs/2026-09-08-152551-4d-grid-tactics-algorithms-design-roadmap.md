@@ -6,7 +6,7 @@ index: 38
 description: A grid-based squad tactics foundation with four spatial coordinates, dimension-aware movement, visibility, cover, combat, AI and readable battlefield views.
 status: active
 document-type: research-design-and-roadmap
-last-updated: 2026-09-29
+last-updated: 2026-10-01
 ---
 
 # Four-spatial-dimensional grid tactics
@@ -603,6 +603,63 @@ grid does not acquire rotated fractional cells merely because the camera slice i
 4D geometry and plane rotations are described in [Hollasch's thesis][hollasch]. The formulas here
 define the proposed client view boundary; they are not a requirement for a full 4D raytraced renderer.
 
+#### 11.2.1 Height maps and spatial projections
+
+The 2026-10-01 representation clarification distinguishes a **column/height-map view** from a
+**geometric projection**. First select the fixed-`w` 3D slice or another explicitly labeled 4D view;
+then choose how its spatial geometry reaches the 2D screen. Neither step changes world occupancy.
+
+A height map reduces each `(x,y)` column at the selected `w` to one declared value, such as its
+highest known occupied `z`. A `5×5` set of columns consequently has a `5×5` summary. This loses
+information about lower layers, gaps and overhangs unless the inspector exposes those records.
+A fixed-`z` `(x,y)` panel can also remain `5×5`, but represents one layer rather than a column
+aggregate. Label these views accordingly; neither depicts the entire 3D cell structure merely by
+coloring a square matrix.
+
+An oblique projection uses `z` in the screen coordinates. For example,
+
+```text
+u = x + 0.5*z
+v = y + 0.25*z
+```
+
+For cell reference points with `x,y ∈ {0,…,4}` and `z ∈ {0,…,3}`, this gives `u ∈ [0,5.5]` and
+`v ∈ [0,4.75]`: successive layers shift by `(0.5,0.25)`. These are reference-point bounds;
+projecting the actual voxel vertices determines the geometry's full footprint. Compute the viewport
+from that projected geometry rather than forcing it into a second `5×5` grid. The outline can be a
+parallelogram, a hexagon-like shape or an irregular union for sparse terrain, depending on the camera
+and occupied geometry.
+
+An illustrative isometric mapping is
+
+```text
+u = x - y
+v = (x + y)/2 - z
+```
+
+Here `x,y ∈ {0,…,4}` already give nine distinct horizontal lattice values, `u=-4,…,4`, not five.
+That is a count of reference-point coordinates, not screen pixels or a replacement board width.
+Adding height shifts and overlaps the projected geometry. For example, `(0,0,0)` and `(1,1,1)`
+both map to `(u,v)=(0,0)`; screen coordinates cannot identify a unique world cell.
+
+Choose an explicit overlap and information policy for each representation:
+
+| Representation | Rendering and overlap rule | Tactical use and limit |
+|---|---|---|
+| Visible-surface projection | Project the actual geometry; the closest visible surface wins through depth testing, such as a z-buffer | Natural oblique board. Occluded cells need layer controls or an inspector; display occlusion does not determine physical 4D sight or weapon legality |
+| Layered or exploded projection | Retain a separate instance for every permitted cell in each labeled `z` layer, with offsets and layer toggles or separation | Useful for tactical inspection. Offsets alone do not guarantee visibility; overlapping cells must remain individually inspectable and selectable |
+| Ray aggregation | Summarize the permitted cells intersected by a defined viewing ray, using nearest, highest/lowest `z`, occupied count, terrain priority or stacked/split colors | An analysis view with a declared reducer and constituent-cell inspector. Nearest depth and highest `z` are different rules; unknown cells must not become known through an aggregate |
+| Projected polygons | Project each cell's geometry into identified screen polygons, such as diamonds or parallelograms; retain depth and full cell identity | Avoids a regular secondary grid. Height can shift and overlap polygons; this mode still needs an explicit depth, transparency or layer policy |
+
+Projected polygons describe geometry, while visible-surface, layered and aggregation modes describe
+how it is presented; these choices can be combined. All modes consume only the side's permitted
+knowledge. Counts, silhouettes, depth buffers and picking lists must not expose hidden occupancy.
+
+For the tactical display comparison, evaluate a layered/exploded view alongside a visible-surface
+oblique view with cell inspection. Keep height maps as clearly labeled summaries. Final camera and
+overlap choices remain subject to the readability evaluation; this clarification is a design
+requirement, not evidence of an implemented renderer.
+
 ### 11.3 Picking has to recover a full cell
 
 In a fixed slice, unproject the pointer into a 3D ray, intersect it with rendered known terrain or an
@@ -610,6 +667,12 @@ explicit targeting plane, recover `(x,y,z)` and attach the slice's explicit `w`.
 `Cell4` or actor ID in the rule core. In a general slice, lift a 3D ray `u(t)` to `o+B·u(t)` in 4D,
 then apply the view's qualified picking query. In an exploded view, also identify which panel/slab
 was picked; screen position alone is ambiguous.
+
+For overlapping projected polygons, use the declared depth/layer rule and provide a way to inspect
+and choose the other permitted cells, such as layer isolation, cycling or a constituent list. Show
+the resulting `(x,y,z,w)` before confirming an action. A height-map or ray-aggregate value is not
+a destination by itself: resolve a constituent cell or an explicit targeting plane. Picking must
+retain the selected cell/actor identity rather than merge cells that share screen coordinates.
 
 Targeting unknown space is possible only through an explicit ground-target/area ability. A hidden
 actor's render proxy must not exist in a browser picking buffer. Hover feedback, path costs and
@@ -633,6 +696,11 @@ orthogonal panels. Measure coordinate mistakes, correct route/range/cover predic
 switching slices and ability to explain a successful flank. For a small formative study, use roughly
 5–8 unfamiliar players; report observations and task outcomes without population-level claims.
 Choose acceptance criteria before the evaluated round and revise when failures cluster.
+
+Include multi-height cells that overlap on screen, lower cells under an overhang, and equal `(x,y,z)`
+positions at different `w`. Check that players can distinguish a height summary from projected
+geometry, identify an obscured permitted cell and confirm the intended full coordinate without
+accidentally ordering a unit to another layer.
 
 The teaching sequence should begin with one additional accessible `w` cell, then introduce an
 extended wall, cross-slice shooting, cross-slice danger and a shrinking blast cross-section. Use
@@ -775,6 +843,7 @@ algorithm/vertical-slice scope.
 | Cover | Sample count matches known geometry; shooter-relative values can differ; no automatic flank bonus from a different `w` |
 | Effects | Correct 4D radius membership, shrinking slices, occlusion and one result per actor; destruction has bounded extent |
 | State/knowledge | View changes reveal nothing; stale contacts stay stale; hidden-state variations do not change a knowledge-limited query |
+| View projection/picking | A `5×5×4` fixed-`w` fixture has a `5×5` column summary but shifted oblique layers; isometric `u` has nine lattice values. Projected vertex bounds fit the viewport; overlapping cells preserve distinct full identities, layer/depth selection and knowledge restrictions |
 | Actions/reactions | Stable per-step ordering, interrupted paths, death/occupancy changes, no animation dependence and no accidental recursive reactions |
 | Cross-runtime | Authored canonical outputs match .NET, emitted Fable/Node and named browser runs; integer/rational/RNG bounds tested |
 | Save/replay | Same initial state and committed action sequence reproduce final state/events across supported runtimes |
@@ -967,7 +1036,7 @@ complete FOURD-01.4–.6, publish an artifact or establish installed adoption.
 | Milestone | Outcome | Entry evidence and completion examples |
 |---|---|---|
 | **FOURD-01.3 — Play one deterministic tactical encounter** | Source delivered: squad, knowledge-limited opposing AI, move/shoot/overwatch/end-turn, cover, one 4D radial breach effect and win/loss objectives | .NET, emitted Fable/Node and Chromium verification covers per-step reactions, death/occupancy, bounded terrain change and canonical save/replay; exact source evidence is linked above |
-| **FOURD-01.4 — Teach and evaluate fourth-axis tactics** | Tutorial, mouse/keyboard interaction and evaluation instrumentation are source delivered; genuine .4-E player evidence remains pending | Playable .3/.4 build. Compare views on matched tasks with a small formative player group; record correct predictions, coordinate mistakes and explanations. Players deliberately use at least two fourth-axis tactics. Set acceptance criteria before the evaluated round; repair clustered failures |
+| **FOURD-01.4 — Teach and evaluate fourth-axis tactics** | Tutorial, mouse/keyboard interaction and evaluation instrumentation are source delivered; genuine .4-E player evidence remains pending | Playable .3/.4 build. Compare views on matched tasks with a small formative player group, including [height summaries versus spatial projections](#1121-height-maps-and-spatial-projections), overlapping height layers and full-cell picking; record correct predictions, coordinate mistakes and explanations. Players deliberately use at least two fourth-axis tactics. Set acceptance criteria before the evaluated round; repair clustered failures |
 | **FOURD-01.5 — Qualify the tactical vertical slice** | Bounded .5a technical cases are complete; full slice qualification remains open for the selected rules and supported performance/recovery envelope | .3–.4 outcomes and the design-v2 comparison determine the real load and usability limits. Measure the proposed benchmark on named devices/browsers, retain correctness oracles through optimization, test restart/save/replay and invalidation after terrain changes |
 | **FOURD-01.6 — Deliver the foundation and decide optional reuse** | Documented supported encounter, algorithms, tests, measurements and source/product handoff; evidence-based extraction decision | .5 evidence and chosen distribution. Identify proven candidates for Game/Rendering and whether a maintained Fable template sample is wanted. Publication and installed adoption remain separately evidenced if selected; they are not speculative prerequisites to the vertical-slice result |
 
