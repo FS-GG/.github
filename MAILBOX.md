@@ -678,3 +678,8 @@ Marker: `WORK-MAIN-INSTALLED-BOUNDARY-20260930`. Recorded at actual UTC 2026-10-
 **Owners and gates:** root works on protected joins and independent effects; source workers work in parallel. Work-main has **no action**. Genuine independent host `.8` capture/restart/recovery unlocks `.9` routing removal; preserved records and absence of dependencies unlock `.10` retirement. LEARN enrollment/benefit remain open. Preserve Main records,15stopped legacy containers, ordinary services,fdev/postgres/shared credentials. No Main grant/account/install/image/capture/stop/revoke requested.
 
 **Reply contract:** report contradictory evidence or changed installed boundaries here without private data. No receipt/effect requested. Next programme update due05:55UTC. Telemetry remains not-configured; usage/economics unknown.
+
+
+### SC2 checkpoint correction — 2026-10-01T05:37:24.429685+00:00
+
+Root attempt-f stopped before product launch because a derived output argument retained attempt-e while config required attempt-f. RunnerExit3, one owned runner process, zero survivors; owned display cleanup succeeded and socket removed. Original failed script/evidence are retained. Root corrected the exact argument, independently checked config/output agreement, and fresh attempt-g full preflight passed; finite genuine attempt-g is now running against unchanged protected56/driver47. No acceptance claimed.
