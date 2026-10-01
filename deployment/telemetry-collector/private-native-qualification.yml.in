@@ -61,29 +61,40 @@ jobs:
           test "$(git -C placement status --porcelain)" = ""
           test "$(git -C recipe status --porcelain)" = ""
           # BEGIN hosted runner SDK custody normalization
-          test "$HOSTED_RUNNER_CUSTODY" = github-hosted
-          test "$DOTNET_ROOT" = /usr/share/dotnet
-          sdk_root="$(readlink -f -- "$DOTNET_ROOT")"
-          resolved_dotnet="$(readlink -f -- /usr/bin/dotnet)"
-          test "$sdk_root" = /usr/share/dotnet
-          test "$resolved_dotnet" = "$sdk_root/dotnet"
-          test "$(readlink -f -- "$(command -v dotnet)")" = "$resolved_dotnet"
-          test "$("$resolved_dotnet" --version)" = 10.0.401
-          sudo chown -hR root:root -- "$sdk_root"
-          sudo chmod -R go-w -- "$sdk_root"
-          invalid_sdk_entry="$(find "$sdk_root" -xdev \( ! -uid 0 -o \( ! -type l -a -perm /022 \) \) -print -quit)"
+          sdk_refuse() {
+            printf 'hosted-sdk-guard-refused stage=%s\n' "$1" >&2
+            exit 1
+          }
+          sdk_path_guard() {
+            local stage="$1" path="$2" uid mode
+            uid="$(stat -c %u -- "$path")" || sdk_refuse "$stage-stat"
+            mode="$(stat -c %a -- "$path")" || sdk_refuse "$stage-stat"
+            printf 'hosted-sdk-guard stage=%s path=%s uid=%s mode=%s\n' "$stage" "$path" "$uid" "$mode"
+            test "$uid" = 0 || sdk_refuse "$stage-owner"
+            test "$((8#$mode & 022))" = 0 || sdk_refuse "$stage-mode"
+          }
+          test "$HOSTED_RUNNER_CUSTODY" = github-hosted || sdk_refuse runner-environment
+          test "$DOTNET_ROOT" = /usr/share/dotnet || sdk_refuse dotnet-root-environment
+          sdk_root="$(readlink -f -- "$DOTNET_ROOT")" || sdk_refuse dotnet-root-resolve
+          resolved_dotnet="$(readlink -f -- /usr/bin/dotnet)" || sdk_refuse usr-bin-dotnet-resolve
+          path_dotnet="$(readlink -f -- "$(command -v dotnet)")" || sdk_refuse path-dotnet-resolve
+          printf 'hosted-sdk-placement sdk-root=%s resolved-dotnet=%s path-dotnet=%s\n' "$sdk_root" "$resolved_dotnet" "$path_dotnet"
+          test "$sdk_root" = /usr/share/dotnet || sdk_refuse dotnet-root-placement
+          test "$resolved_dotnet" = "$sdk_root/dotnet" || sdk_refuse usr-bin-dotnet-placement
+          test "$path_dotnet" = "$resolved_dotnet" || sdk_refuse path-dotnet-placement
+          test "$("$resolved_dotnet" --version)" = 10.0.401 || sdk_refuse dotnet-version-before-normalization
+          sudo chown -hR root:root -- "$sdk_root" || sdk_refuse dotnet-tree-chown
+          sudo chmod -R go-w -- "$sdk_root" || sdk_refuse dotnet-tree-chmod
+          invalid_sdk_entry="$(find "$sdk_root" -xdev \( ! -uid 0 -o \( ! -type l -a -perm /022 \) \) -print -quit)" || sdk_refuse dotnet-tree-scan
           if test -n "$invalid_sdk_entry"; then
             printf '%s\n' hosted-sdk-custody-refused >&2
-            exit 1
+            sdk_refuse dotnet-tree-custody
           fi
-          custody_path="$resolved_dotnet"
-          while true; do
-            test "$(stat -c %u -- "$custody_path")" = 0
-            custody_mode="$(stat -c %a -- "$custody_path")"
-            test "$((8#$custody_mode & 022))" = 0
-            test "$custody_path" = / && break
-            custody_path="$(dirname -- "$custody_path")"
-          done
+          sdk_path_guard resolved-dotnet "$resolved_dotnet"
+          sdk_path_guard dotnet-root "$sdk_root"
+          sdk_path_guard usr-share /usr/share
+          sdk_path_guard usr /usr
+          sdk_path_guard filesystem-root /
           # END hosted runner SDK custody normalization
           # The compiled binding owns every child only in a dedicated Linux x86_64
           # process. Record and validate its exact process/runtime dependencies
@@ -115,7 +126,7 @@ jobs:
             done
             printf '%s %s %s\n' "$selected" "$resolved" "$(sha256sum -- "$resolved" | cut -d' ' -f1)" >> "$dependency_manifest"
           done
-          test "$(/usr/bin/dotnet --version)" = 10.0.401
+          test "$(/usr/bin/dotnet --version)" = 10.0.401 || sdk_refuse usr-bin-dotnet-version-after-normalization
           /usr/bin/dotnet restore recipe/deployment/telemetry-collector/host-binding/HostBinding.fsproj --locked-mode
           /usr/bin/dotnet build recipe/deployment/telemetry-collector/host-binding/HostBinding.fsproj --no-restore --configuration Release
           HOST_BINDING="$GITHUB_WORKSPACE/recipe/deployment/telemetry-collector/host-binding/bin/Release/net10.0/HostBinding.dll"
