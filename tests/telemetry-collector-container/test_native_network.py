@@ -116,7 +116,7 @@ class NativeNetworkTests(unittest.TestCase):
         value = {
             "Config": {"User": "32768:32768", "Env": [
                 *topology.FIXED_ENV, topology.PRODUCER_CREDENTIAL_ENV + "=secret-not-logged"]},
-            "HostConfig": {"NetworkMode": topology.NATIVE_NETWORK, "ReadonlyRootfs": True,
+            "HostConfig": {"NetworkMode": "bridge", "ReadonlyRootfs": True,
                            "PidsLimit": 128, "Memory": 2 * 1024 ** 3, "NanoCpus": 2_000_000_000,
                            "CapAdd": [], "CapDrop": ["ALL"], "UsernsMode": "private",
                            "PidMode": "private", "UTSMode": "private",
@@ -145,7 +145,7 @@ class NativeNetworkTests(unittest.TestCase):
         value = {
             "Config": {"User": "32768:32768", "Env": [],
                        "Cmd": ["serve", "--config", "/qualification/host.json"]},
-            "HostConfig": {"NetworkMode": topology.COLLECTOR_NETWORK, "ReadonlyRootfs": True,
+            "HostConfig": {"NetworkMode": "bridge", "ReadonlyRootfs": True,
                            "PidsLimit": 128, "Memory": 1024 ** 3, "NanoCpus": 1_000_000_000,
                            "PortBindings": {}},
             "NetworkSettings": {"Networks": {
@@ -157,6 +157,13 @@ class NativeNetworkTests(unittest.TestCase):
                                     "/qualification/tls", "/qualification/credentials")],
         }
         topology.inspect_receiver(value)
+        for refused_mode in ("host", "default", "slirp4netns", "pasta",
+                             topology.COLLECTOR_NETWORK, ["bridge"], {"mode": "bridge"}):
+            with self.subTest(network_mode=refused_mode):
+                value["HostConfig"]["NetworkMode"] = refused_mode
+                with self.assertRaisesRegex(topology.Refusal, "direct-network-route"):
+                    topology.inspect_receiver(value)
+        value["HostConfig"]["NetworkMode"] = "bridge"
         value["NetworkSettings"]["Networks"][topology.UPLINK_NETWORK] = {}
         with self.assertRaisesRegex(topology.Refusal, "network-set"):
             topology.inspect_receiver(value)
@@ -170,7 +177,7 @@ class NativeNetworkTests(unittest.TestCase):
             "Config": {"User": "32768:32768",
                        "Env": ["FSGG_TELEMETRY_CREDENTIAL_PRIVATE=secret-value"],
                        "Cmd": ["serve", "--config", "/private/secret-host.json"]},
-            "HostConfig": {"NetworkMode": topology.COLLECTOR_NETWORK, "ReadonlyRootfs": True,
+            "HostConfig": {"NetworkMode": "bridge", "ReadonlyRootfs": True,
                            "PidsLimit": 128, "Memory": 1024 ** 3, "NanoCpus": 1_000_000_000,
                            "PortBindings": {}, "CapAdd": [],
                            "CapDrop": ["CAP_CHOWN", "CAP_SETUID"],
@@ -190,6 +197,7 @@ class NativeNetworkTests(unittest.TestCase):
         self.assertEqual((3, 1), (projection["network"]["count"],
                                  projection["network"]["unexpectedCount"]))
         self.assertEqual("expanded", projection["privilege"]["capDropCategory"])
+        self.assertEqual("bridge", projection["network"]["modeCategory"])
         self.assertTrue(projection["environment"]["credentialPresent"])
         self.assertFalse(projection["route"]["commandExact"])
         self.assertEqual(1, projection["storage"]["unexpectedMountCount"])
