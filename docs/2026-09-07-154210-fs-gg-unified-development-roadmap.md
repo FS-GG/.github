@@ -53,6 +53,21 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**FourD bounded private build storage and cleanup source delivered; native retry remains open.**
+[FourD PR #25](https://github.com/FS-GG/FS.GG.FourD/pull/25) merged at
+`e06609740f49443808f6dd1e656dec4e9e006a23`, tree
+`9e71c9b02e6bf6a4137792a8ce0643aaa77a5a6c`, independently equal to candidate
+`0a9ff6b74d650accf3a7d8b72dea22f765e3df3c`. Full
+[verification 36803263187](https://github.com/FS-GG/FS.GG.FourD/actions/runs/36803263187)
+and source preparation passed. Actual native run 36801170882 exhausted disk while VFS
+retained cached build layers; cleanup then encountered readonly directories after mapped
+ownership was restored. The unchanged pinned build now disables cache layers and removes
+intermediate containers. Only after verified archive/config custody, it releases images from
+its validated private build store before fresh load. Mapped cleanup restores owner write/search
+permissions only within its owned paths. All 23 source checks passed under both tested umasks.
+A fresh protected native run, runtime BIND/recovery, installed adoption and human acceptance
+remain open; no global prune, reset or broad cleanup is authorized by this source repair.
+
 **V2-HOST-01.8 empty compatibility app state source repaired; native qualification stays open.**
 Reviewed source `0e719a3cae14a9416ff30ae0ce1978825e681380` redirects `CODEX_HOME`
 only for the fixed zero-auth readonly compatibility operation to its fresh private run directory
