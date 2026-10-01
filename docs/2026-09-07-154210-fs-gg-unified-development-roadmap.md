@@ -53,6 +53,22 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**SC2 terminal feedback and scripted-peer lifetime source delivered; genuine acceptance remains open.**
+[SC2 Client PR #25](https://github.com/FS-GG/FS.GG.SC2.Client/pull/25) merged at
+`4b17d8582859c9c78ef2a0c074380d3e7fd1d0ea`, tree
+`a342a6b0249ca280b00f75fa32a4be7e5811e093`, independently equal to candidate
+`6198e34d04b529c07d090e6537f7eb09ba1a8525`. Full hosted
+[verification 36814254575](https://github.com/FS-GG/FS.GG.SC2.Client/actions/runs/36814254575)
+passed. Terminal command feedback survives accepted lifecycle messages while lifecycle
+state still updates; rejected messages remain visible and a new command can replace the
+old result. The compiled browser regression exercises Sc2Result followed by accepted
+Heartbeat and Step. A scripted native peer waits until its final Step response is classified
+before disposal, removing the observed response-ownership race without changing product
+criteria. Complete native fixture verification passed ten consecutive local runs; the new
+browser regression and original placement test passed six repeated cases. The driver,
+capture, join and native qualifier are unchanged. A fresh protected build and genuine
+SC2 operation remain next; `.6` completion, publication and installed adoption are open.
+
 **Portable P3 0.2.0 publication and native qualification complete; installed adoption remains open.**
 Actual [36813849644](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36813849644)
 on protected `c8f443e9e52af44287dd3cbb95881933c026627e` passed all six packaged
