@@ -65,6 +65,20 @@ independent and open. This dated clarification is not a current fleet-health att
 profile acceptance or waiver of exact artifact, authentication, custody, settlement/replay or effect
 authority for any operation actually performed.
 
+**2026-10-01: FourD typed qualification source delivered; protected operation remains open.**
+[Coordination PR #917](https://github.com/FS-GG/FS.GG.Coordination/pull/917) merged at
+`2f8437ccbf25606ea9cd567b02924309e3a45fde`, tree
+`75dc590c42fef693bcea3c006e35ddfa14596d1f`, equal to reviewed repair
+`fa776bd8fee2c5038b746e2b26c3d9274797c7bc`.
+[Full validation 36908992547](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36908992547)
+and [bootstrap 36908992422](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36908992422)
+passed. F# owns qualification policy and generates the canonical ephemeral Quint model;
+five actual ITF witnesses exercise the production reducer. The repair preserves historical model
+bytes and the required architecture gate. Failed native cleanup remains an observed resource
+obligation until cleanup succeeds. Protected SDK provisioning and the compiled policy binding are
+source delivered. Fresh capacity, reservation, encrypted source transport, artifact adoption and
+native qualification remain open; this source merge establishes no new native acceptance.
+
 **2026-10-01: OPS-TYPED-01.5 SC2 advisor diagnostic source delivered.**
 [SC2 #33](https://github.com/FS-GG/FS.GG.SC2.Client/pull/33) merged at
 `039feddc07c3c0d47802485dd51c85f3d0a9d54c`; root authenticated tree
