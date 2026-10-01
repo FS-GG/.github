@@ -65,6 +65,42 @@ independent and open. This dated clarification is not a current fleet-health att
 profile acceptance or waiver of exact artifact, authentication, custody, settlement/replay or effect
 authority for any operation actually performed.
 
+**2026-10-01: W6 existing-authority composition source closed; installed operation remains open.**
+[Coordination #915](https://github.com/FS-GG/FS.GG.Coordination/pull/915) merged at
+`b457cab51496deb25ea99fabd0b700e367200c66`; root authenticated tree
+`c9dda659b31aab15ae3b6e68d4bb85ddb3952b59`, equal reviewed head
+`45f9debdfbf79f0113a20cc3b0a8f973963059f7`. Exact-head full coherent
+[verification 36883275832](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36883275832)
+and [bootstrap 36883275835](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36883275835)
+passed. Source joins existing journal authority, typed installed-custody and retained native-delivery
+readers with generation/cohort/WorkItem/window bindings and disabled-by-default Host composition.
+Prospective admission precedes durable assignment, then rereads the exact unlaunched assignment
+before intent; execution counters are required at their actual execution stage. Stale or future
+authority timestamps refuse. The real PostgreSQL fixture repair passed eight local checks without
+skips and the hosted bootstrap; production reservation validators remain unchanged. This is source
+delivery only. Genuine installed-origin receipts and canonical native-delivery binding producers
+remain unavailable, so absent capabilities still refuse. Installation, capture, recovery, enrollment,
+W6 live acceptance and Main-independent deployment remain open; no Main action is selected.
+
+
+**2026-10-01: HOST operation-profile pin repair source closed; attempt-n refused before native execution.**
+[Private Sandbox #37](https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/pull/37) merged at
+`9b157bb400c85d07ac6bd6394c76982175ceedd9`; root authenticated tree
+`a79a3896d6d0d2269f50c67436ddba8130d69ada`, equal reviewed candidate
+`18b04d47c46249a664232d773294103f85a0ae9f`. The workflow now pins profile
+`1ef6d54eb3f9572580407efe9f266f643645af3af17c33723c0aa8368e5f4f34`, required by the
+unchanged protected public recipe `61d55d8807da02b702ca97467f703640d9a59662`.
+Fourteen focused local tests passed, including actual PyYAML parsing, shell syntax and the joined
+recipe/profile regression; no hosted PR workflow applies in this private repository. Genuine
+[attempt-n 36884618279](https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/actions/runs/36884618279)
+refused effect admission because its predecessor profile differed. Authentication materialization
+and native execution never started. Retained result and authenticated readback show cleanup and
+secret retirement completed; root credential metadata remains exact. No result capsule exists.
+Release `401047616` and both input assets remain unchanged; all earlier attempts remain history.
+This closes the pin repair source only. A new exact-placement attempt must still establish `.8`
+capture, persistence and recovery; `.9`, `.10`, LEARN and Main receive no acceptance or action.
+
+
 **2026-10-01: HOST original-rollout-audit public input registration source closed; genuine qualification remains open.**
 [Private Sandbox #36](https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/pull/36) merged at
 `5b381c3c1a732247cb80ad1370d37f7f0c4a650f`; root API readback confirmed tree
