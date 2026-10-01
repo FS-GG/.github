@@ -53,6 +53,54 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**SC2C-01.6f hosted source repair delivered; genuine game acceptance remains open.**
+[SC2 client PR #21](https://github.com/FS-GG/FS.GG.SC2.Client/pull/21) merged at
+`97f783b2737c4076131f3627b9c64ce2770a0420`, tree
+`0d5846bd3db38bc257a4324cb49fb60fc0213acf`, independently equal to candidate
+`29b0a3808ef45705e96a15fae166a04ad483cba9`. Exact-head full
+[verification 36796405125](https://github.com/FS-GG/FS.GG.SC2.Client/actions/runs/36796405125)
+passed, including all 58 browser cases. Fixtures now select the actual correlated terminal
+feedback after intermediate admission, retain causal authority and transport evidence, and
+admit process-heavy Gateway fixtures through a bounded owned lease while pure browser checks
+remain parallel. Product 250/500ms deadlines, authority fences and native Action behavior are
+unchanged. These scripted-peer source checks launched no genuine SC2 process. The private
+qualification runner must bind this protected source before actual module authoring, consent,
+controller movement, recording and offline replay/audit acceptance. Publication, installed
+adoption and genuine .6f acceptance remain separate gates.
+
+**V2-HOST-01.8 successor private recipe registration source delivered.**
+[Private substrate PR #24](https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/pull/24)
+merged at `5ce16ae29bf92743c7cbfe51a3d57584568532ee`, tree
+`7098f22dc889ce5a81fbb105b851a1f2839f9b0a`, independently equal to candidate
+`6f0b9d2c6e943366cb03d873ad328f2c384d1342`. Thirteen source tests and an exact rendered
+public-template comparison passed. The workflow now binds protected public recipe
+`90a39197e7c3a5670e8ac214b6ae070b899b22cc`; acquisition, public-key custody, profile,
+credential scope, cleanup and encrypted finalization remain intact. A separately bounded
+operation must qualify the corrected zero-auth topology and genuine native capture/recovery.
+Registration is source delivery; .9 routing, .10 Main retirement and installed activation remain open.
+
+**V2-LANG-01.5 FourD short-runroot repair source delivered; native gate remains open.**
+[FourD PR #23](https://github.com/FS-GG/FS.GG.FourD/pull/23) merged at
+`917e4ca9b54071eaae96472469b1cca86537e500`, tree
+`acb45c8eeda91b2dea2abb08905b0874196db387`, independently equal to candidate
+`e2d0a3c2c8fe21fe5caf1bade99a7c26b8194d6d`. Exact-head verify and source preparation
+passed, with 21 focused source checks. Run 36794564473 retained Podman's concrete runroot
+length refusal before downloads, builds or P2 operations. Both successor runroots are unique,
+owned private direct children of /tmp and checked below the 50-byte limit before commands.
+OCI, executor and toolchain contracts remain unchanged. The next protected native run must
+produce actual image, operation, duplicate and recovery evidence; broader acceptance remains open.
+
+**V2-LANG-01.2 P3 packaged preparation qualified; publication remains open.**
+[Preparation 36794564231](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36794564231)
+passed from protected source `d25b9eaec991c94593adcecda6869d07dabdfb43`, tree
+`169b7df260ee6668b8b28d43857183ad669b0e12`. Immutable artifact `11133062598`, expiring
+2026-10-15, was independently downloaded and matched its 186566428-byte wrapper digest
+`27c52b6cc7aeb415be0c313fda40165c83daf1e30b5fe8e89d16cb9828824aa9`.
+Its package-contained executor completed all six operations with zero failed or unknown outcomes
+and zero remaining execution roots after retained-image loading. Frozen 0.2.0 publication pins
+are in review; dual-feed publication, byte identity and release readback are still required.
+This does not qualify the successor 0.2.1 compiled receiver or change workspace defaults.
+
 **V2-HOST-01.8 readonly topology repair source; genuine capture remains open.**
 The corrected private run [36792381598](https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/actions/runs/36792381598)
 built four images, passed the earlier zero-auth smokes, then failed the first readonly container
