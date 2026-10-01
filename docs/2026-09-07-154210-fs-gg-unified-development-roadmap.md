@@ -53,6 +53,49 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**V2-HOST Podman network private registration delivered; genuine acceptance remains open.**
+[Private substrate PR #29](https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/pull/29)
+merged at `443c203dab1dbbba36bbbed27a297a6f805333bc`, tree
+`d05b2683ee6bcfd5e45b35627c089a59525abc9b`, independently equal to candidate
+`19ab34f283387113f00c20341ea510486db2a878`. Both recipe references bind protected
+public source `5f79da7d3a8c70ca60f3c7701eafed6ac66b478f`. Root passed all 13
+PyYAML-enabled source tests without skips and independently matched the protected public
+template after removing exactly the existing acquisition step: 9,552 bytes, SHA-256
+`83e3f69e7813b0c1da83cfc85becf439e0b6fa250ef1fd3cc21869729ddff7a4`.
+The template source bytes are unchanged; the rendered hash changes because the recipe
+commit appears twice. Input release 400609820, public key and all four native input pins
+are unchanged. This private repository has no hosted PR checks. A fresh root-owned
+operation remains next; `.8` acceptance, `.9` routing, `.10` retirement and installed
+LEARN enrollment remain open.
+
+**Rust/Go bounded hosted native qualification complete; full installed adoption remains open.**
+Actual [36815503862](https://github.com/FS-GG/FS.GG.Templates/actions/runs/36815503862)
+on protected `eb914297fdd9b6b7d7e85a18a2ee0e341451b421`, tree
+`fb15b4c244c09459da272e04a962a02d309c4458`, passed both real journeys, duplicate
+reconstruction, actual running cancellation and recovery, wrong-reference/toolchain/source
+refusals, exact evidence validation and owned VFS cleanup. Root independently read 22 JSON
+receipts using 69 bounded HTTP ranges totaling 41,590 bytes. Qualification receipt SHA-256
+`afed1c27d46d3df9a7e8c4426038e5a4a328220157e561e2cb6bc87c5db0c8be`
+is accepted, binds the exact source/tree, and matches the validator readback. Cancellation
+recovery retains observed termination and cleanup; owned containers are absent. Artifact
+11141456884 is 888,304,032 bytes with GitHub-reported digest
+`20de1e0d212146c57cfb900528e44fad9c21340e822690487bc5eb609d37076d`;
+root did not download the full wrapper. Frozen executor, SDK, Akka and retained/derived
+image pins remain unchanged. This closes the bounded Rust/Go hosted native BIND gate;
+owning documentary closure is prepared, while publication, installed adoption, other
+language routes and full `.5` remain open.
+
+**FourD measured temporary capacity refuses; alternate storage design is next.**
+Actual [36816629346](https://github.com/FS-GG/FS.GG.FourD/actions/runs/36816629346)
+on protected `d51297c4d29121fea3fb64de42e729effad202fc` failed preflight before
+downloads/build. Retained artifact 11142165458 reports a distinct temporary filesystem
+(device 26 versus state device 2049), only 4,161,896,448 free bytes against the unchanged
+5,368,709,120-byte floor, and `insufficient-free-space`. This establishes the fresh refusal;
+it does not reconstruct the previous masked failure. Repeating the same route is stopped.
+A reviewed rootless private temporary-storage capability design is next; no larger shared
+memory capacity, memory headroom or native runtime success is inferred. Installed and human
+gates remain open.
+
 **V2-HOST Podman named-network inspection source repaired; native acceptance remains open.**
 Actual private attempt-h 36813862234 refused `direct-network-route-refused` after
 receiver connection. Its sealed, closed diagnostic projection reports exactly the two
