@@ -151,6 +151,53 @@ class Tests(unittest.TestCase):
    self.assertEqual('fsgg.telemetry.host-binding-render/1',rendered['schema'])
    self.assertEqual((source,binding['profileSha256'],binding['producerSha256'],binding['bindingSha256']),
                     (rendered['recipeSourceSha'],rendered['profileSha256'],rendered['producerSha256'],rendered['bindingSha256']))
+ def test_compiled_verifier_refuses_oversized_or_padded_admission_frame(self):
+  with tempfile.TemporaryDirectory() as td:
+   repository,pins,source,binding=self.binding_fixture(pathlib.Path(td)); nonce='run-0001'
+   admission=hashlib.sha256((nonce+'\0'+source+'\0'+binding['profileSha256']+'\0'+q.OPERATION).encode()).hexdigest()
+   command=['/usr/bin/dotnet',str(self.binding_dll),'verify','--source-root',str(repository),'--source-sha',source,
+            '--profile',str(repository/'deployment/telemetry-collector/native-operation-v1.json'),'--source-pins',str(pins),
+            '--nonce',nonce,'--expected-binding-sha',binding['bindingSha256']]
+   for candidate in (' '*(1024*1024)+admission+'\n',' '+admission+'\n',admission+'\r\n',admission+'\nextra'):
+    with self.subTest(bytes=len(candidate)):
+     refused=subprocess.run(command,input=candidate.encode(),capture_output=True,timeout=10)
+     self.assertEqual(2,refused.returncode); self.assertEqual(b'',refused.stdout)
+   accepted=subprocess.run(command,input=(admission+'\n').encode(),capture_output=True,timeout=10)
+   self.assertEqual(0,accepted.returncode)
+ def test_python_adapter_refuses_oversized_admission_before_child_or_auth(self):
+  class NoChild:
+   def run(self,*args,**kwargs): raise AssertionError('verifier child must not start')
+  with tempfile.TemporaryDirectory() as td:
+   t=pathlib.Path(td); a=type('A',(),{'private_root':t/'private','run_nonce':'run-0001','source_sha':'a'*40,'private_placement_sha':'d'*40})()
+   op=q.Operation(a,NoChild()); op.host_binding={'bindingSha256':'b'*64}
+   with mock.patch.dict(os.environ,{'FSGG_NATIVE_AUTH_JSON_B64':'synthetic-auth','FSGG_PRIVATE_EFFECT_ADMISSION':' '*(1024*1024)+'0'*64},clear=True):
+    with self.assertRaisesRegex(q.Refusal,'effect-admission-refused'): op.materialize()
+    self.assertFalse((t/'private').exists()); self.assertIn('FSGG_NATIVE_AUTH_JSON_B64',os.environ)
+ def test_real_compiled_pre_materialization_boundary_has_seven_closed_probes(self):
+  class ReachedBoundary(Exception): pass
+  cases=('valid','old-profile','profile-mutated','pins-mutated','source-revision','producer-mutated','producer-missing')
+  for case in cases:
+   with self.subTest(case=case), tempfile.TemporaryDirectory() as td:
+    root=pathlib.Path(td); repository,pins,source,binding=self.binding_fixture(root); nonce='run-0001'
+    admission_profile=binding['profileSha256'] if case!='old-profile' else '5a30fc507f023d542521aac66c8f49c5ae6ee8d9e34dc90c1a3bf3ab30f6b08f'
+    admission=hashlib.sha256((nonce+'\0'+source+'\0'+admission_profile+'\0'+q.OPERATION).encode()).hexdigest()
+    executable=self.binding_dll; selected_source=source
+    if case=='profile-mutated': (repository/'deployment/telemetry-collector/native-operation-v1.json').write_text('{}')
+    elif case=='pins-mutated': pins.write_text('{}')
+    elif case=='source-revision': selected_source='a'*40
+    elif case=='producer-mutated':
+     executable=root/'changed.dll'; executable.write_bytes(self.binding_dll.read_bytes()+b'changed')
+    elif case=='producer-missing': executable=root/'missing.dll'
+    a=type('A',(),{'private_root':root/'private','run_nonce':nonce,'source_sha':selected_source,'private_placement_sha':'d'*40,
+                   'source_root':repository,'native_source_pins':pins,'host_binding':executable})()
+    op=q.Operation(a,q.Runner(__import__('time').monotonic()+30)); op.host_binding=binding
+    with mock.patch.object(q,'private_dir',side_effect=ReachedBoundary), mock.patch.dict(os.environ,{
+         'FSGG_NATIVE_AUTH_JSON_B64':'synthetic-auth-not-read','FSGG_PRIVATE_EFFECT_ADMISSION':admission},clear=True):
+     if case=='valid':
+      with self.assertRaises(ReachedBoundary): op.materialize()
+     else:
+      with self.assertRaisesRegex(q.Refusal,'effect-admission-refused'): op.materialize()
+     self.assertFalse((root/'private').exists()); self.assertIn('FSGG_NATIVE_AUTH_JSON_B64',os.environ)
  def test_full_operation_sequence_is_real_and_bounded(self):
   source=(ROOT/'deployment/telemetry-collector/qualify_native_container.py').read_text()
   ordered=['prepare_context_and_images','zero-auth-readonly-topology-qualified','zero-auth-images-qualified','materialize(); op.execute()',

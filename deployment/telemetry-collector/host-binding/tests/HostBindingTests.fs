@@ -99,6 +99,18 @@ module HostBindingTests =
         Assert.Throws<BindingRefusal>(fun () -> Fixture.construct fixture |> ignore) |> ignore
 
     [<Fact>]
+    let ``malformed profile digest with exact regenerated pin is refused`` () =
+        use fixture = new Fixture.Repository(fun text -> text.Replace("167c0148a849d2444f1b5a7fb5f8bb2de1de5ae13a2a504b833fc765980f5cd9", "not-a-digest"))
+        Assert.Throws<BindingRefusal>(fun () -> Fixture.construct fixture |> ignore) |> ignore
+
+    [<Fact>]
+    let ``profile limits and unknown critical fields are refused`` () =
+        use limit = new Fixture.Repository(fun text -> text.Replace("\"maximumEvents\": 4096", "\"maximumEvents\": 2147483647"))
+        Assert.Throws<BindingRefusal>(fun () -> Fixture.construct limit |> ignore) |> ignore
+        use unknown = new Fixture.Repository(fun text -> text.Replace("\"timeoutSeconds\": 300,", "\"timeoutSeconds\": 300, \"authority\": true,"))
+        Assert.Throws<BindingRefusal>(fun () -> Fixture.construct unknown |> ignore) |> ignore
+
+    [<Fact>]
     let ``operation drift is refused`` () =
         use fixture = new Fixture.Repository(fun text -> text.Replace(HostBinding.OperationId, "v2-host-01.8a-readonly-source-compatibility-v1"))
         Assert.Throws<BindingRefusal>(fun () -> Fixture.construct fixture |> ignore) |> ignore
@@ -139,3 +151,16 @@ module HostBindingTests =
         HostBinding.verifyAdmission binding "run-0001" binding.BindingSha256 admission
         Assert.Throws<BindingRefusal>(fun () -> HostBinding.verifyAdmission binding "run-0002" binding.BindingSha256 admission) |> ignore
         Assert.Throws<BindingRefusal>(fun () -> HostBinding.verifyAdmission binding "run-0001" (String('0', 64)) admission) |> ignore
+
+    [<Fact>]
+    let ``child output capture is concurrent bounded and finite`` () =
+        let exitCode, stdout, stderr =
+            HostBinding.runBoundedProcess "/usr/bin/python3" "/" [ "-c"; "import sys; sys.stdout.write('ok'); sys.stderr.write('e'*4096)" ] 2000 16 4096
+        Assert.Equal(0, exitCode)
+        Assert.Equal("ok", stdout)
+        Assert.Equal(4096, stderr.Length)
+        Assert.Throws<BindingRefusal>(fun () -> HostBinding.runBoundedProcess "/usr/bin/python3" "/" [ "-c"; "import sys; sys.stderr.write('x'*70000); sys.stdout.write('unreachable')" ] 2000 64 4096 |> ignore) |> ignore
+        Assert.Throws<BindingRefusal>(fun () -> HostBinding.runBoundedProcess "/usr/bin/python3" "/" [ "-c"; "import sys; sys.stdout.write('x'*70000)" ] 2000 4096 64 |> ignore) |> ignore
+        let timer = Stopwatch.StartNew()
+        Assert.Throws<BindingRefusal>(fun () -> HostBinding.runBoundedProcess "/usr/bin/python3" "/" [ "-c"; "import time; time.sleep(30)" ] 100 64 64 |> ignore) |> ignore
+        Assert.True(timer.Elapsed < TimeSpan.FromSeconds(5.0))

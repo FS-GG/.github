@@ -312,7 +312,8 @@ class Operation:
         self.phase('zero-auth-readonly-topology-qualified',resultSha256=readback['resultSha256'])
     def materialize(self):
         admission=os.environ.pop('FSGG_PRIVATE_EFFECT_ADMISSION',None)
-        require(admission is not None and self.host_binding is not None,'effect-admission-refused')
+        require(isinstance(admission,str) and re.fullmatch(r'[0-9a-f]{64}',admission)!=None
+                and self.host_binding is not None,'effect-admission-refused')
         profile=self.a.source_root/'deployment/telemetry-collector/native-operation-v1.json'
         verified=self.r.run(['/usr/bin/dotnet',str(self.a.host_binding),'verify',
                     '--source-root',str(self.a.source_root),'--source-sha',self.a.source_sha,

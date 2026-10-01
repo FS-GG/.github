@@ -9,6 +9,7 @@ open System.Security.Cryptography
 open System.Text
 open System.Text.Json
 open System.Text.RegularExpressions
+open System.Threading.Tasks
 
 [<RequireQualifiedAccess>]
 type BindingError =
@@ -63,8 +64,8 @@ module HostBinding =
         require (not (info.Attributes.HasFlag(FileAttributes.ReparsePoint))) "input-symlink-refused"
         require (info.Length > 0L && info.Length <= maximum) "input-size-refused"
 
-    let private runGit (root: string) (arguments: string list) =
-        let start = ProcessStartInfo("git")
+    let runBoundedProcess executable (root: string) (arguments: string list) (timeoutMilliseconds: int) (stdoutMaximum: int) (stderrMaximum: int) =
+        let start = ProcessStartInfo(executable)
         start.WorkingDirectory <- root
         start.UseShellExecute <- false
         start.RedirectStandardOutput <- true
@@ -75,10 +76,38 @@ module HostBinding =
         start.Environment["LC_ALL"] <- "C.UTF-8"
         for argument in arguments do start.ArgumentList.Add(argument)
         use child = Process.Start(start)
-        let stdout = child.StandardOutput.ReadToEnd()
-        let stderr = child.StandardError.ReadToEnd()
-        child.WaitForExit()
-        require (child.ExitCode = 0 && stdout.Length <= 65536 && stderr.Length <= 4096) "git-source-refused"
+        let capture maximum (stream: Stream) =
+            Task.Run(fun () ->
+                use result = new MemoryStream()
+                let buffer = Array.zeroCreate<byte> 1024
+                let mutable complete = false
+                while not complete do
+                    let count = stream.Read(buffer, 0, buffer.Length)
+                    if count = 0 then complete <- true
+                    elif result.Length + int64 count > int64 maximum then
+                        try child.Kill(true) with _ -> ()
+                        refuse "git-output-limit-refused"
+                    else result.Write(buffer, 0, count)
+                UTF8Encoding(false, true).GetString(result.ToArray()))
+        let stdoutTask = capture stdoutMaximum child.StandardOutput.BaseStream
+        let stderrTask = capture stderrMaximum child.StandardError.BaseStream
+        if not (child.WaitForExit(timeoutMilliseconds)) then
+            try child.Kill(true) with _ -> ()
+            try child.WaitForExit(2000) |> ignore with _ -> ()
+            try Task.WaitAll([| stdoutTask :> Task; stderrTask :> Task |], 2000) |> ignore with _ -> ()
+            refuse "git-timeout-refused"
+        let completed =
+            try Task.WaitAll([| stdoutTask :> Task; stderrTask :> Task |], 2000)
+            with :? AggregateException -> false
+        require completed "git-output-refused"
+        require (stdoutTask.IsCompletedSuccessfully && stderrTask.IsCompletedSuccessfully) "git-output-refused"
+        let stdout = stdoutTask.Result
+        let stderr = stderrTask.Result
+        child.ExitCode, stdout, stderr
+
+    let private runGit (root: string) (arguments: string list) =
+        let exitCode, stdout, _ = runBoundedProcess "git" root arguments 10000 65536 4096
+        require (exitCode = 0) "git-source-refused"
         stdout.Trim()
 
     let private properties (element: JsonElement) =
@@ -107,6 +136,12 @@ module HostBinding =
               require (item.ValueKind = JsonValueKind.String) "json-array-item-refused"
               yield item.GetString() ]
 
+    let private requireExact name expected fields =
+        require (stringValue name fields = expected) ("profile-" + name + "-refused")
+
+    let private requireDigest name fields =
+        require (isHex 64 (stringValue name fields)) ("profile-" + name + "-refused")
+
     let private validateProfile (bytes: byte array) =
         use document = JsonDocument.Parse(ReadOnlyMemory<byte>(bytes), JsonDocumentOptions(CommentHandling = JsonCommentHandling.Disallow, AllowTrailingCommas = false, MaxDepth = 16))
         let root = properties document.RootElement
@@ -114,21 +149,53 @@ module HostBinding =
         require (stringValue "schema" root = "fsgg.telemetry.native-operation-profile/1") "profile-schema-refused"
         require (stringValue "operationId" root = OperationId) "profile-operation-refused"
         require (stringArray "supportedOperations" root = [ OperationId; "v2-host-01.8a-readonly-source-compatibility-v1" ]) "profile-supported-operations-refused"
-        for name in [ "provider"; "model"; "effort"; "prompt" ] do ignore (stringValue name root)
+        requireExact "provider" "openai" root
+        requireExact "model" "gpt-5.6-sol" root
+        requireExact "effort" "medium" root
+        requireExact "prompt" "Use the native collaboration spawn_agent tool exactly once with exactly these arguments: message=\"Return exactly NATIVE-CHILD-ACK; do not read files, use any other tool, contact a service, or spawn another agent.\", task_name=native_ack, model=gpt-5.6-sol, reasoning_effort=medium, fork_turns=none. Then use wait_agent exactly once with timeout_ms=30000. Do not use list_agents, send_message, followup_task, interrupt_agent, any other tool, a retry, or a second wait. After the child has one completed turn containing exactly NATIVE-CHILD-ACK, return exactly NATIVE-PARENT-ACK." root
         let native = properties root["native"]
         requireKeys [ "executable"; "sha256"; "bytes"; "version"; "config"; "configSha256"; "protocolSchemaSha256"; "sessionFlagsSha256" ] native.Keys
-        for name in [ "executable"; "sha256"; "version"; "config"; "configSha256"; "protocolSchemaSha256"; "sessionFlagsSha256" ] do ignore (stringValue name native)
-        require (intValue "bytes" native > 0) "profile-native-bytes-refused"
+        requireExact "executable" "/opt/fsgg/codex/codex" native
+        requireExact "version" "0.158.0" native
+        requireExact "config" "/opt/fsgg/native-producer-config.toml" native
+        requireExact "sha256" "167c0148a849d2444f1b5a7fb5f8bb2de1de5ae13a2a504b833fc765980f5cd9" native
+        requireDigest "configSha256" native
+        requireExact "protocolSchemaSha256" "5742a9a7dd41a8b44dca3138f506e013620d4a93573c792b1e5881c053f169a7" native
+        requireExact "sessionFlagsSha256" "6961dbfc2ddce5988b3e567a8d3e4a9680450f25b7648029f790e6a7975fbe49" native
+        require (intValue "bytes" native = 286594376) "profile-native-bytes-refused"
         let producer = properties root["producer"]
         requireKeys [ "executable"; "version"; "executableVersion"; "coherentPayloadSha256"; "coherentMarker"; "telemetryConfig"; "workspaceId"; "producerId"; "streamId"; "repository"; "receiverOrigin"; "credentialReference"; "credentialEnvironment"; "spoolRoot"; "feature"; "item"; "rootAttempt"; "childAttempt" ] producer.Keys
-        for name in producer.Keys do ignore (stringValue name producer)
+        for name, expected in
+            [ "executable", "/opt/fsgg/coord/fsgg-coord-engine"
+              "version", "0.94.0"
+              "executableVersion", "0.94.0.0"
+              "coherentMarker", "/opt/fsgg/coord/coherent-content.sha256"
+              "telemetryConfig", "/qualification/native/telemetry/roadmap.json"
+              "workspaceId", "v2-host-native-qualification"
+              "producerId", "native-prospective-v1"
+              "streamId", "roadmap"
+              "repository", "FS-GG/.github"
+              "receiverOrigin", "https://native-receiver:7443/"
+              "credentialReference", "native-prospective-v1"
+              "credentialEnvironment", "FSGG_TELEMETRY_CREDENTIAL_NATIVE_PROSPECTIVE_V1"
+              "spoolRoot", "/qualification/native/telemetry/spool"
+              "feature", "V2-HOST-01"
+              "item", "V2-HOST-01.8a"
+              "rootAttempt", "native-operation-root"
+              "childAttempt", "native-operation-child" ] do requireExact name expected producer
+        requireExact "coherentPayloadSha256" "9b9486a54e014fd5d21b65ed71a00b9021562a56909a1303f89c9646bca4a585" producer
         let runtime = properties root["runtime"]
         requireKeys [ "home"; "codexHome"; "cwd"; "timeoutSeconds"; "maximumLineBytes"; "maximumEvents"; "python" ] runtime.Keys
-        for name in [ "home"; "codexHome"; "cwd"; "python" ] do ignore (stringValue name runtime)
-        for name in [ "timeoutSeconds"; "maximumLineBytes"; "maximumEvents" ] do require (intValue name runtime > 0) "profile-runtime-bound-refused"
+        for name, expected in [ "home", "/qualification/native"; "codexHome", "/qualification/native/.codex"; "cwd", "/qualification/native/work"; "python", "3.14.0" ] do requireExact name expected runtime
+        require (intValue "timeoutSeconds" runtime = 300 && intValue "maximumLineBytes" runtime = 1048576 && intValue "maximumEvents" runtime = 4096) "profile-runtime-bound-refused"
         let network = properties root["network"]
         requireKeys [ "policySchema"; "policyId"; "privateNetworkId"; "httpsProxy"; "noProxy" ] network.Keys
-        for name in network.Keys do ignore (stringValue name network)
+        for name, expected in
+            [ "policySchema", "fsgg.telemetry.native-network-policy/1"
+              "policyId", "fsgg-native-egress-v1"
+              "privateNetworkId", "fsgg-native-private-v1"
+              "httpsProxy", "http://native-egress:3128"
+              "noProxy", "localhost,127.0.0.1,[::1],native-receiver" ] do requireExact name expected network
 
     let private validatePins (bytes: byte array) =
         use document = JsonDocument.Parse(ReadOnlyMemory<byte>(bytes), JsonDocumentOptions(CommentHandling = JsonCommentHandling.Disallow, AllowTrailingCommas = false, MaxDepth = 4))

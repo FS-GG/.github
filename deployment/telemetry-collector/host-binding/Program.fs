@@ -26,6 +26,22 @@ let required name (values: Map<string, string>) =
 
 let serialize value = JsonSerializer.Serialize(value, JsonSerializerOptions(PropertyNamingPolicy = JsonNamingPolicy.CamelCase))
 
+let readAdmission () =
+    use input = Console.OpenStandardInput()
+    let buffer = Array.zeroCreate<byte> 66
+    let mutable count = 0
+    let mutable complete = false
+    while not complete && count < buffer.Length do
+        let read = input.Read(buffer, count, buffer.Length - count)
+        if read = 0 then complete <- true else count <- count + read
+    if count <> 64 && not (count = 65 && buffer[64] = byte '\n') then
+        raise (BindingRefusal "effect-admission-refused")
+    for index in 0 .. 63 do
+        let value = buffer[index]
+        if not ((value >= byte '0' && value <= byte '9') || (value >= byte 'a' && value <= byte 'f')) then
+            raise (BindingRefusal "effect-admission-refused")
+    Text.Encoding.ASCII.GetString(buffer, 0, 64)
+
 [<EntryPoint>]
 let main argv =
     try
@@ -47,7 +63,7 @@ let main argv =
             0
         | "derive" -> Console.Out.WriteLine(HostBinding.deriveAdmission binding (required "nonce" args)); 0
         | "verify" ->
-            let candidate = Console.In.ReadToEnd().Trim()
+            let candidate = readAdmission ()
             HostBinding.verifyAdmission binding (required "nonce" args) (required "expected-binding-sha" args) candidate
             Console.Out.WriteLine("{\"schema\":\"fsgg.telemetry.host-binding-verification/1\",\"verified\":true}")
             0
