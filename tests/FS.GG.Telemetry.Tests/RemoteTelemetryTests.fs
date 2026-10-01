@@ -1450,7 +1450,10 @@ exec /usr/bin/python3 "{patchedFixture}" "$@"
                         JsonSerializer.SerializeToUtf8Bytes<'value> value
                     let fixedNow = DateTimeOffset.Parse "2026-10-01T10:01:00.0000000+00:00"
                     let observed = fixedNow.AddMinutes(-1.).ToString("O")
-                    let expires = fixedNow.AddMinutes(5.).ToString("O")
+                    let started = fixedNow.AddMinutes(-1.).AddSeconds(-2.).ToString("O")
+                    let completed = fixedNow.AddMinutes(-1.).AddSeconds(1.).ToString("O")
+                    let profileExpires = fixedNow.AddMinutes(2.).ToString("O")
+                    let evidenceExpires = fixedNow.AddMinutes(5.).ToString("O")
                     let executableSha = hashBytes(File.ReadAllBytes reader)
                     let profileBytes =
                         serialize
@@ -1460,7 +1463,7 @@ exec /usr/bin/python3 "{patchedFixture}" "$@"
                                providerExecutableSha256 = executableSha; expectedAdapterVersion = "fixture-adapter/1"
                                expectedCodexVersion = "fixture-version"; environmentAllowList = [| "PATH" |]
                                credentialScope = "fixture-read-only"; maximumRuntimeSeconds = 10
-                               maximumStreamBytes = 65536; expiresAt = expires
+                               maximumStreamBytes = 65536; expiresAt = profileExpires
                                disposableWorkspace = Path.Combine(root, "disposable")
                                cleanup = "delete-owned-workspace/1" |}
                     let profileSha = hashBytes profileBytes
@@ -1477,10 +1480,10 @@ exec /usr/bin/python3 "{patchedFixture}" "$@"
                                credentialScope = "fixture-read-only"; environmentAllowList = [| "PATH" |]
                                maximumRuntimeSeconds = 10; maximumStreamBytes = 65536
                                requestedModel = "gpt-test"; requestedEffort = installation.Effort
-                               startedAt = observed; completedAt = observed; disposition = "advertised-supported"
+                               startedAt = started; completedAt = completed; disposition = "advertised-supported"
                                detail = "requested-selection-advertised"; authenticationState = "authenticated"
                                authenticationProvenance = "installed-account"; evidenceSchema = "fsgg.learning-selection-evidence/1"
-                               evidenceProvenance = "fixture"; evidenceObservedAt = observed; evidenceExpiresAt = expires
+                               evidenceProvenance = "fixture"; evidenceObservedAt = observed; evidenceExpiresAt = evidenceExpires
                                modelSessionStarts = 0; cleanup = cleanup |}
                     writeEvidence "fixed-native-capability-result.json" resultBytes |> ignore
                     let fixtureRoot = Path.Combine(__SOURCE_DIRECTORY__, "Fixtures", "NativeSource")
@@ -1562,6 +1565,55 @@ exec /usr/bin/python3 "{patchedFixture}" "$@"
                                                 (fun _ -> failwith "unexpected native delivery transport"))
                             writer.ToString()
                         finally Console.SetOut current
+                    let collectAt instant =
+                        Operations.runWithDependenciesAt instant
+                            [| "collect-installed-origin"; "--config"; configPath |]
+                            (fun _ -> TelemetryStore.ApprovedLocalDurable)
+                            (fun _ -> failwith "unexpected native delivery transport")
+                    let originalProfileBytes = File.ReadAllBytes(Path.Combine(evidenceRoot, "fixed-native-capability-profile.json"))
+                    let originalResultBytes = File.ReadAllBytes(Path.Combine(evidenceRoot, "fixed-native-capability-result.json"))
+                    let originalSourceReferenceBytes = File.ReadAllBytes sourceReferencePath
+                    let managerReceiptPath = configPath + ".native-collector.receipt.json"
+                    let originalManagerReceiptBytes = File.ReadAllBytes managerReceiptPath
+                    let restoreTemporalFixture () =
+                        File.WriteAllBytes(Path.Combine(evidenceRoot, "fixed-native-capability-profile.json"), originalProfileBytes)
+                        File.WriteAllBytes(Path.Combine(evidenceRoot, "fixed-native-capability-result.json"), originalResultBytes)
+                        File.WriteAllBytes(sourceReferencePath, originalSourceReferenceBytes)
+                        File.WriteAllBytes(managerReceiptPath, originalManagerReceiptBytes)
+                    let mutateResult (mutate: JsonObject -> unit) =
+                        let candidate = JsonNode.Parse(originalResultBytes).AsObject()
+                        mutate candidate
+                        File.WriteAllText(Path.Combine(evidenceRoot, "fixed-native-capability-result.json"), candidate.ToJsonString())
+                    mutateResult (fun candidate ->
+                        candidate["startedAt"] <- JsonValue.Create((DateTimeOffset.Parse observed).AddSeconds(2.).ToString("O"))
+                        candidate["completedAt"] <- JsonValue.Create((DateTimeOffset.Parse observed).AddSeconds(3.).ToString("O")))
+                    Assert.Equal(3, collectAt fixedNow)
+                    restoreTemporalFixture ()
+                    mutateResult (fun candidate ->
+                        candidate["completedAt"] <- JsonValue.Create(fixedNow.AddSeconds(1.).ToString("O")))
+                    Assert.Equal(3, collectAt fixedNow)
+                    restoreTemporalFixture ()
+                    let expiredProfile = JsonNode.Parse(originalProfileBytes).AsObject()
+                    expiredProfile["expiresAt"] <- JsonValue.Create(fixedNow.AddTicks(-1L).ToString("O"))
+                    let expiredProfileBytes = Encoding.UTF8.GetBytes(expiredProfile.ToJsonString())
+                    File.WriteAllBytes(Path.Combine(evidenceRoot, "fixed-native-capability-profile.json"), expiredProfileBytes)
+                    let expiredProfileSha = hashBytes expiredProfileBytes
+                    let profileBoundResult = JsonNode.Parse(originalResultBytes).AsObject()
+                    profileBoundResult["profileSha256"] <- JsonValue.Create expiredProfileSha
+                    File.WriteAllText(Path.Combine(evidenceRoot, "fixed-native-capability-result.json"), profileBoundResult.ToJsonString())
+                    let profileBoundSource = JsonNode.Parse(originalSourceReferenceBytes).AsObject()
+                    profileBoundSource["readerProfileSha256"] <- JsonValue.Create expiredProfileSha
+                    let profileBoundSourceBytes = Encoding.UTF8.GetBytes(profileBoundSource.ToJsonString())
+                    File.WriteAllBytes(sourceReferencePath, profileBoundSourceBytes)
+                    let profileBoundManager = JsonNode.Parse(originalManagerReceiptBytes).AsObject()
+                    profileBoundManager["sourceReferenceSha256"] <- JsonValue.Create(hashBytes profileBoundSourceBytes)
+                    File.WriteAllText(managerReceiptPath, profileBoundManager.ToJsonString())
+                    Assert.Equal(3, collectAt fixedNow)
+                    restoreTemporalFixture ()
+                    mutateResult (fun candidate ->
+                        candidate["evidenceExpiresAt"] <- JsonValue.Create(fixedNow.AddTicks(-1L).ToString("O")))
+                    Assert.Equal(3, collectAt fixedNow)
+                    restoreTemporalFixture ()
                     use installed =
                         JsonDocument.Parse(captureOutput fixedNow [| "collect-installed-origin"; "--config"; configPath |])
                     Assert.Equal("fsgg.learn.installed-producer-receipt/1",
@@ -1576,8 +1628,8 @@ exec /usr/bin/python3 "{patchedFixture}" "$@"
                             [| "read-installed-origin"; "--config"; configPath |]
                             (fun _ -> TelemetryStore.ApprovedLocalDurable)
                             (fun _ -> failwith "unexpected native delivery transport")
-                    Assert.Equal(3, readAt (DateTimeOffset.Parse expires))
-                    Assert.Equal(3, readAt ((DateTimeOffset.Parse expires).AddTicks(1L)))
+                    Assert.Equal(3, readAt (DateTimeOffset.Parse evidenceExpires))
+                    Assert.Equal(3, readAt ((DateTimeOffset.Parse evidenceExpires).AddTicks(1L)))
                     File.Move(snapshotPath, snapshotPath + ".held")
                     Assert.Equal(3, readAt fixedNow)
                     File.Move(snapshotPath + ".held", snapshotPath)

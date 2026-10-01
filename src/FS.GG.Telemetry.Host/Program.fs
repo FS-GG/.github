@@ -715,6 +715,7 @@ module Operations =
         let observed = text result "evidenceObservedAt"
         let expires = text result "evidenceExpiresAt"
         let observedAt, expiresAt = DateTimeOffset.Parse observed, DateTimeOffset.Parse expires
+        let profileExpiresAt = DateTimeOffset.Parse(text profile "expiresAt")
         let startedAt, completedAt = DateTimeOffset.Parse(text result "startedAt"), DateTimeOffset.Parse(text result "completedAt")
         let projection = (capture["projection"]).AsObject()
         let threads = (projection["threads"]).AsArray()
@@ -761,7 +762,6 @@ module Operations =
            || text profile "operation" <> "codex-native-capability/1"
            || text profile "providerExecutable" <> installation.ExecutablePath
            || text profile "providerExecutableSha256" <> digestBytes(File.ReadAllBytes installation.ExecutablePath)
-           || text profile "expiresAt" <> expires
            || text result "schema" <> "fsgg.orchestration.host-fixed-native-capability-result/1"
            || text result "operation" <> "codex-native-capability/1"
            || text result "profileRevision" <> text profile "revision"
@@ -792,8 +792,9 @@ module Operations =
            || text sourceReference "collectorReadOnlyTarget" <> installation.CodexHome
            || sourceReference["captureQualified"].GetValue<bool>()
            || text sourceReference "verifierRuntimeManifestSha256" <> verifier.RuntimeManifestSha256
-           || not routeSupported || startedAt > completedAt || completedAt > observedAt
-           || observedAt > now || expiresAt <= observedAt || expiresAt <= now then
+           || not routeSupported || startedAt > observedAt || observedAt > completedAt
+           || completedAt > now || expiresAt <= observedAt
+           || profileExpiresAt <= now || expiresAt <= now then
             invalidOp "installed origin retained evidence differs"
         NativeSourceVerification.verifyRetained verifier installation.EvidenceRoot captureBytes snapshotBytes verificationBytes
         |> Result.defaultWith (String.concat "; " >> invalidOp)
