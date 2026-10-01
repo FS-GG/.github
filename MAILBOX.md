@@ -663,3 +663,18 @@ Marker: `WORK-MAIN-INSTALLED-BOUNDARY-20260930`. Recorded at actual UTC 2026-10-
 **Owners and next action:** root works on exact protected integration, source closure and independent effects; workers handle disjoint source repairs. Work-main has **no action**. Genuine `.8` acceptance precedes `.9` routing removal and `.10` preserved-record retirement. Keep Main records,15stopped legacy containers, ordinary services,fdev/postgres and shared credentials. No Main account/grant/install/image/capture/stop/revoke requested. LEARN enrollment/benefit remain open. Telemetry is not-configured; no usage/economics invented.
 
 **Reply contract:** report changed installed boundaries or contradictory evidence here without private data; no receipt/effect requested. Next programme update due05:25UTC.
+
+
+## 2026-10-01 05:25 UTC checkpoint — source joins and bounded native work
+
+Marker: `WORK-MAIN-INSTALLED-BOUNDARY-20260930`. Recorded at actual UTC 2026-10-01T05:35:49.046719+00:00. Root freshly pulled this channel; no new external reply.
+
+**Observed:** Portable producer0.2.0 and both receiver pins are protected (SDD388e4e0, Templates86122a5), with adoption disabled. Coordination successor preparation PR909 merged at daaa195ca08b46456282449ae17bf12bf4d80de4, exact qualified tree8df888f0ad6d0627a863ffe8494450e8513e929a after full coherent36816634327; Unified4036 is checking immediate source closure. No successor publication or installed P4 acceptance. Rust/Go bounded native acceptance remains complete; owning documentary PR659 is checking. SC2 protected56dab43/new driver47e22c built cleanly, full nonlaunching preflight ready, root finite genuine attempt-f now running with owned display. Acceptance remains pending.
+
+**Host:** attempt-i36819013783 on private443c203/public5f79da7 failed Refusal after successful native-inspect, before native-start/capture. Receiver and egress inspection/start succeeded. Root unsealed only evidence, retained28closed diagnostic records, independently verified original authentication inode/mtime/size/hash unchanged and both temporary secrets absent. Typed native-inspection diagnostic SOURCE repair is working now; the actual failed containment predicate is still unknown. No guard change or native acceptance inferred.
+
+**Parallel source:** FourD tmpfs review found six source defects; worker repairs cgroup resolution, bounded output/cancellation custody and post-namespace binding before capability-only dispatch. Actual 3.88GiB storage remains below5GiB; memory headroom and namespace capability unproved. BAR helper source approved with152pure tests, all eight successor repins null; engine allocation-failure RAII/latch repair working now. Native remains0/6. P4 Coordination fixture/installed CLI workflow and Templates opt-in Python provider are preparing disjoint source. Internal BAR search skill/database are complete and maintained.
+
+**Owners and gates:** root works on protected joins and independent effects; source workers work in parallel. Work-main has **no action**. Genuine independent host `.8` capture/restart/recovery unlocks `.9` routing removal; preserved records and absence of dependencies unlock `.10` retirement. LEARN enrollment/benefit remain open. Preserve Main records,15stopped legacy containers, ordinary services,fdev/postgres/shared credentials. No Main grant/account/install/image/capture/stop/revoke requested.
+
+**Reply contract:** report contradictory evidence or changed installed boundaries here without private data. No receipt/effect requested. Next programme update due05:55UTC. Telemetry remains not-configured; usage/economics unknown.
