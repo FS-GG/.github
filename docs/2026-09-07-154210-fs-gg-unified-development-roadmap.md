@@ -53,6 +53,32 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**V2-HOST-01.8 private receiver inspection diagnostics added; native acceptance remains open.**
+This source change preserves every receiver acceptance predicate while retaining a bounded,
+closed diagnostic projection only in sealed private evidence when inspection refuses.
+Network, namespace, capability, mount, identity and image categories exclude raw inspect
+bodies, environment values, arguments, network names, host paths and credentials. Malformed
+JSON values are safely classified; the original cached refusal is re-raised. The extension
+is omitted from the public result and limited to eight records and 8 KiB per projection.
+Focused qualification, network, image-context and operation tests passed; independent source
+review accepted the exact diagnostic change and its malformed-field regression. All four
+native source input pins remain unchanged. The actual attempt-g receiver predicate is still
+unknown. Protected recipe registration and a fresh genuine operation remain next; `.8`
+acceptance, `.9` routing, `.10` retirement and installed LEARN enrollment remain open.
+
+**Portable P3 anonymous install propagation recovery source delivered; release closure remains open.**
+[Coordination PR #908](https://github.com/FS-GG/FS.GG.Coordination/pull/908) merged at
+`c8f443e9e52af44287dd3cbb95881933c026627e`, tree
+`26cc7903eac3e617c735c305adfffa589a808f5c`, independently equal to candidate
+`2e320387f0073e0da9aa1ae6b4cf7c279c2e853c`. Full coherent
+[36808939214](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36808939214)
+and bootstrap 36808939259 passed. Anonymous tool installation retries only the observed
+exact package/version/feed absence, at most 60 attempts with fresh directories and cache
+disabled; unknown errors, schema mismatch and exhausted attempts still refuse. All frozen
+0.2.0 source, package, image and provenance bindings remain unchanged. Both feeds already
+passed byte readback in the earlier run; idempotent same-byte publication recovery, anonymous
+install/schema readback and final release/tag closure remain next.
+
 **SC2 command feedback preservation source delivered; genuine completion remains open.**
 [SC2 Client PR #24](https://github.com/FS-GG/FS.GG.SC2.Client/pull/24) merged at
 `f1a34ff8d1715f1d10dd7aaeb6c308057ca7880b`, tree
