@@ -12,7 +12,6 @@ HOST_PAYLOAD="207843031c78c2711e85a2db14b46a83ec0da9fbd3ee0f144a736320f7e8c2c9"
 COORD_SOURCE="337b6a1d53571b07ca8e1417e18e52546ad319a7"
 COORD_PAYLOAD="9b9486a54e014fd5d21b65ed71a00b9021562a56909a1303f89c9646bca4a585"
 NATIVE_SHA="167c0148a849d2444f1b5a7fb5f8bb2de1de5ae13a2a504b833fc765980f5cd9"
-PROFILE_SHA="1ef6d54eb3f9572580407efe9f266f643645af3af17c33723c0aa8368e5f4f34"
 LEARN_CONTRACT="91713679fd486459188f2144e75cc69b77720c7841b6e75cd5d4d35620ed4179"
 HOST_LAUNCHER_SHA="6b881a6f1b346776ca5cb974a655ac041802ed27ad80e44dee92faeed59cc1bb"
 SCOPE=("v2-host-native-qualification","native-prospective-v1","roadmap")
@@ -159,6 +158,7 @@ class Operation:
                      'privatePlacementSha':args.private_placement_sha,'phases':[],'disposition':'incomplete'}
         self.images={}; self.owned_run_ordinal=0; self.command_diagnostics=[]; self.inspection_diagnostics=[]
         self.native_start_failure_diagnostic=None
+        self.host_binding=None
     def phase(self,name,**facts): self.result['phases'].append({'ordinal':len(self.result['phases'])+1,'name':name,**facts})
     def command_diagnostic(self,value):
         require(len(self.command_diagnostics)<128,'command-diagnostic-capacity-refused')
@@ -216,7 +216,18 @@ class Operation:
         require(dirty==b'','source-worktree-dirty')
         profile=self.a.source_root/'deployment/telemetry-collector/native-operation-v1.json'
         contract=self.a.source_root/'policy/learn-01-current-focused-v1.json'
-        require(digest(profile)==PROFILE_SHA and digest(contract)==LEARN_CONTRACT,'source-payload-drift')
+        require(digest(contract)==LEARN_CONTRACT,'source-payload-drift')
+        regular(self.a.host_binding,16*1024*1024)
+        binding=json.loads(self.r.run(['/usr/bin/dotnet',str(self.a.host_binding),'inspect',
+                    '--source-root',str(self.a.source_root),'--source-sha',self.a.source_sha,
+                    '--profile',str(profile),'--source-pins',str(self.a.native_source_pins)],limit=4096).stdout)
+        require(set(binding)=={'schema','sourceSha','sourceTree','profileSha256','operationId','sourcePinsSha256','producerSha256','bindingSha256'}
+                and binding['schema']=='fsgg.telemetry.validated-host-binding/1'
+                and binding['sourceSha']==self.a.source_sha and binding['operationId']==OPERATION
+                and all(re.fullmatch(r'[0-9a-f]{40}',binding[key])!=None for key in ('sourceSha','sourceTree'))
+                and all(re.fullmatch(r'[0-9a-f]{64}',binding[key])!=None for key in ('profileSha256','sourcePinsSha256','producerSha256','bindingSha256')),
+                'host-binding-refused')
+        self.host_binding=binding
         manifest=json.loads(self.a.host_manifest.read_text())
         require(manifest=={**manifest,'version':'0.2.1'},'host-version-drift')
         require(manifest.get('sourceSha')==HOST_SOURCE and manifest.get('archiveSha256')==HOST_ARCHIVE and manifest.get('producerPayloadSha256')=='sha256:'+HOST_PAYLOAD,'host-manifest-drift')
@@ -300,9 +311,20 @@ class Operation:
         require(absent.returncode==1,'zero-auth-readonly-removal-refused')
         self.phase('zero-auth-readonly-topology-qualified',resultSha256=readback['resultSha256'])
     def materialize(self):
-        expected=hashlib.sha256((self.a.run_nonce+'\0'+self.a.source_sha+'\0'+PROFILE_SHA+'\0'+OPERATION).encode()).hexdigest()
         admission=os.environ.pop('FSGG_PRIVATE_EFFECT_ADMISSION',None)
-        require(admission is not None and secrets.compare_digest(admission,expected),'effect-admission-refused')
+        require(admission is not None and self.host_binding is not None,'effect-admission-refused')
+        profile=self.a.source_root/'deployment/telemetry-collector/native-operation-v1.json'
+        verified=self.r.run(['/usr/bin/dotnet',str(self.a.host_binding),'verify',
+                    '--source-root',str(self.a.source_root),'--source-sha',self.a.source_sha,
+                    '--profile',str(profile),'--source-pins',str(self.a.native_source_pins),
+                    '--nonce',self.a.run_nonce,'--expected-binding-sha',self.host_binding['bindingSha256']],
+                    input_bytes=(admission+'\n').encode(),limit=4096,check=False,diagnostic='host-binding-verify')
+        admission=''
+        try: verification=json.loads(verified.stdout)
+        except (UnicodeDecodeError,json.JSONDecodeError): verification=None
+        require(verified.returncode==0 and verification=={
+                    'schema':'fsgg.telemetry.host-binding-verification/1','verified':True},
+                'effect-admission-refused')
         private_dir(self.root); self.created.append(self.root)
         for n in ('native','native/qualification-output','producer-spool','store-seed','evidence','tls','credentials','output','build/collector/host','build/native/fsgg-coord-engine'):
             p=self.root/n; p.mkdir(mode=0o700,parents=True,exist_ok=False)
@@ -481,7 +503,7 @@ class Operation:
         private_write(self.a.result,canonical(self.result))
 
 def parse(argv):
-    p=argparse.ArgumentParser(); p.add_argument('--operation-id',required=True); p.add_argument('--source-root',type=pathlib.Path,required=True); p.add_argument('--source-sha',required=True); p.add_argument('--private-placement-sha',required=True); p.add_argument('--private-root',type=pathlib.Path,required=True); p.add_argument('--staging-root',type=pathlib.Path,required=True); p.add_argument('--run-nonce',required=True); p.add_argument('--host-package',type=pathlib.Path,required=True); p.add_argument('--host-manifest',type=pathlib.Path,required=True); p.add_argument('--host-journal',type=pathlib.Path,required=True); p.add_argument('--host-served',type=pathlib.Path,required=True); p.add_argument('--coord-packages',type=pathlib.Path,required=True); p.add_argument('--coord-manifest',type=pathlib.Path,required=True); p.add_argument('--coord-stable',type=pathlib.Path,required=True); p.add_argument('--context-helper',type=pathlib.Path,required=True); p.add_argument('--native-source-pins',type=pathlib.Path,required=True); p.add_argument('--native-executable',type=pathlib.Path,required=True); p.add_argument('--seal-public-key',type=pathlib.Path,required=True); p.add_argument('--result',type=pathlib.Path,required=True); return p.parse_args(argv)
+    p=argparse.ArgumentParser(); p.add_argument('--operation-id',required=True); p.add_argument('--source-root',type=pathlib.Path,required=True); p.add_argument('--source-sha',required=True); p.add_argument('--private-placement-sha',required=True); p.add_argument('--private-root',type=pathlib.Path,required=True); p.add_argument('--staging-root',type=pathlib.Path,required=True); p.add_argument('--run-nonce',required=True); p.add_argument('--host-package',type=pathlib.Path,required=True); p.add_argument('--host-manifest',type=pathlib.Path,required=True); p.add_argument('--host-journal',type=pathlib.Path,required=True); p.add_argument('--host-served',type=pathlib.Path,required=True); p.add_argument('--coord-packages',type=pathlib.Path,required=True); p.add_argument('--coord-manifest',type=pathlib.Path,required=True); p.add_argument('--coord-stable',type=pathlib.Path,required=True); p.add_argument('--context-helper',type=pathlib.Path,required=True); p.add_argument('--native-source-pins',type=pathlib.Path,required=True); p.add_argument('--host-binding',type=pathlib.Path,required=True); p.add_argument('--native-executable',type=pathlib.Path,required=True); p.add_argument('--seal-public-key',type=pathlib.Path,required=True); p.add_argument('--result',type=pathlib.Path,required=True); return p.parse_args(argv)
 def main(argv=None):
     argv=list(sys.argv[1:] if argv is None else argv)
     if argv and argv[0]=='receipt-probe': return receipt_probe(argv[1:])

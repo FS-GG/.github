@@ -14,6 +14,31 @@ class FakeRunner:
   elif args[-1]=='--version': out=b'0.94.0.0\n'
   return subprocess.CompletedProcess(args,0,out,b'')
 class Tests(unittest.TestCase):
+ @classmethod
+ def setUpClass(cls):
+  project=ROOT/'deployment/telemetry-collector/host-binding/HostBinding.fsproj'
+  cls.package_cache=tempfile.TemporaryDirectory(); env=dict(os.environ,NUGET_PACKAGES=cls.package_cache.name)
+  subprocess.run(['dotnet','restore',str(project),'--locked-mode'],cwd=ROOT,env=env,check=True,capture_output=True)
+  subprocess.run(['dotnet','build',str(project),'--no-restore'],cwd=ROOT,env=env,check=True,capture_output=True)
+  cls.binding_dll=project.parent/'bin/Debug/net10.0/HostBinding.dll'
+ @classmethod
+ def tearDownClass(cls): cls.package_cache.cleanup()
+ @classmethod
+ def binding_fixture(cls,root):
+  repository=root/'repository'; native=repository/'deployment/telemetry-collector'; native.mkdir(parents=True)
+  names=('qualify_native.py','native_producer_support.py','native-operation-v1.json','native-producer-config.toml')
+  pins={}
+  for name in names:
+   raw=(ROOT/'deployment/telemetry-collector'/name).read_bytes(); (native/name).write_bytes(raw); pins[name]=hashlib.sha256(raw).hexdigest()
+  pin_file=root/'source-pins.json'; pin_file.write_text(json.dumps(pins,separators=(',',':')))
+  subprocess.run(['git','init','--quiet'],cwd=repository,check=True); subprocess.run(['git','config','user.email','test@example.invalid'],cwd=repository,check=True)
+  subprocess.run(['git','config','user.name','host-binding-test'],cwd=repository,check=True); subprocess.run(['git','add','.'],cwd=repository,check=True)
+  subprocess.run(['git','commit','--quiet','-m','fixture'],cwd=repository,check=True)
+  source=subprocess.check_output(['git','rev-parse','HEAD'],cwd=repository,text=True).strip()
+  command=['/usr/bin/dotnet',str(cls.binding_dll),'inspect','--source-root',str(repository),'--source-sha',source,
+           '--profile',str(native/'native-operation-v1.json'),'--source-pins',str(pin_file)]
+  binding=json.loads(subprocess.check_output(command,text=True))
+  return repository,pin_file,source,binding
  @staticmethod
  def workflow_shell(label):
   lines=(ROOT/'deployment/telemetry-collector/private-native-qualification.yml.in').read_text().splitlines()
@@ -102,13 +127,30 @@ class Tests(unittest.TestCase):
    self.assertNotEqual(0,refused.returncode); self.assertFalse(marker.exists())
  def test_effect_admission_is_bound_before_private_root_or_auth_read(self):
   with tempfile.TemporaryDirectory() as td:
-   t=pathlib.Path(td); a=type('A',(),{'private_root':t/'private','run_nonce':'run-0001','source_sha':'a'*40,'private_placement_sha':'d'*40})()
-   op=q.Operation(a,FakeRunner())
+   t=pathlib.Path(td); repository,pins,source,binding=self.binding_fixture(t)
+   a=type('A',(),{'private_root':t/'private','run_nonce':'run-0001','source_sha':source,'private_placement_sha':'d'*40,
+                  'source_root':repository,'native_source_pins':pins,'host_binding':self.binding_dll})()
+   op=q.Operation(a,q.Runner(__import__('time').monotonic()+30)); op.host_binding=binding
    with mock.patch.dict(os.environ,{'FSGG_NATIVE_AUTH_JSON_B64':base64.b64encode(b'{}').decode(),
                                     'FSGG_PRIVATE_EFFECT_ADMISSION':'0'*64},clear=True):
     with self.assertRaisesRegex(q.Refusal,'effect-admission-refused'): op.materialize()
     self.assertFalse((t/'private').exists())
     self.assertIn('FSGG_NATIVE_AUTH_JSON_B64',os.environ)
+ def test_materialization_policy_is_only_in_compiled_binding_verifier(self):
+  source=(ROOT/'deployment/telemetry-collector/qualify_native_container.py').read_text()
+  self.assertNotIn("run_nonce+'\\0'+self.a.source_sha",source)
+  self.assertNotIn('compare_digest(admission',source)
+  self.assertIn("'/usr/bin/dotnet',str(self.a.host_binding),'verify'",source)
+  self.assertIn("input_bytes=(admission+'\\n').encode()",source)
+ def test_compiled_renderer_derives_recipe_profile_and_producer_slots(self):
+  with tempfile.TemporaryDirectory() as td:
+   repository,pins,source,binding=self.binding_fixture(pathlib.Path(td))
+   command=['/usr/bin/dotnet',str(self.binding_dll),'render','--source-root',str(repository),'--source-sha',source,
+            '--profile',str(repository/'deployment/telemetry-collector/native-operation-v1.json'),'--source-pins',str(pins)]
+   rendered=json.loads(subprocess.check_output(command,text=True))
+   self.assertEqual('fsgg.telemetry.host-binding-render/1',rendered['schema'])
+   self.assertEqual((source,binding['profileSha256'],binding['producerSha256'],binding['bindingSha256']),
+                    (rendered['recipeSourceSha'],rendered['profileSha256'],rendered['producerSha256'],rendered['bindingSha256']))
  def test_full_operation_sequence_is_real_and_bounded(self):
   source=(ROOT/'deployment/telemetry-collector/qualify_native_container.py').read_text()
   ordered=['prepare_context_and_images','zero-auth-readonly-topology-qualified','zero-auth-images-qualified','materialize(); op.execute()',
@@ -128,14 +170,15 @@ class Tests(unittest.TestCase):
    self.assertIn(token,source)
  def test_materialization_creates_driver_output_before_native_start(self):
   with tempfile.TemporaryDirectory() as td:
-   root=pathlib.Path(td); staging=root/'staging'; (staging/'tls').mkdir(parents=True)
+   root=pathlib.Path(td); repository,pins,source,binding=self.binding_fixture(root); staging=root/'staging'; (staging/'tls').mkdir(parents=True)
    for name in ('password','key.pem','native-receiver.crt','receiver.pfx'): (staging/'tls'/name).write_bytes(b'x')
-   nonce='run-0001'; source='a'*40
-   a=type('A',(),{'private_root':root/'private','staging_root':staging,'run_nonce':nonce,'source_sha':source,'private_placement_sha':'d'*40})()
-   admission=hashlib.sha256((nonce+'\0'+source+'\0'+q.PROFILE_SHA+'\0'+q.OPERATION).encode()).hexdigest()
+   nonce='run-0001'
+   a=type('A',(),{'private_root':root/'private','staging_root':staging,'run_nonce':nonce,'source_sha':source,'private_placement_sha':'d'*40,
+                  'source_root':repository,'native_source_pins':pins,'host_binding':self.binding_dll})()
+   admission=hashlib.sha256((nonce+'\0'+source+'\0'+binding['profileSha256']+'\0'+q.OPERATION).encode()).hexdigest()
    with mock.patch.dict(os.environ,{'FSGG_PRIVATE_EFFECT_ADMISSION':admission,
                                     'FSGG_NATIVE_AUTH_JSON_B64':base64.b64encode(b'{}').decode()},clear=True):
-    q.Operation(a,FakeRunner()).materialize()
+    op=q.Operation(a,q.Runner(__import__('time').monotonic()+30)); op.host_binding=binding; op.materialize()
    output=root/'private/native/qualification-output'
    self.assertTrue(output.is_dir()); self.assertEqual(0o700,output.stat().st_mode&0o777)
  def test_exact_readonly_topology_is_qualified_before_private_root_exists(self):
@@ -216,7 +259,7 @@ exit 2
     for path in fake.iterdir(): path.chmod(0o700)
     env={'PATH':str(fake)+':/usr/bin:/bin','RESULT_ROOT':str(t/'result'),'PRIVATE_ROOT':str(t/'private'),
          'STAGING_ROOT':str(t/'staging'),'RUN_NONCE':'run-0001','RECIPE_SHA':'a'*40,'PLACEMENT_SHA':'d'*40,
-         'PROFILE_SHA':q.PROFILE_SHA,'GITHUB_WORKSPACE':str(t),'FSGG_NATIVE_AUTH_JSON_B64':'test',
+         'PROFILE_SHA':'1ef6d54eb3f9572580407efe9f266f643645af3af17c33723c0aa8368e5f4f34','GITHUB_WORKSPACE':str(t),'FSGG_NATIVE_AUTH_JSON_B64':'test',
          'FSGG_PRIVATE_EFFECT_ADMISSION':'test','SEAL_FAIL':'1' if seal_fail else '0','OPERATION_FAIL':'1' if operation_fail else '0'}
     completed=subprocess.run(['bash','-e','-o','pipefail'],input=script,text=True,cwd=t,env=env,capture_output=True)
     self.assertEqual(expected_rc,completed.returncode,completed.stderr)
