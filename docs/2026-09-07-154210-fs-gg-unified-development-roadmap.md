@@ -53,6 +53,45 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**P4 trusted resolver source delivered; installed adoption remains open.**
+[Coordination PR #905](https://github.com/FS-GG/FS.GG.Coordination/pull/905)
+merged at `e70d41fd9e48896e863bdf1ba33822ad6f09ee6b`, tree
+`5bebd1c89d033b8067c9b6fd30cb375272e65444`, independently equal to candidate
+`2933d7e4dd77fb321c001aeee4b78efa0eb63346`. Full
+[coherent validation 36798688054](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36798688054)
+and [bootstrap 36798688098](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36798688098)
+passed. The compiled route enforces the administrator grant, receiver and tool identities,
+bounded direct source inventory, private rootless runtime layout, cancellation and truthful
+recovery outcomes. The formal repair caps isolated early-lifecycle startup retries at two;
+invariant failures and missing final checker results still fail closed. No grant, installed
+activation or successor package publication is established. Qualified P3 0.2.0 artifacts
+remain frozen to their prior source, independent of P4's later 0.2.1 adoption.
+
+**Rust/Go exact build-path provenance repair delivered; native BIND remains open.**
+[Templates PR #654](https://github.com/FS-GG/FS.GG.Templates/pull/654)
+merged at `dd11a4838eed54d7d84555af68ebc4420a467ce8`, tree
+`5ecfca3df232b84847dde5580fb66c9bd20db9ad`, independently equal to candidate
+`d853d48fe92687d3a785d3c48bcb0074d8fa9f65`. Full
+[composition 36800391772](https://github.com/FS-GG/FS.GG.Templates/actions/runs/36800391772)
+and required checks passed. Actual prior native run 36798962603 built successfully but
+failed the immutable executor digest: F# compilation metadata includes the absolute source
+path. A clean SDK 10.0.400 build at the reviewed fixed path reproduced the existing expected
+digest; no package, source or image pin changed. Failure diagnostics now report expected
+and actual identities before refusing, and always-validation no longer hides missing inputs
+behind an unbound variable. A fresh protected native run, both language journeys, runtime
+cancellation, interruption recovery and installed adoption remain open.
+
+**V2-HOST-01.8 zero-auth diagnostic identified an app-server startup refusal.**
+Actual private [run 36801899408](https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/actions/runs/36801899408)
+on private `c4f21c476ff12059d199c2ddaa15374cb9a0fb1e` and public recipe
+`0ede625ce3d25d836e4e14d2da3fc749b0be4f7f` failed at zero-auth readonly start:
+`app-server stdout closed before a complete message`. Auth was not materialized; evidence
+and custody were incomplete. Cleanup and preservation completed, both temporary secrets
+were removed, and root independently verified original auth bytes and metadata unchanged.
+This narrows the source investigation without establishing its underlying startup cause.
+Genuine `.8` qualification, routing `.9` and preserved-record retirement `.10` remain open;
+Main has no action.
+
 **V2-HOST-01.8 private diagnostic recipe registration delivered.**
 [Private substrate PR #25](https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/pull/25)
 merged at `c4f21c476ff12059d199c2ddaa15374cb9a0fb1e`, tree
