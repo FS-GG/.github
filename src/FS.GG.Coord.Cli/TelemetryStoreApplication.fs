@@ -55,6 +55,33 @@ module TelemetryStoreApplication =
             BindingDigest: string
         }
 
+    type InstalledOriginQuery =
+        {
+            WorkspaceId: string
+            ProducerId: string
+            StreamId: string
+            Role: string
+            GrantId: string
+            GrantGeneration: int64
+            ManagerReceiptSha256: string
+            CapabilityProfileSha256: string
+            CapabilityResultSha256: string
+            NativeCaptureSha256: string
+            NativeVerificationSha256: string
+            InstallationSha256: string
+        }
+
+    type InstalledOrigin =
+        {
+            RecordId: string
+            Revision: int64
+            ObservedAt: string
+            ExpiresAt: string
+            InstallationSha256: string
+            ReceiptKey: string
+            EnvelopeDigest: string
+        }
+
     let databaseFileName = "telemetry.sqlite3"
     let private minimumEngine = Version(3, 51, 3)
     let private busyMilliseconds = 750
@@ -1750,6 +1777,7 @@ PRAGMA user_version=12;
         | TelemetryStore.LearnSharedCost _
         | TelemetryStore.LearnSharedCostAuthority _
         | TelemetryStore.LearnNativeDeliverySource _ -> ()
+        | TelemetryStore.LearnInstalledOrigin _ -> ()
 
         match fact.ItemId, fact.Payload with
         | Some item,
@@ -2631,9 +2659,13 @@ ON CONFLICT(key) DO UPDATE SET value=excluded.value;"""
                                 let allowed =
                                     set [ "runtime-native-inventory/1"; "runtime-native-inventory-source/1";
                                           "learn-shared-cost/1"; "learn-shared-cost-authority/1";
-                                          "learn-native-delivery-source/1" ]
+                                          "learn-native-delivery-source/1"; "learn-installed-origin/1" ]
                                 if batch.Facts |> List.exists (fun fact -> not (allowed.Contains fact.Kind)) then
                                     invalidOp "invalid-request"
+                            | Some _ when batch.Facts |> List.exists (fun fact -> fact.Kind = "learn-installed-origin/1") ->
+                                invalidOp "invalid-request"
+                            | None when batch.Facts |> List.exists (fun fact -> fact.Kind = "learn-installed-origin/1") ->
+                                invalidOp "invalid-request"
                             | _ -> ()
 
                             use priorBatch = connection.CreateCommand()
@@ -4047,6 +4079,279 @@ WHERE d.dispatch_id=$dispatch AND d.relation='child' AND d.runtime='collaboratio
                 with _ ->
                     Error [ "storage-unavailable" ]
 
+    let resolveInstalledOriginAt now path assessment (query: InstalledOriginQuery) =
+        let hash (value: string) =
+            not (String.IsNullOrWhiteSpace value)
+            && System.Text.RegularExpressions.Regex.IsMatch(value, "^[0-9a-f]{64}$")
+            && value <> String('0', 64)
+
+        if
+            query.Role <> "native-collector"
+            || query.GrantGeneration <= 0L
+            || not (TelemetryReceipt.validId query.WorkspaceId)
+            || not (TelemetryReceipt.validId query.ProducerId)
+            || not (TelemetryReceipt.validId query.StreamId)
+            || not (TelemetryReceipt.validId query.GrantId)
+            || not ([ query.ManagerReceiptSha256; query.CapabilityProfileSha256;
+                       query.CapabilityResultSha256; query.NativeCaptureSha256;
+                       query.NativeVerificationSha256; query.InstallationSha256 ] |> List.forall hash)
+        then
+            Error [ "invalid-request" ]
+        else
+            match validateRoot path assessment with
+            | Error errors -> Error errors
+            | Ok root ->
+                try
+                    match connect root SqliteOpenMode.ReadOnly with
+                    | Error _ -> Error [ "storage-unavailable" ]
+                    | Ok(connection, _) ->
+                        use connection = connection
+                        if scalarText connection "PRAGMA user_version;" <> string currentSchemaVersion then
+                            Error [ "unsupported-version" ]
+                        else
+                            use command = connection.CreateCommand()
+                            command.CommandText <-
+                                """
+SELECT f.identity,f.revision,f.canonical,f.content_digest,
+       a.receipt_key,a.envelope_digest
+FROM ingest_facts f
+JOIN fact_admissions a ON a.identity=f.identity
+JOIN receipt_producers p ON p.producer=a.producer AND p.stream=a.stream
+JOIN receipt_admissions ra ON ra.producer=a.producer AND ra.stream=a.stream
+  AND ra.receipt_key=a.receipt_key AND ra.envelope_digest=a.envelope_digest
+JOIN transport_receipts r ON r.producer=ra.producer AND r.batch=ra.batch AND r.state='applied'
+WHERE f.kind='learn-installed-origin/1' AND f.item_id IS NULL
+  AND a.producer=$producer AND a.stream=$stream AND a.authority_role='native-collector'
+  AND a.grant_id=$grant AND a.grant_generation=$generation
+  AND p.authority_role=a.authority_role AND p.grant_id=a.grant_id
+  AND p.grant_generation=a.grant_generation
+  AND (SELECT value FROM store_metadata WHERE key='receiptWorkspace')=$workspace
+  AND json_extract(f.canonical,'$.workspaceId')=$workspace
+  AND json_extract(f.canonical,'$.producerId')=$producer
+  AND json_extract(f.canonical,'$.streamId')=$stream
+  AND json_extract(f.canonical,'$.role')='native-collector'
+  AND json_extract(f.canonical,'$.grantId')=$grant
+  AND json_extract(f.canonical,'$.grantGeneration')=$generation
+  AND json_extract(f.canonical,'$.managerReceiptSha256')=$manager
+  AND json_extract(f.canonical,'$.capabilityProfileSha256')=$profile
+  AND json_extract(f.canonical,'$.capabilityResultSha256')=$result
+  AND json_extract(f.canonical,'$.nativeCaptureSha256')=$capture
+  AND json_extract(f.canonical,'$.nativeVerificationSha256')=$verification
+  AND json_extract(f.canonical,'$.installationSha256')=$installation
+LIMIT 2;
+"""
+                            [ "$workspace", box query.WorkspaceId; "$producer", box query.ProducerId;
+                              "$stream", box query.StreamId; "$grant", box query.GrantId;
+                              "$generation", box query.GrantGeneration;
+                              "$manager", box query.ManagerReceiptSha256;
+                              "$profile", box query.CapabilityProfileSha256;
+                              "$result", box query.CapabilityResultSha256;
+                              "$capture", box query.NativeCaptureSha256;
+                              "$verification", box query.NativeVerificationSha256;
+                              "$installation", box query.InstallationSha256 ]
+                            |> List.iter (fun (name, value) -> parameter command name value)
+                            use reader = command.ExecuteReader()
+                            if not (reader.Read()) then
+                                Error [ "learning-installed-origin-unavailable" ]
+                            else
+                                let identity = reader.GetString 0
+                                let revision = reader.GetInt64 1
+                                let canonical = reader.GetString 2
+                                let digest = reader.GetString 3
+                                let receiptKey = reader.GetString 4
+                                let envelopeDigest = reader.GetString 5
+                                if reader.Read() then
+                                    Error [ "learning-installed-origin-ambiguous" ]
+                                elif CanonicalJson.sha256(Encoding.UTF8.GetBytes canonical) <> digest then
+                                    Error [ "learning-installed-origin-corrupt" ]
+                                else
+                                    use document = JsonDocument.Parse canonical
+                                    let root = document.RootElement
+                                    let text (name: string) = root.GetProperty(name).GetString()
+                                    let number (name: string) = root.GetProperty(name).GetInt64()
+                                    if
+                                        text "workspaceId" <> query.WorkspaceId
+                                        || text "producerId" <> query.ProducerId
+                                        || text "streamId" <> query.StreamId
+                                        || text "role" <> query.Role
+                                        || text "grantId" <> query.GrantId
+                                        || number "grantGeneration" <> query.GrantGeneration
+                                        || text "managerReceiptSha256" <> query.ManagerReceiptSha256
+                                        || text "capabilityProfileSha256" <> query.CapabilityProfileSha256
+                                        || text "capabilityResultSha256" <> query.CapabilityResultSha256
+                                        || text "nativeCaptureSha256" <> query.NativeCaptureSha256
+                                        || text "nativeVerificationSha256" <> query.NativeVerificationSha256
+                                        || text "installationSha256" <> query.InstallationSha256
+                                    then
+                                        Error [ "learning-installed-origin-unavailable" ]
+                                    else
+                                        let mutable observedAt = DateTimeOffset.MinValue
+                                        let mutable expiresAt = DateTimeOffset.MinValue
+                                        let observed = text "capabilityObservedAt"
+                                        let expires = text "capabilityExpiresAt"
+                                        if
+                                            not (DateTimeOffset.TryParseExact(observed, "O", Globalization.CultureInfo.InvariantCulture,
+                                                                              Globalization.DateTimeStyles.RoundtripKind, &observedAt))
+                                            || not (DateTimeOffset.TryParseExact(expires, "O", Globalization.CultureInfo.InvariantCulture,
+                                                                                 Globalization.DateTimeStyles.RoundtripKind, &expiresAt))
+                                            || observedAt > now
+                                            || expiresAt <= observedAt
+                                            || expiresAt <= now
+                                        then
+                                            Error [ "learning-installed-origin-unavailable" ]
+                                        else
+                                            Ok {
+                                                RecordId = identity
+                                                Revision = revision
+                                                ObservedAt = observed
+                                                ExpiresAt = expires
+                                                InstallationSha256 = text "installationSha256"
+                                                ReceiptKey = receiptKey
+                                                EnvelopeDigest = envelopeDigest
+                                            }
+                with _ -> Error [ "storage-unavailable" ]
+
+    let resolveInstalledOrigin path assessment query =
+        resolveInstalledOriginAt DateTimeOffset.UtcNow path assessment query
+
+    let readNativeRoutePopulation path assessment originalItemId =
+        if not (TelemetryReceipt.validId originalItemId) then
+            Error [ "invalid-request" ]
+        else
+            match validateRoot path assessment with
+            | Error errors -> Error errors
+            | Ok root ->
+                try
+                    match connect root SqliteOpenMode.ReadOnly with
+                    | Error _ -> Error [ "storage-unavailable" ]
+                    | Ok(connection, _) ->
+                        use connection = connection
+                        if scalarText connection "PRAGMA user_version;" <> string currentSchemaVersion then
+                            Error [ "unsupported-version" ]
+                        else
+                            use transaction = connection.BeginTransaction()
+                            use ambiguity = connection.CreateCommand()
+                            ambiguity.Transaction <- transaction
+                            ambiguity.CommandText <-
+                                """
+SELECT CASE WHEN (SELECT count(*) FROM budget_population_facts WHERE original_item_id=$original)=0
+            THEN -1 ELSE count(*) END FROM (
+  SELECT item_id FROM budget_population_facts
+  WHERE item_id IN (SELECT item_id FROM budget_population_facts WHERE original_item_id=$original)
+  GROUP BY item_id HAVING count(DISTINCT original_item_id) <> 1
+);
+"""
+                            parameter ambiguity "$original" originalItemId
+                            match Convert.ToInt64(ambiguity.ExecuteScalar()) with
+                            | -1L -> Error [ "native route original mapping is unavailable" ]
+                            | value when value <> 0L ->
+                                Error [ "native route original mapping is ambiguous" ]
+                            | _ ->
+                                use command = connection.CreateCommand()
+                                command.Transaction <- transaction
+                                command.CommandText <-
+                                    """
+SELECT d.item_id,d.dispatch_id,d.relation,d.runtime,
+       l.invocation_id,l.parent_invocation_id,l.root_invocation_id,l.runtime,
+       a.requested_model,a.requested_effort,a.backend,
+       CASE WHEN s.invocation_id IS NULL THEN 0 ELSE 1 END,
+       CASE WHEN t.invocation_id IS NULL THEN 0 ELSE 1 END
+FROM expected_dispatches d
+LEFT JOIN invocation_lineage l ON l.item_id=d.item_id AND l.dispatch_id=d.dispatch_id
+LEFT JOIN runtime_admissions a ON a.item_id=l.item_id AND a.invocation_id=l.invocation_id
+LEFT JOIN runtime_starts s ON s.item_id=l.item_id AND s.invocation_id=l.invocation_id AND s.phase='process'
+LEFT JOIN runtime_terminals t ON t.item_id=l.item_id AND t.invocation_id=l.invocation_id
+WHERE d.item_id IN (SELECT item_id FROM budget_population_facts WHERE original_item_id=$original)
+ORDER BY d.item_id,d.dispatch_id
+LIMIT 257;
+"""
+                                parameter command "$original" originalItemId
+                                use reader = command.ExecuteReader()
+                                let routes = JsonArray()
+                                while reader.Read() do
+                                    if routes.Count = 256 then invalidOp "native route population exceeds the bound"
+                                    let optional index = if reader.IsDBNull index then null else JsonValue.Create(reader.GetString index) :> JsonNode
+                                    let runtime = reader.GetString 3
+                                    let relation = reader.GetString 2
+                                    let started = reader.GetInt64 11 = 1L
+                                    let terminal = reader.GetInt64 12 = 1L
+                                    let support =
+                                        if runtime = "collaboration-spawn-agent" && relation = "child"
+                                           && not (reader.IsDBNull 4) && not (reader.IsDBNull 10)
+                                           && reader.GetString(10) = "codex-collaboration" then
+                                            if started && terminal then "terminal-child-observed"
+                                            elif started then "started-child-observed"
+                                            else "child-route-evidence-incomplete"
+                                        else "unsupported-runtime-or-role"
+                                    let row = JsonObject()
+                                    row["itemId"] <- JsonValue.Create(reader.GetString 0)
+                                    row["dispatchId"] <- JsonValue.Create(reader.GetString 1)
+                                    row["relation"] <- JsonValue.Create relation
+                                    row["runtime"] <- JsonValue.Create runtime
+                                    row["invocationId"] <- optional 4
+                                    row["parentInvocationId"] <- optional 5
+                                    row["rootInvocationId"] <- optional 6
+                                    row["lineageRuntime"] <- optional 7
+                                    row["requestedModel"] <- optional 8
+                                    row["requestedEffort"] <- optional 9
+                                    row["backend"] <- optional 10
+                                    row["started"] <- JsonValue.Create started
+                                    row["terminal"] <- JsonValue.Create terminal
+                                    row["support"] <- JsonValue.Create support
+                                    routes.Add row
+                                reader.Close()
+                                use facts = connection.CreateCommand()
+                                facts.Transaction <- transaction
+                                facts.CommandText <-
+                                    """
+SELECT f.identity,f.item_id,f.kind,f.revision,f.content_digest,
+       a.authority_role,a.grant_id,a.grant_generation,a.receipt_key,a.envelope_digest
+FROM ingest_facts f
+LEFT JOIN fact_admissions a ON a.identity=f.identity
+WHERE f.item_id IN (SELECT item_id FROM budget_population_facts WHERE original_item_id=$original)
+  AND f.kind IN ('runtime-native-inventory/1','runtime-native-inventory-source/1',
+                 'learn-shared-cost/1','learn-shared-cost-allocation/1',
+                 'learn-shared-cost-authority/1','learn-native-delivery-source/1')
+ORDER BY f.item_id,f.kind,f.identity
+LIMIT 257;
+"""
+                                parameter facts "$original" originalItemId
+                                use factReader = facts.ExecuteReader()
+                                let selectedFacts = JsonArray()
+                                while factReader.Read() do
+                                    if selectedFacts.Count = 256 then invalidOp "native route fact population exceeds the bound"
+                                    let optional index = if factReader.IsDBNull index then null else JsonValue.Create(factReader.GetString index) :> JsonNode
+                                    let row = JsonObject()
+                                    row["identity"] <- JsonValue.Create(factReader.GetString 0)
+                                    row["itemId"] <- JsonValue.Create(factReader.GetString 1)
+                                    row["kind"] <- JsonValue.Create(factReader.GetString 2)
+                                    row["revision"] <- JsonValue.Create(factReader.GetInt64 3)
+                                    row["contentDigest"] <- JsonValue.Create(factReader.GetString 4)
+                                    row["receiptRole"] <- optional 5
+                                    row["grantId"] <- optional 6
+                                    row["grantGeneration"] <-
+                                        if factReader.IsDBNull 7 then null
+                                        else JsonValue.Create(factReader.GetInt64 7) :> JsonNode
+                                    row["receiptKey"] <- optional 8
+                                    row["envelopeDigest"] <- optional 9
+                                    selectedFacts.Add row
+                                let output = JsonObject()
+                                output["schema"] <- JsonValue.Create "fsgg.telemetry.native-route-population/1"
+                                output["originalItemId"] <- JsonValue.Create originalItemId
+                                output["windowBinding"] <- JsonValue.Create "unknown"
+                                output["populationComplete"] <- JsonValue.Create false
+                                output["terminalChildEstablishesRoleCoverage"] <- JsonValue.Create false
+                                output["allocationReferenceIsAuthority"] <- JsonValue.Create false
+                                output["routes"] <- routes
+                                output["facts"] <- selectedFacts
+                                let canonical = CanonicalJson.canonicalize(Encoding.UTF8.GetBytes(output.ToJsonString())) |> Result.defaultWith invalidOp
+                                if Encoding.UTF8.GetByteCount canonical > 1048576 then
+                                    Error [ "native route result exceeds the byte bound" ]
+                                else
+                                    transaction.Rollback()
+                                    Ok(canonical + "\n")
+                with _ -> Error [ "storage-unavailable" ]
+
     let resolveNativeDeliveryCandidate path assessment (sourceRef: string) =
         if String.IsNullOrWhiteSpace sourceRef || sourceRef.Length > 1024 || sourceRef |> Seq.exists Char.IsControl then
             Error [ "invalid-request" ]
@@ -4592,7 +4897,7 @@ WHERE n.source_ref=$source;
             ItemId = itemId
             FactCount =
                 runtimeScalar
-                    "SELECT count(*) FROM ingest_facts WHERE item_id=$item AND kind NOT IN ('learn-task-snapshot','learn-context-manifest','learn-experiment-assignment','learn-accounting-inventory/1','runtime-native-inventory/1','runtime-native-inventory-source/1','learn-shared-cost/1','learn-shared-cost-allocation/1','learn-shared-cost-authority/1','learn-native-delivery-source/1');"
+                                    "SELECT count(*) FROM ingest_facts WHERE item_id=$item AND kind NOT IN ('learn-task-snapshot','learn-context-manifest','learn-experiment-assignment','learn-accounting-inventory/1','runtime-native-inventory/1','runtime-native-inventory-source/1','learn-shared-cost/1','learn-shared-cost-allocation/1','learn-shared-cost-authority/1','learn-native-delivery-source/1','learn-installed-origin/1');"
             UsageObservations = usageCount
             DeliveryObservations = count "delivery_observations"
             Input = sum "input_count" + runtimeSum "input_count"
@@ -5001,7 +5306,7 @@ WHERE n.source_ref=$source;
                             use learningCount = connection.CreateCommand()
                             learningCount.Transaction <- transaction
                             learningCount.CommandText <-
-                                $"SELECT count(*) FROM ingest_facts WHERE kind IN ('learn-task-snapshot','learn-context-manifest','learn-experiment-assignment','learn-accounting-inventory/1','runtime-native-inventory/1','runtime-native-inventory-source/1','learn-shared-cost/1','learn-shared-cost-allocation/1','learn-shared-cost-authority/1','learn-native-delivery-source/1')%s{learningItemFilter};"
+                                $"SELECT count(*) FROM ingest_facts WHERE kind IN ('learn-task-snapshot','learn-context-manifest','learn-experiment-assignment','learn-accounting-inventory/1','runtime-native-inventory/1','runtime-native-inventory-source/1','learn-shared-cost/1','learn-shared-cost-allocation/1','learn-shared-cost-authority/1','learn-native-delivery-source/1','learn-installed-origin/1')%s{learningItemFilter};"
                             itemId |> Option.iter (parameter learningCount "$selected")
 
                             if Convert.ToInt64(learningCount.ExecuteScalar()) > 10000L then
@@ -5089,7 +5394,7 @@ WHERE n.source_ref=$source;
                                 "reviews", table "process_reviews" "item_id,scope,attempt_id,fact_revision"
                                 "learningObservations",
                                 rows
-                                    ($"SELECT o.sequence AS ingest_order,a.producer AS receipt_producer,a.stream AS receipt_stream,a.authority_role AS receipt_role,a.grant_id AS receipt_grant_id,a.grant_generation AS receipt_grant_generation,a.receipt_key,a.envelope_digest AS receipt_envelope_digest,f.identity,f.kind,f.item_id,f.revision,f.content_digest,f.canonical FROM ingest_facts f LEFT JOIN learning_fact_order o ON o.identity=f.identity LEFT JOIN fact_admissions a ON a.identity=f.identity WHERE f.kind IN ('learn-task-snapshot','learn-context-manifest','learn-experiment-assignment','learn-accounting-inventory/1','runtime-native-inventory/1','runtime-native-inventory-source/1','learn-shared-cost/1','learn-shared-cost-allocation/1','learn-shared-cost-authority/1','learn-native-delivery-source/1')%s{learningFactItemFilter} ORDER BY f.item_id,f.kind,f.identity LIMIT 10001;")
+                                    ($"SELECT o.sequence AS ingest_order,a.producer AS receipt_producer,a.stream AS receipt_stream,a.authority_role AS receipt_role,a.grant_id AS receipt_grant_id,a.grant_generation AS receipt_grant_generation,a.receipt_key,a.envelope_digest AS receipt_envelope_digest,f.identity,f.kind,f.item_id,f.revision,f.content_digest,f.canonical FROM ingest_facts f LEFT JOIN learning_fact_order o ON o.identity=f.identity LEFT JOIN fact_admissions a ON a.identity=f.identity WHERE f.kind IN ('learn-task-snapshot','learn-context-manifest','learn-experiment-assignment','learn-accounting-inventory/1','runtime-native-inventory/1','runtime-native-inventory-source/1','learn-shared-cost/1','learn-shared-cost-allocation/1','learn-shared-cost-authority/1','learn-native-delivery-source/1','learn-installed-origin/1')%s{learningFactItemFilter} ORDER BY f.item_id,f.kind,f.identity LIMIT 10001;")
                             ]
                             |> List.iter (fun (name, value) -> content[name] <- value)
 
@@ -5912,7 +6217,7 @@ WHERE n.source_ref=$source;
                         use command = connection.CreateCommand()
 
                         command.CommandText <-
-                            "SELECT DISTINCT item_id FROM ingest_facts WHERE item_id IS NOT NULL AND kind NOT IN ('learn-task-snapshot','learn-context-manifest','learn-experiment-assignment','learn-accounting-inventory/1','runtime-native-inventory/1','runtime-native-inventory-source/1','learn-shared-cost/1','learn-shared-cost-allocation/1','learn-shared-cost-authority/1','learn-native-delivery-source/1') ORDER BY item_id;"
+                            "SELECT DISTINCT item_id FROM ingest_facts WHERE item_id IS NOT NULL AND kind NOT IN ('learn-task-snapshot','learn-context-manifest','learn-experiment-assignment','learn-accounting-inventory/1','runtime-native-inventory/1','runtime-native-inventory-source/1','learn-shared-cost/1','learn-shared-cost-allocation/1','learn-shared-cost-authority/1','learn-native-delivery-source/1','learn-installed-origin/1') ORDER BY item_id;"
 
                         use reader = command.ExecuteReader()
                         let items = ResizeArray<string>()

@@ -87,6 +87,67 @@ module TelemetryStoreApplicationTests =
         Encoding.UTF8.GetBytes
             $"""{{"schema":"{TelemetryStore.BatchSchema}","ingestId":"{ingest}","sourceIdentity":"operational-observer","generation":"g1","cursor":"{ingest}","eventCount":{List.length events},"events":[{String.concat "," events}]}}"""
 
+    [<Fact>]
+    let ``installed origin resolves only through current native admission and exact retained selectors`` () =
+        let cleanup, path = root ()
+        use cleanup = cleanup
+        TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
+        let scope: TelemetryReceipt.Scope =
+            { Workspace = "workspace-origin"; Producer = "producer-origin"; Stream = "stream-origin" }
+        let principal: TelemetryReceipt.Principal =
+            { Scope = scope; Role = TelemetryReceipt.NativeCollector
+              GrantId = Some "grant-origin"; GrantGeneration = Some 7L }
+        TelemetryStoreApplication.provisionReceiptWorkspace path approved scope.Workspace |> unwrap |> ignore
+        TelemetryStoreApplication.enrollReceiptPrincipal path approved principal |> unwrap |> ignore
+        let digest = String.replicate 64 "a"
+        let event identity manager observed expires =
+            $"""{{"kind":"learn-installed-origin/1","identity":"{identity}","revision":0,"workspaceId":"{scope.Workspace}","producerId":"{scope.Producer}","streamId":"{scope.Stream}","role":"native-collector","grantId":"grant-origin","grantGeneration":7,"managerReceiptSha256":"{manager}","capabilityProfileSha256":"{digest}","capabilityResultSha256":"{digest}","nativeCaptureSha256":"{digest}","nativeVerificationSha256":"{digest}","capabilityObservedAt":"{observed}","capabilityExpiresAt":"{expires}","installationSha256":"{digest}"}}"""
+        let envelope batch fact =
+            Encoding.UTF8.GetBytes
+                $"""{{"schema":"{TelemetryReceipt.Schema}","workspaceId":"{scope.Workspace}","producerId":"{scope.Producer}","streamId":"{scope.Stream}","batchId":"{batch}","payload":{{"schema":"{TelemetryStore.BatchSchema}","ingestId":"receipt-{batch}","sourceIdentity":"protected-installed-origin","generation":"7","cursor":"{batch}","eventCount":1,"events":[{fact}]}}}}"""
+        let admit identity manager observed expires =
+            TelemetryStoreApplication.submitReceiptPrincipal path approved principal
+                (envelope identity (event identity manager observed expires)) |> unwrap |> ignore
+            Assert.Contains("\"rejected\":0", TelemetryStoreApplication.drainReceipts path approved scope.Workspace |> unwrap)
+        admit "origin-1" digest "2026-10-01T10:00:00.0000000+00:00" "2026-10-01T10:05:00.0000000+00:00"
+        let query: TelemetryStoreApplication.InstalledOriginQuery =
+            { WorkspaceId = scope.Workspace; ProducerId = scope.Producer; StreamId = scope.Stream
+              Role = "native-collector"; GrantId = "grant-origin"; GrantGeneration = 7L
+              ManagerReceiptSha256 = digest; CapabilityProfileSha256 = digest
+              CapabilityResultSha256 = digest; NativeCaptureSha256 = digest
+              NativeVerificationSha256 = digest; InstallationSha256 = digest }
+        let at minute candidate =
+            TelemetryStoreApplication.resolveInstalledOriginAt
+                (DateTimeOffset.Parse($"2026-10-01T10:{minute}:00.0000000+00:00")) path approved candidate
+        let resolved = at "01" query |> unwrap
+        Assert.Equal("origin-1", resolved.RecordId)
+        Assert.Equal(0L, resolved.Revision)
+        Assert.Equal(Error [ "learning-installed-origin-unavailable" ],
+                     at "01" { query with ManagerReceiptSha256 = String.replicate 64 "b" })
+        Assert.Equal(Error [ "learning-installed-origin-unavailable" ], at "05" query)
+        Assert.Equal(Error [ "learning-installed-origin-unavailable" ], at "06" query)
+
+        let renewed = String.replicate 64 "b"
+        admit "origin-2" renewed "2026-10-01T10:02:00.0000000+00:00" "2026-10-01T10:10:00.0000000+00:00"
+        let renewedQuery = { query with ManagerReceiptSha256 = renewed }
+        Assert.Equal(Error [ "learning-installed-origin-unavailable" ], at "01" renewedQuery)
+        Assert.Equal("origin-1", (at "03" query |> unwrap).RecordId)
+        Assert.Equal("origin-2", (at "03" renewedQuery |> unwrap).RecordId)
+        admit "origin-3" renewed "2026-10-01T10:02:00.0000000+00:00" "2026-10-01T10:10:00.0000000+00:00"
+        Assert.Equal(Error [ "learning-installed-origin-ambiguous" ], at "03" renewedQuery)
+
+        let genericScope = { scope with Producer = "generic-origin" }
+        let generic = TelemetryReceipt.genericPrincipal genericScope
+        TelemetryStoreApplication.enrollReceiptPrincipal path approved generic |> unwrap |> ignore
+        let genericEnvelope =
+            Encoding.UTF8.GetString(envelope "origin-generic" (event "origin-generic" digest "2026-10-01T10:00:00.0000000+00:00" "2026-10-01T10:05:00.0000000+00:00"))
+                .Replace(scope.Producer, genericScope.Producer)
+            |> Encoding.UTF8.GetBytes
+        TelemetryStoreApplication.submitReceiptPrincipal path approved generic genericEnvelope |> unwrap |> ignore
+        Assert.Contains("\"rejected\":1", TelemetryStoreApplication.drainReceipts path approved scope.Workspace |> unwrap)
+        Assert.Equal(Error [ "native route original mapping is unavailable" ],
+                     TelemetryStoreApplication.readNativeRoutePopulation path approved "missing-original")
+
     let private ciPopulationBatch ingest item revision checkStatus coverage continuation =
         Encoding.UTF8.GetBytes
             $"""{{"schema":"{TelemetryStore.BatchSchema}","ingestId":"{ingest}","sourceIdentity":"ci-population","generation":"candidate-a","cursor":"{ingest}","eventCount":3,"events":[{{"kind":"ci-population-admission","identity":"ci-admission-a","itemId":"{item}","revision":1,"collectionId":"collection-a","repository":"o/r","prNumber":7,"baseRef":"main","baseSha":"dddddddddddddddddddddddddddddddddddddddd","head":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","witness":"native-pr-head"}},{{"kind":"ci-check","identity":"ci-check-a","itemId":"{item}","revision":{revision},"repository":"o/r","checkId":101,"name":"build","appSlug":"github-actions","status":"{checkStatus}","conclusion":null,"startedAt":"2026-09-08T10:00:00Z","completedAt":null}},{{"kind":"ci-population-coverage","identity":"ci-coverage-a","itemId":"{item}","revision":{revision},"collectionId":"collection-a","actions":"{coverage}","checks":"{coverage}","attempts":"{coverage}","jobs":"{coverage}","terminal":"{coverage}","timestamps":"{coverage}","continuation":"{continuation}","externalChecks":0,"gaps":"[]"}}]}}"""
