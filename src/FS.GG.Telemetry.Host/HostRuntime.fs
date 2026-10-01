@@ -60,6 +60,16 @@ type AuthEntry =
         Revoked: bool
     }
 
+type NativeVerifierConfig =
+    {
+        RuntimeExecutablePath: string
+        RuntimeExecutableSha256: string
+        ModulePath: string
+        ModuleSha256: string
+        RuntimeManifestPath: string
+        RuntimeManifestSha256: string
+    }
+
 type NativeCollectorInstallationConfig =
     {
         Schema: string
@@ -70,6 +80,7 @@ type NativeCollectorInstallationConfig =
         Provider: string
         Model: string
         Effort: string
+        NativeVerifier: NativeVerifierConfig option
     }
 
 type NativeDeliverySourceInstallationConfig =
@@ -491,8 +502,11 @@ module Configuration =
                     let expected =
                         set [ "Schema"; "CredentialReference"; "ExecutablePath"; "CodexHome";
                               "EvidenceRoot"; "Provider"; "Model"; "Effort" ]
-                    let qualified = root.GetProperty("Schema").GetString() = "fsgg.telemetry.native-collector-installation/2"
+                    let schema = root.GetProperty("Schema").GetString()
+                    let qualified = schema = "fsgg.telemetry.native-collector-installation/2" || schema = "fsgg.telemetry.native-collector-installation/3"
+                    let verifierQualified = schema = "fsgg.telemetry.native-collector-installation/3"
                     let expected = if qualified then expected.Add "ExecutableSha256" else expected
+                    let expected = if verifierQualified then expected.Add "NativeVerifier" else expected
 
                     if root.ValueKind <> JsonValueKind.Object
                        || names.Length <> expected.Count
@@ -508,7 +522,29 @@ module Configuration =
 
                         let installationNode = System.Text.Json.Nodes.JsonNode.Parse(bytes)
                         installationNode.AsObject().Remove "ExecutableSha256" |> ignore
-                        let installation = JsonSerializer.Deserialize<NativeCollectorInstallationConfig>(installationNode.ToJsonString(), options)
+                        let verifier =
+                            if verifierQualified then
+                                let verifierNode = installationNode["NativeVerifier"]
+                                installationNode.AsObject().Remove "NativeVerifier" |> ignore
+                                let verifierObject = verifierNode.AsObject()
+                                let verifierNames = verifierObject |> Seq.map _.Key |> Seq.toArray
+                                let verifierFields =
+                                    set [ "RuntimeExecutablePath"; "RuntimeExecutableSha256"; "ModulePath";
+                                          "ModuleSha256"; "RuntimeManifestPath"; "RuntimeManifestSha256" ]
+                                if verifierNames.Length = verifierFields.Count
+                                   && (verifierNames |> Array.distinct |> Array.length) = verifierNames.Length
+                                   && Set.ofArray verifierNames = verifierFields then
+                                    Some(JsonSerializer.Deserialize<NativeVerifierConfig>(verifierNode.ToJsonString(), options))
+                                else None
+                            else None
+                        let installation: NativeCollectorInstallationConfig =
+                            { Schema = schema; CredentialReference = root.GetProperty("CredentialReference").GetString()
+                              ExecutablePath = root.GetProperty("ExecutablePath").GetString()
+                              CodexHome = root.GetProperty("CodexHome").GetString()
+                              EvidenceRoot = root.GetProperty("EvidenceRoot").GetString()
+                              Provider = root.GetProperty("Provider").GetString()
+                              Model = root.GetProperty("Model").GetString()
+                              Effort = root.GetProperty("Effort").GetString(); NativeVerifier = verifier }
                         let bounded value =
                             not (String.IsNullOrWhiteSpace value)
                             && value.Length <= 128
@@ -541,6 +577,21 @@ module Configuration =
                             && (File.GetUnixFileMode executable.FullName
                                 &&& (UnixFileMode.GroupWrite ||| UnixFileMode.OtherWrite)) = enum 0
 
+                        let digest value =
+                            not (String.IsNullOrWhiteSpace value)
+                            && System.Text.RegularExpressions.Regex.IsMatch(value, "^[0-9a-f]{64}$")
+                            && value <> String('0', 64)
+                        let immutableFile executableRequired path expectedDigest maximum =
+                            let info = FileInfo path
+                            info.Exists && Path.IsPathFullyQualified path && isNull info.LinkTarget
+                            && info.Length > 0L && info.Length <= maximum
+                            && ownedByHost true path
+                            && (File.GetUnixFileMode path &&& (UnixFileMode.GroupWrite ||| UnixFileMode.OtherWrite)) = enum 0
+                            && (not executableRequired || (File.GetUnixFileMode path &&&
+                                (UnixFileMode.UserExecute ||| UnixFileMode.GroupExecute ||| UnixFileMode.OtherExecute)) <> enum 0)
+                            && digest expectedDigest
+                            && Convert.ToHexString(SHA256.HashData(File.ReadAllBytes path)).ToLowerInvariant() = expectedDigest
+
                         // The protected operator owns this installation boundary. Ordinary
                         // enrolled producers have no filesystem access beneath its private root.
                         let anchor = DirectoryInfo(Path.GetDirectoryName(Path.GetFullPath hostConfigPath))
@@ -558,6 +609,14 @@ module Configuration =
                              && ownedByHost true executable.FullName
                              && root.GetProperty("ExecutableSha256").GetString() =
                                 Convert.ToHexString(SHA256.HashData(File.ReadAllBytes executable.FullName)).ToLowerInvariant())
+                        let verifierCustody =
+                            match verifier with
+                            | None -> not verifierQualified
+                            | Some value ->
+                                value.ModuleSha256 = "8d6a33beae9a4de84fa7a703809e9b1a1656359a085f92091cf56de3b77fd3ba"
+                                && immutableFile true value.RuntimeExecutablePath value.RuntimeExecutableSha256 (512L * 1024L * 1024L)
+                                && immutableFile false value.ModulePath value.ModuleSha256 (4L * 1024L * 1024L)
+                                && immutableFile false value.RuntimeManifestPath value.RuntimeManifestSha256 (1024L * 1024L)
 
                         if hostConfig.Schema <> "fsgg.telemetry.host-config/2"
                            || (installation.Schema <> "fsgg.telemetry.native-collector-installation/1" && not qualified)
@@ -566,6 +625,7 @@ module Configuration =
                            || not (privateDirectory codexHome)
                            || not (privateDirectory evidenceRoot)
                            || not qualifiedCustody
+                           || not verifierCustody
                            || not (bounded installation.Provider)
                            || not (bounded installation.Model)
                            || not (bounded installation.Effort)

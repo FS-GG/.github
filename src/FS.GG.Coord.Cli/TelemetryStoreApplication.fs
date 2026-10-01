@@ -68,6 +68,7 @@ module TelemetryStoreApplication =
             CapabilityResultSha256: string
             NativeCaptureSha256: string
             NativeVerificationSha256: string
+            InstallationSha256: string
         }
 
     type InstalledOrigin =
@@ -4093,7 +4094,7 @@ WHERE d.dispatch_id=$dispatch AND d.relation='child' AND d.runtime='collaboratio
             || not (TelemetryReceipt.validId query.GrantId)
             || not ([ query.ManagerReceiptSha256; query.CapabilityProfileSha256;
                        query.CapabilityResultSha256; query.NativeCaptureSha256;
-                       query.NativeVerificationSha256 ] |> List.forall hash)
+                       query.NativeVerificationSha256; query.InstallationSha256 ] |> List.forall hash)
         then
             Error [ "invalid-request" ]
         else
@@ -4136,6 +4137,7 @@ WHERE f.kind='learn-installed-origin/1' AND f.item_id IS NULL
   AND json_extract(f.canonical,'$.capabilityResultSha256')=$result
   AND json_extract(f.canonical,'$.nativeCaptureSha256')=$capture
   AND json_extract(f.canonical,'$.nativeVerificationSha256')=$verification
+  AND json_extract(f.canonical,'$.installationSha256')=$installation
 LIMIT 2;
 """
                             [ "$workspace", box query.WorkspaceId; "$producer", box query.ProducerId;
@@ -4145,7 +4147,8 @@ LIMIT 2;
                               "$profile", box query.CapabilityProfileSha256;
                               "$result", box query.CapabilityResultSha256;
                               "$capture", box query.NativeCaptureSha256;
-                              "$verification", box query.NativeVerificationSha256 ]
+                              "$verification", box query.NativeVerificationSha256;
+                              "$installation", box query.InstallationSha256 ]
                             |> List.iter (fun (name, value) -> parameter command name value)
                             use reader = command.ExecuteReader()
                             if not (reader.Read()) then
@@ -4178,6 +4181,7 @@ LIMIT 2;
                                         || text "capabilityResultSha256" <> query.CapabilityResultSha256
                                         || text "nativeCaptureSha256" <> query.NativeCaptureSha256
                                         || text "nativeVerificationSha256" <> query.NativeVerificationSha256
+                                        || text "installationSha256" <> query.InstallationSha256
                                     then
                                         Error [ "learning-installed-origin-unavailable" ]
                                     else

@@ -115,7 +115,7 @@ module TelemetryStoreApplicationTests =
               Role = "native-collector"; GrantId = "grant-origin"; GrantGeneration = 7L
               ManagerReceiptSha256 = digest; CapabilityProfileSha256 = digest
               CapabilityResultSha256 = digest; NativeCaptureSha256 = digest
-              NativeVerificationSha256 = digest }
+              NativeVerificationSha256 = digest; InstallationSha256 = digest }
         let at minute candidate =
             TelemetryStoreApplication.resolveInstalledOriginAt
                 (DateTimeOffset.Parse($"2026-10-01T10:{minute}:00.0000000+00:00")) path approved candidate

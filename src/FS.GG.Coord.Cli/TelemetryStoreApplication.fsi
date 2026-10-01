@@ -59,6 +59,7 @@ module TelemetryStoreApplication =
             CapabilityResultSha256: string
             NativeCaptureSha256: string
             NativeVerificationSha256: string
+            InstallationSha256: string
         }
 
     type InstalledOrigin =

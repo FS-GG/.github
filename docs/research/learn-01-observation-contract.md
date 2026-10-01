@@ -319,6 +319,23 @@ contract. Complete exact selectors are applied before the bounded match decision
 under one current grant coexist while duplicate exact matches refuse. Changed retained bytes, a foreign
 installation or grant, substituted selectors, a revoked current grant or absent admission also refuse.
 
+Installed-origin construction is available only for
+`fsgg.telemetry.native-collector-installation/3`. Its closed `NativeVerifier` binding names the absolute
+interpreter, unchanged canonical native-source verifier module and bounded runtime manifest with their exact
+digests. The adjacent manager receipt/3 binds the complete sidecar, source-reference/3 and runtime manifest.
+Version 1 or 2 installation, a missing snapshot, runtime or manifest, or substituted code is explicitly
+unavailable for installed-origin collection and readback while its older collector functions remain compatible.
+
+For every collect and read, Host copies the already-read capture and retained telemetry snapshot into a fresh
+private directory, invokes the canonical verifier directly with fixed `-I -S -B ... verify --capture ...
+--telemetry-snapshot ...` arguments, clears inherited environment and closes stdin. Runtime is capped at 30
+seconds, stdout at 1 MiB and stderr at 64 KiB; timeout, overflow, nonzero exit, malformed or duplicate JSON and
+retained-output disagreement refuse and remove the owned temporary directory. Host rechecks retained inputs and
+the runtime inventory after execution. The installation digest binds config, sidecar, reader executable, source
+reference, runtime manifest and snapshot bytes. This validates capture/snapshot correspondence at the retained
+boundary; it does not promote `snapshotOrigin`, shared-cost completeness, whole-window membership, role coverage
+or allocation authority, which remain unknown or false at C2.
+
 `read-native-route --config ABSOLUTE_PATH --original-item ID` is a bounded, read-only store snapshot for an
 existing durable original mapping. It returns at most 256 dispatch rows and 256 admitted learning facts from one
 SQLite transaction and caps canonical output at 1 MiB. Every runtime/relation outside the proved

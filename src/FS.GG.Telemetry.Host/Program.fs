@@ -659,7 +659,10 @@ module Operations =
                                               now =
         let readBounded (maximum: int) (file: string) =
             let info = FileInfo file
+            let rec realAncestors (directory: DirectoryInfo) =
+                isNull directory || (directory.Exists && isNull directory.LinkTarget && realAncestors directory.Parent)
             if not info.Exists || isNull info.Directory || not (isNull info.LinkTarget)
+               || not (realAncestors info.Directory)
                || info.Length <= 0L || info.Length > int64 maximum
                || File.GetUnixFileMode file <> (UnixFileMode.UserRead ||| UnixFileMode.UserWrite) then
                 invalidOp "installed origin evidence is unavailable"
@@ -675,9 +678,14 @@ module Operations =
             set [ "schema"; "status"; "ownerUid"; "hostConfigSha256"; "sidecarSha256";
                   "executableSha256"; "credentialReference"; "workspaceId"; "producerId"; "streamId";
                   "grantId"; "grantGeneration"; "sourceVerification"; "snapshotOrigin";
-                  "sharedCostCompleteness"; "activationAuthorized" ]
+                  "sharedCostCompleteness"; "activationAuthorized"; "sourceReferenceSha256";
+                  "verifierRuntimeManifestSha256" ]
+        let verifier = installation.NativeVerifier |> Option.defaultWith (fun () -> invalidOp "installed verifier is unavailable")
+        let sourceReferenceBytes =
+            readBounded 65536 (Path.Combine(Path.GetDirectoryName(path), "source-reference.json"))
+        let runtimeManifestBytes = readBounded (1024 * 1024) verifier.RuntimeManifestPath
         if not (exactNames manager expectedManager)
-           || text manager "schema" <> "fsgg.telemetry.native-collector-installation-receipt/2"
+           || text manager "schema" <> "fsgg.telemetry.native-collector-installation-receipt/3"
            || text manager "status" <> "installed"
            || manager["activationAuthorized"].GetValue<bool>()
            || text manager "hostConfigSha256" <> digestBytes configBytes
@@ -688,16 +696,18 @@ module Operations =
            || text manager "producerId" <> principal.Scope.Producer
            || text manager "streamId" <> principal.Scope.Stream
            || text manager "grantId" <> principal.GrantId.Value
-           || integer manager "grantGeneration" <> principal.GrantGeneration.Value then
+           || integer manager "grantGeneration" <> principal.GrantGeneration.Value
+           || text manager "sourceReferenceSha256" <> digestBytes sourceReferenceBytes
+           || text manager "verifierRuntimeManifestSha256" <> verifier.RuntimeManifestSha256
+           || digestBytes runtimeManifestBytes <> verifier.RuntimeManifestSha256 then
             invalidOp "installed origin manager receipt differs"
 
         let evidence (name: string) maximum = readBounded maximum (Path.Combine(installation.EvidenceRoot, name))
         let profileBytes = evidence "fixed-native-capability-profile.json" 65536
         let resultBytes = evidence "fixed-native-capability-result.json" 65536
         let captureBytes = evidence "native-source-capture.json" (64 * 1024 * 1024)
+        let snapshotBytes = evidence "native-source-snapshot.json" (64 * 1024 * 1024)
         let verificationBytes = evidence "native-source-verification.json" 1048576
-        let sourceReferenceBytes =
-            readBounded 65536 (Path.Combine(Path.GetDirectoryName(path), "source-reference.json"))
         let profile, result, capture, verification, sourceReference =
             parse profileBytes, parse resultBytes, parse captureBytes, parse verificationBytes, parse sourceReferenceBytes
         let profileSha = digestBytes profileBytes
@@ -735,7 +745,8 @@ module Operations =
                   "missingUsage"; "foreignUsage"; "mismatchedUsage" ]
         let sourceReferenceFields =
             set [ "schema"; "profileSha256"; "nativeSourceVolume"; "developmentTarget";
-                  "collectorReadOnlyTarget"; "readerProfileSha256"; "captureQualified" ]
+                  "collectorReadOnlyTarget"; "readerProfileSha256"; "captureQualified";
+                  "verifierRuntimeManifestSha256" ]
         let cleanup = result["cleanup"]
         let cleanupFields =
             set [ "processTreeTerminationRequired"; "processTreeTerminated";
@@ -776,13 +787,25 @@ module Operations =
            || text verification "captureDigest" <> captureDigest
            || not (System.Text.RegularExpressions.Regex.IsMatch(captureDigest, "^[0-9a-f]{64}$"))
            || (verificationGaps |> List.exists (fun name -> verification[name].AsArray().Count <> 0))
-           || text sourceReference "schema" <> "fsgg.telemetry.persistent-source-references/2"
+           || text sourceReference "schema" <> "fsgg.telemetry.persistent-source-references/3"
            || text sourceReference "readerProfileSha256" <> profileSha
            || text sourceReference "collectorReadOnlyTarget" <> installation.CodexHome
-           || not (sourceReference["captureQualified"].GetValue<bool>())
+           || sourceReference["captureQualified"].GetValue<bool>()
+           || text sourceReference "verifierRuntimeManifestSha256" <> verifier.RuntimeManifestSha256
            || not routeSupported || startedAt > completedAt || completedAt > observedAt
            || observedAt > now || expiresAt <= observedAt || expiresAt <= now then
             invalidOp "installed origin retained evidence differs"
+        NativeSourceVerification.verifyRetained verifier installation.EvidenceRoot captureBytes snapshotBytes verificationBytes
+        |> Result.defaultWith (String.concat "; " >> invalidOp)
+        let unchanged (expected: byte array) maximum file =
+            let observed = readBounded maximum file
+            expected.Length = observed.Length && Array.forall2 (=) expected observed
+        if not (unchanged captureBytes (64 * 1024 * 1024) (Path.Combine(installation.EvidenceRoot, "native-source-capture.json")))
+           || not (unchanged snapshotBytes (64 * 1024 * 1024) (Path.Combine(installation.EvidenceRoot, "native-source-snapshot.json")))
+           || not (unchanged verificationBytes 1048576 (Path.Combine(installation.EvidenceRoot, "native-source-verification.json")))
+           || not (unchanged sourceReferenceBytes 65536 (Path.Combine(Path.GetDirectoryName(path), "source-reference.json")))
+           || not (unchanged runtimeManifestBytes (1024 * 1024) verifier.RuntimeManifestPath) then
+            invalidOp "installed origin retained evidence changed"
         let query: TelemetryStoreApplication.InstalledOriginQuery =
             { WorkspaceId = principal.Scope.Workspace
               ProducerId = principal.Scope.Producer; StreamId = principal.Scope.Stream
@@ -792,9 +815,11 @@ module Operations =
               CapabilityProfileSha256 = profileSha
               CapabilityResultSha256 = digestBytes resultBytes
               NativeCaptureSha256 = digestBytes captureBytes
-              NativeVerificationSha256 = digestBytes verificationBytes }
+              NativeVerificationSha256 = digestBytes verificationBytes
+              InstallationSha256 = framedDigest [ configBytes; sidecarBytes; File.ReadAllBytes installation.ExecutablePath;
+                                                   sourceReferenceBytes; runtimeManifestBytes; snapshotBytes ] }
         { Query = query; ObservedAt = observed; ExpiresAt = expires
-          InstallationSha256 = framedDigest [ configBytes; sidecarBytes; File.ReadAllBytes installation.ExecutablePath ] }
+          InstallationSha256 = query.InstallationSha256 }
 
     let private installedOriginEnvelope (principal: TelemetryReceipt.Principal) (material: InstalledOriginMaterial) =
         let query = material.Query
@@ -843,8 +868,8 @@ module Operations =
     let private installedOrigin path config assessmentFor persist now =
         match Configuration.loadNativeCollectorInstallation path config with
         | Error errors -> Error errors
-        | Ok(installation, _) when installation.Schema <> "fsgg.telemetry.native-collector-installation/2" ->
-            Error [ "qualified native collector installation is unavailable" ]
+        | Ok(installation, _) when installation.Schema <> "fsgg.telemetry.native-collector-installation/3" ->
+            Error [ "verified native collector installation is unavailable" ]
         | Ok(installation, principal) ->
             match storeFor config principal.Scope.Workspace with
             | None -> Error [ "native collector workspace is unavailable" ]
@@ -946,7 +971,7 @@ module Operations =
                         ->
                         Error [ "native collector profile differs from durable admission" ]
                     | Ok resolved ->
-                        let qualified = installation.Schema = "fsgg.telemetry.native-collector-installation/2"
+                        let qualified = installation.Schema <> "fsgg.telemetry.native-collector-installation/1"
                         let artifactName =
                             digestBytes (Encoding.UTF8.GetBytes(String.concat "\n" [ dispatchId; parentThreadText; nativeAgent ]))
                             + (if qualified then ".capture.json" else ".envelope.json")

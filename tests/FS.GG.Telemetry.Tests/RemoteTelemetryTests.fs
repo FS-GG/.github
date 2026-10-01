@@ -1340,12 +1340,16 @@ exec /usr/bin/python3 "{patchedFixture}" "$@"
                 { Schema = if qualified then "fsgg.telemetry.native-collector-installation/2" else "fsgg.telemetry.native-collector-installation/1"
                   CredentialReference = "collector"
                   ExecutablePath = reader; CodexHome = codexHome; EvidenceRoot = evidenceRoot
-                  Provider = "openai"; Model = "fixture-model"; Effort = "medium" }
+                  Provider = "openai"; Model = "fixture-model"; Effort = "medium"; NativeVerifier = None }
             let installationJson value =
                 let node = JsonSerializer.SerializeToNode(value).AsObject()
+                node.Remove "NativeVerifier" |> ignore
                 if qualified then
                     node["ExecutableSha256"] <- System.Text.Json.Nodes.JsonValue.Create(
                         Convert.ToHexString(SHA256.HashData(File.ReadAllBytes reader)).ToLowerInvariant())
+                match value.NativeVerifier with
+                | Some verifier -> node["NativeVerifier"] <- JsonSerializer.SerializeToNode verifier
+                | None -> ()
                 node.ToJsonString()
             let installationPath =
                 privateFile "host.json.native-collector.json" (installationJson installation)
@@ -1431,6 +1435,9 @@ exec /usr/bin/python3 "{patchedFixture}" "$@"
                     File.WriteAllText(retainedFile, tamperedTurn.ToJsonString())
                     Assert.Equal(3, Operations.runWithAssessment exportCommand (fun _ -> TelemetryStore.ApprovedLocalDurable))
                     File.WriteAllBytes(retainedFile, retainedBytes)
+                    Assert.Equal(3, Operations.runWithAssessment
+                                        [| "collect-installed-origin"; "--config"; configPath |]
+                                        (fun _ -> TelemetryStore.ApprovedLocalDurable))
 
                     let hashBytes (bytes: byte array) =
                         Convert.ToHexString(SHA256.HashData bytes).ToLowerInvariant()
@@ -1469,54 +1476,82 @@ exec /usr/bin/python3 "{patchedFixture}" "$@"
                                providerExecutableSha256 = executableSha; adapterVersion = "fixture-adapter/1"
                                credentialScope = "fixture-read-only"; environmentAllowList = [| "PATH" |]
                                maximumRuntimeSeconds = 10; maximumStreamBytes = 65536
-                               requestedModel = installation.Model; requestedEffort = installation.Effort
+                               requestedModel = "gpt-test"; requestedEffort = installation.Effort
                                startedAt = observed; completedAt = observed; disposition = "advertised-supported"
                                detail = "requested-selection-advertised"; authenticationState = "authenticated"
                                authenticationProvenance = "installed-account"; evidenceSchema = "fsgg.learning-selection-evidence/1"
                                evidenceProvenance = "fixture"; evidenceObservedAt = observed; evidenceExpiresAt = expires
                                modelSessionStarts = 0; cleanup = cleanup |}
                     writeEvidence "fixed-native-capability-result.json" resultBytes |> ignore
-                    let captureDigest = String('c', 64)
-                    let captureBytes =
-                        serialize
-                            {| schema = "fsgg.learn.native-source-capture/1"
-                               outcome = "native-census-and-usage-reconciled-at-capture"
-                               rootThreadId = "11111111-1111-1111-1111-111111111111"
-                               limits = {| maximum = 1 |}; initialExchanges = [||]; confirmationExchanges = [||]
-                               rollouts = [||]
-                               projection =
-                                {| threads = [| {| provider = installation.Provider; model = installation.Model; effort = installation.Effort |} |]
-                                   turnUsage = [||] |}
-                               captureDigest = captureDigest |}
+                    let fixtureRoot = Path.Combine(__SOURCE_DIRECTORY__, "Fixtures", "NativeSource")
+                    let captureBytes = File.ReadAllBytes(Path.Combine(fixtureRoot, "capture.json"))
                     writeEvidence "native-source-capture.json" captureBytes |> ignore
-                    let verificationBytes =
-                        serialize
-                            {| schema = "fsgg.learn.native-source-verification/1"; status = "verified"
-                               outcome = "native-census-and-usage-reconciled-at-capture"; captureDigest = captureDigest
-                               missingDescendants = [||]; foreignDescendants = [||]; mismatchedThreads = [||]
-                               missingTurns = [||]; foreignTurns = [||]; missingUsage = [||]
-                               foreignUsage = [||]; mismatchedUsage = [||] |}
+                    let snapshotBytes = File.ReadAllBytes(Path.Combine(fixtureRoot, "snapshot.json"))
+                    let snapshotPath = writeEvidence "native-source-snapshot.json" snapshotBytes
+                    let verificationBytes = File.ReadAllBytes(Path.Combine(fixtureRoot, "verification.json"))
                     let verificationPath = writeEvidence "native-source-verification.json" verificationBytes
-                    privateFile
-                        "source-reference.json"
-                        (JsonSerializer.Serialize
-                            {| schema = "fsgg.telemetry.persistent-source-references/2"; profileSha256 = profileSha
-                               nativeSourceVolume = "fixture"; developmentTarget = "/fixture"
-                               collectorReadOnlyTarget = codexHome; readerProfileSha256 = profileSha
-                               captureQualified = true |})
-                    |> ignore
+                    let runtime = FileInfo("/usr/bin/python3").ResolveLinkTarget(true).FullName
+                    let modulePath = Path.GetFullPath(Path.Combine(__SOURCE_DIRECTORY__, "../../tools/learn_01_native_source.py"))
+                    let runtimeSha = hashBytes(File.ReadAllBytes runtime)
+                    let moduleSha = hashBytes(File.ReadAllBytes modulePath)
+                    let manifestBytes =
+                        [| runtime, FileInfo(runtime).Length, runtimeSha; modulePath, FileInfo(modulePath).Length, moduleSha |]
+                        |> Array.sortBy (fun (path, _, _) -> path)
+                        |> Array.map (fun (path, length, digest) -> {| path = path; bytes = length; sha256 = digest |})
+                        |> fun files ->
+                            serialize
+                                {| schema = "fsgg.telemetry.native-verifier-runtime/1"
+                                   sourceRevision = String('1', 40)
+                                   runtimeImageDigest = "sha256:" + hashBytes(Array.append (File.ReadAllBytes runtime) (File.ReadAllBytes modulePath))
+                                   runtimeExecutablePath = runtime; modulePath = modulePath; files = files |}
+                    let manifestPath = privateFile "native-verifier-runtime.json" (Encoding.UTF8.GetString manifestBytes)
+                    let manifestSha = hashBytes manifestBytes
+                    let verifier =
+                        { RuntimeExecutablePath = runtime; RuntimeExecutableSha256 = runtimeSha
+                          ModulePath = modulePath; ModuleSha256 = moduleSha
+                          RuntimeManifestPath = manifestPath; RuntimeManifestSha256 = manifestSha }
+                    let verifiedInstallation =
+                        { installation with Schema = "fsgg.telemetry.native-collector-installation/3"
+                                            Model = "gpt-test"; NativeVerifier = Some verifier }
+                    File.WriteAllText(installationPath, installationJson verifiedInstallation)
+                    let sourceReferencePath =
+                        privateFile
+                            "source-reference.json"
+                            (JsonSerializer.Serialize
+                                {| schema = "fsgg.telemetry.persistent-source-references/3"; profileSha256 = profileSha
+                                   nativeSourceVolume = "fixture"; developmentTarget = "/fixture"
+                                   collectorReadOnlyTarget = codexHome; readerProfileSha256 = profileSha
+                                   captureQualified = false; verifierRuntimeManifestSha256 = manifestSha |})
+                    let sidecarBytes = File.ReadAllBytes installationPath
                     privateFile
                         "host.json.native-collector.receipt.json"
                         (JsonSerializer.Serialize
-                            {| schema = "fsgg.telemetry.native-collector-installation-receipt/2"; status = "installed"
+                            {| schema = "fsgg.telemetry.native-collector-installation-receipt/3"; status = "installed"
                                ownerUid = 0; hostConfigSha256 = hashBytes(File.ReadAllBytes configPath)
-                               sidecarSha256 = hashBytes(File.ReadAllBytes installationPath); executableSha256 = executableSha
+                               sidecarSha256 = hashBytes sidecarBytes; executableSha256 = executableSha
                                credentialReference = installation.CredentialReference; workspaceId = collectorScope.Workspace
                                producerId = collectorScope.Producer; streamId = collectorScope.Stream
                                grantId = collector.GrantId.Value; grantGeneration = collector.GrantGeneration.Value
                                sourceVerification = "unknown"; snapshotOrigin = "unknown"
-                               sharedCostCompleteness = "unknown"; activationAuthorized = false |})
+                               sharedCostCompleteness = "unknown"; activationAuthorized = false
+                               sourceReferenceSha256 = hashBytes(File.ReadAllBytes sourceReferencePath)
+                               verifierRuntimeManifestSha256 = manifestSha |})
                     |> ignore
+                    let installedSidecarBytes = File.ReadAllBytes installationPath
+                    let assertInstallationUnavailable (mutate: JsonObject -> unit) =
+                        let candidate = JsonNode.Parse(installedSidecarBytes).AsObject()
+                        mutate candidate
+                        File.WriteAllText(installationPath, candidate.ToJsonString())
+                        Assert.True(Configuration.loadNativeCollectorInstallation configPath config |> Result.isError)
+                        File.WriteAllBytes(installationPath, installedSidecarBytes)
+                    assertInstallationUnavailable (fun candidate ->
+                        candidate["NativeVerifier"]["RuntimeExecutablePath"] <-
+                            JsonValue.Create(Path.Combine(root, "missing-runtime")))
+                    assertInstallationUnavailable (fun candidate ->
+                        candidate["NativeVerifier"]["RuntimeManifestPath"] <-
+                            JsonValue.Create(Path.Combine(root, "missing-manifest")))
+                    assertInstallationUnavailable (fun candidate ->
+                        candidate["NativeVerifier"]["ModuleSha256"] <- JsonValue.Create(String('0', 64)))
                     let captureOutput instant (argv: string array) =
                         let current = Console.Out
                         use writer = new StringWriter()
@@ -1543,6 +1578,28 @@ exec /usr/bin/python3 "{patchedFixture}" "$@"
                             (fun _ -> failwith "unexpected native delivery transport")
                     Assert.Equal(3, readAt (DateTimeOffset.Parse expires))
                     Assert.Equal(3, readAt ((DateTimeOffset.Parse expires).AddTicks(1L)))
+                    File.Move(snapshotPath, snapshotPath + ".held")
+                    Assert.Equal(3, readAt fixedNow)
+                    File.Move(snapshotPath + ".held", snapshotPath)
+                    let changedCapture = JsonNode.Parse(captureBytes).AsObject()
+                    let changedProjection = changedCapture["projection"].AsObject()
+                    let changedThreads = changedProjection["threads"].AsArray()
+                    let changedThread = changedThreads[0].AsObject()
+                    changedThread["provider"] <- JsonValue.Create "forged-provider"
+                    changedCapture.Remove "captureDigest" |> ignore
+                    let changedDigest =
+                        CanonicalJson.canonicalize(Encoding.UTF8.GetBytes(changedCapture.ToJsonString()))
+                        |> Result.map Encoding.UTF8.GetBytes
+                        |> Result.map hashBytes
+                        |> Result.defaultWith failwith
+                    changedCapture["captureDigest"] <- JsonValue.Create changedDigest
+                    let plausibleVerification = JsonNode.Parse(verificationBytes).AsObject()
+                    plausibleVerification["captureDigest"] <- JsonValue.Create changedDigest
+                    File.WriteAllText(Path.Combine(evidenceRoot, "native-source-capture.json"), changedCapture.ToJsonString())
+                    File.WriteAllText(verificationPath, plausibleVerification.ToJsonString())
+                    Assert.Equal(3, readAt fixedNow)
+                    File.WriteAllBytes(Path.Combine(evidenceRoot, "native-source-capture.json"), captureBytes)
+                    File.WriteAllBytes(verificationPath, verificationBytes)
                     let changedVerification = JsonNode.Parse(verificationBytes).AsObject()
                     changedVerification["status"] <- JsonValue.Create "unverified"
                     File.WriteAllText(verificationPath, changedVerification.ToJsonString())
@@ -1565,6 +1622,58 @@ exec /usr/bin/python3 "{patchedFixture}" "$@"
             Assert.Equal(2, observations.Length)
             Assert.All(observations, fun row -> Assert.Equal("native-collector", row.GetProperty("receipt_role").GetString()))
             Assert.All(observations, fun row -> Assert.Equal("collector-grant", row.GetProperty("receipt_grant_id").GetString()))
+        finally
+            if Directory.Exists root then Directory.Delete(root, true)
+
+    [<Fact>]
+    let ``native source verifier bounds processes and removes private copies`` () =
+        let root = Path.Combine(Path.GetTempPath(), "native-source-verifier-" + Guid.NewGuid().ToString("N"))
+        Directory.CreateDirectory root |> ignore
+        File.SetUnixFileMode(root, UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute)
+        try
+            let fixtureRoot = Path.Combine(__SOURCE_DIRECTORY__, "Fixtures", "NativeSource")
+            let capture = File.ReadAllBytes(Path.Combine(fixtureRoot, "capture.json"))
+            let snapshot = File.ReadAllBytes(Path.Combine(fixtureRoot, "snapshot.json"))
+            let verification = File.ReadAllBytes(Path.Combine(fixtureRoot, "verification.json"))
+            let hash (bytes: byte array) = Convert.ToHexString(SHA256.HashData bytes).ToLowerInvariant()
+            let privateFile name (bytes: byte array) executable =
+                let path = Path.Combine(root, name)
+                File.WriteAllBytes(path, bytes)
+                File.SetUnixFileMode(path,
+                    UnixFileMode.UserRead ||| UnixFileMode.UserWrite |||
+                    (if executable then UnixFileMode.UserExecute else enum 0))
+                path
+            let modulePath = Path.GetFullPath(Path.Combine(__SOURCE_DIRECTORY__, "../../tools/learn_01_native_source.py"))
+            let limits: NativeSourceVerification.Limits =
+                { Timeout = TimeSpan.FromMilliseconds 200.; StdoutBytes = 1024; StderrBytes = 1024 }
+            let run index body =
+                let runtime = privateFile ($"runtime-{index}.sh") (Encoding.UTF8.GetBytes("#!/bin/sh\n" + body + "\n")) true
+                let runtimeBytes, moduleBytes = File.ReadAllBytes runtime, File.ReadAllBytes modulePath
+                let entries =
+                    [| runtime, runtimeBytes; modulePath, moduleBytes |]
+                    |> Array.sortBy fst
+                    |> Array.map (fun (path, bytes) -> {| path = path; bytes = int64 bytes.Length; sha256 = hash bytes |})
+                let manifestBytes =
+                    JsonSerializer.SerializeToUtf8Bytes
+                        {| schema = "fsgg.telemetry.native-verifier-runtime/1"; sourceRevision = String('2', 40)
+                           runtimeImageDigest = "sha256:" + hash(Array.append runtimeBytes moduleBytes)
+                           runtimeExecutablePath = runtime; modulePath = modulePath; files = entries |}
+                let manifest = privateFile ($"manifest-{index}.json") manifestBytes false
+                let verifier =
+                    { RuntimeExecutablePath = runtime; RuntimeExecutableSha256 = hash runtimeBytes
+                      ModulePath = modulePath; ModuleSha256 = hash moduleBytes
+                      RuntimeManifestPath = manifest; RuntimeManifestSha256 = hash manifestBytes }
+                Assert.Equal(
+                    Error [ "native source verification unavailable" ],
+                    NativeSourceVerification.verifyRetainedWithLimits limits verifier root capture snapshot verification)
+                Assert.Empty(Directory.GetDirectories(root, ".native-source-verification-*"))
+            run 1 "exit 7"
+            run 2 "/usr/bin/head -c 2048 /dev/zero"
+            run 3 "/usr/bin/head -c 2048 /dev/zero >&2; exit 7"
+            run 4 "printf '{}{}'"
+            let started = Stopwatch.StartNew()
+            run 5 "/usr/bin/sleep 5"
+            Assert.True(started.Elapsed < TimeSpan.FromSeconds 2.)
         finally
             if Directory.Exists root then Directory.Delete(root, true)
 
@@ -1629,8 +1738,9 @@ exec /usr/bin/python3 "{patchedFixture}" "$@"
             let installation =
                 { Schema = "fsgg.telemetry.native-collector-installation/2"; CredentialReference = "collector"
                   ExecutablePath = executable; CodexHome = codexHome; EvidenceRoot = evidence
-                  Provider = "openai"; Model = "fixture-model"; Effort = "medium" }
+                  Provider = "openai"; Model = "fixture-model"; Effort = "medium"; NativeVerifier = None }
             let installNode = JsonSerializer.SerializeToNode(installation).AsObject()
+            installNode.Remove "NativeVerifier" |> ignore
             installNode["ExecutableSha256"] <- System.Text.Json.Nodes.JsonValue.Create(
                 Convert.ToHexString(SHA256.HashData(File.ReadAllBytes executable)).ToLowerInvariant())
             privateFile "host.json.native-collector.json" (installNode.ToJsonString()) (UnixFileMode.UserRead ||| UnixFileMode.UserWrite) |> ignore
