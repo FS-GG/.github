@@ -162,8 +162,9 @@ def inspect_networks(value: dict, expected: set[str]) -> None:
     networks = set((value.get("NetworkSettings", {}).get("Networks") or {}).keys())
     require(networks == expected, "container-network-set-refused")
     host = value["HostConfig"]
-    require(host.get("NetworkMode") not in {"host", "default", "bridge", "slirp4netns", "pasta"},
-            "direct-network-route-refused")
+    # Podman 4.9 records user-defined networks separately while NetworkMode reports
+    # their common bridge backend.  The exact attachment set above is authoritative.
+    require(host.get("NetworkMode") == "bridge", "direct-network-route-refused")
 
 
 def inspect_native(value: dict) -> None:
@@ -210,9 +211,9 @@ def receiver_inspection_projection(value: dict, refusal: str) -> dict:
     network_names = set(networks)
     expected_networks = {NATIVE_NETWORK, COLLECTOR_NETWORK}
     mode = host.get("NetworkMode")
-    if mode == COLLECTOR_NETWORK:
-        mode_category = "expected"
-    elif isinstance(mode, str) and mode in {"host", "default", "bridge", "slirp4netns", "pasta"}:
+    if mode == "bridge":
+        mode_category = "bridge"
+    elif isinstance(mode, str) and mode in {"host", "default", "slirp4netns", "pasta"}:
         mode_category = "direct"
     elif isinstance(mode, str) and mode:
         mode_category = "other"
