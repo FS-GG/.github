@@ -122,6 +122,19 @@ actual twelve-asset census, facts, grant, native qualification, publication and 
 open. The original producer's eleven genuine roles and published 0.2.0 artifacts remain retained;
 this source delivery establishes no new private upload, grant or native acceptance.
 
+**2026-10-02: LEARN W6 C1 durable learning-owner queries delivered; installed composition remains open.**
+[Coordination PR #920](https://github.com/FS-GG/FS.GG.Coordination/pull/920) merged on protected main
+as `f243b6a2d16d7e504e6a1cb62cecb9ef98996c2d`, tree
+`efdd0ff685d8bd737552a9d40fd62eeb04707ce4`, equal to qualified `9bacd83`.
+The full [bootstrap gate](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36930690234)
+and [coherent optimistic validation](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36930690256)
+passed. The F# PostgreSQL owner projection binds persisted assignment/attempt/generation and treatment
+identity, includes durable revision and exact retained bytes in dispatch identity, and bounds individual
+and aggregate payloads before decoding. Disposable PostgreSQL key/revision/restart and corruption controls
+passed; twelve query-shape bounds were independently checked. Existing canonical C3 state authority is
+unchanged. This closes source delivery only: installed composition, genuine grant/enrollment and complete
+observation/cost coverage remain open; selected V2 platform acceptance remains complete.
+
 **2026-10-01: LEARN executable custody reader source delivered; installed qualification remains open.**
 [Coordination #918](https://github.com/FS-GG/FS.GG.Coordination/pull/918) merged at
 `4be1226aedbd6115fc228c3828e4956a7db4e96f`, tree
