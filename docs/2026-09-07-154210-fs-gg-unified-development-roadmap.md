@@ -53,6 +53,19 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**FourD private-runroot fixture source delivered; native acceptance remains open.**
+[FourD PR #24](https://github.com/FS-GG/FS.GG.FourD/pull/24) merged at
+`9be2bd10966cbf052f5ba49666bc8656bac666d7`, tree
+`f73886212d0e937bf3775b414415d2e3038fd75b`, independently equal to candidate
+`7a87834e7905adacd3e76c12602f3033f6a4fb53`. Full
+[verification 36798681919](https://github.com/FS-GG/FS.GG.FourD/actions/runs/36798681919)
+and source preparation passed. Actual prior native run 36797425004 stopped at a static
+fixture before Podman: hosted `umask 077` made a requested 0755 directory private 0700,
+which the unchanged production guard correctly accepted. The fixture now explicitly sets
+and asserts 0755 before checking refusal; all 21 source checks passed under both umasks.
+A fresh protected native image run, runtime BIND, cancellation/interruption recovery,
+installed adoption and human acceptance remain separate, open gates.
+
 **V2-HOST-01.8 bounded zero-auth diagnostics delivered; native cause remains unknown.**
 Source `c0acd6c94a3b464c364b0f81a38b1e254fa8aad1` retains at most 4096 bytes of
 printable stderr only for the three fixed, empty, zero-auth readonly container probes.
