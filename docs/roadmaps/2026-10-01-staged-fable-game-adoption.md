@@ -1,9 +1,11 @@
 # Staged Fable game foundation adoption
 
-**FABLE-ADOPT-01 — planned on 2026-10-01.** Fold reusable findings from FourD, SC2 and BAR into
-their owning FS-GG producers, qualify the `fable-game` template as the reference consumer, then
+**FABLE-ADOPT-01 — Stage .1 accepted on 2026-10-01; Stages .2–.7 planned.** Fold
+reusable findings from FourD, SC2 and BAR into their owning FS-GG producers, qualify the `fable-game` template as the reference consumer, then
 adopt its shared dependencies and conventions incrementally in the three existing products.
-This document records the proposed delivery sequence; implementation and adoption remain open.
+The [Stage .1 disposition](evidence/fable-adopt-01.1-inventory-disposition-20261001.md) records
+the accepted source inventory and ownership decisions. Implementation, publication, installed
+qualification and adoption remain open.
 
 The [unified roadmap](../2026-09-07-154210-fs-gg-unified-development-roadmap.md#992-staged-fable-game-foundation-adoption)
 indexes this independent product track. It adds no gate to the already accepted V2 platform profile
@@ -55,33 +57,38 @@ still needs a reproducer before becoming an upstream defect claim.
 
 Templates composes the foundation; it does not become the owner of duplicated runtime policy.
 Net, Audio, SDD or Coordination receive work only when triage demonstrates a gap in their contracts.
+Administrative and qualification contracts should derive an F#-validated descriptor and model state
+changes in Quint. The separately planned `OPS-TYPED-01` track owns that parallel operational work
+after fresh Astra review; it is not an existing replacement or a Rendering/Game responsibility.
 When implementation is selected, use the existing producer/receiver coordination route with explicit
 dependencies. This planning entry creates no issues, dispatch or release effects.
 
 ## Stages and exit evidence
 
-All stages are **planned**. A source merge, published package, generated workspace and installed
-product acceptance are separate results; record each exact identity when it exists.
+Stage .1 is **accepted at source** by this documentation delivery; Stages .2–.7 remain **planned**.
+A source merge, published package, generated workspace and installed product acceptance are separate
+results; record each exact identity when it exists.
 
 | Stage | Deliverable and owner | Dependencies | Completion condition |
 |---|---|---|---|
-| **.1 — Inventory and disposition** | `.github` planning owner with producer/product owners: findings-to-owner matrix, current API/package inventory and proposed common browser contract | Inspected product findings and existing Game/Rendering capabilities | Every selected finding has a reproducer or an explicit evidence gap, one owner and an upstream/adoption/product disposition; retain product acceptance baselines |
-| **.2 — Upstream repairs and capability gaps** | Rendering and Game implement only admitted shared changes; operational owners implement their separate fixes | .1 disposition for each change | Shared tests reproduce the reported failure and pass the repair through the relevant .NET/Fable/browser route; compatibility and sibling applicability are documented |
+| **.1 — Inventory and disposition — accepted source** | `.github` planning owner with producer/product owners: [findings-to-owner matrix, current API/package inventory and proposed common browser contract](evidence/fable-adopt-01.1-inventory-disposition-20261001.md) | Inspected product findings and existing Game/Rendering capabilities | Accepted matrix assigns every selected finding a reproducer or explicit evidence gap, one owner and an upstream/adoption/product disposition while retaining product acceptance baselines |
+| **.2 — Upstream repairs and capability gaps** | Rendering and Game implement only admitted shared changes; operational owners implement their separate fixes | .1 disposition for each change | An admitted capability gap has a reviewed contract and source tests; a defect has a reproducer that passes its repair through the relevant .NET/Fable/browser route; compatibility and sibling applicability are documented |
 | **.3 — Reference template composition** | Templates composes the qualified APIs, examples and build/test conventions into `fable-game` | .1 contract and relevant .2 source | A candidate generated workspace renders, maps input, replaces a session and disposes resources through the shared APIs; extensions cover product projection, semantic commands, external authority and WASM transport |
 | **.4 — Coherent publication and installed qualification** | Producer release owners publish the compatible set; Templates publishes and qualifies the reference consumer | .2 and .3 candidate qualification | Exact package/template bytes are read back from required feeds; a fresh installed workspace compiles with Fable and runs browser conformance using delivered F# and native JavaScript. Qualify any retained upgrade promise separately |
 | **.5 — FourD pilot** | FourD adopts one complete encounter incrementally, then its selected browser surface | .4 published set | The encounter uses shared presentation/input/lifecycle with thin product adapters; existing saves/replay, four-axis projections, accessible controls and gameplay parity pass through the actual product entry |
 | **.6 — SC2 and BAR adoption** | SC2 and BAR owners migrate their selected browser surfaces in separate lanes | .5 confirms the common contract; relevant producer repairs are published | Each production browser path uses the qualified shared foundation; native authority, guest/WASM ABI, input meaning and accepted behaviors remain correct. Product-native acceptance stays separately reported |
 | **.7 — Remove superseded infrastructure** | Product owners remove replaced browser policy; Templates/producer owners reconcile documentation and dependency conventions | Each product's .5/.6 parity and adoption evidence | No active path retains a second implementation of the replaced shared policies; package pins, build/test conventions, extension documentation and ownership agree |
 
-The first implementation window is .1 and the smallest FourD-shaped template slice needed to
-resolve its contract. Keep later product migration touch-sets as outlines until that boundary is
-qualified. Close the programme only after all three selected product surfaces and their installed
-adoption evidence pass; keep unresolved product gameplay qualification visible under its own plan.
+Stage .1 closes only the inventory and disposition. The first source implementation window remains
+pending: admitted Stage .2 capability work where needed, followed by the smallest FourD-shaped
+template slice under Stage .3. Keep later product migration touch-sets as outlines until that
+boundary is qualified. Close the programme only after all three selected product surfaces and their
+installed adoption evidence pass; keep unresolved product gameplay qualification visible under its own plan.
 
 ## Parallel work and sequencing
 
-Inventory the three products concurrently. After .1, independent Rendering, Game and operational
-changes can proceed in disjoint touch-sets, while Templates prepares candidate composition against
+The Stage .1 inventory covers the three products. After .1, independent Rendering, Game and
+operational changes can proceed in disjoint touch-sets, while Templates prepares candidate composition against
 the declared contract. Publish producers before consumers adopt their changed dependencies.
 Coherent publication may batch compatible changes; it must not hide unrelated product behavior.
 

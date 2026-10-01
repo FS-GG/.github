@@ -1,0 +1,256 @@
+{
+  "schema": "fsgg.fable-adopt.current-source-inventory/v1",
+  "generatedAt": "2026-10-01T18:03:44+02:00",
+  "scope": "FABLE-ADOPT-01.1 source and public-package inventory; no installed-state claim",
+  "plan": {
+    "repository": "https://github.com/FS-GG/.github",
+    "commit": "4a7acff8ee5d1c6586a7443f3b01cabf77723e01",
+    "tree": "5d9098847fc0748cd5a94f7c848458f6d7ebd281",
+    "path": "docs/roadmaps/2026-10-01-staged-fable-game-adoption.md",
+    "sha256": "8825aa7b12443fd58bcad3f8857d0ee44ca72cb25da9403d0cde16d7d8a821d2"
+  },
+  "repositories": {
+    "Rendering": {
+      "url": "https://github.com/FS-GG/FS.GG.Rendering",
+      "commit": "be57d2927d10b7f9defca8c45f8e0971de0abddc",
+      "tree": "59cd344ece1d6229a1fb16dd27936cf689fbe268",
+      "selectedFiles": [
+        {
+          "path": "src/Scene.SvgBrowser/SvgBrowser.fsi",
+          "gitBlob": "0d85c7202e6749e746e7fbd86bdcc31a40268642",
+          "sha256": "8509ef4aba5a4da39dfcac24ab8c2fb6b2f3b84a11e16a2970608ed49686d856",
+          "bytes": 3865
+        },
+        {
+          "path": "src/Scene.SvgBrowser/SvgInputHost.fsi",
+          "gitBlob": "fcdcd8575b5d94b3a15ba4990ec0cdaf1385b684",
+          "sha256": "2fc97531a6a0d3a186fb69fe9a212aad3c98d78633dca9cceedd0b8159d636b8",
+          "bytes": 3322
+        },
+        {
+          "path": "src/Scene.SvgBrowser/SvgSessionHost.fsi",
+          "gitBlob": "d7afd201066fe41735dc1a6073bb17894d245e37",
+          "sha256": "cbed03531b75ab848ad896094a959d72781193a5cc334902280c96762bbbdc52",
+          "bytes": 4454
+        },
+        {
+          "path": "src/Scene.SvgBrowser/Fable/FS.GG.UI.Scene.SvgBrowser.fsproj",
+          "gitBlob": "c2802b486870afb65c100e655546ccd2ab0002ca",
+          "sha256": "e5902b74e101d5de44e30d6d896513be55c62f8f1d4bcb4af1cc025e8f40cda6",
+          "bytes": 1087
+        },
+        {
+          "path": "template/base/Directory.Packages.props",
+          "gitBlob": "c8f194463d21bffb273a5dc6e65901e14b4c9337",
+          "sha256": "47554bb5d6b014f532bba3e3ed7c6ab2ee52fe2fcf99bc5c4a66fe986bafd701",
+          "bytes": 9133
+        }
+      ]
+    },
+    "Game": {
+      "url": "https://github.com/FS-GG/FS.GG.Game",
+      "commit": "6e2558d811037104b0984d17e19a05dfe5a38421",
+      "tree": "930016adfe4278a972939764feb164bcced37249",
+      "selectedFiles": [
+        {
+          "path": "src/Game.Render/FS.GG.Game.Render.fsproj",
+          "gitBlob": "650e0ed3bc4013653c53c4e4732ebb27b3dc6b0c",
+          "sha256": "34f0267b063441e0f4e8768fee56545e7aaa7b2f85d1a4135290254c76667cf6",
+          "bytes": 1779
+        },
+        {
+          "path": "src/Game.Render/Adapter.fsi",
+          "gitBlob": "561612fdc2620aa02eac3c9fcfcd04c219acf0e8",
+          "sha256": "611aaca7d03a057452b459342edf476ab868d27422faba4de6bd6e17607381a0",
+          "bytes": 4210
+        },
+        {
+          "path": "src/Game.Render/DefaultKeymap.fsi",
+          "gitBlob": "ce18692606d9a683a6b9d64791795ddb2eab9a64",
+          "sha256": "dba808b60fd1072c2a3b556b9e8d4c121906f304265ffae03adcf451a82260af",
+          "bytes": 2481
+        },
+        {
+          "path": "src/Game.Core/SessionRuntime.fsi",
+          "gitBlob": "671b44f64c1c53d2e08993c7c0f2b2d6762c2fbd",
+          "sha256": "ee4efd2afc60480a98e2c1dee0042e7a137ebd164c7429ca9bcb8b36b90da736",
+          "bytes": 3696
+        }
+      ]
+    },
+    "Templates": {
+      "url": "https://github.com/FS-GG/FS.GG.Templates",
+      "commit": "cfe37f35a66e3494b211197a1c84de69f08bf87e",
+      "tree": "006553d8a59b6fef729553ed6b3093d94471dd27",
+      "selectedFiles": [
+        {
+          "path": "FS.GG.Templates.csproj",
+          "gitBlob": "d94257e4c91db0081f5c1f649f0d9f26549b34a5",
+          "sha256": "cf7c4ed2708783af4a59bb055c39e639ef540fec696a2e30c81e9bb921ce28b9",
+          "bytes": 15874
+        },
+        {
+          "path": "providers/fable-game.providers.yml",
+          "gitBlob": "72605169258eb8b2e4b404063368c78142baa79e",
+          "sha256": "16326925cd728a833cc2a1febc0ab2865ea5120047fe8a1d56ee499aed68161a",
+          "bytes": 2839
+        },
+        {
+          "path": "templates/fs-gg-fable-game/SvgFoundation/SvgFoundation.fsproj",
+          "gitBlob": "1b67fc44c33b2e003745062bfc8d78c2fe767655",
+          "sha256": "e2f46c028769eed1a438d1267d7dcc11b734b0f57bee0de727b550a8053e427f",
+          "bytes": 5131
+        },
+        {
+          "path": "templates/fs-gg-fable-game/SvgFoundation/ArcadeExample.fs",
+          "gitBlob": "d5fa83054b051acc1a8c9e23b239ce628be8c215",
+          "sha256": "4c4d19dbd41af311047c800efdaabe232edcb39c01d8992ed6aecdd84fc99aa3",
+          "bytes": 20179
+        },
+        {
+          "path": "templates/fs-gg-fable-game/Browser.Tests/two-client.spec.ts",
+          "gitBlob": "7d1bdcde916dc7e7e93e87801d8a5e2af140ed88",
+          "sha256": "03a9d301542e1de248ced804d9489e2e5b1c5c540bc87ac63a85a44c753e3669",
+          "bytes": 57827
+        }
+      ]
+    },
+    "FourD": {
+      "url": "https://github.com/FS-GG/FS.GG.FourD",
+      "commit": "60f2a41eeaf22325b6af7a264791c79644c6fb6d",
+      "tree": "713db27cb5a39e5896f7ddd82f222b26b6dbe984",
+      "selectedFiles": [
+        {
+          "path": "src/FS.GG.FourD.Browser/FS.GG.FourD.Browser.fsproj",
+          "gitBlob": "7afacd462faf1d07cb8bce0605f3aba83f31228e",
+          "sha256": "4903175d0aa4783206c7615a7cea069940bfb69e0159e925a256337e5c1eab91",
+          "bytes": 445
+        },
+        {
+          "path": "src/FS.GG.FourD.Browser/BrowserBridge.fs",
+          "gitBlob": "e6ab5c0dd564063a09ad5024b5d74625713b3f6c",
+          "sha256": "1162a954c2dbea87c1dd2b6a557dd6d2bb4af5711d5a0ee46b04bcd19ae16549",
+          "bytes": 31984
+        },
+        {
+          "path": "src/FS.GG.FourD.Browser/Program.fs",
+          "gitBlob": "b838b541f51b64d6ca18f8189d1b837a6d941398",
+          "sha256": "f0da819256c3b3a5281dbba7bab681f439894681478c943d2ed45e611100f6e6",
+          "bytes": 238
+        },
+        {
+          "path": "web/interaction.mjs",
+          "gitBlob": "63a2f67472d0e18afd1492c516c79cd72e89f837",
+          "sha256": "1edf9244ffc699f68684b56df7abb16eef3dd037b8d43fe286c4b5b8cdafc6d3",
+          "bytes": 25001
+        }
+      ]
+    },
+    "SC2": {
+      "url": "https://github.com/FS-GG/FS.GG.SC2.Client",
+      "commit": "e1f3fe8cdaca33a2c2e29c1aca6091b5f0a2633e",
+      "tree": "79ff99d0644cb7accab85dfb9b16924df2b32973",
+      "selectedFiles": [
+        {
+          "path": "src/SC2.Client.Browser/SC2.Client.Browser.fsproj",
+          "gitBlob": "aebcaaceb47a799b463e3ac87688a6a43b2234da",
+          "sha256": "78228c24b04777df99d9f9851828cccb69b5d28120ef8942151ccf29ec119ec2",
+          "bytes": 856
+        },
+        {
+          "path": "src/SC2.Client.Browser/Live.fs",
+          "gitBlob": "b80d9319ee255bd8a4f7ab7e91b7c1dc087b0598",
+          "sha256": "54c46dd2415cac03cae1ef3d66bffe7f3f80eecb5da745f649f9b161329b6ff0",
+          "bytes": 122516
+        },
+        {
+          "path": "src/SC2.Client.Browser/Tactical.fs",
+          "gitBlob": "834f8ce2922bf0af086c57b34ce1ca8506e4117b",
+          "sha256": "7a715028cc1f52b2831c371443e2872ab53277ac6c5a132ce0143a0e40f18e36",
+          "bytes": 45571
+        },
+        {
+          "path": "src/SC2.Client.Browser/RecordingIntegration.js",
+          "gitBlob": "d3aa7b44b93d2bc73f619dce3a6620279fc36ed3",
+          "sha256": "4f20033c7f928957f98b67f716944f58cfc2d32a768cd16ffbb237fc64e1fca3",
+          "bytes": 1418
+        }
+      ]
+    },
+    "BAR": {
+      "url": "https://github.com/FS-GG/FSBarV2",
+      "commit": "bcba08f6dcc100d0bfcde4c9416a8f1101dedb82",
+      "tree": "3b63c26b925e7a0d0989d56de4bc317158790e77",
+      "selectedFiles": [
+        {
+          "path": "src/Broker.Browser.Client/Broker.Browser.Client.fsproj",
+          "gitBlob": "3ab2594f47345b17ddf689bddb651ed9d71cabdc",
+          "sha256": "961be2b61582b86fa93806151993f1153405b030de9a61ce503aa89541196447",
+          "bytes": 564
+        },
+        {
+          "path": "src/Broker.Browser.Client/live-runtime.js",
+          "gitBlob": "268c6067045907dc533ce540e4376f18a53f88a1",
+          "sha256": "2177e595505ae40dec6687c38e86c20e6def1e2ecd56fe3863d3501ae4ff93b8",
+          "bytes": 63923
+        },
+        {
+          "path": "src/Broker.Browser.Client/runtime.js",
+          "gitBlob": "e7d1f8a4f2b9fca1819358a44ed7087458733d2a",
+          "sha256": "512903db9376898c8111e15f2174dfba9b8ceadbf54a8fb3ddf0b60a40037f24",
+          "bytes": 29941
+        },
+        {
+          "path": "docs/roadmaps/evidence/barc-01.5-development-audit-20261001.md",
+          "gitBlob": "617d4f2048954180b44d6ea44727fbf3071e5b31",
+          "sha256": "b74b5d065d163d4cfe254cfc27a81d1b6c161e716c73ac7b03a7dbe8ebec3e8f",
+          "bytes": 8607
+        }
+      ]
+    }
+  },
+  "publicPackagesObserved": {
+    "source": "https://api.nuget.org/v3-flatcontainer/{lower-id}/index.json",
+    "observedOn": "2026-10-01",
+    "packages": [
+      {
+        "id": "FS.GG.UI.Scene",
+        "latest": "0.31.0"
+      },
+      {
+        "id": "FS.GG.UI.Scene.SvgBrowser",
+        "latest": "0.31.0"
+      },
+      {
+        "id": "FS.GG.UI.KeyboardInput",
+        "latest": "0.31.0"
+      },
+      {
+        "id": "FS.GG.Game.Core",
+        "latest": "0.16.0"
+      },
+      {
+        "id": "FS.GG.Game.Render",
+        "latest": "0.16.0"
+      },
+      {
+        "id": "FS.GG.Workspace.Template",
+        "latest": "0.15.0"
+      }
+    ],
+    "githubPackages": "unknown: bounded public/read-only observation did not return package-version evidence; no inference from source or GitHub Releases",
+    "installedState": "unknown: this window did not inspect any installed consumer"
+  },
+  "templateCandidate": {
+    "sourceVersion": "0.16.0",
+    "publicNugetLatest": "0.15.0",
+    "providerSource": "FS.GG.Workspace.Template::0.15.0",
+    "disposition": "0.16.0 is source candidate only; Stage .4 publication and fresh installed qualification remain open"
+  },
+  "packageLocks": {
+    "FS.GG.UI.Scene/0.31.0": "dVTWndymoCm70yhVNDEejsvHIAKeL122RnOmRKd8wgGFtyskMvruie2dUJgqkdK8e4pobULfgwyFrNJv32zNFA==",
+    "FS.GG.UI.Scene.SvgBrowser/0.31.0": "MCaSCkJWdt8UfwNAcgNw8KRgHTzYotLCzf5ThHSc3xEbxpK7SeUSkfEz8k02aXiTHtwjdgXzOU0QynOCIappcg==",
+    "FS.GG.UI.KeyboardInput/0.31.0": "SaxeJjtdPZDT9a8JTlmEEyQHfyvx8lxIPW7P39gh8GLYqRmP4WTMol4iEEcw4aetI9vFONy1EhDj+Ei4UTQgSg==",
+    "FS.GG.Game.Core/0.16.0": "mn66KeVyqj0kphAn8Nm11GbEUbmGcO28uRMFiuX6FdQv87Zvv4kXTV7MqwTVeH3GQtA2Nna56Okd6IaCSHH6Bg=="
+  }
+}
