@@ -302,6 +302,9 @@ class NativeOperationTests(unittest.TestCase):
                                               "output": '{"task_name":"/root/native_ack"}',
                                               "internal_chat_message_metadata_passthrough":stamp("turn-parent")}),
                            ("response_item", wait_call),
+                           ("event_msg", completed_item(PARENT,"turn-parent",{"type":"SubAgentActivity",
+                                          "id":"subagent-completed-turn-child","kind":"completed",
+                                          "agent_thread_id":CHILD,"agent_path":"/root/native_ack"})),
                            ("inter_agent_communication_metadata", {"trigger_turn":False}),
                            ("response_item", agent_message("parent-completion","turn-parent","/root/native_ack","/root",completion)),
                            ("event_msg", completed_item(PARENT,"turn-parent",{"type":"CollabAgentToolCall","id":"call-wait",
@@ -314,10 +317,7 @@ class NativeOperationTests(unittest.TestCase):
                            ("event_msg", completed_reasoning(PARENT,"turn-parent","parent-reasoning","PRIVATE-PARENT-SENTINEL")),
                            ("response_item", message("parent-ack","turn-parent","assistant","output_text","NATIVE-PARENT-ACK","final_answer")),
                            ("event_msg", completed_message(PARENT,"turn-parent","parent-ack","NATIVE-PARENT-ACK")),
-                           ("event_msg", {"type": "turn_complete", "turn_id": "turn-parent", "last_agent_message": "NATIVE-PARENT-ACK", "error": None}),
-                           ("event_msg", completed_item(PARENT,"turn-parent",{"type":"SubAgentActivity",
-                                          "id":"subagent-completed-turn-child","kind":"completed",
-                                          "agent_thread_id":CHILD,"agent_path":"/root/native_ack"}))]
+                           ("event_msg", {"type": "turn_complete", "turn_id": "turn-parent", "last_agent_message": "NATIVE-PARENT-ACK", "error": None})]
         child_meta = {**parent_meta, "id": CHILD, "parent_thread_id": PARENT, "agent_path": "/root/native_ack",
                       "source": {"subagent": {"thread_spawn": {"parent_thread_id": PARENT, "depth": 1,
                                                                    "agent_path": "/root/native_ack"}}}}
@@ -433,15 +433,33 @@ class NativeOperationTests(unittest.TestCase):
         def malformed(rows): completed_activity(rows)[1]["item"]["agent_thread_id"]={}
         def duplicate(rows):
             index,_event=completed_activity(rows);rows.insert(index+1,json.loads(json.dumps(rows[index])))
-        def before_completion(rows):
+        def before_started_activity(rows):
             index,_event=completed_activity(rows);record=rows.pop(index)
-            communication=next(index for index,row in enumerate(rows) if row["type"]=="inter_agent_communication_metadata")
-            rows.insert(communication,record)
-        for mutation in (wrong_child,wrong_path,wrong_turn,wrong_kind,malformed,duplicate,before_completion):
+            started=next(index for index,row in enumerate(rows)
+                         if row["type"]=="event_msg" and row["payload"].get("type")=="item_completed"
+                         and row["payload"].get("item",{}).get("type")=="SubAgentActivity"
+                         and row["payload"]["item"].get("kind")=="started")
+            rows.insert(started,record)
+        for mutation in (wrong_child,wrong_path,wrong_turn,wrong_kind,malformed,duplicate,before_started_activity):
             with self.subTest(case=mutation.__name__),tempfile.TemporaryDirectory() as temporary:
                 root=pathlib.Path(temporary);sessions,parent,child=self._write_rollouts(root);self._mutate_rollout(parent,mutation)
                 with self.assertRaises(support.Refusal):
                     support.audit_original_rollouts(str(parent),str(child),sessions,self._v2_audit_evidence(),profile)
+
+    def test_original_completed_subagent_activity_can_arrive_late_without_terminal_authority(self):
+        profile=support.load_profile(PROFILE_PATH)
+        with tempfile.TemporaryDirectory() as temporary:
+            root=pathlib.Path(temporary);sessions,parent,child=self._write_rollouts(root)
+            def move_after_terminal(rows):
+                index=next(index for index,row in enumerate(rows)
+                           if row["type"]=="event_msg" and row["payload"].get("type")=="item_completed"
+                           and row["payload"].get("item",{}).get("type")=="SubAgentActivity"
+                           and row["payload"]["item"].get("kind")=="completed")
+                rows.append(rows.pop(index))
+            self._mutate_rollout(parent,move_after_terminal)
+            value=self._v2_audit_evidence()
+            result=support.audit_original_rollouts(str(parent),str(child),sessions,value,profile)
+        self.assertTrue(value.original_audit);self.assertEqual(19,result["parent"]["records"])
 
     def test_original_rollout_refuses_numeric_type_substitution_and_overflow(self):
         profile=support.load_profile(PROFILE_PATH)

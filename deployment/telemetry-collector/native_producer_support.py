@@ -555,7 +555,7 @@ def audit_original_rollouts(parent_path: object, child_path: object, sessions_ro
                 and user[0][0] < completed_items["user"][0] < spawn_index
                 and spawn_index < completed_items["activity-started"][0] < spawn_output_index
                 and wait_index < completed_items["wait"][0] < wait_output_index
-                and communications[0][0] < completed_items["activity-completed"][0],
+                and completed_items["activity-started"][0] < completed_items["activity-completed"][0],
                 "original completed-item execution order differs")
     evidence.original_audit = True
     evidence.add("original-rollouts-audited", parentRecords=snapshots[0]["records"], childRecords=snapshots[1]["records"],
