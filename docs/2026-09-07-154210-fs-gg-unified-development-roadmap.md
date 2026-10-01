@@ -65,6 +65,27 @@ independent and open. This dated clarification is not a current fleet-health att
 profile acceptance or waiver of exact artifact, authentication, custody, settlement/replay or effect
 authority for any operation actually performed.
 
+**2026-10-01: stock BAR trace and harness source closed; genuine Count1 smoke remains open.**
+[HighBarV3 #13](https://github.com/FS-GG/HighBarV3/pull/13) merged at owning master
+`f08555372168cd911f438de0be5ec2898fd1cfb5`, equal candidate
+`233b11f541986ee65e17062e2eed8548e795fd94` with tree
+`8f287693d61ff7fcbdbd1e21482c70a09133e2fc`. Actual
+[CI 36849458802](https://github.com/FS-GG/HighBarV3/actions/runs/36849458802) passed five
+hosted jobs; five optional self-hosted jobs skipped, and the repository has no branch protection.
+[FSBarV2 #12](https://github.com/FS-GG/FSBarV2/pull/12) merged at owning main
+`6b9139e83334da903ea6861adb57d97578af2239`, equal candidate
+`4608e56a6dfd973e4f5f28e37586a42ab8699576` with tree
+`b951ac855c227bb938ba3bbf42e0418874ad4057`; it has no hosted workflow, so hosted checks
+were honestly not required. Root independently read both merged trees equal to their reviewed
+candidates. Final source/interface review is READY: actual `O_APPEND` custody passed, all 17 private
+helper tests and 28 production codec/normalizer tests passed, and the authenticated growing-prefix
+physical join retained the frozen prefix while allowing bounded append. Private helper manifest
+SHA-256 is `e42dd46fa55fbe43f3f09011e65e397aabc017911cb1b73eebc4e1ff8b5dc758`.
+This closes source and interface only. Genuine native acceptance remains 0/6, custom FR remains
+inactive, and loaded-engine identity remains unknown. Next, rebuild and repin exact protected
+artifacts, pass the bounded preflight and run one genuine Count1 smoke; that smoke is not six-journey
+completion or gameplay acceptance.
+
 **2026-10-01: SC2 versioned recording-context source repaired; genuine completion remains open.**
 [SC2 #29](https://github.com/FS-GG/FS.GG.SC2.Client/pull/29) merged at protected
 `f1867d078da7f4db68729431a8f4479ee36e6d2d`, equal candidate
