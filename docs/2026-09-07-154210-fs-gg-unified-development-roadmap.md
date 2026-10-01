@@ -53,7 +53,7 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
-**2026-10-01: FourD public capacity screen passed; private Stage A remains unimplemented.**
+**2026-10-01: FourD public capacity screen passed; private qualification route remains unimplemented.**
 Actual credential-free read-only [capacity screen 36842162867](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36842162867)
 used protected Coordination `c14715d48fec86eb4e799640d4f8f2cec6be32a5`, tree
 `a5759b54e3a1c978ae57e84a61d6f28a13a7c6d7`, attempt 1 and succeeded. Root downloaded
@@ -66,7 +66,7 @@ The result reports `capacityScreenPassed=true` and `qualified=false`: effective 
 ancestors had no finite limit; free storage was 92,353,101,824 bytes with 18,426,053 free
 inodes. A Podman binary was present, but rootless capability was unmeasured and Podman was not
 started. This closes only the public capacity screen. The bounded privacy/exact-admission,
-private-acquisition and chunk-custody Stage A source route is not implemented; qualification
+private-acquisition and chunk-custody source route is not implemented; qualification
 continues to refuse. No key, private source, image build/load, native runtime or player operation
 was admitted.
 
