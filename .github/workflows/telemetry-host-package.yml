@@ -96,8 +96,30 @@ jobs:
       - name: Qualify the typed HOST binding and private template
         env:
           NUGET_PACKAGES: ${{ runner.temp }}/host-binding-nuget
+          HOSTED_RUNNER_CUSTODY: ${{ runner.environment }}
         run: |
           set -euo pipefail
+          # BEGIN hosted runner SDK custody normalization
+          test "$HOSTED_RUNNER_CUSTODY" = github-hosted
+          test "$DOTNET_ROOT" = /usr/share/dotnet
+          sdk_root="$(readlink -f -- "$DOTNET_ROOT")"
+          resolved_dotnet="$(readlink -f -- /usr/bin/dotnet)"
+          test "$sdk_root" = /usr/share/dotnet
+          test "$resolved_dotnet" = "$sdk_root/dotnet"
+          test "$(readlink -f -- "$(command -v dotnet)")" = "$resolved_dotnet"
+          test "$("$resolved_dotnet" --version)" = 10.0.401
+          sudo chown -hR root:root -- "$sdk_root"
+          sudo chmod -R go-w -- "$sdk_root"
+          test -z "$(find "$sdk_root" -xdev \( ! -uid 0 -o -perm /022 \) -print -quit)"
+          custody_path="$resolved_dotnet"
+          while true; do
+            test "$(stat -c %u -- "$custody_path")" = 0
+            custody_mode="$(stat -c %a -- "$custody_path")"
+            test "$((8#$custody_mode & 022))" = 0
+            test "$custody_path" = / && break
+            custody_path="$(dirname -- "$custody_path")"
+          done
+          # END hosted runner SDK custody normalization
           test "$(dotnet --version)" = 10.0.401
           test "$(/usr/bin/dotnet --version)" = 10.0.401
           test "$(readlink -f "$(command -v dotnet)")" = "$(readlink -f /usr/bin/dotnet)"

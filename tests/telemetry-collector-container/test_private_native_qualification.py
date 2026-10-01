@@ -83,6 +83,7 @@ class Tests(unittest.TestCase):
     self.assertIn('FSGG_NATIVE_AUTH_JSON_B64',os.environ)
  def test_template_is_manual_private_exact_and_never_logs_secret(self):
   text=(ROOT/'deployment/telemetry-collector/private-native-qualification.yml.in').read_text()
+  public=(ROOT/'.github/workflows/telemetry-host-package.yml').read_text()
   self.assertIn('workflow_dispatch:',text); self.assertNotIn('pull_request:',text); self.assertNotIn('push:',text)
   self.assertIn("github.repository == 'FS-GG/FS.GG.GitHub.Substrate.Sandbox'",text)
   self.assertIn('persist-credentials: false',text); self.assertIn('retention-days: 1',text)
@@ -93,6 +94,39 @@ class Tests(unittest.TestCase):
   self.assertIn('podman pull --platform linux/amd64',text); self.assertIn('timeout-minutes: 40',text)
   self.assertIn('actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68',text)
   self.assertIn('dotnet-version: 10.0.401',text); self.assertIn('test "$(/usr/bin/dotnet --version)" = 10.0.401',text)
+  marker='# BEGIN hosted runner SDK custody normalization'
+  self.assertEqual(1,text.count(marker)); self.assertEqual(1,public.count(marker))
+  for workflow in (text,public):
+   self.assertIn('HOSTED_RUNNER_CUSTODY: ${{ runner.environment }}',workflow)
+   self.assertIn('test "$HOSTED_RUNNER_CUSTODY" = github-hosted',workflow)
+   self.assertIn('test "$DOTNET_ROOT" = /usr/share/dotnet',workflow)
+   self.assertIn('test "$resolved_dotnet" = "$sdk_root/dotnet"',workflow)
+   self.assertIn('sudo chown -hR root:root -- "$sdk_root"',workflow)
+   self.assertIn('sudo chmod -R go-w -- "$sdk_root"',workflow)
+   self.assertIn('! -uid 0 -o -perm /022',workflow)
+  self.assertLess(public.index(marker),public.index('python3 -c'))
+  self.assertLess(text.index(marker),text.index('/usr/bin/dotnet restore'))
+  end='# END hosted runner SDK custody normalization'
+  for name,workflow in (('private',text),('public',public)):
+   with self.subTest(workflow=name), tempfile.TemporaryDirectory() as td:
+    root=pathlib.Path(td); system=root/'system'; sdk=system/'usr/share/dotnet'; binary=sdk/'dotnet'; usr_bin=system/'usr/bin'
+    sdk.mkdir(parents=True); usr_bin.mkdir(parents=True)
+    binary.write_text('#!/bin/sh\nprintf "10.0.401\\n"\n'); binary.chmod(0o755)
+    (usr_bin/'dotnet').symlink_to(binary)
+    subprocess.run(['/usr/bin/sudo','chown','root:root',str(system),str(system/'usr'),str(system/'usr/share'),str(usr_bin)],check=True)
+    subprocess.run(['/usr/bin/sudo','chmod','755',str(system),str(system/'usr'),str(system/'usr/share'),str(usr_bin)],check=True)
+    block=workflow.split(marker,1)[1].split(end,1)[0]
+    block=block.replace('/usr/share/dotnet',str(sdk)).replace('/usr/bin/dotnet',str(usr_bin/'dotnet'))
+    block=block.replace('test "$custody_path" = / && break',f'test "$custody_path" = {system} && break')
+    env=dict(os.environ,DOTNET_ROOT=str(sdk),HOSTED_RUNNER_CUSTODY='github-hosted',PATH=str(sdk)+':/usr/bin:/bin')
+    fake=root/'fake'; fake.mkdir(); (fake/'sudo').write_text('#!/bin/sh\nexit 0\n'); (fake/'sudo').chmod(0o755)
+    refused=subprocess.run(['bash','-e','-o','pipefail'],input=block,text=True,env=dict(env,PATH=str(fake)+':'+env['PATH']),capture_output=True)
+    self.assertNotEqual(0,refused.returncode,'runner-owned SDK closure must be refused without normalization')
+    accepted=subprocess.run(['bash','-e','-o','pipefail'],input=block,text=True,env=env,capture_output=True)
+    owner=binary.stat().st_uid; writes=binary.stat().st_mode&0o022
+    subprocess.run(['/usr/bin/sudo','chown','-hR',f'{os.getuid()}:{os.getgid()}',str(system)],check=True)
+    self.assertEqual(0,accepted.returncode,accepted.stderr)
+    self.assertEqual(0,owner); self.assertEqual(0,writes)
   self.assertIn('test -r /proc/thread-self/children',text)
   self.assertIn('mcr.microsoft.com/dotnet/aspnet:10.0.12-noble-amd64@sha256:ed6a2d26633ddcd3d42a1d9f9866214ecbbc11ba6ac5e0e843da02c13da24072',text)
   for selected in ('/usr/bin/dotnet','/usr/bin/git','/usr/bin/setsid'): self.assertIn(selected,text)
@@ -101,14 +135,17 @@ class Tests(unittest.TestCase):
  def test_rendered_workflow_parses_and_each_shell_block_has_valid_syntax(self):
   if importlib.util.find_spec('yaml') is None: self.skipTest('PyYAML unavailable')
   import yaml
-  text=(ROOT/'deployment/telemetry-collector/private-native-qualification.yml.in').read_text()
-  rendered=text.replace('@@RECIPE_SOURCE_SHA@@','a'*40).replace('@@QUALIFICATION_REF@@','qualification-v1')
-  value=yaml.safe_load(rendered); jobs=value.get('jobs'); self.assertIsInstance(jobs,dict)
-  scripts=[step['run'] for step in jobs['qualify']['steps'] if 'run' in step]
-  self.assertEqual(2,len(scripts))
-  for script in scripts:
-   checked=subprocess.run(['bash','-n'],input=script,text=True,capture_output=True)
-   self.assertEqual(0,checked.returncode,checked.stderr)
+  workflows=((ROOT/'deployment/telemetry-collector/private-native-qualification.yml.in',2),
+             (ROOT/'.github/workflows/telemetry-host-package.yml',6))
+  for path,count in workflows:
+   with self.subTest(workflow=path.name):
+    rendered=path.read_text().replace('@@RECIPE_SOURCE_SHA@@','a'*40).replace('@@QUALIFICATION_REF@@','qualification-v1')
+    value=yaml.safe_load(rendered); jobs=value.get('jobs'); self.assertIsInstance(jobs,dict)
+    scripts=[step['run'] for job in jobs.values() for step in job['steps'] if 'run' in step]
+    self.assertEqual(count,len(scripts))
+    for script in scripts:
+     checked=subprocess.run(['bash','-n'],input=script,text=True,capture_output=True)
+     self.assertEqual(0,checked.returncode,checked.stderr)
  def test_job_environment_uses_only_contexts_available_at_job_scope(self):
   if importlib.util.find_spec('yaml') is None: self.skipTest('PyYAML unavailable')
   import yaml
