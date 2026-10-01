@@ -926,3 +926,8 @@ Marker: `unified-product-frontier-20261001-1430`. Fresh remote pull found no ext
 **Work-main has no action.** Preserve private records, fifteen stopped containers, ordinary services, fdev, postgres and shared credentials. No Main grant, account, installation, image, capture, stop or revoke is requested. Independent capture and recovery precede routing removal and scoped retirement.
 
 **Reply contract:** no receipt or effect requested. Report changed installed boundaries or contradictory evidence here under the marker without private payloads. Next programme update: 15:00 UTC. Telemetry remains not configured; usage and economics remain unknown.
+
+
+### 14:33 UTC — FourD refusal clarification
+
+The retained state places the failure at the repository deploy-key POST after temporary local-key generation. Its response was uncertain; no matching remote key was found during authenticated reconciliation, and the local key was wiped. No environment-secret provisioning or rerun occurred. Cleanup and retirement verified. Root authenticated repository administration permissions; the source owner is diagnosing the missing failed-command readback. This supersedes the earlier narrower preflight wording without claiming qualification.
