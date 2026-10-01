@@ -1,0 +1,20 @@
+# syntax=docker/dockerfile:1
+FROM mcr.microsoft.com/dotnet/aspnet:10.0.12-noble-amd64@sha256:ed6a2d26633ddcd3d42a1d9f9866214ecbbc11ba6ac5e0e843da02c13da24072
+ARG HOST_VERSION=0.2.1
+ARG HOST_SOURCE_SHA=0145bd2c852847d00da8b3a0c35d27cd64a87781
+ARG HOST_PACKAGE_SHA256=4847c15ab207a33556462873840ad4109cf1c1e16fd7a15d5fffae5a8162f589
+COPY --chown=0:0 host/ /opt/fsgg/telemetry-host/
+RUN test "$HOST_VERSION" = "0.2.1" \
+ && test "$HOST_SOURCE_SHA" = "0145bd2c852847d00da8b3a0c35d27cd64a87781" \
+ && test "$HOST_PACKAGE_SHA256" = "4847c15ab207a33556462873840ad4109cf1c1e16fd7a15d5fffae5a8162f589" \
+ && test -f /opt/fsgg/telemetry-host/FS.GG.Telemetry.Host.dll \
+ && find /opt/fsgg/telemetry-host -type d -exec chmod 0555 {} + \
+ && find /opt/fsgg/telemetry-host -type f -exec chmod 0444 {} + \
+ && install -d -o 32768 -g 32768 -m 0700 /receiver /producer
+LABEL org.opencontainers.image.title="FS.GG persistent independent telemetry receiver" \
+      org.opencontainers.image.version="0.2.1" \
+      org.opencontainers.image.revision="0145bd2c852847d00da8b3a0c35d27cd64a87781" \
+      org.fsgg.telemetry.host.package-sha256="4847c15ab207a33556462873840ad4109cf1c1e16fd7a15d5fffae5a8162f589" \
+      org.fsgg.telemetry.activation="disabled-before-private-readback"
+USER 32768:32768
+ENTRYPOINT ["/usr/bin/dotnet", "/opt/fsgg/telemetry-host/FS.GG.Telemetry.Host.dll"]

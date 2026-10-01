@@ -1,0 +1,51 @@
+{
+  "schema": "fsgg.telemetry.persistent-receiver-profile/1",
+  "receiverId": "learn-independent-v1",
+  "workspaceId": "learn-01",
+  "producerId": "learn-native-producer",
+  "streamId": "roadmap",
+  "uid": 32768,
+  "gid": 32768,
+  "host": {
+    "version": "0.2.1",
+    "sourceSha": "0145bd2c852847d00da8b3a0c35d27cd64a87781",
+    "packageSha256": "4847c15ab207a33556462873840ad4109cf1c1e16fd7a15d5fffae5a8162f589",
+    "manifestSha256": "f16546855d4ce60060f762b6f7bed715cc115f9ef97cd7b55dad5294b2ea0816",
+    "journalSha256": "bce45f3f4c0701031863c6b1eb398a99982b152f585467cb2e7b06c00987c58e",
+    "payloadSha256": "207843031c78c2711e85a2db14b46a83ec0da9fbd3ee0f144a736320f7e8c2c9"
+  },
+  "runtime": {
+    "platform": "linux/amd64",
+    "baseImage": "mcr.microsoft.com/dotnet/aspnet:10.0.12-noble-amd64@sha256:ed6a2d26633ddcd3d42a1d9f9866214ecbbc11ba6ac5e0e843da02c13da24072"
+  },
+  "image": {
+    "containerfileSha256": "1244ba48829c8f93dedc83f2b297c7d9a968173eaf8514b7a9731ca29e0ca233",
+    "resultDigestRequiredBeforeInstall": true,
+    "activation": "disabled-before-private-readback"
+  },
+  "manager": {
+    "coordinationSource": "0dd4aa26aca6697f1cc3cece762a4ecae60b5b81",
+    "programSha256": "6d722af48f5ee45c35c047c869973345750d8c92dcf740c8d7c82c9b38e101aa",
+    "command": "install-native-collector",
+    "backupCommand": "backup-stopped-host",
+    "installationSchema": "fsgg.telemetry.native-collector-installation/2"
+  },
+  "reader": {
+    "executablePath": "/opt/fsgg/codex/codex",
+    "executableSha256": "167c0148a849d2444f1b5a7fb5f8bb2de1de5ae13a2a504b833fc765980f5cd9",
+    "provider": "openai",
+    "model": "gpt-5.6-sol",
+    "effort": "medium",
+    "profileSha256": "5a30fc507f023d542521aac66c8f49c5ae6ee8d9e34dc90c1a3bf3ab30f6b08f"
+  },
+  "containerPaths": {
+    "configAnchor": "/receiver/private",
+    "hostConfig": "/receiver/private/host.json",
+    "credentials": "/receiver/private/credentials",
+    "store": "/receiver/private/store",
+    "evidence": "/receiver/private/evidence",
+    "codexHome": "/receiver/private/codex-home",
+    "nativeSource": "/producer/native-source",
+    "producerSpool": "/producer/spool"
+  }
+}
