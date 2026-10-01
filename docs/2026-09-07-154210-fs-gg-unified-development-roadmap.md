@@ -53,6 +53,24 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**SC2 paused authored-movement driver source repaired; genuine acceptance remains open.**
+[SC2 Client PR #26](https://github.com/FS-GG/FS.GG.SC2.Client/pull/26) merged at
+`56dab432acb46ef04184eaaf2d3731bb51ad29b2`, tree
+`2d5fd625506ee34aa813ae0b8a22fe7580a4fa2f`, independently equal to candidate
+`13fd2fe5b4b02ea51823de6231b175be4925ad08`. Full hosted
+[verification 36816905756](https://github.com/FS-GG/FS.GG.SC2.Client/actions/runs/36816905756)
+passed. Actual attempt-e on previous protected source passed terminal Sc2Result/actionResult=1
+but failed the owned-unit effect check: only frame-zero observation and one successful Action
+were retained, with no Step or later observation. Cleanup recorded 13 owned processes and
+zero survivors; the owned display socket was removed. The public driver now requires accepted
+feedback, then at most eight single-loop paused Steps and a distinct fresh projection after
+each, succeeding only when the same visible owned tag changes coordinates. Pointer and
+keyboard regressions passed, including 12 repeated effect checks. No criterion or timeout is
+weakened. Driver SHA-256 is now
+`47e22ce955dc501479dc6c60ad6b93d324dc7b7192cb2b0af604acf158e9d68c`;
+a fresh protected build and successor runner/proof must bind it before another genuine
+operation. Prior candidates remain history; `.6`, publication and installed adoption stay open.
+
 **Portable P3 SDD receiver pin delivered; Templates pin and adoption remain open.**
 [SDD PR #1085](https://github.com/FS-GG/FS.GG.SDD/pull/1085) merged at
 `388e4e0dbb216de8a37687818af042030d4e26c5`, tree
