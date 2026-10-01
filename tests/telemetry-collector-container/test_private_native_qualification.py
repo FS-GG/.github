@@ -341,6 +341,25 @@ exit 2
   self.assertEqual(62,len(stderr))
   self.assertEqual('3573f6436c2d1814b72c7379a02850f6754da3d818f975c85f525fabafcabce9',hashlib.sha256(stderr).hexdigest())
   self.assertEqual('tmpfs-owner-option-refused',q.Runner.stderr_category(stderr))
+ def test_only_bounded_printable_zero_auth_topology_stderr_is_retained(self):
+  safe=b'Error: crun: mount `/qualification/readback-output`: Invalid argument\n'
+  cases=(
+   ('zero-auth-readonly-start',safe,safe.decode()),
+   ('readonly-probe-start',safe,None),
+   ('zero-auth-readonly-start',b'credentialed\x00detail',None),
+   ('zero-auth-readonly-start',b'x'*4097,None),
+  )
+  for diagnostic,stderr,expected in cases:
+   with self.subTest(diagnostic=diagnostic,size=len(stderr)):
+    self.assertEqual(expected,q.Runner.safe_zero_auth_stderr(diagnostic,stderr))
+  records=[]
+  completed=subprocess.CompletedProcess(['podman'],2,b'',safe)
+  with mock.patch.object(q.subprocess,'run',return_value=completed):
+   runner=q.Runner(q.time.monotonic()+10,records.append)
+   with self.assertRaisesRegex(q.Refusal,'command-failed:podman'):
+    runner.run(['podman','start','-a','fsgg-native-readonly-probe'],diagnostic='zero-auth-readonly-start',limit=4096)
+  self.assertEqual(safe.decode(),records[0]['stderrText'])
+  self.assertEqual(hashlib.sha256(safe).hexdigest(),records[0]['stderrSha256'])
  def test_public_failure_diagnostic_exposes_only_bounded_safe_fields(self):
   a=type('A',(),{'private_root':pathlib.Path('/private/run'),'run_nonce':'run-0001','source_sha':'a'*40,'private_placement_sha':'d'*40})()
   op=q.Operation(a,FakeRunner())
@@ -350,6 +369,8 @@ exit 2
   value=op.public_failure_diagnostic()
   self.assertEqual('tmpfs-owner-option-refused',value['stderrCategory'])
   self.assertNotIn('requiredSuccess',value); self.assertNotIn('phase',value); self.assertEqual(8,len(value))
+  op.command_diagnostic({'command':'zero-auth-readonly-start','executable':'podman','exitCode':2,'stdoutBytes':0,'stdoutSha256':'e'*64,'stderrBytes':12,'stderrSha256':'f'*64,'stderrCategory':'unclassified','requiredSuccess':True,'stderrText':'safe detail\n'})
+  self.assertEqual('safe detail\n',op.public_failure_diagnostic()['stderrText'])
   op.command_diagnostic({'command':'native-create','executable':'podman','exitCode':125,'stdoutBytes':1,'stdoutSha256':'e'*64,'stderrBytes':1,'stderrSha256':'f'*64,'stderrCategory':'unclassified','requiredSuccess':True})
   private_phase=op.public_failure_diagnostic(); self.assertNotIn('stdoutSha256',private_phase); self.assertNotIn('stderrSha256',private_phase)
  def test_private_diagnostics_file_is_not_added_to_public_result(self):

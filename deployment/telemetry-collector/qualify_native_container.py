@@ -18,6 +18,8 @@ HOST_LAUNCHER_SHA="6b881a6f1b346776ca5cb974a655ac041802ed27ad80e44dee92faeed59cc
 SCOPE=("v2-host-native-qualification","native-prospective-v1","roadmap")
 CREDENTIAL_ENV="FSGG_TELEMETRY_CREDENTIAL_NATIVE_PROSPECTIVE_V1"
 MAX_OUTPUT=4*1024*1024
+ZERO_AUTH_STDERR_DIAGNOSTICS=frozenset({
+    'zero-auth-readonly-create','zero-auth-readonly-start','zero-auth-readonly-remove'})
 
 class Refusal(Exception): pass
 def require(v,m):
@@ -120,6 +122,13 @@ class Runner:
             ('option-refused',r'(?i)(unknown flag|unrecognized option|invalid argument)')):
             if re.search(pattern,text): return category
         return 'empty' if not value else 'unclassified'
+    @staticmethod
+    def safe_zero_auth_stderr(diagnostic,value):
+        if diagnostic not in ZERO_AUTH_STDERR_DIAGNOSTICS or not value or len(value)>4096: return None
+        try: text=value.decode('utf-8')
+        except UnicodeDecodeError: return None
+        if any(character not in '\n\r\t' and not ' '<=character<='~' for character in text): return None
+        return text
     def run(self,args,*,env=None,input_bytes=None,limit=MAX_OUTPUT,check=True,diagnostic=None):
         require(isinstance(args,list) and all(isinstance(x,str) and x for x in args),'command-refused')
         if self.recorder is not None: require(isinstance(diagnostic,str) and re.fullmatch(r'[a-z0-9-]{1,64}',diagnostic)!=None,'command-diagnostic-refused')
@@ -129,10 +138,13 @@ class Runner:
         p=subprocess.run(args,input=input_bytes,stdout=subprocess.PIPE,stderr=subprocess.PIPE,env=env or fixed_env(),timeout=left,check=False)
         require(len(p.stdout)<=limit and len(p.stderr)<=limit,'command-output-limit')
         if self.recorder is not None:
-            self.recorder({'command':diagnostic,'executable':pathlib.Path(args[0]).name,'exitCode':p.returncode,
-                           'stdoutBytes':len(p.stdout),'stdoutSha256':hashlib.sha256(p.stdout).hexdigest(),
-                           'stderrBytes':len(p.stderr),'stderrSha256':hashlib.sha256(p.stderr).hexdigest(),
-                           'stderrCategory':self.stderr_category(p.stderr),'requiredSuccess':check})
+            record={'command':diagnostic,'executable':pathlib.Path(args[0]).name,'exitCode':p.returncode,
+                    'stdoutBytes':len(p.stdout),'stdoutSha256':hashlib.sha256(p.stdout).hexdigest(),
+                    'stderrBytes':len(p.stderr),'stderrSha256':hashlib.sha256(p.stderr).hexdigest(),
+                    'stderrCategory':self.stderr_category(p.stderr),'requiredSuccess':check}
+            safe_stderr=self.safe_zero_auth_stderr(diagnostic,p.stderr)
+            if safe_stderr is not None: record['stderrText']=safe_stderr
+            self.recorder(record)
         if check: require(p.returncode==0,'command-failed:'+args[0])
         return p
 
@@ -159,6 +171,7 @@ class Operation:
         if row is None: return None
         keys=['command','executable','exitCode','stdoutBytes','stderrBytes','stderrCategory']
         if row['command'].startswith('zero-auth-'): keys.extend(('stdoutSha256','stderrSha256'))
+        if row['command'] in ZERO_AUTH_STDERR_DIAGNOSTICS and 'stderrText' in row: keys.append('stderrText')
         return {key:row[key] for key in keys}
     def owned_run(self,args,*,diagnostic=None,**kwargs):
         require(args[:2]==['podman','run'],'owned-run-command-refused')
@@ -248,7 +261,7 @@ class Operation:
         t=self.topology()
         create=t.readonly_probe_create(self.images['native-readonly-source'],public_native,self.a.run_nonce)
         self.containers.append('fsgg-native-readonly-probe')
-        self.r.run(create,diagnostic='zero-auth-readonly-create')
+        self.r.run(create,diagnostic='zero-auth-readonly-create',limit=4096)
         readback=json.loads(self.r.run(['podman','start','-a','fsgg-native-readonly-probe'],diagnostic='zero-auth-readonly-start',limit=4096).stdout)
         require(readback.get('schema')=='fsgg.telemetry.native-source-readback/1'
                 and readback.get('status')=='compatible'
