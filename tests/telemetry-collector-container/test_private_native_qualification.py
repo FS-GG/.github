@@ -111,7 +111,7 @@ class Tests(unittest.TestCase):
     self.assertIn('FSGG_NATIVE_AUTH_JSON_B64',os.environ)
  def test_full_operation_sequence_is_real_and_bounded(self):
   source=(ROOT/'deployment/telemetry-collector/qualify_native_container.py').read_text()
-  ordered=['prepare_context_and_images','zero-auth-images-qualified','materialize(); op.execute()',
+  ordered=['prepare_context_and_images','zero-auth-readonly-topology-qualified','zero-auth-images-qualified','materialize(); op.execute()',
            "'native-readonly-source'",'read-only-source-compatible',"'collect-native'","'export-learning'",'learn-01-analysis.py','wrong-native-selector-was-admitted',
            'receiver-restart-export-drift']
   for value in ordered: self.assertIn(value,source)
@@ -119,6 +119,7 @@ class Tests(unittest.TestCase):
   self.assertIn("probe('prospective.token',False); probe('collector.token',True); probe('revoked.token',True)",source)
   self.assertIn('cleanup=Runner(time.monotonic()+60)',source)
   self.assertIn("signal.signal(signal.SIGTERM,interrupted)",source)
+  self.assertLess(source.index("diagnostic='zero-auth-readonly-create'"),source.index('def materialize(self):'))
   self.assertNotIn('prepared-source-only',source)
   for token in ("inspect_container('fsgg-native-collector',t.inspect_receiver,'receiver-inspect')",
                 "inspect_container('fsgg-native-egress',t.inspect_egress,'egress-inspect')",
@@ -137,6 +138,33 @@ class Tests(unittest.TestCase):
     q.Operation(a,FakeRunner()).materialize()
    output=root/'private/native/qualification-output'
    self.assertTrue(output.is_dir()); self.assertEqual(0o700,output.stat().st_mode&0o777)
+ def test_exact_readonly_topology_is_qualified_before_private_root_exists(self):
+  class ProbeRunner:
+   def __init__(self): self.calls=[]
+   def run(self,args,**kwargs):
+    self.calls.append((args,kwargs)); output=b''; code=0
+    if args[:3]==['podman','start','-a']:
+     output=json.dumps({'schema':'fsgg.telemetry.native-source-readback/1','status':'compatible','resultSha256':'e'*64}).encode()
+    if args[:3]==['podman','container','exists']: code=1
+    return subprocess.CompletedProcess(args,code,output,b'')
+  with tempfile.TemporaryDirectory() as td:
+   root=pathlib.Path(td); runner=ProbeRunner()
+   a=type('A',(),{'private_root':root/'private','staging_root':root/'staging','run_nonce':'run-0001',
+                  'source_sha':'a'*40,'private_placement_sha':'d'*40,'source_root':ROOT})()
+   a.staging_root.mkdir(mode=0o700)
+   op=q.Operation(a,runner); op.images['native-readonly-source']='sha256:'+'f'*64
+   op.qualify_zero_auth_readonly()
+   self.assertFalse(a.private_root.exists())
+   create=runner.calls[0][0]; rendered=' '.join(create)
+   for required in ('--read-only','--cap-drop=all','--security-opt=no-new-privileges','--pids-limit=128',
+                    '--userns=keep-id:uid=32768,gid=32768','--network none',
+                    '/qualification/native:ro,rprivate','/qualification/readback-output:rw,noexec,nosuid,nodev,size=8m,mode=0700,U'):
+    self.assertIn(required,rendered)
+   self.assertEqual(['zero-auth-readonly-create','zero-auth-readonly-start','zero-auth-readonly-remove','zero-auth-readonly-refusal'],
+                    [kwargs['diagnostic'] for _,kwargs in runner.calls])
+   self.assertTrue(all('env' not in kwargs for _,kwargs in runner.calls))
+   self.assertEqual(['fsgg-native-readonly-probe'],op.containers)
+   self.assertEqual('zero-auth-readonly-topology-qualified',op.result['phases'][-1]['name'])
  def test_driver_summary_binds_original_private_full_result(self):
   with tempfile.TemporaryDirectory() as td:
    path=pathlib.Path(td)/'result.json'; nonce='run-0001'
@@ -230,6 +258,7 @@ exit 2
    def materialize(self): pass
    def execute(self): pass
    def cleanup(self): FakeOperation.cleaned=True; return []
+   def public_failure_diagnostic(self): return None
    def write_private_diagnostics(self): pass
    def write_result(self): pass
   with tempfile.TemporaryDirectory() as td:
@@ -307,6 +336,22 @@ exit 2
   for forbidden in ('PRIVATE=value','private-stdout','already in use','podman create','image'):
    self.assertNotIn(forbidden,encoded)
   self.assertEqual(hashlib.sha256(b'private-stdout').hexdigest(),record['stdoutSha256'])
+ def test_actual_podman_49_tmpfs_owner_failure_has_exact_safe_category(self):
+  stderr=b'Error: unknown mount option "uid=32768": invalid mount option\n'
+  self.assertEqual(62,len(stderr))
+  self.assertEqual('3573f6436c2d1814b72c7379a02850f6754da3d818f975c85f525fabafcabce9',hashlib.sha256(stderr).hexdigest())
+  self.assertEqual('tmpfs-owner-option-refused',q.Runner.stderr_category(stderr))
+ def test_public_failure_diagnostic_exposes_only_bounded_safe_fields(self):
+  a=type('A',(),{'private_root':pathlib.Path('/private/run'),'run_nonce':'run-0001','source_sha':'a'*40,'private_placement_sha':'d'*40})()
+  op=q.Operation(a,FakeRunner())
+  op.command_diagnostic({'command':'expected-refusal','executable':'podman','exitCode':1,'stdoutBytes':0,'stdoutSha256':'a'*64,'stderrBytes':0,'stderrSha256':'b'*64,'stderrCategory':'empty','requiredSuccess':False})
+  self.assertIsNone(op.public_failure_diagnostic())
+  op.command_diagnostic({'command':'zero-auth-readonly-create','executable':'podman','exitCode':125,'stdoutBytes':0,'stdoutSha256':'c'*64,'stderrBytes':62,'stderrSha256':'d'*64,'stderrCategory':'tmpfs-owner-option-refused','requiredSuccess':True})
+  value=op.public_failure_diagnostic()
+  self.assertEqual('tmpfs-owner-option-refused',value['stderrCategory'])
+  self.assertNotIn('requiredSuccess',value); self.assertNotIn('phase',value); self.assertEqual(8,len(value))
+  op.command_diagnostic({'command':'native-create','executable':'podman','exitCode':125,'stdoutBytes':1,'stdoutSha256':'e'*64,'stderrBytes':1,'stderrSha256':'f'*64,'stderrCategory':'unclassified','requiredSuccess':True})
+  private_phase=op.public_failure_diagnostic(); self.assertNotIn('stdoutSha256',private_phase); self.assertNotIn('stderrSha256',private_phase)
  def test_private_diagnostics_file_is_not_added_to_public_result(self):
   with tempfile.TemporaryDirectory() as td:
    root=pathlib.Path(td)/'private'; (root/'output').mkdir(parents=True,mode=0o700)
