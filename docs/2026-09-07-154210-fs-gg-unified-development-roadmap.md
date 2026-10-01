@@ -65,6 +65,21 @@ independent and open. This dated clarification is not a current fleet-health att
 profile acceptance or waiver of exact artifact, authentication, custody, settlement/replay or effect
 authority for any operation actually performed.
 
+**2026-10-01: LEARN executable custody reader source delivered; installed qualification remains open.**
+[Coordination #918](https://github.com/FS-GG/FS.GG.Coordination/pull/918) merged at
+`4be1226aedbd6115fc228c3828e4956a7db4e96f`, tree
+`aee27f2994f6d42aa31849be743b8907e461f5ed`, equal reviewed integration
+`aad596bb8ce44542268762eb742e82c46fb35272`.
+[Full validation 36916334732](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36916334732)
+and [bootstrap 36916334860](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36916334860)
+passed. The F# reader hashes the actual 286,594,376-byte executable through a bounded held descriptor,
+with a 512 MiB ceiling and 1 MiB buffer. Executable custody joins containing-filesystem identity,
+size, mode, owner, link count, modification time and change time before and after streaming;
+causal mutation, restored modification time and missing identity-mask controls refuse without a
+producer receipt. Small JSON bounds remain separate. This closes the reader source window;
+replacement-container runtime closure, genuine grants and enrollment, W6 production producers,
+installed capability and persistent capture/restart qualification remain open. Main has no action.
+
 **2026-10-01: FourD typed qualification source delivered; protected operation remains open.**
 [Coordination PR #917](https://github.com/FS-GG/FS.GG.Coordination/pull/917) merged at
 `2f8437ccbf25606ea9cd567b02924309e3a45fde`, tree
