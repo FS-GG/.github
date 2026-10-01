@@ -65,6 +65,19 @@ independent and open. This dated clarification is not a current fleet-health att
 profile acceptance or waiver of exact artifact, authentication, custody, settlement/replay or effect
 authority for any operation actually performed.
 
+**2026-10-02: LEARN W6 C2 manager v3 native-verifier CI source delivered; installed runtime remains open.**
+[Coordination #921](https://github.com/FS-GG/FS.GG.Coordination/pull/921) merged at
+`aa05817cd3025ead9d574e772d5302be8cf4e2dc`, tree
+`02913d7ac8e36d54f88756ee1fc69e04a5a35cce`, equal qualified source
+`f38e94dd77f0d09e6a943632de4afa9b899b0525`. Root authenticated merge, tree and main;
+all 45 native checks passed, with six expected skips, including complete coherent formal validation
+and compiler-and-tests. The required compiled test route invokes the v3 native verifier with bounded
+exact protected-module acquisition, retained seven legacy cases and fail-closed cleanup. Mechanical
+orchestration moved to its test-owned script, leaving the unchanged architecture caps satisfied at
+844/850 total control lines and 630/630 unique lines. The protected-origin reader is already delivered.
+Manager publication, actual OCI/runtime acquisition, genuine collector grant, private installed custody,
+capture/recovery and separate C3 activation remain open; source CI does not establish installed acceptance.
+
 **2026-10-02: FABLE feed-census failure diagnostics source delivered; publication remains open.**
 [Templates #663](https://github.com/FS-GG/FS.GG.Templates/pull/663) merged at
 `aa6fd459ec6c0904167921561b66050baa5bcb31`, tree
