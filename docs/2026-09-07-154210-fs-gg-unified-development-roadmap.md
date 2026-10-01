@@ -65,6 +65,20 @@ independent and open. This dated clarification is not a current fleet-health att
 profile acceptance or waiver of exact artifact, authentication, custody, settlement/replay or effect
 authority for any operation actually performed.
 
+**2026-10-01: HOST original-rollout-audit public input registration source closed; genuine qualification remains open.**
+[Private Sandbox #36](https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/pull/36) merged at
+`5b381c3c1a732247cb80ad1370d37f7f0c4a650f`; root API readback confirmed tree
+`5d5957e30548cd1783b090fed1357ac8a2df9ebc` equal to reviewed candidate
+`09ad078bd50837280492e7cf4189080764a4bf7a`. Registration binds protected HOST source
+`61d55d8807da02b702ca97467f703640d9a59662` to prerelease `401047616`, tag
+`v2-host-private-inputs-20261001-original-audit`, and its exact two authenticated assets: manifest
+`603434428` (1,874 bytes, SHA-256 `e89674314c2added76a5ef595677c1bd33654cec05f31206e463e625d9939ae2`)
+and ZIP `603434427` (152,050,740 bytes, SHA-256
+`f5f864c90de7419e462c37da84824b7cf54c402ea3747e67ceb25d2e3c1311c9`). Root rehashed the
+downloaded bytes, and all 13 local source checks passed; this private repository has no applicable
+hosted workflow. This closes registration source only. Genuine `.8` capture, replay, persistence and
+recovery remain open; `.9`, `.10`, LEARN and Main receive no acceptance or action from this merge.
+
 **2026-10-01: comprehensive BAR development audit and its two immediate source corrections delivered; gameplay remains open.**
 The requested Astra-high audit is retained in the private revisioned knowledge database and published
 with [FSBar #13](https://github.com/FS-GG/FSBarV2/pull/13), merged at
