@@ -42,6 +42,16 @@ The missing process record does not prove pre-dispatch refusal: supervisor destr
 | BAR private preparation/runtime closure | FSBar qualification producer owns selection/profile/artifact-role policy; HighBar retains native engine facts. | Selected highBar **and NullAI** are derived into the expected executable closure; actual mapped modules and acquired identities join. Preserve current passed closure and cleanup evidence; no native adapter rewrite. |
 | SC2 author provenance/remaining qualification JS | SC2 authoring/qualification producer, retaining separate independent author and product qualifier roles. | Machine provenance generated at authoring source, imported by published preparation, same contract consumed by browser/runner; genuine mixed-input/native/replay proof remains SC2C-01's authority. |
 
+**2026-10-01 HOST binding source integration.** The qualification-local F#
+constructor and dedicated Linux process scope now have a standalone hosted gate
+in `telemetry-host-package.yml`: exact .NET SDK/runtime provenance, 26 compiled
+F# tests, 38 Python consumer/template tests, and rendered YAML/shell validation
+run before the existing browser and package work. This is a linear static and
+test preflight; a new state model would duplicate the existing stateless
+binding and OS adapter tests. The joined private template remains a source
+candidate. Protected adoption, private placement, credentials and a genuine
+native qualification stay separate root-owned gates.
+
 FABLE-ADOPT-01 remains the independent staged Rendering/Game/Templates/FourD product adoption programme. OPS-TYPED changes qualification/admin seams only. Its immediate SC2 configuration-codec reuse is a named seam to record in that inventory, not a restart or duplicate of later whole-product SC2/BAR adoption.
 
 ### Model and correspondence contract

@@ -91,6 +91,11 @@ class Tests(unittest.TestCase):
   self.assertNotIn("@@SOURCE_SHA@@",text)
   self.assertEqual(1,text.count('${{ inputs.placement_sha }}')); self.assertIn('[[ "$PLACEMENT_SHA" =~ ^[0-9a-f]{40}$ ]]',text)
   self.assertIn('podman pull --platform linux/amd64',text); self.assertIn('timeout-minutes: 40',text)
+  self.assertIn('actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68',text)
+  self.assertIn('dotnet-version: 10.0.401',text); self.assertIn('test "$(/usr/bin/dotnet --version)" = 10.0.401',text)
+  self.assertIn('test -r /proc/thread-self/children',text)
+  self.assertIn('mcr.microsoft.com/dotnet/aspnet:10.0.12-noble-amd64@sha256:ed6a2d26633ddcd3d42a1d9f9866214ecbbc11ba6ac5e0e843da02c13da24072',text)
+  for selected in ('/usr/bin/dotnet','/usr/bin/git','/usr/bin/setsid'): self.assertIn(selected,text)
   self.assertNotIn('trap finalize EXIT',text); self.assertIn('exit "$final_rc"',text)
   self.assertNotIn('echo $FSGG_NATIVE_AUTH',text); self.assertNotIn('--auth-json',text)
  def test_rendered_workflow_parses_and_each_shell_block_has_valid_syntax(self):
@@ -315,9 +320,26 @@ class Tests(unittest.TestCase):
     if auth=='not-materialized': self.assertTrue(value['preservationComplete'])
  def test_workflow_finalization_propagates_seal_failure_and_preserves_plaintext(self):
   script=self.operation_shell(); self.assertEqual(0,subprocess.run(['bash','-n'],input=script,text=True).returncode)
+  prefix=script.split('if python3 recipe/deployment/telemetry-collector/qualify_native_container.py',1)[0]+'printf OPERATION_SENTINEL\\n\n'
+  with tempfile.TemporaryDirectory() as td:
+   t=pathlib.Path(td); cases=[]
+   cases.append(('missing',t/'missing',None))
+   mode=t/'mode'; mode.mkdir(mode=0o755); cases.append(('mode0755',mode,None))
+   target=t/'target'; target.mkdir(mode=0o700); link=t/'link'; link.symlink_to(target); cases.append(('symlink',link,None))
+   owner=t/'owner'; owner.mkdir(mode=0o700); fake=t/'fake'; fake.mkdir(); identity=fake/'id'
+   identity.write_text('#!/bin/sh\nprintf 999999\\n\n'); identity.chmod(0o700); cases.append(('wrong-owner',owner,str(fake)+':/usr/bin:/bin'))
+   valid=t/'valid'; valid.mkdir(mode=0o700); cases.append(('valid',valid,None))
+   for name,root,path in cases:
+    env=dict(os.environ,RESULT_ROOT=str(root));
+    if path: env['PATH']=path
+    checked=subprocess.run(['bash'],input=prefix,text=True,env=env,capture_output=True)
+    reached='OPERATION_SENTINEL' in checked.stdout
+    if name=='valid': self.assertEqual((0,True),(checked.returncode,reached),checked.stderr)
+    else: self.assertNotEqual(0,checked.returncode,name); self.assertFalse(reached,name)
   for operation_fail,seal_fail,expected_rc in ((False,False,0),(False,True,86),(True,False,2)):
    with self.subTest(operation_fail=operation_fail,seal_fail=seal_fail), tempfile.TemporaryDirectory() as td:
     t=pathlib.Path(td); fake=t/'bin'; fake.mkdir(); (t/'placement/_private-inputs/custody').mkdir(parents=True)
+    (t/'result').mkdir(mode=0o700)
     (t/'placement/_private-inputs/custody/root-public.pem').write_text('public-test-only')
     (t/'recipe').symlink_to(ROOT,target_is_directory=True)
     (fake/'python3').write_text('''#!/bin/bash
