@@ -1975,6 +1975,13 @@ or v1 retired. It must not delay `GS2-11` once all actual cutover prerequisites 
 - migration of the ADR corpus to a future typed `DecisionExtension`;
 - broader Typed SDD extensions for contract topology, skill delivery, Governance rules, provider/template
   composition, and executable TestSpecs;
+- **TSDD-KNOWLEDGE-01:** every Typed SDD project starts with a durable knowledge base for all textual
+  information gathered during development, including roadmaps, logs, architecture, decisions, bugs,
+  fixes and experiments. Concrete storage form remains to be determined. Plan human access through
+  wiki/documentation views and programmatic access through a shared API, CLI and `.fsx` scripts;
+  initialization, capture, publication and installed adoption remain open. The
+  [Unified Roadmap planning scope](2026-09-07-154210-fs-gg-unified-development-roadmap.md#991-project-knowledge-from-typed-sdd-initialization)
+  owns the requirement, access options and clean/retained-project acceptance;
 - a later decision to make `typed-sdd` the default lifecycle, subject to the `GS2-10` candidate-freeze
   rule above; and
 - convenience UI, reports, or projections that do not authorize a coordination decision.
