@@ -53,6 +53,20 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+
+**Portable 0.2.1 successor preparation source delivered; installed qualification remains open.**
+[Coordination PR #909](https://github.com/FS-GG/FS.GG.Coordination/pull/909) merged at
+`daaa195ca08b46456282449ae17bf12bf4d80de4`, tree
+`8df888f0ad6d0627a863ffe8494450e8513e929a`, independently equal to qualified candidate
+`80236add07130a9de547bc9a99dbb92703742b72`. Full
+[coherent validation 36816634327](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36816634327)
+and required source checks passed. Preparation now reserves the separate 0.2.1 successor;
+the frozen 0.2.0 publisher remains byte unchanged. This is source delivery only: no 0.2.1
+candidate preparation, publication, provider grant or installed adoption is claimed. The
+published 0.2.0 producer and both protected receiver pins already satisfy P3's bounded
+publication/pin boundary. Owning plan reconciliation and the reviewed P4 Python provider,
+exact installed CLI qualification and fresh receiver creation are next; P5 remains open.
+
 **Portable P3 both protected receiver pins delivered; adoption remains open.**
 [Templates PR #658](https://github.com/FS-GG/FS.GG.Templates/pull/658) merged at
 `86122a56ebbfcc98faa744df337b5ebe82cd863f`, tree
