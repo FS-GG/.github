@@ -75,10 +75,20 @@ bootstrap validation and provider source contracts. Root independently verified 
 The runtime allows the real .NET archive within a 128 MiB aggregate bound while retaining each
 receiver's 64 MiB limit. Staging checks actual archive SHA-256 before extraction or effects, and
 cleanup owns only a directory whose exclusive creation succeeded. The derived workflow execution
-pin was corrected without weakening the security validator. Private producer-identity source is
-prepared, not delivered. Actual telemetry 0.2.1 preparation, candidate facts, admission, collector
-grant, native hello, publication and receiver adoption remain open; frozen 0.2.0 evidence and
-unproved installed adoption remain unchanged.
+pin was corrected without weakening the security validator.
+[Private Sandbox #35](https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/pull/35) then merged
+`9382e45bb7ba4988a1534008550988201b096a68`, equal reviewed candidate
+`a153e51f088f223f7ee5df5fa298f3a86b69dd46` tree `8f1332d80fe0dd358d10b4a0169246bd847f2634`.
+The adapter independently rehashes admitted roles and distinguishes protected helper H from the
+genuine coherent 0.2.1 package/image producer P before account or provider effects. All 51 private
+tests passed with real PyYAML and zero skips; no pull-request hosted workflow applies, honestly
+not required. Root independently read the equal merged tree; all four HOST paths remain unchanged.
+Actual [0.2.1 candidate preparation 36859533907](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36859533907)
+succeeded on protected producer `0dd4aa26aca6697f1cc3cece762a4ecae60b5b81`, including fresh-load
+packaged qualification and cleanup. Retained archive/member readback and the compiled image-policy
+join are still the next gates; successful preparation authorizes neither publication nor activation.
+Candidate facts, admission, collector grant, native hello, publication and receiver adoption remain
+open. Frozen 0.2.0 evidence and unproved installed adoption remain unchanged.
 
 **2026-10-01: optional FourD programmable reactions and streamlined turns recorded as an unselected design consideration.**
 The [player-facing proposal](roadmaps/2026-09-28-four-dimensional-skirmish-design-v2.md#design-consideration--programmable-reactions-and-streamlined-turns)
