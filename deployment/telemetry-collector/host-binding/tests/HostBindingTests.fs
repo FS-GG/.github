@@ -164,3 +164,19 @@ module HostBindingTests =
         let timer = Stopwatch.StartNew()
         Assert.Throws<BindingRefusal>(fun () -> HostBinding.runBoundedProcess "/usr/bin/python3" "/" [ "-c"; "import time; time.sleep(30)" ] 100 64 64 |> ignore) |> ignore
         Assert.True(timer.Elapsed < TimeSpan.FromSeconds(5.0))
+
+    [<Fact>]
+    let ``exited parent cannot leave a pipe holding descendant`` () =
+        let owner = Path.Combine(Path.GetTempPath(), "host-binding-descendant-" + Guid.NewGuid().ToString("N"))
+        Directory.CreateDirectory(owner) |> ignore
+        let pidFile = Path.Combine(owner, "pid")
+        let script = "import os,time,pathlib\npid=os.fork()\nif pid==0:\n time.sleep(30)\n os._exit(0)\npathlib.Path(" + JsonSerializer.Serialize(pidFile) + ").write_text(str(pid))\nos._exit(0)\n"
+        try
+            let timer = Stopwatch.StartNew()
+            Assert.Throws<BindingRefusal>(fun () -> HostBinding.runBoundedProcess "/usr/bin/python3" owner [ "-c"; script ] 2000 128 128 |> ignore) |> ignore
+            Assert.True(timer.Elapsed < TimeSpan.FromSeconds(5.0))
+            Assert.True(File.Exists(pidFile))
+            let descendant = Int32.Parse(File.ReadAllText(pidFile))
+            Assert.False(Directory.Exists($"/proc/{descendant}"))
+        finally
+            Directory.Delete(owner, true)
