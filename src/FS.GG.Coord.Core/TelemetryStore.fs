@@ -338,6 +338,12 @@ module TelemetryStore =
             repository: string * pullRequest: int64 * expectedHead: string * observedHead: string *
             baseRef: string * baseSha: string * state: string * mergeCommit: string option *
             mergedAt: string option * sourceDigest: string
+        | LearnInstalledOrigin of
+            workspaceId: string * producerId: string * streamId: string * role: string *
+            grantId: string * grantGeneration: int64 * managerReceiptSha256: string *
+            capabilityProfileSha256: string * capabilityResultSha256: string *
+            nativeCaptureSha256: string * nativeVerificationSha256: string *
+            capabilityObservedAt: string * capabilityExpiresAt: string * installationSha256: string
 
     type Fact =
         {
@@ -2229,6 +2235,41 @@ module TelemetryStore =
                                                    baseSha, state, mergeCommit, mergedAt, sourceDigest))
                 | Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _ ->
                     Error $"%s{label} has invalid native delivery source evidence"
+                | values -> Error(sprintf "%A" values)
+            | "learn-installed-origin/1" ->
+                let digest value = Regex.IsMatch(value, "^[0-9a-f]{64}$") && value <> String('0', 64)
+                match
+                    requiredText label node "workspaceId",
+                    requiredText label node "producerId",
+                    requiredText label node "streamId",
+                    requiredText label node "role",
+                    requiredText label node "grantId",
+                    requiredInt label node "grantGeneration",
+                    requiredText label node "managerReceiptSha256",
+                    requiredText label node "capabilityProfileSha256",
+                    requiredText label node "capabilityResultSha256",
+                    requiredText label node "nativeCaptureSha256",
+                    requiredText label node "nativeVerificationSha256",
+                    requiredTimestamp label node "capabilityObservedAt",
+                    requiredTimestamp label node "capabilityExpiresAt",
+                    requiredText label node "installationSha256"
+                with
+                | Ok workspace, Ok producer, Ok stream, Ok role, Ok grant, Ok generation,
+                  Ok managerReceipt, Ok profile, Ok result, Ok capture, Ok verification,
+                  Ok observed, Ok expires, Ok installation
+                    when itemId.IsNone && role = "native-collector" && generation > 0L
+                        && ([ managerReceipt; profile; result; capture; verification; installation ] |> List.forall digest)
+                        && DateTimeOffset.Parse(expires, CultureInfo.InvariantCulture) > DateTimeOffset.Parse(observed, CultureInfo.InvariantCulture) ->
+                    make
+                        [ "workspaceId"; "producerId"; "streamId"; "role"; "grantId"; "grantGeneration";
+                          "managerReceiptSha256"; "capabilityProfileSha256"; "capabilityResultSha256";
+                          "nativeCaptureSha256"; "nativeVerificationSha256"; "capabilityObservedAt";
+                          "capabilityExpiresAt"; "installationSha256" ]
+                        (LearnInstalledOrigin(workspace, producer, stream, role, grant, generation,
+                                              managerReceipt, profile, result, capture, verification,
+                                              observed, expires, installation))
+                | Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _ ->
+                    Error $"%s{label} has invalid installed-origin evidence"
                 | values -> Error(sprintf "%A" values)
             | _ -> Error $"%s{label}.kind is unsupported"
         | values -> Error(sprintf "%A" values)
