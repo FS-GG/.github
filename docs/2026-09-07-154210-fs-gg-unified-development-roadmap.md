@@ -65,6 +65,14 @@ independent and open. This dated clarification is not a current fleet-health att
 profile acceptance or waiver of exact artifact, authentication, custody, settlement/replay or effect
 authority for any operation actually performed.
 
+**2026-10-01: optional FourD programmable reactions and streamlined turns recorded as an unselected design consideration.**
+The [player-facing proposal](roadmaps/2026-09-28-four-dimensional-skirmish-design-v2.md#design-consideration--programmable-reactions-and-streamlined-turns)
+compares current-turn presentation, richer standing orders and a later simultaneous-order experiment.
+It preserves Guard/Ambush/Hold, current timing and saves, `fourd-tactics-v1` as default, and the existing
+V2 technical acceptance. No upload capability, rules selection, runtime profile, usability claim or
+implementation authority follows from this draft; player evidence remains necessary for perceived
+agency and reduced-drudgery claims.
+
 **2026-10-01: SC2 advisor selection source closed; genuine recording and replay remain open.**
 [SC2 #30](https://github.com/FS-GG/FS.GG.SC2.Client/pull/30) merged at owning main
 `2c7afab6103db8ee363b0877454bb162b7eb7313`, equal reviewed candidate
