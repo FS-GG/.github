@@ -180,6 +180,32 @@ def inspect_networks(value: dict, expected: set[str]) -> None:
     require(host.get("NetworkMode") == "bridge", "direct-network-route-refused")
 
 
+def inspect_native_capabilities(value: dict) -> None:
+    """Validate the fixed drop-all launch across Podman 4.9.3 inspect shapes."""
+    host = value["HostConfig"]
+    refused = "native-capability-fence-refused"
+    require("Privileged" in host and host["Privileged"] is False, refused)
+    require("CapAdd" in host and type(host["CapAdd"]) is list and not host["CapAdd"], refused)
+
+    # Podman 4.9.3 copies nil OCI capability slices as JSON null.  Present null
+    # and present empty lists both represent zero saved/configured capabilities;
+    # missing, malformed, or nonempty fields remain fail-closed.
+    for key in ("EffectiveCaps", "BoundingCaps"):
+        require(key in value, refused)
+        capabilities = value[key]
+        require(capabilities is None or (type(capabilities) is list and not capabilities), refused)
+
+    require("CapDrop" in host and type(host["CapDrop"]) is list, refused)
+    dropped = host["CapDrop"]
+    require(0 < len(dropped) <= 512, refused)
+    require(all(type(item) is str and 0 < len(item) <= 64 for item in dropped), refused)
+    require(len(set(dropped)) == len(dropped), refused)
+    sentinel = len(dropped) == 1 and dropped[0] in {"ALL", "CAP_ALL"}
+    expanded = all(item != "CAP_ALL" and re.fullmatch(r"CAP_[A-Z0-9_]+", item) is not None
+                   for item in dropped)
+    require(sentinel or expanded, refused)
+
+
 def inspect_native(value: dict) -> None:
     inspect_networks(value, {NATIVE_NETWORK})
     host, config = value["HostConfig"], value["Config"]
@@ -202,8 +228,7 @@ def inspect_native(value: dict) -> None:
         (PRODUCER_CONFIG_MOUNT, False),
         (PRODUCER_SPOOL_MOUNT, True),
     }, "native-mount-custody-refused")
-    require(not host.get("CapAdd") and set(host.get("CapDrop") or []) in ({"ALL"}, {"CAP_ALL"}),
-            "native-capability-fence-refused")
+    inspect_native_capabilities(value)
     require(host.get("UsernsMode") == "private" and host.get("PidMode") != "host"
             and host.get("UTSMode") != "host", "native-namespace-fence-refused")
     require(any(item.startswith("no-new-privileges") for item in (host.get("SecurityOpt") or [])),

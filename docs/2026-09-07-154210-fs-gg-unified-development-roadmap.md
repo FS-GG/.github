@@ -53,6 +53,25 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**V2-HOST native capability metadata source repaired; genuine acceptance remains open.**
+Genuine private attempt-j [36825105280](https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/actions/runs/36825105280), on placement `48f5a00f20de69b1a7d85aa794c47ad7d45001d5` and recipe `88d65daa1a1262d563c2312698e4a5e57109a824`, failed before native-start with the closed reason `native-capability-fence-refused`.
+Its sealed private diagnostic reports expanded CapDrop, explicit empty CapAdd, present-null OCI Effective/Bounding fields, privileged false and no-new-privileges true. These are configured OCI facts, not kernel observations.
+This source change accepts the documented Podman4.9.3 null/empty zero-set representation only with both fields present, no added capabilities, explicit unprivileged state and bounded valid drop metadata; missing, malformed and contradictory fields refuse. Fixed drop-all/no-add construction and unrelated topology, resource, identity, environment, mount, namespace, authentication and cleanup guards are preserved.
+The focused real inspector integration and 44 combined source tests pass with zero YAML skips. Root independently read both temporary secrets absent, cleanup/preservation complete and original authentication inode, mtime and hash unchanged; authentication custody stays sealed. Private recipe registration and another exact-source operation follow protected source readback. `.8`, `.9`, `.10`, LEARN enrollment and installed operation remain open; Main has no action.
+
+**SC2 imported core-Wasm feedback source repaired; genuine completion remains open.**
+[SC2 #27](https://github.com/FS-GG/FS.GG.SC2.Client/pull/27) merged at protected `c18211dcd635f42b7e33382269b5b58edcb5bfe8`, equal qualified candidate `8d62e5214a258bdee33a8916d17bd495a5cf3d81` tree `ce70b9e2922d8522624da547304bc70086378914`.
+Full hosted [verify36825317575](https://github.com/FS-GG/FS.GG.SC2.Client/actions/runs/36825317575) passed, including actual browser execution.
+Terminal/local feedback is retained for the next normal core-Wasm input instead of invoking an unsupported legacy feedback call. The admissible imported-controller regression observes actual shared ABI input/outcome bytes, enabled paused Step, a fresh frame and exact PreviousFeedback carriage.
+The fixture verifier is self contained; actual clean-checkout build-guest passed with generated browser output absent before and after. Source and scripted-peer checks do not establish genuine game movement or Step completion. Root will derive fresh protected runner artifacts and perform a separately bounded genuine attempt after this closure; `.6`, publication and installed adoption remain open.
+
+**FourD conditional private tmpfs source delivered; actual capability remains unproved.**
+[FourD #30](https://github.com/FS-GG/FS.GG.FourD/pull/30) merged at protected `1316e6dce8600e1fa732659708e5cad98064875b`, equal qualified candidate `354b55fc4aef869b82385afa91c46d825c932423` tree `c251b7f6a69c4fd3b7f9b991a954966420c70470`.
+Full [verify36825257155](https://github.com/FS-GG/FS.GG.FourD/actions/runs/36825257155) and [portable source preparation36825257129](https://github.com/FS-GG/FS.GG.FourD/actions/runs/36825257129) passed. A hosted-only UID fixture assumption was corrected without changing production mapping guards; 67 focused tests pass.
+The source uses one finite rootless private mount owner for a 5GiB tmpfs, requires 2GiB actual memory headroom, bounds descendants/output/cancellation and verifies mount restoration plus persistent archive/store identity. Actual earlier free scratch3.88GiB remains below the unchanged5GiB floor; documented runner memory is not admission evidence.
+Only `preflight_only=true` is selected next, before downloads/build/load/P2; its result cannot qualify. A measured refusal ends this route without a smaller floor, root-disk fallback, unrelated cleanup or paid-runner assumption. Full image/P2, installed operation and player-derived acceptance remain open.
+
+
 
 **V2-HOST typed native-inspection private registration delivered; diagnostic operation is next.**
 [Private substrate PR #30](https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/pull/30)

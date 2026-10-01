@@ -424,38 +424,41 @@ exit 2
                   'private_placement_sha':'d'*40,'source_root':ROOT})()
    op=q.Operation(a,FakeRunner()); topology=op.topology()
    value={'Config':{'User':'32768:32768',
-                    'Env':['FSGG_TELEMETRY_CREDENTIAL_NATIVE_PROSPECTIVE_V1=secret-value',
-                           {'malformed':'private-env'}]},
+                    'Env':[*topology.FIXED_ENV,
+                           'FSGG_TELEMETRY_CREDENTIAL_NATIVE_PROSPECTIVE_V1=secret-value']},
           'HostConfig':{'NetworkMode':'bridge','ReadonlyRootfs':True,'PidsLimit':128,
                         'Memory':2*1024**3,'NanoCpus':2_000_000_000,
-                        'CapAdd':{'malformed':'private-cap-add'},
-                        'CapDrop':[{'malformed':'private-cap-drop'}],
+                        'CapAdd':[],'CapDrop':['CAP_CHOWN','CAP_SETUID'],
                         'SecurityOpt':['no-new-privileges'],'Privileged':False,
                         'UsernsMode':'private','PidMode':'private','UTSMode':'private'},
-          'EffectiveCaps':{'malformed':'private-effective'},'BoundingCaps':None,
+          'EffectiveCaps':None,'BoundingCaps':None,
           'NetworkSettings':{'Networks':{topology.NATIVE_NETWORK:{}}},
           'Mounts':[{'Source':'/private/source','Destination':path,'RW':writable}
                     for path,writable in topology.NATIVE_MOUNTS.items()]}
    class InspectRunner:
     def run(self,args,**kwargs): return subprocess.CompletedProcess(args,0,json.dumps(value).encode(),b'')
-   original=topology.Refusal('native-capability-fence-refused')
-   def refuse(_value): raise original
    op.r=InspectRunner(); op.phase('private-material-ready')
+   op.inspect_container('fsgg-native-development',topology.inspect_native,'native-inspect')
+   value['BoundingCaps']=['CAP_CHOWN']
+   captured=[]
+   def inspect(candidate):
+    try: topology.inspect_native(candidate)
+    except topology.Refusal as exception:
+     captured.append(exception); raise
    with self.assertRaises(topology.Refusal) as refused:
-    op.inspect_container('fsgg-native-development',refuse,'native-inspect')
-   self.assertIs(refused.exception,original)
+    op.inspect_container('fsgg-native-development',inspect,'native-inspect')
+   self.assertIs(refused.exception,captured[0])
    op.write_private_diagnostics(); raw=(root/'output/command-diagnostics.json').read_text(); saved=json.loads(raw)
    extension=saved['extensions']['fsgg.telemetry.private-container-inspection/1']
    record=extension['records'][0]
    self.assertEqual(('private-material-ready','native','native-capability-fence-refused'),
                     (record['phase'],record['inspection'],record['projection']['failureCode']))
-   self.assertEqual(('malformed','malformed','null'),
+   self.assertEqual(('empty','null','list'),
                     (record['projection']['privilege']['capAdd']['shape'],
                      record['projection']['privilege']['ociEffective']['shape'],
                      record['projection']['privilege']['ociBounding']['shape']))
    self.assertEqual([],saved['records']); self.assertNotIn('extensions',op.result)
-   for private in ('secret-value','private-env','private-cap-add','private-cap-drop',
-                   'private-effective','/private/source'):
+   for private in ('secret-value','CAP_CHOWN','CAP_SETUID','/private/source'):
     self.assertNotIn(private,raw)
    self.assertEqual(0o600,(root/'output/command-diagnostics.json').stat().st_mode&0o777)
  def test_diagnostic_write_failure_cannot_skip_cleanup(self):
