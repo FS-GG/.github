@@ -65,6 +65,50 @@ independent and open. This dated clarification is not a current fleet-health att
 profile acceptance or waiver of exact artifact, authentication, custody, settlement/replay or effect
 authority for any operation actually performed.
 
+**2026-10-02: FABLE feed-census failure diagnostics source delivered; publication remains open.**
+[Templates #663](https://github.com/FS-GG/FS.GG.Templates/pull/663) merged at
+`aa6fd459ec6c0904167921561b66050baa5bcb31`, tree
+`73d04773351d180a66c42350385802d04062d914`, equal qualified source
+`6b8daffcffb5b2d6c1f8d728510b9e48029119a6`. Root authenticated merge, tree and main;
+all 13 triggered native checks passed, with three expected skips. Actual F# diagnostics passed
+148 controls, including preservation of AND terms and OR alternatives in sanitized accepted
+permission evidence. The 330 unchanged release, template and public receiver input blobs retain
+the preceding qualified Preview C scope; this PR changes failure classification and tests.
+The prior read-only census remains UNKNOWN because deleted GitHub versions returned 403.
+A fresh protected read-only census and its actual sanitized capability evidence are next;
+dual-feed absence, immutable release, byte-identical publication and installed receiver adoption
+remain open. Source delivery does not supply deleted-version access or publication acceptance.
+
+**2026-10-02: HOST typed private workflow registration delivered; container adoption remains open.**
+[Sandbox #40](https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/pull/40) merged at
+`3aabcb1605c3e23032fa961b917b92c8e238522f`, tree
+`f1c65fccaad42d6e693007de50bd3e5218dd5836`, equal qualified source
+`cb4635ab9b04826455825e8dbf6a5d55c8cf6ead`. Root authenticated merge, tree and main.
+The private workflow now uses the exact qualified public HOST recipe `8ad0da67004d670c6803f34755dfe759a7fc84e7`,
+SDK 10.0.401 and its compiled F# binding/process scope. Its existing 389-byte public-input
+acquisition step remains byte-identical; exact template/profile/render equality, 14 consumer tests,
+26 F# tests, actionlint and shell parsing passed. Sandbox has no hosted source-PR workflow.
+The [Host release roadmap](roadmaps/utel-host-release-020.md) assigns pending adoption to the existing
+container/CI route and labels uncompleted Main adoption steps superseded, retaining the completed
+historical artifact handoff. No new Main action follows. Private producer/admission joins, genuine
+attempt-o, capture/restart/recovery and dependency-free Main retirement remain open; private records,
+the fifteen stopped containers, ordinary services, fdev, PostgreSQL and shared credentials remain preserved.
+
+**2026-10-02: P4 authenticated run-context construction source delivered; facts remain unproved.**
+[Sandbox #41](https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/pull/41) merged at
+`c44f8dc0e4f08425cf56639fb3a71c0476e10c60`, tree
+`20f8c92354c38fbc5d5d7016f36e832b6bcfcc5a`. Root authenticated the predicted merge tree,
+which preserves HOST #40 and the three qualified P4 paths from `c461ec1d5eab9d0dfdac2722567bd4cd761be290`.
+Actual credential-free reservation `36938654501` attempt 1 failed before admission because the
+nonexistent triggering-actor-ID context was empty. It produced no result or artifact; no provider
+work or secret provisioning occurred. The replacement acquires a bounded authenticated exact-run
+response and passes it to F# after removing token access. F# rejects duplicate members and malformed
+or mismatched identities, derives independent numeric actor IDs, and emits the existing closed
+context contract. All 24 focused controls passed, including actual F# and workflow execution;
+hosted SDK 10.0.400 qualification remains pending. The original eleven producer inputs and protected
+v2 manifest helper are unchanged. Source-bound staging manifest replacement, fresh reservation,
+exact-attempt admission, sealed facts, separate grant and native qualification remain open.
+
 **2026-10-02: LEARN W6 C2 protected-origin reader and bound native verifier source integrated; production runtime qualification remains open.**
 The installed-origin reader now joins prospective v3 manager/source-reference contracts to retained capture
 and snapshot bytes and the unchanged canonical native verifier. New F# custody and process code binds the
