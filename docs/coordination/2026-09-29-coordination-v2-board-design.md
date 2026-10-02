@@ -14,6 +14,35 @@ Repository owners retain their deliverables and evidence. This is **COORD-BOARD-
 [Unified roadmap](../2026-09-07-154210-fs-gg-unified-development-roadmap.md#98-feature-parts-and-subroadmap-index)
 and the [V2 execution roadmap](../github-substrate-v2-roadmap.md#coordination-v2-board--2026-09-29).
 
+## Migration priority and execution sequence — 2026-10-02
+
+**Next selected item: `COORD-BOARD-V2-01.2`.** Begin bounded carryover and the organization pilot
+while current implementation lanes continue. The next window prepares the exact project/schema
+binding, consumer inventory and dry-run manifest, then imports three to five representative items
+covering source delivery, publication and native qualification. Every selected item names its owner,
+next action, current dependency, owning roadmap outcome and acceptance evidence. Existing issue
+identities, branches, PRs, workers and unresolved operation evidence remain attached to that work.
+
+Reconcile all currently open V2 roadmap outcomes before broader transfer. Include only verified
+remaining work; a source merge does not finish its unpublished package or unqualified native operation.
+Keep delivered outcomes and superseded V1 requirements in history. Preserve feature identities and
+dependencies, group adjacent steps into reviewable outcomes, and avoid creating a row for every
+checkbox, CI failure or intermediate report. Use the organization board for organization-relevant
+outcomes and the selected product boards for detailed product execution.
+
+Prepare `.3` adapter and refresh source alongside the `.2` pilot. Broader import and the `.4`
+scheduling switch follow verified pilot membership and qualified restricted projection. Inventory and
+switch the actual driving skills and consumer bindings together, preserving routine delivery,
+selected technical checks and native merge readback. After that switch the board is the primary
+scheduling queue; owning roadmaps retain design, sequencing and acceptance, and native evidence
+remains completion authority. Board unavailability cannot stop otherwise valid source delivery.
+
+Product integration preparation can proceed independently, but `.5` publication depends on the
+qualified `.3` contract. `.6` qualifies actual published fresh and retained workspace behavior before
+each product switches. Full V2 acceptance remains complete at its selected profile throughout this
+follow-on migration. The delivery checklist below remains the sole milestone ledger; this priority
+selection completes none of its pending creation, import, projection or adoption outcomes.
+
 ## Current boundary
 
 [ADR-0091](../adr/0091-speed-first-clean-v2-start.md) supersedes the unfinished V1 fleet-migration
