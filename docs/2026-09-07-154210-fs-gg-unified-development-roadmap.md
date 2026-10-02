@@ -65,6 +65,19 @@ independent and open. This dated clarification is not a current fleet-health att
 profile acceptance or waiver of exact artifact, authentication, custody, settlement/replay or effect
 authority for any operation actually performed.
 
+**2026-10-02: SC2 malformed advisor-evidence transport source delivered; private adoption remains open.**
+[SC2 #35](https://github.com/FS-GG/FS.GG.SC2.Client/pull/35) merged at
+`57eadf00bb9e776664e00fe200bb4f2952f72829`, tree
+`991ff12af5485203d94749150b29d3e547cdf1cc`, equal qualified source
+`18bcfcb8b355ada3871158eeef172ed8af0bd265`. Root authenticated merge, tree and main;
+full native verify `36947574223` and its actual product job passed. Four transport/test
+paths preserve malformed post-baseline terminals for the compiled F# selector and mark
+mismatched tagged primitive payloads invalid. Generated-selector Node controls and both
+real focused Chromium callbacks passed. F# authority, canonical Quint, dependencies and
+the existing event, byte and time bounds are unchanged. A fresh protected artifact packet
+must bind these bytes before private successor adoption; its actual import-closure and
+complete transfer-bound repairs, native advisor/replay and full cleanup remain open.
+
 **2026-10-02: BAR complete runtime-closure source delivered; protected artifact adoption and gameplay remain open.**
 [FSBar #17](https://github.com/FS-GG/FSBarV2/pull/17) merged at
 `59ab6e446e23eb3a40cc6a1ce766b181ae0db032`, tree
