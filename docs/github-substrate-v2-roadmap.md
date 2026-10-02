@@ -74,6 +74,14 @@ not schedule or gate the current route, and it is not reported as completed.
 and switch scheduling incrementally. Existing delivery lanes continue in parallel. Full V2 acceptance
 remains complete at its selected profile; board migration is follow-on work.
 
+**Independent BAR product follow-up — 2026-10-02:** the
+[headless engine and infolog qualification plan](roadmaps/2026-10-02-bar-headless-infolog-qualification.md)
+selects a 10 MiB raw-log budget for the next qualified proof, qualifies current stock
+Recoil before atlas workarounds, and sequences F#/Quint complete-record handling,
+capacity measurement and a joined native successor under BARC-01.5f. These are
+planned product changes; no engine installation or native acceptance is claimed,
+and they do not reopen completed V2 acceptance.
+
 The owner selected speed over backward validity on 2026-09-28. No V1 workload requires preserving
 its old execution guarantees. `.github` uses the published Coordination CLI 0.1.2 and its ordinary V2
 workflow. Several ready repository profiles may share one immutable published CLI. Each repository keeps
