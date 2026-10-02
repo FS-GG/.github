@@ -65,6 +65,34 @@ independent and open. This dated clarification is not a current fleet-health att
 profile acceptance or waiver of exact artifact, authentication, custody, settlement/replay or effect
 authority for any operation actually performed.
 
+**2026-10-02: SC2 typed failure-summary and Release task-loop source delivered; native advisor journeys remain open.**
+[SC2 #34](https://github.com/FS-GG/FS.GG.SC2.Client/pull/34) merged at
+`feb7ab0d9ed5afd698945c3c166778c8ce591216`, tree
+`8269e4e6385f9b29b3084c8779dcf3c28ef840cc`, equal the qualified coherent source
+`b92ea4096d53e251b0fac4d77c3654952057ed5d`. Root authenticated merge, tree and main;
+full native verify `36942709339` passed. All nine qualified producer blobs were preserved exactly.
+F# now validates received advisor projections and selects bounded causal terminal evidence;
+the browser adapter transports the compiled result. Release-safe iterative task loops retain
+production wait, cancellation, authority and nine-query bounds. SDK 10.0.400 Release solution
+built with zero warnings/errors; compiled Gateway and Contracts controls, existing Quint/FsQuint
+correspondence, generated Fable vectors and Vite passed. Real focused Chromium passed both the
+corrected baseline-to-summary journey and multibyte bounded capture. Exact protected artifact
+rebuild, private consumer succession and native advisor/replay/cleanup acceptance remain open;
+the incomplete older protected artifact is retained and cannot evidence these new exports.
+
+**2026-10-02: LEARN W6 C2 manager v3 native-verifier CI source delivered; installed runtime remains open.**
+[Coordination #921](https://github.com/FS-GG/FS.GG.Coordination/pull/921) merged at
+`aa05817cd3025ead9d574e772d5302be8cf4e2dc`, tree
+`02913d7ac8e36d54f88756ee1fc69e04a5a35cce`, equal qualified source
+`f38e94dd77f0d09e6a943632de4afa9b899b0525`. Root authenticated merge, tree and main;
+all 45 native checks passed, with six expected skips, including complete coherent formal validation
+and compiler-and-tests. The required compiled test route invokes the v3 native verifier with bounded
+exact protected-module acquisition, retained seven legacy cases and fail-closed cleanup. Mechanical
+orchestration moved to its test-owned script, leaving the unchanged architecture caps satisfied at
+844/850 total control lines and 630/630 unique lines. The protected-origin reader is already delivered.
+Manager publication, actual OCI/runtime acquisition, genuine collector grant, private installed custody,
+capture/recovery and separate C3 activation remain open; source CI does not establish installed acceptance.
+
 **2026-10-02: FABLE feed-census failure diagnostics source delivered; publication remains open.**
 [Templates #663](https://github.com/FS-GG/FS.GG.Templates/pull/663) merged at
 `aa6fd459ec6c0904167921561b66050baa5bcb31`, tree
