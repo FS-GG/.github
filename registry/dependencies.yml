@@ -880,7 +880,8 @@ contracts:
         toolchain: ".NET 10.0.401 / Fable 5.18.0 / Node 26 / Quint 0.32.0 / Rust 1.90.0 / WASI SDK 34.0"
         browser: "Pinned Playwright 1.63.0 Chromium profile"
         abi: "BAR ABI 1; strict imported SC2 ABI 0x00010000"
-        qualification: "Source .NET/Fable and pinned Chromium controls passed; Rust/C author routes use the pinned SDK. Whole two-feed installed acceptance remains OPEN pending final root readback of read-only run 37047631080; org 25/25 is reported passed, public completion unverified."
+        qualification: "Installed both-feed qualification CLOSED: read-only run 37047631080 passed org 25/25 and public 25/25 on immutable producer 4afacb501b9371b4cc81494b7bf91b46c880a663 and reviewed qualifier 7397d4b408b8e7b44393fee9f837278723934867; fresh locked HTTPS restores, .NET/Fable, Rust2/C4, pinned Chromium under /sub/app. Lock SHA-256 d6a4e7dde5754ac50c73f9887c4aedf2e1f845b967ecbd6b26f9eb150667439e. No product adoption."
+        installed-evidence: "Org artifact 11244369017 SHA-256 34647b3b6800339c48785ad7df0afdcf80145d094685bff83c07afbf553e748d; public artifact 11245594558 SHA-256 cad4eede1795feef465b4862a3793683cb3f9bed006b028bcdc78bf4814c3ad0. Native API success and downloaded artifact digests/readbacks verified 2026-10-02; original failed run 37039137022 remains historical."
         qualifier: "7397d4b408b8e7b44393fee9f837278723934867; tree 4881135b718beaeb87eab1763d9f13e31410389f; Game#680. Exact audited consumer projection/assertion correction for canonical early/late expiry orderings; published runtime/model/SDK/package inputs remain unchanged."
         unqualified: "Additional browsers, npm/bundler permutations, OS support, WASI execution, deterministic fuel/replay, product adoption and native authority"
   - id: game-scene-adapter
