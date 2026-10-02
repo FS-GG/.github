@@ -8,6 +8,8 @@ description: Use when explicitly asked to burn down the FS-GG Coordination board
 Run the complete canonical [drive-board](../drive-board/SKILL.md) host workflow. This variant changes
 only the model routing of deployed workers; reconciliation, triage, lane selection, verification,
 engine-currency repair, and termination remain owned by `drive-board`.
+The selected organization V2 adoption gate and read-only inspection route are inherited too; the
+legacy host loop applies only to a separately selected historical scope, never to V2 planning rows.
 
 Inherit `drive-board`'s routine route unchanged. The table below selects the single routine owner only
 when a delegated owner is needed; it does not authorize a critic, confirmation worker, or any

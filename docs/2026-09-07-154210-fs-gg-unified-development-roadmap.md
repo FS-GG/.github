@@ -53,6 +53,24 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-02: COORD-BOARD-V2-01.4 read-only inspection and successor preparation CLOSED (source).**
+The [owning board design](coordination/2026-09-29-coordination-v2-board-design.md) now provides
+`board-v2 inspect`, a structurally read-only projection over authenticated binding and source
+population evidence. It reports planning fields, native dependency coverage, discrepancies and
+Current/Stale/Unknown without granting writes. The fixed Observation authorizer admits either the
+original three identities or the exact proposed four; .github #3009 is refused under the old binding,
+and SDD #935 remains unapproved and unselected. All historical pilot objects and receipts are retained.
+
+Actual source validation passed 53 projection and five CLI tests with zero failures or skips,
+including exact membership, invalid artifact custody, lost-response refusal and zero-mutation controls.
+The 23-skill semantic gate passed all 64 rejection cases. A fresh native snapshot and
+[37 named outcome dispositions](coordination/board-v2-outcome-dispositions.md) prepare bounded carryover;
+unknown native mappings stay Unknown. Organization consumer guidance remains explicitly gated.
+Full .4 acceptance is OPEN: protected Release artifact custody, a new four-target binding,
+root-owned import with complete independent readback, qualified inspection/refresh and selected
+consumer adoption remain required. No live board switch or hosted activation is claimed.
+Selected V2 platform full acceptance remains complete.
+
 **2026-10-02: BAR selected infolog budget amendment CLOSED (source).**
 [FSBar #23](https://github.com/FS-GG/FSBarV2/pull/23) merged protected
 `87250d3d5d4ca48b25307228da595d1d7d6fc2ee`, tree

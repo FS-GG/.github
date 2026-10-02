@@ -128,3 +128,36 @@ let ``partial CLI report is truthful and local lock releases after report failur
         use lease = new FileStream(Path.Combine(Path.GetTempPath(), "fsgg-v2-observation-PVT_coord_v2.lock"), FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None)
         Assert.True(lease.CanRead)
     finally Directory.Delete(directory, true)
+
+[<Fact>]
+let ``inspect emits unknown population evidence without any mutation dispatch`` () =
+    let directory = Path.Combine(Path.GetTempPath(), "board-v2-inspect-" + Guid.NewGuid().ToString("N"))
+    Directory.CreateDirectory directory |> ignore
+    try
+        let bindingPath = Path.Combine(directory, "binding.json")
+        let reportPath = Path.Combine(directory, "inspection.json")
+        File.WriteAllText(bindingPath, bindingJson (loadedDigest ()))
+        let mutable reads = 0
+        let mutable mutations = 0
+        let transport =
+            { new IGitHubTransport with
+                member _.Send request = reads <- reads + 1; Error(Errors.Unauthorized request.Subject)
+                member _.SendMutation _ = mutations <- mutations + 1; failwith "inspect attempted mutation"
+                member _.RetryMutation _ = mutations <- mutations + 1; failwith "inspect attempted retry" }
+        Assert.Equal(3, BoardV2Application.runWithTransport transport ["inspect"; "--binding-file"; bindingPath; "--report-file"; reportPath])
+        Assert.Equal(1, reads)
+        Assert.Equal(0, mutations)
+        use document = JsonDocument.Parse(File.ReadAllText reportPath)
+        let root = document.RootElement
+        Assert.Equal("fsgg.coord.board-v2-inspection/1", root.GetProperty("schema").GetString())
+        Assert.Equal(JsonValueKind.Null, root.GetProperty("selected").ValueKind)
+        Assert.Equal(0, root.GetProperty("mutationAttempts").GetInt32())
+        Assert.Equal("status", root.GetProperty("status").GetProperty("id").GetString())
+        Assert.Equal("r", root.GetProperty("status").GetProperty("options").GetProperty("Ready").GetString())
+        Assert.Equal("roadmap", root.GetProperty("roadmapFieldId").GetString())
+        Assert.Equal("track", root.GetProperty("track").GetProperty("id").GetString())
+        Assert.Equal("observation", root.GetProperty("observation").GetProperty("id").GetString())
+        Assert.Equal("FS-GG/.github", (root.GetProperty("repositories").[0]).GetString())
+        Assert.Equal(0, root.GetProperty("candidates").GetArrayLength())
+        Assert.Equal(0, root.GetProperty("items").GetArrayLength())
+    finally Directory.Delete(directory, true)

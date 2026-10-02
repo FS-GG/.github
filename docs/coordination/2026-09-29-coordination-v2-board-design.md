@@ -7,8 +7,10 @@ The board provides planning and visibility; native delivery and the selected V2 
 remain the sources of delivery truth.
 
 **Status:** selected design, 2026-09-29; organization pilot passed 2026-10-02. Project 3, its schema
-and the three approved memberships are read back. Restricted automatic projection, broader import,
-consumer switching and product adoption remain pending below.
+and the three approved memberships are read back; .3 qualifies its fixed root-local refresh. A
+four-target .4successor and organization inspection guidance are prepared but gated pending actual
+protected artifact/import/inspection and selected consumer readback. Broader adoption and .5–.6product
+publication remain pending below.
 **Owner:** `.github` owns the organization planning surface and shared consumer contract; SDD and
 Templates own published workspace integration, and product owners adopt their scoped boards.
 Repository owners retain their deliverables and evidence. This is **COORD-BOARD-V2-01** in the
@@ -50,6 +52,30 @@ qualified `.3` contract. `.6` qualifies actual published fresh and retained work
 each product switches. Full V2 acceptance remains complete at its selected profile throughout this
 follow-on migration. The delivery checklist below remains the sole milestone ledger; this priority
 selection closes the verified .2 pilot and .3 root-local refresh; .4–.6 remain open.
+
+## Bounded .4 source window — prepared, not adopted
+
+The [successor preparation](board-v2-import-preparation.md#four-target-successor-and-consumer-adoption--source-preparation)
+keeps the accepted three issues and proposes existing .github#3009 as the fourth, with exact native
+identity and fresh complete empty blocked_by observations. Its architecture choice is already accepted;
+the remaining organization ADR/linked design is a genuine deliverable. The
+[outcome dispositions](board-v2-outcome-dispositions.md) cover the actual named programme rows while
+preserving unknown native mappings and unselected later outcomes. Do not create rows per source PR,
+checkbox or receipt. SDD#935 remains outside the selected queue.
+
+The source adds read-only `board-v2 inspect` and a deterministic candidate display using current
+integrator PR/touch-set/capacity facts. Human fields, observation/currentness and outcome acceptance stay
+separate. The fixed Observation authorizer supports only exact original3 or proposed4 bindings and
+freshly checks each selected map; source admission never supplies live credential/manifest authority.
+This stateless descriptor/view work needs no new Quint protocol or scheduler. Qualified legacy/fence
+behavior and dormant hosted activation remain unchanged.
+
+Organization-only work-unified-roadmap, drive-board/normal/best and check-board guidance is gated on
+actual four-target qualification and root-selected consumer invocation. Until that gate is passed, no
+current live switch is claimed. After adoption that admitted scope uses inspection as its primary queue,
+with owning roadmaps/intake/native evidence still authoritative. Product/local-only bindings and ordinary
+work with no represented issue remain valid. Full .4 stays open until remaining approved outcomes,
+imports and consumer/disposition evidence are actually recorded; .5–.6 remain separate.
 
 ## Current boundary
 
