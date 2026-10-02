@@ -21,6 +21,8 @@ FLEET: tuple[Mapping, ...] = (
     Mapping("FS-GG/.github", "coord-engine/v", "FS.GG.Coord.Cli", "semver"),
     Mapping("FS-GG/FS.GG.Game", "v", "FS.GG.Game.Core", "semver"),
     Mapping("FS-GG/FS.GG.Game", "skills/v", "FS.GG.Game.Skills", "semver"),
+    Mapping("FS-GG/FS.GG.Game", "wasm/v", "FS.GG.Wasm.Contracts", "semver"),
+    Mapping("FS-GG/FS.GG.Game", "wasm/v", "FS.GG.Wasm.Browser", "semver"),
     Mapping("FS-GG/FS.GG.Governance", "v", "FS.GG.Governance.ReferenceGateSet", "semver"),
     Mapping("FS-GG/FS.GG.Rendering", "v", "FS.GG.UI", "semver"),
     Mapping("FS-GG/FS.GG.Rendering", "fs-gg-ui/v", "FS.GG.UI", "semver"),

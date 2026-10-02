@@ -53,6 +53,57 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-02: WASM-SHARED-01.4 publication and fresh installed consumers CLOSED; product adoption remains open.**
+[Game PR #677](https://github.com/FS-GG/FS.GG.Game/pull/677) delivered protected
+`ea015cbf884b01754bc6615476241450907b6b24`, tree
+`9526ed555e877080e79b7234b4ec0dac613991ec`. The immutable `wasm/v0.1.1`
+[publisher run 37012281052](https://github.com/FS-GG/FS.GG.Game/actions/runs/37012281052)
+passed packaging, both feed pushes and readbacks, SDK asset verification and release promotion.
+Both `FS.GG.Wasm.Contracts` and `FS.GG.Wasm.Browser` are published at 0.1.1;
+GitHub Packages preserves the original archives and nuget.org adds only its verified package signature.
+The [published SDK](https://github.com/FS-GG/FS.GG.Game/releases/tag/wasm/v0.1.1)
+archive is SHA-256 `923173219374de6c2f5adc62c930042e18abc17125b0e32ba8d66c57266430d2`,
+and its manifest is `975166b2cf53b17c2e5f55b1e020266f4cba78c9d2257d27a751f25deb58c2b5`.
+Root independently compared public package payloads and all three release assets against retained custody.
+The user-supplied NuGet trusted publishing policy worked. The failed unpublished 0.1.0 tag and run remain history.
+This independent release set changes no Game.Core/Render 0.16.0 or Skills 0.9.0 pin.
+The public feed-only consumer passed fresh locked restore, .NET and Fable builds, SDK-authored Rust and C
+modules and all six Chromium cases. [Game PR #678](https://github.com/FS-GG/FS.GG.Game/pull/678)
+then delivered protected `3062be7e37c97959b9d522492ea1505f89a4c74e`, tree
+`70177a549cb2081ee18cb907805bae1f6e9410b1`, correcting duplicate public source mapping
+and adding the read-only organization-feed qualification job. Actual
+[organization installed run 37017511208](https://github.com/FS-GG/FS.GG.Game/actions/runs/37017511208)
+passed the same fresh feed-only journey and all six Chromium cases. Both generated consumers have lock
+SHA-256 `040afc28749bdf7545ce8d424e8cae602583790b06c8439f92a7f86b69fa4007`.
+Neither qualification uses producer ProjectReferences or a local feed. This closes WASM-SHARED-01.4;
+BAR, SC2 and FourD product adoption in .5–.7 remains separate and open.
+
+**2026-10-02: COORD-BOARD-V2-01.3 fixed projection source CLOSED; live migration remains open.**
+[PR #4110](https://github.com/FS-GG/.github/pull/4110) delivered protected
+`47d0a38ca1f3b390bb20b88f04c8ba019d989c15`, tree
+`f760fb087e5f5b20f9d2440f8d1cdffd31e1a70b`, after all required native checks passed.
+The bounded source collector and fixed CLI verify project, content and native issue identities,
+strict pagination and protected manifest population. They preserve scheduling fields and report
+unknown coverage truthfully. This is source closure; live binding, restricted observation writes and
+native refresh qualification remain open. The user resolved organization Projects access, and root
+created and independently read back [Coordination V2 #3](https://github.com/orgs/FS-GG/projects/3),
+immutable ID `PVT_kwDOEYAWY84Bldpa`. Canonical schema and approved three-issue pilot readback are pending;
+COORD-BOARD-V2-01.2 remains open and legacy Project #1 is preserved.
+
+**2026-10-02: SC2 distinct-overlay/empty qualification source CLOSED; native SC2C-01.6f remains open.**
+[SC2 PR #37](https://github.com/FS-GG/FS.GG.SC2.Client/pull/37) merged at
+`944fea24d2c12e396bd0d45bc21a867a5b710500`, with qualified source
+`9fc40e10a5214243356f0059f6d636b1733234ab` and tree
+`eba4e672bdb63eb3e1da35c0173dd2e5753ad1e4`.
+The [native verification run 37013446776](https://github.com/FS-GG/FS.GG.SC2.Client/actions/runs/37013446776)
+passed. The typed constructor now checks actual live output presence, lengths and digests,
+initialization and visible-overlay identities, the ordered invocation prefix and commands through export closure.
+Fresh exact-source DLL revision and raw-source/PDB joins passed; focused real Chromium passed three cases,
+including seven causal negative controls. Independent Astra review passed 31 generated-bridge controls
+and verified all 281 artifact rows. The earlier mismatched DLL remains excluded historical evidence.
+Protected artifact construction, private author/controller preparation and one changed native qualification
+remain open. Source qualification establishes no successful native journey or change to controller authority.
+
 **2026-10-02: LEARN P2-C.3 inactive v3 image-closure source CLOSED; images and native installation remain open.**
 [PR #4105](https://github.com/FS-GG/.github/pull/4105) merged at protected
 `907bbd6abe6da735ddca409b6ec827fe4b2ab7b5`, tree
