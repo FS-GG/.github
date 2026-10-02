@@ -1723,3 +1723,11 @@ Root working: LEARN sourcePR4118 exact3c8b4f adds genuine-production C4 mechanis
 Board worker working: sole task .NET pair granted for protected3829 Release custody; remaining workers have no local compute grant. Main/work-main ordinary services NO ACTION, all stopped containers/private historical records/shared services preserved. No additional user setup requested. Root owns remaining source integration and effect authentication; external host/learn owner waiting only on a concrete future acquisition request, not authorized to manufacture grant/profile bytes.
 
 Last remote check15:59 UTC no new mail; next due16:04 UTC. Full programme checkpoint is in unified mailbox16:00 entry. No credentials/private payloads published.
+
+## 2026-10-02 16:50 UTC — HOST/LEARN checkpoint follow-through
+
+HOSTPR4116 mergedprotected e9bee62a8d3d27bb765e751a65876946e8168940. Actualprotectedpush37031537970 native/formalgates and retainedcustody succeeded. Artifact11238076175 outerdigest70001a27f3d77d21d7d2130bad63523bea3e2058d89114c4a0a64ea20ca89ac0; rootauthenticates88retainedfiles/selectedsource/fixednative/constructor/loadedbytejoins. Detailedpassive PDB/nativegate/inputreview remains active before finalcustodyeligibility. Nativeacquisition/grantedverifier/execution remains unavailable; noeffectauthorized.
+
+LEARN4118 source d7ad mechanism16scenarios/334correspondences fullfinitegate passed; freshhostedgate failed existingforcedadoptionfixture beforePIDmarker setup, while finiteoperation budget250ms includedcoldlaunch. Positivefixturewarmup repair underway, productiontimeout/cleanup unchanged; exactgit-timeout refusal and cleanretirement will be asserted. Actualevent/fetchbaserace repaired by cleanjoincf64 to protectedbe1c .github. No rerun/waiver. ActualC4 image/namespace/reader/profile/protocol qualification open; genuineHostarchiveacquisitionclosed, completePython/Tk/reader/sessionrawbytes still missing.
+
+Main/work-main ordinaryservices NOACTION. Bothremotechannels checked16:46UTC noexternalreply; no backgroundwatcher claim. Fullusercheckpoint16:30UTC/next17:00UTC. Soletask2CLR now SC2protected4314build; permanentkeeper/Gatewaypreserved. Noadditionaluser setup requested.
