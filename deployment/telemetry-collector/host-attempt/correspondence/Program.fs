@@ -18,10 +18,13 @@ if String.IsNullOrWhiteSpace itfRoot then fail "HOST_ATTEMPT_ITF_ROOT required"
 let profilePath=required "HOST_ATTEMPT_PROFILE"
 let adapterPath=required "HOST_ATTEMPT_ADAPTER"
 let productionPath=required "HOST_ATTEMPT_PRODUCTION_DLL"
+let receiverPath=required "HOST_ATTEMPT_RECEIVER_DLL"
 let toolPath=required "HOST_ATTEMPT_QUINT_TOOL"
 let acquiredPath=required "HOST_ATTEMPT_ACQUIRED_STATE"
 let loadedProductionPath=typeof<AttemptState>.Assembly.Location
+let loadedReceiverPath=typeof<OwnedLaunch.State>.Assembly.Location
 if sha loadedProductionPath<>sha productionPath then fail $"loaded production mismatch: loaded={sha loadedProductionPath} provided={sha productionPath}"
+if sha loadedReceiverPath<>sha receiverPath then fail $"loaded receiver mismatch: loaded={sha loadedReceiverPath} provided={sha receiverPath}"
 let acquiredTrace=JsonNode.Parse(File.ReadAllText acquiredPath).AsObject()
 if acquiredTrace["schema"].GetValue<string>()<>"fsgg.telemetry.host-attempt-acquired-trace/1"||acquiredTrace["producerSha256"].GetValue<string>()<>sha productionPath then fail "concrete acquired trace identity differs"
 let acquired=acquiredTrace["finalState"].AsObject()
@@ -124,4 +127,4 @@ for scenario,actions,names in launchCases do
 let private launchGuarded=OwnedLaunch.applyReleaseGuardMutationForCorrespondence false OwnedLaunch.initial
 let private launchMutated=OwnedLaunch.applyReleaseGuardMutationForCorrespondence true OwnedLaunch.initial
 if launchGuarded.Phase<>OwnedLaunch.Refused||launchMutated.Phase<>OwnedLaunch.ReleaseIntended||launchProject launchGuarded=launchProject launchMutated then fail "actual owned launch identity guard mutation did not diverge"
-printfn "OwnedLaunch canonical/actual reducer correspondence passed: %d scenarios, %d transitions; actual identity guard mutation diverged" launchCases.Length launchTransitions
+printfn "OwnedLaunch canonical/actual reducer correspondence passed: %d scenarios, %d transitions; receiver=%s; actual identity guard mutation diverged" launchCases.Length launchTransitions (sha loadedReceiverPath)
