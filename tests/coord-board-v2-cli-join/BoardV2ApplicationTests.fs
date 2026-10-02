@@ -78,4 +78,20 @@ let ``report history roundtrip strips current authority while retaining last ver
         Assert.True(history.Items.Head.Projection.IsNone)
         Assert.Equal("Unknown", history.Items.Head.Health)
         Assert.Equal(Some projection, history.Items.Head.LastVerified)
+    let failedRefresh =
+        { report with
+            RecipeRevision = String.replicate 40 "b"
+            Verified = 0
+            PopulationGap = Some(Errors.Unauthorized "protected population")
+            Items = report.Items |> List.map (fun item ->
+                { item with Health = "Unknown"; Projection = None; Gap = Some(Errors.Unauthorized "native issue") }) }
+    let failedWire = BoardV2Application.encodeReport failedRefresh
+    match BoardV2Application.decodePreviousReport failedWire with
+    | Error error -> failwith error
+    | Ok history ->
+        Assert.Equal(String.replicate 40 "b", history.RecipeRevision)
+        Assert.Equal(Some projection, history.Items.Head.LastVerified)
+        Assert.True(history.Items.Head.Projection.IsNone)
+        Assert.Equal("Unknown", history.Items.Head.Health)
+    Assert.True(BoardV2Application.decodePreviousReport (failedWire.Replace(String.replicate 40 "a", "caller-current")) |> Result.isError)
     Assert.True(BoardV2Application.decodePreviousReport (wire.Replace("\"outcome\":\"updated\"", "\"outcome\":\"Current\"")) |> Result.isError)

@@ -78,6 +78,9 @@ module BoardV2Application =
                 if property.ValueKind = JsonValueKind.Null then None else Some(decode property)
             let projection (value: JsonElement) : Report =
                 closed [ "projectId"; "recipeRevision"; "issue"; "observedRevision"; "observation"; "outcome"; "itemId"; "sourceChecks"; "projectReads"; "mutations"; "verifiedAt" ] value
+                let recipeRevision = text "recipeRevision" value
+                if String.IsNullOrWhiteSpace recipeRevision || recipeRevision.Length <> 40 || recipeRevision |> Seq.exists (Uri.IsHexDigit >> not) then
+                    invalidArg "recipeRevision" "historical recipe revision must be an immutable 40 hexadecimal revision"
                 let outcome = match text "outcome" value with "already-current" -> AlreadyCurrent(text "itemId" value) | "updated" -> Updated(text "itemId" value) | _ -> invalidArg "outcome" "unknown historical outcome"
                 if text "observation" value <> "Verified" then invalidArg "observation" "historical successful observation must be Verified"
                 { ProjectId = text "projectId" value; RecipeRevision = text "recipeRevision" value; Issue = parseIssue (value.GetProperty("issue"))
@@ -88,7 +91,7 @@ module BoardV2Application =
                 closed [ "issue"; "native"; "dependencyObservations"; "delivery"; "publication"; "nativeAcceptance"; "health"; "reads"; "mutationAttempts"; "membershipPages"; "projection"; "gap"; "lastVerified" ] value
                 let issue = parseIssue (value.GetProperty("issue"))
                 let history = optional "lastVerified" projection value
-                if history |> Option.exists (fun report -> report.Issue <> issue || report.ProjectId <> text "projectId" root || report.RecipeRevision <> text "recipeRevision" root) then
+                if history |> Option.exists (fun report -> report.Issue <> issue || report.ProjectId <> text "projectId" root) then
                     invalidArg "lastVerified" "historical identity differs from report"
                 { Issue = issue; Native = None; DependencyObservations = []; Delivery = "Unknown"; Publication = "Unknown"; NativeAcceptance = "Unknown"
                   Health = "Unknown"; Reads = 0; MutationAttempts = 0; MembershipPages = None; Projection = None; Gap = None; LastVerified = history }) |> Seq.toList
