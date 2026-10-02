@@ -29,6 +29,18 @@ external-authority/WASM examples remain open before their dependent product adop
 apply the local Game clock to native SC2/BAR. Retained upgrades require their separate preserving
 qualification. Later .5–.7 outcomes remain open.
 
+## External Rendering producer source delivery
+
+[Rendering #1366](https://github.com/FS-GG/FS.GG.Rendering/pull/1366) delivered the selected
+external-authority producer and coherent 0.32.0 release preparation at protected
+`730923fe9d27174e879566f21dab14a1b03d761a`, tree
+`b48ab5d7a091db7f7e823d938e51f549ea6549ff`. Exact-head native deterministic, packed-consumer,
+browser and retained model/reducer checks passed. This closes that producer source window.
+Final protected-source archives, publication of the complete 19-package set and fresh installed
+Templates external-reference qualification remain open. The template candidate remains opt-in
+until its published dependency joins; broader Stage .2/.3 acceptance and .4 publication are open.
+Historical pre-merge archives do not replace final source binding. No product adoption is claimed.
+
 ## Shared WASM dependency coordination
 
 [WASM-SHARED-01](2026-10-02-shared-wasm-foundation.md) separately plans extraction of BAR/SC2
