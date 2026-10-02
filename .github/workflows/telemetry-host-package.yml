@@ -34,6 +34,9 @@ on:
       - "deployment/telemetry-collector/qualify_native_container.py"
       - "deployment/telemetry-collector/private-native-qualification.yml.in"
       - "tests/telemetry-collector-container/test_private_native_qualification.py"
+      - "deployment/telemetry-collector/persistent/v3/**"
+      - "tests/telemetry-collector-persistent-v3/**"
+      - "docs/roadmaps/learn-c2-persistent-receiver-v3.md"
       - "docs/roadmaps/2026-10-01-typed-administrative-fsharp-quint.md"
       - ".github/workflows/release-telemetry-host-successor-*.yml"
       - ".github/workflows/telemetry-host-package.yml"
@@ -72,6 +75,9 @@ on:
       - "deployment/telemetry-collector/qualify_native_container.py"
       - "deployment/telemetry-collector/private-native-qualification.yml.in"
       - "tests/telemetry-collector-container/test_private_native_qualification.py"
+      - "deployment/telemetry-collector/persistent/v3/**"
+      - "tests/telemetry-collector-persistent-v3/**"
+      - "docs/roadmaps/learn-c2-persistent-receiver-v3.md"
       - "docs/roadmaps/2026-10-01-typed-administrative-fsharp-quint.md"
       - ".github/workflows/release-telemetry-host-successor-*.yml"
       - ".github/workflows/telemetry-host-package.yml"
@@ -171,6 +177,48 @@ jobs:
           dotnet restore tests/FS.GG.Telemetry.Tests/FS.GG.Telemetry.Tests.fsproj --locked-mode
           dotnet restore tests/FS.GG.Telemetry.Dashboard.Tests/FS.GG.Telemetry.Dashboard.Tests.fsproj --locked-mode
           dotnet restore tests/FS.GG.Telemetry.Browser.Tests/FS.GG.Telemetry.Browser.Tests.fsproj --locked-mode
+      - name: Qualify the inactive persistent v3 preparation chain
+        env:
+          FSGG_C2_MANAGER_EXE: ${{ runner.temp }}/c2-manager/TelemetryHostManager
+          FSGG_C2_PREPARATION_EXE: ${{ runner.temp }}/c2-preparation/PersistentV3.Preparation
+          FSGG_C2_TEST_EXE: ${{ runner.temp }}/c2-preparation/PersistentV3.Preparation.Tests
+        run: |
+          set -euo pipefail
+          manager_revision=e6f6631a2166f9d73639b1cbb96953ee3a768530
+          manager_tree=9059c91396cc2963d15037867cde9a5a3cf1c9ba
+          manager_source="$RUNNER_TEMP/c2-coordination-source"
+          manager_project="$manager_source/eng/telemetry-host-manager/TelemetryHostManager.fsproj"
+          manager_packages="$RUNNER_TEMP/c2-manager-nuget"
+          preparation_packages="$RUNNER_TEMP/c2-preparation-nuget"
+
+          test -n "$FSGG_C2_MANAGER_EXE"
+          test -n "$FSGG_C2_PREPARATION_EXE"
+          git init --quiet "$manager_source"
+          git -C "$manager_source" remote add origin https://github.com/FS-GG/FS.GG.Coordination.git
+          timeout 60s git -C "$manager_source" fetch --depth=1 --no-tags origin "$manager_revision"
+          git -C "$manager_source" checkout --quiet --detach FETCH_HEAD
+          test "$(git -C "$manager_source" rev-parse HEAD)" = "$manager_revision"
+          test "$(git -C "$manager_source" rev-parse 'HEAD^{tree}')" = "$manager_tree"
+
+          /usr/bin/dotnet restore "$manager_project" --locked-mode --packages "$manager_packages" \
+            --artifacts-path "$RUNNER_TEMP/c2-manager-artifacts"
+          /usr/bin/dotnet publish "$manager_project" --configuration Release --no-restore \
+            --output "$RUNNER_TEMP/c2-manager" \
+            --artifacts-path "$RUNNER_TEMP/c2-manager-artifacts" -m:1
+          /usr/bin/dotnet restore tests/telemetry-collector-persistent-v3/PersistentV3.Preparation.Tests.fsproj \
+            --locked-mode --packages "$preparation_packages" \
+            --artifacts-path "$RUNNER_TEMP/c2-preparation-artifacts"
+          /usr/bin/dotnet publish tests/telemetry-collector-persistent-v3/PersistentV3.Preparation.Tests.fsproj \
+            --configuration Release --no-restore --output "$RUNNER_TEMP/c2-preparation" \
+            --artifacts-path "$RUNNER_TEMP/c2-preparation-artifacts" -m:1
+
+          test -x "$FSGG_C2_MANAGER_EXE"
+          test -x "$FSGG_C2_PREPARATION_EXE"
+          test -x "$FSGG_C2_TEST_EXE"
+          bash tests/telemetry-collector-persistent-v3/run.sh
+          /usr/bin/dotnet test tests/FS.GG.Telemetry.Tests/FS.GG.Telemetry.Tests.fsproj \
+            --configuration Release --no-restore -m:1 \
+            --filter 'DisplayName~protected native collector resolves durable dispatch'
       - name: Test the host, projection, and browser boundaries
         env:
           FSGG_RUN_REAL_BROWSER: "1"
