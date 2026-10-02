@@ -181,6 +181,7 @@ jobs:
         env:
           FSGG_C2_MANAGER_EXE: ${{ runner.temp }}/c2-manager/TelemetryHostManager
           FSGG_C2_PREPARATION_EXE: ${{ runner.temp }}/c2-preparation/PersistentV3.Preparation
+          FSGG_C2_TEST_EXE: ${{ runner.temp }}/c2-preparation/PersistentV3.Preparation.Tests
         run: |
           set -euo pipefail
           manager_revision=e6f6631a2166f9d73639b1cbb96953ee3a768530
@@ -213,8 +214,8 @@ jobs:
 
           test -x "$FSGG_C2_MANAGER_EXE"
           test -x "$FSGG_C2_PREPARATION_EXE"
-          test -x "$RUNNER_TEMP/c2-preparation/PersistentV3.Preparation.Tests"
-          "$RUNNER_TEMP/c2-preparation/PersistentV3.Preparation.Tests"
+          test -x "$FSGG_C2_TEST_EXE"
+          bash tests/telemetry-collector-persistent-v3/run.sh
           /usr/bin/dotnet test tests/FS.GG.Telemetry.Tests/FS.GG.Telemetry.Tests.fsproj \
             --configuration Release --no-restore -m:1 \
             --filter 'DisplayName~protected native collector resolves durable dispatch'
