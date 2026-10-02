@@ -102,3 +102,10 @@ module V2Projection =
         binding: Binding ->
         request: Request ->
             IoResult<Report>
+
+    /// Fresh immutable owner/schema/native membership and four planning values. Performs queries only;
+    /// unseeded fields remain None, incomplete or mismatched identities remain errors. No projection.
+    type PlanningObservation =
+        { ItemId: string; Status: string option; Roadmap: string option; Track: string option
+          Observation: string option; MembershipPages: int }
+    val readPlanning: transport: IGitHubTransport -> binding: Binding -> request: Request -> IoResult<PlanningObservation>

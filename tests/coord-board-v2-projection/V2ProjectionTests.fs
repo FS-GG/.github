@@ -533,3 +533,153 @@ let ``protected population movement before dispatch retains prior field without 
     Assert.Equal(0, report.Items.Head.MutationAttempts)
     Assert.Equal("Unknown", report.Items.Head.Health)
     Assert.Empty(transport.Mutations)
+
+let private planningValues =
+    ok """{"data":{"node":{"id":"PVTI_2963","project":{"id":"PVT_coord_v2"},"content":{"id":"I_native","number":2963,"repository":{"nameWithOwner":"FS-GG/.github"}},"status":{"__typename":"ProjectV2ItemFieldSingleSelectValue","name":"Ready","optionId":"status_ready","field":{"id":"PVTSSF_status_v2"}},"roadmap":{"__typename":"ProjectV2ItemFieldTextValue","text":"docs/github-substrate-v2-roadmap.md","field":{"id":"PVTF_roadmap_v2"}},"track":{"__typename":"ProjectV2ItemFieldSingleSelectValue","name":"Active delivery","optionId":"track_active","field":{"id":"PVTSSF_track_v2"}},"observation":{"__typename":"ProjectV2ItemFieldSingleSelectValue","name":"Unknown","optionId":"observation_unknown","field":{"id":"PVTSSF_observation_v2"}}}}}"""
+
+[<Fact>]
+let ``planning inspection retains human fields without mutation or acceptance`` () =
+    let transport = scripted [ organization; target; membership; planningValues ]
+    let observed = readPlanning transport binding request |> Result.defaultWith (Errors.explain >> failwith)
+    Assert.Equal(Some "Ready", observed.Status)
+    Assert.Equal(Some "Active delivery", observed.Track)
+    Assert.Equal(Some "Unknown", observed.Observation)
+    Assert.Empty transport.Mutations
+
+[<Fact>]
+let ``planning inspection refuses foreign content field and option identities`` () =
+    for oldValue, newValue in [ "\"content\":{\"id\":\"I_native\"", "\"content\":{\"id\":\"I_foreign\""; "PVTSSF_status_v2", "PVTSSF_foreign"; "status_ready", "foreign_option"; "PVT_coord_v2", "PVT_foreign" ] do
+        let changed = planningValues |> Result.map (fun response -> { response with Body = response.Body.Replace(oldValue, newValue) })
+        let transport = scripted [ organization; target; membership; changed ]
+        Assert.True(readPlanning transport binding request |> Result.isError)
+        Assert.Empty transport.Mutations
+
+let private inspectionResponses firstNative dependencies planning =
+    [ protectedBlob canonicalManifest; firstNative; dependencies; protectedBlob "canonical owning roadmap"
+      organization; target; membership; planning
+      Error(Http(403, "second native")); Error(Http(403, "second planning"))
+      Error(Http(403, "third native")); Error(Http(403, "third planning")) ]
+
+[<Fact>]
+let ``inspection reads current source but never upgrades Unknown or dispatches candidates`` () =
+    let transport = scripted (inspectionResponses (native 2963 "2026-10-02T00:00:00Z") (ok "[]") planningValues)
+    let report = V2ProjectionSource.inspectFixed transport canonicalBinding None
+    Assert.Equal(Some 3, report.Evidence.Selected)
+    Assert.Equal(3, report.Evidence.Attempted)
+    let item = report.Items.Head
+    Assert.Equal("Current", item.SourceCurrentness)
+    Assert.True(item.Evidence.DependencyReadComplete)
+    Assert.Empty item.Evidence.DependencyObservations
+    Assert.Equal("Unknown", item.Evidence.Health)
+    Assert.Equal(Some "Ready", item.Planning |> Option.bind _.Status)
+    Assert.True(item.Evidence.Projection.IsNone)
+    Assert.True(item.Evidence.LastVerified.IsNone)
+    Assert.All(report.Items, fun row -> Assert.Equal(0, row.Evidence.MutationAttempts))
+    Assert.Empty transport.Mutations
+    let facts: V2ProjectionSource.IntegratorFacts = { OpenPullRequests = None; TouchSets = None; AvailableSlots = None }
+    let candidates = V2ProjectionSource.planningCandidates report facts
+    Assert.Equal(3, candidates.Length)
+    Assert.Contains("Current capacity is unknown", candidates.Head.UnmetOrUnknown)
+    Assert.True((candidates = V2ProjectionSource.planningCandidates report facts))
+    Assert.DoesNotContain(report.Items, fun row -> row.Evidence.Issue.Number = 935)
+
+[<Fact>]
+let ``inspection incomplete population is Unknown and yields no candidates`` () =
+    let transport = scripted [ Error(Http(403, "population unavailable")) ]
+    let report = V2ProjectionSource.inspectFixed transport canonicalBinding None
+    Assert.True(report.Evidence.Selected.IsNone)
+    Assert.True(report.Evidence.PopulationGap.IsSome)
+    Assert.Empty report.Items
+    let facts: V2ProjectionSource.IntegratorFacts = { OpenPullRequests = Some []; TouchSets = Some Map.empty; AvailableSlots = Some 1 }
+    Assert.Empty(V2ProjectionSource.planningCandidates report facts)
+    Assert.Empty transport.Mutations
+
+[<Fact>]
+let ``inspection closed native and Done retain acceptance discrepancy`` () =
+    let closed = native 2963 "2026-10-02T00:00:00Z" |> Result.map (fun response -> { response with Body = response.Body.Replace("OPEN", "CLOSED") })
+    let donePlanning = planningValues |> Result.map (fun response -> { response with Body = response.Body.Replace("Ready", "Done").Replace("status_ready", "status_done") })
+    let transport = scripted [ protectedBlob canonicalManifest; closed; organization; target; membership; donePlanning; Error(Http(403, "second")); Error(Http(403, "second planning")); Error(Http(403, "third")); Error(Http(403, "third planning")) ]
+    let report = V2ProjectionSource.inspectFixed transport canonicalBinding None
+    Assert.Equal("Stale", report.Items.Head.SourceCurrentness)
+    Assert.Equal(Some "Done", report.Items.Head.Planning |> Option.bind _.Status)
+    Assert.Contains(report.Items.Head.Discrepancies, fun value -> value.Contains("closed"))
+    Assert.Contains(report.Items.Head.Discrepancies, fun value -> value.Contains("Done"))
+    Assert.StartsWith("Unknown", report.Items.Head.Evidence.NativeAcceptance)
+    Assert.Empty transport.Mutations
+
+[<Fact>]
+let ``inspection changed issue dependency and access denial remain zero effect`` () =
+    let denied = Error(Http(403, "denied"))
+    let newDependency = ok """[{"id":9,"node_id":"I_blocker","number":9,"state":"open","updated_at":"2026-10-02T01:00:00Z","html_url":"https://github.com/FS-GG/.github/issues/9","body":"blocker"}]"""
+    for responses, expected in
+        [ [ protectedBlob canonicalManifest; native 2963 "2026-10-02T01:00:00Z"; organization; target; membership; planningValues; denied; denied; denied; denied ], "Stale"
+          [ protectedBlob canonicalManifest; native 2963 "2026-10-02T00:00:00Z"; newDependency; organization; target; membership; planningValues; denied; denied; denied; denied ], "Stale"
+          [ protectedBlob canonicalManifest; native 2963 "2026-10-02T00:00:00Z"; denied; organization; target; membership; planningValues; denied; denied; denied; denied ], "Unknown" ] do
+        let transport = scripted responses
+        let report = V2ProjectionSource.inspectFixed transport canonicalBinding None
+        Assert.Equal(expected, report.Items.Head.SourceCurrentness)
+        Assert.Empty transport.Mutations
+        Assert.True(report.Items.Head.Evidence.Projection.IsNone)
+
+[<Fact>]
+let ``inspection admits fourth issue only by exact selected population and rejects unbound child`` () =
+    let fourthBinding = { canonicalBinding with SelectedIssues = canonicalBinding.SelectedIssues.Add("I_3009", "FS-GG/.github#3009") }
+    let fourthRow = """,{"issue":"FS-GG/.github#3009","nodeId":"I_3009","observedUpdatedAt":"2026-10-02T00:00:00Z","observedState":"open","decision":"import","adjudication":"verified-remaining","pilot":true,"roadmap":"docs/github-substrate-v2-roadmap.md","dependencies":[]}"""
+    let manifest = canonicalManifest.Substring(0, canonicalManifest.Length - 2) + fourthRow + "]}"
+    let denied = Error(Http(403, "unavailable current read"))
+    let transport = scripted (protectedBlob manifest :: List.replicate 8 denied)
+    let report = V2ProjectionSource.inspectFixed transport fourthBinding None
+    Assert.Equal(Some 4, report.Evidence.Selected)
+    Assert.Contains(report.Items, fun item -> item.Evidence.Issue.Number = 3009 && item.ExpectedNodeId = "I_3009")
+    Assert.DoesNotContain(report.Items, fun item -> item.Evidence.Issue.Number = 935)
+    let foreign = scripted [ protectedBlob manifest ]
+    let refused = V2ProjectionSource.inspectFixed foreign { fourthBinding with SelectedIssues = fourthBinding.SelectedIssues.Remove("I_3009").Add("I_935", "FS-GG/.github#935") } None
+    Assert.True(refused.Evidence.PopulationGap.IsSome)
+    Assert.Empty refused.Items
+    Assert.Empty foreign.Mutations
+
+[<Fact>]
+let ``identical inspection snapshots are identical and malformed binding reads nothing`` () =
+    let snapshot () = scripted (inspectionResponses (native 2963 "2026-10-02T00:00:00Z") (ok "[]") planningValues)
+    let first = V2ProjectionSource.inspectFixed (snapshot ()) canonicalBinding None
+    let second = V2ProjectionSource.inspectFixed (snapshot ()) canonicalBinding None
+    Assert.Equal(first, second)
+    let noCalls = scripted []
+    for candidate in [ { canonicalBinding with ProjectNumber = 1 }; { canonicalBinding with ArtifactSha256 = String.replicate 64 "0" } ] do
+        let report = V2ProjectionSource.inspectFixed noCalls candidate None
+        Assert.True(report.Evidence.PopulationGap.IsSome)
+        Assert.Empty report.Items
+    Assert.Empty noCalls.Mutations
+
+[<Fact>]
+let ``complete inspection verifies observed coverage without creating projection history`` () =
+    let forIssue number (response: IoResult<Response>) =
+        response |> Result.map (fun value -> { value with Body = value.Body.Replace("2963", string number).Replace("I_native", if number = 2963 then "I_native" else $"I_{number}") })
+    let rows = [2963; 2964; 2965] |> List.collect (fun number ->
+        [native number "2026-10-02T00:00:00Z"; ok "[]"; protectedBlob "owning roadmap"; organization; target; forIssue number membership
+         forIssue number (planningValues |> Result.map (fun response -> { response with Body = response.Body.Replace("Unknown", "Verified").Replace("observation_unknown", "observation_verified") })) ])
+    let transport = scripted (protectedBlob canonicalManifest :: rows)
+    let report = V2ProjectionSource.inspectFixed transport canonicalBinding None
+    Assert.Equal(3, report.Evidence.Verified)
+    Assert.All(report.Items, fun item ->
+        Assert.Equal("Current", item.SourceCurrentness)
+        Assert.True(item.Evidence.DependencyReadComplete)
+        Assert.True(item.Planning.IsSome)
+        Assert.True(item.Evidence.Projection.IsNone)
+        Assert.True(item.Evidence.LastVerified.IsNone)
+        Assert.Equal(0, item.Evidence.MutationAttempts))
+    Assert.Empty transport.Mutations
+
+[<Fact>]
+let ``inspection preserves only historical verification and cannot treat it as current`` () =
+    let previousTransport = scripted [ protectedBlob canonicalManifest; native 2963 "2026-10-02T00:00:00Z"; ok "[]"; protectedBlob "owning roadmap"; organization; target; membership; observation (Some "Verified"); Error(Http(403,"second")); Error(Http(403,"third")) ]
+    let previous = V2ProjectionSource.runFixed previousTransport canonicalBinding None
+    let denied = Error(Http(403,"unknown now"))
+    let inspection = scripted [protectedBlob canonicalManifest; denied; denied; denied; denied; denied; denied]
+    let report = V2ProjectionSource.inspectFixed inspection canonicalBinding (Some previous)
+    Assert.Equal(previous.Items.Head.LastVerified, report.Items.Head.Evidence.LastVerified)
+    Assert.True(report.Items.Head.Evidence.LastVerified.IsSome)
+    Assert.Equal("Unknown", report.Items.Head.SourceCurrentness)
+    Assert.Equal("Unknown", report.Items.Head.Evidence.Health)
+    Assert.True(report.Items.Head.Evidence.Projection.IsNone)
+    Assert.Empty inspection.Mutations

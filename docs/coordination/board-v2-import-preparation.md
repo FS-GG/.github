@@ -5,10 +5,14 @@
 fields and four filtered views, and applied the three approved existing native issues. Independent
 readback verified each issue identity, one membership and all four field values. An explicit repeat
 apply emitted **zero mutation intents**. The [canonical plan](2026-09-29-coordination-v2-board-design.md)
-closes only .2; automatic projection, broader adoption and publication remain open in .3–.6.
+retains .2 acceptance; the independently qualified root-local .3 route is recorded below. Broader
+carryover/adoption and publication remain open in .4–.6.
 
-The [manifest](board-v2-import-manifest.json) records **eleven candidates, three approved pilot items,
-two omissions and six adjudication gaps**. `preparationState=adjudication-required` remains accurate
+The original pilot manifest at protected `351e5db40d4d72abd6e87882614725305eb2a419` recorded
+**eleven candidates, three approved pilot items, two omissions and six adjudication gaps**. The current
+[successor manifest](board-v2-import-manifest.json) appends .github#3009: **twelve candidates and four
+proposed selected targets**, pending the separately gated .4 operation described below. Original three
+issue objects, historical operation/provenance and receipts remain unchanged. `preparationState=adjudication-required` remains accurate
 for the unselected inventory. No issue was created, closed, reopened or converted from a PR. Legacy
 Project 1 and its separately scoped archive operation were preserved.
 
@@ -139,7 +143,7 @@ three-item pilot; both invocations emitted zero mutation intents. The final boun
 artifact provenance. Official locked construction and manual pilot readback are verified; installed
 production writer qualification remains .3.
 
-## Remaining acceptance
+## Historical .2 next frontier — superseded by the .3 qualification below
 
 ## Consumer inventory and ownership
 
@@ -149,7 +153,7 @@ production writer qualification remains .3.
 | `V2Projection.fs/.fsi` | Protected source from #3987 provides restricted exact binding and Observation-only behavior; .3 owns immutable item-target verification and actual qualification. Source fixtures are not live activation evidence. |
 | `FS.GG.Coord.Cli/Client.fs` and legacy lifecycle adapters | Retain their legacy schema/lifecycle meanings; no redirection to the planning schema. Root owns shared CLI registration. |
 | `Cache.fs/.fsi` | Existing owner/title board-map keys are legacy hints. V2 requires independent immutable binding/readback; no stale cached membership authority. |
-| `.agents` and `.claude` driving/board/init skills | Inventory work-unified-roadmap, work-roadmap, drive-board, work-board, check-board, pnext-item and initialization during .4/.5; root owns projections/skill edits. No current adoption claimed. |
+| `.agents` and `.claude` driving/board/init skills | .4 prepares gated work-unified-roadmap, drive-board/normal/best and check-board organization inspection. work-roadmap/pnext-item retain routine/native delivery; work-board/init/generated product bindings remain .5–.6. Both tracked skill roots and manifest projections are kept coherent; no current adoption claimed. |
 | `NewSddWorkspace` / configuration / generated guidance | Product-specific owner/project/repository scope and portable commands belong to .5/.6 publication and installed adoption; generated defaults unchanged here. |
 | `coord-board-reconcile.yml` | Manual credential-free legacy diagnostic, no board writes. |
 | `coord-board-archive.yml` / `coord-board-archive.py` | Separate still-scheduled legacy Project 1 archive using its App. Retain exact scope. |
@@ -201,3 +205,95 @@ its credentials, executable binding and activation require their own verified jo
 production writer, retry authority, wider import or legacy-board write was enabled. Ordinary source
 PR #4116 passed and merged while the board job remained unavailable. Broader consumer adoption,
 carryover and scheduling changes remain .4; product publication and installed adoption remain .5–.6.
+
+
+## Four-target successor and consumer adoption — source preparation
+
+**COORD-BOARD-V2-01.4 remains open.** Root authorized this finite source preparation, not live board
+changes. The successor is the original three plus existing
+[.github#3009](https://github.com/FS-GG/.github/issues/3009), node
+`I_kwDOS6feoM8AAAABOUU1ew`, open at revision `2026-08-26T20:18:16Z`.
+It is appended as a new row, not inferred from a missing candidate. Proposed seed is Ready /
+Active delivery / Verified, Roadmap `.github#3008`; root may retain Backlog while capacity is occupied.
+These are initial-seed intentions, not observations of existing Project3 values. SDD#935 remains
+unapproved, unseeded and outside both selected cohorts. No Governance or product scope is added.
+
+Fresh native issue reads on2026-10-02 confirmed all four exact node IDs and unchanged open revisions.
+Their REST blocked_by snapshots returned HTTP200, `[]`, ETags and no Link: .github3009 at18:18:58UTC,
+SDD928 at18:21:29UTC, Templates441 and .github3010 at18:21:49UTC. The successor manifest retains
+these complete native observations. Empty native dependencies do not clear body/owning-plan source,
+publication or installed prerequisites. Current Project3 membership for3009 is **Unknown here**;
+no absence, duplicate, field seed or current schema is inferred from an earlier three-item receipt.
+
+### Architecture remaining-outcome adjudication
+
+[Maintainer comment5430619257](https://github.com/FS-GG/.github/issues/3009#issuecomment-5430619257)
+already accepts the ecosystem-neutral descriptor-driven catalog, typed prompts, identifier derivation,
+capability bindings, skills, package-only qualification and producer-before-consumer publication.
+It explicitly retains the organization ADR, linked design and implementation children as deliverables.
+At protected `eecbae549802ac93b8241f887d29a590a61b9dd0`, source inspection found
+[ADR0071](../adr/0071-two-web-workspace-providers-one-template-package.md),
+[ADR0072](../adr/0072-console-and-fable-bindings-are-separate-workspace-providers.md),
+[ADR0077](../adr/0077-quint-first-typed-specification-authority.md),
+[architecture](../architecture.md) and the
+[older polyglot web design](../reports/2026-07-27-163509-polyglot-web-product-architecture-and-implementation-design.md).
+Those records establish narrower existing provider shapes/lifecycle authority. They do not supply the
+complete four-provider descriptor/typed-prompt/governance/owner/compatibility contract requested by3009.
+Carry forward that ADR/design delivery to the .github architecture/provider-contract owner; do not
+ask the human to choose the already accepted architecture again or claim native acceptance.
+
+The [bounded outcome dispositions](board-v2-outcome-dispositions.md) cover all37 actual named Unified§9.8
+rows and explicit historical/native candidates. They keep unrepresented/native-identity gaps, public
+artifact and native/human evidence gaps visible. They do not create37board rows or qualify a global
+switch; unresolved identities and later approved imports remain work for the owning integrator.
+
+### Prepared source and consumer route
+
+`board-v2 inspect` uses the authoritative source collector and exact bound planning readers; its
+`fsgg.coord.board-v2-inspection/1` output keeps native/dependency/plan evidence, human Status/Track/Roadmap,
+Observation, source currentness and acceptance gaps separate. Population failure is Selected=Unknown,
+not an empty backlog. It sends no mutation/retry, takes no writer lock, creates no verification timestamp
+and does not schedule. Historical LastVerified is display only and cannot authorize future writes.
+The [precise CLI example](../../tests/coord-board-v2-cli-join/INSPECT.md) states the command/wire contract.
+
+The stateless Observation authorizer source admits only the exact original-three or exact proposed-four
+native identity maps. Dispatch freshly checks the *selected binding's map*, not a union:3009 is refused
+under an original-three binding,935 under both. Exact Project3/org/ObservationVerified/document/variables,
+one HTTP dispatch and no retry remain enforced. This descriptor expansion grants no manifest, artifact,
+credential or native operation authority; generic Unavailable fencing and legacy lifecycle stay intact.
+No new durable state protocol or redundant Quint model is introduced.
+
+Organization-only source guidance is prepared for work-unified-roadmap, drive-board/normal/best and
+check-board, with one [shared inspection contract](https://github.com/FS-GG/.github/blob/main/.claude/skills/check-board/references/organization-v2-inspection.md).
+The four newest-model user edits are preserved: newest available Astra/high and Sol/medium are resolved
+at each new spawn. Both tracked skill roots remain coherent; no authored root is replaced by a generated
+view. Product work-board, work-roadmap/pnext-item, initialization and template/provider/lifecycle defaults
+keep their current authority. Legacy Project1 is the retained reference and its separate archive remains
+scheduled. The hosted V2 writer remains `if:false`, unenrolled and unqualified for activation.
+
+### Root-only qualification and adoption gate
+
+1. Accept the coherent protected source and independently authenticate the actual constructor,
+   adapter and CLI closure. Freeze a **new** successor population revision/blob and exact four-target
+   private binding; original population351e and .3artifact/receipts remain historical identities.
+   Changing the current canonical manifest invalidates the old binding's current-blob check until a
+   selected rebind; never rewrite a historical binding/receipt or fallback to stale freshness.
+2. Root takes fresh complete bounded Project3 membership/schema/all-fields and native issue/dependency
+   snapshots. Pure constructor dry-run must show at most the one selected missing3009 membership and
+   its four absent initial seeds, with zero intents for original3,935, native data or Project1.
+   Conflict, bound, denial or ambiguous/late evidence stops. Apply only root's selected one-shot stage;
+   delayed add visibility requires independent readback, never a blind retry. Repeat must emit zero intents.
+3. Qualify the actual restricted four-target no-op/inspection and independent before/after readback;
+   preserve all human/native fields and unselected935. Then root consumes the exact protected inspection
+   and records one bounded dry-run scheduling selection (3009 only if actual plan/intake/PR/touch-set/capacity
+   facts permit). No dispatch is required merely to prove selection.
+4. Record the selected consumer invocation/adoption evidence here before treating this organization scope
+   as its primary queue. Until then every prepared consumer route stays gated. V2 unavailable/stale evidence
+   remains explicit Unknown, preserves current work and never becomes an ordinary source merge gate.
+   All unswitched consumers and unresolved/unrepresented named outcomes remain reported; broader .4closure,
+   .5publication and .6installed product adoption remain separate.
+
+**Current gate:** protected successor source/artifact, constructor dry-run, runtime binding, import/readback,
+four-target refresh/inspection and selected consumer invocation/adoption are pending. Source preparation
+made zero board effects, issue lifecycle/dependency changes, permission/credential changes, workflow
+activation or publication. Telemetry NOTCONFIG/no handle; native usage/economics Unknown.

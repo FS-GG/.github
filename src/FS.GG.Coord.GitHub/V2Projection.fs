@@ -259,6 +259,50 @@ module V2Projection =
             with :? Collections.Generic.KeyNotFoundException ->
                 Error(Malformed(subject, "the response is missing data.node")))
 
+    type PlanningObservation =
+        { ItemId: string; Status: string option; Roadmap: string option; Track: string option
+          Observation: string option; MembershipPages: int }
+
+    let readPlanning (transport: IGitHubTransport) (binding: Binding) (request: Request) =
+        let admitted = validateBinding binding |> Result.bind (fun () ->
+            if request.Issue.Number <= 0 || not (binding.Repositories.Contains $"{request.Issue.Owner}/{request.Issue.Repository}") || Map.tryFind request.ExpectedNodeId binding.SelectedIssues <> Some $"{request.Issue.Owner}/{request.Issue.Repository}#{request.Issue.Number}" then
+                Error(Malformed("bound V2 planning fields", "request is outside the explicitly selected native cohort"))
+            else Ok())
+        admitted |> Result.bind (fun () ->
+            verifyOrganization transport binding |> Result.bind (fun () ->
+                let expected: ExactProject = { Owner = binding.Owner; Number = binding.ProjectNumber; Title = binding.ProjectTitle; Id = binding.ProjectId }
+                bootstrapExactProject transport expected |> Result.bind (fun board ->
+                    verifyFieldSchema binding board |> Result.bind (fun () ->
+                        exactMembership transport binding request.Issue request.ExpectedNodeId |> Result.bind (fun (itemId, nativeId, pages) ->
+                            let document = "query($itemId: ID!) { node(id: $itemId) { ... on ProjectV2Item { id project { id } content { ... on Issue { id number repository { nameWithOwner } } } status: fieldValueByName(name: \"Status\") { __typename ... on ProjectV2ItemFieldSingleSelectValue { name optionId field { ... on ProjectV2SingleSelectField { id } } } } roadmap: fieldValueByName(name: \"Roadmap\") { __typename ... on ProjectV2ItemFieldTextValue { text field { ... on ProjectV2Field { id } } } } track: fieldValueByName(name: \"Track\") { __typename ... on ProjectV2ItemFieldSingleSelectValue { name optionId field { ... on ProjectV2SingleSelectField { id } } } } observation: fieldValueByName(name: \"Observation\") { __typename ... on ProjectV2ItemFieldSingleSelectValue { name optionId field { ... on ProjectV2SingleSelectField { id } } } } } } rateLimit { cost remaining } }"
+                            GraphQl.read transport (graphRequest document [ "itemId", VId itemId ] "bound V2 planning fields") (fun data ->
+                                let node = data.GetProperty "node"
+                                let content = node.GetProperty "content"
+                                if node.GetProperty("id").GetString() <> itemId || node.GetProperty("project").GetProperty("id").GetString() <> binding.ProjectId
+                                   || content.GetProperty("id").GetString() <> nativeId || content.GetProperty("number").GetInt32() <> request.Issue.Number
+                                   || content.GetProperty("repository").GetProperty("nameWithOwner").GetString() <> $"{request.Issue.Owner}/{request.Issue.Repository}" then
+                                    Error(Malformed("bound V2 planning fields", "immutable item/project/native identity differs"))
+                                else
+                                    let select (alias: string) (field: SelectFieldBinding) =
+                                        let value = node.GetProperty alias
+                                        if value.ValueKind = JsonValueKind.Null then Ok None
+                                        else
+                                            let name = value.GetProperty("name").GetString()
+                                            if value.GetProperty("__typename").GetString() <> "ProjectV2ItemFieldSingleSelectValue"
+                                               || value.GetProperty("field").GetProperty("id").GetString() <> field.Id
+                                               || Map.tryFind name field.Options <> Some(value.GetProperty("optionId").GetString()) then
+                                                Error(Malformed("bound V2 planning fields", "single-select field/value differs from bound schema"))
+                                            else Ok(Some name)
+                                    let roadmap =
+                                        let value = node.GetProperty "roadmap"
+                                        if value.ValueKind = JsonValueKind.Null then Ok None
+                                        elif value.GetProperty("__typename").GetString() <> "ProjectV2ItemFieldTextValue" || value.GetProperty("field").GetProperty("id").GetString() <> binding.RoadmapFieldId then
+                                            Error(Malformed("bound V2 planning fields", "Roadmap field identity/type differs"))
+                                        else Ok(Some(value.GetProperty("text").GetString()))
+                                    select "status" binding.Status |> Result.bind (fun status -> roadmap |> Result.bind (fun roadmap ->
+                                        select "track" binding.Track |> Result.bind (fun track -> select "observation" binding.Observation |> Result.map (fun observation ->
+                                            { ItemId = itemId; Status = status; Roadmap = roadmap; Track = track; Observation = observation; MembershipPages = pages }))))))))))
+
     let private repositoryAllowed (binding: Binding) (issue: IssueRef) =
         let candidate = $"%s{issue.Owner}/%s{issue.Repository}"
         binding.Repositories |> Seq.exists (fun allowed -> String.Equals(allowed, candidate, StringComparison.OrdinalIgnoreCase))

@@ -25,6 +25,23 @@ When asked to audit, reconcile or restructure the programme, read
 updates the current frontier and dependency graph, and preserves pinned contracts. It does not dispatch
 the feature-planning/implementation loop merely because the audit edits its roadmap.
 
+## Gated organization planning queue
+
+For an explicitly selected FS-GG organization V2 scope, read
+[the organization inspection contract](../check-board/references/organization-v2-inspection.md).
+Source preparation does not activate this route: root must qualify the exact four-target successor
+population, executable, inspection and selected consumer invocation before adopting that scope.
+After that decision, use the bound inspection as its primary planning queue, with human planning
+values separate from Observation/source currentness. The owning feature roadmaps remain design,
+sequencing and acceptance authorities; section 9.8 still supplies unrepresented named outcomes.
+
+Combine the selected queue with current PRs, disjoint touch sets, capacity and owning-plan dependencies,
+then run the existing intake authorization batch before any native issue dispatch. Do not infer Ready,
+Done, authorization or acceptance from Verified or empty native dependencies. Never promote SDD#935
+or another unselected membership. A failed/missing V2 read is Unknown, not empty work or a source merge
+gate; preserve valid roadmap work without manufacturing an issue. Product board/workspace bindings,
+legacy lifecycle adapters and the separately scoped Project 1 archive remain unchanged.
+
 Identify an active feature from the user's request, current work/PR and existing feature-roadmap links.
 Resume it with its original identity and cost lineage. If multiple active features are genuinely ambiguous,
 ask which one to advance while continuing independent read-only inspection. Do not invent a new registry.

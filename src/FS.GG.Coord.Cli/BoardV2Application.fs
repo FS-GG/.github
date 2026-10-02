@@ -74,6 +74,32 @@ module BoardV2Application =
                       projection = item.Projection |> Option.map projectionWire; gap = item.Gap |> Option.map Errors.explain
                       lastVerified = item.LastVerified |> Option.map projectionWire |}) |}
 
+    let encodeInspection (report: InspectionReport) =
+        let facts: IntegratorFacts = { OpenPullRequests = None; TouchSets = None; AvailableSlots = None }
+        let planningWire (value: PlanningObservation) =
+            {| itemId = value.ItemId; status = value.Status; roadmap = value.Roadmap; track = value.Track; observation = value.Observation; membershipPages = value.MembershipPages |}
+        JsonSerializer.Serialize
+            {| schema = "fsgg.coord.board-v2-inspection/1"; bindingVersion = report.Binding.BindingVersion; organizationId = report.Binding.OrganizationId
+               owner = report.Binding.Owner; projectNumber = report.Binding.ProjectNumber; projectId = report.Binding.ProjectId; projectTitle = report.Binding.ProjectTitle
+               schemaVersion = report.Binding.SchemaVersion; ownerKind = "organization"; repositories = report.Binding.Repositories |> Set.toList
+               status = {| id = report.Binding.Status.Id; options = report.Binding.Status.Options |}; roadmapFieldId = report.Binding.RoadmapFieldId
+               track = {| id = report.Binding.Track.Id; options = report.Binding.Track.Options |}; observation = {| id = report.Binding.Observation.Id; options = report.Binding.Observation.Options |}
+               selectedIssues = report.Binding.SelectedIssues; recipeRevision = report.Binding.RecipeRevision; artifactSha256 = report.Binding.ArtifactSha256
+               populationRevision = report.Binding.PopulationRevision; importRecipeRevision = report.Binding.ImportRecipeRevision; importArtifactSha256 = report.Binding.ImportArtifactSha256
+               protectedInputs = report.Evidence.ProtectedInputs; selected = report.Evidence.Selected; attempted = report.Evidence.Attempted; verified = report.Evidence.Verified
+               mutationAttempts = 0; populationGap = report.Evidence.PopulationGap |> Option.map Errors.explain; cleanup = report.Evidence.Cleanup
+               items = report.Items |> List.map (fun item ->
+                   {| issue = issueWire item.Evidence.Issue; expectedNodeId = item.ExpectedNodeId; native = item.Evidence.Native |> Option.map nativeWire
+                      dependencyObservations = item.Evidence.DependencyObservations |> List.map nativeWire; dependencyReadComplete = item.Evidence.DependencyReadComplete
+                      planObservation = item.Evidence.PlanObservation |> Option.map nativeWire; sourceCurrentness = item.SourceCurrentness
+                      planning = item.Planning |> Option.map planningWire; planningGap = item.PlanningGap |> Option.map Errors.explain; discrepancies = item.Discrepancies
+                      health = item.Evidence.Health; delivery = item.Evidence.Delivery; publication = item.Evidence.Publication; nativeAcceptance = item.Evidence.NativeAcceptance
+                      reads = item.Evidence.Reads; mutationAttempts = 0; gap = item.Evidence.Gap |> Option.map Errors.explain; lastVerified = item.Evidence.LastVerified |> Option.map projectionWire |})
+               candidates = planningCandidates report facts |> List.map (fun candidate ->
+                   {| issue = issueWire candidate.Issue; humanStatus = candidate.HumanStatus; track = candidate.Track; roadmap = candidate.Roadmap
+                      sourceCurrentness = candidate.SourceCurrentness; observation = candidate.Observation; unmetOrUnknown = candidate.UnmetOrUnknown
+                      openPullRequests = candidate.Integrator.OpenPullRequests; touchSets = candidate.Integrator.TouchSets; availableSlots = candidate.Integrator.AvailableSlots |}) |}
+
     let decodePreviousReport json =
         try
             use document = JsonDocument.Parse(json: string)
@@ -121,7 +147,7 @@ module BoardV2Application =
                 | _ -> Error "refresh requires distinct --binding-file PATH and --report-file PATH"
             | flag :: value :: rest when List.contains flag [ "--binding-file"; "--previous-report-file"; "--report-file" ] && not (Map.containsKey flag values) && not (String.IsNullOrWhiteSpace value) && not (value.StartsWith("--", StringComparison.Ordinal)) -> flags (Map.add flag value values) rest
             | _ -> Error "unknown, duplicate or incomplete refresh argument"
-        match arguments with "refresh" :: rest -> flags Map.empty rest | _ -> Error "expected board-v2 refresh"
+        match arguments with ("refresh" | "inspect") :: rest -> flags Map.empty rest | _ -> Error "expected board-v2 refresh or inspect"
 
     let private prepare arguments =
         (try parseArguments arguments with error -> Error("invalid input path: " + error.Message)) |> Result.bind (fun (bindingPath, previousPath, reportPath) ->
@@ -164,8 +190,20 @@ module BoardV2Application =
             File.WriteAllText(reportPath, encodeReport report + Environment.NewLine)
             if report.PopulationGap.IsSome || report.Selected <> Some report.Verified then 3 else 0
         with error -> refuse ("refresh/report failed: " + error.Message)
+    let private executeInspection transport (binding, previous, reportPath) =
+        try
+            let report = V2ProjectionSource.inspectFixed (bounded transport) binding previous
+            File.WriteAllText(reportPath, encodeInspection report + Environment.NewLine)
+            if report.Evidence.PopulationGap.IsSome || (report.Items |> List.exists (fun item -> item.SourceCurrentness <> "Current" || item.PlanningGap.IsSome)) then 3 else 0
+        with error -> refuse ("inspection/report failed: " + error.Message)
+
     let runWithTransport transport arguments =
-        match prepare arguments with Error message -> refuse message | Ok input -> execute transport input
+        match prepare arguments with
+        | Error message -> refuse message
+        | Ok input ->
+            match arguments with
+            | "inspect" :: _ -> executeInspection transport input
+            | _ -> execute transport input
     let tryRun arguments =
         match arguments with
         | "board-v2" :: rest ->
@@ -176,9 +214,13 @@ module BoardV2Application =
                      let token =
                          let primary = Environment.GetEnvironmentVariable "GITHUB_TOKEN"
                          if String.IsNullOrWhiteSpace primary then Environment.GetEnvironmentVariable "GH_TOKEN" else primary
-                     match V2ObservationTransport.createLive binding token with
+                     let live =
+                         match rest with
+                         | "inspect" :: _ -> V2ProjectionSource.createInspectionTransport binding token
+                         | _ -> V2ObservationTransport.createLive binding token
+                     match live with
                      | Error error -> refuse (Errors.explain error)
                      | Ok(transport, lifetime) ->
                          use lifetime = lifetime
-                         execute transport input)
+                         match rest with "inspect" :: _ -> executeInspection transport input | _ -> execute transport input)
         | _ -> None
