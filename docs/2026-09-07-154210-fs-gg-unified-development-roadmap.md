@@ -53,6 +53,60 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-02: Coordination coherent 0.95.0 publication CLOSED; Board receiver adoption remains open.**
+[Publisher 37071597534](https://github.com/FS-GG/.github/actions/runs/37071597534) succeeded
+from protected `3b5de3367f8647cea0cd9366b8cb11eddf53feae`, following the authenticated
+first-attempt candidate `37070544673` and no-effect preflight `37071412283` on that same source.
+The [public coherent release](https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.95.0)
+was promoted at `2026-10-02T22:44:33Z`. Root independently downloaded all seven release assets,
+verified their actual bytes and the exact candidate descriptor, and resolved the tag to that source.
+Root also validated every canonical commit in the 33-generation protected `utel-rel-10` journal:
+all 16 ordered effects are verified, final head `78eff3ca803517859fa2968fe071d4ceb1fbe1b2`.
+The three public signed packages independently match the original normalized producer payloads;
+the native publisher separately verified original org-feed bytes. Registry publication now follows
+0.95.0. No repacking, component tags or legacy release route were used.
+Fresh public installed CLI/Kit/Drivers qualification, the new four-target Board binding, bounded
+root import and independent readback, inspection/refresh and selected consumer adoption remain open.
+Legacy board, original pilot and unapproved SDD #935 remain preserved. Selected V2 platform full
+acceptance remains complete.
+
+**2026-10-02: BAR complete-prefix protocol RP2 CLOSED (source); capacity and native qualification remain open.**
+[FSBar #24](https://github.com/FS-GG/FSBarV2/pull/24) merged protected
+`4e3ee2d4b77ab3f8875fcfb21cee20a374630707`, tree
+`acbbd68041ee213e17e558035373a644a9df9e37`, after actual
+[coherent runtime verification 37070907683](https://github.com/FS-GG/FSBarV2/actions/runs/37070907683)
+passed. Typed F# validates the complete record prefix and permits only a recognized complete stock
+atlas tail; unknown or incomplete content remains pending/refused. Held-descriptor final-length and
+raw-prefix checks precede authority. The existing shared 32-probe, three-evaluation, five-second
+budget is preserved without renewal from append growth. Actual compiled helper/libc checks,
+38 Quint scenarios, 500 bounded simulations, 14 full-state/ordered-effect correspondences and
+13 mutant refusals passed. The owning useful-play plan records source closure in the same PR.
+RP3 measured capacity, RP4 protected executable and actually loaded engine/plugin custody,
+RP5 one freshly admitted changed Count1 and all six useful-play journeys remain open (0/6).
+The selected engine remains unmodified Recoil 2026.07.04; source closure grants no native acceptance.
+
+**2026-10-02: Rendering coherent publication custody CLOSED (source); publication remains open.**
+[Rendering #1373](https://github.com/FS-GG/FS.GG.Rendering/pull/1373) merged protected
+`9ca2120a0ae777b91af398c6770de6efcca24888`, tree
+`31c64bc9413cb374fdcfdf80d7dd6602d0feb949`, after the complete
+[coherent source gate 37070448642](https://github.com/FS-GG/FS.GG.Rendering/actions/runs/37070448642)
+passed. The publisher consumes the original 19-package producer archives from `730923fe9d27174e879566f21dab14a1b03d761a`,
+verifies source/version/custody and refuses repacking. Genuine hosted history-depth and obsolete
+fixture failures were repaired; the final fixture locates ordered steps in the actual named publisher
+job and rejects removed, reversed or misleading duplicated steps. Prior failures remain retained.
+The bounded-attempt record still has `attemptReady=false`: actual native no-effect preflight,
+complete scope/collision observations, both-feed publication/readback and installed consumer
+qualification remain required. Templates #666 is a qualified source reference, not public adoption.
+
+**2026-10-02: SC2 post-source qualification remains held on archive hash-domain comparison.**
+Source #39 remains protected. Its postmerge run `37067104847` failed a guest-preparation fixture;
+repair #40's actual run `37072883472` passed all 84 Chromium tests and compiled the complete
+product, authoring preparer and typed metadata owner, then refused package archive eligibility.
+The failure compares a signed archive hash with NuGet's locked package-content hash. The source
+owner reproduced that distinction against the official signed FSharp.Core archive; strict canonical
+content verification and separate raw archive custody are under repair. No lock reset, skipped hash
+check, qualified artifact upload, native grant or product acceptance is claimed.
+
 **2026-10-02: SC2 saved-replay native binding and legacy audit CLOSED (source).**
 [SC2 Client #39](https://github.com/FS-GG/FS.GG.SC2.Client/pull/39) merged protected
 `49d58201aa57e3282592d3b1621019b3c50dd166`, tree

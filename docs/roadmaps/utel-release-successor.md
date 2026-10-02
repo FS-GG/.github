@@ -52,8 +52,15 @@ The selected coherent cut uses the existing `release-successor-candidate.yml` an
 journal `refs/heads/fsgg/v2/journal/release/utel-rel-10`. The published 0.94 release,
 its manifest and completed `utel-rel-09` journal remain historical authority.
 
-Source qualification prepares this release window; publication and installed adoption remain
-pending. The candidate must come from the final reviewed repair merge on current main, pack
+Publication is complete: candidate `37070544673`, no-effect preflight `37071412283` and publisher
+`37071597534` succeeded at protected `3b5de3367f8647cea0cd9366b8cb11eddf53feae`.
+The public coherent release was promoted on 2026-10-02 at 22:44:33 UTC. Root independently
+authenticated all seven release assets, source tag, exact candidate descriptor and all 33 canonical
+journal generations; head `78eff3ca803517859fa2968fe071d4ceb1fbe1b2` records all 16 effects verified.
+All three public signed archives match their original normalized producer payloads; the native
+publisher also verified original org-feed archives. Fresh installed adoption and Board qualification
+remain pending. The following requirements retain the exact publication/recovery contract.
+The candidate must come from the final reviewed repair merge on current main, pack
 each coherent member once, and retain the source-bound three archives, standalone qualification
 and predecessor receipt. The separate publisher preflight must authenticate that exact
 first-attempt candidate on the same main SHA and confirm the unused target before journal
