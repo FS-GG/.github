@@ -4,34 +4,98 @@
   "title": "FS.GG Coordination V2 bounded import manifest",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema", "observedAt", "source", "target", "fields", "items"],
+  "required": [
+    "schema",
+    "observedAt",
+    "source",
+    "target",
+    "fields",
+    "items",
+    "preparationState",
+    "binding",
+    "inventory"
+  ],
   "properties": {
-    "schema": { "const": "fsgg.coordination-board-v2-import/v1" },
-    "observedAt": { "type": "string", "format": "date-time" },
+    "schema": {
+      "const": "fsgg.coordination-board-v2-import/v1"
+    },
+    "observedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
     "source": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["owner", "title", "number", "id", "treatment"],
+      "required": [
+        "owner",
+        "title",
+        "number",
+        "id",
+        "treatment"
+      ],
       "properties": {
-        "owner": { "const": "FS-GG" },
-        "title": { "const": "Coordination" },
-        "number": { "const": 1 },
-        "id": { "const": "PVT_kwDOEYAWY84Bb08W" },
-        "treatment": { "const": "retain-as-legacy" }
+        "owner": {
+          "const": "FS-GG"
+        },
+        "title": {
+          "const": "Coordination"
+        },
+        "number": {
+          "const": 1
+        },
+        "id": {
+          "const": "PVT_kwDOEYAWY84Bb08W"
+        },
+        "treatment": {
+          "const": "retain-as-legacy"
+        }
       }
     },
     "target": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["ownerKind", "owner", "title", "schemaVersion", "creationState", "number", "id"],
+      "required": [
+        "ownerKind",
+        "owner",
+        "title",
+        "schemaVersion",
+        "creationState",
+        "number",
+        "id"
+      ],
       "properties": {
-        "ownerKind": { "const": "organization" },
-        "owner": { "const": "FS-GG" },
-        "title": { "const": "Coordination V2" },
-        "schemaVersion": { "const": 1 },
-        "creationState": { "enum": ["pending-authorized-operation", "created-and-read-back"] },
-        "number": { "type": ["integer", "null"], "minimum": 1 },
-        "id": { "type": ["string", "null"], "pattern": "^PVT_" }
+        "ownerKind": {
+          "const": "organization"
+        },
+        "owner": {
+          "const": "FS-GG"
+        },
+        "title": {
+          "const": "Coordination V2"
+        },
+        "schemaVersion": {
+          "const": 1
+        },
+        "creationState": {
+          "enum": [
+            "pending-authorized-operation",
+            "created-and-read-back"
+          ]
+        },
+        "number": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        },
+        "id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^PVT_"
+        }
       }
     },
     "fields": {
@@ -41,15 +105,63 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["name", "kind", "options", "owner", "importerMaySeed", "refreshMayWrite", "id"],
+        "required": [
+          "name",
+          "kind",
+          "options",
+          "owner",
+          "importerMaySeed",
+          "refreshMayWrite",
+          "id"
+        ],
         "properties": {
-          "name": { "enum": ["Status", "Roadmap", "Track", "Observation"] },
-          "kind": { "enum": ["single-select", "text"] },
-          "options": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
-          "owner": { "enum": ["human-scheduling", "owning-plan", "restricted-refresh"] },
-          "importerMaySeed": { "const": true },
-          "refreshMayWrite": { "type": "boolean" },
-          "id": { "type": ["string", "null"] }
+          "name": {
+            "enum": [
+              "Status",
+              "Roadmap",
+              "Track",
+              "Observation"
+            ]
+          },
+          "kind": {
+            "enum": [
+              "single-select",
+              "text"
+            ]
+          },
+          "options": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "uniqueItems": true
+          },
+          "owner": {
+            "enum": [
+              "human-scheduling",
+              "owning-plan",
+              "restricted-refresh"
+            ]
+          },
+          "importerMaySeed": {
+            "const": true
+          },
+          "refreshMayWrite": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "optionIds": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
         }
       }
     },
@@ -59,34 +171,246 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["issue", "nodeId", "title", "observedUpdatedAt", "observedState", "decision", "reason", "remainingOutcome", "roadmap", "status", "track", "observation", "dependencies", "pilot"],
+        "required": [
+          "issue",
+          "nodeId",
+          "title",
+          "observedUpdatedAt",
+          "observedState",
+          "decision",
+          "reason",
+          "remainingOutcome",
+          "roadmap",
+          "status",
+          "track",
+          "observation",
+          "dependencies",
+          "pilot",
+          "owner",
+          "nextAction",
+          "acceptanceEvidence",
+          "adjudication"
+        ],
         "properties": {
-          "issue": { "type": "string", "pattern": "^[^/]+/[^#]+#[1-9][0-9]*$" },
-          "nodeId": { "type": "string", "pattern": "^I_" },
-          "title": { "type": "string", "minLength": 1 },
-          "observedUpdatedAt": { "type": "string", "format": "date-time" },
-          "observedState": { "enum": ["open", "closed"] },
-          "decision": { "enum": ["import", "follow-up", "omit-delivered", "omit-superseded", "adjudicate"] },
-          "reason": { "type": "string", "minLength": 1 },
-          "remainingOutcome": { "type": ["string", "null"] },
-          "roadmap": { "type": ["string", "null"] },
-          "status": { "enum": ["Backlog", "Ready", "In progress", "Blocked", "Done"] },
-          "track": { "enum": ["Active delivery", "Follow-up"] },
-          "observation": { "enum": ["Verified", "Stale", "Unknown"] },
+          "issue": {
+            "type": "string",
+            "pattern": "^[^/]+/[^#]+#[1-9][0-9]*$"
+          },
+          "nodeId": {
+            "type": "string",
+            "pattern": "^I_"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1
+          },
+          "observedUpdatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "observedState": {
+            "enum": [
+              "open",
+              "closed"
+            ]
+          },
+          "decision": {
+            "enum": [
+              "import",
+              "follow-up",
+              "omit-delivered",
+              "omit-superseded",
+              "adjudicate"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1
+          },
+          "remainingOutcome": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "roadmap": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "enum": [
+              "Backlog",
+              "Ready",
+              "In progress",
+              "Blocked",
+              "Done"
+            ]
+          },
+          "track": {
+            "enum": [
+              "Active delivery",
+              "Follow-up"
+            ]
+          },
+          "observation": {
+            "enum": [
+              "Verified",
+              "Stale",
+              "Unknown"
+            ]
+          },
           "dependencies": {
             "type": "array",
             "items": {
               "type": "object",
               "additionalProperties": false,
-              "required": ["issue", "observedState", "evidence"],
+              "required": [
+                "issue",
+                "observedState",
+                "evidence"
+              ],
               "properties": {
-                "issue": { "type": "string", "pattern": "^[^/]+/[^#]+#[1-9][0-9]*$" },
-                "observedState": { "enum": ["open", "closed", "unknown"] },
-                "evidence": { "enum": ["native", "issue-body", "owning-plan", "unknown"] }
+                "issue": {
+                  "type": "string",
+                  "pattern": "^[^/]+/[^#]+#[1-9][0-9]*$"
+                },
+                "observedState": {
+                  "enum": [
+                    "open",
+                    "closed",
+                    "unknown"
+                  ]
+                },
+                "evidence": {
+                  "enum": [
+                    "native",
+                    "issue-body",
+                    "owning-plan",
+                    "unknown"
+                  ]
+                }
               }
-            }
+            },
+            "maxItems": 50
           },
-          "pilot": { "type": "boolean" }
+          "pilot": {
+            "type": "boolean"
+          },
+          "owner": {
+            "type": "string",
+            "minLength": 1
+          },
+          "nextAction": {
+            "type": "string",
+            "minLength": 1
+          },
+          "acceptanceEvidence": {
+            "type": "string",
+            "minLength": 1
+          },
+          "adjudication": {
+            "enum": [
+              "unknown",
+              "verified-remaining"
+            ]
+          }
+        }
+      }
+    },
+    "preparationState": {
+      "const": "adjudication-required"
+    },
+    "binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "organizationId",
+        "visibility",
+        "authorization",
+        "recipeRevision",
+        "artifactSha256",
+        "repositories"
+      ],
+      "properties": {
+        "organizationId": {
+          "const": "O_kgDOEYAWYw"
+        },
+        "visibility": {
+          "enum": [
+            "complete",
+            "incomplete",
+            "unknown"
+          ]
+        },
+        "authorization": {
+          "enum": [
+            "root-selected",
+            "unknown"
+          ]
+        },
+        "recipeRevision": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[a-f0-9]{40}$"
+        },
+        "artifactSha256": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "repositories": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^FS-GG/[^/#]+$"
+          }
+        }
+      }
+    },
+    "inventory": {
+      "type": "object",
+      "required": [
+        "protectedRevision",
+        "targetExistence",
+        "projectCapability",
+        "gaps",
+        "outcomes"
+      ],
+      "properties": {
+        "protectedRevision": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{40}$"
+        },
+        "targetExistence": {
+          "enum": [
+            "unknown",
+            "verified"
+          ]
+        },
+        "projectCapability": {
+          "enum": [
+            "unknown",
+            "verified"
+          ]
+        },
+        "gaps": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "outcomes": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
         }
       }
     }

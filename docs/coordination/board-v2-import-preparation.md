@@ -1,95 +1,129 @@
 # Coordination V2 bounded import preparation
 
-This is the retained dry run for **COORD-BOARD-V2-01.2**. It fixes the first candidate boundary,
-adjudication, schema ownership and representative pilot before a Projects write. The machine-readable
-[manifest](board-v2-import-manifest.json) records the exact source issue node IDs and observed issue
-revisions. The legacy `Coordination` Project 1 remains intact.
+Retained preparation for **COORD-BOARD-V2-01.2**, refreshed 2026-10-02 from protected
+`.github` revision `e6a7268ce92e7c6259a3872a12ac341708aeb222`, current native issue REST
+readback and root's project readback. The [canonical plan](2026-09-29-coordination-v2-board-design.md)
+owns acceptance. This source preparation cannot close .2: actual exact target/schema creation or
+selection, an approved three-to-five issue pilot and independent native readback remain pending.
 
-Observed 2026-09-30 through current repository issue REST reads and the existing legacy-board
-inventory. The bounded population is deliberately eight issues: direct active program identities,
-one representative cross-repository receiver, and one superseded V1 comparator. It is not a claim
-that every legacy row was adjudicated.
+The [manifest](board-v2-import-manifest.json) contains **nine existing native issue identities,
+zero approved additions, zero pilot items and seven adjudication gaps**. Its valid inventory is
+non-executable. No issue was created, closed, reopened or converted from a PR. Retain legacy Project 1,
+its history, lifecycle semantics and separately scoped archive operation.
 
-## Live consumer inventory
+## Current target capability
 
-| Consumer | Current binding or behavior | V2 disposition |
+Root's 2026-10-02 12:13 GraphQL read found organization `O_kgDOEYAWYw`, legacy Project 1
+`PVT_kwDOEYAWY84Bb08W`, and one inaccessible/null project node with `FORBIDDEN`. Although the
+connection reported its final page, visibility is incomplete. **Coordination V2 existence and write
+capability are Unknown.** This is neither proof of absence nor authorization to create a duplicate.
+There is no title-discovery write fallback or Project 1 substitution. No credentials were acquired.
+Project number/node ID and all new field/option IDs stay null until complete root readback.
+
+## Current bounded inventory
+
+All nine identities were read again through repository issue REST on 2026-10-02; node IDs and
+`updated_at` revisions remain in the manifest. An open issue proves native state, not relevant scope.
+
+| Identity | Current decision | Evidence and remaining gap |
 |---|---|---|
-| `src/FS.GG.Coord.GitHub/Board.fs` and `.fsi` | `exact-project1` pins owner `FS-GG`, Project 1, title `Coordination` and node `PVT_kwDOEYAWY84Bb08W`; normal bootstrap resolves owner/title and caches the result | Keep the pinned mode V1-only. COORD-BOARD-V2-01.3 must add an explicit identity-bound V2 route; title substitution is unsafe. |
-| `src/FS.GG.Coord.Cli/Client.fs` | Scheduling, reconciliation, claim, delivery and field writes consume the legacy schema through `Board.bootstrapCached` | Do not point this lifecycle writer at the smaller schema. Only a restricted V2 membership/observation adapter may write the new board. |
-| `src/FS.GG.Coord.GitHub/Cache.fs` and `.fsi` | Scan and board-map caches are keyed by owner plus title; item IDs are retained without a TTL | V2 adoption must use a distinct title/key and refresh the V2 board map after exact field readback. Old item-ID cache entries stay associated with `Coordination`. |
-| `.agents/skills/check-board`, `drive-board`, `p-add` and `pnext-item` | Invoke `scripts/fsgg-coord`; several treat legacy fields, claims or board state as scheduling inputs | Keep them on V1 until an explicit V2 consumer contract is qualified. V2 project membership alone cannot switch these skills. |
-| `scripts/NewSddWorkspace/Program.fs`, README and tests | Generated coordinated workspaces default `FSGG_COORD_OWNER=FS-GG` and `FSGG_COORD_PROJECT=Coordination`; `--board` is title based | COORD-BOARD-V2-01.5/.6 must publish an immutable V2 binding and upgrade path. This import does not change generated defaults. |
-| `.github/workflows/coord-board-reconcile.yml` | Manual, credential-free retirement diagnostic; reads and writes no board state | Retain as the V1 retirement diagnostic. It is not a V2 writer. |
-| `.github/workflows/coord-board-archive.yml` and `scripts/coord-board-archive.py` | Scheduled legacy Project 1 archive writer using a narrowly scoped App token and reversible manifest | Keep targeting legacy Project 1. Do not run it against V2; broader archive policy is outside this import. |
-| `scripts/fsgg-coord` and installed `fsgg-coord` | Sole metered Projects GraphQL principal; can resolve and mutate an existing selected board but has no project-creation command or V2 schema contract | Extend or add a separately reviewed fixed operation before creation/import. Direct `gh project` or `gh api graphql` calls are prohibited by `graphql-budget.md`. |
+| `.github#2954` | Omit superseded | ADR-0091 supersedes unfinished V1 migration ceremony. |
+| `.github#2963` | Omit delivered at selected profile | Current protected V2 roadmap records full selected acceptance and clean-start operation complete; historical GS2-09–14 unchecked units are superseded. COORD-BOARD follow-on remains distinct. |
+| `.github#2994` | Adjudicate | Historical epic explicitly says non-schedulable; current consumer/retirement/default scope needs owning-plan reconciliation. |
+| `.github#2995` | Adjudicate | Native Q6 identity is open. Actual current published Quint and registry/workspace adoption must be reconciled; obsolete Q5/GS2 qualification cannot block it by inference. |
+| `.github#2996` | Adjudicate | Retirement and soak scope requires current selected adoption evidence. |
+| `.github#2997` | Adjudicate | Default decision remains separate; selection and current authority are unverified. |
+| `Coordination#24` | Adjudicate | Its open read-only projection request references historical GS2/Q10 gates. Current delivered projection and any genuinely remaining scope must be reconciled. |
+| `Templates#438` | Adjudicate; old source request superseded | Current `templates/fs-gg-fable-game/Directory.Build.props` blob `05807043215370cd2e47c9a0198c7ddfd48d6069` pins Game 0.16.0. Domain project blob `ea807de0db74443d83911dd12648a3f61a6f18f0` consumes that axis. This exceeds the requested 0.13→0.14 source change; historical feed/generated acceptance was not requalified here. |
+| `.github#3010` | Adjudicate | Open catalog adoption identity requires actual current catalog publication and installed receiver evidence; `Templates#441` dependency remains Unknown. |
 
-## Exact V2 schema and owners
+Source, publication and native acceptance are distinct facts within each outcome. Historical dependency
+references are retained as evidence hints, never revived as current blockers or native dependency proof.
+`Observation=Unknown` truthfully records missing current acceptance/adjudication even where REST state
+is observed.
 
-Built-in Title, Repository and Assignees continue to come from each existing issue. The new project
-has exactly four custom planning fields:
+The manifest also lists current representative outcome slots without fabricating issue mappings:
+SC2C-01.6f / OPS-TYPED-01.5 source repair, WASM-SHARED-01.4 publication, BARC-01.5 useful play,
+LEARN-01.4 inactive C2 native qualification, COORD-BOARD-V2-01.2–.6, V2-LANG-01 publication/adoption,
+and explicitly selected installed-host/W6/player-study follow-up. Active workers/branches retain their
+own work. Merged Game #674 and SC2 PR #37 are delivery evidence, not remaining native issue anchors.
+Planner's bounded open-issue inventory found no non-PR open issues for FSBarV2/SC2 and only Game's
+Dependency Dashboard. Its first-page scope is not a historical census. No three-to-five admissible cohort
+has been established. Routine source work continues without board membership.
 
-| Field | Type and values | Write owner after import | Initial import |
-|---|---|---|---|
-| Status | single select: Backlog, Ready, In progress, Blocked, Done | Human scheduling owner | Seed the adjudicated scheduling state once. Restricted refresh cannot overwrite it. |
-| Roadmap | text link/path to the owning outcome and acceptance evidence | Owning plan or issue owner | Seed the adjudicated owning plan once. Refresh may report a broken link but cannot replace it. |
-| Track | single select: Active delivery, Follow-up | Human scheduling owner | Seed the selected track once. |
-| Observation | single select: Verified, Stale, Unknown | Restricted refresh writer | Seed `Verified` only for the recorded complete REST observation. Later refresh reports identify the last successful observation separately. |
+## Consumer inventory and ownership
 
-The checked-in JSON Schema fixes those names, options and owners. Project and field node IDs remain
-`null` until the authorized operation creates the project and reads every identity back. The manifest
-refuses invented IDs, duplicate canonical issue/node identities, a pilot item selected for omission,
-or machine ownership of a scheduling field.
+| Consumer | Current binding and disposition |
+|---|---|
+| `Board.fs/.fsi` | `exact-project1` stays pinned to legacy organization/project identity. Preserve legacy behavior. |
+| `V2Projection.fs/.fsi` | Protected source from #3987 provides restricted exact binding and Observation-only behavior; .3 owns immutable item-target verification and actual qualification. Source fixtures are not live activation evidence. |
+| `FS.GG.Coord.Cli/Client.fs` and legacy lifecycle adapters | Retain their legacy schema/lifecycle meanings; no redirection to the planning schema. Root owns shared CLI registration. |
+| `Cache.fs/.fsi` | Existing owner/title board-map keys are legacy hints. V2 requires independent immutable binding/readback; no stale cached membership authority. |
+| `.agents` and `.claude` driving/board/init skills | Inventory work-unified-roadmap, work-roadmap, drive-board, work-board, check-board, pnext-item and initialization during .4/.5; root owns projections/skill edits. No current adoption claimed. |
+| `NewSddWorkspace` / configuration / generated guidance | Product-specific owner/project/repository scope and portable commands belong to .5/.6 publication and installed adoption; generated defaults unchanged here. |
+| `coord-board-reconcile.yml` | Manual credential-free legacy diagnostic, no board writes. |
+| `coord-board-archive.yml` / `coord-board-archive.py` | Separate still-scheduled legacy Project 1 archive using its App. Retain exact scope. |
+| `scripts/fsgg-coord` / shared metered transport | Sole Projects operation route. Root owns composition/registration and any actual create/schema/import operation; direct GraphQL bypass is not preparation authority. |
 
-## Adjudicated dry run
+## Field contract
 
-| Existing issue | Decision | Initial projection | Reason |
-|---|---|---|---|
-| `FS-GG/.github#2954` | Omit, superseded | none | ADR-0091 superseded the unfinished V1 migration sequence. The open issue stays historical and does not become Ready again. |
-| `FS-GG/.github#2963` | Import, pilot | In progress / Active delivery | The V2 roadmap retains unfinished qualification, publication and protected effects. |
-| `FS-GG/.github#2994` | Import | Backlog / Active delivery | The program anchor retains open consumer, retirement and decision outcomes. |
-| `FS-GG/.github#2995` | Import, pilot | Blocked / Active delivery | Its producer dependency `FS-GG/FS.GG.SDD#924` is closed, but the owning design requires Q5 acceptance and #2963 remains open. |
-| `FS-GG/.github#2996` | Import | Blocked / Active delivery | Retirement still depends on adoption and soak evidence. |
-| `FS-GG/.github#2997` | Import as selected follow-up | Blocked / Follow-up | The default decision remains deliberately separate and depends on #2996. |
-| `FS-GG/FS.GG.Coordination#24` | Import, pilot | Blocked / Active delivery | Its distinct read-only projection outcome remains behind #2963. |
-| `FS-GG/FS.GG.Templates#438` | Import | Ready / Active delivery | The cross-repository receiver still exact-pins the prior Game.Core version. |
+Exactly four custom fields; Title/Repository/Assignees derive from the unchanged native issue.
 
-There are seven approved additions, one omission, three pilot additions and no unresolved
-adjudications. Dependencies remain references to their existing issues. No issue is cloned, reopened,
-closed or edited.
+| Field | Type and values | Owner after initial seed |
+|---|---|---|
+| Status | single select: Backlog, Ready, In progress, Blocked, Done | Scheduling owner |
+| Roadmap | text: owning outcome/acceptance link | Owning plan owner |
+| Track | single select: Active delivery, Follow-up | Scheduling owner |
+| Observation | single select: Verified, Stale, Unknown | Restricted projection |
 
-Run the deterministic checks from the repository root:
+Refresh never changes scheduling fields. An initial seed conflict preserves owner edits and reports
+it; no CAS or overwrite permission is inferred. Verified observation means required observations are
+complete/current, not acceptance completed. Native issue lifecycle/dependencies, grants and settlement
+are outside this planning surface.
+
+## F# offline authority and fixed plan
+
+`tools/BoardV2Import/Program.fs` is the administrative validator and stateless fixed plan constructor.
+`tools/board-v2-import.py` only forwards arguments. Neither has a transport, credential path, state store
+or writer. JSON Schema documents the wire; production decisions are F#. Meaningful fixtures exercise the
+compiled executable, including duplicate issues, PR identities, legacy targets, incomplete visibility,
+foreign repositories, every field contract, field/option identity gaps, missing acceptance, arbitrary
+command input and the three-to-five bound. No lifecycle state machine was added; existing canonical Quint
+and F# lifecycle authority remains unchanged. An eventual durable apply/retry/seed implementation must
+map its actual semantics to canonical authority and prove production correspondence before activation.
 
 ```console
+python3 tests/board-v2-import/run.py
 python3 tools/board-v2-import.py docs/coordination/board-v2-import-manifest.json
 python3 tools/board-v2-import.py docs/coordination/board-v2-import-manifest.json --pilot-plan
-python3 tests/board-v2-import/run.py
 ```
 
-## Pilot operation and current boundary
+The final command currently refuses. Plan construction requires three-to-five approved `import` or
+`follow-up` rows with `pilot=true`, `adjudication=verified-remaining`, native `I_` identity, open state,
+owner/next action/outcome/acceptance, exact target and fields/options, complete organization visibility,
+trusted recipe Git revision/artifact SHA-256 and repository allowlist. Dependencies are bounded to 50
+per item and require a complete native snapshot before a plan can be constructed. The manifest
+`authorization=root-selected` label records a selected descriptive request; it is no credential, grant
+or independently sufficient effect authority. Root's actual operation controls remain required.
 
-The pilot order is `.github#2963`, `.github#2995`, then `FS.GG.Coordination#24`. For each item the
-operation must read membership first, add only when absence is established from a complete response,
-seed the four manifest fields, and read back:
+The constructed request contains fixed descriptive stages: fresh native source/dependencies, exact
+project/schema, complete membership by immutable project and issue IDs, add only after proven absence,
+initial seed retaining conflicting owner edits, and independent readback. It performs none of them.
+Creation and schema establishment are separate root-selected effects and are not emitted as pilot work.
+Limits: five items, 50 entries/page, ten pages/connection, two transient-read retries, 300 seconds and one
+active writer for the immutable project ID. Bound exhaustion is incomplete/Unknown with cursor; lost
+mutation response requires fresh readback before retry. No blind mutation loop is implemented here.
 
-1. the exact target project and four field identities;
-2. one target membership for the unchanged source issue node ID;
-3. all four seeded field values; and
-4. the unchanged dependency references and their observed states.
+## Root-owned operation acceptance
 
-A lost response, incomplete page, unknown field or target mismatch stops the affected item and records
-an unresolved observation. Retrying begins with membership readback. The operation never mutates issue
-state, title, body, assignees, dependencies or legacy Project 1 membership.
+After identity/adjudication gaps clear, qualify the real metered transport through actual composition:
+complete exact membership, foreign same-number project refusal, incomplete fields/pages, denied/hidden
+404, source/dependency drift, lost add/seed response, duplicate rerun, owner-edit preservation and partial
+batch readback. Ambiguous create response stops for reconciliation. The native pilot must independently
+read back each unchanged native issue ID, one exact membership, all selected fields and native dependency
+references; repeat apply must preserve scheduling and membership. These remain explicit qualification
+gaps, not claimed by the pure constructor fixtures.
 
-Project creation and pilot application remain pending. The current PAT could read issue REST data and
-the existing board through the legacy path, but the organization project command reported that the PAT
-cannot access the organization Projects collection. More decisively, repository policy permits Projects
-operations only through `fsgg-coord`, and the installed client has neither a project-creation command nor
-an explicit V2 schema/import route. Direct Projects GraphQL would bypass the shared budget and operation
-boundary. COORD-BOARD-V2-01.2 therefore remains unchecked until that fixed operation is available and
-the identities, memberships, fields and dependency references above are read back.
-
-## Workspace effect
-
-This preparation changes no generated workspace, package or default. The first organization planning
-effect occurs only when the pending project and representative pilot are applied. Fresh and retained
-workspace behavior remains assigned to COORD-BOARD-V2-01.5/.6 after the restricted adapter is qualified.
+No project/schema/import writes, broader transfer, scheduling switch, credential enrollment, publication
+or product adoption occurred. `.2` remains open until actual target/schema/pilot readback. Telemetry
+configuration is unavailable in the parent session; usage and economics remain Unknown.

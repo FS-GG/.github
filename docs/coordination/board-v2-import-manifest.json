@@ -1,6 +1,6 @@
 {
   "schema": "fsgg.coordination-board-v2-import/v1",
-  "observedAt": "2026-09-30T06:02:30+02:00",
+  "observedAt": "2026-10-02T12:32:54.817864+00:00",
   "source": {
     "owner": "FS-GG",
     "title": "Coordination",
@@ -18,10 +18,55 @@
     "id": null
   },
   "fields": [
-    { "name": "Status", "kind": "single-select", "options": ["Backlog", "Ready", "In progress", "Blocked", "Done"], "owner": "human-scheduling", "importerMaySeed": true, "refreshMayWrite": false, "id": null },
-    { "name": "Roadmap", "kind": "text", "options": [], "owner": "owning-plan", "importerMaySeed": true, "refreshMayWrite": false, "id": null },
-    { "name": "Track", "kind": "single-select", "options": ["Active delivery", "Follow-up"], "owner": "human-scheduling", "importerMaySeed": true, "refreshMayWrite": false, "id": null },
-    { "name": "Observation", "kind": "single-select", "options": ["Verified", "Stale", "Unknown"], "owner": "restricted-refresh", "importerMaySeed": true, "refreshMayWrite": true, "id": null }
+    {
+      "name": "Status",
+      "kind": "single-select",
+      "options": [
+        "Backlog",
+        "Ready",
+        "In progress",
+        "Blocked",
+        "Done"
+      ],
+      "owner": "human-scheduling",
+      "importerMaySeed": true,
+      "refreshMayWrite": false,
+      "id": null
+    },
+    {
+      "name": "Roadmap",
+      "kind": "text",
+      "options": [],
+      "owner": "owning-plan",
+      "importerMaySeed": true,
+      "refreshMayWrite": false,
+      "id": null
+    },
+    {
+      "name": "Track",
+      "kind": "single-select",
+      "options": [
+        "Active delivery",
+        "Follow-up"
+      ],
+      "owner": "human-scheduling",
+      "importerMaySeed": true,
+      "refreshMayWrite": false,
+      "id": null
+    },
+    {
+      "name": "Observation",
+      "kind": "single-select",
+      "options": [
+        "Verified",
+        "Stale",
+        "Unknown"
+      ],
+      "owner": "restricted-refresh",
+      "importerMaySeed": true,
+      "refreshMayWrite": true,
+      "id": null
+    }
   ],
   "items": [
     {
@@ -36,9 +81,19 @@
       "roadmap": null,
       "status": "Backlog",
       "track": "Active delivery",
-      "observation": "Verified",
-      "dependencies": [{ "issue": "FS-GG/.github#2953", "observedState": "closed", "evidence": "issue-body" }],
-      "pilot": false
+      "observation": "Unknown",
+      "dependencies": [
+        {
+          "issue": "FS-GG/.github#2953",
+          "observedState": "closed",
+          "evidence": "issue-body"
+        }
+      ],
+      "pilot": false,
+      "owner": "owning repository/plan owner; current accountability unverified",
+      "nextAction": "Reconcile source, publication and actual acceptance before admission.",
+      "acceptanceEvidence": "unknown",
+      "adjudication": "unknown"
     },
     {
       "issue": "FS-GG/.github#2963",
@@ -46,15 +101,25 @@
       "title": "[gh-modernization F0] Bootstrap and independently qualify FS.GG.Coordination v2",
       "observedUpdatedAt": "2026-09-25T04:58:08Z",
       "observedState": "open",
-      "decision": "import",
-      "reason": "The GitHub Substrate V2 roadmap retains unfinished qualification and protected activation outcomes under this existing identity.",
-      "remainingOutcome": "Finish the named GS2 qualification, publication and protected-effect outcomes without treating board membership as acceptance.",
+      "decision": "omit-delivered",
+      "reason": "Current selected full V2/clean-start acceptance is complete. Historical GS2-09\u201314 gates are superseded; board follow-on remains COORD-BOARD-V2-01.",
+      "remainingOutcome": null,
       "roadmap": "docs/github-substrate-v2-roadmap.md",
       "status": "In progress",
       "track": "Active delivery",
-      "observation": "Verified",
-      "dependencies": [{ "issue": "FS-GG/FS.GG.SDD#924", "observedState": "closed", "evidence": "owning-plan" }],
-      "pilot": true
+      "observation": "Unknown",
+      "dependencies": [
+        {
+          "issue": "FS-GG/FS.GG.SDD#924",
+          "observedState": "closed",
+          "evidence": "owning-plan"
+        }
+      ],
+      "pilot": false,
+      "owner": "owning repository/plan owner; current accountability unverified",
+      "nextAction": "Reconcile source, publication and actual acceptance before admission.",
+      "acceptanceEvidence": "unknown",
+      "adjudication": "unknown"
     },
     {
       "issue": "FS-GG/.github#2994",
@@ -62,15 +127,19 @@
       "title": "[epic] Quint-first Typed SDD migration",
       "observedUpdatedAt": "2026-08-25T22:25:02Z",
       "observedState": "open",
-      "decision": "import",
-      "reason": "The epic still owns an ordered program with open consumer, retirement and decision outcomes.",
+      "decision": "adjudicate",
+      "reason": "Open native identity read 2026-10-02; current remaining outcome and acceptance not established. Historical GS2 dependencies cannot revive superseded gates.",
       "remainingOutcome": "Complete the remaining producer/consumer adoption, retirement and default-decision sequence.",
       "roadmap": "docs/coordination/2026-08-25-quint-first-typed-sdd-migration-design.md",
       "status": "Backlog",
       "track": "Active delivery",
-      "observation": "Verified",
+      "observation": "Unknown",
       "dependencies": [],
-      "pilot": false
+      "pilot": false,
+      "owner": "owning repository/plan owner; current accountability unverified",
+      "nextAction": "Reconcile source, publication and actual acceptance before admission.",
+      "acceptanceEvidence": "unknown",
+      "adjudication": "unknown"
     },
     {
       "issue": "FS-GG/.github#2995",
@@ -78,18 +147,30 @@
       "title": "[cross-repo] Q6: project the published Quint backend into the registry and workspace UI",
       "observedUpdatedAt": "2026-09-04T07:21:22Z",
       "observedState": "open",
-      "decision": "import",
-      "reason": "Its producer dependency is closed, but the owning design requires Q5 acceptance before Q6 and that V2 outcome remains open.",
+      "decision": "adjudicate",
+      "reason": "Open native identity read 2026-10-02; current remaining outcome and acceptance not established. Historical GS2 dependencies cannot revive superseded gates.",
       "remainingOutcome": "Adopt the published Quint backend in registry and workspace UI with coherent feed and clean-workspace proof.",
       "roadmap": "docs/coordination/2026-08-25-quint-first-typed-sdd-migration-design.md",
       "status": "Blocked",
       "track": "Active delivery",
-      "observation": "Verified",
+      "observation": "Unknown",
       "dependencies": [
-        { "issue": "FS-GG/FS.GG.SDD#924", "observedState": "closed", "evidence": "issue-body" },
-        { "issue": "FS-GG/.github#2963", "observedState": "open", "evidence": "owning-plan" }
+        {
+          "issue": "FS-GG/FS.GG.SDD#924",
+          "observedState": "closed",
+          "evidence": "issue-body"
+        },
+        {
+          "issue": "FS-GG/.github#2963",
+          "observedState": "open",
+          "evidence": "owning-plan"
+        }
       ],
-      "pilot": true
+      "pilot": false,
+      "owner": "owning repository/plan owner; current accountability unverified",
+      "nextAction": "Reconcile source, publication and actual acceptance before admission.",
+      "acceptanceEvidence": "unknown",
+      "adjudication": "unknown"
     },
     {
       "issue": "FS-GG/.github#2996",
@@ -97,15 +178,25 @@
       "title": "[cross-repo] Q7: retire F# as a supported Typed SDD authoring path",
       "observedUpdatedAt": "2026-08-25T22:23:42Z",
       "observedState": "open",
-      "decision": "import",
-      "reason": "The retirement outcome remains explicitly conditional on unfinished adoption and soak evidence.",
+      "decision": "adjudicate",
+      "reason": "Open native identity read 2026-10-02; current remaining outcome and acceptance not established. Historical GS2 dependencies cannot revive superseded gates.",
       "remainingOutcome": "Retire new F# authoring only after all selected consumers adopt Quint and the soak requirement is met.",
       "roadmap": "docs/coordination/2026-08-25-quint-first-typed-sdd-migration-design.md",
       "status": "Blocked",
       "track": "Active delivery",
-      "observation": "Verified",
-      "dependencies": [{ "issue": "FS-GG/.github#2995", "observedState": "open", "evidence": "owning-plan" }],
-      "pilot": false
+      "observation": "Unknown",
+      "dependencies": [
+        {
+          "issue": "FS-GG/.github#2995",
+          "observedState": "open",
+          "evidence": "owning-plan"
+        }
+      ],
+      "pilot": false,
+      "owner": "owning repository/plan owner; current accountability unverified",
+      "nextAction": "Reconcile source, publication and actual acceptance before admission.",
+      "acceptanceEvidence": "unknown",
+      "adjudication": "unknown"
     },
     {
       "issue": "FS-GG/.github#2997",
@@ -113,15 +204,25 @@
       "title": "[decision] Q7: decide whether Quint-backed Typed SDD becomes the workspace default",
       "observedUpdatedAt": "2026-08-26T20:18:11Z",
       "observedState": "open",
-      "decision": "follow-up",
-      "reason": "The owning roadmap deliberately keeps the default choice separate and selected after retirement evidence.",
+      "decision": "adjudicate",
+      "reason": "Open native identity read 2026-10-02; current remaining outcome and acceptance not established. Historical GS2 dependencies cannot revive superseded gates.",
       "remainingOutcome": "Record the evidence-based accept, defer or reject decision after retirement and soak evidence.",
       "roadmap": "docs/coordination/2026-08-25-quint-first-typed-sdd-migration-design.md",
       "status": "Blocked",
       "track": "Follow-up",
-      "observation": "Verified",
-      "dependencies": [{ "issue": "FS-GG/.github#2996", "observedState": "open", "evidence": "issue-body" }],
-      "pilot": false
+      "observation": "Unknown",
+      "dependencies": [
+        {
+          "issue": "FS-GG/.github#2996",
+          "observedState": "open",
+          "evidence": "issue-body"
+        }
+      ],
+      "pilot": false,
+      "owner": "owning repository/plan owner; current accountability unverified",
+      "nextAction": "Reconcile source, publication and actual acceptance before admission.",
+      "acceptanceEvidence": "unknown",
+      "adjudication": "unknown"
     },
     {
       "issue": "FS-GG/FS.GG.Coordination#24",
@@ -129,15 +230,25 @@
       "title": "[cross-repo] Add read-only planning, trace, and operations projections to Coordination v2",
       "observedUpdatedAt": "2026-08-28T13:30:19Z",
       "observedState": "open",
-      "decision": "import",
-      "reason": "This is a distinct retained read-only projection outcome in the V2 product repository.",
+      "decision": "adjudicate",
+      "reason": "Open native identity read 2026-10-02; current remaining outcome and acceptance not established. Historical GS2 dependencies cannot revive superseded gates.",
       "remainingOutcome": "Deliver the shared read-only planning, trace, risk and operations projection after the prerequisite V2 model contracts.",
       "roadmap": "docs/github-substrate-v2-roadmap.md",
       "status": "Blocked",
       "track": "Active delivery",
-      "observation": "Verified",
-      "dependencies": [{ "issue": "FS-GG/.github#2963", "observedState": "open", "evidence": "issue-body" }],
-      "pilot": true
+      "observation": "Unknown",
+      "dependencies": [
+        {
+          "issue": "FS-GG/.github#2963",
+          "observedState": "open",
+          "evidence": "issue-body"
+        }
+      ],
+      "pilot": false,
+      "owner": "owning repository/plan owner; current accountability unverified",
+      "nextAction": "Reconcile source, publication and actual acceptance before admission.",
+      "acceptanceEvidence": "unknown",
+      "adjudication": "unknown"
     },
     {
       "issue": "FS-GG/FS.GG.Templates#438",
@@ -145,15 +256,122 @@
       "title": "[cross-repo] Adopt FS.GG.Game.Core 0.14.0 in the fable-game template",
       "observedUpdatedAt": "2026-08-25T13:05:56Z",
       "observedState": "open",
-      "decision": "import",
-      "reason": "The existing cross-repository receiver outcome remains open and organization-relevant; it keeps its repository issue identity.",
-      "remainingOutcome": "Update and qualify the template's exact Game.Core pin and generated workspace.",
+      "decision": "adjudicate",
+      "reason": "Current Templates props blob 05807043215370cd2e47c9a0198c7ddfd48d6069 pins Game 0.16.0; Domain blob ea807de0db74443d83911dd12648a3f61a6f18f0 consumes it. Old 0.13 to 0.14 source change is superseded; historical generated/feed acceptance not requalified here.",
+      "remainingOutcome": null,
       "roadmap": "docs/2026-09-07-064259-svg-game-engine-template-design-roadmap.md",
       "status": "Ready",
       "track": "Active delivery",
-      "observation": "Verified",
+      "observation": "Unknown",
       "dependencies": [],
-      "pilot": false
+      "pilot": false,
+      "owner": "owning repository/plan owner; current accountability unverified",
+      "nextAction": "Reconcile source, publication and actual acceptance before admission.",
+      "acceptanceEvidence": "unknown",
+      "adjudication": "unknown"
+    },
+    {
+      "issue": "FS-GG/.github#3010",
+      "nodeId": "I_kwDOS6feoM8AAAABOUWpiA",
+      "title": "[cross-repo] Adopt the polyglot provider catalog in new-sdd-workspace and the coherent registry",
+      "observedUpdatedAt": "2026-08-26T10:12:28Z",
+      "observedState": "open",
+      "decision": "adjudicate",
+      "reason": "Open catalog adoption identity needs current publication/receiver reconciliation.",
+      "remainingOutcome": null,
+      "roadmap": "docs/github-substrate-v2-roadmap.md",
+      "status": "Backlog",
+      "track": "Active delivery",
+      "observation": "Unknown",
+      "dependencies": [
+        {
+          "issue": "FS-GG/FS.GG.Templates#441",
+          "observedState": "unknown",
+          "evidence": "issue-body"
+        }
+      ],
+      "pilot": false,
+      "owner": "scaffolder/registry owner; current accountability unverified",
+      "nextAction": "Reconcile published catalog and installed receiver evidence.",
+      "acceptanceEvidence": "unknown",
+      "adjudication": "unknown"
     }
-  ]
+  ],
+  "preparationState": "adjudication-required",
+  "binding": {
+    "organizationId": "O_kgDOEYAWYw",
+    "visibility": "incomplete",
+    "authorization": "unknown",
+    "recipeRevision": null,
+    "artifactSha256": null,
+    "repositories": []
+  },
+  "inventory": {
+    "protectedRevision": "e6a7268ce92e7c6259a3872a12ac341708aeb222",
+    "targetExistence": "unknown",
+    "projectCapability": "unknown",
+    "gaps": [
+      "Inaccessible project node prevents absence inference.",
+      "No current three-to-five verified existing native issue cohort.",
+      "Fixed transport/apply and independent readback remain pending."
+    ],
+    "outcomes": [
+      {
+        "id": "SC2C-01.6f / OPS-TYPED-01.5",
+        "issue": null,
+        "owner": "existing SC2 owner",
+        "nextAction": "Repair PR #37; retain native acceptance and issue identity gaps.",
+        "evidenceState": "unknown",
+        "pilotEligible": false
+      },
+      {
+        "id": "WASM-SHARED-01.4",
+        "issue": null,
+        "owner": "Game publication owner",
+        "nextAction": "Publish coherent artifact; merged PR #674 is not an open issue mapping.",
+        "evidenceState": "unknown",
+        "pilotEligible": false
+      },
+      {
+        "id": "BARC-01.5",
+        "issue": null,
+        "owner": "BAR/root operation owner",
+        "nextAction": "Qualify useful play; retain publication/native gaps.",
+        "evidenceState": "unknown",
+        "pilotEligible": false
+      },
+      {
+        "id": "LEARN-01.4",
+        "issue": null,
+        "owner": "LEARN owner / root",
+        "nextAction": "Repair #4105; inactive C2 native census/enrollment/economics remain open.",
+        "evidenceState": "unknown",
+        "pilotEligible": false
+      },
+      {
+        "id": "COORD-BOARD-V2-01.2\u2013.6",
+        "issue": null,
+        "owner": ".github / SDD / Templates / products",
+        "nextAction": "Pilot, projection, switch, publication, product adoption remain pending.",
+        "evidenceState": "unknown",
+        "pilotEligible": false
+      },
+      {
+        "id": "V2-LANG-01",
+        "issue": null,
+        "owner": "SDD / Templates / products",
+        "nextAction": "Qualify actual published language-independent workspace integration.",
+        "evidenceState": "unknown",
+        "pilotEligible": false
+      },
+      {
+        "id": "V2 installed-host/W6/player studies",
+        "issue": null,
+        "owner": "selected operation owner",
+        "nextAction": "Select follow-up scope and native issue identity before admission.",
+        "evidenceState": "unknown",
+        "pilotEligible": false
+      }
+    ]
+  }
 }
