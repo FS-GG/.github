@@ -16,6 +16,10 @@ module V2Projection =
 
     type Binding =
         {
+            BindingVersion: int
+            ImportRecipeRevision: string
+            ImportArtifactSha256: string
+            SelectedIssues: Map<string, string>
             SchemaVersion: int
             RecipeRevision: string
             PopulationRevision: string
@@ -102,7 +106,14 @@ module V2Projection =
         let subject = "the Coordination V2 binding"
         let allFieldIds = [ binding.Status.Id; binding.RoadmapFieldId; binding.Track.Id; binding.Observation.Id ]
 
-        if binding.SchemaVersion <> 1 then
+        if binding.BindingVersion <> 2 then
+            invalid subject "only refresh binding version 2 is supported"
+        elif String.IsNullOrWhiteSpace binding.ImportRecipeRevision || binding.ImportRecipeRevision.Length <> 40 || binding.ImportRecipeRevision |> Seq.exists (Uri.IsHexDigit >> not)
+             || String.IsNullOrWhiteSpace binding.ImportArtifactSha256 || binding.ImportArtifactSha256.Length <> 64 || binding.ImportArtifactSha256 |> Seq.exists (Uri.IsHexDigit >> not) then
+            invalid subject "distinct reviewed import constructor provenance is incomplete"
+        elif binding.SelectedIssues.Count < 3 || binding.SelectedIssues.Count > 5 || binding.SelectedIssues |> Map.exists (fun node issue -> String.IsNullOrWhiteSpace node || String.IsNullOrWhiteSpace issue) then
+            invalid subject "explicit selected native cohort is incomplete"
+        elif binding.SchemaVersion <> 1 then
             invalid subject "only schema version 1 is supported"
         elif not (nonBlank binding.RecipeRevision) || binding.RecipeRevision.Length <> 40 || binding.RecipeRevision |> Seq.exists (Uri.IsHexDigit >> not) then
             invalid subject "the reviewed recipe revision must be an immutable Git SHA"

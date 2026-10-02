@@ -20,6 +20,10 @@ let private ok body =
 
 let private binding =
     {
+        BindingVersion = 2
+        ImportRecipeRevision = String.replicate 40 "e"
+        ImportArtifactSha256 = String.replicate 64 "f"
+        SelectedIssues = Map.ofList [ "I_native", "FS-GG/.github#2963"; "I_2964", "FS-GG/.github#2964"; "I_2965", "FS-GG/.github#2965" ]
         SchemaVersion = 1
         RecipeRevision = String.replicate 40 "a"
         PopulationRevision = String.replicate 40 "c"
@@ -293,23 +297,23 @@ let private canonicalBinding =
 
 let private protectedBlob value =
     let encoded = Text.Json.JsonSerializer.Serialize(value: string)
-    ok $"""{{"data":{{"repository":{{"nameWithOwner":"FS-GG/.github","ref":{{"target":{{"oid":"{canonicalBinding.PopulationRevision}"}}}},"object":{{"text":{encoded}}}}}}}}}"""
+    ok $"""{{"data":{{"repository":{{"nameWithOwner":"FS-GG/.github","ref":{{"target":{{"oid":"{canonicalBinding.PopulationRevision}"}}}},"object":{{"oid":"{String.replicate 40 "b"}","text":{encoded}}},"current":{{"oid":"{String.replicate 40 "b"}","text":{encoded}}}}}}}}}"""
 
 let private canonicalManifest =
     let rows =
         [ 2963; 2964; 2965 ] |> List.map (fun number ->
             $"""{{"issue":"FS-GG/.github#{number}","nodeId":"{if number = 2963 then "I_native" else $"I_{number}"}","observedUpdatedAt":"2026-10-02T00:00:00Z","observedState":"open","decision":"import","adjudication":"verified-remaining","pilot":true,"roadmap":"docs/github-substrate-v2-roadmap.md","dependencies":[]}}""") |> String.concat ","
-    $"""{{"schema":"fsgg.coordination-board-v2-import/v1","target":{{"ownerKind":"organization","owner":"FS-GG","title":"Coordination V2","id":"PVT_coord_v2","number":77,"creationState":"created-and-read-back"}},"binding":{{"organizationId":"O_fsgg","visibility":"complete","authorization":"root-selected","recipeRevision":"{canonicalBinding.RecipeRevision}","artifactSha256":"{canonicalBinding.ArtifactSha256}","repositories":["FS-GG/.github","FS-GG/FS.GG.Coordination"]}},"items":[{rows}]}}"""
+    $"""{{"schema":"fsgg.coordination-board-v2-import/v1","target":{{"ownerKind":"organization","owner":"FS-GG","title":"Coordination V2","id":"PVT_coord_v2","number":77,"creationState":"created-and-read-back"}},"binding":{{"organizationId":"O_fsgg","visibility":"complete","authorization":"root-selected","recipeRevision":"{canonicalBinding.ImportRecipeRevision}","artifactSha256":"{canonicalBinding.ImportArtifactSha256}","repositories":["FS-GG/.github","FS-GG/FS.GG.Coordination"]}},"items":[{rows}]}}"""
 
 let private native number updated =
     let nodeId = if number = 2963 then "I_native" else $"I_{number}"
-    ok $"""{{"data":{{"repository":{{"nameWithOwner":"FS-GG/.github","issue":{{"id":"{nodeId}","number":{number},"updatedAt":"{updated}","state":"OPEN","repository":{{"nameWithOwner":"FS-GG/.github"}}}}}}}}}}"""
+    ok $"""{{"data":{{"repository":{{"nameWithOwner":"FS-GG/.github","issue":{{"id":"{nodeId}","number":{number},"updatedAt":"{updated}","state":"OPEN","url":"https://github.com/FS-GG/.github/issues/{number}","body":"canonical plan", "repository":{{"nameWithOwner":"FS-GG/.github"}}}}}}}}}}"""
 
 [<Fact>]
 let ``fixed composition covers successful stale and denied members independently`` () =
     let transport = scripted
                         [ protectedBlob canonicalManifest
-                          native 2963 "2026-10-02T00:00:00Z"; protectedBlob "canonical owning roadmap"
+                          native 2963 "2026-10-02T00:00:00Z"; ok "[]"; protectedBlob "canonical owning roadmap"
                           organization; target; membership; observation (Some "Verified")
                           native 2964 "2026-10-02T01:00:00Z"
                           Error(Http(403, "source denied")) ]
@@ -346,7 +350,7 @@ let ``unadjudicated protected population cannot assert Current`` () =
 let ``lost protected population response preserves prior last verified evidence`` () =
     let transport = scripted
                         [ protectedBlob canonicalManifest
-                          native 2963 "2026-10-02T00:00:00Z"; protectedBlob "canonical owning roadmap"
+                          native 2963 "2026-10-02T00:00:00Z"; ok "[]"; protectedBlob "canonical owning roadmap"
                           organization; target; membership; observation (Some "Verified")
                           native 2964 "2026-10-02T01:00:00Z"; Error(Http(403, "source denied")) ]
     let previous = V2ProjectionSource.runFixed transport canonicalBinding None
@@ -409,7 +413,7 @@ let ``repository bindings cannot project each other's source`` () =
 
 [<Fact>]
 let ``candidate commit population is refused independently of its asserted metadata`` () =
-    let candidate = protectedBlob canonicalManifest |> Result.map (fun response -> { response with Body = response.Body.Replace(canonicalBinding.PopulationRevision, String.replicate 40 "d") })
+    let candidate = protectedBlob canonicalManifest |> Result.map (fun response -> { response with Body = response.Body.Replace("\"current\":{\"oid\":\"" + String.replicate 40 "b", "\"current\":{\"oid\":\"" + String.replicate 40 "d") })
     let transport = scripted [ candidate ]
     let report = V2ProjectionSource.runFixed transport canonicalBinding None
     Assert.True(report.PopulationGap.IsSome)
@@ -420,9 +424,9 @@ let ``candidate commit population is refused independently of its asserted metad
 let ``fixed composition preserves lost field result and retry verifies live state`` () =
     let initial = scripted
                       [ protectedBlob canonicalManifest
-                        native 2963 "2026-10-02T00:00:00Z"; protectedBlob "canonical owning roadmap"
+                        native 2963 "2026-10-02T00:00:00Z"; ok "[]"; protectedBlob "canonical owning roadmap"
                         organization; target; membership; observation None
-                        native 2963 "2026-10-02T00:00:00Z"; protectedBlob "canonical owning roadmap"
+                        protectedBlob canonicalManifest; native 2963 "2026-10-02T00:00:00Z"; ok "[]"; protectedBlob "canonical owning roadmap"
                         Error(Transport "field response lost")
                         native 2964 "2026-10-02T01:00:00Z"; Error(Http(403, "source denied")) ]
     let previous = V2ProjectionSource.runFixed initial canonicalBinding None
@@ -433,7 +437,7 @@ let ``fixed composition preserves lost field result and retry verifies live stat
     Assert.True(previous.Items[0].LastVerified.IsNone)
     let retry = scripted
                     [ protectedBlob canonicalManifest
-                      native 2963 "2026-10-02T00:00:00Z"; protectedBlob "canonical owning roadmap"
+                      native 2963 "2026-10-02T00:00:00Z"; ok "[]"; protectedBlob "canonical owning roadmap"
                       organization; target; membership; observation (Some "Verified")
                       native 2964 "2026-10-02T01:00:00Z"; Error(Http(403, "source denied")) ]
     let report = V2ProjectionSource.runFixed retry canonicalBinding (Some previous)
@@ -451,3 +455,81 @@ let ``native membership identity must equal reviewed canonical issue node`` () =
     match runOneShot (verified "revision") transport binding request with
     | Error(Malformed _) -> Assert.Equal(3, transport.GraphQlCalls); Assert.Empty(transport.Mutations)
     | other -> failwith $"native node drift cannot reach Observation: {other}"
+
+[<Fact>]
+let ``unrelated protected main advance preserves the pinned population blob`` () =
+    let advanced = protectedBlob canonicalManifest |> Result.map (fun response -> { response with Body = response.Body.Replace(canonicalBinding.PopulationRevision, String.replicate 40 "d") })
+    let transport = scripted [ advanced; native 2963 "2026-10-02T00:00:00Z"; ok "[]"; protectedBlob "canonical owning roadmap"; organization; target; membership; observation (Some "Verified"); Error(Http(403, "second")); Error(Http(403, "third")) ]
+    let report = V2ProjectionSource.runFixed transport canonicalBinding None
+    Assert.True(report.PopulationGap.IsNone)
+    Assert.Equal(1, report.Verified)
+    Assert.True(report.Items.Head.DependencyReadComplete)
+    Assert.Empty(transport.Mutations)
+
+[<Fact>]
+let ``programme3008 is read natively and records revision and body digest`` () =
+    let manifest = canonicalManifest.Replace("docs/github-substrate-v2-roadmap.md", "https://github.com/FS-GG/.github/issues/3008")
+    let transport = scripted [ protectedBlob manifest; native 2963 "2026-10-02T00:00:00Z"; ok "[]"; native 3008 "2026-10-02T02:00:00Z"; organization; target; membership; observation (Some "Verified"); Error(Http(403, "second")); Error(Http(403, "third")) ]
+    let report = V2ProjectionSource.runFixed transport canonicalBinding None
+    Assert.Equal(1, report.Verified)
+    let plan = report.Items.Head.PlanObservation.Value
+    Assert.Equal(3008, plan.Issue.Number)
+    Assert.Equal("2026-10-02T02:00:00Z", plan.UpdatedAt)
+    Assert.Equal(64, plan.BodySha256.Length)
+    Assert.Empty(transport.Mutations)
+
+[<Fact>]
+let ``new native dependency against reviewed empty snapshot is stale without writes`` () =
+    let dependency = """[{"node_id":"I_blocker","number":12,"updated_at":"2026-10-02T02:00:00Z","state":"open","html_url":"https://github.com/FS-GG/.github/issues/12"}]"""
+    let transport = scripted [ protectedBlob canonicalManifest; native 2963 "2026-10-02T00:00:00Z"; ok dependency; Error(Http(403, "second")); Error(Http(403, "third")) ]
+    let report = V2ProjectionSource.runFixed transport canonicalBinding None
+    Assert.Equal("Stale", report.Items.Head.Health)
+    Assert.True(report.Items.Head.DependencyReadComplete)
+    Assert.Single(report.Items.Head.DependencyObservations) |> ignore
+    Assert.Empty(transport.Mutations)
+
+[<Fact>]
+let ``partial native dependency snapshot remains unknown without writes`` () =
+    let partial = ok "[]" |> Result.map (fun response -> { response with NextLink = Some "https://api.github.com/unreviewed-page" })
+    let transport = scripted [ protectedBlob canonicalManifest; native 2963 "2026-10-02T00:00:00Z"; partial; Error(Http(403, "second")); Error(Http(403, "third")) ]
+    let report = V2ProjectionSource.runFixed transport canonicalBinding None
+    Assert.Equal("Unknown", report.Items.Head.Health)
+    Assert.False(report.Items.Head.DependencyReadComplete)
+    Assert.Empty(transport.Mutations)
+
+[<Fact>]
+let ``programme body or revision drift during source recheck prevents dispatch`` () =
+    for changed in [ native 3008 "2026-10-02T02:01:00Z"; native 3008 "2026-10-02T02:00:00Z" |> Result.map (fun response -> { response with Body = response.Body.Replace("canonical plan", "changed plan") }) ] do
+        let manifest = canonicalManifest.Replace("docs/github-substrate-v2-roadmap.md", "https://github.com/FS-GG/.github/issues/3008")
+        let transport = scripted [ protectedBlob manifest; native 2963 "2026-10-02T00:00:00Z"; ok "[]"; native 3008 "2026-10-02T02:00:00Z"; organization; target; membership; observation None; protectedBlob manifest; native 2963 "2026-10-02T00:00:00Z"; ok "[]"; changed; Error(Http(403, "second")); Error(Http(403, "third")) ]
+        let report = V2ProjectionSource.runFixed transport canonicalBinding None
+        Assert.Equal(0, report.Verified)
+        Assert.Equal(0, report.Items.Head.MutationAttempts)
+        Assert.Empty(transport.Mutations)
+
+[<Fact>]
+let ``foreign programme and pull request URLs cannot supply owning evidence`` () =
+    for url in [ "https://github.com/foreign/repo/issues/3008"; "https://github.com/FS-GG/.github/pull/3008"; "https://example.org/arbitrary" ] do
+        let manifest = canonicalManifest.Replace("docs/github-substrate-v2-roadmap.md", url)
+        let transport = scripted [ protectedBlob manifest; native 2963 "2026-10-02T00:00:00Z"; ok "[]"; Error(Http(403, "second")); Error(Http(403, "third")) ]
+        let report = V2ProjectionSource.runFixed transport canonicalBinding None
+        Assert.Equal("Unknown", report.Items.Head.Health)
+        Assert.Empty(transport.Mutations)
+
+[<Fact>]
+let ``import constructor provenance mismatch never reaches native reads or writes`` () =
+    for manifest in [ canonicalManifest.Replace(canonicalBinding.ImportArtifactSha256, String.replicate 64 "1"); canonicalManifest.Replace(canonicalBinding.ImportRecipeRevision, String.replicate 40 "2") ] do
+        let transport = scripted [ protectedBlob manifest ]
+        let report = V2ProjectionSource.runFixed transport canonicalBinding None
+        Assert.True(report.PopulationGap.IsSome)
+        Assert.Equal(None, report.Selected)
+        Assert.Empty(transport.Mutations)
+
+[<Fact>]
+let ``protected population movement before dispatch retains prior field without write`` () =
+    let changed = protectedBlob canonicalManifest |> Result.map (fun response -> { response with Body = response.Body.Replace("\"current\":{\"oid\":\"" + String.replicate 40 "b", "\"current\":{\"oid\":\"" + String.replicate 40 "d") })
+    let transport = scripted [ protectedBlob canonicalManifest; native 2963 "2026-10-02T00:00:00Z"; ok "[]"; protectedBlob "canonical owning roadmap"; organization; target; membership; observation None; changed; Error(Http(403, "second")); Error(Http(403, "third")) ]
+    let report = V2ProjectionSource.runFixed transport canonicalBinding None
+    Assert.Equal(0, report.Items.Head.MutationAttempts)
+    Assert.Equal("Unknown", report.Items.Head.Health)
+    Assert.Empty(transport.Mutations)
