@@ -54,6 +54,32 @@ native qualification stay separate root-owned gates.
 
 FABLE-ADOPT-01 remains the independent staged Rendering/Game/Templates/FourD product adoption programme. OPS-TYPED changes qualification/admin seams only. Its immediate SC2 configuration-codec reuse is a named seam to record in that inventory, not a restart or duplicate of later whole-product SC2/BAR adoption.
 
+**2026-10-02 HOST acquired-attempt source integration.** The qualification-local
+[F# caller](../../deployment/telemetry-collector/host-attempt/README.md) drives
+the actual operation reducer from fixed HTTP and inherited-channel observations.
+The canonical Quint model covers ownership, effect uncertainty, deadlines and
+cleanup; seven generated ITFs compare 91 transitions with the production reducer,
+and an acquired-caller execution contributes 16 observed transitions. The hosted
+gate runs 37 compiled controls, 15 transport controls and five CLI controls,
+including a separately compiled acquisition-identity guard mutation. It builds
+the unchanged binding from published recipe `8ad0da67004d670c6803f34755dfe759a7fc84e7`.
+The independent source review qualifies `f1cc5e1c599bae6760649d8881b5971ab4ef5447`;
+its selected DLL is `c31c2e908fcb4f956e5ddb652e688399382f7dffc70157dedb10f81cea57e980`.
+That local build's PDB names its predecessor; implementation document hashes
+match the reviewed source. Protected rebuilding and actual runtime placement
+remain required before adoption.
+
+The workflow uses the existing linear static preflight, adds the canonical
+model and compiled correspondence checks before browser/package work, and
+retains SDK custody and the existing binding gate. All eight resulting shell
+blocks parse; 38 private-template controls pass without skips. A copied older
+test expected six blocks; integration corrects the expectation to the actual
+eight. No separate pipeline state model or measured CI saving is claimed.
+Native authorization channels, private custody, workflow admission, dispatch,
+artifact evidence and scoped cleanup remain root-owned operating gates.
+There is no generated workspace or default activation effect; published
+receiver/profile and the four native payloads remain unchanged.
+
 ### Model and correspondence contract
 
 SC2's model has one qualification-owner state and opaque artifact/version IDs. FourD has one operation-owner state plus an explicit set of owned resource identities and observations; it does not model unrelated distributed Authority consensus. Plain Quint fits this shared-state boundary. Bound the instance to two artifact generations and a small fixed set of owned roles. Time is a monotonically advancing budget/epoch; include aggregate deadline exhaustion and cancellation, not real timers.
@@ -73,4 +99,3 @@ OPS-TYPED-01.1–.3 have **no generated workspace/default effect**. The first en
 The SC2 diagnostic slice has no generated-workspace/default effect. Its first operational change requires the clean browser artifact and selected runner/failure-summary successor to retain the typed terminal. Historical attempt n keeps its unknown cause.
 
 Feature completion requires the first production seams adopted and the selected administrative ownership/retirement outcomes resolved or explicitly scoped by root; checking the current ready window does not silently declare the broader migration finished. Root records source delivery, publication, adoption, native acceptance and cleanup separately in the existing programme report. Telemetry remains the existing observer route; missing configuration and usage are unknown, not zero-cost/compliant. Current dispatch telemetry is not configured; usage and economics remain unknown.
-

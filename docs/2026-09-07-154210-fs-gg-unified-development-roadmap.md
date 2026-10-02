@@ -65,6 +65,19 @@ independent and open. This dated clarification is not a current fleet-health att
 profile acceptance or waiver of exact artifact, authentication, custody, settlement/replay or effect
 authority for any operation actually performed.
 
+**2026-10-02: HOST acquired-attempt caller source CLOSED; private adoption remains open.**
+The [qualification-local F# caller](../deployment/telemetry-collector/host-attempt/README.md)
+consumes fixed acquired observations and drives the actual lifecycle reducer.
+The native source gate includes 37 compiled controls, 15 transport controls,
+five CLI controls, the canonical Quint model, seven genuine ITF comparisons
+covering 91 transitions and an acquired-caller comparison with 16 transitions.
+The independent reviewed source is `f1cc5e1c599bae6760649d8881b5971ab4ef5447`.
+Absolute authorization deadlines, interrupt-before-cancel cleanup and an actual
+removed-acquisition-guard witness are covered. Protected runtime rebuilding,
+private channel/custody joins and genuine native acceptance remain open.
+Published receiver `8ad0da67004d670c6803f34755dfe759a7fc84e7`, its profile and
+four native payloads remain unchanged; V2 FULL ACCEPTED and Main NO ACTION remain.
+
 **2026-10-02: BAR typed refusal diagnostic source CLOSED; protected placement and gameplay remain open.**
 [FSBarV2 #18](https://github.com/FS-GG/FSBarV2/pull/18) merged at
 `4be2e6e9a0d228de828061198c9c2ce9992d90ad`, tree
