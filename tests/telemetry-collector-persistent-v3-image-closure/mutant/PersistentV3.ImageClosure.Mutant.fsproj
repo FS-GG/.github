@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net10.0</TargetFramework><TreatWarningsAsErrors>true</TreatWarningsAsErrors><IsPackable>false</IsPackable><DefineConstants>PERSISTENT_V3_REMOVE_INPUT_REVALIDATION_GUARD</DefineConstants></PropertyGroup>
+  <ItemGroup><PackageReference Include="FSharp.Core" /></ItemGroup>
+  <ItemGroup><Compile Include="../../../deployment/telemetry-collector/persistent/v3/image-closure/Runner.fs" Link="Runner.fs" /><Compile Include="Program.fs" /></ItemGroup>
+</Project>
