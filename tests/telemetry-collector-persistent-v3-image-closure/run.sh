@@ -22,9 +22,9 @@ PERSISTENT_V3_RUNNER_ADAPTER="$repo_root/deployment/telemetry-collector/persiste
 PERSISTENT_V3_RUNNER_PROFILE="$repo_root/deployment/telemetry-collector/persistent/v3/image-closure/production-selection.json" \
 PERSISTENT_V3_RUNNER_PRODUCTION_DLL="$repo_root/deployment/telemetry-collector/persistent/v3/image-closure/bin/Debug/net10.0/PersistentV3.ImageClosure.dll" \
 dotnet run --project "$repo_root/deployment/telemetry-collector/persistent/v3/image-closure/correspondence/PersistentV3.ImageClosure.Correspondence.fsproj" --no-restore
-dotnet restore "$repo_root/tests/telemetry-collector-persistent-v3-image-closure-mutant/PersistentV3.ImageClosure.Mutant.fsproj" --locked-mode
+dotnet restore "$repo_root/tests/telemetry-collector-persistent-v3-image-closure/mutant/PersistentV3.ImageClosure.Mutant.fsproj" --locked-mode
 set +e
-dotnet run --project "$repo_root/tests/telemetry-collector-persistent-v3-image-closure-mutant/PersistentV3.ImageClosure.Mutant.fsproj" --no-restore
+dotnet run --project "$repo_root/tests/telemetry-collector-persistent-v3-image-closure/mutant/PersistentV3.ImageClosure.Mutant.fsproj" --no-restore
 mutant_code=$?
 set -e
 test "$mutant_code" -eq 1
