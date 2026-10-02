@@ -95,15 +95,7 @@ def bounded_run(command,input=None,text=True,capture_output=True,timeout=1,check
   except subprocess.TimeoutExpired:raise Refusal("transport-settlement-unknown")
   raise
 def run_fixed(command,name,runner,stdin,timeout):
- if name!="invoke-binding":return runner(command,input=stdin,text=True,capture_output=True,timeout=timeout,check=False)
- deadline=time.monotonic()+timeout
- for attempt in range(3):
-  remaining=deadline-time.monotonic()
-  if remaining<=0:raise subprocess.TimeoutExpired(command,timeout)
-  completed=runner(command,input=stdin,text=True,capture_output=True,timeout=remaining,check=False)
-  exact_cleanup_refusal=(completed.returncode==2 and not(completed.stdout or "") and (completed.stderr or "").strip()=="host-binding-refused:process-cleanup-unknown")
-  if not exact_cleanup_refusal or attempt==2:return completed
- raise Refusal("binding-attempt-state-refused")
+ return runner(command,input=stdin,text=True,capture_output=True,timeout=timeout,check=False)
 def run_actions(actions,context,lease_path,runner=bounded_run,sensitive_input=None,allow_batch=False):
  exact(actions,["schema","actions"])
  if actions["schema"]!=SCHEMA or type(actions["actions"])is not list or len(actions["actions"])<1 or (len(actions["actions"])!=1 and not allow_batch):raise Refusal("actions-refused")

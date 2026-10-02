@@ -94,16 +94,13 @@ module AcquisitionTests =
         Assert.Throws<AttemptRefusal>(fun()->AttemptAcquisition.readFrame wrong 1|>AttemptAcquisition.auth "invocation-1" "destination-1" 3|>ignore)|>ignore
 
     [<Fact>]
-    let ``binding authority retry accepts only a fresh success after exact cleanup refusal`` () =
+    let ``binding authority cleanup unknown is terminal without a second call`` () =
         let mutable attempts=0
-        let output=AttemptPreparation.runHostBindingAttempts "binding-test-refused" (fun()->
-            attempts<-attempts+1
-            if attempts<3 then 2,"","host-binding-refused:process-cleanup-unknown\n" else 0,"authoritative-result","")
-        Assert.Equal("authoritative-result",output);Assert.Equal(3,attempts)
-        let mutable rejectedAttempts=0
         Assert.Throws<AttemptRefusal>(fun()->
-            AttemptPreparation.runHostBindingAttempts "binding-test-refused" (fun()->rejectedAttempts<-rejectedAttempts+1;2,"","host-binding-refused:source-head-drift\n")|>ignore)|>ignore
-        Assert.Equal(1,rejectedAttempts)
+            AttemptPreparation.runHostBindingAttempt "binding-test-refused" (fun()->
+            attempts<-attempts+1
+            2,"","host-binding-refused:process-cleanup-unknown\n")|>ignore)|>ignore
+        Assert.Equal(1,attempts)
 
 module ReducerTests =
     [<Fact>]
@@ -451,20 +448,46 @@ module CliTests =
     let digestFile path=Convert.ToHexString(SHA256.HashData(File.ReadAllBytes path)).ToLowerInvariant()
 
     [<Fact>]
-    let ``real producer invokes unchanged compiled HostBinding against exact 8ad source`` () =
+    let ``real producer binds exact source and effect check reopens every pinned payload`` () =
         use temp = new TempDirectory()
         let placement = Path.Combine(temp.Path,"placement")
         let workflow, head, tree = makePlacement placement
+        let recipe = Path.Combine(temp.Path,"recipe")
+        let cloneCode,_,cloneError=run "/usr/bin/git" temp.Path ["clone";"--no-hardlinks";"-q";sourceRoot();recipe]
+        Assert.True((cloneCode=0),cloneError)
         let pins = Path.Combine(temp.Path,"source-pins.json")
-        File.WriteAllText(pins,sourcePins(sourceRoot()))
+        File.WriteAllText(pins,sourcePins recipe)
         let input = Path.Combine(temp.Path,"request.json")
         let output = Path.Combine(temp.Path,"state.json")
-        File.WriteAllText(input,request placement workflow head tree pins (sourceRoot()))
+        File.WriteAllText(input,request placement workflow head tree pins recipe)
         let code,_,error=run "/usr/bin/dotnet" temp.Path [producerDll();"prepare";"--request";input;"--output";output]
         Assert.True((code = 0), error);Assert.Equal("",error);Assert.True(File.Exists output)
         let state=JsonDocument.Parse(File.ReadAllBytes output).RootElement
-        Assert.Equal(AttemptPreparation.RecipeSha,state.GetProperty("recipeSourceSha").GetString());Assert.Equal(AttemptPreparation.OperationId,state.GetProperty("operationId").GetString())
-        Assert.Equal("1ef6d54eb3f9572580407efe9f266f643645af3af17c33723c0aa8368e5f4f34",state.GetProperty("profileSha256").GetString())
+        let string (name:string)=state.GetProperty(name).GetString()
+        let preparedIdentity =
+            { SourceGeneration=state.GetProperty("sourceGeneration").GetInt32();PlacementSha=string "placementSha";PlacementTree=string "placementTree";WorkflowSha256=string "workflowSha256"
+              RecipeSourceSha=string "recipeSourceSha";RecipeSourceTree=string "recipeSourceTree";ProfileSha256=string "profileSha256";OperationId=string "operationId"
+              BindingSha256=string "bindingSha256";BindingProducerSha256=string "bindingProducerSha256";SourcePinsSha256=string "sourcePinsSha256";ProducerSha256=string "producerSha256"
+              RuntimeHostSha256=string "runtimeHostSha256";MechanismAdapterSha256=string "mechanismAdapterSha256";Nonce=string "nonce";DestinationId=string "destinationId" }
+        let preparation =
+            { PlacementRoot=placement;PlacementSha=head;PlacementTree=tree;WorkflowPath=".github/workflows/v2-host-native-private.yml";WorkflowSha256=digestFile workflow
+              QualificationRef=AttemptPreparation.QualificationRef;Environment=AttemptPreparation.Environment;Repository=AttemptPreparation.Repository;Workflow=AttemptPreparation.Workflow
+              ReleaseId=AttemptPreparation.ReleaseId;ManifestAssetId=AttemptPreparation.ManifestAssetId;ArchiveAssetId=AttemptPreparation.ArchiveAssetId;SourceGeneration=1
+              RecipeRoot=recipe;RecipeSourceSha=AttemptPreparation.RecipeSha;RecipeSourceTree=AttemptPreparation.RecipeTree;ProfilePath=Path.Combine(recipe,"deployment/telemetry-collector/native-operation-v1.json")
+              SourcePinsPath=pins;HostBindingDll=bindingDll();MechanismAdapterPath=Path.GetFullPath(Path.Combine(__SOURCE_DIRECTORY__,"..","host_attempt_transport.py"));Nonce="attempt-o-0001";DestinationId="destination-o-0001";BudgetSeconds=2700 }
+        Assert.Equal(AttemptPreparation.RecipeSha,preparedIdentity.RecipeSourceSha);Assert.Equal(AttemptPreparation.OperationId,preparedIdentity.OperationId)
+        Assert.Equal("1ef6d54eb3f9572580407efe9f266f643645af3af17c33723c0aa8368e5f4f34",preparedIdentity.ProfileSha256)
+        AttemptPreparation.revalidateWithin preparedIdentity preparation 10000
+        let role="deployment/telemetry-collector/native_producer_support.py"
+        let assumeCode,_,assumeError=run "/usr/bin/git" recipe ["update-index";"--assume-unchanged";role]
+        Assert.True((assumeCode=0),assumeError)
+        File.AppendAllText(Path.Combine(recipe,role),"\n# controlled payload-byte mutation\n")
+        let statusCode,status,statusError=run "/usr/bin/git" recipe ["status";"--porcelain"]
+        Assert.True((statusCode=0),statusError);Assert.Equal("",status)
+        let refusalCode =
+            try AttemptPreparation.revalidateWithin preparedIdentity preparation 10000; "not-refused"
+            with AttemptRefusal value->value
+        Assert.Equal("source-pin-content-refused",refusalCode)
 
     [<Fact>]
     let ``changed profile is refused before state or effect output`` () =

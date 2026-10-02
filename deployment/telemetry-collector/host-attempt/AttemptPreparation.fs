@@ -59,6 +59,7 @@ module AttemptPreparation =
     let ArchiveAssetId = 603434427L
     [<Literal>]
     let WorkflowTemplateRelativePath = "deployment/telemetry-collector/private-native-qualification.yml.in"
+    let SourcePayloads = ["qualify_native.py";"native_producer_support.py";"native-operation-v1.json";"native-producer-config.toml"]
 
     let private refuse value = raise (AttemptRefusal value)
     let private require condition value = if not condition then refuse value
@@ -133,22 +134,33 @@ module AttemptPreparation =
         [ for property in element.EnumerateObject() do require (seen.Add property.Name) "json-duplicate-key-refused"; yield property.Name, property.Value ] |> Map.ofList
     let private requireKeys expected (fields: Map<string, JsonElement>) = require (Set.ofList expected = Set.ofSeq fields.Keys) "json-fields-refused"
     let private text name (fields: Map<string, JsonElement>) = require (fields[name].ValueKind = JsonValueKind.String) "json-string-refused"; fields[name].GetString()
+    let private regularBytes path maximum =
+        let info=FileInfo(Path.GetFullPath path)
+        require(info.Exists && info.Length>0L && info.Length<=maximum && not(info.Attributes.HasFlag FileAttributes.ReparsePoint)) "binding-input-file-refused"
+        let before=info.Length,info.LastWriteTimeUtc
+        let bytes=File.ReadAllBytes info.FullName
+        info.Refresh();require(before=(info.Length,info.LastWriteTimeUtc)) "binding-input-replaced"
+        bytes
+    let private shaBytes (bytes:byte array)=Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant()
+    let private gitBlobSha (bytes:byte array) =
+        let header=Encoding.ASCII.GetBytes($"blob {bytes.LongLength}\000")
+        Convert.ToHexString(SHA1.HashData(Array.append header bytes)).ToLowerInvariant()
+    let private pinnedInventory path expectedSha =
+        let bytes=regularBytes path (64L*1024L)
+        require(shaBytes bytes=expectedSha) "source-pins-drift"
+        use document=JsonDocument.Parse(ReadOnlyMemory<byte>(bytes),JsonDocumentOptions(CommentHandling=JsonCommentHandling.Disallow,AllowTrailingCommas=false,MaxDepth=4))
+        let fields=properties document.RootElement
+        requireKeys SourcePayloads fields
+        SourcePayloads|>List.map(fun name->let value=text name fields in require(hex 64 value) "source-pin-digest-refused";name,value)|>Map.ofList
 
-    let internal runHostBindingAttempts finalRefusal (run:unit -> int*string*string) =
-        let rec attempt count =
-            let code,output,error=run()
-            let isolatedCleanupRefusal =
-                code=2 && String.IsNullOrEmpty output &&
-                String.Equals(error.Trim(),"host-binding-refused:process-cleanup-unknown",StringComparison.Ordinal)
-            if code=0 then output
-            elif isolatedCleanupRefusal && count<3 then attempt(count+1)
-            else refuse finalRefusal
-        attempt 1
+    let internal runHostBindingAttempt finalRefusal (run:unit -> int*string*string) =
+        let code,output,_=run()
+        if code=0 then output else refuse finalRefusal
 
     let private runHostBinding finalRefusal recipeRoot arguments timeoutMilliseconds maximumBytes =
         let clock=Stopwatch.StartNew()
         let remaining()=let value=timeoutMilliseconds-int clock.ElapsedMilliseconds in require(value>0) "host-binding-timeout-refused";value
-        runHostBindingAttempts finalRefusal (fun()->runBounded "/usr/bin/dotnet" recipeRoot arguments (remaining()) maximumBytes)
+        runHostBindingAttempt finalRefusal (fun()->runBounded "/usr/bin/dotnet" recipeRoot arguments (remaining()) maximumBytes)
 
     let private renderBinding request timeoutMilliseconds =
         let args =
@@ -238,7 +250,14 @@ module AttemptPreparation =
         let workflow=Path.GetFullPath(Path.Combine(request.PlacementRoot,request.WorkflowPath))
         require(request.WorkflowPath=".github/workflows/v2-host-native-private.yml" && File.Exists workflow && shaFile workflow=expected.WorkflowSha256) "workflow-drift-refused"
         require(Path.GetFullPath request.ProfilePath=Path.Combine(Path.GetFullPath request.RecipeRoot,"deployment/telemetry-collector/native-operation-v1.json") && shaFile request.ProfilePath=expected.ProfileSha256) "profile-drift-refused"
-        require(shaFile request.SourcePinsPath=expected.SourcePinsSha256 && shaFile request.HostBindingDll=expected.BindingProducerSha256) "binding-input-drift"
+        let pins=pinnedInventory request.SourcePinsPath expected.SourcePinsSha256
+        for name in SourcePayloads do
+            remaining()|>ignore
+            let relative="deployment/telemetry-collector/"+name
+            let bytes=regularBytes(Path.Combine(request.RecipeRoot,relative))(4L*1024L*1024L)
+            require(shaBytes bytes=pins[name]) "source-pin-content-refused"
+            require(git request.RecipeRoot ["rev-parse";expected.RecipeSourceSha+":"+relative] (remaining())=gitBlobSha bytes) "source-blob-refused"
+        require(shaFile request.HostBindingDll=expected.BindingProducerSha256) "binding-input-drift"
         require(shaFile(Path.GetFullPath "/usr/bin/dotnet")=expected.RuntimeHostSha256 && shaFile request.MechanismAdapterPath=expected.MechanismAdapterSha256) "runtime-closure-drift"
         let templatePath=Path.Combine(request.RecipeRoot,WorkflowTemplateRelativePath)
         require(File.Exists templatePath) "workflow-template-missing"
