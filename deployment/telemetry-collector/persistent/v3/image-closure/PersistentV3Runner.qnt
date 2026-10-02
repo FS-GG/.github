@@ -1,33 +1,47 @@
 module PersistentV3Runner {
-  type State = { phase: str, current: bool, stores: int, first: str, second: str, qualification: str, cancelled: bool, cleanupFailed: bool, refusal: str }
-  var state: State
-  val initialState = { phase: "Prepared", current: true, stores: 0, first: "None", second: "None", qualification: "Unknown", cancelled: false, cleanupFailed: false, refusal: "None" }
-  action init = state' = initialState
-  action acquire = all { state.phase == "Prepared", state' = {...state, phase: "Acquired"} }
-  action validate = all { state.phase == "Acquired", state.current, state' = {...state, phase: "Validated"} }
-  action createStores = all { state.phase == "Validated", state.current, state' = {...state, phase: "BuildingFirst", stores: 2} }
-  action firstBuilt = all { state.phase == "BuildingFirst", state' = {...state, phase: "BuildingSecond", first: "aaa"} }
-  action firstLost = all { state.phase == "BuildingFirst", state' = {...state, phase: "Cleanup", first: "Unknown", qualification: "Unknown"} }
-  action secondMatches = all { state.phase == "BuildingSecond", state.current, state' = {...state, phase: "Comparing", second: "aaa"} }
-  action secondDiffers = all { state.phase == "BuildingSecond", state' = {...state, phase: "Cleanup", second: "bbb", refusal: "BuildMismatch"} }
-  action invalidate = all { state.phase != "Complete", state' = {...state, current: false, phase: if (state.stores > 0) "Cleanup" else "Refused", qualification: "Unknown", refusal: "InputChanged"} }
-  action qualify = all { state.phase == "Comparing", state.current, state.first == state.second, state' = {...state, phase: "Cleanup", qualification: "Accepted"} }
-  action staleResult = all { state.phase == "Comparing", not(state.current), state' = {...state, phase: "Cleanup", qualification: "Unknown", refusal: "StaleResult"} }
-  action cancel = all { state.stores > 0, state.phase != "Complete", state' = {...state, phase: "Cleanup", cancelled: true, qualification: "Unknown"} }
-  action cleanupOne = all { state.phase == "Cleanup", state.stores > 0, state' = {...state, stores: state.stores - 1} }
-  action cleanupFailure = all { state.phase == "Cleanup", state.stores > 0, state' = {...state, cleanupFailed: true, qualification: "Unknown"} }
-  action finish = all { state.phase == "Cleanup", state.stores == 0, not(state.cleanupFailed), not(state.cancelled), state.qualification == "Accepted", state.current, state' = {...state, phase: "Complete"} }
-  action refuseAfterCleanup = all { state.phase == "Cleanup", state.stores == 0, (state.cleanupFailed or state.cancelled or state.qualification != "Accepted" or not(state.current)), state' = {...state, phase: "Refused"} }
-  action step = any { acquire, validate, createStores, firstBuilt, firstLost, secondMatches, secondDiffers, invalidate, qualify, staleResult, cancel, cleanupOne, cleanupFailure, finish, refuseAfterCleanup }
-  action successStep = if (state.phase == "Prepared") acquire else if (state.phase == "Acquired") validate else if (state.phase == "Validated") createStores else if (state.phase == "BuildingFirst") firstBuilt else if (state.phase == "BuildingSecond") secondMatches else if (state.phase == "Comparing") qualify else if (state.phase == "Cleanup" and state.stores > 0) cleanupOne else finish
-  val successIsClosed = state.phase != "Complete" or (state.current and state.first == state.second and state.qualification == "Accepted" and state.stores == 0 and not(state.cancelled) and not(state.cleanupFailed))
-  val unknownNeverSucceeds = state.phase != "Complete" or state.qualification == "Accepted"
-  val ownedStoresBounded = state.stores >= 0 and state.stores <= 2
-  val allInvariants = all { successIsClosed, unknownNeverSucceeds, ownedStoresBounded }
-  val successWitness = state.phase == "Complete"
-  val lostWitness = state.phase == "Refused" and state.first == "Unknown"
-  val mismatchWitness = state.phase == "Refused" and state.refusal == "BuildMismatch"
-  val cancellationWitness = state.phase == "Refused" and state.cancelled and state.qualification == "Unknown"
-  val cleanupFailureWitness = state.phase == "Cleanup" and state.cleanupFailed and state.qualification == "Unknown"
-  val staleWitness = state.refusal == "StaleResult" and state.qualification == "Unknown"
+ type State={phase:str,current:bool,owned:str,running:str,unknownBuild:bool,first:str,second:str,qualification:str,cancelled:bool,cleanupFailed:bool,refusal:str,pending:str,lastEffect:str}
+ var state:State
+ val initialState={phase:"Prepared",current:true,owned:"None",running:"None",unknownBuild:false,first:"None",second:"None",qualification:"Unknown",cancelled:false,cleanupFailed:false,refusal:"None",pending:"None",lastEffect:"None"}
+ action init=state'=initialState
+ action requestAcquire=all{state.phase=="Prepared",state.pending=="None",state'={...state,pending:"Acquire",lastEffect:"Acquire"}}
+ action observeAcquire=all{state.pending=="Acquire",state'={...state,phase:"Acquired",pending:"None"}}
+ action requestValidate=all{(state.phase=="Acquired" or state.phase=="Revalidating"),state.pending=="None",state'={...state,pending:"Validate",lastEffect:"Validate"}}
+ action observeValid=all{state.pending=="Validate",state.current,state'={...state,phase:if(state.phase=="Acquired")"Validated" else "Qualifying",pending:"None"}}
+ action observeStale=all{state.pending=="Validate",state'={...state,phase:if(state.owned=="None" and state.running=="None")"Refused" else "Cleanup",current:false,qualification:"Unknown",refusal:"InputChanged",pending:"None"}}
+ action requestStoreA=all{state.phase=="Validated",state.pending=="None",state'={...state,pending:"CreateA",lastEffect:"CreateA"}}
+ action observeStoreA=all{state.pending=="CreateA",state'={...state,phase:"CreatingStores",owned:"A",pending:"None"}}
+ action requestStoreB=all{state.phase=="CreatingStores",state.owned=="A",state.pending=="None",state'={...state,pending:"CreateB",lastEffect:"CreateB"}}
+ action observeStoreB=all{state.pending=="CreateB",state'={...state,owned:"AB",pending:"None"}}
+ action requestStartA=all{state.phase=="CreatingStores",state.owned=="AB",state.pending=="None",state'={...state,pending:"StartA",lastEffect:"StartA"}}
+ action observeStartedA=all{state.pending=="StartA",state'={...state,phase:"BuildingFirst",running:"A",pending:"None"}}
+ action loseBuildA=all{state.pending=="StartA",state'={...state,phase:"Cleanup",unknownBuild:true,first:"Unknown",qualification:"Unknown",refusal:"BuildAckLost",pending:"None"}}
+ action requestAwaitA=all{state.phase=="BuildingFirst",state.running=="A",state.pending=="None",state'={...state,pending:"AwaitA",lastEffect:"AwaitA"}}
+ action observeBuildA=all{state.pending=="AwaitA",state'={...state,phase:"BuildingSecond",running:"None",first:"aaa",pending:"None"}}
+ action requestStartB=all{state.phase=="BuildingSecond",state.pending=="None",state'={...state,pending:"StartB",lastEffect:"StartB"}}
+ action observeStartedB=all{state.pending=="StartB",state'={...state,running:"B",pending:"None"}}
+ action requestAwaitB=all{state.phase=="BuildingSecond",state.running=="B",state.pending=="None",state'={...state,pending:"AwaitB",lastEffect:"AwaitB"}}
+ action observeBuildB=all{state.pending=="AwaitB",state'={...state,phase:"Comparing",running:"None",second:"aaa",pending:"None"}}
+ action observeBuildMismatch=all{state.pending=="AwaitB",state'={...state,phase:"Comparing",running:"None",second:"bbb",pending:"None"}}
+ action requestCompare=all{state.phase=="Comparing",state.pending=="None",state'={...state,pending:"Compare",lastEffect:"Compare"}}
+ action observeMatch=all{state.pending=="Compare",state.first==state.second,state'={...state,phase:"Revalidating",pending:"None"}}
+ action observeMismatch=all{state.pending=="Compare",state.first!=state.second,state'={...state,phase:"Cleanup",qualification:"Unknown",refusal:"BuildMismatch",pending:"None"}}
+ action requestQualify=all{state.phase=="Qualifying",state.pending=="None",state'={...state,pending:"Qualify",lastEffect:"Qualify"}}
+ action observeQualified=all{state.pending=="Qualify",state.current,state'={...state,phase:"Cleanup",qualification:"Accepted",pending:"None"}}
+ action cancel=all{state.owned!="None",state'={...state,phase:"Cleanup",cancelled:true,qualification:"Unknown",pending:"None"}}
+ action requestCancel=all{state.phase=="Cleanup",state.running!="None",state.pending=="None",state'={...state,pending:"Cancel",lastEffect:"Cancel"}}
+ action observeCancelled=all{state.pending=="Cancel",state'={...state,running:"None",pending:"None"}}
+ action requestRemove=all{state.phase=="Cleanup",state.running=="None",state.owned!="None",state.pending=="None",state'={...state,pending:"Remove",lastEffect:"Remove"}}
+ action observeRemoved=all{state.pending=="Remove",state'={...state,owned:if(state.owned=="AB")"B" else "None",pending:"None",phase:if(state.owned!="AB" and state.unknownBuild)"Unknown" else if(state.owned!="AB" and state.qualification=="Accepted" and state.current and not(state.cancelled))"Complete" else if(state.owned!="AB")"Refused" else "Cleanup"}}
+ action cleanupFailure=all{(state.pending=="Remove" or state.pending=="Cancel"),state'={...state,cleanupFailed:true,qualification:"Unknown",pending:"None"}}
+ action step=any{requestAcquire,observeAcquire,requestValidate,observeValid,observeStale,requestStoreA,observeStoreA,requestStoreB,observeStoreB,requestStartA,observeStartedA,loseBuildA,requestAwaitA,observeBuildA,requestStartB,observeStartedB,requestAwaitB,observeBuildB,observeBuildMismatch,requestCompare,observeMatch,observeMismatch,requestQualify,observeQualified,cancel,requestCancel,observeCancelled,requestRemove,observeRemoved,cleanupFailure}
+ val successIsClosed=state.phase!="Complete" or (state.current and state.owned=="None" and state.running=="None" and not(state.unknownBuild) and state.qualification=="Accepted" and not(state.cancelled) and not(state.cleanupFailed))
+ val unknownNeverSucceeds=not(state.unknownBuild) or state.phase!="Complete"
+ val effectsOrdered=state.pending=="None" or state.pending==state.lastEffect
+ val allInvariants=all{successIsClosed,unknownNeverSucceeds,effectsOrdered}
+ val successWitness=state.phase=="Complete"
+ val lostWitness=state.phase=="Unknown" and state.unknownBuild and state.first=="Unknown"
+ val mismatchWitness=state.phase=="Refused" and state.refusal=="BuildMismatch"
+ val cancellationWitness=state.phase=="Refused" and state.cancelled and state.running=="None" and state.qualification=="Unknown"
+ val cleanupFailureWitness=state.cleanupFailed and state.owned!="None" and state.qualification=="Unknown"
+ val staleWitness=state.phase=="Refused" and not(state.current) and state.refusal=="InputChanged"
 }

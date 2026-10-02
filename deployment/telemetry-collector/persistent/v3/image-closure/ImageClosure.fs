@@ -1,13 +1,14 @@
 namespace FSGG.Telemetry.PersistentV3.ImageClosure
 
 open System
+open System.IO
+open System.Diagnostics
 open System.Security.Cryptography
-open System.Text
 open System.Text.Json
 open System.Text.RegularExpressions
 
-type FileRow = { Path:string; Bytes:int64; Sha256:string; Mode:string; SourceClass:string }
-type Selection = { Platform:string; HostSourceRevision:string; HostReleaseId:int64; HostRunId:int64; HostArchiveSha256:string; HostPackageSha256:string; HostPayloadSha256:string; HostManifestSha256:string; HostJournalSha256:string; ManagerSourceRevision:string; ManagerSourceTree:string; ManagerArtifactSha256:string; ManagerManifestSha256:string; ManagerPreparedSha256:string; ManagerArchiveSha256:string; ManagerRunId:int64; ManagerArtifactId:int64; RuntimeImageDigest:string; RuntimeTreeSha256:string; NativeElfSha256:string; NativeProfileSha256:string; ReaderProfileSha256:string; CanonicalVerifierSha256:string; InventorySha256:string; Files:FileRow array }
+type FileRow = { SourcePath:string; TargetPath:string; Bytes:int64; Sha256:string; Mode:string; SourceClass:string }
+type Selection = { IdentityClass:string; AcquisitionRoot:string; OwnerUid:int; Platform:string; HostSourceRevision:string; HostReleaseId:int64; HostRunId:int64; HostArchiveSha256:string; HostPackageSha256:string; HostPayloadSha256:string; HostManifestSha256:string; HostJournalSha256:string; ManagerSourceRevision:string; ManagerSourceTree:string; ManagerArtifactSha256:string; ManagerManifestSha256:string; ManagerPreparedSha256:string; ManagerArchiveSha256:string; ManagerRunId:int64; ManagerArtifactId:int64; RuntimeImageDigest:string; RuntimeTreeSha256:string; NativeElfSha256:string; NativeProfileSha256:string; ReaderProfileSha256:string; CanonicalVerifierSha256:string; InventorySha256:string; Files:FileRow array }
 type ClosureResult = Unavailable of string | Refused of string | Prepared of byte array
 
 module ImageClosure =
@@ -46,19 +47,67 @@ module ImageClosure =
     [<Literal>]
     let CanonicalVerifierSha256="8d6a33beae9a4de84fa7a703809e9b1a1656359a085f92091cf56de3b77fd3ba"
     let private sha (bytes:byte array)=Convert.ToHexString(SHA256.HashData bytes).ToLowerInvariant()
-    let private sha64 (value:string)=Regex.IsMatch(value,"^[0-9a-f]{64}$") && value<>String('0',64)
-    let private safePath (value:string)=value.StartsWith("/opt/fsgg/image/",StringComparison.Ordinal) && not(value.Contains("..")) && not(value.Contains('\\'))
-    let prepare selection =
-        if String.IsNullOrWhiteSpace selection.InventorySha256 || selection.Files.Length=0 then Unavailable "native-image-closure-inventory-acquisition-required"
-        elif selection.Platform<>"linux/amd64" || selection.HostSourceRevision<>HostSourceRevision || selection.HostReleaseId<>401538149L || selection.HostRunId<>36964135216L || selection.HostArchiveSha256<>HostArchiveSha256 || selection.HostPackageSha256<>HostPackageSha256 || selection.HostPayloadSha256<>HostPayloadSha256 || selection.HostManifestSha256<>HostManifestSha256 || selection.HostJournalSha256<>HostJournalSha256 || selection.ManagerSourceRevision<>ManagerSourceRevision || selection.ManagerSourceTree<>ManagerSourceTree || selection.ManagerArtifactSha256<>ManagerArtifactSha256 || selection.ManagerManifestSha256<>ManagerManifestSha256 || selection.ManagerPreparedSha256<>ManagerPreparedSha256 || selection.ManagerArchiveSha256<>ManagerArchiveSha256 || selection.ManagerRunId<>36983338783L || selection.ManagerArtifactId<>11216418410L || selection.RuntimeImageDigest<>RuntimeImageDigest || selection.RuntimeTreeSha256<>RuntimeTreeSha256 || selection.NativeElfSha256<>NativeElfSha256 || selection.NativeProfileSha256<>NativeProfileSha256 || selection.CanonicalVerifierSha256<>CanonicalVerifierSha256 then Refused "fixed-production-identity-mismatch"
-        elif not(sha64 selection.ReaderProfileSha256 && sha64 selection.InventorySha256) then Refused "invalid-digest"
-        else
-            let sorted=selection.Files|>Array.sortBy _.Path
-            if sorted<>selection.Files || (sorted|>Array.distinctBy _.Path).Length<>sorted.Length then Refused "inventory-order-or-duplicate"
-            elif sorted.Length>8192 || (sorted|>Array.sumBy _.Bytes)>1024L*1024L*1024L then Refused "inventory-bound"
-            elif sorted|>Array.exists(fun row->not(safePath row.Path)||row.Bytes<=0L||not(sha64 row.Sha256)||row.Mode<>"0444"&&row.Mode<>"0555"||row.SourceClass<>"host"&&row.SourceClass<>"manager"&&row.SourceClass<>"native"&&row.SourceClass<>"runtime") then Refused "inventory-entry"
-            elif (sorted|>Array.map _.SourceClass|>Set.ofArray)<>set ["host";"manager";"native";"runtime"] || not(sorted|>Array.exists(fun row->row.SourceClass="native"&&row.Sha256=NativeElfSha256)) || not(sorted|>Array.exists(fun row->row.Sha256=CanonicalVerifierSha256)) then Refused "inventory-omits-required-content"
+    let private sha64 (value:string)=not(String.IsNullOrWhiteSpace value)&&Regex.IsMatch(value,"^[0-9a-f]{64}$")&&value<>String('0',64)
+    let private fixedProduction selection = selection.Platform="linux/amd64"&&selection.OwnerUid=0&&selection.HostSourceRevision=HostSourceRevision&&selection.HostReleaseId=401538149L&&selection.HostRunId=36964135216L&&selection.HostArchiveSha256=HostArchiveSha256&&selection.HostPackageSha256=HostPackageSha256&&selection.HostPayloadSha256=HostPayloadSha256&&selection.HostManifestSha256=HostManifestSha256&&selection.HostJournalSha256=HostJournalSha256&&selection.ManagerSourceRevision=ManagerSourceRevision&&selection.ManagerSourceTree=ManagerSourceTree&&selection.ManagerArtifactSha256=ManagerArtifactSha256&&selection.ManagerManifestSha256=ManagerManifestSha256&&selection.ManagerPreparedSha256=ManagerPreparedSha256&&selection.ManagerArchiveSha256=ManagerArchiveSha256&&selection.ManagerRunId=36983338783L&&selection.ManagerArtifactId=11216418410L&&selection.RuntimeImageDigest=RuntimeImageDigest&&selection.RuntimeTreeSha256=RuntimeTreeSha256&&selection.NativeElfSha256=NativeElfSha256&&selection.NativeProfileSha256=NativeProfileSha256&&selection.CanonicalVerifierSha256=CanonicalVerifierSha256
+    let private modeText (path:string) = Convert.ToString(int(File.GetUnixFileMode path),8).PadLeft(4,'0')
+    let private noLink (info:FileSystemInfo)=String.IsNullOrEmpty info.LinkTarget
+    let ownerUid (path:string) =
+        let start=ProcessStartInfo("/usr/bin/stat")
+        start.ArgumentList.Add("--format=%u")
+        start.ArgumentList.Add(path)
+        start.RedirectStandardOutput<-true
+        start.UseShellExecute<-false
+        use child=Process.Start start
+        let output=child.StandardOutput.ReadToEnd().Trim()
+        child.WaitForExit()
+        match child.ExitCode,Int32.TryParse output with 0,(true,value)->value|_-> -1
+    let private custody root source expectedUid =
+        let rec directories current =
+            let info=DirectoryInfo current
+            if not info.Exists||not(noLink info)||ownerUid current<>expectedUid||((File.GetUnixFileMode current)&&&(UnixFileMode.GroupWrite|||UnixFileMode.OtherWrite))<>enum 0 then false
+            elif current=root then true
+            elif isNull info.Parent then false
+            else directories info.Parent.FullName
+        let file=FileInfo source
+        noLink file&&ownerUid source=expectedUid&&directories file.DirectoryName
+    let private physicalRows selection =
+        try
+            let root=Path.GetFullPath selection.AcquisitionRoot
+            let rootInfo=DirectoryInfo root
+            if not rootInfo.Exists||not(noLink rootInfo)||ownerUid root<>selection.OwnerUid||((File.GetUnixFileMode root)&&&(UnixFileMode.GroupWrite|||UnixFileMode.OtherWrite))<>enum 0 then Error "acquisition-root-custody"
+            elif (Directory.EnumerateFiles(root,"*",SearchOption.AllDirectories)|>Seq.map(fun path->Path.GetRelativePath(root,path))|>Set.ofSeq)<>(selection.Files|>Array.map _.SourcePath|>Set.ofArray) then Error "acquisition-root-inventory-incomplete"
             else
-                let inventoryBytes=JsonSerializer.SerializeToUtf8Bytes(sorted)
-                if sha inventoryBytes<>selection.InventorySha256 then Refused "inventory-digest"
-                else Prepared(JsonSerializer.SerializeToUtf8Bytes({|schema="fsgg.telemetry.persistent-v3-image-context/1"; status="prepared-inactive"; platform=selection.Platform; user=32768; activationAuthorized=false; serviceEnabled=false; host={|sourceRevision=selection.HostSourceRevision;releaseId=selection.HostReleaseId;runId=selection.HostRunId;archiveSha256=selection.HostArchiveSha256;packageSha256=selection.HostPackageSha256;payloadSha256=selection.HostPayloadSha256;manifestSha256=selection.HostManifestSha256;journalSha256=selection.HostJournalSha256|}; manager={|sourceRevision=selection.ManagerSourceRevision;sourceTree=selection.ManagerSourceTree;runId=selection.ManagerRunId;artifactId=selection.ManagerArtifactId;artifactSha256=selection.ManagerArtifactSha256;manifestSha256=selection.ManagerManifestSha256;preparedSha256=selection.ManagerPreparedSha256;archiveSha256=selection.ManagerArchiveSha256|}; runtimeImageDigest=selection.RuntimeImageDigest; runtimeTreeSha256=selection.RuntimeTreeSha256; nativeElfSha256=selection.NativeElfSha256; nativeProfileSha256=selection.NativeProfileSha256; readerProfileSha256=selection.ReaderProfileSha256; canonicalVerifierSha256=selection.CanonicalVerifierSha256; inventorySha256=selection.InventorySha256; files=sorted|}))
+                selection.Files|>Array.map(fun row->
+                    let source=Path.GetFullPath(Path.Combine(root,row.SourcePath))
+                    let prefix=root.TrimEnd(Path.DirectorySeparatorChar)+string Path.DirectorySeparatorChar
+                    if Path.IsPathFullyQualified row.SourcePath||not(source.StartsWith(prefix,StringComparison.Ordinal))||not(row.TargetPath.StartsWith("/opt/fsgg/image/",StringComparison.Ordinal))||row.TargetPath.Contains("..") then Error "inventory-path"
+                    else
+                        let info=FileInfo source
+                        if not info.Exists||not(noLink info)||info.Attributes.HasFlag FileAttributes.ReparsePoint||not(custody root source selection.OwnerUid) then Error "inventory-regular-file-or-custody"
+                        elif info.Length<>row.Bytes||modeText source<>row.Mode||sha(File.ReadAllBytes source)<>row.Sha256 then Error "inventory-physical-mismatch"
+                        else Ok(source,row))
+                |>Array.fold(fun state next->match state,next with|Error e,_->Error e|_,Error e->Error e|Ok rows,Ok row->Ok(row::rows))(Ok [])
+                |>Result.map(List.rev>>List.toArray)
+        with _ -> Error "inventory-physical-read"
+    let prepare selection =
+        if String.IsNullOrWhiteSpace selection.InventorySha256||selection.Files.Length=0 then Unavailable "native-image-closure-inventory-acquisition-required"
+        elif selection.IdentityClass<>"production"&&selection.IdentityClass<>"synthetic-test" then Refused "identity-class"
+        elif selection.IdentityClass="production"&&not(fixedProduction selection) then Refused "fixed-production-identity-mismatch"
+        elif selection.Platform<>"linux/amd64"||not(sha64 selection.ReaderProfileSha256&&sha64 selection.InventorySha256) then Refused "selection-shape"
+        else
+            let sorted=selection.Files|>Array.sortBy _.TargetPath
+            if sorted<>selection.Files||(sorted|>Array.distinctBy _.TargetPath).Length<>sorted.Length then Refused "inventory-order-or-duplicate"
+            elif sorted.Length>8192||(sorted|>Array.sumBy _.Bytes)>1024L*1024L*1024L then Refused "inventory-bound"
+            elif sorted|>Array.exists(fun row->String.IsNullOrWhiteSpace row.SourcePath||row.Bytes<=0L||not(sha64 row.Sha256)||(row.Mode<>"0444"&&row.Mode<>"0555")||not(Set.contains row.SourceClass (set["host";"manager";"native";"runtime"]))) then Refused "inventory-entry"
+            elif (sorted|>Array.map _.SourceClass|>Set.ofArray)<>set["host";"manager";"native";"runtime"] then Refused "inventory-omits-dependency-root"
+            elif sha(JsonSerializer.SerializeToUtf8Bytes sorted)<>selection.InventorySha256 then Refused "inventory-digest"
+            else match physicalRows selection with
+                 | Error reason->Refused reason
+                 | Ok acquired->
+                    let requiredProductionDigests=[|selection.HostPackageSha256;selection.ManagerArtifactSha256;selection.NativeElfSha256;selection.NativeProfileSha256;selection.ReaderProfileSha256;selection.CanonicalVerifierSha256|]
+                    if selection.IdentityClass="production" && not(requiredProductionDigests|>Array.forall(fun digest->acquired|>Array.exists(fun(_,row)->row.Sha256=digest))) then Refused "inventory-omits-production-code-or-profile"
+                    else
+                      let copies=sorted|>Array.map(fun row -> $"COPY --chown=32768:32768 --chmod={row.Mode.Substring(1)} {row.SourcePath} {row.TargetPath}")
+                      let containerfile=String.concat "\n" (Array.concat[ [|$"FROM docker.io/library/aspnet@{selection.RuntimeImageDigest}";"USER 32768:32768"|];copies;[|"ENTRYPOINT []";"CMD []"|] ])+"\n"
+                      let profile=JsonSerializer.Serialize({|schema="fsgg.telemetry.persistent-v3-image-profile/1";user=32768;group=32768;platform=selection.Platform;argv=Array.empty<string>;listeners=Array.empty<string>;serviceEnabled=false;activationAuthorized=false;readerProfileSha256=selection.ReaderProfileSha256|})
+                      Prepared(JsonSerializer.SerializeToUtf8Bytes({|schema="fsgg.telemetry.persistent-v3-image-context/2";status=(if selection.IdentityClass="production" then "prepared-inactive" else "prepared-inactive-synthetic");identityClass=selection.IdentityClass;containerfile=containerfile;profile=profile;inventorySha256=selection.InventorySha256;runtimeImageDigest=selection.RuntimeImageDigest;files=sorted|}))
