@@ -26,7 +26,26 @@ protected `6bbe4fd21beed315c7c5156a5632956058126891`, tree
 These deliver the selected successor engine profile, matching contract and consumer admission.
 Reported local compilation/tests and the separate candidate installation require independent
 artifact/use-time joins before native qualification. They do not replace the original retained
-policy495/stock2639 attempt, deliver the pending budget amendment or close useful-play journeys.
+policy495/stock2639 attempt or close useful-play journeys. The budget source closure follows below.
+
+## Delivered budget amendment source
+
+[FSBar #23](https://github.com/FS-GG/FSBarV2/pull/23) merged protected
+`87250d3d5d4ca48b25307228da595d1d7d6fc2ee`, tree
+`735e073e22f40371d99f72e6bcc83ac364aebfbe`. The actual
+[hosted compiled boundary gate 37056504611](https://github.com/FS-GG/FSBarV2/actions/runs/37056504611)
+passed. Local exact-source qualification passed seven Python buffered-file controls, two actual
+CLI boundary controls, compiled raw/encoded/UTF-8/record boundaries, 27 canonical model scenarios,
+14 normalized traces, full-state/ordered-effect correspondence and three mutation refusals.
+The accepted source now uses 10 MiB raw, 16 MiB encoded and 160 reads of at most 64 KiB,
+with the existing record, probe, evaluation and time caps preserved.
+
+Fresh official locked restore exposed two existing FSharp.Core checksum mismatches. Only the two
+hashes and owning projects' implicit-library-pack selection were corrected to the genuine official
+same-version archive. The original failures are retained. A fork-origin SourceLink refusal was
+resolved by building the same committed source in a private canonical clone; the guard stayed intact.
+Protected artifact/build custody and private placement remain open. This closure does not implement
+RP2's complete-prefix/raw-tail contract or replace the retained native attempt.
 
 ## Findings and limits
 
@@ -113,11 +132,10 @@ probes, three evaluations and five-second deadline unless separate evidence
 justifies a later decision. Unrelated process-map, normalization, guest and
 knowledge-store limits retain their own purposes.
 
-A local source candidate has seven passing Python controls, including full-size
-read and encoded-envelope checks. Its F# tests and protected delivery are pending;
-this does not change any existing installed artifact. Verify exact byte limit and
-limit + 1, exact record limit and limit + 1, short reads and oversized envelopes
-through the actual F# entrypoint before RP4.
+Source and protected delivery are closed as recorded above. Actual F# and CLI controls cover
+exact byte and record limits, limit + 1, invalid UTF-8, short reads and oversized envelopes.
+Protected build/helper custody and private placement must still join those guards before RP4;
+existing installed artifacts remain separate.
 
 ### Preserve complete-record evidence
 

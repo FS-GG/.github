@@ -36,8 +36,18 @@ external-authority producer and coherent 0.32.0 release preparation at protected
 `730923fe9d27174e879566f21dab14a1b03d761a`, tree
 `b48ab5d7a091db7f7e823d938e51f549ea6549ff`. Exact-head native deterministic, packed-consumer,
 browser and retained model/reducer checks passed. This closes that producer source window.
-Final protected-source archives, publication of the complete 19-package set and fresh installed
-Templates external-reference qualification remain open. The template candidate remains opt-in
+Final protected-source archives are qualified by
+[source-only run 37046893526](https://github.com/FS-GG/FS.GG.Rendering/actions/runs/37046893526),
+original artifact `11244853996`, archive SHA-256
+`58a80ec49db26b36b3f873694053df1e0eb4c3fb5bac503c8905ac2547bdb4d7`.
+Root authenticated the custody manifest and all 19 archives. Read-only release preflight
+37051631070 passed; it establishes reads and identity exchange, while effective publisher grants
+and complete active/deleted occupancy remain unqualified. Rendering #1368 delivered the protected
+same-repository-token Templates transport at `d11790b8229119e74b30a59f6be6db59bd48da54`.
+Its archive preflight passed; explicit full run 37056141755 then refused an npm version mismatch
+before browser qualification. The failed run remains evidence and a bounded pinned-npm repair is
+in review. Publication of the complete 19-package set and fresh installed Templates
+external-reference qualification remain open. The template candidate remains opt-in
 until its published dependency joins; broader Stage .2/.3 acceptance and .4 publication are open.
 Historical pre-merge archives do not replace final source binding. No product adoption is claimed.
 
