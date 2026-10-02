@@ -41,15 +41,35 @@ Final protected-source archives are qualified by
 original artifact `11244853996`, archive SHA-256
 `58a80ec49db26b36b3f873694053df1e0eb4c3fb5bac503c8905ac2547bdb4d7`.
 Root authenticated the custody manifest and all 19 archives. Read-only release preflight
-37051631070 passed; it establishes reads and identity exchange, while effective publisher grants
-and complete active/deleted occupancy remain unqualified. Rendering #1368 delivered the protected
-same-repository-token Templates transport at `d11790b8229119e74b30a59f6be6db59bd48da54`.
-Its archive preflight passed; explicit full run 37056141755 then refused an npm version mismatch
-before browser qualification. The failed run remains evidence and a bounded pinned-npm repair is
-in review. Publication of the complete 19-package set and fresh installed Templates
-external-reference qualification remain open. The template candidate remains opt-in
-until its published dependency joins; broader Stage .2/.3 acceptance and .4 publication are open.
-Historical pre-merge archives do not replace final source binding. No product adoption is claimed.
+37051631070 established reads and identity exchange. Protected Rendering #1369's complete native
+census37058106737 observed all 19 target versions absent from both active and deleted listings;
+this does not prove per-package write permission. Effective writer scopes remain unobserved,
+original publicationReady remains false, and the separately selected publisher amendment is in review.
+The original producer/archive identities remain immutable across execution-workflow repairs.
+
+## External-authority reference source delivery
+
+[Templates #666](https://github.com/FS-GG/FS.GG.Templates/pull/666) delivered the selected
+external-authority reference at protected `908da309c9a52490cf914c3f2d5ce1eaf1188b2e`, tree
+`2c611f36ae4241c5a4566b403bea5727dbb99d85`, equal exact qualified source
+`d90c55e768afc2fbed14a3c6e234fa346f61da41`. Its own native composition and receiver checks passed.
+Rendering #1372 binds that exact source in the native caller; the
+[full qualification37062172958](https://github.com/FS-GG/FS.GG.Rendering/actions/runs/37062172958)
+ran from executor `09a8f6a11877a30087ac67d147c9ad4d73db7ecc` against the unchanged original
+producer730 archives. Root authenticated the 18-file native evidence artifact11250403662,
+30,089 bytes, outer SHA-256 `59eee748707f2b7490bc1d29eda9579af9ec19ba583d41b143bc7f1a44b7ef4d`.
+All 180 ProviderComposition tests and four tests per Chromium, Firefox and WebKit family passed;
+no test was skipped, failed or flaky. Every selected archive hash equals retained producer custody.
+Fresh generated Fable5.18.0/Vite/server and candidate-package compilation are source-candidate evidence.
+Prior transport422, bundled-npm mismatch and undeclared-rg failures are retained with their causal
+workflow repairs; they are not installed outcomes or waived checks.
+
+This closes the selected .3 external-authority source window alongside the previously closed local
+reference. Stage .4 still requires coherent publication of all 19 Rendering packages, publication
+and fresh feed-installed qualification of the Templates consumer, and separate upgrade evidence
+where an upgrade is promised. Broader .3 WASM examples and .5–.7 product adoption remain open.
+The reference remains opt-in until the published dependency joins. No source-candidate result
+establishes installed operation or SC2/BAR/FourD native gameplay acceptance.
 
 ## Shared WASM dependency coordination
 

@@ -53,6 +53,22 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-02: FABLE-ADOPT-01.3 external-authority reference CLOSED (source candidate).**
+[Templates #666](https://github.com/FS-GG/FS.GG.Templates/pull/666) merged protected
+`908da309c9a52490cf914c3f2d5ce1eaf1188b2e`, tree
+`2c611f36ae4241c5a4566b403bea5727dbb99d85`, after exact-head native checks and the
+[full native qualification 37062172958](https://github.com/FS-GG/FS.GG.Rendering/actions/runs/37062172958)
+passed. Root independently authenticated evidence artifact `11250403662`, outer SHA-256
+`59eee748707f2b7490bc1d29eda9579af9ec19ba583d41b143bc7f1a44b7ef4d`: 180 provider tests and
+four tests each in Chromium, Firefox and WebKit passed, with zero failures, skips or flaky results.
+The generated Fable reference consumed the three exact original Rendering 0.32.0 archives from
+producer `730923fe9d27174e879566f21dab14a1b03d761a`; all archive hashes match retained custody.
+Prior native transport, npm-version and missing-tool failures remain historical evidence.
+This closes the selected external-authority source reference; coherent 19-package publication,
+fresh feed-installed Templates qualification, broader WASM reference coverage and product adoption
+remain open in the [owning staged adoption plan](roadmaps/2026-10-01-staged-fable-game-adoption.md).
+No installed or native gameplay acceptance follows. V2 platform full acceptance remains complete.
+
 **2026-10-02: COORD-BOARD-V2-01.4 read-only inspection and successor preparation CLOSED (source).**
 The [owning board design](coordination/2026-09-29-coordination-v2-board-design.md) now provides
 `board-v2 inspect`, a structurally read-only projection over authenticated binding and source
