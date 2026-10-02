@@ -29,6 +29,16 @@ external-authority/WASM examples remain open before their dependent product adop
 apply the local Game clock to native SC2/BAR. Retained upgrades require their separate preserving
 qualification. Later .5–.7 outcomes remain open.
 
+## Shared WASM dependency coordination
+
+[WASM-SHARED-01](2026-10-02-shared-wasm-foundation.md) separately plans extraction of BAR/SC2
+execution mechanics into a shared browser host, typed contracts and guest SDK. Coordinate the
+Stage .3 WASM extension example against that qualified dependency. Its extraction and subsequent
+WASM-only product adoption do not depend on this plan's FourD rendering pilot. This plan's
+presentation/input migration retains its existing .5–.6 sequence. Product wire codecs, native
+authority and module ABI compatibility remain with their adapters; shared package publication
+and clean importing-consumer qualification are separate evidence.
+
 ## Inspected starting point
 
 Fable compiles F# to JavaScript. Using Fable alone does not establish adoption of a common renderer.
