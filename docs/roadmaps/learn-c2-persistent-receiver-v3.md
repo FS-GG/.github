@@ -55,6 +55,17 @@ The candidate, artifact, admission and publisher selectors agree; the existing p
 state machine and default `publish=false` remain unchanged. Historical 0.2.1 and older
 refusal fixtures remain. The registry's published fields remain 0.2.1.
 
+The P2-A source window is Closed on 2026-10-02: [PR #4086](https://github.com/FS-GG/.github/pull/4086)
+merged at `c10885ead065f6724a843ea9c10bd51793e1a120`, tree
+`c55d71b5cabdd61d49724434c796bd438e91e278`, equal qualified
+`a494e3cdd0be95b9cc72f597cf5af7cd5f355dc1`. Root authenticated the merge,
+tree and protected main, then verified the exact protected
+[Host package workflow](https://github.com/FS-GG/.github/actions/runs/36959036061)
+passed. Native CI repaired the generated publishing skill manifest in the same
+PR; all eight independently reviewed implementation blobs remained unchanged.
+This closes successor source preparation, while tuple availability, candidate
+retention, publication, served artifacts and container adoption remain open.
+
 ### P2-B — served artifacts
 
 After protected source and native qualification, root acquires a first-attempt candidate,
