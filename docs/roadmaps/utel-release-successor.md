@@ -43,3 +43,25 @@ release journal `fsgg/v2/journal/release/utel-rel-04`. The historical
 `utel-rel-03` journal remains immutable. Candidate qualification still has no
 provider write capability; the publisher performs a separate exact-source
 preflight before any effect. The five GS2-08.9 workflows remain disabled.
+
+## UTEL-REL-10 — 0.95.0 Board inspection successor
+
+The selected coherent cut uses the existing `release-successor-candidate.yml` and
+`release-successor-publish.yml` entry points with literal version `0.95.0`, predecessor
+`0.94.0` from source `337b6a1d53571b07ca8e1417e18e52546ad319a7`, and fresh protected
+journal `refs/heads/fsgg/v2/journal/release/utel-rel-10`. The published 0.94 release,
+its manifest and completed `utel-rel-09` journal remain historical authority.
+
+Source qualification prepares this release window; publication and installed adoption remain
+pending. The candidate must come from the final reviewed repair merge on current main, pack
+each coherent member once, and retain the source-bound three archives, standalone qualification
+and predecessor receipt. The separate publisher preflight must authenticate that exact
+first-attempt candidate on the same main SHA and confirm the unused target before journal
+initialization. The existing sole operator, environment, credentials, admission rereads,
+16-effect ordering, protected journal and recovery rules apply unchanged.
+
+This route creates only `coherent-set/v0.95.0`; component tags are collision checks and must
+not be created to start the retired publishers. The GS2-08.9 legacy routes stay sealed.
+Publication requires all 16 effects to be verified through native readback. Fresh public
+installation and Board receiver qualification are separate acceptance boundaries; the version
+selection alone does not import issues, activate schedulers or complete Board adoption.
