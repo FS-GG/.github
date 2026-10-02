@@ -24,6 +24,14 @@ on:
   pull_request:
     paths:
       - "src/FS.GG.Coord.GitHub/**"
+      - "src/FS.GG.Coord.Cli/**"
+      - "src/FS.GG.Coord.Cli.BoardOps/**"
+      - "src/FS.GG.Coord.Cli.Kernel/**"
+      - "src/FS.GG.Coord.Cli.Lifecycle/**"
+      - "src/FS.GG.Telemetry.Client/**"
+      - "src/FS.GG.Telemetry.Contracts/**"
+      - "src/FS.GG.Telemetry.Dashboard/**"
+      - "src/FS.GG.Telemetry.Store/**"
       - "tests/FS.GG.Coord.GitHub.Tests/**"
       - "tests/coord-board-v2-projection/**"
       - "tests/coord-board-v2-cli-join/**"
@@ -39,6 +47,14 @@ on:
     branches: [main]
     paths:
       - "src/FS.GG.Coord.GitHub/**"
+      - "src/FS.GG.Coord.Cli/**"
+      - "src/FS.GG.Coord.Cli.BoardOps/**"
+      - "src/FS.GG.Coord.Cli.Kernel/**"
+      - "src/FS.GG.Coord.Cli.Lifecycle/**"
+      - "src/FS.GG.Telemetry.Client/**"
+      - "src/FS.GG.Telemetry.Contracts/**"
+      - "src/FS.GG.Telemetry.Dashboard/**"
+      - "src/FS.GG.Telemetry.Store/**"
       - "tests/FS.GG.Coord.GitHub.Tests/**"
       - "tests/coord-board-v2-projection/**"
       - "tests/coord-board-v2-cli-join/**"
