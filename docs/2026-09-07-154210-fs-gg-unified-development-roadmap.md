@@ -53,6 +53,23 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-02: BAR selected infolog budget amendment CLOSED (source).**
+[FSBar #23](https://github.com/FS-GG/FSBarV2/pull/23) merged protected
+`87250d3d5d4ca48b25307228da595d1d7d6fc2ee`, tree
+`735e073e22f40371d99f72e6bcc83ac364aebfbe`, after the actual
+[compiled boundary gate 37056504611](https://github.com/FS-GG/FSBarV2/actions/runs/37056504611)
+passed. The source admits 10 MiB decoded logs, 16 MiB encoded requests and 160 reads of at most
+64 KiB; 65,536 records, 32 probes, three evaluations and the five-second deadline remain fixed.
+Local genuine compiled boundary and CLI tests, seven buffered-file controls, 27 canonical scenarios,
+14 normalized trace joins, full projected-state/ordered-effect correspondence and three mutation
+refusals passed. Two existing package locks now bind the actual official FSharp.Core archive;
+the owning projects disable the implicit SDK package copy. Genuine checksum and fork-origin
+SourceLink failures remain retained; no integrity or source guard was weakened.
+The external draft and handoff remain unchanged. Complete-prefix/raw-tail semantics, protected
+artifact and private placement, successor engine loaded custody, capacity qualification and one
+changed native attempt remain open. Installed policy495/stock2639 and useful-play 0/6 remain
+historical/current native evidence; this source closure grants no gameplay acceptance.
+
 **2026-10-02: WASM-SHARED-01.5-P connected 0.2.0 publication and installed qualification CLOSED.**
 The immutable `wasm/v0.2.0` producer is `4afacb501b9371b4cc81494b7bf91b46c880a663`,
 tree `191d7c0ca82af8a4d610e88b35ce97df802d3463`.
