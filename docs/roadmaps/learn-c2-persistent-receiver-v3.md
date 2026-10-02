@@ -45,5 +45,41 @@ unused Host successor version containing the reader, public artifact provenance,
 closure, reproducible OCI construction, and protected container qualification. P2 must preserve the
 published Host 0.2.1 package, tag, release, manifest, and journal; it cannot republish or relabel them.
 
+### P2-A — provisional Host successor source
+
+The additive installed-origin reader selects source version `0.3.0`, candidate tag
+`telemetry-host/v0.3.0`, and journal `utel-host-rel-09`. These are provisional choices;
+their availability is unverified. Root must use Host's own tag, feed and journal checks before
+candidate retention or publication. A collision requires another unused coherent tuple.
+The candidate, artifact, admission and publisher selectors agree; the existing publisher
+state machine and default `publish=false` remain unchanged. Historical 0.2.1 and older
+refusal fixtures remain. The registry's published fields remain 0.2.1.
+
+### P2-B — served artifacts
+
+After protected source and native qualification, root acquires a first-attempt candidate,
+verifies its exact package/manifest/source bytes, qualifies the existing publication authority,
+then publishes one retained payload to both feeds and reads back their normalized equality.
+Publication does not follow from a source version bump. The Coordination manager requires its
+own read-only Actions archive route with source and complete published-directory hashes;
+the existing two-component orchestration archive does not contain the manager. Artifact
+expiration and actual acquisition remain explicit. No new manager package or durable release
+destination is selected here.
+
+### P2-C — inactive v3 container
+
+A new v3 recipe must consume the served Host payload, qualified manager directory, unchanged
+canonical verifier, selected native executable/profile, and complete pinned .NET/Python/native
+runtime and search closure. Preserve the active v2 and HOST qualification recipes. Require two
+isolated builds from identical inputs and truthful OCI digest comparison, then disposable,
+credential-free manager-to-Host qualification. Keep final image receipts outside the image to
+avoid a circular digest. Neither an image nor a synthetic fixture establishes installation,
+enrollment, native capture or real grant custody.
+
+Generated-workspace impact: none. Source, served distribution and inert image are separate
+milestones; the first enabled runtime change remains the later scoped receiver admission.
+Existing v2 receivers need separate stopped migration and backup/restore evidence. C3 remains
+disabled. Main/work-main is not a destination or prerequisite.
+
 Receiver installation, real grants, private custody, capability/capture evidence, restart/export/backup,
 and any activation remain later protected effects. C3 stays disabled until those authorities close.
