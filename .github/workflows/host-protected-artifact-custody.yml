@@ -1,0 +1,87 @@
+name: HOST protected artifact custody
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/host-protected-artifact-custody.yml'
+      - 'scripts/host-protected-artifact-custody.py'
+      - 'tests/host-protected-artifact-custody/run.py'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/host-protected-artifact-custody.yml'
+      - 'scripts/host-protected-artifact-custody.py'
+      - 'tests/host-protected-artifact-custody/run.py'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: host-protected-custody-${{ github.run_id }}-${{ github.run_attempt }}
+  cancel-in-progress: false
+
+jobs:
+  construct:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      artifact-id: ${{ steps.upload.outputs.artifact-id }}
+      artifact-url: ${{ steps.upload.outputs.artifact-url }}
+      artifact-digest: ${{ steps.upload.outputs.artifact-digest }}
+      artifact-name: host-protected-7d9663421a0e74eeb2531eadb5924974f31304f2-${{ github.event_name }}-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - name: Check out exact construction recipe
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: custody-recipe
+          persist-credentials: false
+      - name: Static custody preflight
+        working-directory: custody-recipe
+        run: python3 tests/host-protected-artifact-custody/run.py
+      - name: Check out selected compiled source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: 7d9663421a0e74eeb2531eadb5924974f31304f2
+          path: protected-source
+          persist-credentials: false
+      - name: Check out fixed native recipe
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: 8ad0da67004d670c6803f34755dfe759a7fc84e7
+          path: protected-source/.host-attempt-recipe-8ad
+          persist-credentials: false
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          dotnet-version: 10.0.401
+      - name: Execute original pinned gates and retain allowlisted closure
+        env:
+          CUSTODY_RUNNER_ENVIRONMENT: ${{ runner.environment }}
+        run: |
+          python3 custody-recipe/scripts/host-protected-artifact-custody.py \
+            --source "$GITHUB_WORKSPACE/protected-source" \
+            --recipe "$GITHUB_WORKSPACE/custody-recipe" \
+            --output "$RUNNER_TEMP/host-custody-success"
+      - name: Upload constructed closure for independent root authentication
+        id: upload
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: host-protected-7d9663421a0e74eeb2531eadb5924974f31304f2-${{ github.event_name }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/host-custody-success/payload.tar
+            ${{ runner.temp }}/host-custody-success/inventory.json
+            ${{ runner.temp }}/host-custody-success/manifest.json
+          if-no-files-found: error
+          retention-days: 14
+          overwrite: false
+      - name: Upload incomplete diagnostics separately
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: host-custody-INCOMPLETE-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/host-custody-success/payload/evidence/gate-*.log
+            ${{ runner.temp }}/host-custody-success/payload/evidence/gate-status.json
+          if-no-files-found: ignore
+          retention-days: 14
+          overwrite: false
