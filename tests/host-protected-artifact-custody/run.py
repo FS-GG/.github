@@ -205,19 +205,27 @@ class CustodyTests(unittest.TestCase):
         for name in ('host-attempt-tests/bin/HostAttempt/release/HostAttempt.dll', 'host-attempt-tests/bin/HostAttempt.Tests/release/HostAttempt.dll'):
             path = self.root / name; path.parent.mkdir(parents=True); path.write_text(name)
         self.refusal(lambda: c.selected_loaded(self.root), 'selected/loaded')
-    def portable_pdb(self, document):
+    def portable_pdb(self, document, identifier=None, source_link=None):
         blobs = bytearray(b'\0')
+        def encoded(value):
+            return bytes([value]) if value < 128 else bytes([0x80 | (value >> 8), value & 255])
         def append(value):
-            self.assertLess(len(value), 128)
             index = len(blobs)
-            self.assertLess(index, 128)
-            blobs.extend(bytes([len(value)]) + value)
+            blobs.extend(encoded(len(value)) + value)
             return index
-        parts = [append(part.encode()) if part else 0 for part in str(document).split('/')]
-        name_index = append(bytes([47] + parts))
+        parts = [append(part.encode()) if part else 0 for part in (identifier or str(document)).split('/')]
+        name_index = append(bytes([47]) + b''.join(encoded(part) for part in parts))
         checksum_index = append(hashlib.sha256(document.read_bytes()).digest())
-        tables = struct.pack('<IBBBBQQIHHHH', 0, 2, 0, 0, 1, 1 << 48, 0, 1, name_index, 1, checksum_index, 0)
-        streams = {'#~': tables, '#Blob': bytes(blobs), '#GUID': bytes.fromhex('0fd02988b8111342878b770e8597ac16'), '#Pdb': bytes(32)}
+        valid = (1 << 48) | ((1 << 55) if source_link is not None else 0)
+        tables = struct.pack('<IBBBBQQI', 0, 2, 0, 0, 1, valid, 0, 1)
+        if source_link is not None:
+            tables += struct.pack('<I', 1)
+        tables += struct.pack('<HHHH', name_index, 1, checksum_index, 2)
+        if source_link is not None:
+            index = append(json.dumps(source_link).encode())
+            tables += struct.pack('<HHH', 39, 3, index)
+        guids = bytes.fromhex('0fd02988b8111342878b770e8597ac16c9384fabe6b6ba43be3b58080b2ccce3560511cc91a0384d9fec25ab9a351a6a')
+        streams = {'#~': tables, '#Blob': bytes(blobs), '#GUID': guids, '#Pdb': bytes(32)}
         header = b'BSJB' + struct.pack('<HHII', 1, 1, 0, 4) + b'v\0\0\0' + struct.pack('<HH', 0, len(streams))
         names = {name: (name.encode() + b'\0') for name in streams}
         names = {name: value + bytes((-len(value)) % 4) for name, value in names.items()}
@@ -239,6 +247,81 @@ class CustodyTests(unittest.TestCase):
             self.assertEqual(result['sourceLink'], 'absent')
         document.write_text('changed')
         self.refusal(lambda: c.pdb_documents(path, source, self.root, self.evidence), 'checksum mismatch')
+    def actual_source_link(self):
+        return {'documents': {'/_/*': 'https://raw.githubusercontent.com/FS-GG/.github/' + c.SOURCE + '/*'}}
+    def test_actual_fsharp_virtual_source_link_and_git_checksum_join(self):
+        source = self.root / 'source'; source.mkdir()
+        document = source / 'Program.fs'; document.write_bytes(b'synthetic source')
+        path = self.portable_pdb(document, '/_//Program.fs', self.actual_source_link())
+        with patch.object(c, 'git', return_value='Program.fs'), patch.object(c.subprocess, 'check_output', return_value=document.read_bytes()):
+            result = c.pdb_documents(path, source, self.root, self.evidence)
+            self.assertEqual(result['documents'][0]['sourceKind'], 'mapped-git')
+            self.assertEqual(result['documents'][0]['gitPath'], 'Program.fs')
+            self.assertEqual(result['sourceLink'], self.actual_source_link())
+        document.write_bytes(b'drifted')
+        self.refusal(lambda: c.pdb_documents(path, source, self.root, self.evidence), 'checksum mismatch')
+    def test_source_link_prefix_collision_traversal_and_unknown_authority(self):
+        self.refusal(lambda: c.source_link_relative('/_evil/Program.fs', self.actual_source_link()), 'missing or ambiguous')
+        for document in ('/_/../Program.fs', '/_//../Program.fs', '/_///Program.fs'):
+            self.refusal(lambda: c.source_link_relative(document, self.actual_source_link()), 'traversal')
+        for target in ('https://raw.githubusercontent.com/FS-GG/.github/' + 'f'*40 + '/*', 'https://example.org/source/*', 'https://raw.githubusercontent.com/FS-GG/.github/' + c.SOURCE + '/../*'):
+            self.refusal(lambda: c.source_link_relative('/_/Program.fs', {'documents': {'/_/*': target}}))
+        overlapping = self.actual_source_link(); overlapping['documents']['/_/deployment/*'] = overlapping['documents']['/_/*']
+        self.refusal(lambda: c.source_link_relative('/_/deployment/Program.fs', overlapping), 'ambiguous')
+    def pseudo_metadata_fixture(self):
+        source = self.root / 'source'
+        document = source / 'deployment/telemetry-collector/host-binding/BindingTypes.fs'
+        document.parent.mkdir(parents=True); document.write_bytes(b'synthetic real binding source')
+        path = self.portable_pdb(document, '/_//deployment/telemetry-collector/host-binding/BindingTypes.fs', self.actual_source_link())
+        value = c.pdb_metadata(path)
+        pseudo = {'document': '/_//deployment/telemetry-collector/host-binding/unknown', 'algorithmGuid': None, 'checksum': '', 'languageGuid': 'c9384fabe6b6ba43be3b58080b2ccce3'}
+        value['documents'].append(pseudo)
+        return source, document, value
+    def test_exact_fsharp_unknown_is_non_source_with_real_source_join(self):
+        source, document, value = self.pseudo_metadata_fixture()
+        with patch.object(c, 'pdb_metadata', return_value=value), patch.object(c, 'git', side_effect=lambda root, *args: '' if args[-1].endswith('/unknown') else args[-1]), patch.object(c.subprocess, 'check_output', return_value=document.read_bytes()):
+            result = c.pdb_documents(self.root / 'HostBinding.pdb', source, self.root, self.evidence)
+            pseudo = result['documents'][1]
+            self.assertTrue(pseudo['nonSource'])
+            self.assertIsNone(pseudo['gitPath'])
+            self.assertEqual(pseudo['sourceKind'], 'compiler-pseudo')
+    def test_pseudo_marker_wrong_language_checksum_and_real_empty_checksum_refuse(self):
+        source, document, value = self.pseudo_metadata_fixture()
+        pseudo = dict(value['documents'][1])
+        with patch.object(c, 'pdb_metadata', return_value=value), patch.object(c, 'git', side_effect=lambda root, *args: '' if args[-1].endswith('/unknown') else args[-1]), patch.object(c.subprocess, 'check_output', return_value=document.read_bytes()):
+            for key, wrong in [('languageGuid', 'not-fsharp'), ('algorithmGuid', '0fd02988b8111342878b770e8597ac16'), ('checksum', 'ab')]:
+                value['documents'][1] = dict(pseudo, **{key: wrong})
+                self.refusal(lambda: c.pdb_documents(self.root / 'HostBinding.pdb', source, self.root, self.evidence), 'pseudo-document')
+            value['documents'][1] = pseudo
+            self.refusal(lambda: c.pdb_documents(self.root / 'HostAttempt.pdb', source, self.root, self.evidence), 'pseudo-document')
+            sentinel = source / 'deployment/telemetry-collector/host-binding/unknown'
+            sentinel.write_bytes(b'real source cannot be skipped')
+            self.refusal(lambda: c.pdb_documents(self.root / 'HostBinding.pdb', source, self.root, self.evidence), 'pseudo-document')
+            sentinel.unlink()
+            value['documents'][0]['checksum'] = ''
+            self.refusal(lambda: c.pdb_documents(self.root / 'HostBinding.pdb', source, self.root, self.evidence), 'nonempty')
+    def test_generated_pdb_document_declared_root_checksum_and_diagnostics(self):
+        source = self.root / 'source'; source.mkdir()
+        real = source / 'Program.fs'; real.write_bytes(b'real fixture')
+        path = self.portable_pdb(real)
+        value = c.pdb_metadata(path)
+        generated = self.root / 'host-attempt-tests/obj/HostAttempt/release/Generated.fs'
+        generated.parent.mkdir(parents=True); generated.write_bytes(b'generated fixture')
+        value['documents'].append(dict(value['documents'][0], document=str(generated), checksum=c.digest(generated)))
+        with patch.object(c, 'pdb_metadata', return_value=value), patch.object(c, 'git', return_value='Program.fs'), patch.object(c.subprocess, 'check_output', return_value=real.read_bytes()):
+            result = c.pdb_documents(self.root / 'HostAttempt.pdb', source, self.root, self.evidence)
+            self.assertTrue(result['documents'][1]['generated'])
+            self.assertTrue(list(self.evidence.glob('generated-*')))
+            generated.write_bytes(b'generated drift')
+            self.refusal(lambda: c.pdb_documents(self.root / 'HostAttempt.pdb', source, self.root, self.evidence), 'checksum mismatch')
+            generated.write_bytes(b'generated fixture')
+            value['documents'][1]['document'] = str(self.root / 'outside-generated-root.fs')
+            (self.root / 'outside-generated-root.fs').write_bytes(b'generated fixture')
+            with self.assertRaises(c.Refusal) as error:
+                c.pdb_documents(self.root / 'HostAttempt.pdb', source, self.root, self.evidence)
+            self.assertIn('declared build root', str(error.exception))
+            self.assertIn('"sourceKind": "generated-build"', str(error.exception))
+            self.assertIn('PDB document check=', str(error.exception))
     def test_production_pe_pdb_join_and_wrong_identity(self):
         data = bytearray(512)
         data[:2] = b'MZ'; struct.pack_into('<I', data, 60, 64)

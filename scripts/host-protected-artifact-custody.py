@@ -229,7 +229,7 @@ def compressed(data, offset):
     require(first < 224, 'invalid compressed metadata integer')
     return ((first & 31) << 24) | int.from_bytes(data[offset+1:offset+4], 'big'), offset + 4
 
-def pdb_documents(path, source, temp, output):
+def pdb_metadata(path):
     """Read Portable PDB Document checksums and SourceLink without executing .NET."""
     data = path.read_bytes()
     require(data[:4] == b'BSJB', 'portable PDB required')
@@ -268,7 +268,7 @@ def pdb_documents(path, source, temp, output):
         name_index = integer(tables, pos, blob_width); pos += blob_width
         algorithm_index = integer(tables, pos, guid_width); pos += guid_width
         checksum_index = integer(tables, pos, blob_width); pos += blob_width
-        pos += guid_width  # language
+        language_index = integer(tables, pos, guid_width); pos += guid_width
         name = blob(name_index)
         require(name and name[0] in (47, 92), 'unsupported PDB document separator')
         components = []
@@ -276,21 +276,7 @@ def pdb_documents(path, source, temp, output):
         while at < len(name):
             index, at = compressed(name, at)
             components.append(blob(index).decode())
-        document = Path(chr(name[0]).join(components))
-        require(document.is_absolute() and (document.is_relative_to(source) or document.is_relative_to(temp)), 'PDB document cannot join selected source/build root')
-        safe_file(document, source if document.is_relative_to(source) else temp)
-        algorithm = guids[(algorithm_index-1)*16:algorithm_index*16].hex()
-        algorithms = {'ec1618ff5eaa104d87f76f4963833460': 'sha1', '0fd02988b8111342878b770e8597ac16': 'sha256'}
-        require(algorithm in algorithms, 'unknown PDB document checksum algorithm')
-        require(digest(document, algorithms[algorithm]) == blob(checksum_index).hex(), 'PDB source checksum mismatch')
-        relative = str(document.relative_to(source)) if document.is_relative_to(source) else None
-        tracked = relative is not None and bool(git(source, 'ls-files', '--', relative))
-        if tracked:
-            require(hashlib.sha256(subprocess.check_output(['git','-C',str(source),'show',SOURCE+':'+relative])).hexdigest() == digest(document), 'PDB document differs from selected Git source')
-        else:
-            copy_file(document, source if document.is_relative_to(source) else temp, output / ('generated-' + digest(document) + document.suffix))
-        documents.append({'document': str(document), 'algorithm': algorithms[algorithm], 'checksum': blob(checksum_index).hex(), 'gitPath': relative if tracked else None, 'generated': not tracked})
-    require(documents and any(not d['generated'] for d in documents), 'PDB has no selected Git document join')
+        documents.append({'document': chr(name[0]).join(components), 'checksum': blob(checksum_index).hex(), 'algorithmGuid': guids[(algorithm_index-1)*16:algorithm_index*16].hex() if algorithm_index else None, 'languageGuid': guids[(language_index-1)*16:language_index*16].hex() if language_index else None})
     # Decode SourceLink CustomDebugInformation; preserve original PDB alongside documents.
     source_link_guid = bytes.fromhex('560511cc91a0384d9fec25ab9a351a6a')
     external = streams['#Pdb']
@@ -313,16 +299,99 @@ def pdb_documents(path, source, temp, output):
     parent_tables = [6,4,1,2,8,9,10,0,14,23,20,17,26,27,32,35,38,39,40,42,44,43,48,50,51,52,53]
     parent_width = 4 if max((all_counts.get(table, 0) for table in parent_tables), default=0) >= 2048 else 2
     source_link = None
+    compiler_options = None
     for _ in range(row_counts.get(55, 0)):
         parent = integer(tables, pos, parent_width); pos += parent_width
         kind = integer(tables, pos, guid_width); pos += guid_width
         value = integer(tables, pos, blob_width); pos += blob_width
+        if guids[(kind-1)*16:kind*16].hex() == '05ecfeb5d08c834a96da466284bb4bd8':
+            require(compiler_options is None and parent == 39, 'invalid compiler options metadata')
+            compiler_options = blob(value).decode()
         if guids[(kind-1)*16:kind*16] == source_link_guid:
             require(source_link is None and parent == 7 + (1 << 5), 'invalid or duplicate SourceLink metadata')
-            source_link = json.loads(blob(value))
+            def unique_pairs(pairs):
+                result = {}
+                for key, item in pairs:
+                    require(key not in result, 'duplicate SourceLink field')
+                    result[key] = item
+                return result
+            source_link = json.loads(blob(value), object_pairs_hook=unique_pairs)
             require(type(source_link) is dict and type(source_link.get('documents')) is dict, 'invalid SourceLink documents')
     require(pos == len(tables) or not any(tables[pos:]), 'unsupported PDB table bytes')
-    return {'sha256': digest(path), 'portablePdbId': external[:20].hex(), 'documents': documents, 'sourceLink': source_link if source_link is not None else 'absent'}
+    return {'sha256': digest(path), 'portablePdbId': external[:20].hex(), 'documents': documents, 'sourceLink': source_link if source_link is not None else 'absent', 'compilerOptions': compiler_options}
+
+def source_link_relative(document, source_link):
+    require(type(source_link) is dict and type(source_link.get('documents')) is dict, 'missing actual SourceLink mapping')
+    candidates = []
+    authority = 'https://raw.githubusercontent.com/FS-GG/.github/' + SOURCE + '/'
+    for pattern, target in source_link['documents'].items():
+        require(type(pattern) is str and pattern.startswith('/') and pattern.endswith('/*') and pattern.count('*') == 1 and '\\' not in pattern and not any(part in ('.', '..') for part in pattern.split('/')), 'unsupported SourceLink document pattern')
+        require(type(target) is str and target.startswith(authority) and target.endswith('/*') and target.count('*') == 1, 'SourceLink differs from selected immutable Git source')
+        target_prefix = target[len(authority):-1]
+        require(not any(part in ('.', '..') for part in target_prefix.split('/')) and not any(char in target_prefix for char in ('%', '?', '#', ':', '\\')), 'unsafe SourceLink target')
+        if document.startswith(pattern[:-1]):
+            suffix = document[len(pattern)-1:]
+            # Actual F# Document encoding preserves an extra slash after the mapped root.
+            if suffix.startswith('/'):
+                suffix = suffix[1:]
+            require(suffix and not suffix.startswith('/') and not any(part in ('', '.', '..') for part in suffix.split('/')) and '\\' not in suffix, 'SourceLink document traversal/path escape')
+            relative = target_prefix + suffix
+            require(not relative.startswith('/') and not any(part in ('', '.', '..') for part in relative.split('/')), 'SourceLink target traversal')
+            candidates.append(relative)
+    require(len(candidates) == 1, 'missing or ambiguous SourceLink document mapping')
+    return candidates[0]
+
+def pdb_documents(path, source, temp, output):
+    value = pdb_metadata(path)
+    documents = []
+    algorithms = {'ec1618ff5eaa104d87f76f4963833460': 'sha1', '0fd02988b8111342878b770e8597ac16': 'sha256'}
+    fsharp_language = 'c9384fabe6b6ba43be3b58080b2ccce3'
+    for row in value['documents']:
+        identifier = row['document']
+        kind = 'unjoined'
+        try:
+            require(identifier.startswith('/') and '\\' not in identifier and not any(part in ('.', '..') for part in identifier.split('/')), 'unsafe PDB document path')
+            document = Path(identifier)
+            relative = None
+            if document.is_relative_to(source):
+                relative = str(document.relative_to(source))
+                kind = 'direct-git'
+            elif document.is_relative_to(temp):
+                kind = 'generated-build'
+            else:
+                relative = source_link_relative(identifier, value['sourceLink'])
+                document = source / relative
+                kind = 'mapped-git'
+            # This exact F# compiler sentinel was observed in production HostBinding PDBs.
+            # It has no source checksum and is never represented as source evidence.
+            if relative == 'deployment/telemetry-collector/host-binding/unknown':
+                kind = 'compiler-pseudo'
+                require(path.name == 'HostBinding.pdb' and row['languageGuid'] == fsharp_language and row['algorithmGuid'] is None and row['checksum'] == '' and not document.exists() and not git(source, 'ls-files', '--', relative), 'invalid compiler unknown pseudo-document')
+                require(type(value['sourceLink']) is dict and source_link_relative(identifier, value['sourceLink']) == relative, 'compiler sentinel requires actual selected SourceLink')
+                documents.append(dict(row, sourceKind=kind, gitPath=None, generated=False, nonSource=True, producerFact='F# language marker, exact HostBinding sentinel, null algorithm/empty hash, absent selected source, actual immutable SourceLink; enclosing PE/PDB identity join required'))
+                continue
+            require(row['algorithmGuid'] in algorithms and row['checksum'], 'real PDB source requires nonempty supported checksum')
+            algorithm = algorithms[row['algorithmGuid']]
+            require(len(row['checksum']) == (40 if algorithm == 'sha1' else 64), 'invalid PDB source checksum length')
+            root = source if document.is_relative_to(source) else temp
+            safe_file(document, root)
+            require(digest(document, algorithm) == row['checksum'], 'PDB source checksum mismatch')
+            tracked = relative is not None and bool(git(source, 'ls-files', '--', relative))
+            if tracked:
+                require(hashlib.sha256(subprocess.check_output(['git', '-C', str(source), 'show', SOURCE + ':' + relative])).hexdigest() == digest(document), 'PDB document differs from selected Git source')
+            else:
+                require(kind == 'generated-build', 'mapped or direct source absent from selected Git')
+                assembly = path.stem
+                build_directory = {'HostAttempt': 'host-attempt-tests', 'HostBinding': 'host-attempt-binding'}.get(assembly)
+                require(build_directory is not None and document.is_relative_to(temp / build_directory / 'obj' / assembly / 'release'), 'generated document outside declared build root')
+                copy_file(document, temp, output / ('generated-' + digest(document) + document.suffix))
+            documents.append(dict(row, algorithm=algorithm, sourceKind=kind, resolvedDocument=str(document), gitPath=relative if tracked else None, generated=not tracked, nonSource=False))
+        except (Refusal, OSError) as error:
+            detail = {'document': identifier[:240], 'sourceKind': kind, 'algorithmGuid': row['algorithmGuid'], 'checksumLength': len(row['checksum']), 'sourceLinkPresent': type(value['sourceLink']) is dict}
+            raise Refusal(str(error) + '; PDB document check=' + json.dumps(detail, sort_keys=True)) from error
+    require(documents and any(d.get('gitPath') for d in documents), 'PDB has no selected Git document join')
+    value['documents'] = documents
+    return value
 
 def assembly_pdb_join(assembly, pdb_identity):
     """Join Portable PDB ID to the production PE's actual CodeView debug record."""
