@@ -53,6 +53,26 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-02: LEARN P2-C.4 production mechanism CLOSED (source); native container qualification remains open.**
+[PR #4118](https://github.com/FS-GG/.github/pull/4118) merged protected
+`238e4f3c4160f69f32b1f924ff639a4deda0cf3c`, tree
+`9144aae81142d186c9f8c34fc80739c0193047e9`, after the native
+[Host package gate 37037046999](https://github.com/FS-GG/.github/actions/runs/37037046999)
+and all mandatory source checks passed.
+The typed rootless mechanism uses pinned executables, fixed arguments, isolated stores,
+process identity/retirement checks and a conservative capacity reserve. It validates OCI evidence
+and emits C4Only/C4Ready without claiming qualification or enabling C5/C6.
+Sixteen canonical scenarios and 334 ordered correspondence transitions, actual synthetic
+process/OCI controls, causal mutants and CLI refusal paths passed.
+
+The failed cold-start HOST fixture is retained: positive lineage setup now precedes the unchanged
+250 ms operation deadline; exact timeout refusal and clean retirement remain required.
+Production behavior and its canonical model were unchanged by that fixture repair.
+The real 128 GiB capacity guard remains; synthetic capacity is an explicit fixture input.
+Genuine native capability/reader/protocol acquisition, complete Python runtime closure,
+two-build OCI comparison, native Manager-to-Host qualification, installation, capture and recovery
+remain open. Main/work-main is not an execution destination or prerequisite.
+
 **2026-10-02: V2-HOST protected artifact custody CLOSED; native acquisition remains open.**
 [PR #4116](https://github.com/FS-GG/.github/pull/4116) delivered protected constructor
 `e9bee62a8d3d27bb765e751a65876946e8168940`, tree

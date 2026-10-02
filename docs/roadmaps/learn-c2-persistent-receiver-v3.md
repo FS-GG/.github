@@ -138,5 +138,22 @@ disabled. Main/work-main is not a destination or prerequisite.
   and P2-C.6 protected readback remain open. Genuine native acquisition, image construction,
   installation, grants, capture, restart/recovery, enrollment, and activation also remain open.
 
+### P2-C.4 production mechanism source closure
+
+[PR #4118](https://github.com/FS-GG/.github/pull/4118) delivered protected
+`238e4f3c4160f69f32b1f924ff639a4deda0cf3c`, tree
+`9144aae81142d186c9f8c34fc80739c0193047e9`. The exact native
+[Host package workflow](https://github.com/FS-GG/.github/actions/runs/37037046999)
+and all required source checks passed. The production rootless process mechanism, OCI validation
+and canonical C4Only mode have source qualification through sixteen scenarios/334 ordered
+correspondence transitions, actual synthetic process controls and causal mutants.
+The production capacity reserve, process retirement, fixed executable/argument and refusal
+contracts remain enforced. The positive HOST fixture setup repair preserves the operation deadline.
+
+This closes the mechanism **source** milestone only. C4Ready still reports qualification Unknown;
+C5/C6 remain false. Genuine native input acquisition, complete runtime closure, two isolated
+OCI builds and native container comparison/qualification remain required. No image, native run,
+installation, collector grant, capture or activation is accepted by this source merge.
+
 Receiver installation, real grants, private custody, capability/capture evidence, restart/export/backup,
 and any activation remain later protected effects. C3 stays disabled until those authorities close.
