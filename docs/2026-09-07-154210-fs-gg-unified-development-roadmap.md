@@ -110,7 +110,7 @@ rechecks the direct PID/start identity and pidfd before one release intention an
 Identity failure, cancellation before or after release, deadline, lost release response and
 post-release exception remain sticky refusals; descendant, reader, output and cleanup Unknown rules
 are preserved. The production receiver exposes only Git, while test roles remain compile-scoped.
-Exact-source qualification passed 34 receiver and 41 caller controls, the retained seven caller ITFs /
+Exact-source qualification passed 35 receiver and 41 caller controls, the retained seven caller ITFs /
 91 transitions, and eight launch ITFs / 23 transitions. Correspondence binds both actually loaded
 caller and receiver DLL hashes. Published recipe `8ad0da67004d670c6803f34755dfe759a7fc84e7`,
 profile `1ef6d54e...` and all four payloads remain unchanged as caller inputs. This is source readiness:

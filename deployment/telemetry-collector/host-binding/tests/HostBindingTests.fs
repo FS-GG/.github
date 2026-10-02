@@ -69,6 +69,23 @@ module private Fixture =
 
 module HostBindingTests =
     [<Fact>]
+    let ``production launcher admits only fixed read only Git arguments`` () =
+        let sha=String('a',40)
+        for arguments in
+            [ [|"rev-parse";"HEAD"|]
+              [|"status";"--porcelain"|]
+              [|"rev-parse";sha+"^{tree}"|]
+              [|"rev-parse";sha+":deployment/telemetry-collector/native-operation-v1.json"|] ] do
+            OwnedLaunch.validateArgumentsForTest "git" arguments
+        for arguments in
+            [ [|"push";"origin";"main"|]
+              [|"config";"user.name";"writer"|]
+              [|"rev-parse";"--verify"|]
+              [|"rev-parse";sha+":deployment/telemetry-collector/other"|]
+              [|"rev-parse";String('A',40)+"^{tree}"|] ] do
+            Assert.Throws<BindingRefusal>(fun()->OwnedLaunch.validateArgumentsForTest "git" arguments)|>ignore
+
+    [<Fact>]
     let ``current profile and source pins form a validated binding`` () =
         use fixture = new Fixture.Repository()
         let binding = Fixture.construct fixture

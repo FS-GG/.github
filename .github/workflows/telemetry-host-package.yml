@@ -160,7 +160,7 @@ jobs:
           import sys, xml.etree.ElementTree as ET
           counters = ET.parse(sys.argv[1]).getroot().find('.//{*}Counters')
           assert counters is not None
-          assert (counters.get('total'), counters.get('executed'), counters.get('passed'), counters.get('failed')) == ('34', '34', '34', '0')
+          assert (counters.get('total'), counters.get('executed'), counters.get('passed'), counters.get('failed')) == ('35', '35', '35', '0')
           PY
           python3 -m unittest tests/telemetry-collector-container/test_private_native_qualification.py \
             2>&1 | tee "$RUNNER_TEMP/host-binding-python-tests.log"

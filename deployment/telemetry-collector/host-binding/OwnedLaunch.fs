@@ -47,6 +47,33 @@ module internal OwnedLaunch =
         | "/usr/bin/git" -> "git"
         | _ -> raise(BindingRefusal "process-executable-refused")
 
+    let private isLowerHex40 (value:string) =
+        value.Length=40 && value|>Seq.forall(fun c->(c>='0'&&c<='9')||(c>='a'&&c<='f'))
+
+    let private sourceNames =
+        set [ "qualify_native.py";"native_producer_support.py";"native-operation-v1.json";"native-producer-config.toml" ]
+
+    let private validGitArguments (arguments:string array) =
+        match Array.toList arguments with
+        | ["rev-parse";"HEAD"] | ["status";"--porcelain"] -> true
+        | ["rev-parse";value] when value.EndsWith("^{tree}",StringComparison.Ordinal) ->
+            isLowerHex40(value.Substring(0,value.Length-7))
+        | ["rev-parse";value] ->
+            let marker=":deployment/telemetry-collector/"
+            let split=value.IndexOf(marker,StringComparison.Ordinal)
+            split=40 && isLowerHex40(value.Substring(0,40)) && sourceNames.Contains(value.Substring(split+marker.Length))
+        | _ -> false
+
+    let private validateArguments role arguments =
+        match role with
+        | "git" when validGitArguments arguments -> ()
+#if HOST_BINDING_TEST_LAUNCH_ROLES
+        | "python3-test" | "sleep-test" | "true-test" -> ()
+#endif
+        | _ -> raise(BindingRefusal "process-arguments-refused")
+
+    let validateArgumentsForTest role arguments = validateArguments role arguments
+
 #if HOST_BINDING_TEST_LAUNCH_ROLES
     let roleForTest path =
         match path with
@@ -57,6 +84,7 @@ module internal OwnedLaunch =
 
     let runLauncher role (arguments:string array) =
         try
+            validateArguments role arguments
             use input=Console.OpenStandardInput()
             if input.ReadByte()<>int(byte 'R') || input.ReadByte() <> -1 then 125 else
             let path=executable role

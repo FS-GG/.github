@@ -80,7 +80,7 @@ holds its fixed Git guest behind an exact inherited gate until the parent record
 direct PID/start identity and pidfd. One release intention precedes same-PID exec. Identity failure,
 cancellation before/after release, deadline, lost response and post-release failure stay sticky;
 settlement still requires the direct process, descendants and readers. Production exposes no test
-launcher roles. Exact-source checks pass 34 receiver and 41 caller controls. The canonical extension
+launcher roles. Exact-source checks pass 35 receiver and 41 caller controls. The canonical extension
 adds eight launch ITFs / 23 actual reducer transitions while retaining the caller's seven ITFs / 91
 transitions; correspondence verifies both selected/loaded DLL hashes. Published recipe `8ad0da...`,
 profile `1ef6d54e...` and four payload bytes remain fixed caller inputs. Protected rebuild, custody,
