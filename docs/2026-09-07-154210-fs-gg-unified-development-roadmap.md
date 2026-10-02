@@ -84,6 +84,25 @@ The nupkg is unpublished; browser host/runtime, lifecycle Quint correspondence, 
 feed readback and product adoption remain open in .2–.7. V2 FULL ACCEPTED, P4 and independent product
 frontiers are unchanged.
 
+**2026-10-02: WASM-SHARED-01.2 shared runtime and lifecycle source CLOSED; guest SDK and publication remain open.**
+[FS.GG.Game #673](https://github.com/FS-GG/FS.GG.Game/pull/673) merged the qualified candidate
+`4022ab59800492407258a2fbeb1e985248de9017` at protected
+`c951df2b02515cc44eefe6f1078923abd52b71be`, with equal tree
+`e4453f9bf3565cf4f1321365efecb13fc2e56570`; root authenticated merge, tree and protected main.
+The source adds the production F# lifecycle reducer and host, strict BAR/imported-SC2 admission,
+validated invocation ownership, thin JavaScript mechanics and canonical Quint correspondence. The
+host preserves BAR destructive replacement and busy refusal, SC2 transactional replacement and
+bounded queues, retiring-worker capacity, generation fencing, deadline settlement, freeze and
+disposal. Model-generated full-state and ordered-effect traces agree with the reducer on .NET and
+Fable/Node, including a mutation that must fail correspondence. Real Rust BAR and SC2 modules plus
+hostile modules passed six Chromium Worker cases. The independent hosted WASM run
+[`36991045744`](https://github.com/FS-GG/FS.GG.Game/actions/runs/36991045744) and all existing Game
+gate checks passed. Local `0.1.0-source.2` package candidates and their fresh .NET/Fable consumers
+remain unpublished; the projects stay outside the Game solution and existing release set. This is
+runtime source and hosted source qualification, not a released or installed browser host. Guest SDK
+distribution, feed readback, BAR/SC2 adoption, FourD example and duplicate-policy removal remain open
+in .3–.7; no product or native authority changed.
+
 **2026-10-02: HOST acquired-attempt caller source CLOSED; private adoption remains open.**
 The [qualification-local F# caller](../deployment/telemetry-collector/host-attempt/README.md)
 consumes fixed acquired observations and drives the actual lifecycle reducer.
@@ -104,17 +123,23 @@ private channel/custody joins and genuine native acceptance remain open.
 Published receiver `8ad0da67004d670c6803f34755dfe759a7fc84e7`, its profile and
 four native payloads remain unchanged; V2 FULL ACCEPTED and Main NO ACTION remain.
 
-**2026-10-02: HOST owned-launch repair source READY; protected native adoption remains open.**
-The coherent source candidate uses a fixed F# launcher gate so the current receiver records and
+**2026-10-02: HOST owned-launch repair source CLOSED; protected native adoption remains open.**
+[PR #4101](https://github.com/FS-GG/.github/pull/4101) merged qualified candidate
+`bdd0a58906231619094f51eaede76de834969c4e` at protected
+`f12402431e72327fbdaa533fce434e3c22d714ad`; both resolve to tree
+`05b8d55cdfa59e5849629e443e0d6ebfc2c41bb7`. Root authenticated merge, tree and protected main.
+The fixed F# launcher gate records and
 rechecks the direct PID/start identity and pidfd before one release intention and same-PID Git exec.
 Identity failure, cancellation before or after release, deadline, lost release response and
 post-release exception remain sticky refusals; descendant, reader, output and cleanup Unknown rules
 are preserved. The production receiver exposes only Git, while test roles remain compile-scoped.
-Exact-source qualification passed 35 receiver and 41 caller controls, the retained seven caller ITFs /
+Exact-source qualification passed 35 package and 41 caller controls, the retained seven caller ITFs /
 91 transitions, and eight launch ITFs / 23 transitions. Correspondence binds both actually loaded
-caller and receiver DLL hashes. Published recipe `8ad0da67004d670c6803f34755dfe759a7fc84e7`,
-profile `1ef6d54e...` and all four payloads remain unchanged as caller inputs. This is source readiness:
-protected rebuild/custody, private channel joins and genuine native acceptance remain root-owned and open.
+caller and receiver DLL hashes. Native package run
+[`36992333438`](https://github.com/FS-GG/.github/actions/runs/36992333438) and all required checks passed.
+Published recipe `8ad0da67004d670c6803f34755dfe759a7fc84e7`, profile `1ef6d54e...` and all four payloads remain
+unchanged as caller inputs. This closes source only: private channel joins, protected runtime adoption
+and genuine native acceptance remain root-owned and open.
 
 **2026-10-02: P4 cold-restore source CLOSED; actual runner readiness remains open.**
 [Sandbox #45](https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/pull/45) merged at
@@ -193,6 +218,8 @@ at `2026-10-02T05:53:01.3943199Z` with four distinct versions and advanced the l
 to `2026-10-02T06:22:38.1755476Z`. The 1,383,022,592-byte live store
 has 5,532,090,368 bytes of retained backup allocation; initial cleanup pruned 51 snapshots and freed
 65,733,767,168 bytes. Frozen F# source, policy replay and the thin SQLite bridge are exact and reviewed.
+An additional natural keeper cycle succeeded at `2026-10-02T09:48:58Z` with `current=4`, no alerts
+and `history=247`; it preserves the same retention boundary.
 The 1,800-second keeper remains a host process without restart supervision. This operational closure
 does not change BAR product source, native admission, Count1 or the six useful-play results (0/6).
 
