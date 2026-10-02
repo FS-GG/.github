@@ -53,6 +53,20 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-02: BARC-01.5f RP1 buffered-writer reproduction and failure observations CLOSED (source).**
+[FSBarV2 PR #21](https://github.com/FS-GG/FSBarV2/pull/21) delivered protected
+`3a4f81db0b0e0984f36adf1ed662b6f66e2c2618`, tree
+`615d90ae3959ac7e73d396addd1ad2cc813f3c6d`, after its complete-record source gate passed.
+Five public ordinary-file controls reproduce fully buffered partial EOF and exact-read exhaustion.
+Two controls against the actual protected compiled F# policy verify three evaluations and subsequent
+growth, including the buffered writer. The adapter retains a bounded private mechanical observation
+and digest/source receipt distinguishing probe, read-call and evaluation exhaustion. F# acceptance,
+the diagnostic schema and all runtime caps are unchanged. This closes RP1 source only.
+The previous native policy495 attempt failed before browser launch and cleanup settled;
+useful play remains 0/6. Modeled record-prefix semantics (RP2), whole-operation log capacity (RP3),
+protected successor construction/private adoption and a separate native attempt remain required.
+Stock Recoil and BAR game content are unchanged.
+
 **2026-10-02: COORD-BOARD-V2-01.2 actual schema and bounded native pilot CLOSED.**
 Root created [Coordination V2 #3](https://github.com/orgs/FS-GG/projects/3), immutable ID
 `PVT_kwDOEYAWY84Bldpa`, configured four canonical fields and four filtered views, and applied
