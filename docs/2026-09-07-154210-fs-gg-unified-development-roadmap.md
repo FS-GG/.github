@@ -141,6 +141,21 @@ runtime source and hosted source qualification, not a released or installed brow
 distribution, feed readback, BAR/SC2 adoption, FourD example and duplicate-policy removal remain open
 in .3–.7; no product or native authority changed.
 
+**2026-10-02: WASM-SHARED-01.3 guest SDK and fresh packaged consumer source CLOSED; publication remains open.**
+[FS.GG.Game #674](https://github.com/FS-GG/FS.GG.Game/pull/674) merged qualified candidate
+`eec59377d004b68d47bdebc1f2449065c090607a` at protected
+`e91db7efaf15dfb56b1925307ad0ceb46a3da31d`; both resolve to tree
+`6a8c7e5c9dbcb309c71b612be78093df23c877a8`. The `0.1.0-source.3` guest SDK is a deterministic
+source archive with portable Rust and C helpers, pinned toolchain provenance, and independently built
+BAR and SC2 examples. A second clean root restored the exact local Contracts and Browser packages,
+built the .NET consumer with zero warnings and errors, compiled all 15 package sources with Fable, and
+loaded package-owned Worker assets below a non-root browser path. Six Chromium cases exercised real
+Rust/C BAR and SC2 calls, trap containment, deadline termination and repeated disposal. Hosted run
+[`36996692451`](https://github.com/FS-GG/FS.GG.Game/actions/runs/36996692451) and all protected Game
+checks passed. The SDK archive and packages remain unpublished local candidates; feed publication and
+readback, installed qualification, BAR/SC2/FourD adoption, product effects and native authority remain
+open in .4–.7.
+
 **2026-10-02: HOST acquired-attempt caller source CLOSED; private adoption remains open.**
 The [qualification-local F# caller](../deployment/telemetry-collector/host-attempt/README.md)
 consumes fixed acquired observations and drives the actual lifecycle reducer.
