@@ -53,6 +53,18 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-02: SC2C-01.6f final typed pair CLI repair CLOSED (source).**
+[SC2 Client PR #38](https://github.com/FS-GG/FS.GG.SC2.Client/pull/38) merged as protected
+`4314edd7ca502f7180b5cf9058044ffeeaff2bea` after
+[verify37032434120](https://github.com/FS-GG/FS.GG.SC2.Client/actions/runs/37032434120) passed.
+The final CLI now calls the fixed production F# pair constructor using retained, digest-bound
+browser/offline/native payloads and the frozen import closure, and emits the v2 receipt after
+runtime, Action census, replay and cleanup checks. Historical v1 readability remains separate.
+The stale-digest fixture prepares its exact Wasm through one bounded owned warmup; production
+250 ms deadlines and actual stale-digest assertions remain unchanged. The prior cold-start failure
+is retained. Fresh protected artifact/preparer custody, private input join and the genuine
+pointer-overlay plus keyboard-empty journey remain open; no native acceptance is claimed.
+
 **2026-10-02: COORD-BOARD-V2-01.3 restricted root-local refresh CLOSED.**
 Protected [source3829d42d](https://github.com/FS-GG/.github/commit/3829d42dd668eac5de33ebaaafbedfb342ac74be),
 tree `8cc6b44dc9c8185c26ba033f960a12a3d908147e`, passed native source checks.
