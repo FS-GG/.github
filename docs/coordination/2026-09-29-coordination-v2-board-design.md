@@ -17,7 +17,7 @@ and the [V2 execution roadmap](../github-substrate-v2-roadmap.md#coordination-v2
 
 ## Migration priority and execution sequence — 2026-10-02
 
-**Next selected item: `COORD-BOARD-V2-01.3`.** The bounded organization pilot in .2 passed through
+**Next selected item: `COORD-BOARD-V2-01.4`.** The bounded organization pilot in .2 passed through
 an explicit user-authorized native one-shot administration exception. The
 [pilot evidence](board-v2-import-preparation.md) and [bound manifest](board-v2-import-manifest.json)
 record Project 3, four fields, four filtered views, the three approved existing issues and independent
@@ -27,7 +27,7 @@ preparation's sole shared-transport route only for .2; it does not qualify the a
 The complete project has four memberships: the three selected issues and unapproved, unseeded
 SDD#935, a native child of selected SDD#928. No operator add requested that fourth membership.
 Child propagation is an inference, with cause/actor unproven. Keep this distinction visible during
-.3 population-policy qualification; neither it nor the successful pilot approves broader carryover.
+broader population-policy adoption; neither it nor the successful pilot approves broader carryover.
 
 Reconcile all currently open V2 roadmap outcomes before broader transfer. Include only verified
 remaining work; a source merge does not finish its unpublished package or unqualified native operation.
@@ -36,7 +36,9 @@ dependencies, group adjacent steps into reviewable outcomes, and avoid creating 
 checkbox, CI failure or intermediate report. Use the organization board for organization-relevant
 outcomes and the selected product boards for detailed product execution.
 
-Qualify the `.3` adapter and refresh source against the actual pilot binding. Broader import and the `.4`
+The `.3` fixed root-local adapter passed against the actual pilot binding; see the
+[restricted refresh evidence](board-v2-import-preparation.md#restricted-root-local-refresh-qualification--2026-10-02).
+The hosted job remains dormant and unenrolled. Broader import and the `.4`
 scheduling switch follow verified pilot membership and qualified restricted projection. Inventory and
 switch the actual driving skills and consumer bindings together, preserving routine delivery,
 selected technical checks and native merge readback. After that switch the board is the primary
@@ -47,7 +49,7 @@ Product integration preparation can proceed independently, but `.5` publication 
 qualified `.3` contract. `.6` qualifies actual published fresh and retained workspace behavior before
 each product switches. Full V2 acceptance remains complete at its selected profile throughout this
 follow-on migration. The delivery checklist below remains the sole milestone ledger; this priority
-selection closes only the verified .2 pilot and leaves .3–.6 open.
+selection closes the verified .2 pilot and .3 root-local refresh; .4–.6 remain open.
 
 ## Current boundary
 
@@ -198,10 +200,13 @@ alone cannot close product adoption.
   Templates#441 / .github#3010, four fields/views, independent readback and zero-write repeat.
   [Evidence](board-v2-import-preparation.md) retains delayed reads, the unapproved child membership
   and separate historical/corrected constructor provenance. Automatic projection remains .3.
-- [ ] **COORD-BOARD-V2-01.3 — Qualify restricted projection.** Implement the explicit V2 adapter and
+- [x] **COORD-BOARD-V2-01.3 — Qualify restricted projection.** Implement the explicit V2 adapter and
   fixed job. Prove duplicate retry, lost response, incomplete pagination, stale source, wrong-project,
   field drift and denied-access behavior. Verify limited writes and truthful unknown/stale reporting;
   demonstrate that an unavailable board job cannot block valid ordinary source delivery.
+  Qualified 2026-10-02 at protected3829 for the selected root-local route: three verified items,
+  zero-write no-op, one acknowledged bounded Observation write, independent field readback and
+  zero-write repeat. Hosted enrollment remains a separate operating join; no wider writer is enabled.
 - [ ] **COORD-BOARD-V2-01.4 — Adopt and retain history.** Import the remaining approved outcomes,
   switch selected consumers with independent readback, and label the old board as legacy reference.
   Verify no automatic V1 writer resumes and no host-resident autonomous agent is required. Retain the

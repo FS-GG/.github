@@ -162,3 +162,42 @@ owner-edit preservation and population-policy qualification remain distinct. No 
 inferred from the private manual operator. No broader transfer, consumer switch, package publication
 or product adoption occurred through this pilot. Telemetry is NOTCONFIG with no handle; usage and
 economics remain Unknown.
+
+## Restricted root-local refresh qualification — 2026-10-02
+
+COORD-BOARD-V2-01.3 passed for the selected root-local Project 3 Observation route.
+Protected source [3829d42d](https://github.com/FS-GG/.github/commit/3829d42dd668eac5de33ebaaafbedfb342ac74be),
+tree `8cc6b44dc9c8185c26ba033f960a12a3d908147e`, delivered the fixed adapter and CLI after
+40 projection/transport controls and four CLI controls passed in native CI. They retain denial,
+stale or changed source, incomplete pagination, wrong scope, ambiguous response and replay refusals.
+
+Root independently authenticated the clean Release artifact: 91 output files, nine official
+NuGet archives, 49 package runtime assets, 97 real PDB source documents joined to exact Git bytes,
+and 3,849 installed SDK/runtime/host files. Actual SDK/compiler was 10.0.401 and the CLI host was
+.NET 10.0.12. The loaded adapter SHA-256 is
+`7bdf188e6e7c82a256f8c185537914b34ef6fccf0bfddda595a218c79bb407cd`;
+CLI SHA-256 is `50bff72b74fc6bcd1b87f52ac2ff597da01b5b669181a6681ade3ce8d98995f9`.
+Compiler pseudo-documents are explicitly non-source; real source checksums remain required.
+
+The binding preserves constructor source `47d0a38ca1f3b390bb20b88f04c8ba019d989c15`,
+constructor SHA-256 `dac15107412e92e9238f232008137244019957b7b57ab164bcd58b647a5227d3`,
+and population revision `351e5db40d4d72abd6e87882614725305eb2a419`.
+The current manifest blob `f0de0955c30158272669d18e4ed3501b743e043a` was unchanged through
+protected main `e9bee62a8d3d27bb765e751a65876946e8168940` at execution.
+Its earlier inventory gaps remain a historical capture, not a new carryover approval.
+
+At 16:17 UTC, the fixed CLI verified all three approved pilot items with zero writes. Root then
+staged exactly one Observation=Unknown fixture after a complete independent project read.
+The fixed CLI restored that item to Verified with exactly one acknowledged HTTP 200 mutation;
+the response SHA-256 is `987a0c399d09ea4f0925dcd906f4c3b6e71dc6e731988ef6487958d6e1bfddbd`.
+Independent readback and a repeat verified all three items; the repeat emitted zero mutations.
+Complete field readback, including native labels and repository values, matched the pre-fixture
+snapshot exactly. All human-owned fields and the fourth, unapproved SDD#935 membership were preserved.
+Root live-proof receipt SHA-256: `a157b65cdaa14700fb6c33538de974ec7508f493242a0d3bc39d4153263e8b70`.
+Private payloads and credential metadata remain private.
+
+This qualifies the fixed root-local route. The hosted workflow remains dormant and unenrolled;
+its credentials, executable binding and activation require their own verified join. No generic
+production writer, retry authority, wider import or legacy-board write was enabled. Ordinary source
+PR #4116 passed and merged while the board job remained unavailable. Broader consumer adoption,
+carryover and scheduling changes remain .4; product publication and installed adoption remain .5–.6.
