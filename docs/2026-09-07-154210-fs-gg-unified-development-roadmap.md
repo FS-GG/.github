@@ -53,6 +53,21 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-02: LEARN P2-C.3 inactive v3 image-closure source CLOSED; images and native installation remain open.**
+[PR #4105](https://github.com/FS-GG/.github/pull/4105) merged at protected
+`907bbd6abe6da735ddca409b6ec827fe4b2ab7b5`, tree
+`e5a8a7eea4a5206b42e98da66e0d97d6840ece5c`, equal qualified source
+`d5c3a7149a5ecacbbd0b8d7c63d46297d9495951`. The exact protected
+[Host package run 37008208065](https://github.com/FS-GG/.github/actions/runs/37008208065) passed.
+The typed runner accepts native trust only from a separately supplied acquisition selection, preserves
+production unavailability without that selection, and checks the complete physical closure. Its focused
+gate passed ten canonical Quint cases and 194 complete production state/ordered-effect transitions,
+constructor refusals and an assertion-specific mutant. Four lock hashes were corrected against the
+actual official FSharp.Core 10.1.401 package; source, dependency version and formal semantics were retained.
+This is [P2-C.3 source delivery](roadmaps/learn-c2-persistent-receiver-v3.md#p2-c3-source-readiness).
+P2-C.4 reproducible OCI images, P2-C.5 served Manager-to-Host qualification, P2-C.6 protected readback,
+genuine grants, installation, capture, restart/recovery and activation remain open. Main receives no action.
+
 **2026-10-02: FABLE-ADOPT-01.2 externally driven SVG presentation source CLOSED; external-reference adoption remains open.**
 [FS.GG.Rendering #1365](https://github.com/FS-GG/FS.GG.Rendering/pull/1365) merged at protected
 `097e228388375bf27a03ac008627e4a038686c53`, tree

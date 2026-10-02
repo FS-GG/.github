@@ -5,6 +5,7 @@ name: board-v2-import-preflight
 on:
   pull_request:
     paths:
+      - "tools/BoardV2Import/**"
       - "tools/board-v2-import.py"
       - "tools/board-v2-import.schema.json"
       - "docs/coordination/board-v2-import-manifest.json"
@@ -14,6 +15,7 @@ on:
   push:
     branches: [main]
     paths:
+      - "tools/BoardV2Import/**"
       - "tools/board-v2-import.py"
       - "tools/board-v2-import.schema.json"
       - "docs/coordination/board-v2-import-manifest.json"
@@ -31,9 +33,12 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+      - name: Restore typed import constructor (locked)
+        run: dotnet restore tools/BoardV2Import/BoardV2Import.fsproj --locked-mode
       - name: Validate exact import manifest
         run: python3 tools/board-v2-import.py docs/coordination/board-v2-import-manifest.json
-      - name: Validate bounded pilot plan
-        run: python3 tools/board-v2-import.py docs/coordination/board-v2-import-manifest.json --pilot-plan
-      - name: Exercise negative controls
+      - name: Exercise production constructors and current pilot refusal
         run: python3 tests/board-v2-import/run.py

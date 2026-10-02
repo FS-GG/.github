@@ -126,8 +126,12 @@ disabled. Main/work-main is not a destination or prerequisite.
   production unavailability while that genuine selection is absent, and carries the selected trust
   input into the prepared context. The retained independent review is READY with SHA-256
   `302773c8bf5bee44a7d58c50e0860b99f13339d717bea3feea172378eb967964`.
-- [ ] The joined protected Host workflow must pass for the exact merged source before P2-C.3 source
-  closes. This source-ready state does not claim a hosted result.
+- [x] The joined protected Host workflow passed for exact merged source
+  `907bbd6abe6da735ddca409b6ec827fe4b2ab7b5`, tree
+  `e5a8a7eea4a5206b42e98da66e0d97d6840ece5c`, in
+  [run 37008208065](https://github.com/FS-GG/.github/actions/runs/37008208065).
+  [PR #4105](https://github.com/FS-GG/.github/pull/4105) delivered the reviewed source and official
+  NuGet lock correction. This closes P2-C.3 source; it does not install or activate a receiver.
 - [ ] P2-C.4 two-build OCI comparison, P2-C.5 actual served Manager-to-Host inactive qualification,
   and P2-C.6 protected readback remain open. Genuine native acquisition, image construction,
   installation, grants, capture, restart/recovery, enrollment, and activation also remain open.
