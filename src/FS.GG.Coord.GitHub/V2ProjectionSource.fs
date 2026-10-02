@@ -1,6 +1,5 @@
 namespace FS.GG.Coord.GitHub
 
-/// Fixed read-only composition. Inputs select an immutable reviewed binding, never executable code.
 module V2ProjectionSource =
     open System
     open System.Text.Json
@@ -140,7 +139,6 @@ module V2ProjectionSource =
         | :? Collections.Generic.KeyNotFoundException
         | :? InvalidOperationException -> Error(Malformed("reviewed population", "manifest is incomplete or nonexecutable"))
 
-    /// Previous reports preserve historical successful observations only; they never license writes.
     let runFixed (transport: IGitHubTransport) (binding: Binding) (previous: BatchReport option) =
         let failed error =
             { ProjectId = binding.ProjectId; RecipeRevision = binding.RecipeRevision; PopulationRevision = binding.PopulationRevision; Selected = None; Attempted = 0; Verified = 0
