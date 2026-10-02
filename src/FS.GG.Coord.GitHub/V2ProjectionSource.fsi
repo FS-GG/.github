@@ -56,3 +56,22 @@ module V2ProjectionSource =
         binding: Binding ->
         previous: BatchReport option ->
             BatchReport
+
+    /// Read evidence and human intent remain distinct. No new verification timestamp or write is minted.
+    type InspectionItem =
+        { Evidence: ItemReport; ExpectedNodeId: string; SourceCurrentness: string
+          Planning: PlanningObservation option; PlanningGap: IoError option; Discrepancies: string list }
+    type InspectionReport =
+        { Binding: Binding; Evidence: BatchReport; Items: InspectionItem list }
+    /// Facts supplied by the existing integrator; None means unknown and grants no authority.
+    type IntegratorFacts =
+        { OpenPullRequests: string list option; TouchSets: Map<string, string list> option; AvailableSlots: int option }
+    type PlanningCandidate =
+        { Issue: IssueRef; HumanStatus: string option; Track: string option; Roadmap: string option
+          SourceCurrentness: string; Observation: string option; UnmetOrUnknown: string list; Integrator: IntegratorFacts }
+    /// Fixed queries/selected GET reads only. No writer, mutation or durable retry composition.
+    val createInspectionTransport: binding: Binding -> token: string -> IoResult<IGitHubTransport * System.IDisposable>
+    /// Reuse admitted source collection and exact planning readers. Never calls runOneShot or any writer.
+    val inspectFixed: transport: IGitHubTransport -> binding: Binding -> previous: BatchReport option -> InspectionReport
+    /// Deterministic display of selected human intent and known/unknown evidence. No scheduling decision.
+    val planningCandidates: report: InspectionReport -> facts: IntegratorFacts -> PlanningCandidate list

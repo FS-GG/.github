@@ -201,22 +201,56 @@ module V2ProjectionSource =
         | :? Collections.Generic.KeyNotFoundException
         | :? InvalidOperationException -> Error(Malformed("reviewed population", "manifest is incomplete or nonexecutable"))
 
+    type private SourceCollection =
+        { Verification: IoResult<SourceVerification>; Native: NativeObservation option
+          Dependencies: NativeObservation list; DependenciesComplete: bool; Plan: NativeObservation option }
+
+    let private collectSource (transport: IGitHubTransport) (binding: Binding) (row: Selected) =
+        let mutable native = None
+        let mutable dependencies = []
+        let mutable dependenciesComplete = false
+        let mutable plan = None
+        let verification =
+            match readIssue transport row.Issue with
+            | Error error -> Error error
+            | Ok observation ->
+                native <- Some observation
+                if observation.NodeId <> row.NodeId then Ok(Refused "native issue node identity changed")
+                elif observation.UpdatedAt <> row.UpdatedAt || observation.State <> "OPEN" then Ok(Stale None)
+                else
+                    match readBlockedBy transport row.Issue with
+                    | Error error -> Error error
+                    | Ok observed ->
+                        dependencies <- observed
+                        dependenciesComplete <- true
+                        let actual = observed |> List.map _.Issue |> Set.ofList
+                        if actual <> Set.ofList row.Dependencies then Ok(Stale None)
+                        else
+                            match readPlan transport binding row.Roadmap with
+                            | Error error -> Error error
+                            | Ok(planObservation, planRevision) ->
+                                plan <- planObservation
+                                let dependencyRevision = dependencies |> List.map (fun dependency -> $"{dependency.NodeId}@{dependency.UpdatedAt}:{dependency.State}") |> List.sort |> String.concat ";"
+                                Ok(Current $"{observation.NodeId}@{observation.UpdatedAt};dependencies=complete:{dependencyRevision};plan={planRevision};recipe={binding.RecipeRevision}")
+        { Verification = verification; Native = native; Dependencies = dependencies; DependenciesComplete = dependenciesComplete; Plan = plan }
+
+    let private artifactCheck (binding: Binding) =
+        try
+            let location = typeof<Binding>.Assembly.Location
+            if String.IsNullOrWhiteSpace location then Error(Malformed("reviewed executable", "loaded assembly has no verifiable file identity"))
+            else
+                use stream = System.IO.File.OpenRead location
+                let actual = System.Security.Cryptography.SHA256.HashData stream |> Convert.ToHexStringLower
+                if not (String.Equals(actual, binding.ArtifactSha256, StringComparison.OrdinalIgnoreCase)) then Error(Malformed("reviewed executable", "loaded assembly bytes differ from selected artifact SHA-256"))
+                else Ok()
+        with :? System.IO.IOException -> Error(Malformed("reviewed executable", "loaded assembly bytes unavailable"))
+
     let runFixed (transport: IGitHubTransport) (binding: Binding) (previous: BatchReport option) =
         let failed error =
             { ProjectId = binding.ProjectId; RecipeRevision = binding.RecipeRevision; PopulationRevision = binding.PopulationRevision; ImportRecipeRevision = binding.ImportRecipeRevision; ImportArtifactSha256 = binding.ImportArtifactSha256; ArtifactSha256 = binding.ArtifactSha256; NativeDispatch = []; ProtectedInputs = []; Selected = None; Attempted = 0; Verified = 0
               Items = previous |> Option.filter (fun batch -> batch.ProjectId = binding.ProjectId) |> Option.map (fun batch -> batch.Items |> List.map (fun item -> { item with Native = None; DependencyObservations = []; DependencyReadComplete = false; PlanObservation = None; Health = "Unknown"; Reads = 0; MutationAttempts = 0; MembershipPages = None; Projection = None; Gap = Some error })) |> Option.defaultValue []
               PopulationGap = Some error; Cleanup = "No resources, claims or background work created" }
-        let artifactCheck =
-            try
-                let location = typeof<Binding>.Assembly.Location
-                if String.IsNullOrWhiteSpace location then Error(Malformed("reviewed executable", "loaded assembly has no verifiable file identity"))
-                else
-                    use stream = System.IO.File.OpenRead location
-                    let actual = System.Security.Cryptography.SHA256.HashData stream |> Convert.ToHexStringLower
-                    if not (String.Equals(actual, binding.ArtifactSha256, StringComparison.OrdinalIgnoreCase)) then Error(Malformed("reviewed executable", "loaded assembly bytes differ from selected artifact SHA-256"))
-                    else Ok()
-            with :? System.IO.IOException -> Error(Malformed("reviewed executable", "loaded assembly bytes unavailable"))
-        match validateBinding binding |> Result.bind (fun () -> artifactCheck) with
+        match validateBinding binding |> Result.bind (fun () -> artifactCheck binding) with
         | Error error -> failed error
         | Ok() ->
             match readProtectedBlob transport binding.PopulationRevision "docs/coordination/board-v2-import-manifest.json" |> Result.bind (fun (text, current, blob) -> population binding text |> Result.map (fun selected -> selected, current, blob)) with
@@ -241,27 +275,15 @@ module V2ProjectionSource =
                             else readProtectedBlob counted binding.PopulationRevision "docs/coordination/board-v2-import-manifest.json" |> Result.bind (fun (_, _, blob) ->
                                 if blob = populationBlob then Ok() else Error(Malformed("reviewed population", "population changed before mutation")))
                         sourceChecks <- sourceChecks + 1
-                        match populationCurrent |> Result.bind (fun () -> readIssue counted row.Issue) with
+                        match populationCurrent with
                         | Error error -> Error error
-                        | Ok observation ->
-                            native <- Some observation
-                            if observation.NodeId <> row.NodeId then Ok(Refused "native issue node identity changed")
-                            elif observation.UpdatedAt <> row.UpdatedAt || observation.State <> "OPEN" then Ok(Stale None)
-                            else
-                                match readBlockedBy counted row.Issue with
-                                | Error error -> Error error
-                                | Ok observed ->
-                                    dependencies <- observed
-                                    dependenciesComplete <- true
-                                    let actual = observed |> List.map _.Issue |> Set.ofList
-                                    if actual <> Set.ofList row.Dependencies then Ok(Stale None)
-                                    else
-                                        match readPlan counted binding row.Roadmap with
-                                        | Error error -> Error error
-                                        | Ok(planObservation, planRevision) ->
-                                            plan <- planObservation
-                                            let dependencyRevision = dependencies |> List.map (fun dependency -> $"{dependency.NodeId}@{dependency.UpdatedAt}:{dependency.State}") |> List.sort |> String.concat ";"
-                                            Ok(Current $"{observation.NodeId}@{observation.UpdatedAt};dependencies=complete:{dependencyRevision};plan={planRevision};recipe={binding.RecipeRevision}")
+                        | Ok() ->
+                            let collection = collectSource counted binding row
+                            native <- collection.Native
+                            dependencies <- collection.Dependencies
+                            dependenciesComplete <- collection.DependenciesComplete
+                            plan <- collection.Plan
+                            collection.Verification
                     let result = runOneShot verifier counted binding { Issue = row.Issue; ExpectedNodeId = row.NodeId }
                     let projection = match result with Ok report -> Some report | _ -> None
                     let historical = previous |> Option.bind (fun batch ->
@@ -279,3 +301,104 @@ module V2ProjectionSource =
                 { ProjectId = binding.ProjectId; RecipeRevision = binding.RecipeRevision; PopulationRevision = binding.PopulationRevision; ImportRecipeRevision = binding.ImportRecipeRevision; ImportArtifactSha256 = binding.ImportArtifactSha256; ArtifactSha256 = binding.ArtifactSha256; NativeDispatch = []; ProtectedInputs = [ "docs/coordination/board-v2-import-manifest.json", protectedRevision, populationBlob ]; Selected = Some selected.Length
                   Attempted = items.Length; Verified = items |> List.filter (fun item -> item.Health = "Verified") |> List.length
                   Items = items; PopulationGap = None; Cleanup = "No resources, claims or background work created" }
+
+    type InspectionItem =
+        { Evidence: ItemReport; ExpectedNodeId: string; SourceCurrentness: string
+          Planning: PlanningObservation option; PlanningGap: IoError option; Discrepancies: string list }
+
+    type InspectionReport =
+        { Binding: Binding; Evidence: BatchReport; Items: InspectionItem list }
+
+    type IntegratorFacts =
+        { OpenPullRequests: string list option; TouchSets: Map<string, string list> option; AvailableSlots: int option }
+
+    type PlanningCandidate =
+        { Issue: IssueRef; HumanStatus: string option; Track: string option; Roadmap: string option
+          SourceCurrentness: string; Observation: string option; UnmetOrUnknown: string list; Integrator: IntegratorFacts }
+
+    let private inspectionReads (transport: IGitHubTransport) (binding: Binding) =
+        let paths = binding.SelectedIssues |> Map.values |> Seq.choose (fun value ->
+            match parseIssue value with Ok issue -> Some $"repos/{issue.Owner}/{issue.Repository}/issues/{issue.Number}/dependencies/blocked_by" | _ -> None) |> Set.ofSeq
+        { new IGitHubTransport with
+            member _.Send request =
+                match request.Method, request.Path, request.Body with
+                | "POST", "graphql", Query(document, _) when request.Budget = GraphQl && request.Query.IsEmpty && request.IfNoneMatch.IsNone && document.StartsWith("query(", StringComparison.Ordinal) -> transport.Send request
+                | "GET", path, NoBody when paths.Contains path && request.Budget = Rest && request.Query = [ "per_page", "50" ] && request.IfNoneMatch.IsNone ->
+                    match box transport with
+                    | :? ISinglePageGitHubTransport as single -> single.SendSingle request
+                    | _ -> transport.Send request
+                | _ -> Error(Malformed("read-only V2 inspection", "request is not a fixed canonical read"))
+            member _.SendMutation _ = Error(Malformed("read-only V2 inspection", "mutation is unavailable"))
+            member _.RetryMutation _ = Error(Malformed("read-only V2 inspection", "durable replay is unavailable")) }
+
+    let createInspectionTransport binding token : IoResult<IGitHubTransport * IDisposable> =
+        validateBinding binding |> Result.bind (fun () ->
+            if String.IsNullOrWhiteSpace token then Error(Unauthorized "read-only V2 inspection token")
+            else
+                let transport = new HttpTransport("https://api.github.com", token)
+                Ok(inspectionReads transport binding, transport :> IDisposable))
+
+    let inspectFixed (transport: IGitHubTransport) (binding: Binding) (previous: BatchReport option) =
+        let reads = inspectionReads transport binding
+        let metadata items selected protectedInputs gap : BatchReport =
+            { ProjectId = binding.ProjectId; RecipeRevision = binding.RecipeRevision; PopulationRevision = binding.PopulationRevision
+              ImportRecipeRevision = binding.ImportRecipeRevision; ImportArtifactSha256 = binding.ImportArtifactSha256; ArtifactSha256 = binding.ArtifactSha256
+              NativeDispatch = []; ProtectedInputs = protectedInputs; Selected = selected; Attempted = items |> List.length
+              Verified = items |> List.filter (fun item -> item.Health = "Verified") |> List.length; Items = items
+              PopulationGap = gap; Cleanup = "Read-only inspection; no project lock, claims, mutation, durable effect or background work" }
+        let failed error = { Binding = binding; Evidence = metadata [] None [] (Some error); Items = [] }
+        match validateBinding binding |> Result.bind (fun () -> artifactCheck binding) with
+        | Error error -> failed error
+        | Ok() ->
+            match readProtectedBlob reads binding.PopulationRevision "docs/coordination/board-v2-import-manifest.json" |> Result.bind (fun (text, current, blob) -> population binding text |> Result.map (fun selected -> selected, current, blob)) with
+            | Error error -> failed error
+            | Ok(selected, current, blob) ->
+                let items = selected |> List.map (fun row ->
+                    let mutable calls = 0
+                    let counted =
+                        { new IGitHubTransport with
+                            member _.Send request = calls <- calls + 1; reads.Send request
+                            member _.SendMutation _ = Error(Malformed("read-only V2 inspection", "mutation is unavailable"))
+                            member _.RetryMutation _ = Error(Malformed("read-only V2 inspection", "durable replay is unavailable")) }
+                    let collection = collectSource counted binding row
+                    let currentness, sourceGap =
+                        match collection.Verification with
+                        | Ok(Current _) -> "Current", None
+                        | Ok(Stale _) -> "Stale", Some(Http(409, "native issue or dependency differs from admitted population"))
+                        | Ok(Refused reason) -> "Unknown", Some(Http(403, reason))
+                        | Error error -> "Unknown", Some error
+                    let planning = readPlanning counted binding { Issue = row.Issue; ExpectedNodeId = row.NodeId }
+                    let observed, planningGap = match planning with Ok value -> Some value, None | Error error -> None, Some error
+                    let historical = previous |> Option.filter (fun batch -> batch.ProjectId = binding.ProjectId) |> Option.bind (fun batch ->
+                        batch.Items |> List.tryFind (fun item -> item.Issue = row.Issue) |> Option.bind _.LastVerified)
+                    let discrepancies =
+                        [ if collection.Native |> Option.exists (fun native -> native.State = "CLOSED") then "Native issue is closed; remaining outcome acceptance is unverified"
+                          match observed with
+                          | Some value ->
+                              if value.Roadmap <> Some row.Roadmap then "Human Roadmap differs from the admitted owning plan"
+                              if value.Status = Some "Done" then "Human Status is Done; delivery/publication/native outcome acceptance is unverified"
+                              if value.Observation <> Some "Verified" then "Observation is missing or not Verified; inspection retains its value"
+                          | None -> "Current planning fields are unavailable" ]
+                    let evidence =
+                        { Issue = row.Issue; Native = collection.Native; DependencyObservations = collection.Dependencies; DependencyReadComplete = collection.DependenciesComplete; PlanObservation = collection.Plan
+                          Delivery = "Unknown: no source-delivery acceptance reader selected"; Publication = "Unknown: no publication acceptance reader selected"; NativeAcceptance = "Unknown: no operation acceptance reader selected"
+                          Health = if planningGap.IsSome then "Unknown" elif currentness = "Stale" then "Stale" elif currentness = "Current" && (observed |> Option.exists (fun value -> value.Observation = Some "Verified")) then "Verified" else "Unknown"
+                          Reads = calls; MutationAttempts = 0; MembershipPages = observed |> Option.map _.MembershipPages
+                          Projection = None; Gap = sourceGap; LastVerified = historical }
+                    { Evidence = evidence; ExpectedNodeId = row.NodeId; SourceCurrentness = currentness; Planning = observed; PlanningGap = planningGap; Discrepancies = discrepancies })
+                { Binding = binding; Evidence = metadata (items |> List.map _.Evidence) (Some selected.Length) [ "docs/coordination/board-v2-import-manifest.json", current, blob ] None; Items = items }
+
+    let planningCandidates (report: InspectionReport) (facts: IntegratorFacts) =
+        if report.Evidence.Selected.IsNone || report.Evidence.PopulationGap.IsSome then []
+        else report.Items |> List.map (fun item ->
+            { Issue = item.Evidence.Issue; HumanStatus = item.Planning |> Option.bind _.Status; Track = item.Planning |> Option.bind _.Track; Roadmap = item.Planning |> Option.bind _.Roadmap
+              SourceCurrentness = item.SourceCurrentness; Observation = item.Planning |> Option.bind _.Observation; Integrator = facts
+              UnmetOrUnknown =
+                  item.Discrepancies @
+                  [ if item.SourceCurrentness <> "Current" then yield "Current source/native coverage is unavailable or stale"
+                    if item.Evidence.Gap.IsSome || item.PlanningGap.IsSome then yield "One or more selected reads failed"
+                    yield item.Evidence.Delivery; yield item.Evidence.Publication; yield item.Evidence.NativeAcceptance
+                    if facts.OpenPullRequests.IsNone then yield "Open PR facts are unknown"
+                    if facts.TouchSets.IsNone then yield "Touch-set facts are unknown"
+                    if facts.AvailableSlots.IsNone then yield "Current capacity is unknown"
+                    yield "Intake authorization and scheduling selection remain the current integrator's responsibility" ] })
