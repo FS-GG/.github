@@ -65,6 +65,21 @@ independent and open. This dated clarification is not a current fleet-health att
 profile acceptance or waiver of exact artifact, authentication, custody, settlement/replay or effect
 authority for any operation actually performed.
 
+**2026-10-02: FABLE protected diagnostic census completed with UNKNOWN; publication awaits a qualified capability.**
+After the #664 source closure and immediate #4080 projection, one fresh read-only
+[census](https://github.com/FS-GG/FS.GG.Templates/actions/runs/36947123836) ran against
+protected `5326b896a5ded3ab86b929b99e4bea7eec967f03`, tree
+`619b3ac86097ebf841ec67c2cdca0e1b82d12e69`, with unchanged read permissions.
+Root verified attempt 1, terminal jobs and artifact `11203040036`; receipt SHA-256 is
+`fb9596c090a31a7e361c6c5d9dd6e5072424ae4d9422c3d89af63620befd39d5`.
+Metadata and active-version requests returned 200; deleted versions returned 403.
+The new sanitized observation reports valid syntax with an unrecognized name and level,
+one `other`/`other` alternative and no accepted permission sets. It establishes no write
+alternative or grant. NuGet remains independently ABSENT; complete GitHub absence remains
+UNKNOWN. The bounded diagnostic window is complete. Publication requires a separately
+qualified capability and fresh complete absence evidence; no further speculative probe,
+tag, pack or publication occurred in this window.
+
 **2026-10-02: FABLE unrecognized-permission diagnostics source delivered; feed occupancy remains unknown.**
 [Templates #664](https://github.com/FS-GG/FS.GG.Templates/pull/664) merged at
 `5326b896a5ded3ab86b929b99e4bea7eec967f03`, tree
