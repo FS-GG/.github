@@ -33,6 +33,20 @@ class ManifestTests(unittest.TestCase):
             if field['kind'] == 'single-select': field['optionIds'] = {name:'option_'+str(index)+'_'+str(n) for n,name in enumerate(field['options'])}
         return m
 
+    def pending(self):
+        """Retain the historical unbound inventory independently of the live target."""
+        m = copy.deepcopy(self.manifest)
+        m['items'] = m['items'][:8] + [m['items'][-1]]
+        m['items'][-1].update(decision='adjudicate', pilot=False, adjudication='unknown',
+                              remainingOutcome=None, acceptanceEvidence='unknown')
+        m['target'].update(creationState='pending-authorized-operation', id=None, number=None)
+        m['binding'].update(visibility='incomplete', authorization='unknown',
+                            recipeRevision=None, artifactSha256=None, repositories=[])
+        for field in m['fields']:
+            field['id'] = None
+            field.pop('optionIds', None)
+        return m
+
     def refused(self, m, message, plan=False):
         result = self.call(m, plan)
         self.assertEqual(2, result.returncode, result.stdout)
@@ -42,8 +56,20 @@ class ManifestTests(unittest.TestCase):
         result = self.call(self.manifest)
         self.assertEqual(0, result.returncode, result.stderr)
         summary = json.loads(result.stdout)
-        self.assertEqual((9,0,0,7,False), tuple(summary[k] for k in ['candidateCount','approvedImportCount','pilotCount','unresolvedCount','executable']))
-        self.refused(self.manifest, 'three to five', True)
+        self.assertEqual((11,3,3,6,True,False), tuple(summary[k] for k in
+                         ['candidateCount','approvedImportCount','pilotCount','unresolvedCount',
+                          'planConstructible','executable']))
+        self.assertEqual('created-and-read-back', summary['targetCreationState'])
+        result = self.call(self.manifest, True)
+        self.assertEqual(0, result.returncode, result.stderr)
+        plan = json.loads(result.stdout)
+        selected = [item for item in self.manifest['items'] if item['pilot']]
+        self.assertEqual(['FS-GG/FS.GG.SDD#928', 'FS-GG/FS.GG.Templates#441',
+                          'FS-GG/.github#3010'], [item['issue'] for item in selected])
+        self.assertEqual(selected, plan['items'])
+        self.assertEqual(self.manifest['target'], plan['target'])
+        self.assertEqual(self.manifest['fields'], plan['fields'])
+        self.assertEqual(self.manifest['binding'], plan['binding'])
 
     def test_fixed_plan_preserves_identities_and_separates_effects(self):
         m=self.approved(); result=self.call(m,True)
@@ -76,7 +102,23 @@ class ManifestTests(unittest.TestCase):
         m=self.approved();m['items'][0]['nodeId']='PR_fixture';self.refused(m,'issue node')
 
     def test_pending_identity_refuses(self):
-        m=copy.deepcopy(self.manifest);m['target']['id']='PVT_invented';self.refused(m,'must not invent')
+        pending = self.pending()
+        result = self.call(pending)
+        self.assertEqual(0, result.returncode, result.stderr)
+        summary = json.loads(result.stdout)
+        self.assertEqual((9,0,0,7,False,False), tuple(summary[k] for k in
+                         ['candidateCount','approvedImportCount','pilotCount','unresolvedCount',
+                          'planConstructible','executable']))
+        self.assertEqual('pending-authorized-operation', summary['targetCreationState'])
+        self.refused(pending, 'three to five', True)
+        for key, value in [('id', 'PVT_invented'), ('number', 2)]:
+            with self.subTest(key=key):
+                m = copy.deepcopy(pending)
+                m['target'][key] = value
+                self.refused(m, 'must not invent')
+        m = copy.deepcopy(pending)
+        m['fields'][0]['id'] = 'FIELD_invented'
+        self.refused(m, 'pending Status must not invent identity')
 
     def test_legacy_target_refuses(self):
         m=self.approved();m['target']['number']=1;self.refused(m,'Project 1')
