@@ -12,5 +12,5 @@ module BoardV2Application =
     val decodePreviousReport: json: string -> Result<V2ProjectionSource.BatchReport, string>
     /// Fixed file command against an injected metered transport, for offline refusal fixtures.
     val runWithTransport: transport: Transport.IGitHubTransport -> arguments: string list -> int
-    /// Recognize board-v2 and construct the existing fenced, metered production context after validation.
+    /// Recognize board-v2 and construct the fixed root-local V2 Observation-only composition after validation.
     val tryRun: arguments: string list -> int option

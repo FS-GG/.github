@@ -74,6 +74,14 @@ not schedule or gate the current route, and it is not reported as completed.
 and switch scheduling incrementally. Existing delivery lanes continue in parallel. Full V2 acceptance
 remains complete at its selected profile; board migration is follow-on work.
 
+**Independent BAR product follow-up — 2026-10-02:** the
+[headless engine and infolog qualification plan](roadmaps/2026-10-02-bar-headless-infolog-qualification.md)
+selects a 10 MiB raw-log budget for the next qualified proof, qualifies current stock
+Recoil before atlas workarounds, and sequences F#/Quint complete-record handling,
+capacity measurement and a joined native successor under BARC-01.5f. These are
+planned product changes; no engine installation or native acceptance is claimed,
+and they do not reopen completed V2 acceptance.
+
 The owner selected speed over backward validity on 2026-09-28. No V1 workload requires preserving
 its old execution guarantees. `.github` uses the published Coordination CLI 0.1.2 and its ordinary V2
 workflow. Several ready repository profiles may share one immutable published CLI. Each repository keeps
@@ -2009,10 +2017,13 @@ or v1 retired. It must not delay `GS2-11` once all actual cutover prerequisites 
 - migration of the ADR corpus to a future typed `DecisionExtension`;
 - broader Typed SDD extensions for contract topology, skill delivery, Governance rules, provider/template
   composition, and executable TestSpecs;
-- **TSDD-KNOWLEDGE-01:** every Typed SDD project starts with a durable knowledge base for all textual
-  information gathered during development, including roadmaps, logs, architecture, decisions, bugs,
-  fixes and experiments. Concrete storage form remains to be determined. Plan human access through
-  wiki/documentation views and programmatic access through a shared API, CLI and `.fsx` scripts;
+- **TSDD-KNOWLEDGE-01:** every Typed SDD project starts with concise, evidence-backed knowledge in
+  Git-tracked text records, automatically included in the normal initial commit and limited to
+  **10 MiB (10,485,760 bytes)**. Capture decisions, architecture explanations, bug causes/fixes and
+  experimental or operational lessons with references to canonical evidence. Exclude source copies,
+  raw logs, transcripts, document dumps and generated indexes; optional search caches are rebuildable
+  and Git-ignored. Plan human access through wiki/documentation views and programmatic access through
+  a shared F# API, CLI and `.fsx` scripts;
   initialization, capture, publication and installed adoption remain open. The
   [Unified Roadmap planning scope](2026-09-07-154210-fs-gg-unified-development-roadmap.md#991-project-knowledge-from-typed-sdd-initialization)
   owns the requirement, access options and clean/retained-project acceptance;

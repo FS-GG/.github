@@ -89,6 +89,8 @@
     <Compile Include="Board.fs" />
     <Compile Include="V2Projection.fsi" />
     <Compile Include="V2Projection.fs" />
+    <Compile Include="V2ObservationTransport.fsi" />
+    <Compile Include="V2ObservationTransport.fs" />
     <Compile Include="V2ProjectionSource.fsi" />
     <Compile Include="V2ProjectionSource.fs" />
     <Compile Include="Done.fsi" />

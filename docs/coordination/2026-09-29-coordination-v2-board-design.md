@@ -6,8 +6,9 @@ only work with a verified remaining outcome. Reuse existing repository issue and
 The board provides planning and visibility; native delivery and the selected V2 operation authorities
 remain the sources of delivery truth.
 
-**Status:** selected design, 2026-09-29. This document does not create the project, import items,
-activate a writer or switch consumers. Those outcomes remain unchecked below.
+**Status:** selected design, 2026-09-29; organization pilot passed 2026-10-02. Project 3, its schema
+and the three approved memberships are read back. Restricted automatic projection, broader import,
+consumer switching and product adoption remain pending below.
 **Owner:** `.github` owns the organization planning surface and shared consumer contract; SDD and
 Templates own published workspace integration, and product owners adopt their scoped boards.
 Repository owners retain their deliverables and evidence. This is **COORD-BOARD-V2-01** in the
@@ -16,12 +17,17 @@ and the [V2 execution roadmap](../github-substrate-v2-roadmap.md#coordination-v2
 
 ## Migration priority and execution sequence — 2026-10-02
 
-**Next selected item: `COORD-BOARD-V2-01.2`.** Begin bounded carryover and the organization pilot
-while current implementation lanes continue. The next window prepares the exact project/schema
-binding, consumer inventory and dry-run manifest, then imports three to five representative items
-covering source delivery, publication and native qualification. Every selected item names its owner,
-next action, current dependency, owning roadmap outcome and acceptance evidence. Existing issue
-identities, branches, PRs, workers and unresolved operation evidence remain attached to that work.
+**Next selected item: `COORD-BOARD-V2-01.4`.** The bounded organization pilot in .2 passed through
+an explicit user-authorized native one-shot administration exception. The
+[pilot evidence](board-v2-import-preparation.md) and [bound manifest](board-v2-import-manifest.json)
+record Project 3, four fields, four filtered views, the three approved existing issues and independent
+readback. A repeat emitted zero mutation intents. This selected exception supersedes the earlier
+preparation's sole shared-transport route only for .2; it does not qualify the automatic writer.
+
+The complete project has four memberships: the three selected issues and unapproved, unseeded
+SDD#935, a native child of selected SDD#928. No operator add requested that fourth membership.
+Child propagation is an inference, with cause/actor unproven. Keep this distinction visible during
+broader population-policy adoption; neither it nor the successful pilot approves broader carryover.
 
 Reconcile all currently open V2 roadmap outcomes before broader transfer. Include only verified
 remaining work; a source merge does not finish its unpublished package or unqualified native operation.
@@ -30,7 +36,9 @@ dependencies, group adjacent steps into reviewable outcomes, and avoid creating 
 checkbox, CI failure or intermediate report. Use the organization board for organization-relevant
 outcomes and the selected product boards for detailed product execution.
 
-Prepare `.3` adapter and refresh source alongside the `.2` pilot. Broader import and the `.4`
+The `.3` fixed root-local adapter passed against the actual pilot binding; see the
+[restricted refresh evidence](board-v2-import-preparation.md#restricted-root-local-refresh-qualification--2026-10-02).
+The hosted job remains dormant and unenrolled. Broader import and the `.4`
 scheduling switch follow verified pilot membership and qualified restricted projection. Inventory and
 switch the actual driving skills and consumer bindings together, preserving routine delivery,
 selected technical checks and native merge readback. After that switch the board is the primary
@@ -41,7 +49,7 @@ Product integration preparation can proceed independently, but `.5` publication 
 qualified `.3` contract. `.6` qualifies actual published fresh and retained workspace behavior before
 each product switches. Full V2 acceptance remains complete at its selected profile throughout this
 follow-on migration. The delivery checklist below remains the sole milestone ledger; this priority
-selection completes none of its pending creation, import, projection or adoption outcomes.
+selection closes the verified .2 pilot and .3 root-local refresh; .4–.6 remain open.
 
 ## Current boundary
 
@@ -184,14 +192,21 @@ alone cannot close product adoption.
 
 - [x] **COORD-BOARD-V2-01.1 — Select the design.** Record the planning boundary, selective carryover,
   host restriction and implementation sequence in the Unified and V2 roadmaps.
-- [ ] **COORD-BOARD-V2-01.2 — Prepare the bounded import.** Inventory live consumers and candidate
+- [x] **COORD-BOARD-V2-01.2 — Prepare the bounded import.** Inventory live consumers and candidate
   issues; define exact schema and field ownership; retain an adjudicated dry run. Create the selected
   project and apply a small approved pilot through existing operation controls. Read back unchanged
-  issue identities, membership, fields and dependency references before broader import.
-- [ ] **COORD-BOARD-V2-01.3 — Qualify restricted projection.** Implement the explicit V2 adapter and
+  issue identities, membership, fields and dependency references before broader import. Completed
+  2026-10-02 by the selected manual administration exception: Project 3, approved SDD#928 /
+  Templates#441 / .github#3010, four fields/views, independent readback and zero-write repeat.
+  [Evidence](board-v2-import-preparation.md) retains delayed reads, the unapproved child membership
+  and separate historical/corrected constructor provenance. Automatic projection remains .3.
+- [x] **COORD-BOARD-V2-01.3 — Qualify restricted projection.** Implement the explicit V2 adapter and
   fixed job. Prove duplicate retry, lost response, incomplete pagination, stale source, wrong-project,
   field drift and denied-access behavior. Verify limited writes and truthful unknown/stale reporting;
   demonstrate that an unavailable board job cannot block valid ordinary source delivery.
+  Qualified 2026-10-02 at protected3829 for the selected root-local route: three verified items,
+  zero-write no-op, one acknowledged bounded Observation write, independent field readback and
+  zero-write repeat. Hosted enrollment remains a separate operating join; no wider writer is enabled.
 - [ ] **COORD-BOARD-V2-01.4 — Adopt and retain history.** Import the remaining approved outcomes,
   switch selected consumers with independent readback, and label the old board as legacy reference.
   Verify no automatic V1 writer resumes and no host-resident autonomous agent is required. Retain the

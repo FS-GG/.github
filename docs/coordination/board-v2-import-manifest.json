@@ -1,6 +1,6 @@
 {
   "schema": "fsgg.coordination-board-v2-import/v1",
-  "observedAt": "2026-10-02T12:32:54.817864+00:00",
+  "observedAt": "2026-10-02T14:35:04.1027082+00:00",
   "source": {
     "owner": "FS-GG",
     "title": "Coordination",
@@ -13,9 +13,9 @@
     "owner": "FS-GG",
     "title": "Coordination V2",
     "schemaVersion": 1,
-    "creationState": "pending-authorized-operation",
-    "number": null,
-    "id": null
+    "creationState": "created-and-read-back",
+    "number": 3,
+    "id": "PVT_kwDOEYAWY84Bldpa"
   },
   "fields": [
     {
@@ -31,7 +31,14 @@
       "owner": "human-scheduling",
       "importerMaySeed": true,
       "refreshMayWrite": false,
-      "id": null
+      "id": "PVTSSF_lADOEYAWY84BldpazhkKcRk",
+      "optionIds": {
+        "Backlog": "24178d01",
+        "Ready": "a2525fec",
+        "In progress": "7e672ece",
+        "Blocked": "973b408f",
+        "Done": "809f15f4"
+      }
     },
     {
       "name": "Roadmap",
@@ -40,7 +47,7 @@
       "owner": "owning-plan",
       "importerMaySeed": true,
       "refreshMayWrite": false,
-      "id": null
+      "id": "PVTF_lADOEYAWY84BldpazhkKrR8"
     },
     {
       "name": "Track",
@@ -52,7 +59,11 @@
       "owner": "human-scheduling",
       "importerMaySeed": true,
       "refreshMayWrite": false,
-      "id": null
+      "id": "PVTSSF_lADOEYAWY84BldpazhkKrS8",
+      "optionIds": {
+        "Active delivery": "a143cb15",
+        "Follow-up": "b0cbad47"
+      }
     },
     {
       "name": "Observation",
@@ -65,7 +76,12 @@
       "owner": "restricted-refresh",
       "importerMaySeed": true,
       "refreshMayWrite": true,
-      "id": null
+      "id": "PVTSSF_lADOEYAWY84BldpazhkKrUw",
+      "optionIds": {
+        "Verified": "c0e289aa",
+        "Stale": "0a28b459",
+        "Unknown": "ab03cd87"
+      }
     }
   ],
   "items": [
@@ -102,7 +118,7 @@
       "observedUpdatedAt": "2026-09-25T04:58:08Z",
       "observedState": "open",
       "decision": "omit-delivered",
-      "reason": "Current selected full V2/clean-start acceptance is complete. Historical GS2-09\u201314 gates are superseded; board follow-on remains COORD-BOARD-V2-01.",
+      "reason": "Current selected full V2/clean-start acceptance is complete. Historical GS2-09–14 gates are superseded; board follow-on remains COORD-BOARD-V2-01.",
       "remainingOutcome": null,
       "roadmap": "docs/github-substrate-v2-roadmap.md",
       "status": "In progress",
@@ -271,49 +287,87 @@
       "adjudication": "unknown"
     },
     {
+      "issue": "FS-GG/FS.GG.SDD#928",
+      "nodeId": "I_kwDOS_PboM8AAAABOUVZAw",
+      "title": "[cross-repo] Generalize scaffold-provider contracts for polyglot Quint workspaces",
+      "observedUpdatedAt": "2026-08-27T08:02:59Z",
+      "observedState": "open",
+      "decision": "import",
+      "reason": "Ecosystem-neutral provider/catalog contract and SDK are absent from current Provider.fsi and served Contracts7.5.2; required source and publication outcome remains.",
+      "remainingOutcome": "After FS-GG/.github#3009 accepts the architecture and FS.GG.SDD#927 establishes the single Quint lifecycle, specify and implement an additive scaffold-provider/catalog contract version that describes provider identity, display metadata, source language, concrete product shape, typed parameters with prompts/defaults/enums/validation, external toolchain requirements, capability-command bindings, evidence outputs, supported platforms, and product-skill selection. Make identifier derivation provider-owned or declarative and ecosystem-neutral while retaining schema-v1 F# provider inspection and invocation during the compatibility window. Keep template transport opaque and continue to support dotnet-new/NuGet packages. Stamp exact effective metadata and tools into provenance, reject unsupported contracts and malformed parameters before invocation, preserve SDD-tree ownership/no-partial-state guarantees, and expose the contract to the Quint WorkspaceModel without embedding any TypeScript, JavaScript, Rust, Go, or concrete provider ID in SDD code. Additional accepted scope: third-party provider-authoring SDK and reusable qualification harness, native comment5436166922.",
+      "roadmap": "https://github.com/FS-GG/.github/issues/3008",
+      "status": "Blocked",
+      "track": "Active delivery",
+      "observation": "Verified",
+      "pilot": true,
+      "owner": "FS.GG.SDD provider-contract owner",
+      "nextAction": "Finish the already accepted descriptor-driven architecture records; implement and publish the ecosystem-neutral catalog/typed-parameter contract plus third-party provider SDK and reusable package-only qualification harness.",
+      "acceptanceEvidence": "Ecosystem-neutral provider/catalog contract and SDK are absent from current Provider.fsi and served Contracts7.5.2; required source and publication outcome remains. Native issue acceptance remains open; no four-provider installed receipt is claimed.",
+      "adjudication": "verified-remaining",
+      "dependencies": []
+    },
+    {
+      "issue": "FS-GG/FS.GG.Templates#441",
+      "nodeId": "I_kwDOTGkvVs8AAAABOUV4AA",
+      "title": "[cross-repo] Publish TypeScript, JavaScript, Rust, and Go workspace-provider packs and skills",
+      "observedUpdatedAt": "2026-08-26T10:13:59Z",
+      "observedState": "open",
+      "decision": "import",
+      "reason": "Current source has no four provider descriptors; served Workspace.Template0.15.0 contains only six older template identities. Language route fixture/image source is separate and does not deliver these provider packs.",
+      "remainingOutcome": "After FS.GG.SDD#928 and FS.GG.Governance#423 publish their compatible contracts, add concrete initial executable/CLI provider identities for TypeScript, JavaScript, Rust, and Go with explicit language and shape metadata in the provider catalog. Share authored Node infrastructure between the TypeScript and JavaScript packs without collapsing their distinct output contracts. Pin every toolchain and dependency closure; ship lockfiles; provide deterministic build, lint, test, evidence, package, security, and release commands; bind the neutral governance capabilities; and scaffold directly onto the single Quint-backed lifecycle. TypeScript uses strict checking; JavaScript uses native ESM with declared JSDoc/checkJs posture; Rust declares toolchain/MSRV, fmt, Clippy, tests, package and safety policy; Go declares module path, formatting, vet/static analysis, tests/race posture, package and vulnerability policy. Author and manifest only the non-obvious operational product skills: node-workspace, typescript-project, javascript-project, node-testing, rust-workspace, rust-safety, go-workspace, and go-testing. Commands and invariants remain executable authority rather than prose inside skills.",
+      "roadmap": "https://github.com/FS-GG/.github/issues/3008",
+      "status": "Blocked",
+      "track": "Active delivery",
+      "observation": "Verified",
+      "pilot": true,
+      "owner": "FS.GG.Templates provider/package owner",
+      "nextAction": "After exact SDD/Governance contracts publish, add and package-qualify TypeScript, JavaScript, Rust and Go providers and their operational skills; publish byte-identical artifacts to both feeds.",
+      "acceptanceEvidence": "Current source has no four provider descriptors; served Workspace.Template0.15.0 contains only six older template identities. Language route fixture/image source is separate and does not deliver these provider packs. Native issue acceptance remains open; no four-provider installed receipt is claimed.",
+      "adjudication": "verified-remaining",
+      "dependencies": []
+    },
+    {
       "issue": "FS-GG/.github#3010",
       "nodeId": "I_kwDOS6feoM8AAAABOUWpiA",
       "title": "[cross-repo] Adopt the polyglot provider catalog in new-sdd-workspace and the coherent registry",
       "observedUpdatedAt": "2026-08-26T10:12:28Z",
       "observedState": "open",
-      "decision": "adjudicate",
-      "reason": "Open catalog adoption identity needs current publication/receiver reconciliation.",
-      "remainingOutcome": null,
-      "roadmap": "docs/github-substrate-v2-roadmap.md",
-      "status": "Backlog",
+      "decision": "import",
+      "reason": "Protected wizard has five fixed provider choices and selected-descriptor fetch. Public installed SVG0.12.0 journey is delivered but does not cover requested four-provider catalog-native qualification.",
+      "remainingOutcome": "After FS.GG.Templates#441 publishes and independently verifies the exact package/catalog artifact, make new-sdd-workspace fetch the ref-pinned provider catalog before selection, render language and product shape separately, prompt and validate descriptor-declared typed parameters, fetch the selected descriptor, and forward effective values without provider-specific F# branches. Keep existing command-line provider names and compatibility behavior during the declared window; preserve offline/pinned, no-partial-state, coordination, governance, doctor, and secure flows. Update README/help/previews from the catalog or a verified projection. Flip registry/dependency, compatibility, architecture, roadmap, ADR, minimum-CLI, package, and provider pins only after both-feed publication; then prove TypeScript, JavaScript, Rust, and Go creation through the public installed tools. Adding a subsequently valid provider to the catalog must require no Program.fs edit.",
+      "roadmap": "https://github.com/FS-GG/.github/issues/3008",
+      "status": "Blocked",
       "track": "Active delivery",
-      "observation": "Unknown",
-      "dependencies": [
-        {
-          "issue": "FS-GG/FS.GG.Templates#441",
-          "observedState": "unknown",
-          "evidence": "issue-body"
-        }
-      ],
-      "pilot": false,
-      "owner": "scaffolder/registry owner; current accountability unverified",
-      "nextAction": "Reconcile published catalog and installed receiver evidence.",
-      "acceptanceEvidence": "unknown",
-      "adjudication": "unknown"
+      "observation": "Verified",
+      "pilot": true,
+      "owner": ".github scaffolder/registry owner",
+      "nextAction": "After the exact provider catalog publishes, replace the compiled wizard provider list with ref-pinned descriptor discovery; qualify all four providers through public installed tools and exact registry/readback.",
+      "acceptanceEvidence": "Protected wizard has five fixed provider choices and selected-descriptor fetch. Public installed SVG0.12.0 journey is delivered but does not cover requested four-provider catalog-native qualification. Native issue acceptance remains open; no four-provider installed receipt is claimed.",
+      "adjudication": "verified-remaining",
+      "dependencies": []
     }
   ],
   "preparationState": "adjudication-required",
   "binding": {
     "organizationId": "O_kgDOEYAWYw",
-    "visibility": "incomplete",
-    "authorization": "unknown",
-    "recipeRevision": null,
-    "artifactSha256": null,
-    "repositories": []
+    "visibility": "complete",
+    "authorization": "root-selected",
+    "recipeRevision": "47d0a38ca1f3b390bb20b88f04c8ba019d989c15",
+    "artifactSha256": "dac15107412e92e9238f232008137244019957b7b57ab164bcd58b647a5227d3",
+    "repositories": [
+      "FS-GG/FS.GG.SDD",
+      "FS-GG/FS.GG.Templates",
+      "FS-GG/.github"
+    ]
   },
   "inventory": {
-    "protectedRevision": "e6a7268ce92e7c6259a3872a12ac341708aeb222",
-    "targetExistence": "unknown",
-    "projectCapability": "unknown",
+    "protectedRevision": "3aa00f2bca46167233257135d9909e4b8a2b5f1e",
+    "targetExistence": "verified",
+    "projectCapability": "verified",
     "gaps": [
-      "Inaccessible project node prevents absence inference.",
-      "No current three-to-five verified existing native issue cohort.",
-      "Fixed transport/apply and independent readback remain pending."
+      "Six historical candidates retain adjudication gaps and are not approved for import.",
+      "Automatic restricted projection production fence remains Unavailable; COORD-BOARD-V2-01.3 is open.",
+      "SDD#935 appears as an unapproved native child membership; its cause/actor is not proven and it is retained without planning seeds."
     ],
     "outcomes": [
       {
@@ -328,7 +382,7 @@
         "id": "WASM-SHARED-01.4",
         "issue": null,
         "owner": "Game publication owner",
-        "nextAction": "Publish coherent artifact; merged PR #674 is not an open issue mapping.",
+        "nextAction": "Root recorded published shared WASM 0.1.1 and installed acceptance at protected revision 3aa00f2; no new native issue mapping or pilot row is inferred.",
         "evidenceState": "unknown",
         "pilotEligible": false
       },
@@ -349,10 +403,10 @@
         "pilotEligible": false
       },
       {
-        "id": "COORD-BOARD-V2-01.2\u2013.6",
+        "id": "COORD-BOARD-V2-01.3–.6",
         "issue": null,
         "owner": ".github / SDD / Templates / products",
-        "nextAction": "Pilot, projection, switch, publication, product adoption remain pending.",
+        "nextAction": "Qualify restricted projection, then selected scheduling switch, publication and product adoption; .2 pilot passed.",
         "evidenceState": "unknown",
         "pilotEligible": false
       },
@@ -372,6 +426,259 @@
         "evidenceState": "unknown",
         "pilotEligible": false
       }
-    ]
+    ],
+    "pilotAdjudication": {
+      "authority": "root-selected",
+      "noNativeDependencyMutation": true,
+      "expansionReason": "Nine historical candidates lack defensible current three-item source/publication/native cohort; two delivered/superseded, epic explicitly non-schedulable, other historical adoption/retirement/default scopes cannot imply remaining work from issue state alone.",
+      "actualSourceRevisions": {
+        "github": "a66730ef631267912beb6e1dc720c10d878abaa3",
+        "SDD": "388e4e0dbb216de8a37687818af042030d4e26c5",
+        "Templates": "1396febd0868d4b531f6e3ef52cc1a51cb6eca0b",
+        "Governance": "bfcab71bb322687306134276c816eab95bcb85a5"
+      },
+      "humanDecision": "Architecture already accepted in .github3009 comment5430619257; required ADR/linked design delivery incomplete. No new user answer requested.",
+      "telemetry": "NOTCONFIG; usage/economics Unknown",
+      "snapshotDetails": [
+        {
+          "issue": "FS-GG/FS.GG.SDD#928",
+          "nativeSnapshot": {
+            "complete": true,
+            "observedAt": "2026-10-02T13:52:15Z",
+            "edges": [],
+            "count": 0,
+            "bound": 50,
+            "route": "repos/FS-GG/FS.GG.SDD/issues/928/dependencies/blocked_by?per_page=50&page=1",
+            "httpStatus": 200
+          },
+          "planPrerequisites": [
+            {
+              "issue": "FS-GG/.github#3009",
+              "nodeId": "I_kwDOS6feoM8AAAABOUU1ew",
+              "observedUpdatedAt": "2026-08-26T20:18:16Z",
+              "observedState": "open",
+              "evidence": "issue-body/owning-epic; not a native dependency edge"
+            },
+            {
+              "issue": "FS-GG/FS.GG.SDD#927",
+              "nodeId": "I_kwDOS_PboM8AAAABOT7GqQ",
+              "observedUpdatedAt": "2026-09-15T15:37:59Z",
+              "observedState": "closed",
+              "evidence": "issue-body/owning-epic; not a native dependency edge"
+            }
+          ],
+          "representativeClass": "source"
+        },
+        {
+          "issue": "FS-GG/FS.GG.Templates#441",
+          "nativeSnapshot": {
+            "complete": true,
+            "observedAt": "2026-10-02T13:52:15Z",
+            "edges": [],
+            "count": 0,
+            "bound": 50,
+            "route": "repos/FS-GG/FS.GG.Templates/issues/441/dependencies/blocked_by?per_page=50&page=1",
+            "httpStatus": 200
+          },
+          "planPrerequisites": [
+            {
+              "issue": "FS-GG/FS.GG.SDD#928",
+              "nodeId": "I_kwDOS_PboM8AAAABOUVZAw",
+              "observedUpdatedAt": "2026-08-27T08:02:59Z",
+              "observedState": "open",
+              "evidence": "issue-body/owning-epic; not a native dependency edge"
+            },
+            {
+              "issue": "FS-GG/FS.GG.Governance#423",
+              "nodeId": "I_kwDOS-Fun88AAAABOUVf4g",
+              "observedUpdatedAt": "2026-08-26T10:12:24Z",
+              "observedState": "open",
+              "evidence": "issue-body/owning-epic; not a native dependency edge"
+            }
+          ],
+          "representativeClass": "publication"
+        },
+        {
+          "issue": "FS-GG/.github#3010",
+          "nativeSnapshot": {
+            "complete": true,
+            "observedAt": "2026-10-02T13:52:15Z",
+            "edges": [],
+            "count": 0,
+            "bound": 50,
+            "route": "repos/FS-GG/.github/issues/3010/dependencies/blocked_by?per_page=50&page=1",
+            "httpStatus": 200
+          },
+          "planPrerequisites": [
+            {
+              "issue": "FS-GG/FS.GG.Templates#441",
+              "nodeId": "I_kwDOTGkvVs8AAAABOUV4AA",
+              "observedUpdatedAt": "2026-08-26T10:13:59Z",
+              "observedState": "open",
+              "evidence": "issue-body/owning-epic; not a native dependency edge"
+            }
+          ],
+          "representativeClass": "native-qualification"
+        }
+      ],
+      "expandedCohortDecision": "Root approved three genuine existing remaining outcomes for source, package publication and installed adoption; historical epic and unrelated source/publication slots remain outside the pilot."
+    },
+    "views": [
+      {
+        "id": "PVTV_lADOEYAWY84BldpazgL4z_k",
+        "name": "View 1",
+        "layout": "TABLE_LAYOUT",
+        "filter": null,
+        "projectId": "PVT_kwDOEYAWY84Bldpa"
+      },
+      {
+        "id": "PVTV_lADOEYAWY84BldpazgL411M",
+        "name": "Active delivery",
+        "layout": "TABLE_LAYOUT",
+        "filter": "track:\"Active delivery\" -status:Done",
+        "projectId": "PVT_kwDOEYAWY84Bldpa"
+      },
+      {
+        "id": "PVTV_lADOEYAWY84BldpazgL411c",
+        "name": "Blocked",
+        "layout": "TABLE_LAYOUT",
+        "filter": "status:Blocked",
+        "projectId": "PVT_kwDOEYAWY84Bldpa"
+      },
+      {
+        "id": "PVTV_lADOEYAWY84BldpazgL411s",
+        "name": "Backlog",
+        "layout": "TABLE_LAYOUT",
+        "filter": "status:Backlog",
+        "projectId": "PVT_kwDOEYAWY84Bldpa"
+      },
+      {
+        "id": "PVTV_lADOEYAWY84BldpazgL4110",
+        "name": "Follow-up",
+        "layout": "TABLE_LAYOUT",
+        "filter": "track:\"Follow-up\"",
+        "projectId": "PVT_kwDOEYAWY84Bldpa"
+      }
+    ],
+    "pilotOperation": {
+      "state": "passed",
+      "route": "explicit-user-authorized-native-one-shot-administration-exception",
+      "supersedesPreparationSoleRouteForThisPilotOnly": true,
+      "projectUrl": "https://github.com/orgs/FS-GG/projects/3",
+      "observedAt": "2026-10-02T14:35:04.1086780+00:00",
+      "selectedCount": 3,
+      "actualMembershipCount": 4,
+      "actualAddRequestCount": 3,
+      "eventualMembershipReadbackStops": 2,
+      "blindAddRetryCount": 0,
+      "repeatMutationIntentCount": 0,
+      "readbackReceiptSha256": "0bb6e7131ecaa4d854c873a6ba60762e76936b620a52b49b49b209dfe050d2ad",
+      "boundManifestSha256": "28563970466d2543d88b3ec670d08ef02ee4bf83fe1dd991d9c77100ed6daf94",
+      "repeatBoundManifestSha256": "0d1327daed98178bbcf428a098542895c409764511dc22e034eb8e3ee5f79cf6",
+      "repeatMembershipSha256": "d7ee7927db68ef21002b18f4ffde07dca4826dd1ad5452b0ff0e532b20c0c475",
+      "memberships": [
+        {
+          "issue": "FS-GG/FS.GG.SDD#928",
+          "nodeId": "I_kwDOS_PboM8AAAABOUVZAw",
+          "itemId": "PVTI_lADOEYAWY84Bldpazg-JiJc",
+          "status": "Blocked",
+          "roadmap": "https://github.com/FS-GG/.github/issues/3008",
+          "track": "Active delivery",
+          "observation": "Verified"
+        },
+        {
+          "issue": "FS-GG/FS.GG.Templates#441",
+          "nodeId": "I_kwDOTGkvVs8AAAABOUV4AA",
+          "itemId": "PVTI_lADOEYAWY84Bldpazg-JiTw",
+          "status": "Blocked",
+          "roadmap": "https://github.com/FS-GG/.github/issues/3008",
+          "track": "Active delivery",
+          "observation": "Verified"
+        },
+        {
+          "issue": "FS-GG/.github#3010",
+          "nodeId": "I_kwDOS6feoM8AAAABOUWpiA",
+          "itemId": "PVTI_lADOEYAWY84Bldpazg-Jjqc",
+          "status": "Blocked",
+          "roadmap": "https://github.com/FS-GG/.github/issues/3008",
+          "track": "Active delivery",
+          "observation": "Verified"
+        }
+      ],
+      "limits": {
+        "maxItems": 5,
+        "pageSize": 50,
+        "maxPages": 10,
+        "maxNativeDependencies": 50,
+        "deadlineSeconds": 300,
+        "httpTimeoutSeconds": 25,
+        "maxHttpCalls": 180,
+        "readRetries": 0,
+        "activeWriters": 1
+      },
+      "automaticWriterProductionFence": "Unavailable",
+      "issueLifecycleWrites": 0,
+      "nativeDependencyWrites": 0,
+      "legacyProjectWrites": 0,
+      "historicalEffectsReadbackReceiptSha256": "a6eea3a4b0f84e3cb87506eccaa35449a197d37d3664edba5bbba020ca21d3af",
+      "historicalEffectsBoundManifestSha256": "cbb66a259521ce71c221320149e9d5565441a852fdd4e9c1cde924c51bddd08b",
+      "qualifiedConstructorDryRunSha256": "33fe03714010bc8f1ee248391949561b9be838f145d3a01877ca28bc61890c04",
+      "qualifiedReadOnlyMutationIntentCount": 0
+    },
+    "unexpectedMembership": {
+      "issue": "FS-GG/FS.GG.SDD#935",
+      "nodeId": "I_kwDOS_PboM8AAAABOda86Q",
+      "itemId": "PVTI_lADOEYAWY84Bldpazg-JiKs",
+      "nativeParent": "FS-GG/FS.GG.SDD#928",
+      "pilot": false,
+      "approvedAddRequest": false,
+      "planningFieldsSeeded": false,
+      "disposition": "retain-unapproved-unseeded",
+      "cause": "Unknown; native-child projection is an inference, not actor proof"
+    },
+    "operationProvenance": {
+      "recipeRevision": "47d0a38ca1f3b390bb20b88f04c8ba019d989c15",
+      "constructorAssemblySha256": "dac15107412e92e9238f232008137244019957b7b57ab164bcd58b647a5227d3",
+      "operatorScriptSha256": "81c192f5e12d22783e4e85c345a2578f361e390a895740239d82d286cd66f474",
+      "artifactKind": "locally built protected-source constructor with official locked package closure; separate private read-only requalification operator",
+      "installedProtectedArtifactQualification": "not-claimed",
+      "sourceProgramSha256": "c0497c92485c4f9d6e03d8c8220b3c4203929aa7c8832241e785b372d36404ae",
+      "sourceProjectSha256": "316f7c211dd67c9c0185b0638a6d79ecd9ad110c09e186de65dbf5ac409061c9",
+      "sdkVersion": "10.0.401",
+      "targetFramework": "net10.0",
+      "exactExecutedHostRuntimeVersion": "10.0.12",
+      "fsharpCoreVersion": "10.1.401",
+      "fsharpCoreFileVersion": "10.104.126.42413",
+      "protectedTrackedLockUnchanged": true,
+      "protectedLockSha256": "01c145e67fc46567f4e4e158be1e8d275004d4435e4c305bcff514b068638f89",
+      "protectedLockContentHash": "/lvOK51KD8IangBYkfDVna3/HrE/r4VUnX3dI01KDspctoYXmind3POeoYkqWKeXHwiKlf6Hc9TxwSnoSCWcjw==",
+      "resolvedSource": "https://api.nuget.org/v3/index.json; private cache and FSharp.Core package-source mapping; implicit SDK library-packs disabled",
+      "fsiSdkFsharpCoreDllSha256": "2232698f623c28b8bcca32fa3cc8943cdd8529b20b487b5938106aae1c2ab256",
+      "officialPackageUrl": "https://api.nuget.org/v3-flatcontainer/fsharp.core/10.1.401/fsharp.core.10.1.401.nupkg",
+      "officialPackageRawSha512": "seB+h8p9A8f2wRCm7g6m90xuTWRyyuYLWxyftiR5ahIFaN9NHDgMhTEtrEe+Kdg3t9UnKkfxGA9Ljf3MCrXc1A==",
+      "officialFsharpCoreDllSha256": "39b0b7f06c11bedd93f94b6f101fffd645f1c4437a5a6d3ee79259f855aeb11a",
+      "depsSha256": "45cd0166a5bfc05949b4b1d7cda79965b637d4061f3c5b69973232a336f854c9",
+      "runtimeConfigSha256": "f9bc8e9f0c46247078ed47309f19a7576b4b94e4300e9de0003917d6bd2d667a",
+      "historicalEffectsArtifacts": {
+        "constructorAssemblySha256": "197dc5d65875bdd5321ec8471e22d577156a4d89a8819ccd77a94244fca85aee",
+        "operatorScriptSha256": "1de4ad11ea189d27bef554ac45575f27cca05d41c942a0942a56080c8fffbd48",
+        "freshSeparateLockSha256": "c26a69be3f986a75c483506fda6eb5ca28cc2ee78eff737caf4e7b88e36011ce",
+        "freshLockContentHash": "IGqjL9U8pQl7CaCpFP3f5slZMduE8c7ZBx7HycAQ9dc1tawyniNyw7Fh6L2cShIoQDcaDL+S8/kokhWs8WwnBQ==",
+        "resolvedSource": "local SDK FSharp library-packs/cache",
+        "cachedPackageRawSha512": "nFXsglh7vUT80jb+oqJmz4KFJMwPJ6nQGRyFAbqd1FOgPO9Qr+Ml474TGgBpfAs+6rZ06xPc0hhYBS6NNViREg==",
+        "cachedCompiledFsharpCoreDllSha256": "9abd1f889fc8e2d2a74d6ac83a31e6c3012c075a17946a7d687c0cbe33ed15be",
+        "restoreDisposition": "initial NU1403; isolated build used RestoreLockedMode=false with a separate fresh lock; no protected source or tracked lock changes",
+        "qualificationGap": "Protected lock, fresh metadata and actual cache/official package bytes differ. Preserve actual historical constructor identity; do not claim official-byte or installed production qualification."
+      },
+      "officialLockedRestore": "passed",
+      "officialBuild": "passed",
+      "compiledFsharpCoreDllSha256": "39b0b7f06c11bedd93f94b6f101fffd645f1c4437a5a6d3ee79259f855aeb11a",
+      "qualifiedDepsSha256": "7427081cf4da38e14ae941728632a6dd7392c442f9dd519397915a1c6dccd6c2",
+      "qualifiedRuntimeConfigSha256": "f9bc8e9f0c46247078ed47309f19a7576b4b94e4300e9de0003917d6bd2d667a",
+      "officialNugetConfigSha256": "0318daa9bedb28e3cae00e1adc0d78fff425859b0160419bdfa4bdc5aa5efc00",
+      "qualifiedLockSha256": "01c145e67fc46567f4e4e158be1e8d275004d4435e4c305bcff514b068638f89",
+      "qualifiedSourceUnchanged": true,
+      "qualificationBoundary": "Official locked constructor dry-run and independent native readback passed without new writes. Historical effects used the separately retained local-SDK constructor. Neither artifact qualifies the .3 automatic writer or an installed production release."
+    }
   }
 }

@@ -13,7 +13,9 @@ open FS.GG.Coord.GitHub.V2ProjectionSource
 
 let private bindingJson artifact =
     JsonSerializer.Serialize
-        {| schemaVersion = 1; recipeRevision = String.replicate 40 "a"; populationRevision = String.replicate 40 "c"
+        {| bindingVersion = 2; importRecipeRevision = String.replicate 40 "e"; importArtifactSha256 = String.replicate 64 "f"
+           selectedIssues = Map.ofList [ "I_1", "FS-GG/.github#1"; "I_2", "FS-GG/.github#2"; "I_3", "FS-GG/.github#3" ]
+           schemaVersion = 1; recipeRevision = String.replicate 40 "a"; populationRevision = String.replicate 40 "c"
            organizationId = "O_fsgg"; artifactSha256 = artifact; ownerKind = "organization"; owner = "FS-GG"
            projectNumber = 77; projectTitle = "Coordination V2"; projectId = "PVT_coord_v2"
            status = {| id = "status"; options = Map.ofList ["Backlog", "b"; "Ready", "r"; "In progress", "i"; "Blocked", "x"; "Done", "d"] |}
@@ -65,8 +67,9 @@ let ``report history roundtrip strips current authority while retaining last ver
           SourceChecks = 2; ProjectReads = 5; Mutations = 1; VerifiedAt = DateTimeOffset.Parse "2026-10-02T01:02:03Z" }
     let report =
         { ProjectId = projection.ProjectId; RecipeRevision = projection.RecipeRevision; PopulationRevision = String.replicate 40 "c"
+          ImportRecipeRevision = String.replicate 40 "e"; ImportArtifactSha256 = String.replicate 64 "f"; ArtifactSha256 = String.replicate 64 "b"; NativeDispatch = []; ProtectedInputs = []
           Selected = Some 1; Attempted = 1; Verified = 1; PopulationGap = None; Cleanup = "complete"
-          Items = [ { Issue = issue; Native = None; DependencyObservations = []; Delivery = "Unknown"; Publication = "Unknown"
+          Items = [ { Issue = issue; Native = None; DependencyObservations = []; DependencyReadComplete = false; PlanObservation = None; Delivery = "Unknown"; Publication = "Unknown"
                       NativeAcceptance = "Unknown"; Health = "Verified"; Reads = 5; MutationAttempts = 1; MembershipPages = Some 1
                       Projection = Some projection; Gap = None; LastVerified = Some projection } ] }
     let wire = BoardV2Application.encodeReport report
@@ -95,3 +98,33 @@ let ``report history roundtrip strips current authority while retaining last ver
         Assert.Equal("Unknown", history.Items.Head.Health)
     Assert.True(BoardV2Application.decodePreviousReport (failedWire.Replace(String.replicate 40 "a", "caller-current")) |> Result.isError)
     Assert.True(BoardV2Application.decodePreviousReport (wire.Replace("\"outcome\":\"updated\"", "\"outcome\":\"Current\"")) |> Result.isError)
+
+[<Fact>]
+let ``partial CLI report is truthful and local lock releases after report failure`` () =
+    let directory = Path.Combine(Path.GetTempPath(), "board-v2-cli-" + Guid.NewGuid().ToString("N"))
+    Directory.CreateDirectory directory |> ignore
+    try
+        let bindingPath = Path.Combine(directory, "binding.json")
+        File.WriteAllText(bindingPath, bindingJson (loadedDigest ()))
+        let mutable calls = 0
+        let transport =
+            { new IGitHubTransport with
+                member _.Send request = calls <- calls + 1; Error(Errors.Unauthorized request.Subject)
+                member _.SendMutation _ = failwith "partial source must never dispatch"
+                member _.RetryMutation _ = failwith "no retry" }
+        let run path = BoardV2Application.runWithTransport transport [ "refresh"; "--binding-file"; bindingPath; "--report-file"; path ]
+        let missingParent = Path.Combine(directory, "missing", "report.json")
+        Assert.Equal(1, run missingParent)
+        let reportPath = Path.Combine(directory, "report.json")
+        Assert.Equal(3, run reportPath)
+        Assert.Equal(2, calls)
+        use document = JsonDocument.Parse(File.ReadAllText reportPath)
+        let root = document.RootElement
+        Assert.Equal(0, root.GetProperty("verified").GetInt32())
+        Assert.Equal(JsonValueKind.Null, root.GetProperty("selected").ValueKind)
+        Assert.NotEqual(JsonValueKind.Null, root.GetProperty("populationGap").ValueKind)
+        Assert.Equal(0, root.GetProperty("nativeDispatch").GetArrayLength())
+        Assert.Contains("released", root.GetProperty("cleanup").GetString())
+        use lease = new FileStream(Path.Combine(Path.GetTempPath(), "fsgg-v2-observation-PVT_coord_v2.lock"), FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None)
+        Assert.True(lease.CanRead)
+    finally Directory.Delete(directory, true)

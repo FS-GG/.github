@@ -1,55 +1,145 @@
-# Coordination V2 bounded import preparation
+# Coordination V2 bounded import and pilot
 
-Retained preparation for **COORD-BOARD-V2-01.2**, refreshed 2026-10-02 from protected
-`.github` revision `e6a7268ce92e7c6259a3872a12ac341708aeb222`, current native issue REST
-readback and root's project readback. The [canonical plan](2026-09-29-coordination-v2-board-design.md)
-owns acceptance. This source preparation cannot close .2: actual exact target/schema creation or
-selection, an approved three-to-five issue pilot and independent native readback remain pending.
+**COORD-BOARD-V2-01.2 passed on 2026-10-02.** Root created and read back
+[Coordination V2, Project 3](https://github.com/orgs/FS-GG/projects/3), established the four planning
+fields and four filtered views, and applied the three approved existing native issues. Independent
+readback verified each issue identity, one membership and all four field values. An explicit repeat
+apply emitted **zero mutation intents**. The [canonical plan](2026-09-29-coordination-v2-board-design.md)
+closes only .2; automatic projection, broader adoption and publication remain open in .3–.6.
 
-The [manifest](board-v2-import-manifest.json) contains **nine existing native issue identities,
-zero approved additions, zero pilot items and seven adjudication gaps**. Its valid inventory is
-non-executable. No issue was created, closed, reopened or converted from a PR. Retain legacy Project 1,
-its history, lifecycle semantics and separately scoped archive operation.
+The [manifest](board-v2-import-manifest.json) records **eleven candidates, three approved pilot items,
+two omissions and six adjudication gaps**. `preparationState=adjudication-required` remains accurate
+for the unselected inventory. No issue was created, closed, reopened or converted from a PR. Legacy
+Project 1 and its separately scoped archive operation were preserved.
 
-## Current target capability
+## Selected administration exception
 
-Root's 2026-10-02 12:13 GraphQL read found organization `O_kgDOEYAWYw`, legacy Project 1
-`PVT_kwDOEYAWY84Bb08W`, and one inaccessible/null project node with `FORBIDDEN`. Although the
-connection reported its final page, visibility is incomplete. **Coordination V2 existence and write
-capability are Unknown.** This is neither proof of absence nor authorization to create a duplicate.
-There is no title-discovery write fallback or Project 1 substitution. No credentials were acquired.
-Project number/node ID and all new field/option IDs stay null until complete root readback.
+The user explicitly authorized target creation, schema establishment, cohort selection, apply and
+readback. Root selected a bounded native one-shot administration exception for these effects. For this pilot, that selection
+supersedes the earlier preparation's sole shared-transport route. It does not authorize or qualify the
+.3 automatic writer, whose production fence remains **Unavailable**.
 
-## Current bounded inventory
+Root ran a private F# script using `HttpClient` and `System.Text.Json`, with the existing organization
+Projects credential supplied in memory/environment. The script loaded the protected-source pure F#
+constructor before apply. It did not use the internal transport port or synthesize a grant. No native
+issue lifecycle/dependency, legacy-project, source-ref, permission or settlement writes were requested.
+A linear manual operator needs no durable automatic retry service or new lifecycle model.
 
-All nine identities were read again through repository issue REST on 2026-10-02; node IDs and
-`updated_at` revisions remain in the manifest. An open issue proves native state, not relevant scope.
+Each invocation retained private, numbered intents, responses, complete snapshots and receipts. Token
+values, raw private paths and full account data are excluded from this source report. Complete reads
+bound membership to 50 entries/page and ten pages, native dependencies to 50/item, and the pilot to
+five items. Each stage allowed one writer, a 300-second deadline, 25-second HTTP timeout, 180 calls
+and zero automatic read or mutation retries. Unknown or conflicting evidence stopped the stage.
 
-| Identity | Current decision | Evidence and remaining gap |
+## Exact target and schema
+
+The target is organization `FS-GG` / `O_kgDOEYAWYw`, Project 3 `Coordination V2` /
+`PVT_kwDOEYAWY84Bldpa`. Actual complete owner/title/number/node-ID readback supersedes the earlier
+inaccessible-node observation; no title fallback or Project 1 substitution occurred. Legacy Project 1
+remains `PVT_kwDOEYAWY84Bb08W`. The manifest contains the actual field and option IDs.
+
+| Field | Type and values | Owner after initial seed |
 |---|---|---|
-| `.github#2954` | Omit superseded | ADR-0091 supersedes unfinished V1 migration ceremony. |
-| `.github#2963` | Omit delivered at selected profile | Current protected V2 roadmap records full selected acceptance and clean-start operation complete; historical GS2-09–14 unchecked units are superseded. COORD-BOARD follow-on remains distinct. |
-| `.github#2994` | Adjudicate | Historical epic explicitly says non-schedulable; current consumer/retirement/default scope needs owning-plan reconciliation. |
-| `.github#2995` | Adjudicate | Native Q6 identity is open. Actual current published Quint and registry/workspace adoption must be reconciled; obsolete Q5/GS2 qualification cannot block it by inference. |
-| `.github#2996` | Adjudicate | Retirement and soak scope requires current selected adoption evidence. |
-| `.github#2997` | Adjudicate | Default decision remains separate; selection and current authority are unverified. |
-| `Coordination#24` | Adjudicate | Its open read-only projection request references historical GS2/Q10 gates. Current delivered projection and any genuinely remaining scope must be reconciled. |
-| `Templates#438` | Adjudicate; old source request superseded | Current `templates/fs-gg-fable-game/Directory.Build.props` blob `05807043215370cd2e47c9a0198c7ddfd48d6069` pins Game 0.16.0. Domain project blob `ea807de0db74443d83911dd12648a3f61a6f18f0` consumes that axis. This exceeds the requested 0.13→0.14 source change; historical feed/generated acceptance was not requalified here. |
-| `.github#3010` | Adjudicate | Open catalog adoption identity requires actual current catalog publication and installed receiver evidence; `Templates#441` dependency remains Unknown. |
+| Status | single select: Backlog, Ready, In progress, Blocked, Done | Scheduling owner |
+| Roadmap | text: owning outcome/acceptance link | Owning plan owner |
+| Track | single select: Active delivery, Follow-up | Scheduling owner |
+| Observation | single select: Verified, Stale, Unknown | Restricted projection |
 
-Source, publication and native acceptance are distinct facts within each outcome. Historical dependency
-references are retained as evidence hints, never revived as current blockers or native dependency proof.
-`Observation=Unknown` truthfully records missing current acceptance/adjudication even where REST state
-is observed.
+The four canonical table views were independently read back with exact filters: Active delivery
+(`track:"Active delivery" -status:Done`), Blocked (`status:Blocked`), Backlog (`status:Backlog`) and
+Follow-up (`track:"Follow-up"`). The default View 1 was retained. Actual API introspection confirmed
+`visibleFieldIds` in view configuration and `filter` on the top-level view update input; filters were
+written through that supported route. Native Title/Repository/Assignees remain issue-derived.
 
-The manifest also lists current representative outcome slots without fabricating issue mappings:
-SC2C-01.6f / OPS-TYPED-01.5 source repair, WASM-SHARED-01.4 publication, BARC-01.5 useful play,
-LEARN-01.4 inactive C2 native qualification, COORD-BOARD-V2-01.2–.6, V2-LANG-01 publication/adoption,
-and explicitly selected installed-host/W6/player-study follow-up. Active workers/branches retain their
-own work. Merged Game #676 and candidate SC2 PR #37 carry source evidence, not remaining native issue anchors.
-Planner's bounded open-issue inventory found no non-PR open issues for FSBarV2/SC2 and only Game's
-Dependency Dashboard. Its first-page scope is not a historical census. No three-to-five admissible cohort
-has been established. Routine source work continues without board membership.
+## Approved cohort and bounded adjudication
+
+| Existing issue | Representative remaining outcome | Current owner and next action |
+|---|---|---|
+| [SDD#928](https://github.com/FS-GG/FS.GG.SDD/issues/928) | Source contract and provider-authoring SDK/harness | SDD provider-contract owner: finish accepted architecture records, implement and publish the ecosystem-neutral descriptor contract and SDK. |
+| [Templates#441](https://github.com/FS-GG/FS.GG.Templates/issues/441) | Provider package publication | Templates provider/package owner: after compatible SDD/Governance contracts publish, qualify and publish TypeScript, JavaScript, Rust and Go provider packs and skills. |
+| [.github#3010](https://github.com/FS-GG/.github/issues/3010) | Public installed catalog adoption | Scaffolder/registry owner: after exact catalog publication, replace the fixed wizard list with descriptor discovery and qualify all four installed providers. |
+
+All three are **Blocked / Active delivery / Verified**, with Roadmap pointing to
+[the owning polyglot outcome](https://github.com/FS-GG/.github/issues/3008). Verified means the selected
+observations are current; it does not mean delivery is complete. Fresh REST 200 reads confirmed open
+native issue state, unchanged node IDs and update revisions. Complete native `blocked_by` reads were
+empty for each issue. Owning-plan prerequisites remain recorded separately and are not fabricated as
+native dependency edges. Status remains Blocked because accepted source/publication/adoption work
+is unfinished, including prerequisite plan work.
+
+The manifest retains historical candidates: `.github#2954` is omitted as superseded and `.github#2963`
+as delivered at the selected V2 profile. `.github#2994` is a non-schedulable epic; `.github#2995–2997`,
+`Coordination#24` and `Templates#438` retain current-scope/acceptance adjudication gaps. Templates#438's
+old Game 0.13→0.14 source request is superseded by the observed Game 0.16.0 pin; historical publication
+acceptance was not requalified. No remaining outcome is inferred solely from open native state.
+
+Other outcome slots remain outside the cohort. In particular, protected revision `3aa00f2` records
+shared WASM 0.1.1 publication and installed acceptance; it supplies no new native issue mapping for
+this pilot. SC2, BAR, LEARN and installed-host/W6/player-study slots retain their owning work and
+unresolved evidence. Routine source work can continue without board membership.
+
+## Actual apply, delayed reads and retained extra membership
+
+Exactly three add requests were issued for the three selected native node IDs. Two immediate complete
+membership snapshots lagged acknowledged adds, so their stages stopped before further seeding. Fresh
+independent reads later confirmed the expected memberships; explicit continuation seeded absent values
+and preserved existing values. Neither delay caused a blind add retry. Final readback verified all
+three memberships and Status, Roadmap, Track and Observation. The explicit repeat retained all twelve
+existing planning values and emitted zero mutation intents.
+
+Complete project readback contains **four memberships**. The extra
+[SDD#935](https://github.com/FS-GG/FS.GG.SDD/issues/935), node `I_kwDOS_PboM8AAAABOda86Q`, is a native
+child of SDD#928 and appeared without an operator add request. It was retained unapproved and without
+planning seeds. Native-child project propagation is a plausible inference; these observations do not
+prove the cause or actor. It is not a fourth pilot item or broader-import approval. The automatic
+writer's population policy must treat this distinction explicitly during .3 qualification.
+
+The final independent readback with the corrected official locked constructor has receipt SHA-256
+`0bb6e7131ecaa4d854c873a6ba60762e76936b620a52b49b49b209dfe050d2ad`. The earlier effects readback remains retained as
+`a6eea3a4b0f84e3cb87506eccaa35449a197d37d3664edba5bbba020ca21d3af`.
+The repeat's complete membership SHA-256 is
+`d7ee7927db68ef21002b18f4ffde07dca4826dd1ad5452b0ff0e532b20c0c475`.
+The manifest retains exact issue/item IDs, field/option/view IDs and receipt hashes. Private originals
+remain retained by root; there is no public CI run for this manual native operation.
+
+## Constructor and operator provenance
+
+The [protected pure constructor](https://github.com/FS-GG/.github/blob/47d0a38ca1f3b390bb20b88f04c8ba019d989c15/tools/BoardV2Import/Program.fs)
+validates the bound manifest and emits fixed descriptive stages; it has no transport or writer.
+`pilotPlan` copies the selected complete issue objects, including their flat planning seed keys.
+Source program SHA-256 is `c0497c92485c4f9d6e03d8c8220b3c4203929aa7c8832241e785b372d36404ae`.
+The private operator is a separate artifact and is not described as an installed protected assembly.
+
+Initial constructor build failed `NU1403`. A separate unlocked restore produced the historical local
+constructor `197dc5d65875bdd5321ec8471e22d577156a4d89a8819ccd77a94244fca85aee`, used with operator
+`1de4ad11ea189d27bef554ac45575f27cca05d41c942a0942a56080c8fffbd48` for the actual effects.
+The protected tracked lock stayed unchanged, but the separate fresh lock used SDK/cache metadata
+`IGqjL9U8pQl7CaCpFP3f5slZMduE8c7ZBx7HycAQ9dc1tawyniNyw7Fh6L2cShIoQDcaDL+S8/kokhWs8WwnBQ==`.
+Its compiled FSharp.Core DLL hash `9abd1f889fc8e2d2a74d6ac83a31e6c3012c075a17946a7d687c0cbe33ed15be`
+differed from official NuGet bytes. These historical artifacts and receipts are preserved; they do
+not establish official-package or installed production-artifact qualification.
+
+Root selected correction of that dependency closure. A fresh private package cache, official-only
+NuGet source mapping and disabled implicit SDK library-packs source restored FSharp.Core **10.1.401**
+in locked mode against the unchanged protected content hash
+`/lvOK51KD8IangBYkfDVna3/HrE/r4VUnX3dI01KDspctoYXmind3POeoYkqWKeXHwiKlf6Hc9TxwSnoSCWcjw==`.
+The isolated official package's DLL SHA-256 is
+`39b0b7f06c11bedd93f94b6f101fffd645f1c4437a5a6d3ee79259f855aeb11a`.
+The same protected source then built constructor
+`dac15107412e92e9238f232008137244019957b7b57ab164bcd58b647a5227d3`; only the private operator's
+constructor path/hash selection changed, yielding operator
+`81c192f5e12d22783e4e85c345a2578f361e390a895740239d82d286cd66f474`.
+SDK 10.0.401 targets net10.0; the observed FSI host runtime is 10.0.12. FSI uses its own SDK FSharp.Core
+hash `2232698f623c28b8bcca32fa3cc8943cdd8529b20b487b5938106aae1c2ab256`; the compiled constructor
+package closure and the FSI host are recorded separately. No shared cache was altered.
+
+The corrected constructor passed a fresh dry-run and independent native readback against the actual
+three-item pilot; both invocations emitted zero mutation intents. The final bound-manifest SHA-256 is
+`28563970466d2543d88b3ec670d08ef02ee4bf83fe1dd991d9c77100ed6daf94`. This requalification did not replay apply or erase historical
+artifact provenance. Official locked construction and manual pilot readback are verified; installed
+production writer qualification remains .3.
+
+## Remaining acceptance
 
 ## Consumer inventory and ownership
 
@@ -63,67 +153,51 @@ has been established. Routine source work continues without board membership.
 | `NewSddWorkspace` / configuration / generated guidance | Product-specific owner/project/repository scope and portable commands belong to .5/.6 publication and installed adoption; generated defaults unchanged here. |
 | `coord-board-reconcile.yml` | Manual credential-free legacy diagnostic, no board writes. |
 | `coord-board-archive.yml` / `coord-board-archive.py` | Separate still-scheduled legacy Project 1 archive using its App. Retain exact scope. |
-| `scripts/fsgg-coord` / shared metered transport | Sole Projects operation route. Root owns composition/registration and any actual create/schema/import operation; direct GraphQL bypass is not preparation authority. |
+| `scripts/fsgg-coord` / shared metered transport | Default shared Projects route. The explicit user-authorized native one-shot exception below applies only to this .2 pilot; .3 retains production composition and qualification. |
 
-## Field contract
+Only the selected .2 pilot is closed. The .3 adapter still needs actual automatic-writer composition,
+immutable item verification and production correspondence for its own wire/provenance contract. Its
+wrong-project, foreign repository, incomplete/denied reads, stale source, field drift, lost response,
+owner-edit preservation and population-policy qualification remain distinct. No .3 activation is
+inferred from the private manual operator. No broader transfer, consumer switch, package publication
+or product adoption occurred through this pilot. Telemetry is NOTCONFIG with no handle; usage and
+economics remain Unknown.
 
-Exactly four custom fields; Title/Repository/Assignees derive from the unchanged native issue.
+## Restricted root-local refresh qualification — 2026-10-02
 
-| Field | Type and values | Owner after initial seed |
-|---|---|---|
-| Status | single select: Backlog, Ready, In progress, Blocked, Done | Scheduling owner |
-| Roadmap | text: owning outcome/acceptance link | Owning plan owner |
-| Track | single select: Active delivery, Follow-up | Scheduling owner |
-| Observation | single select: Verified, Stale, Unknown | Restricted projection |
+COORD-BOARD-V2-01.3 passed for the selected root-local Project 3 Observation route.
+Protected source [3829d42d](https://github.com/FS-GG/.github/commit/3829d42dd668eac5de33ebaaafbedfb342ac74be),
+tree `8cc6b44dc9c8185c26ba033f960a12a3d908147e`, delivered the fixed adapter and CLI after
+40 projection/transport controls and four CLI controls passed in native CI. They retain denial,
+stale or changed source, incomplete pagination, wrong scope, ambiguous response and replay refusals.
 
-Refresh never changes scheduling fields. An initial seed conflict preserves owner edits and reports
-it; no CAS or overwrite permission is inferred. Verified observation means required observations are
-complete/current, not acceptance completed. Native issue lifecycle/dependencies, grants and settlement
-are outside this planning surface.
+Root independently authenticated the clean Release artifact: 91 output files, nine official
+NuGet archives, 49 package runtime assets, 97 real PDB source documents joined to exact Git bytes,
+and 3,849 installed SDK/runtime/host files. Actual SDK/compiler was 10.0.401 and the CLI host was
+.NET 10.0.12. The loaded adapter SHA-256 is
+`7bdf188e6e7c82a256f8c185537914b34ef6fccf0bfddda595a218c79bb407cd`;
+CLI SHA-256 is `50bff72b74fc6bcd1b87f52ac2ff597da01b5b669181a6681ade3ce8d98995f9`.
+Compiler pseudo-documents are explicitly non-source; real source checksums remain required.
 
-## F# offline authority and fixed plan
+The binding preserves constructor source `47d0a38ca1f3b390bb20b88f04c8ba019d989c15`,
+constructor SHA-256 `dac15107412e92e9238f232008137244019957b7b57ab164bcd58b647a5227d3`,
+and population revision `351e5db40d4d72abd6e87882614725305eb2a419`.
+The current manifest blob `f0de0955c30158272669d18e4ed3501b743e043a` was unchanged through
+protected main `e9bee62a8d3d27bb765e751a65876946e8168940` at execution.
+Its earlier inventory gaps remain a historical capture, not a new carryover approval.
 
-`tools/BoardV2Import/Program.fs` is the administrative validator and stateless fixed plan constructor.
-`tools/board-v2-import.py` only forwards arguments. Neither has a transport, credential path, state store
-or writer. JSON Schema documents the wire; production decisions are F#. Meaningful fixtures exercise the
-compiled executable, including duplicate issues, PR identities, legacy targets, incomplete visibility,
-foreign repositories, every field contract, field/option identity gaps, missing acceptance, arbitrary
-command input and the three-to-five bound. No lifecycle state machine was added; existing canonical Quint
-and F# lifecycle authority remains unchanged. An eventual durable apply/retry/seed implementation must
-map its actual semantics to canonical authority and prove production correspondence before activation.
+At 16:17 UTC, the fixed CLI verified all three approved pilot items with zero writes. Root then
+staged exactly one Observation=Unknown fixture after a complete independent project read.
+The fixed CLI restored that item to Verified with exactly one acknowledged HTTP 200 mutation;
+the response SHA-256 is `987a0c399d09ea4f0925dcd906f4c3b6e71dc6e731988ef6487958d6e1bfddbd`.
+Independent readback and a repeat verified all three items; the repeat emitted zero mutations.
+Complete field readback, including native labels and repository values, matched the pre-fixture
+snapshot exactly. All human-owned fields and the fourth, unapproved SDD#935 membership were preserved.
+Root live-proof receipt SHA-256: `a157b65cdaa14700fb6c33538de974ec7508f493242a0d3bc39d4153263e8b70`.
+Private payloads and credential metadata remain private.
 
-```console
-python3 tests/board-v2-import/run.py
-python3 tools/board-v2-import.py docs/coordination/board-v2-import-manifest.json
-python3 tools/board-v2-import.py docs/coordination/board-v2-import-manifest.json --pilot-plan
-```
-
-The final command currently refuses. Plan construction requires three-to-five approved `import` or
-`follow-up` rows with `pilot=true`, `adjudication=verified-remaining`, native `I_` identity, open state,
-owner/next action/outcome/acceptance, exact target and fields/options, complete organization visibility,
-trusted recipe Git revision/artifact SHA-256 and repository allowlist. Dependencies are bounded to 50
-per item and require a complete native snapshot before a plan can be constructed. The manifest
-`authorization=root-selected` label records a selected descriptive request; it is no credential, grant
-or independently sufficient effect authority. Root's actual operation controls remain required.
-
-The constructed request contains fixed descriptive stages: fresh native source/dependencies, exact
-project/schema, complete membership by immutable project and issue IDs, add only after proven absence,
-initial seed retaining conflicting owner edits, and independent readback. It performs none of them.
-Creation and schema establishment are separate root-selected effects and are not emitted as pilot work.
-Limits: five items, 50 entries/page, ten pages/connection, two transient-read retries, 300 seconds and one
-active writer for the immutable project ID. Bound exhaustion is incomplete/Unknown with cursor; lost
-mutation response requires fresh readback before retry. No blind mutation loop is implemented here.
-
-## Root-owned operation acceptance
-
-After identity/adjudication gaps clear, qualify the real metered transport through actual composition:
-complete exact membership, foreign same-number project refusal, incomplete fields/pages, denied/hidden
-404, source/dependency drift, lost add/seed response, duplicate rerun, owner-edit preservation and partial
-batch readback. Ambiguous create response stops for reconciliation. The native pilot must independently
-read back each unchanged native issue ID, one exact membership, all selected fields and native dependency
-references; repeat apply must preserve scheduling and membership. These remain explicit qualification
-gaps, not claimed by the pure constructor fixtures.
-
-No project/schema/import writes, broader transfer, scheduling switch, credential enrollment, publication
-or product adoption occurred. `.2` remains open until actual target/schema/pilot readback. Telemetry
-configuration is unavailable in the parent session; usage and economics remain Unknown.
+This qualifies the fixed root-local route. The hosted workflow remains dormant and unenrolled;
+its credentials, executable binding and activation require their own verified join. No generic
+production writer, retry authority, wider import or legacy-board write was enabled. Ordinary source
+PR #4116 passed and merged while the board job remained unavailable. Broader consumer adoption,
+carryover and scheduling changes remain .4; product publication and installed adoption remain .5–.6.

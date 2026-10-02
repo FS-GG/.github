@@ -53,6 +53,64 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-02: SC2C-01.6f final typed pair CLI repair CLOSED (source).**
+[SC2 Client PR #38](https://github.com/FS-GG/FS.GG.SC2.Client/pull/38) merged as protected
+`4314edd7ca502f7180b5cf9058044ffeeaff2bea` after
+[verify37032434120](https://github.com/FS-GG/FS.GG.SC2.Client/actions/runs/37032434120) passed.
+The final CLI now calls the fixed production F# pair constructor using retained, digest-bound
+browser/offline/native payloads and the frozen import closure, and emits the v2 receipt after
+runtime, Action census, replay and cleanup checks. Historical v1 readability remains separate.
+The stale-digest fixture prepares its exact Wasm through one bounded owned warmup; production
+250 ms deadlines and actual stale-digest assertions remain unchanged. The prior cold-start failure
+is retained. Fresh protected artifact/preparer custody, private input join and the genuine
+pointer-overlay plus keyboard-empty journey remain open; no native acceptance is claimed.
+
+**2026-10-02: COORD-BOARD-V2-01.3 restricted root-local refresh CLOSED.**
+Protected [source3829d42d](https://github.com/FS-GG/.github/commit/3829d42dd668eac5de33ebaaafbedfb342ac74be),
+tree `8cc6b44dc9c8185c26ba033f960a12a3d908147e`, passed native source checks.
+Root independently authenticated its Release CLI/PDB/package/runtime closure, then qualified
+[Project 3](https://github.com/orgs/FS-GG/projects/3): three verified pilot items with zero writes,
+one explicitly staged Unknown restored by one acknowledged HTTP 200 Observation write,
+independent complete field readback and a repeat with zero writes. Human-owned fields and
+unapproved SDD#935 were unchanged; the legacy board received no action.
+[Evidence](coordination/board-v2-import-preparation.md#restricted-root-local-refresh-qualification--2026-10-02)
+records exact bindings and receipt SHA-256
+`a157b65cdaa14700fb6c33538de974ec7508f493242a0d3bc39d4153263e8b70`.
+Hosted enrollment remains dormant and unqualified. Broader carryover/consumer switching is .4;
+product publication and installed qualification remain .5–.6. V2 full acceptance remains complete.
+
+**2026-10-02: BARC-01.5f RP1 buffered-writer reproduction and failure observations CLOSED (source).**
+[FSBarV2 PR #21](https://github.com/FS-GG/FSBarV2/pull/21) delivered protected
+`3a4f81db0b0e0984f36adf1ed662b6f66e2c2618`, tree
+`615d90ae3959ac7e73d396addd1ad2cc813f3c6d`, after its complete-record source gate passed.
+Five public ordinary-file controls reproduce fully buffered partial EOF and exact-read exhaustion.
+Two controls against the actual protected compiled F# policy verify three evaluations and subsequent
+growth, including the buffered writer. The adapter retains a bounded private mechanical observation
+and digest/source receipt distinguishing probe, read-call and evaluation exhaustion. F# acceptance,
+the diagnostic schema and all runtime caps are unchanged. This closes RP1 source only.
+The previous native policy495 attempt failed before browser launch and cleanup settled;
+useful play remains 0/6. Modeled record-prefix semantics (RP2), whole-operation log capacity (RP3),
+protected successor construction/private adoption and a separate native attempt remain required.
+Stock Recoil and BAR game content are unchanged.
+
+**2026-10-02: COORD-BOARD-V2-01.2 actual schema and bounded native pilot CLOSED.**
+Root created [Coordination V2 #3](https://github.com/orgs/FS-GG/projects/3), immutable ID
+`PVT_kwDOEYAWY84Bldpa`, configured four canonical fields and four filtered views, and applied
+three existing issues: [SDD #928](https://github.com/FS-GG/FS.GG.SDD/issues/928),
+[Templates #441](https://github.com/FS-GG/FS.GG.Templates/issues/441) and
+[.github #3010](https://github.com/FS-GG/.github/issues/3010). Independent native readback verified
+unchanged issue identities, one membership each, complete empty native dependency snapshots and
+all twelve planning values: Blocked, Active delivery, Verified and the owning programme link.
+An explicit repeat emitted zero mutations. Two acknowledged adds initially lagged membership reads;
+root stopped, reconciled fresh reads and resumed existing items without blind add retries.
+SDD #935 also appeared and is a native child of #928; it remains outside the approved pilot and
+unseeded. The cause of that extra membership is unverified. Legacy Project #1 was preserved.
+The [canonical manifest and evidence](coordination/board-v2-import-preparation.md) distinguish
+historical execution artifacts from the official locked constructor used for final read-only verification.
+The final receipt SHA-256 is `0bb6e7131ecaa4d854c873a6ba60762e76936b620a52b49b49b209dfe050d2ad`.
+This authorized manual F# administration operation closes .2 only. The .3 automatic Observation writer,
+broader carryover, product adoption and publication remain open; source merge alone grants none of them.
+
 **2026-10-02: WASM-SHARED-01.4 publication and fresh installed consumers CLOSED; product adoption remains open.**
 [Game PR #677](https://github.com/FS-GG/FS.GG.Game/pull/677) delivered protected
 `ea015cbf884b01754bc6615476241450907b6b24`, tree
@@ -87,8 +145,8 @@ strict pagination and protected manifest population. They preserve scheduling fi
 unknown coverage truthfully. This is source closure; live binding, restricted observation writes and
 native refresh qualification remain open. The user resolved organization Projects access, and root
 created and independently read back [Coordination V2 #3](https://github.com/orgs/FS-GG/projects/3),
-immutable ID `PVT_kwDOEYAWY84Bldpa`. Canonical schema and approved three-issue pilot readback are pending;
-COORD-BOARD-V2-01.2 remains open and legacy Project #1 is preserved.
+immutable ID `PVT_kwDOEYAWY84Bldpa`. Canonical schema and the approved pilot are now verified as recorded below;
+legacy Project #1 is preserved and automatic refresh remains open.
 
 **2026-10-02: SC2 distinct-overlay/empty qualification source CLOSED; native SC2C-01.6f remains open.**
 [SC2 PR #37](https://github.com/FS-GG/FS.GG.SC2.Client/pull/37) merged at
@@ -4050,7 +4108,7 @@ Entry conditions constrain the dependent execution; earlier read-only planning m
 | **Audio explicit ordinary V2 adoption — C3-AUDIO-01** | C3: publish immutable Coordination CLI 0.1.3, enroll dedicated Audio credentials, activate the receiver separately, then observe one settlement and one normal rerun | Coordination, `.github` and Audio owners; source profiles [Coordination #865](https://github.com/FS-GG/FS.GG.Coordination/pull/865), [`.github` #3919](https://github.com/FS-GG/.github/pull/3919), [Audio #326](https://github.com/FS-GG/FS.GG.Audio/pull/326), [CLI 0.1.3](https://github.com/FS-GG/FS.GG.Coordination/releases/tag/v0.1.3), dedicated custody and activated Audio main are delivered. [Run `36413290713`](https://github.com/FS-GG/FS.GG.Audio/actions/runs/36413290713) settled once and its normal rerun was already complete; the Authority journal head remained unchanged. | [Audio receiver plan on `main`](https://github.com/FS-GG/FS.GG.Audio/blob/main/docs/roadmaps/v2-ordinary-adoption.md). Selected Audio adoption complete; no fleet-wide result or V1 migration is claimed. |
 | **Simplified baseline and v2 policy binding** | V0: accepted selected-profile functional V2; bind adopted routine policy, actual enforcement/receiver wiring and the frozen 15-original R5 population; keep economics separate | `.github`, Coordination, Governance and receivers; the nine selected receivers are accepted at C0–C3, while future operations/defaults retain their own authority. V2-HOST-01 fixed-job source/artifact/hosted diagnostic qualification is closed through Coordination #893/#895 and the owning evidence. Work-main additionally reports one exact installed fixed version/login diagnostic with complete cleanup and retained-runtime preservation; root verified the public report delivery but not the private evidence. No model/resume session, general service activation or upgrade is established | [R0–R5 source plan](2026-09-07-074251-radical-development-bureaucracy-reduction-design-and-roadmap.md), [functional acceptance report](reports/2026-09-29-r5-functional-v2-acceptance.md), [UTEL correctness](roadmaps/utel-01-telemetry-correctness.md), [local store](roadmaps/utel-local-telemetry-store.md), [operational completeness](roadmaps/utel-operational-completeness.md), [dashboard](roadmaps/utel-telemetry-dashboard.md), [release successor](roadmaps/utel-release-successor.md), [Host 0.2.0 successor](roadmaps/utel-host-release-020.md), [V2-HOST-01 owning plan](https://github.com/FS-GG/FS.GG.Coordination/blob/main/docs/roadmaps/v2-host-execution-boundary.md), [installed result report](https://github.com/FS-GG/.github/blob/0d317ffc72fdcaafce8eb245a960e61124d4445f/MAILBOX.md), and [current audit](reports/2026-09-24-v2-roadmap-code-audit.md). Functional acceptance claims no complete native usage or efficiency benefit |
 | **Skill Python to F# conversion — SKILL-FS-01** | Independent source and receiver track: replace the four current distinct Python implementation files across both tracked skill roots with packaged F# commands; preserve telemetry and preflight refusal behavior, then remove Python skill executables | `.github` tool and skill owner, with selected receivers; can proceed beside V2 source work, while the skill flip and deletion require coherent publication and installed parity | [SKILL-FS-01 subroadmap](roadmaps/skill-python-fsharp-conversion.md). Complete at the selected public SDD 2.0.3 clean and retained receiver boundary: coherent 0.94.0 supplies the replacement callers and the retired implementations are absent. Wider materializers use their own adoption path; no removed routine obligation is reopened |
-| **Project knowledge from Typed SDD initialization — TSDD-KNOWLEDGE-01** | Independent V2 workspace capability: every new Typed SDD project starts with a durable knowledge base for all textual knowledge gathered during development, accessible to people, scripts and agents | SDD owns the generic storage/access contract and initialization; Templates owns composition across provider families; project owners retain their content. Concrete storage form and access design remain to be determined; source delivery does not establish installed adoption | [Planning scope and acceptance](#991-project-knowledge-from-typed-sdd-initialization). Requirements are selected; implementation, publication and receiver qualification remain open |
+| **Project knowledge from Typed SDD initialization — TSDD-KNOWLEDGE-01** | Independent V2 workspace capability: every new Typed SDD project starts with concise, evidence-backed project knowledge in Git-tracked text records, limited to 10 MiB and accessible to people, scripts and agents | SDD owns the generic storage/access contract and initialization; Templates owns composition across provider families; project owners retain their content. Source copies, raw logs and generated indexes are excluded from the canonical store; source delivery does not establish installed adoption | [Planning scope and acceptance](#991-project-knowledge-from-typed-sdd-initialization). Requirements are selected; implementation, publication and receiver qualification remain open |
 | **Event and queue qualification** | V1, GS2-07.6–07.7: qualify the queue and measure narrow reconciliation, coalescing and audit repair | Coordination; preserve accepted native units and resume only unfinished scope | [GS2-07.7 event-benefit subroadmap](https://github.com/FS-GG/FS.GG.Coordination/blob/main/docs/roadmaps/gs2-07-7-event-benefit.md), scoped to 07.7; native acceptance is recorded in [PR #329](https://github.com/FS-GG/FS.GG.Coordination/pull/329) |
 | **Runtime operations qualification** | V1 / GS2-07.8: accepted selected no-host operation/audit scope | Coordination; preserve the accepted disposition, qualify only newly included runtime behavior | [GS2-07.8 owning plan](https://github.com/FS-GG/FS.GG.Coordination/blob/e96f4821a40c595ebe960e6cf126ace748852f30/docs/roadmaps/gs2-07-8-runtime-operations.md) and its accepted receipt |
 | **Universal bridge and receiver fencing** | V1, GS2-08: protected epoch ledger, complete current-writer coverage, published bridge, receiver adoption and old-client refusal | `.github` bridge owner, with Coordination and receiver owners; GS2-08.1–08.9 are accepted, active installed bypasses are retired and Q4 remains unclaimed | [GS2-08.8 receiver adoption horizon](roadmaps/gs2-08-universal-v1-bridge.md#gs2-088-receiver-adoption--window-a), [receiver acceptance](https://github.com/FS-GG/FS.GG.Coordination/pull/417) and [residual-writer acceptance](https://github.com/FS-GG/FS.GG.Coordination/pull/419) |
@@ -4082,7 +4140,7 @@ Entry conditions constrain the dependent execution; earlier read-only planning m
 | **Tic-tac-toe — TTT-01** | Independent local two-player game; whole TTT-01.1 covers moves, wins/draws, terminal refusal and restart | Templates source owner; whole TTT-01.1 delivered through [#648](https://github.com/FS-GG/FS.GG.Templates/pull/648), native checks and protected owning/tree readback verified | [Owning plan](https://github.com/FS-GG/FS.GG.Templates/blob/ba760d7725fe64b9311c20b57a05ef8630533804/docs/roadmaps/tic-tac-toe.md); [prospective enrollment](roadmaps/2026-09-29-r5-additional-app-enrollment.md) |
 | **Snake — SNAKE-01** | Independent keyboard game; whole SNAKE-01.1 covers food/growth/score, collision, pause and restart | Templates source owner; whole SNAKE-01.1 delivered through [#648](https://github.com/FS-GG/FS.GG.Templates/pull/648), native checks and protected owning/tree readback verified | [Owning plan](https://github.com/FS-GG/FS.GG.Templates/blob/ba760d7725fe64b9311c20b57a05ef8630533804/docs/roadmaps/snake-app.md); [prospective enrollment](roadmaps/2026-09-29-r5-additional-app-enrollment.md) |
 | **Hello-world app — HELLO-01** | Independent browser app; whole HELLO-01.1 renders an accessible greeting through its actual entry point | Templates source owner; whole HELLO-01.1 delivered through [#648](https://github.com/FS-GG/FS.GG.Templates/pull/648), native checks and protected owning/tree readback verified | [Owning plan](https://github.com/FS-GG/FS.GG.Templates/blob/ba760d7725fe64b9311c20b57a05ef8630533804/docs/roadmaps/hello-world-app.md); [prospective enrollment](roadmaps/2026-09-29-r5-additional-app-enrollment.md) |
-| **Coordination and product V2 boards — COORD-BOARD-V2-01** | Follow-on V2 planning surfaces: organization and product-scoped boards, selective issue carryover, fixed restricted refresh and product-local commands; no new full-acceptance prerequisite | `.github` owns the shared design; SDD/Templates publish product integration and product owners adopt. .1 design is selected; .2–.6 import/projection/adoption and published fresh/retained workspace qualification remain pending. Repository delivery authority stays native; no Home/Main autonomous agent is required | [Design and subroadmap](coordination/2026-09-29-coordination-v2-board-design.md) |
+| **Coordination and product V2 boards — COORD-BOARD-V2-01** | Follow-on V2 planning surfaces: organization and product-scoped boards, selective issue carryover, fixed restricted refresh and product-local commands; no new full-acceptance prerequisite | `.github` owns the shared design; SDD/Templates publish product integration and product owners adopt. .1 design, .2 native pilot and .3 root-local refresh are qualified; .4–.6 carryover, consumer adoption and published fresh/retained workspace qualification remain pending. Repository delivery authority stays native; no Home/Main autonomous agent is required | [Design and subroadmap](coordination/2026-09-29-coordination-v2-board-design.md) |
 | **Language-independent workspaces and agent integration — V2-LANG-01** | Prospective product integration: portable contracts, reviewed toolchain profiles and cross-language/native product qualification; bounded AG-UI and Agent Framework trials | Coordination owns execution/protocol adapters; `.github` coordinates qualification; SDD/Templates publish profiles and product owners adopt. .1 and .3 are complete. .4 closed through Coordination #899 with a measured rejection of Microsoft Agent Framework 1.22.0 production adoption for this path. .2 P1/P2 source and native qualification closed through [Coordination #902](https://github.com/FS-GG/FS.GG.Coordination/pull/902) at protected `c069263c3e9e8780b1596eee82d2f6c017daa8df`, tree `d525a227f5df61b551e09915df51d7d4bd9ec11e`; its current six-operation native run and bootstrap passed. The portable producer remains version `0.1.7`; P3 publication remains open. P4 cold-restore source closed through [Sandbox #45](https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/pull/45) at protected `2fd71ecd10eda835d491ea4f8f22432309e59d82`, tree `b84a0a111cd36d095037c4f8780d476f24dc2dcb`. Its protected stateless prebuild/restore diagnostics successor closed through [Sandbox #46](https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/pull/46) at `625161204895130aaa1469a908f46e1eda1497df`, tree `eb193e76f77701081f7ef12ac65e0564bd2ad139`, after the actual cold locked-SDK restore/build passed. The task-private exact-SDK repair then closed through [Sandbox #47](https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/pull/47) at `3924409829e96fc4b436e2a26179d885bbf8837c`, tree `d0b24b64a44e3af1e0f0612ddf270c6793550c74`, with 22 controls and an actual cold locked restore/build passing. Readiness run `36973970176` remains a pre-restore `dotnet-version-mismatch` refusal with no facts or effects; fresh readiness and receiver adoption remain open. P5 upgrade/matrix closure remains open. .5 TypeScript, Rust and Go fixture source remains delivered; Templates #650 adds protected Rust/Go image profiles and a passing strict hosted native run. Full .5 adoption is open. Language independence is required for supported new routes; the frozen R5 cohort is unchanged | [Amendment and subroadmap](roadmaps/2026-09-29-language-independent-workspaces-and-agent-integration.md), [Coordination .3 source plan](https://github.com/FS-GG/FS.GG.Coordination/blob/5d86daf3898be683bd6720bdd36da479a29a0260/docs/roadmaps/v2-lang-agui-projection.md), [protected .4 trial decision](https://github.com/FS-GG/FS.GG.Coordination/blob/9516006663393709e8f96ecd1f21b9ce16d729bd/docs/roadmaps/v2-lang-agent-framework-trial.md), [merged image source #900](https://github.com/FS-GG/FS.GG.Coordination/pull/900), [merged P1/P2 executor #902](https://github.com/FS-GG/FS.GG.Coordination/pull/902), and the [protected .5 language-routes plan](https://github.com/FS-GG/FS.GG.Templates/blob/66ce4faacc122ef4a2d2331a0c10fe388e7c3b69/docs/roadmaps/v2-lang-language-routes.md) advanced through [Templates PR #650](https://github.com/FS-GG/FS.GG.Templates/pull/650) |
 
 Each selected part produces a subroadmap in its owning repository, normally
@@ -4131,7 +4189,7 @@ than assuming every family updates together.
 | **Events and runtime qualification — V1** | Usually no new scaffold files; a later installed event/runtime service may improve reconciliation for enrolled workspaces | Qualification/replay alone has no installed effect. Any service activation or polling change needs its own supported receiver and operating authority |
 | **Bridge and receiver fencing — V1** | Updated tool pins, helper preconditions or bridge guidance for affected families; production still follows the current epoch | The bridge is published and adopted by the scaffold/receiver family. A newly generated receiver must obey the same fence as an upgraded one |
 | **Callable v2 and migration rehearsal — V2** | Published callable tools and additive preparation artifacts where included; sandbox/rehearsal capabilities can be available | The selected scaffold/receiver adopts those artifacts. Installed v2 capability remains distinct from permission to perform normal production writes |
-| **Project knowledge — TSDD-KNOWLEDGE-01** | Every newly initialized `typed-sdd` project receives a usable knowledge base, capture guidance and access for people and scripts from its first development step | Published SDD implementation and Templates/provider adoption must pass clean creation across the supported Typed SDD families. The concrete form is undecided; existing projects require a separate preserving import/upgrade route. Other lifecycle defaults do not change |
+| **Project knowledge — TSDD-KNOWLEDGE-01** | Every newly initialized `typed-sdd` project receives a usable knowledge base automatically included in its normal initial Git commit, with concise records limited to 10 MiB, capture guidance and access for people and scripts | Published SDD implementation and Templates/provider adoption must pass clean creation across the supported Typed SDD families. Existing projects require a separate preserving extraction/upgrade route; optional search caches are rebuildable and Git-ignored. Other lifecycle defaults do not change |
 | **Candidate and new-workspace qualification — V3** | The exact intended combination of tool, provider/template, lifecycle, policy, skills and required checks | GS2-10 explicitly includes or defers each receiver profile and qualifies fresh creation plus upgrade. This is the decisive clean-workspace qualification checkpoint; it does not itself open v2 |
 | **Closed switch — V4** | Prepared receiver configuration and verified candidate bytes for the cutover scope | GS2-11–12 govern the closed-write window. Creating a workspace during that window does not escape its restrictions |
 | **Open and ordinary use — V5** | Prepared and admitted workspaces can use enabled normal v2 operations and the qualified routine journey | Authoritative OpenV2, effective receiver configuration and current operation permissions. Already prepared files may stay identical while the permitted runtime behavior changes |
@@ -4169,13 +4227,18 @@ default decisions; progress through V0–V6 alone does not select a new product 
 
 #### 9.9.1 Project knowledge from Typed SDD initialization
 
-**Requirement selected on 2026-10-01; concrete form to be determined.** Every Typed SDD project
-starts with a durable project knowledge base at initialization. It stores all textual information
-gained or gathered during development: requirements, roadmaps, plans, architecture, source maps,
-decisions and their rationale, research, documentation, development and diagnostic logs, experiments,
-successful and failed approaches, bugs, fixes, incidents, test and qualification results, build and
-runtime setup, operational lessons, handoffs and unresolved questions. The knowledge base covers the
-whole project throughout its development, including contributions from people, scripts and agents.
+**Requirement selected on 2026-10-01; scope and storage clarified on 2026-10-02.** Every Typed SDD
+project starts with a durable knowledge base of concise, evidence-backed project knowledge, limited
+to **10 MiB (10,485,760 bytes)**. Capture reusable findings from the whole development lifecycle:
+architecture explanations, decisions and rationale, bug causes and fixes, successful and failed
+experiments with their limits, qualification conclusions and operational lessons. People, scripts
+and agents contribute through the same capture and retrieval contract.
+
+The knowledge base must not contain copies of source code, raw logs, transcripts, document dumps,
+build artifacts or generated search indexes. Summarize what was learned and link to canonical source
+files, roadmaps, documents and evidence at their relevant revisions or run identities. Evidence can
+remain in its existing repository or private custody; retaining its bytes in the knowledge store is
+not required.
 
 **TSDD-KNOWLEDGE-01** is a planned V2 workspace capability, with SDD as the generic implementation
 owner and Templates as the provider-composition owner. Project owners retain authority over their
@@ -4186,34 +4249,41 @@ roadmap entry.
 
 ##### Storage and capture design
 
-**Knowledge retention constraint selected on 2026-10-01:** retain relevant development knowledge,
-provenance and concise supporting excerpts in the durable store. Full source snapshots and their
+**Knowledge retention constraint selected on 2026-10-01, clarified on 2026-10-02:** retain concise
+development findings and provenance references in the durable store. Full source snapshots and their
 symbol/search indexes belong in a separate, disposable source cache. Keep revision, repository,
 file and digest references so source can be fetched again. A knowledge backup must preserve
-decisions, findings, incidents, fixes, negative results and their history without requiring that
+decisions, findings, incidents, fixes, negative results and their Git history without requiring that
 cache. Migration of an existing combined store must preserve these records and prove retrieval
 after restore before retiring the old store. BAR's current combined source/knowledge index is
 an example to separate, not the storage-size baseline for new projects.
 
-Determine the physical form before implementing the scaffold. Compare portable text documents with
-structured metadata and a rebuildable search index, a database with lossless text export, and a
-combination of the two. Evaluate reviewable changes, offline use, concurrent contributors, import,
-backup, recovery, migration and access cost. A project must remain able to retrieve its knowledge
-without the original agent session or a particular hosting service.
+Use portable, reviewable structured text records under `.fsgg/knowledge/`, with stable identities,
+schema/configuration metadata and evidence references. Select the exact record schema and text format
+during implementation. An optional local search database, such as SQLite, belongs under
+`.fsgg/cache/` and is Git-ignored. It must be rebuildable solely from the canonical knowledge records;
+every clone must support retrieval without that cache, the original agent session or a hosting service.
 
-Preserve original text and its provenance as well as useful summaries. Existing roadmaps, logs and
-architecture documents must remain addressable through the knowledge base; define when it retains
-their canonical bytes, imports an external source or indexes an existing project file. Avoid separate
-editable copies that can disagree about the same document. Record dates, scope, source references and
-relevant revisions or run identities. Distinguish proposals, reported claims, verified observations,
-accepted decisions, superseded conclusions and open questions; link bugs to fixes and experiments to
-their outcomes. Corrections preserve the history needed to understand why a conclusion changed.
+Typed SDD initialization creates the canonical records, capture guidance and ignore rules, and
+includes the knowledge files in the normal initial Git commit. Verify that broader ignore rules do
+not hide them. Subsequent knowledge updates accompany the relevant work through ordinary commits and
+PRs; automatic initialization does not introduce background commits or pushes. Use Git history for
+past versions rather than embedding snapshots or backups in the current store.
 
-Design capture into ordinary development: initialization, document changes, investigations, completed
-experiments, bug fixes and handoffs. Preserve negative results and the limits of each result. Decide
-retention and public/private boundaries explicitly; credentials and restricted raw payloads stay in
-their appropriate custody, with safe references where necessary. Search and generated views respect
-the same access boundary as the underlying records.
+The 10 MiB aggregate limit covers all current canonical records and their schema/configuration
+metadata. Git history and separately stored, ignored caches are outside that measurement. The write
+path and CI must enforce the byte limit, report growth and refuse an over-limit update. Consolidate
+duplicate and superseded entries while preserving useful conclusions, provenance and revision
+history; do not silently discard useful knowledge or raise the limit. Structural checks cannot
+establish that a finding is useful or true: evidence and review must establish its substance.
+
+Record dates, scope, applicability, evidence references and relevant revisions or run identities.
+Distinguish verified observations, accepted decisions, superseded conclusions and explicitly marked
+proposals or open questions; unverified claims must not appear as facts. Link bugs to fixes and
+experiments to outcomes. Capture findings during investigations, experiments, bug fixes and handoffs,
+including negative results and their limits. Credentials and restricted raw payloads stay outside
+the repository knowledge store, with safe references where appropriate. Generated views and exports
+respect the access boundary of the canonical records.
 
 ##### Access beyond an agent
 
@@ -4227,26 +4297,32 @@ versions. Assess the following complementary views; the rendering and hosting ch
 | F# library and `.fsx` scripts | Query and analyze project knowledge from F# Interactive, notebooks, development tools or repeatable reports | Evaluate a small shared API for search, record retrieval, related records, history and export. Thin `.fsx` entry points should use that API rather than each understanding the storage layout |
 | Agent tools and skills | Find project context and contribute new findings during development | Use the same records and access contract; evidence verification and maintenance rules remain explicit |
 
-Text search and navigable links are the initial retrieval requirement. Evaluate additional retrieval
-methods only against a demonstrated need; they must preserve evidence references and make the
-underlying text available. A wiki view or summary alone does not establish that all development
-knowledge has been retained.
+Text search and navigable links are the initial retrieval requirement. The F# API, CLI, `.fsx`
+scripts and agent access must read the same canonical records, directly or through a rebuildable
+cache. Evaluate additional retrieval methods only against a demonstrated need; preserve evidence
+references and make the underlying knowledge records available.
 
 ##### Delivery and acceptance
 
-1. **Resolve the design.** Select storage, record/provenance metadata, capture/import rules, history,
-   access permissions and a shared retrieval contract. Include representative existing project
-   knowledge in the comparison, not only an empty scaffold.
-2. **Implement and publish the generic capability.** SDD initializes the selected store and provides
-   capture and retrieval; Templates composes it into every supported `typed-sdd` creation route.
-3. **Qualify clean creation and use.** A fresh installed Typed SDD project starts with a usable store.
-   Record and retrieve a roadmap, architecture decision, diagnostic log, failed experiment and
-   bug/fix pair through both agent access and a human/script route. Prove source links, history,
-   search, lossless export/restore and the selected public/private behavior without an agent session.
-4. **Qualify retained projects separately.** Import existing textual knowledge and upgrade without
-   losing documents, overwriting project-owned edits or silently treating old conclusions as current.
-   Record the actual producer releases and receiver adoption before claiming the capability is
-   available in generated projects.
+1. **Resolve the record and access design.** Select the text schema, provenance/status metadata,
+   capture/extraction rules, size enforcement, access permissions and shared retrieval contract.
+   Include representative existing findings and concurrent edits, not only an empty scaffold.
+2. **Implement and publish the generic capability.** SDD initializes the Git-tracked store and
+   provides capture, retrieval and size checks; Templates composes it into every supported
+   `typed-sdd` creation route. Generated indexes and backups stay outside the canonical store.
+3. **Qualify clean creation and use.** A fresh installed project includes its knowledge files in the
+   normal initial commit. Capture and retrieve an architecture decision, a diagnostic lesson linked
+   to its raw evidence, a failed-experiment finding and a bug/cause/fix record through agent and
+   human/script access. Prove evidence links, history, search and lossless record export/restore.
+   Clone the repository and retrieve all canonical knowledge with no pre-existing cache or agent
+   session; rebuild any optional cache. Prove normal Git inclusion of later knowledge updates,
+   acceptance at 10,485,760 bytes and refusal above it, exclusion of copied source/raw logs and the
+   selected public/private behavior.
+4. **Qualify retained projects separately.** Extract concise knowledge from existing material without
+   copying its source/log corpus into the store, losing canonical documents, overwriting
+   project-owned edits or treating old conclusions as current. Keep the migrated store within the
+   same limit. Record producer releases and receiver adoption before claiming generated-project
+   availability.
 
 #### 9.9.2 Staged Fable game foundation adoption
 
