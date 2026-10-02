@@ -18,8 +18,8 @@ jobs:
       - name: Report the qualification boundary
         run: |
           echo 'Restricted refresh source is dormant.' >> "$GITHUB_STEP_SUMMARY"
-          echo 'The exact pilot binding, complete cohort, narrow credential and scoped mutation admission remain unqualified.' >> "$GITHUB_STEP_SUMMARY"
-          echo 'Ordinary source checks and the separate legacy Project 1 archive remain independent.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Hosted credential custody, exact executable binding and hosted qualification remain unenrolled.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'The root-local Project 3 Observation route requires separate native qualification; this job reports no live acceptance.' >> "$GITHUB_STEP_SUMMARY"
 
   # Fixed command prepared for review only. Removing this guard is an independently
   # authorized activation after root selects and qualifies the existing binding.
