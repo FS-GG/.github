@@ -92,8 +92,16 @@ merged at `bd4de1e999289c7d2a73bcaaf58177f903adc797`, tree
 `b2e06caa53db83ace4d0c44448aea20c0f82747e`, from qualified source
 `0591497fa05e2cd12ab80311125fc421a8124701`; protected native-coherence
 [run `36961953645`](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36961953645) and its
-bootstrap passed. The manager archive is not yet served. Manager distribution, image qualification,
-grant, capture, recovery and C3 activation remain open.
+bootstrap passed. Manager distribution is now served by successful run `36967367250`: artifact
+`11209647998` expires `2026-12-31`, contains three entries and 19 manager payloads, and has archive
+SHA-256 `0387deaeddcdce45a3664c2a207b1ec003c7b9fdf467d4a18dd117ed7508620f`; the raw ZIP SHA-256 is
+`ce868989d1b78535d2db6000721d765e4a10a03443aa139b3fc38f12f087d78d`.
+
+The actual local compiled verifier exited 2 for that hosted archive. All 189 Core payload bytes match,
+but hosted dotnet and hostfxr content differ from the required target and all 191 runtime file modes
+are `0777` rather than the required target modes. The refusal preserves the boundary between served
+distribution and a qualified inactive image. Image qualification, grant, capture, recovery and C3
+activation remain open. Main has no action.
 
 ### P2-C — inactive v3 container
 
