@@ -1,4 +1,32 @@
-# Coherent-set release saga
+# Coherent-set release publication
+
+`FS.GG.Coord.Cli`, `FS.GG.Kit`, and `FS.GG.Drivers` form one stable coherent set.
+
+## Current successor route
+
+The [successor roadmap](../roadmaps/utel-release-successor.md) owns the selected operating window.
+Current source selects version **0.95.0**, promoted predecessor **0.94.0** from
+`337b6a1d53571b07ca8e1417e18e52546ad319a7`, and protected Authority journal `utel-rel-10`.
+Source qualification alone does not publish that version.
+
+Dispatch `release-successor-candidate.yml` once on accepted current `main`. Authenticate the successful
+first-attempt run and the original raw Actions archive, including exactly three packages, release manifest,
+predecessor channel and two standalone qualification files. Hold `main` stable until the same-source
+`release-successor-publish.yml` preflight and first publication. Pass the exact candidate run ID,
+artifact ID and raw archive SHA-256 with `publish=false`; only genuine passing eligibility permits
+selecting `publish=true` with those same identities.
+
+The existing single operator, environment, protected-journal admission, sixteen ordered effects and
+forward recovery rules remain authoritative. Publication creates only the coherent-set tag. Component
+tags would trigger sealed workflows. All effects, both feeds and promoted channel require actual
+readback. Unknown intent or conflicting bytes leave publication incomplete. After journal initialization,
+recovery retains the original bytes and existing admission rules; do not repack or reset the journal.
+
+## Sealed historical saga
+
+The following records the predecessor design and historical recovery evidence. GS2-08.9 sealed
+`release-saga-start`, prepare, component publishers and promote; these instructions are historical,
+not current dispatch instructions. Their manifests, journals and published versions remain immutable.
 
 `FS.GG.Coord.Cli`, `FS.GG.Kit`, and `FS.GG.Drivers` form one stable coherent set. Independent
 registries cannot provide a shared transaction, so publication is a resumable saga whose durable
