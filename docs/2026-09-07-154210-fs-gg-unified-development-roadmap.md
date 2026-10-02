@@ -65,6 +65,36 @@ independent and open. This dated clarification is not a current fleet-health att
 profile acceptance or waiver of exact artifact, authentication, custody, settlement/replay or effect
 authority for any operation actually performed.
 
+**2026-10-02: SC2 malformed advisor-evidence transport source delivered; private adoption remains open.**
+[SC2 #35](https://github.com/FS-GG/FS.GG.SC2.Client/pull/35) merged at
+`57eadf00bb9e776664e00fe200bb4f2952f72829`, tree
+`991ff12af5485203d94749150b29d3e547cdf1cc`, equal qualified source
+`18bcfcb8b355ada3871158eeef172ed8af0bd265`. Root authenticated merge, tree and main;
+full native verify `36947574223` and its actual product job passed. Four transport/test
+paths preserve malformed post-baseline terminals for the compiled F# selector and mark
+mismatched tagged primitive payloads invalid. Generated-selector Node controls and both
+real focused Chromium callbacks passed. F# authority, canonical Quint, dependencies and
+the existing event, byte and time bounds are unchanged. A fresh protected artifact packet
+must bind these bytes before private successor adoption; its actual import-closure and
+complete transfer-bound repairs, native advisor/replay and full cleanup remain open.
+
+**2026-10-02: BAR complete runtime-closure source delivered; protected artifact adoption and gameplay remain open.**
+[FSBar #17](https://github.com/FS-GG/FSBarV2/pull/17) merged at
+`59ab6e446e23eb3a40cc6a1ce766b181ae0db032`, tree
+`6606e535c4b63fea43e7ea810d0b2b25e8b72234`, equal qualified source
+`89f8e6fc9cb60fb5eb46ff41bd63422131739c4d`. Root authenticated merge, tree and main.
+The owning source gate passed 16 directed Quint cases, 500 sampled traces, seven generated
+ITFs, locked Release compilation and actual F# correspondence; the helper passed 77 controls.
+Independent review passed 13 focused helper cases plus causal omitted-root, selection-parent,
+final-deadline and early-directory-overflow controls against the exact compiled helper.
+F# binds the selected runtime census, product/provenance joins and same-child final closure
+before consumption, and bounds scheduled traversal before enqueue. This repository has no
+hosted source workflow for the scope; these are observed local source qualifications.
+Rebuild from the exact protected merge, complete runtime/product receipts, OS custody or
+explicit concurrency admission and private adoption remain next. Owner read-only mode is
+a checkpoint, not OS immutability. Vanilla Recoil remains unchanged; Count1 is absent and
+the six genuine gameplay journeys remain 0/6. V2 platform acceptance is unchanged.
+
 **2026-10-02: FABLE protected diagnostic census completed with UNKNOWN; publication awaits a qualified capability.**
 After the #664 source closure and immediate #4080 projection, one fresh read-only
 [census](https://github.com/FS-GG/FS.GG.Templates/actions/runs/36947123836) ran against
