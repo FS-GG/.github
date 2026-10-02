@@ -862,6 +862,23 @@ contracts:
         portable: "packaged float value types"
         dotnet-only: "all modules explicitly excluded by compatibility-profile.v1.json"
         oracle: "tests/Game.Core.Fable.Tests/fixtures/v1/expected.bin — 442 bytes, SHA-256 9c0d7128f7b9558ef7e985618b1165199f83a0bb4af7533b175cc95b340c4a24"
+  - id: wasm-shared-runtime
+    version: "0.1.1"   # Independent WASM release axis; Game#677 protected source ea015cbf884b01754bc6615476241450907b6b24.
+    package-version: "0.1.1"
+    package-tag: "wasm/v0.1.1"
+    owner: game
+    surface: "FS.GG.Wasm.Contracts and FS.GG.Wasm.Browser coherent package set; browser Worker lifecycle, portable Fable sources and fsgg-wasm-sdk-0.1.1.tar.gz author source archive"
+    consumers: []   # Availability establishes no product adoption; BAR/SC2/FourD remain separate milestones.
+    profiles:
+      shared-wasm:
+        identity: "wasm/v0.1.1"
+        packages: "FS.GG.Wasm.Contracts@0.1.1 / FS.GG.Wasm.Browser@0.1.1; exact same-version Browser-to-Contracts dependency"
+        sdk: "fsgg-wasm-sdk-0.1.1.tar.gz — versioned source archive under wasm/v0.1.1, coupled to both NuGet packages"
+        toolchain: ".NET 10.0.401 / Fable 5.18.0 / Node 26 / Quint 0.32.0 / Rust 1.90.0 / WASI SDK 34.0"
+        browser: "Pinned Playwright 1.63.0 Chromium profile"
+        abi: "BAR ABI 1; strict imported SC2 ABI 0x00010000"
+        qualification: "Qualified .NET/Fable build boundary and pinned Chromium profile; Rust/C author routes use the pinned SDK toolchain"
+        unqualified: "Additional browsers, npm/bundler permutations, OS support, WASI execution, deterministic fuel/replay, product adoption and native authority"
   - id: game-scene-adapter
     version: "0.16.0"   # SOURCE: SVG Preview C replay/planning/rules/network APIs; Game#635 merge 996832a6ebb5c893199627b0ecc46f7c1da848cd.
     package-version: "0.16.0"   # FEED: release run 34815287187 published all three retained originals and verified both feeds; custody artifact 10336430350, readback artifact 10336470968. Immutable v0.16.0 names the exact source.

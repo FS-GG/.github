@@ -19,7 +19,7 @@ gates* a publish, and *how* a release propagates. That's what this skill holds.
 <!-- BEGIN GENERATED: fsgg-release-inventory -->
 *Generated from every registry package-bearing contract. Package, producer and coherent-set counts are derived here; release judgement remains below.*
 
-Registry release inventory: 15 package-bearing contracts across 9 producers; 14 coherent release sets.
+Registry release inventory: 16 package-bearing contracts across 9 producers; 15 coherent release sets.
 
 | owner | contract | source version | published version | coherent set | surface |
 |---|---|---|---|---|---|
@@ -28,6 +28,7 @@ Registry release inventory: 15 package-bearing contracts across 9 producers; 14 
 | `governance` | `governance-reference-gate-set` | `1.7.0` | `1.7.0` | `governance:1.7.0` | FS.GG.Governance.ReferenceGateSet content package — contentFiles/any/any/.fsgg/{governance,capabilities,policy,tooling}.yml, byte-identical to samples/sdd-reference-gate-set/.fsgg/; version-derivation rule per ADR-0055.  |
 | `rendering` | `fs-gg-ui-template` | `0.31.0` | `0.31.0` | `rendering:0.31.0` | dotnet new fs-gg-ui (template/base) + FS.GG.UI.* framework packages |
 | `game` | `game-sim-core` | `0.16.0` | `0.16.0` | `game:0.16.0` | FS.GG.Game.Core package — BCL-only deterministic simulation primitives plus the packaged fs-gg-game-core-fable-lockstep-v1 bounded Fable source/profile and canonical oracle |
+| `game` | `wasm-shared-runtime` | `0.1.1` | `0.1.1` | `game:0.1.1` | FS.GG.Wasm.Contracts and FS.GG.Wasm.Browser coherent package set; browser Worker lifecycle, portable Fable sources and fsgg-wasm-sdk-0.1.1.tar.gz author source archive |
 | `game` | `game-scene-adapter` | `0.16.0` | `0.16.0` | `game:0.16.0` | FS.GG.Game.Render package — Adapter (sim-state -> FS.GG.UI.Scene drawables) |
 | `audio` | `fs-gg-audio` | `0.6.0` | `0.6.0` | `audio:0.6.0` | FS.GG.Audio.Core/.Host/.Engine/.Elmish/.WebBrowser public .fsi surfaces — AudioEffect vocabulary + IAudioBackend/IMixingBackend seam + mixing Engine + Audio.Cmd Elmish bridge + browser Web Audio host |
 | `net` | `fs-gg-net` | `0.6.0` | `0.6.0` | `net:0.6.0` | FS.GG.Net.Core/.WebSocket/.WebSocket.Server/.Protobuf/.Grpc/.Elmish public .fsi surfaces — ITransport/IMessageChannel seam + Sequential/Multiplexed correlation + serve/ServerEcho + WebSocket client/server transport + Google.Protobuf/protobuf-net codecs + gRPC lifecycle bridge + Elmish Cmd/Sub |

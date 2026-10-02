@@ -48,6 +48,7 @@ contracts:
   - { id: fs-gg-ui-template,             version: "0.4.0",           package-version: "0.4.0" }
   - { id: game-sim-core,                 version: "0.2.0",           package-version: "0.2.0" }
   - { id: game-scene-adapter,            version: "0.2.0",           package-version: "0.2.0" }
+  - { id: wasm-shared-runtime,           version: "0.1.1",           package-version: "0.1.1" }
   - { id: fs-gg-audio,                   version: "0.1.0-preview.1", package-version: "0.1.0-preview.1" }
   # .github's own engine (.github#1067). Carried here because the gate's ORPHAN check is live: a
   # CONTRACT_PACKAGES entry with no contract in the registry under test is an error, so every real
@@ -82,6 +83,8 @@ cat > "$FEED" <<'JSON'
   "FS.GG.UI.Template":                 ["0.4.0", "0.4.0-preview.1", "0.3.1-preview.1", "0.2.0-preview.1"],
   "FS.GG.Game.Core":                   ["0.2.0", "0.1.0-preview.1"],
   "FS.GG.Game.Render":                 ["0.2.0", "0.1.0-preview.1"],
+  "FS.GG.Wasm.Contracts":              ["0.1.1"],
+  "FS.GG.Wasm.Browser":                ["0.1.1"],
   "FS.GG.Audio.Core":                  ["0.1.0-preview.1"],
   "FS.GG.Audio.Host":                  ["0.1.0-preview.1"],
   "FS.GG.Audio.Engine":                ["0.1.0-preview.1"],
@@ -196,6 +199,17 @@ must_fail_dual() {
 
 echo "--- the green baseline ---"
 must_pass "coherent registry == newest on the feed" "$BASE" "$FEED"
+
+# WASM is one independent two-package contract: either missing member or incomplete
+# public-feed publication must fail even when the other package is available.
+for package in FS.GG.Wasm.Contracts FS.GG.Wasm.Browser; do
+  must_fail "WASM member $package missing from org feed refuses" \
+    "$BASE" "$(feed_without "wasm-missing-$package" "$package")" "$package.*not on the org feed|package.*$package.*fixture: absent"
+  must_fail_dual "WASM member $package missing from nuget.org refuses" \
+    "$BASE" "$FEED" "$(feed_without "wasm-public-missing-$package" "$package")" "$package.*not on nuget.org|package.*$package.*fixture: absent"
+  must_fail_dual "WASM member $package public version mismatch refuses" \
+    "$BASE" "$FEED" "$(feed_with "wasm-public-stale-$package" "$package" '["0.1.0"]')" "PARTIAL RELEASE.*$package"
+done
 
 echo
 echo "--- the drift the gate was built for (both directions) ---"
