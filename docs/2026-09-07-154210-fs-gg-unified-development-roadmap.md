@@ -53,6 +53,14 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-02: HOST GitGuardian alert clarified at its exact source location.**
+The flagged mapping in [commit `59cfb2a`](https://github.com/FS-GG/.github/commit/59cfb2a9a47c74ebcbe08a0605428f2b12cde9d2#diff-d9b3e0b60188e34c0486096111952e390be6aa02f1869c5def77394434538cb2R6) contains GitHub environment secret names.
+The transport reads private values at runtime from the environment or sensitive stdin and sends them
+as child stdin. The mapping is now explicitly named `GITHUB_SECRET_NAMES`; 17 transport controls
+cover the unchanged role/name mappings and argv/stdin boundary. This exact location is a names-only
+false positive. GitGuardian alert disposition has not been verified; no credential exposure is
+established by this finding.
+
 **2026-10-01: V2 platform FULL ACCEPTED for the selected clean-start profile; independent products and extensions remain open.**
 The accepted platform boundary is ordinary source delivery and ordinary settlement across the nine
 named adopted receivers, truthful observer-loss behavior and the bounded fixed-job HOST diagnostic. The
