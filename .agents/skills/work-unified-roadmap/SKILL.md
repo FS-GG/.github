@@ -73,13 +73,18 @@ not block earlier read-only research or otherwise authorized qualification.
 
 | Role | Model | Effort | Lifetime |
 |---|---|---|---|
-| Feature planner | `gpt-6-astra` | `high` | Fresh at each new major feature; reuse for bounded horizon expansion while its context remains useful |
-| Subroadmap implementation worker | `gpt-5.6-sol` | `medium` | One accountable worker per disjoint lane; reuse through that lane's routine milestones and repairs |
+| Feature planner | Newest available Astra (currently `gpt-6-astra`) | `high` | Fresh at each new major feature; reuse for bounded horizon expansion while its context remains useful |
+| Subroadmap implementation worker | Newest available Sol (currently `gpt-6.1-sol`) | `medium` | One accountable worker per disjoint lane; reuse through that lane's routine milestones and repairs |
 
-Use explicit overrides when spawning: `model`, `reasoning_effort`, and `fork_turns: "none"`. Supply the
-bounded packet below rather than the entire conversation. If those exact selections are unavailable,
-report the capability gap; do not silently substitute models. The parent schedules lanes, coordinates
-joins and integrates results; it does not redo a planner's analysis or implement a duplicate worker task.
+At each new worker spawn, resolve the newest Astra or Sol from the current runtime's available model
+list. Use Astra at `high` for planning and Sol at `medium` for implementation. The current model IDs
+above identify today's choices; a newer available member of either family takes precedence. Pass the
+resolved exact ID through explicit `model`, `reasoning_effort`, and `fork_turns: "none"` overrides.
+Report an unavailable model or effort as a capability gap; do not silently downgrade or substitute
+another family. Existing workers may finish their assigned bounded window; subsequent new assignments
+use the current selections while retaining feature and cost lineage. Supply the bounded packet below
+rather than the entire conversation. The parent schedules lanes, coordinates joins and integrates
+results; it does not redo a planner's analysis or implement a duplicate worker task.
 
 For a new feature, read [feature-planning.md](references/feature-planning.md) and give the Astra planner
 the real request, named part, relevant unified sections, current repository/evidence locations, original
