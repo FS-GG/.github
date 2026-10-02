@@ -117,6 +117,19 @@ The prior `36973970176` refusal remains an exact `dotnet-version-mismatch` befor
 effects. No hosted source gate is configured or required for this source claim. A fresh credential-free
 readiness run, private facts and native qualification remain open.
 
+**2026-10-02: P4 finite subordinate-candidate source CLOSED; fresh readiness remains open.**
+[Sandbox #48](https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/pull/48) merged at
+`eda3d995428d047dadfdbf57242dd86cfaafbf05`, tree
+`f42d03894a5315f533125e3acf27353aebd6bd7c`, equal qualified source
+`11b8c7b346a0571e1387a13d93cdf219b5388e54`; root authenticated merge, tree and protected main.
+The exact 230-byte policy admits 16 ordered candidates while compiled F# retains first-eligible
+selection and revalidates the complete tuple and policy digest from the same four bounded snapshots
+before ledger or identity effects. It does not claim that any candidate is free. The preceding
+credential-free run `36976372543` at source `3924409829e96fc4b436e2a26179d885bbf8837c`
+returned `subordinate-collision`, with readiness, facts qualification and native authorization false;
+it does not qualify the successor source. A fresh credential-free readiness run, current-run
+revalidation, private admission, facts and native qualification remain open.
+
 **2026-10-02: FourD stateless diagnostic source CLOSED; native qualification remains open.**
 [Coordination #924](https://github.com/FS-GG/FS.GG.Coordination/pull/924) merged at
 `74ff6b3497154f7e308cc9ebdfd4da1a18c82cc1`, tree
