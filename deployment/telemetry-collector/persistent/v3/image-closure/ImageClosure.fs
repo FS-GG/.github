@@ -11,7 +11,8 @@ type FileRow = { SourcePath:string; TargetPath:string; Bytes:int64; Sha256:strin
 type ManifestFile = { SourcePath:string; TargetPath:string; Bytes:int64; Sha256:string; Mode:string }
 type RoleManifest = { Schema:string; Role:string; AuthoritySha256:string; SearchRoots:string array; Argv:string array; LoaderPaths:string array; Files:ManifestFile array }
 type RoleManifestReference = { Role:string; Path:string; Sha256:string }
-type NativeAcquisitionInventory = { Schema:string; ProfileSha256:string; ReaderProfileSha256:string; NativeExecutable:string; NativeExecutableSha256:string; PythonExecutable:string; PythonVersion:string; VerifierArgv:string array; SearchRoots:string array; LoaderPath:string; ImportPaths:string array; LibraryPaths:string array; OsDataPaths:string array; Files:ManifestFile array }
+type NativeAcquisitionInventory = { Schema:string; AcquisitionProvenanceSha256:string; ProfileSha256:string; ReaderProfileSha256:string; NativeExecutable:string; NativeExecutableSha256:string; PythonExecutable:string; PythonVersion:string; VerifierArgv:string array; SearchRoots:string array; LoaderPath:string; ImportPaths:string array; LibraryPaths:string array; OsDataPaths:string array; Files:ManifestFile array }
+type TrustedNativeSelection = { Schema:string; AcquisitionProvenanceSha256:string; NativeInventorySha256:string; ProfileSha256:string; ReaderProfileSha256:string; NativeExecutableSha256:string; PythonExecutable:string; PythonVersion:string; VerifierArgv:string array; SearchRoots:string array; LoaderPath:string; ImportPaths:string array; LibraryPaths:string array; OsDataPaths:string array }
 type Selection = { IdentityClass:string; AcquisitionRoot:string; ManifestRoot:string; RoleManifests:RoleManifestReference array; NativeInventoryPath:string; NativeInventorySha256:string; OwnerUid:int; Platform:string; HostSourceRevision:string; HostReleaseId:int64; HostRunId:int64; HostArchiveSha256:string; HostPackageSha256:string; HostPayloadSha256:string; HostManifestSha256:string; HostJournalSha256:string; ManagerSourceRevision:string; ManagerSourceTree:string; ManagerArtifactSha256:string; ManagerManifestSha256:string; ManagerPreparedSha256:string; ManagerArchiveSha256:string; ManagerRunId:int64; ManagerArtifactId:int64; RuntimeImageDigest:string; RuntimeTreeSha256:string; NativeElfSha256:string; NativeProfileSha256:string; ReaderProfileSha256:string; CanonicalVerifierSha256:string; InventorySha256:string; Files:FileRow array }
 type ClosureResult = Unavailable of string | Refused of string | Prepared of byte array
 
@@ -190,19 +191,20 @@ module ImageClosure =
             use document=JsonDocument.Parse bytes
             Ok(document.RootElement.Clone())
         with _->Error "production-authority-read"
-    let private nativeAcquisitionInventory selection =
+    let private nativeAcquisitionInventory (trusted:TrustedNativeSelection) selection =
         try
             if not(relativePath selection.NativeInventoryPath)||not(sha64 selection.NativeInventorySha256) then Error "native-authority-inventory-reference" else
+            if selection.NativeInventorySha256<>trusted.NativeInventorySha256 then Error "native-authority-inventory-selection-mismatch" else
             let root=Path.GetFullPath selection.ManifestRoot
             let path=Path.GetFullPath(Path.Combine(root,selection.NativeInventoryPath))
             let prefix=root.TrimEnd(Path.DirectorySeparatorChar)+string Path.DirectorySeparatorChar
             let info=FileInfo path
             if not(path.StartsWith(prefix,StringComparison.Ordinal))||not info.Exists||info.Length<=0L||info.Length>2L*1024L*1024L||not(custody root path selection.OwnerUid) then Error "native-authority-inventory-physical" else
             let bytes=File.ReadAllBytes path
-            if sha bytes<>selection.NativeInventorySha256 then Error "native-authority-inventory-digest" else
+            if sha bytes<>trusted.NativeInventorySha256 then Error "native-authority-inventory-digest" else
             use document=JsonDocument.Parse bytes
             let value=document.RootElement
-            let expected=set["Schema";"ProfileSha256";"ReaderProfileSha256";"NativeExecutable";"NativeExecutableSha256";"PythonExecutable";"PythonVersion";"VerifierArgv";"SearchRoots";"LoaderPath";"ImportPaths";"LibraryPaths";"OsDataPaths";"Files"]
+            let expected=set["Schema";"AcquisitionProvenanceSha256";"ProfileSha256";"ReaderProfileSha256";"NativeExecutable";"NativeExecutableSha256";"PythonExecutable";"PythonVersion";"VerifierArgv";"SearchRoots";"LoaderPath";"ImportPaths";"LibraryPaths";"OsDataPaths";"Files"]
             let names=if value.ValueKind=JsonValueKind.Object then value.EnumerateObject()|>Seq.map _.Name|>Seq.toArray else [||]
             let mutable files=Unchecked.defaultof<JsonElement>
             let arrays=[|"VerifierArgv";"SearchRoots";"ImportPaths";"LibraryPaths";"OsDataPaths"|]
@@ -226,11 +228,11 @@ module ImageClosure =
             else Ok {SourcePath=(if String.IsNullOrEmpty sourcePrefix then relative else sourcePrefix+"/"+relative);TargetPath=targetRoot.TrimEnd('/')+"/"+relative;Bytes=bytes;Sha256=digest;Mode=mode})
         |>Seq.fold(fun state next->match state,next with Error e,_->Error e|_,Error e->Error e|Ok values,Ok value->Ok(value::values))(Ok[])
         |>Result.map(List.rev>>List.toArray)
-    let private productionManifests selection (rows:FileRow array) =
+    let private productionManifests (trusted:TrustedNativeSelection) selection (rows:FileRow array) =
         let pinned=selection.IdentityClass="production"
         let rowSet role=rows|>Array.filter(fun row->row.SourceClass=role)|>Array.map(fun row->{SourcePath=row.SourcePath;TargetPath=row.TargetPath;Bytes=row.Bytes;Sha256=row.Sha256;Mode=row.Mode})
         let closed expected (value:JsonElement)=value.ValueKind=JsonValueKind.Object&&(value.EnumerateObject()|>Seq.length)=Set.count expected&&(value.EnumerateObject()|>Seq.map _.Name|>Set.ofSeq)=expected
-        match productionManifest selection "host" selection.HostManifestSha256,productionManifest selection "manager" selection.ManagerManifestSha256,productionManifest selection "runtime" selection.RuntimeTreeSha256,productionManifest selection "native" selection.NativeProfileSha256,nativeAcquisitionInventory selection with
+        match productionManifest selection "host" selection.HostManifestSha256,productionManifest selection "manager" selection.ManagerManifestSha256,productionManifest selection "runtime" selection.RuntimeTreeSha256,productionManifest selection "native" selection.NativeProfileSha256,nativeAcquisitionInventory trusted selection with
         | Ok host,Ok manager,Ok runtime,Ok native,Ok nativeInventory->
             try
                 let hostNames=host.EnumerateObject()|>Seq.map _.Name|>Set.ofSeq
@@ -277,10 +279,13 @@ module ImageClosure =
                         let executable path digest=authorityFiles|>Array.exists(fun row->row.TargetPath=path&&row.Sha256=digest&&row.Mode="0555")
                         let nativeAuthority=
                             nativeInventory.Schema="fsgg.telemetry.native-acquisition-inventory/1"&&
-                            nativeInventory.ProfileSha256=selection.NativeProfileSha256&&nativeInventory.ReaderProfileSha256=selection.ReaderProfileSha256&&
-                            nativeInventory.NativeExecutable=nativeExecutable&&nativeInventory.NativeExecutableSha256=selection.NativeElfSha256&&
-                            nativeInventory.PythonExecutable="/opt/fsgg/python/bin/python3.14"&&nativeInventory.PythonVersion="3.14.0"&&
-                            nativeInventory.VerifierArgv=fixedVerifierArgv&&nativeInventory.SearchRoots=[|"/opt/fsgg/python/lib/python3.14"|]&&
+                            nativeInventory.AcquisitionProvenanceSha256=trusted.AcquisitionProvenanceSha256&&
+                            nativeInventory.ProfileSha256=trusted.ProfileSha256&&nativeInventory.ProfileSha256=selection.NativeProfileSha256&&
+                            nativeInventory.ReaderProfileSha256=trusted.ReaderProfileSha256&&nativeInventory.ReaderProfileSha256=selection.ReaderProfileSha256&&
+                            nativeInventory.NativeExecutable=nativeExecutable&&nativeInventory.NativeExecutableSha256=trusted.NativeExecutableSha256&&nativeInventory.NativeExecutableSha256=selection.NativeElfSha256&&
+                            nativeInventory.PythonExecutable=trusted.PythonExecutable&&nativeInventory.PythonVersion=trusted.PythonVersion&&
+                            nativeInventory.VerifierArgv=trusted.VerifierArgv&&nativeInventory.VerifierArgv=fixedVerifierArgv&&nativeInventory.SearchRoots=trusted.SearchRoots&&
+                            nativeInventory.LoaderPath=trusted.LoaderPath&&nativeInventory.ImportPaths=trusted.ImportPaths&&nativeInventory.LibraryPaths=trusted.LibraryPaths&&nativeInventory.OsDataPaths=trusted.OsDataPaths&&
                             canonicalAbsolute nativeInventory.LoaderPath&&canonicalList nativeInventory.ImportPaths&&canonicalList nativeInventory.LibraryPaths&&canonicalList nativeInventory.OsDataPaths&&
                             (layoutPaths|>Array.distinct).Length=layoutPaths.Length&&
                             (nativeInventory.ImportPaths|>Array.forall underSearchRoot)&&
@@ -301,10 +306,16 @@ module ImageClosure =
                 | Error reason,_->Error reason|_,Error reason->Error reason
             with _->Error "production-authority-shape"
         | Error reason,_,_,_,_->Error reason|_,Error reason,_,_,_->Error reason|_,_,Error reason,_,_->Error reason|_,_,_,Error reason,_->Error reason|_,_,_,_,Error reason->Error reason
-    let prepare selection =
+    let private trustedNativeShape (trusted:TrustedNativeSelection) =
+        let canonicalList (values:string array)=values.Length>0&&(values|>Array.distinct).Length=values.Length&&values=Array.sort values&&(values|>Array.forall canonicalAbsolute)
+        trusted.Schema="fsgg.telemetry.trusted-native-selection/1"&&sha64 trusted.AcquisitionProvenanceSha256&&sha64 trusted.NativeInventorySha256&&sha64 trusted.ProfileSha256&&sha64 trusted.ReaderProfileSha256&&sha64 trusted.NativeExecutableSha256&&
+        trusted.PythonExecutable="/opt/fsgg/python/bin/python3.14"&&trusted.PythonVersion="3.14.0"&&trusted.VerifierArgv=[|trusted.PythonExecutable;"-I";"-S";"-B";"/opt/fsgg/verifier/learn_01_native_source.py";"verify"|]&&trusted.SearchRoots=[|"/opt/fsgg/python/lib/python3.14"|]&&canonicalAbsolute trusted.LoaderPath&&canonicalList trusted.ImportPaths&&canonicalList trusted.LibraryPaths&&canonicalList trusted.OsDataPaths
+    let prepareWithTrustedNative (trusted:TrustedNativeSelection option) selection =
         if String.IsNullOrWhiteSpace selection.InventorySha256||selection.Files.Length=0 then Unavailable "native-image-closure-inventory-acquisition-required"
         elif selection.IdentityClass<>"production"&&selection.IdentityClass<>"production-contract-test"&&selection.IdentityClass<>"synthetic-test" then Refused "identity-class"
         elif selection.IdentityClass="production"&&not(fixedProduction selection) then Refused "fixed-production-identity-mismatch"
+        elif selection.IdentityClass<>"synthetic-test"&&trusted.IsNone then Unavailable "trusted-native-selection-acquisition-required"
+        elif selection.IdentityClass<>"synthetic-test"&&not(trustedNativeShape trusted.Value) then Refused "trusted-native-selection-shape"
         elif selection.IdentityClass<>"synthetic-test"&&(String.IsNullOrWhiteSpace selection.NativeInventoryPath||not(sha64 selection.NativeInventorySha256)) then Unavailable "native-authority-inventory-acquisition-required"
         elif selection.Platform<>"linux/amd64"||not(sha64 selection.ReaderProfileSha256&&sha64 selection.InventorySha256) then Refused "selection-shape"
         else
@@ -319,7 +330,7 @@ module ImageClosure =
                  | Ok acquired->
                     let requiredProductionDigests=[|selection.HostArchiveSha256;selection.NativeElfSha256;selection.NativeProfileSha256;selection.ReaderProfileSha256;selection.CanonicalVerifierSha256|]
                     if selection.IdentityClass<>"synthetic-test" && not(requiredProductionDigests|>Array.forall(fun digest->acquired|>Array.exists(fun(_,row)->row.Sha256=digest))) then Refused "inventory-omits-production-code-or-profile"
-                    else match (if selection.IdentityClass<>"synthetic-test" then productionManifests selection sorted else validateManifests selection sorted) with
+                    else match (if selection.IdentityClass<>"synthetic-test" then productionManifests trusted.Value selection sorted else validateManifests selection sorted) with
                          | Error reason->Refused reason
                          | Ok manifests->
                             let copies=sorted|>Array.map(fun row -> $"COPY --chown=32768:32768 --chmod={row.Mode} {JsonSerializer.Serialize([|row.SourcePath;row.TargetPath|])}")
@@ -328,4 +339,6 @@ module ImageClosure =
                             let manager=manifests|>Array.find(fun manifest->manifest.Role="manager")
                             let verifierArgv=if selection.IdentityClass<>"synthetic-test" then [|"/opt/fsgg/python/bin/python3.14";"-I";"-S";"-B";"/opt/fsgg/verifier/learn_01_native_source.py";"verify"|] else [||]
                             let profile=JsonSerializer.Serialize({|schema="fsgg.telemetry.persistent-v3-image-profile/1";user=32768;group=32768;platform=selection.Platform;argv=native.Argv;managerArgv=manager.Argv;verifierArgv=verifierArgv;searchRoots=native.SearchRoots;loaderPaths=native.LoaderPaths;listeners=Array.empty<string>;serviceEnabled=false;activationAuthorized=false;readerProfileSha256=selection.ReaderProfileSha256|})
-                            Prepared(JsonSerializer.SerializeToUtf8Bytes({|schema="fsgg.telemetry.persistent-v3-image-context/2";status=(if selection.IdentityClass="production" then "prepared-inactive" else "prepared-inactive-synthetic");identityClass=selection.IdentityClass;containerfile=containerfile;profile=profile;inventorySha256=selection.InventorySha256;runtimeImageDigest=selection.RuntimeImageDigest;roleManifestSha256=selection.RoleManifests|>Array.map(fun item->item.Role,item.Sha256)|>Map.ofArray;files=sorted|}))
+                            let trustedNativeSelection=if selection.IdentityClass="synthetic-test" then null else box trusted.Value
+                            Prepared(JsonSerializer.SerializeToUtf8Bytes({|schema="fsgg.telemetry.persistent-v3-image-context/2";status=(if selection.IdentityClass="production" then "prepared-inactive" else "prepared-inactive-synthetic");identityClass=selection.IdentityClass;containerfile=containerfile;profile=profile;inventorySha256=selection.InventorySha256;runtimeImageDigest=selection.RuntimeImageDigest;trustedNativeSelection=trustedNativeSelection;roleManifestSha256=selection.RoleManifests|>Array.map(fun item->item.Role,item.Sha256)|>Map.ofArray;files=sorted|}))
+    let prepare selection=prepareWithTrustedNative None selection
