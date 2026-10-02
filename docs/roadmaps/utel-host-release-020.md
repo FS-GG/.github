@@ -32,7 +32,16 @@ The artifact handoff to Main completed through telemetry mailbox commit `3cdaec2
 
 The root integrator owns this route through the existing V2 container/CI execution boundary and its selected profile. This is a bounded adoption of one exact Host into that destination. It is not a universal Host activation, workspace migration or claim that another receiver has adopted the package.
 
-1. [ ] Bind the exact existing container/CI destination, execution profile and owner before changing installed state. The container-native Host 0.2.1 adoption remains planned until this sequence completes; this 0.2.0 release record does not establish that later version's adoption or replace its own source and publication evidence.
+Public release metadata checked on 2026-10-02 confirms that
+[Host 0.2.1](https://github.com/FS-GG/.github/releases/tag/telemetry-host/v0.2.1)
+was already published on 2026-09-30 at `0145bd2c852847d00da8b3a0c35d27cd64a87781`.
+Its package, manifest and journal match the persistent receiver's existing pins.
+That release predates the protected #4076 v3 reader. Preserve its published bytes;
+qualify a supported successor artifact for the current reader instead of republishing
+changed bytes as 0.2.1. This metadata correction supplies no new installed or both-feed
+payload qualification.
+
+1. [ ] Bind the exact existing container/CI destination, execution profile and owner before changing installed state. Container adoption remains planned until this sequence completes; this 0.2.0 release record does not establish adoption of another artifact or replace its own source and publication evidence.
 2. [ ] Verify the selected Host's exact protected source, package bytes, executable digest and supported schema against its own release evidence. For 0.2.0, retain the source, three-asset release, journal, package and schema-10-through-12 facts recorded here. A later version requires its separately verified release record and cannot inherit these identities.
 3. [ ] Create or select the bounded private writable store for this destination, preserving the fresh-store versus retained-migration distinction. Qualify configuration, mounted roots, owner/mode custody and rollback or stopped recovery before activation; never relabel legacy schema-10 state as fresh custody.
 4. [ ] Obtain and verify a genuine receiver-owned grant for the exact destination and operation. Source capability, an empty receipt, a package install or a protected CI pass does not establish that grant.
