@@ -3,6 +3,7 @@ open System.IO
 open System.Security.Cryptography
 open System.Text.Json.Nodes
 open Fs.Gg.Telemetry.HostAttempt
+open Fs.Gg.Telemetry.HostBinding
 open FsQuint
 let fail message=raise(InvalidOperationException message)
 let replay=function Ok value->value|Error error->fail $"FsQuint: %A{error}"
@@ -94,3 +95,30 @@ let guarded=(AttemptReducer.applyNativeEvidenceMutationForCorrespondence false c
 let guardRemoved=(AttemptReducer.applyNativeEvidenceMutationForCorrespondence true cancelled).State
 if guarded.NativeDisposition<>NativeDisposition.NativeUnknown||guardRemoved.NativeDisposition<>NativeDisposition.NativeAccepted||project guarded=project guardRemoved then fail "actual native cancellation guard mutation did not diverge"
 printfn "HostAttempt canonical action/actual reducer correspondence passed: %d retained scenarios, %d retained transitions; loaded=%s; 16-step concrete acquired trace matched canonical success ITF; actual cancellation guard mutation diverged" cases.Length transitions (sha loadedProductionPath)
+
+let private launchProject (state:OwnedLaunch.State) =
+ let fields=["phase",text(string state.Phase);"identity",boolean state.IdentityRecorded;"releaseIntentions",integer state.ReleaseIntentions;"releaseMayHaveEffect",boolean state.ReleaseMayHaveEffect;"cancelled",boolean state.Cancelled;"deadline",boolean state.DeadlineExpired;"failure",boolean state.StickyFailure;"directSettled",boolean state.DirectSettled;"descendantsSettled",boolean state.DescendantsSettled;"readersSettled",boolean state.ReadersSettled]
+ let draft:QuintReplayState={Identity=String.replicate 64 "0";Bindings=["launch",QuintReplayValue.Record fields]}
+ {draft with Identity=QuintReplay.stateFingerprint draft|>replay}
+let private launchCases=[
+ "gatedRelease",[OwnedLaunch.RecordIdentity;OwnedLaunch.RequestRelease;OwnedLaunch.AcknowledgeRelease],["recordIdentity";"requestRelease";"ackRelease"]
+ "lostRelease",[OwnedLaunch.RecordIdentity;OwnedLaunch.RequestRelease;OwnedLaunch.LoseRelease],["recordIdentity";"requestRelease";"loseRelease"]
+ "cancelBefore",[OwnedLaunch.Cancel],["cancelLaunch"]
+ "deadlineBefore",[OwnedLaunch.Expire],["expireLaunch"]
+ "settled",[OwnedLaunch.RecordIdentity;OwnedLaunch.RequestRelease;OwnedLaunch.AcknowledgeRelease;OwnedLaunch.BeginRetirement;OwnedLaunch.ObserveSettlement(true,true,true);OwnedLaunch.Finish],["recordIdentity";"requestRelease";"ackRelease";"beginRetirement";"settleAll";"finishLaunch"]]
+let mutable private launchTransitions=0
+for scenario,actions,names in launchCases do
+ let states=actions|>List.scan(fun state action->OwnedLaunch.apply action state)OwnedLaunch.initial|>List.map launchProject
+ let observations=List.map3(fun index name actual->{Index=index;Action=name;Source={Path="HostAttempt.qnt";Line=1;Column=index};Actual=actual})[1..names.Length] names states.Tail
+ let context={Environment=environment names.Length;Steps=observations|>List.map(fun item->{Index=item.Index;Action=item.Action;Source=item.Source})}
+ let root=JsonNode.Parse(File.ReadAllText(Path.Combine(itfRoot,$"{scenario}-0.itf.json"))).AsObject()
+ let metadata=root["#meta"].AsObject()
+ metadata.Remove("description")|>ignore
+ metadata.Remove("timestamp")|>ignore
+ let trace=QuintReplay.decodeItf context (root.ToJsonString())|>replay
+ match QuintReplay.compare trace observations with|Ok QuintReplayResult.Equivalent->()|value->fail $"owned launch {scenario} correspondence failed: %A{value}"
+ launchTransitions<-launchTransitions+names.Length
+let private launchGuarded=OwnedLaunch.applyReleaseGuardMutationForCorrespondence false OwnedLaunch.initial
+let private launchMutated=OwnedLaunch.applyReleaseGuardMutationForCorrespondence true OwnedLaunch.initial
+if launchGuarded.Phase<>OwnedLaunch.Refused||launchMutated.Phase<>OwnedLaunch.ReleaseIntended||launchProject launchGuarded=launchProject launchMutated then fail "actual owned launch identity guard mutation did not diverge"
+printfn "OwnedLaunch canonical/actual reducer correspondence passed: %d scenarios, %d transitions; actual identity guard mutation diverged" launchCases.Length launchTransitions

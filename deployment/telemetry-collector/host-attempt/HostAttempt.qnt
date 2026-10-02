@@ -67,3 +67,36 @@ module HostAttempt {
  val refusedOwnedCancellationWitness=state.refusal=="MechanismFailure" and state.ownedRun==1 and state.cancellationMayHaveEffect and state.native=="Unknown"
  val falseOwnershipRefusalWitness=state.refusal=="EffectAction" and state.ownedRun==0 and not(state.cancellationMayHaveEffect)
 }
+
+module OwnedLaunch {
+ type LaunchState={phase:str,identity:bool,releaseIntentions:int,releaseMayHaveEffect:bool,cancelled:bool,deadline:bool,failure:bool,directSettled:bool,descendantsSettled:bool,readersSettled:bool}
+ var launch:LaunchState
+ val launchInitial={phase:"Gated",identity:false,releaseIntentions:0,releaseMayHaveEffect:false,cancelled:false,deadline:false,failure:false,directSettled:false,descendantsSettled:false,readersSettled:false}
+ action launchInit=launch'=launchInitial
+ action recordIdentity=all{launch.phase=="Gated",not(launch.failure),launch'={...launch,phase:"IdentityRecorded",identity:true}}
+ action requestRelease=all{launch.phase=="IdentityRecorded",launch.identity,not(launch.cancelled),not(launch.deadline),not(launch.failure),launch.releaseIntentions==0,launch'={...launch,phase:"ReleaseIntended",releaseIntentions:1,releaseMayHaveEffect:true}}
+ action ackRelease=all{launch.phase=="ReleaseIntended",launch.releaseIntentions==1,launch'={...launch,phase:"Released"}}
+ action loseRelease=all{launch.releaseIntentions==1,launch'={...launch,phase:"Retiring",failure:true,releaseMayHaveEffect:true}}
+ action cancelLaunch=all{launch'={...launch,cancelled:true,failure:true,phase:if(launch.releaseMayHaveEffect)"Retiring" else "Refused"}}
+ action expireLaunch=all{launch'={...launch,deadline:true,failure:true,phase:if(launch.releaseMayHaveEffect)"Retiring" else "Refused"}}
+ action beginRetirement=all{launch.phase=="Released" or launch.phase=="Retiring",launch'={...launch,phase:"Retiring"}}
+ action settleAll=all{launch.phase=="Retiring",launch'={...launch,directSettled:true,descendantsSettled:true,readersSettled:true}}
+ action finishLaunch=all{launch.phase=="Retiring",launch.directSettled,launch.descendantsSettled,launch.readersSettled,not(launch.failure),launch'={...launch,phase:"Terminal"}}
+ action launchStep=any{recordIdentity,requestRelease,ackRelease,loseRelease,cancelLaunch,expireLaunch,beginRetirement,settleAll,finishLaunch}
+ action gatedReleaseStep=if(launch.phase=="Gated")recordIdentity else if(launch.phase=="IdentityRecorded")requestRelease else ackRelease
+ action lostReleaseStep=if(launch.phase=="Gated")recordIdentity else if(launch.phase=="IdentityRecorded")requestRelease else loseRelease
+ action cancelBeforeStep=cancelLaunch
+ action deadlineBeforeStep=expireLaunch
+ action settledStep=if(launch.phase=="Gated")recordIdentity else if(launch.phase=="IdentityRecorded")requestRelease else if(launch.phase=="ReleaseIntended")ackRelease else if(launch.phase=="Released")beginRetirement else if(not(launch.directSettled))settleAll else finishLaunch
+ val releaseNeedsIdentity=launch.releaseIntentions==0 or launch.identity
+ val atMostOneRelease=launch.releaseIntentions<=1
+ val terminalNeedsSettlement=launch.phase!="Terminal" or (launch.directSettled and launch.descendantsSettled and launch.readersSettled and not(launch.failure))
+ val terminalNeedsOwnership=launch.phase!="Terminal" or (launch.identity and launch.releaseIntentions==1)
+ val refusalNeverTerminal=not(launch.failure) or launch.phase!="Terminal"
+ val launchInvariants=all{releaseNeedsIdentity,atMostOneRelease,terminalNeedsSettlement,terminalNeedsOwnership,refusalNeverTerminal}
+ val releasedWitness=launch.phase=="Released" and launch.identity and launch.releaseIntentions==1
+ val lostWitness=launch.phase=="Retiring" and launch.failure and launch.releaseMayHaveEffect
+ val cancelledBeforeWitness=launch.phase=="Refused" and launch.cancelled and launch.releaseIntentions==0
+ val deadlineBeforeWitness=launch.phase=="Refused" and launch.deadline and launch.releaseIntentions==0
+ val settledWitness=launch.phase=="Terminal" and launchInvariants
+}

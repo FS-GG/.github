@@ -67,8 +67,7 @@ let readAdmission () =
             raise (BindingRefusal "effect-admission-refused")
     Text.Encoding.ASCII.GetString(buffer, 0, 64)
 
-[<EntryPoint>]
-let main argv =
+let private normalMain (argv:string array) =
     let mutable diagnostic: OwnedProcessScope.DiagnosticSnapshot option = None
     try
         use scope = OwnedProcessScope.enterCli ()
@@ -97,3 +96,8 @@ let main argv =
     | :? UnauthorizedAccessException -> fail diagnostic "input-access-refused"
     | :? IO.IOException -> fail diagnostic "input-io-refused"
     | _ -> fail diagnostic "unexpected-refused"
+
+[<EntryPoint>]
+let main (argv:string array) =
+    if argv.Length>=2 && argv[0]="__owned-launch" then OwnedLaunch.runLauncher argv[1] argv[2..]
+    else normalMain argv

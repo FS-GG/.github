@@ -124,6 +124,7 @@ module internal OwnedProcessScope =
         let mutable runFirstRetirement = RetirementNotObserved
         let mutable runFinalRetirement = RetirementNotObserved
         let mutable retirementRunOrdinal = 0
+        let launchTrace = ResizeArray<OwnedLaunch.Action * OwnedLaunch.State>()
         let supervisorPid = Environment.ProcessId
 
         let remainingMilliseconds () = deadline - Environment.TickCount64
@@ -324,7 +325,7 @@ module internal OwnedProcessScope =
         member internal _.RejectedCandidateCount = rejected.Count
         member internal _.RetainedCapacityExhausted = capacityExhausted
 
-        member private this.RunCore(executable: string, root: string, arguments: string list, timeoutMilliseconds: int, stdoutMaximum: int, stderrMaximum: int, postSpawnHook: (unit -> unit) option) =
+        member private this.RunCore(executable: string, root: string, arguments: string list, timeoutMilliseconds: int, stdoutMaximum: int, stderrMaximum: int, preAcquireHook: (Process -> unit) option, postSpawnHook: (unit -> unit) option, legacyLaunch: bool) =
             runOrdinal <- min 64 (runOrdinal + 1)
             runFirstRetirement <- RetirementNotObserved; runFinalRetirement <- RetirementNotObserved; retirementRunOrdinal <- runOrdinal
             if isCancelled () || unknown then raise (BindingRefusal "process-scope-refused")
@@ -337,15 +338,30 @@ module internal OwnedProcessScope =
             start.UseShellExecute <- false
             start.RedirectStandardOutput <- true
             start.RedirectStandardError <- true
+            start.RedirectStandardInput <- not legacyLaunch
             start.Environment.Clear()
             start.Environment["PATH"] <- "/usr/bin:/bin"
             start.Environment["LANG"] <- "C.UTF-8"
             start.Environment["LC_ALL"] <- "C.UTF-8"
-            start.ArgumentList.Add(executable)
+            if legacyLaunch then start.ArgumentList.Add(executable)
+            else
+                start.ArgumentList.Add("/usr/bin/dotnet")
+                start.ArgumentList.Add(Assembly.GetExecutingAssembly().Location)
+                start.ArgumentList.Add("__owned-launch")
+#if HOST_BINDING_TEST_LAUNCH_ROLES
+                start.ArgumentList.Add(if ignoreBaseline then OwnedLaunch.roleForTest executable else OwnedLaunch.roleFor executable)
+#else
+                start.ArgumentList.Add(OwnedLaunch.roleFor executable)
+#endif
             for argument in arguments do start.ArgumentList.Add(argument)
             use direct = Process.Start(start)
             activeDirectPid <- direct.Id
             sawDescendant <- false
+            let mutable launchState=OwnedLaunch.initial
+            launchTrace.Clear()
+            let applyLaunch action =
+                launchState <- OwnedLaunch.apply action launchState
+                launchTrace.Add(action,launchState)
             let mutable settlementComplete = false
             let mutable stdoutTask: Task<string> option = None
             let mutable stderrTask: Task<string> option = None
@@ -376,9 +392,19 @@ module internal OwnedProcessScope =
                 elif stderrReaderState = ReaderFaulted then note StderrReader None Other
                 doneReading
             let retire reason =
+                if not legacyLaunch && launchState.ReleaseMayHaveEffect then
+                    if isCancelled() && not launchState.StickyFailure then applyLaunch OwnedLaunch.Cancel
+                    elif remainingMilliseconds()<=0L && not launchState.StickyFailure then applyLaunch OwnedLaunch.Expire
+                    applyLaunch OwnedLaunch.BeginRetirement
                 let clean = settle direct reason
                 let readersDone = finishReaders ()
                 settlementComplete <- clean && readersDone
+                if not legacyLaunch && launchState.ReleaseMayHaveEffect then
+                    let directSettled = directExitObservation = ObservedTrue
+                    let descendantsSettled = settlementObservationValue = ObservedTrue
+                    applyLaunch (OwnedLaunch.ObserveSettlement(directSettled,descendantsSettled,readersDone))
+                    if settlementComplete && not launchState.StickyFailure then
+                        applyLaunch OwnedLaunch.Finish
                 let result = if settlementComplete then RetirementClean else RetirementUnknown
                 if firstRetirement = RetirementNotObserved then firstRetirement <- result; scopeFirstRetirementRunOrdinal <- runOrdinal
                 finalRetirement <- result
@@ -389,9 +415,39 @@ module internal OwnedProcessScope =
                     identities.Clear()
                 settlementComplete
             try
-                postSpawnHook |> Option.iter (fun hook -> hook ())
                 stdoutTask <- Some(capture stdoutMaximum direct.StandardOutput.BaseStream)
                 stderrTask <- Some(capture stderrMaximum direct.StandardError.BaseStream)
+                if legacyLaunch then
+                    preAcquireHook |> Option.iter(fun hook->hook direct)
+                else
+                    let release () =
+                        if launchState.Phase<>OwnedLaunch.ReleaseIntended then raise(BindingRefusal "process-scope-refused")
+                        try
+                            direct.StandardInput.BaseStream.WriteByte(byte 'R')
+                            direct.StandardInput.BaseStream.Flush()
+                            direct.StandardInput.Close()
+                            applyLaunch OwnedLaunch.AcknowledgeRelease
+                        with _ -> applyLaunch OwnedLaunch.LoseRelease;reraise()
+#if HOST_BINDING_REMOVE_LAUNCH_IDENTITY_GUARD
+                    launchState<-OwnedLaunch.applyReleaseGuardMutationForCorrespondence true OwnedLaunch.initial
+                    release()
+                    preAcquireHook |> Option.iter(fun hook->hook direct)
+#else
+                    preAcquireHook |> Option.iter(fun hook->hook direct)
+#endif
+                    if isCancelled() then applyLaunch OwnedLaunch.Cancel;raise(BindingRefusal "process-scope-refused")
+                    if remainingMilliseconds()<=3250L then applyLaunch OwnedLaunch.Expire;raise(BindingRefusal "process-budget-refused")
+                    acquire direct.Id
+                    if unknown || not(identities.ContainsKey(direct.Id)) then raise(BindingRefusal "process-cleanup-unknown")
+                    applyLaunch OwnedLaunch.RecordIdentity
+                    if isCancelled() then applyLaunch OwnedLaunch.Cancel;raise(BindingRefusal "process-scope-refused")
+                    if remainingMilliseconds()<=3250L then applyLaunch OwnedLaunch.Expire;raise(BindingRefusal "process-budget-refused")
+#if HOST_BINDING_REMOVE_LAUNCH_IDENTITY_GUARD
+#else
+                    applyLaunch OwnedLaunch.RequestRelease
+                    release()
+#endif
+                postSpawnHook |> Option.iter (fun hook -> hook ())
                 let operationEnd = min (Environment.TickCount64 + int64 timeoutMilliseconds) (deadline - 3250L)
                 let mutable exited = false
                 while not exited && not (isCancelled ()) && Environment.TickCount64 < operationEnd do
@@ -420,10 +476,18 @@ module internal OwnedProcessScope =
                 else raise (BindingRefusal "process-cleanup-unknown")
 
         member this.Run(executable: string, root: string, arguments: string list, timeoutMilliseconds: int, stdoutMaximum: int, stderrMaximum: int) =
-            this.RunCore(executable, root, arguments, timeoutMilliseconds, stdoutMaximum, stderrMaximum, None)
+            this.RunCore(executable, root, arguments, timeoutMilliseconds, stdoutMaximum, stderrMaximum, None, None, false)
 
         member internal this.RunWithPostSpawnHook(executable: string, root: string, arguments: string list, timeoutMilliseconds: int, stdoutMaximum: int, stderrMaximum: int, hook: unit -> unit) =
-            this.RunCore(executable, root, arguments, timeoutMilliseconds, stdoutMaximum, stderrMaximum, Some hook)
+            this.RunCore(executable, root, arguments, timeoutMilliseconds, stdoutMaximum, stderrMaximum, None, Some hook, false)
+
+        member internal this.RunWithPreAcquireHook(executable: string, root: string, arguments: string list, timeoutMilliseconds: int, stdoutMaximum: int, stderrMaximum: int, hook: Process -> unit) =
+            this.RunCore(executable, root, arguments, timeoutMilliseconds, stdoutMaximum, stderrMaximum, Some hook, None, false)
+
+        member internal this.RunLegacyForTest(executable: string, root: string, arguments: string list, timeoutMilliseconds: int, stdoutMaximum: int, stderrMaximum: int, hook: Process -> unit) =
+            this.RunCore(executable, root, arguments, timeoutMilliseconds, stdoutMaximum, stderrMaximum, Some hook, None, true)
+
+        member internal _.LaunchTraceForTest = launchTrace |> Seq.toList
 
         interface IDisposable with
             member _.Dispose() =
