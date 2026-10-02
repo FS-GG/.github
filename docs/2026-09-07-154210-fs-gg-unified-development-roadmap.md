@@ -71,6 +71,26 @@ root-owned import with complete independent readback, qualified inspection/refre
 consumer adoption remain required. No live board switch or hosted activation is claimed.
 Selected V2 platform full acceptance remains complete.
 
+**2026-10-02: WASM-SHARED-01.5-P connected 0.2.0 publication and installed qualification CLOSED.**
+The immutable `wasm/v0.2.0` producer is `4afacb501b9371b4cc81494b7bf91b46c880a663`,
+tree `191d7c0ca82af8a4d610e88b35ce97df802d3463`.
+[Publisher 37037339434](https://github.com/FS-GG/FS.GG.Game/actions/runs/37037339434)
+passed both-feed and release-asset readback. SDK archive SHA-256 is
+`ddd7b0ea76a1811ec3cdd45c373ac0ee556cf90eb9ae4cecad48dec1095475a3`;
+manifest SHA-256 is `dee8b02ad0e43e7d279492ed6378eb873f76edeb5a72c29e9c336409d5907853`.
+Fresh [installed run 37047631080](https://github.com/FS-GG/FS.GG.Game/actions/runs/37047631080)
+passed all **25 org-feed and 25 public-feed** browser cases at qualification-only successor
+`7397d4b408b8e7b44393fee9f837278723934867`, with locked consumer SHA-256
+`d6a4e7dde5754ac50c73f9887c4aedf2e1f845b967ecbd6b26f9eb150667439e`.
+Both original served artifacts matched their native archive digests; root independently verified
+the full native log and producer/qualifier/SDK/manifest joins. Root readback receipt SHA-256 is
+`bc5b5e7d292c37fa6025462fba1c4821131fc144eafeaf5fbf5a74aa59dfa788`.
+The canonical registry now selects the genuinely published 0.2.0 Contracts/Browser pair.
+Published 0.1.1, its original acceptance and failed expiry run 37039137022 remain historical.
+The intentional four-constructor Browser migration is documented; Contracts remains compatible.
+This unlocks separate BAR/SC2 adapters and the FourD example, whose adoption and native acceptance
+remain open. V2 platform acceptance stays complete.
+
 **2026-10-02: BAR successor stock-engine producer and consumer profile CLOSED (source); native qualification remains open.**
 [HighBar #15](https://github.com/FS-GG/HighBarV3/pull/15) merged protected
 `e2a5a9cf6fdd187bcc82f701a755567db96c11c7`, tree
@@ -164,7 +184,10 @@ byte-identical SDK/manifest assets against publisher custody; feed signature wra
 Fresh installed [run 37039137022](https://github.com/FS-GG/FS.GG.Game/actions/runs/37039137022)
 passed all 25 org-feed controls, while public qualification passed 24 and failed one expiry assertion.
 That assertion lost the typed deadline reason and assumed one delivery order despite two valid canonical
-expiry schedules. Its bounded qualification correction is in progress; installed 0.2.0 acceptance and
+expiry schedules. [Game #680](https://github.com/FS-GG/FS.GG.Game/pull/680) corrected only the
+consumer qualification at protected `7397d4b408b8e7b44393fee9f837278723934867`, tree
+`4881135b718beaeb87eab1763d9f13e31410389f`; the original failed run remains historical evidence.
+The connected 0.2.0 publication and installed boundary is now closed as recorded above.
 BAR/SC2/FourD adapters remain open. No product adoption effect is claimed.
 
 **2026-10-02: SC2C-01.6f final typed pair CLI repair CLOSED (source).**

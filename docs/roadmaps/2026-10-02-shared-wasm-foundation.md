@@ -35,7 +35,9 @@ authority and clocks.
 ## Dependency boundary
 
 The package names below are selected. `FS.GG.Wasm.Contracts` and `FS.GG.Wasm.Browser` now exist as
-published version `0.1.1` from FS.GG.Game on GitHub Packages and nuget.org. FS.GG.Game owns shared execution policy and releases; the guest SDK ships as a versioned source archive.
+published version **0.2.0** from FS.GG.Game on GitHub Packages and nuget.org. The first
+immutable 0.1.1 baseline remains historical. FS.GG.Game owns shared execution policy and releases;
+the guest SDK ships as a versioned source archive.
 
 | Deliverable | Shared responsibility | Product responsibility |
 |---|---|---|
@@ -77,7 +79,7 @@ receipt interpretation and handling of unknown native effects stay in the produc
 
 ## Stages and completion evidence
 
-### Connected producer prerequisite to .5 — source closed, release open
+### Connected producer prerequisite to .5 — source, publication and installed qualification CLOSED
 
 The published 0.1.1 boundary exposed missing connection between the real Worker and its
 F# lifecycle. Empty BAR output, unaligned output and lifecycle expiry counterexamples required
@@ -96,10 +98,25 @@ Native ApiCompat against the genuine published 0.1.1 archives identified four re
 constructors: WorkerCommand, RequestProjection, EffectProjection and HostProjection.
 Contracts remains compatible. The selected successor is coherent **0.2.0**, with that exact
 pre-1.0 migration recorded rather than suppressed. The immutable first release remains 0.1.1.
-Before .5 adapters, qualify protected-source publisher custody, both genuine feeds and SDK
-assets, then fresh public and organization installed consumers. None is inferred from the
-local candidate or source merge. BAR/SC2 existing frozen paths remain independently qualified;
-consumer adapters, native journeys and .6–.7 remain open.
+[Publisher 37037339434](https://github.com/FS-GG/FS.GG.Game/actions/runs/37037339434)
+qualified that immutable producer, both genuine feeds and SDK assets. SDK archive SHA-256 is
+`ddd7b0ea76a1811ec3cdd45c373ac0ee556cf90eb9ae4cecad48dec1095475a3` and manifest SHA-256 is
+`dee8b02ad0e43e7d279492ed6378eb873f76edeb5a72c29e9c336409d5907853`.
+The original installed run 37039137022 passed org 25/25 and public 24/25, then failed one expiry
+assertion. It remains retained evidence. [Game #680](https://github.com/FS-GG/FS.GG.Game/pull/680)
+repaired only qualification's missing typed deadline reason and allowance for two valid canonical
+expiry schedules at protected `7397d4b408b8e7b44393fee9f837278723934867`, tree
+`4881135b718beaeb87eab1763d9f13e31410389f`; producer bytes and tag stayed unchanged.
+Fresh [installed run 37047631080](https://github.com/FS-GG/FS.GG.Game/actions/runs/37047631080)
+passed **25/25 org and 25/25 public** cases, .NET/Fable and independently built Rust/C modules.
+Both consumers use lock SHA-256
+`d6a4e7dde5754ac50c73f9887c4aedf2e1f845b967ecbd6b26f9eb150667439e`.
+Root authenticated both original served archives against native digests and independently joined
+producer, qualifier, SDK and manifest in the full native log. Root readback receipt SHA-256 is
+`bc5b5e7d292c37fa6025462fba1c4821131fc144eafeaf5fbf5a74aa59dfa788`.
+This closes .5-P's connected 0.2.0 publication/installed prerequisite. Product adapters select
+that boundary; BAR/SC2 frozen paths remain independently qualified. Consumer adapters, native
+journeys and .6–.7 remain open.
 
 
 Stages .1–.3 source and .4 publication/installed qualification are closed. Stages .5–.7 remain open. Record source delivery, publication and
@@ -111,7 +128,7 @@ installed qualification separately, with exact versions, revisions and artifact 
 | **.2 — Shared runtime and lifecycle — CLOSED (source)** | Unpublished `FS.GG.Wasm.Browser` production F# lifecycle/host, strict admission and invocation, thin JS mechanics, canonical Quint model and full-state/effect correspondence | Closed .1 contract | [Game #673](https://github.com/FS-GG/FS.GG.Game/pull/673), protected source `c951df2b02515cc44eefe6f1078923abd52b71be`, tree `e4453f9bf3565cf4f1321365efecb13fc2e56570`; hosted source/model/package/browser run `36991045744` and existing Game gates passed. No publication, installed host, product adoption or native authority inferred |
 | **.3 — Guest SDK and fresh consumer — CLOSED (source)** | Versioned `0.1.0-source.3` Rust/C guest SDK source archive, package-owned Worker assets, independently compiled BAR/SC2 modules and a clean Fable consumer | Closed .1 contract and .2 host | [Game #674](https://github.com/FS-GG/FS.GG.Game/pull/674), protected source `e91db7efaf15dfb56b1925307ad0ceb46a3da31d`, tree `6a8c7e5c9dbcb309c71b612be78093df23c877a8`; hosted archive/package/fresh-consumer/browser run `36996692451` and existing Game gates passed. No publication, feed readback, installed qualification, product adoption or native authority inferred |
 | **.4 — Publication and clean import — CLOSED** | Contracts/Browser `0.1.1` on GitHub Packages and nuget.org; SDK source archive under immutable `wasm/v0.1.1` | Closed .2 and .3; protected publisher source `ea015cbf884b01754bc6615476241450907b6b24` and qualifier source `3062be7e37c97959b9d522492ea1505f89a4c74e` | [Publisher `37012281052`](https://github.com/FS-GG/FS.GG.Game/actions/runs/37012281052) passed both feed and release-asset readbacks; genuine public fresh consumer passed locally and [org installed run `37017511208`](https://github.com/FS-GG/FS.GG.Game/actions/runs/37017511208) passed. Both locked consumers have SHA-256 `040afc28749bdf7545ce8d424e8cae602583790b06c8439f92a7f86b69fa4007`; .NET/Fable, extracted Rust/C examples and six Chromium Worker cases passed |
-| **.5 — BAR and SC2 adoption** | Separate product adapter migrations | .4 published boundary; each product's baseline | Actual production paths consume the dependency; existing ABI, replacement, authority and unknown-effect behavior pass. Native acceptance remains separately reported |
+| **.5 — BAR and SC2 adoption** | Separate product adapter migrations | Closed .5-P connected 0.2.0 published/installed boundary; each product's baseline | Actual production paths consume the dependency; existing ABI, replacement, authority and unknown-effect behavior pass. Native acceptance remains separately reported |
 | **.6 — FourD extension example** | Optional reaction-policy composition using the published host | .4; declared execution scope | Clean example imports the dependency, invokes a policy and handles trap/deadline/disposal through the shared API; no claim of completed FourD gameplay or deterministic replay without corresponding evidence |
 | **.7 — Remove duplicate runtime policy** | Delete replaced product host mechanics and reconcile SDK/runtime guidance | Each consumer's accepted adoption | Active paths have one owner for shared execution policy; product codecs and authority adapters remain local |
 
