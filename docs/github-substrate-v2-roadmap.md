@@ -68,6 +68,12 @@ not schedule or gate the current route, and it is not reported as completed.
 
 ## Active strategy: start clean and repair forward
 
+**Next selected item — 2026-10-02: Coordination V2 board migration
+(`COORD-BOARD-V2-01.2`).** Prepare the bounded carryover and organization pilot described in
+[the migration sequence](#coord-board-v2-migration--next-item-2026-10-02), then qualify projection
+and switch scheduling incrementally. Existing delivery lanes continue in parallel. Full V2 acceptance
+remains complete at its selected profile; board migration is follow-on work.
+
 The owner selected speed over backward validity on 2026-09-28. No V1 workload requires preserving
 its old execution guarantees. `.github` uses the published Coordination CLI 0.1.2 and its ordinary V2
 workflow. Several ready repository profiles may share one immutable published CLI. Each repository keeps
@@ -236,6 +242,34 @@ The legacy automatic V1 writer stays retired; the new
 board cannot become delivery authority or a synchronous source-merge gate. Refresh uses fixed,
 reviewed jobs under the host execution boundary. This follow-on feature adds no board migration
 prerequisite to full V2 acceptance.
+
+#### Coord-board-v2 migration — next item, 2026-10-02
+
+Start `COORD-BOARD-V2-01.2` next. Reconcile the currently open V2 roadmap outcomes against current
+source, publication and operational evidence, prepare a selective import, and establish the fresh
+**Coordination V2** planning board. After the pilot and restricted projection qualify, use it as the
+primary scheduling queue for the selected remaining work. The
+[owning migration plan](coordination/2026-09-29-coordination-v2-board-design.md#migration-priority-and-execution-sequence--2026-10-02)
+retains the executable milestone boundaries and completion conditions.
+
+The board records priorities, owners, dependencies, blockers and the next action. Owning roadmaps
+retain architecture, sequencing and acceptance requirements; native delivery and operation evidence
+determine completion. Carry over genuine remaining outcomes, preserve existing issue identities and
+active PRs, and keep source delivery, publication and installed/native acceptance distinct. Completed
+outcomes and superseded V1 requirements stay in history. Organization-relevant work belongs on the
+shared board; detailed product work follows its selected product-board adoption.
+
+| Step | Owning item and action | Completion condition |
+|---|---|---|
+| Reconcile and pilot | `.2`: inventory consumers and remaining outcomes; prepare the dry-run manifest and import three to five representative source, publication and native-qualification items | Exact target, fields, issue identities, owners, dependencies and remaining acceptance outcomes are verified by readback |
+| Qualify projection | `.3`: implement the restricted V2 adapter and fixed refresh job; prepare source alongside the pilot | Repeat import, lost response, incomplete pages, wrong target, field drift and denied access preserve bounded writes and truthful stale/unknown state |
+| Transfer and switch | `.4`: import the remaining selected outcomes and switch the organization scheduling driver and skills | Consumers use the verified V2 binding, retain routine delivery and active work, and leave the legacy writer retired |
+| Publish product integration | `.5`: publish the adapter and SDD/Templates configuration, commands and guidance after `.3` qualification | Coherent published artifacts provide scoped V2 bindings while preserving local-only operation |
+| Adopt product boards | `.6`: qualify fresh and retained workspaces, then adopt each selected product independently | Actual published workspace journeys and cross-project/repository scope refusals pass |
+
+Migration does not pause current implementation, recreate legacy claim ceremony, or make board
+refresh a source-merge gate. A board item is optional for routine source work. No project creation,
+import, credential activation, consumer switch or product adoption is completed by this write-up.
 
 ### Language-independent product workspaces — 2026-09-29
 
