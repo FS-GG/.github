@@ -1,6 +1,7 @@
 namespace FSGG.Telemetry.PersistentV3.ImageClosure
 
 open System
+open System.Diagnostics
 open System.IO
 open System.Threading
 open System.Threading.Tasks
@@ -79,34 +80,63 @@ module Runner =
       | Some _->refuse reason state
       | None->refuse reason state
     let cancel state=if state.Owned.IsEmpty&&state.MayHaveEffect.IsEmpty&&state.Running.IsEmpty then refuse "Cancelled" state else {state with Phase=Cleanup;Cancelled=true;Qualification=QualificationUnknown;Pending=None}
+    let invalidateBoundary reason cancelled state =
+      let phase=
+        if cancelled then
+          if state.Owned.IsEmpty&&state.Running.IsEmpty then Refused else Cleanup
+        else Indeterminate
+      {state with Phase=phase;Cancelled=state.Cancelled||cancelled;Qualification=QualificationUnknown;Refusal=Some reason;Pending=None}
     let qualificationAccepted state=state.Phase=Complete&&state.Owned.IsEmpty&&state.MayHaveEffect.IsEmpty&&state.Running.IsEmpty&&state.UnknownBuilds.IsEmpty&&state.IdentityOk&&state.Current&&state.Qualification=Accepted&&not state.Cancelled&&not state.CleanupFailed
 
 type IRunnerMechanism = abstract Execute:Effect*CancellationToken->Task<Observation>
 module RunnerExecution =
     let run maximumSteps (deadline:DateTimeOffset) (cancellation:CancellationToken) (mechanism:IRunnerMechanism) state =
+      let budget=deadline-DateTimeOffset.UtcNow
+      let clock=Stopwatch.StartNew()
       let exhausted reason current =
-        if current.Phase=Complete||current.Phase=Refused||current.Phase=Indeterminate||current.CleanupFailed then current
+        if current.Phase=Refused||current.Phase=Indeterminate||current.CleanupFailed then current
         else {current with Phase=Indeterminate;Qualification=QualificationUnknown;Refusal=Some reason;Pending=None}
       let rec loop remaining ignoreCancellation current trace =
-        if remaining=0 then exhausted "StepBudget" current,List.rev trace
+        if cancellation.IsCancellationRequested&&not ignoreCancellation then
+          let invalid=Runner.invalidateBoundary "Cancelled" true current
+          if invalid.Phase=Cleanup then loop remaining true invalid trace else invalid,List.rev trace
+        elif clock.Elapsed>=budget then exhausted "Deadline" current,List.rev trace
+        elif remaining=0 then exhausted "StepBudget" current,List.rev trace
         elif current.Phase=Complete||current.Phase=Refused||current.Phase=Indeterminate||current.CleanupFailed then current,List.rev trace else
         let requested,effect=Runner.nextEffect current
         match effect with
         | None->requested,List.rev trace
         | Some command->
-            let remainingTime=deadline-DateTimeOffset.UtcNow
+            let remainingTime=budget-clock.Elapsed
             if remainingTime<=TimeSpan.Zero then
               exhausted "Deadline" requested,List.rev trace
             elif cancellation.IsCancellationRequested&&not ignoreCancellation then loop (remaining-1) true (Runner.cancel requested) trace
             else
+              let invocationBudget=min remainingTime (TimeSpan.FromMilliseconds 250.0)
+              use invocationCancellation=if ignoreCancellation then new CancellationTokenSource() else CancellationTokenSource.CreateLinkedTokenSource(cancellation)
+              invocationCancellation.CancelAfter invocationBudget
+              let invocation:Task<Observation>=Task.Factory.StartNew((fun()->mechanism.Execute(command,invocationCancellation.Token)),CancellationToken.None,TaskCreationOptions.DenyChildAttach,TaskScheduler.Default).Unwrap()
               try
                 let token=if ignoreCancellation then CancellationToken.None else cancellation
-                let invocationBudget=min remainingTime (TimeSpan.FromMilliseconds 250.0)
-                let observation=mechanism.Execute(command,token).WaitAsync(invocationBudget,token).GetAwaiter().GetResult()
-                loop (remaining-1) ignoreCancellation (Runner.observe observation requested) ((command,observation)::trace)
+                let observation=invocation.WaitAsync(invocationBudget,token).GetAwaiter().GetResult()
+                let observed=Runner.observe observation requested
+                let cancelledNow=cancellation.IsCancellationRequested&&not ignoreCancellation
+                let deadlineNow=clock.Elapsed>=budget
+                let next=if cancelledNow then Runner.invalidateBoundary "Cancelled" true observed elif deadlineNow then Runner.invalidateBoundary "Deadline" false observed else observed
+                loop (remaining-1) (ignoreCancellation||cancelledNow||deadlineNow) next ((command,observation)::trace)
               with error->
-                let observation=match command with CreateStore logical->StoreMayHaveEffect logical|StartBuild(logical,_)->BuildMayHaveEffect logical|_->EffectFailed(error.GetType().Name)
-                loop (remaining-1) true (Runner.losePending (error.GetType().Name) requested) ((command,observation)::trace)
+                invocationCancellation.Cancel()
+                if invocation.IsCompletedSuccessfully then
+                  let observation=invocation.Result
+                  let observed=Runner.observe observation requested
+                  let next=if cancellation.IsCancellationRequested then Runner.invalidateBoundary "Cancelled" true observed else Runner.invalidateBoundary "Deadline" false observed
+                  loop (remaining-1) true next ((command,observation)::trace)
+                else
+                  invocation.ContinueWith((fun(completed:Task<Observation>)->if completed.IsFaulted then completed.Exception.Handle(fun _->true)|>ignore),TaskContinuationOptions.ExecuteSynchronously)|>ignore
+                  let observation=match command with CreateStore logical->StoreMayHaveEffect logical|StartBuild(logical,_)->BuildMayHaveEffect logical|_->EffectFailed(error.GetType().Name)
+                  let lost=Runner.losePending (error.GetType().Name) requested
+                  let next=if cancellation.IsCancellationRequested&&not ignoreCancellation then Runner.invalidateBoundary "Cancelled" true lost else lost
+                  loop (remaining-1) true next ((command,observation)::trace)
       loop maximumSteps false state []
     type DirectoryFixture(root:string,input:string,first:string,second:string)=
       interface IRunnerMechanism with

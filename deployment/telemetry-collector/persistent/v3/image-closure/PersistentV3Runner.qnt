@@ -35,7 +35,9 @@ module PersistentV3Runner {
  action requestRemove=all{state.phase=="Cleanup",state.running=="None",state.owned!="None",state.pending=="None",state'={...state,pending:"Remove",lastEffect:"Remove"}}
  action observeRemoved=all{state.pending=="Remove",state'={...state,owned:if(state.owned=="AB")"B" else "None",pending:"None",phase:if(state.owned!="AB" and (state.unknownBuild or state.storeUnknown))"Unknown" else if(state.owned!="AB" and state.qualification=="Accepted" and state.current and not(state.cancelled))"Complete" else if(state.owned!="AB")"Refused" else "Cleanup"}}
  action cleanupFailure=all{(state.pending=="Remove" or state.pending=="Cancel"),state'={...state,cleanupFailed:true,qualification:"Unknown",pending:"None"}}
- action step=any{requestAcquire,observeAcquire,requestValidate,observeValid,observeStale,requestStoreA,observeStoreA,requestStoreB,observeStoreB,observeDuplicateStore,requestStartA,observeStartedA,observeDuplicateProcess,loseBuildA,requestAwaitA,observeBuildA,requestStartB,observeStartedB,requestAwaitB,observeBuildB,observeBuildMismatch,requestCompare,observeMatch,observeMismatch,requestQualify,observeQualified,cancel,requestCancel,observeCancelled,requestRemove,observeRemoved,cleanupFailure}
+ action deadlineAfterRemove=all{state.pending=="Remove",state.owned=="B",state'={...state,phase:"Unknown",owned:"None",qualification:"Unknown",refusal:"Deadline",pending:"None"}}
+ action cancellationAfterRemove=all{state.pending=="Remove",state.owned=="B",state'={...state,phase:"Refused",owned:"None",qualification:"Unknown",cancelled:true,refusal:"Cancelled",pending:"None"}}
+ action step=any{requestAcquire,observeAcquire,requestValidate,observeValid,observeStale,requestStoreA,observeStoreA,requestStoreB,observeStoreB,observeDuplicateStore,requestStartA,observeStartedA,observeDuplicateProcess,loseBuildA,requestAwaitA,observeBuildA,requestStartB,observeStartedB,requestAwaitB,observeBuildB,observeBuildMismatch,requestCompare,observeMatch,observeMismatch,requestQualify,observeQualified,cancel,requestCancel,observeCancelled,requestRemove,observeRemoved,cleanupFailure,deadlineAfterRemove,cancellationAfterRemove}
  val successIsClosed=state.phase!="Complete" or (state.current and state.owned=="None" and state.running=="None" and not(state.storeUnknown) and not(state.unknownBuild) and state.identityOk and state.qualification=="Accepted" and not(state.cancelled) and not(state.cleanupFailed))
  val unknownNeverSucceeds=(not(state.storeUnknown) and not(state.unknownBuild)) or state.phase!="Complete"
  val effectsOrdered=state.pending=="None" or state.pending==state.lastEffect
@@ -48,4 +50,6 @@ module PersistentV3Runner {
  val staleWitness=state.phase=="Refused" and not(state.current) and state.refusal=="InputChanged"
  val duplicateStoreWitness=state.phase=="Unknown" and state.storeUnknown and not(state.identityOk)
  val duplicateProcessWitness=state.phase=="Unknown" and state.unknownBuild and not(state.identityOk)
+ val deadlineWitness=state.phase=="Unknown" and state.owned=="None" and state.qualification=="Unknown" and state.refusal=="Deadline"
+ val terminalCancellationWitness=state.phase=="Refused" and state.owned=="None" and state.qualification=="Unknown" and state.cancelled and state.refusal=="Cancelled"
 }

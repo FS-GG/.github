@@ -42,7 +42,7 @@ module ImageClosure =
     [<Literal>]
     let RuntimeImageDigest="sha256:ed6a2d26633ddcd3d42a1d9f9866214ecbbc11ba6ac5e0e843da02c13da24072"
     [<Literal>]
-    let RuntimeTreeSha256="ead4ece7808c4f07f75eebfae705448509c6621534967ded5868454396a2aa21"
+    let RuntimeTreeSha256="ead4ece42719198be9607d18415e428e3a6fcaadf50b88dc6e93894c47bec4c2"
     [<Literal>]
     let NativeElfSha256="167c0148a849d2444f1b5a7fb5f8bb2de1de5ae13a2a504b833fc765980f5cd9"
     [<Literal>]
@@ -53,7 +53,16 @@ module ImageClosure =
     let private sha64 (value:string)=not(String.IsNullOrWhiteSpace value)&&Regex.IsMatch(value,"^[0-9a-f]{64}$")&&value<>String('0',64)
     let private canonicalSegments (value:string)=value.Split('/')|>Array.forall(fun segment->segment<>"."&&segment<>"..")
     let private relativePath (value:string)=not(String.IsNullOrWhiteSpace value)&&Regex.IsMatch(value,"^[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*$")&&canonicalSegments value
-    let private targetPath role (value:string)=not(String.IsNullOrWhiteSpace value)&&Regex.IsMatch(value,$"^/opt/fsgg/image/{role}/[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*$")&&canonicalSegments value
+    let private canonicalAbsolute (value:string)=not(String.IsNullOrWhiteSpace value)&&Regex.IsMatch(value,"^/[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*$")&&canonicalSegments value
+    let private targetPath role (value:string)=
+        canonicalAbsolute value&&
+        (value.StartsWith($"/opt/fsgg/image/{role}/",StringComparison.Ordinal)||
+         match role with
+         | "host"->value.StartsWith("/opt/fsgg/telemetry-host/",StringComparison.Ordinal)
+         | "manager"->value.StartsWith("/opt/fsgg/telemetry-host-manager/",StringComparison.Ordinal)
+         | "runtime"->value.StartsWith("/usr/share/dotnet/",StringComparison.Ordinal)
+         | "native"->[|"/opt/fsgg/";"/usr/local/";"/usr/lib/";"/lib/";"/lib64/";"/etc/";"/usr/share/"|]|>Array.exists(fun prefix->value.StartsWith(prefix,StringComparison.Ordinal))
+         | _->false)
     let private fixedProduction selection = selection.Platform="linux/amd64"&&selection.OwnerUid=0&&selection.HostSourceRevision=HostSourceRevision&&selection.HostReleaseId=401538149L&&selection.HostRunId=36964135216L&&selection.HostArchiveSha256=HostArchiveSha256&&selection.HostPackageSha256=HostPackageSha256&&selection.HostPayloadSha256=HostPayloadSha256&&selection.HostManifestSha256=HostManifestSha256&&selection.HostJournalSha256=HostJournalSha256&&selection.ManagerSourceRevision=ManagerSourceRevision&&selection.ManagerSourceTree=ManagerSourceTree&&selection.ManagerArtifactSha256=ManagerArtifactSha256&&selection.ManagerManifestSha256=ManagerManifestSha256&&selection.ManagerPreparedSha256=ManagerPreparedSha256&&selection.ManagerArchiveSha256=ManagerArchiveSha256&&selection.ManagerRunId=36983338783L&&selection.ManagerArtifactId=11216418410L&&selection.RuntimeImageDigest=RuntimeImageDigest&&selection.RuntimeTreeSha256=RuntimeTreeSha256&&selection.NativeElfSha256=NativeElfSha256&&selection.NativeProfileSha256=NativeProfileSha256&&selection.CanonicalVerifierSha256=CanonicalVerifierSha256
     let private modeText (path:string) = Convert.ToString(int(File.GetUnixFileMode path),8).PadLeft(4,'0')
     let private noLink (info:FileSystemInfo)=String.IsNullOrEmpty info.LinkTarget
@@ -91,17 +100,20 @@ module ImageClosure =
         let pending=Collections.Generic.Stack<string>()
         pending.Push root
         let mutable error=None
+        let mutable visited=1
         while pending.Count>0&&error.IsNone do
             let directory=pending.Pop()
             let info=DirectoryInfo directory
             if not info.Exists||not(noLink info)||ownerUid directory<>expectedUid||((File.GetUnixFileMode directory)&&&(UnixFileMode.GroupWrite|||UnixFileMode.OtherWrite))<>enum 0 then error<-Some "acquisition-directory-custody"
             else
                 for entry in info.EnumerateFileSystemInfos() do
-                    if files.Count+pending.Count>=8192 then error<-Some "acquisition-census-bound"
-                    elif not(noLink entry)||entry.Attributes.HasFlag FileAttributes.ReparsePoint then error<-Some "acquisition-census-link"
-                    elif entry.Attributes.HasFlag FileAttributes.Directory then pending.Push entry.FullName
-                    elif regularFile entry.FullName then files.Add(Path.GetRelativePath(root,entry.FullName))
-                    else error<-Some "acquisition-census-special-file"
+                    if error.IsNone then
+                      visited<-visited+1
+                      if visited>8192 then error<-Some "acquisition-census-bound"
+                      elif not(noLink entry)||entry.Attributes.HasFlag FileAttributes.ReparsePoint then error<-Some "acquisition-census-link"
+                      elif entry.Attributes.HasFlag FileAttributes.Directory then pending.Push entry.FullName
+                      elif regularFile entry.FullName then files.Add(Path.GetRelativePath(root,entry.FullName))
+                      else error<-Some "acquisition-census-special-file"
         match error with Some value->Error value|None->Ok(files|>Set.ofSeq)
     let private physicalRows selection =
         try
@@ -159,11 +171,92 @@ module ImageClosure =
               |>Array.fold(fun state next->match state,next with Error e,_->Error e|_,Error e->Error e|Ok values,Ok value->Ok(value::values))(Ok[])
               |>Result.map(List.rev>>List.toArray)
         with _->Error "role-manifest-read"
+    let private productionManifest selection role expectedSha =
+        try
+            let reference=selection.RoleManifests|>Array.find(fun item->item.Role=role)
+            if reference.Sha256<>expectedSha||not(relativePath reference.Path) then Error "production-authority-reference" else
+            let root=Path.GetFullPath selection.ManifestRoot
+            let path=Path.GetFullPath(Path.Combine(root,reference.Path))
+            let prefix=root.TrimEnd(Path.DirectorySeparatorChar)+string Path.DirectorySeparatorChar
+            let info=FileInfo path
+            if not(path.StartsWith(prefix,StringComparison.Ordinal))||not info.Exists||info.Length<=0L||info.Length>2L*1024L*1024L||not(custody root path selection.OwnerUid) then Error "production-authority-physical" else
+            let bytes=File.ReadAllBytes path
+            if sha bytes<>expectedSha then Error "production-authority-digest" else
+            use document=JsonDocument.Parse bytes
+            Ok(document.RootElement.Clone())
+        with _->Error "production-authority-read"
+    let private manifestFiles (sourcePrefix:string) (targetRoot:string) (value:JsonElement) =
+        if value.ValueKind<>JsonValueKind.Array||value.GetArrayLength()=0||value.GetArrayLength()>8192 then Error "production-authority-files" else
+        value.EnumerateArray()
+        |>Seq.map(fun item->
+            let names=item.EnumerateObject()|>Seq.map _.Name|>Seq.toArray
+            if item.ValueKind<>JsonValueKind.Object||names.Length<>4||Set.ofArray names<>set["bytes";"mode";"path";"sha256"] then Error "production-authority-file-shape" else
+            let path=item.GetProperty("path").GetString()
+            let relative=if String.IsNullOrEmpty sourcePrefix then path elif path.StartsWith(sourcePrefix+"/",StringComparison.Ordinal) then path.Substring(sourcePrefix.Length+1) else path
+            let mode=item.GetProperty("mode").GetString()
+            let digest=item.GetProperty("sha256").GetString()
+            let bytes=item.GetProperty("bytes").GetInt64()
+            if not(relativePath relative)||bytes<=0L||(mode<>"0444"&&mode<>"0555")||not(sha64 digest) then Error "production-authority-file-value"
+            else Ok {SourcePath=(if String.IsNullOrEmpty sourcePrefix then relative else sourcePrefix+"/"+relative);TargetPath=targetRoot.TrimEnd('/')+"/"+relative;Bytes=bytes;Sha256=digest;Mode=mode})
+        |>Seq.fold(fun state next->match state,next with Error e,_->Error e|_,Error e->Error e|Ok values,Ok value->Ok(value::values))(Ok[])
+        |>Result.map(List.rev>>List.toArray)
+    let private productionManifests selection (rows:FileRow array) =
+        let pinned=selection.IdentityClass="production"
+        let rowSet role=rows|>Array.filter(fun row->row.SourceClass=role)|>Array.map(fun row->{SourcePath=row.SourcePath;TargetPath=row.TargetPath;Bytes=row.Bytes;Sha256=row.Sha256;Mode=row.Mode})
+        let closed expected (value:JsonElement)=value.ValueKind=JsonValueKind.Object&&(value.EnumerateObject()|>Seq.length)=Set.count expected&&(value.EnumerateObject()|>Seq.map _.Name|>Set.ofSeq)=expected
+        match productionManifest selection "host" selection.HostManifestSha256,productionManifest selection "manager" selection.ManagerManifestSha256,productionManifest selection "runtime" selection.RuntimeTreeSha256,productionManifest selection "native" selection.NativeProfileSha256 with
+        | Ok host,Ok manager,Ok runtime,Ok native->
+            try
+                let hostNames=host.EnumerateObject()|>Seq.map _.Name|>Set.ofSeq
+                let hostExpected=set["archiveSha256";"createdAt";"dependencyLockSha256";"framework";"packageId";"producerPayloadSha256";"runtimePrerequisites";"schema";"sourceSha";"supportedStoreSchemaMax";"supportedStoreSchemaMin";"tag";"target";"uiAssetTreeSha256";"version"]
+                let hostRows=rowSet "host"
+                let hostOk=closed hostExpected host&&hostNames=hostExpected&&host.GetProperty("schema").GetString()="fsgg.telemetry.host-release/1"&&host.GetProperty("sourceSha").GetString()=selection.HostSourceRevision&&host.GetProperty("archiveSha256").GetString()=selection.HostArchiveSha256&&host.GetProperty("producerPayloadSha256").GetString()="sha256:"+selection.HostPayloadSha256&&host.GetProperty("version").GetString()="0.3.0"&&host.GetProperty("target").GetString()="linux-x64"&&hostRows.Length=1&&hostRows[0].SourcePath="host/FS.GG.Telemetry.Host.0.3.0.nupkg"&&hostRows[0].TargetPath="/opt/fsgg/telemetry-host/FS.GG.Telemetry.Host.0.3.0.nupkg"&&hostRows[0].Sha256=selection.HostArchiveSha256&&(not pinned||hostRows[0].Bytes=6074745L)&&hostRows[0].Mode="0444"
+                if not hostOk then Error "production-host-authority" else
+                let managerExpected=set["archiveRoot";"buildSdk";"entrypoint";"fixedArgv";"installationRoot";"payloads";"runtime";"schema";"source"]
+                if not(closed managerExpected manager)||manager.GetProperty("schema").GetString()<>"fsgg.coordination.telemetry-host-manager-bundle/2" then Error "production-manager-schema" else
+                let source=manager.GetProperty("source")
+                let runtimeNode=manager.GetProperty("runtime")
+                let sourceExpected=set["lockFile";"project";"repository";"revision";"tree"]
+                let runtimeExpected=set["aspnetFramework";"aspnetFrameworkVersion";"dotnetRoot";"files";"framework";"frameworkVersion";"rollForward";"source";"treeSha256"]
+                let archiveRoot=manager.GetProperty("archiveRoot").GetString()
+                let installationRoot=manager.GetProperty("installationRoot").GetString()
+                let fixedArgv=manager.GetProperty("fixedArgv").EnumerateArray()|>Seq.map _.GetString()|>Seq.toArray
+                let expectedArgv=[|"/usr/share/dotnet/dotnet";"exec";"--fx-version";"10.0.12";"/opt/fsgg/telemetry-host-manager/TelemetryHostManager.dll"|]
+                if not(closed sourceExpected source)||not(closed runtimeExpected runtimeNode)||source.GetProperty("revision").GetString()<>selection.ManagerSourceRevision||source.GetProperty("tree").GetString()<>selection.ManagerSourceTree||archiveRoot<>"telemetry-host-manager-net10.0"||installationRoot<>"/opt/fsgg/telemetry-host-manager"||fixedArgv<>expectedArgv then Error "production-manager-identity-layout" else
+                match manifestFiles archiveRoot installationRoot (manager.GetProperty("payloads")),manifestFiles "runtime" "/usr/share/dotnet" runtime with
+                | Ok managerFiles,Ok runtimeFiles->
+                    let embeddedRuntime=runtimeNode.GetProperty("files")
+                    match manifestFiles "runtime" "/usr/share/dotnet" embeddedRuntime with
+                    | Error reason->Error reason
+                    | Ok embeddedFiles when embeddedFiles<>runtimeFiles||runtimeNode.GetProperty("treeSha256").GetString()<>selection.RuntimeTreeSha256||runtimeNode.GetProperty("dotnetRoot").GetString()<>"/usr/share/dotnet"||runtimeNode.GetProperty("source").GetProperty("manifestDigest").GetString()<>selection.RuntimeImageDigest->Error "production-runtime-authority"
+                    | Ok _ when managerFiles<>rowSet "manager"||runtimeFiles<>rowSet "runtime"->Error "production-authority-inventory-mismatch"
+                    | Ok _->
+                        let nativeRows=rowSet "native"
+                        let nativeNode=native.GetProperty("native")
+                        let nativeExpected=set["config";"configSha256";"bytes";"executable";"protocolSchemaSha256";"sessionFlagsSha256";"sha256";"version"]
+                        let nativeTopExpected=set["effort";"model";"native";"network";"operationId";"producer";"prompt";"provider";"runtime";"schema";"supportedOperations"]
+                        let nativeExecutable=nativeNode.GetProperty("executable").GetString()
+                        let nativeDigest=nativeNode.GetProperty("sha256").GetString()
+                        let nativeBytes=nativeNode.GetProperty("bytes").GetInt64()
+                        let config=nativeNode.GetProperty("config").GetString()
+                        let configDigest=nativeNode.GetProperty("configSha256").GetString()
+                        let has digest target= nativeRows|>Array.exists(fun row->row.Sha256=digest&&row.TargetPath=target)
+                        let hasTarget predicate=nativeRows|>Array.exists(fun row->predicate row.TargetPath)
+                        let nativeIdentity=closed nativeTopExpected native&&closed nativeExpected nativeNode&&native.GetProperty("schema").GetString()="fsgg.telemetry.native-operation-profile/1"&&nativeExecutable="/opt/fsgg/codex/codex"&&nativeDigest=selection.NativeElfSha256&&(not pinned||nativeBytes=286594376L)&&(nativeRows|>Array.exists(fun row->row.Sha256=nativeDigest&&row.TargetPath=nativeExecutable&&row.Bytes=nativeBytes))&&has selection.NativeProfileSha256 "/opt/fsgg/profile/native-operation-v1.json"&&has selection.ReaderProfileSha256 "/opt/fsgg/profile/reader-profile.json"&&has selection.CanonicalVerifierSha256 "/opt/fsgg/verifier/learn_01_native_source.py"&&has configDigest config&&has (nativeNode.GetProperty("protocolSchemaSha256").GetString()) "/opt/fsgg/native-protocol-schema.json"&&has (nativeNode.GetProperty("sessionFlagsSha256").GetString()) "/opt/fsgg/native-session-flags.json"
+                        let nativeClosure=hasTarget(fun target->target="/opt/fsgg/python/bin/python3.14")&&hasTarget(fun target->target.StartsWith("/opt/fsgg/python/lib/python3.14/",StringComparison.Ordinal)&&target.EndsWith(".py",StringComparison.Ordinal))&&hasTarget(fun target->target.StartsWith("/opt/fsgg/python/lib/python3.14/",StringComparison.Ordinal)&&target.EndsWith(".so",StringComparison.Ordinal))&&hasTarget(fun target->target="/lib64/ld-linux-x86-64.so.2"||target="/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2")&&hasTarget(fun target->(target.StartsWith("/usr/lib/",StringComparison.Ordinal)||target.StartsWith("/lib/",StringComparison.Ordinal))&&target.Contains(".so",StringComparison.Ordinal))&&hasTarget(fun target->target.StartsWith("/etc/ssl/",StringComparison.Ordinal)||target.StartsWith("/usr/share/zoneinfo/",StringComparison.Ordinal))
+                        if not nativeIdentity then Error "production-native-profile"
+                        elif not nativeClosure then Error "production-native-dependency-closure"
+                        else
+                          let mk role authority search argv loaders files={Schema="fsgg.telemetry.persistent-v3-role-closure/1";Role=role;AuthoritySha256=authority;SearchRoots=search;Argv=argv;LoaderPaths=loaders;Files=files}
+                          let loaders=nativeRows|>Array.filter(fun row->row.TargetPath.Contains(".so",StringComparison.Ordinal)||row.TargetPath.Contains("ld-linux",StringComparison.Ordinal))|>Array.map _.TargetPath
+                          Ok [|mk "host" selection.HostManifestSha256 [|"/opt/fsgg/telemetry-host"|] [||] [||] hostRows;mk "manager" selection.ManagerManifestSha256 [|installationRoot|] fixedArgv [|"/usr/share/dotnet"|] managerFiles;mk "native" selection.NativeProfileSha256 [|"/opt/fsgg/python/lib/python3.14";"/usr/lib";"/lib"|] [|nativeExecutable|] loaders nativeRows;mk "runtime" selection.RuntimeTreeSha256 [|"/usr/share/dotnet"|] [||] [||] runtimeFiles|]
+                | Error reason,_->Error reason|_,Error reason->Error reason
+            with _->Error "production-authority-shape"
+        | Error reason,_,_,_->Error reason|_,Error reason,_,_->Error reason|_,_,Error reason,_->Error reason|_,_,_,Error reason->Error reason
     let prepare selection =
         if String.IsNullOrWhiteSpace selection.InventorySha256||selection.Files.Length=0 then Unavailable "native-image-closure-inventory-acquisition-required"
-        elif selection.IdentityClass<>"production"&&selection.IdentityClass<>"synthetic-test" then Refused "identity-class"
+        elif selection.IdentityClass<>"production"&&selection.IdentityClass<>"production-contract-test"&&selection.IdentityClass<>"synthetic-test" then Refused "identity-class"
         elif selection.IdentityClass="production"&&not(fixedProduction selection) then Refused "fixed-production-identity-mismatch"
-        elif selection.IdentityClass="production" then Unavailable "trusted-production-role-manifests-acquisition-required"
         elif selection.Platform<>"linux/amd64"||not(sha64 selection.ReaderProfileSha256&&sha64 selection.InventorySha256) then Refused "selection-shape"
         else
             let sorted=selection.Files|>Array.sortBy _.TargetPath
@@ -175,13 +268,15 @@ module ImageClosure =
             else match physicalRows selection with
                  | Error reason->Refused reason
                  | Ok acquired->
-                    let requiredProductionDigests=[|selection.HostPackageSha256;selection.ManagerArtifactSha256;selection.NativeElfSha256;selection.NativeProfileSha256;selection.ReaderProfileSha256;selection.CanonicalVerifierSha256|]
-                    if selection.IdentityClass="production" && not(requiredProductionDigests|>Array.forall(fun digest->acquired|>Array.exists(fun(_,row)->row.Sha256=digest))) then Refused "inventory-omits-production-code-or-profile"
-                    else match validateManifests selection sorted with
+                    let requiredProductionDigests=[|selection.HostArchiveSha256;selection.NativeElfSha256;selection.NativeProfileSha256;selection.ReaderProfileSha256;selection.CanonicalVerifierSha256|]
+                    if selection.IdentityClass<>"synthetic-test" && not(requiredProductionDigests|>Array.forall(fun digest->acquired|>Array.exists(fun(_,row)->row.Sha256=digest))) then Refused "inventory-omits-production-code-or-profile"
+                    else match (if selection.IdentityClass<>"synthetic-test" then productionManifests selection sorted else validateManifests selection sorted) with
                          | Error reason->Refused reason
                          | Ok manifests->
                             let copies=sorted|>Array.map(fun row -> $"COPY --chown=32768:32768 --chmod={row.Mode} {JsonSerializer.Serialize([|row.SourcePath;row.TargetPath|])}")
                             let containerfile=String.concat "\n" (Array.concat[ [|$"FROM mcr.microsoft.com/dotnet/aspnet@{selection.RuntimeImageDigest}";"USER 32768:32768"|];copies;[|"ENTRYPOINT []";"CMD []"|] ])+"\n"
                             let native=manifests|>Array.find(fun manifest->manifest.Role="native")
-                            let profile=JsonSerializer.Serialize({|schema="fsgg.telemetry.persistent-v3-image-profile/1";user=32768;group=32768;platform=selection.Platform;argv=native.Argv;searchRoots=native.SearchRoots;loaderPaths=native.LoaderPaths;listeners=Array.empty<string>;serviceEnabled=false;activationAuthorized=false;readerProfileSha256=selection.ReaderProfileSha256|})
+                            let manager=manifests|>Array.find(fun manifest->manifest.Role="manager")
+                            let verifierArgv=if selection.IdentityClass<>"synthetic-test" then [|"/opt/fsgg/python/bin/python3.14";"-I";"-S";"-B";"/opt/fsgg/verifier/learn_01_native_source.py";"verify"|] else [||]
+                            let profile=JsonSerializer.Serialize({|schema="fsgg.telemetry.persistent-v3-image-profile/1";user=32768;group=32768;platform=selection.Platform;argv=native.Argv;managerArgv=manager.Argv;verifierArgv=verifierArgv;searchRoots=native.SearchRoots;loaderPaths=native.LoaderPaths;listeners=Array.empty<string>;serviceEnabled=false;activationAuthorized=false;readerProfileSha256=selection.ReaderProfileSha256|})
                             Prepared(JsonSerializer.SerializeToUtf8Bytes({|schema="fsgg.telemetry.persistent-v3-image-context/2";status=(if selection.IdentityClass="production" then "prepared-inactive" else "prepared-inactive-synthetic");identityClass=selection.IdentityClass;containerfile=containerfile;profile=profile;inventorySha256=selection.InventorySha256;runtimeImageDigest=selection.RuntimeImageDigest;roleManifestSha256=selection.RoleManifests|>Array.map(fun item->item.Role,item.Sha256)|>Map.ofArray;files=sorted|}))

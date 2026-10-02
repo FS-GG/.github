@@ -50,15 +50,21 @@ let common=["requestAcquire",req;"observeAcquire",obs(InputsAcquired "input");"r
 let started=common@["requestStartA",req;"observeStartedA",obs(BuildStarted("a","process-a"))]
 let compared=started@["requestAwaitA",req;"observeBuildA",obs(BuildCompleted("a","process-a","aaa","input"));"requestStartB",req;"observeStartedB",obs(BuildStarted("b","process-b"));"requestAwaitB",req;"observeBuildB",obs(BuildCompleted("b","process-b","aaa","input"));"requestCompare",req;"observeMatch",obs(BuildsCompared true)]
 let remove=["requestRemove",req;"observeRemoved",obs(StoreAbsent "store-a");"requestRemove",req;"observeRemoved",obs(StoreAbsent "store-b")]
+let qualified=compared@["requestValidate",req;"observeValid",obs(InputsValidated "input");"requestQualify",req;"observeQualified",obs(QualificationObserved(true,"input"))]
+let beforeFinalRemove=qualified@["requestRemove",req;"observeRemoved",obs(StoreAbsent "store-a");"requestRemove",req]
+let deadlineAfterRemove state=Runner.observe(StoreAbsent "store-b")state|>Runner.invalidateBoundary "Deadline" false
+let cancellationAfterRemove state=Runner.observe(StoreAbsent "store-b")state|>Runner.invalidateBoundary "Cancelled" true
 let cases=[
- "success",compared@["requestValidate",req;"observeValid",obs(InputsValidated "input");"requestQualify",req;"observeQualified",obs(QualificationObserved(true,"input"))]@remove
+ "success",qualified@remove
  "lost",common@["requestStartA",req;"loseBuildA",obs(BuildMayHaveEffect "a")]@remove
  "mismatch",started@["requestAwaitA",req;"observeBuildA",obs(BuildCompleted("a","process-a","aaa","input"));"requestStartB",req;"observeStartedB",obs(BuildStarted("b","process-b"));"requestAwaitB",req;"observeBuildMismatch",obs(BuildCompleted("b","process-b","bbb","input"));"requestCompare",req;"observeMismatch",obs(BuildsCompared false)]@remove
  "cancellation",started@["cancel",cancel;"requestCancel",req;"observeCancelled",obs(BuildCancelled "process-a")]@remove
  "cleanupFailureCase",started@["cancel",cancel;"requestCancel",req;"observeCancelled",obs(BuildCancelled "process-a");"requestRemove",req;"cleanupFailure",obs(EffectFailed "remove-failed")]
  "stale",compared@["requestValidate",req;"observeStale",obs(InputsValidated "changed-input")]@remove
  "duplicateStore",(common|>List.take 6)@["requestStoreB",req;"observeDuplicateStore",obs(StoreCreated("b","store-a"));"requestRemove",req;"observeRemoved",obs(StoreAbsent "store-a")]
- "duplicateProcess",common@["requestStartA",req;"observeDuplicateProcess",obs(BuildStarted("a","store-a"))]@remove]
+ "duplicateProcess",common@["requestStartA",req;"observeDuplicateProcess",obs(BuildStarted("a","store-a"))]@remove
+ "lateDeadline",beforeFinalRemove@["deadlineAfterRemove",deadlineAfterRemove]
+ "lateCancellation",beforeFinalRemove@["cancellationAfterRemove",cancellationAfterRemove]]
 let environment steps={Seed="20261002";Bounds=["steps",int64 steps];ToolFingerprint=fileSha toolPath;ProfileFingerprint=fileSha profilePath;ContractFingerprint=fileSha modelPath;AdapterFingerprint=fileSha adapterPath;ImplementationFingerprint=fileSha productionPath}
 let mutable transitions=0
 for scenario,steps in cases do

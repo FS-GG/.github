@@ -11,4 +11,6 @@ module PersistentV3Runner_test {
  run stale=compared.then(requestValidate).then(observeStale).then(requestRemove).then(observeRemoved).then(requestRemove).then(observeRemoved).expect(allInvariants and staleWitness)
  run duplicateStore=init.then(requestAcquire).then(observeAcquire).then(requestValidate).then(observeValid).then(requestStoreA).then(observeStoreA).then(requestStoreB).then(observeDuplicateStore).then(requestRemove).then(observeRemoved).expect(allInvariants and duplicateStoreWitness)
  run duplicateProcess=acquireStores.then(requestStartA).then(observeDuplicateProcess).then(requestRemove).then(observeRemoved).then(requestRemove).then(observeRemoved).expect(allInvariants and duplicateProcessWitness)
+ run lateDeadline=compared.then(requestValidate).then(observeValid).then(requestQualify).then(observeQualified).then(requestRemove).then(observeRemoved).then(requestRemove).then(deadlineAfterRemove).expect(allInvariants and deadlineWitness)
+ run lateCancellation=compared.then(requestValidate).then(observeValid).then(requestQualify).then(observeQualified).then(requestRemove).then(observeRemoved).then(requestRemove).then(cancellationAfterRemove).expect(allInvariants and terminalCancellationWitness)
 }
