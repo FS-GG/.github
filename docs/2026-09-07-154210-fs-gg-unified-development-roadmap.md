@@ -53,6 +53,25 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-02: SC2 saved-replay native binding and legacy audit CLOSED (source).**
+[SC2 Client #39](https://github.com/FS-GG/FS.GG.SC2.Client/pull/39) merged protected
+`49d58201aa57e3282592d3b1621019b3c50dd166`, tree
+`015ea48f4dde5327d8c0d626d31743675c4784c7`, after changed-head
+[hosted verification 37065980709](https://github.com/FS-GG/FS.GG.SC2.Client/actions/runs/37065980709)
+passed. The typed saved-replay binding retains the actual owned GameInfo map name, Ping runtime,
+map digest and saved replay hash through live cleanup and strict replay admission. Its canonical
+ownership model has ten generated Quint traces, complete state and ordered effects, and three
+semantic mutant controls. Legacy command audit now retains exact nonce, ordinal, journal digest
+and durable outcome; post-command Step must have both correlation fields cleared.
+The first hosted run failed a test that read a replay-only field from a live exchange; its causal
+repair uses the live `operation` field and preserves strict assertions. That failure remains history.
+This source follows the actual frozen `4314` native attempt that saved a replay then refused
+`replay-map-unavailable`; all owned roots retired without forced cleanup. The original artifact,
+actors and private runtime packets remain unchanged. No new native attempt or acceptance follows.
+Actual replay launch, final pointer plus keyboard-empty pair, full trace/offline comparison,
+public V2 command output and runtime custody remain open. Shared WASM adoption is independent;
+selected V2 platform full acceptance remains complete.
+
 **2026-10-02: FABLE-ADOPT-01.3 external-authority reference CLOSED (source candidate).**
 [Templates #666](https://github.com/FS-GG/FS.GG.Templates/pull/666) merged protected
 `908da309c9a52490cf914c3f2d5ce1eaf1188b2e`, tree
