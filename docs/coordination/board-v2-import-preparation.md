@@ -15,7 +15,7 @@ Project 1 and its separately scoped archive operation were preserved.
 ## Selected administration exception
 
 The user explicitly authorized target creation, schema establishment, cohort selection, apply and
-readback through a bounded native one-shot administration exception. For this pilot, that selection
+readback. Root selected a bounded native one-shot administration exception for these effects. For this pilot, that selection
 supersedes the earlier preparation's sole shared-transport route. It does not authorize or qualify the
 .3 automatic writer, whose production fence remains **Unavailable**.
 

@@ -53,6 +53,24 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-02: COORD-BOARD-V2-01.2 actual schema and bounded native pilot CLOSED.**
+Root created [Coordination V2 #3](https://github.com/orgs/FS-GG/projects/3), immutable ID
+`PVT_kwDOEYAWY84Bldpa`, configured four canonical fields and four filtered views, and applied
+three existing issues: [SDD #928](https://github.com/FS-GG/FS.GG.SDD/issues/928),
+[Templates #441](https://github.com/FS-GG/FS.GG.Templates/issues/441) and
+[.github #3010](https://github.com/FS-GG/.github/issues/3010). Independent native readback verified
+unchanged issue identities, one membership each, complete empty native dependency snapshots and
+all twelve planning values: Blocked, Active delivery, Verified and the owning programme link.
+An explicit repeat emitted zero mutations. Two acknowledged adds initially lagged membership reads;
+root stopped, reconciled fresh reads and resumed existing items without blind add retries.
+SDD #935 also appeared and is a native child of #928; it remains outside the approved pilot and
+unseeded. The cause of that extra membership is unverified. Legacy Project #1 was preserved.
+The [canonical manifest and evidence](coordination/board-v2-import-preparation.md) distinguish
+historical execution artifacts from the official locked constructor used for final read-only verification.
+The final receipt SHA-256 is `0bb6e7131ecaa4d854c873a6ba60762e76936b620a52b49b49b209dfe050d2ad`.
+This authorized manual F# administration operation closes .2 only. The .3 automatic Observation writer,
+broader carryover, product adoption and publication remain open; source merge alone grants none of them.
+
 **2026-10-02: WASM-SHARED-01.4 publication and fresh installed consumers CLOSED; product adoption remains open.**
 [Game PR #677](https://github.com/FS-GG/FS.GG.Game/pull/677) delivered protected
 `ea015cbf884b01754bc6615476241450907b6b24`, tree
@@ -87,8 +105,8 @@ strict pagination and protected manifest population. They preserve scheduling fi
 unknown coverage truthfully. This is source closure; live binding, restricted observation writes and
 native refresh qualification remain open. The user resolved organization Projects access, and root
 created and independently read back [Coordination V2 #3](https://github.com/orgs/FS-GG/projects/3),
-immutable ID `PVT_kwDOEYAWY84Bldpa`. Canonical schema and approved three-issue pilot readback are pending;
-COORD-BOARD-V2-01.2 remains open and legacy Project #1 is preserved.
+immutable ID `PVT_kwDOEYAWY84Bldpa`. Canonical schema and the approved pilot are now verified as recorded below;
+legacy Project #1 is preserved and automatic refresh remains open.
 
 **2026-10-02: SC2 distinct-overlay/empty qualification source CLOSED; native SC2C-01.6f remains open.**
 [SC2 PR #37](https://github.com/FS-GG/FS.GG.SC2.Client/pull/37) merged at
