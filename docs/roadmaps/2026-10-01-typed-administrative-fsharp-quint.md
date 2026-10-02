@@ -54,7 +54,7 @@ native qualification stay separate root-owned gates.
 
 FABLE-ADOPT-01 remains the independent staged Rendering/Game/Templates/FourD product adoption programme. OPS-TYPED changes qualification/admin seams only. Its immediate SC2 configuration-codec reuse is a named seam to record in that inventory, not a restart or duplicate of later whole-product SC2/BAR adoption.
 
-**2026-10-02 HOST acquired-attempt source successor ready for same-PR integration.** The qualification-local
+**2026-10-02 HOST acquired-attempt source CLOSED.** The qualification-local
 [F# caller](../../deployment/telemetry-collector/host-attempt/README.md) drives
 the actual operation reducer from fixed HTTP and inherited-channel observations.
 The canonical Quint model covers ownership, effect uncertainty, deadlines and
@@ -69,9 +69,11 @@ tree `3111c5386e284c41d3e8f8eb24ef1fc836297e34`, selected DLL
 and review record SHA256 `d09afa7201719364c76b6c099851b65b8e6f7b4e5a4008042b2a5dbbcccef3cc`.
 An authority `process-cleanup-unknown` refusal is terminal after one call, and
 effect-time revalidation reopens and binds all four fixed payload bytes even
-when Git status is hidden by an index flag. Source closure is conditional on
-merging this successor through [PR #4089](https://github.com/FS-GG/.github/pull/4089).
-Protected rebuilding and actual runtime placement remain required before adoption.
+when Git status is hidden by an index flag. [PR #4089](https://github.com/FS-GG/.github/pull/4089)
+merged at protected `59cfb2a9a47c74ebcbe08a0605428f2b12cde9d2`, tree
+`debb71994c236ec129e3861a50780a43bdac8498`, and exact-tree native package run
+`36972071422` passed. Protected runtime adoption, private channel/custody joins and genuine
+native acceptance remain open.
 
 The workflow uses the existing linear static preflight, adds the canonical
 model and compiled correspondence checks before browser/package work, and
