@@ -1,12 +1,13 @@
 module PersistentV3Runner {
- type State={phase:str,inputId:str,current:bool,owned:str,running:str,storeUnknown:bool,unknownBuild:bool,identityOk:bool,first:str,second:str,qualification:str,cancelled:bool,cleanupFailed:bool,refusal:str,pending:str,lastEffect:str}
+ type State={target:str,phase:str,inputId:str,current:bool,owned:str,running:str,storeUnknown:bool,unknownBuild:bool,identityOk:bool,first:str,second:str,qualification:str,cancelled:bool,cleanupFailed:bool,refusal:str,pending:str,lastEffect:str}
  var state:State
- val initialState={phase:"Prepared",inputId:"input",current:true,owned:"None",running:"None",storeUnknown:false,unknownBuild:false,identityOk:true,first:"None",second:"None",qualification:"Unknown",cancelled:false,cleanupFailed:false,refusal:"None",pending:"None",lastEffect:"None"}
+ val initialState={target:"Full",phase:"Prepared",inputId:"input",current:true,owned:"None",running:"None",storeUnknown:false,unknownBuild:false,identityOk:true,first:"None",second:"None",qualification:"Unknown",cancelled:false,cleanupFailed:false,refusal:"None",pending:"None",lastEffect:"None"}
  action init=state'=initialState
+ action initC4=state'={...initialState,target:"C4Only"}
  action requestAcquire=all{state.phase=="Prepared",state.pending=="None",state'={...state,pending:"Acquire",lastEffect:"Acquire"}}
  action observeAcquire=all{state.pending=="Acquire",state'={...state,phase:"Acquired",pending:"None"}}
  action requestValidate=all{(state.phase=="Acquired" or state.phase=="Revalidating"),state.pending=="None",state'={...state,pending:"Validate",lastEffect:"Validate"}}
- action observeValid=all{state.pending=="Validate",state.current,state'={...state,phase:if(state.phase=="Acquired")"Validated" else "Qualifying",pending:"None"}}
+ action observeValid=all{state.pending=="Validate",state.current,state'={...state,phase:if(state.phase=="Acquired")"Validated" else if(state.target=="C4Only")"Cleanup" else "Qualifying",pending:"None"}}
  action observeStale=all{state.pending=="Validate",state'={...state,phase:if(state.owned=="None" and state.running=="None")"Refused" else "Cleanup",current:false,qualification:"Unknown",refusal:"InputChanged",pending:"None"}}
  action requestStoreA=all{state.phase=="Validated",state.pending=="None",state'={...state,pending:"CreateA",lastEffect:"CreateA"}}
  action observeStoreA=all{state.pending=="CreateA",state'={...state,phase:"CreatingStores",owned:"A",pending:"None"}}
@@ -27,21 +28,24 @@ module PersistentV3Runner {
  action requestCompare=all{state.phase=="Comparing",state.pending=="None",state'={...state,pending:"Compare",lastEffect:"Compare"}}
  action observeMatch=all{state.pending=="Compare",state.first==state.second,state'={...state,phase:"Revalidating",pending:"None"}}
  action observeMismatch=all{state.pending=="Compare",state.first!=state.second,state'={...state,phase:"Cleanup",qualification:"Unknown",refusal:"BuildMismatch",pending:"None"}}
+ action comparisonSealFailure=all{state.pending=="Compare",state.first==state.second,state'={...state,phase:"Cleanup",qualification:"Unknown",refusal:"BuildMismatch",pending:"None"}}
  action requestQualify=all{state.phase=="Qualifying",state.pending=="None",state'={...state,pending:"Qualify",lastEffect:"Qualify"}}
  action observeQualified=all{state.pending=="Qualify",state.current,state'={...state,phase:"Cleanup",qualification:"Accepted",pending:"None"}}
  action cancel=all{state.owned!="None",state'={...state,phase:"Cleanup",cancelled:true,qualification:"Unknown",pending:"None"}}
  action requestCancel=all{state.phase=="Cleanup",state.running!="None",state.pending=="None",state'={...state,pending:"Cancel",lastEffect:"Cancel"}}
  action observeCancelled=all{state.pending=="Cancel",state'={...state,running:"None",pending:"None"}}
  action requestRemove=all{state.phase=="Cleanup",state.running=="None",state.owned!="None",state.pending=="None",state'={...state,pending:"Remove",lastEffect:"Remove"}}
- action observeRemoved=all{state.pending=="Remove",state'={...state,owned:if(state.owned=="AB")"B" else "None",pending:"None",phase:if(state.owned!="AB" and (state.unknownBuild or state.storeUnknown))"Unknown" else if(state.owned!="AB" and state.qualification=="Accepted" and state.current and not(state.cancelled))"Complete" else if(state.owned!="AB")"Refused" else "Cleanup"}}
+ action observeRemoved=all{state.pending=="Remove",state'={...state,owned:if(state.owned=="AB")"B" else "None",pending:"None",phase:if(state.owned!="AB" and (state.unknownBuild or state.storeUnknown))"Unknown" else if(state.owned!="AB" and state.qualification=="Accepted" and state.current and not(state.cancelled))"Complete" else if(state.owned!="AB" and state.target=="C4Only" and state.current and state.first==state.second and state.first!="None" and state.identityOk and not(state.cancelled) and not(state.cleanupFailed) and state.refusal=="None")"C4Ready" else if(state.owned!="AB")"Refused" else "Cleanup"}}
  action cleanupFailure=all{(state.pending=="Remove" or state.pending=="Cancel"),state'={...state,cleanupFailed:true,qualification:"Unknown",pending:"None"}}
  action deadlineAfterRemove=all{state.pending=="Remove",state.owned=="B",state'={...state,phase:"Unknown",owned:"None",qualification:"Unknown",refusal:"Deadline",pending:"None"}}
  action cancellationAfterRemove=all{state.pending=="Remove",state.owned=="B",state'={...state,phase:"Refused",owned:"None",qualification:"Unknown",cancelled:true,refusal:"Cancelled",pending:"None"}}
- action step=any{requestAcquire,observeAcquire,requestValidate,observeValid,observeStale,requestStoreA,observeStoreA,requestStoreB,observeStoreB,observeDuplicateStore,requestStartA,observeStartedA,observeDuplicateProcess,loseBuildA,requestAwaitA,observeBuildA,requestStartB,observeStartedB,requestAwaitB,observeBuildB,observeBuildMismatch,requestCompare,observeMatch,observeMismatch,requestQualify,observeQualified,cancel,requestCancel,observeCancelled,requestRemove,observeRemoved,cleanupFailure,deadlineAfterRemove,cancellationAfterRemove}
+ action step=any{requestAcquire,observeAcquire,requestValidate,observeValid,observeStale,requestStoreA,observeStoreA,requestStoreB,observeStoreB,observeDuplicateStore,requestStartA,observeStartedA,observeDuplicateProcess,loseBuildA,requestAwaitA,observeBuildA,requestStartB,observeStartedB,requestAwaitB,observeBuildB,observeBuildMismatch,requestCompare,observeMatch,observeMismatch,comparisonSealFailure,requestQualify,observeQualified,cancel,requestCancel,observeCancelled,requestRemove,observeRemoved,cleanupFailure,deadlineAfterRemove,cancellationAfterRemove}
  val successIsClosed=state.phase!="Complete" or (state.current and state.owned=="None" and state.running=="None" and not(state.storeUnknown) and not(state.unknownBuild) and state.identityOk and state.qualification=="Accepted" and not(state.cancelled) and not(state.cleanupFailed))
  val unknownNeverSucceeds=(not(state.storeUnknown) and not(state.unknownBuild)) or state.phase!="Complete"
  val effectsOrdered=state.pending=="None" or state.pending==state.lastEffect
- val allInvariants=all{successIsClosed,unknownNeverSucceeds,effectsOrdered}
+ val c4IsClosed=state.phase!="C4Ready" or (state.target=="C4Only" and state.current and state.owned=="None" and state.running=="None" and not(state.storeUnknown) and not(state.unknownBuild) and state.identityOk and state.first==state.second and state.first!="None" and state.qualification=="Unknown" and not(state.cancelled) and not(state.cleanupFailed) and state.refusal=="None")
+ val allInvariants=all{successIsClosed,unknownNeverSucceeds,effectsOrdered,c4IsClosed}
+ val c4Witness=state.phase=="C4Ready" and state.qualification=="Unknown"
  val successWitness=state.phase=="Complete"
  val lostWitness=state.phase=="Unknown" and state.unknownBuild and state.first=="Unknown"
  val mismatchWitness=state.phase=="Refused" and state.refusal=="BuildMismatch"

@@ -7,3 +7,23 @@ This directory contains the additive P2-C.3 source boundary. `ImageClosure.prepa
 `PersistentV3Runner.qnt` is the lifecycle authority for the later two-build qualification. `Runner.fs` implements the same ordered command/observation transitions and exposes a mechanical adapter with an absolute deadline, per-effect budget, external cancellation, exception conversion, and bounded cleanup. Resource ownership comes only from distinct, nonempty acknowledged store and process identities. The runner preserves unknown outcomes after lost acknowledgements, cancellation, stale results, mechanism exceptions, or cleanup failure, and recognizes success only after matching results, fresh input, accepted inactive qualification, and observed cleanup. The correspondence gate replays all eight positive and negative traces and one actual exception trace while binding the model, tool, adapter, profile, loaded assembly, and selected production assembly bytes.
 
 This source does not build an image, create a container, install a runtime, grant access, activate collection, or change the existing persistent container definitions.
+
+## Production C4 command and boundary
+
+The historical one-argument command retains its unavailable production placeholder.
+Separate root-selected inputs enter preparation through:
+
+```console
+persistent-v3-image-closure prepare --selection /private/selection.json --trusted-native-selection /private/trusted-native.json
+persistent-v3-image-closure run-c4 --selection /private/selection.json --trusted-native-selection /private/trusted-native.json --parent-oci /private/parent.oci.tar --work-root /private/new-work --evidence-root /private/new-evidence
+```
+
+Run preparation in the admitted rootless user namespace: production custody is observed as UID 0 there. The CLI accepts production identity only for execution and always selects the pinned Podman 6.1.2 executable; it exposes no test backend or builder override. Public images and genuine closed Python/native/reader inventory must be acquired before this command. Both work and evidence destinations must be fresh absolute paths. Native acquisition remains unavailable; this source does not close P2-C.4.
+
+`C4Only` is an immutable modeled runner target. It compares two actual exports, reloads each in a distinct private store, performs bounded inert version/runtime probes, revalidates inputs, and requires acknowledged cleanup before returning `C4Ready`. Qualification remains unknown and `qualificationAccepted` is false. Full qualification retains its separate served Manager-to-Host acceptance; this mechanism refuses that missing adapter. The Host archive copied into the image is not a runnable Host distribution. C5 must extract/execute the exact GitHub archive, distinct from the signed NuGet archive.
+
+Each acknowledged A/B bundle owns its context, build/reload VFS stores and all process descendants. Fixed environment and argument lists prevent ambient credentials, default stores, remote connections, shells and mutable pulls. Acquisition/validation, process creation/wait, export, reload, probes and cleanup have finite ceilings under an absolute 90-minute deadline; cancellation and timeout retain unknown resources instead of recovering success by discovery. The default test budgets remain 250 ms. Production ceilings are acquire/validate 5 min, create 2 min, start/cancel 30 s, await/compare 15 min and remove 3 min. At most one build/probe runs at a time.
+
+Reproducibility selects timestamp 1790899200 alone, linux/amd64, fixed context metadata, UID/GID 32768, gzip level 6 and OCI export policy. Evidence validates manifest/config/blob digest and length, ordered layer descriptors, config diff IDs, bounded decompression and applied whiteout inventories; raw archive and wrapper digests are separate identities. Missing/ambiguous platform, links in the OCI wrapper, duplicate/escaping paths and mismatched selected file metadata refuse. External artifacts are sealed before owned cleanup; the terminal result is durably sealed before successful CLI output.
+
+Focused tests use explicitly synthetic OCI bytes and fixed Python subprocesses beneath the same production mechanism. They do not invoke Podman, containers, installed native ELF, providers or receiver credentials, and establish source behavior only. Canonical model correspondence includes C4 success, stale input, late deadline/cancellation, failed sealing and cleanup refusal. Actual two builds, image probes, C5 qualification and protected readback remain independent gates.
