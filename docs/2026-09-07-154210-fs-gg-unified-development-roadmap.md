@@ -53,6 +53,24 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-02: BAR successor stock-engine producer and consumer profile CLOSED (source); native qualification remains open.**
+[HighBar #15](https://github.com/FS-GG/HighBarV3/pull/15) merged protected
+`e2a5a9cf6fdd187bcc82f701a755567db96c11c7`, tree
+`c5af41a6e33aaa9d6f27f9ddd1cdb25823cfece8`.
+Its [hosted source checks](https://github.com/FS-GG/HighBarV3/actions/runs/37025189299)
+passed; optional native build/gameplay jobs were skipped.
+[FSBar #22](https://github.com/FS-GG/FSBarV2/pull/22) merged protected
+`6bbe4fd21beed315c7c5156a5632956058126891`, tree
+`e5556d356d4ea7a3e0bf5acc4d2db01276b59ef9`; its hosted check rollup is empty.
+The sources align the unmodified Recoil 2026.07.04/de693 profile, producer/consumer contract,
+native catalogue admission and stock trace normalization. Historical profile/vector evidence is
+preserved; the old profile is refused at new admission. Wire and queue semantics are unchanged.
+Reported local plugin build, four native test targets and Lua ABI checks are separate from actual
+loaded-process/native qualification. A parallel versioned candidate installation does not update
+the retained policy495/stock2639 failed-attempt packet. Budget and complete-prefix source work,
+coherent artifact/use-time custody, RP3 margins and one changed RP5 attempt remain open.
+Useful-play acceptance remains 0/6; the selected V2 platform acceptance stays complete.
+
 **2026-10-02: FABLE-ADOPT-01 external Rendering producer and coherent release preparation CLOSED (source).**
 [Rendering PR #1366](https://github.com/FS-GG/FS.GG.Rendering/pull/1366) merged protected
 `730923fe9d27174e879566f21dab14a1b03d761a`, tree

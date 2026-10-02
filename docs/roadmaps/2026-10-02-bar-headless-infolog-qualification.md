@@ -15,6 +15,19 @@ This is BAR product work. Full V2 acceptance at its selected execution profile
 remains complete. Coordination V2 board migration retains its selected priority;
 BAR qualification can progress independently.
 
+## Delivered successor profile source
+
+[HighBar #15](https://github.com/FS-GG/HighBarV3/pull/15) merged protected
+`e2a5a9cf6fdd187bcc82f701a755567db96c11c7`, tree
+`c5af41a6e33aaa9d6f27f9ddd1cdb25823cfece8`; hosted source checks passed and optional native
+build/gameplay jobs were skipped. [FSBar #22](https://github.com/FS-GG/FSBarV2/pull/22) merged
+protected `6bbe4fd21beed315c7c5156a5632956058126891`, tree
+`e5556d356d4ea7a3e0bf5acc4d2db01276b59ef9`; no hosted checks appear in its rollup.
+These deliver the selected successor engine profile, matching contract and consumer admission.
+Reported local compilation/tests and the separate candidate installation require independent
+artifact/use-time joins before native qualification. They do not replace the original retained
+policy495/stock2639 attempt, deliver the pending budget amendment or close useful-play journeys.
+
 ## Findings and limits
 
 The [selected stock profile](https://github.com/FS-GG/FSBarV2/blob/4955ae7e7b7ce7ff2f5d5aaa6231fc84662585b7/docs/roadmaps/barc-01-useful-play.md)
