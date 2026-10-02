@@ -46,7 +46,7 @@ The manifest also lists current representative outcome slots without fabricating
 SC2C-01.6f / OPS-TYPED-01.5 source repair, WASM-SHARED-01.4 publication, BARC-01.5 useful play,
 LEARN-01.4 inactive C2 native qualification, COORD-BOARD-V2-01.2–.6, V2-LANG-01 publication/adoption,
 and explicitly selected installed-host/W6/player-study follow-up. Active workers/branches retain their
-own work. Merged Game #674 and SC2 PR #37 are delivery evidence, not remaining native issue anchors.
+own work. Merged Game #676 and candidate SC2 PR #37 carry source evidence, not remaining native issue anchors.
 Planner's bounded open-issue inventory found no non-PR open issues for FSBarV2/SC2 and only Game's
 Dependency Dashboard. Its first-page scope is not a historical census. No three-to-five admissible cohort
 has been established. Routine source work continues without board membership.
