@@ -3,7 +3,8 @@
 import argparse,json,os,re,selectors,signal,subprocess,tempfile,time,urllib.parse
 from pathlib import Path
 SCHEMA="fsgg.telemetry.host-attempt-actions/1";REPOSITORY="FS-GG/FS.GG.GitHub.Substrate.Sandbox";WORKFLOW="v2-host-native-private.yml";BRANCH="qualification/v2-host-native-20260930";RECIPE_SHA="8ad0da67004d670c6803f34755dfe759a7fc84e7";ENVIRONMENT="v2-host-01-8-native-private"
-SECRETS={"native-auth":"FSGG_V2_HOST_018_NATIVE_AUTH_JSON_B64","effect-admission":"FSGG_V2_HOST_018_EFFECT_ADMISSION"}
+# GitHub secret names only; private input values come from the runtime environment or stdin.
+GITHUB_SECRET_NAMES={"native-auth":"FSGG_V2_HOST_018_NATIVE_AUTH_JSON_B64","effect-admission":"FSGG_V2_HOST_018_EFFECT_ADMISSION"}
 EFFECTS={"request-branch-fast-forward","transfer-secret","dispatch-once","cancel-owned-run","delete-secret"}
 LIMITS={"read-public-identity":60,"request-branch-fast-forward":60,"inspect-auth-metadata":45,"invoke-binding":90,"transfer-secret":45,"dispatch-once":60,"list-runs":60,"get-run":60,"cancel-owned-run":60,"delete-secret":45,"read-secret-absence":45,"download-run-artifacts":120,"emit-root-readback":30}
 class Refusal(Exception):pass
@@ -39,10 +40,10 @@ def action_command(action,context,sensitive_input=None):
  if name=="inspect-auth-metadata":return ["gh","api","--include",f"repos/{REPOSITORY}/environments/{ENVIRONMENT}/secrets?per_page=100&page=1"],None
  if name=="invoke-binding":return ["/usr/bin/dotnet",context["hostBindingDll"],"render","--source-root",context["recipeRoot"],"--source-sha",context["recipeSha"],"--profile",context["profilePath"],"--source-pins",context["sourcePinsPath"]],None
  if name=="transfer-secret":
-  if argument not in SECRETS:raise Refusal("secret-role-refused")
-  value=sensitive_input if argument=="effect-admission" else os.environ.get(SECRETS[argument])
+  if argument not in GITHUB_SECRET_NAMES:raise Refusal("secret-role-refused")
+  value=sensitive_input if argument=="effect-admission" else os.environ.get(GITHUB_SECRET_NAMES[argument])
   if not value or "\n" in value or "\r" in value:raise Refusal("secret-value-missing")
-  return ["gh","secret","set",SECRETS[argument],"--repo",REPOSITORY,"--env",ENVIRONMENT],value
+  return ["gh","secret","set",GITHUB_SECRET_NAMES[argument],"--repo",REPOSITORY,"--env",ENVIRONMENT],value
  if name=="dispatch-once":return ["gh","workflow","run",WORKFLOW,"--repo",REPOSITORY,"--ref",BRANCH,"-f",f"placement_sha={context['placementSha']}","-f",f"run_nonce={context['nonce']}"],None
  if name=="list-runs":
   start=context.get("discoveryStart")
@@ -54,8 +55,8 @@ def action_command(action,context,sensitive_input=None):
   if name=="cancel-owned-run":return ["gh","run","cancel",argument,"--repo",REPOSITORY],None
   return ["gh","run","download",argument,"--repo",REPOSITORY,"--dir",context["artifactOutput"]],None
  if name in {"delete-secret","read-secret-absence"}:
-  if argument not in SECRETS:raise Refusal("secret-role-refused")
-  if name=="delete-secret":return ["gh","secret","delete",SECRETS[argument],"--repo",REPOSITORY,"--env",ENVIRONMENT],None
+  if argument not in GITHUB_SECRET_NAMES:raise Refusal("secret-role-refused")
+  if name=="delete-secret":return ["gh","secret","delete",GITHUB_SECRET_NAMES[argument],"--repo",REPOSITORY,"--env",ENVIRONMENT],None
   return ["gh","api","--include",f"repos/{REPOSITORY}/environments/{ENVIRONMENT}/secrets?per_page=100&page=1"],None
  if name=="emit-root-readback":raise Refusal("readback-owned-by-fsharp")
  raise Refusal("action-refused")
