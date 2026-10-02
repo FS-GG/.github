@@ -300,11 +300,44 @@ module HostBindingTests =
         scope.ObserveCandidateForTest(first)
         Assert.True(scope.IsUnknown)
         Assert.Equal(OwnedProcessScope.IdentityRead,scope.DiagnosticSnapshot.FirstFailureSite)
+        Assert.Equal(OwnedProcessScope.ExistenceGuard,scope.DiagnosticSnapshot.ReadOrigin)
+        Assert.Equal(OwnedProcessScope.ExistsFalse,scope.DiagnosticSnapshot.ReadGuard)
+        Assert.Equal(OwnedProcessScope.ManagedNone,scope.DiagnosticSnapshot.ManagedException)
+        Assert.Equal(OwnedProcessScope.InitialPass,scope.DiagnosticSnapshot.AcquisitionPass)
+        Assert.Equal(OwnedProcessScope.OtherCandidate,scope.DiagnosticSnapshot.CandidateRelation)
         Assert.Equal(1, scope.RejectedCandidateCount)
         for pid in first + 1 .. first + 256 do scope.ObserveCandidateForTest(pid)
         Assert.Equal(256, scope.RejectedCandidateCount)
         Assert.True(scope.RetainedCapacityExhausted)
         Assert.Equal(OwnedProcessScope.IdentityRead,scope.DiagnosticSnapshot.FirstFailureSite)
+
+    [<Fact>]
+    let ``failure and retirement ordinals belong to the failing run`` () =
+        use scope = OwnedProcessScope.enterTest ()
+        let firstCode,_,_=scope.Run("/usr/bin/true",Path.GetTempPath(),[],1000,128,128)
+        Assert.Equal(0,firstCode)
+        let missing=2000000000
+        let refusal=Assert.Throws<BindingRefusal>(fun()->scope.RunWithPostSpawnHook("/usr/bin/sleep",Path.GetTempPath(),["1"],2000,128,128,(fun()->scope.ObserveCandidateForTest(missing)))|>ignore)
+        Assert.Equal("process-cleanup-unknown",refusal.Data0)
+        let diagnostic=scope.DiagnosticSnapshot
+        Assert.Equal(2,diagnostic.RunOrdinal)
+        Assert.Equal(2,diagnostic.FirstFailureRunOrdinal)
+        Assert.Equal(1,diagnostic.ScopeFirstRetirementRunOrdinal)
+        Assert.Equal(OwnedProcessScope.RetirementClean,diagnostic.FirstRetirement)
+        Assert.Equal(2,diagnostic.RetirementRunOrdinal)
+        Assert.Equal(OwnedProcessScope.RetirementUnknown,diagnostic.RunFirstRetirement)
+        Assert.Equal(OwnedProcessScope.RetirementUnknown,diagnostic.RunFinalRetirement)
+
+    [<Fact>]
+    let ``managed exception classes and identity contexts are closed`` () =
+        use scope = OwnedProcessScope.enterTest ()
+        Assert.Equal(OwnedProcessScope.FileNotFound,scope.ClassifyManagedExceptionForTest(FileNotFoundException()))
+        Assert.Equal(OwnedProcessScope.DirectoryNotFound,scope.ClassifyManagedExceptionForTest(DirectoryNotFoundException()))
+        Assert.Equal(OwnedProcessScope.ManagedUnauthorized,scope.ClassifyManagedExceptionForTest(UnauthorizedAccessException()))
+        Assert.Equal(OwnedProcessScope.GenericIo,scope.ClassifyManagedExceptionForTest(IOException()))
+        scope.ObserveIdentityContextForTest(2000000000,true,true)
+        Assert.Equal(OwnedProcessScope.RecheckPass,scope.DiagnosticSnapshot.AcquisitionPass)
+        Assert.Equal(OwnedProcessScope.ActiveDirect,scope.DiagnosticSnapshot.CandidateRelation)
 
     [<Fact>]
     let ``unsupported pidfd capability refuses before scope and child creation`` () =

@@ -118,6 +118,14 @@ module AcquisitionTests =
         Assert.Equal("process-cleanup-unknown",diagnostic.ReceiverRefusal)
         Assert.Equal(Some "final-settlement",diagnostic.ReceiverDetail|>Option.map _.FirstFailureSite)
         Assert.DoesNotContain("SENTINEL",AttemptDiagnostics.text diagnostic)
+        let v2="{\"schema\":\"fsgg.telemetry.host-binding-diagnostic/2\",\"runOrdinal\":2,\"executionRole\":\"cli\",\"firstFailureSite\":\"identity-read\",\"errno\":null,\"exceptionClass\":\"io\",\"directExit\":\"true\",\"settlement\":\"true\",\"unknownBeforeFinal\":\"true\",\"stdoutReader\":\"complete\",\"stderrReader\":\"complete\",\"scopeFirstRetirement\":\"clean\",\"scopeFinalRetirement\":\"unknown\",\"deadlineExpired\":\"false\",\"readOrigin\":\"existence-guard\",\"managedException\":\"none\",\"readGuard\":\"exists-false\",\"acquisitionPass\":\"recheck\",\"candidateRelation\":\"active-direct\",\"firstFailureRunOrdinal\":2,\"scopeFirstRetirementRunOrdinal\":1,\"runFirstRetirement\":\"unknown\",\"runFinalRetirement\":\"unknown\",\"retirementRunOrdinal\":2}"
+        AttemptDiagnostics.beginInvocation None None None
+        let v2Refusal=AttemptDiagnostics.receiverRefusal("host-binding-refused:process-cleanup-unknown\nhost-binding-diagnostic:"+v2+"\n")
+        AttemptDiagnostics.record Transport (Some InvokeBinding) Returned (Some 2) v2Refusal NoException
+        let v2Diagnostic=AttemptDiagnostics.snapshot()|>Option.defaultWith(fun()->failwith "v2 diagnostic missing")
+        Assert.Equal(Some "existence-guard",v2Diagnostic.ReceiverDetail|>Option.bind _.ReadOrigin)
+        Assert.Equal(Some 2,v2Diagnostic.ReceiverDetail|>Option.bind _.RetirementRunOrdinal)
+        Assert.DoesNotContain("activeDirectPid",AttemptDiagnostics.text v2Diagnostic)
         for malformed in [
             "host-binding-refused:process-cleanup-unknown\nhost-binding-diagnostic:"+json+"\nextra\n"
             "host-binding-refused:process-cleanup-unknown\nhost-binding-diagnostic:"+json.Replace("\"schema\"","\"schema\":\"duplicate\",\"schema\"")+"\n"

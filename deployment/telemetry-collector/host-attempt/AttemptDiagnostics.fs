@@ -11,9 +11,11 @@ type internal DiagnosticAction = ReadPublicIdentity | RequestBranchFastForward |
 type internal DiagnosticOutcome = Returned | ResponseLost | Malformed | Exception
 type internal DiagnosticExceptionClass = NoException | AttemptRefusalException | Json | Io | Cancellation | Timeout | InvalidData | Unexpected
 type internal ReceiverDiagnostic =
-    { RunOrdinal:int;ExecutionRole:string;FirstFailureSite:string;Errno:int option;ExceptionClass:string
+    { ReceiverSchema:string;RunOrdinal:int;ExecutionRole:string;FirstFailureSite:string;Errno:int option;ExceptionClass:string
       DirectExit:string;Settlement:string;UnknownBeforeFinal:string;StdoutReader:string;StderrReader:string
-      FirstRetirement:string;FinalRetirement:string;DeadlineExpired:string }
+      FirstRetirement:string;FinalRetirement:string;DeadlineExpired:string;ReadOrigin:string option
+      ManagedException:string option;ReadGuard:string option;AcquisitionPass:string option;CandidateRelation:string option
+      FirstFailureRunOrdinal:int option;ScopeFirstRetirementRunOrdinal:int option;RunFirstRetirement:string option;RunFinalRetirement:string option;RetirementRunOrdinal:int option }
 
 type internal AttemptDiagnostic =
     { Stage: DiagnosticStage
@@ -65,6 +67,7 @@ module internal AttemptDiagnostics =
         | None -> ()
 
     let private names = set ["schema";"runOrdinal";"executionRole";"firstFailureSite";"errno";"exceptionClass";"directExit";"settlement";"unknownBeforeFinal";"stdoutReader";"stderrReader";"firstRetirement";"finalRetirement";"deadlineExpired"]
+    let private namesV2 = set ["schema";"runOrdinal";"executionRole";"firstFailureSite";"errno";"exceptionClass";"directExit";"settlement";"unknownBeforeFinal";"stdoutReader";"stderrReader";"scopeFirstRetirement";"scopeFinalRetirement";"deadlineExpired";"readOrigin";"managedException";"readGuard";"acquisitionPass";"candidateRelation";"firstFailureRunOrdinal";"scopeFirstRetirementRunOrdinal";"runFirstRetirement";"runFinalRetirement";"retirementRunOrdinal"]
     let private parseDetail (json:string) =
         try
             if Encoding.UTF8.GetByteCount(json)>4069 then None else
@@ -73,30 +76,40 @@ module internal AttemptDiagnostics =
             if root.ValueKind<>JsonValueKind.Object then None else
             let properties=root.EnumerateObject()|>Seq.toArray
             let actual=properties|>Array.map _.Name
-            if actual.Length<>names.Count || Set.ofArray actual<>names then None else
+            let actualNames=Set.ofArray actual
+            if actual.Length<>actualNames.Count || (actualNames<>names && actualNames<>namesV2) then None else
             let text (name:string) (allowed:string->bool) =
                 let property=root.GetProperty(name)
-                if property.ValueKind=JsonValueKind.String then
-                    let value=property.GetString()
-                    if allowed value then Some value else None
+                if property.ValueKind=JsonValueKind.String then let value=property.GetString() in if allowed value then Some value else None
                 else None
             let oneOf values value=values|>Set.contains value
+            let ordinalField (name:string) =
+                let property=root.GetProperty(name)
+                let mutable value=0
+                if property.ValueKind=JsonValueKind.Number && property.TryGetInt32(&value) && value>=0 && value<=64 then Some value else None
+            let nullableErrno () =
+                let property=root.GetProperty("errno")
+                let mutable value=0
+                if property.ValueKind=JsonValueKind.Null then Some None
+                elif property.ValueKind=JsonValueKind.Number && property.TryGetInt32(&value) && value>=0 && value<=4096 then Some(Some value)
+                else None
             let observation=set["not-observed";"false";"true"]
             let readers=set["not-observed";"complete";"faulted";"incomplete"]
             let retirements=set["not-observed";"clean";"unknown"]
             let failures=set["none";"child-task-limit";"child-token";"child-enumeration";"identity-read";"identity-parent";"pidfd-open";"identity-recheck";"retained-capacity";"signal";"reap-no-child";"reap-error";"direct-wait";"final-direct-exit";"final-settlement";"prior-unknown";"stdout-reader";"stderr-reader"]
             let classes=set["none";"io";"format";"unauthorized";"invalid-operation";"other"]
-            let ordinal=root.GetProperty("runOrdinal")
-            let errnoProperty=root.GetProperty("errno")
-            let mutable ordinalValue=0
-            let mutable errnoValue=0
-            let errno = if errnoProperty.ValueKind=JsonValueKind.Null then Some None elif errnoProperty.ValueKind=JsonValueKind.Number && errnoProperty.TryGetInt32(&errnoValue) && errnoValue>=0 && errnoValue<=4096 then Some(Some errnoValue) else None
-            match ordinal.ValueKind=JsonValueKind.Number && ordinal.TryGetInt32(&ordinalValue) && ordinalValue>=0 && ordinalValue<=64,
-                  text "schema" ((=)"fsgg.telemetry.host-binding-diagnostic/1"),text "executionRole" (oneOf(set["cli";"test"])),text "firstFailureSite" (oneOf failures),errno,
-                  text "exceptionClass" (oneOf classes),text "directExit" (oneOf observation),text "settlement" (oneOf observation),text "unknownBeforeFinal" (oneOf observation),
-                  text "stdoutReader" (oneOf readers),text "stderrReader" (oneOf readers),text "firstRetirement" (oneOf retirements),text "finalRetirement" (oneOf retirements),text "deadlineExpired" (oneOf observation) with
-            | true,Some _,Some role,Some site,Some errno,Some category,Some direct,Some settlement,Some prior,Some stdout,Some stderr,Some first,Some finalResult,Some deadline ->
-                Some {RunOrdinal=ordinalValue;ExecutionRole=role;FirstFailureSite=site;Errno=errno;ExceptionClass=category;DirectExit=direct;Settlement=settlement;UnknownBeforeFinal=prior;StdoutReader=stdout;StderrReader=stderr;FirstRetirement=first;FinalRetirement=finalResult;DeadlineExpired=deadline}
+            match ordinalField "runOrdinal",text "executionRole" (oneOf(set["cli";"test"])),text "firstFailureSite" (oneOf failures),nullableErrno(),text "exceptionClass" (oneOf classes),text "directExit" (oneOf observation),text "settlement" (oneOf observation),text "unknownBeforeFinal" (oneOf observation),text "stdoutReader" (oneOf readers),text "stderrReader" (oneOf readers),text "deadlineExpired" (oneOf observation) with
+            | Some ordinal,Some role,Some site,Some errno,Some category,Some direct,Some settlement,Some prior,Some stdout,Some stderr,Some deadline when actualNames=names ->
+                match text "schema" ((=)"fsgg.telemetry.host-binding-diagnostic/1"),text "firstRetirement" (oneOf retirements),text "finalRetirement" (oneOf retirements) with
+                | Some schemaValue,Some first,Some finalResult -> Some {ReceiverSchema=schemaValue;RunOrdinal=ordinal;ExecutionRole=role;FirstFailureSite=site;Errno=errno;ExceptionClass=category;DirectExit=direct;Settlement=settlement;UnknownBeforeFinal=prior;StdoutReader=stdout;StderrReader=stderr;FirstRetirement=first;FinalRetirement=finalResult;DeadlineExpired=deadline;ReadOrigin=None;ManagedException=None;ReadGuard=None;AcquisitionPass=None;CandidateRelation=None;FirstFailureRunOrdinal=None;ScopeFirstRetirementRunOrdinal=None;RunFirstRetirement=None;RunFinalRetirement=None;RetirementRunOrdinal=None}
+                | _ -> None
+            | Some ordinal,Some role,Some site,Some errno,Some category,Some direct,Some settlement,Some prior,Some stdout,Some stderr,Some deadline when actualNames=namesV2 ->
+                let origins=set["not-observed";"existence-guard";"metadata-length-guard";"content-read";"post-read-byte-guard";"stat-parse"]
+                let managed=set["not-observed";"file-not-found";"directory-not-found";"unauthorized";"generic-io";"format";"other";"none"]
+                let guards=set["not-observed";"exists-false";"length-negative";"length-over";"byte-length-over";"none"]
+                match text "schema" ((=)"fsgg.telemetry.host-binding-diagnostic/2"),text "scopeFirstRetirement" (oneOf retirements),text "scopeFinalRetirement" (oneOf retirements),text "runFirstRetirement" (oneOf retirements),text "runFinalRetirement" (oneOf retirements),text "readOrigin" (oneOf origins),text "managedException" (oneOf managed),text "readGuard" (oneOf guards),text "acquisitionPass" (oneOf(set["not-observed";"initial";"recheck"])),text "candidateRelation" (oneOf(set["not-observed";"active-direct";"other"])),ordinalField "firstFailureRunOrdinal",ordinalField "scopeFirstRetirementRunOrdinal",ordinalField "retirementRunOrdinal" with
+                | Some schemaValue,Some scopeFirst,Some scopeFinal,Some runFirst,Some runFinal,Some origin,Some managedValue,Some guard,Some pass,Some relation,Some failureOrdinal,Some scopeOrdinal,Some retirementOrdinal -> Some {ReceiverSchema=schemaValue;RunOrdinal=ordinal;ExecutionRole=role;FirstFailureSite=site;Errno=errno;ExceptionClass=category;DirectExit=direct;Settlement=settlement;UnknownBeforeFinal=prior;StdoutReader=stdout;StderrReader=stderr;FirstRetirement=scopeFirst;FinalRetirement=scopeFinal;DeadlineExpired=deadline;ReadOrigin=Some origin;ManagedException=Some managedValue;ReadGuard=Some guard;AcquisitionPass=Some pass;CandidateRelation=Some relation;FirstFailureRunOrdinal=Some failureOrdinal;ScopeFirstRetirementRunOrdinal=Some scopeOrdinal;RunFirstRetirement=Some runFirst;RunFinalRetirement=Some runFinal;RetirementRunOrdinal=Some retirementOrdinal}
+                | _ -> None
             | _ -> None
         with _ -> None
 
@@ -181,9 +194,18 @@ module internal AttemptDiagnostics =
         match diagnostic.ReceiverDetail with
         | None -> writer.WriteNullValue()
         | Some detail ->
-            writer.WriteStartObject();writer.WriteString("schema","fsgg.telemetry.host-binding-diagnostic/1");writer.WriteNumber("runOrdinal",detail.RunOrdinal);writer.WriteString("executionRole",detail.ExecutionRole);writer.WriteString("firstFailureSite",detail.FirstFailureSite)
+            writer.WriteStartObject();writer.WriteString("schema",detail.ReceiverSchema);writer.WriteNumber("runOrdinal",detail.RunOrdinal);writer.WriteString("executionRole",detail.ExecutionRole);writer.WriteString("firstFailureSite",detail.FirstFailureSite)
             match detail.Errno with Some value->writer.WriteNumber("errno",value)|None->writer.WriteNull("errno")
-            writer.WriteString("exceptionClass",detail.ExceptionClass);writer.WriteString("directExit",detail.DirectExit);writer.WriteString("settlement",detail.Settlement);writer.WriteString("unknownBeforeFinal",detail.UnknownBeforeFinal);writer.WriteString("stdoutReader",detail.StdoutReader);writer.WriteString("stderrReader",detail.StderrReader);writer.WriteString("firstRetirement",detail.FirstRetirement);writer.WriteString("finalRetirement",detail.FinalRetirement);writer.WriteString("deadlineExpired",detail.DeadlineExpired);writer.WriteEndObject()
+            writer.WriteString("exceptionClass",detail.ExceptionClass);writer.WriteString("directExit",detail.DirectExit);writer.WriteString("settlement",detail.Settlement);writer.WriteString("unknownBeforeFinal",detail.UnknownBeforeFinal);writer.WriteString("stdoutReader",detail.StdoutReader);writer.WriteString("stderrReader",detail.StderrReader)
+            if detail.ReceiverSchema.EndsWith("/1",StringComparison.Ordinal) then writer.WriteString("firstRetirement",detail.FirstRetirement);writer.WriteString("finalRetirement",detail.FinalRetirement)
+            else
+                writer.WriteString("scopeFirstRetirement",detail.FirstRetirement);writer.WriteString("scopeFinalRetirement",detail.FinalRetirement)
+                optional "readOrigin" detail.ReadOrigin;optional "managedException" detail.ManagedException;optional "readGuard" detail.ReadGuard;optional "acquisitionPass" detail.AcquisitionPass;optional "candidateRelation" detail.CandidateRelation
+                match detail.FirstFailureRunOrdinal with Some value->writer.WriteNumber("firstFailureRunOrdinal",value)|None->writer.WriteNull("firstFailureRunOrdinal")
+                match detail.ScopeFirstRetirementRunOrdinal with Some value->writer.WriteNumber("scopeFirstRetirementRunOrdinal",value)|None->writer.WriteNull("scopeFirstRetirementRunOrdinal")
+                optional "runFirstRetirement" detail.RunFirstRetirement;optional "runFinalRetirement" detail.RunFinalRetirement
+                match detail.RetirementRunOrdinal with Some value->writer.WriteNumber("retirementRunOrdinal",value)|None->writer.WriteNull("retirementRunOrdinal")
+            writer.WriteString("deadlineExpired",detail.DeadlineExpired);writer.WriteEndObject()
         optional "recipeSourceSha" diagnostic.RecipeSourceSha
         optional "producerSha256" diagnostic.ProducerSha256
         optional "bindingSha256" diagnostic.BindingSha256

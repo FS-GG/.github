@@ -23,13 +23,21 @@ module internal OwnedProcessScope =
         | PidFdOpen | IdentityRecheck | RetainedCapacity | Signal | ReapNoChild | ReapError
         | DirectWait | FinalDirectExit | FinalSettlement | PriorUnknown | StdoutReader | StderrReader
     type internal DiagnosticExceptionClass = NoException | Io | Format | Unauthorized | InvalidOperation | Other
+    type internal DiagnosticReadOrigin = ReadNotObserved | ExistenceGuard | MetadataLengthGuard | ContentRead | PostReadByteGuard | StatParse
+    type internal DiagnosticManagedException = ManagedNotObserved | FileNotFound | DirectoryNotFound | ManagedUnauthorized | GenericIo | ManagedFormat | ManagedOther | ManagedNone
+    type internal DiagnosticReadGuard = GuardNotObserved | ExistsFalse | LengthNegative | LengthOver | ByteLengthOver | GuardNone
+    type internal DiagnosticAcquisitionPass = PassNotObserved | InitialPass | RecheckPass
+    type internal DiagnosticCandidateRelation = RelationNotObserved | ActiveDirect | OtherCandidate
     type internal DiagnosticSnapshot =
         { RunOrdinal: int; ExecutionRole: string; FirstFailureSite: DiagnosticFailureSite
           Errno: int option; ExceptionClass: DiagnosticExceptionClass; DirectExit: DiagnosticObservation
           Settlement: DiagnosticObservation; UnknownBeforeFinal: DiagnosticObservation
           StdoutReader: DiagnosticReaderState; StderrReader: DiagnosticReaderState
           FirstRetirement: DiagnosticRetirement; FinalRetirement: DiagnosticRetirement
-          Deadline: DiagnosticObservation }
+          Deadline: DiagnosticObservation; ReadOrigin: DiagnosticReadOrigin; ManagedException: DiagnosticManagedException
+          ReadGuard: DiagnosticReadGuard; AcquisitionPass: DiagnosticAcquisitionPass; CandidateRelation: DiagnosticCandidateRelation
+          FirstFailureRunOrdinal: int; ScopeFirstRetirementRunOrdinal: int; RunFirstRetirement: DiagnosticRetirement
+          RunFinalRetirement: DiagnosticRetirement; RetirementRunOrdinal: int }
     [<Literal>]
     let private PrSetChildSubreaper = 36
     [<Literal>]
@@ -106,36 +114,63 @@ module internal OwnedProcessScope =
         let mutable firstRetirement = RetirementNotObserved
         let mutable finalRetirement = RetirementNotObserved
         let mutable deadlineObservation = NotObserved
+        let mutable readOrigin = ReadNotObserved
+        let mutable managedException = ManagedNotObserved
+        let mutable readGuard = GuardNotObserved
+        let mutable acquisitionPass = PassNotObserved
+        let mutable candidateRelation = RelationNotObserved
+        let mutable firstFailureRunOrdinal = 0
+        let mutable scopeFirstRetirementRunOrdinal = 0
+        let mutable runFirstRetirement = RetirementNotObserved
+        let mutable runFinalRetirement = RetirementNotObserved
+        let mutable retirementRunOrdinal = 0
         let supervisorPid = Environment.ProcessId
 
         let remainingMilliseconds () = deadline - Environment.TickCount64
         let exceptionClass (error: exn) =
             match error with
-            | :? IOException -> Io | :? FormatException -> Format | :? UnauthorizedAccessException -> Unauthorized
+            | :? FormatException -> Format | :? UnauthorizedAccessException -> Unauthorized | :? IOException -> Io
             | :? InvalidOperationException -> InvalidOperation | _ -> Other
+        let managedClass (error: exn) =
+            match error with
+            | :? FileNotFoundException -> FileNotFound | :? DirectoryNotFoundException -> DirectoryNotFound
+            | :? UnauthorizedAccessException -> ManagedUnauthorized | :? IOException -> GenericIo
+            | :? FormatException -> ManagedFormat | _ -> ManagedOther
         let note site errno category =
-            if firstFailure = NoFailure then firstFailure <- site; firstErrno <- errno; firstException <- category
+            if firstFailure = NoFailure then firstFailure <- site; firstErrno <- errno; firstException <- category; firstFailureRunOrdinal <- runOrdinal
         let poisonAt site errno category = note site errno category; unknown <- true
         let isCancelled () = Volatile.Read(&cancellation) <> 0
         let cancel () = Interlocked.Exchange(&cancellation, 1) |> ignore
 
-        let readBounded maximum path =
+        let noteIdentityRead origin guard pass relation category managed =
+            note IdentityRead None category
+            if readOrigin = ReadNotObserved then
+                readOrigin <- origin; readGuard <- guard; acquisitionPass <- pass; candidateRelation <- relation; managedException <- managed
+
+        let readBounded maximum path context =
+            let observe origin guard category managed = context |> Option.iter(fun (pass, relation) -> noteIdentityRead origin guard pass relation category managed)
             let info = FileInfo(path)
-            if not info.Exists || info.Length < 0L || info.Length > int64 maximum then raise (IOException())
-            let value = File.ReadAllText(path, Encoding.ASCII)
-            if Encoding.ASCII.GetByteCount(value) > maximum then raise (IOException())
+            if not info.Exists then observe ExistenceGuard ExistsFalse Io ManagedNone; raise (IOException())
+            if info.Length < 0L then observe MetadataLengthGuard LengthNegative Io ManagedNone; raise (IOException())
+            if info.Length > int64 maximum then observe MetadataLengthGuard LengthOver Io ManagedNone; raise (IOException())
+            let value =
+                try File.ReadAllText(path, Encoding.ASCII)
+                with error -> observe ContentRead GuardNone (exceptionClass error) (managedClass error); reraise()
+            if Encoding.ASCII.GetByteCount(value) > maximum then observe PostReadByteGuard ByteLengthOver Io ManagedNone; raise (IOException())
             value
 
-        let readIdentity pid =
+        let readIdentity pass pid =
+            let relation = if activeDirectPid <> 0 && pid = activeDirectPid then ActiveDirect else OtherCandidate
             try
-                let raw = readBounded 16384 $"/proc/{pid}/stat"
+                let raw = readBounded 16384 $"/proc/{pid}/stat" (Some(pass,relation))
                 let closeParen = raw.LastIndexOf(')')
-                if closeParen < 2 || closeParen + 2 >= raw.Length then None else
+                if closeParen < 2 || closeParen + 2 >= raw.Length then noteIdentityRead StatParse GuardNone pass relation Format ManagedFormat; None else
                 let fields = raw.Substring(closeParen + 2).Split(' ', StringSplitOptions.RemoveEmptyEntries)
-                if fields.Length <= 19 then None else
+                if fields.Length <= 19 then noteIdentityRead StatParse GuardNone pass relation Format ManagedFormat; None else
                 let mutable ppid = 0
                 let mutable start = 0UL
-                if Int32.TryParse(fields[1], &ppid) && UInt64.TryParse(fields[19], &start) then Some(ppid, start) else None
+                if Int32.TryParse(fields[1], &ppid) && UInt64.TryParse(fields[19], &start) then Some(ppid, start)
+                else noteIdentityRead StatParse GuardNone pass relation Format ManagedFormat; None
             with error -> note IdentityRead None (exceptionClass error); None
 
         let childPids () =
@@ -145,7 +180,7 @@ module internal OwnedProcessScope =
                 if threads.Length > 256 then poisonAt ChildTaskLimit None NoException; [||] else
                 let values = ResizeArray<int>()
                 for thread in threads do
-                    let raw = readBounded 65536 (Path.Combine(thread.FullName, "children"))
+                    let raw = readBounded 65536 (Path.Combine(thread.FullName, "children")) None
                     for token in raw.Split(' ', StringSplitOptions.RemoveEmptyEntries) do
                         let mutable pid = 0
                         if not (Int32.TryParse(token, &pid)) || pid <= 0 then poisonAt ChildToken None Format
@@ -163,12 +198,12 @@ module internal OwnedProcessScope =
                 capacityExhausted <- true
                 poisonAt RetainedCapacity None NoException
             else
-                match readIdentity pid with
+                match readIdentity InitialPass pid with
                 | Some(ppid, start) when ppid = supervisorPid ->
                     let fd = pidfd_open(pid, 0u)
                     if fd < 0 then let errno = Marshal.GetLastPInvokeError() in note PidFdOpen (Some errno) NoException; reject ()
                     else
-                        match readIdentity pid with
+                        match readIdentity RecheckPass pid with
                         | Some(ppid2, start2) when ppid2 = ppid && start2 = start ->
                             identities.Add(pid, { Pid = pid; Start = start; PidFd = fd; Reaped = false })
                             if activeDirectPid <> 0 && pid <> activeDirectPid then sawDescendant <- true
@@ -274,14 +309,24 @@ module internal OwnedProcessScope =
             { RunOrdinal=runOrdinal;ExecutionRole=(if ignoreBaseline then "test" else "cli");FirstFailureSite=firstFailure
               Errno=firstErrno;ExceptionClass=firstException;DirectExit=directExitObservation;Settlement=settlementObservationValue
               UnknownBeforeFinal=unknownBeforeFinal;StdoutReader=stdoutReaderState;StderrReader=stderrReaderState
-              FirstRetirement=firstRetirement;FinalRetirement=finalRetirement;Deadline=deadlineObservation }
+              FirstRetirement=firstRetirement;FinalRetirement=finalRetirement;Deadline=deadlineObservation
+              ReadOrigin=readOrigin;ManagedException=managedException;ReadGuard=readGuard;AcquisitionPass=acquisitionPass;CandidateRelation=candidateRelation
+              FirstFailureRunOrdinal=firstFailureRunOrdinal;ScopeFirstRetirementRunOrdinal=scopeFirstRetirementRunOrdinal
+              RunFirstRetirement=runFirstRetirement;RunFinalRetirement=runFinalRetirement;RetirementRunOrdinal=retirementRunOrdinal }
         member internal _.ObserveCandidateForTest(pid: int) =
             if not (rejected.Contains(pid)) && not (identities.ContainsKey(pid)) then acquire pid
+        member internal _.ObserveIdentityContextForTest(pid: int, recheck: bool, direct: bool) =
+            let prior=activeDirectPid
+            if direct then activeDirectPid<-pid
+            try readIdentity (if recheck then RecheckPass else InitialPass) pid |> ignore
+            finally activeDirectPid<-prior
+        member internal _.ClassifyManagedExceptionForTest(error: exn) = managedClass error
         member internal _.RejectedCandidateCount = rejected.Count
         member internal _.RetainedCapacityExhausted = capacityExhausted
 
         member private this.RunCore(executable: string, root: string, arguments: string list, timeoutMilliseconds: int, stdoutMaximum: int, stderrMaximum: int, postSpawnHook: (unit -> unit) option) =
             runOrdinal <- min 64 (runOrdinal + 1)
+            runFirstRetirement <- RetirementNotObserved; runFinalRetirement <- RetirementNotObserved; retirementRunOrdinal <- runOrdinal
             if isCancelled () || unknown then raise (BindingRefusal "process-scope-refused")
             if timeoutMilliseconds <= 0 || remainingMilliseconds () < int64 timeoutMilliseconds + 3250L then
                 raise (BindingRefusal "process-budget-refused")
@@ -335,8 +380,10 @@ module internal OwnedProcessScope =
                 let readersDone = finishReaders ()
                 settlementComplete <- clean && readersDone
                 let result = if settlementComplete then RetirementClean else RetirementUnknown
-                if firstRetirement = RetirementNotObserved then firstRetirement <- result
+                if firstRetirement = RetirementNotObserved then firstRetirement <- result; scopeFirstRetirementRunOrdinal <- runOrdinal
                 finalRetirement <- result
+                if runFirstRetirement = RetirementNotObserved then runFirstRetirement <- result
+                runFinalRetirement <- result
                 if settlementComplete then
                     for identity in identities.Values do close(identity.PidFd) |> ignore
                     identities.Clear()
