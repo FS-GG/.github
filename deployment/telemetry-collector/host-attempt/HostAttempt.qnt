@@ -78,18 +78,20 @@ module OwnedLaunch {
  action requestRelease=all{launch.phase=="IdentityRecorded",launch.identity,not(launch.cancelled),not(launch.deadline),not(launch.failure),launch.releaseIntentions==0,launch'={...launch,phase:"ReleaseIntended",releaseIntentions:1,releaseMayHaveEffect:true}}
  action ackRelease=all{launch.phase=="ReleaseIntended",launch.releaseIntentions==1,launch'={...launch,phase:"Released"}}
  action loseRelease=all{launch.releaseIntentions==1,launch'={...launch,phase:"Retiring",failure:true,releaseMayHaveEffect:true}}
+ action failAfterRelease=all{launch.releaseMayHaveEffect,launch'={...launch,phase:"Retiring",failure:true}}
  action cancelLaunch=all{launch'={...launch,cancelled:true,failure:true,phase:if(launch.releaseMayHaveEffect)"Retiring" else "Refused"}}
  action expireLaunch=all{launch'={...launch,deadline:true,failure:true,phase:if(launch.releaseMayHaveEffect)"Retiring" else "Refused"}}
  action beginRetirement=all{launch.phase=="Released" or launch.phase=="Retiring",launch'={...launch,phase:"Retiring"}}
  action settleAll=all{launch.phase=="Retiring",launch'={...launch,directSettled:true,descendantsSettled:true,readersSettled:true}}
  action finishLaunch=all{launch.phase=="Retiring",launch.directSettled,launch.descendantsSettled,launch.readersSettled,not(launch.failure),launch'={...launch,phase:"Terminal"}}
- action launchStep=any{recordIdentity,failIdentity,requestRelease,ackRelease,loseRelease,cancelLaunch,expireLaunch,beginRetirement,settleAll,finishLaunch}
+ action launchStep=any{recordIdentity,failIdentity,requestRelease,ackRelease,loseRelease,failAfterRelease,cancelLaunch,expireLaunch,beginRetirement,settleAll,finishLaunch}
  action gatedReleaseStep=if(launch.phase=="Gated")recordIdentity else if(launch.phase=="IdentityRecorded")requestRelease else ackRelease
  action lostReleaseStep=if(launch.phase=="Gated")recordIdentity else if(launch.phase=="IdentityRecorded")requestRelease else loseRelease
  action cancelBeforeStep=cancelLaunch
  action deadlineBeforeStep=expireLaunch
  action identityFailureStep=failIdentity
  action cancelAfterStep=if(launch.phase=="Gated")recordIdentity else if(launch.phase=="IdentityRecorded")requestRelease else if(launch.phase=="ReleaseIntended")ackRelease else cancelLaunch
+ action failureAfterStep=if(launch.phase=="Gated")recordIdentity else if(launch.phase=="IdentityRecorded")requestRelease else if(launch.phase=="ReleaseIntended")ackRelease else failAfterRelease
  action settledStep=if(launch.phase=="Gated")recordIdentity else if(launch.phase=="IdentityRecorded")requestRelease else if(launch.phase=="ReleaseIntended")ackRelease else if(launch.phase=="Released")beginRetirement else if(not(launch.directSettled))settleAll else finishLaunch
  val releaseNeedsIdentity=launch.releaseIntentions==0 or launch.identity
  val atMostOneRelease=launch.releaseIntentions<=1
@@ -103,5 +105,6 @@ module OwnedLaunch {
  val deadlineBeforeWitness=launch.phase=="Refused" and launch.deadline and launch.releaseIntentions==0
  val identityFailureWitness=launch.phase=="Refused" and launch.failure and not(launch.identity) and launch.releaseIntentions==0
  val cancelledAfterWitness=launch.phase=="Retiring" and launch.cancelled and launch.releaseIntentions==1 and launch.releaseMayHaveEffect and launch.failure
+ val failureAfterWitness=launch.phase=="Retiring" and launch.releaseIntentions==1 and launch.releaseMayHaveEffect and launch.failure and not(launch.cancelled) and not(launch.deadline)
  val settledWitness=launch.phase=="Terminal" and launchInvariants
 }

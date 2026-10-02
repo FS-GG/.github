@@ -288,6 +288,10 @@ module HostBindingTests =
             let diagnostic=scope.DiagnosticSnapshot
             Assert.Equal(OwnedProcessScope.RetirementClean,diagnostic.FirstRetirement)
             Assert.Equal(OwnedProcessScope.RetirementClean,diagnostic.FinalRetirement)
+            let launch=scope.LaunchTraceForTest
+            Assert.Contains(OwnedLaunch.FailAfterRelease,launch|>List.map fst)
+            Assert.DoesNotContain(OwnedLaunch.Finish,launch|>List.map fst)
+            Assert.True((launch|>List.last|>snd).StickyFailure)
             Assert.False(Directory.Exists($"/proc/{Int32.Parse(File.ReadAllText(parentFile))}"))
             Assert.False(Directory.Exists($"/proc/{Int32.Parse(File.ReadAllText(childFile))}"))
         finally Directory.Delete(owner, true)

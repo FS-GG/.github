@@ -9,7 +9,7 @@ module internal OwnedLaunch =
     type State =
         { Phase:Phase;IdentityRecorded:bool;ReleaseIntentions:int;ReleaseMayHaveEffect:bool
           Cancelled:bool;DeadlineExpired:bool;StickyFailure:bool;DirectSettled:bool;DescendantsSettled:bool;ReadersSettled:bool }
-    type Action = RecordIdentity | FailIdentity | RequestRelease | AcknowledgeRelease | LoseRelease | Cancel | Expire | BeginRetirement | ObserveSettlement of bool*bool*bool | Finish
+    type Action = RecordIdentity | FailIdentity | RequestRelease | AcknowledgeRelease | LoseRelease | FailAfterRelease | Cancel | Expire | BeginRetirement | ObserveSettlement of bool*bool*bool | Finish
     let initial={Phase=Gated;IdentityRecorded=false;ReleaseIntentions=0;ReleaseMayHaveEffect=false;Cancelled=false;DeadlineExpired=false;StickyFailure=false;DirectSettled=false;DescendantsSettled=false;ReadersSettled=false}
     let private refuse state={state with Phase=Refused;StickyFailure=true}
     let apply action state =
@@ -19,6 +19,7 @@ module internal OwnedLaunch =
         | RequestRelease when state.Phase=IdentityRecorded && state.IdentityRecorded && not state.Cancelled && not state.DeadlineExpired && not state.StickyFailure && state.ReleaseIntentions=0 -> {state with Phase=ReleaseIntended;ReleaseIntentions=1;ReleaseMayHaveEffect=true}
         | AcknowledgeRelease when state.Phase=ReleaseIntended && state.ReleaseIntentions=1 -> {state with Phase=Released}
         | LoseRelease when state.ReleaseIntentions=1 -> {state with Phase=Retiring;StickyFailure=true;ReleaseMayHaveEffect=true}
+        | FailAfterRelease when state.ReleaseMayHaveEffect -> {state with Phase=Retiring;StickyFailure=true}
         | Cancel -> {state with Cancelled=true;Phase=(if state.ReleaseMayHaveEffect then Retiring else Refused);StickyFailure=true}
         | Expire -> {state with DeadlineExpired=true;Phase=(if state.ReleaseMayHaveEffect then Retiring else Refused);StickyFailure=true}
         | BeginRetirement when state.Phase=Released || state.Phase=Retiring -> {state with Phase=Retiring}

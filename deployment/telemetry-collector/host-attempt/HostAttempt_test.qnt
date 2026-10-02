@@ -22,5 +22,6 @@ module OwnedLaunch_test {
  run deadlineBefore = launchInit.then(expireLaunch).expect(launchInvariants and deadlineBeforeWitness)
  run identityFailure = launchInit.then(failIdentity).expect(launchInvariants and identityFailureWitness)
  run cancelAfter = launchInit.then(recordIdentity).then(requestRelease).then(ackRelease).then(cancelLaunch).expect(launchInvariants and cancelledAfterWitness)
+ run failureAfter = launchInit.then(recordIdentity).then(requestRelease).then(ackRelease).then(failAfterRelease).expect(launchInvariants and failureAfterWitness)
  run settled = launchInit.then(recordIdentity).then(requestRelease).then(ackRelease).then(beginRetirement).then(settleAll).then(finishLaunch).expect(launchInvariants and settledWitness)
 }

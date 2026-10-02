@@ -395,6 +395,7 @@ module internal OwnedProcessScope =
                 if not legacyLaunch && launchState.ReleaseMayHaveEffect then
                     if isCancelled() && not launchState.StickyFailure then applyLaunch OwnedLaunch.Cancel
                     elif remainingMilliseconds()<=0L && not launchState.StickyFailure then applyLaunch OwnedLaunch.Expire
+                    elif reason && not launchState.StickyFailure then applyLaunch OwnedLaunch.FailAfterRelease
                     applyLaunch OwnedLaunch.BeginRetirement
                 let clean = settle direct reason
                 let readersDone = finishReaders ()
