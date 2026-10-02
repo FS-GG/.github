@@ -254,6 +254,21 @@ and its recorded runtime-content/mode refusal remain immutable historical eviden
 bundle, target and SDK image/runtime qualification, genuine receiver grant, private capture,
 restart/recovery and activation remain open; C3 stays disabled and no installed experiment follows.
 
+**2026-10-02: LEARN W6 C2 served manager-bundle qualification CLOSED; receiver image remains open.**
+[Protected Coordination run `36983338783`](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36983338783)
+served sole artifact `11216418410` from exact source `49fe964f0239ad3734f5fa5119b3227f2a04758d`, tree
+`36b0be5cc74bfd10d045ab11ce978547464d5266`. Root and an independent read-only consumer bound the Actions
+artifact SHA-256 `518041591b9b7f1827911f0e796a1815799841831b962d3112169d9241969cdd`, canonical `/2` manifest
+`966e13e827b3b3a3f37c51bcc35fd57f4684741d19a3308905e5f66ac51ebf0e` and manager archive
+`03d46e6553e99be27c0bbc06d8767e2aa2a5e9b588d608d4b4c229e7a87ad74f`. Fresh official OCI acquisition
+reproduced the 337-file hardened target tree `ead4ece42719198be9607d18415e428e3a6fcaadf50b88dc6e93894c47bec4c2`
+and admitted the 4907-file SDK tree `c51a26bcd972e5f1b2944a912ca57cab9878fa88a2d8110fa0300c54ba0afcb0`
+before SDK execution. The SDK host truthfully refused target runtime `10.0.12` because it carries `10.0.11`;
+the canonical target `10.0.12` host route then passed exact `verify-v2`. The
+[public qualification report](reports/2026-10-02-learn-c2-served-bundle-qualification.md) closes C2 only.
+C3 image closure is next; C4 dual OCI comparison, C5 synthetic qualification and C6 protected activation remain
+later. No image, grant, capture, restart/recovery, installation, activation, workspace default or Main action follows.
+
 **2026-10-02: LEARN W6 C2 P1 inactive persistent-v3 preparation CLOSED; installed qualification remains open.**
 The [owning P1/P2 plan](roadmaps/learn-c2-persistent-receiver-v3.md) supplies a stateless F#
 constructor and CLI with closed, duplicate-safe inputs and exclusive mode-0600 materialization.
