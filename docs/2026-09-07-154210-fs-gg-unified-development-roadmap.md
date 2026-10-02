@@ -65,6 +65,20 @@ independent and open. This dated clarification is not a current fleet-health att
 profile acceptance or waiver of exact artifact, authentication, custody, settlement/replay or effect
 authority for any operation actually performed.
 
+**2026-10-02: FABLE unrecognized-permission diagnostics source delivered; feed occupancy remains unknown.**
+[Templates #664](https://github.com/FS-GG/FS.GG.Templates/pull/664) merged at
+`5326b896a5ded3ab86b929b99e4bea7eec967f03`, tree
+`619b3ac86097ebf841ec67c2cdca0e1b82d12e69`, equal qualified source
+`dcfb817d116e5f71a649abb7540c20e7ac54bf91`. Root authenticated merge, tree and main;
+all ten triggered native checks passed, with three expected skips, including composition.
+The actual F# HTTP-to-receipt route passed 178 controls. Closed diagnostic name and level
+buckets preserve complete AND/OR alternatives and refuse malformed or conflicting evidence;
+they leave the accepted-permission parser, request permissions and occupancy verdict unchanged.
+All 330 release, template and public receiver input blobs remain unchanged from the preceding
+qualified scope. The previous read-only census remains UNKNOWN after deleted-package HTTP 403
+and unrecognized permission evidence. One fresh protected read-only census and an evidence-based
+capability decision remain next; publication and installed product adoption remain open.
+
 **2026-10-02: SC2 typed failure-summary and Release task-loop source delivered; native advisor journeys remain open.**
 [SC2 #34](https://github.com/FS-GG/FS.GG.SC2.Client/pull/34) merged at
 `feb7ab0d9ed5afd698945c3c166778c8ce591216`, tree
