@@ -53,14 +53,43 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
-**2026-10-02: HOST GitGuardian alert clarified at its exact source location.**
+**2026-10-02: HOST GitGuardian names-only clarification source CLOSED; external alert disposition remains unverified.**
 The flagged mapping in [commit `59cfb2a`](https://github.com/FS-GG/.github/commit/59cfb2a9a47c74ebcbe08a0605428f2b12cde9d2#diff-d9b3e0b60188e34c0486096111952e390be6aa02f1869c5def77394434538cb2R6) contains GitHub environment secret names.
 The confirmed historical file SHA-256 is `262a744ded3e37e400556479bcdd8d4f722f4afaf54f2d52dafc6ec33e5c99a7`.
 The transport reads private values at runtime from the environment or sensitive stdin and sends them
-as child stdin. The mapping is now explicitly named `GITHUB_SECRET_NAMES`; 17 transport controls
-cover the unchanged role/name mappings and argv/stdin boundary. This exact location is a names-only
-false positive. GitGuardian alert disposition has not been verified; no credential exposure is
-established by this finding.
+as child stdin. [PR #4098](https://github.com/FS-GG/.github/pull/4098) merged the clarification at
+protected `831c4cb3fb21d5f312d06578e3c334611da792b3`, tree
+`6429d7364d0ade5528756919157fad57286062c2`; the current hosted package passed 17 transport, 35 receiver
+and 41 caller controls. The mapping is now explicitly named `GITHUB_SECRET_NAMES` while preserving its
+role/name mapping and argv/stdin boundary. This exact location is a names-only false positive. GitGuardian
+alert disposition has not been verified; no credential exposure is established by this finding.
+
+**2026-10-02: BAR installed knowledge-only compact-backup C3 cutover and legacy full-backup release CLOSED.**
+Root installed independently reviewed runtime `e4ff96feeb7c8e57a1304de10ff89bebb6770e8c`, tree
+`9a100df5073709d361065df3bf987c92242ca547`, DLL SHA-256
+`b5da543a927aa7e13bcfbabb4267d1d86462cbcb8593fef3a3c16712b7e5841b`; the review record SHA-256 is
+`4915f8c53f7ca660113362ca9953b0651445e3e1ca1df0e05d9380b7d1e2d650`. The original intent SHA-256
+`2f0ab6828b78cb087395127880101dbc4fa855eb427d4f1836a961196ff47cb5` completed with receipt SHA-256
+`79aca1601477e87f2cbf9c5d20af6e16b6273eea1a9ac5dc76069bb9dd05493d`: four legacy databases totaling
+5,532,090,368 bytes and their exact authorized sidecars were released, leaving the full catalog empty
+with zero pending entries. Mode-0600 before/after checkpoints have identical SHA-256
+`073efdd0d4dbc335763a64932c65b2d91ba1ca5dee472c55548f558dca3a8a29` and bind unchanged live
+`bar.sqlite`, sources, compact catalog, and current plus three prior compact databases and manifests.
+The sole v10 keeper first succeeded at 10:10:47.977 UTC with four retained snapshots, 247 knowledge
+versions, no alerts, 13,987,840 bytes and the combined live source index preserved; its next tick was
+due at 10:40:42 UTC and host restart supervision remained absent. The v6 natural 09:48 tick remains
+valid historical evidence; a natural v10 tick had not occurred at this evidence horizon. Active
+knowledge folding can legitimately change later chapter and knowledge snapshots, so the checkpoint
+does not promise an immutable live database hash. The normal wrapper fold completed at 10:18:43 UTC;
+maintenance report SHA-256 `5befe5fffddc40dae20a68961d5806a12a272757170dca91da6217ced8852e43`
+records 42 documents and 259 versions after seven semantic revisions plus five immutable graph-closure
+versions, with zero conflicts. The current project database is 3,670,016 bytes, below 5 MiB, with
+2,944,338 payload bytes; the four retained snapshots occupy 14,569,472 bytes, 524,288 more than the
+immediate pre-fold set. Sources, index selectors and file counts remain unchanged. The current
+`compact-backup-growth-over-1mib-per-day` alert is retained because the policy extrapolates genuine
+imports separated by a short interval; the measured growth does not itself establish an unbounded
+increase. This closure covers installed knowledge backup and cutover cleanup only; the source-cache
+physical database split, remote GitHub backup, host supervision and product-native work remain open.
 
 **2026-10-01: V2 platform FULL ACCEPTED for the selected clean-start profile; independent products and extensions remain open.**
 The accepted platform boundary is ordinary source delivery and ordinary settlement across the nine
