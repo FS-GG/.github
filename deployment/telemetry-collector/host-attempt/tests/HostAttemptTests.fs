@@ -95,12 +95,49 @@ module AcquisitionTests =
 
     [<Fact>]
     let ``binding authority cleanup unknown is terminal without a second call`` () =
+        AttemptDiagnostics.beginInvocation (Some AttemptPreparation.RecipeSha) (Some(String.replicate 64 "a")) None
         let mutable attempts=0
         Assert.Throws<AttemptRefusal>(fun()->
             AttemptPreparation.runHostBindingAttempt "binding-test-refused" (fun()->
             attempts<-attempts+1
             2,"","host-binding-refused:process-cleanup-unknown\n")|>ignore)|>ignore
         Assert.Equal(1,attempts)
+        let diagnostic=AttemptDiagnostics.snapshot()|>Option.defaultWith(fun()->failwith "diagnostic missing")
+        Assert.Equal(PreparationRender,diagnostic.Stage)
+        Assert.Equal(Some 2,diagnostic.ExitCode)
+        Assert.Equal("process-cleanup-unknown",diagnostic.ReceiverRefusal)
+        Assert.Equal("unrecognized",AttemptDiagnostics.receiverRefusal(String.replicate 65536 "x"+"SENTINEL"))
+
+    [<Fact>]
+    let ``transport diagnostic retains first closed failure without raw stderr or success material`` () =
+        AttemptDiagnostics.beginInvocation (Some AttemptPreparation.RecipeSha) (Some(String.replicate 64 "a")) (Some(String.replicate 64 "b"))
+        let secret="SENTINEL-PRIVATE-DO-NOT-RETAIN"
+        let failure=$"{{\"schema\":\"fsgg.telemetry.host-attempt-transport-results/1\",\"results\":[{{\"name\":\"read-public-identity\",\"argument\":null,\"exitCode\":2,\"stdout\":\"\",\"stderr\":\"{secret}\",\"outcome\":\"returned\"}}]}}"
+        let outcome,_=ConcreteWire.result(Encoding.UTF8.GetBytes failure) FixedAction.ReadPublicIdentity
+        Assert.Equal(MechanismOutcome.Returned 2,outcome)
+        let successMaterial=String.replicate 64 "c"
+        let success=$"{{\"schema\":\"fsgg.telemetry.host-attempt-transport-results/1\",\"results\":[{{\"name\":\"invoke-binding\",\"argument\":null,\"exitCode\":0,\"stdout\":\"{successMaterial}\",\"stderr\":\"\",\"outcome\":\"returned\"}}]}}"
+        ConcreteWire.result(Encoding.UTF8.GetBytes success) FixedAction.InvokeBinding|>ignore
+        let text=AttemptDiagnostics.snapshot()|>Option.map AttemptDiagnostics.text|>Option.defaultWith(fun()->failwith "diagnostic missing")
+        Assert.Contains("\"action\":\"read-public-identity\"",text)
+        Assert.Contains("\"receiverRefusal\":\"unrecognized\"",text)
+        Assert.DoesNotContain(secret,text)
+        Assert.DoesNotContain(successMaterial,text)
+
+    [<Fact>]
+    let ``transport response loss and malformed result retain closed categories`` () =
+        AttemptDiagnostics.beginInvocation None None None
+        let lost="{\"schema\":\"fsgg.telemetry.host-attempt-transport-results/1\",\"results\":[{\"name\":\"inspect-auth-metadata\",\"argument\":null,\"exitCode\":null,\"stdout\":\"\",\"stderr\":\"\",\"outcome\":\"unknown\"}]}"
+        let outcome,_=ConcreteWire.result(Encoding.UTF8.GetBytes lost) FixedAction.InspectAuthMetadata
+        Assert.Equal(MechanismOutcome.ResponseLost,outcome)
+        let lostDiagnostic=AttemptDiagnostics.snapshot()|>Option.defaultWith(fun()->failwith "diagnostic missing")
+        Assert.Equal(ResponseLost,lostDiagnostic.Outcome)
+        Assert.Equal(Some InspectAuthMetadata,lostDiagnostic.Action)
+        AttemptDiagnostics.beginInvocation None None None
+        Assert.Throws<AttemptRefusal>(fun()->ConcreteWire.result(Encoding.UTF8.GetBytes "{}") FixedAction.InvokeBinding|>ignore)|>ignore
+        let malformed=AttemptDiagnostics.snapshot()|>Option.defaultWith(fun()->failwith "diagnostic missing")
+        Assert.Equal(Malformed,malformed.Outcome)
+        Assert.Equal(Some InvokeBinding,malformed.Action)
 
 module ReducerTests =
     [<Fact>]
@@ -566,8 +603,12 @@ module CliTests =
         let input=Path.Combine(temp.Path,"request.json")
         let output=Path.Combine(temp.Path,"state.json")
         File.WriteAllText(input,values.ToJsonString())
-        let code,_,_=run "/usr/bin/dotnet" temp.Path [producerDll();"prepare";"--request";input;"--output";output]
+        let code,_,error=run "/usr/bin/dotnet" temp.Path [producerDll();"prepare";"--request";input;"--output";output]
         Assert.Equal(2,code);Assert.False(File.Exists output)
+        Assert.Contains("host-attempt-diagnostic:",error)
+        Assert.Contains("\"stage\":\"preparation-render\"",error)
+        Assert.Contains("\"outcome\":\"returned\"",error)
+        Assert.DoesNotContain("hostBindingDll",error)
 
     [<Fact>]
     let ``duplicate preparation key is refused closed`` () =
@@ -672,7 +713,7 @@ else: raise SystemExit(2)
         child.WaitForExit()
         Assert.True(child.ExitCode=0,$"stdout={stdout} stderr={stderr}")
         let final=JsonNode.Parse(File.ReadAllText output).AsObject()
-        Assert.True(final["phase"].GetValue<string>()="finalized",final.ToJsonString());Assert.True(final["nativeDisposition"].GetValue<string>()="accepted",final.ToJsonString());Assert.Equal("secrets-absent",final["cleanupDisposition"].GetValue<string>())
+        Assert.True(final["phase"].GetValue<string>()="finalized",final.ToJsonString()+" stderr="+stderr);Assert.True(final["nativeDisposition"].GetValue<string>()="accepted",final.ToJsonString()+" stderr="+stderr);Assert.Equal("secrets-absent",final["cleanupDisposition"].GetValue<string>())
         let readback=JsonNode.Parse(File.ReadAllText(Path.Combine(temp.Path,"lease-positive-1.readback.json"))).AsObject()
         Assert.Equal(final["phase"].GetValue<string>(),readback["phase"].GetValue<string>());Assert.Equal(final["nativeDisposition"].GetValue<string>(),readback["nativeDisposition"].GetValue<string>())
         match Environment.GetEnvironmentVariable "HOST_ATTEMPT_ACQUIRED_TRACE_OUTPUT" with
