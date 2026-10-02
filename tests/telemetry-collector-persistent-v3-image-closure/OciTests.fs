@@ -117,10 +117,33 @@ elif 'run' in args:
     let synthetic={new IProcessBackend with
       member _.ReadBuilderIdentity()=RootlessPolicy.BuilderSha256
       member _.ReadSupervisorIdentity()=RootlessPolicy.SupervisorSha256
+      member _.ReadAvailableCapacity _=128L*1024L*1024L*1024L
       member _.Start command=
         require(command.Executable=RootlessPolicy.Builder) "mechanism selected arbitrary production executable"
         if command.Arguments|>Array.contains "build" then actualBuilds<-actualBuilds+1
         real.Start {command with Executable="/usr/bin/python3";Arguments=Array.append [|fixtureScript|] command.Arguments;Environment=command.Environment|>Map.add "FIXTURE_OCI" original|>Map.add "FIXTURE_MANIFEST" manifestDigest|>Map.add "FIXTURE_CONFIG" configDigest}}
+    // Hosted CI capacity is unrelated to this synthetic process/OCI fixture. Production still
+    // reads the real drive and requires the same 128 GiB reserve before acquiring any resources.
+    let lowCapacityInputs={inputs with WorkRoot=Path.Combine(root,"low-capacity-work");EvidenceRoot=Path.Combine(root,"low-capacity-evidence")}
+    let mutable lowCapacityStarts=0
+    let mutable capacityObserved=false
+    let lowCapacity={new IProcessBackend with
+      member _.ReadBuilderIdentity()=RootlessPolicy.BuilderSha256
+      member _.ReadSupervisorIdentity()=RootlessPolicy.SupervisorSha256
+      member _.ReadAvailableCapacity path=
+        require(path=lowCapacityInputs.WorkRoot) "capacity checked unrelated path"
+        capacityObserved<-true
+        128L*1024L*1024L*1024L-1L
+      member _.Start _=
+        lowCapacityStarts<-lowCapacityStarts+1
+        raise(InvalidOperationException "capacity refusal started a process")}
+    let lowCapacityMechanism=RootlessMechanism(lowCapacityInputs,lowCapacity):>IRunnerMechanism
+    let mutable capacityRefused=false
+    try lowCapacityMechanism.Execute(AcquireInputs expected,CancellationToken.None).GetAwaiter().GetResult()|>ignore
+    with :? InvalidDataException as error->
+        require(error.Message="capacity-reserve-unavailable") "capacity fixture refused for an unrelated reason"
+        capacityRefused<-true
+    require(capacityObserved&&capacityRefused&&lowCapacityStarts=0&&not(Directory.Exists lowCapacityInputs.WorkRoot)&&not(Directory.Exists lowCapacityInputs.EvidenceRoot)) "below-reserve capacity acquired resources"
     let mechanism=RootlessMechanism(inputs,synthetic)
     let final,trace=RunnerExecution.runWithBudgets RunnerExecution.productionBudgets 32 (DateTimeOffset.UtcNow.AddSeconds 30.) CancellationToken.None mechanism (Runner.initialC4 expected)
     require(Runner.c4Ready final&&not(Runner.qualificationAccepted final)&&actualBuilds=2&&trace.Length=12) (sprintf "synthetic actual process/OCI mechanism did not reach narrower C4Ready: %A" final)
@@ -131,6 +154,7 @@ elif 'run' in args:
     let unacknowledged={new IProcessBackend with
       member _.ReadBuilderIdentity()=RootlessPolicy.BuilderSha256
       member _.ReadSupervisorIdentity()=RootlessPolicy.SupervisorSha256
+      member _.ReadAvailableCapacity _=128L*1024L*1024L*1024L
       member _.Start command=
         if command.Arguments|>Array.contains "build" then raise(IOException "synthetic-lost-start-ack")
         synthetic.Start command}
@@ -141,6 +165,7 @@ elif 'run' in args:
     let mismatched={new IProcessBackend with
       member _.ReadBuilderIdentity()=RootlessPolicy.BuilderSha256
       member _.ReadSupervisorIdentity()=RootlessPolicy.SupervisorSha256
+      member _.ReadAvailableCapacity _=128L*1024L*1024L*1024L
       member _.Start command=
         let second=(command.Arguments|>Array.exists(fun arg->arg.Contains("bundle-b",StringComparison.Ordinal)))
         if second&&(command.Arguments|>Array.contains "save") then

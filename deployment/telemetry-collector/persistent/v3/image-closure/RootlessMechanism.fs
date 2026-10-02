@@ -28,12 +28,14 @@ type IProcessBackend=
     abstract Start:ProcessCommand->IOwnedProcess
     abstract ReadBuilderIdentity:unit->string
     abstract ReadSupervisorIdentity:unit->string
+    abstract ReadAvailableCapacity:string->int64
 
-/// The test backend substitutes only process mechanics. The CLI always selects this real backend.
+/// The test backend substitutes process mechanics and capacity observations. The CLI always selects this real backend.
 type RealProcessBackend()=
     interface IProcessBackend with
         member _.ReadBuilderIdentity()=OciEvidence.shaFile "/usr/sbin/podman"
         member _.ReadSupervisorIdentity()=OciEvidence.shaFile "/usr/bin/setsid"
+        member _.ReadAvailableCapacity path=DriveInfo(Path.GetPathRoot path).AvailableFreeSpace
         member _.Start command=
             let start=ProcessStartInfo("/usr/bin/setsid")
             start.ArgumentList.Add "--wait"
@@ -254,7 +256,7 @@ type RootlessMechanism(inputs:RootlessInputs,backend:IProcessBackend)=
             | AcquireInputs expected->
                 require(expected=inputs.ExpectedInput) "input-identity"
                 validate token;checkBuilder token
-                require(DriveInfo(Path.GetPathRoot inputs.WorkRoot).AvailableFreeSpace>=128L*1024L*1024L*1024L) "capacity-reserve-unavailable"
+                require(backend.ReadAvailableCapacity(inputs.WorkRoot)>=128L*1024L*1024L*1024L) "capacity-reserve-unavailable"
                 token.ThrowIfCancellationRequested()
                 Directory.CreateDirectory(inputs.WorkRoot,UnixFileMode.UserRead|||UnixFileMode.UserWrite|||UnixFileMode.UserExecute)|>ignore
                 Directory.CreateDirectory(inputs.EvidenceRoot,UnixFileMode.UserRead|||UnixFileMode.UserWrite|||UnixFileMode.UserExecute)|>ignore
