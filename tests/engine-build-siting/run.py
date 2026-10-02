@@ -130,6 +130,15 @@ DECLARED_SITES: dict[str, str | None] = {
     # through a variable, so this gate cannot READ that it is not the engine — and default-deny means
     # "cannot read" is answered by a human writing this sentence, not by the gate guessing. Its output
     # lands under `scripts/NewSddWorkspace/bin/Release`, a path `scripts/fsgg-coord` never probes.
+    # The image-closure gate builds only its explicit non-engine F# CLI, tests,
+    # correspondence and mutant projects. Their ProjectReference graphs contain
+    # PersistentV3.ImageClosure only (plus FSharp.Core/FsQuint packages), with no
+    # Coord.Cli/Core/GitHub project. All outputs remain under those image-closure
+    # directories, outside every coordination tier-2a probe path.
+    "tests/telemetry-collector-persistent-v3-image-closure/run.sh": (
+        "builds only PersistentV3.ImageClosure and its tests/correspondence/mutant; "
+        "no coordination-engine project reference or tier-2a output path"
+    ),
     "tests/new-sdd-workspace/run.sh": (
         "builds scripts/NewSddWorkspace, not the engine; its output lands where tier 2a never probes"
     ),

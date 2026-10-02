@@ -278,8 +278,17 @@ module HostBindingTests =
             "time.sleep(30)\n"
         try
             use scope = OwnedProcessScope.enterTest ()
-            Assert.Throws<BindingRefusal>(fun () -> scope.Run("/usr/bin/python3", owner, [ "-c"; script ], 250, 128, 128) |> ignore) |> ignore
-            waitForFile parentFile; waitForFile childFile; waitForFile grandchildFile
+            // Establish the whole TERM-ignoring lineage before the operation clock starts.
+            // Cold managed-launcher startup must not replace the late-adoption scenario.
+            let ready () = waitForFile parentFile; waitForFile childFile; waitForFile grandchildFile
+            let refusal =
+                Assert.Throws<BindingRefusal>(fun () ->
+                    scope.RunWithPostSpawnHook("/usr/bin/python3", owner, [ "-c"; script ], 250, 128, 128, ready)
+                    |> ignore)
+            Assert.Equal("git-timeout-refused", refusal.Data0)
+            let diagnostic = scope.DiagnosticSnapshot
+            Assert.Equal(OwnedProcessScope.RetirementClean, diagnostic.FirstRetirement)
+            Assert.Equal(OwnedProcessScope.RetirementClean, diagnostic.FinalRetirement)
             Assert.False(Directory.Exists($"/proc/{Int32.Parse(File.ReadAllText(parentFile))}"))
             Assert.False(Directory.Exists($"/proc/{Int32.Parse(File.ReadAllText(childFile))}"))
             Assert.False(Directory.Exists($"/proc/{Int32.Parse(File.ReadAllText(grandchildFile))}"))

@@ -6,19 +6,21 @@ open System.IO
 open System.Threading
 open System.Threading.Tasks
 
-type Phase = Prepared | Acquired | Validated | CreatingStores | BuildingFirst | BuildingSecond | Comparing | Revalidating | Qualifying | Cleanup | Complete | Refused | Indeterminate
+type RunnerTarget = FullInactive | C4Only
+type Phase = Prepared | Acquired | Validated | CreatingStores | BuildingFirst | BuildingSecond | Comparing | Revalidating | Qualifying | Cleanup | Complete | C4Ready | Refused | Indeterminate
 type BuildResult = NoResult | Unknown | Digest of string
 type Qualification = QualificationUnknown | Accepted
 type Effect = AcquireInputs of string | ValidateInputs of string | CreateStore of string | StartBuild of string*string | AwaitBuild of string*string*string | CancelBuild of string | CompareBuilds of string*string | QualifyInactive of string | RemoveStore of string
 type Observation = InputsAcquired of string | InputsValidated of string | StoreCreated of string*string | StoreMayHaveEffect of string | BuildStarted of string*string | BuildCompleted of string*string*string*string | BuildMayHaveEffect of string | BuildCancelled of string | BuildsCompared of bool | QualificationObserved of bool*string | StoreAbsent of string | EffectFailed of string
-type State = { Phase:Phase; ExpectedInput:string; Current:bool; Owned:Map<string,string>; MayHaveEffect:Set<string>; Running:Map<string,string>; UnknownBuilds:Set<string>; IdentityOk:bool; First:BuildResult; Second:BuildResult; Qualification:Qualification; Cancelled:bool; CleanupFailed:bool; Refusal:string option; Pending:Effect option; LastEffect:string }
+type State = { Target:RunnerTarget; Phase:Phase; ExpectedInput:string; Current:bool; Owned:Map<string,string>; MayHaveEffect:Set<string>; Running:Map<string,string>; UnknownBuilds:Set<string>; IdentityOk:bool; First:BuildResult; Second:BuildResult; Qualification:Qualification; Cancelled:bool; CleanupFailed:bool; Refusal:string option; Pending:Effect option; LastEffect:string }
 
 module Runner =
-    let initial expected={Phase=Prepared;ExpectedInput=expected;Current=true;Owned=Map.empty;MayHaveEffect=Set.empty;Running=Map.empty;UnknownBuilds=Set.empty;IdentityOk=true;First=NoResult;Second=NoResult;Qualification=QualificationUnknown;Cancelled=false;CleanupFailed=false;Refusal=None;Pending=None;LastEffect="None"}
+    let initial expected={Target=FullInactive;Phase=Prepared;ExpectedInput=expected;Current=true;Owned=Map.empty;MayHaveEffect=Set.empty;Running=Map.empty;UnknownBuilds=Set.empty;IdentityOk=true;First=NoResult;Second=NoResult;Qualification=QualificationUnknown;Cancelled=false;CleanupFailed=false;Refusal=None;Pending=None;LastEffect="None"}
+    let initialC4 expected={initial expected with Target=C4Only}
     let private effectName=function AcquireInputs _->"Acquire"|ValidateInputs _->"Validate"|CreateStore "a"->"CreateA"|CreateStore _->"CreateB"|StartBuild("a",_)->"StartA"|StartBuild _->"StartB"|AwaitBuild("a",_,_)->"AwaitA"|AwaitBuild _->"AwaitB"|CancelBuild _->"Cancel"|CompareBuilds _->"Compare"|QualifyInactive _->"Qualify"|RemoveStore _->"Remove"
     let private refuse reason state={state with Phase=(if state.Owned.IsEmpty&&state.MayHaveEffect.IsEmpty&&state.Running.IsEmpty then Refused else Cleanup);Qualification=QualificationUnknown;Refusal=Some reason;Pending=None}
     let nextEffect state =
-        if state.Pending.IsSome||state.Phase=Complete||state.Phase=Refused||state.CleanupFailed then state,None else
+        if state.Pending.IsSome||state.Phase=Complete||state.Phase=C4Ready||state.Phase=Refused||state.CleanupFailed then state,None else
         let effect=
           match state.Phase with
           | Prepared->Some(AcquireInputs state.ExpectedInput)
@@ -45,10 +47,10 @@ module Runner =
       match state.Pending,observation with
       | Some(AcquireInputs expected),InputsAcquired actual when expected=actual->{state with Phase=Acquired;Pending=None}
       | Some(ValidateInputs expected),InputsValidated actual when expected=actual&&state.Phase=Acquired->{state with Phase=Validated;Pending=None;Current=true}
-      | Some(ValidateInputs expected),InputsValidated actual when expected=actual&&state.Phase=Revalidating->{state with Phase=Qualifying;Pending=None;Current=true}
+      | Some(ValidateInputs expected),InputsValidated actual when expected=actual&&state.Phase=Revalidating->{state with Phase=(if state.Target=C4Only then Cleanup else Qualifying);Pending=None;Current=true}
       | Some(ValidateInputs _),InputsValidated _->
 #if PERSISTENT_V3_REMOVE_INPUT_REVALIDATION_GUARD
-          {state with Phase=Qualifying;Pending=None;Current=true}
+          {state with Phase=(if state.Target=C4Only then Cleanup else Qualifying);Pending=None;Current=true}
 #else
           refuse "InputChanged" {state with Current=false}
 #endif
@@ -68,7 +70,7 @@ module Runner =
       | Some(QualifyInactive _),QualificationObserved _->refuse "StaleResult" {state with Current=false}
       | Some(RemoveStore resource),StoreAbsent observed when resource=observed->
           let owned=state.Owned|>Map.filter(fun _ value->value<>resource)
-          if owned.IsEmpty then {state with Phase=(if not state.UnknownBuilds.IsEmpty||not state.MayHaveEffect.IsEmpty then Indeterminate elif state.Qualification=Accepted&&state.Current&&not state.Cancelled then Complete else Refused);Owned=owned;Pending=None} else {state with Owned=owned;Pending=None}
+          if owned.IsEmpty then {state with Phase=(if not state.UnknownBuilds.IsEmpty||not state.MayHaveEffect.IsEmpty then Indeterminate elif state.Qualification=Accepted&&state.Current&&not state.Cancelled then Complete elif state.Target=C4Only&&state.Current&&state.IdentityOk&&not state.Cancelled&&not state.CleanupFailed&&state.Refusal.IsNone&&(match state.First,state.Second with Digest a,Digest b->a=b|_->false) then C4Ready else Refused);Owned=owned;Pending=None} else {state with Owned=owned;Pending=None}
       | Some(RemoveStore _),EffectFailed _->{state with CleanupFailed=true;Qualification=QualificationUnknown;Pending=None}
       | Some _,EffectFailed reason->refuse reason state
       | _->refuse "ObservationMismatch" state
@@ -88,9 +90,16 @@ module Runner =
       {state with Phase=phase;Cancelled=state.Cancelled||cancelled;Qualification=QualificationUnknown;Refusal=Some reason;Pending=None}
     let qualificationAccepted state=state.Phase=Complete&&state.Owned.IsEmpty&&state.MayHaveEffect.IsEmpty&&state.Running.IsEmpty&&state.UnknownBuilds.IsEmpty&&state.IdentityOk&&state.Current&&state.Qualification=Accepted&&not state.Cancelled&&not state.CleanupFailed
 
+    let c4Ready state=state.Phase=C4Ready&&state.Target=C4Only&&state.Current&&state.Owned.IsEmpty&&state.Running.IsEmpty&&state.MayHaveEffect.IsEmpty&&state.UnknownBuilds.IsEmpty&&state.IdentityOk&&state.Refusal.IsNone&&not state.Cancelled&&not state.CleanupFailed&&state.Qualification=QualificationUnknown&&(match state.First,state.Second with Digest a,Digest b->a=b|_->false)
+
 type IRunnerMechanism = abstract Execute:Effect*CancellationToken->Task<Observation>
 module RunnerExecution =
-    let run maximumSteps (deadline:DateTimeOffset) (cancellation:CancellationToken) (mechanism:IRunnerMechanism) state =
+    type EffectBudgets={Acquire:TimeSpan;Validate:TimeSpan;Create:TimeSpan;Start:TimeSpan;Await:TimeSpan;Compare:TimeSpan;Qualify:TimeSpan;Cancel:TimeSpan;Remove:TimeSpan}
+    let shortBudgets={Acquire=TimeSpan.FromMilliseconds 250.;Validate=TimeSpan.FromMilliseconds 250.;Create=TimeSpan.FromMilliseconds 250.;Start=TimeSpan.FromMilliseconds 250.;Await=TimeSpan.FromMilliseconds 250.;Compare=TimeSpan.FromMilliseconds 250.;Qualify=TimeSpan.FromMilliseconds 250.;Cancel=TimeSpan.FromMilliseconds 250.;Remove=TimeSpan.FromMilliseconds 250.}
+    let productionBudgets={Acquire=TimeSpan.FromMinutes 5.;Validate=TimeSpan.FromMinutes 5.;Create=TimeSpan.FromMinutes 2.;Start=TimeSpan.FromSeconds 30.;Await=TimeSpan.FromMinutes 15.;Compare=TimeSpan.FromMinutes 15.;Qualify=TimeSpan.FromMinutes 15.;Cancel=TimeSpan.FromSeconds 30.;Remove=TimeSpan.FromMinutes 3.}
+    let private effectBudget policy=function AcquireInputs _->policy.Acquire|ValidateInputs _->policy.Validate|CreateStore _->policy.Create|StartBuild _->policy.Start|AwaitBuild _->policy.Await|CompareBuilds _->policy.Compare|QualifyInactive _->policy.Qualify|CancelBuild _->policy.Cancel|RemoveStore _->policy.Remove
+    let runWithBudgets policy maximumSteps (deadline:DateTimeOffset) (cancellation:CancellationToken) (mechanism:IRunnerMechanism) state =
+      if maximumSteps<=0||maximumSteps>128||([policy.Acquire;policy.Validate;policy.Create;policy.Start;policy.Await;policy.Compare;policy.Qualify;policy.Cancel;policy.Remove]|>List.exists(fun span->span<=TimeSpan.Zero||span>TimeSpan.FromMinutes 90.)) then invalidArg "policy" "finite positive effect budgets required"
       let budget=deadline-DateTimeOffset.UtcNow
       let clock=Stopwatch.StartNew()
       let exhausted reason current =
@@ -112,7 +121,7 @@ module RunnerExecution =
               exhausted "Deadline" requested,List.rev trace
             elif cancellation.IsCancellationRequested&&not ignoreCancellation then loop (remaining-1) true (Runner.cancel requested) trace
             else
-              let invocationBudget=min remainingTime (TimeSpan.FromMilliseconds 250.0)
+              let invocationBudget=min remainingTime (effectBudget policy command)
               use invocationCancellation=if ignoreCancellation then new CancellationTokenSource() else CancellationTokenSource.CreateLinkedTokenSource(cancellation)
               invocationCancellation.CancelAfter invocationBudget
               let invocation:Task<Observation>=Task.Factory.StartNew((fun()->mechanism.Execute(command,invocationCancellation.Token)),CancellationToken.None,TaskCreationOptions.DenyChildAttach,TaskScheduler.Default).Unwrap()
@@ -138,6 +147,7 @@ module RunnerExecution =
                   let next=if cancellation.IsCancellationRequested&&not ignoreCancellation then Runner.invalidateBoundary "Cancelled" true lost else lost
                   loop (remaining-1) true next ((command,observation)::trace)
       loop maximumSteps false state []
+    let run maximumSteps deadline cancellation mechanism state=runWithBudgets shortBudgets maximumSteps deadline cancellation mechanism state
     type DirectoryFixture(root:string,input:string,first:string,second:string)=
       interface IRunnerMechanism with
         member _.Execute(effect,_)=

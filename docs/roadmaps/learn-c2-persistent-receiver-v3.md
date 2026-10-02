@@ -132,6 +132,8 @@ disabled. Main/work-main is not a destination or prerequisite.
   [run 37008208065](https://github.com/FS-GG/.github/actions/runs/37008208065).
   [PR #4105](https://github.com/FS-GG/.github/pull/4105) delivered the reviewed source and official
   NuGet lock correction. This closes P2-C.3 source; it does not install or activate a receiver.
+- [ ] P2-C.4 production mechanism source: separate trusted-input CLI, bounded rootless process mechanism, modeled C4Ready and verified OCI evidence. Source qualification alone does not establish actual image builds.
+- [ ] P2-C.4 genuine full Python/native/search/reader acquisition and independently selected input custody; the acquisition-required placeholder remains unavailable.
 - [ ] P2-C.4 two-build OCI comparison, P2-C.5 actual served Manager-to-Host inactive qualification,
   and P2-C.6 protected readback remain open. Genuine native acquisition, image construction,
   installation, grants, capture, restart/recovery, enrollment, and activation also remain open.
