@@ -37,6 +37,7 @@ on:
       - "tests/telemetry-collector-container/test_private_native_qualification.py"
       - "deployment/telemetry-collector/persistent/v3/**"
       - "tests/telemetry-collector-persistent-v3/**"
+      - "tests/telemetry-collector-persistent-v3-image-closure/**"
       - "docs/roadmaps/learn-c2-persistent-receiver-v3.md"
       - "docs/roadmaps/2026-10-01-typed-administrative-fsharp-quint.md"
       - ".github/workflows/release-telemetry-host-successor-*.yml"
@@ -79,6 +80,7 @@ on:
       - "tests/telemetry-collector-container/test_private_native_qualification.py"
       - "deployment/telemetry-collector/persistent/v3/**"
       - "tests/telemetry-collector-persistent-v3/**"
+      - "tests/telemetry-collector-persistent-v3-image-closure/**"
       - "docs/roadmaps/learn-c2-persistent-receiver-v3.md"
       - "docs/roadmaps/2026-10-01-typed-administrative-fsharp-quint.md"
       - ".github/workflows/release-telemetry-host-successor-*.yml"
@@ -270,6 +272,9 @@ jobs:
           HOST_ATTEMPT_ACQUIRED_STATE="$HOST_ATTEMPT_ACQUIRED_TRACE_OUTPUT" \
           HOST_ATTEMPT_QUINT_TOOL="$quint_archive" \
             /usr/bin/dotnet "$RUNNER_TEMP/host-attempt-correspondence/bin/HostAttempt.Correspondence/release/HostAttempt.Correspondence.dll"
+          export quint_archive
+          export -f quint
+          PERSISTENT_V3_RUNNER_TOOL="$quint_archive" bash tests/telemetry-collector-persistent-v3-image-closure/run.sh
       - name: Refuse malformed Host release effect policy before costly qualification
         run: |
           set -euo pipefail
