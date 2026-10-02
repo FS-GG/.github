@@ -53,6 +53,21 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-02: FABLE-ADOPT-01.2 externally driven SVG presentation source CLOSED; external-reference adoption remains open.**
+[FS.GG.Rendering #1365](https://github.com/FS-GG/FS.GG.Rendering/pull/1365) merged at protected
+`097e228388375bf27a03ac008627e4a038686c53`, tree
+`86dd831919131690aee6f87f130cf7c41068f700`, equal qualified source
+`1c50ec0bafedd9e26bbc1232bf0213008f24ee2f`. Hosted
+[SVG browser run 37003089565](https://github.com/FS-GG/FS.GG.Rendering/actions/runs/37003089565)
+passed Chromium, Firefox and WebKit plus canonical .NET/Fable correspondence and scale; deterministic
+[run 37003090379](https://github.com/FS-GG/FS.GG.Rendering/actions/runs/37003090379) also passed.
+The boundary passed 22 focused F# checks, 15 directed Quint ITFs covering 82 complete production states
+and ordered effect payloads, and four assertion-specific production guard mutants. It adds no local engine
+clock, and gateway commands and accepted or rejected receipts remain outside presentation coalescing. This
+closes the shared Rendering source window only. Publication, installed qualification,
+external-reference composition and migration, and FourD, product and native acceptance remain open. The
+existing FABLE-ADOPT-01.3 local-reference source closure is unchanged; external-reference composition is next.
+
 **2026-10-02: HOST GitGuardian names-only clarification source CLOSED; external alert disposition remains unverified.**
 The flagged mapping in [commit `59cfb2a`](https://github.com/FS-GG/.github/commit/59cfb2a9a47c74ebcbe08a0605428f2b12cde9d2#diff-d9b3e0b60188e34c0486096111952e390be6aa02f1869c5def77394434538cb2R6) contains GitHub environment secret names.
 The confirmed historical file SHA-256 is `262a744ded3e37e400556479bcdd8d4f722f4afaf54f2d52dafc6ec33e5c99a7`.

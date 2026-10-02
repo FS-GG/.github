@@ -118,5 +118,19 @@ milestones; the first enabled runtime change remains the later scoped receiver a
 Existing v2 receivers need separate stopped migration and backup/restore evidence. C3 remains
 disabled. Main/work-main is not a destination or prerequisite.
 
+### P2-C.3 source readiness
+
+- [x] The inactive image-closure constructor and typed qualification-runner source are ready for
+  protected integration. Candidate `ca86607ee55705ca9ded42e35803ac335fa0b5b3` binds the complete
+  physical native closure to a separately supplied root-acquisition selection, preserves explicit
+  production unavailability while that genuine selection is absent, and carries the selected trust
+  input into the prepared context. The retained independent review is READY with SHA-256
+  `302773c8bf5bee44a7d58c50e0860b99f13339d717bea3feea172378eb967964`.
+- [ ] The joined protected Host workflow must pass for the exact merged source before P2-C.3 source
+  closes. This source-ready state does not claim a hosted result.
+- [ ] P2-C.4 two-build OCI comparison, P2-C.5 actual served Manager-to-Host inactive qualification,
+  and P2-C.6 protected readback remain open. Genuine native acquisition, image construction,
+  installation, grants, capture, restart/recovery, enrollment, and activation also remain open.
+
 Receiver installation, real grants, private custody, capability/capture evidence, restart/export/backup,
 and any activation remain later protected effects. C3 stays disabled until those authorities close.
