@@ -65,6 +65,25 @@ independent and open. This dated clarification is not a current fleet-health att
 profile acceptance or waiver of exact artifact, authentication, custody, settlement/replay or effect
 authority for any operation actually performed.
 
+**2026-10-02: WASM-SHARED-01.1 contract and compatibility source CLOSED; shared runtime remains open.**
+[FS.GG.Game #672](https://github.com/FS-GG/FS.GG.Game/pull/672) merged at protected
+`3182cb1b678d9fa9da00edba263702a545e38bc0`, tree
+`8938409692792f7a90b4ba31e8d5bc96be1472af`, equal qualified candidate
+`1991d2972060587d8e51abfccbd300e3db53a06f`; root authenticated merge, tree and protected main.
+FS.GG.Game is the producer for the unpublished `FS.GG.Wasm.Contracts` source. Its typed F# contract
+preserves BAR ABI 1 and SC2 ABI `0x00010000`, strict imported SC2 versus weaker inventory-only legacy
+admission, and the products' destructive/transactional replacement and scheduling differences without
+granting native authority. The pinned corpus has attributed source hashes and expected decisions; no
+built `.wasm` existed in the protected inputs, so no guest artifact/toolchain digest is claimed. Local
+.NET/Fable package consumers passed against nupkg SHA-256
+`41cc25ed8ef1ba0a51934654531ffc26fb9405e5f473d3be529c458a4a9ffa9a`. Native Game run
+[`36979942169`](https://github.com/FS-GG/FS.GG.Game/actions/runs/36979942169), routine eligibility
+[`36979941395`](https://github.com/FS-GG/FS.GG.Game/actions/runs/36979941395) and protected branch
+contexts passed, but the project remains outside the Game solution and no hosted package gate ran.
+The nupkg is unpublished; browser host/runtime, lifecycle Quint correspondence, guest SDK archive,
+feed readback and product adoption remain open in .2–.7. V2 FULL ACCEPTED, P4 and independent product
+frontiers are unchanged.
+
 **2026-10-02: HOST acquired-attempt caller source CLOSED; private adoption remains open.**
 The [qualification-local F# caller](../deployment/telemetry-collector/host-attempt/README.md)
 consumes fixed acquired observations and drives the actual lifecycle reducer.
@@ -146,6 +165,22 @@ returned `subordinate-collision`, with readiness, facts qualification and native
 it does not qualify the successor source. A fresh credential-free readiness run, current-run
 revalidation, private admission, facts and native qualification remain open.
 
+**2026-10-02: P4 credential-free source readiness CLOSED; private facts and native execution remain open.**
+Protected Sandbox source `eda3d995428d047dadfdbf57242dd86cfaafbf05`, tree
+`f42d03894a5315f533125e3acf27353aebd6bd7c`, completed credential-free readiness in
+[run `36980200458`](https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/actions/runs/36980200458).
+Root downloaded immutable artifact `11214913824` and verified schema
+`fsgg.portable-p4-account-readiness/1` with `ready=true`, while `factsQualified=false` and
+`nativeExecutionAuthorized=false`. Receipt SHA-256 is
+`7c91610fcf102c0535243e2e4028ad5b69eeb91d4c4cf87c55f71d52ac929fb4`; archive SHA-256 is
+`66d647985668290de33c37603bc52dca1d47fc5161a5d81f88de1eb7539e7f41`. Policy SHA-256
+`778af6a83419b607d2f0a327dec2266f0c1dce77fa52589188c28ffa275d3441` bound all four database
+observations and selected the first eligible candidate. No public range tuple is required because the
+ephemeral runner is not reserved. This closes source plus credential-free readiness only. Fresh
+private owning-runner observation, admission, qualified facts, provider authority and native execution
+remain open. No KB import, compact operation or pending cutover is inferred; the preceding P4 source
+closures remain unchanged.
+
 **2026-10-02: FourD stateless diagnostic source CLOSED; native qualification remains open.**
 [Coordination #924](https://github.com/FS-GG/FS.GG.Coordination/pull/924) merged at
 `74ff6b3497154f7e308cc9ebdfd4da1a18c82cc1`, tree
@@ -221,6 +256,35 @@ hostfxr content and all 191 runtime modes differ from the required target modes.
 qualification, real receiver grant, capture and recovery remain open. No workspace default,
 experiment or C3 activation changes. Main has no action.
 
+**2026-10-02: LEARN W6 C2 hardened runtime-bundle source CLOSED; served adoption remains open.**
+[Coordination #925](https://github.com/FS-GG/FS.GG.Coordination/pull/925) merged at protected
+`49fe964f0239ad3734f5fa5119b3227f2a04758d`, tree
+`36b0be5cc74bfd10d045ab11ce978547464d5266`, equal qualified candidate
+`526c178510f8cb4fd04f852148a97e5729f3eed1`; bootstrap run `36978261546` and full optimistic run
+`36978261669` passed. The source preserves the legacy bundle `/1` producer, verifier and CLI and adds an
+explicit successor `/2` contract that binds the immutable target OCI identity, normalized runtime
+path/mode/content inventory and a separately acquired SDK tree before any selected SDK executable runs.
+The same-PR Q3 repair rebound the workflow digest and exact immutable-reference inventory without changing
+the five reviewed C1 source blobs. This is source closure only. The earlier served artifact `11209647998`
+and its recorded runtime-content/mode refusal remain immutable historical evidence. A freshly served C2
+bundle, target and SDK image/runtime qualification, genuine receiver grant, private capture,
+restart/recovery and activation remain open; C3 stays disabled and no installed experiment follows.
+
+**2026-10-02: LEARN W6 C2 served manager-bundle qualification CLOSED; receiver image remains open.**
+[Protected Coordination run `36983338783`](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36983338783)
+served sole artifact `11216418410` from exact source `49fe964f0239ad3734f5fa5119b3227f2a04758d`, tree
+`36b0be5cc74bfd10d045ab11ce978547464d5266`. Root and an independent read-only consumer bound the Actions
+artifact SHA-256 `518041591b9b7f1827911f0e796a1815799841831b962d3112169d9241969cdd`, canonical `/2` manifest
+`966e13e827b3b3a3f37c51bcc35fd57f4684741d19a3308905e5f66ac51ebf0e` and manager archive
+`03d46e6553e99be27c0bbc06d8767e2aa2a5e9b588d608d4b4c229e7a87ad74f`. Fresh official OCI acquisition
+reproduced the 337-file hardened target tree `ead4ece42719198be9607d18415e428e3a6fcaadf50b88dc6e93894c47bec4c2`
+and admitted the 4907-file SDK tree `c51a26bcd972e5f1b2944a912ca57cab9878fa88a2d8110fa0300c54ba0afcb0`
+before SDK execution. The SDK host truthfully refused target runtime `10.0.12` because it carries `10.0.11`;
+the canonical target `10.0.12` host route then passed exact `verify-v2`. The
+[public qualification report](reports/2026-10-02-learn-c2-served-bundle-qualification.md) closes C2 only.
+C3 image closure is next; C4 dual OCI comparison, C5 synthetic qualification and C6 protected activation remain
+later. No image, grant, capture, restart/recovery, installation, activation, workspace default or Main action follows.
+
 **2026-10-02: LEARN W6 C2 P1 inactive persistent-v3 preparation CLOSED; installed qualification remains open.**
 The [owning P1/P2 plan](roadmaps/learn-c2-persistent-receiver-v3.md) supplies a stateless F#
 constructor and CLI with closed, duplicate-safe inputs and exclusive mode-0600 materialization.
@@ -295,6 +359,20 @@ consumer readiness, fresh source-bound inputs, manifest and admission, and one n
 facts operation remain next. The historical admitted facts failure remains unexplained
 with no sealed capsule; this source does not retrospectively diagnose it or justify
 an identical rerun. Canonical H2, provider, sealer and HOST source remain unchanged.
+
+**2026-10-02: SC2 canonical typed-profile source closure delivered; protected rebuild and genuine journeys remain open.**
+[SC2 #36](https://github.com/FS-GG/FS.GG.SC2.Client/pull/36) merged at protected
+`e521fa9dc5a910d9e1f201686e126a0e9edc736e`, tree
+`9c2132780d0c544dc04790ff784064d98427068d`, equal qualified source
+`304c13624e866448c75849f25b2fcdc91de6e2ed`. Root authenticated merge, tree and main;
+full native [verification `36982008400`](https://github.com/FS-GG/FS.GG.SC2.Client/actions/runs/36982008400)
+passed. The generated F# live contract now supplies the canonical advisor profile; the standalone
+diagnostic compile fixture includes its ordered contract dependency, bounded capture avoids repeated
+oversized serialization, and hosted browser qualification uses one worker to match its already
+serialized Gateway/peer capacity. The historical protected-`57eadf00bb9e776664e00fe200bb4f2952f72829` genuine attempt remains a typed
+`ProfileRefused` with no native acceptance. An exact protected artifact rebuild, fresh private pins,
+genuine advisor and replay journeys, and owned cleanup acceptance remain open. No next SC2 item is
+selected by this projection.
 
 **2026-10-02: SC2 malformed advisor-evidence transport source delivered; private adoption remains open.**
 [SC2 #35](https://github.com/FS-GG/FS.GG.SC2.Client/pull/35) merged at
