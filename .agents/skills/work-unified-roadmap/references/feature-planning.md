@@ -1,8 +1,9 @@
 # Feature-planner assignment
 
 Read this only when a new major feature needs a plan or an existing feature needs a material replan or
-near-term horizon expansion. The planner is `gpt-6-astra` with effort `high`; implementation is a separate
-`gpt-5.6-sol` medium worker. Planning does not authorize implementation or protected effects.
+near-term horizon expansion. Select the newest available Astra at `high` for planning and a separate
+newest available Sol at `medium` for implementation, resolving exact model IDs from the runtime's
+available model list at each new spawn as directed by the parent skill. Planning does not authorize implementation or protected effects.
 
 ## Give the planner a bounded evidence packet
 
