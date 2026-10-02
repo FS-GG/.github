@@ -329,6 +329,20 @@ facts operation remain next. The historical admitted facts failure remains unexp
 with no sealed capsule; this source does not retrospectively diagnose it or justify
 an identical rerun. Canonical H2, provider, sealer and HOST source remain unchanged.
 
+**2026-10-02: SC2 canonical typed-profile source closure delivered; protected rebuild and genuine journeys remain open.**
+[SC2 #36](https://github.com/FS-GG/FS.GG.SC2.Client/pull/36) merged at protected
+`e521fa9dc5a910d9e1f201686e126a0e9edc736e`, tree
+`9c2132780d0c544dc04790ff784064d98427068d`, equal qualified source
+`304c13624e866448c75849f25b2fcdc91de6e2ed`. Root authenticated merge, tree and main;
+full native [verification `36982008400`](https://github.com/FS-GG/FS.GG.SC2.Client/actions/runs/36982008400)
+passed. The generated F# live contract now supplies the canonical advisor profile; the standalone
+diagnostic compile fixture includes its ordered contract dependency, bounded capture avoids repeated
+oversized serialization, and hosted browser qualification uses one worker to match its already
+serialized Gateway/peer capacity. The historical protected-`57eadf00bb9e776664e00fe200bb4f2952f72829` genuine attempt remains a typed
+`ProfileRefused` with no native acceptance. An exact protected artifact rebuild, fresh private pins,
+genuine advisor and replay journeys, and owned cleanup acceptance remain open. No next SC2 item is
+selected by this projection.
+
 **2026-10-02: SC2 malformed advisor-evidence transport source delivered; private adoption remains open.**
 [SC2 #35](https://github.com/FS-GG/FS.GG.SC2.Client/pull/35) merged at
 `57eadf00bb9e776664e00fe200bb4f2952f72829`, tree
