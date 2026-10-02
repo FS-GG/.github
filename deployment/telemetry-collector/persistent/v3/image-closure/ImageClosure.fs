@@ -11,7 +11,8 @@ type FileRow = { SourcePath:string; TargetPath:string; Bytes:int64; Sha256:strin
 type ManifestFile = { SourcePath:string; TargetPath:string; Bytes:int64; Sha256:string; Mode:string }
 type RoleManifest = { Schema:string; Role:string; AuthoritySha256:string; SearchRoots:string array; Argv:string array; LoaderPaths:string array; Files:ManifestFile array }
 type RoleManifestReference = { Role:string; Path:string; Sha256:string }
-type Selection = { IdentityClass:string; AcquisitionRoot:string; ManifestRoot:string; RoleManifests:RoleManifestReference array; OwnerUid:int; Platform:string; HostSourceRevision:string; HostReleaseId:int64; HostRunId:int64; HostArchiveSha256:string; HostPackageSha256:string; HostPayloadSha256:string; HostManifestSha256:string; HostJournalSha256:string; ManagerSourceRevision:string; ManagerSourceTree:string; ManagerArtifactSha256:string; ManagerManifestSha256:string; ManagerPreparedSha256:string; ManagerArchiveSha256:string; ManagerRunId:int64; ManagerArtifactId:int64; RuntimeImageDigest:string; RuntimeTreeSha256:string; NativeElfSha256:string; NativeProfileSha256:string; ReaderProfileSha256:string; CanonicalVerifierSha256:string; InventorySha256:string; Files:FileRow array }
+type NativeAcquisitionInventory = { Schema:string; ProfileSha256:string; ReaderProfileSha256:string; NativeExecutable:string; NativeExecutableSha256:string; PythonExecutable:string; PythonVersion:string; VerifierArgv:string array; SearchRoots:string array; LoaderPath:string; ImportPaths:string array; LibraryPaths:string array; OsDataPaths:string array; Files:ManifestFile array }
+type Selection = { IdentityClass:string; AcquisitionRoot:string; ManifestRoot:string; RoleManifests:RoleManifestReference array; NativeInventoryPath:string; NativeInventorySha256:string; OwnerUid:int; Platform:string; HostSourceRevision:string; HostReleaseId:int64; HostRunId:int64; HostArchiveSha256:string; HostPackageSha256:string; HostPayloadSha256:string; HostManifestSha256:string; HostJournalSha256:string; ManagerSourceRevision:string; ManagerSourceTree:string; ManagerArtifactSha256:string; ManagerManifestSha256:string; ManagerPreparedSha256:string; ManagerArchiveSha256:string; ManagerRunId:int64; ManagerArtifactId:int64; RuntimeImageDigest:string; RuntimeTreeSha256:string; NativeElfSha256:string; NativeProfileSha256:string; ReaderProfileSha256:string; CanonicalVerifierSha256:string; InventorySha256:string; Files:FileRow array }
 type ClosureResult = Unavailable of string | Refused of string | Prepared of byte array
 
 module ImageClosure =
@@ -106,8 +107,12 @@ module ImageClosure =
             let info=DirectoryInfo directory
             if not info.Exists||not(noLink info)||ownerUid directory<>expectedUid||((File.GetUnixFileMode directory)&&&(UnixFileMode.GroupWrite|||UnixFileMode.OtherWrite))<>enum 0 then error<-Some "acquisition-directory-custody"
             else
-                for entry in info.EnumerateFileSystemInfos() do
-                    if error.IsNone then
+                use entries=info.EnumerateFileSystemInfos().GetEnumerator()
+                let mutable more=true
+                while error.IsNone&&more do
+                    more<-entries.MoveNext()
+                    if more then
+                      let entry=entries.Current
                       visited<-visited+1
                       if visited>8192 then error<-Some "acquisition-census-bound"
                       elif not(noLink entry)||entry.Attributes.HasFlag FileAttributes.ReparsePoint then error<-Some "acquisition-census-link"
@@ -185,6 +190,27 @@ module ImageClosure =
             use document=JsonDocument.Parse bytes
             Ok(document.RootElement.Clone())
         with _->Error "production-authority-read"
+    let private nativeAcquisitionInventory selection =
+        try
+            if not(relativePath selection.NativeInventoryPath)||not(sha64 selection.NativeInventorySha256) then Error "native-authority-inventory-reference" else
+            let root=Path.GetFullPath selection.ManifestRoot
+            let path=Path.GetFullPath(Path.Combine(root,selection.NativeInventoryPath))
+            let prefix=root.TrimEnd(Path.DirectorySeparatorChar)+string Path.DirectorySeparatorChar
+            let info=FileInfo path
+            if not(path.StartsWith(prefix,StringComparison.Ordinal))||not info.Exists||info.Length<=0L||info.Length>2L*1024L*1024L||not(custody root path selection.OwnerUid) then Error "native-authority-inventory-physical" else
+            let bytes=File.ReadAllBytes path
+            if sha bytes<>selection.NativeInventorySha256 then Error "native-authority-inventory-digest" else
+            use document=JsonDocument.Parse bytes
+            let value=document.RootElement
+            let expected=set["Schema";"ProfileSha256";"ReaderProfileSha256";"NativeExecutable";"NativeExecutableSha256";"PythonExecutable";"PythonVersion";"VerifierArgv";"SearchRoots";"LoaderPath";"ImportPaths";"LibraryPaths";"OsDataPaths";"Files"]
+            let names=if value.ValueKind=JsonValueKind.Object then value.EnumerateObject()|>Seq.map _.Name|>Seq.toArray else [||]
+            let mutable files=Unchecked.defaultof<JsonElement>
+            let arrays=[|"VerifierArgv";"SearchRoots";"ImportPaths";"LibraryPaths";"OsDataPaths"|]
+            if names.Length<>expected.Count||Set.ofArray names<>expected||not(value.TryGetProperty("Files",&files))||files.ValueKind<>JsonValueKind.Array||files.GetArrayLength()=0||files.GetArrayLength()>8192 then Error "native-authority-inventory-not-closed"
+            elif arrays|>Array.exists(fun name->let item=value.GetProperty name in item.ValueKind<>JsonValueKind.Array||(item.EnumerateArray()|>Seq.exists(fun entry->entry.ValueKind<>JsonValueKind.String))) then Error "native-authority-inventory-not-closed"
+            elif files.EnumerateArray()|>Seq.exists(fun item->let itemNames=if item.ValueKind=JsonValueKind.Object then item.EnumerateObject()|>Seq.map _.Name|>Seq.toArray else [||] in itemNames.Length<>5||Set.ofArray itemNames<>set["SourcePath";"TargetPath";"Bytes";"Sha256";"Mode"]) then Error "native-authority-inventory-not-closed"
+            else Ok(JsonSerializer.Deserialize<NativeAcquisitionInventory> bytes)
+        with _->Error "native-authority-inventory-read"
     let private manifestFiles (sourcePrefix:string) (targetRoot:string) (value:JsonElement) =
         if value.ValueKind<>JsonValueKind.Array||value.GetArrayLength()=0||value.GetArrayLength()>8192 then Error "production-authority-files" else
         value.EnumerateArray()
@@ -204,8 +230,8 @@ module ImageClosure =
         let pinned=selection.IdentityClass="production"
         let rowSet role=rows|>Array.filter(fun row->row.SourceClass=role)|>Array.map(fun row->{SourcePath=row.SourcePath;TargetPath=row.TargetPath;Bytes=row.Bytes;Sha256=row.Sha256;Mode=row.Mode})
         let closed expected (value:JsonElement)=value.ValueKind=JsonValueKind.Object&&(value.EnumerateObject()|>Seq.length)=Set.count expected&&(value.EnumerateObject()|>Seq.map _.Name|>Set.ofSeq)=expected
-        match productionManifest selection "host" selection.HostManifestSha256,productionManifest selection "manager" selection.ManagerManifestSha256,productionManifest selection "runtime" selection.RuntimeTreeSha256,productionManifest selection "native" selection.NativeProfileSha256 with
-        | Ok host,Ok manager,Ok runtime,Ok native->
+        match productionManifest selection "host" selection.HostManifestSha256,productionManifest selection "manager" selection.ManagerManifestSha256,productionManifest selection "runtime" selection.RuntimeTreeSha256,productionManifest selection "native" selection.NativeProfileSha256,nativeAcquisitionInventory selection with
+        | Ok host,Ok manager,Ok runtime,Ok native,Ok nativeInventory->
             try
                 let hostNames=host.EnumerateObject()|>Seq.map _.Name|>Set.ofSeq
                 let hostExpected=set["archiveSha256";"createdAt";"dependencyLockSha256";"framework";"packageId";"producerPayloadSha256";"runtimePrerequisites";"schema";"sourceSha";"supportedStoreSchemaMax";"supportedStoreSchemaMin";"tag";"target";"uiAssetTreeSha256";"version"]
@@ -241,22 +267,45 @@ module ImageClosure =
                         let config=nativeNode.GetProperty("config").GetString()
                         let configDigest=nativeNode.GetProperty("configSha256").GetString()
                         let has digest target= nativeRows|>Array.exists(fun row->row.Sha256=digest&&row.TargetPath=target)
-                        let hasTarget predicate=nativeRows|>Array.exists(fun row->predicate row.TargetPath)
                         let nativeIdentity=closed nativeTopExpected native&&closed nativeExpected nativeNode&&native.GetProperty("schema").GetString()="fsgg.telemetry.native-operation-profile/1"&&nativeExecutable="/opt/fsgg/codex/codex"&&nativeDigest=selection.NativeElfSha256&&(not pinned||nativeBytes=286594376L)&&(nativeRows|>Array.exists(fun row->row.Sha256=nativeDigest&&row.TargetPath=nativeExecutable&&row.Bytes=nativeBytes))&&has selection.NativeProfileSha256 "/opt/fsgg/profile/native-operation-v1.json"&&has selection.ReaderProfileSha256 "/opt/fsgg/profile/reader-profile.json"&&has selection.CanonicalVerifierSha256 "/opt/fsgg/verifier/learn_01_native_source.py"&&has configDigest config&&has (nativeNode.GetProperty("protocolSchemaSha256").GetString()) "/opt/fsgg/native-protocol-schema.json"&&has (nativeNode.GetProperty("sessionFlagsSha256").GetString()) "/opt/fsgg/native-session-flags.json"
-                        let nativeClosure=hasTarget(fun target->target="/opt/fsgg/python/bin/python3.14")&&hasTarget(fun target->target.StartsWith("/opt/fsgg/python/lib/python3.14/",StringComparison.Ordinal)&&target.EndsWith(".py",StringComparison.Ordinal))&&hasTarget(fun target->target.StartsWith("/opt/fsgg/python/lib/python3.14/",StringComparison.Ordinal)&&target.EndsWith(".so",StringComparison.Ordinal))&&hasTarget(fun target->target="/lib64/ld-linux-x86-64.so.2"||target="/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2")&&hasTarget(fun target->(target.StartsWith("/usr/lib/",StringComparison.Ordinal)||target.StartsWith("/lib/",StringComparison.Ordinal))&&target.Contains(".so",StringComparison.Ordinal))&&hasTarget(fun target->target.StartsWith("/etc/ssl/",StringComparison.Ordinal)||target.StartsWith("/usr/share/zoneinfo/",StringComparison.Ordinal))
+                        let authorityFiles=nativeInventory.Files
+                        let authorityTargets=authorityFiles|>Array.map _.TargetPath|>Set.ofArray
+                        let canonicalList (values:string array)=values.Length>0&&(values|>Array.distinct).Length=values.Length&&values=Array.sort values&&(values|>Array.forall canonicalAbsolute)
+                        let underSearchRoot (path:string)=nativeInventory.SearchRoots|>Array.exists(fun root->path.StartsWith(root.TrimEnd('/')+"/",StringComparison.Ordinal))
+                        let fixedVerifierArgv=[|nativeInventory.PythonExecutable;"-I";"-S";"-B";"/opt/fsgg/verifier/learn_01_native_source.py";"verify"|]
+                        let layoutPaths=Array.concat[ [|nativeInventory.NativeExecutable;nativeInventory.PythonExecutable;nativeInventory.LoaderPath|];nativeInventory.ImportPaths;nativeInventory.LibraryPaths;nativeInventory.OsDataPaths ]
+                        let executable path digest=authorityFiles|>Array.exists(fun row->row.TargetPath=path&&row.Sha256=digest&&row.Mode="0555")
+                        let nativeAuthority=
+                            nativeInventory.Schema="fsgg.telemetry.native-acquisition-inventory/1"&&
+                            nativeInventory.ProfileSha256=selection.NativeProfileSha256&&nativeInventory.ReaderProfileSha256=selection.ReaderProfileSha256&&
+                            nativeInventory.NativeExecutable=nativeExecutable&&nativeInventory.NativeExecutableSha256=selection.NativeElfSha256&&
+                            nativeInventory.PythonExecutable="/opt/fsgg/python/bin/python3.14"&&nativeInventory.PythonVersion="3.14.0"&&
+                            nativeInventory.VerifierArgv=fixedVerifierArgv&&nativeInventory.SearchRoots=[|"/opt/fsgg/python/lib/python3.14"|]&&
+                            canonicalAbsolute nativeInventory.LoaderPath&&canonicalList nativeInventory.ImportPaths&&canonicalList nativeInventory.LibraryPaths&&canonicalList nativeInventory.OsDataPaths&&
+                            (layoutPaths|>Array.distinct).Length=layoutPaths.Length&&
+                            (nativeInventory.ImportPaths|>Array.forall underSearchRoot)&&
+                            executable nativeInventory.NativeExecutable nativeInventory.NativeExecutableSha256&&
+                            (authorityFiles|>Array.exists(fun row->row.TargetPath=nativeInventory.PythonExecutable&&row.Mode="0555"))&&
+                            (layoutPaths|>Array.forall authorityTargets.Contains)&&
+                            authorityFiles=(authorityFiles|>Array.sortBy _.TargetPath)&&
+                            (authorityFiles|>Array.distinctBy _.TargetPath).Length=authorityFiles.Length&&
+                            (authorityFiles|>Array.distinctBy _.SourcePath).Length=authorityFiles.Length&&
+                            (authorityFiles|>Array.forall(fun row->relativePath row.SourcePath&&targetPath "native" row.TargetPath&&row.Bytes>0L&&sha64 row.Sha256&&(row.Mode="0444"||row.Mode="0555")))&&
+                            authorityFiles=nativeRows
                         if not nativeIdentity then Error "production-native-profile"
-                        elif not nativeClosure then Error "production-native-dependency-closure"
+                        elif not nativeAuthority then Error "production-native-authority-inventory-mismatch"
                         else
                           let mk role authority search argv loaders files={Schema="fsgg.telemetry.persistent-v3-role-closure/1";Role=role;AuthoritySha256=authority;SearchRoots=search;Argv=argv;LoaderPaths=loaders;Files=files}
-                          let loaders=nativeRows|>Array.filter(fun row->row.TargetPath.Contains(".so",StringComparison.Ordinal)||row.TargetPath.Contains("ld-linux",StringComparison.Ordinal))|>Array.map _.TargetPath
-                          Ok [|mk "host" selection.HostManifestSha256 [|"/opt/fsgg/telemetry-host"|] [||] [||] hostRows;mk "manager" selection.ManagerManifestSha256 [|installationRoot|] fixedArgv [|"/usr/share/dotnet"|] managerFiles;mk "native" selection.NativeProfileSha256 [|"/opt/fsgg/python/lib/python3.14";"/usr/lib";"/lib"|] [|nativeExecutable|] loaders nativeRows;mk "runtime" selection.RuntimeTreeSha256 [|"/usr/share/dotnet"|] [||] [||] runtimeFiles|]
+                          let loaders=Array.concat[[|nativeInventory.LoaderPath|];nativeInventory.LibraryPaths]
+                          Ok [|mk "host" selection.HostManifestSha256 [|"/opt/fsgg/telemetry-host"|] [||] [||] hostRows;mk "manager" selection.ManagerManifestSha256 [|installationRoot|] fixedArgv [|"/usr/share/dotnet"|] managerFiles;mk "native" selection.NativeProfileSha256 nativeInventory.SearchRoots [|nativeExecutable|] loaders nativeRows;mk "runtime" selection.RuntimeTreeSha256 [|"/usr/share/dotnet"|] [||] [||] runtimeFiles|]
                 | Error reason,_->Error reason|_,Error reason->Error reason
             with _->Error "production-authority-shape"
-        | Error reason,_,_,_->Error reason|_,Error reason,_,_->Error reason|_,_,Error reason,_->Error reason|_,_,_,Error reason->Error reason
+        | Error reason,_,_,_,_->Error reason|_,Error reason,_,_,_->Error reason|_,_,Error reason,_,_->Error reason|_,_,_,Error reason,_->Error reason|_,_,_,_,Error reason->Error reason
     let prepare selection =
         if String.IsNullOrWhiteSpace selection.InventorySha256||selection.Files.Length=0 then Unavailable "native-image-closure-inventory-acquisition-required"
         elif selection.IdentityClass<>"production"&&selection.IdentityClass<>"production-contract-test"&&selection.IdentityClass<>"synthetic-test" then Refused "identity-class"
         elif selection.IdentityClass="production"&&not(fixedProduction selection) then Refused "fixed-production-identity-mismatch"
+        elif selection.IdentityClass<>"synthetic-test"&&(String.IsNullOrWhiteSpace selection.NativeInventoryPath||not(sha64 selection.NativeInventorySha256)) then Unavailable "native-authority-inventory-acquisition-required"
         elif selection.Platform<>"linux/amd64"||not(sha64 selection.ReaderProfileSha256&&sha64 selection.InventorySha256) then Refused "selection-shape"
         else
             let sorted=selection.Files|>Array.sortBy _.TargetPath
