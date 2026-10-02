@@ -77,6 +77,31 @@ receipt interpretation and handling of unknown native effects stay in the produc
 
 ## Stages and completion evidence
 
+### Connected producer prerequisite to .5 — source closed, release open
+
+The published 0.1.1 boundary exposed missing connection between the real Worker and its
+F# lifecycle. Empty BAR output, unaligned output and lifecycle expiry counterexamples required
+repair before product adapters could rely on that boundary. [Game #679](https://github.com/FS-GG/FS.GG.Game/pull/679)
+delivers the connected producer at protected `4afacb501b9371b4cc81494b7bf91b46c880a663`,
+tree `191d7c0ca82af8a4d610e88b35ce97df802d3463`.
+
+The actual Worker now joins typed load/initialize/invoke/shutdown identities, phase and
+queue policy, deadline settlement and physical termination. Unsafe guest output retires the
+worker and its authority. Formal exploration covers both cold and initialized states;
+five production F#/.NET/Fable state-and-effect traces and four causal mutants passed.
+The fresh exact-candidate consumer passed .NET/Fable, independently built Rust/C modules
+and all 25 Chromium cases using empty locked package caches. This is source qualification.
+
+Native ApiCompat against the genuine published 0.1.1 archives identified four removed Browser
+constructors: WorkerCommand, RequestProjection, EffectProjection and HostProjection.
+Contracts remains compatible. The selected successor is coherent **0.2.0**, with that exact
+pre-1.0 migration recorded rather than suppressed. The immutable first release remains 0.1.1.
+Before .5 adapters, qualify protected-source publisher custody, both genuine feeds and SDK
+assets, then fresh public and organization installed consumers. None is inferred from the
+local candidate or source merge. BAR/SC2 existing frozen paths remain independently qualified;
+consumer adapters, native journeys and .6–.7 remain open.
+
+
 Stages .1–.3 source and .4 publication/installed qualification are closed. Stages .5–.7 remain open. Record source delivery, publication and
 installed qualification separately, with exact versions, revisions and artifact digests.
 

@@ -53,6 +53,20 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-02: WASM-SHARED-01.5-P connected producer repair CLOSED (source).**
+[Game PR #679](https://github.com/FS-GG/FS.GG.Game/pull/679) merged protected
+`4afacb501b9371b4cc81494b7bf91b46c880a663`, tree
+`191d7c0ca82af8a4d610e88b35ce97df802d3463`, after native source checks passed.
+The production browser Worker now uses the authoritative F# lifecycle for artifact loading,
+initialization, invocation, phase and expiry checks, queue settlement and termination.
+Canonical Quint cold and initialized exploration, five full-state/ordered-effect traces,
+four causal mutants and a fresh exact-package consumer passed; all 25 Chromium cases passed.
+Actual comparison against published 0.1.1 found four Browser constructor removals and no
+Contracts incompatibility. The selected coherent successor is therefore 0.2.0, with that
+explicit migration recorded; it is not a compatible patch. Published 0.1.1 remains immutable.
+Protected-source publisher custody, both-feed and SDK verification, fresh public/org installed
+qualification and BAR/SC2/FourD adapters remain open. No 0.2.0 publication or product effect is claimed.
+
 **2026-10-02: SC2C-01.6f final typed pair CLI repair CLOSED (source).**
 [SC2 Client PR #38](https://github.com/FS-GG/FS.GG.SC2.Client/pull/38) merged as protected
 `4314edd7ca502f7180b5cf9058044ffeeaff2bea` after
