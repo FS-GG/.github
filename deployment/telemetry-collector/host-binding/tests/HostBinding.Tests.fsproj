@@ -9,7 +9,7 @@
     <Compile Include="HostBindingTests.fs" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="../HostBinding.fsproj" />
+    <ProjectReference Include="../HostBinding.fsproj" AdditionalProperties="DefineConstants=HOST_BINDING_TEST_LAUNCH_ROLES%3B$(HostBindingTestConstants)" />
     <PackageReference Include="FSharp.Core" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="xunit" />

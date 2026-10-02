@@ -53,6 +53,44 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-02: HOST GitGuardian names-only clarification source CLOSED; external alert disposition remains unverified.**
+The flagged mapping in [commit `59cfb2a`](https://github.com/FS-GG/.github/commit/59cfb2a9a47c74ebcbe08a0605428f2b12cde9d2#diff-d9b3e0b60188e34c0486096111952e390be6aa02f1869c5def77394434538cb2R6) contains GitHub environment secret names.
+The confirmed historical file SHA-256 is `262a744ded3e37e400556479bcdd8d4f722f4afaf54f2d52dafc6ec33e5c99a7`.
+The transport reads private values at runtime from the environment or sensitive stdin and sends them
+as child stdin. [PR #4098](https://github.com/FS-GG/.github/pull/4098) merged the clarification at
+protected `831c4cb3fb21d5f312d06578e3c334611da792b3`, tree
+`6429d7364d0ade5528756919157fad57286062c2`; the current hosted package passed 17 transport, 35 receiver
+and 41 caller controls. The mapping is now explicitly named `GITHUB_SECRET_NAMES` while preserving its
+role/name mapping and argv/stdin boundary. This exact location is a names-only false positive. GitGuardian
+alert disposition has not been verified; no credential exposure is established by this finding.
+
+**2026-10-02: BAR installed knowledge-only compact-backup C3 cutover and legacy full-backup release CLOSED.**
+Root installed independently reviewed runtime `e4ff96feeb7c8e57a1304de10ff89bebb6770e8c`, tree
+`9a100df5073709d361065df3bf987c92242ca547`, DLL SHA-256
+`b5da543a927aa7e13bcfbabb4267d1d86462cbcb8593fef3a3c16712b7e5841b`; the review record SHA-256 is
+`4915f8c53f7ca660113362ca9953b0651445e3e1ca1df0e05d9380b7d1e2d650`. The original intent SHA-256
+`2f0ab6828b78cb087395127880101dbc4fa855eb427d4f1836a961196ff47cb5` completed with receipt SHA-256
+`79aca1601477e87f2cbf9c5d20af6e16b6273eea1a9ac5dc76069bb9dd05493d`: four legacy databases totaling
+5,532,090,368 bytes and their exact authorized sidecars were released, leaving the full catalog empty
+with zero pending entries. Mode-0600 before/after checkpoints have identical SHA-256
+`073efdd0d4dbc335763a64932c65b2d91ba1ca5dee472c55548f558dca3a8a29` and bind unchanged live
+`bar.sqlite`, sources, compact catalog, and current plus three prior compact databases and manifests.
+The sole v10 keeper first succeeded at 10:10:47.977 UTC with four retained snapshots, 247 knowledge
+versions, no alerts, 13,987,840 bytes and the combined live source index preserved; its next tick was
+due at 10:40:42 UTC and host restart supervision remained absent. The v6 natural 09:48 tick remains
+valid historical evidence; a natural v10 tick had not occurred at this evidence horizon. Active
+knowledge folding can legitimately change later chapter and knowledge snapshots, so the checkpoint
+does not promise an immutable live database hash. The normal wrapper fold completed at 10:18:43 UTC;
+maintenance report SHA-256 `5befe5fffddc40dae20a68961d5806a12a272757170dca91da6217ced8852e43`
+records 42 documents and 259 versions after seven semantic revisions plus five immutable graph-closure
+versions, with zero conflicts. The current project database is 3,670,016 bytes, below 5 MiB, with
+2,944,338 payload bytes; the four retained snapshots occupy 14,569,472 bytes, 524,288 more than the
+immediate pre-fold set. Sources, index selectors and file counts remain unchanged. The current
+`compact-backup-growth-over-1mib-per-day` alert is retained because the policy extrapolates genuine
+imports separated by a short interval; the measured growth does not itself establish an unbounded
+increase. This closure covers installed knowledge backup and cutover cleanup only; the source-cache
+physical database split, remote GitHub backup, host supervision and product-native work remain open.
+
 **2026-10-01: V2 platform FULL ACCEPTED for the selected clean-start profile; independent products and extensions remain open.**
 The accepted platform boundary is ordinary source delivery and ordinary settlement across the nine
 named adopted receivers, truthful observer-loss behavior and the bounded fixed-job HOST diagnostic. The
@@ -84,6 +122,40 @@ The nupkg is unpublished; browser host/runtime, lifecycle Quint correspondence, 
 feed readback and product adoption remain open in .2–.7. V2 FULL ACCEPTED, P4 and independent product
 frontiers are unchanged.
 
+**2026-10-02: WASM-SHARED-01.2 shared runtime and lifecycle source CLOSED; guest SDK and publication remain open.**
+[FS.GG.Game #673](https://github.com/FS-GG/FS.GG.Game/pull/673) merged the qualified candidate
+`4022ab59800492407258a2fbeb1e985248de9017` at protected
+`c951df2b02515cc44eefe6f1078923abd52b71be`, with equal tree
+`e4453f9bf3565cf4f1321365efecb13fc2e56570`; root authenticated merge, tree and protected main.
+The source adds the production F# lifecycle reducer and host, strict BAR/imported-SC2 admission,
+validated invocation ownership, thin JavaScript mechanics and canonical Quint correspondence. The
+host preserves BAR destructive replacement and busy refusal, SC2 transactional replacement and
+bounded queues, retiring-worker capacity, generation fencing, deadline settlement, freeze and
+disposal. Model-generated full-state and ordered-effect traces agree with the reducer on .NET and
+Fable/Node, including a mutation that must fail correspondence. Real Rust BAR and SC2 modules plus
+hostile modules passed six Chromium Worker cases. The independent hosted WASM run
+[`36991045744`](https://github.com/FS-GG/FS.GG.Game/actions/runs/36991045744) and all existing Game
+gate checks passed. Local `0.1.0-source.2` package candidates and their fresh .NET/Fable consumers
+remain unpublished; the projects stay outside the Game solution and existing release set. This is
+runtime source and hosted source qualification, not a released or installed browser host. Guest SDK
+distribution, feed readback, BAR/SC2 adoption, FourD example and duplicate-policy removal remain open
+in .3–.7; no product or native authority changed.
+
+**2026-10-02: WASM-SHARED-01.3 guest SDK and fresh packaged consumer source CLOSED; publication remains open.**
+[FS.GG.Game #674](https://github.com/FS-GG/FS.GG.Game/pull/674) merged qualified candidate
+`eec59377d004b68d47bdebc1f2449065c090607a` at protected
+`e91db7efaf15dfb56b1925307ad0ceb46a3da31d`; both resolve to tree
+`6a8c7e5c9dbcb309c71b612be78093df23c877a8`. The `0.1.0-source.3` guest SDK is a deterministic
+source archive with portable Rust and C helpers, pinned toolchain provenance, and independently built
+BAR and SC2 examples. A second clean root restored the exact local Contracts and Browser packages,
+built the .NET consumer with zero warnings and errors, compiled all 15 package sources with Fable, and
+loaded package-owned Worker assets below a non-root browser path. Six Chromium cases exercised real
+Rust/C BAR and SC2 calls, trap containment, deadline termination and repeated disposal. Hosted run
+[`36996692451`](https://github.com/FS-GG/FS.GG.Game/actions/runs/36996692451) and all protected Game
+checks passed. The SDK archive and packages remain unpublished local candidates; feed publication and
+readback, installed qualification, BAR/SC2/FourD adoption, product effects and native authority remain
+open in .4–.7.
+
 **2026-10-02: HOST acquired-attempt caller source CLOSED; private adoption remains open.**
 The [qualification-local F# caller](../deployment/telemetry-collector/host-attempt/README.md)
 consumes fixed acquired observations and drives the actual lifecycle reducer.
@@ -103,6 +175,24 @@ The exact-tree native package run `36972071422` passed. Protected runtime adopti
 private channel/custody joins and genuine native acceptance remain open.
 Published receiver `8ad0da67004d670c6803f34755dfe759a7fc84e7`, its profile and
 four native payloads remain unchanged; V2 FULL ACCEPTED and Main NO ACTION remain.
+
+**2026-10-02: HOST owned-launch repair source CLOSED; protected native adoption remains open.**
+[PR #4101](https://github.com/FS-GG/.github/pull/4101) merged qualified candidate
+`bdd0a58906231619094f51eaede76de834969c4e` at protected
+`f12402431e72327fbdaa533fce434e3c22d714ad`; both resolve to tree
+`05b8d55cdfa59e5849629e443e0d6ebfc2c41bb7`. Root authenticated merge, tree and protected main.
+The fixed F# launcher gate records and
+rechecks the direct PID/start identity and pidfd before one release intention and same-PID Git exec.
+Identity failure, cancellation before or after release, deadline, lost release response and
+post-release exception remain sticky refusals; descendant, reader, output and cleanup Unknown rules
+are preserved. The production receiver exposes only Git, while test roles remain compile-scoped.
+Exact-source qualification passed 35 package and 41 caller controls, the retained seven caller ITFs /
+91 transitions, and eight launch ITFs / 23 transitions. Correspondence binds both actually loaded
+caller and receiver DLL hashes. Native package run
+[`36992333438`](https://github.com/FS-GG/.github/actions/runs/36992333438) and all required checks passed.
+Published recipe `8ad0da67004d670c6803f34755dfe759a7fc84e7`, profile `1ef6d54e...` and all four payloads remain
+unchanged as caller inputs. This closes source only: private channel joins, protected runtime adoption
+and genuine native acceptance remain root-owned and open.
 
 **2026-10-02: P4 cold-restore source CLOSED; actual runner readiness remains open.**
 [Sandbox #45](https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/pull/45) merged at
@@ -181,6 +271,8 @@ at `2026-10-02T05:53:01.3943199Z` with four distinct versions and advanced the l
 to `2026-10-02T06:22:38.1755476Z`. The 1,383,022,592-byte live store
 has 5,532,090,368 bytes of retained backup allocation; initial cleanup pruned 51 snapshots and freed
 65,733,767,168 bytes. Frozen F# source, policy replay and the thin SQLite bridge are exact and reviewed.
+An additional natural keeper cycle succeeded at `2026-10-02T09:48:58Z` with `current=4`, no alerts
+and `history=247`; it preserves the same retention boundary.
 The 1,800-second keeper remains a host process without restart supervision. This operational closure
 does not change BAR product source, native admission, Count1 or the six useful-play results (0/6).
 

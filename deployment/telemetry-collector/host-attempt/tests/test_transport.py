@@ -1,6 +1,7 @@
 import importlib.util
 import json
 import os
+import re
 import subprocess
 import tempfile
 import unittest
@@ -82,8 +83,8 @@ class TransportTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as value:
             root = Path(value)
             lease = root / "lease"
-            old = os.environ.get(transport.SECRETS["native-auth"])
-            os.environ[transport.SECRETS["native-auth"]] = "synthetic-secret"
+            old = os.environ.get(transport.GITHUB_SECRET_NAMES["native-auth"])
+            os.environ[transport.GITHUB_SECRET_NAMES["native-auth"]] = "synthetic-secret"
             try:
                 seen = []
 
@@ -100,9 +101,28 @@ class TransportTests(unittest.TestCase):
                 self.assertTrue(Path(str(lease) + ".0.json").is_file())
             finally:
                 if old is None:
-                    os.environ.pop(transport.SECRETS["native-auth"], None)
+                    os.environ.pop(transport.GITHUB_SECRET_NAMES["native-auth"], None)
                 else:
-                    os.environ[transport.SECRETS["native-auth"]] = old
+                    os.environ[transport.GITHUB_SECRET_NAMES["native-auth"]] = old
+
+    def test_secret_name_map_contains_names_only_and_values_stay_on_stdin(self):
+        self.assertEqual({"native-auth", "effect-admission"}, set(transport.GITHUB_SECRET_NAMES))
+        self.assertTrue(all(re.fullmatch(r"FSGG_[A-Z0-9_]+", name)
+                            for name in transport.GITHUB_SECRET_NAMES.values()))
+        with tempfile.TemporaryDirectory() as value:
+            root = Path(value)
+            secret_name = transport.GITHUB_SECRET_NAMES["native-auth"]
+            with mock.patch.dict(os.environ, {secret_name: "synthetic-private-input"}):
+                command, stdin = transport.action_command(action("transfer-secret", "native-auth"), context(root))
+            self.assertEqual(["gh", "secret", "set", secret_name], command[:4])
+            self.assertEqual("synthetic-private-input", stdin)
+            self.assertNotIn(stdin, command)
+            admission_name = transport.GITHUB_SECRET_NAMES["effect-admission"]
+            command, stdin = transport.action_command(
+                action("transfer-secret", "effect-admission"), context(root), "a" * 64)
+            self.assertEqual(["gh", "secret", "set", admission_name], command[:4])
+            self.assertEqual("a" * 64, stdin)
+            self.assertNotIn(stdin, command)
 
     def test_only_exact_owned_run_can_be_cancelled(self):
         with tempfile.TemporaryDirectory() as value:

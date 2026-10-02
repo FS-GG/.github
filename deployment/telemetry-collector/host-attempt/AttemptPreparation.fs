@@ -153,20 +153,28 @@ module AttemptPreparation =
         requireKeys SourcePayloads fields
         SourcePayloads|>List.map(fun name->let value=text name fields in require(hex 64 value) "source-pin-digest-refused";name,value)|>Map.ofList
 
-    let internal runHostBindingAttempt finalRefusal (run:unit -> int*string*string) =
-        let code,output,_=run()
-        if code=0 then output else refuse finalRefusal
+    let internal runHostBindingAttemptAt stage finalRefusal (run:unit -> int*string*string) =
+        try
+            let code,output,error=run()
+            if code=0 then output else
+                AttemptDiagnostics.record stage None DiagnosticOutcome.Returned (Some code) (AttemptDiagnostics.receiverRefusal error) NoException
+                refuse finalRefusal
+        with error ->
+            AttemptDiagnostics.record stage None DiagnosticOutcome.Exception None "missing" (AttemptDiagnostics.exceptionClass error)
+            reraise()
 
-    let private runHostBinding finalRefusal recipeRoot arguments timeoutMilliseconds maximumBytes =
+    let internal runHostBindingAttempt finalRefusal run = runHostBindingAttemptAt PreparationRender finalRefusal run
+
+    let private runHostBinding stage finalRefusal recipeRoot arguments timeoutMilliseconds maximumBytes =
         let clock=Stopwatch.StartNew()
         let remaining()=let value=timeoutMilliseconds-int clock.ElapsedMilliseconds in require(value>0) "host-binding-timeout-refused";value
-        runHostBindingAttempt finalRefusal (fun()->runBounded "/usr/bin/dotnet" recipeRoot arguments (remaining()) maximumBytes)
+        runHostBindingAttemptAt stage finalRefusal (fun()->runBounded "/usr/bin/dotnet" recipeRoot arguments (remaining()) maximumBytes)
 
     let private renderBinding request timeoutMilliseconds =
         let args =
             [ request.HostBindingDll; "render"; "--source-root"; request.RecipeRoot; "--source-sha"; request.RecipeSourceSha
               "--profile"; request.ProfilePath; "--source-pins"; request.SourcePinsPath ]
-        let output=runHostBinding "host-binding-refused" request.RecipeRoot args (min 90000 timeoutMilliseconds) 65536
+        let output=runHostBinding PreparationRender "host-binding-refused" request.RecipeRoot args (min 90000 timeoutMilliseconds) 65536
         let trimmed = output.TrimEnd('\r', '\n')
         require (not (trimmed.Contains('\n')) && Encoding.UTF8.GetByteCount trimmed <= 16384) "host-binding-output-refused"
         use document = JsonDocument.Parse(trimmed, JsonDocumentOptions(CommentHandling = JsonCommentHandling.Disallow, AllowTrailingCommas = false, MaxDepth = 4))
@@ -182,7 +190,7 @@ module AttemptPreparation =
         require (Regex.IsMatch(nonce, @"\A[a-z0-9][a-z0-9-]{7,63}\z")) "attempt-identity-refused"
         let args=[hostBindingDll;"derive";"--source-root";recipeRoot;"--source-sha";RecipeSha;"--profile";profilePath;"--source-pins";sourcePinsPath;"--nonce";nonce]
         require (timeoutMilliseconds>0 && timeoutMilliseconds<=90000) "host-binding-timeout-refused"
-        let output=runHostBinding "host-binding-derive-refused" recipeRoot args timeoutMilliseconds 4096
+        let output=runHostBinding PreparationDerive "host-binding-derive-refused" recipeRoot args timeoutMilliseconds 4096
         let value=output.TrimEnd('\r','\n')
         require (hex 64 value) "host-binding-admission-refused"
         value

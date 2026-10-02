@@ -15,6 +15,29 @@ open System.Threading.Tasks
 /// own every child because admission proves that the process initially has no
 /// children and the assembly has no other child producer.
 module internal OwnedProcessScope =
+    type internal DiagnosticObservation = NotObserved | ObservedFalse | ObservedTrue
+    type internal DiagnosticReaderState = ReaderNotObserved | ReaderComplete | ReaderFaulted | ReaderIncomplete
+    type internal DiagnosticRetirement = RetirementNotObserved | RetirementClean | RetirementUnknown
+    type internal DiagnosticFailureSite =
+        | NoFailure | ChildTaskLimit | ChildToken | ChildEnumeration | IdentityRead | IdentityParent
+        | PidFdOpen | IdentityRecheck | RetainedCapacity | Signal | ReapNoChild | ReapError
+        | DirectWait | FinalDirectExit | FinalSettlement | PriorUnknown | StdoutReader | StderrReader
+    type internal DiagnosticExceptionClass = NoException | Io | Format | Unauthorized | InvalidOperation | Other
+    type internal DiagnosticReadOrigin = ReadNotObserved | ExistenceGuard | MetadataLengthGuard | ContentRead | PostReadByteGuard | StatParse
+    type internal DiagnosticManagedException = ManagedNotObserved | FileNotFound | DirectoryNotFound | ManagedUnauthorized | GenericIo | ManagedFormat | ManagedOther | ManagedNone
+    type internal DiagnosticReadGuard = GuardNotObserved | ExistsFalse | LengthNegative | LengthOver | ByteLengthOver | GuardNone
+    type internal DiagnosticAcquisitionPass = PassNotObserved | InitialPass | RecheckPass
+    type internal DiagnosticCandidateRelation = RelationNotObserved | ActiveDirect | OtherCandidate
+    type internal DiagnosticSnapshot =
+        { RunOrdinal: int; ExecutionRole: string; FirstFailureSite: DiagnosticFailureSite
+          Errno: int option; ExceptionClass: DiagnosticExceptionClass; DirectExit: DiagnosticObservation
+          Settlement: DiagnosticObservation; UnknownBeforeFinal: DiagnosticObservation
+          StdoutReader: DiagnosticReaderState; StderrReader: DiagnosticReaderState
+          FirstRetirement: DiagnosticRetirement; FinalRetirement: DiagnosticRetirement
+          Deadline: DiagnosticObservation; ReadOrigin: DiagnosticReadOrigin; ManagedException: DiagnosticManagedException
+          ReadGuard: DiagnosticReadGuard; AcquisitionPass: DiagnosticAcquisitionPass; CandidateRelation: DiagnosticCandidateRelation
+          FirstFailureRunOrdinal: int; ScopeFirstRetirementRunOrdinal: int; RunFirstRetirement: DiagnosticRetirement
+          RunFinalRetirement: DiagnosticRetirement; RetirementRunOrdinal: int }
     [<Literal>]
     let private PrSetChildSubreaper = 36
     [<Literal>]
@@ -79,68 +102,115 @@ module internal OwnedProcessScope =
         let mutable cancellation = 0
         let mutable activeDirectPid = 0
         let mutable sawDescendant = false
+        let mutable runOrdinal = 0
+        let mutable firstFailure = NoFailure
+        let mutable firstErrno: int option = None
+        let mutable firstException = NoException
+        let mutable directExitObservation = NotObserved
+        let mutable settlementObservationValue = NotObserved
+        let mutable unknownBeforeFinal = NotObserved
+        let mutable stdoutReaderState = ReaderNotObserved
+        let mutable stderrReaderState = ReaderNotObserved
+        let mutable firstRetirement = RetirementNotObserved
+        let mutable finalRetirement = RetirementNotObserved
+        let mutable deadlineObservation = NotObserved
+        let mutable readOrigin = ReadNotObserved
+        let mutable managedException = ManagedNotObserved
+        let mutable readGuard = GuardNotObserved
+        let mutable acquisitionPass = PassNotObserved
+        let mutable candidateRelation = RelationNotObserved
+        let mutable firstFailureRunOrdinal = 0
+        let mutable scopeFirstRetirementRunOrdinal = 0
+        let mutable runFirstRetirement = RetirementNotObserved
+        let mutable runFinalRetirement = RetirementNotObserved
+        let mutable retirementRunOrdinal = 0
+        let launchTrace = ResizeArray<OwnedLaunch.Action * OwnedLaunch.State>()
         let supervisorPid = Environment.ProcessId
 
         let remainingMilliseconds () = deadline - Environment.TickCount64
-        let poison () = unknown <- true
+        let exceptionClass (error: exn) =
+            match error with
+            | :? FormatException -> Format | :? UnauthorizedAccessException -> Unauthorized | :? IOException -> Io
+            | :? InvalidOperationException -> InvalidOperation | _ -> Other
+        let managedClass (error: exn) =
+            match error with
+            | :? FileNotFoundException -> FileNotFound | :? DirectoryNotFoundException -> DirectoryNotFound
+            | :? UnauthorizedAccessException -> ManagedUnauthorized | :? IOException -> GenericIo
+            | :? FormatException -> ManagedFormat | _ -> ManagedOther
+        let note site errno category =
+            if firstFailure = NoFailure then firstFailure <- site; firstErrno <- errno; firstException <- category; firstFailureRunOrdinal <- runOrdinal
+        let poisonAt site errno category = note site errno category; unknown <- true
         let isCancelled () = Volatile.Read(&cancellation) <> 0
         let cancel () = Interlocked.Exchange(&cancellation, 1) |> ignore
 
-        let readBounded maximum path =
+        let noteIdentityRead origin guard pass relation category managed =
+            note IdentityRead None category
+            if readOrigin = ReadNotObserved then
+                readOrigin <- origin; readGuard <- guard; acquisitionPass <- pass; candidateRelation <- relation; managedException <- managed
+
+        let readBounded maximum path context =
+            let observe origin guard category managed = context |> Option.iter(fun (pass, relation) -> noteIdentityRead origin guard pass relation category managed)
             let info = FileInfo(path)
-            if not info.Exists || info.Length < 0L || info.Length > int64 maximum then raise (IOException())
-            let value = File.ReadAllText(path, Encoding.ASCII)
-            if Encoding.ASCII.GetByteCount(value) > maximum then raise (IOException())
+            if not info.Exists then observe ExistenceGuard ExistsFalse Io ManagedNone; raise (IOException())
+            if info.Length < 0L then observe MetadataLengthGuard LengthNegative Io ManagedNone; raise (IOException())
+            if info.Length > int64 maximum then observe MetadataLengthGuard LengthOver Io ManagedNone; raise (IOException())
+            let value =
+                try File.ReadAllText(path, Encoding.ASCII)
+                with error -> observe ContentRead GuardNone (exceptionClass error) (managedClass error); reraise()
+            if Encoding.ASCII.GetByteCount(value) > maximum then observe PostReadByteGuard ByteLengthOver Io ManagedNone; raise (IOException())
             value
 
-        let readIdentity pid =
+        let readIdentity pass pid =
+            let relation = if activeDirectPid <> 0 && pid = activeDirectPid then ActiveDirect else OtherCandidate
             try
-                let raw = readBounded 16384 $"/proc/{pid}/stat"
+                let raw = readBounded 16384 $"/proc/{pid}/stat" (Some(pass,relation))
                 let closeParen = raw.LastIndexOf(')')
-                if closeParen < 2 || closeParen + 2 >= raw.Length then None else
+                if closeParen < 2 || closeParen + 2 >= raw.Length then noteIdentityRead StatParse GuardNone pass relation Format ManagedFormat; None else
                 let fields = raw.Substring(closeParen + 2).Split(' ', StringSplitOptions.RemoveEmptyEntries)
-                if fields.Length <= 19 then None else
+                if fields.Length <= 19 then noteIdentityRead StatParse GuardNone pass relation Format ManagedFormat; None else
                 let mutable ppid = 0
                 let mutable start = 0UL
-                if Int32.TryParse(fields[1], &ppid) && UInt64.TryParse(fields[19], &start) then Some(ppid, start) else None
-            with _ -> None
+                if Int32.TryParse(fields[1], &ppid) && UInt64.TryParse(fields[19], &start) then Some(ppid, start)
+                else noteIdentityRead StatParse GuardNone pass relation Format ManagedFormat; None
+            with error -> note IdentityRead None (exceptionClass error); None
 
         let childPids () =
             try
                 let task = DirectoryInfo("/proc/self/task")
                 let threads = task.EnumerateDirectories() |> Seq.truncate 257 |> Seq.toArray
-                if threads.Length > 256 then poison (); [||] else
+                if threads.Length > 256 then poisonAt ChildTaskLimit None NoException; [||] else
                 let values = ResizeArray<int>()
                 for thread in threads do
-                    let raw = readBounded 65536 (Path.Combine(thread.FullName, "children"))
+                    let raw = readBounded 65536 (Path.Combine(thread.FullName, "children")) None
                     for token in raw.Split(' ', StringSplitOptions.RemoveEmptyEntries) do
                         let mutable pid = 0
-                        if not (Int32.TryParse(token, &pid)) || pid <= 0 then poison ()
+                        if not (Int32.TryParse(token, &pid)) || pid <= 0 then poisonAt ChildToken None Format
                         elif not (values.Contains(pid)) then values.Add(pid)
-                        if values.Count > 256 then poison ()
+                        if values.Count > 256 then poisonAt RetainedCapacity None NoException
                 if values.Count > 256 then [||] else values.ToArray()
-            with _ -> poison (); [||]
+            with error -> poisonAt ChildEnumeration None (exceptionClass error); [||]
 
         let acquire pid =
             let reject () =
-                poison ()
+                poisonAt IdentityRead None NoException
                 if identities.Count + rejected.Count < 256 then rejected.Add(pid) |> ignore
                 else capacityExhausted <- true
             if capacityExhausted || identities.Count + rejected.Count >= 256 then
                 capacityExhausted <- true
-                poison ()
+                poisonAt RetainedCapacity None NoException
             else
-                match readIdentity pid with
+                match readIdentity InitialPass pid with
                 | Some(ppid, start) when ppid = supervisorPid ->
                     let fd = pidfd_open(pid, 0u)
-                    if fd < 0 then reject ()
+                    if fd < 0 then let errno = Marshal.GetLastPInvokeError() in note PidFdOpen (Some errno) NoException; reject ()
                     else
-                        match readIdentity pid with
+                        match readIdentity RecheckPass pid with
                         | Some(ppid2, start2) when ppid2 = ppid && start2 = start ->
                             identities.Add(pid, { Pid = pid; Start = start; PidFd = fd; Reaped = false })
                             if activeDirectPid <> 0 && pid <> activeDirectPid then sawDescendant <- true
-                        | _ -> close(fd) |> ignore; reject ()
-                | _ -> reject ()
+                        | _ -> note IdentityRecheck None NoException; close(fd) |> ignore; reject ()
+                | Some _ -> note IdentityParent None NoException; reject ()
+                | None -> reject ()
 
         let discover () =
             for pid in childPids () do
@@ -155,7 +225,9 @@ module internal OwnedProcessScope =
             for identity in identities.Values do
                 if not identity.Reaped then
                     let rc = pidfd_send_signal(identity.PidFd, signal, 0n, 0u)
-                    if rc <> 0 && Marshal.GetLastPInvokeError() <> ESrch then poison ()
+                    if rc <> 0 then
+                        let errno = Marshal.GetLastPInvokeError()
+                        if errno <> ESrch then poisonAt Signal (Some errno) NoException
 
         let reapAdopted directPid =
             let buffer = Marshal.AllocHGlobal(128)
@@ -167,10 +239,12 @@ module internal OwnedProcessScope =
                         if rc = 0 then
                             // Linux siginfo_t.si_pid is the fourth 32-bit field on the selected x86_64 ABI.
                             if Marshal.ReadInt32(buffer, 16) <> 0 then identity.Reaped <- true
-                        elif Marshal.GetLastPInvokeError() = EChild then
+                        else
+                            let errno = Marshal.GetLastPInvokeError()
+                            if errno = EChild then
                             // Another reaper or unsupported runtime interaction is not success.
-                            poison ()
-                        else poison ()
+                                poisonAt ReapNoChild (Some errno) NoException
+                            else poisonAt ReapError (Some errno) NoException
             finally Marshal.FreeHGlobal(buffer)
 
         let kernelHasNoChildren () =
@@ -196,35 +270,64 @@ module internal OwnedProcessScope =
             let termEnd = min cleanupEnd (Environment.TickCount64 + 250L)
             while Environment.TickCount64 < termEnd && (not direct.HasExited || not (settledObservation direct.Id)) do
                 discover (); reapAdopted direct.Id
-                try if not direct.HasExited then direct.WaitForExit(10) |> ignore with _ -> poison ()
+                try if not direct.HasExited then direct.WaitForExit(10) |> ignore with error -> poisonAt DirectWait None (exceptionClass error)
                 Thread.Sleep(10)
             signal SigKill
             while Environment.TickCount64 < cleanupEnd && (not direct.HasExited || not (settledObservation direct.Id)) do
                 // KILL every newly adopted identity during the same forced-stage
                 // budget. Later generations receive no new TERM grace.
                 signal SigKill; reapAdopted direct.Id
-                try if not direct.HasExited then direct.WaitForExit(10) |> ignore with _ -> poison ()
+                try if not direct.HasExited then direct.WaitForExit(10) |> ignore with error -> poisonAt DirectWait None (exceptionClass error)
                 // Reaping the direct child can adopt its session-separated child
                 // synchronously; discover and KILL that generation before the
                 // loop is allowed to observe settlement.
                 signal SigKill; reapAdopted direct.Id
                 Thread.Sleep(10)
-            try if not direct.HasExited then direct.WaitForExit(1) |> ignore with _ -> poison ()
+            try if not direct.HasExited then direct.WaitForExit(1) |> ignore with error -> poisonAt DirectWait None (exceptionClass error)
             if Environment.TickCount64 < cleanupEnd then signal SigKill
             discover (); reapAdopted direct.Id
-            let clean = direct.HasExited && settledObservation direct.Id && not unknown
-            if not clean then poison ()
+            let directExited = direct.HasExited
+            directExitObservation <- if directExited then ObservedTrue else ObservedFalse
+            let settled =
+                if directExited then
+                    let value = settledObservation direct.Id
+                    settlementObservationValue <- if value then ObservedTrue else ObservedFalse
+                    value
+                else false
+            unknownBeforeFinal <- if unknown then ObservedTrue else ObservedFalse
+            deadlineObservation <- if remainingMilliseconds () <= 0L then ObservedTrue else ObservedFalse
+            let clean = directExited && settled && not unknown
+            if not clean then
+                if not directExited then poisonAt FinalDirectExit None NoException
+                elif not settled then poisonAt FinalSettlement None NoException
+                else poisonAt PriorUnknown None NoException
             clean
 
         member _.RequestCancellation() = cancel ()
         member _.RemainingMilliseconds = remainingMilliseconds ()
         member _.IsUnknown = unknown
+        member _.DiagnosticSnapshot =
+            { RunOrdinal=runOrdinal;ExecutionRole=(if ignoreBaseline then "test" else "cli");FirstFailureSite=firstFailure
+              Errno=firstErrno;ExceptionClass=firstException;DirectExit=directExitObservation;Settlement=settlementObservationValue
+              UnknownBeforeFinal=unknownBeforeFinal;StdoutReader=stdoutReaderState;StderrReader=stderrReaderState
+              FirstRetirement=firstRetirement;FinalRetirement=finalRetirement;Deadline=deadlineObservation
+              ReadOrigin=readOrigin;ManagedException=managedException;ReadGuard=readGuard;AcquisitionPass=acquisitionPass;CandidateRelation=candidateRelation
+              FirstFailureRunOrdinal=firstFailureRunOrdinal;ScopeFirstRetirementRunOrdinal=scopeFirstRetirementRunOrdinal
+              RunFirstRetirement=runFirstRetirement;RunFinalRetirement=runFinalRetirement;RetirementRunOrdinal=retirementRunOrdinal }
         member internal _.ObserveCandidateForTest(pid: int) =
             if not (rejected.Contains(pid)) && not (identities.ContainsKey(pid)) then acquire pid
+        member internal _.ObserveIdentityContextForTest(pid: int, recheck: bool, direct: bool) =
+            let prior=activeDirectPid
+            if direct then activeDirectPid<-pid
+            try readIdentity (if recheck then RecheckPass else InitialPass) pid |> ignore
+            finally activeDirectPid<-prior
+        member internal _.ClassifyManagedExceptionForTest(error: exn) = managedClass error
         member internal _.RejectedCandidateCount = rejected.Count
         member internal _.RetainedCapacityExhausted = capacityExhausted
 
-        member private this.RunCore(executable: string, root: string, arguments: string list, timeoutMilliseconds: int, stdoutMaximum: int, stderrMaximum: int, postSpawnHook: (unit -> unit) option) =
+        member private this.RunCore(executable: string, root: string, arguments: string list, timeoutMilliseconds: int, stdoutMaximum: int, stderrMaximum: int, preAcquireHook: (Process -> unit) option, postSpawnHook: (unit -> unit) option, legacyLaunch: bool) =
+            runOrdinal <- min 64 (runOrdinal + 1)
+            runFirstRetirement <- RetirementNotObserved; runFinalRetirement <- RetirementNotObserved; retirementRunOrdinal <- runOrdinal
             if isCancelled () || unknown then raise (BindingRefusal "process-scope-refused")
             if timeoutMilliseconds <= 0 || remainingMilliseconds () < int64 timeoutMilliseconds + 3250L then
                 raise (BindingRefusal "process-budget-refused")
@@ -235,15 +338,30 @@ module internal OwnedProcessScope =
             start.UseShellExecute <- false
             start.RedirectStandardOutput <- true
             start.RedirectStandardError <- true
+            start.RedirectStandardInput <- not legacyLaunch
             start.Environment.Clear()
             start.Environment["PATH"] <- "/usr/bin:/bin"
             start.Environment["LANG"] <- "C.UTF-8"
             start.Environment["LC_ALL"] <- "C.UTF-8"
-            start.ArgumentList.Add(executable)
+            if legacyLaunch then start.ArgumentList.Add(executable)
+            else
+                start.ArgumentList.Add("/usr/bin/dotnet")
+                start.ArgumentList.Add(Assembly.GetExecutingAssembly().Location)
+                start.ArgumentList.Add("__owned-launch")
+#if HOST_BINDING_TEST_LAUNCH_ROLES
+                start.ArgumentList.Add(if ignoreBaseline then OwnedLaunch.roleForTest executable else OwnedLaunch.roleFor executable)
+#else
+                start.ArgumentList.Add(OwnedLaunch.roleFor executable)
+#endif
             for argument in arguments do start.ArgumentList.Add(argument)
             use direct = Process.Start(start)
             activeDirectPid <- direct.Id
             sawDescendant <- false
+            let mutable launchState=OwnedLaunch.initial
+            launchTrace.Clear()
+            let applyLaunch action =
+                launchState <- OwnedLaunch.apply action launchState
+                launchTrace.Add(action,launchState)
             let mutable settlementComplete = false
             let mutable stdoutTask: Task<string> option = None
             let mutable stderrTask: Task<string> option = None
@@ -267,21 +385,70 @@ module internal OwnedProcessScope =
                     [ stdoutTask |> Option.map (fun value -> value :> Task)
                       stderrTask |> Option.map (fun value -> value :> Task) ]
                     |> List.choose id |> List.toArray
-                if tasks.Length = 0 then true
-                else
-                    try Task.WaitAll(tasks, 100) with _ -> false
+                let doneReading = if tasks.Length = 0 then true else try Task.WaitAll(tasks, 100) with _ -> false
+                let state (value: Task<string> option) = match value with None -> ReaderNotObserved | Some task when task.IsCompletedSuccessfully -> ReaderComplete | Some task when task.IsFaulted -> ReaderFaulted | Some _ -> ReaderIncomplete
+                stdoutReaderState <- state stdoutTask; stderrReaderState <- state stderrTask
+                if stdoutReaderState = ReaderFaulted then note StdoutReader None Other
+                elif stderrReaderState = ReaderFaulted then note StderrReader None Other
+                doneReading
             let retire reason =
+                if not legacyLaunch && launchState.ReleaseMayHaveEffect then
+                    if isCancelled() && not launchState.StickyFailure then applyLaunch OwnedLaunch.Cancel
+                    elif remainingMilliseconds()<=0L && not launchState.StickyFailure then applyLaunch OwnedLaunch.Expire
+                    elif reason && not launchState.StickyFailure then applyLaunch OwnedLaunch.FailAfterRelease
+                    applyLaunch OwnedLaunch.BeginRetirement
                 let clean = settle direct reason
                 let readersDone = finishReaders ()
                 settlementComplete <- clean && readersDone
+                if not legacyLaunch && launchState.ReleaseMayHaveEffect then
+                    let directSettled = directExitObservation = ObservedTrue
+                    let descendantsSettled = settlementObservationValue = ObservedTrue
+                    applyLaunch (OwnedLaunch.ObserveSettlement(directSettled,descendantsSettled,readersDone))
+                    if settlementComplete && not launchState.StickyFailure then
+                        applyLaunch OwnedLaunch.Finish
+                let result = if settlementComplete then RetirementClean else RetirementUnknown
+                if firstRetirement = RetirementNotObserved then firstRetirement <- result; scopeFirstRetirementRunOrdinal <- runOrdinal
+                finalRetirement <- result
+                if runFirstRetirement = RetirementNotObserved then runFirstRetirement <- result
+                runFinalRetirement <- result
                 if settlementComplete then
                     for identity in identities.Values do close(identity.PidFd) |> ignore
                     identities.Clear()
                 settlementComplete
             try
-                postSpawnHook |> Option.iter (fun hook -> hook ())
                 stdoutTask <- Some(capture stdoutMaximum direct.StandardOutput.BaseStream)
                 stderrTask <- Some(capture stderrMaximum direct.StandardError.BaseStream)
+                if legacyLaunch then
+                    preAcquireHook |> Option.iter(fun hook->hook direct)
+                else
+                    let release () =
+                        if launchState.Phase<>OwnedLaunch.ReleaseIntended then raise(BindingRefusal "process-scope-refused")
+                        try
+                            direct.StandardInput.BaseStream.WriteByte(byte 'R')
+                            direct.StandardInput.BaseStream.Flush()
+                            direct.StandardInput.Close()
+                            applyLaunch OwnedLaunch.AcknowledgeRelease
+                        with _ -> applyLaunch OwnedLaunch.LoseRelease;reraise()
+#if HOST_BINDING_REMOVE_LAUNCH_IDENTITY_GUARD
+                    launchState<-OwnedLaunch.applyReleaseGuardMutationForCorrespondence true OwnedLaunch.initial
+                    release()
+                    preAcquireHook |> Option.iter(fun hook->hook direct)
+#else
+                    preAcquireHook |> Option.iter(fun hook->hook direct)
+#endif
+                    if isCancelled() then applyLaunch OwnedLaunch.Cancel;raise(BindingRefusal "process-scope-refused")
+                    if remainingMilliseconds()<=3250L then applyLaunch OwnedLaunch.Expire;raise(BindingRefusal "process-budget-refused")
+                    acquire direct.Id
+                    if unknown || not(identities.ContainsKey(direct.Id)) then applyLaunch OwnedLaunch.FailIdentity;raise(BindingRefusal "process-cleanup-unknown")
+                    applyLaunch OwnedLaunch.RecordIdentity
+                    if isCancelled() then applyLaunch OwnedLaunch.Cancel;raise(BindingRefusal "process-scope-refused")
+                    if remainingMilliseconds()<=3250L then applyLaunch OwnedLaunch.Expire;raise(BindingRefusal "process-budget-refused")
+#if HOST_BINDING_REMOVE_LAUNCH_IDENTITY_GUARD
+#else
+                    applyLaunch OwnedLaunch.RequestRelease
+                    release()
+#endif
+                postSpawnHook |> Option.iter (fun hook -> hook ())
                 let operationEnd = min (Environment.TickCount64 + int64 timeoutMilliseconds) (deadline - 3250L)
                 let mutable exited = false
                 while not exited && not (isCancelled ()) && Environment.TickCount64 < operationEnd do
@@ -310,10 +477,18 @@ module internal OwnedProcessScope =
                 else raise (BindingRefusal "process-cleanup-unknown")
 
         member this.Run(executable: string, root: string, arguments: string list, timeoutMilliseconds: int, stdoutMaximum: int, stderrMaximum: int) =
-            this.RunCore(executable, root, arguments, timeoutMilliseconds, stdoutMaximum, stderrMaximum, None)
+            this.RunCore(executable, root, arguments, timeoutMilliseconds, stdoutMaximum, stderrMaximum, None, None, false)
 
         member internal this.RunWithPostSpawnHook(executable: string, root: string, arguments: string list, timeoutMilliseconds: int, stdoutMaximum: int, stderrMaximum: int, hook: unit -> unit) =
-            this.RunCore(executable, root, arguments, timeoutMilliseconds, stdoutMaximum, stderrMaximum, Some hook)
+            this.RunCore(executable, root, arguments, timeoutMilliseconds, stdoutMaximum, stderrMaximum, None, Some hook, false)
+
+        member internal this.RunWithPreAcquireHook(executable: string, root: string, arguments: string list, timeoutMilliseconds: int, stdoutMaximum: int, stderrMaximum: int, hook: Process -> unit) =
+            this.RunCore(executable, root, arguments, timeoutMilliseconds, stdoutMaximum, stderrMaximum, Some hook, None, false)
+
+        member internal this.RunLegacyForTest(executable: string, root: string, arguments: string list, timeoutMilliseconds: int, stdoutMaximum: int, stderrMaximum: int, hook: Process -> unit) =
+            this.RunCore(executable, root, arguments, timeoutMilliseconds, stdoutMaximum, stderrMaximum, Some hook, None, true)
+
+        member internal _.LaunchTraceForTest = launchTrace |> Seq.toList
 
         interface IDisposable with
             member _.Dispose() =

@@ -8,6 +8,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="AttemptTypes.fs" />
+    <Compile Include="AttemptDiagnostics.fs" />
     <Compile Include="AttemptPreparation.fs" />
     <Compile Include="AttemptAcquisition.fs" />
     <Compile Include="AttemptReducer.fs" />

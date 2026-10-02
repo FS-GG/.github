@@ -53,7 +53,11 @@ def main() -> int:
             # happens to contain "Telemetry". Raw markers and unsafe suffixes still apply everywhere.
             implementation_source = normalized.startswith((
                 "/src/", "/tests/", "/.agents/skills/", "/.claude/skills/",
-            )) or normalized == "/tools/telemetry-dashboard.py"
+            )) or normalized in (
+                "/tools/telemetry-dashboard.py",
+                "/.github/workflows/telemetry-host-package.yml",
+                "/deployment/telemetry-collector/host-attempt/tests/hostattempttests.fs",
+            )
             roadmap_prose = normalized.startswith("/docs/roadmaps/") and normalized.endswith(".md")
             telemetry_evidence = not implementation_source and any(
                 word in normalized for word in ("telemetry", "usage", "receipt"))
