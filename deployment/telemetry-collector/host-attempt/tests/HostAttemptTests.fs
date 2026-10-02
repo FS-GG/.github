@@ -109,6 +109,25 @@ module AcquisitionTests =
         Assert.Equal("unrecognized",AttemptDiagnostics.receiverRefusal(String.replicate 65536 "x"+"SENTINEL"))
 
     [<Fact>]
+    let ``receiver diagnostic envelope is strict sanitized and optional`` () =
+        let json="{\"schema\":\"fsgg.telemetry.host-binding-diagnostic/1\",\"runOrdinal\":1,\"executionRole\":\"cli\",\"firstFailureSite\":\"final-settlement\",\"errno\":null,\"exceptionClass\":\"none\",\"directExit\":\"true\",\"settlement\":\"false\",\"unknownBeforeFinal\":\"false\",\"stdoutReader\":\"complete\",\"stderrReader\":\"complete\",\"firstRetirement\":\"unknown\",\"finalRetirement\":\"unknown\",\"deadlineExpired\":\"false\"}"
+        AttemptDiagnostics.beginInvocation None None None
+        let refusal=AttemptDiagnostics.receiverRefusal("host-binding-refused:process-cleanup-unknown\nhost-binding-diagnostic:"+json+"\n")
+        AttemptDiagnostics.record Transport (Some InvokeBinding) Returned (Some 2) refusal NoException
+        let diagnostic=AttemptDiagnostics.snapshot()|>Option.defaultWith(fun()->failwith "diagnostic missing")
+        Assert.Equal("process-cleanup-unknown",diagnostic.ReceiverRefusal)
+        Assert.Equal(Some "final-settlement",diagnostic.ReceiverDetail|>Option.map _.FirstFailureSite)
+        Assert.DoesNotContain("SENTINEL",AttemptDiagnostics.text diagnostic)
+        for malformed in [
+            "host-binding-refused:process-cleanup-unknown\nhost-binding-diagnostic:"+json+"\nextra\n"
+            "host-binding-refused:process-cleanup-unknown\nhost-binding-diagnostic:"+json.Replace("\"schema\"","\"schema\":\"duplicate\",\"schema\"")+"\n"
+            "host-binding-refused:process-cleanup-unknown\nhost-binding-diagnostic:"+json.TrimEnd('}')+",\"SENTINEL\":true}\n"
+            "host-binding-refused:process-cleanup-unknown\nhost-binding-diagnostic:"+String.replicate 4097 "x"+"\n" ] do
+            AttemptDiagnostics.beginInvocation None None None
+            Assert.Equal("unrecognized",AttemptDiagnostics.receiverRefusal malformed)
+            Assert.True((AttemptDiagnostics.snapshot()).IsNone)
+
+    [<Fact>]
     let ``transport diagnostic retains first closed failure without raw stderr or success material`` () =
         AttemptDiagnostics.beginInvocation (Some AttemptPreparation.RecipeSha) (Some(String.replicate 64 "a")) (Some(String.replicate 64 "b"))
         let secret="SENTINEL-PRIVATE-DO-NOT-RETAIN"

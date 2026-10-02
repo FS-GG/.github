@@ -285,6 +285,9 @@ module HostBindingTests =
             let hook () = waitForFile parentFile; waitForFile childFile; raise (InvalidOperationException("synthetic-post-spawn"))
             let error = Assert.Throws<InvalidOperationException>(fun () -> scope.RunWithPostSpawnHook("/usr/bin/python3", owner, [ "-c"; script ], 2000, 128, 128, hook) |> ignore)
             Assert.Equal("synthetic-post-spawn", error.Message)
+            let diagnostic=scope.DiagnosticSnapshot
+            Assert.Equal(OwnedProcessScope.RetirementClean,diagnostic.FirstRetirement)
+            Assert.Equal(OwnedProcessScope.RetirementClean,diagnostic.FinalRetirement)
             Assert.False(Directory.Exists($"/proc/{Int32.Parse(File.ReadAllText(parentFile))}"))
             Assert.False(Directory.Exists($"/proc/{Int32.Parse(File.ReadAllText(childFile))}"))
         finally Directory.Delete(owner, true)
@@ -296,10 +299,12 @@ module HostBindingTests =
         scope.ObserveCandidateForTest(first)
         scope.ObserveCandidateForTest(first)
         Assert.True(scope.IsUnknown)
+        Assert.Equal(OwnedProcessScope.IdentityRead,scope.DiagnosticSnapshot.FirstFailureSite)
         Assert.Equal(1, scope.RejectedCandidateCount)
         for pid in first + 1 .. first + 256 do scope.ObserveCandidateForTest(pid)
         Assert.Equal(256, scope.RejectedCandidateCount)
         Assert.True(scope.RetainedCapacityExhausted)
+        Assert.Equal(OwnedProcessScope.IdentityRead,scope.DiagnosticSnapshot.FirstFailureSite)
 
     [<Fact>]
     let ``unsupported pidfd capability refuses before scope and child creation`` () =
