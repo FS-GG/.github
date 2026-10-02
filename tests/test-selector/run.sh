@@ -313,6 +313,45 @@ echo "── the scrape vocabulary: WHICH runners a workflow may name (.github#2
 # --assert-wired (.github#2537) that made it undischargeable, since wiring it changed nothing the
 # selector could observe. Every leg in this section reds if a KINDS row is deleted; that is the point.
 
+# A published console test is wired only when the same run block executes the exact published
+# basename. Publishing alone is a build, and an unrelated executable is not causal test coverage.
+r="$(root vocab-dotnet-console)"
+cat > "$r/.github/workflows/w.yml" <<'EOF'
+name: w
+on: { pull_request: { paths: ["src/**"] } }
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          dotnet publish tests/consolesuite/Console.Tests.fsproj --output "$RUNNER_TEMP/console"
+          "$RUNNER_TEMP/console/Console.Tests"
+EOF
+mkdir -p "$r/tests/consolesuite" "$r/src"
+printf '<Project Sdk="Microsoft.NET.Sdk"/>\n' > "$r/tests/consolesuite/Console.Tests.fsproj"
+echo x > "$r/src/a.fs"; seal "$r"; touchf "$r" src/a.fs
+selects "a published-and-executed console suite is derived" "$r" yes \
+        "dotnet run --project tests/consolesuite/Console.Tests.fsproj"
+
+r="$(root vocab-dotnet-console-build-only)"
+cat > "$r/.github/workflows/w.yml" <<'EOF'
+name: w
+on: { pull_request: { paths: ["src/**"] } }
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          bash tests/real/run.sh
+          dotnet publish tests/buildonly/Console.Tests.fsproj --output "$RUNNER_TEMP/console"
+EOF
+suite "$r" tests/real/run.sh
+mkdir -p "$r/tests/buildonly" "$r/src"
+printf '<Project Sdk="Microsoft.NET.Sdk"/>\n' > "$r/tests/buildonly/Console.Tests.fsproj"
+echo x > "$r/src/a.fs"; seal "$r"; touchf "$r" src/a.fs
+selects "publishing a console without executing it does not invent coverage" "$r" no \
+        "tests/buildonly/Console.Tests.fsproj"
+
 r="$(root vocab-node)"
 cat > "$r/.github/workflows/w.yml" <<'EOF'
 name: w

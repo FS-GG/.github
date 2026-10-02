@@ -49,8 +49,8 @@ sibling and a fully-wired, CI-executed suite read as never run. Under `--assert-
 that stopped being cosmetic: an invisible suite could not be discharged by WIRING it, because wiring
 changed nothing the selector could observe, so its only available answer was a `DELIBERATELY_UNWIRED`
 entry saying "deliberate" about something that is not. `KINDS` below is now the single statement of that
-vocabulary — one row per runner, carrying both how the workflows SPELL it and how we canonically RUN
-it — so adding a fifth kind is one row rather than four edits in three functions, which is how the set
+vocabulary — one row per runner form, carrying both how the workflows SPELL it and how we canonically RUN
+it — so adding another kind is one row rather than four edits in three functions, which is how the set
 came to be frozen in the first place.
 
 The cost of that line is PRECONDITIONS, and it is worth stating plainly because you will meet it on a
@@ -131,7 +131,8 @@ class Kind:
     lists — a pair of module-level regexes, a pair of `finditer` loops repeated in each of the two
     scrape functions, and an inline conditional building the command — so teaching the selector a new
     runner meant four edits nothing checked for completeness, and in practice nobody made them: the
-    vocabulary stayed at two kinds while `tests/` grew to four.
+    vocabulary stayed at two kinds while `tests/` grew to four direct runner forms. The paired
+    publish-and-execute console form is the fifth.
     """
 
     name: str
@@ -151,6 +152,19 @@ class Kind:
 KINDS: tuple[Kind, ...] = (
     Kind("shell", re.compile(r"(?:bash|sh)\s+(tests/[\w.@/-]+\.sh)"), ("bash",)),
     Kind("dotnet", re.compile(r"dotnet\s+test\s+(tests/[\w.@/-]+\.fsproj)"), ("dotnet", "test")),
+    # Console test projects are published and then executed by exact output path in CI. Require both
+    # halves in the same run block, joined by the project basename: a publish alone is compilation,
+    # not test wiring, while an unrelated executable cannot lend its authority to the project.
+    Kind(
+        "dotnet-console",
+        re.compile(
+            r"\bdotnet\s+publish\s+"
+            r"(tests/(?P<console_dir>[\w.@/-]+)/(?P<console_name>[\w.-]+)\.fsproj)\b"
+            r".*?^\s*\"\$RUNNER_TEMP/[^\"\n]+/(?P=console_name)\"\s*$",
+            re.DOTALL | re.MULTILINE,
+        ),
+        ("dotnet", "run", "--project"),
+    ),
     Kind("node", re.compile(r"\bnode\s+(tests/[\w.@/-]+\.(?:mjs|cjs|js))"), ("node",)),
     Kind("python", re.compile(r"\bpython3?\s+(tests/[\w.@/-]+\.py)"), ("python3",)),
 )
@@ -209,7 +223,8 @@ DELIBERATELY_UNWIRED: dict[str, str] = {
         "It CANNOT be wired, and — unlike the four by-omission entries .github#2556 discharged by "
         "wiring them — widening the scrape vocabulary does not change that. `wired` is derivable "
         "only for a directory holding a RUNNER some KINDS "
-        "row can name in a workflow `run:` step; .github#2555 grew that set from two kinds to four, "
+        "row can name in a workflow `run:` step; .github#2555 grew that set from two direct kinds to "
+        "four and this tree now also recognizes one paired publish-and-execute console form, "
         "and a data-only directory satisfies none of them because it has no runner at all. The only "
         "way to make this one read WIRED would be to invent a runner purely to be "
         "scraped — a wrapper re-invoking the two consumers CI already runs, which is ceremony that "

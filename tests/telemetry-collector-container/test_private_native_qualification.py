@@ -170,7 +170,7 @@ class Tests(unittest.TestCase):
   if importlib.util.find_spec('yaml') is None: self.skipTest('PyYAML unavailable')
   import yaml
   workflows=((ROOT/'deployment/telemetry-collector/private-native-qualification.yml.in',2),
-             (ROOT/'.github/workflows/telemetry-host-package.yml',6))
+             (ROOT/'.github/workflows/telemetry-host-package.yml',7))
   for path,count in workflows:
    with self.subTest(workflow=path.name):
     rendered=path.read_text().replace('@@RECIPE_SOURCE_SHA@@','a'*40).replace('@@QUALIFICATION_REF@@','qualification-v1')

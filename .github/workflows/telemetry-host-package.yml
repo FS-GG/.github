@@ -197,7 +197,7 @@ jobs:
           timeout 60s git -C "$manager_source" fetch --depth=1 --no-tags origin "$manager_revision"
           git -C "$manager_source" checkout --quiet --detach FETCH_HEAD
           test "$(git -C "$manager_source" rev-parse HEAD)" = "$manager_revision"
-          test "$(git -C "$manager_source" rev-parse HEAD^{tree})" = "$manager_tree"
+          test "$(git -C "$manager_source" rev-parse 'HEAD^{tree}')" = "$manager_tree"
 
           /usr/bin/dotnet restore "$manager_project" --locked-mode --packages "$manager_packages" \
             --artifacts-path "$RUNNER_TEMP/c2-manager-artifacts"
