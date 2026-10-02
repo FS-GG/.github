@@ -40,5 +40,5 @@ jobs:
         run: dotnet restore tools/BoardV2Import/BoardV2Import.fsproj --locked-mode
       - name: Validate exact import manifest
         run: python3 tools/board-v2-import.py docs/coordination/board-v2-import-manifest.json
-      - name: Exercise production constructors and current pilot refusal
+      - name: Exercise bounded pilot plan and pending-target refusals
         run: python3 tests/board-v2-import/run.py
