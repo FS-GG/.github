@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net10.0</TargetFramework><TreatWarningsAsErrors>true</TreatWarningsAsErrors><IsPackable>false</IsPackable></PropertyGroup>
+  <ItemGroup><PackageReference Include="FSharp.Core" /></ItemGroup>
+  <ItemGroup><ProjectReference Include="../PersistentV3.ImageClosure.fsproj" /></ItemGroup>
+  <ItemGroup><Compile Include="Program.fs" /></ItemGroup>
+</Project>
