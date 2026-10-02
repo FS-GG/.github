@@ -65,6 +65,25 @@ independent and open. This dated clarification is not a current fleet-health att
 profile acceptance or waiver of exact artifact, authentication, custody, settlement/replay or effect
 authority for any operation actually performed.
 
+**2026-10-02: WASM-SHARED-01.1 contract and compatibility source CLOSED; shared runtime remains open.**
+[FS.GG.Game #672](https://github.com/FS-GG/FS.GG.Game/pull/672) merged at protected
+`3182cb1b678d9fa9da00edba263702a545e38bc0`, tree
+`8938409692792f7a90b4ba31e8d5bc96be1472af`, equal qualified candidate
+`1991d2972060587d8e51abfccbd300e3db53a06f`; root authenticated merge, tree and protected main.
+FS.GG.Game is the producer for the unpublished `FS.GG.Wasm.Contracts` source. Its typed F# contract
+preserves BAR ABI 1 and SC2 ABI `0x00010000`, strict imported SC2 versus weaker inventory-only legacy
+admission, and the products' destructive/transactional replacement and scheduling differences without
+granting native authority. The pinned corpus has attributed source hashes and expected decisions; no
+built `.wasm` existed in the protected inputs, so no guest artifact/toolchain digest is claimed. Local
+.NET/Fable package consumers passed against nupkg SHA-256
+`41cc25ed8ef1ba0a51934654531ffc26fb9405e5f473d3be529c458a4a9ffa9a`. Native Game run
+[`36979942169`](https://github.com/FS-GG/FS.GG.Game/actions/runs/36979942169), routine eligibility
+[`36979941395`](https://github.com/FS-GG/FS.GG.Game/actions/runs/36979941395) and protected branch
+contexts passed, but the project remains outside the Game solution and no hosted package gate ran.
+The nupkg is unpublished; browser host/runtime, lifecycle Quint correspondence, guest SDK archive,
+feed readback and product adoption remain open in .2–.7. V2 FULL ACCEPTED, P4 and independent product
+frontiers are unchanged.
+
 **2026-10-02: HOST acquired-attempt caller source CLOSED; private adoption remains open.**
 The [qualification-local F# caller](../deployment/telemetry-collector/host-attempt/README.md)
 consumes fixed acquired observations and drives the actual lifecycle reducer.
@@ -129,6 +148,22 @@ credential-free run `36976372543` at source `3924409829e96fc4b436e2a26179d885bbf
 returned `subordinate-collision`, with readiness, facts qualification and native authorization false;
 it does not qualify the successor source. A fresh credential-free readiness run, current-run
 revalidation, private admission, facts and native qualification remain open.
+
+**2026-10-02: P4 credential-free source readiness CLOSED; private facts and native execution remain open.**
+Protected Sandbox source `eda3d995428d047dadfdbf57242dd86cfaafbf05`, tree
+`f42d03894a5315f533125e3acf27353aebd6bd7c`, completed credential-free readiness in
+[run `36980200458`](https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/actions/runs/36980200458).
+Root downloaded immutable artifact `11214913824` and verified schema
+`fsgg.portable-p4-account-readiness/1` with `ready=true`, while `factsQualified=false` and
+`nativeExecutionAuthorized=false`. Receipt SHA-256 is
+`7c91610fcf102c0535243e2e4028ad5b69eeb91d4c4cf87c55f71d52ac929fb4`; archive SHA-256 is
+`66d647985668290de33c37603bc52dca1d47fc5161a5d81f88de1eb7539e7f41`. Policy SHA-256
+`778af6a83419b607d2f0a327dec2266f0c1dce77fa52589188c28ffa275d3441` bound all four database
+observations and selected the first eligible candidate. No public range tuple is required because the
+ephemeral runner is not reserved. This closes source plus credential-free readiness only. Fresh
+private owning-runner observation, admission, qualified facts, provider authority and native execution
+remain open. No KB import, compact operation or pending cutover is inferred; the preceding P4 source
+closures remain unchanged.
 
 **2026-10-02: FourD stateless diagnostic source CLOSED; native qualification remains open.**
 [Coordination #924](https://github.com/FS-GG/FS.GG.Coordination/pull/924) merged at
