@@ -13,4 +13,13 @@ module PersistentV3Runner_test {
  run duplicateProcess=acquireStores.then(requestStartA).then(observeDuplicateProcess).then(requestRemove).then(observeRemoved).then(requestRemove).then(observeRemoved).expect(allInvariants and duplicateProcessWitness)
  run lateDeadline=compared.then(requestValidate).then(observeValid).then(requestQualify).then(observeQualified).then(requestRemove).then(observeRemoved).then(requestRemove).then(deadlineAfterRemove).expect(allInvariants and deadlineWitness)
  run lateCancellation=compared.then(requestValidate).then(observeValid).then(requestQualify).then(observeQualified).then(requestRemove).then(observeRemoved).then(requestRemove).then(cancellationAfterRemove).expect(allInvariants and terminalCancellationWitness)
+ action acquireC4=initC4.then(requestAcquire).then(observeAcquire).then(requestValidate).then(observeValid).then(requestStoreA).then(observeStoreA).then(requestStoreB).then(observeStoreB)
+ action compareC4=acquireC4.then(requestStartA).then(observeStartedA).then(requestAwaitA).then(observeBuildA).then(requestStartB).then(observeStartedB).then(requestAwaitB).then(observeBuildB).then(requestCompare).then(observeMatch)
+ action validatedC4=compareC4.then(requestValidate).then(observeValid)
+ run c4Success=validatedC4.then(requestRemove).then(observeRemoved).then(requestRemove).then(observeRemoved).expect(allInvariants and c4Witness)
+ run c4Stale=compareC4.then(requestValidate).then(observeStale).then(requestRemove).then(observeRemoved).then(requestRemove).then(observeRemoved).expect(allInvariants and staleWitness)
+ run c4LateDeadline=validatedC4.then(requestRemove).then(observeRemoved).then(requestRemove).then(deadlineAfterRemove).expect(allInvariants and deadlineWitness)
+ run c4LateCancellation=validatedC4.then(requestRemove).then(observeRemoved).then(requestRemove).then(cancellationAfterRemove).expect(allInvariants and terminalCancellationWitness)
+ run c4CleanupFailure=validatedC4.then(requestRemove).then(cleanupFailure).expect(allInvariants and cleanupFailureWitness)
+ run c4SealFailure=acquireC4.then(requestStartA).then(observeStartedA).then(requestAwaitA).then(observeBuildA).then(requestStartB).then(observeStartedB).then(requestAwaitB).then(observeBuildB).then(requestCompare).then(comparisonSealFailure).then(requestRemove).then(observeRemoved).then(requestRemove).then(observeRemoved).expect(allInvariants and mismatchWitness)
 }
