@@ -9,4 +9,6 @@ module PersistentV3Runner_test {
  run cancellation=startedA.then(cancel).then(requestCancel).then(observeCancelled).then(requestRemove).then(observeRemoved).then(requestRemove).then(observeRemoved).expect(allInvariants and cancellationWitness)
  run cleanupFailureCase=startedA.then(cancel).then(requestCancel).then(observeCancelled).then(requestRemove).then(cleanupFailure).expect(allInvariants and cleanupFailureWitness)
  run stale=compared.then(requestValidate).then(observeStale).then(requestRemove).then(observeRemoved).then(requestRemove).then(observeRemoved).expect(allInvariants and staleWitness)
+ run duplicateStore=init.then(requestAcquire).then(observeAcquire).then(requestValidate).then(observeValid).then(requestStoreA).then(observeStoreA).then(requestStoreB).then(observeDuplicateStore).then(requestRemove).then(observeRemoved).expect(allInvariants and duplicateStoreWitness)
+ run duplicateProcess=acquireStores.then(requestStartA).then(observeDuplicateProcess).then(requestRemove).then(observeRemoved).then(requestRemove).then(observeRemoved).expect(allInvariants and duplicateProcessWitness)
 }

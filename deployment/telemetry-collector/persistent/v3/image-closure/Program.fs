@@ -6,13 +6,17 @@ open FSGG.Telemetry.PersistentV3.ImageClosure
 
 let options=JsonSerializerOptions(PropertyNameCaseInsensitive=true)
 let sha bytes=Convert.ToHexString(SHA256.HashData(bytes:byte array)).ToLowerInvariant()
-let exactProperties (expected:Set<string>) (value:JsonElement)=value.ValueKind=JsonValueKind.Object&&(value.EnumerateObject()|>Seq.map _.Name|>Set.ofSeq)=expected
+let exactProperties (expected:Set<string>) (value:JsonElement)=value.ValueKind=JsonValueKind.Object&&(value.EnumerateObject()|>Seq.length)=expected.Count&&(value.EnumerateObject()|>Seq.map _.Name|>Set.ofSeq)=expected
 let selectionProperties=typeof<Selection>.GetProperties()|>Array.map _.Name|>Set.ofArray
 let rowProperties=typeof<FileRow>.GetProperties()|>Array.map _.Name|>Set.ofArray
+let roleReferenceProperties=typeof<RoleManifestReference>.GetProperties()|>Array.map _.Name|>Set.ofArray
 if Environment.GetCommandLineArgs().Length<>2 then eprintfn "usage: persistent-v3-image-closure <selection.json>"; Environment.ExitCode<-64
 else
   try
-    let bytes=File.ReadAllBytes(Environment.GetCommandLineArgs()[1])
+    let inputPath=Environment.GetCommandLineArgs()[1]
+    let inputInfo=FileInfo inputPath
+    if not inputInfo.Exists||inputInfo.Length<=0L||inputInfo.Length>4L*1024L*1024L then raise(InvalidDataException "input-size")
+    let bytes=File.ReadAllBytes inputPath
     use document=JsonDocument.Parse bytes
     let mutable status=Unchecked.defaultof<JsonElement>
     if document.RootElement.TryGetProperty("status",&status) && status.GetString()="acquisition-required" then
@@ -22,7 +26,8 @@ else
         eprintfn "persistent-v3-image-closure-refused: acquisition-required-selection-bytes-differ"; Environment.ExitCode<-3
     else
       let mutable files=Unchecked.defaultof<JsonElement>
-      if not(exactProperties selectionProperties document.RootElement)||not(document.RootElement.TryGetProperty("Files",&files))||files.ValueKind<>JsonValueKind.Array||files.GetArrayLength()=0||files.GetArrayLength()>8192||(files.EnumerateArray()|>Seq.exists(fun row->not(exactProperties rowProperties row))) then
+      let mutable roles=Unchecked.defaultof<JsonElement>
+      if not(exactProperties selectionProperties document.RootElement)||not(document.RootElement.TryGetProperty("Files",&files))||files.ValueKind<>JsonValueKind.Array||files.GetArrayLength()=0||files.GetArrayLength()>8192||(files.EnumerateArray()|>Seq.exists(fun row->not(exactProperties rowProperties row)))||not(document.RootElement.TryGetProperty("RoleManifests",&roles))||roles.ValueKind<>JsonValueKind.Array||roles.GetArrayLength()<>4||(roles.EnumerateArray()|>Seq.exists(fun row->not(exactProperties roleReferenceProperties row))) then
         eprintfn "persistent-v3-image-closure-refused: input-is-not-closed"; Environment.ExitCode<-3
       else
         let selection=JsonSerializer.Deserialize<Selection>(bytes,options)

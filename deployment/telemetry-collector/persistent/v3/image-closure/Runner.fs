@@ -2,16 +2,18 @@ namespace FSGG.Telemetry.PersistentV3.ImageClosure
 
 open System
 open System.IO
+open System.Threading
+open System.Threading.Tasks
 
 type Phase = Prepared | Acquired | Validated | CreatingStores | BuildingFirst | BuildingSecond | Comparing | Revalidating | Qualifying | Cleanup | Complete | Refused | Indeterminate
 type BuildResult = NoResult | Unknown | Digest of string
 type Qualification = QualificationUnknown | Accepted
 type Effect = AcquireInputs of string | ValidateInputs of string | CreateStore of string | StartBuild of string*string | AwaitBuild of string*string*string | CancelBuild of string | CompareBuilds of string*string | QualifyInactive of string | RemoveStore of string
 type Observation = InputsAcquired of string | InputsValidated of string | StoreCreated of string*string | StoreMayHaveEffect of string | BuildStarted of string*string | BuildCompleted of string*string*string*string | BuildMayHaveEffect of string | BuildCancelled of string | BuildsCompared of bool | QualificationObserved of bool*string | StoreAbsent of string | EffectFailed of string
-type State = { Phase:Phase; ExpectedInput:string; Current:bool; Owned:Map<string,string>; MayHaveEffect:Set<string>; Running:Map<string,string>; UnknownBuilds:Set<string>; First:BuildResult; Second:BuildResult; Qualification:Qualification; Cancelled:bool; CleanupFailed:bool; Refusal:string option; Pending:Effect option; LastEffect:string }
+type State = { Phase:Phase; ExpectedInput:string; Current:bool; Owned:Map<string,string>; MayHaveEffect:Set<string>; Running:Map<string,string>; UnknownBuilds:Set<string>; IdentityOk:bool; First:BuildResult; Second:BuildResult; Qualification:Qualification; Cancelled:bool; CleanupFailed:bool; Refusal:string option; Pending:Effect option; LastEffect:string }
 
 module Runner =
-    let initial expected={Phase=Prepared;ExpectedInput=expected;Current=true;Owned=Map.empty;MayHaveEffect=Set.empty;Running=Map.empty;UnknownBuilds=Set.empty;First=NoResult;Second=NoResult;Qualification=QualificationUnknown;Cancelled=false;CleanupFailed=false;Refusal=None;Pending=None;LastEffect="None"}
+    let initial expected={Phase=Prepared;ExpectedInput=expected;Current=true;Owned=Map.empty;MayHaveEffect=Set.empty;Running=Map.empty;UnknownBuilds=Set.empty;IdentityOk=true;First=NoResult;Second=NoResult;Qualification=QualificationUnknown;Cancelled=false;CleanupFailed=false;Refusal=None;Pending=None;LastEffect="None"}
     let private effectName=function AcquireInputs _->"Acquire"|ValidateInputs _->"Validate"|CreateStore "a"->"CreateA"|CreateStore _->"CreateB"|StartBuild("a",_)->"StartA"|StartBuild _->"StartB"|AwaitBuild("a",_,_)->"AwaitA"|AwaitBuild _->"AwaitB"|CancelBuild _->"Cancel"|CompareBuilds _->"Compare"|QualifyInactive _->"Qualify"|RemoveStore _->"Remove"
     let private refuse reason state={state with Phase=(if state.Owned.IsEmpty&&state.MayHaveEffect.IsEmpty&&state.Running.IsEmpty then Refused else Cleanup);Qualification=QualificationUnknown;Refusal=Some reason;Pending=None}
     let nextEffect state =
@@ -49,9 +51,11 @@ module Runner =
 #else
           refuse "InputChanged" {state with Current=false}
 #endif
-      | Some(CreateStore logical),StoreCreated(observed,resource) when logical=observed && not(state.Owned.ContainsKey logical)->{state with Phase=CreatingStores;Owned=state.Owned.Add(logical,resource);Pending=None}
+      | Some(CreateStore logical),StoreCreated(observed,resource) when logical=observed && not(String.IsNullOrWhiteSpace resource) && not(state.Owned.ContainsKey logical)&&not(state.Owned|>Map.exists(fun _ value->value=resource))&&not(state.Running|>Map.exists(fun _ value->value=resource))->{state with Phase=CreatingStores;Owned=state.Owned.Add(logical,resource);Pending=None}
+      | Some(CreateStore logical),StoreCreated(observed,_) when logical=observed->{state with Phase=Cleanup;MayHaveEffect=state.MayHaveEffect.Add logical;IdentityOk=false;Qualification=QualificationUnknown;Refusal=Some "DuplicateResourceIdentity";Pending=None}
       | Some(CreateStore logical),StoreMayHaveEffect observed when logical=observed->{state with Phase=Cleanup;MayHaveEffect=state.MayHaveEffect.Add logical;Pending=None;Qualification=QualificationUnknown;Refusal=Some "StoreAckLost"}
-      | Some(StartBuild(logical,_)),BuildStarted(observed,resource) when logical=observed->{state with Phase=(if logical="a" then BuildingFirst else BuildingSecond);Running=state.Running.Add(logical,resource);Pending=None}
+      | Some(StartBuild(logical,_)),BuildStarted(observed,resource) when logical=observed && not(String.IsNullOrWhiteSpace resource) && not(state.Running|>Map.exists(fun _ value->value=resource))&&not(state.Owned|>Map.exists(fun _ value->value=resource))->{state with Phase=(if logical="a" then BuildingFirst else BuildingSecond);Running=state.Running.Add(logical,resource);Pending=None}
+      | Some(StartBuild(logical,_)),BuildStarted(observed,_) when logical=observed->{state with Phase=Cleanup;UnknownBuilds=state.UnknownBuilds.Add logical;IdentityOk=false;Qualification=QualificationUnknown;Refusal=Some "DuplicateProcessIdentity";Pending=None}
       | Some(StartBuild(logical,_)),BuildMayHaveEffect observed when logical=observed->{state with Phase=Cleanup;UnknownBuilds=state.UnknownBuilds.Add logical;First=(if logical="a" then Unknown else state.First);Second=(if logical="b" then Unknown else state.Second);Pending=None;Qualification=QualificationUnknown;Refusal=Some "BuildAckLost"}
       | Some(AwaitBuild(logical,resource,expected)),BuildCompleted(observed,processId,digest,input) when logical=observed&&resource=processId&&input=expected&&logical="a"->{state with Phase=BuildingSecond;Running=state.Running.Remove logical;First=Digest digest;Pending=None}
       | Some(AwaitBuild(logical,resource,expected)),BuildCompleted(observed,processId,digest,input) when logical=observed&&resource=processId&&input=expected&&logical="b"->{state with Phase=Comparing;Running=state.Running.Remove logical;Second=Digest digest;Pending=None}
@@ -63,36 +67,63 @@ module Runner =
       | Some(QualifyInactive _),QualificationObserved _->refuse "StaleResult" {state with Current=false}
       | Some(RemoveStore resource),StoreAbsent observed when resource=observed->
           let owned=state.Owned|>Map.filter(fun _ value->value<>resource)
-          if owned.IsEmpty&&state.MayHaveEffect.IsEmpty then {state with Phase=(if not state.UnknownBuilds.IsEmpty then Indeterminate elif state.Qualification=Accepted&&state.Current&&not state.Cancelled then Complete else Refused);Owned=owned;Pending=None} else {state with Owned=owned;Pending=None}
+          if owned.IsEmpty then {state with Phase=(if not state.UnknownBuilds.IsEmpty||not state.MayHaveEffect.IsEmpty then Indeterminate elif state.Qualification=Accepted&&state.Current&&not state.Cancelled then Complete else Refused);Owned=owned;Pending=None} else {state with Owned=owned;Pending=None}
       | Some(RemoveStore _),EffectFailed _->{state with CleanupFailed=true;Qualification=QualificationUnknown;Pending=None}
       | Some _,EffectFailed reason->refuse reason state
       | _->refuse "ObservationMismatch" state
+    let losePending reason state =
+      match state.Pending with
+      | Some(CreateStore logical)->observe(StoreMayHaveEffect logical) state
+      | Some(StartBuild(logical,_))->observe(BuildMayHaveEffect logical) state
+      | Some(RemoveStore _)|Some(CancelBuild _)->observe(EffectFailed reason) state
+      | Some _->refuse reason state
+      | None->refuse reason state
     let cancel state=if state.Owned.IsEmpty&&state.MayHaveEffect.IsEmpty&&state.Running.IsEmpty then refuse "Cancelled" state else {state with Phase=Cleanup;Cancelled=true;Qualification=QualificationUnknown;Pending=None}
-    let qualificationAccepted state=state.Phase=Complete&&state.Owned.IsEmpty&&state.MayHaveEffect.IsEmpty&&state.Running.IsEmpty&&state.UnknownBuilds.IsEmpty&&state.Current&&state.Qualification=Accepted&&not state.Cancelled&&not state.CleanupFailed
+    let qualificationAccepted state=state.Phase=Complete&&state.Owned.IsEmpty&&state.MayHaveEffect.IsEmpty&&state.Running.IsEmpty&&state.UnknownBuilds.IsEmpty&&state.IdentityOk&&state.Current&&state.Qualification=Accepted&&not state.Cancelled&&not state.CleanupFailed
 
-type IRunnerMechanism = abstract Execute:Effect->Observation
+type IRunnerMechanism = abstract Execute:Effect*CancellationToken->Task<Observation>
 module RunnerExecution =
-    let run maximumSteps (mechanism:IRunnerMechanism) state =
-      let rec loop remaining current trace =
-        if remaining=0||current.Phase=Complete||current.Phase=Refused||current.CleanupFailed then current,List.rev trace else
+    let run maximumSteps (deadline:DateTimeOffset) (cancellation:CancellationToken) (mechanism:IRunnerMechanism) state =
+      let exhausted reason current =
+        if current.Phase=Complete||current.Phase=Refused||current.Phase=Indeterminate||current.CleanupFailed then current
+        else {current with Phase=Indeterminate;Qualification=QualificationUnknown;Refusal=Some reason;Pending=None}
+      let rec loop remaining ignoreCancellation current trace =
+        if remaining=0 then exhausted "StepBudget" current,List.rev trace
+        elif current.Phase=Complete||current.Phase=Refused||current.Phase=Indeterminate||current.CleanupFailed then current,List.rev trace else
         let requested,effect=Runner.nextEffect current
-        match effect with None->requested,List.rev trace|Some command->let observation=mechanism.Execute command in loop (remaining-1) (Runner.observe observation requested) ((command,observation)::trace)
-      loop maximumSteps state []
+        match effect with
+        | None->requested,List.rev trace
+        | Some command->
+            let remainingTime=deadline-DateTimeOffset.UtcNow
+            if remainingTime<=TimeSpan.Zero then
+              exhausted "Deadline" requested,List.rev trace
+            elif cancellation.IsCancellationRequested&&not ignoreCancellation then loop (remaining-1) true (Runner.cancel requested) trace
+            else
+              try
+                let token=if ignoreCancellation then CancellationToken.None else cancellation
+                let invocationBudget=min remainingTime (TimeSpan.FromMilliseconds 250.0)
+                let observation=mechanism.Execute(command,token).WaitAsync(invocationBudget,token).GetAwaiter().GetResult()
+                loop (remaining-1) ignoreCancellation (Runner.observe observation requested) ((command,observation)::trace)
+              with error->
+                let observation=match command with CreateStore logical->StoreMayHaveEffect logical|StartBuild(logical,_)->BuildMayHaveEffect logical|_->EffectFailed(error.GetType().Name)
+                loop (remaining-1) true (Runner.losePending (error.GetType().Name) requested) ((command,observation)::trace)
+      loop maximumSteps false state []
     type DirectoryFixture(root:string,input:string,first:string,second:string)=
       interface IRunnerMechanism with
-        member _.Execute effect=
-          match effect with
-          | AcquireInputs _->InputsAcquired input
-          | ValidateInputs _->InputsValidated input
-          | CreateStore logical->
-              let path=Path.Combine(root,"store-"+logical)
-              Directory.CreateDirectory path|>ignore
-              StoreCreated(logical,path)
-          | StartBuild(logical,_)->BuildStarted(logical,"process-"+logical)
-          | AwaitBuild(logical,resource,_)->BuildCompleted(logical,resource,(if logical="a" then first else second),input)
-          | CancelBuild resource->BuildCancelled resource
-          | CompareBuilds(a,b)->BuildsCompared(a=b)
-          | QualifyInactive _->QualificationObserved(true,input)
-          | RemoveStore resource->
-              if Directory.Exists resource then Directory.Delete resource
-              StoreAbsent resource
+        member _.Execute(effect,_)=
+          Task.FromResult(
+            match effect with
+            | AcquireInputs _->InputsAcquired input
+            | ValidateInputs _->InputsValidated input
+            | CreateStore logical->
+                let path=Path.Combine(root,"store-"+logical)
+                Directory.CreateDirectory path|>ignore
+                StoreCreated(logical,path)
+            | StartBuild(logical,_)->BuildStarted(logical,"process-"+logical)
+            | AwaitBuild(logical,resource,_)->BuildCompleted(logical,resource,(if logical="a" then first else second),input)
+            | CancelBuild resource->BuildCancelled resource
+            | CompareBuilds(a,b)->BuildsCompared(a=b)
+            | QualifyInactive _->QualificationObserved(true,input)
+            | RemoveStore resource->
+                if Directory.Exists resource then Directory.Delete resource
+                StoreAbsent resource)
