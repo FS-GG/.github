@@ -18,6 +18,9 @@ module V2Projection =
         {
             SchemaVersion: int
             RecipeRevision: string
+            PopulationRevision: string
+            OrganizationId: string
+            ArtifactSha256: string
             OwnerKind: OwnerKind
             Owner: string
             ProjectNumber: int
@@ -47,6 +50,7 @@ module V2Projection =
     type Request =
         {
             Issue: IssueRef
+            ExpectedNodeId: string
         }
 
     type Outcome =
@@ -64,6 +68,7 @@ module V2Projection =
             SourceChecks: int
             ProjectReads: int
             Mutations: int
+            VerifiedAt: DateTimeOffset
         }
 
     let private invalid subject message = Error(Http(422, $"%s{subject}: %s{message}"))
@@ -99,19 +104,23 @@ module V2Projection =
 
         if binding.SchemaVersion <> 1 then
             invalid subject "only schema version 1 is supported"
-        elif not (nonBlank binding.RecipeRevision) then
-            invalid subject "the reviewed recipe revision is missing"
+        elif not (nonBlank binding.RecipeRevision) || binding.RecipeRevision.Length <> 40 || binding.RecipeRevision |> Seq.exists (Uri.IsHexDigit >> not) then
+            invalid subject "the reviewed recipe revision must be an immutable Git SHA"
+        elif not (nonBlank binding.PopulationRevision) || binding.PopulationRevision.Length <> 40 || binding.PopulationRevision |> Seq.exists (Uri.IsHexDigit >> not) then
+            invalid subject "the reviewed population revision must be an immutable Git SHA"
+        elif not (nonBlank binding.OrganizationId) || not (nonBlank binding.ArtifactSha256) || binding.ArtifactSha256.Length <> 64 || binding.ArtifactSha256 |> Seq.exists (Uri.IsHexDigit >> not) then
+            invalid subject "immutable organization or reviewed artifact identity is missing"
         elif binding.OwnerKind <> OwnerKind.Org then
             invalid subject "this organization-board adapter requires an explicit organization owner kind"
         elif not (nonBlank binding.Owner) || binding.ProjectNumber <= 0 || not (nonBlank binding.ProjectTitle) || not (nonBlank binding.ProjectId) then
             invalid subject "the exact organization project identity is incomplete"
         elif
             String.Equals(binding.Owner, "FS-GG", StringComparison.OrdinalIgnoreCase)
-            && binding.ProjectNumber = 1
-            && binding.ProjectTitle = "Coordination"
-            && binding.ProjectId = "PVT_kwDOEYAWY84Bb08W"
+            && (binding.ProjectNumber = 1 || binding.ProjectId = "PVT_kwDOEYAWY84Bb08W")
         then
             invalid subject "the legacy Coordination Project 1 identity is not a V2 projection target"
+        elif binding.Owner <> "FS-GG" || binding.ProjectTitle <> "Coordination V2" then
+            invalid subject "this restricted organization pilot requires the FS-GG Coordination V2 target"
         elif not (nonBlank binding.RoadmapFieldId) then
             invalid subject "the Roadmap field id is missing"
         elif List.distinct allFieldIds |> List.length <> allFieldIds.Length then
@@ -144,10 +153,66 @@ module V2Projection =
                 | Ok() -> select "Observation" binding.Observation
             | _ -> Error(Malformed("the Coordination V2 field 'Roadmap'", "field identity or type drifted from the reviewed binding"))
 
-    let private fieldValueByItemId (transport: IGitHubTransport) itemId =
+    let private graphRequest document variables subject : Transport.Request =
+        { Method = "POST"; Path = "graphql"; Query = []; Body = Query(document, variables)
+          Budget = GraphQl; IfNoneMatch = None; Subject = subject }
+
+    let private verifyOrganization transport (binding: Binding) =
+        let document = "query($owner: String!) { organization(login: $owner) { id login } rateLimit { cost remaining } }"
+        GraphQl.read transport (graphRequest document [ "owner", VString binding.Owner ] "immutable project owner") (fun data ->
+            let organization = data.GetProperty "organization"
+            if organization.GetProperty("id").GetString() <> binding.OrganizationId || organization.GetProperty("login").GetString() <> binding.Owner then
+                Error(Malformed("immutable project owner", "organization identity differs from the reviewed binding"))
+            else Ok())
+
+    let private exactMembership (transport: IGitHubTransport) (binding: Binding) (issue: IssueRef) expectedNativeId =
+        let subject = $"{issue.Owner}/{issue.Repository}#{issue.Number} exact membership"
+        let document =
+            "query($owner: String!, $repo: String!, $number: Int!, $after: String) { repository(owner: $owner, name: $repo) { nameWithOwner issue(number: $number) { id number projectItems(first: 50, after: $after) { totalCount pageInfo { hasNextPage endCursor } nodes { id project { id } content { ... on Issue { id number repository { nameWithOwner } } } } } } } rateLimit { cost remaining } }"
+        let mutable pages = 0
+        let fetch after =
+            let variables =
+                [ "owner", VString issue.Owner; "repo", VString issue.Repository; "number", VNumber(double issue.Number) ]
+                @ (after |> Option.map (fun cursor -> [ "after", VString cursor ]) |> Option.defaultValue [])
+            GraphQl.read transport (graphRequest document variables subject) (fun data ->
+                try
+                    let repository = data.GetProperty "repository"
+                    let native = repository.GetProperty "issue"
+                    let repo = $"{issue.Owner}/{issue.Repository}"
+                    let nativeId = native.GetProperty("id").GetString()
+                    if repository.GetProperty("nameWithOwner").GetString() <> repo || native.GetProperty("number").GetInt32() <> issue.Number || nativeId <> expectedNativeId || not (nonBlank nativeId) then
+                        Error(Malformed(subject, "native issue identity differs"))
+                    else
+                        let decode (node: JsonElement) =
+                            let itemId = node.GetProperty("id").GetString()
+                            let projectId = node.GetProperty("project").GetProperty("id").GetString()
+                            let content = node.GetProperty "content"
+                            if not (nonBlank itemId) || not (nonBlank projectId) || content.GetProperty("id").GetString() <> nativeId || content.GetProperty("number").GetInt32() <> issue.Number || content.GetProperty("repository").GetProperty("nameWithOwner").GetString() <> repo then
+                                Error(Malformed(subject, "membership content identity differs"))
+                            else Ok(itemId, projectId, nativeId)
+                        let connection = native.GetProperty "projectItems"
+                        if connection.GetProperty("totalCount").GetInt32() < 0 || connection.GetProperty("nodes").GetArrayLength() > 50 then
+                            Error(Malformed(subject, "membership count/window is invalid"))
+                        else
+                            let page = GraphQl.page subject "native issue project memberships" (fun (id, _, _) -> id) decode connection
+                            match page with
+                            | Ok _ -> pages <- pages + 1; page
+                            | Error _ -> page
+                with
+                | :? Collections.Generic.KeyNotFoundException
+                | :? InvalidOperationException -> Error(Malformed(subject, "unreadable native membership identity")))
+        match GraphQl.drain subject "native issue project memberships" { MaxPages = 10; MaxItems = 500 } fetch with
+        | Error error -> Error error
+        | Ok memberships ->
+            match memberships |> List.filter (fun (_, projectId, _) -> projectId = binding.ProjectId) with
+            | [ (itemId, _, nativeId) ] -> Ok(itemId, nativeId, pages)
+            | [] -> Error(NotFound subject)
+            | _ -> Error(Malformed(subject, "duplicate exact-project membership"))
+
+    let private fieldValueByItemId (transport: IGitHubTransport) (binding: Binding) (issue: IssueRef) nativeId itemId =
         let subject = $"board item %s{itemId} Observation"
         let document =
-            "query($itemId: ID!) { node(id: $itemId) { ... on ProjectV2Item { fieldValueByName(name: \"Observation\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } } } rateLimit { cost remaining } }"
+            "query($itemId: ID!) { node(id: $itemId) { ... on ProjectV2Item { id project { id } content { ... on Issue { id number repository { nameWithOwner } } } fieldValueByName(name: \"Observation\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } } } rateLimit { cost remaining } }"
 
         let request =
             {
@@ -166,6 +231,12 @@ module V2Projection =
 
                 if node.ValueKind = JsonValueKind.Null then
                     Error(NotFound subject)
+                elif node.GetProperty("id").GetString() <> itemId
+                     || node.GetProperty("project").GetProperty("id").GetString() <> binding.ProjectId
+                     || node.GetProperty("content").GetProperty("id").GetString() <> nativeId
+                     || node.GetProperty("content").GetProperty("number").GetInt32() <> issue.Number
+                     || node.GetProperty("content").GetProperty("repository").GetProperty("nameWithOwner").GetString() <> $"{issue.Owner}/{issue.Repository}" then
+                    Error(Malformed(subject, "immutable item project or content identity differs"))
                 else
                     match node.TryGetProperty "fieldValueByName" with
                     | true, value when value.ValueKind = JsonValueKind.Null -> Ok None
@@ -184,7 +255,7 @@ module V2Projection =
     let runOneShot (verifySource: SourceVerifier) (transport: IGitHubTransport) (binding: Binding) (request: Request) =
         match validateBinding binding with
         | Error error -> Error error
-        | Ok() when request.Issue.Number <= 0 || not (nonBlank request.Issue.Owner) || not (nonBlank request.Issue.Repository) ->
+        | Ok() when request.Issue.Number <= 0 || not (nonBlank request.Issue.Owner) || not (nonBlank request.Issue.Repository) || not (nonBlank request.ExpectedNodeId) ->
             invalid "the projection request" "the issue identity is incomplete"
         | Ok() when not (repositoryAllowed binding request.Issue) ->
             Error(Http(403, $"repository %s{request.Issue.Owner}/%s{request.Issue.Repository} is outside the reviewed V2 projection allowlist"))
@@ -208,17 +279,17 @@ module V2Projection =
                         Id = binding.ProjectId
                     }
 
-                match bootstrapExactProject transport expected with
+                let bootstrap = verifyOrganization transport binding |> Result.bind (fun () -> bootstrapExactProject transport expected)
+                match bootstrap with
                 | Error error -> Error error
                 | Ok board ->
                     match verifyFieldSchema binding board with
                     | Error error -> Error error
                     | Ok() ->
-                        match itemId transport board request.Issue.Owner request.Issue.Repository request.Issue.Number with
+                        match exactMembership transport binding request.Issue request.ExpectedNodeId with
                         | Error error -> Error error
-                        | Ok None -> Error(NotFound $"%s{request.Issue.Owner}/%s{request.Issue.Repository}#%d{request.Issue.Number} on exact project %s{binding.ProjectId}")
-                        | Ok(Some itemId) ->
-                            match fieldValueByItemId transport itemId with
+                        | Ok(itemId, nativeId, pages) ->
+                            match fieldValueByItemId transport binding request.Issue nativeId itemId with
                             | Error error -> Error error
                             | Ok(Some "Verified") ->
                                 Ok
@@ -230,24 +301,26 @@ module V2Projection =
                                         Observation = "Verified"
                                         Outcome = AlreadyCurrent itemId
                                         SourceChecks = 1
-                                        ProjectReads = 3
+                                        ProjectReads = 3 + pages
                                         Mutations = 0
+                                        VerifiedAt = DateTimeOffset.UtcNow
                                     }
                             | Ok(Some value) when not (binding.Observation.Options.ContainsKey value) ->
                                 Error(Malformed("the Observation value", $"unknown option '%s{value}'"))
                             | Ok _ ->
-                                match setField transport board itemId "Observation" (Set "Verified") with
+                                let write =
+                                    match verifySource request.Issue with
+                                    | Ok(Current fresh) when fresh = revision -> setField transport board itemId "Observation" (Set "Verified")
+                                    | Ok _ -> Error(Http(409, "source changed before mutation; retaining current project value"))
+                                    | Error error -> Error error
+                                match write with
                                 | Error error -> Error error
                                 | Ok() ->
-                                    Ok
-                                        {
-                                            ProjectId = binding.ProjectId
-                                            RecipeRevision = binding.RecipeRevision
-                                            Issue = request.Issue
-                                            ObservedRevision = revision
-                                            Observation = "Verified"
-                                            Outcome = Updated itemId
-                                            SourceChecks = 1
-                                            ProjectReads = 3
-                                            Mutations = 1
-                                        }
+                                    match fieldValueByItemId transport binding request.Issue nativeId itemId with
+                                    | Ok(Some "Verified") ->
+                                        Ok
+                                            { ProjectId = binding.ProjectId; RecipeRevision = binding.RecipeRevision
+                                              Issue = request.Issue; ObservedRevision = revision; Observation = "Verified"
+                                              Outcome = Updated itemId; SourceChecks = 2; ProjectReads = 4 + pages; Mutations = 1; VerifiedAt = DateTimeOffset.UtcNow }
+                                    | Ok _ -> Error(Malformed("projection readback", "owned Observation did not read back Verified"))
+                                    | Error error -> Error error

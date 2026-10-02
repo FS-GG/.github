@@ -1,0 +1,46 @@
+name: Coordination V2 refresh preparation
+
+on:
+  workflow_dispatch:
+
+# Preparation is credential-free. Enrollment and qualification remain root-owned.
+permissions: {}
+
+concurrency:
+  group: coordination-v2-reviewed-refresh
+  cancel-in-progress: false
+
+jobs:
+  readiness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    steps:
+      - name: Report the qualification boundary
+        run: |
+          echo 'Restricted refresh source is dormant.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'The exact pilot binding, complete cohort, narrow credential and scoped mutation admission remain unqualified.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Ordinary source checks and the separate legacy Project 1 archive remain independent.' >> "$GITHUB_STEP_SUMMARY"
+
+  # Fixed command prepared for review only. Removing this guard is an independently
+  # authorized activation after root selects and qualifies the existing binding.
+  # No secret, credential or binding file is invented by this preparation workflow.
+  refresh:
+    if: ${{ false }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+      - name: Fixed reviewed one-shot command
+        run: >-
+          dotnet run --project src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj --configuration Release --
+          board-v2 refresh
+          --binding-file "$RUNNER_TEMP/selected-coordination-v2-binding.json"
+          --report-file "$RUNNER_TEMP/coordination-v2-refresh-report.json"

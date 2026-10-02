@@ -3,11 +3,13 @@ namespace FS.GG.Coord.GitHub
 /// Restricted, opt-in projection onto a reviewed Coordination V2 binding.
 ///
 /// This adapter is deliberately separate from the legacy board bootstrap and write paths. It invokes
-/// one required source verifier, performs one bounded target read, one complete membership read, one
-/// field read and at most one mutation. It never adds an item or changes issue, claim, dependency,
-/// scheduling or settlement state.
+/// one required source verifier, verifies the immutable owner and target, drains at most ten pages of
+/// fifty native memberships, and validates item/content identity on each Observation read. It performs
+/// at most one mutation and requires independent post-write readback. It never adds an item or changes
+/// issue, claim, dependency, scheduling or settlement state.
 module V2Projection =
 
+    open System
     open Errors
     open Transport
 
@@ -22,6 +24,9 @@ module V2Projection =
         {
             SchemaVersion: int
             RecipeRevision: string
+            PopulationRevision: string
+            OrganizationId: string
+            ArtifactSha256: string
             OwnerKind: OwnerKind
             Owner: string
             ProjectNumber: int
@@ -56,6 +61,7 @@ module V2Projection =
     type Request =
         {
             Issue: IssueRef
+            ExpectedNodeId: string
         }
 
     type Outcome =
@@ -73,6 +79,7 @@ module V2Projection =
             SourceChecks: int
             ProjectReads: int
             Mutations: int
+            VerifiedAt: DateTimeOffset
         }
 
     /// Validate the reviewed binding without performing IO.
@@ -80,8 +87,11 @@ module V2Projection =
 
     /// Run one bounded projection pass. Every run first consumes the required authoritative source
     /// verifier, then freshly verifies the exact target and field schema.
-    /// A retry after a lost mutation response repeats those reads; if the desired value landed, it emits
+    /// The source snapshot is revalidated immediately before a mutation. A successful field update
+    /// requires independent readback. A retry after a lost mutation response repeats those reads;
+    /// if the desired value landed, it emits
     /// no second mutation. Any failed or incomplete read remains an error and cannot license a write.
+    /// Production commands must use V2ProjectionSource.runFixed; verifier injection is the fixture seam.
     val runOneShot:
         verifySource: SourceVerifier ->
         transport: IGitHubTransport ->
