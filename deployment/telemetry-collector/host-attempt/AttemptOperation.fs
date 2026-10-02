@@ -17,6 +17,7 @@ type IAttemptMechanism =
     abstract MonotonicMilliseconds: unit -> int64
     abstract ConsumeInterruption: unit -> bool
     abstract Sleep: seconds:int -> unit
+    abstract AcquireAdmission: OperationContext * AttemptState * OperationWindow -> string
     abstract AcquireEffectCheck: AttemptState * OperationWindow -> EffectCheckEvidence
     abstract AcquireRunBaseline: AttemptState * OperationWindow -> bool
     abstract Execute: action:FixedAction * timeoutSeconds:int * sensitiveInput:string option -> MechanismOutcome
@@ -132,7 +133,7 @@ module AttemptOperation =
         if not checksOk && state.Refusal.IsNone then
             if state.ElapsedSeconds<state.BudgetSeconds then reduce Observation.SourceInvalidated else fail()
         if checksOk && state.Refusal.IsNone && remainingMilliseconds()>0L then
-            let admission=invoke 90 false (fun window->AttemptPreparation.deriveAdmission context.HostBindingDll context.RecipeRoot context.ProfilePath context.SourcePinsPath state.Prepared.Nonce (window.RemainingSeconds*1000))
+            let admission=invoke 90 false (fun window->mechanism.AcquireAdmission(context,state,window))
             match admission with
             | Some value ->
                 effect None (FixedAction.TransferSecret SecretRole.NativeAuth)

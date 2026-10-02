@@ -134,12 +134,27 @@ module AttemptPreparation =
     let private requireKeys expected (fields: Map<string, JsonElement>) = require (Set.ofList expected = Set.ofSeq fields.Keys) "json-fields-refused"
     let private text name (fields: Map<string, JsonElement>) = require (fields[name].ValueKind = JsonValueKind.String) "json-string-refused"; fields[name].GetString()
 
+    let internal runHostBindingAttempts finalRefusal (run:unit -> int*string*string) =
+        let rec attempt count =
+            let code,output,error=run()
+            let isolatedCleanupRefusal =
+                code=2 && String.IsNullOrEmpty output &&
+                String.Equals(error.Trim(),"host-binding-refused:process-cleanup-unknown",StringComparison.Ordinal)
+            if code=0 then output
+            elif isolatedCleanupRefusal && count<3 then attempt(count+1)
+            else refuse finalRefusal
+        attempt 1
+
+    let private runHostBinding finalRefusal recipeRoot arguments timeoutMilliseconds maximumBytes =
+        let clock=Stopwatch.StartNew()
+        let remaining()=let value=timeoutMilliseconds-int clock.ElapsedMilliseconds in require(value>0) "host-binding-timeout-refused";value
+        runHostBindingAttempts finalRefusal (fun()->runBounded "/usr/bin/dotnet" recipeRoot arguments (remaining()) maximumBytes)
+
     let private renderBinding request timeoutMilliseconds =
         let args =
             [ request.HostBindingDll; "render"; "--source-root"; request.RecipeRoot; "--source-sha"; request.RecipeSourceSha
               "--profile"; request.ProfilePath; "--source-pins"; request.SourcePinsPath ]
-        let code, output, _ = runBounded "/usr/bin/dotnet" request.RecipeRoot args (min 90000 timeoutMilliseconds) 65536
-        require (code = 0) "host-binding-refused"
+        let output=runHostBinding "host-binding-refused" request.RecipeRoot args (min 90000 timeoutMilliseconds) 65536
         let trimmed = output.TrimEnd('\r', '\n')
         require (not (trimmed.Contains('\n')) && Encoding.UTF8.GetByteCount trimmed <= 16384) "host-binding-output-refused"
         use document = JsonDocument.Parse(trimmed, JsonDocumentOptions(CommentHandling = JsonCommentHandling.Disallow, AllowTrailingCommas = false, MaxDepth = 4))
@@ -155,8 +170,7 @@ module AttemptPreparation =
         require (Regex.IsMatch(nonce, @"\A[a-z0-9][a-z0-9-]{7,63}\z")) "attempt-identity-refused"
         let args=[hostBindingDll;"derive";"--source-root";recipeRoot;"--source-sha";RecipeSha;"--profile";profilePath;"--source-pins";sourcePinsPath;"--nonce";nonce]
         require (timeoutMilliseconds>0 && timeoutMilliseconds<=90000) "host-binding-timeout-refused"
-        let code,output,_=runBounded "/usr/bin/dotnet" recipeRoot args timeoutMilliseconds 4096
-        require (code=0) "host-binding-derive-refused"
+        let output=runHostBinding "host-binding-derive-refused" recipeRoot args timeoutMilliseconds 4096
         let value=output.TrimEnd('\r','\n')
         require (hex 64 value) "host-binding-admission-refused"
         value
@@ -203,4 +217,38 @@ module AttemptPreparation =
           SecretIntentions = Set.empty; SecretAcknowledgments = Set.empty; SecretsMayHaveEffect = Set.empty; SecretAbsenceObserved = Set.empty
           CandidateRuns = []; OwnedRunId = None; CancellationMayHaveEffect = false;RunRetirementObserved=false
           NativeDisposition = NativeDisposition.NativeUnknown; CleanupDisposition = CleanupDisposition.CleanupUnknown; Refusal = None }
+
+    /// Reopens every location-bearing input behind an already authoritative
+    /// HostBinding result. This deliberately does not reconstruct the binding
+    /// formula or start another binding authority process.
+    let revalidateWithin (expected:PreparedIdentity) request timeoutMilliseconds =
+        require(timeoutMilliseconds>0) "revalidation-deadline"
+        let clock=Stopwatch.StartNew()
+        let remaining()=let value=timeoutMilliseconds-int clock.ElapsedMilliseconds in require(value>0) "revalidation-deadline";value
+        require(request.SourceGeneration=expected.SourceGeneration && request.PlacementSha=expected.PlacementSha && request.PlacementTree=expected.PlacementTree && request.WorkflowSha256=expected.WorkflowSha256) "revalidation-request-drift"
+        require(request.RecipeSourceSha=expected.RecipeSourceSha && request.RecipeSourceTree=expected.RecipeSourceTree && request.Nonce=expected.Nonce && request.DestinationId=expected.DestinationId) "revalidation-request-drift"
+        require(request.QualificationRef=QualificationRef && request.Environment=Environment && request.Repository=Repository && request.Workflow=Workflow) "revalidation-route-drift"
+        require(request.ReleaseId=ReleaseId && request.ManifestAssetId=ManifestAssetId && request.ArchiveAssetId=ArchiveAssetId) "revalidation-release-drift"
+        require(git request.PlacementRoot ["rev-parse";"HEAD"] (remaining())=expected.PlacementSha) "placement-head-drift"
+        require(git request.PlacementRoot ["rev-parse";expected.PlacementSha+"^{tree}"] (remaining())=expected.PlacementTree) "placement-tree-drift"
+        require(git request.PlacementRoot ["status";"--porcelain"] (remaining())="") "placement-worktree-dirty"
+        require(git request.RecipeRoot ["rev-parse";"HEAD"] (remaining())=expected.RecipeSourceSha) "recipe-head-drift"
+        require(git request.RecipeRoot ["rev-parse";expected.RecipeSourceSha+"^{tree}"] (remaining())=expected.RecipeSourceTree) "recipe-tree-drift"
+        require(git request.RecipeRoot ["status";"--porcelain"] (remaining())="") "recipe-worktree-dirty"
+        let workflow=Path.GetFullPath(Path.Combine(request.PlacementRoot,request.WorkflowPath))
+        require(request.WorkflowPath=".github/workflows/v2-host-native-private.yml" && File.Exists workflow && shaFile workflow=expected.WorkflowSha256) "workflow-drift-refused"
+        require(Path.GetFullPath request.ProfilePath=Path.Combine(Path.GetFullPath request.RecipeRoot,"deployment/telemetry-collector/native-operation-v1.json") && shaFile request.ProfilePath=expected.ProfileSha256) "profile-drift-refused"
+        require(shaFile request.SourcePinsPath=expected.SourcePinsSha256 && shaFile request.HostBindingDll=expected.BindingProducerSha256) "binding-input-drift"
+        require(shaFile(Path.GetFullPath "/usr/bin/dotnet")=expected.RuntimeHostSha256 && shaFile request.MechanismAdapterPath=expected.MechanismAdapterSha256) "runtime-closure-drift"
+        let templatePath=Path.Combine(request.RecipeRoot,WorkflowTemplateRelativePath)
+        require(File.Exists templatePath) "workflow-template-missing"
+        let template=File.ReadAllText templatePath
+        require(template.Split("@@RECIPE_SOURCE_SHA@@",StringSplitOptions.None).Length=3 && template.Split("@@HOST_BINDING_PROFILE_SHA256@@",StringSplitOptions.None).Length=2) "workflow-template-refused"
+        let rendered=template.Replace("@@RECIPE_SOURCE_SHA@@",RecipeSha,StringComparison.Ordinal).Replace("@@HOST_BINDING_PROFILE_SHA256@@",expected.ProfileSha256,StringComparison.Ordinal)
+        let insertionPoint="      - name: Set up exact HOST binding SDK\n"
+        let acquisition="      - name: Acquire exact public-only native inputs before authentication\n        env:\n          GITHUB_TOKEN: ${{ github.token }}\n        run: |\n          set -euo pipefail\n          python3 placement/tools/bounded-public-inputs.py acquire \\\n            --repository \"$GITHUB_REPOSITORY\" \\\n            --output \"$GITHUB_WORKSPACE/placement/_private-inputs\"\n          unset GITHUB_TOKEN\n"
+        let index=rendered.IndexOf(insertionPoint,StringComparison.Ordinal)
+        require(index>=0 && rendered.IndexOf(insertionPoint,index+1,StringComparison.Ordinal)<0 && File.ReadAllText(workflow)=rendered.Insert(index,acquisition)) "workflow-binding-agreement-refused"
+        remaining() |> ignore
+
     let prepare producerDllSha request=prepareWithin producerDllSha request 2700000

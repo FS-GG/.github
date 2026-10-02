@@ -18,6 +18,15 @@ Every effect consumes a fresh closure check. The operation drives typed secret
 absence and complete inactive-run readbacks before finalization. Native
 disposition, secret absence, and owned-run retirement remain separate.
 
+The authoritative binding render and admission derivation remain dedicated
+calls to the unchanged published `HostBinding` CLI. An exact preeffect
+`process-cleanup-unknown` refusal may start a fresh authority process, at most
+three total attempts inside the same absolute deadline; output from a refused
+attempt is never accepted. Other refusals are terminal. Effect-time checks
+reopen the exact Git heads, trees, worktree status, workflow, profile, source
+pins, binding binary, runtime, and adapter bytes behind the authoritative
+result without reconstructing its binding or admission formulas.
+
 `host_attempt_transport.py` is a thin fixed transport. It accepts exactly one
 normal action per invocation. Before a secret,
 dispatch, branch, cancellation, or deletion command, it exclusively persists

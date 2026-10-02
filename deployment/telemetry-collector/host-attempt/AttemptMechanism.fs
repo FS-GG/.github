@@ -101,14 +101,15 @@ type AcquiredAttemptMechanism(request:ConcreteRunRequest,prepared:AttemptState,c
     let rootFrame stream remaining=AttemptAcquisition.readFrameWithCancellation stream remaining interrupted
     let effectCheck remainingSeconds =
         ensureClosure()
-        let current=AttemptPreparation.prepareWithin request.ProducerSha256 request.Preparation (remainingSeconds*1000)
-        require(current.Prepared=prepared.Prepared) "effect-closure-drift"
-        {SourceGeneration=current.Prepared.SourceGeneration;BindingSha256=current.Prepared.BindingSha256;ProfileSha256=current.Prepared.ProfileSha256;WorkflowSha256=current.Prepared.WorkflowSha256;BindingProducerSha256=current.Prepared.BindingProducerSha256;RuntimeHostSha256=current.Prepared.RuntimeHostSha256;MechanismAdapterSha256=current.Prepared.MechanismAdapterSha256}
+        AttemptPreparation.revalidateWithin prepared.Prepared request.Preparation (remainingSeconds*1000)
+        {SourceGeneration=prepared.Prepared.SourceGeneration;BindingSha256=prepared.Prepared.BindingSha256;ProfileSha256=prepared.Prepared.ProfileSha256;WorkflowSha256=prepared.Prepared.WorkflowSha256;BindingProducerSha256=prepared.Prepared.BindingProducerSha256;RuntimeHostSha256=prepared.Prepared.RuntimeHostSha256;MechanismAdapterSha256=prepared.Prepared.MechanismAdapterSha256}
     interface IAttemptMechanism with
         member _.MonotonicMilliseconds()=stopwatch.ElapsedMilliseconds
         member _.ConsumeInterruption()=
             if interrupted.IsCancellationRequested&&not interruptionConsumed then interruptionConsumed<-true;true else false
         member _.Sleep seconds=Threading.Thread.Sleep(seconds*1000)
+        member _.AcquireAdmission(context,state,window)=
+            AttemptPreparation.deriveAdmission context.HostBindingDll context.RecipeRoot context.ProfilePath context.SourcePinsPath state.Prepared.Nonce (window.RemainingSeconds*1000)
         member _.AcquireEffectCheck(_,window) = effectCheck window.RemainingSeconds
         member _.AcquireRunBaseline(state,window) =
             discoveryStart<-Some(DateTimeOffset.UtcNow.AddSeconds(-float AttemptOperation.DiscoverySeconds).ToString("yyyy-MM-dd'T'HH:mm:ss'Z'",Globalization.CultureInfo.InvariantCulture))

@@ -162,6 +162,19 @@ class TransportTests(unittest.TestCase):
             with self.assertRaisesRegex(transport.Refusal,"actions-refused"):
                 transport.run_actions(actions(action("invoke-binding"),action("dispatch-once")),context(root),root/"lease",lambda *a,**k:Completed())
 
+    def test_binding_retry_accepts_only_fresh_success_after_exact_cleanup_refusal(self):
+        with tempfile.TemporaryDirectory() as value:
+            root=Path(value);calls=[]
+            def succeeds(command,**kwargs):
+                calls.append(kwargs["timeout"])
+                return Completed(2,"","host-binding-refused:process-cleanup-unknown\n") if len(calls)<3 else Completed(0,"authoritative","")
+            result=transport.run_actions(actions(action("invoke-binding")),context(root),root/"lease",succeeds)
+            self.assertEqual("authoritative",result["results"][0]["stdout"]);self.assertEqual(3,len(calls));self.assertGreater(calls[0],calls[-1])
+            rejected=[]
+            def refuses(command,**kwargs):rejected.append(command);return Completed(2,"","host-binding-refused:source-head-drift\n")
+            result=transport.run_actions(actions(action("invoke-binding")),context(root),root/"lease-2",refuses)
+            self.assertEqual(2,result["results"][0]["exitCode"]);self.assertEqual(1,len(rejected))
+
     def test_remaining_budget_clamps_fixed_timeout(self):
         with tempfile.TemporaryDirectory() as value:
             root=Path(value);value_context=context(root);value_context["remainingSeconds"]=3;timeouts=[]

@@ -93,6 +93,18 @@ module AcquisitionTests =
         use wrong=new MemoryStream(framed)
         Assert.Throws<AttemptRefusal>(fun()->AttemptAcquisition.readFrame wrong 1|>AttemptAcquisition.auth "invocation-1" "destination-1" 3|>ignore)|>ignore
 
+    [<Fact>]
+    let ``binding authority retry accepts only a fresh success after exact cleanup refusal`` () =
+        let mutable attempts=0
+        let output=AttemptPreparation.runHostBindingAttempts "binding-test-refused" (fun()->
+            attempts<-attempts+1
+            if attempts<3 then 2,"","host-binding-refused:process-cleanup-unknown\n" else 0,"authoritative-result","")
+        Assert.Equal("authoritative-result",output);Assert.Equal(3,attempts)
+        let mutable rejectedAttempts=0
+        Assert.Throws<AttemptRefusal>(fun()->
+            AttemptPreparation.runHostBindingAttempts "binding-test-refused" (fun()->rejectedAttempts<-rejectedAttempts+1;2,"","host-binding-refused:source-head-drift\n")|>ignore)|>ignore
+        Assert.Equal(1,rejectedAttempts)
+
 module ReducerTests =
     [<Fact>]
     let ``old source or profile cannot reach a secret action`` () =
@@ -201,6 +213,7 @@ type FakeMechanism(failBinding:bool, ?nativeJoined:bool) =
         member _.MonotonicMilliseconds()=now
         member _.ConsumeInterruption()=false
         member _.Sleep seconds=now<-now+int64 seconds*1000L
+        member _.AcquireAdmission(_,_,_)=String.replicate 64 "a"
         member _.AcquireEffectCheck(state,_)={SourceGeneration=state.Prepared.SourceGeneration;BindingSha256=state.Prepared.BindingSha256;ProfileSha256=state.Prepared.ProfileSha256;WorkflowSha256=state.Prepared.WorkflowSha256;BindingProducerSha256=state.Prepared.BindingProducerSha256;RuntimeHostSha256=state.Prepared.RuntimeHostSha256;MechanismAdapterSha256=state.Prepared.MechanismAdapterSha256}
         member _.AcquireRunBaseline(_,_) = true
         member _.Execute(action,timeout,sensitive)=calls.Add(action,timeout,sensitive.IsSome);now<-now+1000L;if failBinding && action=FixedAction.InvokeBinding then MechanismOutcome.Returned 2 else MechanismOutcome.Returned 0
@@ -225,6 +238,7 @@ type ControlledMechanism(mode:string) =
         member _.MonotonicMilliseconds()=now
         member _.ConsumeInterruption()=if interrupted then interrupted<-false;true else false
         member _.Sleep seconds=tick(int64 seconds*1000L)
+        member _.AcquireAdmission(_,_,window)=windows.Add("admission",window);tick 1000L;String.replicate 64 "a"
         member _.AcquireEffectCheck(state,window)=
             windows.Add("effect",window);tick 1000L
             if mode="exception-after-auth" && state.SecretAcknowledgments.Contains SecretRole.NativeAuth then failwith "controlled-acquisition-failure"

@@ -94,6 +94,16 @@ def bounded_run(command,input=None,text=True,capture_output=True,timeout=1,check
   try:process.wait(timeout=max(0,final_deadline-time.monotonic()))
   except subprocess.TimeoutExpired:raise Refusal("transport-settlement-unknown")
   raise
+def run_fixed(command,name,runner,stdin,timeout):
+ if name!="invoke-binding":return runner(command,input=stdin,text=True,capture_output=True,timeout=timeout,check=False)
+ deadline=time.monotonic()+timeout
+ for attempt in range(3):
+  remaining=deadline-time.monotonic()
+  if remaining<=0:raise subprocess.TimeoutExpired(command,timeout)
+  completed=runner(command,input=stdin,text=True,capture_output=True,timeout=remaining,check=False)
+  exact_cleanup_refusal=(completed.returncode==2 and not(completed.stdout or "") and (completed.stderr or "").strip()=="host-binding-refused:process-cleanup-unknown")
+  if not exact_cleanup_refusal or attempt==2:return completed
+ raise Refusal("binding-attempt-state-refused")
 def run_actions(actions,context,lease_path,runner=bounded_run,sensitive_input=None,allow_batch=False):
  exact(actions,["schema","actions"])
  if actions["schema"]!=SCHEMA or type(actions["actions"])is not list or len(actions["actions"])<1 or (len(actions["actions"])!=1 and not allow_batch):raise Refusal("actions-refused")
@@ -104,7 +114,7 @@ def run_actions(actions,context,lease_path,runner=bounded_run,sensitive_input=No
   if name in EFFECTS:write_new(Path(str(lease)+f".{index}.json"),{"schema":"fsgg.telemetry.host-attempt-intention/1","action":action,"mayHaveEffect":True,"sequence":index})
   timeout=max(1,min(LIMITS[name],context["remainingSeconds"]))
   try:
-   completed=runner(command,input=stdin,text=True,capture_output=True,timeout=timeout,check=False);stdout=completed.stdout or "";stderr=completed.stderr or ""
+   completed=run_fixed(command,name,runner,stdin,timeout);stdout=completed.stdout or "";stderr=completed.stderr or ""
    if len(stdout.encode())>1048576 or len(stderr.encode())>65536:raise Refusal("transport-output-limit")
    results.append({"name":name,"argument":action["argument"],"exitCode":completed.returncode,"stdout":stdout,"stderr":stderr,"outcome":"returned"})
   except subprocess.TimeoutExpired:results.append({"name":name,"argument":action["argument"],"exitCode":None,"stdout":"","stderr":"","outcome":"unknown"})
