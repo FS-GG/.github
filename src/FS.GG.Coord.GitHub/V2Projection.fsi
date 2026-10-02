@@ -61,6 +61,7 @@ module V2Projection =
     type Request =
         {
             Issue: IssueRef
+            ExpectedNodeId: string
         }
 
     type Outcome =

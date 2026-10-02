@@ -62,7 +62,7 @@ let private issue =
         Number = 2963
     }
 
-let private request = { Issue = issue }
+let private request = { Issue = issue; ExpectedNodeId = "I_native" }
 
 let private verified revision : SourceVerifier =
     fun actual ->
@@ -227,7 +227,7 @@ let ``foreign repository refuses before invoking source verifier`` () =
     let transport = scripted []
     let mutable called = false
     let verifier: SourceVerifier = fun _ -> called <- true; Ok(Current "issue-etag-1")
-    let candidate = { Issue = { issue with Repository = "foreign" } }
+    let candidate = { request with Issue = { issue with Repository = "foreign" } }
 
     match runOneShot verifier transport binding candidate with
     | Error(Http(403, _)) ->
@@ -401,7 +401,7 @@ let ``partial field population refuses before item access`` () =
 let ``repository bindings cannot project each other's source`` () =
     let first = { binding with Repositories = Set.singleton "FS-GG/.github" }
     let second = { binding with ProjectId = "PVT_product_other"; Repositories = Set.singleton "FS-GG/FS.GG.Coordination" }
-    for selected, candidate in [ first, { Issue = { issue with Repository = "FS.GG.Coordination" } }; second, request ] do
+    for selected, candidate in [ first, { request with Issue = { issue with Repository = "FS.GG.Coordination" } }; second, request ] do
         let transport = scripted []
         match runOneShot (verified "revision") transport selected candidate with
         | Error(Http(403, _)) -> Assert.Equal(0, transport.GraphQlCalls); Assert.Empty(transport.Mutations)
@@ -443,3 +443,11 @@ let ``fixed composition preserves lost field result and retry verifies live stat
     Assert.Equal(0, report.Items[0].MutationAttempts)
     Assert.True(report.Items[0].LastVerified.IsSome)
     Assert.Empty(retry.Mutations)
+
+[<Fact>]
+let ``native membership identity must equal reviewed canonical issue node`` () =
+    let foreign = membership |> Result.map (fun response -> { response with Body = response.Body.Replace("I_native", "I_recreated") })
+    let transport = scripted [ organization; target; foreign ]
+    match runOneShot (verified "revision") transport binding request with
+    | Error(Malformed _) -> Assert.Equal(3, transport.GraphQlCalls); Assert.Empty(transport.Mutations)
+    | other -> failwith $"native node drift cannot reach Observation: {other}"

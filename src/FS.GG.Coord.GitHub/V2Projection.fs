@@ -50,6 +50,7 @@ module V2Projection =
     type Request =
         {
             Issue: IssueRef
+            ExpectedNodeId: string
         }
 
     type Outcome =
@@ -164,7 +165,7 @@ module V2Projection =
                 Error(Malformed("immutable project owner", "organization identity differs from the reviewed binding"))
             else Ok())
 
-    let private exactMembership (transport: IGitHubTransport) (binding: Binding) (issue: IssueRef) =
+    let private exactMembership (transport: IGitHubTransport) (binding: Binding) (issue: IssueRef) expectedNativeId =
         let subject = $"{issue.Owner}/{issue.Repository}#{issue.Number} exact membership"
         let document =
             "query($owner: String!, $repo: String!, $number: Int!, $after: String) { repository(owner: $owner, name: $repo) { nameWithOwner issue(number: $number) { id number projectItems(first: 50, after: $after) { totalCount pageInfo { hasNextPage endCursor } nodes { id project { id } content { ... on Issue { id number repository { nameWithOwner } } } } } } } rateLimit { cost remaining } }"
@@ -179,7 +180,7 @@ module V2Projection =
                     let native = repository.GetProperty "issue"
                     let repo = $"{issue.Owner}/{issue.Repository}"
                     let nativeId = native.GetProperty("id").GetString()
-                    if repository.GetProperty("nameWithOwner").GetString() <> repo || native.GetProperty("number").GetInt32() <> issue.Number || not (nonBlank nativeId) then
+                    if repository.GetProperty("nameWithOwner").GetString() <> repo || native.GetProperty("number").GetInt32() <> issue.Number || nativeId <> expectedNativeId || not (nonBlank nativeId) then
                         Error(Malformed(subject, "native issue identity differs"))
                     else
                         let decode (node: JsonElement) =
@@ -254,7 +255,7 @@ module V2Projection =
     let runOneShot (verifySource: SourceVerifier) (transport: IGitHubTransport) (binding: Binding) (request: Request) =
         match validateBinding binding with
         | Error error -> Error error
-        | Ok() when request.Issue.Number <= 0 || not (nonBlank request.Issue.Owner) || not (nonBlank request.Issue.Repository) ->
+        | Ok() when request.Issue.Number <= 0 || not (nonBlank request.Issue.Owner) || not (nonBlank request.Issue.Repository) || not (nonBlank request.ExpectedNodeId) ->
             invalid "the projection request" "the issue identity is incomplete"
         | Ok() when not (repositoryAllowed binding request.Issue) ->
             Error(Http(403, $"repository %s{request.Issue.Owner}/%s{request.Issue.Repository} is outside the reviewed V2 projection allowlist"))
@@ -285,7 +286,7 @@ module V2Projection =
                     match verifyFieldSchema binding board with
                     | Error error -> Error error
                     | Ok() ->
-                        match exactMembership transport binding request.Issue with
+                        match exactMembership transport binding request.Issue request.ExpectedNodeId with
                         | Error error -> Error error
                         | Ok(itemId, nativeId, pages) ->
                             match fieldValueByItemId transport binding request.Issue nativeId itemId with

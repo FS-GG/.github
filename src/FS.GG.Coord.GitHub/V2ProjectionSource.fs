@@ -190,7 +190,7 @@ module V2ProjectionSource =
                                     | Ok _ ->
                                         let dependencyRevision = dependencies |> List.map (fun dependency -> $"{dependency.NodeId}@{dependency.UpdatedAt}:{dependency.State}") |> String.concat ";"
                                         Ok(Current $"{observation.NodeId}@{observation.UpdatedAt};dependencies={dependencyRevision};recipe={binding.RecipeRevision}")
-                    let result = runOneShot verifier counted binding { Issue = row.Issue }
+                    let result = runOneShot verifier counted binding { Issue = row.Issue; ExpectedNodeId = row.NodeId }
                     let projection = match result with Ok report -> Some report | _ -> None
                     let historical = previous |> Option.bind (fun batch ->
                         if batch.ProjectId <> binding.ProjectId then None
