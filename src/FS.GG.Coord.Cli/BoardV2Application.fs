@@ -26,7 +26,7 @@ module BoardV2Application =
         try
             use document = JsonDocument.Parse(json: string)
             let root = document.RootElement
-            closed [ "schemaVersion"; "recipeRevision"; "populationRevision"; "organizationId"; "artifactSha256"; "ownerKind"; "owner"; "projectNumber"; "projectTitle"; "projectId"; "status"; "roadmapFieldId"; "track"; "observation"; "repositories" ] root
+            closed [ "bindingVersion"; "importRecipeRevision"; "importArtifactSha256"; "selectedIssues"; "schemaVersion"; "recipeRevision"; "populationRevision"; "organizationId"; "artifactSha256"; "ownerKind"; "owner"; "projectNumber"; "projectTitle"; "projectId"; "status"; "roadmapFieldId"; "track"; "observation"; "repositories" ] root
             if text "ownerKind" root <> "organization" then invalidArg "ownerKind" "only organization is admitted"
             let field (name: string) =
                 let value = root.GetProperty(name)
@@ -36,8 +36,13 @@ module BoardV2Application =
                 { Id = text "id" value; Options = Map.ofList options }
             let repositories = root.GetProperty("repositories").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList
             if repositories.Length <> (repositories |> Set.ofList |> Set.count) then invalidArg "repositories" "duplicate repositories"
+            let selected = root.GetProperty("selectedIssues").EnumerateObject() |> Seq.map (fun entry -> entry.Name, entry.Value.GetString()) |> Seq.toList
+            if selected.Length <> (selected |> Map.ofList |> Map.count) then invalidArg "selectedIssues" "duplicate native issue IDs"
             let binding =
-                { SchemaVersion = number "schemaVersion" root; RecipeRevision = text "recipeRevision" root
+                { BindingVersion = number "bindingVersion" root; ImportRecipeRevision = text "importRecipeRevision" root
+                  ImportArtifactSha256 = text "importArtifactSha256" root
+                  SelectedIssues = Map.ofList selected
+                  SchemaVersion = number "schemaVersion" root; RecipeRevision = text "recipeRevision" root
                   PopulationRevision = text "populationRevision" root; OrganizationId = text "organizationId" root
                   ArtifactSha256 = text "artifactSha256" root; OwnerKind = Org; Owner = text "owner" root
                   ProjectNumber = number "projectNumber" root; ProjectTitle = text "projectTitle" root; ProjectId = text "projectId" root
@@ -53,15 +58,17 @@ module BoardV2Application =
            observedRevision = report.ObservedRevision; observation = report.Observation; outcome = outcome; itemId = itemId
            sourceChecks = report.SourceChecks; projectReads = report.ProjectReads; mutations = report.Mutations; verifiedAt = report.VerifiedAt |}
     let private nativeWire (native: NativeObservation) =
-        {| issue = issueWire native.Issue; nodeId = native.NodeId; updatedAt = native.UpdatedAt; state = native.State |}
+        {| issue = issueWire native.Issue; nodeId = native.NodeId; updatedAt = native.UpdatedAt; state = native.State; url = native.Url; bodySha256 = native.BodySha256 |}
     let encodeReport (report: BatchReport) =
         JsonSerializer.Serialize
-            {| schema = "fsgg.coord.board-v2-refresh/1"; projectId = report.ProjectId; recipeRevision = report.RecipeRevision
-               populationRevision = report.PopulationRevision; selected = report.Selected; attempted = report.Attempted; verified = report.Verified
+            {| schema = "fsgg.coord.board-v2-refresh/2"; projectId = report.ProjectId; recipeRevision = report.RecipeRevision
+               populationRevision = report.PopulationRevision; importRecipeRevision = report.ImportRecipeRevision
+               importArtifactSha256 = report.ImportArtifactSha256; artifactSha256 = report.ArtifactSha256; protectedInputs = report.ProtectedInputs; nativeDispatch = report.NativeDispatch |> List.map (fun receipt -> {| httpStatus = receipt.HttpStatus; headers = receipt.Headers; responseSha256 = receipt.ResponseSha256; error = receipt.Error |}); readAccounting = "Logical source/project calls; dispatch identity reads are additional"; selected = report.Selected; attempted = report.Attempted; verified = report.Verified
                populationGap = report.PopulationGap |> Option.map Errors.explain; cleanup = report.Cleanup
                items = report.Items |> List.map (fun item ->
                    {| issue = issueWire item.Issue; native = item.Native |> Option.map nativeWire
                       dependencyObservations = item.DependencyObservations |> List.map nativeWire
+                      dependencyReadComplete = item.DependencyReadComplete; planObservation = item.PlanObservation |> Option.map nativeWire
                       delivery = item.Delivery; publication = item.Publication; nativeAcceptance = item.NativeAcceptance
                       health = item.Health; reads = item.Reads; mutationAttempts = item.MutationAttempts; membershipPages = item.MembershipPages
                       projection = item.Projection |> Option.map projectionWire; gap = item.Gap |> Option.map Errors.explain
@@ -71,8 +78,8 @@ module BoardV2Application =
         try
             use document = JsonDocument.Parse(json: string)
             let root = document.RootElement
-            closed [ "schema"; "projectId"; "recipeRevision"; "populationRevision"; "selected"; "attempted"; "verified"; "populationGap"; "cleanup"; "items" ] root
-            if text "schema" root <> "fsgg.coord.board-v2-refresh/1" then invalidArg "schema" "unsupported report schema"
+            closed [ "schema"; "projectId"; "recipeRevision"; "populationRevision"; "importRecipeRevision"; "importArtifactSha256"; "artifactSha256"; "protectedInputs"; "nativeDispatch"; "readAccounting"; "selected"; "attempted"; "verified"; "populationGap"; "cleanup"; "items" ] root
+            if text "schema" root <> "fsgg.coord.board-v2-refresh/2" then invalidArg "schema" "unsupported report schema"
             let optional (name: string) decode (value: JsonElement) =
                 let property = value.GetProperty(name)
                 if property.ValueKind = JsonValueKind.Null then None else Some(decode property)
@@ -88,14 +95,15 @@ module BoardV2Application =
                   SourceChecks = number "sourceChecks" value; ProjectReads = number "projectReads" value; Mutations = number "mutations" value
                   VerifiedAt = value.GetProperty("verifiedAt").GetDateTimeOffset() }
             let items = root.GetProperty("items").EnumerateArray() |> Seq.map (fun value ->
-                closed [ "issue"; "native"; "dependencyObservations"; "delivery"; "publication"; "nativeAcceptance"; "health"; "reads"; "mutationAttempts"; "membershipPages"; "projection"; "gap"; "lastVerified" ] value
+                closed [ "issue"; "native"; "dependencyObservations"; "dependencyReadComplete"; "planObservation"; "delivery"; "publication"; "nativeAcceptance"; "health"; "reads"; "mutationAttempts"; "membershipPages"; "projection"; "gap"; "lastVerified" ] value
                 let issue = parseIssue (value.GetProperty("issue"))
                 let history = optional "lastVerified" projection value
                 if history |> Option.exists (fun report -> report.Issue <> issue || report.ProjectId <> text "projectId" root) then
                     invalidArg "lastVerified" "historical identity differs from report"
-                { Issue = issue; Native = None; DependencyObservations = []; Delivery = "Unknown"; Publication = "Unknown"; NativeAcceptance = "Unknown"
+                { Issue = issue; Native = None; DependencyObservations = []; DependencyReadComplete = false; PlanObservation = None; Delivery = "Unknown"; Publication = "Unknown"; NativeAcceptance = "Unknown"
                   Health = "Unknown"; Reads = 0; MutationAttempts = 0; MembershipPages = None; Projection = None; Gap = None; LastVerified = history }) |> Seq.toList
             Ok { ProjectId = text "projectId" root; RecipeRevision = text "recipeRevision" root; PopulationRevision = text "populationRevision" root
+                 ImportRecipeRevision = text "importRecipeRevision" root; ImportArtifactSha256 = text "importArtifactSha256" root; ArtifactSha256 = text "artifactSha256" root; NativeDispatch = []; ProtectedInputs = []
                  Selected = None; Attempted = 0; Verified = 0; Items = items; PopulationGap = None; Cleanup = "historical-input" }
         with error -> Error("invalid previous report: " + error.Message)
 
@@ -145,9 +153,14 @@ module BoardV2Application =
     let private refuse message =
         eprintfn "fsgg-coord-engine: board-v2 refresh refused: %s" message
         1
-    let private execute transport (binding, previous, reportPath) =
+    let private execute (transport: IGitHubTransport) ((binding: Binding), previous, reportPath) =
         try
-            let report = V2ProjectionSource.runFixed (bounded transport) binding previous
+            let report =
+                let lockPath = Path.Combine(Path.GetTempPath(), "fsgg-v2-observation-" + binding.ProjectId + ".lock")
+                use lease = new FileStream(lockPath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None)
+                V2ProjectionSource.runFixed (bounded transport) binding previous
+            let evidence = match box transport with :? V2ObservationTransport.IDispatchEvidence as evidence -> evidence.DispatchReceipts | _ -> []
+            let report = { report with NativeDispatch = evidence; Cleanup = "Root-local project exclusive OS handle released; no distributed lease or background work" }
             File.WriteAllText(reportPath, encodeReport report + Environment.NewLine)
             if report.PopulationGap.IsSome || report.Selected <> Some report.Verified then 3 else 0
         with error -> refuse ("refresh/report failed: " + error.Message)
@@ -159,9 +172,13 @@ module BoardV2Application =
             Some(match prepare rest with
                  | Error message -> refuse message
                  | Ok input ->
-                     match Client.context () with
-                     | Error code -> code
-                     | Ok(context, lifetime) ->
+                     let binding, _, _ = input
+                     let token =
+                         let primary = Environment.GetEnvironmentVariable "GITHUB_TOKEN"
+                         if String.IsNullOrWhiteSpace primary then Environment.GetEnvironmentVariable "GH_TOKEN" else primary
+                     match V2ObservationTransport.createLive binding token with
+                     | Error error -> refuse (Errors.explain error)
+                     | Ok(transport, lifetime) ->
                          use lifetime = lifetime
-                         execute context.Transport input)
+                         execute transport input)
         | _ -> None

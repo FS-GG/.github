@@ -22,6 +22,10 @@ module V2Projection =
     /// Immutable identities copied from an independently reviewed board binding.
     type Binding =
         {
+            BindingVersion: int
+            ImportRecipeRevision: string
+            ImportArtifactSha256: string
+            SelectedIssues: Map<string, string>
             SchemaVersion: int
             RecipeRevision: string
             PopulationRevision: string
