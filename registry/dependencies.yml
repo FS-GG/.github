@@ -863,21 +863,26 @@ contracts:
         dotnet-only: "all modules explicitly excluded by compatibility-profile.v1.json"
         oracle: "tests/Game.Core.Fable.Tests/fixtures/v1/expected.bin — 442 bytes, SHA-256 9c0d7128f7b9558ef7e985618b1165199f83a0bb4af7533b175cc95b340c4a24"
   - id: wasm-shared-runtime
-    version: "0.1.1"   # Independent WASM release axis; Game#677 protected source ea015cbf884b01754bc6615476241450907b6b24.
-    package-version: "0.1.1"
-    package-tag: "wasm/v0.1.1"
+    version: "0.2.0"   # Independent WASM release axis; Game#679 protected source 4afacb501b9371b4cc81494b7bf91b46c880a663.
+    package-version: "0.2.0"   # Both feeds and release assets verified by native publisher 37037339434; no product adoption.
+    package-tag: "wasm/v0.2.0"
     owner: game
-    surface: "FS.GG.Wasm.Contracts and FS.GG.Wasm.Browser coherent package set; browser Worker lifecycle, portable Fable sources and fsgg-wasm-sdk-0.1.1.tar.gz author source archive"
+    surface: "FS.GG.Wasm.Contracts and FS.GG.Wasm.Browser coherent package set; browser Worker lifecycle, portable Fable sources and fsgg-wasm-sdk-0.2.0.tar.gz author source archive"
     consumers: []   # Availability establishes no product adoption; BAR/SC2/FourD remain separate milestones.
     profiles:
       shared-wasm:
-        identity: "wasm/v0.1.1"
-        packages: "FS.GG.Wasm.Contracts@0.1.1 / FS.GG.Wasm.Browser@0.1.1; exact same-version Browser-to-Contracts dependency"
-        sdk: "fsgg-wasm-sdk-0.1.1.tar.gz — versioned source archive under wasm/v0.1.1, coupled to both NuGet packages"
+        identity: "wasm/v0.2.0"
+        packages: "FS.GG.Wasm.Contracts@0.2.0 / FS.GG.Wasm.Browser@0.2.0; exact same-version Browser-to-Contracts dependency"
+        sdk: "fsgg-wasm-sdk-0.2.0.tar.gz — coupled source archive under wasm/v0.2.0; SHA-256 ddd7b0ea76a1811ec3cdd45c373ac0ee556cf90eb9ae4cecad48dec1095475a3"
+        source: "4afacb501b9371b4cc81494b7bf91b46c880a663; tree 191d7c0ca82af8a4d610e88b35ce97df802d3463; Game#679"
+        manifest: "release-manifest.json SHA-256 dee8b02ad0e43e7d279492ed6378eb873f76edeb5a72c29e9c336409d5907853; native publisher 37037339434 verified both feeds and exact release assets"
+        api-baseline: "Published 0.1.1 remains the first baseline. Native SDK10.0.401 ApiCompat: Contracts compatible; Browser intentionally versioned pre-1.0 migration with four CP0002 constructor changes (WorkerCommand, RequestProjection, EffectProjection, HostProjection), no suppressions. Recompile and use connected Host with explicit compile/initialize readiness."
         toolchain: ".NET 10.0.401 / Fable 5.18.0 / Node 26 / Quint 0.32.0 / Rust 1.90.0 / WASI SDK 34.0"
         browser: "Pinned Playwright 1.63.0 Chromium profile"
         abi: "BAR ABI 1; strict imported SC2 ABI 0x00010000"
-        qualification: "Qualified .NET/Fable build boundary and pinned Chromium profile; Rust/C author routes use the pinned SDK toolchain"
+        qualification: "Installed both-feed qualification CLOSED: read-only run 37047631080 passed org 25/25 and public 25/25 on immutable producer 4afacb501b9371b4cc81494b7bf91b46c880a663 and reviewed qualifier 7397d4b408b8e7b44393fee9f837278723934867; fresh locked HTTPS restores, .NET/Fable, Rust2/C4, pinned Chromium under /sub/app. Lock SHA-256 d6a4e7dde5754ac50c73f9887c4aedf2e1f845b967ecbd6b26f9eb150667439e. No product adoption."
+        installed-evidence: "Org artifact 11244369017 SHA-256 34647b3b6800339c48785ad7df0afdcf80145d094685bff83c07afbf553e748d; public artifact 11245594558 SHA-256 cad4eede1795feef465b4862a3793683cb3f9bed006b028bcdc78bf4814c3ad0. Native API success and downloaded artifact digests/readbacks verified 2026-10-02; original failed run 37039137022 remains historical."
+        qualifier: "7397d4b408b8e7b44393fee9f837278723934867; tree 4881135b718beaeb87eab1763d9f13e31410389f; Game#680. Exact audited consumer projection/assertion correction for canonical early/late expiry orderings; published runtime/model/SDK/package inputs remain unchanged."
         unqualified: "Additional browsers, npm/bundler permutations, OS support, WASI execution, deterministic fuel/replay, product adoption and native authority"
   - id: game-scene-adapter
     version: "0.16.0"   # SOURCE: SVG Preview C replay/planning/rules/network APIs; Game#635 merge 996832a6ebb5c893199627b0ecc46f7c1da848cd.
