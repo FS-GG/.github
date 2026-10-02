@@ -53,6 +53,38 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-02: BAR successor stock-engine producer and consumer profile CLOSED (source); native qualification remains open.**
+[HighBar #15](https://github.com/FS-GG/HighBarV3/pull/15) merged protected
+`e2a5a9cf6fdd187bcc82f701a755567db96c11c7`, tree
+`c5af41a6e33aaa9d6f27f9ddd1cdb25823cfece8`.
+Its [hosted source checks](https://github.com/FS-GG/HighBarV3/actions/runs/37025189299)
+passed; optional native build/gameplay jobs were skipped.
+[FSBar #22](https://github.com/FS-GG/FSBarV2/pull/22) merged protected
+`6bbe4fd21beed315c7c5156a5632956058126891`, tree
+`e5556d356d4ea7a3e0bf5acc4d2db01276b59ef9`; its hosted check rollup is empty.
+The sources align the unmodified Recoil 2026.07.04/de693 profile, producer/consumer contract,
+native catalogue admission and stock trace normalization. Historical profile/vector evidence is
+preserved; the old profile is refused at new admission. Wire and queue semantics are unchanged.
+Reported local plugin build, four native test targets and Lua ABI checks are separate from actual
+loaded-process/native qualification. A parallel versioned candidate installation does not update
+the retained policy495/stock2639 failed-attempt packet. Budget and complete-prefix source work,
+coherent artifact/use-time custody, RP3 margins and one changed RP5 attempt remain open.
+Useful-play acceptance remains 0/6; the selected V2 platform acceptance stays complete.
+
+**2026-10-02: FABLE-ADOPT-01 external Rendering producer and coherent release preparation CLOSED (source).**
+[Rendering PR #1366](https://github.com/FS-GG/FS.GG.Rendering/pull/1366) merged protected
+`730923fe9d27174e879566f21dab14a1b03d761a`, tree
+`b48ab5d7a091db7f7e823d938e51f549ea6549ff`. All native checks passed, including the
+[deterministic gate](https://github.com/FS-GG/FS.GG.Rendering/actions/runs/37041373429),
+packed consumers, browser adapter and retained model/reducer replay.
+The 0.32.0 source candidate supplies external-authority rendering/input composition and prepares
+its coherent 19-package release with source, toolchain and archive custody checks.
+Owner-generated skill mirrors now bind the actual packed API signature; no coverage waiver changed.
+This closes the selected producer source window. Final protected-source archive qualification,
+both-feed publication, fresh installed Templates composition and product adoption remain open.
+The earlier 2401 source-only archives are historical candidate evidence, not final merged artifacts.
+The 0.31.0 published baseline and separate Rendering.Skills publication remain distinct.
+
 **2026-10-02: LEARN P2-C.4 production mechanism CLOSED (source); native container qualification remains open.**
 [PR #4118](https://github.com/FS-GG/.github/pull/4118) merged protected
 `238e4f3c4160f69f32b1f924ff639a4deda0cf3c`, tree
@@ -108,8 +140,14 @@ four causal mutants and a fresh exact-package consumer passed; all 25 Chromium c
 Actual comparison against published 0.1.1 found four Browser constructor removals and no
 Contracts incompatibility. The selected coherent successor is therefore 0.2.0, with that
 explicit migration recorded; it is not a compatible patch. Published 0.1.1 remains immutable.
-Protected-source publisher custody, both-feed and SDK verification, fresh public/org installed
-qualification and BAR/SC2/FourD adapters remain open. No 0.2.0 publication or product effect is claimed.
+The protected-source [0.2.0 publisher](https://github.com/FS-GG/FS.GG.Game/actions/runs/37037339434)
+succeeded on both feeds and published the SDK archive. Root verified public package payloads and
+byte-identical SDK/manifest assets against publisher custody; feed signature wrapping is recorded.
+Fresh installed [run 37039137022](https://github.com/FS-GG/FS.GG.Game/actions/runs/37039137022)
+passed all 25 org-feed controls, while public qualification passed 24 and failed one expiry assertion.
+That assertion lost the typed deadline reason and assumed one delivery order despite two valid canonical
+expiry schedules. Its bounded qualification correction is in progress; installed 0.2.0 acceptance and
+BAR/SC2/FourD adapters remain open. No product adoption effect is claimed.
 
 **2026-10-02: SC2C-01.6f final typed pair CLI repair CLOSED (source).**
 [SC2 Client PR #38](https://github.com/FS-GG/FS.GG.SC2.Client/pull/38) merged as protected
