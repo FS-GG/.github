@@ -85,6 +85,22 @@ private channel/custody joins and genuine native acceptance remain open.
 Published receiver `8ad0da67004d670c6803f34755dfe759a7fc84e7`, its profile and
 four native payloads remain unchanged; V2 FULL ACCEPTED and Main NO ACTION remain.
 
+**2026-10-02: HOST first-refusal diagnostic source READY; receiver cause and native acceptance remain open.**
+The source candidate `992f2d3d5f6edbbdcde8e877c7fe877b2e106ad4`, tree
+`ce84ee1700cc2ccd099f763b50262749aa4d958d`, retains one invocation-local,
+first-failure-only closed F# diagnostic at the existing preparation and transport
+boundaries. A bounded compiled-caller witness identified `transport` /
+`invoke-binding` / returned exit 2 / `process-cleanup-unknown`; the original state
+remained `source-invalidated` with no secret or dispatch intention. This locates
+the published HostBinding process-scope retirement boundary, while the exact
+internal poison or settlement predicate remains Unknown. The final source passed
+40/40 compiled F# controls, 16 transport controls and five CLI controls. The
+canonical reducer, seven ITFs and 91-transition correspondence remain byte
+unchanged. Published receiver `8ad0da67004d670c6803f34755dfe759a7fc84e7`,
+profile and four payloads also remain unchanged. This is diagnostic source only:
+protected rebuild, any receiver-side diagnostic, private custody and genuine
+native acceptance remain root-owned and open.
+
 **2026-10-02: P4 cold-restore source CLOSED; actual runner readiness remains open.**
 [Sandbox #45](https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/pull/45) merged at
 `2fd71ecd10eda835d491ea4f8f22432309e59d82`, tree
