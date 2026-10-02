@@ -65,7 +65,7 @@ independent and open. This dated clarification is not a current fleet-health att
 profile acceptance or waiver of exact artifact, authentication, custody, settlement/replay or effect
 authority for any operation actually performed.
 
-**2026-10-02: LEARN W6 C2 P1 inactive persistent-v3 source and real CI chain added; installed qualification remains open.**
+**2026-10-02: LEARN W6 C2 P1 inactive persistent-v3 preparation CLOSED; installed qualification remains open.**
 The [owning P1/P2 plan](roadmaps/learn-c2-persistent-receiver-v3.md) supplies a stateless F#
 constructor and CLI with closed, duplicate-safe inputs and exclusive mode-0600 materialization.
 All ten production/test blobs match independently qualified `243a1ce08c69a2669334454bcfe2593d501b8741`.
@@ -75,11 +75,30 @@ The existing Host job acquires exact public Coordination
 executes the constructor console and requires both executable identities for the joined actual
 preparation → manager → Host tests. The exact added shell passed locally with 27 constructor
 controls and both Host cases; actionlint, compiled workflow inspection and shell parsing passed.
-P1 closes only after authenticated protected delivery and its exact merged-source native workflow
-pass. Its declarations remain inactive; publication, real grants, installed runtime/image closure,
+[PR #4084](https://github.com/FS-GG/.github/pull/4084) merged at
+`d9a142de6b0b615604b02779d5eae963010acc15`, tree
+`34ecbaf027646f0454f5ce7f1d30aac61c0f8cf0`, equal qualified source
+`1898c28ee98b8f4c0146eb011a022cb5c460f02a`. Root authenticated merge, tree and main, then
+the exact protected [Host package run](https://github.com/FS-GG/.github/actions/runs/36953495898)
+passed. The F# console executes through a thin shell entry; existing Python selector semantics and
+fixtures remain unchanged. P1 is Closed. Its declarations remain inactive; publication, real grants, installed runtime/image closure,
 private custody, capture/recovery and activation remain open. Published Host 0.2.1 remains its
 historical immutable release; P2 needs an unused successor or a qualified immutable distribution.
 Main/work-main is not a destination or prerequisite; C3 remains disabled.
+
+**2026-10-02: P4 closed typed result consumer source delivered; protected adoption and fresh facts remain open.**
+[Sandbox #43](https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/pull/43) merged at
+`236ab5be1b869cf65f6908e62a814985239c55a4`, tree
+`f22d96e8d19755d41958bd6ef86150ecf60fa29b`, equal qualified source
+`7311b8a724d8a7169422f651d0cadba917414af5`. Root authenticated merge, tree and main.
+The stateless F# consumer bounds input to 8 KiB, rejects duplicate or incorrectly typed fields,
+and validates the historical result and current result `/2` against closed field sets. Nested
+observed cleanup completion independently requires outer cleanup success, including writer false
+or unavailable; unavailable observations retain truthful outer state. Twenty retained controls,
+25 focused controls and nine independent causal cases passed against the compiled executable.
+No hosted source PR gate is configured for this scope. Protected helper and runtime custody,
+fresh source-bound inputs and manifest, and one new facts operation remain next. Canonical H2,
+provider, sealer and HOST source remain unchanged; historical refusal remains unexplained.
 
 **2026-10-02: FourD signal and settlement source delivered; fresh private operation remains open.**
 [Coordination #922](https://github.com/FS-GG/FS.GG.Coordination/pull/922) merged at
