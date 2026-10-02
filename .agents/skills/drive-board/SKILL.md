@@ -8,6 +8,27 @@ description: Use when explicitly asked to burn down the org-wide FS-GG Coordinat
 Burn down the org-wide Coordination board across repositories. The board is the ledger; this skill owns
 cross-repo allocation, not item implementation.
 
+## Select the organization queue
+
+For explicitly selected organization V2 scope, read
+[the organization inspection contract](../check-board/references/organization-v2-inspection.md).
+Its adoption gate remains pending: source preparation alone does not switch a consumer. After root's
+actual four-target qualification and selected adoption, use the bound inspection as the primary queue
+for that admitted scope. Combine its human Status/Track/Roadmap and distinct freshness/acceptance gaps
+with owning plans, actual open PRs, disjoint touch sets and current capacity. Only the current integrator
+makes a bounded selection. Keep the three blocked provider outcomes blocked on their owning plans;
+.github#3009 is a proposed remaining ADR/design outcome, not a request to repeat its settled decision.
+SDD#935 and other unselected memberships never enter this queue.
+
+Run the existing intake batch below before dispatch. Routine ownership, PR admission, native delivery
+and required source validation remain unchanged. For V2, do not invoke the numbered legacy host loop,
+reconcile/apply/flush, Class/Phase claim ranking, batch/driver events or status-auto-repair. Inspection
+failure remains Unknown; ordinary source work with no represented item continues from its owning plan.
+
+The numbered host loop and legacy references below apply only to an explicitly selected historical
+Project 1 scope. They retain their meanings and are never a fallback for an unavailable V2 queue.
+Product `work-board` and local-only workspaces are not redirected by this organization skill.
+
 Before reading issue bodies as work input or assigning any owner, collect every selected issue ref and
 run one `scripts/fsgg-coord intake authorize <owner/repo#number>...` batch. Consume its admission array
 for that selection; do not invoke one CLI per item. The native scheduler and claim path enforce the same

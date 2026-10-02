@@ -21,14 +21,15 @@ module V2ObservationTransport =
         Map.ofList [ "I_kwDOS_PboM8AAAABOUVZAw", "FS-GG/FS.GG.SDD#928"
                      "I_kwDOTGkvVs8AAAABOUV4AA", "FS-GG/FS.GG.Templates#441"
                      "I_kwDOS6feoM8AAAABOUWpiA", "FS-GG/.github#3010" ]
+    let private successorCohort = cohort.Add("I_kwDOS6feoM8AAAABOUU1ew", "FS-GG/.github#3009")
     let private document = "mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) { updateProjectV2ItemFieldValue(input: {projectId: $projectId, itemId: $itemId, fieldId: $fieldId, value: {singleSelectOptionId: $optionId}}) { clientMutationId } }"
 
     let validateScope (binding: Binding) =
         match validateBinding binding with
         | Error error -> Error error
         | Ok() when binding.Owner <> "FS-GG" || binding.OrganizationId <> "O_kgDOEYAWYw" || binding.ProjectNumber <> 3 || binding.ProjectId <> project
-                    || binding.Observation.Id <> field || Map.tryFind "Verified" binding.Observation.Options <> Some verified || binding.SelectedIssues <> cohort ->
-            Error(Malformed("V2 Observation authority", "selected root-local project/field/native cohort differs from the reviewed pilot"))
+                    || binding.Observation.Id <> field || Map.tryFind "Verified" binding.Observation.Options <> Some verified || (binding.SelectedIssues <> cohort && binding.SelectedIssues <> successorCohort) ->
+            Error(Malformed("V2 Observation authority", "selected root-local project/field/native cohort differs from the reviewed three-target pilot or four-target successor"))
         | Ok() -> Ok()
 
     let authorize binding (intent: MutationIntent) =
@@ -61,7 +62,7 @@ module V2ObservationTransport =
                             let repository = content.GetProperty("repository").GetProperty("nameWithOwner").GetString()
                             let number = content.GetProperty("number").GetInt32()
                             let issue = $"{repository}#{number}"
-                            if node.GetProperty("id").GetString() <> item || node.GetProperty("project").GetProperty("id").GetString() <> project || Map.tryFind nativeId cohort <> Some issue then
+                            if node.GetProperty("id").GetString() <> item || node.GetProperty("project").GetProperty("id").GetString() <> project || Map.tryFind nativeId binding.SelectedIssues <> Some issue then
                                 Error(Malformed("V2 Observation authority", "fresh item project/content is not an admitted native pilot issue"))
                             else Ok()) |> Result.bind (fun () -> nativeOnce request)) })
 

@@ -56,7 +56,7 @@ class ManifestTests(unittest.TestCase):
         result = self.call(self.manifest)
         self.assertEqual(0, result.returncode, result.stderr)
         summary = json.loads(result.stdout)
-        self.assertEqual((11,3,3,6,True,False), tuple(summary[k] for k in
+        self.assertEqual((12,4,4,6,True,False), tuple(summary[k] for k in
                          ['candidateCount','approvedImportCount','pilotCount','unresolvedCount',
                           'planConstructible','executable']))
         self.assertEqual('created-and-read-back', summary['targetCreationState'])
@@ -65,8 +65,18 @@ class ManifestTests(unittest.TestCase):
         plan = json.loads(result.stdout)
         selected = [item for item in self.manifest['items'] if item['pilot']]
         self.assertEqual(['FS-GG/FS.GG.SDD#928', 'FS-GG/FS.GG.Templates#441',
-                          'FS-GG/.github#3010'], [item['issue'] for item in selected])
+                          'FS-GG/.github#3010', 'FS-GG/.github#3009'], [item['issue'] for item in selected])
         self.assertEqual(selected, plan['items'])
+        self.assertEqual('I_kwDOS6feoM8AAAABOUU1ew', selected[-1]['nodeId'])
+        self.assertEqual([], selected[-1]['dependencies'])
+        historical = self.manifest['inventory']['pilotOperation']
+        self.assertEqual(3, historical['selectedCount'])
+        self.assertEqual(['FS-GG/FS.GG.SDD#928', 'FS-GG/FS.GG.Templates#441',
+                          'FS-GG/.github#3010'], [item['issue'] for item in historical['memberships']])
+        self.assertFalse(self.manifest['inventory']['unexpectedMembership']['pilot'])
+        self.assertFalse(self.manifest['inventory']['unexpectedMembership']['planningFieldsSeeded'])
+        self.assertEqual('source-prepared-awaiting-root-qualification',
+                         self.manifest['inventory']['successorPreparation']['state'])
         self.assertEqual(self.manifest['target'], plan['target'])
         self.assertEqual(self.manifest['fields'], plan['fields'])
         self.assertEqual(self.manifest['binding'], plan['binding'])

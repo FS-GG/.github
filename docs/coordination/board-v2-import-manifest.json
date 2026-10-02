@@ -345,6 +345,26 @@
       "acceptanceEvidence": "Protected wizard has five fixed provider choices and selected-descriptor fetch. Public installed SVG0.12.0 journey is delivered but does not cover requested four-provider catalog-native qualification. Native issue acceptance remains open; no four-provider installed receipt is claimed.",
       "adjudication": "verified-remaining",
       "dependencies": []
+    },
+    {
+      "issue": "FS-GG/.github#3009",
+      "nodeId": "I_kwDOS6feoM8AAAABOUU1ew",
+      "title": "[decision] Define the polyglot workspace-provider and skills architecture",
+      "observedUpdatedAt": "2026-08-26T20:18:16Z",
+      "observedState": "open",
+      "decision": "import",
+      "reason": "Maintainer comment5430619257 accepts the descriptor-driven architecture but explicitly retains the organization ADR, linked design and implementation children as deliverables. Protected ADR0071/0072 and the older polyglot web design cover narrower fixed provider shapes, not the full typed catalog/four-provider architecture.",
+      "remainingOutcome": "Record the already accepted descriptor-driven architecture in an organization ADR and linked producer design: explicit language/shape metadata, typed prompts, ecosystem-neutral identifier derivation, shared Quint/GitHub/CI/coordination/provenance/evidence obligations, governance capability IDs, skill ownership, compatibility/rollback, package-only qualification and producer-before-consumer publication for TypeScript, JavaScript, Rust and Go. Link the SDD/Governance/Templates/.github implementation children and owning programme; do not repeat the settled architecture choice.",
+      "roadmap": "https://github.com/FS-GG/.github/issues/3008",
+      "status": "Ready",
+      "track": "Active delivery",
+      "observation": "Verified",
+      "pilot": true,
+      "owner": ".github architecture/provider-contract owner",
+      "nextAction": "Write and accept the remaining organization ADR and linked producer/consumer design, preserving existing-provider compatibility and the accepted cross-repository publication order. Root may retain Backlog if current capacity does not permit scheduling.",
+      "acceptanceEvidence": "Architecture choice accepted by https://github.com/FS-GG/.github/issues/3009#issuecomment-5430619257; ADR/design delivery remains unverified. Source adjudication at protected eecbae549802ac93b8241f887d29a590a61b9dd0 inspected ADR0071, ADR0072, ADR0077, docs/architecture.md and the older polyglot web design; none supplies the complete requested organization contract. Native issue remains open; no delivery or installed adoption is inferred.",
+      "adjudication": "verified-remaining",
+      "dependencies": []
     }
   ],
   "preparationState": "adjudication-required",
@@ -679,6 +699,84 @@
       "qualifiedLockSha256": "01c145e67fc46567f4e4e158be1e8d275004d4435e4c305bcff514b068638f89",
       "qualifiedSourceUnchanged": true,
       "qualificationBoundary": "Official locked constructor dry-run and independent native readback passed without new writes. Historical effects used the separately retained local-SDK constructor. Neither artifact qualifies the .3 automatic writer or an installed production release."
+    },
+    "successorPreparation": {
+      "state": "source-prepared-awaiting-root-qualification",
+      "preparedAt": "2026-10-02T18:24:26.599355+00:00",
+      "authorizationBoundary": "Source preparation only. Runtime cohort selection, credential custody, import/refresh effects and consumer adoption remain root-only pending protected acceptance and readback.",
+      "protectedSourceRevision": "eecbae549802ac93b8241f887d29a590a61b9dd0",
+      "historicalPilotPopulationRevision": "351e5db40d4d72abd6e87882614725305eb2a419",
+      "historicalPilotManifestBlob": "f0de0955c30158272669d18e4ed3501b743e043a",
+      "proposedSelectedCount": 4,
+      "nativeSnapshots": [
+        {
+          "issue": "FS-GG/FS.GG.SDD#928",
+          "nodeId": "I_kwDOS_PboM8AAAABOUVZAw",
+          "observedUpdatedAt": "2026-08-27T08:02:59Z",
+          "observedState": "open",
+          "dependencyHttpStatus": 200,
+          "dependencyComplete": true,
+          "dependencyCount": 0,
+          "dependencyLinkPresent": false,
+          "dependencyObservedAt": "2026-10-02T18:21:29+00:00",
+          "dependencyETag": "\"a189f24e77b7cfe2d6e53ef7d97de8d6b9c60b34c6179b2532c5be1ba02d8d92\"",
+          "dependencyBodySha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "issue": "FS-GG/FS.GG.Templates#441",
+          "nodeId": "I_kwDOTGkvVs8AAAABOUV4AA",
+          "observedUpdatedAt": "2026-08-26T10:13:59Z",
+          "observedState": "open",
+          "dependencyHttpStatus": 200,
+          "dependencyComplete": true,
+          "dependencyCount": 0,
+          "dependencyLinkPresent": false,
+          "dependencyObservedAt": "2026-10-02T18:21:49+00:00",
+          "dependencyETag": "\"a189f24e77b7cfe2d6e53ef7d97de8d6b9c60b34c6179b2532c5be1ba02d8d92\"",
+          "dependencyBodySha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "issue": "FS-GG/.github#3010",
+          "nodeId": "I_kwDOS6feoM8AAAABOUWpiA",
+          "observedUpdatedAt": "2026-08-26T10:12:28Z",
+          "observedState": "open",
+          "dependencyHttpStatus": 200,
+          "dependencyComplete": true,
+          "dependencyCount": 0,
+          "dependencyLinkPresent": false,
+          "dependencyObservedAt": "2026-10-02T18:21:49+00:00",
+          "dependencyETag": "\"a189f24e77b7cfe2d6e53ef7d97de8d6b9c60b34c6179b2532c5be1ba02d8d92\"",
+          "dependencyBodySha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "issue": "FS-GG/.github#3009",
+          "nodeId": "I_kwDOS6feoM8AAAABOUU1ew",
+          "observedUpdatedAt": "2026-08-26T20:18:16Z",
+          "observedState": "open",
+          "dependencyHttpStatus": 200,
+          "dependencyComplete": true,
+          "dependencyCount": 0,
+          "dependencyLinkPresent": false,
+          "dependencyObservedAt": "2026-10-02T18:18:58+00:00",
+          "dependencyETag": "\"a189f24e77b7cfe2d6e53ef7d97de8d6b9c60b34c6179b2532c5be1ba02d8d92\"",
+          "dependencyBodySha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        }
+      ],
+      "additionalTarget": "FS-GG/.github#3009",
+      "proposedAdditionalSeed": {
+        "status": "Ready",
+        "roadmap": "https://github.com/FS-GG/.github/issues/3008",
+        "track": "Active delivery",
+        "observation": "Verified"
+      },
+      "additionalProjectMembership": "Unknown until fresh complete root readback; source preparation makes no absence claim.",
+      "unapprovedMembership": "FS-GG/FS.GG.SDD#935 retained unselected/unseeded; no add or field write authorized.",
+      "constructorQualification": "pending exact successor dry-run",
+      "runtimeBinding": "pending new protected population revision/blob and independently authenticated adapter/CLI bytes; old three-target binding is not a successor binding",
+      "restrictedRefreshQualification": "pending four-target actual fixed source, dispatch and independent readback",
+      "consumerAdoption": "gated-pending-four-target-inspection-and-root-selection",
+      "hostedRefreshActivation": false,
+      "sourcePreparationMutationAttempts": 0
     }
   }
 }
