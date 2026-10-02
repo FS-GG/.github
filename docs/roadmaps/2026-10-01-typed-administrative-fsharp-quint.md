@@ -86,6 +86,17 @@ artifact evidence and scoped cleanup remain root-owned operating gates.
 There is no generated workspace or default activation effect; published
 receiver/profile and the four native payloads remain unchanged.
 
+**2026-10-02 P4 task-private SDK selection source CLOSED.** The protected
+[Sandbox #47](https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/pull/47) source at
+`3924409829e96fc4b436e2a26179d885bbf8837c`, tree
+`d0b24b64a44e3af1e0f0612ddf270c6793550c74`, is equal to reviewed
+`5fec142a5ca56472d29968e4dd069256528058dd`. It selects exact SDK `10.0.400`
+in a fresh task-private root and uses the absolute regular host for version inspection,
+locked restore, build and readiness. Twenty-two controls and the actual cold locked
+restore/build passed. Earlier run `36973970176` remains refused before restore with
+`dotnet-version-mismatch` and no facts or effects. Fresh credential-free readiness,
+private facts and native qualification remain open; no hosted source gate is required.
+
 ### Model and correspondence contract
 
 SC2's model has one qualification-owner state and opaque artifact/version IDs. FourD has one operation-owner state plus an explicit set of owned resource identities and observations; it does not model unrelated distributed Authority consensus. Plain Quint fits this shared-state boundary. Bound the instance to two artifact generations and a small fixed set of owned roles. Time is a monotonically advancing budget/epoch; include aggregate deadline exhaustion and cancellation, not real timers.
