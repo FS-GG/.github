@@ -2017,10 +2017,13 @@ or v1 retired. It must not delay `GS2-11` once all actual cutover prerequisites 
 - migration of the ADR corpus to a future typed `DecisionExtension`;
 - broader Typed SDD extensions for contract topology, skill delivery, Governance rules, provider/template
   composition, and executable TestSpecs;
-- **TSDD-KNOWLEDGE-01:** every Typed SDD project starts with a durable knowledge base for all textual
-  information gathered during development, including roadmaps, logs, architecture, decisions, bugs,
-  fixes and experiments. Concrete storage form remains to be determined. Plan human access through
-  wiki/documentation views and programmatic access through a shared API, CLI and `.fsx` scripts;
+- **TSDD-KNOWLEDGE-01:** every Typed SDD project starts with concise, evidence-backed knowledge in
+  Git-tracked text records, automatically included in the normal initial commit and limited to
+  **10 MiB (10,485,760 bytes)**. Capture decisions, architecture explanations, bug causes/fixes and
+  experimental or operational lessons with references to canonical evidence. Exclude source copies,
+  raw logs, transcripts, document dumps and generated indexes; optional search caches are rebuildable
+  and Git-ignored. Plan human access through wiki/documentation views and programmatic access through
+  a shared F# API, CLI and `.fsx` scripts;
   initialization, capture, publication and installed adoption remain open. The
   [Unified Roadmap planning scope](2026-09-07-154210-fs-gg-unified-development-roadmap.md#991-project-knowledge-from-typed-sdd-initialization)
   owns the requirement, access options and clean/retained-project acceptance;
