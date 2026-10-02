@@ -65,6 +65,20 @@ independent and open. This dated clarification is not a current fleet-health att
 profile acceptance or waiver of exact artifact, authentication, custody, settlement/replay or effect
 authority for any operation actually performed.
 
+**2026-10-02: BAR typed refusal diagnostic source CLOSED; protected placement and gameplay remain open.**
+[FSBarV2 #18](https://github.com/FS-GG/FSBarV2/pull/18) merged at
+`4be2e6e9a0d228de828061198c9c2ce9992d90ad`, tree
+`b5c6aa811b5309d45547a91b40bdd6b2fd376c44`, equal qualified
+`e456cbc8ee9dd0452a4706551eecfd53032b7390`; root authenticated merge, tree and main.
+The stateless production F# projection rejects contradictory checkpoint/code pairs and false
+digest joins. Independent controls preserve the first observed failure across cleanup refusal,
+distinguish accepted-growth exhaustion from genuine pending evidence, and retain all seven actual
+production FsQuint trace comparisons. No runtime admission, canonical policy or stock Recoil
+engine behavior changes. The separately frozen helper, protected-source rebuild, complete runtime
+and product closure, trusted private placement and a newly admitted observable operation remain
+root-owned gates. Historical Count1 remains failed/refused with settled cleanup, Unknown cause
+and gameplay acceptance 0/6. No retrospective diagnosis or identical-source replay is claimed.
+
 **2026-10-02: LEARN W6 C2 P2-A Host 0.3.0 successor source CLOSED; publication and receiver adoption remain open.**
 The [owning plan](roadmaps/learn-c2-persistent-receiver-v3.md#p2-a--provisional-host-successor-source)
 selects coherent source version `0.3.0`, tag `telemetry-host/v0.3.0` and journal
