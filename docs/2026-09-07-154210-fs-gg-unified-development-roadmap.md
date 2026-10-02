@@ -240,6 +240,20 @@ hostfxr content and all 191 runtime modes differ from the required target modes.
 qualification, real receiver grant, capture and recovery remain open. No workspace default,
 experiment or C3 activation changes. Main has no action.
 
+**2026-10-02: LEARN W6 C2 hardened runtime-bundle source CLOSED; served adoption remains open.**
+[Coordination #925](https://github.com/FS-GG/FS.GG.Coordination/pull/925) merged at protected
+`49fe964f0239ad3734f5fa5119b3227f2a04758d`, tree
+`36b0be5cc74bfd10d045ab11ce978547464d5266`, equal qualified candidate
+`526c178510f8cb4fd04f852148a97e5729f3eed1`; bootstrap run `36978261546` and full optimistic run
+`36978261669` passed. The source preserves the legacy bundle `/1` producer, verifier and CLI and adds an
+explicit successor `/2` contract that binds the immutable target OCI identity, normalized runtime
+path/mode/content inventory and a separately acquired SDK tree before any selected SDK executable runs.
+The same-PR Q3 repair rebound the workflow digest and exact immutable-reference inventory without changing
+the five reviewed C1 source blobs. This is source closure only. The earlier served artifact `11209647998`
+and its recorded runtime-content/mode refusal remain immutable historical evidence. A freshly served C2
+bundle, target and SDK image/runtime qualification, genuine receiver grant, private capture,
+restart/recovery and activation remain open; C3 stays disabled and no installed experiment follows.
+
 **2026-10-02: LEARN W6 C2 P1 inactive persistent-v3 preparation CLOSED; installed qualification remains open.**
 The [owning P1/P2 plan](roadmaps/learn-c2-persistent-receiver-v3.md) supplies a stateless F#
 constructor and CLI with closed, duplicate-safe inputs and exclusive mode-0600 materialization.
