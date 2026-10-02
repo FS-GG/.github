@@ -69,9 +69,10 @@ authority for any operation actually performed.
 [Sandbox #45](https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/pull/45) merged at
 `2fd71ecd10eda835d491ea4f8f22432309e59d82`, tree
 `b84a0a111cd36d095037c4f8780d476f24dc2dcb`, equal qualified source
-`6ca95dd16bd02dce1b84cdfdace161072bafce1c`. The repair binds the typed helper's
-FSharp.Core restore to its public package provenance and locked content hash. This closes the
-cold-restore source failure only. Credential-free actual-runner readiness, fresh source-bound inputs,
+`6ca95dd16bd02dce1b84cdfdace161072bafce1c`. The repair binds the typed helper to the
+SDK 10.0.400 library-pack FSharp.Core bytes, whose content hash begins `407fee`; the public NuGet
+package at the same version has different bytes. Locked content validation remains enabled through a
+task-local cache. This closes the cold-restore source failure only. Credential-free actual-runner readiness, fresh source-bound inputs,
 private admission, custody and facts remain open; the failed readiness attempt produced none of them.
 
 **2026-10-02: FourD stateless diagnostic source CLOSED; native qualification remains open.**
@@ -128,10 +129,10 @@ closed manager source at `bd4de1e999289c7d2a73bcaaf58177f903adc797`, tree
 [`36961953645`](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36961953645) passed.
 The manager archive is served by successful run `36967367250` as artifact `11209647998`, expiring
 `2026-12-31`, with three entries and 19 manager payloads. Its archive SHA-256 is
-`0387deaeddcdce45a3664c2a207b1ec003c7b9fdf467d4a18dd117ed7508620f`; the observed raw ZIP
-SHA-256 begins `ce8689`. The local compiled verifier
+`0387deaeddcdce45a3664c2a207b1ec003c7b9fdf467d4a18dd117ed7508620f`; the raw ZIP SHA-256 is
+`ce868989d1b78535d2db6000721d765e4a10a03443aa139b3fc38f12f087d78d`. The local compiled verifier
 correctly refused this hosted archive: all 189 Core payload bytes match, while hosted dotnet and
-hostfxr content and all 191 runtime modes differ from the root-owned target. Inactive v3 image/runtime
+hostfxr content and all 191 runtime modes differ from the required target modes. Inactive v3 image/runtime
 qualification, real receiver grant, capture and recovery remain open. No workspace default,
 experiment or C3 activation changes. Main has no action.
 

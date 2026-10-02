@@ -2,7 +2,9 @@
 
 Owner: the BAR knowledge-store operator owns backup execution and recovery. The public roadmap records
 the bounded policy and aggregate evidence; credentials, restricted payloads and host-local paths remain
-in their existing custody.
+in their existing custody. The
+[Unified roadmap current progress and feature index](../2026-09-07-154210-fs-gg-unified-development-roadmap.md#0-current-progress-report)
+project this owning result.
 
 ## Outcome
 
@@ -30,10 +32,12 @@ SHA-256 is `412f9d03de5b1682374f0f3f5948b38d49268ea53bf6d851af926c6e8003760e`.
 The production reducer corresponds to a canonical 31-state replay. Python is a mechanical SQLite and
 filesystem bridge; it does not decide retention, scheduling or health policy.
 
-Retention keeps the current snapshot and at most three older distinct logical versions. A backup is
-eligible only after both growth thresholds are met: at least 256 MiB and at least 25 percent growth.
-The independent database-to-source-payload warning ratio is 1.5. Snapshot identity is content based,
-so repeated unchanged cycles do not consume the three-version history.
+Retention keeps the current snapshot and at most three older distinct logical versions. A changed
+version creates a backup; an unchanged fingerprint skips backup creation. Growth does not control
+backup eligibility. Health alerts require allocated growth of at least 256 MiB and at least 25 percent
+above baseline. The independent database-to-source-payload alert fires above 1.5 times its baseline
+ratio. Snapshot identity is content based, so repeated unchanged cycles do not consume the
+three-version history.
 
 ## Recovery and limits
 
@@ -46,3 +50,11 @@ This operational result does not accept BAR native gameplay, modify stock Recoil
 or change the six useful-play outcomes, which remain 0/6. It also does not claim machine power-loss
 durability or host restart supervision. Those product and operating boundaries remain separate from
 the fulfilled request for regular running-host backups with no more than three older versions.
+
+## Workspace impact and delivery boundaries
+
+Generated workspace impact is none. Frozen source qualification, installation of the maintenance
+bundle and keeper activation are distinct boundaries. The recorded operational closure covers the
+qualified installed bundle and its observed activation on the current running host. It does not change
+workspace templates or defaults, and later installation or activation on another host requires its own
+evidence.
