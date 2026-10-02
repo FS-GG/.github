@@ -89,6 +89,8 @@
     <Compile Include="Board.fs" />
     <Compile Include="V2Projection.fsi" />
     <Compile Include="V2Projection.fs" />
+    <Compile Include="V2ProjectionSource.fsi" />
+    <Compile Include="V2ProjectionSource.fs" />
     <Compile Include="Done.fsi" />
     <Compile Include="Done.fs" />
     <Compile Include="Scan.fsi" />
