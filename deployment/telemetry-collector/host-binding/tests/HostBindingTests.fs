@@ -69,6 +69,23 @@ module private Fixture =
 
 module HostBindingTests =
     [<Fact>]
+    let ``production launcher admits only fixed read only Git arguments`` () =
+        let sha=String('a',40)
+        for arguments in
+            [ [|"rev-parse";"HEAD"|]
+              [|"status";"--porcelain"|]
+              [|"rev-parse";sha+"^{tree}"|]
+              [|"rev-parse";sha+":deployment/telemetry-collector/native-operation-v1.json"|] ] do
+            OwnedLaunch.validateArgumentsForTest "git" arguments
+        for arguments in
+            [ [|"push";"origin";"main"|]
+              [|"config";"user.name";"writer"|]
+              [|"rev-parse";"--verify"|]
+              [|"rev-parse";sha+":deployment/telemetry-collector/other"|]
+              [|"rev-parse";String('A',40)+"^{tree}"|] ] do
+            Assert.Throws<BindingRefusal>(fun()->OwnedLaunch.validateArgumentsForTest "git" arguments)|>ignore
+
+    [<Fact>]
     let ``current profile and source pins form a validated binding`` () =
         use fixture = new Fixture.Repository()
         let binding = Fixture.construct fixture
@@ -285,6 +302,13 @@ module HostBindingTests =
             let hook () = waitForFile parentFile; waitForFile childFile; raise (InvalidOperationException("synthetic-post-spawn"))
             let error = Assert.Throws<InvalidOperationException>(fun () -> scope.RunWithPostSpawnHook("/usr/bin/python3", owner, [ "-c"; script ], 2000, 128, 128, hook) |> ignore)
             Assert.Equal("synthetic-post-spawn", error.Message)
+            let diagnostic=scope.DiagnosticSnapshot
+            Assert.Equal(OwnedProcessScope.RetirementClean,diagnostic.FirstRetirement)
+            Assert.Equal(OwnedProcessScope.RetirementClean,diagnostic.FinalRetirement)
+            let launch=scope.LaunchTraceForTest
+            Assert.Contains(OwnedLaunch.FailAfterRelease,launch|>List.map fst)
+            Assert.DoesNotContain(OwnedLaunch.Finish,launch|>List.map fst)
+            Assert.True((launch|>List.last|>snd).StickyFailure)
             Assert.False(Directory.Exists($"/proc/{Int32.Parse(File.ReadAllText(parentFile))}"))
             Assert.False(Directory.Exists($"/proc/{Int32.Parse(File.ReadAllText(childFile))}"))
         finally Directory.Delete(owner, true)
@@ -296,10 +320,142 @@ module HostBindingTests =
         scope.ObserveCandidateForTest(first)
         scope.ObserveCandidateForTest(first)
         Assert.True(scope.IsUnknown)
+        Assert.Equal(OwnedProcessScope.IdentityRead,scope.DiagnosticSnapshot.FirstFailureSite)
+        Assert.Equal(OwnedProcessScope.ExistenceGuard,scope.DiagnosticSnapshot.ReadOrigin)
+        Assert.Equal(OwnedProcessScope.ExistsFalse,scope.DiagnosticSnapshot.ReadGuard)
+        Assert.Equal(OwnedProcessScope.ManagedNone,scope.DiagnosticSnapshot.ManagedException)
+        Assert.Equal(OwnedProcessScope.InitialPass,scope.DiagnosticSnapshot.AcquisitionPass)
+        Assert.Equal(OwnedProcessScope.OtherCandidate,scope.DiagnosticSnapshot.CandidateRelation)
         Assert.Equal(1, scope.RejectedCandidateCount)
         for pid in first + 1 .. first + 256 do scope.ObserveCandidateForTest(pid)
         Assert.Equal(256, scope.RejectedCandidateCount)
         Assert.True(scope.RetainedCapacityExhausted)
+        Assert.Equal(OwnedProcessScope.IdentityRead,scope.DiagnosticSnapshot.FirstFailureSite)
+
+    [<Fact>]
+    let ``failure and retirement ordinals belong to the failing run`` () =
+        use scope = OwnedProcessScope.enterTest ()
+        let firstCode,_,_=scope.Run("/usr/bin/true",Path.GetTempPath(),[],1000,128,128)
+        Assert.Equal(0,firstCode)
+        let missing=2000000000
+        let refusal=Assert.Throws<BindingRefusal>(fun()->scope.RunWithPostSpawnHook("/usr/bin/sleep",Path.GetTempPath(),["1"],2000,128,128,(fun()->scope.ObserveCandidateForTest(missing)))|>ignore)
+        Assert.Equal("process-cleanup-unknown",refusal.Data0)
+        let diagnostic=scope.DiagnosticSnapshot
+        Assert.Equal(2,diagnostic.RunOrdinal)
+        Assert.Equal(2,diagnostic.FirstFailureRunOrdinal)
+        Assert.Equal(1,diagnostic.ScopeFirstRetirementRunOrdinal)
+        Assert.Equal(OwnedProcessScope.RetirementClean,diagnostic.FirstRetirement)
+        Assert.Equal(2,diagnostic.RetirementRunOrdinal)
+        Assert.Equal(OwnedProcessScope.RetirementUnknown,diagnostic.RunFirstRetirement)
+        Assert.Equal(OwnedProcessScope.RetirementUnknown,diagnostic.RunFinalRetirement)
+
+    [<Fact>]
+    let ``managed exception classes and identity contexts are closed`` () =
+        use scope = OwnedProcessScope.enterTest ()
+        Assert.Equal(OwnedProcessScope.FileNotFound,scope.ClassifyManagedExceptionForTest(FileNotFoundException()))
+        Assert.Equal(OwnedProcessScope.DirectoryNotFound,scope.ClassifyManagedExceptionForTest(DirectoryNotFoundException()))
+        Assert.Equal(OwnedProcessScope.ManagedUnauthorized,scope.ClassifyManagedExceptionForTest(UnauthorizedAccessException()))
+        Assert.Equal(OwnedProcessScope.GenericIo,scope.ClassifyManagedExceptionForTest(IOException()))
+        scope.ObserveIdentityContextForTest(2000000000,true,true)
+        Assert.Equal(OwnedProcessScope.RecheckPass,scope.DiagnosticSnapshot.AcquisitionPass)
+        Assert.Equal(OwnedProcessScope.ActiveDirect,scope.DiagnosticSnapshot.CandidateRelation)
+
+    [<Fact>]
+    let ``legacy fast exit loses actual direct identity before acquisition`` () =
+        use scope=OwnedProcessScope.enterTest()
+        let hook (direct:Process) = direct.WaitForExit();scope.ObserveCandidateForTest(direct.Id)
+        Assert.Throws<BindingRefusal>(fun()->scope.RunLegacyForTest("/usr/bin/python3",Path.GetTempPath(),["-c";"import os; os._exit(0)"],1000,128,128,hook)|>ignore)|>ignore
+        let diagnostic=scope.DiagnosticSnapshot
+        Assert.Equal(OwnedProcessScope.ExistenceGuard,diagnostic.ReadOrigin)
+        Assert.Equal(OwnedProcessScope.ActiveDirect,diagnostic.CandidateRelation)
+        Assert.True(scope.IsUnknown)
+
+    [<Fact>]
+    let ``gated fast exit cannot execute before identity and preserves same pid`` () =
+        let owner=Path.Combine(Path.GetTempPath(),"host-binding-gated-"+Guid.NewGuid().ToString("N"))
+        Directory.CreateDirectory(owner)|>ignore
+        let marker=Path.Combine(owner,"marker")
+        try
+            use scope=OwnedProcessScope.enterTest()
+            let mutable launchedPid=0
+            let hook (direct:Process) =
+                launchedPid<-direct.Id
+                Threading.Thread.Sleep(100)
+                Assert.False(File.Exists(marker))
+            let script="import os,pathlib; pathlib.Path("+JsonSerializer.Serialize(marker)+").write_text(str(os.getpid()))"
+            let code,_,_=scope.RunWithPreAcquireHook("/usr/bin/python3",owner,["-c";script],2000,128,128,hook)
+            Assert.Equal(0,code)
+            Assert.Equal(launchedPid,Int32.Parse(File.ReadAllText(marker)))
+            Assert.False(scope.IsUnknown)
+            let actions=scope.LaunchTraceForTest|>List.map fst
+            Assert.Equal<OwnedLaunch.Action list>(
+                [OwnedLaunch.RecordIdentity;OwnedLaunch.RequestRelease;OwnedLaunch.AcknowledgeRelease;OwnedLaunch.BeginRetirement;OwnedLaunch.ObserveSettlement(true,true,true);OwnedLaunch.Finish],
+                actions)
+            Assert.Equal(OwnedLaunch.Terminal,(scope.LaunchTraceForTest|>List.last|>snd).Phase)
+        finally Directory.Delete(owner,true)
+
+    [<Fact>]
+    let ``cancellation before identity never releases the guest`` () =
+        let owner=Path.Combine(Path.GetTempPath(),"host-binding-gate-cancel-"+Guid.NewGuid().ToString("N"))
+        Directory.CreateDirectory(owner)|>ignore
+        let marker=Path.Combine(owner,"marker")
+        try
+            use scope=OwnedProcessScope.enterTest()
+            let script="import pathlib; pathlib.Path("+JsonSerializer.Serialize(marker)+").write_text('released')"
+            Assert.Throws<BindingRefusal>(fun()->scope.RunWithPreAcquireHook("/usr/bin/python3",owner,["-c";script],2000,128,128,(fun _->scope.RequestCancellation()))|>ignore)|>ignore
+            Assert.False(File.Exists(marker))
+        finally Directory.Delete(owner,true)
+
+    [<Fact>]
+    let ``identity acquisition failure never releases the guest`` () =
+        let owner=Path.Combine(Path.GetTempPath(),"host-binding-gate-identity-"+Guid.NewGuid().ToString("N"))
+        Directory.CreateDirectory(owner)|>ignore
+        let marker=Path.Combine(owner,"marker")
+        try
+            use scope=OwnedProcessScope.enterTest()
+            let script="import pathlib; pathlib.Path("+JsonSerializer.Serialize(marker)+").write_text('released')"
+            let stop (direct:Process) = direct.Kill();direct.WaitForExit()
+            Assert.Throws<BindingRefusal>(fun()->scope.RunWithPreAcquireHook("/usr/bin/python3",owner,["-c";script],2000,128,128,stop)|>ignore)|>ignore
+            Assert.False(File.Exists(marker))
+            Assert.Equal<OwnedLaunch.Action list>([OwnedLaunch.FailIdentity],scope.LaunchTraceForTest|>List.map fst)
+            Assert.True(scope.IsUnknown)
+        finally Directory.Delete(owner,true)
+
+    [<Fact>]
+    let ``cancellation after release retires without a successful launch terminal`` () =
+        use scope=OwnedProcessScope.enterTest()
+        Assert.Throws<BindingRefusal>(fun()->scope.RunWithPostSpawnHook("/usr/bin/sleep",Path.GetTempPath(),["30"],2000,128,128,scope.RequestCancellation)|>ignore)|>ignore
+        let actions=scope.LaunchTraceForTest|>List.map fst
+        Assert.Equal<OwnedLaunch.Action list>(
+            [OwnedLaunch.RecordIdentity;OwnedLaunch.RequestRelease;OwnedLaunch.AcknowledgeRelease;OwnedLaunch.Cancel;OwnedLaunch.BeginRetirement;OwnedLaunch.ObserveSettlement(true,true,true)],
+            actions)
+        let final=scope.LaunchTraceForTest|>List.last|>snd
+        Assert.Equal(OwnedLaunch.Retiring,final.Phase)
+        Assert.True(final.StickyFailure)
+
+    [<Fact>]
+    let ``launcher refuses an invalid gate byte without executing the guest`` () =
+        let owner=Path.Combine(Path.GetTempPath(),"host-binding-invalid-gate-"+Guid.NewGuid().ToString("N"))
+        Directory.CreateDirectory(owner)|>ignore
+        let marker=Path.Combine(owner,"marker")
+        try
+            let start=ProcessStartInfo("/usr/bin/dotnet")
+            start.UseShellExecute<-false
+            start.RedirectStandardInput<-true
+            start.RedirectStandardOutput<-true
+            start.RedirectStandardError<-true
+            start.ArgumentList.Add(typeof<BindingRefusal>.Assembly.Location)
+            start.ArgumentList.Add("__owned-launch")
+            start.ArgumentList.Add("python3-test")
+            start.ArgumentList.Add("-c")
+            start.ArgumentList.Add("import pathlib; pathlib.Path("+JsonSerializer.Serialize(marker)+").write_text('released')")
+            use child=Process.Start(start)
+            child.StandardInput.Write("X")
+            child.StandardInput.Close()
+            Assert.True(child.WaitForExit(2000))
+            Assert.Equal(125,child.ExitCode)
+            Assert.False(File.Exists(marker))
+        finally Directory.Delete(owner,true)
 
     [<Fact>]
     let ``unsupported pidfd capability refuses before scope and child creation`` () =

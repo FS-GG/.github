@@ -11,7 +11,7 @@ open System.Text.Json
 open System.Text.RegularExpressions
 open System.Threading
 
-module private ConcreteWire =
+module internal ConcreteWire =
     let refuse value=raise(AttemptRefusal value)
     let require condition value=if not condition then refuse value
     let writeNew path (bytes:byte array) =
@@ -37,21 +37,30 @@ module private ConcreteWire =
         let pairs=["placementSha",jsonString state.Prepared.PlacementSha;"nonce",jsonString state.Prepared.Nonce;"hostBindingDll",jsonString request.HostBindingDll;"recipeRoot",jsonString request.RecipeRoot;"recipeSha",jsonString request.RecipeSourceSha;"profilePath",jsonString request.ProfilePath;"sourcePinsPath",jsonString request.SourcePinsPath;"bindingSha256",jsonString state.Prepared.BindingSha256;"ownedRunId",owned;"artifactOutput",jsonString artifact;"discoveryStart",start;"remainingSeconds",string remaining]
         Encoding.UTF8.GetBytes("{\"schema\":\"fsgg.telemetry.host-attempt-transport-context/2\","+(pairs|>List.map(fun(k,v)->jsonString k+":"+v)|>String.concat ",")+"}\n")
     let result bytes expected =
-        use doc=AttemptAcquisition.document bytes
-        let root=AttemptAcquisition.fields doc.RootElement
-        AttemptAcquisition.keys ["schema";"results"] root
-        require(AttemptAcquisition.text "schema" root="fsgg.telemetry.host-attempt-transport-results/1" && root["results"].ValueKind=JsonValueKind.Array && root["results"].GetArrayLength()=1) "transport-result-refused"
-        let v=AttemptAcquisition.fields(root["results"][0])
-        AttemptAcquisition.keys ["name";"argument";"exitCode";"stdout";"stderr";"outcome"] v
-        let name,_=ClosedNames.action expected
-        let _,expectedArgument=ClosedNames.action expected
-        let actualArgument=if v["argument"].ValueKind=JsonValueKind.Null then None else Some(AttemptAcquisition.text "argument" v)
-        require(AttemptAcquisition.text "name" v=name&&actualArgument=expectedArgument) "transport-action-mismatch"
-        let outcome=AttemptAcquisition.text "outcome" v
-        if outcome="unknown" then MechanismOutcome.ResponseLost,None
-        else
-            require(outcome="returned" && v["exitCode"].ValueKind=JsonValueKind.Number) "transport-outcome-refused"
-            MechanismOutcome.Returned(v["exitCode"].GetInt32()),Some(AttemptAcquisition.text "stdout" v)
+        let actionName,_=ClosedNames.action expected
+        let action=AttemptDiagnostics.action expected
+        try
+            use doc=AttemptAcquisition.document bytes
+            let root=AttemptAcquisition.fields doc.RootElement
+            AttemptAcquisition.keys ["schema";"results"] root
+            require(AttemptAcquisition.text "schema" root="fsgg.telemetry.host-attempt-transport-results/1" && root["results"].ValueKind=JsonValueKind.Array && root["results"].GetArrayLength()=1) "transport-result-refused"
+            let v=AttemptAcquisition.fields(root["results"][0])
+            AttemptAcquisition.keys ["name";"argument";"exitCode";"stdout";"stderr";"outcome"] v
+            let _,expectedArgument=ClosedNames.action expected
+            let actualArgument=if v["argument"].ValueKind=JsonValueKind.Null then None else Some(AttemptAcquisition.text "argument" v)
+            require(AttemptAcquisition.text "name" v=actionName&&actualArgument=expectedArgument) "transport-action-mismatch"
+            let outcome=AttemptAcquisition.text "outcome" v
+            if outcome="unknown" then
+                AttemptDiagnostics.record Transport (Some action) ResponseLost None "missing" NoException
+                MechanismOutcome.ResponseLost,None
+            else
+                require(outcome="returned" && v["exitCode"].ValueKind=JsonValueKind.Number) "transport-outcome-refused"
+                let exitCode=v["exitCode"].GetInt32()
+                if exitCode<>0 then AttemptDiagnostics.record Transport (Some action) Returned (Some exitCode) (AttemptDiagnostics.receiverRefusal(AttemptAcquisition.text "stderr" v)) NoException
+                MechanismOutcome.Returned exitCode,Some(AttemptAcquisition.text "stdout" v)
+        with error ->
+            AttemptDiagnostics.record Transport (Some action) Malformed None "missing" (AttemptDiagnostics.exceptionClass error)
+            reraise()
 
 /// Concrete fixed mechanism. Root supplies only three inherited, invocation-bound framed channels.
 type AcquiredAttemptMechanism(request:ConcreteRunRequest,prepared:AttemptState,channels:RootChannels,leaseRoot:string,readbackPath:string,interrupted:CancellationToken) =
@@ -90,8 +99,11 @@ type AcquiredAttemptMechanism(request:ConcreteRunRequest,prepared:AttemptState,c
         let contextState=match action with FixedAction.GetRun run|FixedAction.CancelOwnedRun run|FixedAction.DownloadRunArtifacts run->{state with OwnedRunId=Some run}|_->state
         ConcreteWire.writeNew context (ConcreteWire.contextBytes request.Preparation contextState (remaining limit) discoveryStart)
         let args=[request.Preparation.MechanismAdapterPath;"--actions";actions;"--context";context;"--lease";lease;"--output";output] @ (if sensitive.IsSome then ["--sensitive-stdin"] else [])
-        let code,_,_=AttemptPreparation.runBoundedInput "/usr/bin/python3" request.Preparation.RecipeRoot args sensitive ((remaining limit)*1000) 65536
-        if code<>0 || not(File.Exists output) then MechanismOutcome.ResponseLost,None
+        let code,_,error=AttemptPreparation.runBoundedInput "/usr/bin/python3" request.Preparation.RecipeRoot args sensitive ((remaining limit)*1000) 65536
+        let diagnosticAction=AttemptDiagnostics.action action
+        if code<>0 || not(File.Exists output) then
+            AttemptDiagnostics.record TransportAdapter (Some diagnosticAction) ResponseLost (Some code) (AttemptDiagnostics.receiverRefusal error) NoException
+            MechanismOutcome.ResponseLost,None
         else ConcreteWire.result (AttemptAcquisition.regularFile output 1048576L) action
     let acquireRun state run remainingSeconds =
         let outcome,raw=executeRaw state (FixedAction.GetRun run) (deadline remainingSeconds) None
@@ -103,14 +115,18 @@ type AcquiredAttemptMechanism(request:ConcreteRunRequest,prepared:AttemptState,c
         ensureClosure()
         AttemptPreparation.revalidateWithin prepared.Prepared request.Preparation (remainingSeconds*1000)
         {SourceGeneration=prepared.Prepared.SourceGeneration;BindingSha256=prepared.Prepared.BindingSha256;ProfileSha256=prepared.Prepared.ProfileSha256;WorkflowSha256=prepared.Prepared.WorkflowSha256;BindingProducerSha256=prepared.Prepared.BindingProducerSha256;RuntimeHostSha256=prepared.Prepared.RuntimeHostSha256;MechanismAdapterSha256=prepared.Prepared.MechanismAdapterSha256}
+    do AttemptDiagnostics.setIdentity (Some prepared.Prepared.RecipeSourceSha) (Some prepared.Prepared.ProducerSha256) (Some prepared.Prepared.BindingSha256)
     interface IAttemptMechanism with
         member _.MonotonicMilliseconds()=stopwatch.ElapsedMilliseconds
         member _.ConsumeInterruption()=
             if interrupted.IsCancellationRequested&&not interruptionConsumed then interruptionConsumed<-true;true else false
         member _.Sleep seconds=Threading.Thread.Sleep(seconds*1000)
         member _.AcquireAdmission(context,state,window)=
-            AttemptPreparation.deriveAdmission context.HostBindingDll context.RecipeRoot context.ProfilePath context.SourcePinsPath state.Prepared.Nonce (window.RemainingSeconds*1000)
-        member _.AcquireEffectCheck(_,window) = effectCheck window.RemainingSeconds
+            try AttemptPreparation.deriveAdmission context.HostBindingDll context.RecipeRoot context.ProfilePath context.SourcePinsPath state.Prepared.Nonce (window.RemainingSeconds*1000)
+            with error -> AttemptDiagnostics.record Admission None DiagnosticOutcome.Exception None "missing" (AttemptDiagnostics.exceptionClass error);reraise()
+        member _.AcquireEffectCheck(_,window) =
+            try effectCheck window.RemainingSeconds
+            with error -> AttemptDiagnostics.record EffectCheck None DiagnosticOutcome.Exception None "missing" (AttemptDiagnostics.exceptionClass error);reraise()
         member _.AcquireRunBaseline(state,window) =
             discoveryStart<-Some(DateTimeOffset.UtcNow.AddSeconds(-float AttemptOperation.DiscoverySeconds).ToString("yyyy-MM-dd'T'HH:mm:ss'Z'",Globalization.CultureInfo.InvariantCulture))
             let outcome,raw=executeRaw state FixedAction.ListRuns (deadline window.RemainingSeconds) None
@@ -121,20 +137,25 @@ type AcquiredAttemptMechanism(request:ConcreteRunRequest,prepared:AttemptState,c
                 baseline<-Some(records|>List.map _.Id|>Set.ofList,AttemptAcquisition.responseDate envelope);true
             | _->false
         member _.Execute(action,timeout,sensitive)=
-            let limit=deadline timeout
-            if action=FixedAction.InspectAuthMetadata && not authObserved then
-                let receipt=AttemptAcquisition.auth request.InvocationId prepared.Prepared.DestinationId (sequence+1) (rootFrame channels.Auth (remaining limit))
-                require(receipt.Repository=AttemptPreparation.Repository && receipt.Environment=AttemptPreparation.Environment && receipt.RequestedRole="native-auth") "auth-metadata-mismatch"
-                sequence<-receipt.Sequence;authObserved<-true
-            if action=FixedAction.TransferSecret SecretRole.NativeAuth then require authObserved "auth-metadata-missing"
-            let outcome,raw=executeRaw prepared action limit sensitive
-            match outcome,raw,action with
-            | MechanismOutcome.Returned 0,Some value,FixedAction.ReadPublicIdentity -> AttemptAcquisition.repository AttemptPreparation.Repository (AttemptAcquisition.http value)
-            | MechanismOutcome.Returned 0,Some value,FixedAction.InspectAuthMetadata -> AttemptAcquisition.secrets(AttemptAcquisition.http value)|>ignore
-            | MechanismOutcome.Returned 0,Some value,FixedAction.InvokeBinding -> AttemptAcquisition.binding prepared.Prepared.BindingSha256 (Encoding.UTF8.GetBytes value)
-            | MechanismOutcome.Returned 0,Some value,(FixedAction.ListRuns|FixedAction.GetRun _|FixedAction.ReadSecretAbsence _) -> cache<-cache.Add(action,value)
-            | _ -> ()
-            outcome
+            let diagnosticAction=AttemptDiagnostics.action action
+            try
+                let limit=deadline timeout
+                if action=FixedAction.InspectAuthMetadata && not authObserved then
+                    let receipt=AttemptAcquisition.auth request.InvocationId prepared.Prepared.DestinationId (sequence+1) (rootFrame channels.Auth (remaining limit))
+                    require(receipt.Repository=AttemptPreparation.Repository && receipt.Environment=AttemptPreparation.Environment && receipt.RequestedRole="native-auth") "auth-metadata-mismatch"
+                    sequence<-receipt.Sequence;authObserved<-true
+                if action=FixedAction.TransferSecret SecretRole.NativeAuth then require authObserved "auth-metadata-missing"
+                let outcome,raw=executeRaw prepared action limit sensitive
+                match outcome,raw,action with
+                | MechanismOutcome.Returned 0,Some value,FixedAction.ReadPublicIdentity -> AttemptAcquisition.repository AttemptPreparation.Repository (AttemptAcquisition.http value)
+                | MechanismOutcome.Returned 0,Some value,FixedAction.InspectAuthMetadata -> AttemptAcquisition.secrets(AttemptAcquisition.http value)|>ignore
+                | MechanismOutcome.Returned 0,Some value,FixedAction.InvokeBinding -> AttemptAcquisition.binding prepared.Prepared.BindingSha256 (Encoding.UTF8.GetBytes value)
+                | MechanismOutcome.Returned 0,Some value,(FixedAction.ListRuns|FixedAction.GetRun _|FixedAction.ReadSecretAbsence _) -> cache<-cache.Add(action,value)
+                | _ -> ()
+                outcome
+            with error ->
+                AttemptDiagnostics.record ActionValidation (Some diagnosticAction) DiagnosticOutcome.Exception None "missing" (AttemptDiagnostics.exceptionClass error)
+                reraise()
         member _.AcquireRunListing(state,_)=
             let records=take FixedAction.ListRuns|>AttemptAcquisition.http|>AttemptAcquisition.runs
             let prior,boundary=baseline|>Option.defaultWith(fun()->raise(AttemptRefusal "run-baseline-missing"))

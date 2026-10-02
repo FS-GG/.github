@@ -75,6 +75,17 @@ merged at protected `59cfb2a9a47c74ebcbe08a0605428f2b12cde9d2`, tree
 `36972071422` passed. Protected runtime adoption, private channel/custody joins and genuine
 native acceptance remain open.
 
+**2026-10-02 HOST owned-launch repair source READY.** The qualification-local receiver now
+holds its fixed Git guest behind an exact inherited gate until the parent records and rechecks the
+direct PID/start identity and pidfd. One release intention precedes same-PID exec. Identity failure,
+cancellation before/after release, deadline, lost response and post-release failure stay sticky;
+settlement still requires the direct process, descendants and readers. Production exposes no test
+launcher roles. Exact-source checks pass 35 receiver and 41 caller controls. The canonical extension
+adds eight launch ITFs / 23 actual reducer transitions while retaining the caller's seven ITFs / 91
+transitions; correspondence verifies both selected/loaded DLL hashes. Published recipe `8ad0da...`,
+profile `1ef6d54e...` and four payload bytes remain fixed caller inputs. Protected rebuild, custody,
+private channel joins and native acceptance remain open.
+
 The workflow uses the existing linear static preflight, adds the canonical
 model and compiled correspondence checks before browser/package work, and
 retains SDK custody and the existing binding gate. All eight resulting shell

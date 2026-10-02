@@ -22,6 +22,12 @@
         "dependencies": {
           "FSharp.Core": "[10.1.401, )"
         }
+      },
+      "hostbinding": {
+        "type": "Project",
+        "dependencies": {
+          "FSharp.Core": "[10.1.401, )"
+        }
       }
     }
   }

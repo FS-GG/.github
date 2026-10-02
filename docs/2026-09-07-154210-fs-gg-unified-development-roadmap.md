@@ -112,6 +112,18 @@ private channel/custody joins and genuine native acceptance remain open.
 Published receiver `8ad0da67004d670c6803f34755dfe759a7fc84e7`, its profile and
 four native payloads remain unchanged; V2 FULL ACCEPTED and Main NO ACTION remain.
 
+**2026-10-02: HOST owned-launch repair source READY; protected native adoption remains open.**
+The coherent source candidate uses a fixed F# launcher gate so the current receiver records and
+rechecks the direct PID/start identity and pidfd before one release intention and same-PID Git exec.
+Identity failure, cancellation before or after release, deadline, lost release response and
+post-release exception remain sticky refusals; descendant, reader, output and cleanup Unknown rules
+are preserved. The production receiver exposes only Git, while test roles remain compile-scoped.
+Exact-source qualification passed 35 receiver and 41 caller controls, the retained seven caller ITFs /
+91 transitions, and eight launch ITFs / 23 transitions. Correspondence binds both actually loaded
+caller and receiver DLL hashes. Published recipe `8ad0da67004d670c6803f34755dfe759a7fc84e7`,
+profile `1ef6d54e...` and all four payloads remain unchanged as caller inputs. This is source readiness:
+protected rebuild/custody, private channel joins and genuine native acceptance remain root-owned and open.
+
 **2026-10-02: P4 cold-restore source CLOSED; actual runner readiness remains open.**
 [Sandbox #45](https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/pull/45) merged at
 `2fd71ecd10eda835d491ea4f8f22432309e59d82`, tree
@@ -262,6 +274,21 @@ and its recorded runtime-content/mode refusal remain immutable historical eviden
 bundle, target and SDK image/runtime qualification, genuine receiver grant, private capture,
 restart/recovery and activation remain open; C3 stays disabled and no installed experiment follows.
 
+**2026-10-02: LEARN W6 C2 served manager-bundle qualification CLOSED; receiver image remains open.**
+[Protected Coordination run `36983338783`](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36983338783)
+served sole artifact `11216418410` from exact source `49fe964f0239ad3734f5fa5119b3227f2a04758d`, tree
+`36b0be5cc74bfd10d045ab11ce978547464d5266`. Root and an independent read-only consumer bound the Actions
+artifact SHA-256 `518041591b9b7f1827911f0e796a1815799841831b962d3112169d9241969cdd`, canonical `/2` manifest
+`966e13e827b3b3a3f37c51bcc35fd57f4684741d19a3308905e5f66ac51ebf0e` and manager archive
+`03d46e6553e99be27c0bbc06d8767e2aa2a5e9b588d608d4b4c229e7a87ad74f`. Fresh official OCI acquisition
+reproduced the 337-file hardened target tree `ead4ece42719198be9607d18415e428e3a6fcaadf50b88dc6e93894c47bec4c2`
+and admitted the 4907-file SDK tree `c51a26bcd972e5f1b2944a912ca57cab9878fa88a2d8110fa0300c54ba0afcb0`
+before SDK execution. The SDK host truthfully refused target runtime `10.0.12` because it carries `10.0.11`;
+the canonical target `10.0.12` host route then passed exact `verify-v2`. The
+[public qualification report](reports/2026-10-02-learn-c2-served-bundle-qualification.md) closes C2 only.
+C3 image closure is next; C4 dual OCI comparison, C5 synthetic qualification and C6 protected activation remain
+later. No image, grant, capture, restart/recovery, installation, activation, workspace default or Main action follows.
+
 **2026-10-02: LEARN W6 C2 P1 inactive persistent-v3 preparation CLOSED; installed qualification remains open.**
 The [owning P1/P2 plan](roadmaps/learn-c2-persistent-receiver-v3.md) supplies a stateless F#
 constructor and CLI with closed, duplicate-safe inputs and exclusive mode-0600 materialization.
@@ -336,6 +363,20 @@ consumer readiness, fresh source-bound inputs, manifest and admission, and one n
 facts operation remain next. The historical admitted facts failure remains unexplained
 with no sealed capsule; this source does not retrospectively diagnose it or justify
 an identical rerun. Canonical H2, provider, sealer and HOST source remain unchanged.
+
+**2026-10-02: SC2 canonical typed-profile source closure delivered; protected rebuild and genuine journeys remain open.**
+[SC2 #36](https://github.com/FS-GG/FS.GG.SC2.Client/pull/36) merged at protected
+`e521fa9dc5a910d9e1f201686e126a0e9edc736e`, tree
+`9c2132780d0c544dc04790ff784064d98427068d`, equal qualified source
+`304c13624e866448c75849f25b2fcdc91de6e2ed`. Root authenticated merge, tree and main;
+full native [verification `36982008400`](https://github.com/FS-GG/FS.GG.SC2.Client/actions/runs/36982008400)
+passed. The generated F# live contract now supplies the canonical advisor profile; the standalone
+diagnostic compile fixture includes its ordered contract dependency, bounded capture avoids repeated
+oversized serialization, and hosted browser qualification uses one worker to match its already
+serialized Gateway/peer capacity. The historical protected-`57eadf00bb9e776664e00fe200bb4f2952f72829` genuine attempt remains a typed
+`ProfileRefused` with no native acceptance. An exact protected artifact rebuild, fresh private pins,
+genuine advisor and replay journeys, and owned cleanup acceptance remain open. No next SC2 item is
+selected by this projection.
 
 **2026-10-02: SC2 malformed advisor-evidence transport source delivered; private adoption remains open.**
 [SC2 #35](https://github.com/FS-GG/FS.GG.SC2.Client/pull/35) merged at
