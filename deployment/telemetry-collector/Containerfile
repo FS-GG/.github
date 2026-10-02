@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # Policy owned Linux x64 runtime. Callers cannot replace this base.
-FROM mcr.microsoft.com/dotnet/aspnet:10.0.12-noble-amd64@sha256:ed6a2d26633ddcd3d42a1d9f9866214ecbbc11ba6ac5e0e843da02c13da24072 AS runtime
+FROM mcr.microsoft.com/dotnet/aspnet:10.0.12-noble-amd64@sha256:0fa044f682cb7d93a5a90401a00c626c66f7b00b86922be9441f869eae039f80 AS runtime
 
 FROM runtime AS controlled-development
 COPY --chown=0:0 controlled-development.sh /opt/fsgg/controlled-development

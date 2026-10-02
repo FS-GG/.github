@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-FROM mcr.microsoft.com/dotnet/aspnet:10.0.12-noble-amd64@sha256:ed6a2d26633ddcd3d42a1d9f9866214ecbbc11ba6ac5e0e843da02c13da24072
+FROM mcr.microsoft.com/dotnet/aspnet:10.0.12-noble-amd64@sha256:0fa044f682cb7d93a5a90401a00c626c66f7b00b86922be9441f869eae039f80
 ARG HOST_VERSION=0.2.1
 ARG HOST_SOURCE_SHA=0145bd2c852847d00da8b3a0c35d27cd64a87781
 ARG HOST_PACKAGE_SHA256=4847c15ab207a33556462873840ad4109cf1c1e16fd7a15d5fffae5a8162f589
