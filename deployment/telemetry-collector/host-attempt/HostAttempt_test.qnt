@@ -13,3 +13,15 @@ module HostAttempt_test {
  run refusedOwnedCancellation = init.then(place).then(checkEffect).then(requestAuth).then(ackAuth).then(checkEffect).then(requestAdmission).then(ackAdmission).then(checkEffect).then(requestDispatch).then(ackDispatch).then(discoverOne).then(ownRun).then(failOwnedNative).then(checkCleanupEffect).then(requestCleanupCancel).then(ackCleanupCancel).expect(allInvariants and refusedOwnedCancellationWitness)
  run falseOwnershipRefusal = init.then(place).then(checkEffect).then(requestAuth).then(ackAuth).then(checkEffect).then(requestAdmission).then(ackAdmission).then(checkEffect).then(requestDispatch).then(ackDispatch).then(discoverOne).then(checkEffect).then(cancelWithoutOwnership).expect(allInvariants and falseOwnershipRefusalWitness)
 }
+
+module OwnedLaunch_test {
+ import OwnedLaunch.* from "./HostAttempt"
+ run gatedRelease = launchInit.then(recordIdentity).then(requestRelease).then(ackRelease).expect(launchInvariants and releasedWitness)
+ run lostRelease = launchInit.then(recordIdentity).then(requestRelease).then(loseRelease).expect(launchInvariants and lostWitness)
+ run cancelBefore = launchInit.then(cancelLaunch).expect(launchInvariants and cancelledBeforeWitness)
+ run deadlineBefore = launchInit.then(expireLaunch).expect(launchInvariants and deadlineBeforeWitness)
+ run identityFailure = launchInit.then(failIdentity).expect(launchInvariants and identityFailureWitness)
+ run cancelAfter = launchInit.then(recordIdentity).then(requestRelease).then(ackRelease).then(cancelLaunch).expect(launchInvariants and cancelledAfterWitness)
+ run failureAfter = launchInit.then(recordIdentity).then(requestRelease).then(ackRelease).then(failAfterRelease).expect(launchInvariants and failureAfterWitness)
+ run settled = launchInit.then(recordIdentity).then(requestRelease).then(ackRelease).then(beginRetirement).then(settleAll).then(finishLaunch).expect(launchInvariants and settledWitness)
+}

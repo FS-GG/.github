@@ -64,6 +64,29 @@ with tempfile.TemporaryDirectory(prefix="fsgg-telemetry-safety-") as scratch:
     subprocess.run(["git", "-C", str(repo), "add", str(implementation)], check=True)
     assert subprocess.run([str(GUARD), "--repo", str(repo)], capture_output=True).returncode == 1
     subprocess.run(["git", "-C", str(repo), "reset", "-q", str(implementation)], check=True)
+    workflows = repo / ".github" / "workflows"; workflows.mkdir(parents=True)
+    host_workflow = workflows / "telemetry-host-package.yml"
+    host_workflow.write_text("name: host-package\n# " + " " * (64 * 1024 + 1))
+    subprocess.run(["git", "-C", str(repo), "add", str(host_workflow)], check=True)
+    assert subprocess.run([str(GUARD), "--repo", str(repo)], capture_output=True).returncode == 0
+    host_workflow.write_text('# {"session_' + 'id":"private"}\n')
+    subprocess.run(["git", "-C", str(repo), "add", str(host_workflow)], check=True)
+    assert subprocess.run([str(GUARD), "--repo", str(repo)], capture_output=True).returncode == 1
+    subprocess.run(["git", "-C", str(repo), "reset", "-q", str(host_workflow)], check=True)
+    other_workflow = workflows / "telemetry-other.yml"
+    other_workflow.write_text("name: other\n# " + " " * (64 * 1024 + 1))
+    subprocess.run(["git", "-C", str(repo), "add", str(other_workflow)], check=True)
+    assert subprocess.run([str(GUARD), "--repo", str(repo)], capture_output=True).returncode == 1
+    subprocess.run(["git", "-C", str(repo), "reset", "-q", str(other_workflow)], check=True)
+    attempt_tests = repo / "deployment" / "telemetry-collector" / "host-attempt" / "tests" / "HostAttemptTests.fs"
+    attempt_tests.parent.mkdir(parents=True)
+    attempt_tests.write_text("module Synthetic\n// " + " " * (64 * 1024 + 1))
+    subprocess.run(["git", "-C", str(repo), "add", str(attempt_tests)], check=True)
+    assert subprocess.run([str(GUARD), "--repo", str(repo)], capture_output=True).returncode == 0
+    attempt_tests.write_text('// {"session_' + 'id":"private"}\n')
+    subprocess.run(["git", "-C", str(repo), "add", str(attempt_tests)], check=True)
+    assert subprocess.run([str(GUARD), "--repo", str(repo)], capture_output=True).returncode == 1
+    subprocess.run(["git", "-C", str(repo), "reset", "-q", str(attempt_tests)], check=True)
     # Binary fixtures exist only in this temporary repo. Extension and renamed-signature detection are
     # independent: neither a renamed database nor a private immutable spool batch may be forced in.
     (repo / "innocent.bin").write_bytes(b"SQLite format " + b"3\x00" + b"synthetic")

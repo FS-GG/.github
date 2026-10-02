@@ -10,6 +10,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../HostAttempt.fsproj" />
+    <ProjectReference Include="../../host-binding/HostBinding.fsproj" />
     <PackageReference Include="FSharp.Core" />
     <PackageReference Include="FsQuint" VersionOverride="0.1.0" />
   </ItemGroup>

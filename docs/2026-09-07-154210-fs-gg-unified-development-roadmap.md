@@ -104,6 +104,18 @@ private channel/custody joins and genuine native acceptance remain open.
 Published receiver `8ad0da67004d670c6803f34755dfe759a7fc84e7`, its profile and
 four native payloads remain unchanged; V2 FULL ACCEPTED and Main NO ACTION remain.
 
+**2026-10-02: HOST owned-launch repair source READY; protected native adoption remains open.**
+The coherent source candidate uses a fixed F# launcher gate so the current receiver records and
+rechecks the direct PID/start identity and pidfd before one release intention and same-PID Git exec.
+Identity failure, cancellation before or after release, deadline, lost release response and
+post-release exception remain sticky refusals; descendant, reader, output and cleanup Unknown rules
+are preserved. The production receiver exposes only Git, while test roles remain compile-scoped.
+Exact-source qualification passed 35 receiver and 41 caller controls, the retained seven caller ITFs /
+91 transitions, and eight launch ITFs / 23 transitions. Correspondence binds both actually loaded
+caller and receiver DLL hashes. Published recipe `8ad0da67004d670c6803f34755dfe759a7fc84e7`,
+profile `1ef6d54e...` and all four payloads remain unchanged as caller inputs. This is source readiness:
+protected rebuild/custody, private channel joins and genuine native acceptance remain root-owned and open.
+
 **2026-10-02: P4 cold-restore source CLOSED; actual runner readiness remains open.**
 [Sandbox #45](https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/pull/45) merged at
 `2fd71ecd10eda835d491ea4f8f22432309e59d82`, tree

@@ -160,7 +160,7 @@ jobs:
           import sys, xml.etree.ElementTree as ET
           counters = ET.parse(sys.argv[1]).getroot().find('.//{*}Counters')
           assert counters is not None
-          assert (counters.get('total'), counters.get('executed'), counters.get('passed'), counters.get('failed')) == ('26', '26', '26', '0')
+          assert (counters.get('total'), counters.get('executed'), counters.get('passed'), counters.get('failed')) == ('35', '35', '35', '0')
           PY
           python3 -m unittest tests/telemetry-collector-container/test_private_native_qualification.py \
             2>&1 | tee "$RUNNER_TEMP/host-binding-python-tests.log"
@@ -189,9 +189,9 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "$HOST_ATTEMPT_ITF_ROOT" "$HOST_ATTEMPT_QUINT_ROOT/archives" "$HOST_ATTEMPT_QUINT_ROOT/home"
-          /usr/bin/dotnet restore "$HOST_ATTEMPT_RECIPE_ROOT/deployment/telemetry-collector/host-binding/HostBinding.fsproj" \
+          /usr/bin/dotnet restore deployment/telemetry-collector/host-binding/HostBinding.fsproj \
             --locked-mode --artifacts-path "$RUNNER_TEMP/host-attempt-binding"
-          /usr/bin/dotnet build "$HOST_ATTEMPT_RECIPE_ROOT/deployment/telemetry-collector/host-binding/HostBinding.fsproj" \
+          /usr/bin/dotnet build deployment/telemetry-collector/host-binding/HostBinding.fsproj \
             -c Release --no-restore --artifacts-path "$RUNNER_TEMP/host-attempt-binding"
           python3 - "$HOST_ATTEMPT_RECIPE_ROOT" "$HOST_ATTEMPT_SOURCE_PINS" <<'PY'
           import hashlib, json, pathlib, sys
@@ -218,7 +218,7 @@ jobs:
           import sys, xml.etree.ElementTree as ET
           counters = ET.parse(sys.argv[1]).getroot().find('.//{*}Counters')
           assert counters is not None
-          assert (counters.get('total'), counters.get('executed'), counters.get('passed'), counters.get('failed')) == ('38','38','38','0')
+          assert (counters.get('total'), counters.get('executed'), counters.get('passed'), counters.get('failed')) == ('41','41','41','0')
           PY
           python3 -m unittest discover -s deployment/telemetry-collector/host-attempt/tests -p test_transport.py 2>&1 | tee "$RUNNER_TEMP/host-attempt-transport.log"
           grep -F 'Ran 16 tests' "$RUNNER_TEMP/host-attempt-transport.log"
@@ -237,6 +237,8 @@ jobs:
           quint typecheck deployment/telemetry-collector/host-attempt/HostAttempt.qnt
           quint test deployment/telemetry-collector/host-attempt/HostAttempt_test.qnt \
             --backend typescript --match '^(success|earlyAdmission|stickyLateAck|lostDispatch|ambiguity|candidateNotOwned|cancellationUnknown|deadlineUnknown|secretOnlyCleanup|successThenDeadline|refusedOwnedCancellation|falseOwnershipRefusal)$'
+          quint test deployment/telemetry-collector/host-attempt/HostAttempt_test.qnt --backend typescript \
+            --main OwnedLaunch_test --match '^(gatedRelease|lostRelease|cancelBefore|deadlineBefore|identityFailure|cancelAfter|failureAfter|settled)$'
           quint run deployment/telemetry-collector/host-attempt/HostAttempt.qnt --backend typescript --main HostAttempt \
             --max-samples 5000 --max-steps 30 --n-threads 1 --seed 20261004 --invariant allInvariants
           for item in 'success successStep 16' 'ambiguous ambiguityStep 11' 'lost lostStep 10' 'sticky stickyStep 5' 'deadline deadlineStep 20' 'refused-owned-cancel refusedOwnedCancelStep 16' 'false-ownership falseOwnershipStep 13'; do
@@ -244,17 +246,27 @@ jobs:
             quint run deployment/telemetry-collector/host-attempt/HostAttempt.qnt --backend typescript --main HostAttempt --step "$2" \
               --max-samples 1 --max-steps "$3" --seed 1 --out-itf "$HOST_ATTEMPT_ITF_ROOT/$1-{seq}.itf.json" --verbosity 0
           done
+          for item in 'gatedRelease gatedReleaseStep 3' 'lostRelease lostReleaseStep 3' 'cancelBefore cancelBeforeStep 1' 'deadlineBefore deadlineBeforeStep 1' 'identityFailure identityFailureStep 1' 'cancelAfter cancelAfterStep 4' 'failureAfter failureAfterStep 4' 'settled settledStep 6'; do
+            set -- $item
+            quint run deployment/telemetry-collector/host-attempt/HostAttempt.qnt --backend typescript --main OwnedLaunch --init launchInit --step "$2" \
+              --max-samples 1 --max-steps "$3" --seed 20261002 --invariant launchInvariants \
+              --out-itf "$HOST_ATTEMPT_ITF_ROOT/$1-{seq}.itf.json" --verbosity 0
+          done
           /usr/bin/dotnet restore deployment/telemetry-collector/host-attempt/correspondence/HostAttempt.Correspondence.fsproj \
             --locked-mode --artifacts-path "$RUNNER_TEMP/host-attempt-correspondence"
           /usr/bin/dotnet build deployment/telemetry-collector/host-attempt/correspondence/HostAttempt.Correspondence.fsproj \
             -c Release --no-restore --artifacts-path "$RUNNER_TEMP/host-attempt-correspondence"
           correspondence_loaded="$RUNNER_TEMP/host-attempt-correspondence/bin/HostAttempt.Correspondence/release/HostAttempt.dll"
+          correspondence_receiver="$RUNNER_TEMP/host-attempt-correspondence/bin/HostAttempt.Correspondence/release/HostBinding.dll"
           cp -- "$HOST_ATTEMPT_PRODUCER_DLL" "$correspondence_loaded"
+          cp -- "$HOST_ATTEMPT_BINDING_DLL" "$correspondence_receiver"
           test "$(sha256sum -- "$HOST_ATTEMPT_PRODUCER_DLL" | cut -d' ' -f1)" = "$(sha256sum -- "$correspondence_loaded" | cut -d' ' -f1)"
+          test "$(sha256sum -- "$HOST_ATTEMPT_BINDING_DLL" | cut -d' ' -f1)" = "$(sha256sum -- "$correspondence_receiver" | cut -d' ' -f1)"
           HOST_ATTEMPT_MODEL="$GITHUB_WORKSPACE/deployment/telemetry-collector/host-attempt/HostAttempt.qnt" \
           HOST_ATTEMPT_PROFILE="$HOST_ATTEMPT_RECIPE_ROOT/deployment/telemetry-collector/native-operation-v1.json" \
           HOST_ATTEMPT_ADAPTER="$GITHUB_WORKSPACE/deployment/telemetry-collector/host-attempt/host_attempt_transport.py" \
           HOST_ATTEMPT_PRODUCTION_DLL="$HOST_ATTEMPT_PRODUCER_DLL" \
+          HOST_ATTEMPT_RECEIVER_DLL="$HOST_ATTEMPT_BINDING_DLL" \
           HOST_ATTEMPT_ACQUIRED_STATE="$HOST_ATTEMPT_ACQUIRED_TRACE_OUTPUT" \
           HOST_ATTEMPT_QUINT_TOOL="$quint_archive" \
             /usr/bin/dotnet "$RUNNER_TEMP/host-attempt-correspondence/bin/HostAttempt.Correspondence/release/HostAttempt.Correspondence.dll"

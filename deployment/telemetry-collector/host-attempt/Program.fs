@@ -206,6 +206,7 @@ let inheritedChannel name =
 
 [<EntryPoint>]
 let main argv =
+    AttemptDiagnostics.beginInvocation None None None
     try
         require (argv.Length>0) "command-refused"
         let values=args argv[1..]
@@ -213,7 +214,9 @@ let main argv =
         | "prepare" ->
             exactArgs ["request";"output"] values
             let request=Wire.preparation(Wire.read(required "request" values)(64L*1024L))
-            let state=AttemptPreparation.prepare(producerSha()) request
+            let selected=producerSha()
+            AttemptDiagnostics.setIdentity (Some request.RecipeSourceSha) (Some selected) None
+            let state=AttemptPreparation.prepare selected request
             writeNew(required "output" values)(Wire.stateBytes state);0
         | "next" ->
             exactArgs ["state";"observation";"state-output";"actions-output"] values
@@ -226,6 +229,7 @@ let main argv =
             exactArgs ["request";"output"] values
             let request=Wire.runRequest(Wire.read(required "request" values)(128L*1024L))
             let selected=producerSha()
+            AttemptDiagnostics.setIdentity (Some request.Preparation.RecipeSourceSha) (Some selected) None
             require(selected=request.ProducerSha256) "selected-producer-refused"
             let preparationClock=Diagnostics.Stopwatch.StartNew()
             let prepared=AttemptPreparation.prepareWithin selected request.Preparation (request.Preparation.BudgetSeconds*1000)
@@ -253,10 +257,12 @@ let main argv =
             writeNew(required "output" values)(Wire.stateBytes final)
             let stepJson=steps|>Seq.map(fun (action,stateJson,actionsJson) -> $"{{\"action\":{JsonSerializer.Serialize action},\"state\":{stateJson},\"emitted\":{actionsJson}}}")|>String.concat ","
             let trace=Encoding.UTF8.GetBytes($"{{\"schema\":\"fsgg.telemetry.host-attempt-acquired-trace/1\",\"producerSha256\":{JsonSerializer.Serialize selected},\"finalState\":{Encoding.UTF8.GetString(Wire.stateBytes final).Trim()},\"steps\":[{stepJson}]}}\n")
-            writeNew(Path.Combine(leaseRoot,request.LeaseId+".trace.json"))trace;0
+            writeNew(Path.Combine(leaseRoot,request.LeaseId+".trace.json"))trace
+            if final.Refusal.IsSome then AttemptDiagnostics.emitToStderr()
+            0
         | _ -> refuse "command-refused"
     with
-    | AttemptRefusal reason -> Console.Error.WriteLine("host-attempt-refused:"+reason);2
-    | :? JsonException -> Console.Error.WriteLine("host-attempt-refused:json-refused");2
-    | :? IOException -> Console.Error.WriteLine("host-attempt-refused:io-refused");2
-    | error -> Console.Error.WriteLine("host-attempt-refused:unexpected-"+error.GetType().Name);2
+    | AttemptRefusal reason -> AttemptDiagnostics.emitToStderr();Console.Error.WriteLine("host-attempt-refused:"+reason);2
+    | :? JsonException -> AttemptDiagnostics.emitToStderr();Console.Error.WriteLine("host-attempt-refused:json-refused");2
+    | :? IOException -> AttemptDiagnostics.emitToStderr();Console.Error.WriteLine("host-attempt-refused:io-refused");2
+    | error -> AttemptDiagnostics.emitToStderr();Console.Error.WriteLine("host-attempt-refused:unexpected-"+error.GetType().Name);2

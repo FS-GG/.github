@@ -8,6 +8,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="BindingTypes.fs" />
+    <Compile Include="OwnedLaunch.fs" />
     <Compile Include="OwnedProcessScope.fs" />
     <Compile Include="HostBinding.fs" />
     <Compile Include="Program.fs" />
@@ -17,5 +18,6 @@
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="HostBinding.Tests" />
+    <InternalsVisibleTo Include="HostAttempt.Correspondence" />
   </ItemGroup>
 </Project>
