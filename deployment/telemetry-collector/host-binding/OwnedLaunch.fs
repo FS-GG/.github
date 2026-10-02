@@ -9,12 +9,13 @@ module internal OwnedLaunch =
     type State =
         { Phase:Phase;IdentityRecorded:bool;ReleaseIntentions:int;ReleaseMayHaveEffect:bool
           Cancelled:bool;DeadlineExpired:bool;StickyFailure:bool;DirectSettled:bool;DescendantsSettled:bool;ReadersSettled:bool }
-    type Action = RecordIdentity | RequestRelease | AcknowledgeRelease | LoseRelease | Cancel | Expire | BeginRetirement | ObserveSettlement of bool*bool*bool | Finish
+    type Action = RecordIdentity | FailIdentity | RequestRelease | AcknowledgeRelease | LoseRelease | Cancel | Expire | BeginRetirement | ObserveSettlement of bool*bool*bool | Finish
     let initial={Phase=Gated;IdentityRecorded=false;ReleaseIntentions=0;ReleaseMayHaveEffect=false;Cancelled=false;DeadlineExpired=false;StickyFailure=false;DirectSettled=false;DescendantsSettled=false;ReadersSettled=false}
     let private refuse state={state with Phase=Refused;StickyFailure=true}
     let apply action state =
         match action with
         | RecordIdentity when state.Phase=Gated && not state.StickyFailure -> {state with Phase=IdentityRecorded;IdentityRecorded=true}
+        | FailIdentity when state.Phase=Gated -> refuse state
         | RequestRelease when state.Phase=IdentityRecorded && state.IdentityRecorded && not state.Cancelled && not state.DeadlineExpired && not state.StickyFailure && state.ReleaseIntentions=0 -> {state with Phase=ReleaseIntended;ReleaseIntentions=1;ReleaseMayHaveEffect=true}
         | AcknowledgeRelease when state.Phase=ReleaseIntended && state.ReleaseIntentions=1 -> {state with Phase=Released}
         | LoseRelease when state.ReleaseIntentions=1 -> {state with Phase=Retiring;StickyFailure=true;ReleaseMayHaveEffect=true}

@@ -386,6 +386,33 @@ module HostBindingTests =
         finally Directory.Delete(owner,true)
 
     [<Fact>]
+    let ``identity acquisition failure never releases the guest`` () =
+        let owner=Path.Combine(Path.GetTempPath(),"host-binding-gate-identity-"+Guid.NewGuid().ToString("N"))
+        Directory.CreateDirectory(owner)|>ignore
+        let marker=Path.Combine(owner,"marker")
+        try
+            use scope=OwnedProcessScope.enterTest()
+            let script="import pathlib; pathlib.Path("+JsonSerializer.Serialize(marker)+").write_text('released')"
+            let stop (direct:Process) = direct.Kill();direct.WaitForExit()
+            Assert.Throws<BindingRefusal>(fun()->scope.RunWithPreAcquireHook("/usr/bin/python3",owner,["-c";script],2000,128,128,stop)|>ignore)|>ignore
+            Assert.False(File.Exists(marker))
+            Assert.Equal<OwnedLaunch.Action list>([OwnedLaunch.FailIdentity],scope.LaunchTraceForTest|>List.map fst)
+            Assert.True(scope.IsUnknown)
+        finally Directory.Delete(owner,true)
+
+    [<Fact>]
+    let ``cancellation after release retires without a successful launch terminal`` () =
+        use scope=OwnedProcessScope.enterTest()
+        Assert.Throws<BindingRefusal>(fun()->scope.RunWithPostSpawnHook("/usr/bin/sleep",Path.GetTempPath(),["30"],2000,128,128,scope.RequestCancellation)|>ignore)|>ignore
+        let actions=scope.LaunchTraceForTest|>List.map fst
+        Assert.Equal<OwnedLaunch.Action list>(
+            [OwnedLaunch.RecordIdentity;OwnedLaunch.RequestRelease;OwnedLaunch.AcknowledgeRelease;OwnedLaunch.Cancel;OwnedLaunch.BeginRetirement;OwnedLaunch.ObserveSettlement(true,true,true)],
+            actions)
+        let final=scope.LaunchTraceForTest|>List.last|>snd
+        Assert.Equal(OwnedLaunch.Retiring,final.Phase)
+        Assert.True(final.StickyFailure)
+
+    [<Fact>]
     let ``launcher refuses an invalid gate byte without executing the guest`` () =
         let owner=Path.Combine(Path.GetTempPath(),"host-binding-invalid-gate-"+Guid.NewGuid().ToString("N"))
         Directory.CreateDirectory(owner)|>ignore

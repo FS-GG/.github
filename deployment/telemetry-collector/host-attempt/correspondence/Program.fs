@@ -105,6 +105,8 @@ let private launchCases=[
  "lostRelease",[OwnedLaunch.RecordIdentity;OwnedLaunch.RequestRelease;OwnedLaunch.LoseRelease],["recordIdentity";"requestRelease";"loseRelease"]
  "cancelBefore",[OwnedLaunch.Cancel],["cancelLaunch"]
  "deadlineBefore",[OwnedLaunch.Expire],["expireLaunch"]
+ "identityFailure",[OwnedLaunch.FailIdentity],["failIdentity"]
+ "cancelAfter",[OwnedLaunch.RecordIdentity;OwnedLaunch.RequestRelease;OwnedLaunch.AcknowledgeRelease;OwnedLaunch.Cancel],["recordIdentity";"requestRelease";"ackRelease";"cancelLaunch"]
  "settled",[OwnedLaunch.RecordIdentity;OwnedLaunch.RequestRelease;OwnedLaunch.AcknowledgeRelease;OwnedLaunch.BeginRetirement;OwnedLaunch.ObserveSettlement(true,true,true);OwnedLaunch.Finish],["recordIdentity";"requestRelease";"ackRelease";"beginRetirement";"settleAll";"finishLaunch"]]
 let mutable private launchTransitions=0
 for scenario,actions,names in launchCases do

@@ -438,7 +438,7 @@ module internal OwnedProcessScope =
                     if isCancelled() then applyLaunch OwnedLaunch.Cancel;raise(BindingRefusal "process-scope-refused")
                     if remainingMilliseconds()<=3250L then applyLaunch OwnedLaunch.Expire;raise(BindingRefusal "process-budget-refused")
                     acquire direct.Id
-                    if unknown || not(identities.ContainsKey(direct.Id)) then raise(BindingRefusal "process-cleanup-unknown")
+                    if unknown || not(identities.ContainsKey(direct.Id)) then applyLaunch OwnedLaunch.FailIdentity;raise(BindingRefusal "process-cleanup-unknown")
                     applyLaunch OwnedLaunch.RecordIdentity
                     if isCancelled() then applyLaunch OwnedLaunch.Cancel;raise(BindingRefusal "process-scope-refused")
                     if remainingMilliseconds()<=3250L then applyLaunch OwnedLaunch.Expire;raise(BindingRefusal "process-budget-refused")
