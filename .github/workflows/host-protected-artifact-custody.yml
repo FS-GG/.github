@@ -37,7 +37,8 @@ jobs:
           path: custody-recipe
           persist-credentials: false
       - name: Static custody preflight
-        run: python3 custody-recipe/tests/host-protected-artifact-custody/run.py
+        working-directory: custody-recipe
+        run: python3 tests/host-protected-artifact-custody/run.py
       - name: Check out selected compiled source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:

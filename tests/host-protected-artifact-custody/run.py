@@ -192,6 +192,7 @@ class CustodyTests(unittest.TestCase):
             self.assertIn(fragment, text)
         for fragment in ('packages: write','id-token: write','secrets:', 'workflow_dispatch:', 'always()', '@v7', 'pull_request_target:'):
             self.assertNotIn(fragment, text)
+        self.assertIn('      - name: Static custody preflight\n        working-directory: custody-recipe\n        run: python3 tests/host-protected-artifact-custody/run.py\n', text)
         self.assertLess(text.index('Static custody preflight'), text.index('actions/setup-dotnet'))
 
 if __name__ == '__main__':
