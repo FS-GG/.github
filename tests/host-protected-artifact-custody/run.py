@@ -108,6 +108,92 @@ class CustodyTests(unittest.TestCase):
         (directory / 'HostAttempt.pdb').write_text('fixture')
         (directory / 'HostAttempt.Tests.dll').write_text('fixture')
         self.refusal(lambda: c.closure(directory, 'HostAttempt', self.root / 'bad'), 'unallowlisted')
+    def resource_production(self):
+        directory = self.production()
+        packages = self.root / 'packages'
+        package = packages / 'fsharp.core/10.1.401'
+        assets = package / 'lib/netstandard2.1'
+        assets.mkdir(parents=True)
+        (assets / 'FSharp.Core.dll').write_bytes((directory / 'FSharp.Core.dll').read_bytes())
+        deps_path = directory / 'HostAttempt.deps.json'
+        deps = json.loads(deps_path.read_text())
+        target = deps['targets'].pop('net10.0')
+        deps['runtimeTarget']['name'] = '.NETCoreApp,Version=v10.0'
+        deps['targets']['.NETCoreApp,Version=v10.0'] = target
+        target.pop('FSharp.Core/1')
+        resources = {}
+        for locale in ('cs','de','es','fr','it','ja','ko','pl','pt-BR','ru','tr','zh-Hans','zh-Hant'):
+            name = 'FSharp.Core.resources.dll'
+            resources[f'lib/netstandard2.1/{locale}/{name}'] = {'locale': locale}
+            (assets / locale).mkdir()
+            (directory / locale).mkdir()
+            content = ('synthetic satellite ' + locale).encode()
+            (assets / locale / name).write_bytes(content)
+            (directory / locale / name).write_bytes(content)
+        deps['targets']['.NETCoreApp,Version=v10.0']['FSharp.Core/10.1.401'] = {'runtime': {'lib/netstandard2.1/FSharp.Core.dll': {'assemblyVersion': '10.1.0.0', 'fileVersion': '10.104.126.42413'}}, 'resources': resources}
+        deps['libraries'] = {'HostAttempt/1': {'type': 'project'}, 'FSharp.Core/10.1.401': {'type': 'package', 'path': 'fsharp.core/10.1.401'}}
+        deps_path.write_text(json.dumps(deps))
+        return directory, packages
+    def test_actual_deps_resource_shape_complete_locales_and_byte_joins(self):
+        directory, packages = self.resource_production()
+        destination = self.root / 'copied'
+        _, joins = c.closure(directory, 'HostAttempt', destination, packages)
+        resources = [join for join in joins if join['kind'] == 'resources']
+        self.assertEqual(len(resources), 13)
+        self.assertEqual({join['locale'] for join in resources}, {'cs','de','es','fr','it','ja','ko','pl','pt-BR','ru','tr','zh-Hans','zh-Hant'})
+        for join in resources:
+            self.assertEqual((destination / join['outputPath']).read_bytes(), (directory / join['outputPath']).read_bytes())
+            self.assertEqual(c.digest(destination / join['outputPath']), join['sha256'])
+    def test_resource_missing_extra_directory_and_byte_mismatch(self):
+        directory, packages = self.resource_production()
+        satellite = directory / 'de/FSharp.Core.resources.dll'
+        content = satellite.read_bytes(); satellite.unlink()
+        self.refusal(lambda: c.closure(directory, 'HostAttempt', self.root / 'missing', packages), 'de/FSharp.Core.resources.dll')
+        satellite.write_bytes(content)
+        extra = directory / 'de/undeclared.resources.dll'; extra.write_bytes(b'fixture')
+        self.refusal(lambda: c.closure(directory, 'HostAttempt', self.root / 'extra', packages), 'undeclared.resources.dll')
+        extra.unlink()
+        (directory / 'unexpected-empty').mkdir()
+        self.refusal(lambda: c.closure(directory, 'HostAttempt', self.root / 'extra', packages), 'unexpected-empty')
+        (directory / 'unexpected-empty').rmdir()
+        satellite.write_bytes(b'substituted')
+        self.refusal(lambda: c.closure(directory, 'HostAttempt', self.root / 'different', packages), 'byte mismatch')
+        self.assertFalse((self.root / 'different').exists())
+    def test_resource_locale_mismatch_mutant_and_path_escape(self):
+        directory, packages = self.resource_production()
+        deps_path = directory / 'HostAttempt.deps.json'
+        original = deps_path.read_text()
+        for asset, locale, reason in [('lib/netstandard2.1/de/FSharp.Core.resources.dll','fr','locale mismatch'), ('lib/netstandard2.1/de/HostAttempt.Tests.resources.dll','de','test/mutant'), ('../de/FSharp.Core.resources.dll','de','path escape'), ('lib/netstandard2.1/de/FSharp.Core.resources.dll','../de','locale')]:
+            deps = json.loads(original)
+            deps['targets']['.NETCoreApp,Version=v10.0']['FSharp.Core/10.1.401']['resources'] = {asset: {'locale': locale}}
+            deps_path.write_text(json.dumps(deps))
+            self.refusal(lambda: c.closure(directory, 'HostAttempt', self.root / 'bad', packages), reason)
+        deps_path.write_text(original)
+        target = directory / 'de/FSharp.Core.resources.dll'; target.unlink(); target.symlink_to('/etc/passwd')
+        self.refusal(lambda: c.closure(directory, 'HostAttempt', self.root / 'bad', packages), 'symlink')
+    def test_resource_missing_restored_package_bytes_and_escaping_directory(self):
+        directory, packages = self.resource_production()
+        restored = packages / 'fsharp.core/10.1.401/lib/netstandard2.1/de/FSharp.Core.resources.dll'
+        restored.unlink()
+        self.refusal(lambda: c.closure(directory, 'HostAttempt', self.root / 'bad', packages), 'missing')
+        (directory / 'de/FSharp.Core.resources.dll').unlink()
+        (directory / 'de').rmdir()
+        (directory / 'de').symlink_to('/etc', target_is_directory=True)
+        self.refusal(lambda: c.closure(directory, 'HostAttempt', self.root / 'bad', packages), 'escaping production directory')
+    def test_resource_hardlink_refused(self):
+        directory, packages = self.resource_production()
+        path = directory / 'de/FSharp.Core.resources.dll'
+        os.link(path, self.root / 'linked-satellite')
+        self.refusal(lambda: c.closure(directory, 'HostAttempt', self.root / 'bad', packages), 'hardlink')
+    def test_closure_diagnostic_lists_are_bounded(self):
+        directory = self.production()
+        for index in range(30):
+            (directory / f'extra-{index}').write_bytes(b'fixture')
+        with self.assertRaises(c.Refusal) as error:
+            c.closure(directory, 'HostAttempt', self.root / 'bad')
+        detail = json.loads(str(error.exception).split(': ', 1)[1])
+        self.assertEqual(detail['extra']['count'], 30)
+        self.assertEqual(len(detail['extra']['first']), 20)
     def test_symlink_escape_and_hardlink(self):
         (self.root / 'escape').symlink_to('/etc/passwd')
         self.refusal(lambda: c.copy_file(self.root / 'escape', self.root, self.root / 'copy'), 'symlink')

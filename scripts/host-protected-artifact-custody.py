@@ -154,28 +154,71 @@ def copy_file(path, root, destination):
     destination.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(path, destination)
 
-def closure(directory, assembly, destination):
+def dependency_path(value):
+    require(type(value) is str and value and len(value) <= 512 and '\\' not in value, 'invalid dependency path')
+    parts = value.split('/')
+    require(all(part not in ('', '.', '..') and re.fullmatch(r'[A-Za-z0-9_.+-]+', part) for part in parts), 'dependency traversal/path escape refused')
+    require(not any('test' in part.lower() or 'mutat' in part.lower() for part in parts), 'test/mutant production dependency')
+    return Path(*parts)
+
+def closure(directory, assembly, destination, package_root=None):
     require(directory.is_dir() and not directory.is_symlink(), 'missing production directory')
     deps_path = directory / f'{assembly}.deps.json'
     safe_file(deps_path, directory)
     deps = json.loads(deps_path.read_text())
     targets = deps['targets'][deps['runtimeTarget']['name']]
     allowed = {f'{assembly}{suffix}' for suffix in ('.dll', '.pdb', '.deps.json', '.runtimeconfig.json', '')}
-    for package in targets.values():
-        for kind in ('runtime', 'native', 'runtimeTargets'):
-            for asset in package.get(kind, {}):
-                name = Path(asset).name
-                require(name not in ('', '.', '..') and 'test' not in name.lower() and 'mutat' not in name.lower(), 'test/mutant production dependency')
+    optional = set()
+    matches = []
+    for package_name, package in targets.items():
+        library = deps.get('libraries', {}).get(package_name, {})
+        for kind in ('runtime', 'native', 'runtimeTargets', 'resources'):
+            for asset_name, metadata in package.get(kind, {}).items():
+                asset = dependency_path(asset_name)
+                if kind == 'resources':
+                    locale = metadata.get('locale')
+                    require(type(locale) is str and re.fullmatch(r'[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})*', locale) is not None, 'invalid declared resource locale')
+                    require(len(asset.parts) >= 2 and asset.parts[-2] == locale and asset.name.endswith('.resources.dll'), 'resource asset/declared locale mismatch')
+                    output = Path(locale) / asset.name
+                    require(library.get('type') == 'package' and package_root is not None, 'resource requires restored package byte custody')
+                else:
+                    output = asset if kind == 'runtimeTargets' and asset.parts[0] == 'runtimes' else Path(asset.name)
+                name = output.as_posix()
                 allowed.add(name)
-                if name.endswith('.dll'):
-                    allowed.add(name[:-4] + '.pdb')
-    required = allowed - {name for name in allowed if name.endswith('.pdb') and name != f'{assembly}.pdb'}
-    present = {p.name for p in directory.iterdir()}
-    require(required <= present and present <= allowed, 'production runtime closure missing or unallowlisted files')
+                if name.endswith('.dll') and kind != 'resources':
+                    pdb_name = name[:-4] + '.pdb'
+                    allowed.add(pdb_name)
+                    if pdb_name != f'{assembly}.pdb':
+                        optional.add(pdb_name)
+                if library.get('type') == 'package' and package_root is not None:
+                    package_path = dependency_path(library['path'])
+                    matches.append((name, package_root / package_path / asset, kind, package_name, metadata.get('locale')))
+    required = allowed - optional
+    allowed_directories = {parent.as_posix() for name in allowed for parent in Path(name).parents if parent != Path('.')}
+    present, directories = set(), set()
+    for current, subdirectories, files in os.walk(directory, followlinks=False):
+        for name in subdirectories:
+            path = Path(current) / name
+            require(not path.is_symlink() and path.resolve().is_relative_to(directory.resolve()), 'symlink/escaping production directory refused')
+            directories.add(path.relative_to(directory).as_posix())
+        for name in files:
+            path = Path(current) / name
+            safe_file(path, directory)
+            present.add(path.relative_to(directory).as_posix())
+    missing, extra = sorted(required - present), sorted((present - allowed) | (directories - allowed_directories))
+    def bounded(values):
+        return {'count': len(values), 'first': [value[:160] for value in values[:20]]}
+    require(not missing and not extra, 'production runtime closure missing or unallowlisted files: ' + json.dumps({'missing': bounded(missing), 'extra': bounded(extra)}, sort_keys=True))
+    byte_joins = []
+    for name, restored, kind, package, locale in matches:
+        safe_file(restored, package_root)
+        actual = digest(directory / name)
+        require(actual == digest(restored), 'production/restored dependency byte mismatch: ' + name)
+        byte_joins.append({'outputPath': name, 'package': package, 'kind': kind, 'locale': locale, 'restoredPath': str(restored), 'sha256': actual})
     require((directory / assembly).stat().st_mode & 0o111, 'apphost is not executable')
-    for path in directory.iterdir():
-        copy_file(path, directory, destination / path.name)
-    return directory / f'{assembly}.pdb'
+    for name in sorted(present):
+        copy_file(directory / name, directory, destination / name)
+    return directory / f'{assembly}.pdb', byte_joins
 
 def compressed(data, offset):
     first = data[offset]
@@ -354,8 +397,9 @@ def retain(source, temp, stage):
     json_write(evidence / 'assembly-joins.json', joins)
     provenance = {}
     for assembly, directory in [('HostAttempt', 'host-attempt-tests'), ('HostBinding', 'host-attempt-binding')]:
-        pdb = closure(temp / directory / 'bin' / assembly / 'release', assembly, stage / 'production' / assembly)
+        pdb, dependency_joins = closure(temp / directory / 'bin' / assembly / 'release', assembly, stage / 'production' / assembly, temp / 'host-attempt-nuget')
         provenance[assembly] = pdb_documents(pdb, source, temp, evidence / 'pdb-generated-documents')
+        provenance[assembly]['dependencyByteJoins'] = dependency_joins
         provenance[assembly]['assemblyJoin'] = assembly_pdb_join(pdb.with_suffix('.dll'), provenance[assembly]['portablePdbId'])
     json_write(evidence / 'pdb-provenance.json', provenance)
     base = source / 'deployment/telemetry-collector/host-attempt'
