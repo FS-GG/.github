@@ -53,6 +53,25 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-02: SC2 guest preparation and typed retained-product eligibility CLOSED (source).**
+[SC2 Client #40](https://github.com/FS-GG/FS.GG.SC2.Client/pull/40) merged protected
+`ceb7a43d9e88a036982280cff2ab4fe912d8d25d`, tree
+`e4a2622128a31be4809602391191db58ce6bfb23`, after the full
+[hosted verification 37076021286](https://github.com/FS-GG/FS.GG.SC2.Client/actions/runs/37076021286)
+passed. The non-timing stale-placement fixture prepares the actual selected guest through its
+existing Worker route; production 250 ms policy and assertions remain unchanged.
+The coherent pipeline builds the complete product, authoring preparer and typed F# metadata owner,
+joins actual PE/PDB/SourceLink/raw source and locked package evidence, and retains curated products
+only after success. Genuine signed archive versus locked-content hash mismatch was corrected using
+NuGet's canonical signature-record ZIP projection; separate raw archive hashes and strict locked
+content equality remain mandatory. Actual signed, unsigned, payload-mutation and truncation controls,
+PE/PDB mismatch controls and the full hosted suite passed; prior failed runs remain retained.
+The successful PR artifact uses the actual merge-checkout identity `dc19a176f4c618bae09fc4b69f0b0d2d7b9ae968`;
+it is not relabeled as protected `ceb7`. Root's independent byte custody and fresh protected-main
+artifact qualification remain required before actor preparation or a new native grant.
+Original `4314` actors, private packets and failed native attempts remain frozen. Replay launch,
+final pointer plus keyboard-empty pair, full trace/offline comparison and native acceptance remain open.
+
 **2026-10-02: Coordination coherent 0.95.0 publication CLOSED; Board receiver adoption remains open.**
 [Publisher 37071597534](https://github.com/FS-GG/.github/actions/runs/37071597534) succeeded
 from protected `3b5de3367f8647cea0cd9366b8cb11eddf53feae`, following the authenticated
