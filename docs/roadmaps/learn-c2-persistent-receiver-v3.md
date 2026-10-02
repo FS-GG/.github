@@ -5,10 +5,10 @@ protected integration, publication, container qualification, receiver custody, a
 
 ## Before P1
 
-The retained persistent receiver is v2. Published Host 0.2.1 predates the required installed-origin
-reader. There is no v3 package, image, installation, grant, activation, capture, custody, or native
-acceptance. The protected Coordination manager can emit v3 installation records, but that alone does
-not establish a receiver.
+The retained persistent receiver is v2. Published Host 0.3.0 contains the required installed-origin
+reader, while the immutable 0.2.1 release remains historical. There is no v3 image, installation,
+grant, activation, capture, custody, or native acceptance. The protected Coordination manager can emit
+v3 installation records, but that alone does not establish a receiver.
 
 ## P1 — inactive preparation and native CI
 
@@ -40,20 +40,18 @@ state machine, so P1 adds no custom model.
 
 ## P2 — publication and root container after P1 Closed
 
-P2 starts only after root records P1 Closed from the protected exact-head workflow. Root then owns an
-unused Host successor version containing the reader, public artifact provenance, complete runtime/image
-closure, reproducible OCI construction, and protected container qualification. P2 must preserve the
-published Host 0.2.1 package, tag, release, manifest, and journal; it cannot republish or relabel them.
+P2 started after root recorded P1 Closed from the protected exact-head workflow. Host successor source
+and publication are now Closed. Root still owns the separate Coordination manager distribution,
+complete runtime/image closure, reproducible OCI construction, and protected container qualification.
+P2 preserves the published Host 0.2.1 package, tag, release, manifest, and journal as immutable history.
 
-### P2-A — provisional Host successor source
+### P2-A — Host successor source
 
-The additive installed-origin reader selects source version `0.3.0`, candidate tag
-`telemetry-host/v0.3.0`, and journal `utel-host-rel-09`. These are provisional choices;
-their availability is unverified. Root must use Host's own tag, feed and journal checks before
-candidate retention or publication. A collision requires another unused coherent tuple.
+The additive installed-origin reader selects source version `0.3.0`, stable tag
+`telemetry-host/v0.3.0`, and CanonicalAuthority ledger release `utel-host-rel-09`.
 The candidate, artifact, admission and publisher selectors agree; the existing publisher
 state machine and default `publish=false` remain unchanged. Historical 0.2.1 and older
-refusal fixtures remain. The registry's published fields remain 0.2.1.
+refusal fixtures remain.
 
 The P2-A source window is Closed on 2026-10-02: [PR #4086](https://github.com/FS-GG/.github/pull/4086)
 merged at `c10885ead065f6724a843ea9c10bd51793e1a120`, tree
@@ -63,19 +61,39 @@ tree and protected main, then verified the exact protected
 [Host package workflow](https://github.com/FS-GG/.github/actions/runs/36959036061)
 passed. Native CI repaired the generated publishing skill manifest in the same
 PR; all eight independently reviewed implementation blobs remained unchanged.
-This closes successor source preparation, while tuple availability, candidate
-retention, publication, served artifacts and container adoption remain open.
+This closes successor source preparation. Publication and later adoption remain separate gates.
 
 ### P2-B — served artifacts
 
-After protected source and native qualification, root acquires a first-attempt candidate,
-verifies its exact package/manifest/source bytes, qualifies the existing publication authority,
-then publishes one retained payload to both feeds and reads back their normalized equality.
+The served-artifact gate required root to acquire a first-attempt candidate, verify its exact
+package/manifest/source bytes, qualify the existing publication authority, publish one retained
+payload to both feeds and read back their normalized equality.
 Publication does not follow from a source version bump. The Coordination manager requires its
 own read-only Actions archive route with source and complete published-directory hashes;
 the existing two-component orchestration archive does not contain the manager. Artifact
 expiration and actual acquisition remain explicit. No new manager package or durable release
 destination is selected here.
+
+Host publication is Closed on 2026-10-02. The exact protected
+[publisher run](https://github.com/FS-GG/.github/actions/runs/36964135216) succeeded for source
+`f43e0a1f94448aa8f7668b1ed72f3169a7cf925e`. Release
+[`telemetry-host/v0.3.0`](https://github.com/FS-GG/.github/releases/tag/telemetry-host/v0.3.0)
+is public as release `401538149`; its GitHub archive SHA-256 is
+`c7cbaa474fdcd0ba577f8577ec92bb381f032db7842f86ddb1b3fb050d8a97ad`. The signed nuget.org
+archive SHA-256 is `7ad2c30894cb3eafbf498e5d247034bc3167ee30dd07c8b09c6b4915657c598a`;
+both feeds expose normalized producer payload SHA-256
+`5572aa61f284abc5a37a12aa88f99b5169c4379be2aa9959e46c9934532f2836`. The release manifest and
+publication journal SHA-256 values are respectively
+`7d61b4888d08299b5578df2e3e283dee88b5acabafa53490b4ba8d00e6676704` and
+`ec63822c627cfad490f9eea731257ac531c9ac3bd681f4790b9489dcfc8470ce`.
+
+Coordination manager source is also Closed: [Coordination PR #923](https://github.com/FS-GG/FS.GG.Coordination/pull/923)
+merged at `bd4de1e999289c7d2a73bcaaf58177f903adc797`, tree
+`b2e06caa53db83ace4d0c44448aea20c0f82747e`, from qualified source
+`0591497fa05e2cd12ab80311125fc421a8124701`; protected native-coherence
+[run `36961953645`](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36961953645) and its
+bootstrap passed. The manager archive is not yet served. Manager distribution, image qualification,
+grant, capture, recovery and C3 activation remain open.
 
 ### P2-C — inactive v3 container
 
