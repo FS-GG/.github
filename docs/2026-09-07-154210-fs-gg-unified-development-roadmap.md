@@ -53,6 +53,30 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-02: V2-HOST protected artifact custody CLOSED; native acquisition remains open.**
+[PR #4116](https://github.com/FS-GG/.github/pull/4116) delivered protected constructor
+`e9bee62a8d3d27bb765e751a65876946e8168940`, tree
+`5270fb87670a191d6ff543fff37db808c7a4ec5e`. Its actual protected-push
+[run 37031537970](https://github.com/FS-GG/.github/actions/runs/37031537970)
+passed the original selected-source qualification and retained
+[artifact 11238076175](https://github.com/FS-GG/.github/actions/runs/37031537970/artifacts/11238076175).
+Root authenticated the served archive SHA-256
+`70001a27f3d77d21d7d2130bad63523bea3e2058d89114c4a0a64ea20ca89ac0`,
+all 88 retained files and 581 immutable source inputs. Actual production DLL/portable-PDB,
+CodeView, SourceLink, source checksums, dependency bytes and selected/loaded identities join
+compiled source `7d9663421a0e74eeb2531eadb5924974f31304f2` and fixed native recipe
+`8ad0da67004d670c6803f34755dfe759a7fc84e7`.
+
+Retained native source gates passed 35 binding and 41 caller tests, 60 Python controls,
+canonical directed/model correspondence and both causal guard mutants. Generated documents
+and the exact compiler non-source sentinel remain explicitly classified. Configured invariant
+limits and successful completion are observed; the completed sample count is Unknown.
+The concrete acquired trace is synthetic and establishes no native acceptance.
+Root artifact-custody receipt SHA-256 is
+`9ca4e9674b9f7b2a39e79c67c3f8585deca926973b852b043b348b8c0c256821`.
+Genuine native capability/profile acquisition, use-time runtime custody and an execution grant
+remain open. No production operation or Main service change follows from this custody closure.
+
 **2026-10-02: WASM-SHARED-01.5-P connected producer repair CLOSED (source).**
 [Game PR #679](https://github.com/FS-GG/FS.GG.Game/pull/679) merged protected
 `4afacb501b9371b4cc81494b7bf91b46c880a663`, tree
