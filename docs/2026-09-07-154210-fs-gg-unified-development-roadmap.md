@@ -65,6 +65,20 @@ independent and open. This dated clarification is not a current fleet-health att
 profile acceptance or waiver of exact artifact, authentication, custody, settlement/replay or effect
 authority for any operation actually performed.
 
+**2026-10-02: FourD signal and settlement source delivered; fresh private operation remains open.**
+[Coordination #922](https://github.com/FS-GG/FS.GG.Coordination/pull/922) merged at
+`e6f6631a2166f9d73639b1cbb96953ee3a768530`, tree
+`9059c91396cc2963d15037867cde9a5a3cf1c9ba`, equal qualified source
+`0b746cc5dd76e1084f0fa82dead28afd16131181`. Root authenticated merge, tree and main.
+Full native validation `36946721471`, including the final formal epoch, and bootstrap
+passed. Nine reviewed source blobs preserve the accepted F# signal, cancellation,
+monotonic time and terminal settlement fixes. Independent qualification exercised actual
+compiled canonical correspondence and late-signal, retired-active and deadline controls.
+A new packet compiled from this exact protected identity, caller and runtime joins,
+and one freshly admitted private operation remain next. The historical refused receipt
+and separate cleanup readback retain their original truth; this source merge opens no
+private window and establishes no new custody, native acceptance or product completion.
+
 **2026-10-02: P4 safe typed failure-observation source delivered; fresh facts and custody remain open.**
 [Sandbox #42](https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/pull/42) merged at
 `1d9079c39302d026db8f658e204106d245e0c7c3`, tree
