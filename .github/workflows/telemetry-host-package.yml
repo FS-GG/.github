@@ -31,6 +31,7 @@ on:
       - "scripts/release_successor_journal.py"
       - "tests/telemetry-host-successor/**"
       - "deployment/telemetry-collector/host-binding/**"
+      - "deployment/telemetry-collector/host-attempt/**"
       - "deployment/telemetry-collector/qualify_native_container.py"
       - "deployment/telemetry-collector/private-native-qualification.yml.in"
       - "tests/telemetry-collector-container/test_private_native_qualification.py"
@@ -72,6 +73,7 @@ on:
       - "scripts/release_successor_journal.py"
       - "tests/telemetry-host-successor/**"
       - "deployment/telemetry-collector/host-binding/**"
+      - "deployment/telemetry-collector/host-attempt/**"
       - "deployment/telemetry-collector/qualify_native_container.py"
       - "deployment/telemetry-collector/private-native-qualification.yml.in"
       - "tests/telemetry-collector-container/test_private_native_qualification.py"
@@ -165,6 +167,97 @@ jobs:
           grep -F 'Ran 38 tests' "$RUNNER_TEMP/host-binding-python-tests.log"
           grep -F 'OK' "$RUNNER_TEMP/host-binding-python-tests.log"
           ! grep -F 'skipped=' "$RUNNER_TEMP/host-binding-python-tests.log"
+      - name: Check out the exact published HOST recipe for attempt-producer tests
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: FS-GG/.github
+          ref: 8ad0da67004d670c6803f34755dfe759a7fc84e7
+          path: .host-attempt-recipe-8ad
+          persist-credentials: false
+      - name: Qualify the typed HOST attempt producer and canonical lifecycle
+        env:
+          NUGET_PACKAGES: ${{ runner.temp }}/host-attempt-nuget
+          HOST_ATTEMPT_RECIPE_ROOT: ${{ github.workspace }}/.host-attempt-recipe-8ad
+          HOST_ATTEMPT_BINDING_DLL: ${{ runner.temp }}/host-attempt-binding/bin/HostBinding/release/HostBinding.dll
+          HOST_ATTEMPT_PRODUCER_DLL: ${{ runner.temp }}/host-attempt-tests/bin/HostAttempt/release/HostAttempt.dll
+          HOST_ATTEMPT_MUTATED_PRODUCER_DLL: ${{ runner.temp }}/host-attempt-mutated/bin/HostAttempt/release/HostAttempt.dll
+          HOST_ATTEMPT_TEST_LOADED_DLL: ${{ runner.temp }}/host-attempt-tests/bin/HostAttempt.Tests/release/HostAttempt.dll
+          HOST_ATTEMPT_SOURCE_PINS: ${{ runner.temp }}/host-attempt-source-pins.json
+          HOST_ATTEMPT_ITF_ROOT: ${{ runner.temp }}/host-attempt-itf
+          HOST_ATTEMPT_ACQUIRED_TRACE_OUTPUT: ${{ runner.temp }}/host-attempt-acquired-state.json
+          HOST_ATTEMPT_QUINT_ROOT: ${{ runner.temp }}/host-attempt-quint
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOST_ATTEMPT_ITF_ROOT" "$HOST_ATTEMPT_QUINT_ROOT/archives" "$HOST_ATTEMPT_QUINT_ROOT/home"
+          /usr/bin/dotnet restore "$HOST_ATTEMPT_RECIPE_ROOT/deployment/telemetry-collector/host-binding/HostBinding.fsproj" \
+            --locked-mode --artifacts-path "$RUNNER_TEMP/host-attempt-binding"
+          /usr/bin/dotnet build "$HOST_ATTEMPT_RECIPE_ROOT/deployment/telemetry-collector/host-binding/HostBinding.fsproj" \
+            -c Release --no-restore --artifacts-path "$RUNNER_TEMP/host-attempt-binding"
+          python3 - "$HOST_ATTEMPT_RECIPE_ROOT" "$HOST_ATTEMPT_SOURCE_PINS" <<'PY'
+          import hashlib, json, pathlib, sys
+          root, output = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
+          native = root / 'deployment/telemetry-collector'
+          names = ['qualify_native.py','native_producer_support.py','native-operation-v1.json','native-producer-config.toml']
+          output.write_text(json.dumps({name: hashlib.sha256((native/name).read_bytes()).hexdigest() for name in names}, sort_keys=True, separators=(',',':'))+'\n')
+          PY
+          /usr/bin/dotnet restore deployment/telemetry-collector/host-attempt/tests/HostAttempt.Tests.fsproj \
+            --locked-mode --artifacts-path "$RUNNER_TEMP/host-attempt-tests"
+          /usr/bin/dotnet build deployment/telemetry-collector/host-attempt/tests/HostAttempt.Tests.fsproj \
+            -c Release --no-restore --artifacts-path "$RUNNER_TEMP/host-attempt-tests"
+          /usr/bin/dotnet restore deployment/telemetry-collector/host-attempt/HostAttempt.fsproj \
+            --locked-mode --artifacts-path "$RUNNER_TEMP/host-attempt-mutated"
+          /usr/bin/dotnet build deployment/telemetry-collector/host-attempt/HostAttempt.fsproj \
+            -c Release --no-restore --artifacts-path "$RUNNER_TEMP/host-attempt-mutated" \
+            -p:DefineConstants=HOST_ATTEMPT_REMOVE_PROVIDER_IDENTITY_GUARD
+          cp -- "$HOST_ATTEMPT_PRODUCER_DLL" "$HOST_ATTEMPT_TEST_LOADED_DLL"
+          test "$(sha256sum -- "$HOST_ATTEMPT_PRODUCER_DLL" | cut -d' ' -f1)" = "$(sha256sum -- "$HOST_ATTEMPT_TEST_LOADED_DLL" | cut -d' ' -f1)"
+          /usr/bin/dotnet test deployment/telemetry-collector/host-attempt/tests/HostAttempt.Tests.fsproj \
+            -c Release --no-build --artifacts-path "$RUNNER_TEMP/host-attempt-tests" \
+            --logger "trx;LogFileName=host-attempt.trx" --results-directory "$RUNNER_TEMP/host-attempt-results"
+          python3 - "$RUNNER_TEMP/host-attempt-results/host-attempt.trx" <<'PY'
+          import sys, xml.etree.ElementTree as ET
+          counters = ET.parse(sys.argv[1]).getroot().find('.//{*}Counters')
+          assert counters is not None
+          assert (counters.get('total'), counters.get('executed'), counters.get('passed'), counters.get('failed')) == ('38','38','38','0')
+          PY
+          python3 -m unittest discover -s deployment/telemetry-collector/host-attempt/tests -p test_transport.py 2>&1 | tee "$RUNNER_TEMP/host-attempt-transport.log"
+          grep -F 'Ran 16 tests' "$RUNNER_TEMP/host-attempt-transport.log"
+          python3 -m unittest discover -s deployment/telemetry-collector/host-attempt/tests -p test_cli_controls.py 2>&1 | tee "$RUNNER_TEMP/host-attempt-cli.log"
+          grep -F 'Ran 5 tests' "$RUNNER_TEMP/host-attempt-cli.log"
+          ! grep -F 'skipped=' "$RUNNER_TEMP/host-attempt-transport.log" "$RUNNER_TEMP/host-attempt-cli.log"
+          quint_url="$(jq -r .quintDownload docs/quint/toolchain.json)"
+          quint_sha512="$(jq -r .quintArchiveSha512 docs/quint/toolchain.json)"
+          quint_version="$(jq -r .quintVersion docs/quint/toolchain.json)"
+          test "$quint_version" = 0.32.0
+          quint_archive="$HOST_ATTEMPT_QUINT_ROOT/archives/quint-$quint_version.tgz"
+          curl --fail --location --silent --show-error "$quint_url" --output "$quint_archive"
+          printf '%s  %s\n' "$quint_sha512" "$quint_archive" | sha512sum --check --status
+          export npm_config_cache="$HOST_ATTEMPT_QUINT_ROOT/npm" QUINT_HOME="$HOST_ATTEMPT_QUINT_ROOT/home"
+          quint() { npm exec --yes --package="$quint_archive" -- quint "$@"; }
+          quint typecheck deployment/telemetry-collector/host-attempt/HostAttempt.qnt
+          quint test deployment/telemetry-collector/host-attempt/HostAttempt_test.qnt \
+            --backend typescript --match '^(success|earlyAdmission|stickyLateAck|lostDispatch|ambiguity|candidateNotOwned|cancellationUnknown|deadlineUnknown|secretOnlyCleanup|successThenDeadline|refusedOwnedCancellation|falseOwnershipRefusal)$'
+          quint run deployment/telemetry-collector/host-attempt/HostAttempt.qnt --backend typescript --main HostAttempt \
+            --max-samples 5000 --max-steps 30 --n-threads 1 --seed 20261004 --invariant allInvariants
+          for item in 'success successStep 16' 'ambiguous ambiguityStep 11' 'lost lostStep 10' 'sticky stickyStep 5' 'deadline deadlineStep 20' 'refused-owned-cancel refusedOwnedCancelStep 16' 'false-ownership falseOwnershipStep 13'; do
+            set -- $item
+            quint run deployment/telemetry-collector/host-attempt/HostAttempt.qnt --backend typescript --main HostAttempt --step "$2" \
+              --max-samples 1 --max-steps "$3" --seed 1 --out-itf "$HOST_ATTEMPT_ITF_ROOT/$1-{seq}.itf.json" --verbosity 0
+          done
+          /usr/bin/dotnet restore deployment/telemetry-collector/host-attempt/correspondence/HostAttempt.Correspondence.fsproj \
+            --locked-mode --artifacts-path "$RUNNER_TEMP/host-attempt-correspondence"
+          /usr/bin/dotnet build deployment/telemetry-collector/host-attempt/correspondence/HostAttempt.Correspondence.fsproj \
+            -c Release --no-restore --artifacts-path "$RUNNER_TEMP/host-attempt-correspondence"
+          correspondence_loaded="$RUNNER_TEMP/host-attempt-correspondence/bin/HostAttempt.Correspondence/release/HostAttempt.dll"
+          cp -- "$HOST_ATTEMPT_PRODUCER_DLL" "$correspondence_loaded"
+          test "$(sha256sum -- "$HOST_ATTEMPT_PRODUCER_DLL" | cut -d' ' -f1)" = "$(sha256sum -- "$correspondence_loaded" | cut -d' ' -f1)"
+          HOST_ATTEMPT_MODEL="$GITHUB_WORKSPACE/deployment/telemetry-collector/host-attempt/HostAttempt.qnt" \
+          HOST_ATTEMPT_PROFILE="$HOST_ATTEMPT_RECIPE_ROOT/deployment/telemetry-collector/native-operation-v1.json" \
+          HOST_ATTEMPT_ADAPTER="$GITHUB_WORKSPACE/deployment/telemetry-collector/host-attempt/host_attempt_transport.py" \
+          HOST_ATTEMPT_PRODUCTION_DLL="$HOST_ATTEMPT_PRODUCER_DLL" \
+          HOST_ATTEMPT_ACQUIRED_STATE="$HOST_ATTEMPT_ACQUIRED_TRACE_OUTPUT" \
+          HOST_ATTEMPT_QUINT_TOOL="$quint_archive" \
+            /usr/bin/dotnet "$RUNNER_TEMP/host-attempt-correspondence/bin/HostAttempt.Correspondence/release/HostAttempt.Correspondence.dll"
       - name: Refuse malformed Host release effect policy before costly qualification
         run: |
           set -euo pipefail

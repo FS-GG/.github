@@ -54,6 +54,36 @@ native qualification stay separate root-owned gates.
 
 FABLE-ADOPT-01 remains the independent staged Rendering/Game/Templates/FourD product adoption programme. OPS-TYPED changes qualification/admin seams only. Its immediate SC2 configuration-codec reuse is a named seam to record in that inventory, not a restart or duplicate of later whole-product SC2/BAR adoption.
 
+**2026-10-02 HOST acquired-attempt source successor ready for same-PR integration.** The qualification-local
+[F# caller](../../deployment/telemetry-collector/host-attempt/README.md) drives
+the actual operation reducer from fixed HTTP and inherited-channel observations.
+The canonical Quint model covers ownership, effect uncertainty, deadlines and
+cleanup; seven generated ITFs compare 91 transitions with the production reducer,
+and an acquired-caller execution contributes 16 observed transitions. The hosted
+gate now expects 38 compiled controls, 16 transport controls and five CLI controls,
+including a separately compiled acquisition-identity guard mutation. It builds
+the unchanged binding from published recipe `8ad0da67004d670c6803f34755dfe759a7fc84e7`.
+The independent B1/B2 review qualifies source `550e201270cb2eee6822aec6b30c8da9e2a32815`,
+tree `3111c5386e284c41d3e8f8eb24ef1fc836297e34`, selected DLL
+`5433508768b9a12a94fccd152d5fbf38826983e693be34deac51aad08e90ed2d`
+and review record SHA256 `d09afa7201719364c76b6c099851b65b8e6f7b4e5a4008042b2a5dbbcccef3cc`.
+An authority `process-cleanup-unknown` refusal is terminal after one call, and
+effect-time revalidation reopens and binds all four fixed payload bytes even
+when Git status is hidden by an index flag. Source closure is conditional on
+merging this successor through [PR #4089](https://github.com/FS-GG/.github/pull/4089).
+Protected rebuilding and actual runtime placement remain required before adoption.
+
+The workflow uses the existing linear static preflight, adds the canonical
+model and compiled correspondence checks before browser/package work, and
+retains SDK custody and the existing binding gate. All eight resulting shell
+blocks parse; 38 private-template controls pass without skips. A copied older
+test expected six blocks; integration corrects the expectation to the actual
+eight. No separate pipeline state model or measured CI saving is claimed.
+Native authorization channels, private custody, workflow admission, dispatch,
+artifact evidence and scoped cleanup remain root-owned operating gates.
+There is no generated workspace or default activation effect; published
+receiver/profile and the four native payloads remain unchanged.
+
 ### Model and correspondence contract
 
 SC2's model has one qualification-owner state and opaque artifact/version IDs. FourD has one operation-owner state plus an explicit set of owned resource identities and observations; it does not model unrelated distributed Authority consensus. Plain Quint fits this shared-state boundary. Bound the instance to two artifact generations and a small fixed set of owned roles. Time is a monotonically advancing budget/epoch; include aggregate deadline exhaustion and cancellation, not real timers.
@@ -73,4 +103,3 @@ OPS-TYPED-01.1–.3 have **no generated workspace/default effect**. The first en
 The SC2 diagnostic slice has no generated-workspace/default effect. Its first operational change requires the clean browser artifact and selected runner/failure-summary successor to retain the typed terminal. Historical attempt n keeps its unknown cause.
 
 Feature completion requires the first production seams adopted and the selected administrative ownership/retirement outcomes resolved or explicitly scoped by root; checking the current ready window does not silently declare the broader migration finished. Root records source delivery, publication, adoption, native acceptance and cleanup separately in the existing programme report. Telemetry remains the existing observer route; missing configuration and usage are unknown, not zero-cost/compliant. Current dispatch telemetry is not configured; usage and economics remain unknown.
-
