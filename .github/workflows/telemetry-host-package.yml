@@ -218,10 +218,10 @@ jobs:
           import sys, xml.etree.ElementTree as ET
           counters = ET.parse(sys.argv[1]).getroot().find('.//{*}Counters')
           assert counters is not None
-          assert (counters.get('total'), counters.get('executed'), counters.get('passed'), counters.get('failed')) == ('37','37','37','0')
+          assert (counters.get('total'), counters.get('executed'), counters.get('passed'), counters.get('failed')) == ('38','38','38','0')
           PY
           python3 -m unittest discover -s deployment/telemetry-collector/host-attempt/tests -p test_transport.py 2>&1 | tee "$RUNNER_TEMP/host-attempt-transport.log"
-          grep -F 'Ran 15 tests' "$RUNNER_TEMP/host-attempt-transport.log"
+          grep -F 'Ran 16 tests' "$RUNNER_TEMP/host-attempt-transport.log"
           python3 -m unittest discover -s deployment/telemetry-collector/host-attempt/tests -p test_cli_controls.py 2>&1 | tee "$RUNNER_TEMP/host-attempt-cli.log"
           grep -F 'Ran 5 tests' "$RUNNER_TEMP/host-attempt-cli.log"
           ! grep -F 'skipped=' "$RUNNER_TEMP/host-attempt-transport.log" "$RUNNER_TEMP/host-attempt-cli.log"

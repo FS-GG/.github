@@ -54,20 +54,24 @@ native qualification stay separate root-owned gates.
 
 FABLE-ADOPT-01 remains the independent staged Rendering/Game/Templates/FourD product adoption programme. OPS-TYPED changes qualification/admin seams only. Its immediate SC2 configuration-codec reuse is a named seam to record in that inventory, not a restart or duplicate of later whole-product SC2/BAR adoption.
 
-**2026-10-02 HOST acquired-attempt source integration.** The qualification-local
+**2026-10-02 HOST acquired-attempt source successor ready for same-PR integration.** The qualification-local
 [F# caller](../../deployment/telemetry-collector/host-attempt/README.md) drives
 the actual operation reducer from fixed HTTP and inherited-channel observations.
 The canonical Quint model covers ownership, effect uncertainty, deadlines and
 cleanup; seven generated ITFs compare 91 transitions with the production reducer,
 and an acquired-caller execution contributes 16 observed transitions. The hosted
-gate runs 37 compiled controls, 15 transport controls and five CLI controls,
+gate now expects 38 compiled controls, 16 transport controls and five CLI controls,
 including a separately compiled acquisition-identity guard mutation. It builds
 the unchanged binding from published recipe `8ad0da67004d670c6803f34755dfe759a7fc84e7`.
-The independent source review qualifies `f1cc5e1c599bae6760649d8881b5971ab4ef5447`;
-its selected DLL is `c31c2e908fcb4f956e5ddb652e688399382f7dffc70157dedb10f81cea57e980`.
-That local build's PDB names its predecessor; implementation document hashes
-match the reviewed source. Protected rebuilding and actual runtime placement
-remain required before adoption.
+The independent B1/B2 review qualifies source `550e201270cb2eee6822aec6b30c8da9e2a32815`,
+tree `3111c5386e284c41d3e8f8eb24ef1fc836297e34`, selected DLL
+`5433508768b9a12a94fccd152d5fbf38826983e693be34deac51aad08e90ed2d`
+and review record SHA256 `d09afa7201719364c76b6c099851b65b8e6f7b4e5a4008042b2a5dbbcccef3cc`.
+An authority `process-cleanup-unknown` refusal is terminal after one call, and
+effect-time revalidation reopens and binds all four fixed payload bytes even
+when Git status is hidden by an index flag. Source closure is conditional on
+merging this successor through [PR #4089](https://github.com/FS-GG/.github/pull/4089).
+Protected rebuilding and actual runtime placement remain required before adoption.
 
 The workflow uses the existing linear static preflight, adds the canonical
 model and compiled correspondence checks before browser/package work, and

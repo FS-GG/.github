@@ -65,15 +65,20 @@ independent and open. This dated clarification is not a current fleet-health att
 profile acceptance or waiver of exact artifact, authentication, custody, settlement/replay or effect
 authority for any operation actually performed.
 
-**2026-10-02: HOST acquired-attempt caller source CLOSED; private adoption remains open.**
+**2026-10-02: HOST acquired-attempt caller successor READY; source closure is conditional on same-PR merge and private adoption remains open.**
 The [qualification-local F# caller](../deployment/telemetry-collector/host-attempt/README.md)
 consumes fixed acquired observations and drives the actual lifecycle reducer.
-The native source gate includes 37 compiled controls, 15 transport controls,
+The native source gate expects 38 compiled controls, 16 transport controls,
 five CLI controls, the canonical Quint model, seven genuine ITF comparisons
 covering 91 transitions and an acquired-caller comparison with 16 transitions.
-The independent reviewed source is `f1cc5e1c599bae6760649d8881b5971ab4ef5447`.
+Independent B1/B2 review qualifies source `550e201270cb2eee6822aec6b30c8da9e2a32815`,
+tree `3111c5386e284c41d3e8f8eb24ef1fc836297e34`, with review record SHA256
+`d09afa7201719364c76b6c099851b65b8e6f7b4e5a4008042b2a5dbbcccef3cc`.
 Absolute authorization deadlines, interrupt-before-cancel cleanup and an actual
-removed-acquisition-guard witness are covered. Protected runtime rebuilding,
+removed-acquisition-guard witness remain covered. Cleanup-unknown from the
+binding authority is terminal after one call, and effect-time checks reopen all
+four pinned payloads. [PR #4089](https://github.com/FS-GG/.github/pull/4089) must
+merge this successor before source closure. Protected runtime rebuilding,
 private channel/custody joins and genuine native acceptance remain open.
 Published receiver `8ad0da67004d670c6803f34755dfe759a7fc84e7`, its profile and
 four native payloads remain unchanged; V2 FULL ACCEPTED and Main NO ACTION remain.
