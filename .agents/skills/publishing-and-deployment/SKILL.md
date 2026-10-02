@@ -103,19 +103,27 @@ published a `.nupkg` byte-identical to `0.46.0` that can never be un-tagged (`.g
 
 ### `.github` coherent-set entry point
 
-For the `github` coherent set (`FS.GG.Kit`, `FS.GG.Drivers`, and `FS.GG.Coord.Cli`), do **not**
-push component tags directly and do not sequence preparation from a step-summary recipe. Start the
-transaction from the exact accepted source commit:
+For the `github` coherent set (`FS.GG.Kit`, `FS.GG.Drivers`, and `FS.GG.Coord.Cli`), use the
+selected successor operating window in [utel-release-successor](../../../docs/roadmaps/utel-release-successor.md).
+The current source selects **0.95.0**, promoted predecessor **0.94.0**, and protected journal
+`utel-rel-10`. Historical `release-saga-start`, prepare, component publishers and promote workflows
+remain sealed under GS2-08.9; their recipes do not authorize current publication.
 
-    gh workflow run release-saga-start.yml --repo FS-GG/.github --ref main \
-      -f source_sha=<40-character-merge-sha>
+1. Qualify and merge the selected successor source. Dispatch `release-successor-candidate.yml`
+   on current `main` once. Authenticate the successful first-attempt run and its original seven-file
+   Actions archive: three packages, manifest, predecessor channel and two standalone qualification files.
+2. Hold `main` stable through candidate qualification, preflight and first publication. Dispatch
+   `release-successor-publish.yml` on that same SHA with `candidate_run_id`, `candidate_artifact_id`,
+   the raw `candidate_archive_sha256`, and `publish=false`. Verify its genuine authority, collision,
+   exact-byte and eligibility observations before selecting `publish=true` with those same inputs.
+3. Observe all sixteen durable effects and both feeds before declaring publication complete. The
+   successor creates only `coherent-set/v0.95.0`; component tags would enter sealed historical routes.
+   After journal initialization, forward recovery uses the original archive and the existing admission
+   and journal rules. Unknown or conflicting effects remain incomplete; never reset the journal,
+   repack, replace published bytes or blindly retry an unresolved write.
 
-`release-saga-start` first inspects the durable release journal. A fresh version calls the single-pack
-prepare workflow and can create component tags only after it succeeds. A prepared draft validates
-its stored manifest and resumes already-tagged members without re-packing; a promoted release is an
-idempotent no-op. This is the standard entry point
-for both fresh operator cuts and partial recovery. The component release workflows and
-`release-saga-prepare.yml` are lower-level saga primitives, not independent operator instructions.
+The workflow retains its existing single-operator and environment restrictions. Source merge, a
+successful preflight and published/installed readback are separate milestones.
 
 Each **producer owns its release workflow**, including `.github` for its two org-level tools
 (ADR-0039 §5). The shape is:
