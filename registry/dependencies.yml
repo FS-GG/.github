@@ -3,7 +3,7 @@
 # versions are coherent. A `contract-change` issue MUST update this file as part of
 # its resolution. Human projection: docs/registry/compatibility.md.
 schemaVersion: 2   # → 2 (.github#1114, SDD#508 step 3): `consumers` becomes "required, may be EMPTY" — a present-but-empty `consumers: []` is now a legal, honest value for a package-bearing contract that nothing restores (the `new-sdd-workspace` scaffolder). Schema growth under #686 / ADR-0015; the FS.GG.SDD.Cli validator pin in contract-coherence.yml advances to 0.13.0 with this bump (publish-before-flip, ADR-0037: SDD published the three-state validator FIRST, in SDD#512/#516).
-updated: "2026-09-30"   # Changelog moved to registry/CHANGELOG.md (.github#129 / review M4): prepend one dated entry there per change and set this date to match. Kept short deliberately — the typed validator does not read this comment.
+updated: "2026-10-02"   # Changelog moved to registry/CHANGELOG.md (.github#129 / review M4): prepend one dated entry there per change and set this date to match. Kept short deliberately — the typed validator does not read this comment.
 
 repos:
   fsquint: { name: FsQuint, role: "Independent public Quint–F# decoding, replay and optional tooling" }
@@ -956,7 +956,7 @@ contracts:
     surface: "the `fsgg-coord-engine` CLI verb surface (claim/take/batch/who/widen/set-paths/say/landable/done/release/flush/…) + its exit-code contract, emitted from src/FS.GG.Coord.Core/Protocol.fs; shipped as the FS.GG.Coord.Cli dotnet tool"
     consumers: [sdd, rendering, governance, templates, game, audio, net]   # All SEVEN coordination-kit receivers (registry/repos.yml `receives: coordination-kit`). `scripts/fsgg-coord` resolves and execs this package, so every receiver is a real TOOL consumer edge. `.github` itself is not listed because it resolves the engine from source.
   - id: telemetry-host
-    version: "0.2.1"     # SOURCE and immutable release bind exact protected main 0145bd2c852847d00da8b3a0c35d27cd64a87781; schema 10..12.
+    version: "0.3.0"     # SOURCE: provisional additive installed-origin reader candidate; schema 10..12. Tag telemetry-host/v0.3.0 and journal utel-host-rel-09 availability/publication remain unverified. Immutable published 0.2.1 below is preserved.
     package-version: "0.2.1" # GitHub Packages archive sha256:4847c15ab207a33556462873840ad4109cf1c1e16fd7a15d5fffae5a8162f589 and signed nuget.org archive sha256:681faeca9941aaeaaad29368f1ab4f1f3c4b0c581655b8a2d8054b6448adc6f2 have equal normalized payload sha256:207843031c78c2711e85a2db14b46a83ec0da9fbd3ee0f144a736320f7e8c2c9.
     package-tag: "telemetry-host/v0.2.1" # Promoted three-asset release; publisher 36739270730; raw manifest sha256:f16546855d4ce60060f762b6f7bed715cc115f9ef97cd7b55dad5294b2ea0816 and publication journal sha256:bce45f3f4c0701031863c6b1eb398a99982b152f585467cb2e7b06c00987c58e.
     owner: github
