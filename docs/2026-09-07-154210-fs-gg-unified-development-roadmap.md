@@ -53,6 +53,25 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-03: Coordination Host candidate packaging repair CLOSED (source).**
+[Coordination #926](https://github.com/FS-GG/FS.GG.Coordination/pull/926) merged as
+`2309964321a895100d12ededb1c9c00c8342b509`, tree
+`b5794fbaba463f7132999f11a1121d79dce53759`, equal the reviewed candidate,
+after native coherent qualification and required checks passed.
+The required current Host had exceeded the unchanged 100 MiB payload ceiling.
+Pinned-SDK single-file compression preserves all 227 bundle entries and their
+content while reducing the apphost from 106,138,938 to 50,364,860 bytes.
+Two cold builds at the existing fixed source path produced identical
+42,966,885-byte canonical archives. Historical uncompressed manifests remain
+readable; malformed compression bindings refuse. This closes the packaging
+source repair, not protected serving or native capability qualification.
+
+The inactive collector runtime declaration also now matches the retained
+337-file canonical inventory and typed constructor hash. Its status remains
+`acquisition-required`; native reader inventory, image qualification, capture,
+receiver installation and activation remain open. No account authentication,
+model discovery, grant or installed operation follows from this source change.
+
 **2026-10-03: Shared-WASM canonical event qualification CLOSED (source).**
 [Game #681](https://github.com/FS-GG/FS.GG.Game/pull/681) merged as
 `0b8a3217c94e54bcb5667df48a42dee4398e21c9`, tree
