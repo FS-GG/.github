@@ -77,7 +77,7 @@ The private root manifest digest is `baef18f06846c0a5344e35e27b7e3db0389e2dad451
 
 Historical source qualification had no configured telemetry. The current source-preparation attempt uses prospective telemetry; native usage remains unsupported or unknown. No missing telemetry was reconstructed.
 
-### Public 2.0.3 negative custody supplement pending
+### Public 2.0.3 negative custody guard and qualification
 
 The retained insufficient executable was a local `dotnet publish` candidate, not the original public 2.0.3 payload. Static custody audit found only 10 of 36 public payload members identical; Commands, CLI, dependencies and runtime closure differed. The original manifest and 39-command report remain immutable historical evidence for that private candidate. Public SDD 2.1.0 positive custody and acceptance remain independent and unchanged.
 
@@ -99,3 +99,27 @@ controls retain wrong-hash and drift refusal without changing the oracle. Fresh
 exact-head native closure remains pending; the earlier TRX identity closure was
 not accepted after the structural refusal. This attestation repair performs no
 release effect and changes no telemetry performance budget or published frontier.
+
+
+### Genuine public 2.0.3 negative qualification accepted — 2026-10-03
+
+Root accepted the fresh four-command supplement with the genuine public archive,
+all 36 literal tool payloads and actual apphost target bound above. Actual version
+output was 2.0.3. The structured knowledge probe returned exit 1, blocked
+`unknownCommand` and an empty changed-artifact list. Normal typed app and game
+calls through the reviewed private Wizard each exited 1 at the 2.1.0 producer
+floor, before Git, knowledge-store or product-scaffold creation.
+
+Ordinary descriptor fetch precedes the floor and writes `.fsgg/providers.yml`.
+The first supplement refused this expected residue and remains FAILED after three
+commands, with game unrun. The source-corrected successor accepts only the exact
+pinned descriptor bytes and directory shape, refusing extra entries, Git/store or
+product files, symlinks, hardlinks and changed descriptor transport. Its fresh
+operation passed four commands in 4.355 seconds with all physical pre/post pins
+unchanged and all owned process identities absent. Root acceptance SHA-256 is
+`fac568bc46c58a75ead34bf4c594ea16d7f9225e8f5048a91d05f69273bcbecc`.
+
+This completes the genuine public negative dependency proof alongside the preserved
+public 2.1.0 positive proof. The private Wizard binary remains a private source
+qualification; publication and installed acceptance of the future public 0.13.0
+archive remain separate milestones. No package publication or activation occurred.
