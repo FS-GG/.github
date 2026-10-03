@@ -4,6 +4,9 @@
 open System
 open System.Diagnostics
 open System.IO
+open System.Reflection
+open System.Runtime
+open System.Runtime.InteropServices
 open System.Security.Cryptography
 open System.Text
 open System.Text.Json
@@ -63,6 +66,114 @@ let elapsed action =
     timer.Stop()
     Math.Round(timer.Elapsed.TotalMilliseconds, 3)
 
+type PhaseSample = { name: string; timestamp: int64 }
+
+type AdmissionSample =
+    { index: int
+      startTimestamp: int64
+      endTimestamp: int64
+      elapsedMilliseconds: float
+      processCpuMilliseconds: float
+      gcCollections: int array
+      phases: PhaseSample array
+      phasesTruncated: bool }
+
+let measuredAdmission index action =
+    use currentProcess = Process.GetCurrentProcess()
+    let cpuBefore = currentProcess.TotalProcessorTime
+    let gcBefore = Array.init 3 GC.CollectionCount
+    let phases = ResizeArray<PhaseSample>(16)
+    let mutable truncated = false
+    let hook name =
+        // Hooks remain inside the admission timer. Their cost is not subtracted.
+        if phases.Count < 256 then
+            phases.Add({ name = name; timestamp = Stopwatch.GetTimestamp() })
+        else
+            truncated <- true
+    let started = Stopwatch.GetTimestamp()
+    action hook
+    let finished = Stopwatch.GetTimestamp()
+    currentProcess.Refresh()
+    let cpuAfter = currentProcess.TotalProcessorTime
+    let gcAfter = Array.init 3 GC.CollectionCount
+    let milliseconds =
+        Math.Round(float (finished - started) * 1000.0 / float Stopwatch.Frequency, 3)
+    { index = index
+      startTimestamp = started
+      endTimestamp = finished
+      elapsedMilliseconds = milliseconds
+      processCpuMilliseconds = Math.Round((cpuAfter - cpuBefore).TotalMilliseconds, 3)
+      gcCollections = Array.map2 (-) gcAfter gcBefore
+      phases = phases.ToArray()
+      phasesTruncated = truncated }
+
+let fileDigest path =
+    if String.IsNullOrWhiteSpace path || not (File.Exists path) then null
+    else
+        use stream = File.OpenRead path
+        SHA256.HashData stream |> Convert.ToHexString |> fun value -> value.ToLowerInvariant()
+
+let loadedDigest name =
+    match AppDomain.CurrentDomain.GetAssemblies() |> Array.filter (fun assembly -> assembly.GetName().Name = name) with
+    | [| assembly |] -> fileDigest assembly.Location
+    | _ -> null
+
+let nativeSqliteDigest () =
+    if File.Exists "/proc/self/maps" then
+        File.ReadLines "/proc/self/maps"
+        |> Seq.map (fun line -> line.Split(' ', StringSplitOptions.RemoveEmptyEntries) |> Array.last)
+        |> Seq.filter (fun path -> Path.GetFileName path = "libe_sqlite3.so")
+        |> Seq.distinct
+        |> Seq.toArray
+        |> function
+            | [| path |] -> fileDigest path
+            | _ -> null
+    else null
+
+let diagnosticContext () =
+    // Only these configuration values are read, never the process environment as a whole.
+    // An unset or non-boolean value stays unknown instead of being copied into evidence.
+    let settings = System.Collections.Generic.Dictionary<string, string>()
+    for name in
+        [| "DOTNET_TieredCompilation"; "DOTNET_TieredPGO"; "DOTNET_ReadyToRun"
+           "DOTNET_gcServer"; "DOTNET_gcConcurrent"; "COMPlus_TieredCompilation"
+           "COMPlus_TieredPGO"; "COMPlus_ReadyToRun"; "COMPlus_gcServer"; "COMPlus_gcConcurrent" |] do
+        let value = Environment.GetEnvironmentVariable name
+        settings.Add(name, if value = "0" || value = "1" then value else null)
+    let cpuModel =
+        if File.Exists "/proc/cpuinfo" then
+            File.ReadLines "/proc/cpuinfo"
+            |> Seq.tryFind (fun line -> line.StartsWith("model name", StringComparison.Ordinal))
+            |> Option.map (fun line -> line.Split(':', 2).[1].Trim())
+            |> Option.defaultValue null
+        else null
+    let cpuQuota =
+        if File.Exists "/sys/fs/cgroup/cpu.max" then
+            let value = File.ReadAllText("/sys/fs/cgroup/cpu.max").Trim()
+            if System.Text.RegularExpressions.Regex.IsMatch(value, "^(max|[0-9]+) [0-9]+$") then value else null
+        else null
+    let fsiHost = Assembly.GetEntryAssembly()
+    {|
+        runtimeVersion = Environment.Version.ToString()
+        runtimeAssemblySha256 = fileDigest (typeof<obj>.Assembly.Location)
+        fsiHostVersion = if isNull fsiHost then null else fsiHost.GetName().Version.ToString()
+        fsiHostSha256 = if isNull fsiHost then null else fileDigest fsiHost.Location
+        framework = RuntimeInformation.FrameworkDescription
+        processArchitecture = RuntimeInformation.ProcessArchitecture.ToString()
+        osArchitecture = RuntimeInformation.OSArchitecture.ToString()
+        processorCount = Environment.ProcessorCount
+        cpuModel = cpuModel
+        cpuQuota = cpuQuota
+        operatingSystem = RuntimeInformation.OSDescription
+        isServerGC = GCSettings.IsServerGC
+        gcLatencyMode = GCSettings.LatencyMode.ToString()
+        observedEnvironment = settings
+        // These are loaded bytes, not an assertion about effective JIT policy.
+        storeAssemblySha256 = loadedDigest "FS.GG.Telemetry.Store"
+        coreAssemblySha256 = loadedDigest "FS.GG.Coord.Core"
+        nativeSqliteSha256 = nativeSqliteDigest ()
+    |}
+
 let initialize root =
     match TelemetryStoreApplication.assessProductionRoot root with
     | TelemetryStore.ApprovedLocalDurable -> ()
@@ -114,9 +225,17 @@ try
 
     let admission = Array.zeroCreate<float> sampleCount
     let application = Array.zeroCreate<float> sampleCount
+    let diagnostics = Array.zeroCreate<AdmissionSample> sampleCount
 
     for index in 0 .. sampleCount - 1 do
-        admission[index] <- elapsed (fun () -> submit steadyRoot "steady" index)
+        let sample =
+            measuredAdmission index (fun hook ->
+                TelemetryStoreApplication.submitReceiptWithHook
+                    steadyRoot TelemetryStore.ApprovedLocalDurable scope (envelope "steady" index) hook
+                |> unwrap
+                |> ignore)
+        diagnostics[index] <- sample
+        admission[index] <- sample.elapsedMilliseconds
         application[index] <- elapsed (fun () -> drain steadyRoot)
 
     initialize backlogRoot
@@ -145,6 +264,17 @@ try
             qualified = admissionSummary.p95Milliseconds <= limit
             storeAssemblySha256 = storeAssemblySha256
             assessment = "approved-local-durable"
+            diagnostics =
+                {|
+                    schema = "fsgg.telemetry.store-phase-diagnostics/1"
+                    warmupPairs = 5
+                    firstSample = 0
+                    sampleCount = sampleCount
+                    timestampFrequency = Stopwatch.Frequency
+                    context = diagnosticContext ()
+                    admissions = diagnostics
+                    interpretation = "observations-only; CPU includes process-wide work; GC overlap is not attribution"
+                |}
             samples =
                 {|
                     warmInProcessAdmissionMilliseconds = admission
