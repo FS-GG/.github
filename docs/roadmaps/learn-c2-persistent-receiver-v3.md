@@ -221,3 +221,9 @@ rejects zero dependency bytes, and
 requires positive file size. Complete OS/Tcl/Tk closure, independently selected image inputs, two
 cold OCI builds and actual served Manager-to-Host qualification remain open. The inactive
 `acquisition-required` selection and all installation, capture and activation boundaries remain.
+
+The exact-byte inactive CLI guard also binds the canonical declaration after the prior runtime-pin
+correction: SHA-256 `63a6bd47f0e5def4d0690df6ed83c479629ed2461ab26b9fc6017415d52da7b8`.
+An actual CLI control requires unavailable status for those exact bytes and refusal after appending
+one whitespace byte. The deliberate input-revalidation mutant remains unchanged and must still
+fail its safety property; that expected failure is distinct from later placeholder checks.

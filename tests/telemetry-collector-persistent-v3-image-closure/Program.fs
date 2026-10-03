@@ -45,6 +45,33 @@ let writeManifest name (manifest:RoleManifest) : RoleManifestReference =
   {Role=manifest.Role;Path=name+".json";Sha256=sha bytes}
 let manifests=[|"host";"manager";"native";"runtime"|]|>Array.map(fun role->writeManifest role (roleManifest role))
 let selected={IdentityClass="synthetic-test";AcquisitionRoot=root;ManifestRoot=manifestRoot;RoleManifests=manifests;NativeInventoryPath="";NativeInventorySha256="";OwnerUid=ImageClosure.ownerUid root;Platform="linux/amd64";HostSourceRevision=h 'a';HostReleaseId=1L;HostRunId=2L;HostArchiveSha256=h 'b';HostPackageSha256=h 'c';HostPayloadSha256=h 'd';HostManifestSha256=h 'e';HostJournalSha256=h 'f';ManagerSourceRevision=String('a',40);ManagerSourceTree=String('b',40);ManagerArtifactSha256=h '1';ManagerManifestSha256=h '2';ManagerPreparedSha256=h '3';ManagerArchiveSha256=h '4';ManagerRunId=3L;ManagerArtifactId=4L;RuntimeImageDigest="sha256:"+h '5';RuntimeTreeSha256=h '6';NativeElfSha256=h '7';NativeProfileSha256=h '8';ReaderProfileSha256=h '9';CanonicalVerifierSha256=h 'a';InventorySha256=inventory rows;Files=rows}
+// Execute the actual CLI: canonical inert bytes stay unavailable; even one changed byte refuses.
+let cliRoot=Path.GetFullPath(Path.Combine(__SOURCE_DIRECTORY__, "../../deployment/telemetry-collector/persistent/v3/image-closure"))
+let cli=Path.Combine(cliRoot,"bin/Debug/net10.0/PersistentV3.ImageClosure.dll")
+let invokePlaceholder path =
+  let start=System.Diagnostics.ProcessStartInfo("dotnet")
+  start.UseShellExecute<-false
+  start.RedirectStandardOutput<-true
+  start.RedirectStandardError<-true
+  start.ArgumentList.Add cli
+  start.ArgumentList.Add path
+  use child=System.Diagnostics.Process.Start start
+  let stdout=child.StandardOutput.ReadToEnd()
+  let stderr=child.StandardError.ReadToEnd().Trim()
+  child.WaitForExit()
+  child.ExitCode,stdout,stderr
+let canonicalPlaceholder=Path.Combine(cliRoot,"production-selection.json")
+match invokePlaceholder canonicalPlaceholder with
+| 2,"","persistent-v3-image-closure-unavailable: native-image-closure-inventory-acquisition-required"->()
+| actual->fail $"actual canonical placeholder outcome differs: %A{actual}"
+let changedPlaceholder=Path.Combine(root,"changed-production-selection.json")
+let canonicalPlaceholderBytes=File.ReadAllBytes canonicalPlaceholder
+File.WriteAllBytes(changedPlaceholder,Array.append canonicalPlaceholderBytes [|byte ' '|])
+match invokePlaceholder changedPlaceholder with
+| 3,"","persistent-v3-image-closure-refused: acquisition-required-selection-bytes-differ"->()
+| actual->fail $"actual changed-byte placeholder outcome differs: %A{actual}"
+File.Delete changedPlaceholder
+printfn "PASS actual canonical placeholder unavailability and changed-byte refusal"
 let prepared:byte array=match ImageClosure.prepare selected with ClosureResult.Prepared bytes->bytes|value->fail $"physical positive refused: %A{value}"
 let production={selected with IdentityClass="production";OwnerUid=0;HostSourceRevision=ImageClosure.HostSourceRevision;HostReleaseId=401538149L;HostRunId=36964135216L;HostArchiveSha256=ImageClosure.HostArchiveSha256;HostPackageSha256=ImageClosure.HostPackageSha256;HostPayloadSha256=ImageClosure.HostPayloadSha256;HostManifestSha256=ImageClosure.HostManifestSha256;HostJournalSha256=ImageClosure.HostJournalSha256;ManagerSourceRevision=ImageClosure.ManagerSourceRevision;ManagerSourceTree=ImageClosure.ManagerSourceTree;ManagerArtifactSha256=ImageClosure.ManagerArtifactSha256;ManagerManifestSha256=ImageClosure.ManagerManifestSha256;ManagerPreparedSha256=ImageClosure.ManagerPreparedSha256;ManagerArchiveSha256=ImageClosure.ManagerArchiveSha256;ManagerRunId=36983338783L;ManagerArtifactId=11216418410L;RuntimeImageDigest=ImageClosure.RuntimeImageDigest;RuntimeTreeSha256=ImageClosure.RuntimeTreeSha256;NativeElfSha256=ImageClosure.NativeElfSha256;NativeProfileSha256=ImageClosure.NativeProfileSha256;CanonicalVerifierSha256=ImageClosure.CanonicalVerifierSha256}
 match ImageClosure.prepare production with ClosureResult.Unavailable "trusted-native-selection-acquisition-required"->()|value->fail $"unacquired production closure did not require trusted root selection: %A{value}"
