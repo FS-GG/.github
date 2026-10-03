@@ -164,6 +164,23 @@ independent literal publication readback remains authoritative. Existing 2.1
 original archives, versions and product behavior are unchanged; no new publication
 is claimed.
 
+**2026-10-03: WASM cold evaluator preparation CLOSED (source and native qualification).**
+[Game #686](https://github.com/FS-GG/FS.GG.Game/pull/686) merged as protected
+executor `10f024fb8c53df184c09e8b5374724c8ed3c20c7`, matching reviewed
+`7e36fb80f627403474371429e51b8bbe9f394337` tree
+`4638e0453b11a755918caddd736dd9617c579a54`. Full native
+[WASM qualification 37138400319](https://github.com/FS-GG/FS.GG.Game/actions/runs/37138400319)
+and all 34 native checks passed. The source verifies the exact official
+`quint-co/quint` evaluator v0.6.0 archive and sole regular binary member in a
+fresh private cache, then requires additional Rust model/witness readiness before
+packing. Pure controls at the earlier `4c71b9d` checkpoint retained their scope;
+the final source also passes static preflight with shallow history and a
+hash-checked original producer fixture. Producer
+`16a401692f4c0dee7f6da1a86d0cd49e6ea3ec2c`, public/default 0.2 contracts and the
+historical TypeScript proof remain unchanged. No actual Rust readiness run,
+protected-producer pack, R2 preparation or publication is claimed; these and
+fresh both-feed installed acceptance remain pending.
+
 **2026-10-03: WASM-SHARED-01.3-R1 publisher route CLOSED (source and native qualification).**
 [Game #685](https://github.com/FS-GG/FS.GG.Game/pull/685) merged as
 `ccdec51db27e7fbcce8fcfda71a36aa9a2ca7b95`; protected source has the exact
