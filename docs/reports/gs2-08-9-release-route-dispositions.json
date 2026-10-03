@@ -31,12 +31,12 @@
     },
     {
       "path": ".github/workflows/release-new-sdd-workspace.yml",
-      "sha256": "1ac232745859871cc50847c58eb91648f64eefc30d599b367b9038926b78e740",
+      "sha256": "5704613f20a68efce211f699189f439af46c1a8387d1859625e06882978efa7a",
       "disposition": "exact-source-protected-journal-successor-only",
       "successorAmendment": {
-        "unit": "SVG-D5-WIZARD-012",
-        "version": "0.12.0",
-        "reason": "The existing filename carries the NuGet Trusted Publishing identity. Its historical direct publisher remains retired; the 0.12.0 workflow delegates all publication effects to the admitted successor and restores no tag trigger.",
+        "unit": "TSDD-KNOWLEDGE-01.4",
+        "version": "0.13.0",
+        "reason": "The existing filename retains its NuGet Trusted Publishing identity. The accepted 0.13.0 source changes the prior successor comments and publisher job identity while delegating all effects to the same exact-source, protected-journal route. The historical direct publisher remains retired; no tag trigger or unadmitted effect is restored.",
         "sealedPredecessorSha256": "28bb782d48c1d0fbf4f71e1000dc73fb1517fda3a8b71942358c604855a2360f"
       },
       "historicalDisposition": "manual-local-pack-only",
@@ -144,5 +144,36 @@
     "land-after-gs2-08.8-bridge-adoption",
     "land-this-release-partition-before-final-gs2-08.9-census-and-roadmap-projection",
     "reconcile-historical-callers-and-administrative-credential-revocation-as-separate-authority-owned-residuals"
+  ],
+  "historicalRouteAttestations": [
+    {
+      "status": "non-current-history",
+      "acceptedSource": "b1552d2302971b17d0a6cfae487d3d5f17b767db",
+      "route": {
+        "path": ".github/workflows/release-new-sdd-workspace.yml",
+        "sha256": "1ac232745859871cc50847c58eb91648f64eefc30d599b367b9038926b78e740",
+        "disposition": "exact-source-protected-journal-successor-only",
+        "successorAmendment": {
+          "unit": "SVG-D5-WIZARD-012",
+          "version": "0.12.0",
+          "reason": "The existing filename carries the NuGet Trusted Publishing identity. Its historical direct publisher remains retired; the 0.12.0 workflow delegates all publication effects to the admitted successor and restores no tag trigger.",
+          "sealedPredecessorSha256": "28bb782d48c1d0fbf4f71e1000dc73fb1517fda3a8b71942358c604855a2360f"
+        },
+        "historicalDisposition": "manual-local-pack-only",
+        "historicalCapabilityLoss": [
+          "tag-trigger",
+          "packages-write",
+          "oidc-token",
+          "github-package-publish",
+          "nuget-package-publish"
+        ],
+        "capabilityLoss": [
+          "tag-trigger",
+          "direct-package-publish",
+          "repack-after-candidate",
+          "unadmitted-release-effects"
+        ]
+      }
+    }
   ]
 }

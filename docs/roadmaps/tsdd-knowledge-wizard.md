@@ -84,3 +84,18 @@ The retained insufficient executable was a local `dotnet publish` candidate, not
 The installed-public guard now requires the retained public 2.0.3 archive SHA-256 `b950bf4fc46a09554a51b6b31f920830c8811bb6580b2724c500b8317bcfa9d7`, nuspec source `0c26ac591e76d2839177da823b3f6ada5c09a698`, all 36 literal tool payload members, an exclusive pinned closure, and the actual apphost's embedded target. It refuses the old manifest before any execution, including a same-version private candidate or repinned changed dependencies. The historical `source-candidate` mode retains its private scope. Pure synthetic controls exercise these joins and refusals without invoking either product.
 
 A separate root-reviewed, bounded negative supplement must use that genuine public apphost through the normal Wizard caller for both app and game profiles, record actual version and structured unknown-command knowledge responses, and establish absent Git/store/output after refusal. Its source wrapper and pending manifest are private review material; no supplement execution or public-negative acceptance is claimed by this source change. Publication and adoption remain pending.
+
+The integrated native edge run [37150779976](https://github.com/FS-GG/.github/actions/runs/37150779976)
+at PR head `9884c3940c8c4af0eed7b44252b98b16e3e72b97` passed its three compiled
+suites and all 66 ProducerFence tests, then the GS2 structural oracle refused the
+Wizard workflow's stale 0.12 successor hash. Accepted source
+`70838b94421ea117c6558e999692eefc074634ec` changes that workflow's comments and
+publisher job identity for 0.13; its current SHA-256 is
+`5704613f20a68efce211f699189f439af46c1a8387d1859625e06882978efa7a`.
+The current release-route disposition now binds those exact bytes and the 0.13
+successor, retaining the complete 0.12 attestation as non-current history and all
+original sealed predecessor and capability-loss fields. Pure source and mutation
+controls retain wrong-hash and drift refusal without changing the oracle. Fresh
+exact-head native closure remains pending; the earlier TRX identity closure was
+not accepted after the structural refusal. This attestation repair performs no
+release effect and changes no telemetry performance budget or published frontier.
