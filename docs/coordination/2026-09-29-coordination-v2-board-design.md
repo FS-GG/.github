@@ -6,11 +6,12 @@ only work with a verified remaining outcome. Reuse existing repository issue and
 The board provides planning and visibility; native delivery and the selected V2 operation authorities
 remain the sources of delivery truth.
 
-**Status:** selected design, 2026-09-29; organization pilot passed 2026-10-02. Project 3, its schema
-and the three approved memberships are read back; .3 qualifies its fixed root-local refresh. A
-four-target .4successor and organization inspection guidance are prepared but gated pending actual
-protected artifact/import/inspection and selected consumer readback. Broader adoption and .5–.6product
-publication remain pending below.
+**Status:** selected design, 2026-09-29; organization pilot passed 2026-10-02.
+On 2026-10-03 the exact four-target successor, public installed 0.95.0 closure,
+one-shot import with independent readbacks, zero-mutation refresh/inspection and
+root-selected check-board consumer qualified through [.github #4134](https://github.com/FS-GG/.github/pull/4134).
+Only that bounded organization consumer scope is adopted. Broader .4 carryover and
+consumer adoption, and .5–.6 product publication/adoption remain pending below.
 **Owner:** `.github` owns the organization planning surface and shared consumer contract; SDD and
 Templates own published workspace integration, and product owners adopt their scoped boards.
 Repository owners retain their deliverables and evidence. This is **COORD-BOARD-V2-01** in the
@@ -53,7 +54,7 @@ each product switches. Full V2 acceptance remains complete at its selected profi
 follow-on migration. The delivery checklist below remains the sole milestone ledger; this priority
 selection closes the verified .2 pilot and .3 root-local refresh; .4–.6 remain open.
 
-## Bounded .4 source window — prepared, not adopted
+## Bounded .4 source window and selected installed adoption
 
 The [successor preparation](board-v2-import-preparation.md#four-target-successor-and-consumer-adoption--source-preparation)
 keeps the accepted three issues and proposes existing .github#3009 as the fourth, with exact native
@@ -70,9 +71,10 @@ freshly checks each selected map; source admission never supplies live credentia
 This stateless descriptor/view work needs no new Quint protocol or scheduler. Qualified legacy/fence
 behavior and dormant hosted activation remain unchanged.
 
-Organization-only work-unified-roadmap, drive-board/normal/best and check-board guidance is gated on
-actual four-target qualification and root-selected consumer invocation. Until that gate is passed, no
-current live switch is claimed. After adoption that admitted scope uses inspection as its primary queue,
+Organization-only work-unified-roadmap and drive-board/normal/best remain unswitched. The exact
+four-target check-board organization scope passed the installed gate and root selected its adoption
+in the [canonical operation evidence](board-v2-import-preparation.md#four-target-successor-and-consumer-adoption--source-preparation).
+That admitted scope uses inspection as its primary queue,
 with owning roadmaps/intake/native evidence still authoritative. Product/local-only bindings and ordinary
 work with no represented issue remain valid. Full .4 stays open until remaining approved outcomes,
 imports and consumer/disposition evidence are actually recorded; .5–.6 remain separate.

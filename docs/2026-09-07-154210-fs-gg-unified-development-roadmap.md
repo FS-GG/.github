@@ -53,6 +53,41 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-03: Coordination V2 four-target installed consumer qualification delivered.**
+[.github #4134](https://github.com/FS-GG/.github/pull/4134) merged as
+`1605ccb017642a88aa12ba35fea6ec9a0fb2a6fd`; both qualified documentation paths
+are byte-identical to reviewed candidate `8c58513b6ddf4b92a32cda8340115d171ab18862`.
+The public CLI/Kit/Drivers 0.95.0 installed closure and original constructor custody
+were independently verified. One native membership and four previously absent planning
+fields were written once for selected .github#3009; complete readback after every write
+preserved the original three targets, unapproved SDD#935 and the project schema.
+Actual installed refresh and inspection verified all four selected targets with zero
+mutation attempts. Root selected only the bounded organization check-board consumer;
+a post-adoption inspection again verified four of four. Human Ready/Blocked values,
+source currentness and outcome acceptance remain separate. Full .4 carryover/consumer
+adoption and .5–.6 product publication/adoption remain open.
+[Installed qualification](coordination/board-v2-installed-qualification.md) and
+[canonical operation evidence](coordination/board-v2-import-preparation.md#four-target-successor-and-consumer-adoption--source-preparation)
+retain the exact scope and gaps.
+
+**2026-10-03: Repaired Coordination Host protected serving qualified.**
+[Protected run 37100959672](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/37100959672)
+succeeded at exact protected `2309964321a895100d12ededb1c9c00c8342b509`.
+Root independently downloaded artifact `11266635705`, verified its native API identity
+and outer SHA-256 `213a2c14521f5e7ab04c509cd7e4a8f433e25307b21a849dc000ff0c639637b0`,
+and executed the exact protected prepared/served verifier. Generated verification
+matches hosted bytes. The 50,364,834-byte served apphost has SHA-256
+`dd2f6ac75269bad5931168e527f948fe4e507e42208af160e4036058a572e328` and
+advertises the fixed native-capability diagnostic. Root then selected a bounded,
+executable-pinned diagnostic. At 06:07 UTC it genuinely observed the existing
+account's advertised support for the frozen `gpt-5.6-sol` / `medium` selection,
+with zero model sessions, 1.805-second execution and complete owned process/workspace
+cleanup. Root independently read the result and verified cleanup. Its capability
+evidence expires at 06:12:26 UTC and cannot authorize later use without refresh.
+This establishes protected serving and that bounded capability observation;
+model execution, collector capture, image qualification, receiver installation and
+activation retain their separate boundaries.
+
 **2026-10-03: Coordination Host candidate packaging repair CLOSED (source).**
 [Coordination #926](https://github.com/FS-GG/FS.GG.Coordination/pull/926) merged as
 `2309964321a895100d12ededb1c9c00c8342b509`, tree
@@ -4497,7 +4532,7 @@ Entry conditions constrain the dependent execution; earlier read-only planning m
 | **Tic-tac-toe — TTT-01** | Independent local two-player game; whole TTT-01.1 covers moves, wins/draws, terminal refusal and restart | Templates source owner; whole TTT-01.1 delivered through [#648](https://github.com/FS-GG/FS.GG.Templates/pull/648), native checks and protected owning/tree readback verified | [Owning plan](https://github.com/FS-GG/FS.GG.Templates/blob/ba760d7725fe64b9311c20b57a05ef8630533804/docs/roadmaps/tic-tac-toe.md); [prospective enrollment](roadmaps/2026-09-29-r5-additional-app-enrollment.md) |
 | **Snake — SNAKE-01** | Independent keyboard game; whole SNAKE-01.1 covers food/growth/score, collision, pause and restart | Templates source owner; whole SNAKE-01.1 delivered through [#648](https://github.com/FS-GG/FS.GG.Templates/pull/648), native checks and protected owning/tree readback verified | [Owning plan](https://github.com/FS-GG/FS.GG.Templates/blob/ba760d7725fe64b9311c20b57a05ef8630533804/docs/roadmaps/snake-app.md); [prospective enrollment](roadmaps/2026-09-29-r5-additional-app-enrollment.md) |
 | **Hello-world app — HELLO-01** | Independent browser app; whole HELLO-01.1 renders an accessible greeting through its actual entry point | Templates source owner; whole HELLO-01.1 delivered through [#648](https://github.com/FS-GG/FS.GG.Templates/pull/648), native checks and protected owning/tree readback verified | [Owning plan](https://github.com/FS-GG/FS.GG.Templates/blob/ba760d7725fe64b9311c20b57a05ef8630533804/docs/roadmaps/hello-world-app.md); [prospective enrollment](roadmaps/2026-09-29-r5-additional-app-enrollment.md) |
-| **Coordination and product V2 boards — COORD-BOARD-V2-01** | Follow-on V2 planning surfaces: organization and product-scoped boards, selective issue carryover, fixed restricted refresh and product-local commands; no new full-acceptance prerequisite | `.github` owns the shared design; SDD/Templates publish product integration and product owners adopt. .1 design, .2 native pilot and .3 root-local refresh are qualified; .4–.6 carryover, consumer adoption and published fresh/retained workspace qualification remain pending. Repository delivery authority stays native; no Home/Main autonomous agent is required | [Design and subroadmap](coordination/2026-09-29-coordination-v2-board-design.md) |
+| **Coordination and product V2 boards — COORD-BOARD-V2-01** | Follow-on V2 planning surfaces: organization and product-scoped boards, selective issue carryover, fixed restricted refresh and product-local commands; no new full-acceptance prerequisite | `.github` owns the shared design; SDD/Templates publish product integration and product owners adopt. .1 design, .2 native pilot and .3 root-local refresh are qualified. The bounded four-target .4 successor and selected check-board installed consumer qualified through #4134; full .4 carryover/consumer adoption and .5–.6 published fresh/retained workspace qualification remain pending. Repository delivery authority stays native; no Home/Main autonomous agent is required | [Design and subroadmap](coordination/2026-09-29-coordination-v2-board-design.md) |
 | **Language-independent workspaces and agent integration — V2-LANG-01** | Prospective product integration: portable contracts, reviewed toolchain profiles and cross-language/native product qualification; bounded AG-UI and Agent Framework trials | Coordination owns execution/protocol adapters; `.github` coordinates qualification; SDD/Templates publish profiles and product owners adopt. .1 and .3 are complete. .4 closed through Coordination #899 with a measured rejection of Microsoft Agent Framework 1.22.0 production adoption for this path. .2 P1/P2 source and native qualification closed through [Coordination #902](https://github.com/FS-GG/FS.GG.Coordination/pull/902) at protected `c069263c3e9e8780b1596eee82d2f6c017daa8df`, tree `d525a227f5df61b551e09915df51d7d4bd9ec11e`; its current six-operation native run and bootstrap passed. The portable producer remains version `0.1.7`; P3 publication remains open. P4 cold-restore source closed through [Sandbox #45](https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/pull/45) at protected `2fd71ecd10eda835d491ea4f8f22432309e59d82`, tree `b84a0a111cd36d095037c4f8780d476f24dc2dcb`. Its protected stateless prebuild/restore diagnostics successor closed through [Sandbox #46](https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/pull/46) at `625161204895130aaa1469a908f46e1eda1497df`, tree `eb193e76f77701081f7ef12ac65e0564bd2ad139`, after the actual cold locked-SDK restore/build passed. The task-private exact-SDK repair then closed through [Sandbox #47](https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/pull/47) at `3924409829e96fc4b436e2a26179d885bbf8837c`, tree `d0b24b64a44e3af1e0f0612ddf270c6793550c74`, with 22 controls and an actual cold locked restore/build passing. Readiness run `36973970176` remains a pre-restore `dotnet-version-mismatch` refusal with no facts or effects; fresh readiness and receiver adoption remain open. P5 upgrade/matrix closure remains open. .5 TypeScript, Rust and Go fixture source remains delivered; Templates #650 adds protected Rust/Go image profiles and a passing strict hosted native run. Full .5 adoption is open. Language independence is required for supported new routes; the frozen R5 cohort is unchanged | [Amendment and subroadmap](roadmaps/2026-09-29-language-independent-workspaces-and-agent-integration.md), [Coordination .3 source plan](https://github.com/FS-GG/FS.GG.Coordination/blob/5d86daf3898be683bd6720bdd36da479a29a0260/docs/roadmaps/v2-lang-agui-projection.md), [protected .4 trial decision](https://github.com/FS-GG/FS.GG.Coordination/blob/9516006663393709e8f96ecd1f21b9ce16d729bd/docs/roadmaps/v2-lang-agent-framework-trial.md), [merged image source #900](https://github.com/FS-GG/FS.GG.Coordination/pull/900), [merged P1/P2 executor #902](https://github.com/FS-GG/FS.GG.Coordination/pull/902), and the [protected .5 language-routes plan](https://github.com/FS-GG/FS.GG.Templates/blob/66ce4faacc122ef4a2d2331a0c10fe388e7c3b69/docs/roadmaps/v2-lang-language-routes.md) advanced through [Templates PR #650](https://github.com/FS-GG/FS.GG.Templates/pull/650) |
 
 Each selected part produces a subroadmap in its owning repository, normally
