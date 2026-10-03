@@ -49,6 +49,14 @@ Both compiled Wizard and producer runtime closures contain official FSharp.Core 
 
 ## Remaining activation boundary
 
+### Wizard 0.13 source cut
+
+The next standalone Wizard source version is 0.13.0. Its package registry remains source 0.13.0 / published 0.12.0 until separate protected publication and both-feed acceptance. The predecessor 0.12.0 release, source `4889c446de0a431d1168a61a89ab660fc2062314`, tag and protected `svg-d5-wizard-012` journal remain immutable; the source cut selects a new `tsdd-knowledge-wizard-013` journal beneath the same protected Authority release namespace.
+
+The existing candidate and publisher workflow filenames remain authoritative, including `release-new-sdd-workspace.yml` for the established Trusted Publishing identity. The same first-attempt candidate binding, live-main admission, five-field journal intent and eight ordered effects are retained. Successor controls explicitly refuse 0.12.0 manifests. PR CI now includes those identity/effect controls, the generic protected journal controls, retained legacy seals and installed-public pure fixture guards. No historical sealed publisher is reopened.
+
+This is release source preparation only. Root separately refreshes predecessor custody, integrates all ready source before freezing a candidate, authenticates the exact retained candidate archive, and admits preflight/publication. A changed main before fresh publication requires a new candidate; recovery after journal initialization retains the original admitted bytes. The intentionally empty consumer list remains unchanged, and Wizard public-package/adoption acceptance is not inferred from source, version selection or this preparation.
+
 ### Installed public-package qualification preparation
 
 Templates 0.18 installed qualification is now root-accepted: its original matrix attempt retains actual exit 1 and 18 genuine passing rows, joined with a distinct actual-exit-0 budget fragment that accepted exactly 10 MiB, refused one byte over, and restored the receiver bytes. The acceptance digest is `0525d3ece867437fad4d240b916c28c6dc164a6602820f74ed34be7acaf79d64`. Unified section 0 closure landed through PR 4161 at `44699223268d3bd040725332d791792f9b5d955a`. This establishes the dependency for preparing Wizard qualification; it does not establish Wizard activation.

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import hashlib
+import ast
 import importlib.util
 import json
 import pathlib
@@ -24,7 +25,7 @@ from new_sdd_workspace_successor_provider import WizardProvider, NotFound
 def manifest():
     return {
         "schema": "fsgg.new-sdd-workspace-release/1", "packageId": "FS.GG.NewSddWorkspace",
-        "version": "0.12.0", "tag": "new-sdd-workspace/v0.12.0", "sourceSha": "a" * 40,
+        "version": "0.13.0", "tag": "new-sdd-workspace/v0.13.0", "sourceSha": "a" * 40,
         "archiveSha256": "b" * 64, "producerPayloadSha256": "sha256:" + "c" * 64,
     }
 
@@ -117,7 +118,7 @@ class WizardReleaseTests(unittest.TestCase):
             with zipfile.ZipFile(archive, "w") as zipped:
                 zipped.writestr("manifest.json", json.dumps(manifest()))
                 zipped.writestr("package-evidence.json", "{}")
-                zipped.writestr("FS.GG.NewSddWorkspace.0.12.0.nupkg", "fixture")
+                zipped.writestr("FS.GG.NewSddWorkspace.0.13.0.nupkg", "fixture")
             digest = hashlib.sha256(archive.read_bytes()).hexdigest()
             run = {"id": 123, "path": verifier.WORKFLOW, "head_sha": source,
                    "head_branch": "main", "event": "workflow_dispatch", "conclusion": "success",
@@ -128,7 +129,7 @@ class WizardReleaseTests(unittest.TestCase):
                                          "repository_id": verifier.REPOSITORY_ID,
                                          "head_repository_id": verifier.REPOSITORY_ID}}
             with patch.object(verifier.subprocess, "run"):
-                self.assertEqual(verifier.verify(artifact, run, archive, root / "good", source)["version"], "0.12.0")
+                self.assertEqual(verifier.verify(artifact, run, archive, root / "good", source)["version"], "0.13.0")
             altered = {**run, "run_attempt": 2}
             with self.assertRaisesRegex(ValueError, "first-attempt"):
                 verifier.verify(artifact, altered, archive, root / "rerun", source)
@@ -137,11 +138,38 @@ class WizardReleaseTests(unittest.TestCase):
                 verifier.verify(altered_artifact, run, archive, root / "tampered", source)
 
     def test_prior_release_identity_and_wrong_payload_are_refused(self):
-        for key, value in (("version", "0.11.2"), ("tag", "new-sdd-workspace/v0.11.2"),
+        for key, value in (("version", "0.12.0"), ("tag", "new-sdd-workspace/v0.12.0"),
+                           ("version", "0.11.2"), ("tag", "new-sdd-workspace/v0.11.2"),
                            ("producerPayloadSha256", "bad")):
             row = manifest(); row[key] = value
             with self.assertRaises(Refused):
                 effects(row)
+
+    def test_predecessor_manifest_cannot_reuse_successor_effects(self):
+        prior = {**manifest(), "version": "0.12.0", "tag": "new-sdd-workspace/v0.12.0"}
+        with self.assertRaisesRegex(Refused, "exact Wizard 0.13.0"):
+            effects(prior)
+
+    def test_fresh_journal_and_version_cut_retain_the_existing_boundary(self):
+        publisher = (ROOT / "scripts/new-sdd-workspace-successor-publish.py").read_text()
+        self.assertIn('REF = "refs/heads/fsgg/v2/journal/release/tsdd-knowledge-wizard-013"', publisher)
+        self.assertNotIn('REF = "refs/heads/fsgg/v2/journal/release/svg-d5-wizard-012"', publisher)
+        self.assertIn('"version": "0.13.0"', publisher)
+        self.assertEqual([e.identity for e in self.ordered],
+                         ['tag', 'draft', 'github', 'nuget', 'package-asset', 'manifest-asset',
+                          'publication-journal-asset', 'promote'])
+        intent = next(node.value for node in ast.walk(ast.parse(publisher))
+                      if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == 'intent' for t in node.targets))
+        self.assertEqual({key.value for key in intent.keys},
+                         {'contentId', 'sourceSha', 'version', 'candidateArchiveSha256', 'operator'})
+
+    def test_source_cut_and_candidate_package_names_agree(self):
+        project = (ROOT / 'scripts/NewSddWorkspace/NewSddWorkspace.fsproj').read_text()
+        candidate = (ROOT / '.github/workflows/release-new-sdd-workspace-successor-candidate.yml').read_text()
+        self.assertIn('<Version>0.13.0</Version>', project)
+        self.assertIn('test "$version" = 0.13.0', candidate)
+        self.assertIn('FS.GG.NewSddWorkspace.0.13.0.nupkg', candidate)
+        self.assertIn('--tag new-sdd-workspace/v0.13.0', candidate)
 
     def test_package_nuspec_must_bind_protected_source_commit(self):
         path = ROOT / "scripts" / "new-sdd-workspace-release.py"
@@ -150,19 +178,19 @@ class WizardReleaseTests(unittest.TestCase):
         checker = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(checker)
         with tempfile.TemporaryDirectory() as temporary:
-            package = pathlib.Path(temporary) / "FS.GG.NewSddWorkspace.0.12.0.nupkg"
+            package = pathlib.Path(temporary) / "FS.GG.NewSddWorkspace.0.13.0.nupkg"
             def write_package(commit):
                 nuspec = ("<package><metadata><id>FS.GG.NewSddWorkspace</id>"
-                          "<version>0.12.0</version><repository commit='" + commit + "'/></metadata></package>")
+                          "<version>0.13.0</version><repository commit='" + commit + "'/></metadata></package>")
                 with zipfile.ZipFile(package, "w") as archive:
                     archive.writestr("FS.GG.NewSddWorkspace.nuspec", nuspec)
             write_package("a" * 40)
             self.assertEqual(checker.package_identity(package),
-                             ("FS.GG.NewSddWorkspace", "0.12.0", "a" * 40))
+                             ("FS.GG.NewSddWorkspace", "0.13.0", "a" * 40))
             write_package("b" * 40)
             with self.assertRaisesRegex(ValueError, "repository commit differs"):
                 checker.build_manifest(type("Args", (), {"package": str(package), "source_sha": "a" * 40,
-                                                       "version": "0.12.0", "tag": "new-sdd-workspace/v0.12.0"})())
+                                                       "version": "0.13.0", "tag": "new-sdd-workspace/v0.13.0"})())
             write_package("")
             with self.assertRaisesRegex(ValueError, "repository commit"):
                 checker.package_identity(package)
@@ -221,9 +249,9 @@ class WizardReleaseTests(unittest.TestCase):
                 self.assets = {}
                 self.writes = []
             def get(self, path):
-                if path.endswith("/git/ref/tags/new-sdd-workspace/v0.12.0") and self.tag:
+                if path.endswith("/git/ref/tags/new-sdd-workspace/v0.13.0") and self.tag:
                     return {"object": {"sha": self.tag}}
-                if path.endswith("/releases/tags/new-sdd-workspace/v0.12.0") and self.release and not self.release["draft"]:
+                if path.endswith("/releases/tags/new-sdd-workspace/v0.13.0") and self.release and not self.release["draft"]:
                     return self.release
                 if path.endswith("/releases?per_page=100&page=1"):
                     return [self.release] if self.release else []
@@ -247,7 +275,7 @@ class WizardReleaseTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = pathlib.Path(temporary)
             row = manifest()
-            package = root / "FS.GG.NewSddWorkspace.0.12.0.nupkg"
+            package = root / "FS.GG.NewSddWorkspace.0.13.0.nupkg"
             package.write_bytes(b"exact original Wizard archive")
             row["archiveSha256"] = hashlib.sha256(package.read_bytes()).hexdigest()
             manifest_path = root / "manifest.json"
@@ -275,10 +303,10 @@ class WizardReleaseTests(unittest.TestCase):
             def __init__(self, raw):
                 self.raw = raw
             def get(self, path):
-                if path.endswith("/releases/tags/new-sdd-workspace/v0.12.0"):
+                if path.endswith("/releases/tags/new-sdd-workspace/v0.13.0"):
                     raise NotFound(path)
                 if path.endswith("/releases?per_page=100&page=1"):
-                    return [{"id": 1, "tag_name": "new-sdd-workspace/v0.12.0", "draft": True}]
+                    return [{"id": 1, "tag_name": "new-sdd-workspace/v0.13.0", "draft": True}]
                 if path.endswith("/releases/1/assets?per_page=100"):
                     return [{"id": 1, "name": "publication-journal.json"}]
                 raise AssertionError(path)
