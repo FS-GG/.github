@@ -53,6 +53,32 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-03: Coherent SDD 2.1.0 publication CLOSED (publication and installed qualification).**
+[Native release run 37114843541, attempt 2](https://github.com/FS-GG/FS.GG.SDD/actions/runs/37114843541)
+passed at protected source `518517f6b90330a6e99f90bbce68faa0a891287f`.
+Artifacts, CLI and the new Knowledge SDK were packed once in native preparation
+run 37114497970 and published together, using those original archives on GitHub
+Packages first and public NuGet second. Independent literal ZIP comparison of all
+six downloaded feed packages matches every original non-signature entry, including
+`[Content_Types].xml`; NuGet's added signing envelopes are recorded separately.
+Authenticated occupancy and retained-source/hash checks passed before the pushes.
+
+Fresh public CLI and Knowledge SDK installs, official FSharp.Core payload joins,
+normal initial Git/history/recovery, cacheless clones, and the native neutral Q2/Q3
+installed receiver qualification passed. The first promotion attempt failed because
+the NuGet resolver could not yet find 2.1.0; the same-source recovery reused the
+retained candidate and completed without repacking. Independently versioned
+Contracts remains 7.5.2, with duplicate-safe existing-version pushes.
+
+The historical shell readback manifest mishandled the bracketed Content Types
+filename; the independent literal comparison qualifies these published bytes. A
+focused source repair of both manifest loops remains open. Compiler consumer pins,
+provider adoption, retained project extraction and V2 preflight cleanup/calibration
+remain separate pending outcomes. Publication does not activate a lifecycle or
+preflight default. The [owning release notes](https://github.com/FS-GG/FS.GG.SDD/blob/518517f6b90330a6e99f90bbce68faa0a891287f/docs/release/knowledge-2.1.0.md)
+retain the source and installed qualification boundary.
+
+
 **2026-10-03: SDD compiler capacity and coherent release preparation CLOSED (source).**
 [SDD #1092](https://github.com/FS-GG/FS.GG.SDD/pull/1092) merged as
 `518517f6b90330a6e99f90bbce68faa0a891287f`, with the reviewed candidate's exact
@@ -70,8 +96,8 @@ publication. Provider contract 2 enforces stable capability floors before effect
 contract 1 and lifecycle defaults are preserved. The native Python-bytecode failure
 is repaired at the import boundary without weakening the clean-tree gate.
 
-Both-feed publication, genuinely published consumer adoption and retained project
-extraction remain open. V2 preflight source projections and compiler-row partition
+At source closure, both-feed publication, published consumer adoption and retained
+project extraction remained open; the publication outcome above advances that boundary. V2 preflight source projections and compiler-row partition
 pilots retain explicit interaction checks; the duplicate audit establishes no safe
 row removal. Source closure does not grant preflight cleanup or native operation
 acceptance. The [owning release preparation](https://github.com/FS-GG/FS.GG.SDD/blob/main/docs/release/knowledge-2.1.0.md)
