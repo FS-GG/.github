@@ -53,6 +53,29 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-03: BARC-01.5f module readiness and owned-damage repair CLOSED (source).**
+[FSBarV2 #28](https://github.com/FS-GG/FSBarV2/pull/28) merged as
+`d9aa36c05928fba80fc33d3cb1f22978ce9f0e5f`. The stock handoff checks the exact
+guest body before upload, waits for the published module and matches the actual
+arm digest before accepting native-confirmed authority. Bounded failure evidence
+separates module publication, arm refusal and controller status. Forty focused
+and retained preparation controls passed; no-effect discovery selected one test.
+No native workflow applied to this JavaScript-only candidate.
+
+[HighBarV3 #16](https://github.com/FS-GG/HighBarV3/pull/16) merged as
+`b57f11f290dc3239d894b0285ae272b6b21bc25d`, with the qualified candidate's exact
+tree. Owned damage requests the existing coalesced authoritative replacement;
+publication enqueues the snapshot before recording its basis. The projection
+filters handled owned-damage arms while retaining mixed and unsupported events.
+Fourteen compiled planner/projector tests, two causal mutation controls and the
+gateway syntax check passed. Native source CI passed; runner-dependent C++ and
+headless jobs were skipped because the runner was unavailable.
+
+The retained producer payloads are controlled fixtures, not raw native evidence.
+Full plugin rebuild and adoption, actual producer/consumer correspondence delivery
+and fresh native operations remain open. Useful native play remains **0/6**;
+historical packets and consumed grants remain unchanged.
+
 **2026-10-03: Typed project-knowledge Wizard bootstrap CLOSED (source).**
 The Wizard refuses an insufficient actual SDD producer before scaffolding, pins the
 same stable capable producer in the root local tool manifest and checks knowledge
