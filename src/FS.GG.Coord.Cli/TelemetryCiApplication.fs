@@ -751,6 +751,65 @@ module TelemetryCiApplication =
         | Legacy of root: string * assessment: TelemetryStore.DurabilityAssessment
         | Workspace of binding: 'binding * localRoot: string option
 
+    // Only a validated legacy host default may coexist with explicit legacy storage.
+    // Explicit selections still belong to the workspace resolver and never fall back.
+    let private implicitWorkspaceSelected () =
+        try
+            let path = WorkspaceTelemetryApplication.configuredPath None
+            let info = FileInfo path
+            if not (isNull info.LinkTarget) || Directory.Exists path then
+                Error [ "configuration-unsafe" ]
+            elif not info.Exists then
+                Ok false
+            elif
+                info.Length > 65536L
+                || (not (OperatingSystem.IsWindows())
+                    && File.GetUnixFileMode(path) <> (UnixFileMode.UserRead ||| UnixFileMode.UserWrite))
+            then
+                Error [ "configuration-unsafe" ]
+            else
+                use stream = File.OpenRead path
+                let bytes = Array.zeroCreate<byte> 65537
+                let count = stream.ReadAtLeast(bytes.AsSpan(), 65537, false)
+                if count > 65536 then
+                    Error [ "configuration-unsafe" ]
+                else
+                    use document = JsonDocument.Parse(ReadOnlyMemory<byte>(bytes, 0, count))
+                    let rec unique (value: JsonElement) =
+                        match value.ValueKind with
+                        | JsonValueKind.Object ->
+                            let fields = value.EnumerateObject() |> Seq.toList
+                            (fields |> List.map _.Name |> List.distinct).Length = fields.Length
+                            && fields |> List.forall (fun field -> unique field.Value)
+                        | JsonValueKind.Array -> value.EnumerateArray() |> Seq.forall unique
+                        | _ -> true
+
+                    let root = document.RootElement
+                    if not (unique root) then
+                        Error [ "configuration-duplicate-property" ]
+                    else
+                        match root.GetProperty("schema").GetString() with
+                        | "fsgg.telemetry.workspace-config/1" -> Ok true
+                        | "fsgg.telemetry.host-config/1" ->
+                            let fields = root.EnumerateObject() |> Seq.map _.Name |> Set.ofSeq
+                            if fields <> Set [ "schema"; "storeRoot"; "engine" ] then
+                                Error [ "configuration-shape" ]
+                            else
+                                let storeRoot = root.GetProperty("storeRoot").GetString()
+                                let engine = root.GetProperty("engine").GetString()
+                                if
+                                    not (String.IsNullOrEmpty storeRoot)
+                                    && Path.IsPathFullyQualified storeRoot
+                                    && not (String.IsNullOrEmpty engine)
+                                    && not (engine.Contains('/') || engine.Contains('\\'))
+                                then
+                                    Ok false
+                                else
+                                    Error [ "configuration-shape" ]
+                        | _ -> Error [ "configuration-version" ]
+        with _ ->
+            Error [ "configuration-unreadable" ]
+
     let private target
         (assess: string -> TelemetryStore.DurabilityAssessment)
         (resolve: string option -> string option -> Result<'binding, string list>)
@@ -759,24 +818,27 @@ module TelemetryCiApplication =
         =
         let config, repository = option "--config" args, option "--repository" args
 
-        let selectedConfigExists =
-            File.Exists(WorkspaceTelemetryApplication.configuredPath config)
-
         let environmentConfigSelected =
             Environment.GetEnvironmentVariable("FSGG_TELEMETRY_CONFIG")
             |> Option.ofObj
-            |> Option.exists (String.IsNullOrWhiteSpace >> not)
+            |> Option.exists (fun value -> value <> "")
 
         let workspaceSelected =
-            config.IsSome || environmentConfigSelected || selectedConfigExists
+            if List.contains "--config" args && config.IsNone then
+                Error [ "configuration-path-required" ]
+            elif config.IsSome || environmentConfigSelected then
+                Ok true
+            else
+                implicitWorkspaceSelected ()
 
         match option "--store-root" args, workspaceSelected with
-        | Some _, true -> Error [ "workspace config and legacy store root cannot both be selected" ]
-        | Some root, false -> Ok(Legacy(root, assess root))
-        | None, true ->
+        | _, Error errors -> Error errors
+        | Some _, Ok true -> Error [ "workspace config and legacy store root cannot both be selected" ]
+        | Some root, Ok false -> Ok(Legacy(root, assess root))
+        | None, Ok true ->
             resolve config repository
             |> Result.bind (fun binding -> localStoreRoot binding |> Result.map (fun root -> Workspace(binding, root)))
-        | None, false ->
+        | None, Ok false ->
             match
                 Environment.GetEnvironmentVariable("FSGG_TELEMETRY_STORE")
                 |> Option.ofObj
