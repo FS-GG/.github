@@ -53,6 +53,45 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-03: WASM deleted-version permission repair CLOSED (source and native qualification).**
+[Game #689](https://github.com/FS-GG/FS.GG.Game/pull/689) merged as
+`9fc4c6d8bd7b0643226d3ba4b4dee99f2aca563c` after all 34 native checks passed on
+`0ad3bc38c22babc309ad0a1ff0f54c15eea9346c`. The authentic
+[diagnostic 37154778966](https://github.com/FS-GG/FS.GG.Game/actions/runs/37154778966)
+confirmed active-version queries return 200 with read or write permission, while
+deleted-version queries return 403 with read and 200 with write for both packages.
+Admission, begin and public now receive job-local `packages: write`; org retains
+its existing write grant. Offline controls require exactly these four write jobs
+and refuse missing, extra or global grants. Credentials and package access settings
+need no replacement. Complete pagination, non-200 refusal, original custody and
+frozen producer remain unchanged.
+
+This resolves the permission cause of the preserved failed f8 promotion below;
+it does not admit its old tuple for the changed executor. Fresh preparation and
+original-archive authentication at the new executor precede promotion. R3 publication,
+both-feed installed acceptance and consumer activation remain pending; public/default
+WASM is still **0.2.0**.
+
+**2026-10-03: Wizard genuine public 2.0.3 negative qualification CLOSED (installed dependencies, private Wizard).**
+Root accepted one fresh four-command supplement against original public SDD **2.0.3**,
+archive `b950bf4fc46a09554a51b6b31f920830c8811bb6580b2724c500b8317bcfa9d7`
+and source `0c26ac591e76d2839177da823b3f6ada5c09a698`, with all 36 literal
+payload members and its actual apphost target checked. Version output was 2.0.3;
+the structured knowledge probe returned blocked `unknownCommand`, exit 1 and no
+changed artifacts. Normal typed app and game Wizard calls each refused the 2.1.0
+producer floor, with Git, knowledge store and product scaffold absent.
+
+The only residue was each exact downloaded `.fsgg/providers.yml`, written by the
+ordinary descriptor fetch before the capability gate. The first supplement wrongly
+required the entire directory absent and remains FAILED with game unrun. Its successor
+permits only that literal descriptor residue; the fresh operation passed all four
+commands in 4.355 seconds, with unchanged physical input pins and all owned processes
+absent. Root acceptance SHA-256 is
+`fac568bc46c58a75ead34bf4c594ea16d7f9225e8f5048a91d05f69273bcbecc`.
+The earlier 39-command public 2.1.0 positive proof and historical private 2.0.3
+candidate proof retain their separate scopes. Public Wizard **0.13.0** publication
+and adoption remain pending; current public Wizard stays **0.12.0**.
+
 **2026-10-03: Rendering 0.32 Templates descriptor adoption CLOSED (source and native qualification).**
 [Templates #668](https://github.com/FS-GG/FS.GG.Templates/pull/668) merged as
 `0b1c483b175f7754597e8dc619b10cd39c394b4f` after all 14 exact-head native checks
