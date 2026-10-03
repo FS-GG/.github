@@ -1012,9 +1012,9 @@ contracts:
     # The remaining P4 provider implementation ships in FS.GG.Workspace.Template; this wizard identity
     # is published and selectable, not a pending rollout phase.
   - id: fs-gg-workspace-template
-    version: "0.15.0"   # SOURCE: SVG-RELEASE-D.5 omitted provider lifecycle selects typed-sdd/quint-specification-v1; explicit tokens and bundle choices retained. Immutable source b86c841a1c4c4bf7f157a3ae4dc61b0356d6576d.
-    package-version: "0.15.0"   # FEED: protected release 36465599265 verified 403 equal normalized payload entries on both feeds. Original/release/org archive SHA-256 6ebd2b19fd972c3d2dddaf9074e1f31e1f495ebe0e1070d6e5daea416bafcdc6; nuget.org signed archive b822e77d4046a81c453d983a78cc6f319c67a2d3cbd3ec354d7038687416ec3e. Public D.5 receiver run 36472328832 passed before this activation.
-    package-tag: "fs-gg-templates/v0.15.0"   # Immutable tag peels to the exact frozen source above.
+    version: "0.18.0"   # CURRENT SOURCE: Typed SDD contract2 provider composition from protected 9161a9d91b3fdd7a80cae7776fdff179e712b32e/tree bd5fd90dac3c73cb754c73512578d4c6f6f48f16. PRIOR 0.15.0 SOURCE: SVG-RELEASE-D.5 omitted provider lifecycle selects typed-sdd/quint-specification-v1; explicit tokens and bundle choices retained. Immutable source b86c841a1c4c4bf7f157a3ae4dc61b0356d6576d.
+    package-version: "0.18.0"   # CURRENT FEED: protected release 37138971862 completed 2026-10-03T17:24:48Z; both native feed readbacks verify all 440 payload entries exact. Original/release/GitHub archive de6a2fdc887d7a595ca6d9d59f465bc762b1a27fdf5518592f304d7c1b3053d1; signed nuget.org archive 27eb96234c9b993fbd01a1f724a3d5b7864ecfae66ca9118a244f391afe6005c. Readback artifact 11280380721; fresh installed adoption remains pending. PRIOR 0.15.0 FEED: protected release 36465599265 verified 403 equal normalized payload entries on both feeds. Original/release/org archive SHA-256 6ebd2b19fd972c3d2dddaf9074e1f31e1f495ebe0e1070d6e5daea416bafcdc6; nuget.org signed archive b822e77d4046a81c453d983a78cc6f319c67a2d3cbd3ec354d7038687416ec3e. Public D.5 receiver run 36472328832 passed before this activation.
+    package-tag: "fs-gg-templates/v0.18.0"   # Annotated tag a079a528d1c0752c639c568a1477078a152fa121 peels to protected source 9161a9d91b3fdd7a80cae7776fdff179e712b32e. Prior fs-gg-templates/v0.15.0 remains historical.
     owner: templates
     # ADR-0071 (two web workspace providers, one template package) amended by ADR-0072 (console and
     # fable-bindings are separate workspace providers; renames the package) amended by ADR-0073 (plain
@@ -1316,17 +1316,16 @@ coherence:
       This is producer capability authority for provider contract 2 and effective
       Typed SDD project knowledge, not receiver package adoption. UI producer inventory is 0.32.0 after verified
       original-archive publication; the Templates Rendering edge remains 0.31.0.
-      Workspace 0.15.0 and Wizard 0.12.0 package fields remain unchanged.
-      Templates PR 667 prepares all six matching descriptor floors and has current
-      D.5 source acceptance plus private public-2.1 proof across 18 receiver rows;
-      its live registry equality and historical tuple qualification repairs remain
-      pending. Workspace 0.18.0 publication, Wizard 0.13.0 installed adoption and
-      deliberate Rendering 0.32.0 receiver adoption are separate outstanding joins.
+      Workspace 0.18.0 is published on both feeds after protected release 37138971862
+      and native 440-entry payload readbacks; Wizard package inventory remains 0.12.0.
+      Templates PR 667 merged all six matching descriptor floors with complete native
+      source qualification. Fresh installed Workspace adoption, Wizard 0.13.0 installed
+      adoption and deliberate Rendering 0.32.0 receiver adoption remain outstanding joins.
       The axis stays incomplete until protected mirrors and actual installed
       receivers establish its current scope. Lifecycle defaults are unchanged;
       prior 0.3.0, 0.4.0, 0.6.0 and 1.4.0-preview.1 closure remains historical.
-    resolved_by: "Historical 1.4.0-preview.1 closure: SDD#916, .github#2928 and Templates#432. Current 2.1.0 producer publication: protected promotion 37114843541 and .github#4146; receiver coherence remains pending."
-    impact: "The declared capable producer floor is 2.1.0. Live Templates equality must match both floors; older descriptor heads are expected to fail during the bounded receiver transition. Package publication, descriptor source-pin adoption, installed Wizard acceptance and complete coherence are not established by this floor."
+    resolved_by: "Historical 1.4.0-preview.1 closure: SDD#916, .github#2928 and Templates#432. Current 2.1.0 producer publication: protected promotion 37114843541 and .github#4146; Templates 0.18.0 producer publication: protected release 37138971862 from 9161a9d91b3fdd7a80cae7776fdff179e712b32e; receiver coherence remains pending."
+    impact: "The declared capable producer floor is 2.1.0. Live Templates equality must match both floors; older descriptor heads are expected to fail during the bounded receiver transition. Templates 0.18.0 publication is established separately by protected feed readbacks. Descriptor source-pin adoption, installed Wizard acceptance and complete coherence remain pending."
     tracking: "https://github.com/FS-GG/FS.GG.Templates/pull/667; TSDD-KNOWLEDGE-01; ADR-0008; historical .github#2928, SDD#916, Templates#432 and original .github#85/#87"
 
   - id: governance-overlay-populated

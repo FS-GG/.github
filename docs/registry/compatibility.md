@@ -142,7 +142,7 @@ authored `Version` cells of the Versioned contracts table (#748).*
 | `coord-engine` | FS-GG/.github | `0.95.0` | `0.95.0` |
 | `telemetry-host` | FS-GG/.github | `0.3.0` | `0.3.0` |
 | `new-sdd-workspace` | FS-GG/.github | `0.12.0` | `0.12.0` |
-| `fs-gg-workspace-template` | FS.GG.Templates | `0.15.0` | `0.15.0` |
+| `fs-gg-workspace-template` | FS.GG.Templates | `0.18.0` | `0.18.0` |
 | `game-skills` | FS.GG.Game | `0.9.0` | `0.9.0` |
 | `rendering-skills` | FS.GG.Rendering | `0.2.0` | `0.2.0` |
 | `audio-skills` | FS.GG.Audio | `0.1.0` | `0.1.0` |

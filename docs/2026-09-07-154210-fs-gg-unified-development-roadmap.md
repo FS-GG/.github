@@ -53,6 +53,18 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-03: TEMPLATES-H2 Workspace Template 0.18 publication CLOSED (producer).**
+The [protected publisher](https://github.com/FS-GG/FS.GG.Templates/actions/runs/37138971862)
+completed from `9161a9d91b3fdd7a80cae7776fdff179e712b32e`, after its full native
+release-archive composition gate passed. Both feeds return all **440** payload
+entries exactly matching the original archive; the
+[immutable release](https://github.com/FS-GG/FS.GG.Templates/releases/tag/fs-gg-templates/v0.18.0)
+and native readback receipts bind that publication. Registry producer inventory now
+records **0.18.0**. Fresh installed adoption, Wizard 0.13 adoption and deliberate
+Rendering 0.32 receiver adoption remain pending; consumer edges, SDD 2.1.0 floors,
+lifecycle defaults and published `.github` coherent 0.95.0 remain unchanged.
+The earlier source-only checkpoint below retains its pre-publication status as history.
+
 **2026-10-03: Typed Templates receiver source CLOSED (source and full native qualification).**
 [Templates #667](https://github.com/FS-GG/FS.GG.Templates/pull/667) merged as
 `9161a9d91b3fdd7a80cae7776fdff179e712b32e`, with reviewed candidate
