@@ -53,6 +53,25 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-03: Home prospective metadata observation CLOSED (bounded operation).**
+Following the [receiver installation checkpoint](https://github.com/FS-GG/.github/pull/4150),
+one genuine prospective observer operation reached matching authenticated **applied**
+receipts for its expected, started and completed facts. A separate Home association
+uses a scoped client that verifies all 82 installed
+[Coord 0.95.0 payload files](https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.95.0)
+and selects process-scoped CA trust. Final private drain and status report no pending
+input. This accepts generic producer wiring for that bounded context; it neither
+imports earlier local events nor changes Main, global defaults or generated workspaces.
+Native usage is explicitly unsupported, and native counters, CI joins, costs and
+bureaucracy measurements remain unknown. The first and terminal original envelopes
+were removed by normal applied-receipt cleanup; their authenticated receipts and
+canonical fact-admission hashes remain verified, without reconstructed bytes.
+The started envelope retains its exact source bytes. Review report SHA-256 is
+`774aed2cf5cbea8297f8e06b353a7bf31e41e0086057813b761f42fc5757080e`.
+Native collector and public publisher activation remain pending. This real metadata
+acceptance is separate from the installation's synthetic receipt and does not complete
+Learning capture.
+
 **2026-10-03: Home telemetry receiver installation CLOSED (bounded operation).**
 The separately provisioned rootless Home container now runs the original
 [Host 0.3.0 release](https://github.com/FS-GG/.github/releases/tag/telemetry-host/v0.3.0)
