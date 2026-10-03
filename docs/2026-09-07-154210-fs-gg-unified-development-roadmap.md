@@ -53,6 +53,25 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-03: WASM unique preparation checkout names CLOSED (source and native qualification).**
+[Game #688](https://github.com/FS-GG/FS.GG.Game/pull/688) merged as
+`f8b6f5e1ec579fb54d22d4c2b5bb22505cfbb685`, protected executor tree
+`4338f1893c014af1d75801c80dfb064c6d44c0ae`. All 34 native checks passed on
+reviewed candidate `36522dac627efeb014662e74a6ec2ece7eae0eaa`, including
+[shared WASM qualification](https://github.com/FS-GG/FS.GG.Game/actions/runs/37148502074).
+The only workflow changes give executor and producer checkout steps unique names;
+the six gates, producer/executor custody and promotion validator are unchanged.
+
+Earlier protected preparation [37146128965](https://github.com/FS-GG/FS.GG.Game/actions/runs/37146128965)
+succeeded and retained original artifact **11282417557**, whose outer archive digest
+`1a13aec7a1ec200903ec3c1a19bad8f3e07565bcd7d2a5f5120b8b0c0bf498e0`
+and complete package inventories verified. The unchanged promotion validator then
+refused duplicate native checkout/post-checkout names. That run, its archives and
+the actual refusal remain preserved and unadmitted. Fresh preparation must bind
+the newly accepted protected executor before any promotion decision; no old
+archive is relabelled. Producer `16a401692f4c0dee7f6da1a86d0cd49e6ea3ec2c`
+remains frozen, public/default WASM remains **0.2.0**, and 0.3 publication is pending.
+
 **2026-10-03: Typed-knowledge Wizard public-dependency qualification CLOSED (bounded receivers).**
 One root-admitted build and one installed operation passed against public SDD
 **2.1.0**, Templates **0.18.0** and unchanged Rendering **0.31.0**. The operation

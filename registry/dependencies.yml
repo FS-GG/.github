@@ -532,7 +532,7 @@ contracts:
     # source-complete authoring, input, runtime and presentation surfaces while preserving
     # omitted/default sdd, explicit none, typed-sdd and legacy spec-kit.
     version: "0.32.0"   # SOURCE: original coherent Rendering archives from 730923fe9d27174e879566f21dab14a1b03d761a; all three 0.32.0 tags bind that source.
-    package-version: "0.32.0"   # FEED: protected original-byte publisher 37106323610 verified all 19 archives on both feeds. Producer inventory only; the Templates consumer edge remains 0.31.0.
+    package-version: "0.32.0"   # FEED: protected original-byte publisher 37106323610 verified all 19 archives on both feeds. Templates registry edge selects 0.32.0; descriptor merge and new installed acceptance remain pending.
     package-tag: "fs-gg-ui-template/v0.32.0"
     # visibility: PUBLIC — Feature 218 (FS.GG.Rendering#26): the whole coherent set (template + 16 FS.GG.UI.* libs) flipped private→PUBLIC so consumer-CI tokens install+restore without exit-103 (internal unavailable — FS-GG is a free, non-enterprise org; public matches the FS.GG.*.Cli norm)
     owner: rendering
@@ -1088,9 +1088,10 @@ dependencies:
   # SINCE (2026-07-11, coordinated full-platform release): FS.GG.Templates 0.4.0 re-pinned its provider
   # descriptor (providers/rendering.providers.yml → FS.GG.UI.Template) to fs-gg-ui-template 0.8.0, so the
   # edge now reads @0.8.0; the 0.3.1-preview.1 pin above is HISTORICAL.
-  # ADVANCED to @0.31.0 after Templates#480 and the 0.13.0 dual-feed release. This edge records the
-  # consumer's actual provider descriptor and direct SVG pins; SVG remains opt-in and lifecycle remains sdd.
-  - { from: templates, to: rendering,  via: "fs-gg-ui-template@0.31.0 composed via scaffold-provider (lifecycle=sdd); SVG preview directly pins UI.Scene/SvgBrowser/KeyboardInput 0.31.0" }
+  # SELECTED @0.32.0 for TSDD-KNOWLEDGE-01.4's Rendering provider adoption; Templates local source
+  # 534d51899ccd4fbb231c1ca3e9d3bc538ee9bcce is prepared, not merged. Descriptor/native/installed joins
+  # remain pending. Packed Fable SVG pins stay 0.31.0; provider lifecycle defaults remain unchanged.
+  - { from: templates, to: rendering,  via: "fs-gg-ui-template@0.32.0 composed via scaffold-provider (lifecycle=sdd); SVG preview directly pins UI.Scene/SvgBrowser/KeyboardInput 0.31.0" }
   # ADR-0022 P5 (Rendering#155): Rendering's template game/sample-pack profiles + Canvas.Tests consume the
   # extracted bottom layer. Rendering (upstream) reaching further UP to the new sibling bottom layer is
   # allowed — Game.Core reaches up to nothing; this is the template's game-sim primitive source.
@@ -1315,7 +1316,8 @@ coherence:
       source 518517f6b90330a6e99f90bbce68faa0a891287f and both-feed installed readback.
       This is producer capability authority for provider contract 2 and effective
       Typed SDD project knowledge, not receiver package adoption. UI producer inventory is 0.32.0 after verified
-      original-archive publication; the Templates Rendering edge remains 0.31.0.
+      original-archive publication; the Templates registry Rendering edge selects 0.32.0,
+      while its prepared descriptor source still requires native acceptance and merge.
       Workspace 0.18.0 is published on both feeds after protected release 37138971862
       and native 440-entry payload readbacks; Wizard package inventory remains 0.12.0.
       Templates PR 667 merged all six matching descriptor floors with complete native
