@@ -358,7 +358,7 @@ deadline, memory or replacement reducer in JavaScript.
 
 ### Ready and joined windows
 
-- [ ] **WASM-SHARED-01.5-B1 — BAR adapter and compatibility qualification**
+- [x] **WASM-SHARED-01.5-B1 — BAR adapter and compatibility qualification**
   — route: routine.
   Depends on: Closed .5-P; protected BAR baseline.
   Scope: new `src/Broker.Browser.SharedWasm/` and
@@ -440,7 +440,7 @@ deadline, memory or replacement reducer in JavaScript.
   the affected migration. Source/browser evidence does not close native
   replay, product publication or installed-platform qualification.
 
-- [ ] **WASM-SHARED-01.6 — FourD optional reaction-policy example**
+- [x] **WASM-SHARED-01.6 — FourD optional reaction-policy example**
   — route: routine.
   Depends on: Closed .5-P; no BAR/SC2 or rendering-pilot prerequisite.
   Scope: isolated `examples/reaction-policy/` with its project, locks,
@@ -732,3 +732,17 @@ then can S1 qualify the complete adapter and S2 perform its product/native
 join. Source completion, published capability, installed acceptance and
 native adoption remain separate. No new workspace default or telemetry
 claim follows from this amendment.
+
+## Consumer source readback — 2026-10-03
+
+.5-B1 is Closed through [BAR #26](https://github.com/FS-GG/FSBarV2/pull/26),
+protected `8da133be0f41c15fdb78291d428c559c56a9afc2`; reviewed candidate tree equality
+and 37 installed-Worker cases establish the bounded adapter window. .5-B2
+production/receiver/native adoption remains open.
+
+.6 is Closed through [FourD #33](https://github.com/FS-GG/FS.GG.FourD/pull/33),
+protected `af32cea8864bcc4c970fb8457ef2cde88011e829`, tree
+`cddcea669b2b78f50a96de35bd22b445096cbe2a`; independent root tree readback and
+seven clean installed-browser cases establish the optional example. Its owning
+[plan](https://github.com/FS-GG/FS.GG.FourD/blob/main/docs/roadmaps/shared-wasm-reaction-example.md)
+retains hosting and authoritative gameplay outside this completed window.
