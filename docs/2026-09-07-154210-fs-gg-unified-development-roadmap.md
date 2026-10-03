@@ -53,6 +53,27 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-04: WASM fresh protected preparation CLOSED (native qualification and original custody).**
+[Preparation 37157871393](https://github.com/FS-GG/FS.GG.Game/actions/runs/37157871393),
+attempt 1, succeeded at protected executor
+`9fc4c6d8bd7b0643226d3ba4b4dee99f2aca563c` with unchanged producer
+`16a401692f4c0dee7f6da1a86d0cd49e6ea3ec2c`. Root accepted all six actual native
+gates and eligible artifact `11287095456`, SHA-256
+`dd040e206f1cc2e73366c94347a172ec7027428baee8f5a49c2e4d0fe0730ff2`.
+Root independently verified all 590 outer members and 159 original members across
+the Contracts, Browser and SDK archives through the unchanged custody validators.
+The fresh reviewed tuple has SHA-256
+`5bfc3549a5b5a53609db894f373d9ad58b7787a912458541f04a35ae06250fc8`;
+private root acceptance has SHA-256
+`2f505c885ef34318b76edf1d63674de62e4d469c8ddaa70916d633a1332e48be`.
+
+This closes fresh preparation and original-custody acceptance after the permission
+repair below. All effect jobs were skipped; promotion has not been admitted and
+publication remains false. R3 promotion, genuine both-feed installed acceptance
+and consumer activation remain pending. Public/default WASM stays **0.2.0**.
+The old f8 originals, its failed 403 promotion and the earlier duplicate-name
+refusal retain their outcomes; this fresh tuple does not relabel their evidence.
+
 **2026-10-04: SC2 private cache generation and selected loader controls CLOSED (bounded acceptance).**
 Root accepted one operation: the signed generator and positive loader exited 0,
 with the same 167-byte private cache and the full selected signed libc mapped.
