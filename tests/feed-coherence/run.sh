@@ -536,7 +536,8 @@ fi
 echo
 echo "--- P4 Typed SDD registry contract and gate-inversion controls ---"
 # This is the release-specific acceptance guard: feed coherence proves package reality, while this
-# guard proves the additive P4 identities/default/vocabulary that a schema-valid YAML mutation could
+# guard preserves P4 identities/default/vocabulary while checking the current published 2.1.0
+# producer capability floor for both provider families. A schema-valid YAML mutation could
 # otherwise change silently. Every negative case mutates a throwaway copy and must fail for its named
 # field, so a vacuous or wrong-subject failure cannot satisfy the control.
 p4_contract() {
@@ -550,16 +551,20 @@ if len(rows) != 1:
     raise SystemExit(f"expected exactly one fs-gg-ui-template row, found {len(rows)}")
 row = rows[0]
 expected = {
-    "version": "0.31.0",
-    "package-version": "0.31.0",
-    "package-tag": "fs-gg-ui-template/v0.31.0",
+    "version": "0.32.0",
+    "package-version": "0.32.0",
+    "package-tag": "fs-gg-ui-template/v0.32.0",
 }
 for key, value in expected.items():
     if str(row.get(key)) != value:
         raise SystemExit(f"P4 identity mismatch: {key}={row.get(key)!r}, expected {value!r}")
-floor = row.get("minimum-fsgg-sdd") or {}
-if str(floor.get("version")) != "1.4.0-preview.1":
-    raise SystemExit(f"P4 floor mismatch: {floor.get('version')!r}, expected '1.4.0-preview.1'")
+for identity in ("fs-gg-ui-template", "fs-gg-workspace-template"):
+    family = [entry for entry in doc.get("contracts", []) if entry.get("id") == identity]
+    if len(family) != 1:
+        raise SystemExit(f"expected exactly one {identity} row, found {len(family)}")
+    floor = family[0].get("minimum-fsgg-sdd") or {}
+    if str(floor.get("version")) != "2.1.0":
+        raise SystemExit(f"P4 floor mismatch: {identity}={floor.get('version')!r}, expected '2.1.0'")
 lifecycle = ((row.get("parameters") or {}).get("lifecycle") or {})
 if lifecycle.get("type") != "choice (spec-kit|sdd|typed-sdd|none)":
     raise SystemExit(f"P4 lifecycle vocabulary mismatch: {lifecycle.get('type')!r}")
@@ -577,10 +582,11 @@ import yaml
 
 src, target, field, value = sys.argv[1:5]
 doc = yaml.safe_load(open(src, encoding="utf-8"))
-row = next(row for row in doc["contracts"] if row.get("id") == "fs-gg-ui-template")
+identity = "fs-gg-workspace-template" if field == "workspace-floor" else "fs-gg-ui-template"
+row = next(row for row in doc["contracts"] if row.get("id") == identity)
 if field in {"default", "type"}:
     subject = row["parameters"]["lifecycle"]
-elif field == "floor":
+elif field in {"floor", "workspace-floor"}:
     subject, field = row["minimum-fsgg-sdd"], "version"
 else:
     subject = row
@@ -606,6 +612,9 @@ p4_mutation wrong-default default typed-sdd "P4 default mismatch"
 p4_mutation lifecycle-loss type 'choice (spec-kit|sdd|none)' "P4 lifecycle vocabulary mismatch"
 p4_mutation rendering-identity version 0.28.0 "P4 identity mismatch"
 p4_mutation orchestrator-floor floor 1.3.0-preview.3 "P4 floor mismatch"
+p4_mutation old-published-floor floor 1.4.0-preview.1 "P4 floor mismatch: fs-gg-ui-template"
+p4_mutation prerelease-floor floor 2.1.0-preview.1 "P4 floor mismatch: fs-gg-ui-template"
+p4_mutation workspace-old-floor workspace-floor 1.4.0-preview.1 "P4 floor mismatch: fs-gg-workspace-template"
 
 echo
 echo "--- CI guard on hand-authored prose (.github#2070 repair round 3): does the prose that names"

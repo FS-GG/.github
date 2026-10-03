@@ -3,7 +3,7 @@
 # versions are coherent. A `contract-change` issue MUST update this file as part of
 # its resolution. Human projection: docs/registry/compatibility.md.
 schemaVersion: 2   # → 2 (.github#1114, SDD#508 step 3): `consumers` becomes "required, may be EMPTY" — a present-but-empty `consumers: []` is now a legal, honest value for a package-bearing contract that nothing restores (the `new-sdd-workspace` scaffolder). Schema growth under #686 / ADR-0015; the FS.GG.SDD.Cli validator pin in contract-coherence.yml advances to 0.13.0 with this bump (publish-before-flip, ADR-0037: SDD published the three-state validator FIRST, in SDD#512/#516).
-updated: "2026-10-02"   # Changelog moved to registry/CHANGELOG.md (.github#129 / review M4): prepend one dated entry there per change and set this date to match. Kept short deliberately — the typed validator does not read this comment.
+updated: "2026-10-03"   # Changelog moved to registry/CHANGELOG.md (.github#129 / review M4): prepend one dated entry there per change and set this date to match. Kept short deliberately — the typed validator does not read this comment.
 
 repos:
   fsquint: { name: FsQuint, role: "Independent public Quint–F# decoding, replay and optional tooling" }
@@ -531,9 +531,9 @@ contracts:
     # 5c74f2a and all 19 archives were read back from GitHub Packages and nuget.org. It adds the
     # source-complete authoring, input, runtime and presentation surfaces while preserving
     # omitted/default sdd, explicit none, typed-sdd and legacy spec-kit.
-    version: "0.31.0"   # SOURCE: SVG Preview C spatial working-set release; Rendering#1322 merge 96810c3c66ba888ecd03a0e10fe6374fd88917f9.
-    package-version: "0.31.0"   # FEED: guarded run 34806339482 published/read back all 19 retained archives on both feeds. Custody artifact 10333198495 binds source/roster/hashes; original UI.Template SHA-256 049355e6e28edb1a9fdcd7730877c17e698bca4e2ee8280a0e29635bd3d5604d. Consumer adoption remains separate.
-    package-tag: "fs-gg-ui-template/v0.31.0"
+    version: "0.32.0"   # SOURCE: original coherent Rendering archives from 730923fe9d27174e879566f21dab14a1b03d761a; all three 0.32.0 tags bind that source.
+    package-version: "0.32.0"   # FEED: protected original-byte publisher 37106323610 verified all 19 archives on both feeds. Producer inventory only; the Templates consumer edge remains 0.31.0.
+    package-tag: "fs-gg-ui-template/v0.32.0"
     # visibility: PUBLIC — Feature 218 (FS.GG.Rendering#26): the whole coherent set (template + 16 FS.GG.UI.* libs) flipped private→PUBLIC so consumer-CI tokens install+restore without exit-103 (internal unavailable — FS-GG is a free, non-enterprise org; public matches the FS.GG.*.Cli norm)
     owner: rendering
     surface: "dotnet new fs-gg-ui (template/base) + FS.GG.UI.* framework packages"
@@ -545,13 +545,10 @@ contracts:
     # 049). The coherent set therefore carries a MINIMUM coherent fsgg-sdd version — the oldest CLI
     # that seeds them. See coherence id `fsgg-sdd-orchestrator-axis`.
     minimum-fsgg-sdd:
-      version: "1.4.0-preview.1" # P4 Typed SDD producer-first floor. FS.GG.SDD#916 / v1.4.0-preview.1
-                                 # was published to GitHub Packages and nuget.org before this registry
-                                 # flip and independently installed from the public feed. It is the first
-                                 # release carrying the canonical specification kernel, typed lifecycle
-                                 # backend, migration analysis, authoring receipt, normalized AST,
-                                 # generated projection, doctor/refresh/upgrade, and readiness contracts.
-      requires: "FS.GG.SDD 1.4.0-preview.1 Typed SDD compiler/backend, migration analysis, canonical source + normalized AST, authoring receipt, generated projection, refresh/upgrade/doctor, and readiness/ship checks; includes all earlier Standard SDD seeded artifacts"
+      # Published stable producer capability floor; receiver package/adoption
+      # identities remain separate under TSDD-KNOWLEDGE-01.
+      version: "2.1.0"
+      requires: "Provider contract 2 admission with a hard stable CLI floor, concise project knowledge initialized and checked for effective Typed SDD, and all earlier Standard/Typed lifecycle capabilities"
       adr: "docs/adr/0008-fsgg-sdd-cli-first-class-member-of-coherent-set.md"
       tracking: "Live enforcement: FS.GG.Templates scripts/check-provider-floors.py (required composition check; FS.GG.Templates#383). Historic 0.4.0->0.6.0 re-mirror: FS.GG.Templates#99, closed via PR#100. FS.GG.SDD#49 records the CLI provenance/warning axis."
       # This is deliberately an enumerable subject, not a YAML list: the typed registry validator
@@ -1042,8 +1039,10 @@ contracts:
       pre-existing governance overlay template folded into this package at the same rename.
     consumers: [github]   # the org new-sdd-workspace wizard is the sole intended consumer (ADR-0071 §2 --template selector); registry-active and wizard-selectable through published new-sdd-workspace 0.10.1.
     minimum-fsgg-sdd:
-      version: "1.4.0-preview.1" # P4 Typed SDD floor, mirrored by every FS.GG.Templates provider in #432.
-      requires: "Typed Protocol Kernel lifecycle selection, compilation, provenance, refresh, upgrade, and diagnostics for every workspace identity"
+      # Matching published capability floor for all six provider families.
+      # This does not advance Workspace package or live descriptor source pins.
+      version: "2.1.0"
+      requires: "Provider contract 2 hard admission floor, canonical Typed SDD knowledge initialization/checks, and retained lifecycle compilation, provenance, refresh, upgrade and diagnostics"
       adr: "docs/adr/0071-two-web-workspace-providers-one-template-package.md; docs/adr/0072-console-and-fable-bindings-are-separate-workspace-providers.md"
       provider-descriptor: "FS.GG.Templates providers/console.providers.yml, providers/web.providers.yml, providers/fable-game.providers.yml, providers/fable-bindings.providers.yml"
       # This advance also subsumes the former fable-game materializer gap recorded at #407: the
@@ -1308,21 +1307,28 @@ coherence:
     impact: "Consumers (Templates, SDD) can install the lifecycle + side-effect-free + root-buildable template surface by id and pin the coherent template↔framework snapshot; SDD composition-acceptance probes run the stock root commands."
     tracking: "https://github.com/FS-GG/FS.GG.Rendering/issues/9 (root-buildable guarantee, Feature 212/215); https://github.com/FS-GG/FS.GG.SDD/issues/1 (dependent scaffold-path request — responded)"
   - id: fsgg-sdd-orchestrator-axis
-    coherent: true
+    coherent: false
     owner: sdd
     summary: >
-      ADR-0008 (.github#87, sub-issue of #85) makes fsgg-sdd a first-class third axis beside
-      template and framework. P4 of the Typed Protocol Kernel rollout advances both provider-family
-      minimum-fsgg-sdd contracts and all five Templates descriptors to dual-published
-      1.4.0-preview.1 (FS.GG.SDD#916, .github#2928, Templates#432). This is the oldest CLI carrying
-      explicit typed-sdd selection, canonical F# specification authority, normalized AST and
-      projection receipts, migration analysis, refresh/upgrade/doctor, and readiness enforcement.
-      Omitted lifecycle remains sdd. A product below the declared minimum is rejected with
-      scaffold.cliBehindMinimum and the exact requirement is recorded in scaffold provenance.
-      Prior floors 0.3.0, 0.4.0, and 0.6.0 remain recorded in registry/CHANGELOG.md.
-    resolved_by: "FS.GG.SDD#916 published FS.GG.SDD.Cli 1.4.0-preview.1 to both feeds; .github#2928 advanced the registry floors; FS.GG.Templates#432 mirrors and verifies every provider/profile."
-    impact: "A pre-1.4.0-preview.1 CLI is a detected incoherence for the current provider family; registry floors, all provider descriptors, installed-package lifecycle matrices, and scaffold provenance agree."
-    tracking: "https://github.com/FS-GG/.github/issues/2928; https://github.com/FS-GG/FS.GG.SDD/issues/916; https://github.com/FS-GG/FS.GG.Templates/issues/432; original rollout .github#85/#87"
+      TSDD-KNOWLEDGE-01 H1 raises both provider-family minimum-fsgg-sdd contracts
+      to stable public 2.1.0 after coherent Artifacts/CLI/Knowledge publication from
+      source 518517f6b90330a6e99f90bbce68faa0a891287f and both-feed installed readback.
+      This is producer capability authority for provider contract 2 and effective
+      Typed SDD project knowledge, not receiver package adoption. UI producer inventory is 0.32.0 after verified
+      original-archive publication; the Templates Rendering edge remains 0.31.0.
+      Workspace 0.15.0 and Wizard 0.12.0 package fields remain unchanged.
+      Templates PR 667 prepares all six matching descriptor floors and has current
+      D.5 source acceptance plus private public-2.1 proof across 18 receiver rows;
+      its live registry equality and historical tuple qualification repairs remain
+      pending. Workspace 0.18.0 publication, Wizard 0.13.0 installed adoption and
+      deliberate Rendering 0.32.0 receiver adoption are separate outstanding joins.
+      The axis stays incomplete until protected mirrors and actual installed
+      receivers establish its current scope. Lifecycle defaults are unchanged;
+      prior 0.3.0, 0.4.0, 0.6.0 and 1.4.0-preview.1 closure remains historical.
+    resolved_by: "Historical 1.4.0-preview.1 closure: SDD#916, .github#2928 and Templates#432. Current 2.1.0 producer publication: protected promotion 37114843541 and .github#4146; receiver coherence remains pending."
+    impact: "The declared capable producer floor is 2.1.0. Live Templates equality must match both floors; older descriptor heads are expected to fail during the bounded receiver transition. Package publication, descriptor source-pin adoption, installed Wizard acceptance and complete coherence are not established by this floor."
+    tracking: "https://github.com/FS-GG/FS.GG.Templates/pull/667; TSDD-KNOWLEDGE-01; ADR-0008; historical .github#2928, SDD#916, Templates#432 and original .github#85/#87"
+
   - id: governance-overlay-populated
     coherent: true
     owner: governance
