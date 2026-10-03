@@ -53,6 +53,30 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-03: SDD compiler capacity and coherent release preparation CLOSED (source).**
+[SDD #1092](https://github.com/FS-GG/FS.GG.SDD/pull/1092) merged as
+`518517f6b90330a6e99f90bbce68faa0a891287f`, with the reviewed candidate's exact
+tree after all required checks and the complete native gate passed. Profile 2
+permits 8,192 rows independently in compiler table/type/effect maps; declaration,
+binding, export and all other ceilings remain unchanged. Genuine installed-candidate
+authoring and retained inspection accept 4,127 and 8,192 rows; 8,193 refuses with
+no changed paths. Warm unchanged measurements observed 1.2% more elapsed time and
+1.0% more peak child RSS. These are bounded observations, not performance guarantees.
+
+The coherent 2.1.0 release preparation binds Artifacts, CLI and the new Knowledge
+SDK to one retained source/version/hash inventory, checks actual public 2.0.3 APIs
+and installed candidate SDKs, and requires authenticated feed occupancy before
+publication. Provider contract 2 enforces stable capability floors before effects;
+contract 1 and lifecycle defaults are preserved. The native Python-bytecode failure
+is repaired at the import boundary without weakening the clean-tree gate.
+
+Both-feed publication, genuinely published consumer adoption and retained project
+extraction remain open. V2 preflight source projections and compiler-row partition
+pilots retain explicit interaction checks; the duplicate audit establishes no safe
+row removal. Source closure does not grant preflight cleanup or native operation
+acceptance. The [owning release preparation](https://github.com/FS-GG/FS.GG.SDD/blob/main/docs/release/knowledge-2.1.0.md)
+and existing knowledge roadmap retain the remaining joins.
+
 **2026-10-03: BARC-01.5f controlled producer/consumer correspondence CLOSED (source).**
 [FSBarV2 #29](https://github.com/FS-GG/FSBarV2/pull/29) merged as
 `e955cb24ee3c621668aa3d69c05f1a625aa57f7a`, with the qualified candidate's exact
