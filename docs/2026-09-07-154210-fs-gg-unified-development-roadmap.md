@@ -53,6 +53,25 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-03: Rendering 0.32 Templates descriptor adoption CLOSED (source and native qualification).**
+[Templates #668](https://github.com/FS-GG/FS.GG.Templates/pull/668) merged as
+`0b1c483b175f7754597e8dc619b10cd39c394b4f` after all 14 exact-head native checks
+completed on `e94a3c14a23e7bb5cbd3d2b1f4102307f29acad8`: eleven passed and three
+were skipped, including successful Release C and composition qualification.
+The current Rendering descriptor selects the existing public UI **0.32.0** original
+for fresh app/game requests through Wizard **0.12.0** with `Ref=main`.
+The published Workspace **0.18.0** archive, its packed Fable UI **0.31.0** pin and
+lifecycle defaults retain their bytes; existing workspaces receive no automatic upgrade.
+
+The first Release C run passed the retained public source families, then failed
+when downloading the pinned Rust evaluator. Its failure is preserved. The repair
+acquires the same evaluator original through the authenticated release-asset API,
+verifies its archive/member hashes and uses Quint's supported private home; all
+existing model/browser gates retain their arguments and bounds. The fresh native
+run [37153183738](https://github.com/FS-GG/FS.GG.Templates/actions/runs/37153183738)
+passed. Installed four-row app/game typed/omitted receiver acceptance remains the
+separate next milestone; no adoption receipt or package republish is claimed.
+
 **2026-10-03: WASM-SHARED-01.R2 protected original preparation CLOSED (native custody).**
 [Preparation 37150982238](https://github.com/FS-GG/FS.GG.Game/actions/runs/37150982238),
 attempt 1, passed all six existing gates on protected executor

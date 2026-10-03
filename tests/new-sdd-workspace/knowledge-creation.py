@@ -36,6 +36,61 @@ def payload(path):
         return {n: hashlib.sha256(archive.read(n)).hexdigest() for n in names if n != '.signature.p7s'}
 
 
+INSUFFICIENT_ARCHIVE_SHA256 = 'b950bf4fc46a09554a51b6b31f920830c8811bb6580b2724c500b8317bcfa9d7'
+INSUFFICIENT_SOURCE = '0c26ac591e76d2839177da823b3f6ada5c09a698'
+
+
+def regular_input(path, inputs):
+    path = Path(path)
+    require(path.is_absolute() and path == path.resolve() and path.is_file(), 'insufficient-unsafe-input')
+    require(str(path) in inputs and sha(path) == inputs[str(path)], 'insufficient-input-pin')
+    return path
+
+
+def validate_insufficient_public(m, expected_archive_sha=INSUFFICIENT_ARCHIVE_SHA256):
+    """Literal public archive join; version output cannot authorize this identity."""
+    import stat
+    import xml.etree.ElementTree as ET
+    binding = m.get('insufficientPublic')
+    require(isinstance(binding, dict) and set(binding) == {'archive', 'archiveSha256', 'sourceRevision', 'closure', 'apphostTarget', 'literalPayloads'}, 'insufficient-public-binding-required')
+    require(binding['sourceRevision'] == INSUFFICIENT_SOURCE and binding['archiveSha256'] == expected_archive_sha, 'insufficient-public-source')
+    inputs = m['inputs']
+    archive_path = regular_input(binding['archive'], inputs)
+    require(archive_path.stat().st_size <= 32 * 1024 * 1024 and sha(archive_path) == expected_archive_sha, 'insufficient-archive-identity')
+    closure = Path(binding['closure'])
+    require(closure.is_absolute() and closure == closure.resolve() and closure.is_dir(), 'insufficient-unsafe-closure')
+    prefix = 'tools/net10.0/any/'
+    with zipfile.ZipFile(archive_path) as archive:
+        entries = archive.infolist(); names = [entry.filename for entry in entries]
+        require(len(entries) <= 512 and len(names) == len(set(names)), 'insufficient-duplicate-members')
+        require(sum(entry.file_size for entry in entries) <= 128 * 1024 * 1024, 'insufficient-archive-bound')
+        for entry in entries:
+            name = entry.filename
+            require(name and not name.startswith('/') and '\\' not in name and all(part not in ('', '.', '..') for part in name.rstrip('/').split('/')) and ':' not in name and not stat.S_ISLNK(entry.external_attr >> 16), 'insufficient-unsafe-member')
+        nuspecs = [name for name in names if name.endswith('.nuspec')]
+        require(len(nuspecs) == 1, 'insufficient-package-metadata')
+        metadata = ET.fromstring(archive.read(nuspecs[0]))
+        def values(name):
+            return [node for node in metadata.iter() if node.tag.split('}')[-1] == name]
+        require(len(values('id')) == len(values('version')) == len(values('repository')) == 1 and values('id')[0].text == 'FS.GG.SDD.Cli' and values('version')[0].text == '2.0.3' and values('repository')[0].get('commit') == INSUFFICIENT_SOURCE, 'insufficient-package-source')
+        members = {name: hashlib.sha256(archive.read(name)).hexdigest() for name in names if name.startswith(prefix) and not name.endswith('/')}
+    require(len(members) == 36 and binding['literalPayloads'] == members, 'insufficient-full-payload')
+    required = ['FS.GG.SDD.Cli.dll', 'FS.GG.SDD.Commands.dll', 'FS.GG.SDD.Cli.deps.json', 'FS.GG.SDD.Cli.runtimeconfig.json', 'DotnetToolSettings.xml']
+    require(all(prefix + name in members for name in required), 'insufficient-runtime-members')
+    expected_paths = {str(closure / name.removeprefix(prefix)) for name in members}
+    actual_paths = {str(path) for path in closure.rglob('*') if path.is_file() or path.is_symlink()}
+    require(actual_paths == expected_paths and {path for path in inputs if path.startswith(str(closure) + os.sep)} == expected_paths, 'insufficient-exclusive-closure')
+    for name, expected in members.items():
+        path = regular_input(closure / name.removeprefix(prefix), inputs)
+        require(sha(path) == expected, 'insufficient-closure-payload')
+    executable = regular_input(m['insufficientExecutable'], inputs)
+    require(executable.stat().st_size <= 1024 * 1024, 'insufficient-apphost-bound')
+    target = os.path.relpath(closure / 'FS.GG.SDD.Cli.dll', executable.parent)
+    raw = executable.read_bytes()
+    require(binding['apphostTarget'] == target and raw.startswith(b'\x7fELF') and raw.count(b'FS.GG.SDD.Cli.dll\x00') == 1 and b'\x00' + target.encode() + b'\x00' in raw, 'insufficient-apphost-target')
+    return binding
+
+
 def validate_installed(args, after=False):
     require(args.installed_manifest and args.approved_installed_manifest_sha256, 'installed-root-manifest-required')
     require(sha(args.installed_manifest) == args.approved_installed_manifest_sha256, 'installed-root-manifest-drift')
@@ -47,6 +102,7 @@ def validate_installed(args, after=False):
         return result
     m = json.loads(args.installed_manifest.read_text(), object_pairs_hook=unique)
     require(m['schema'] == 'fsgg.wizard.installed-public-qualification/1', 'installed-manifest-schema')
+    validate_insufficient_public(m)
     for path, expected in m['inputs'].items():
         require(Path(path).is_file() and not Path(path).is_symlink() and sha(path) == expected, 'installed-input-drift:' + path)
     for argument, key in [('wizard', 'wizard'), ('sdd_cli', 'sddExecutable'), ('insufficient_cli', 'insufficientExecutable'),
@@ -183,7 +239,11 @@ def source_controls():
                 self.assertEqual(run.call_args.kwargs['timeout'], 180)
         def test_missing_root_manifest_refuses(self):
             with self.assertRaises(ValueError): validate_installed(argparse.Namespace(installed_manifest=None, approved_installed_manifest_sha256=None))
-    result = unittest.TextTestRunner(verbosity=2).run(unittest.defaultTestLoader.loadTestsFromTestCase(Controls))
+    import runpy
+    custody = runpy.run_path(str(Path(__file__).with_name('test-insufficient-public-custody.py')))
+    suite = unittest.TestSuite([unittest.defaultTestLoader.loadTestsFromTestCase(Controls),
+                                unittest.defaultTestLoader.loadTestsFromTestCase(custody['Custody'])])
+    result = unittest.TextTestRunner(verbosity=2).run(suite)
     require(result.wasSuccessful(), 'source-controls-failed')
 
 
@@ -368,6 +428,9 @@ def main():
             assert not (standard / ".github/workflows/project-knowledge.yml").exists()
             report["standardSddUnchanged"] = True
             report["insufficientProducerRefusedBeforeScaffold"] = True
+            report["insufficientProducerQualificationScope"] = "public-archive-literal-closure" if installed else "private-source-candidate"
+            if installed:
+                report["insufficientPublicBinding"] = m["insufficientPublic"]
         finally:
             server.shutdown()
     if installed:
