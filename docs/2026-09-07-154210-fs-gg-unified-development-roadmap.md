@@ -53,6 +53,27 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-03: Coupled SDD 2.1 validator adoption CLOSED (source).**
+Both native validator installers select published CLI 2.1.0. The engine admits its
+vetted tool version alongside the existing 1.0.0 and 1.5.0 identities; the coupled
+Renovate ceiling and actual-preset boundary fixtures advance together to 2.1.0.
+Provider authority guards retain their existing behavior.
+
+The qualified production inputs passed all 190 write assertions with a fresh
+public 2.1.0 install, including the valid-provider route and six authority refusals.
+Actual observed dry-run verification is ready with zero blocking or unmet counts;
+its single VF001 warning follows the existing succeeded-with-warnings contract.
+Archive payload and official FSharp.Core joins bind that install to published
+producer source `518517f6b90330a6e99f90bbce68faa0a891287f`. Those production inputs
+are byte-identical after rebasing onto the protected publication closure. Final
+pin-coherence controls pass 108/108; final-head native CI is a merge prerequisite.
+
+This closes the `.github` compiler-consumer source join. Coordination package
+publication, other provider and retained-project consumers, and V2 preflight
+cleanup/calibration remain separate pending outcomes. No lifecycle, provider or
+shared-registry default changes. The owning qualification is retained with the
+[validator source](../src/FS.GG.Coord.Cli/CycleLedgerApplication.fs).
+
 **2026-10-03: Coherent SDD 2.1.0 publication CLOSED (publication and installed qualification).**
 [Native release run 37114843541, attempt 2](https://github.com/FS-GG/FS.GG.SDD/actions/runs/37114843541)
 passed at protected source `518517f6b90330a6e99f90bbce68faa0a891287f`.
