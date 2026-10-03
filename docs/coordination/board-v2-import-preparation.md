@@ -11,7 +11,8 @@ carryover/adoption and publication remain open in .4–.6.
 The original pilot manifest at protected `351e5db40d4d72abd6e87882614725305eb2a419` recorded
 **eleven candidates, three approved pilot items, two omissions and six adjudication gaps**. The current
 [successor manifest](board-v2-import-manifest.json) appends .github#3009: **twelve candidates and four
-proposed selected targets**, pending the separately gated .4 operation described below. Original three
+selected targets**. The independently qualified bounded .4 operation is recorded below; broader
+carryover remains separate. Original three
 issue objects, historical operation/provenance and receipts remain unchanged. `preparationState=adjudication-required` remains accurate
 for the unselected inventory. No issue was created, closed, reopened or converted from a PR. Legacy
 Project 1 and its separately scoped archive operation were preserved.
@@ -209,8 +210,8 @@ carryover and scheduling changes remain .4; product publication and installed ad
 
 ## Four-target successor and consumer adoption — source preparation
 
-**COORD-BOARD-V2-01.4 remains open.** Root authorized this finite source preparation, not live board
-changes. The successor is the original three plus existing
+**COORD-BOARD-V2-01.4 remains open.** At source preparation, root authorized this finite source work
+without live board changes. The subsequently selected root operation is recorded below. The successor is the original three plus existing
 [.github#3009](https://github.com/FS-GG/.github/issues/3009), node
 `I_kwDOS6feoM8AAAABOUU1ew`, open at revision `2026-08-26T20:18:16Z`.
 It is appended as a new row, not inferred from a missing candidate. Proposed seed is Ready /
@@ -293,12 +294,31 @@ scheduled. The hosted V2 writer remains `if:false`, unenrolled and unqualified f
    All unswitched consumers and unresolved/unrepresented named outcomes remain reported; broader .4closure,
    .5publication and .6installed product adoption remain separate.
 
-**Installed qualification:** [2026-10-03 public receiver proof](board-v2-installed-qualification.md) verifies
-0.95.0 CLI/Kit/Drivers acquisition, installed read-only four-target coverage and a complete native
-preservation snapshot. A targeted follow-up resolved retained exact-bound constructor custody without
-a manifest rebind. .github#3009 remains absent; root operation/binding acceptance remains pending. No consumer adoption or Board effect follows.
+**Actual bounded successor qualification — 2026-10-03:**
+[Public installed receiver and native evidence](board-v2-installed-qualification.md#actual-bounded-root-import-and-installed-four-target-qualification)
+verifies 0.95.0 CLI/Kit/Drivers consumption and retained exact-bound constructor custody. Root selected
+one add plus four absent seeds, independently read back each stage and made exactly five acknowledged
+mutations without retry. .github#3009 is now item `PVTI_lADOEYAWY84Bldpazg-REU0`, Ready / Active delivery /
+Verified with Roadmap .github#3008. Complete independent readback preserved original3, unselected
+SDD#935, all native values and the schema. The explicit import repeat retained all 16 planning values
+with zero intents. Actual installed inspection and restricted refresh each verified all four; refresh
+made zero writes and complete fresh before/after snapshots were identical.
 
-**Current gate:** selected runtime binding, import/readback,
-four-target refresh/inspection and selected consumer invocation/adoption are pending. Source preparation
-made zero board effects, issue lifecycle/dependency changes, permission/credential changes, workflow
-activation or publication. Telemetry NOTCONFIG/no handle; native usage/economics Unknown.
+**Selected consumer adoption:** root selected the check-board read-only organization V2 consumer at
+05:32:42 UTC and independently invoked the actual installed CLI at 05:32:52 UTC: exit0,
+selected/attempted/verified4, zero mutations and no population gap. Root selection receipt SHA-256 is
+`2bc924438d04915989018af5c5de9f352d056049c828d79464ccd12596eca2e6`; actual inspection SHA-256 is
+`fbab2db499b3fd6ba525d6fda6179abb727ac62b99037c68698ba1a225189dc8`. At 05:35:54 UTC, root selected
+only .github#3009 for a bounded prospective ADR/design dry-run using actual intake, remaining-outcome
+adjudication, reviewed PR linkage, disjoint documentation touch sets and owner/PR capacity. Dry-run
+receipt SHA-256 is `4bab632070107d12031fc6155ae2eda6f213f37a42662cc23dd0c0dbe06c9aec`.
+Its architecture choice stays accepted; ADR/design delivery remains unverified. No worker was dispatched.
+
+**Bounded window qualified; canonical activation awaits native evidence landing.** Once this owning
+record lands, only the selected check-board four-target organization scope uses the bound inspection
+as its primary queue. Other organization driving consumers, product boards, initialization and generated
+bindings remain unswitched. A missing/stale V2 read reports Unknown, preserves owning roadmap work
+and does not become an ordinary source merge gate.
+Broader unresolved/unrepresented carryover keeps .4 open; .5–.6 remain separate. No native issue
+lifecycle/dependency change, permission/credential change, hosted-workflow activation or legacy write
+was performed. Telemetry NOTCONFIG/no handle; native usage/economics Unknown.
