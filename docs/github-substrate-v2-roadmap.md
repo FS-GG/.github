@@ -68,8 +68,13 @@ not schedule or gate the current route, and it is not reported as completed.
 
 ## Active strategy: start clean and repair forward
 
-**Next selected item — 2026-10-02: Coordination V2 board migration
-(`COORD-BOARD-V2-01.2`).** Prepare the bounded carryover and organization pilot described in
+**Next selected item — 2026-10-03: typed prerequisite admission
+(`V2-PREFLIGHT-01`).** Implement the [bounded preparation and execution contract](#v2-preflight-01--typed-prerequisite-admission-next-item-2026-10-03)
+before selecting another V2 follow-on item. Existing delivery lanes and already admitted operations
+continue; this selection neither interrupts them nor qualifies their pending acceptance.
+
+**Continuing selected work — 2026-10-02: Coordination V2 board migration
+(`COORD-BOARD-V2-01.2`).** Preserve the bounded carryover and organization pilot described in
 [the migration sequence](#coord-board-v2-migration--next-item-2026-10-02), then qualify projection
 and switch scheduling incrementally. Existing delivery lanes continue in parallel. Full V2 acceptance
 remains complete at its selected profile; board migration is follow-on work.
@@ -253,7 +258,7 @@ prerequisite to full V2 acceptance.
 
 #### Coord-board-v2 migration — next item, 2026-10-02
 
-Start `COORD-BOARD-V2-01.2` next. Reconcile the currently open V2 roadmap outcomes against current
+Continue `COORD-BOARD-V2-01.2`. Reconcile the currently open V2 roadmap outcomes against current
 source, publication and operational evidence, prepare a selective import, and establish the fresh
 **Coordination V2** planning board. After the pilot and restricted projection qualify, use it as the
 primary scheduling queue for the selected remaining work. The
@@ -278,6 +283,55 @@ shared board; detailed product work follows its selected product-board adoption.
 Migration does not pause current implementation, recreate legacy claim ceremony, or make board
 refresh a source-merge gate. A board item is optional for routine source work. No project creation,
 import, credential activation, consumer switch or product adoption is completed by this write-up.
+
+### V2-PREFLIGHT-01 — Typed prerequisite admission (next item, 2026-10-03)
+
+Owner: Coordination for reusable execution contracts, with BAR and SC2 owners for their actual
+runner adapters; `.github` owns roadmap and skill integration. Route: routine. Status: selected,
+implementation pending. This is the next V2 improvement following the observed preparation defects,
+including a missing BAR capture import, repeated SC2 mapping observations exhausting a census bound,
+and request expiry effects discarded when a later submission refuses. Existing accepted V2 scope
+and historical evidence remain intact.
+
+Inspect the actual validators, runners and canonical models first. Extend reusable contracts where
+they exist; avoid a new package or parallel execution framework solely for this item. Follow the
+[existing preflight guidance](../.agents/skills/pipeline-preflight/SKILL.md) and retain the published
+SDD/FsQuint model and replay boundary. Product models and adapters stay with their owners.
+
+- [ ] **V2-PREFLIGHT-01.1 — Typed preparation and real prerequisite checks.** Bind exact command,
+  configuration, transitive artifact identities, prerequisite observations and applicable deadlines
+  in a `PreparedAttempt` value with a private constructor. The execution entry point requires that
+  value. Preparation runs bounded, no-effect checks against the actual assembled capsule, including
+  capture imports and test discovery. Missing inputs, malformed observations, timeout and unknown
+  results cannot construct readiness. Revalidate mutable or time-sensitive facts immediately before
+  their dependent effect; types alone cannot establish continuing filesystem or process identity.
+- [ ] **V2-PREFLIGHT-01.2 — Partitioned models and implementation correspondence.** Reuse small Quint
+  modules for artifact preparation/invalidation, admission/deadlines, and owned process observation
+  and cleanup. Compose them with BAR/SC2 adapters and check the interactions between modules. Keep
+  requirements independent of the execution plan and bind model inputs to actual runner inputs with
+  drift checks. Replay relevant model traces through the real F# reducers. Include reachable success
+  cases and causal mutations; bounded sampling is not exhaustive proof or native acceptance.
+- [ ] **V2-PREFLIGHT-01.3 — Wire and qualify BAR and SC2 independently.** Add regressions for missing
+  capture imports, repeated versus distinct observation bounds, deadline/refusal ordering and required
+  cleanup. Demonstrate that bad preparation prevents costly workload launch; a valid admission whose
+  clock advance expires existing work must retain its retirement, timer and settlement effects even
+  when the new request refuses. Invalid pre-admission inputs preserve state. Exercise the exact
+  packaged entry points and artifact layout, including writable output placement outside immutable
+  inputs. Passing shared tests does not qualify either product adapter without its own actual checks.
+- [ ] **V2-PREFLIGHT-01.4 — Deliver and adopt the checked route.** Provide one local preparation command
+  with actionable errors and integrate it before costly qualification and native effects. Update
+  only affected callers and skill guidance; add no issue/claim, approval or reporting ceremony.
+  Record cold/warm cost, defect detection and remaining coverage in the owning implementation evidence.
+  Source merge, any required publication, installed receiver adoption and native acceptance remain
+  separate. Complete this item only after both actual adapters use the checked route and their
+  regressions pass; report savings only when measured.
+
+The implementation owner declares bounded, disjoint touch-sets before dispatch. Shared-contract work
+precedes dependent adapter adoption; independent BAR/SC2 qualification may run in parallel. Preserve
+required native checks, coherent-validation/reuse rules, operation authority and existing bounds.
+Partitioned reuse must not substitute stale evidence for changed inputs or model a missing import as
+verified without executing its actual discovery check. This roadmap amendment supplies no prepared
+value, publication, installation, native grant or completion claim.
 
 ### Language-independent product workspaces — 2026-09-29
 
