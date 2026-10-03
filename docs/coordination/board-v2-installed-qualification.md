@@ -72,15 +72,39 @@ The actual local constructor SHA-256 is
 Its descriptive plan selects exactly four manifest rows; plan SHA-256 is
 `b2715b131d3a0a2f6dcaf625f25593f86b35e1057bf0905bd04ab463cf92aff4`.
 That newly built artifact differs from the historical bound constructor `dac151…`; source equality
-is not compiled-artifact equality. The local plan does not establish exact-bound constructor custody.
+is not compiled-artifact equality. Its plan initially left exact-bound constructor custody unresolved.
+
+A targeted follow-up found the retained historical `dac15107412e92e9238f232008137244019957b7b57ab164bcd58b647a5227d3`
+constructor referenced by the actual retained operator `81c192…`. The retained Program, project and
+lock bytes match protected `47d0a38…` exactly. The constructor, runtime config and official
+FSharp.Core DLL hashes match their accepted identities; all 14 package runtime/resource DLLs match
+the official archive byte for byte. Executing this exact-bound constructor against the current
+four-target manifest passed and emitted the same plan hash `b2715b…`. No manifest rebind is needed.
+Constructor custody proof SHA-256:
+`b36dba159aed736979a8c7dfd50b7436b31d4a3aee09aab3f0618dffa02810bc`.
+
+The actual corrected dependency file hash is
+`7427081cf4da38e14ae941728632a6dd7392c442f9dd519397915a1c6dccd6c2`, differing from the older
+`45cd0166…` value in historical provenance. Its closed dependency set contains only BoardV2Import
+and FSharp.Core 10.1.401 with the exact protected official-lock content hash. This fresh custody
+observation records that metadata distinction; historical artifacts, provenance and receipts remain
+unchanged.
+
+One independent capture after custody resolution completed at 05:14:49 UTC, again verifying complete
+schema, four current memberships, all field values and nested connection counts, and complete empty
+native dependency snapshots. Original3 and unseeded SDD#935 remain; .github#3009 is absent.
+Fresh aggregate SHA-256:
+`3567f950a7c3ece8a96d2a065ac13545841955d4dd7feda8ef5342c7d8bad0e3`.
 
 A concrete private proposal contains one exact .github#3009 add and four initial seeds, with a
 mandatory independent read between membership add and field seeding. Existing values are retained,
 conflicts stop, and ambiguous or delayed responses have no automatic retry. Maximum effects are five;
 original3, SDD#935, native issue data and Project1 receive no intents. Proposal SHA-256:
 `73447c24b8686d12ceed3adb2b921bcccac504c11801a25c72cfc40e7a71bb48`.
-Root must select the native one-shot administration route, accept actual installed custody/binding,
-and resolve exact-bound constructor custody before effects. A fresh complete snapshot remains required
+A new custody-resolved proposal binds the retained exact constructor and the fresh preservation
+capture; its SHA-256 is `71e245d8493b0ab67e81eff54bfced5404cd30f5d305d1f7d3c01f1c2bf8c7ad`.
+Root still must accept actual installed custody/binding and select the native one-shot administration
+stage before effects. A fresh complete snapshot remains required
 at each stage; this preparation supplies no fabricated authority receipt or fresh item ID.
 
 After admitted import, root still needs independent complete all-fields preservation readback,
