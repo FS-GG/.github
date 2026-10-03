@@ -53,6 +53,26 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-04: SC2 private cache generation and selected loader controls CLOSED (bounded acceptance).**
+Root accepted one operation: the signed generator and positive loader exited 0,
+with the same 167-byte private cache and the full selected signed libc mapped.
+The negative loader exited 127 with the actual missing-libc diagnostic, after two
+literal cache-stat `ENOENT` results and one literal default-libc-open `ENOENT` result.
+This qualifies the explicit selected stat-absence contract; the legacy
+`cacheFailedOpen` fact remains false. No policy refusal occurred. Root rehashed all
+30 retained output files, verified all five owned processes absent and private-bind
+cleanup, and confirmed unchanged source, mechanism pins and host mount view.
+Private root acceptance SHA-256 is
+`3ebc9a12103591a098b04b43cf17ad0b6ac6d2155f679454d735acb10c4959ed`.
+
+Only this private-cache milestone closes. General P2, library-algorithm and runtime
+qualification remain open under the existing [SC2 owning plan](https://github.com/FS-GG/FS.GG.SC2.Client/blob/main/docs/SC2C-01.6-plan.md).
+The exact stopped-owned-memory window below retains its separate scope; actor and
+native grants, genuine product invocation and native .6f acceptance are not established
+by this operation. All earlier failed windows retain their outcomes, including the
+original refusal whose rejected syscall/path remains unknown. No later item or
+further operation is admitted by this closure.
+
 **2026-10-04: TEMPLATES-H2 Rendering 0.32 installed receiver qualification CLOSED (four bounded rows).**
 Root accepted one operation at protected [Templates #668](https://github.com/FS-GG/FS.GG.Templates/pull/668)
 revision `0b1c483b175f7754597e8dc619b10cd39c394b4f`, using genuine public SDD
