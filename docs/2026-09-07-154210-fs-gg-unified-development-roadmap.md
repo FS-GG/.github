@@ -53,6 +53,31 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-03: Typed Templates receiver source CLOSED (source and full native qualification).**
+[Templates #667](https://github.com/FS-GG/FS.GG.Templates/pull/667) merged as
+`9161a9d91b3fdd7a80cae7776fdff179e712b32e`, with reviewed candidate
+`11d5f4810676c00682b61bfd585cf732653c7350` and exact protected tree
+`bd5fd90dac3c73cb754c73512578d4c6f6f48f16`. The complete native
+[composition gate](https://github.com/FS-GG/FS.GG.Templates/actions/runs/37135235379),
+[current producer qualification](https://github.com/FS-GG/FS.GG.Templates/actions/runs/37135235478),
+[receiver qualification](https://github.com/FS-GG/FS.GG.Templates/actions/runs/37135235464)
+and [typed receiver gate](https://github.com/FS-GG/FS.GG.Templates/actions/runs/37135235394)
+passed on that exact candidate, alongside all required checks. The final bindings failure was
+an actual generated JUnit report missing from Git; the foreground caller now commits only that
+report before the unchanged lifecycle, preserving its bytes and terminal evidence gates.
+
+The qualified tuple is Workspace Template 0.18.0 source with six contract2 provider families,
+genuine public SDD CLI/Artifacts/Knowledge 2.1.0 from
+`518517f6b90330a6e99f90bbce68faa0a891287f`, official FSharp.Core 10.1.401,
+and original Rendering Template 0.31.0. All eight frozen public D/D.5 assets and thirty
+preserved descriptor/fixture/historical inputs remain unchanged; historical CLI 1.7 routes
+retain their exact archive tuples. Public Templates 0.18 publication, fresh installed adoption,
+Wizard 0.13 adoption and deliberate Rendering 0.32 receiver adoption remain pending. Installed
+package versions and lifecycle defaults are unchanged. Main-descriptor callers, including
+installed Wizard 0.12, now select the unpublished 0.18 source tuple; its package availability
+interval remains a separate root-owned release join. The older 8526 candidate archive is historical,
+not the protected release artifact. Native usage coverage remains Unknown.
+
 **2026-10-03: telemetry CI default selection CLOSED (source).**
 CI collection and reconciliation now distinguish an implicit legacy host configuration
 from a workspace configuration. A valid legacy default permits explicit store selection;
@@ -183,9 +208,9 @@ original source `730923fe9d27174e879566f21dab14a1b03d761a` after verified publis
 The Templates Rendering edge remains 0.31.0; Workspace 0.15.0, Wizard 0.12.0 and
 lifecycle defaults retain their actual values. This inventory flip is separate from
 Rendering receiver adoption.
-[Templates #667](https://github.com/FS-GG/FS.GG.Templates/pull/667) prepares matching
-floors with current D.5/private public-2.1 proof; live equality and historical tuple
-repairs remain pending. Workspace 0.18.0 publication, Wizard 0.13.0 installed adoption
+[Templates #667](https://github.com/FS-GG/FS.GG.Templates/pull/667) has merged matching
+floors and historical tuple repairs with complete exact-head native qualification,
+as recorded above. Workspace 0.18.0 publication, Wizard 0.13.0 installed adoption
 and deliberate Rendering 0.32.0 receiver adoption remain separate joins. This
 capability-floor source change does not activate that incomplete receiver set.
 
