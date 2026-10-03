@@ -53,6 +53,27 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-03: TEMPLATES-H2 published 0.18 installed qualification CLOSED (bounded receivers).**
+The original published package from protected source
+`9161a9d91b3fdd7a80cae7776fdff179e712b32e` passed all **18** installed receiver
+rows: twelve effective typed choices and six omitted choices. Typed rows retained
+durable history and recovery, excluded private stores, and passed ordinary pinned
+CI with public SDD 2.1.0. The original matrix attempt exited **1** after its final
+budget check selected an omitted receiver's tool home; its rows, raw receipt and
+failed exit remain preserved as historical evidence.
+
+One separately admitted budget operation selected the existing console tool home
+without replaying the matrix. It exited **0**, accepted exactly **10 MiB**, refused
+one byte over the limit, and restored identical receiver bytes while preserving
+actual HOME. The root evidence join accepts these distinct attempts together:
+matrix proof `027d8fed10a7a53e00ecac2432cb3db87e44e44aaad24ac6d65d8dbdbb1704e9`,
+budget fragment `c3a156ac9eb1d0ffa43002374d9f66360057a1ae15c0d3ceaf1824d7e1a37a95`,
+and private acceptance `0525d3ece867437fad4d240b916c28c6dc164a6602820f74ed34be7acaf79d64`.
+This closes published-package qualification in the bounded workspaces; no production
+activation or adoption receipt was emitted. Wizard 0.13 qualification and publication,
+deliberate Rendering 0.32 receiver adoption, and later extractor acceptance remain
+separate successors. Public registry versions and lifecycle defaults are unchanged.
+
 **2026-10-03: WASM supported evaluator thread option CLOSED (source and native qualification).**
 [Game #687](https://github.com/FS-GG/FS.GG.Game/pull/687) merged as
 `94bce296fbdfacdff8492ae02ad62789ac051cb9`, with exact protected tree
