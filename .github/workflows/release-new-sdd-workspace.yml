@@ -1,8 +1,8 @@
 name: release-new-sdd-workspace
 
-# SVG-D5-WIZARD-012: retain the existing NuGet Trusted Publishing filename.
+# TSDD-KNOWLEDGE-01.4: retain the existing NuGet Trusted Publishing filename.
 # GS2-08.9's no-effect seal is superseded only for this exact-source, protected-
-# journal wizard 0.12.0 successor. Default dispatch remains read-only.
+# journal wizard 0.13.0 successor. Default dispatch remains read-only.
 on:
   workflow_dispatch:
     inputs:
@@ -41,7 +41,7 @@ concurrency:
 
 jobs:
   publish:
-    name: new-sdd-workspace-012-publisher
+    name: new-sdd-workspace-013-publisher
     if: github.ref == 'refs/heads/main' && github.actor == 'EHotwagner'
     runs-on: ubuntu-latest
     environment: release-successor
