@@ -69,6 +69,32 @@ usage-error contract, so scripted callers must still pass `<target-dir> <product
 | `--chore-locks <refs>` | `FSGG_COORD_CHORE_LOCKS` for a **non-FS-GG** board's chore queue: comma-separated `owner/repo#n`. Unneeded for the FS-GG board (the engine carries its lock table). |
 | `--no-coordination` | skip wiring the workspace to a coordination board entirely (no kit, no env). |
 
+### Typed project knowledge bootstrap
+
+A `typed-sdd` creation requires an actual stable `fsgg-sdd` version of at least 2.1.0
+before scaffold effects. The wizard rechecks that exact producer before handoff and records
+it in the root `.config/dotnet-tools.json`. It preserves unrelated tool pins and refuses
+an authored SDD pin conflict or a manifest explicitly marked as non-root.
+
+The capable scaffold seeds `.fsgg/knowledge-guide.md`, the knowledge schema, and initial
+records. Owned templates emit the central project-knowledge workflow and checker. Rendering
+app and game creation composes the separate `fs-gg-project-knowledge` overlay from exact
+`FS.GG.Workspace.Template::0.18.0`; the Rendering archive remains immutable. The installer
+may refresh package registration, but overlay creation never uses `--force`. A uniquely
+registered cached package is reused only after its actual archive's complete overlay payload
+matches the qualified central workflow, checker, and template configuration. Unknown bytes,
+malformed metadata, and duplicate registrations refuse before overlay emission.
+
+The wizard checks all bootstrap artifacts and runs the actual producer's knowledge check
+before the first-agent handoff. It creates no Git commit: the caller's normal initial commit
+includes the guide, schema, records, exact local tool pin, workflow, and checker. Standard SDD
+and the separate `--upgrade` operation retain their existing behavior.
+
+This source candidate depends on coherent public SDD 2.1.0 and Workspace.Template 0.18.0
+publication, installed-package checks, and guarded descriptor/registry adoption. Source
+qualification with injected exact compiled tools and immutable archives does not activate
+those public pins. See the [qualification record](../../docs/roadmaps/tsdd-knowledge-wizard.md).
+
 ### Release D.5 qualification boundary
 
 Version 0.12.0 is the wizard candidate for the selected SVG default. Its omitted `fable-game`

@@ -31,7 +31,7 @@ bad() { echo "FAIL  $1"; [ -n "${2:-}" ] && printf '%s\n' "$2" | sed 's/^/    | 
 [ -f "$PROJ" ] || { echo "::error::missing $PROJ — nothing to test"; exit 1; }
 
 echo "new-sdd-workspace parse fixture — building the CLI (Release)…"
-dotnet build "$PROJ" -c Release --nologo -v quiet 1>&2
+dotnet build "$PROJ" -c Release --nologo -v quiet -m:1 -nr:false -p:UseSharedCompilation=false 1>&2
 
 # Newest *built artifact* wins by modification time. Lexical path order used to prefer a stale
 # `publish/` DLL over the just-built `net*/` DLL, which let the mutation controls compile a changed
@@ -44,6 +44,7 @@ echo "new-sdd-workspace parse fixture — dll='$DLL'"
 # requires a TTY; this deterministic probe proves that creation needs only product + target and does
 # not manufacture repository, board, collaborator, chore-lock, or npm answers.
 dotnet fsi --reference:"$DLL" "$HERE/wizard-defaults.fsx"
+dotnet fsi --reference:"$DLL" "$HERE/knowledge-bootstrap.fsx"
 
 # Scrub `fsgg-sdd` from the child's PATH by handing it only the directory the dotnet muxer lives in
 # (onPath does a non-recursive PATH scan, and fsgg-sdd is a global tool in a *different* dir). On a
@@ -549,7 +550,17 @@ while [ ! -s "$PORT_FILE" ]; do sleep 0.05; done
 RAW_BASE="http://127.0.0.1:$(cat "$PORT_FILE")"
 STUB_DIR="$WORK/stub-bin"
 mkdir -p "$STUB_DIR"
-printf '%s\n' '#!/bin/sh' 'printf "%s\n" "$*" >> "$FSGG_SDD_LOG"' > "$STUB_DIR/fsgg-sdd"
+# This existing routing double proves arguments only. Typed routes deliberately refuse at
+# scaffold so no synthetic knowledge store, checker, installer, or capability proof is created.
+cat > "$STUB_DIR/fsgg-sdd" <<'EOF'
+#!/bin/sh
+printf "%s\n" "$*" >> "$FSGG_SDD_LOG"
+[ "$1" = "--version" ] && { printf '%s\n' '2.1.0'; exit 0; }
+case " $* " in
+  *" scaffold "*) [ "${FSGG_STUB_TYPED_CASE:-0}" = 1 ] && exit 1 ;;
+esac
+exit 0
+EOF
 chmod +x "$STUB_DIR/fsgg-sdd"
 
 expect_execution() {
@@ -558,7 +569,9 @@ expect_execution() {
   local target="$WORK/real-$template-$execution_case"
   local log="$WORK/$template-$execution_case.log"
   local rc=0
-  OUT="$(PATH="$STUB_DIR:$DOTNET_DIR" FSGG_TEMPLATES_RAW_BASE="$RAW_BASE" FSGG_SDD_LOG="$log" dotnet "$DLL" "$target" Product --pinned --no-governance --no-coordination "$@" 2>&1)" || rc=$?
+  local typed_case=0
+  [[ "$expected_params" == *"lifecycle=typed-sdd"* ]] && typed_case=1
+  OUT="$(FSGG_STUB_TYPED_CASE="$typed_case" PATH="$STUB_DIR:$DOTNET_DIR" FSGG_TEMPLATES_RAW_BASE="$RAW_BASE" FSGG_SDD_LOG="$log" dotnet "$DLL" "$target" Product --pinned --no-governance --no-coordination "$@" 2>&1)" || rc=$?
   local params_ok=1
   grep -qF "$expected_params" "$log" || params_ok=0
   if [ "$template" = "fable-bindings" ]; then
@@ -569,6 +582,16 @@ expect_execution() {
     *" --ref d5 "*) expected_source='source: FS.GG.Workspace.Template::0.15.0' ;;
     *" --ref legacy "*) expected_source='source: FS.GG.Workspace.Template::0.14.0' ;;
   esac
+  if [[ "$expected_params" == *"lifecycle=typed-sdd"* ]]; then
+    if [ "$rc" -eq 1 ] && grep -qF "$expected_source" "$target/.fsgg/providers.yml" \
+      && grep -qF "scaffold --root $target --provider $template" "$log" && [ "$params_ok" -eq 1 ] \
+      && [ ! -e "$target/.fsgg/workspace-initialization.json" ]; then
+      ok "$desc"
+    else
+      bad "$desc" "want exact typed parameters at the deliberately refusing routing double; got rc=$rc"$'\n'"$OUT"$'\n'"$(cat "$log" 2>/dev/null || true)"
+    fi
+    return
+  fi
   if [ "$rc" -ne 0 ] || ! grep -qF "$expected_source" "$target/.fsgg/providers.yml" || ! grep -qF "scaffold --root $target --provider $template" "$log" || [ "$params_ok" -ne 1 ] \
     || ! jq -e '.schemaVersion == 1 and .status == "pending" and .next == "$initialize-sdd-workspace"' "$target/.fsgg/workspace-initialization.json" >/dev/null \
     || ! cmp -s "$target/.claude/skills/initialize-sdd-workspace/SKILL.md" "$target/.agents/skills/initialize-sdd-workspace/SKILL.md" \
