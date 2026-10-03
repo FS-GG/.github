@@ -53,6 +53,44 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-03: BARC-01.5f stock pairing capture-path repair CLOSED (source and native qualification).**
+[FSBarV2 #32](https://github.com/FS-GG/FSBarV2/pull/32) merged as
+`fb00d0f77b6c7d0998f85a2039931c0c5eed2472`. Its canonical-main tree
+`a3a99dad4ef2b301643157b4cd3d1b3fc626facc` equals reviewed candidate
+`6df580f3f8ff674bcf107c05a09c24594ce04d80`. The actual selected-stock
+constructor now supplies the admitted capture path to the existing pairing
+journal and diagnostic writer. Its causal source control uses that constructor:
+the previous source refuses at the writer, while the repair preserves the exact
+destination and refuses a foreign path before journal creation.
+
+The [exact-head native run](https://github.com/FS-GG/FSBarV2/actions/runs/37147968122)
+passed all fourteen JavaScript controls, a build with zero warnings/errors and
+exactly three compiled controls. RuntimeEvidence, grants, capture grammar and
+ARM boundaries are unchanged. This closure performs no runtime activation,
+pairing retry or game launch. The consumed historical Count-1 attempt, unknown
+cause and useful native play **0/6** remain preserved; a fresh diagnostic runtime
+observation requires separate concrete admission.
+
+**2026-10-03: BARC-01.5f pre-arm diagnostics CLOSED (source and native qualification).**
+[FSBarV2 #31](https://github.com/FS-GG/FSBarV2/pull/31) merged as
+`742e73caa4413ded82e65fcc6c712ab9e1084902`, with protected tree
+`80c15c7a1fbcc0fd034a734507c14ecc4cd1dec9`, equal to reviewed candidate
+`c0add113363af5d84ee18242220157cd4c554e78`. The exact-head
+[native source-controls run](https://github.com/FS-GG/FSBarV2/actions/runs/37146325321)
+passed all fourteen JavaScript controls, one zero-warning build and exactly three
+compiled synthetic controls. Missing, skipped or extra compiled results refuse.
+The new focused workflow supplies actual qualification for the previously
+unselected paths; the existing RuntimeEvidence workflow is byte-identical.
+
+The first native run passed JavaScript controls but failed the existing net6.0
+generator's runtime selection; its compiled controls were skipped. The repaired
+build step uses the repository's existing `LatestMajor` policy without changing
+dependency pins. Existing union tags 0–14 remain preserved with four appended
+secret-free diagnostics. This source closure performs no runtime activation,
+pairing retry, game launch or model run. The historical Count-1 pairing exit **3**,
+unknown cause and useful native play **0/6** remain unchanged; a separately
+admitted diagnostic runtime observation is still required.
+
 **2026-10-03: TEMPLATES-H2 published 0.18 installed qualification CLOSED (bounded receivers).**
 The original published package from protected source
 `9161a9d91b3fdd7a80cae7776fdff179e712b32e` passed all **18** installed receiver
