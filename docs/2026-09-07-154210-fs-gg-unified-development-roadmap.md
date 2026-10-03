@@ -53,6 +53,26 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-03: Typed-knowledge Wizard public-dependency qualification CLOSED (bounded receivers).**
+One root-admitted build and one installed operation passed against public SDD
+**2.1.0**, Templates **0.18.0** and unchanged Rendering **0.31.0**. The operation
+exited **0** in **26.7122 seconds**, retaining 39 actual command records. App and
+game each created two canonical knowledge files with normal caller commits;
+four ordinary root and cacheless-clone CI runs passed without command overrides.
+The genuine insufficient producer, over-budget and wrong-cache controls refused;
+repeated registration stayed single and Standard SDD stayed omitted. Actual HOME
+and all input pins were preserved, with no owned process remaining.
+
+Private manifest `baef18f06846c0a5344e35e27b7e3db0389e2dad4513397193df2a8702b2b69e`,
+outer result `34205a82aa36766d769c32a4449d71954e43bce189ab813d63580f84fed86ab0`
+and qualification report `9c26f5efb98056fa17d9f7a276a90a99248219f52dc8eca101d41011cce9d940`
+bind this bounded acceptance. It uses the reviewed private Wizard executable;
+`publicWizard` and `adoptionReceiptEmitted` remain false. The same source delivery
+prepares Wizard **0.13.0** on its existing protected release rail with a fresh
+journal, while published inventory remains **0.12.0**. Public 0.13 candidate,
+publication and public-tool receiver acceptance remain separate admissions in the
+[owning plan](roadmaps/tsdd-knowledge-wizard.md).
+
 **2026-10-03: BARC-01.5f pre-arm diagnostics CLOSED (source and native qualification).**
 [FSBarV2 #31](https://github.com/FS-GG/FSBarV2/pull/31) merged as
 `742e73caa4413ded82e65fcc6c712ab9e1084902`, with protected tree
