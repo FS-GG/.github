@@ -157,3 +157,35 @@ installation, collector grant, capture or activation is accepted by this source 
 
 Receiver installation, real grants, private custody, capability/capture evidence, restart/export/backup,
 and any activation remain later protected effects. C3 stays disabled until those authorities close.
+
+
+### P2-C runtime declaration and acquisition frontier, 2026-10-03
+
+The inactive production declaration now names the same canonical runtime inventory as the
+[typed constructor](../../deployment/telemetry-collector/persistent/v3/image-closure/ImageClosure.fs):
+`ead4ece42719198be9607d18415e428e3a6fcaadf50b88dc6e93894c47bec4c2`.
+Independent readback hashed the retained actual 337-file runtime inventory to that digest.
+Fresh authenticated downloads of manager artifact `11216418410` and Host release asset
+`604796015` matched the selected artifact and archive digests. The manager artifact expires
+`2026-12-31T08:19:03Z`. This corrects a stale declaration; `acquisition-required` and all native
+inventory placeholders remain unchanged.
+
+Complete native acquisition remains open. The bounded retained acquisition packet lacks reader
+capability profile bytes, raw protocol/session-flag inputs, and full Python loader, import,
+library and OS-data closure. Its selectable Python `_tkinter` extension has unresolved Tcl/Tk
+libraries. Cached candidates and hash fields do not establish acquired input custody.
+
+The existing Coordination Host `diagnose-fixed-native-capability` command can produce a new
+genuine result from an independently selected, unexpired profile. Its closed profile pins the
+Host process and native executable, bounds runtime and output, and selects a fresh disposable
+workspace. It checks current-account authentication before bounded model discovery for the
+frozen `gpt-5.6-sol` / `medium` selection; it permits no executor candidate. The profile is an
+owner input, and the actual diagnostic emits the result. Missing retained bytes therefore remain
+an acquisition frontier, not proof that a new diagnostic is impossible. An admitted account/profile
+and actual producer execution are still required; neither source nor a synthetic fixture supplies
+them.
+
+Two independent cold OCI builds, complete runtime probes, and served Manager-to-Host inactive
+qualification remain open. The current C4 runner stops with qualification Unknown and needs its
+separate C5 adapter to execute the exact published Host bytes. This declaration correction creates
+no image, grant, installation, capture, enrollment or activation authority.
