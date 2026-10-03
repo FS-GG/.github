@@ -131,6 +131,21 @@ independent literal publication readback remains authoritative. Existing 2.1
 original archives, versions and product behavior are unchanged; no new publication
 is claimed.
 
+**2026-10-03: WASM-SHARED-01.3-R1 publisher route CLOSED (source and native qualification).**
+[Game #685](https://github.com/FS-GG/FS.GG.Game/pull/685) merged as
+`ccdec51db27e7fbcce8fcfda71a36aa9a2ca7b95`; protected source has the exact
+reviewed head `233d9115d77e3756dc749a135ff6541d4b46498c` tree
+`31dbbbaa5a7530ab6320af9853af28682cf4d1ec`. The full native
+[WASM qualification](https://github.com/FS-GG/FS.GG.Game/actions/runs/37132653543)
+passed. The route separates one-time preparation from promotion and recovery of
+verified original artifacts, with GitHub Packages readback before public NuGet.
+Selected model checks explicitly retain the historical TypeScript backend;
+earlier failed attempts remain historical. Product producer
+`16a401692f4c0dee7f6da1a86d0cd49e6ea3ec2c`, models, API, traces and public/default
+0.2 contracts remain unchanged. Protected producer 0.3 packing, publication and
+fresh both-feed installed consumer acceptance remain pending; no tag or public
+release is claimed.
+
 **2026-10-03: WASM shared compatible successor CLOSED (source and native acceptance).**
 [Game #683](https://github.com/FS-GG/FS.GG.Game/pull/683) merged as
 `16a401692f4c0dee7f6da1a86d0cd49e6ea3ec2c`, equal reviewed candidate
