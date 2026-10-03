@@ -53,6 +53,44 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-03: Rendering original-archive feed-probe repair CLOSED (source).**
+[Rendering #1376](https://github.com/FS-GG/FS.GG.Rendering/pull/1376) merged as
+`24e0bdcc30864f62fa8c5f59a58eff021065d71a`, equal reviewed candidate
+`6ade59ecd973f9a68e38f26fb80035b89d4e3564`, tree
+`33f34215e582f8bf0c26fec9e816016c9a675ae0`. All five required checks and
+routine eligibility passed. The fresh [native gate 37104165707](https://github.com/FS-GG/FS.GG.Rendering/actions/runs/37104165707)
+passed genuine ApiCompat for 17 compared packages with zero breaks and the
+98-file, 21-pin API mirror with zero rewrites. Explicit public-source initialization
+and candidate identity handling repair the earlier clean-runner failures.
+
+Root independently authenticated and downloaded artifact `11267366030`, matching
+native digest `8b3582daa007ad3fa82d81aec7ec1f6e941817bcfe85a900598933e27b3bad93`.
+The read-only qualifier retains the exact original nineteen archives and custody;
+actual workflow context and checkout identities remain distinct. Producer source
+`730923fe9d27174e879566f21dab14a1b03d761a`, all three immutable tags and original
+package bytes remain unchanged. Both-feed publication and installed adoption are
+pending; the source merge does not turn the two publication checks green. Earlier
+no-effect failed attempts remain retained. The [owning publication readback](https://github.com/FS-GG/FS.GG.Rendering/blob/main/docs/release/publication-window-20261003.json)
+retains the remaining publication and receiver boundaries.
+
+**2026-10-03: LEARN native empty-dependency admission repair CLOSED (source).**
+[.github #4137](https://github.com/FS-GG/.github/pull/4137) admits genuine empty
+Python initializer files with their exact empty SHA-256 and readonly regular-file
+custody. Executable, Host, Manager and required CLR payloads remain positive;
+aggregate bounds and complete census remain enforced. The preparation emits the
+exact selected empty-file tuple. The inactive CLI also binds the corrected canonical
+declaration bytes and refuses even one appended whitespace byte.
+
+The qualified implementation candidate `848f879827f72b6e5eaa7a692daae057951e62c0`
+passed [full native package qualification 37104370230](https://github.com/FS-GG/.github/actions/runs/37104370230),
+including actual immutable Python replay, 16 model traces, 334 correspondence
+transitions, deliberate mutation refusal and actual CLI controls. This source
+repair leaves the declaration `acquisition-required`, with reader inventory unset.
+Served Coordination Manager/Host readers, full OS/Tcl/Tk closure, selected image
+inputs, two cold OCI builds and actual receiver qualification remain open. No
+installation, model execution, capture or activation is established. The
+[owning plan](roadmaps/learn-c2-persistent-receiver-v3.md) retains those boundaries.
+
 **2026-10-03: Project knowledge storage, access and typed initialization CLOSED (source).**
 [SDD #1091](https://github.com/FS-GG/FS.GG.SDD/pull/1091) merged as
 `5f07e02cb5064a3f3b9cf43a7d439e9c9a949d29`, equal reviewed candidate
