@@ -1138,19 +1138,19 @@ must_pass "a version-shaped comment ABOVE the annotation does not shadow the pin
 
 echo
 echo "--- an allowedVersions cap LOWERS a pin's coherence ceiling, but only when it actually excludes the feed's newest (.github#2464) ---"
-# The real preset now carries default.json's own FS.GG.SDD.Cli cap (<=1.5.0) alongside the
+# The real preset now carries default.json's own FS.GG.SDD.Cli cap (<=2.1.0) alongside the
 # YoloDev.Expecto one every leg above already re-checks — make_repo copies the REAL preset, so this
 # section proves the cap does not just sit there: it changes what "coherent" MEANS for the one pin it
 # governs, without silently turning the freshness check OFF for that pin (the gap #2464 closed:
 # `_resolve_newest` used to compare every FS.GG.* pin against the feed's ABSOLUTE newest, unconditionally,
 # and nothing before this connected a cap back to that comparison at all).
-CAPFEED="$(feed_with capfeed '["1.4.0", "1.5.0", "1.5.1"]')"
+CAPFEED="$(feed_with capfeed '["2.0.3", "2.1.0", "2.1.1"]')"
 
-# The pin at 1.5.0 — main's vetted pin today — is coherent even though the feed serves 1.5.1: the
-# cap admits through 1.5.0, so 1.5.0 is its ceiling. Without the cap-aware
-# comparison this fails outright, because 1.5.0 never equals the feed's absolute newest while 1.5.1
+# The pin at 2.1.0 — this source change's target pin — is coherent even though the feed serves 2.1.1: the
+# cap admits through 2.1.0, so 2.1.0 is its ceiling. Without the cap-aware
+# comparison this fails outright, because 2.1.0 never equals the feed's absolute newest while 2.1.1
 # is published — which is exactly the state #2464 found `pin-coherence` stuck in.
-CAPPED_OK="$(make_repo capped-ok 1.5.0)"
+CAPPED_OK="$(make_repo capped-ok 2.1.0)"
 must_pass "a pin at the cap's admitted newest is coherent even though the FEED serves newer" \
   "$CAPPED_OK" "$CAPFEED"
 
@@ -1159,27 +1159,27 @@ must_pass "a pin at the cap's admitted newest is coherent even though the FEED s
 # diagnosis must name the CAP's ceiling, not the feed's absolute newest (which would send a reader
 # chasing the wrong number, or worse, toward hand-advancing past a ceiling the cap put there on
 # purpose).
-CAPPED_STALE="$(make_repo capped-stale 1.4.0)"
+CAPPED_STALE="$(make_repo capped-stale 2.0.3)"
 must_fail "a pin below the cap's admitted newest still reds — the cap does not disable freshness" \
   "$CAPPED_STALE" "$CAPFEED" \
-  'caps it at `allowedVersions: '"'"'<=1.5.0'"'"'`, whose newest ADMITTED published version is '"'"'1.5.0'"'"''
+  'caps it at `allowedVersions: '"'"'<=2.1.0'"'"'`, whose newest ADMITTED published version is '"'"'2.1.0'"'"''
 
-# A pin ADVANCED past what the cap admits (hand-edited to 1.5.1) is refused too — the cap is a
+# A pin ADVANCED past what the cap admits (hand-edited to 2.1.1) is refused too — the cap is a
 # ceiling in both directions, exactly like the uncapped AHEAD leg earlier in this file.
-CAPPED_AHEAD="$(make_repo capped-ahead 1.5.1)"
+CAPPED_AHEAD="$(make_repo capped-ahead 2.1.1)"
 must_fail "a pin ahead of the cap's admitted newest fails, even though the feed serves it" \
   "$CAPPED_AHEAD" "$CAPFEED" "AHEAD of the cap-admitted newest"
 
 # The correction half: a cap whose ceiling happens to EQUAL the feed's absolute newest (nothing
 # published today falls in the excluded range) must be invisible to the message. Mentioning a cap
 # that is not the reason a pin is stale would misdirect — so with a feed that serves nothing past
-# 1.5.0, the <=1.5.0 cap excludes no PUBLISHED version and the comparison degrades to the ordinary,
+# 2.1.0, the <=2.1.0 cap excludes no PUBLISHED version and the comparison degrades to the ordinary,
 # pre-#2464 uncapped one.
-NOCEIL_FEED="$(feed_with noceil '["1.4.0", "1.5.0"]')"
-NOCEIL_STALE="$(make_repo noceil-stale 1.4.0)"
+NOCEIL_FEED="$(feed_with noceil '["2.0.3", "2.1.0"]')"
+NOCEIL_STALE="$(make_repo noceil-stale 2.0.3)"
 must_fail "a cap that currently excludes nothing published leaves the ordinary uncapped message" \
   "$NOCEIL_STALE" "$NOCEIL_FEED" \
-  "is pinned at '1.4.0' but the newest on the registry Renovate reads is '1.5.0'"
+  "is pinned at '2.0.3' but the newest on the registry Renovate reads is '2.1.0'"
 
 echo
 echo "--- CI guard on the real repo (no network: structure only) ---"
