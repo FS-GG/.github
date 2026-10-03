@@ -56,7 +56,9 @@ reviewed public aggregate releases on GitHub.
 **2026-10-03: BAR shared-WASM adapter and FourD optional example CLOSED (source and declared installed-browser qualification).**
 [BAR #26](https://github.com/FS-GG/FSBarV2/pull/26) merged as
 `8da133be0f41c15fdb78291d428c559c56a9afc2` after native required checks;
-its tree equals reviewed candidate `b4066c1fd9c1bd03b784bfbf5f1c481d9c446178`.
+merged tree `0e154100059c7da42f607ae5960999fb6cc42be3` preserves the three
+previously merged official-package repair paths. Every adapter, test and owning-plan
+byte equals reviewed candidate `b4066c1fd9c1bd03b784bfbf5f1c481d9c446178`.
 WASM-SHARED-01.5-B1 uses the exact public Contracts/Browser 0.2.0 connected
 Worker, retaining product wire validation in the isolated F# adapter.
 Clean locked builds and all 37 actual installed-Worker Chromium cases passed;

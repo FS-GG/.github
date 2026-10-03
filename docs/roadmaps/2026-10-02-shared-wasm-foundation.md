@@ -736,8 +736,9 @@ claim follows from this amendment.
 ## Consumer source readback — 2026-10-03
 
 .5-B1 is Closed through [BAR #26](https://github.com/FS-GG/FSBarV2/pull/26),
-protected `8da133be0f41c15fdb78291d428c559c56a9afc2`; reviewed candidate tree equality
-and 37 installed-Worker cases establish the bounded adapter window. .5-B2
+protected `8da133be0f41c15fdb78291d428c559c56a9afc2`. The merged tree preserves
+the earlier official-package repair; exact adapter/test/owning-plan byte equality
+with the reviewed candidate and 37 installed-Worker cases establish the bounded adapter window. .5-B2
 production/receiver/native adoption remains open.
 
 .6 is Closed through [FourD #33](https://github.com/FS-GG/FS.GG.FourD/pull/33),
