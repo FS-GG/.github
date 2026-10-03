@@ -53,6 +53,28 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-03: BAR complete bounded process census repair CLOSED (source).**
+[BAR #27](https://github.com/FS-GG/FSBarV2/pull/27) merged as
+`3d723bcab5b25efc8d3467dcbc63790936f2add6`, tree
+`3efbe3a8796e9cc2dc5e091f9979d19b19cf6753`, equal reviewed candidate
+`c33671402c1004eeb11976ec34cda89a77cc66c4`.
+[Native qualification 37102216592](https://github.com/FS-GG/FSBarV2/actions/runs/37102216592)
+passed. The process reader now continues through short reads to EOF and retains
+maximum-plus-one refusal. Five focused controls include the actual complete
+process mapping census. The protected B1 adapter and receiver dependency repairs
+remain byte-identical.
+
+The sole granted stock Count1 attempt refused before browser interaction and
+Count1: a 139-byte incomplete buffered infolog tail exhausted 32 settlement
+probes. Owned host/engine/receiver cleanup settled and all 24,544 immutable
+packet files and the settings seed were unchanged. That failed attempt is
+retained, with no replay or native acceptance inferred. Controlled successor
+preparation uses official `LogFlushLevel=0` to flush complete emitted records and
+persists a positive engine/plugin mapping receipt before browser effect;
+15 controls passed. A fresh protected-source packet, independent custody review
+and a separately selected native attempt remain required. RP3–RP5 and all six
+useful-play journeys remain open, at 0/6.
+
 **2026-10-03: Coordination V2 four-target installed consumer qualification delivered.**
 [.github #4134](https://github.com/FS-GG/.github/pull/4134) merged as
 `1605ccb017642a88aa12ba35fea6ec9a0fb2a6fd`; both qualified documentation paths
