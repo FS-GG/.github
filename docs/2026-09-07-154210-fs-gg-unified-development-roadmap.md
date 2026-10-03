@@ -57,8 +57,11 @@ reviewed public aggregate releases on GitHub.
 The shared Kit, Drivers and Coord source version carries the merged
 [telemetry CI selection repair](https://github.com/FS-GG/.github/pull/4152).
 The published coherent set, consumer pins and installed Home client remain **0.95.0**.
-Publication from the accepted successor merge through `release-saga-start.yml`,
-verification of original archives on both feeds and deliberate consumer adoption are pending.
+The existing successor candidate and publisher now select REL-11: source 0.96.0,
+promoted predecessor 0.95.0 and fresh protected journal `utel-rel-11`. Exact-main
+candidate qualification, authenticated original archives, separate publisher
+preflight, all sixteen effects on both feeds and deliberate consumer adoption
+remain pending. The completed 0.95 release and sealed legacy routes are preserved.
 The bounded Home metadata observation remains accepted; native usage, observed CI
 collection and costs remain unknown. The diagnostic source records wall/CPU/GC
 and durability boundaries for all first 100 warm admissions. The earlier native
