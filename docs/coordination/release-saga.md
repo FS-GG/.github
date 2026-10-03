@@ -5,8 +5,9 @@
 ## Current successor route
 
 The [successor roadmap](../roadmaps/utel-release-successor.md) owns the selected operating window.
-Current source selects version **0.95.0**, promoted predecessor **0.94.0** from
-`337b6a1d53571b07ca8e1417e18e52546ad319a7`, and protected Authority journal `utel-rel-10`.
+Current source selects version **0.96.0**, promoted predecessor **0.95.0** from
+`3b5de3367f8647cea0cd9366b8cb11eddf53feae`, and fresh protected Authority journal `utel-rel-11`.
+The completed 0.95.0 release and `utel-rel-10` journal remain immutable.
 Source qualification alone does not publish that version.
 
 Dispatch `release-successor-candidate.yml` once on accepted current `main`. Authenticate the successful

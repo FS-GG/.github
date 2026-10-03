@@ -139,7 +139,7 @@ authored `Version` cells of the Versioned contracts table (#748).*
 | `fs-gg-audio` | FS.GG.Audio | `0.6.0` | `0.6.0` |
 | `fs-gg-net` | FS.GG.Net | `0.6.0` | `0.6.0` |
 | `keyboard-input` | FS.GG.Rendering | `0.5.0` | — |
-| `coord-engine` | FS-GG/.github | `0.95.0` | `0.95.0` |
+| `coord-engine` | FS-GG/.github | `0.96.0` | `0.95.0` |
 | `telemetry-host` | FS-GG/.github | `0.3.0` | `0.3.0` |
 | `new-sdd-workspace` | FS-GG/.github | `0.13.0` | `0.12.0` |
 | `fs-gg-workspace-template` | FS.GG.Templates | `0.18.0` | `0.18.0` |

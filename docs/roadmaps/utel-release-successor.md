@@ -72,3 +72,34 @@ not be created to start the retired publishers. The GS2-08.9 legacy routes stay 
 Publication requires all 16 effects to be verified through native readback. Fresh public
 installation and Board receiver qualification are separate acceptance boundaries; the version
 selection alone does not import issues, activate schedulers or complete Board adoption.
+
+## UTEL-REL-11 — 0.96.0 telemetry selection and diagnostic successor
+
+The next source cut selects the existing `release-successor-candidate.yml` and
+`release-successor-publish.yml` entry points with literal version `0.96.0`, promoted
+predecessor `0.95.0` from `3b5de3367f8647cea0cd9366b8cb11eddf53feae`, and fresh
+protected journal `refs/heads/fsgg/v2/journal/release/utel-rel-11`. The completed
+0.95.0 release, seven release assets and `utel-rel-10` journal retain their historical
+authority. This source selection creates no journal, tag, feed write or installed adoption.
+
+The cut carries the merged CI legacy-default selection repair and first-100 warm
+Store diagnostics. The earlier native candidate refused the unchanged 100 ms p95
+budget at 119.996 ms; its latency cause remains unknown. Five warmup submit/drain
+pairs, all 100 measured admissions, complete arrays, diagnostic hook cost and all
+qualification limits remain unchanged. An exact-source native pass is required;
+CPU or GC overlap alone does not establish cause or waive a refusal.
+
+After the final source is qualified and merged, hold current main stable through
+the successful first-attempt candidate, authenticated seven-file retained archive,
+separate no-effect publisher preflight and first publication. Candidate preparation
+reads the exact promoted 0.95.0 channel and verifies all six package/feed coordinates
+have that predecessor and an unused 0.96.0 target. The publisher repeats current
+authority, original-byte, collision and fresh-journal checks before effects.
+
+The existing sole operator, environment, credential identities, admission rereads,
+sixteen-effect order, protected journal and forward recovery rules apply unchanged.
+Create only `coherent-set/v0.96.0`; preserve all five GS2-08.9 sealed workflows.
+Unknown or conflicting effects remain incomplete. After any partial effect, recover
+from the original candidate archives and journal without repacking or resetting.
+Publication requires native verification of every effect and both feeds; Home
+adoption, consumer pins and default configuration remain separate decisions.

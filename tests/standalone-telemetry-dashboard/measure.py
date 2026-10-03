@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Measure an installed local dashboard on an assessor-qualified store."""
 from __future__ import annotations
-import argparse,hashlib,http.cookiejar,importlib.util,json,math,os,pathlib,secrets,selectors,signal,statistics,subprocess,tempfile,time,urllib.request
+import argparse,hashlib,http.cookiejar,importlib.util,json,math,os,pathlib,secrets,selectors,signal,statistics,subprocess,tempfile,time,urllib.request,zipfile
 
 SCHEMA="fsgg.telemetry.standalone-qualification/2"
 LIMITS={"startupP95Milliseconds":2000,"idleRssPeakBytes":100*1024*1024,"coldCliSubmissionP95Milliseconds":1000,"warmInProcessAdmissionP95Milliseconds":100}
@@ -20,7 +20,71 @@ def distribution(values:list[float])->dict:
  if not values: raise ValueError('samples are empty')
  return {"medianMilliseconds":round(statistics.median(values),3),"p95Milliseconds":round(p95(values),3),"maximumMilliseconds":round(max(values),3)}
 
-def verify_store_probe(path:pathlib.Path,assembly:pathlib.Path)->dict:
+def verify_phase_diagnostics(data:dict,assembly:pathlib.Path,package:pathlib.Path|None=None,required:bool=False)->None:
+ diagnostics=data.get('diagnostics')
+ if diagnostics is None:
+  if required: raise ValueError('Store phase diagnostics are missing')
+  return # Historical evidence remains readable; it does not acquire diagnostics retroactively.
+ if not isinstance(diagnostics,dict) or diagnostics.get('schema')!='fsgg.telemetry.store-phase-diagnostics/1': raise ValueError('Store phase diagnostics schema differs')
+ sampling=[diagnostics.get(key) for key in ['warmupPairs','firstSample','sampleCount']]
+ if any(type(value) is not int for value in sampling) or sampling!=[5,0,100]: raise ValueError('Store phase diagnostics sampling differs')
+ frequency=diagnostics.get('timestampFrequency')
+ if type(frequency) is not int or frequency<=0: raise ValueError('Store phase diagnostics clock differs')
+ rows=diagnostics.get('admissions')
+ if not isinstance(rows,list) or len(rows)!=100: raise ValueError('Store phase diagnostics count differs')
+ allowed={'after-inbox-directory-sync','before-file-sync','after-file-sync','after-rename','after-directory-sync','index-committed'}
+ required_phases=['before-file-sync','after-file-sync','after-rename','after-directory-sync','index-committed']
+ previous_end=-1
+ for index,row in enumerate(rows):
+  if not isinstance(row,dict) or type(row.get('index')) is not int or row['index']!=index: raise ValueError('Store phase diagnostics sample order differs')
+  start,end=row.get('startTimestamp'),row.get('endTimestamp')
+  if type(start) is not int or type(end) is not int or start<0 or start<previous_end or end<start: raise ValueError('Store phase diagnostics timestamps differ')
+  previous_end=end
+  milliseconds=row.get('elapsedMilliseconds'); cpu=row.get('processCpuMilliseconds')
+  if any(isinstance(value,bool) or not isinstance(value,(int,float)) or not math.isfinite(value) or value<0 for value in [milliseconds,cpu]): raise ValueError('Store phase diagnostics timings are invalid')
+  if milliseconds!=data['samples']['warmInProcessAdmissionMilliseconds'][index] or abs(milliseconds-round((end-start)*1000/frequency,3))>0.001: raise ValueError('Store phase diagnostics wall time differs')
+  gc=row.get('gcCollections')
+  if not isinstance(gc,list) or len(gc)!=3 or any(type(count) is not int or count<0 for count in gc): raise ValueError('Store phase diagnostics GC counts differ')
+  if row.get('phasesTruncated') is not False: raise ValueError('Store phase diagnostics are truncated')
+  phases=row.get('phases')
+  if not isinstance(phases,list) or len(phases)>256: raise ValueError('Store phase diagnostics phases are invalid')
+  names=[]; previous=start
+  for phase in phases:
+   if not isinstance(phase,dict) or phase.get('name') not in allowed or type(phase.get('timestamp')) is not int or not previous<=phase['timestamp']<=end: raise ValueError('Store phase diagnostics phase order differs')
+   previous=phase['timestamp']; names.append(phase['name'])
+  if names not in [required_phases,['after-inbox-directory-sync']+required_phases]: raise ValueError('Store phase diagnostics durability boundaries differ')
+ context=diagnostics.get('context')
+ if not isinstance(context,dict): raise ValueError('Store phase diagnostics context is missing')
+ context_names={'runtimeVersion','runtimeAssemblySha256','fsiHostVersion','fsiHostSha256','framework','processArchitecture','osArchitecture','processorCount','cpuModel','cpuQuota','operatingSystem','isServerGC','gcLatencyMode','observedEnvironment','storeAssemblySha256','coreAssemblySha256','nativeSqliteSha256'}
+ if set(context)!=context_names: raise ValueError('Store phase diagnostics context allowlist differs')
+ for name in ['runtimeVersion','fsiHostVersion','framework','processArchitecture','osArchitecture','cpuModel','cpuQuota','operatingSystem','gcLatencyMode']:
+  value=context[name]
+  if value is not None and (not isinstance(value,str) or not value or len(value)>512): raise ValueError('Store phase diagnostics runtime context differs')
+ if type(context['processorCount']) is not int or context['processorCount']<=0 or type(context['isServerGC']) is not bool: raise ValueError('Store phase diagnostics runtime context differs')
+ for name in ['runtimeAssemblySha256','fsiHostSha256']:
+  value=context[name]
+  if value is not None and (not isinstance(value,str) or len(value)!=64 or any(char not in '0123456789abcdef' for char in value)): raise ValueError('Store phase diagnostics runtime identity differs')
+ settings=context.get('observedEnvironment')
+ setting_names={prefix+name for prefix in ['DOTNET_','COMPlus_'] for name in ['TieredCompilation','TieredPGO','ReadyToRun','gcServer','gcConcurrent']}
+ if not isinstance(settings,dict) or set(settings)!=setting_names or any(value not in [None,'0','1'] for value in settings.values()): raise ValueError('Store phase diagnostics configuration differs')
+ identities={'storeAssemblySha256':assembly,'coreAssemblySha256':assembly.with_name('FS.GG.Coord.Core.dll')}
+ for key,binary in identities.items():
+  value=context.get(key)
+  if value is not None and (not binary.is_file() or value!=digest(binary)): raise ValueError('Store phase diagnostics assembly differs')
+ if context.get('storeAssemblySha256')!=data['storeAssemblySha256']: raise ValueError('Store phase diagnostics Store binding differs')
+ native=context.get('nativeSqliteSha256')
+ if native is not None and (not isinstance(native,str) or len(native)!=64 or any(char not in '0123456789abcdef' for char in native)): raise ValueError('Store phase diagnostics native identity differs')
+ if package is not None:
+  try:
+   with zipfile.ZipFile(package) as archive:
+    for key,name in [('storeAssemblySha256','FS.GG.Telemetry.Store.dll'),('coreAssemblySha256','FS.GG.Coord.Core.dll'),('nativeSqliteSha256','libe_sqlite3.so')]:
+     value=context.get(key)
+     if value is None: continue # Missing observations stay unknown.
+     entries=[entry for entry in archive.namelist() if pathlib.PurePosixPath(entry).name==name]
+     if not entries or value not in [hashlib.sha256(archive.read(entry)).hexdigest() for entry in entries]: raise ValueError('Store phase diagnostics package payload differs')
+  except zipfile.BadZipFile as error: raise ValueError('Store phase diagnostics package archive is invalid') from error
+
+def verify_store_probe(path:pathlib.Path,assembly:pathlib.Path,package:pathlib.Path|None=None,require_diagnostics:bool=False)->dict:
  if path.stat().st_size>1024*1024: raise ValueError('packaged Store performance evidence is oversized')
  data=json.loads(path.read_text())
  if data.get('schema')!='fsgg.telemetry.packaged-store-performance/1': raise ValueError('packaged Store performance evidence schema differs')
@@ -38,6 +102,7 @@ def verify_store_probe(path:pathlib.Path,assembly:pathlib.Path)->dict:
  measured=round(p95(samples['warmInProcessAdmissionMilliseconds']),3)
  reported=summary['warmInProcessAdmission'].get('p95Milliseconds')
  if reported!=measured or data.get('qualified') != (measured<=LIMITS['warmInProcessAdmissionP95Milliseconds']): raise ValueError('packaged Store performance verdict contradicts samples')
+ verify_phase_diagnostics(data,assembly,package,require_diagnostics)
  return data
 
 def verify_manifest(path:pathlib.Path|None,package:pathlib.Path,source_sha:str)->dict:
@@ -125,7 +190,7 @@ def rss_bytes(pid:int)->int:
 
 def run(args)->dict:
  binding=verify_manifest(args.manifest,args.package,args.source_sha)
- store_probe=verify_store_probe(args.store_probe_evidence,args.store_assembly)
+ store_probe=verify_store_probe(args.store_probe_evidence,args.store_assembly,args.package,require_diagnostics=True)
  if args.public_release:
   verify_public_readback(args.public_readback_evidence,binding)
  status=subprocess.run([str(args.cli_path),'telemetry','dashboard','status','--config',str(args.config),'--repository',args.repository],capture_output=True,text=True,timeout=10)

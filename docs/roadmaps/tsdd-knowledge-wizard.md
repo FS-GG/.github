@@ -76,3 +76,19 @@ Root built reviewed source `c69585f092e03623598a9da0e2ed84f8e6267429` once with 
 The private root manifest digest is `baef18f06846c0a5344e35e27b7e3db0389e2dad4513397193df2a8702b2b69e`; outer result digest `34205a82aa36766d769c32a4449d71954e43bce189ab813d63580f84fed86ab0`; qualification report digest `9c26f5efb98056fa17d9f7a276a90a99248219f52dc8eca101d41011cce9d940`. These close bounded qualification of installed public dependency packages with the reviewed private Wizard executable. The report explicitly retains `publicWizard: false` and `adoptionReceiptEmitted: false`; it is not qualification of the future public 0.13 archive.
 
 Historical source qualification had no configured telemetry. The current source-preparation attempt uses prospective telemetry; native usage remains unsupported or unknown. No missing telemetry was reconstructed.
+
+
+The integrated native edge run [37150779976](https://github.com/FS-GG/.github/actions/runs/37150779976)
+at PR head `9884c3940c8c4af0eed7b44252b98b16e3e72b97` passed its three compiled
+suites and all 66 ProducerFence tests, then the GS2 structural oracle refused the
+Wizard workflow's stale 0.12 successor hash. Accepted source
+`70838b94421ea117c6558e999692eefc074634ec` changes that workflow's comments and
+publisher job identity for 0.13; its current SHA-256 is
+`5704613f20a68efce211f699189f439af46c1a8387d1859625e06882978efa7a`.
+The current release-route disposition now binds those exact bytes and the 0.13
+successor, retaining the complete 0.12 attestation as non-current history and all
+original sealed predecessor and capability-loss fields. Pure source and mutation
+controls retain wrong-hash and drift refusal without changing the oracle. Fresh
+exact-head native closure remains pending; the earlier TRX identity closure was
+not accepted after the structural refusal. This attestation repair performs no
+release effect and changes no telemetry performance budget or published frontier.

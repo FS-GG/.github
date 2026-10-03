@@ -130,15 +130,12 @@ bytes under 0.52.0 would make the same version identify different artifacts. Ado
 coherent set cut from corrected source. All three partial sets are recorded in
 `registry/dependencies.yml`.</FsggStandingAdvisories>
 
-    <PackageReleaseNotes>0.95.0 — add bounded read-only CoordinationV2 inspection and gated organization guidance.
+    <PackageReleaseNotes>0.96.0 — repair telemetry CI selection with an implicit legacy host configuration.
 
-The CLI adds board-v2 inspect with exact protected source, population, artifact, native and
-planning coverage in a read-only report. Kit and Drivers carry organization-only consumer guidance
-that remains gated on root-selected adoption after four-target qualification and readback.
-The fixed Observation authorizer admits only the exact original-three or proposed-four cohort;
-new descriptor admission does not bypass protected manifest or executable custody checks.
-Product and legacy board routing, the generic mutation fence and dormant hosted refresh remain
-unchanged. This source cut does not establish live four-target adoption or board acceptance.
+CI collection and reconciliation permit explicit store selection when the implicit default
+is a valid legacy host configuration. Workspace conflicts and invalid configurations still
+refuse. Kit and Drivers advance with the shared coherent set; no installed receiver or
+consumer pin changes until original prepared bytes are verified on both feeds.
 
 $(FsggStandingAdvisories)
 

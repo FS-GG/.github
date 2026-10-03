@@ -151,6 +151,22 @@ activation or adoption receipt was emitted. Wizard 0.13 qualification and public
 deliberate Rendering 0.32 receiver adoption, and later extractor acceptance remain
 separate successors. Public registry versions and lifecycle defaults are unchanged.
 
+**2026-10-03: UTEL-H3 coherent 0.96.0 successor prepared (source).**
+The shared Kit, Drivers and Coord source version carries the merged
+[telemetry CI selection repair](https://github.com/FS-GG/.github/pull/4152).
+The published coherent set, consumer pins and installed Home client remain **0.95.0**.
+The existing successor candidate and publisher now select REL-11: source 0.96.0,
+promoted predecessor 0.95.0 and fresh protected journal `utel-rel-11`. Exact-main
+candidate qualification, authenticated original archives, separate publisher
+preflight, all sixteen effects on both feeds and deliberate consumer adoption
+remain pending. The completed 0.95 release and sealed legacy routes are preserved.
+The bounded Home metadata observation remains accepted; native usage, observed CI
+collection and costs remain unknown. The diagnostic source records wall/CPU/GC
+and durability boundaries for all first 100 warm admissions. The earlier native
+119.996 ms p95 refusal retains the unchanged 100 ms limit and an unknown cause;
+the composed candidate still requires native qualification. This preparation
+changes no receiver or client state.
+
 **2026-10-03: WASM supported evaluator thread option CLOSED (source and native qualification).**
 [Game #687](https://github.com/FS-GG/FS.GG.Game/pull/687) merged as
 `94bce296fbdfacdff8492ae02ad62789ac051cb9`, with exact protected tree
