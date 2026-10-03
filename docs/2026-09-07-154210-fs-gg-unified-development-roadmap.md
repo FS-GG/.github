@@ -53,6 +53,14 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-03: telemetry CI default selection CLOSED (source).**
+CI collection and reconciliation now distinguish an implicit legacy host configuration
+from a workspace configuration. A valid legacy default permits explicit store selection;
+workspace conflicts and invalid explicit, environment or default configurations still refuse.
+Thirty-one focused tests pass; the previous source reproduced ten failures across nineteen
+cases. This source repair does not update installed Coord 0.95.0. Package publication,
+consumer adoption and observed CI collection remain pending; CI costs remain unknown.
+
 **2026-10-03: Home prospective metadata observation CLOSED (bounded operation).**
 Following the [receiver installation checkpoint](https://github.com/FS-GG/.github/pull/4150),
 one genuine prospective observer operation reached matching authenticated **applied**
