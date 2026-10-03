@@ -53,6 +53,15 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-03: UTEL-H3 coherent 0.96.0 successor prepared (source).**
+The shared Kit, Drivers and Coord source version carries the merged
+[telemetry CI selection repair](https://github.com/FS-GG/.github/pull/4152).
+The published coherent set, consumer pins and installed Home client remain **0.95.0**.
+Publication from the accepted successor merge through `release-saga-start.yml`,
+verification of original archives on both feeds and deliberate consumer adoption are pending.
+The bounded Home metadata observation remains accepted; native usage, observed CI
+collection and costs remain unknown. This preparation changes no receiver or client state.
+
 **2026-10-03: Typed Templates receiver source CLOSED (source and full native qualification).**
 [Templates #667](https://github.com/FS-GG/FS.GG.Templates/pull/667) merged as
 `9161a9d91b3fdd7a80cae7776fdff179e712b32e`, with reviewed candidate

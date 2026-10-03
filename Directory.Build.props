@@ -605,8 +605,11 @@
        Kit and Drivers add gated organization-only V2 inspection guidance; the CLI
        adds the structurally read-only board-v2 inspect command. No live population
        adoption or hosted activation is implied by this source version. -->
+  <!-- 0.95.0 -> 0.96.0 (UTEL-H3): coherent source successor carrying the
+       telemetry CI legacy-default selection repair. Publication and installed
+       consumer adoption remain separate from this source version. -->
   <PropertyGroup>
-    <FsggCoherentSetVersion>0.95.0</FsggCoherentSetVersion>
+    <FsggCoherentSetVersion>0.96.0</FsggCoherentSetVersion>
   </PropertyGroup>
 
 </Project>
