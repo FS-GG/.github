@@ -53,6 +53,26 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-03: WASM-SHARED-01.R2 protected original preparation CLOSED (native custody).**
+[Preparation 37150982238](https://github.com/FS-GG/FS.GG.Game/actions/runs/37150982238),
+attempt 1, passed all six existing gates on protected executor
+`f8b6f5e1ec579fb54d22d4c2b5bb22505cfbb685` and frozen producer
+`16a401692f4c0dee7f6da1a86d0cd49e6ea3ec2c`. Root downloaded original artifact
+**11284177576**, verified all 590 outer members and its complete SHA-256
+`4b0cb76934498e740f6c4c7ca22ecdc088a14e4135945dcad183a2e64033765e`,
+and accepted the unchanged tuple, actual native-run and original-archive validators.
+Eligible binding `14c033ba3c4079f45ba162ee8418dd68b1869d5121660f8d2b969ccc76877ba9`
+retains the exact Contracts, Browser and SDK originals and full contract, lifecycle,
+historical-reader and selected browser/supervisor custody qualification.
+
+The separately admitted [promotion 37152503839](https://github.com/FS-GG/FS.GG.Game/actions/runs/37152503839)
+passed its preflight and genuine NuGet login, then refused HTTP **403** while listing
+deleted organization Contracts versions. Missing access remains unknown occupancy;
+no journal begin, organization/public package write, release asset or completion ran.
+R3 publication is blocked on genuine deleted-package read access. The failed run,
+earlier rejected preparation and all original archives retain their outcomes;
+public/default WASM remains **0.2.0**. No permission widening or retry was inferred.
+
 **2026-10-03: WASM unique preparation checkout names CLOSED (source and native qualification).**
 [Game #688](https://github.com/FS-GG/FS.GG.Game/pull/688) merged as
 `f8b6f5e1ec579fb54d22d4c2b5bb22505cfbb685`, protected executor tree
@@ -78,15 +98,18 @@ One root-admitted build and one installed operation passed against public SDD
 exited **0** in **26.7122 seconds**, retaining 39 actual command records. App and
 game each created two canonical knowledge files with normal caller commits;
 four ordinary root and cacheless-clone CI runs passed without command overrides.
-The genuine insufficient producer, over-budget and wrong-cache controls refused;
-repeated registration stayed single and Standard SDD stayed omitted. Actual HOME
+The private version-stamped insufficient candidate, over-budget and wrong-cache
+controls refused; repeated registration stayed single and Standard SDD stayed omitted. Actual HOME
 and all input pins were preserved, with no owned process remaining.
 
 Private manifest `baef18f06846c0a5344e35e27b7e3db0389e2dad4513397193df2a8702b2b69e`,
 outer result `34205a82aa36766d769c32a4449d71954e43bce189ab813d63580f84fed86ab0`
 and qualification report `9c26f5efb98056fa17d9f7a276a90a99248219f52dc8eca101d41011cce9d940`
 bind this bounded acceptance. It uses the reviewed private Wizard executable;
-`publicWizard` and `adoptionReceiptEmitted` remain false. The same source delivery
+`publicWizard` and `adoptionReceiptEmitted` remain false. A later archive audit
+proved that the insufficient candidate was a private 2.0.3-stamped build; the sealed
+report remains unchanged, but it does not qualify the genuine public 2.0.3 negative.
+That public-original supplement remains pending in the owning plan. The same source delivery
 prepares Wizard **0.13.0** on its existing protected release rail with a fresh
 journal, while published inventory remains **0.12.0**. Public 0.13 candidate,
 publication and public-tool receiver acceptance remain separate admissions in the
@@ -151,7 +174,13 @@ activation or adoption receipt was emitted. Wizard 0.13 qualification and public
 deliberate Rendering 0.32 receiver adoption, and later extractor acceptance remain
 separate successors. Public registry versions and lifecycle defaults are unchanged.
 
-**2026-10-03: UTEL-H3 coherent 0.96.0 successor prepared (source).**
+**2026-10-03: UTEL-H3 coherent 0.96.0 successor CLOSED (source and native qualification).**
+[.github #4155](https://github.com/FS-GG/.github/pull/4155) merged as
+`417d10c81434553f5e9c06a43dc34e82d5d198d4` after all 93 exact-head native
+checks completed on `e09f1b22de0890ba7b7b8974a0d8ee7ec2d83fa4`:
+91 passed and two were skipped. The repaired current Wizard route attestation binds
+the accepted 0.13 source; its predecessor stays historical. This closes source
+qualification only; the public candidate and publisher remain separate operations.
 The shared Kit, Drivers and Coord source version carries the merged
 [telemetry CI selection repair](https://github.com/FS-GG/.github/pull/4152).
 The published coherent set, consumer pins and installed Home client remain **0.95.0**.
