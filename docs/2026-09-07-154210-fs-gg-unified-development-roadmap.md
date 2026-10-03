@@ -53,6 +53,37 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-04: WASM inline custody import repair CLOSED (source and native qualification).**
+[Game #690](https://github.com/FS-GG/FS.GG.Game/pull/690) merged as
+`8b92b7c4a8061157c03155662c97d33c0bc01551` after all 34 native checks passed
+on exact accepted head `1cb8cb11cd8b8d52404b17b060687c6bb7be6f74`.
+All six inline custody imports now start with `python3 -B`. Source-only preflight
+passed 21 promotion controls and eight evaluator controls, including six missing-flag
+mutants and cold checks retaining dirty-source, wrong-tree and wrong-head refusals.
+The adapter, clean-checkout guards, permissions and credential routes retain their
+bytes and behavior; the earlier package permission repair remains in force.
+
+The accepted 9fc preparation below,
+[37157871393](https://github.com/FS-GG/FS.GG.Game/actions/runs/37157871393), retained
+artifact `11287095456`, outer SHA-256
+`dd040e206f1cc2e73366c94347a172ec7027428baee8f5a49c2e4d0fe0730ff2`.
+Its first fresh [promotion 37159983975](https://github.com/FS-GG/FS.GG.Game/actions/runs/37159983975)
+passed native admission, genuine NuGet OIDC and complete authenticated occupancy
+reads with all six active, deleted and public values false. Begin then refused
+`dirty or different executor tree` during the inline custody import, before tag
+or draft creation; every remaining publication job was skipped. Subsequent readback
+observed no tag or release. A cold fixture reproduced SourceFileLoader writing an
+untracked bytecode cache before the module disabled bytecode generation; `-B`
+preserved the clean checkout. The native log did not list the dirty filename.
+
+The 9fc originals, successful admission and failed begin remain historical and
+cannot qualify the changed 8b92 executor. After this source closure is projected,
+root must review the new executor, perform one fresh preparation and authenticate
+its new original custody and tuple before separately admitting promotion.
+No rerun, recovery, credential change or activation follows from this source closure.
+Publication and genuine both-feed installed acceptance remain pending;
+public/default WASM stays **0.2.0**.
+
 **2026-10-04: WASM fresh protected preparation CLOSED (native qualification and original custody).**
 [Preparation 37157871393](https://github.com/FS-GG/FS.GG.Game/actions/runs/37157871393),
 attempt 1, succeeded at protected executor
