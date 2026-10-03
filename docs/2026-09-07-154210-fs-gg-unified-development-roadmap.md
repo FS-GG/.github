@@ -53,6 +53,25 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-03: Rendering 0.32.0 original-archive publication CLOSED (both feeds).**
+The protected [publisher 37106323610](https://github.com/FS-GG/FS.GG.Rendering/actions/runs/37106323610)
+passed on executor `24e0bdcc30864f62fa8c5f59a58eff021065d71a` and replayed
+the nineteen retained original archives from producer
+`730923fe9d27174e879566f21dab14a1b03d761a`. Fresh package scope and occupancy
+checks preceded the writers. Each feed acknowledged all nineteen pushes and
+matched all nineteen readbacks; the 191-event journal retains no failed,
+refused or interrupted event.
+
+Root independently verified native artifact `11268895451`, 29,741,214 bytes,
+SHA-256 `828f11eca47a4b4c3a46018c7ba01017afcc173ee440148789e925d10a18c806`,
+and journal `d59f706342064d2504c4d104f9aca40f73d1c030c54133866cd7df01f8443240`.
+All nineteen public packages returned HTTP 200 and matched the original payload
+entries exactly; public repository signatures remain separately observed. The
+org-feed client readback retains exact original archive digests. Original custody,
+producer source and all three tags remain unchanged. Cold installed acceptance,
+descriptor adoption and registry updates remain pending; earlier no-effect
+attempts retain their historical outcomes.
+
 **2026-10-03: Rendering original-archive feed-probe repair CLOSED (source).**
 [Rendering #1376](https://github.com/FS-GG/FS.GG.Rendering/pull/1376) merged as
 `24e0bdcc30864f62fa8c5f59a58eff021065d71a`, equal reviewed candidate
