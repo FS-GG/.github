@@ -53,6 +53,42 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-03: Rendering publication admission, SC2 feedback qualification and BAR receiver custody CLOSED (source).**
+[Rendering #1375](https://github.com/FS-GG/FS.GG.Rendering/pull/1375) merged as
+`150f79978b7d1f4053c6745106b6fd392c80ea9f` after its native required checks passed.
+Its bounded publisher now defines the per-step diagnostic function and selects the independently
+qualified original 19-package 0.32.0 candidate. Fresh no-effect
+[preflight 37097094139](https://github.com/FS-GG/FS.GG.Rendering/actions/runs/37097094139)
+passed scope and complete collision observations. Original producer archives remain fixed;
+actual both-feed publication and fresh installed consumer qualification remain open.
+
+[SC2 #41](https://github.com/FS-GG/FS.GG.SC2.Client/pull/41) merged as
+`827377e5c8504a410676ede265745c1a5d6a3004`, tree
+`230ec676bda87de71a7a70a13364eb957c9d6b15`, equal the reviewed candidate.
+The non-timing feedback fixture uses the established exact-guest preparation path;
+production 250 ms deadlines and no-retry behavior remain unchanged. All 84 local browser
+cases and native required PR checks passed. The failed predecessor protected-main run
+retained no qualified product artifact. Fresh protected artifact custody, a pristine successor
+native packet, replay launch and full trace/offline comparison remain open; frozen `4314`
+actors, packets and failed attempts are preserved.
+
+[BAR #25](https://github.com/FS-GG/FSBarV2/pull/25) merged as
+`a7eb52ade82c2cf805f7ac370d8bc3f45533f2bf`, tree
+`69de4703567a501c3fcea759796215d1250e1258`, equal the reviewed candidate.
+The browser receiver now restores the genuine official FSharp.Core 10.1.401 content in locked
+mode instead of the SDK's implicit package copy. Package signatures, locked restore, Fable,
+Vite, guest compilation, receiver packaging and live-preparation checks passed. Compiled
+component measurements used synthetic boundary inputs and do not close actual successor RP3.
+Protected source-bound receiver/host custody, loaded stock-engine/plugin qualification,
+one changed Count1 operation and all six useful-play journeys remain open (0/6).
+
+The [shared WASM consumer horizon](roadmaps/2026-10-02-shared-wasm-foundation.md#consumer-adoption-horizon--2026-10-03)
+selects isolated BAR/SC2 adapters and an independent FourD example. The SC2 audit identified
+request-limit and scheduling compatibility gaps; their typed producer successor must be
+published and installed-qualified before the affected consumer adoption. These are planned
+windows, not native acceptance. Dispatch telemetry returned `not-configured`; usage and
+bureaucracy measurements for this continuation remain unknown.
+
 **2026-10-02: SC2 guest preparation and typed retained-product eligibility CLOSED (source).**
 [SC2 Client #40](https://github.com/FS-GG/FS.GG.SC2.Client/pull/40) merged protected
 `ceb7a43d9e88a036982280cff2ab4fe912d8d25d`, tree
@@ -4392,7 +4428,7 @@ Entry conditions constrain the dependent execution; earlier read-only planning m
 | **SVG game engine and Fable workspace completion** | Section 15 independent producer/product track: complete C01–C20, M0–M11, section 13 and Releases A–D through the accepted ordered feature sequence; no V0–V6 completion prerequisite for independent source/qualification work | `.github` planning owner with SDD, Rendering, Game, Audio, Net and Templates implementation owners. S.I.R. is strictly read-only and supplies only an audited disclosed compatibility baseline. Releases A–C and SVG-WORKSPACE-01.1–.6 are complete. Release D is selected for exact public publication, installed qualification and activation; durable hosting is deferred, while the later single-lifecycle default follows the generation-2 clean-start policy and separate SDD receiver proof | [accepted complete programme](2026-09-07-064259-svg-game-engine-template-design-roadmap.md), [SVG-FOUND-01 foundation](roadmaps/svg-game-engine-foundation.md), [SVG-QUAL-01 installed model qualification](roadmaps/svg-game-engine-installed-model-qualification.md), [SVG-SCENE-02 scene/renderer](roadmaps/svg-game-engine-scene-renderer.md), [SVG-PREVIEW-A publication](roadmaps/svg-preview-a.md), [SVG-PREVIEW-B release plan](roadmaps/svg-preview-b.md), [replay](roadmaps/svg-replay-01.md), [network](roadmaps/svg-network-01.md), [scale](roadmaps/svg-scale-01.md), [SVG-PREVIEW-C release plan](roadmaps/svg-preview-c.md), [SVG-WORKSPACE-01](https://github.com/FS-GG/FS.GG.Templates/blob/main/docs/roadmaps/svg-workspace-01.md), [SVG-RELEASE-D](roadmaps/svg-release-d.md), and [revision rationale](2026-09-07-121207-svg-game-engine-roadmap-revision-proposal.md) |
 | **Typed administrative and qualification policy — OPS-TYPED-01** | Producer-owned F# contracts and Quint lifecycle correspondence; routine source route | `.github` programme integrator; FSBarV2/SC2 qualification owners; Coordination administrative/runtime owner. .1 BAR and .2 SC2 source delivered; .3 FourD repair review underway; .4 actual adoption remains open; .5 starts the bounded SC2 advisor diagnostic slice while broader owner migration remains deferred | [Typed administrative plan](roadmaps/2026-10-01-typed-administrative-fsharp-quint.md). Source delivery, installed capability, native acceptance and cleanup remain separate; no generated-workspace default change |
 | **Shared Fable game foundation adoption — FABLE-ADOPT-01** | Independent product track: triage sibling findings, repair their owning producers, qualify the `fable-game` reference template, pilot FourD, then adopt in SC2 and BAR concurrently | `.github` planning owner; Rendering/Game own shared behavior, Templates owns composition, product owners retain native authority and gameplay. .1 inventory and disposition are source accepted; .2–.7 remain planned, and selected V2 platform acceptance remains complete | [Staged adoption plan](roadmaps/2026-10-01-staged-fable-game-adoption.md) and [workspace boundary](#992-staged-fable-game-foundation-adoption). Producer publication precedes installed consumer adoption; product qualification remains separate |
-| **Shared WASM execution foundation — WASM-SHARED-01** | Independent product infrastructure: extract typed contracts, a browser host and guest SDK; publish clean-import dependencies, then adopt in BAR/SC2 and provide a FourD reaction-policy example | `.github` roadmap owner coordinates the remaining work; BAR/SC2 own compatibility adapters and FourD owns its example. .1–.3 source are Closed at the boundaries recorded in section 0. .4 publication and clean-import readback are next; no FourD rendering-pilot prerequisite or new V2 acceptance gate applies | [Extraction plan](roadmaps/2026-10-02-shared-wasm-foundation.md) and [workspace boundary](#993-shared-wasm-execution-foundation). .4–.7 remain open; no shared release, installed adoption or product effect is claimed |
+| **Shared WASM execution foundation — WASM-SHARED-01** | Independent product infrastructure: published typed contracts, connected browser host and guest SDK; adopt in BAR/SC2 and provide an optional FourD reaction-policy example | `.github` coordinates; Game owns the producer and each product owns its adapter/example. .1–.4 and connected .5-P 0.2.0 publication/installed qualification are Closed. BAR adapter and FourD example preparation proceed independently; SC2 compatibility needs the selected additive producer successor before published consumer qualification | [Extraction and consumer-adoption plan](roadmaps/2026-10-02-shared-wasm-foundation.md) and [workspace boundary](#993-shared-wasm-execution-foundation). .5–.7 remain open; product/native adoption and duplicate removal require their own evidence. No rendering-pilot or V2 prerequisite applies |
 | **Fable bindings candidate generation and upstream integration assessment** | Section 15 producer track: optional Xantham candidates, exact tool qualification and skill-load upstream assessment; independent of v2 prerequisites | Templates 0.14.0 contains the public Xantham payload; [PR #635](https://github.com/FS-GG/FS.GG.Templates/pull/635) merged at `f3a7cd6ab6f035d4ba335d03fdc367db6164793f` after clean installed and retained-adoption proof, with the protected composition, kit and materialization gates green. Current live assessment remains `updates-found` / `unqualified` / `investigate`; no upstream update is accepted by that observation. | [Xantham candidate subroadmap](https://github.com/FS-GG/FS.GG.Templates/blob/main/docs/roadmaps/fable-bindings-xantham-candidates.md). FBX-05 is complete at its public installed receiver boundary. FBX-07's second-runtime candidate composition merged in [#645](https://github.com/FS-GG/FS.GG.Templates/pull/645), with [exact candidate hosted proof](https://github.com/FS-GG/FS.GG.Templates/actions/runs/36473506070/job/109101353158); public successor adoption remains separate. |
 | **Fable SC2 client and custom WASM control** | Section 15 product track: browser tactical client, native SC2 gateway and portable module contract; independent of v2 prerequisites | `FS.GG.SC2.Client`; .1–.5 are delivered for their declared profiles. The bounded .6a source-contract and author-toolchain window is delivered through [#17](https://github.com/FS-GG/FS.GG.SC2.Client/pull/17) at protected `4be9a4c18598f8e63d5624a422f5f28621d68cd3`, tree `c9044372fb12858d10a12215047d317e7b2438cd`, with [verification `36757984221`](https://github.com/FS-GG/FS.GG.SC2.Client/actions/runs/36757984221) passed. .6b–.6e joined product source is delivered through [#18](https://github.com/FS-GG/FS.GG.SC2.Client/pull/18) at protected `bfe7c45bbcf605a278d65988b78af7330ef0f9d8`, tree `9bb21c0368d7dad5244f79ebc1428da3f007ce5b`, after [verification `36775549734`](https://github.com/FS-GG/FS.GG.SC2.Client/actions/runs/36775549734). .6f genuine independent-module/native/replay/recording acceptance and .7 publication, installation and platform qualification remain open | [SC2C-01 design and feature roadmap](2026-09-08-132131-fable-sc2-wasm-client-design-roadmap.md), [bounded .5 plan](https://github.com/FS-GG/FS.GG.SC2.Client/blob/ad50425dcdcc526215fce1904e33015369b2ac69/docs/SC2C-01.5-plan.md), and [owning .6 plan](https://github.com/FS-GG/FS.GG.SC2.Client/blob/main/docs/SC2C-01.6-plan.md). Section 0 records exact source and qualification boundaries; no wider-race, native .6f, released-product or backdated R5 claim follows |
 | **Fable BAR client and custom WASM control** | Section 15 product track: browser tactical client over FSBarV2/HighBarV3, including the FS.GG Fable game target; independent of v2 prerequisites | Foundation, preview and bounded `.4` live control remain delivered. `.5` selects unmodified stock Recoil with an ABI-matched plugin and bounded Lua observer. Protected fixed-code diagnostic source is Closed through [FSBarV2 #19](https://github.com/FS-GG/FSBarV2/pull/19) at `9f0d8712e2c9a21cbf49f515a65b520516239b5a`, tree `644e7bbc7d4e9906934d89453970ae6634ef895b`, with compiled projection, canonical replay and eleven causal helper fixtures passing. The retained native product remains `5bc`, HighBar remains `54e`, and vanilla Recoil remains selected; Count1 and the six useful-play native journeys remain unaccepted (0/6). Next: protected rebuild, a new final packet, custody and one freshly admitted observable operation. Custom FR1–FR6 is optional/inactive/open. The [knowledge backup retention plan](roadmaps/bar-knowledge-backup-retention.md) separately records the Closed running-host request for current plus at most three older versions; three scheduled cycles are observed, while keeper restart supervision remains absent. `.7` publication and installed adoption remain separate. | [Original BAR design](2026-09-08-134900-fable-bar-wasm-client-design-roadmap.md), [useful-play owner](https://github.com/FS-GG/FSBarV2/blob/main/docs/roadmaps/barc-01-useful-play.md), and [optional factory experiment](https://github.com/FS-GG/FSBarV2/blob/main/docs/roadmaps/barc-01-factory-atomic-replacement.md). Section 0 records the actual source/native frontier. |
@@ -4619,13 +4655,14 @@ production reducer correspondence. BAR and SC2 currently own separate implementa
 uploaded reaction modules remain a design proposal. Product codecs, native gateway authority,
 receipts and unknown-effect handling stay with their product adapters.
 
-The next window is .1: the `.github` roadmap owner selects the producer owner and inventories
-current supervisors, ABI versions, resource profiles and package conventions. Preserve the
-existing BARC/SC2C contracts through compatibility profiles. Shared runtime, lifecycle modeling
-and guest SDK work can then proceed in disjoint lanes. Publication and fresh installed import
-qualification precede parallel BAR/SC2 adoption and the FourD example. This extraction can
-advance independently of FABLE-ADOPT-01's FourD rendering pilot; coordinate its external-authority
-and WASM reference against the qualified shared dependency.
+Game delivered the shared contracts, lifecycle and SDK, then published and installed-qualified
+connected 0.2.0 at the section 0 boundaries. The selected next windows are isolated BAR/SC2
+adapters and the independent optional FourD example in the consumer horizon. SC2 request limits,
+queue scheduling and frozen replacement require an additive producer successor and fresh
+publication/installed qualification before its affected adoption. Preserve existing product
+codecs and native authorities at their explicit consumer joins. This work proceeds independently
+of FABLE-ADOPT-01's FourD rendering pilot; coordinate the template's external-authority and WASM
+reference against the qualified shared dependency.
 
 Candidate source first changes at .2–.3. The foundation is ready to import only after .4 proves
 published versioned artifacts, delivered worker/native JavaScript assets and a clean Fable
@@ -4634,7 +4671,8 @@ explicit .5 adoption; .6 qualifies the FourD extension example, and .7 removes r
 policy after consumer parity. A later template composition changes generated workspaces only
 through its own publication and installed qualification. Browser deadlines do not establish
 deterministic instruction fuel; authoritative or replayable FourD policies need their own
-qualified execution contract. All extraction stages remain open. This track adds no prerequisite
+qualified execution contract. Stages .1–.4 and connected .5-P are Closed; consumer adoption,
+its compatibility successor and duplicate removal remain open. This track adds no prerequisite
 to the accepted V2 platform profile and changes no provider or lifecycle default.
 
 ## 10. Exact GS2 integration and contract-change boundaries
