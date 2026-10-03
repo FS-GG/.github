@@ -163,7 +163,7 @@ module CycleLedgerApplication =
     // An unlisted `toolVersion` fails closed with the exact value it reported, so a validator bump
     // that outruns this list surfaces as one specific, actionable refusal here — not as unrelated
     // downstream test failures a caller has to trace back to this comparison.
-    let private acceptedFsggSddValidatorVersions = [ "1.0.0"; "1.5.0" ]
+    let private acceptedFsggSddValidatorVersions = [ "1.0.0"; "1.5.0"; "2.1.0" ]
 
     let private validateProviderArtifact expectedIdentity provider node =
         let root = providerRoot node

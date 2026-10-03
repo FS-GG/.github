@@ -75,14 +75,15 @@
     },
     {
       "description": [
-        "Cap FS.GG.SDD.Cli at the newest validator identity this repository has explicitly vetted: 1.5.0. The engine pins validator IDENTITY, not just an install version, at the #2133 provider-authority boundary. `src/FS.GG.Coord.Cli/CycleLedgerApplication.fs` accepts 1.5.0, and `.github/workflows/coord-engine.yml` plus `.github/workflows/contract-coherence.yml` both install 1.5.0 in the same coordinated change (.github#3208).",
+        "Cap FS.GG.SDD.Cli at the newest qualified validator identity: 2.1.0. The accepted 1.0.0, 1.5.0 and 2.1.0 identities in `src/FS.GG.Coord.Cli/CycleLedgerApplication.fs`, BOTH exact 2.1.0 workflow install pins and this <=2.1.0 ceiling are one coordinated authority boundary.",
+        "The genuinely published 2.1.0 producer at source 518517f6b90330a6e99f90bbce68faa0a891287f passed fresh public archive/source/official-Core joins and the compiled production engine's 190 write assertions, including the valid-provider case and all six original authority refusals. Actual verify --require-observed --dry-run reported verificationReady with zero blocking/classified/journey unmet counts. Its one VF001 warning is admitted by the unchanged existing succeededWithWarnings guard, not a new acceptance policy. Coherent dual-feed publication and literal payload readback completed in native release run https://github.com/FS-GG/FS.GG.SDD/actions/runs/37114843541 (attempt 2); feed signatures change archive envelopes only.",
         "The 1.5.0 adoption was exercised against the real `fsgg-sdd verify --dry-run` output and all six discriminating #2133 provider-authority assertions, rather than re-baselining a version string to green. The accepted identity, both workflow pins, and this Renovate ceiling are one coupled fact; moving any one without the other three recreates .github#2464's split-brain validator boundary.",
-        "ACTION WHEN FS.GG.SDD.Cli later than 1.5.0 should be adopted: re-vet the target release's `verify` output against the #2133 provider-authority contract, update the accepted validator identity in `src/FS.GG.Coord.Cli/CycleLedgerApplication.fs`, advance BOTH workflow install pins (`coord-engine.yml`, `contract-coherence.yml`) to match, confirm all six #2133 assertions still reject their original attack shapes, and raise this cap in the same change.",
+        "ACTION WHEN FS.GG.SDD.Cli later than 2.1.0 should be adopted: re-vet the target release's `verify` output against the #2133 provider-authority contract, update the accepted validator identity in `src/FS.GG.Coord.Cli/CycleLedgerApplication.fs`, advance BOTH workflow install pins (`coord-engine.yml`, `contract-coherence.yml`) to match, confirm all six #2133 assertions still reject their original attack shapes, and raise this cap in the same change.",
         "fsgg-cap-expires-when: manual — the trigger is a same-repo source-code coupling (CycleLedgerApplication.fs:116's hardcoded validator-identity literal), not a fact any nuspec range can express; lifting the cap requires .github#2465 (making the accepted fsgg-sdd validator version a coordinated, checkable fact rather than a bare source literal) to land, then the re-vet and coordinated pin update named above in the same change"
       ],
       "matchDatasources": ["nuget"],
       "matchPackageNames": ["FS.GG.SDD.Cli"],
-      "allowedVersions": "<=1.5.0"
+      "allowedVersions": "<=2.1.0"
     },
     {
       "description": [
