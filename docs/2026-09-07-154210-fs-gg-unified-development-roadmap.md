@@ -53,6 +53,22 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-03: BARC-01.5f controlled producer/consumer correspondence CLOSED (source).**
+[FSBarV2 #29](https://github.com/FS-GG/FSBarV2/pull/29) merged as
+`e955cb24ee3c621668aa3d69c05f1a625aa57f7a`, with the qualified candidate's exact
+tree. Eight tests parse the immutable compiled HighBar fixture bytes through
+the real typed reducer and live-basis join: health remains 100 after the projected
+delta and becomes authoritative 83 only after the complete replacement. Missing,
+reordered, stale, wrong-lifetime and wrong-epoch metadata refuse tactical readiness.
+Replacement omission and projection-removal mutations fail causally; all 75
+Protocol tests pass. The rebase preserved every qualified test and fixture blob
+and all CLR dependency inputs. Native complete-record CI does not qualify this
+Protocol slice, so no native CI pass is claimed.
+
+These are controlled reconstructions; the retained native packet has no raw
+delta. Plugin rebuild, exact receiver adoption and fresh native acceptance remain
+open. Useful play remains **0/6**, with no new operation grant.
+
 **2026-10-03: BARC-01.5f module readiness and owned-damage repair CLOSED (source).**
 [FSBarV2 #28](https://github.com/FS-GG/FSBarV2/pull/28) merged as
 `d9aa36c05928fba80fc33d3cb1f22978ce9f0e5f`. The stock handoff checks the exact
