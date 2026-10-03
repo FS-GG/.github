@@ -53,6 +53,22 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-03: Home telemetry receiver installation CLOSED (bounded operation).**
+The separately provisioned rootless Home container now runs the original
+[Host 0.3.0 release](https://github.com/FS-GG/.github/releases/tag/telemetry-host/v0.3.0)
+from `f43e0a1f94448aa8f7668b1ed72f3169a7cf925e` in a fresh private schema-12
+store. Root independently verified all 52 installed package files, the running
+service, explicit-CA and hostname TLS validation, authentication refusals, and
+an applied receipt with exact replay. A stopped backup, restart persistence and
+fresh-store restore rehearsal passed. The receipt represents one explicitly
+synthetic operational check; it supplies no native usage or roadmap-delivery fact.
+Qualification report SHA-256 is
+`265e9a49f8e6dca694f98157fc019c8fa140225a911878b10b7ed260c6d7871a`.
+Prospective producer/collector wiring, native usage coverage, browser operation,
+LAN access and whole-container restart qualification remain pending. Existing Main
+credentials, routing and stores were preserved. This installed receiver does not
+complete Learning capture or change generated-workspace defaults.
+
 **2026-10-03: BAR initial-failure policy diagnostics CLOSED (source).**
 [BAR #30](https://github.com/FS-GG/FSBarV2/pull/30) merged as
 `9682516a8ebec133d33c1f8069f46f66477ea54a`, with reviewed candidate
