@@ -453,10 +453,31 @@ passed [full native package qualification 37104370230](https://github.com/FS-GG/
 including actual immutable Python replay, 16 model traces, 334 correspondence
 transitions, deliberate mutation refusal and actual CLI controls. This source
 repair leaves the declaration `acquisition-required`, with reader inventory unset.
-Served Coordination Manager/Host readers, full OS/Tcl/Tk closure, selected image
+Served Coordination consumer adoption, full OS/Tcl/Tk closure, selected image
 inputs, two cold OCI builds and actual receiver qualification remain open. No
 installation, model execution, capture or activation is established. The
 [owning plan](roadmaps/learn-c2-persistent-receiver-v3.md) retains those boundaries.
+
+**2026-10-03: LEARN-C2 served Manager dependency-reader repair CLOSED (source).**
+[Coordination #927](https://github.com/FS-GG/FS.GG.Coordination/pull/927) merged at
+`1e6afd8ef38a5fef01e2a2d3f2a2acf4ec1127f7` from exact source
+`5f1af3f3263e307975d8227333be4e9e39b16e2f`. The two-file Manager/V3-test repair
+admits zero-byte dependency rows only with the exact empty SHA-256 and mode `0444`,
+using regular single-link, no-follow descriptor custody, exact extent/EOF, stable metadata
+and final-name checks. Missing or empty required payloads still refuse; census and
+aggregate bounds remain unchanged. The Host `readPrivate` callers have always consumed
+required payloads, not Python dependencies; their nonempty checks remain unchanged.
+
+All 28 source-slice controls passed, including actual retained initializer bytes and
+protected-source causal rejection. The actual compiled/native
+[optimistic qualification 37138060201](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/37138060201)
+and [ordinary source checks 37138060190](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/37138060190)
+passed. Repaired Manager distribution, C4/C5 OCI and served Manager-to-Host live
+qualification, full native Python/OS/Tcl closure, selected reader capability/profile,
+runtime readiness and installed adoption remain Pending/Unknown. Main has no action.
+No installation, capture or activation is established. The
+[owning LEARN-C2 plan](roadmaps/learn-c2-persistent-receiver-v3.md) retains prior evidence
+and the separate runtime boundaries.
 
 **2026-10-03: Project knowledge storage, access and typed initialization CLOSED (source).**
 [SDD #1091](https://github.com/FS-GG/FS.GG.SDD/pull/1091) merged as

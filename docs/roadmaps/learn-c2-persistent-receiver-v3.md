@@ -214,13 +214,30 @@ manifest bytes and refusal of wrong or malformed empty digests, negative or malf
 executable modes and empty required payloads. Existing preparation CLI custody checks and actual
 Manager positive-fixture qualification still pass. These are source checks, not image qualification.
 
-The separately served Coordination consumers still require a source and publication decision:
-[Manager runtime validation](https://github.com/FS-GG/FS.GG.Coordination/blob/2309964321a895100d12ededb1c9c00c8342b509/eng/telemetry-host-manager/Program.fs#L376)
-rejects zero dependency bytes, and
-[Host regular-file custody](https://github.com/FS-GG/FS.GG.Coordination/blob/2309964321a895100d12ededb1c9c00c8342b509/src/FS.GG.Coordination.Orchestration.Host/LearningInstalledReadinessSource.fs#L249)
-requires positive file size. Complete OS/Tcl/Tk closure, independently selected image inputs, two
-cold OCI builds and actual served Manager-to-Host qualification remain open. The inactive
+The [protected Manager baseline](https://github.com/FS-GG/FS.GG.Coordination/blob/2309964321a895100d12ededb1c9c00c8342b509/eng/telemetry-host-manager/Program.fs#L376)
+rejected zero dependency bytes. That consumer source repair is now Closed through
+[Coordination #927](https://github.com/FS-GG/FS.GG.Coordination/pull/927), merged at
+`1e6afd8ef38a5fef01e2a2d3f2a2acf4ec1127f7` from exact source
+`5f1af3f3263e307975d8227333be4e9e39b16e2f`. Its two-file change updates the Manager
+validator and V3 test harness. Empty dependency rows require the exact empty SHA-256 and
+mode `0444`; every row binds a regular, single-link, no-follow descriptor to its declared extent,
+EOF, stable metadata and final filename. Missing or empty required runtime, module and manifest
+payloads still refuse; the 4,096-entry and 512 MiB limits remain unchanged.
+
+All 28 extracted-production-source controls passed, including the baseline causal rejection and
+admission of fresh readonly copies of the five retained initializer files. Their acquired source
+copies remain unchanged at mode `0600`; this source test does not qualify installed custody.
+The actual compiled/native [optimistic qualification](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/37138060201)
+and [ordinary source checks](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/37138060190)
+passed. The [Host required-payload reader](https://github.com/FS-GG/FS.GG.Coordination/blob/2309964321a895100d12ededb1c9c00c8342b509/src/FS.GG.Coordination.Orchestration.Host/LearningInstalledReadinessSource.fs#L249)
+remained unchanged: its callers read required payloads, never Python dependency rows, so its
+positive-size check is not this frontier.
+
+Distribution of the repaired Manager, complete OS/Tcl/Tk and native Python closure, independently
+selected reader capability/profile and image inputs, two cold OCI builds, C4/C5 runtime readiness,
+and actual served Manager-to-Host qualification remain Pending/Unknown. The inactive
 `acquisition-required` selection and all installation, capture and activation boundaries remain.
+Main has no action; publication, installed adoption and live receiver evidence remain separate.
 
 The exact-byte inactive CLI guard also binds the canonical declaration after the prior runtime-pin
 correction: SHA-256 `63a6bd47f0e5def4d0690df6ed83c479629ed2461ab26b9fc6017415d52da7b8`.
