@@ -293,7 +293,12 @@ scheduled. The hosted V2 writer remains `if:false`, unenrolled and unqualified f
    All unswitched consumers and unresolved/unrepresented named outcomes remain reported; broader .4closure,
    .5publication and .6installed product adoption remain separate.
 
-**Current gate:** protected successor source/artifact, constructor dry-run, runtime binding, import/readback,
+**Installed qualification:** [2026-10-03 public receiver proof](board-v2-installed-qualification.md) verifies
+0.95.0 CLI/Kit/Drivers acquisition, installed read-only four-target coverage and a complete native
+preservation snapshot. .github#3009 remains absent; exact-bound constructor custody and root operation
+authority remain explicit boundaries. No consumer adoption or Board effect follows.
+
+**Current gate:** exact-bound constructor custody, selected runtime binding, import/readback,
 four-target refresh/inspection and selected consumer invocation/adoption are pending. Source preparation
 made zero board effects, issue lifecycle/dependency changes, permission/credential changes, workflow
 activation or publication. Telemetry NOTCONFIG/no handle; native usage/economics Unknown.
