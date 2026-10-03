@@ -53,6 +53,21 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-03: Shared-WASM canonical event qualification CLOSED (source).**
+[Game #681](https://github.com/FS-GG/FS.GG.Game/pull/681) merged as
+`0b8a3217c94e54bcb5667df48a42dee4398e21c9`, tree
+`336c8113540dae0d295c247d0dcb2bc0f4a82ba6`, equal reviewed head
+`229104554ea481c0a09d3409ea5e77a6db4a2dbc`.
+The exact-head [shared qualification 37099061357](https://github.com/FS-GG/FS.GG.Game/actions/runs/37099061357)
+passed. The canonical model now mirrors existing active/candidate invalidation
+and real connected termination callbacks; original event timing, raw outcomes and
+ordered effects remain explicit. Forty-seven generated schedules, production and
+installed .NET/Fable correspondence, causal mutants and cold/initialized seeded
+sampling passed. Prior failures and rejected audit digests remain historical evidence.
+Published 0.2.0 package/runtime/SDK bytes were unchanged. The selected .5-P2
+request-limit and SC2 scheduling successor remains open, with publication and fresh
+installed qualification required before the affected SC2 adoption.
+
 **2026-10-03: BAR shared-WASM adapter and FourD optional example CLOSED (source and declared installed-browser qualification).**
 [BAR #26](https://github.com/FS-GG/FSBarV2/pull/26) merged as
 `8da133be0f41c15fdb78291d428c559c56a9afc2` after native required checks;

@@ -747,3 +747,10 @@ protected `af32cea8864bcc4c970fb8457ef2cde88011e829`, tree
 seven clean installed-browser cases establish the optional example. Its owning
 [plan](https://github.com/FS-GG/FS.GG.FourD/blob/main/docs/roadmaps/shared-wasm-reaction-example.md)
 retains hosting and authoritative gameplay outside this completed window.
+
+Game's canonical event qualifier repair is source Closed through
+[#681](https://github.com/FS-GG/FS.GG.Game/pull/681), protected
+`0b8a3217c94e54bcb5667df48a42dee4398e21c9`, tree
+`336c8113540dae0d295c247d0dcb2bc0f4a82ba6`, equal the approved candidate.
+Exact-head shared qualification `37099061357` passed with unchanged public 0.2.0
+inputs. The completed final .5-P2 packet above is the next producer window.
