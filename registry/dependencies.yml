@@ -531,9 +531,9 @@ contracts:
     # 5c74f2a and all 19 archives were read back from GitHub Packages and nuget.org. It adds the
     # source-complete authoring, input, runtime and presentation surfaces while preserving
     # omitted/default sdd, explicit none, typed-sdd and legacy spec-kit.
-    version: "0.31.0"   # SOURCE: SVG Preview C spatial working-set release; Rendering#1322 merge 96810c3c66ba888ecd03a0e10fe6374fd88917f9.
-    package-version: "0.31.0"   # FEED: guarded run 34806339482 published/read back all 19 retained archives on both feeds. Custody artifact 10333198495 binds source/roster/hashes; original UI.Template SHA-256 049355e6e28edb1a9fdcd7730877c17e698bca4e2ee8280a0e29635bd3d5604d. Consumer adoption remains separate.
-    package-tag: "fs-gg-ui-template/v0.31.0"
+    version: "0.32.0"   # SOURCE: original coherent Rendering archives from 730923fe9d27174e879566f21dab14a1b03d761a; all three 0.32.0 tags bind that source.
+    package-version: "0.32.0"   # FEED: protected original-byte publisher 37106323610 verified all 19 archives on both feeds. Producer inventory only; the Templates consumer edge remains 0.31.0.
+    package-tag: "fs-gg-ui-template/v0.32.0"
     # visibility: PUBLIC — Feature 218 (FS.GG.Rendering#26): the whole coherent set (template + 16 FS.GG.UI.* libs) flipped private→PUBLIC so consumer-CI tokens install+restore without exit-103 (internal unavailable — FS-GG is a free, non-enterprise org; public matches the FS.GG.*.Cli norm)
     owner: rendering
     surface: "dotnet new fs-gg-ui (template/base) + FS.GG.UI.* framework packages"
@@ -1314,7 +1314,8 @@ coherence:
       to stable public 2.1.0 after coherent Artifacts/CLI/Knowledge publication from
       source 518517f6b90330a6e99f90bbce68faa0a891287f and both-feed installed readback.
       This is producer capability authority for provider contract 2 and effective
-      Typed SDD project knowledge, not receiver package adoption. UI 0.31.0,
+      Typed SDD project knowledge, not receiver package adoption. UI producer inventory is 0.32.0 after verified
+      original-archive publication; the Templates Rendering edge remains 0.31.0.
       Workspace 0.15.0 and Wizard 0.12.0 package fields remain unchanged.
       Templates PR 667 prepares all six matching descriptor floors and has current
       D.5 source acceptance plus private public-2.1 proof across 18 receiver rows;

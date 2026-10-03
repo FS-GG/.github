@@ -53,6 +53,34 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-03: BAR initial-failure policy diagnostics CLOSED (source).**
+[BAR #30](https://github.com/FS-GG/FSBarV2/pull/30) merged as
+`9682516a8ebec133d33c1f8069f46f66477ea54a`, with reviewed candidate
+`17d2c33af885abb2c049e45ad0e92f50e65ef7e2`, complete tree
+`1949ae63b13fdfe606e2fd96a10b2d74504d5e20`. The exact-candidate canonical
+[complete-record-source run](https://github.com/FS-GG/FSBarV2/actions/runs/37121800584)
+passed every step. The source follow-up adds the initial-failure v2 subcheckpoint
+and code diagnostic while preserving every guard, legacy v1 and non-initial
+behavior. Root rehashed all 28 retained references. The historical Count-1 cause
+remains unknown/refused and useful native play remains **0/6**. Protected-build
+successor qualification, a fresh grant and native gameplay remain pending; source
+acceptance does not qualify that product invocation.
+
+**2026-10-03: SC2 exact stopped-owned-memory window CLOSED (bounded acceptance).**
+Root admitted the exact twelve-control repair-5 window after independent M4 review:
+one positive `complete-deleted` stopped, owned 8192-byte memfd capture and eleven
+expected refusals. All 36 original identities were absent after cleanup; eight
+actual evidence mutants were rejected. The observed suite took 2.232 seconds.
+Root admission SHA-256 is
+`9034cdb310fc65feef64949f1031dfac8bb093cd797b82e55885bc100acb6632`;
+independent M4 SHA-256 is
+`c0223a4b409b646ddaa2925f94b87d6eca02e840272337d4128c972e9594156a`.
+This completes only that narrow ready window. General memory, watchdog qualification,
+historical generated-memory/JIT/IPC provenance, general helper qualification, actor
+and native grants, and overall P2 remain false. Historical refusals retain their
+outcomes; generated-memory authority, prospective cache inventory and a separately
+admitted exact product invocation remain required. Native usage remains unknown.
+
 **2026-10-03: SDD literal ZIP payload-readback guard CLOSED (source).**
 [SDD #1093](https://github.com/FS-GG/FS.GG.SDD/pull/1093) merged as
 `9df47707ab22b2486400fb359f381e08c4de90df`, equal reviewed candidate
@@ -91,8 +119,12 @@ source closure records no new tag or publication.
 TSDD-KNOWLEDGE-01 H1 advances both UI/Workspace minimum producer floors to genuine
 public stable SDD 2.1.0, after [producer publication and installed acceptance](https://github.com/FS-GG/.github/pull/4146)
 and [validator adoption](https://github.com/FS-GG/.github/pull/4147). The orchestrator
-axis explicitly becomes incomplete. UI 0.31.0, Workspace 0.15.0 and Wizard 0.12.0
-package fields, dependency edges and lifecycle defaults retain their actual values.
+axis explicitly becomes incomplete. Published UI producer inventory is 0.32.0 from
+original source `730923fe9d27174e879566f21dab14a1b03d761a` after verified publisher
+[37106323610](https://github.com/FS-GG/FS.GG.Rendering/actions/runs/37106323610).
+The Templates Rendering edge remains 0.31.0; Workspace 0.15.0, Wizard 0.12.0 and
+lifecycle defaults retain their actual values. This inventory flip is separate from
+Rendering receiver adoption.
 [Templates #667](https://github.com/FS-GG/FS.GG.Templates/pull/667) prepares matching
 floors with current D.5/private public-2.1 proof; live equality and historical tuple
 repairs remain pending. Workspace 0.18.0 publication, Wizard 0.13.0 installed adoption
