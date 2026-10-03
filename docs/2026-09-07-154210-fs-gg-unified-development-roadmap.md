@@ -53,6 +53,22 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-03: WASM supported evaluator thread option CLOSED (source and native qualification).**
+[Game #687](https://github.com/FS-GG/FS.GG.Game/pull/687) merged as
+`94bce296fbdfacdff8492ae02ad62789ac051cb9`, with exact protected tree
+`21db0128d86cfd4f95173fa4267f9251ca3a855e`. All 34 native checks passed on
+reviewed candidate `baabab71871d810cae9ae794457150b8b5c2f52f`, including
+[shared WASM qualification](https://github.com/FS-GG/FS.GG.Game/actions/runs/37142001618).
+The executor selects the supported Quint `--n-threads=1` option and retains
+actual argv and numeric exit codes before refusal. The earlier protected
+prepare [37140795929](https://github.com/FS-GG/FS.GG.Game/actions/runs/37140795929)
+failed on the unsupported `nthreads` option and produced no eligible pack;
+that outcome remains unchanged. Frozen product source
+`16a401692f4c0dee7f6da1a86d0cd49e6ea3ec2c`, public/default 0.2 contracts and
+the historical TypeScript proof remain unchanged. Fresh protected preparation,
+original-artifact custody, both-feed publication and installed receiver
+acceptance remain pending; this source closure records no pack or release.
+
 **2026-10-03: TEMPLATES-H2 Workspace Template 0.18 publication CLOSED (producer).**
 The [protected publisher](https://github.com/FS-GG/FS.GG.Templates/actions/runs/37138971862)
 completed from `9161a9d91b3fdd7a80cae7776fdff179e712b32e`, after its full native
