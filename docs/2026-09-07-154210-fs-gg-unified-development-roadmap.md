@@ -53,6 +53,25 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-03: Typed project-knowledge Wizard bootstrap CLOSED (source).**
+The Wizard refuses an insufficient actual SDD producer before scaffolding, pins the
+same stable capable producer in the root local tool manifest and checks knowledge
+and common CI before its creation handoff. Rendering app/game routes compose the
+central Workspace.Template 0.18.0 overlay without replacing the original Rendering
+archive or forcing authored files. Cache reuse checks the three exact owner payloads.
+The historical lifecycle omission rule remains unchanged: only the existing exact
+fable-game 0.15.0 gate selects Typed SDD; newer providers require explicit selection.
+
+Focused qualification passed 78 assertions and three causal source mutations,
+plus the repaired default-preservation controls. Source-candidate app/game creation
+used the genuine compiled SDD 2.1.0 closure and immutable original Rendering 0.32.0
+archive; normal caller commits included knowledge and CI, cacheless clones passed,
+over-limit knowledge and altered same-version overlay bytes refused, and actual
+public SDD 2.0.3 refused before scaffolding. These are source-candidate observations.
+Public SDD 2.1.0 and Workspace.Template 0.18.0 publication, both-feed installed
+qualification, descriptor/registry adoption and existing-project extraction remain
+open. The [owning Wizard plan](roadmaps/tsdd-knowledge-wizard.md) retains these joins.
+
 **2026-10-03: Rendering 0.32.0 original-archive publication CLOSED (both feeds).**
 The protected [publisher 37106323610](https://github.com/FS-GG/FS.GG.Rendering/actions/runs/37106323610)
 passed on executor `24e0bdcc30864f62fa8c5f59a58eff021065d71a` and replayed
