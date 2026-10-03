@@ -45,6 +45,33 @@ let writeManifest name (manifest:RoleManifest) : RoleManifestReference =
   {Role=manifest.Role;Path=name+".json";Sha256=sha bytes}
 let manifests=[|"host";"manager";"native";"runtime"|]|>Array.map(fun role->writeManifest role (roleManifest role))
 let selected={IdentityClass="synthetic-test";AcquisitionRoot=root;ManifestRoot=manifestRoot;RoleManifests=manifests;NativeInventoryPath="";NativeInventorySha256="";OwnerUid=ImageClosure.ownerUid root;Platform="linux/amd64";HostSourceRevision=h 'a';HostReleaseId=1L;HostRunId=2L;HostArchiveSha256=h 'b';HostPackageSha256=h 'c';HostPayloadSha256=h 'd';HostManifestSha256=h 'e';HostJournalSha256=h 'f';ManagerSourceRevision=String('a',40);ManagerSourceTree=String('b',40);ManagerArtifactSha256=h '1';ManagerManifestSha256=h '2';ManagerPreparedSha256=h '3';ManagerArchiveSha256=h '4';ManagerRunId=3L;ManagerArtifactId=4L;RuntimeImageDigest="sha256:"+h '5';RuntimeTreeSha256=h '6';NativeElfSha256=h '7';NativeProfileSha256=h '8';ReaderProfileSha256=h '9';CanonicalVerifierSha256=h 'a';InventorySha256=inventory rows;Files=rows}
+// Execute the actual CLI: canonical inert bytes stay unavailable; even one changed byte refuses.
+let cliRoot=Path.GetFullPath(Path.Combine(__SOURCE_DIRECTORY__, "../../deployment/telemetry-collector/persistent/v3/image-closure"))
+let cli=Path.Combine(cliRoot,"bin/Debug/net10.0/PersistentV3.ImageClosure.dll")
+let invokePlaceholder path =
+  let start=System.Diagnostics.ProcessStartInfo("dotnet")
+  start.UseShellExecute<-false
+  start.RedirectStandardOutput<-true
+  start.RedirectStandardError<-true
+  start.ArgumentList.Add cli
+  start.ArgumentList.Add path
+  use child=System.Diagnostics.Process.Start start
+  let stdout=child.StandardOutput.ReadToEnd()
+  let stderr=child.StandardError.ReadToEnd().Trim()
+  child.WaitForExit()
+  child.ExitCode,stdout,stderr
+let canonicalPlaceholder=Path.Combine(cliRoot,"production-selection.json")
+match invokePlaceholder canonicalPlaceholder with
+| 2,"","persistent-v3-image-closure-unavailable: native-image-closure-inventory-acquisition-required"->()
+| actual->fail $"actual canonical placeholder outcome differs: %A{actual}"
+let changedPlaceholder=Path.Combine(root,"changed-production-selection.json")
+let canonicalPlaceholderBytes=File.ReadAllBytes canonicalPlaceholder
+File.WriteAllBytes(changedPlaceholder,Array.append canonicalPlaceholderBytes [|byte ' '|])
+match invokePlaceholder changedPlaceholder with
+| 3,"","persistent-v3-image-closure-refused: acquisition-required-selection-bytes-differ"->()
+| actual->fail $"actual changed-byte placeholder outcome differs: %A{actual}"
+File.Delete changedPlaceholder
+printfn "PASS actual canonical placeholder unavailability and changed-byte refusal"
 let prepared:byte array=match ImageClosure.prepare selected with ClosureResult.Prepared bytes->bytes|value->fail $"physical positive refused: %A{value}"
 let production={selected with IdentityClass="production";OwnerUid=0;HostSourceRevision=ImageClosure.HostSourceRevision;HostReleaseId=401538149L;HostRunId=36964135216L;HostArchiveSha256=ImageClosure.HostArchiveSha256;HostPackageSha256=ImageClosure.HostPackageSha256;HostPayloadSha256=ImageClosure.HostPayloadSha256;HostManifestSha256=ImageClosure.HostManifestSha256;HostJournalSha256=ImageClosure.HostJournalSha256;ManagerSourceRevision=ImageClosure.ManagerSourceRevision;ManagerSourceTree=ImageClosure.ManagerSourceTree;ManagerArtifactSha256=ImageClosure.ManagerArtifactSha256;ManagerManifestSha256=ImageClosure.ManagerManifestSha256;ManagerPreparedSha256=ImageClosure.ManagerPreparedSha256;ManagerArchiveSha256=ImageClosure.ManagerArchiveSha256;ManagerRunId=36983338783L;ManagerArtifactId=11216418410L;RuntimeImageDigest=ImageClosure.RuntimeImageDigest;RuntimeTreeSha256=ImageClosure.RuntimeTreeSha256;NativeElfSha256=ImageClosure.NativeElfSha256;NativeProfileSha256=ImageClosure.NativeProfileSha256;CanonicalVerifierSha256=ImageClosure.CanonicalVerifierSha256}
 match ImageClosure.prepare production with ClosureResult.Unavailable "trusted-native-selection-acquisition-required"->()|value->fail $"unacquired production closure did not require trusted root selection: %A{value}"
@@ -76,7 +103,16 @@ let nativeProfileBytes=JsonSerializer.SerializeToUtf8Bytes nativeProfileObject
 let nativeProfilePath=Path.Combine(contractRoot,"native/native-operation-v1.json")
 File.WriteAllBytes(nativeProfilePath,nativeProfileBytes);File.SetUnixFileMode(nativeProfilePath,readMode)
 let nativeProfileRow={SourcePath="native/native-operation-v1.json";TargetPath="/opt/fsgg/profile/native-operation-v1.json";Bytes=FileInfo(nativeProfilePath).Length;Sha256=sha nativeProfileBytes;Mode="0444";SourceClass="native"}
-let contractRows=[|hostRow;managerRow;managerDependencyRow;runtimeRow;codexRow;configRow;protocolRow;flagsRow;verifierRow;pythonRow;stdlibRow;extensionRow;loaderRow;libraryRow;osDataRow;readerRow;nativeProfileRow|]|>Array.sortBy _.TargetPath
+// The optional immutable root replays actual acquired Python image bytes; no file is dropped.
+let emptyInitializerRows =
+  [|"compression/__init__.py";"compression/_common/__init__.py";"email/mime/__init__.py";"pydoc_data/__init__.py";"urllib/__init__.py"|]
+  |>Array.map(fun relative->
+      let immutableRoot=Environment.GetEnvironmentVariable "PERSISTENT_V3_IMMUTABLE_PYTHON_ROOT"
+      if not(String.IsNullOrWhiteSpace immutableRoot) then
+        let actual=File.ReadAllBytes(Path.Combine(immutableRoot,relative))
+        if actual.Length<>0||sha actual<>sha [||] then fail "immutable Python initializer bytes differ"
+      contractRow ("native/python/"+relative) ("/opt/fsgg/python/lib/python3.14/"+relative) "native" readMode "")
+let contractRows=Array.append emptyInitializerRows [|hostRow;managerRow;managerDependencyRow;runtimeRow;codexRow;configRow;protocolRow;flagsRow;verifierRow;pythonRow;stdlibRow;extensionRow;loaderRow;libraryRow;osDataRow;readerRow;nativeProfileRow|]|>Array.sortBy _.TargetPath
 let authorityFile name (bytes:byte array) =
   let path=Path.Combine(contractManifestRoot,name)
   File.WriteAllBytes(path,bytes);File.SetUnixFileMode(path,readMode)
@@ -94,7 +130,7 @@ let managerManifestSha=authorityFile "manager.json" managerManifestBytes
 let nativeManifestSha=authorityFile "native.json" nativeProfileBytes
 let nativeAuthorityFiles=contractRows|>Array.filter(fun row->row.SourceClass="native")|>Array.map(fun row->{SourcePath=row.SourcePath;TargetPath=row.TargetPath;Bytes=row.Bytes;Sha256=row.Sha256;Mode=row.Mode})
 let acquisitionProvenanceSha=h '7'
-let nativeInventory={Schema="fsgg.telemetry.native-acquisition-inventory/1";AcquisitionProvenanceSha256=acquisitionProvenanceSha;ProfileSha256=nativeManifestSha;ReaderProfileSha256=readerRow.Sha256;NativeExecutable=codexRow.TargetPath;NativeExecutableSha256=codexRow.Sha256;PythonExecutable=pythonRow.TargetPath;PythonVersion="3.14.0";VerifierArgv=[|pythonRow.TargetPath;"-I";"-S";"-B";verifierRow.TargetPath;"verify"|];SearchRoots=[|"/opt/fsgg/python/lib/python3.14"|];LoaderPath=loaderRow.TargetPath;ImportPaths=[|extensionRow.TargetPath;stdlibRow.TargetPath|]|>Array.sort;LibraryPaths=[|libraryRow.TargetPath|];OsDataPaths=[|osDataRow.TargetPath|];Files=nativeAuthorityFiles}
+let nativeInventory={Schema="fsgg.telemetry.native-acquisition-inventory/1";AcquisitionProvenanceSha256=acquisitionProvenanceSha;ProfileSha256=nativeManifestSha;ReaderProfileSha256=readerRow.Sha256;NativeExecutable=codexRow.TargetPath;NativeExecutableSha256=codexRow.Sha256;PythonExecutable=pythonRow.TargetPath;PythonVersion="3.14.0";VerifierArgv=[|pythonRow.TargetPath;"-I";"-S";"-B";verifierRow.TargetPath;"verify"|];SearchRoots=[|"/opt/fsgg/python/lib/python3.14"|];LoaderPath=loaderRow.TargetPath;ImportPaths=Array.append (emptyInitializerRows|>Array.map _.TargetPath) [|extensionRow.TargetPath;stdlibRow.TargetPath|]|>Array.sort;LibraryPaths=[|libraryRow.TargetPath|];OsDataPaths=[|osDataRow.TargetPath|];Files=nativeAuthorityFiles}
 let nativeInventoryBytes=JsonSerializer.SerializeToUtf8Bytes nativeInventory
 let nativeInventorySha=authorityFile "native-inventory.json" nativeInventoryBytes
 let trustedNative={Schema="fsgg.telemetry.trusted-native-selection/1";AcquisitionProvenanceSha256=acquisitionProvenanceSha;NativeInventorySha256=nativeInventorySha;ProfileSha256=nativeManifestSha;ReaderProfileSha256=readerRow.Sha256;NativeExecutableSha256=codexRow.Sha256;PythonExecutable=pythonRow.TargetPath;PythonVersion="3.14.0";VerifierArgv=nativeInventory.VerifierArgv;SearchRoots=nativeInventory.SearchRoots;LoaderPath=loaderRow.TargetPath;ImportPaths=nativeInventory.ImportPaths;LibraryPaths=nativeInventory.LibraryPaths;OsDataPaths=nativeInventory.OsDataPaths}
@@ -109,6 +145,16 @@ if not(contractProfile.Contains("\\u0022managerArgv\\u0022"))&&not(contractProfi
 let preparedTrust=contractPrepared.RootElement.GetProperty("trustedNativeSelection")
 if preparedTrust.GetProperty("NativeInventorySha256").GetString()<>nativeInventorySha||preparedTrust.GetProperty("AcquisitionProvenanceSha256").GetString()<>acquisitionProvenanceSha then fail "prepared context omitted trusted native selection"
 let expectContractRefusal expected value=match prepareContract value with ClosureResult.Refused reason when reason=expected->()|actual->fail $"production contract did not refuse at {expected}: %A{actual}"
+let refuseRow (replacement:FileRow) =
+  let changed=contractRows|>Array.map(fun row->if row.SourcePath=replacement.SourcePath then replacement else row)
+  expectContractRefusal "inventory-entry" {contractSelection with Files=changed;InventorySha256=inventory changed}
+refuseRow {emptyInitializerRows[0] with Sha256=h 'f'}
+refuseRow {emptyInitializerRows[0] with Sha256="malformed"}
+refuseRow {emptyInitializerRows[0] with Bytes= -1L}
+refuseRow {emptyInitializerRows[0] with Mode="0555"}
+for row in [|hostRow;managerRow;runtimeRow;codexRow;pythonRow|] do
+  refuseRow {row with Bytes=0L;Sha256=sha [||]}
+printfn "PASS exact empty Python initializers and positive payload guards"
 match ImageClosure.prepare contractSelection with ClosureResult.Unavailable "trusted-native-selection-acquisition-required"->()|actual->fail $"missing trusted selection was not unavailable: %A{actual}"
 match prepareContract {contractSelection with NativeInventoryPath="";NativeInventorySha256=""} with ClosureResult.Unavailable "native-authority-inventory-acquisition-required"->()|actual->fail $"missing native authority was not unavailable: %A{actual}"
 expectContractRefusal "native-authority-inventory-selection-mismatch" {contractSelection with NativeInventorySha256=h 'f'}

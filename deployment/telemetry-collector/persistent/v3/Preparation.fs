@@ -191,14 +191,18 @@ module Preparation =
                         let mutable sizeProperty = Unchecked.defaultof<JsonElement>
                         if not (file.TryGetProperty("bytes", &sizeProperty))
                            || sizeProperty.ValueKind <> JsonValueKind.Number
-                           || not (sizeProperty.TryGetInt64(&size)) || size <= 0L then
+                           || not (sizeProperty.TryGetInt64(&size)) || size < 0L then
                             return! refuse "runtime inventory bytes"
+                        if size = 0L && (digest <> "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+                                         || path = runtime || path = modulePath || path = manifestPath) then
+                            return! refuse "runtime inventory empty dependency"
                         if not (isNull previous) && StringComparer.Ordinal.Compare(previous, path) >= 0 then return! refuse "runtime inventory order"
                         if total > 512L * 1024L * 1024L - size then return! refuse "runtime inventory size"
                         previous <- path; total <- total + size
                         runtimeSeen <- runtimeSeen || (path = runtime && digest = runtimeSha)
                         moduleSeen <- moduleSeen || (path = modulePath && digest = moduleSha)
                         rows.Add {| path = path; bytes = size; sha256 = digest |}
+                    if total <= 0L then return! refuse "runtime inventory size"
                     if not runtimeSeen || not moduleSeen then return! refuse "runtime inventory omits required code"
                     let! recovery = child "recovery" root |> optionResult "persistent-v3-preparation-refused: recovery"
                     if not (exactProperties [| "coverage"; "requiredPrivateInputs" |] recovery) then return! refuse "recovery is not closed"

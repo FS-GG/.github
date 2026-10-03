@@ -189,3 +189,41 @@ Two independent cold OCI builds, complete runtime probes, and served Manager-to-
 qualification remain open. The current C4 runner stops with qualification Unknown and needs its
 separate C5 adapter to execute the exact published Host bytes. This declaration correction creates
 no image, grant, installation, capture, enrollment or activation authority.
+
+### P2-C empty native dependency admission repair, 2026-10-03
+
+The immutable Python 3.14.0 image selected for acquisition contains genuine zero-byte regular
+initializer files, including `compression/__init__.py`, `compression/_common/__init__.py`,
+`email/mime/__init__.py`, `pydoc_data/__init__.py` and `urllib/__init__.py`. Rejecting every
+zero-byte row prevents a complete native import census without changing or dropping those bytes.
+
+The [image constructor](../../deployment/telemetry-collector/persistent/v3/image-closure/ImageClosure.fs)
+accepts an empty native authority row only with exact empty SHA-256
+`e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` and mode `0444`.
+Its existing regular-file, owner, path, link, physical-byte, digest and complete-census checks remain.
+Host archives, Manager payloads, CLR runtime files and executable native rows remain positive.
+The aggregate inventory remains finite, positive and bounded by 1 GiB and 8,192 entries.
+The [preparation constructor](../../deployment/telemetry-collector/persistent/v3/Preparation.fs)
+preserves the same exact empty dependency tuple in the verifier runtime manifest; runtime executable,
+verifier module and manifest paths remain ineligible for empty admission, with the existing 512 MiB
+and 4,096-entry bounds.
+
+Focused consoles replay these actual immutable Python initializer bytes when
+`PERSISTENT_V3_IMMUTABLE_PYTHON_ROOT` names the acquired standard library. They verify exact emitted
+manifest bytes and refusal of wrong or malformed empty digests, negative or malformed sizes,
+executable modes and empty required payloads. Existing preparation CLI custody checks and actual
+Manager positive-fixture qualification still pass. These are source checks, not image qualification.
+
+The separately served Coordination consumers still require a source and publication decision:
+[Manager runtime validation](https://github.com/FS-GG/FS.GG.Coordination/blob/2309964321a895100d12ededb1c9c00c8342b509/eng/telemetry-host-manager/Program.fs#L376)
+rejects zero dependency bytes, and
+[Host regular-file custody](https://github.com/FS-GG/FS.GG.Coordination/blob/2309964321a895100d12ededb1c9c00c8342b509/src/FS.GG.Coordination.Orchestration.Host/LearningInstalledReadinessSource.fs#L249)
+requires positive file size. Complete OS/Tcl/Tk closure, independently selected image inputs, two
+cold OCI builds and actual served Manager-to-Host qualification remain open. The inactive
+`acquisition-required` selection and all installation, capture and activation boundaries remain.
+
+The exact-byte inactive CLI guard also binds the canonical declaration after the prior runtime-pin
+correction: SHA-256 `63a6bd47f0e5def4d0690df6ed83c479629ed2461ab26b9fc6017415d52da7b8`.
+An actual CLI control requires unavailable status for those exact bytes and refusal after appending
+one whitespace byte. The deliberate input-revalidation mutant remains unchanged and must still
+fail its safety property; that expected failure is distinct from later placeholder checks.
