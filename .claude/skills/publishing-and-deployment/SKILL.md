@@ -105,9 +105,11 @@ published a `.nupkg` byte-identical to `0.46.0` that can never be un-tagged (`.g
 
 For the `github` coherent set (`FS.GG.Kit`, `FS.GG.Drivers`, and `FS.GG.Coord.Cli`), use the
 selected successor operating window in [utel-release-successor](../../../docs/roadmaps/utel-release-successor.md).
-The current source selects **0.95.0**, promoted predecessor **0.94.0**, and protected journal
-`utel-rel-10`. Historical `release-saga-start`, prepare, component publishers and promote workflows
-remain sealed under GS2-08.9; their recipes do not authorize current publication.
+The current source selects **0.96.0**, promoted predecessor **0.95.0** from
+`3b5de3367f8647cea0cd9366b8cb11eddf53feae`, and fresh protected journal `utel-rel-11`.
+The completed 0.95.0 release and `utel-rel-10` journal remain immutable. Historical
+`release-saga-start`, prepare, component publishers and promote workflows remain sealed
+under GS2-08.9; their recipes do not authorize current publication.
 
 1. Qualify and merge the selected successor source. Dispatch `release-successor-candidate.yml`
    on current `main` once. Authenticate the successful first-attempt run and its original seven-file
@@ -117,7 +119,7 @@ remain sealed under GS2-08.9; their recipes do not authorize current publication
    the raw `candidate_archive_sha256`, and `publish=false`. Verify its genuine authority, collision,
    exact-byte and eligibility observations before selecting `publish=true` with those same inputs.
 3. Observe all sixteen durable effects and both feeds before declaring publication complete. The
-   successor creates only `coherent-set/v0.95.0`; component tags would enter sealed historical routes.
+   successor creates only `coherent-set/v0.96.0`; component tags would enter sealed historical routes.
    After journal initialization, forward recovery uses the original archive and the existing admission
    and journal rules. Unknown or conflicting effects remain incomplete; never reset the journal,
    repack, replace published bytes or blindly retry an unresolved write.
