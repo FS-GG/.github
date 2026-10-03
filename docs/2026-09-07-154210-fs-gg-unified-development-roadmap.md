@@ -558,6 +558,27 @@ Rendering consumer window. It adds no publication or default activation; histori
 1.7 evidence and all nineteen original Rendering 0.32 archives remain unchanged.
 Telemetry returned `not-configured`; native usage remains unknown.
 
+**2026-10-03: V2-PREFLIGHT-01 A–B CLOSED (source and native qualification).**
+[Coordination #928](https://github.com/FS-GG/FS.GG.Coordination/pull/928) merged on
+protected main as `b6c7ef23b5a45bf62b0b7386132d9bcb0c29a386` at 23:12:44 UTC.
+Its tree equals reviewed candidate `ca02dafc1b1eb5dd87a53608612655ba809a05da`;
+all 70 exact-head checks completed: 68 passed and two were skipped. The
+[native bootstrap gate](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/37158237446)
+accepted the current stable receipt profile. The
+[owning plan](https://github.com/FS-GG/FS.GG.Coordination/blob/b6c7ef23b5a45bf62b0b7386132d9bcb0c29a386/docs/roadmaps/v2-preflight-01.md)
+retains opaque checked preparation, bounded capsule discovery and model/production
+correspondence, including the admitted physical baseline and 57 native witnesses.
+The 225 generated cases and 15 fault executions retain their semantics; the 117
+focused source tests retain their local scope. Historical receipts, failed heads
+and the explicit string-overload repair remain preserved.
+
+This closes the shared A–B source window. The feature's BAR/SC2 adapters,
+distribution and installed caller adoption remain open. Coherent engine 0.96.0
+candidate/publication, R5 feedback, live grants and runtime activation retain their
+separate boundaries. This progress entry grants no operation authority and changes
+no published package or workspace default. Native collector advisory readback was
+unavailable; usage remains unknown.
+
 **2026-10-03: Coupled SDD 2.1 validator adoption CLOSED (source).**
 Both native validator installers select published CLI 2.1.0. The engine admits its
 vetted tool version alongside the existing 1.0.0 and 1.5.0 identities; the coupled
