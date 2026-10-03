@@ -53,6 +53,34 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-04: TEMPLATES-H2 Rendering 0.32 installed receiver qualification CLOSED (four bounded rows).**
+Root accepted one operation at protected [Templates #668](https://github.com/FS-GG/FS.GG.Templates/pull/668)
+revision `0b1c483b175f7754597e8dc619b10cd39c394b4f`, using genuine public SDD
+**2.1.0**, original public UI **0.32.0** and Workspace **0.18.0** archives. App and
+game each passed explicit `typed-sdd` and omitted-lifecycle creation. The public
+product bytes were preserved; the source knowledge overlay added only the checker
+and workflow. Omitted rows gained neither knowledge store nor workflow.
+
+Both typed rows passed foreground caller commits, four findings, two history
+versions, authored recovery refusal and private-store exclusion, with two canonical
+files tracked. Ordinary root and cacheless-clone CI used exact SDD 2.1.0 without a
+source override; each store held 5,200 bytes. The explicit typed-app home passed
+exactly 10 MiB and refused one byte over. Authored-workflow collision and genuine
+public SDD 2.0.3 each refused while preserving owner bytes.
+
+The outer operation exited 0 in 25.712 seconds: 105 work commands, two inner post
+checks and two independent outer post checks. Root rehashed all 107 command
+captures, accepted their custody records and verified all 102 outer-observed
+processes absent, with all 781 source files and 4,926 physical inputs unchanged.
+Private root acceptance SHA-256 is
+`ba0a3b1ff69976730331752045c0520939ba8770620598ffcf97d8b66d753de4`.
+
+This closes the Rendering receiver window under existing `TSDD-KNOWLEDGE-01.4`
+and public acceptance .5. Public Wizard 0.13 qualification, protected activation,
+adoption receipts, package republishing and default migration are not established
+by this operation. Historical 0.31 evidence and earlier failed/source-only rows
+retain their scopes.
+
 **2026-10-03: WASM deleted-version permission repair CLOSED (source and native qualification).**
 [Game #689](https://github.com/FS-GG/FS.GG.Game/pull/689) merged as
 `9fc4c6d8bd7b0643226d3ba4b4dee99f2aca563c` after all 34 native checks passed on
