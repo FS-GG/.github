@@ -53,6 +53,52 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-03: SDD literal ZIP payload-readback guard CLOSED (source).**
+[SDD #1093](https://github.com/FS-GG/FS.GG.SDD/pull/1093) merged as
+`9df47707ab22b2486400fb359f381e08c4de90df`, equal reviewed candidate
+`457b1ec4fa197e051c8e02f27cad01a9ab46a19c`, tree
+`56b560f48a8264596c71695e17843cd1f10324fd`. The exact-candidate
+[coherent native gate](https://github.com/FS-GG/FS.GG.SDD/actions/runs/37119602616)
+passed all jobs. The guard compares literal ZipFile payload names before emitting
+sidecars, retains `[Content_Types].xml`, excludes only root `.signature.p7s`, and
+refuses duplicate/missing/newline entries and invalid ZIPs. Sixty portable controls,
+all six actual published archive payload comparisons and 77 source-contract
+assertions passed. This repairs the old unzip-glob ContentTypes readback limitation;
+independent literal publication readback remains authoritative. Existing 2.1
+original archives, versions and product behavior are unchanged; no new publication
+is claimed.
+
+**2026-10-03: WASM shared compatible successor CLOSED (source and native acceptance).**
+[Game #683](https://github.com/FS-GG/FS.GG.Game/pull/683) merged as
+`16a401692f4c0dee7f6da1a86d0cd49e6ea3ec2c`, equal reviewed candidate
+`d87f9e3480380e2135883c0a740c1de53dcadeff`, tree
+`f06c9fef54b90d9dcd190b5bc1484f2e2e72f67a`. Exact-candidate
+[full coherent WASM qualification](https://github.com/FS-GG/FS.GG.Game/actions/runs/37119471374)
+and all required checks passed, covering source/model checks, all 13 retained gzip
+ITF archives, 47 defaults, six official-Core cases, eight browser cases, packed and
+installed consumers, and API closure. Native controls first unset compiler-host
+state, reproduce `MSB6004`, then compile through the actual admitted dotnet-host/private
+fsc routing helper. Eighteen semantic inputs and the original historical owner proof
+remain unchanged; earlier failed attempts retain their outcomes.
+
+Contracts, Browser and SDK select compatible MINOR 0.3.0 source under the
+[owning WASM plan](https://github.com/FS-GG/FS.GG.Game/blob/16a401692f4c0dee7f6da1a86d0cd49e6ea3ec2c/docs/roadmaps/wasm-shared-01.md).
+Public/default 0.2 behavior remains unchanged. Actual 0.3 publication, occupancy or
+reservation, public receiver adoption and product acceptance remain pending; this
+source closure records no new tag or publication.
+
+**2026-10-03: Typed receiver registry capability floor CLOSED (source scope).**
+TSDD-KNOWLEDGE-01 H1 advances both UI/Workspace minimum producer floors to genuine
+public stable SDD 2.1.0, after [producer publication and installed acceptance](https://github.com/FS-GG/.github/pull/4146)
+and [validator adoption](https://github.com/FS-GG/.github/pull/4147). The orchestrator
+axis explicitly becomes incomplete. UI 0.31.0, Workspace 0.15.0 and Wizard 0.12.0
+package fields, dependency edges and lifecycle defaults retain their actual values.
+[Templates #667](https://github.com/FS-GG/FS.GG.Templates/pull/667) prepares matching
+floors with current D.5/private public-2.1 proof; live equality and historical tuple
+repairs remain pending. Workspace 0.18.0 publication, Wizard 0.13.0 installed adoption
+and deliberate Rendering 0.32.0 receiver adoption remain separate joins. This
+capability-floor source change does not activate that incomplete receiver set.
+
 **2026-10-03: Rendering current public SDD 2.1 compiler qualification CLOSED (source and installed acceptance).**
 [Rendering #1378](https://github.com/FS-GG/FS.GG.Rendering/pull/1378) merged as
 `16da43f37de9f0eea0f4a65a67e6dee44c36ef1c`, with the complete tree of reviewed

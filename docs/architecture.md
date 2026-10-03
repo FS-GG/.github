@@ -625,8 +625,8 @@ product's `FS.GG.UI.*` pin), which is a different axis from the template package
 | `rendering-skills` | FS.GG.Rendering | `0.2.0` | `0.2.0` |
 | `audio-skills` | FS.GG.Audio | `0.1.0` | `0.1.0` |
 
-**The orchestrator axis.** `fs-gg-ui-template` pins `minimum-fsgg-sdd` at **`1.4.0-preview.1`** — the oldest published `fsgg-sdd` that seeds the artifacts a workspace on this pin is expected to contain (ADR-0008; see *The coherent set has three axes* below).
-**The orchestrator axis.** `fs-gg-workspace-template` pins `minimum-fsgg-sdd` at **`1.4.0-preview.1`** — the oldest published `fsgg-sdd` that seeds the artifacts a workspace on this pin is expected to contain (ADR-0008; see *The coherent set has three axes* below).
+**The orchestrator axis.** `fs-gg-ui-template` pins `minimum-fsgg-sdd` at **`2.1.0`** — the oldest published `fsgg-sdd` that seeds the artifacts a workspace on this pin is expected to contain (ADR-0008; see *The coherent set has three axes* below).
+**The orchestrator axis.** `fs-gg-workspace-template` pins `minimum-fsgg-sdd` at **`2.1.0`** — the oldest published `fsgg-sdd` that seeds the artifacts a workspace on this pin is expected to contain (ADR-0008; see *The coherent set has three axes* below).
 
 <!-- END GENERATED: fsgg-versions -->
 
