@@ -53,6 +53,35 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-03: Rendering current public SDD 2.1 compiler qualification CLOSED (source and installed acceptance).**
+[Rendering #1378](https://github.com/FS-GG/FS.GG.Rendering/pull/1378) merged as
+`16da43f37de9f0eea0f4a65a67e6dee44c36ef1c`, with the complete tree of reviewed
+candidate `6c112f0292c7173410c92261e4f0fa6714548bd3`, tree
+`56f62074d659a2e859661c1e70e75b40725734b3`. All required checks passed, including
+routine eligibility and the [full native gate](https://github.com/FS-GG/FS.GG.Rendering/actions/runs/37117991747).
+The actual [public installed qualification](https://github.com/FS-GG/FS.GG.Rendering/actions/runs/37117991427)
+passed on that exact candidate. The live workflow explicitly selects CLI 2.1.0;
+direct historical callers retain the closed 1.7.0 route.
+
+Fresh public author/inspect passed exact CLI and Artifacts/profile identity checks,
+two complete deterministic extractions, the strict historical comparison permitting
+only the Artifacts 1.7-to-2.1 authority identity, retained/document bounded Quint
+traces and stale-range/action refusals. Local native acceptance additionally retained
+two unformatted author trees with entire-byte equality and compiled the fresh F#
+bindings through native FSI, checking the unchanged contract fingerprint and nine
+actions. Six reducer tests passed; packed .NET and Fable/Node consumers each replayed
+192 retained and 192 document transitions with identical projections and killed
+all five document mutants. Packed input replay passed both runtimes; bounded input
+witnesses, deterministic seeded traces and two mutants passed.
+
+Fresh public archives matched every original non-signature payload entry, including
+ContentTypes; installed CLI, Artifacts and official Core bytes matched the served
+archive. The [owning qualification evidence](https://github.com/FS-GG/FS.GG.Rendering/blob/16da43f37de9f0eea0f4a65a67e6dee44c36ef1c/docs/roadmaps/current-sdd-qualification.md)
+retains the scope and receipt digests. This closes the existing V2-PREFLIGHT-01 CAP4
+Rendering consumer window. It adds no publication or default activation; historical
+1.7 evidence and all nineteen original Rendering 0.32 archives remain unchanged.
+Telemetry returned `not-configured`; native usage remains unknown.
+
 **2026-10-03: Coupled SDD 2.1 validator adoption CLOSED (source).**
 Both native validator installers select published CLI 2.1.0. The engine admits its
 vetted tool version alongside the existing 1.0.0 and 1.5.0 identities; the coupled
