@@ -236,7 +236,7 @@ let private feedToken () =
 /// discovers config from CWD upward, so the isolated dir gives us a config with a `<clear />`
 /// that no ambient source can widen — a 401-on-read org feed in the caller's global config then
 /// can't poison the restore (one source hard-failing fails the whole restore).
-let private installFromTempConfig (configXml: string) : int * string =
+let private installPackageFromTempConfig (refresh: bool) (package: string) (configXml: string) : int * string =
     let dir =
         Path.Combine(Path.GetTempPath(), "new-sdd-workspace-" + Guid.NewGuid().ToString "N")
 
@@ -244,12 +244,14 @@ let private installFromTempConfig (configXml: string) : int * string =
 
     try
         File.WriteAllText(Path.Combine(dir, "nuget.config"), configXml)
-        runProcessIn (Some dir) false "dotnet" [ "new"; "install"; "FS.GG.Templates" ]
+        runProcessIn (Some dir) false "dotnet" ([ "new"; "install"; package ] @ (if refresh then [ "--force" ] else []))
     finally
         try
             Directory.Delete(dir, true)
         with _ ->
             ()
+
+let private installFromTempConfig configXml = installPackageFromTempConfig false "FS.GG.Templates" configXml
 
 /// An isolated nuget.config exposing only nuget.org (anonymous).
 let private nugetOrgConfig () =
@@ -2653,6 +2655,154 @@ let private parseRetrofit (argv: string list) : Result<RetrofitOptions, string> 
 
 // ── Orchestration ────────────────────────────────────────────────────────────
 
+/// Knowledge is admitted only by a stable producer with the selected capability floor.
+let knowledgeProducerVersion (reported: string) : Result<string, string> =
+    let exact = reported.Trim()
+    if not (System.Text.RegularExpressions.Regex.IsMatch(exact, @"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$")) then
+        Error "Typed project knowledge requires an exact stable FS.GG.SDD.Cli version."
+    else
+        match Version.TryParse exact with
+        | true, version when version >= Version(2, 1, 0) -> Ok exact
+        | _ -> Error "Typed project knowledge requires FS.GG.SDD.Cli 2.1.0 or newer; the installed producer is insufficient."
+
+/// Preserve every unrelated tool and refuse an owner-authored SDD pin conflict.
+let pinKnowledgeProducer (target: string) (version: string) : Result<unit, string> =
+    try
+        match knowledgeProducerVersion version with
+        | Error note -> Error note
+        | Ok exact ->
+            let path = Path.Combine(target, ".config", "dotnet-tools.json")
+            let root =
+                if File.Exists path then JsonNode.Parse(File.ReadAllText path).AsObject()
+                else JsonObject()
+            let tools =
+                match root.["tools"] with
+                | :? JsonObject as value -> value
+                | null -> let value = JsonObject() in root.["tools"] <- value; value
+                | _ -> invalidOp "The root tool manifest tools field is not an object."
+            match root.["version"] with
+            | null -> root.["version"] <- JsonValue.Create 1
+            | value when value.GetValue<int>() = 1 -> ()
+            | _ -> invalidOp "The root tool manifest format is not version 1."
+            match root.["isRoot"] with
+            | null -> root.["isRoot"] <- JsonValue.Create true
+            | value when value.GetValue<bool>() -> ()
+            | _ -> invalidOp "The root tool manifest is explicitly not a root manifest."
+            let key = "fs.gg.sdd.cli"
+            if tools |> Seq.exists (fun entry -> entry.Key <> key && entry.Key.Equals(key, StringComparison.OrdinalIgnoreCase)) then
+                invalidOp "The authored SDD tool key is ambiguous; reconcile it explicitly."
+            match tools.[key] with
+            | null ->
+                let tool = JsonObject()
+                tool.["version"] <- JsonValue.Create exact
+                let commands = JsonArray()
+                commands.Add(JsonValue.Create "fsgg-sdd")
+                tool.["commands"] <- commands
+                tools.[key] <- tool
+            | tool when tool.["version"].GetValue<string>() = exact
+                        && (tool.["commands"].AsArray() |> Seq.exists (fun command -> command.GetValue<string>() = "fsgg-sdd")) -> ()
+            | _ -> invalidOp "The authored FS.GG.SDD.Cli pin differs from the capable producer; reconcile it explicitly."
+            Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath path)) |> ignore
+            File.WriteAllText(path, root.ToJsonString(JsonSerializerOptions(WriteIndented = true)) + "\n")
+            Ok ()
+    with error -> Error error.Message
+
+/// Bind one engine registration to the qualified central overlay bytes before reuse.
+let knowledgeOverlayRegistration (cacheRoot: string) : Result<bool, string> =
+    try
+        let metadata = Path.Combine(cacheRoot, "packages.json")
+        if not (File.Exists metadata) then Ok false
+        else
+            use document = JsonDocument.Parse(File.ReadAllText metadata)
+            let registrations =
+                document.RootElement.GetProperty("Packages").EnumerateArray()
+                |> Seq.filter (fun entry ->
+                    let details = entry.GetProperty("Details")
+                    let mutable id = Unchecked.defaultof<JsonElement>
+                    details.TryGetProperty("PackageId", &id) && id.GetString() = "FS.GG.Workspace.Template")
+                |> Seq.toArray
+            if registrations.Length = 0 then Ok false
+            elif registrations.Length <> 1 then Error "Multiple Workspace.Template registrations exist; reconcile the template cache explicitly."
+            else
+                let entry = registrations.[0]
+                if entry.GetProperty("Details").GetProperty("Version").GetString() <> "0.18.0" then Ok false
+                else
+                    let archivePath = entry.GetProperty("MountPointUri").GetString()
+                    use archive = System.IO.Compression.ZipFile.OpenRead archivePath
+                    let prefix = "content/templates/fs-gg-project-knowledge/"
+                    let expected =
+                        [ ".github/workflows/project-knowledge.yml", "58366f025d26793e7444616477be323466216f26313b7f49408f1db46565915f"
+                          ".template.config/template.json", "434d67450d9ade3da19ad07991ccbd81783559a2780239ef3e050eaf9bd43947"
+                          "scripts/check-project-knowledge.py", "313c4be5bca8397d33260a37948527d216b3f30c4afa383f4218beaba11742ef" ]
+                    let entries = archive.Entries |> Seq.filter (fun item -> item.FullName.StartsWith(prefix, StringComparison.Ordinal) && not (item.FullName.EndsWith("/", StringComparison.Ordinal))) |> Seq.toArray
+                    if entries.Length <> expected.Length then Error "The cached project-knowledge overlay payload is unknown."
+                    else
+                        let matches = expected |> List.forall (fun (name, digest) ->
+                            let item = archive.GetEntry(prefix + name)
+                            if isNull item then false
+                            else
+                                use content = item.Open()
+                                Convert.ToHexString(System.Security.Cryptography.SHA256.HashData content).ToLowerInvariant() = digest)
+                        if matches then Ok true else Error "The cached project-knowledge overlay differs from the qualified owner payload."
+    with error -> Error ("Cannot verify the project-knowledge template cache: " + error.Message)
+
+let rec private installKnowledgeOverlay () =
+    let cliHome = Environment.GetEnvironmentVariable "DOTNET_CLI_HOME"
+    let userHome = if String.IsNullOrWhiteSpace cliHome then Environment.GetFolderPath Environment.SpecialFolder.UserProfile else cliHome
+    let cacheRoot = Path.Combine(userHome, ".templateengine")
+    match knowledgeOverlayRegistration cacheRoot with
+    | Error note -> 1, note
+    | Ok true -> 0, "Reusing exact Workspace.Template 0.18.0 qualified project-knowledge registration."
+    | Ok false ->
+        let code, log = installKnowledgeOverlayPackage ()
+        if code <> 0 then code, log
+        else
+            match knowledgeOverlayRegistration cacheRoot with
+            | Ok true -> code, log
+            | _ -> 1, log + "\nThe installed overlay did not establish one qualified package registration."
+
+and private installKnowledgeOverlayPackage () =
+    let package = "FS.GG.Workspace.Template::0.18.0"
+    match feedToken () with
+    | None -> installPackageFromTempConfig true package (nugetOrgConfig ())
+    | Some token ->
+        let code, log = installPackageFromTempConfig true package (orgFeedConfig token)
+        if code = 0 then code, log
+        else
+            let fallback, fallbackLog = installPackageFromTempConfig true package (nugetOrgConfig ())
+            fallback, log + "\n" + fallbackLog
+
+let private bootstrapTypedKnowledge (opts: Options) (version: string) : Outcome =
+    let code, reported = runProcess false "fsgg-sdd" [ "--version" ]
+    let selected = if code = 0 then knowledgeProducerVersion reported else Error "Could not re-read the SDD producer version."
+    let pinned =
+        match selected with
+        | Ok actual when actual = version -> pinKnowledgeProducer opts.Target actual
+        | Ok _ -> Error "The SDD producer changed during creation; rerun with one exact capable producer."
+        | Error note -> Error note
+    match pinned with
+    | Error note -> Failed note
+    | Ok () ->
+        let mutable error = None
+        // Owned templates carry this same central projection. Rendering is an external
+        // immutable archive, so compose the owner's explicit overlay after its scaffold.
+        if opts.Template = "rendering" then
+            let installed, _ = installKnowledgeOverlay ()
+            if installed <> 0 then error <- Some "Could not install the exact project-knowledge overlay FS.GG.Workspace.Template::0.18.0."
+            else
+                let emitted, _ = runProcess true "dotnet" [ "new"; "fs-gg-project-knowledge"; "--lifecycle"; "typed-sdd"; "--output"; opts.Target ]
+                if emitted <> 0 then error <- Some "Project-knowledge overlay refused; existing owner files were not forced."
+        if error.IsNone then
+            for relative in [ ".fsgg/knowledge-guide.md"; ".fsgg/knowledge/schema.json"; ".github/workflows/project-knowledge.yml"; "scripts/check-project-knowledge.py" ] do
+                if not (File.Exists(Path.Combine(opts.Target, relative))) then
+                    error <- Some(sprintf "Typed initialization is incomplete: missing %s." relative)
+        if error.IsNone then
+            let checkCode, _ = runProcess true "fsgg-sdd" [ "knowledge"; "check"; "--root"; opts.Target ]
+            if checkCode <> 0 then error <- Some "The capable producer knowledge check refused the generated workspace."
+        match error with
+        | Some note -> Failed note
+        | None -> Succeeded
+
 let private run (opts: Options) : int =
     header opts
 
@@ -2731,6 +2881,21 @@ let private run (opts: Options) : int =
                     Title = "update fsgg-sdd"
                     Outcome = outcome
                 }
+
+        let sourceLine = match fetched with Ok pinned -> pinned | Error _ -> None
+        let lifecycle = selectScaffoldLifecycle opts sourceLine
+        let mutable knowledgeVersion = None
+        if not fatal && lifecycle = "typed-sdd" then
+            let code, reported = runProcess false "fsgg-sdd" [ "--version" ]
+            let selected =
+                if code = 0 then knowledgeProducerVersion reported
+                else Error "Could not read the installed SDD producer version."
+            match selected with
+            | Ok version -> knowledgeVersion <- Some version
+            | Error note ->
+                results.Add { Title = "typed knowledge capability"; Outcome = Failed note }
+                AnsiConsole.MarkupLine(sprintf "  [red]✗[/] %s" (Markup.Escape note))
+                fatal <- true
 
         // 3 · fsgg-sdd scaffold (fatal on failure)
         if not fatal then
@@ -2987,6 +3152,20 @@ let private run (opts: Options) : int =
                     }
 
                 fatal <- true
+
+        if not fatal then
+            match knowledgeVersion with
+            | Some version ->
+                step 8 "typed project knowledge"
+                let outcome = bootstrapTypedKnowledge opts version
+                results.Add { Title = "typed project knowledge"; Outcome = outcome }
+                match outcome with
+                | Succeeded -> AnsiConsole.MarkupLine "  [green]✓[/] typed knowledge initialized, exact local tool pinned and common CI composed"
+                | Failed note ->
+                    AnsiConsole.MarkupLine(sprintf "  [red]✗[/] %s" (Markup.Escape note))
+                    fatal <- true
+                | _ -> ()
+            | None -> ()
 
         // Final authored step · install the creation-time agent handoff after every provider and
         // overlay has written its files. The skill and warning are embedded in this tool, so a fresh
