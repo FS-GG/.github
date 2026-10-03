@@ -53,6 +53,9 @@ module ImageClosure =
     let CanonicalVerifierSha256="8d6a33beae9a4de84fa7a703809e9b1a1656359a085f92091cf56de3b77fd3ba"
     let private sha (bytes:byte array)=Convert.ToHexString(SHA256.HashData bytes).ToLowerInvariant()
     let private sha64 (value:string)=not(String.IsNullOrWhiteSpace value)&&Regex.IsMatch(value,"^[0-9a-f]{64}$")&&value<>String('0',64)
+    let private emptySha256="e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    let private validBytes role bytes digest mode =
+        bytes>0L||(role="native"&&bytes=0L&&digest=emptySha256&&mode="0444")
     let private canonicalSegments (value:string)=value.Split('/')|>Array.forall(fun segment->segment<>"."&&segment<>"..")
     let private relativePath (value:string)=not(String.IsNullOrWhiteSpace value)&&Regex.IsMatch(value,"^[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*$")&&canonicalSegments value
     let private canonicalAbsolute (value:string)=not(String.IsNullOrWhiteSpace value)&&Regex.IsMatch(value,"^/[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*$")&&canonicalSegments value
@@ -295,7 +298,7 @@ module ImageClosure =
                             authorityFiles=(authorityFiles|>Array.sortBy _.TargetPath)&&
                             (authorityFiles|>Array.distinctBy _.TargetPath).Length=authorityFiles.Length&&
                             (authorityFiles|>Array.distinctBy _.SourcePath).Length=authorityFiles.Length&&
-                            (authorityFiles|>Array.forall(fun row->relativePath row.SourcePath&&targetPath "native" row.TargetPath&&row.Bytes>0L&&sha64 row.Sha256&&(row.Mode="0444"||row.Mode="0555")))&&
+                            (authorityFiles|>Array.forall(fun row->relativePath row.SourcePath&&targetPath "native" row.TargetPath&&validBytes "native" row.Bytes row.Sha256 row.Mode&&sha64 row.Sha256&&(row.Mode="0444"||row.Mode="0555")))&&
                             authorityFiles=nativeRows
                         if not nativeIdentity then Error "production-native-profile"
                         elif not nativeAuthority then Error "production-native-authority-inventory-mismatch"
@@ -321,8 +324,9 @@ module ImageClosure =
         else
             let sorted=selection.Files|>Array.sortBy _.TargetPath
             if sorted<>selection.Files||(sorted|>Array.distinctBy _.TargetPath).Length<>sorted.Length||(sorted|>Array.distinctBy _.SourcePath).Length<>sorted.Length then Refused "inventory-order-or-duplicate"
-            elif sorted.Length>8192||(sorted|>Array.sumBy _.Bytes)>1024L*1024L*1024L then Refused "inventory-bound"
-            elif sorted|>Array.exists(fun row->not(relativePath row.SourcePath)||not(targetPath row.SourceClass row.TargetPath)||row.Bytes<=0L||not(sha64 row.Sha256)||(row.Mode<>"0444"&&row.Mode<>"0555")||not(Set.contains row.SourceClass (set["host";"manager";"native";"runtime"]))) then Refused "inventory-entry"
+            elif sorted.Length>8192||(sorted|>Array.exists(fun row->row.Bytes>1024L*1024L*1024L)) then Refused "inventory-bound"
+            elif sorted|>Array.exists(fun row->not(relativePath row.SourcePath)||not(targetPath row.SourceClass row.TargetPath)||not(validBytes row.SourceClass row.Bytes row.Sha256 row.Mode)||not(sha64 row.Sha256)||(row.Mode<>"0444"&&row.Mode<>"0555")||not(Set.contains row.SourceClass (set["host";"manager";"native";"runtime"]))) then Refused "inventory-entry"
+            elif (sorted|>Array.sumBy _.Bytes)<=0L||(sorted|>Array.sumBy _.Bytes)>1024L*1024L*1024L then Refused "inventory-bound"
             elif (sorted|>Array.map _.SourceClass|>Set.ofArray)<>set["host";"manager";"native";"runtime"] then Refused "inventory-omits-dependency-root"
             elif sha(JsonSerializer.SerializeToUtf8Bytes sorted)<>selection.InventorySha256 then Refused "inventory-digest"
             else match physicalRows selection with

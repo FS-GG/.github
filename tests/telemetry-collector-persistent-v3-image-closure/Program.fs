@@ -76,7 +76,16 @@ let nativeProfileBytes=JsonSerializer.SerializeToUtf8Bytes nativeProfileObject
 let nativeProfilePath=Path.Combine(contractRoot,"native/native-operation-v1.json")
 File.WriteAllBytes(nativeProfilePath,nativeProfileBytes);File.SetUnixFileMode(nativeProfilePath,readMode)
 let nativeProfileRow={SourcePath="native/native-operation-v1.json";TargetPath="/opt/fsgg/profile/native-operation-v1.json";Bytes=FileInfo(nativeProfilePath).Length;Sha256=sha nativeProfileBytes;Mode="0444";SourceClass="native"}
-let contractRows=[|hostRow;managerRow;managerDependencyRow;runtimeRow;codexRow;configRow;protocolRow;flagsRow;verifierRow;pythonRow;stdlibRow;extensionRow;loaderRow;libraryRow;osDataRow;readerRow;nativeProfileRow|]|>Array.sortBy _.TargetPath
+// The optional immutable root replays actual acquired Python image bytes; no file is dropped.
+let emptyInitializerRows =
+  [|"compression/__init__.py";"compression/_common/__init__.py";"email/mime/__init__.py";"pydoc_data/__init__.py";"urllib/__init__.py"|]
+  |>Array.map(fun relative->
+      let immutableRoot=Environment.GetEnvironmentVariable "PERSISTENT_V3_IMMUTABLE_PYTHON_ROOT"
+      if not(String.IsNullOrWhiteSpace immutableRoot) then
+        let actual=File.ReadAllBytes(Path.Combine(immutableRoot,relative))
+        if actual.Length<>0||sha actual<>sha [||] then fail "immutable Python initializer bytes differ"
+      contractRow ("native/python/"+relative) ("/opt/fsgg/python/lib/python3.14/"+relative) "native" readMode "")
+let contractRows=Array.append emptyInitializerRows [|hostRow;managerRow;managerDependencyRow;runtimeRow;codexRow;configRow;protocolRow;flagsRow;verifierRow;pythonRow;stdlibRow;extensionRow;loaderRow;libraryRow;osDataRow;readerRow;nativeProfileRow|]|>Array.sortBy _.TargetPath
 let authorityFile name (bytes:byte array) =
   let path=Path.Combine(contractManifestRoot,name)
   File.WriteAllBytes(path,bytes);File.SetUnixFileMode(path,readMode)
@@ -94,7 +103,7 @@ let managerManifestSha=authorityFile "manager.json" managerManifestBytes
 let nativeManifestSha=authorityFile "native.json" nativeProfileBytes
 let nativeAuthorityFiles=contractRows|>Array.filter(fun row->row.SourceClass="native")|>Array.map(fun row->{SourcePath=row.SourcePath;TargetPath=row.TargetPath;Bytes=row.Bytes;Sha256=row.Sha256;Mode=row.Mode})
 let acquisitionProvenanceSha=h '7'
-let nativeInventory={Schema="fsgg.telemetry.native-acquisition-inventory/1";AcquisitionProvenanceSha256=acquisitionProvenanceSha;ProfileSha256=nativeManifestSha;ReaderProfileSha256=readerRow.Sha256;NativeExecutable=codexRow.TargetPath;NativeExecutableSha256=codexRow.Sha256;PythonExecutable=pythonRow.TargetPath;PythonVersion="3.14.0";VerifierArgv=[|pythonRow.TargetPath;"-I";"-S";"-B";verifierRow.TargetPath;"verify"|];SearchRoots=[|"/opt/fsgg/python/lib/python3.14"|];LoaderPath=loaderRow.TargetPath;ImportPaths=[|extensionRow.TargetPath;stdlibRow.TargetPath|]|>Array.sort;LibraryPaths=[|libraryRow.TargetPath|];OsDataPaths=[|osDataRow.TargetPath|];Files=nativeAuthorityFiles}
+let nativeInventory={Schema="fsgg.telemetry.native-acquisition-inventory/1";AcquisitionProvenanceSha256=acquisitionProvenanceSha;ProfileSha256=nativeManifestSha;ReaderProfileSha256=readerRow.Sha256;NativeExecutable=codexRow.TargetPath;NativeExecutableSha256=codexRow.Sha256;PythonExecutable=pythonRow.TargetPath;PythonVersion="3.14.0";VerifierArgv=[|pythonRow.TargetPath;"-I";"-S";"-B";verifierRow.TargetPath;"verify"|];SearchRoots=[|"/opt/fsgg/python/lib/python3.14"|];LoaderPath=loaderRow.TargetPath;ImportPaths=Array.append (emptyInitializerRows|>Array.map _.TargetPath) [|extensionRow.TargetPath;stdlibRow.TargetPath|]|>Array.sort;LibraryPaths=[|libraryRow.TargetPath|];OsDataPaths=[|osDataRow.TargetPath|];Files=nativeAuthorityFiles}
 let nativeInventoryBytes=JsonSerializer.SerializeToUtf8Bytes nativeInventory
 let nativeInventorySha=authorityFile "native-inventory.json" nativeInventoryBytes
 let trustedNative={Schema="fsgg.telemetry.trusted-native-selection/1";AcquisitionProvenanceSha256=acquisitionProvenanceSha;NativeInventorySha256=nativeInventorySha;ProfileSha256=nativeManifestSha;ReaderProfileSha256=readerRow.Sha256;NativeExecutableSha256=codexRow.Sha256;PythonExecutable=pythonRow.TargetPath;PythonVersion="3.14.0";VerifierArgv=nativeInventory.VerifierArgv;SearchRoots=nativeInventory.SearchRoots;LoaderPath=loaderRow.TargetPath;ImportPaths=nativeInventory.ImportPaths;LibraryPaths=nativeInventory.LibraryPaths;OsDataPaths=nativeInventory.OsDataPaths}
@@ -109,6 +118,16 @@ if not(contractProfile.Contains("\\u0022managerArgv\\u0022"))&&not(contractProfi
 let preparedTrust=contractPrepared.RootElement.GetProperty("trustedNativeSelection")
 if preparedTrust.GetProperty("NativeInventorySha256").GetString()<>nativeInventorySha||preparedTrust.GetProperty("AcquisitionProvenanceSha256").GetString()<>acquisitionProvenanceSha then fail "prepared context omitted trusted native selection"
 let expectContractRefusal expected value=match prepareContract value with ClosureResult.Refused reason when reason=expected->()|actual->fail $"production contract did not refuse at {expected}: %A{actual}"
+let refuseRow (replacement:FileRow) =
+  let changed=contractRows|>Array.map(fun row->if row.SourcePath=replacement.SourcePath then replacement else row)
+  expectContractRefusal "inventory-entry" {contractSelection with Files=changed;InventorySha256=inventory changed}
+refuseRow {emptyInitializerRows[0] with Sha256=h 'f'}
+refuseRow {emptyInitializerRows[0] with Sha256="malformed"}
+refuseRow {emptyInitializerRows[0] with Bytes= -1L}
+refuseRow {emptyInitializerRows[0] with Mode="0555"}
+for row in [|hostRow;managerRow;runtimeRow;codexRow;pythonRow|] do
+  refuseRow {row with Bytes=0L;Sha256=sha [||]}
+printfn "PASS exact empty Python initializers and positive payload guards"
 match ImageClosure.prepare contractSelection with ClosureResult.Unavailable "trusted-native-selection-acquisition-required"->()|actual->fail $"missing trusted selection was not unavailable: %A{actual}"
 match prepareContract {contractSelection with NativeInventoryPath="";NativeInventorySha256=""} with ClosureResult.Unavailable "native-authority-inventory-acquisition-required"->()|actual->fail $"missing native authority was not unavailable: %A{actual}"
 expectContractRefusal "native-authority-inventory-selection-mismatch" {contractSelection with NativeInventorySha256=h 'f'}

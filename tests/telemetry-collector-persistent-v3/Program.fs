@@ -140,6 +140,45 @@ let main _ =
         check (output.GetProperty("verifierRuntime").GetProperty("moduleSha256").GetString() = canonicalModuleSha) "canonical module pin missing"
         printfn "PASS positive inert preparation"
 
+        // Keep the actual Manager fixture positive: its separately published reader is a later gate.
+        let emptyInput = clone input
+        let verifier = emptyInput["verifierRuntime"].AsObject()
+        let emptyPath = Path.Combine(root, "runtime", "urllib", "__init__.py")
+        Directory.CreateDirectory(Path.GetDirectoryName emptyPath) |> ignore
+        let immutableRoot = Environment.GetEnvironmentVariable "PERSISTENT_V3_IMMUTABLE_PYTHON_ROOT"
+        let emptyBytes =
+            if String.IsNullOrWhiteSpace immutableRoot then [||]
+            else File.ReadAllBytes(Path.Combine(immutableRoot, "urllib", "__init__.py"))
+        check (emptyBytes.Length = 0 && shaBytes emptyBytes = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855") "immutable empty initializer differs"
+        write emptyPath emptyBytes (UnixFileMode.UserRead ||| UnixFileMode.GroupRead ||| UnixFileMode.OtherRead)
+        let emptyRow = JsonSerializer.SerializeToNode({| path = emptyPath; bytes = 0L; sha256 = shaBytes emptyBytes |})
+        let files = verifier["files"].AsArray()
+        files.Add emptyRow
+        let sortedFiles = files |> Seq.sortBy (fun row -> row["path"].GetValue<string>()) |> Seq.map (fun row -> row.DeepClone()) |> Seq.toArray
+        verifier["files"] <- JsonArray(sortedFiles)
+        let manifestRows = sortedFiles |> Array.map (fun row -> {| path = row["path"].GetValue<string>(); bytes = row["bytes"].GetValue<int64>(); sha256 = row["sha256"].GetValue<string>() |})
+        let manifestBytes = json {| schema = "fsgg.telemetry.native-verifier-runtime/1"; sourceRevision = verifier["sourceRevision"].GetValue<string>(); runtimeImageDigest = verifier["runtimeImageDigest"].GetValue<string>(); runtimeExecutablePath = verifier["runtimeExecutablePath"].GetValue<string>(); modulePath = verifier["modulePath"].GetValue<string>(); files = manifestRows |}
+        verifier["manifestSha256"] <- JsonValue.Create(shaBytes manifestBytes)
+        emptyInput["sourceReference"]["verifierRuntimeManifestSha256"] <- JsonValue.Create(shaBytes manifestBytes)
+        match Preparation.prepare (Encoding.UTF8.GetBytes(emptyInput.ToJsonString())) with
+        | Ok bytes ->
+            use actual = JsonDocument.Parse bytes
+            let emitted = Convert.FromBase64String(actual.RootElement.GetProperty("verifierRuntimeManifestBytesBase64").GetString())
+            check (emitted = manifestBytes) "empty initializer manifest bytes changed"
+        | Error error -> fail ("empty initializer refused: " + error)
+        let mutateEmpty name path change =
+            let changed = clone emptyInput
+            let row = (changed["verifierRuntime"]["files"]).AsArray() |> Seq.find (fun row -> row["path"].GetValue<string>() = path)
+            change (row)
+            expectRefused name changed
+        mutateEmpty "empty initializer wrong hash" emptyPath (fun row -> row["sha256"] <- JsonValue.Create(hashes[0]))
+        mutateEmpty "empty initializer malformed hash" emptyPath (fun row -> row["sha256"] <- JsonValue.Create("malformed"))
+        mutateEmpty "negative initializer bytes" emptyPath (fun row -> row["bytes"] <- JsonValue.Create(-1L))
+        mutateEmpty "malformed initializer bytes" emptyPath (fun row -> row["bytes"] <- JsonValue.Create("0"))
+        for name in [|"runtimeExecutablePath";"modulePath"|] do
+            mutateEmpty ("empty required " + name) (verifier[name].GetValue<string>()) (fun row -> row["bytes"] <- JsonValue.Create(0L); row["sha256"] <- JsonValue.Create(shaBytes emptyBytes))
+        printfn "PASS exact empty initializer manifest preservation"
+
         let preparationExe = Environment.GetEnvironmentVariable "FSGG_C2_PREPARATION_EXE"
         if String.IsNullOrWhiteSpace preparationExe then fail "FSGG_C2_PREPARATION_EXE is required for actual CLI coverage"
         let inputPath = Path.Combine(root, "preparation-input.json")
