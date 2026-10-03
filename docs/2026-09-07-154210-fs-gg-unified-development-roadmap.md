@@ -76,9 +76,9 @@ is claimed.
 [full coherent WASM qualification](https://github.com/FS-GG/FS.GG.Game/actions/runs/37119471374)
 and all required checks passed, covering source/model checks, all 13 retained gzip
 ITF archives, 47 defaults, six official-Core cases, eight browser cases, packed and
-installed consumers, and API closure. Native controls first unset compiler-host
-state, reproduce `MSB6004`, then compile through the actual admitted dotnet-host/private
-fsc routing helper. Eighteen semantic inputs and the original historical owner proof
+installed consumers, and API closure. Focused local controls first unset compiler-host
+state, reproduce `MSB6004`, then compile through the admitted dotnet-host/private
+fsc routing helper; the hosted qualification passes with that repair. Eighteen semantic inputs and the original historical owner proof
 remain unchanged; earlier failed attempts retain their outcomes.
 
 Contracts, Browser and SDK select compatible MINOR 0.3.0 source under the
