@@ -46,6 +46,8 @@ advances the pin to that CLI.
 - **YYYY-MM-DD** — HEADER (owner; refs): body
 -->
 
+- **2026-10-04** — Reconcile Host 0.4 publication guidance and retained work-roadmap source digests (.github; Host publication run 37220419362, source PR #4207). Canonical producer bodies and mirrored guidance are byte-equal; work-roadmap source is unchanged.
+
 - **2026-09-28** — RECONCILE (auto; .github#299/#1200): `fsgg-skill-registry-check --write` reconciled 2 sha256 row(s) and 0 materializes-when value(s); homed 0 and appended 0 row(s) from the producer manifests. registry = manifest = bytes.
 
 - **2026-09-27** — RECONCILE (auto; .github#299/#1200): `fsgg-skill-registry-check --write` reconciled 2 sha256 row(s) and 0 materializes-when value(s); homed 0 and appended 0 row(s) from the producer manifests. registry = manifest = bytes.
