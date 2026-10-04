@@ -18,17 +18,17 @@ type ClosureResult = Unavailable of string | Refused of string | Prepared of byt
 
 module ImageClosure =
     [<Literal>]
-    let HostPackageSha256="7ad2c30894cb3eafbf498e5d247034bc3167ee30dd07c8b09c6b4915657c598a"
+    let HostPackageSha256="293e2ccdbc7a4aed2c56d72cf82a7f806d7671b549439463cd93164dad574f77"
     [<Literal>]
-    let HostSourceRevision="f43e0a1f94448aa8f7668b1ed72f3169a7cf925e"
+    let HostSourceRevision="09f06f5cc5278cbfbf7c02b0a7a9e72104aa4e3f"
     [<Literal>]
-    let HostArchiveSha256="c7cbaa474fdcd0ba577f8577ec92bb381f032db7842f86ddb1b3fb050d8a97ad"
+    let HostArchiveSha256="150f3e697e088a10170db4f2404fd4e73be856ccefc8d776c53076f55adce45a"
     [<Literal>]
-    let HostPayloadSha256="5572aa61f284abc5a37a12aa88f99b5169c4379be2aa9959e46c9934532f2836"
+    let HostPayloadSha256="d7e747cebd6f425d775177bc844d0b3d187a911ae4032e269b008c875a872240"
     [<Literal>]
-    let HostManifestSha256="7d61b4888d08299b5578df2e3e283dee88b5acabafa53490b4ba8d00e6676704"
+    let HostManifestSha256="144e5aa3d382b8bfc6ddcac76ed583c23ebe8fbb6744f844a94fa5347819d3f0"
     [<Literal>]
-    let HostJournalSha256="ec63822c627cfad490f9eea731257ac531c9ac3bd681f4790b9489dcfc8470ce"
+    let HostJournalSha256="c2409342cd3448325fb1dc3dff53b6c2e3783c7634b75101834049b86aa11731"
     [<Literal>]
     let ManagerArtifactSha256="518041591b9b7f1827911f0e796a1815799841831b962d3112169d9241969cdd"
     [<Literal>]
@@ -74,7 +74,7 @@ module ImageClosure =
          | "runtime"->value.StartsWith("/usr/share/dotnet/",StringComparison.Ordinal)
          | "native"->[|"/opt/fsgg/";"/usr/local/";"/usr/lib/";"/lib/";"/lib64/";"/etc/";"/usr/share/"|]|>Array.exists(fun prefix->value.StartsWith(prefix,StringComparison.Ordinal))
          | _->false)
-    let private fixedProduction selection = selection.Platform="linux/amd64"&&selection.OwnerUid=0&&selection.HostSourceRevision=HostSourceRevision&&selection.HostReleaseId=401538149L&&selection.HostRunId=36964135216L&&selection.HostArchiveSha256=HostArchiveSha256&&selection.HostPackageSha256=HostPackageSha256&&selection.HostPayloadSha256=HostPayloadSha256&&selection.HostManifestSha256=HostManifestSha256&&selection.HostJournalSha256=HostJournalSha256&&selection.ManagerSourceRevision=ManagerSourceRevision&&selection.ManagerSourceTree=ManagerSourceTree&&selection.ManagerArtifactSha256=ManagerArtifactSha256&&selection.ManagerManifestSha256=ManagerManifestSha256&&selection.ManagerPreparedSha256=ManagerPreparedSha256&&selection.ManagerArchiveSha256=ManagerArchiveSha256&&selection.ManagerRunId=36983338783L&&selection.ManagerArtifactId=11216418410L&&selection.RuntimeImageDigest=RuntimeImageDigest&&selection.RuntimeTreeSha256=RuntimeTreeSha256&&selection.NativeElfSha256=NativeElfSha256&&selection.NativeProfileSha256=NativeProfileSha256&&selection.CanonicalVerifierSha256=CanonicalVerifierSha256
+    let private fixedProduction selection = selection.Platform="linux/amd64"&&selection.OwnerUid=0&&selection.HostSourceRevision=HostSourceRevision&&selection.HostReleaseId=403127331L&&selection.HostRunId=37220419362L&&selection.HostArchiveSha256=HostArchiveSha256&&selection.HostPackageSha256=HostPackageSha256&&selection.HostPayloadSha256=HostPayloadSha256&&selection.HostManifestSha256=HostManifestSha256&&selection.HostJournalSha256=HostJournalSha256&&selection.ManagerSourceRevision=ManagerSourceRevision&&selection.ManagerSourceTree=ManagerSourceTree&&selection.ManagerArtifactSha256=ManagerArtifactSha256&&selection.ManagerManifestSha256=ManagerManifestSha256&&selection.ManagerPreparedSha256=ManagerPreparedSha256&&selection.ManagerArchiveSha256=ManagerArchiveSha256&&selection.ManagerRunId=36983338783L&&selection.ManagerArtifactId=11216418410L&&selection.RuntimeImageDigest=RuntimeImageDigest&&selection.RuntimeTreeSha256=RuntimeTreeSha256&&selection.NativeElfSha256=NativeElfSha256&&selection.NativeProfileSha256=NativeProfileSha256&&selection.CanonicalVerifierSha256=CanonicalVerifierSha256
     let private modeText (path:string) = Convert.ToString(int(File.GetUnixFileMode path),8).PadLeft(4,'0')
     let private noLink (info:FileSystemInfo)=String.IsNullOrEmpty info.LinkTarget
     let ownerUid (path:string) =
@@ -247,7 +247,7 @@ module ImageClosure =
                 let hostNames=host.EnumerateObject()|>Seq.map _.Name|>Set.ofSeq
                 let hostExpected=set["archiveSha256";"createdAt";"dependencyLockSha256";"framework";"packageId";"producerPayloadSha256";"runtimePrerequisites";"schema";"sourceSha";"supportedStoreSchemaMax";"supportedStoreSchemaMin";"tag";"target";"uiAssetTreeSha256";"version"]
                 let hostRows=rowSet "host"
-                let hostOk=closed hostExpected host&&hostNames=hostExpected&&host.GetProperty("schema").GetString()="fsgg.telemetry.host-release/1"&&host.GetProperty("sourceSha").GetString()=selection.HostSourceRevision&&host.GetProperty("archiveSha256").GetString()=selection.HostArchiveSha256&&host.GetProperty("producerPayloadSha256").GetString()="sha256:"+selection.HostPayloadSha256&&host.GetProperty("version").GetString()="0.3.0"&&host.GetProperty("target").GetString()="linux-x64"&&hostRows.Length=1&&hostRows[0].SourcePath="host/FS.GG.Telemetry.Host.0.3.0.nupkg"&&hostRows[0].TargetPath="/opt/fsgg/telemetry-host/FS.GG.Telemetry.Host.0.3.0.nupkg"&&hostRows[0].Sha256=selection.HostArchiveSha256&&(not pinned||hostRows[0].Bytes=6074745L)&&hostRows[0].Mode="0444"
+                let hostOk=closed hostExpected host&&hostNames=hostExpected&&host.GetProperty("schema").GetString()="fsgg.telemetry.host-release/1"&&host.GetProperty("sourceSha").GetString()=selection.HostSourceRevision&&host.GetProperty("archiveSha256").GetString()=selection.HostArchiveSha256&&host.GetProperty("producerPayloadSha256").GetString()="sha256:"+selection.HostPayloadSha256&&host.GetProperty("version").GetString()="0.4.0"&&host.GetProperty("target").GetString()="linux-x64"&&hostRows.Length=1&&hostRows[0].SourcePath="host/FS.GG.Telemetry.Host.0.4.0.nupkg"&&hostRows[0].TargetPath="/opt/fsgg/telemetry-host/FS.GG.Telemetry.Host.0.4.0.nupkg"&&hostRows[0].Sha256=selection.HostArchiveSha256&&(not pinned||hostRows[0].Bytes=6134924L)&&hostRows[0].Mode="0444"
                 if not hostOk then Error "production-host-authority" else
                 let managerExpected=set["archiveRoot";"buildSdk";"entrypoint";"fixedArgv";"installationRoot";"payloads";"runtime";"schema";"source"]
                 if not(closed managerExpected manager)||manager.GetProperty("schema").GetString()<>"fsgg.coordination.telemetry-host-manager-bundle/2" then Error "production-manager-schema" else

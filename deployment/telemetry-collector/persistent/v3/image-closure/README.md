@@ -1,6 +1,6 @@
 # Persistent v3 inactive image closure
 
-This directory contains the additive P2-C.3 source boundary. `ImageClosure.prepareWithTrustedNative` admits a physically acquired, closed set of Host 0.3, served manager bundle, ASP.NET 10.0.12 substrate, native executable, verifier, and profiles only after the protected Host and Manager manifests, canonical runtime inventory, native operation profile, and a separately selected root acquisition input account for the exact acquisition census. The root input binds the expected native inventory digest, acquisition provenance, profiles, executable, Python interpreter, search roots, imports, loader, libraries, and OS data paths outside the candidate selection JSON; the prepared context carries that same selection for later revalidation. It reads every selected regular file, checks its custody ancestry, owner, mode, byte count and hash, rejects links, special files, unlisted files, duplicate paths, and unsafe target paths, and renders a concrete inactive Containerfile and profile for UID/GID 32768 with no service or activation authority. Controlled tests exercise the same production schema route under a distinct test identity; only the fixed protected digests can enter the real production route.
+This directory contains the additive P2-C.3 source boundary. `ImageClosure.prepareWithTrustedNative` admits a physically acquired, closed set of published Host 0.4, served manager bundle, ASP.NET 10.0.12 substrate, native executable, verifier, and profiles only after the protected Host and Manager manifests, canonical runtime inventory, native operation profile, and a separately selected root acquisition input account for the exact acquisition census. The root input binds the expected native inventory digest, acquisition provenance, profiles, executable, Python interpreter, search roots, imports, loader, libraries, and OS data paths outside the candidate selection JSON; the prepared context carries that same selection for later revalidation. It reads every selected regular file, checks its custody ancestry, owner, mode, byte count and hash, rejects links, special files, unlisted files, duplicate paths, and unsafe target paths, and renders a concrete inactive Containerfile and profile for UID/GID 32768 with no service or activation authority. Controlled tests exercise the same production schema route under a distinct test identity; only the fixed protected digests can enter the real production route.
 
 `production-selection.json` records the identities already acquired from protected sources. Its native closure inventory remains `acquisition-required`, so the CLI exits 2 and emits no context. A later qualification window must acquire and bind that inventory before either isolated image build.
 
@@ -46,3 +46,16 @@ The C5 policy is included in the frozen input identity. Timeout or unknown
 retirement prevents store removal and retains an unknown/indeterminate outcome.
 `InactiveQualified` describes synthetic served-code preparation only; capture,
 native acceptance and activation remain false. `run-c4` still leaves C5 unknown.
+
+
+The Host role now binds accepted release `telemetry-host/v0.4.0` (`403127331`) from
+source `09f06f5cc5278cbfbf7c02b0a7a9e72104aa4e3f` and publisher `37220419362`.
+The GitHub archive and signed NuGet archive have separate hashes; the shared
+normalized producer payload remains the equality boundary. Exact manifest,
+publication-journal asset, package extent and role filename checks move together.
+Historical Host 0.3 remains an explicit inactive-package refusal.
+
+The declaration retains `acquisition-required`; no reader profile or native inventory
+is inferred from publication. Repaired served Manager distribution, trusted native/Python/
+Tcl/Tk/search/runtime acquisition, two cold builds/reloads and C5 on each reload remain
+required. Source rebinding does not establish installation, capture, recovery or activation.

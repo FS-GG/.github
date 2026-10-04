@@ -137,9 +137,17 @@ with original candidate package/manifest equality and both-feed normalized paylo
 `d7e747cebd6f425d775177bc844d0b3d187a911ae4032e269b008c875a872240`.
 Root verified all 17 protected journal generations at
 `203ba60f7df146743d4a7373a52f55fc6c22858e` and eight effects.
-Image-source pin rebinding, served repaired Manager, genuine acquisition, two cold OCI
-builds, C5 retirement, installed receiver/capture/recovery and usage completeness remain open.
-No real C5, OCI or activation result follows from source or publication closure.
+Host 0.4.0 image-source pin rebinding is now locally qualified at
+`90b0fbd0c9b020b0a74cf940be88820adbb31559`: three natural-success restore/build/console
+steps settled in 10.488 seconds with no final pin drift. Twelve focused Host release
+cases passed, including the actual staged CLI's canonical/changed-byte placeholder
+checks and eight historical-pin refusals; existing path and closed inactive-result
+controls also passed. The full constructor/OCI/runner console remains the native CI default.
+Local qualification does not replace protected integration or exact-head source checks.
+Served repaired
+Manager, genuine acquisition, two cold OCI builds/reloads, C5 retirement, installed
+receiver/capture/recovery and usage completeness remain open. No real C5, OCI or activation
+result follows from source or publication closure.
 
 **2026-10-04: BARC-01.5f six-phase producer build and Cargo custody CLOSED (bounded native build).**
 Root accepted the fresh sixth producer operation after all six actual phases returned **0**:
