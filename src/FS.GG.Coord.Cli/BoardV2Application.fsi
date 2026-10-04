@@ -14,6 +14,9 @@ module BoardV2Application =
     val encodeInspection: report: V2ProjectionSource.InspectionReport -> string
     /// Decode historical verification evidence. It cannot authorize a current observation or write.
     val decodePreviousReport: json: string -> Result<V2ProjectionSource.BatchReport, string>
+    /// Validate the production Board V2 argument grammar without reading files or creating a transport.
+    /// Return None for other command families; normalized-path and output custody remain runtime checks.
+    val validateInvocation: arguments: string list -> Result<unit, string> option
     /// Fixed refresh or read-only inspect file command against an injected transport, for offline fixtures.
     val runWithTransport: transport: Transport.IGitHubTransport -> arguments: string list -> int
     /// Recognize board-v2 after validation; refresh composes the qualified writer, inspect only canonical reads.

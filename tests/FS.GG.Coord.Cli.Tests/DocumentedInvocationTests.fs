@@ -35,8 +35,8 @@ open FS.GG.Coord.Cli.Options
 /// board. Running them to check their arguments would post junk to live issues under whatever
 /// credentials the runner holds. (Measured, while writing this: `GH_TOKEN=invalid` does not save you —
 /// the engine resolves auth through `gh`'s stored credentials and ignores it. Three junk comments
-/// landed on a live issue before the mistake was caught.) `Options.parse` is total, pure, and touches
-/// no network, so it is the ONE place a documented invocation can be checked safely.
+/// landed on a live issue before the mistake was caught.) The production argument parsers are pure and touch no network, so their composed
+/// validation is where a documented invocation can be checked safely.
 ///
 /// SCOPE, and its honest limit: this gate checks SHAPE — that the corpus's line reaches the verb with
 /// arguments the parser accepts. It cannot check meaning. A `widen --paths "a, b"` (one quoted
@@ -300,6 +300,55 @@ module DocumentedInvocationTests =
         // (`release --status`), #919 (`say`). Add an entry ONLY with the issue that retires it.
         ]
 
+    // Program.main dispatches Board V2 before telemetry and Options. Use its
+    // real pure grammar, not an accepted-name list or the effectful entry point.
+    let private validateInvocation argv =
+        match BoardV2Application.validateInvocation argv with
+        | Some result -> result
+        | None ->
+            match TelemetryApplication.validateInvocation argv with
+            | Some result -> result
+            | None -> parse argv |> Result.map ignore
+
+    [<Theory>]
+    [<InlineData("inspect")>]
+    [<InlineData("refresh")>]
+    let ``Board V2 production grammar accepts both operations and optional history`` operation =
+        let required = [ "board-v2"; operation; "--binding-file"; "missing-binding.json"; "--report-file"; "new-report.json" ]
+        Assert.Equal(Some(Ok()), BoardV2Application.validateInvocation required)
+        Assert.Equal(Some(Ok()), BoardV2Application.validateInvocation (required @ [ "--previous-report-file"; "missing-history.json" ]))
+        Assert.True(validateInvocation required |> Result.isOk)
+
+    [<Fact>]
+    let ``Board V2 production grammar refuses malformed commands rather than delegating`` () =
+        let required = [ "--binding-file"; "binding.json"; "--report-file"; "report.json" ]
+        let malformed = [
+            [ "board-v2" ]
+            [ "board-v2"; "apply" ] @ required
+            [ "board-v2"; "inspect" ]
+            [ "board-v2"; "inspect"; "--binding-file"; "binding.json" ]
+            [ "board-v2"; "inspect"; "--report-file"; "report.json" ]
+            [ "board-v2"; "inspect" ] @ required @ [ "--apply"; "true" ]
+            [ "board-v2"; "inspect" ] @ required @ [ "--report-file"; "other.json" ]
+            [ "board-v2"; "inspect" ] @ required @ [ "--previous-report-file" ]
+            [ "board-v2"; "inspect"; "--binding-file"; ""; "--report-file"; "report.json" ]
+            [ "board-v2"; "inspect"; "--binding-file"; "--report-file"; "report.json" ]
+            [ "board-v2"; "inspect"; "--binding-file"; "same.json"; "--report-file"; "same.json" ]
+            [ "board-v2"; "refresh" ] @ required @ [ "--previous-report-file"; "report.json" ]
+        ]
+        for argv in malformed do
+            match BoardV2Application.validateInvocation argv with
+            | Some(Error _) -> Assert.True(validateInvocation argv |> Result.isError)
+            | result -> failwithf "malformed production Board V2 command was accepted or delegated: %A => %A" argv result
+
+    [<Fact>]
+    let ``Board V2 validator delegates other families to their actual parsers`` () =
+        for argv in [ []; [ "whoami" ]; [ "telemetry"; "usage"; "collect" ]; [ "board-v2-other"; "inspect" ] ] do
+            Assert.True(BoardV2Application.validateInvocation argv |> Option.isNone)
+        Assert.True(validateInvocation [ "whoami" ] |> Result.isOk)
+        Assert.True(validateInvocation [ "telemetry"; "usage"; "collect" ] |> Result.isOk)
+        Assert.True(validateInvocation [ "board-v2-other"; "inspect" ] |> Result.isError)
+
     [<Fact>]
     let ``every invocation the corpus prescribes is one the parser ACCEPTS`` () =
         let gapped argv =
@@ -309,10 +358,7 @@ module DocumentedInvocationTests =
             prescribed ()
             |> List.filter (fun (_, _, argv) -> not (gapped argv))
             |> List.choose (fun (file, line, argv) ->
-                let parsed =
-                    match TelemetryApplication.validateInvocation argv with
-                    | Some result -> result
-                    | None -> parse argv |> Result.map ignore
+                let parsed = validateInvocation argv
 
                 match parsed with
                 | Ok _ -> None
@@ -335,10 +381,7 @@ module DocumentedInvocationTests =
         let stale =
             knownGaps
             |> List.choose (fun (argv, why) ->
-                let parsed =
-                    match TelemetryApplication.validateInvocation argv with
-                    | Some result -> result
-                    | None -> parse argv |> Result.map ignore
+                let parsed = validateInvocation argv
 
                 match parsed with
                 | Ok _ -> Some $"  %A{argv}\n    listed as: %s{why}"
