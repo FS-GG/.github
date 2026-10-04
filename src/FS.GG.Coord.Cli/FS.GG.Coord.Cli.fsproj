@@ -130,12 +130,13 @@ bytes under 0.52.0 would make the same version identify different artifacts. Ado
 coherent set cut from corrected source. All three partial sets are recorded in
 `registry/dependencies.yml`.</FsggStandingAdvisories>
 
-    <PackageReleaseNotes>0.96.0 — repair telemetry CI selection with an implicit legacy host configuration.
+    <PackageReleaseNotes>0.97.0 — explicit product-scoped V2 board inspection and workspace preparation.
 
-CI collection and reconciliation permit explicit store selection when the implicit default
-is a valid legacy host configuration. Workspace conflicts and invalid configurations still
-refuse. Kit and Drivers advance with the shared coherent set; no installed receiver or
-consumer pin changes until original prepared bytes are verified on both feeds.
+Selected organization-owned product bindings retain exact repository/project identity and
+human scheduling fields. The workspace creator and product guidance prepare immutable
+binding provenance and verified skill/tool closure through the existing decoder. Organization
+cohort controls remain unchanged. CLI, Kit and Drivers advance together; publication and
+installed receiver adoption require their separate exact-source evidence.
 
 $(FsggStandingAdvisories)
 

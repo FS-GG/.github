@@ -1,9 +1,9 @@
 name: release-new-sdd-workspace
-run-name: "Wizard 0.13 recovery ${{ inputs.promotion_recovery }} ${{ inputs.recovery_correlation }} ${{ inputs.recovery_binding_sha256 }}"
+run-name: ${{ inputs.promotion_recovery != 'off' && format('Wizard 0.13 recovery {0} {1} {2}', inputs.promotion_recovery, inputs.recovery_correlation, inputs.recovery_binding_sha256) || format('Wizard 0.14 successor {0}', inputs.candidate_run_id) }}
 
 # TSDD-KNOWLEDGE-01.4: retain the existing NuGet Trusted Publishing filename.
 # GS2-08.9's no-effect seal is superseded only for this exact-source, protected-
-# journal wizard 0.13.0 successor. Default dispatch remains read-only.
+# journal wizard 0.14.0 successor. Default dispatch remains read-only.
 on:
   workflow_dispatch:
     inputs:
@@ -66,7 +66,7 @@ concurrency:
 
 jobs:
   publish:
-    name: new-sdd-workspace-013-publisher
+    name: new-sdd-workspace-014-publisher
     if: github.ref == 'refs/heads/main' && github.actor == 'EHotwagner' && inputs.promotion_recovery == 'off'
     runs-on: ubuntu-latest
     environment: release-successor

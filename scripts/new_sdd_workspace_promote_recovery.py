@@ -11,8 +11,10 @@ from datetime import datetime, timezone
 from release_successor_execution import Refused, JournalState
 from release_successor_journal import ProtectedReleaseJournal, REPOSITORY as AUTHORITY
 from new_sdd_workspace_successor_admission import WizardAdmission
-from new_sdd_workspace_successor_execution import effects, PACKAGE, VERSION, TAG
+from new_sdd_workspace_successor_execution import effects, HISTORICAL_013
 from new_sdd_workspace_successor_provider import output_signals
+
+PACKAGE, VERSION, TAG = HISTORICAL_013.package, HISTORICAL_013.version, HISTORICAL_013.tag
 
 Path=pathlib.Path
 STREAM_CAP=1024*1024
@@ -806,7 +808,7 @@ def candidate(api,root):
     require(observation["preparedArchiveEqual"] and observation["producerPayloadEqual"],"original package semantic proof")
     return manifest,original,target
 def release_gate(api,manifest,original):
-    cid,ordered=effects(manifest)
+    cid,ordered=effects(manifest,binding=HISTORICAL_013)
     release=api.get(f"repos/{REPO}/releases/{RELEASE}")
     require(release.get("id")==RELEASE and release.get("tag_name")==TAG and release.get("prerelease")is False and type(release.get("draft"))is bool and f"new-sdd-workspace-successor:{cid}" in release.get("body","") and release.get("name")==f"{PACKAGE} {VERSION}" and release.get("target_commitish")==CANDIDATE_SOURCE,"exact release binding")
     require(api.get(f"repos/{REPO}/git/ref/tags/{TAG}").get("object",{}).get("sha")==CANDIDATE_SOURCE,"release original tag source")
@@ -869,7 +871,7 @@ class Recovery:
     """Production state decisions; transports and process calls are injectable in pure controls."""
     def __init__(self,api,journal,admission,binding,manifest,original,run_id,mode,root,installer):
         self.api=api;self.journal=journal;self.admission=admission;self.binding=binding;self.manifest=manifest;self.original=original;self.run_id=run_id;self.mode=mode;self.root=root;self.installer=installer
-        self.cid,self.ordered=effects(manifest);self.install_count=0
+        self.cid,self.ordered=effects(manifest,binding=HISTORICAL_013);self.install_count=0
     def state(self):
         current=self.journal.read()
         require(current==JournalState(16,self.cid,{**{e.identity:"verified" for e in self.ordered[:-1]},"promote":"intent"}),"exact generation16 seven verified/open promote")
@@ -940,7 +942,7 @@ def worker(mode,binding,root,source,start=None):
         report["stage"]="immutable-authority-primer"
         ledger.prime_journal()
         journal=ProtectedReleaseJournal(ledger,REF)
-        admission=WizardAdmission(api,manifest,binding["heldSource"],int(os.environ["GITHUB_RUN_ID"]),os.environ["GITHUB_ACTOR"],os.environ["GITHUB_REF"])
+        admission=WizardAdmission(api,manifest,binding["heldSource"],int(os.environ["GITHUB_RUN_ID"]),os.environ["GITHUB_ACTOR"],os.environ["GITHUB_REF"],release_binding=HISTORICAL_013)
         engine=Recovery(api,journal,admission,binding,manifest,original,int(os.environ["GITHUB_RUN_ID"]),mode,root,lambda p,n:public_install(p,runner,original,n,env))
         report["stage"]="promotion-reconciliation"
         report.update(engine.run());report["success"]=True

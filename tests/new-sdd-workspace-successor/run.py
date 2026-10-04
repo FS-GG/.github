@@ -16,22 +16,69 @@ import sys
 import tempfile
 import unittest
 import zipfile
+import runpy
+from xml.etree import ElementTree
 from unittest.mock import patch
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
 from release_successor_execution import Dispatch, JournalState, Observation, Refused, advance_effects
 from new_sdd_workspace_successor_admission import WizardAdmission
-from new_sdd_workspace_successor_execution import effects
+from new_sdd_workspace_successor_execution import effects, CURRENT_014, HISTORICAL_013, ReleaseBinding
 from new_sdd_workspace_successor_provider import WizardProvider, NotFound, output_signals, publisher_error, DIAGNOSTIC_LIMIT
 
 
 def manifest():
     return {
         "schema": "fsgg.new-sdd-workspace-release/1", "packageId": "FS.GG.NewSddWorkspace",
-        "version": "0.13.0", "tag": "new-sdd-workspace/v0.13.0", "sourceSha": "a" * 40,
+        "version": "0.14.0", "tag": "new-sdd-workspace/v0.14.0", "sourceSha": "a" * 40,
         "archiveSha256": "b" * 64, "producerPayloadSha256": "sha256:" + "c" * 64,
     }
+
+
+def board_package_closure(package: pathlib.Path, source_sha: str, *, source_root: pathlib.Path = ROOT):
+    """Join the actual current package to its freshly built creator/dependency output."""
+    spec = importlib.util.spec_from_file_location("wizard_package_identity", source_root / "scripts/new-sdd-workspace-release.py")
+    checker = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(checker)
+    if checker.package_identity(package) != (CURRENT_014.package, CURRENT_014.version, source_sha):
+        raise ValueError("current creator package/source identity differs")
+    project = source_root / "scripts/NewSddWorkspace/NewSddWorkspace.fsproj"
+    projects = {}
+    def visit(path):
+        path = path.resolve()
+        if path in projects:
+            return
+        xml = ElementTree.parse(path)
+        projects[path] = next((e.text for e in xml.iter("AssemblyName") if e.text), path.stem)
+        for reference in xml.iter("ProjectReference"):
+            visit(path.parent / reference.attrib["Include"])
+    visit(project)
+    output = project.parent / "bin/Release/net10.0"
+    required = {name + ".dll" for name in projects.values()}
+    required.update({"new-sdd-workspace.deps.json", "new-sdd-workspace.runtimeconfig.json"})
+    required.update(str(p.relative_to(output)) for p in output.rglob("*")
+                    if p.is_file() and p.suffix in {".dll", ".so", ".dylib"})
+    if len(projects) != 11 or not {"FS.GG.Coord.GitHub.dll", "fsgg-coord-engine.dll"} <= required:
+        raise ValueError("current creator board project closure differs")
+    prefix = "tools/net10.0/any/"
+    with zipfile.ZipFile(package) as archive:
+        names = archive.namelist()
+        if len(names) != len(set(names)):
+            raise ValueError("duplicate creator package members")
+        for name in sorted(required):
+            built = output / name
+            if built.is_symlink() or not built.is_file() or prefix + name not in names:
+                raise ValueError("creator package dependency missing: " + name)
+            if archive.read(prefix + name) != built.read_bytes():
+                raise ValueError("creator package dependency differs from built source: " + name)
+        deps = json.loads(archive.read(prefix + "new-sdd-workspace.deps.json"))
+        if "FS.GG.Coord.Cli/0.97.0" not in deps["libraries"]:
+            raise ValueError("creator package must carry current coherent CLI dependency metadata")
+    return {"schema": "fsgg.creator-board-package-closure/1", "version": CURRENT_014.version,
+            "sourceSha": source_sha, "coherentVersion": "0.97.0", "projectCount": len(projects),
+            "builtFilesCompared": len(required), "archiveSha256": hashlib.sha256(package.read_bytes()).hexdigest(),
+            "installedAdoptionAccepted": False}
 
 
 class Journal:
@@ -86,6 +133,90 @@ class WizardReleaseTests(unittest.TestCase):
     def advance(self):
         return advance_effects(self.content_id, self.ordered, self.journal, self.admission, self.provider)
 
+    def test_release_bindings_are_explicit_immutable_and_route_specific(self):
+        historical = {**manifest(), "version": "0.13.0", "tag": "new-sdd-workspace/v0.13.0"}
+        with self.assertRaises(Refused):
+            effects(historical)
+        content, ordered = effects(historical, binding=HISTORICAL_013)
+        canonical = json.dumps(historical, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
+        self.assertEqual(content, "sha256:" + hashlib.sha256(canonical).hexdigest())
+        self.assertEqual([effect.identity for effect in ordered], [effect.identity for effect in self.ordered])
+        with self.assertRaises(Refused):
+            effects(manifest(), binding=HISTORICAL_013)
+        for forged in (ReleaseBinding(CURRENT_014.package, CURRENT_014.version, CURRENT_014.tag),
+                       ReleaseBinding(HISTORICAL_013.package, HISTORICAL_013.version, HISTORICAL_013.tag), None):
+            with self.assertRaises(Refused):
+                effects(manifest(), binding=forged)
+        with self.assertRaises(AttributeError):
+            CURRENT_014.version = "0.13.0"
+
+    def test_admission_cannot_cross_current_and_historical_routes(self):
+        class NoReads:
+            def get(self, path):
+                raise AssertionError("route mismatch must refuse before remote reads")
+        historical = {**manifest(), "version": "0.13.0", "tag": "new-sdd-workspace/v0.13.0"}
+        old = WizardAdmission(NoReads(), historical, "a" * 40, 1, "EHotwagner", "refs/heads/main",
+                              release_binding=HISTORICAL_013)
+        self.assertFalse(old.authorize(old.content_id, "journal", "intent", old.content_id))
+        current = WizardAdmission(NoReads(), manifest(), "a" * 40, 1, "EHotwagner", "refs/heads/main")
+        self.assertFalse(current.authorize_recovery(current.content_id, "dispatch", current.requests["promote"],
+                                                     {"heldSource": "a" * 40}, "complete"))
+        with self.assertRaises(Refused):
+            WizardAdmission(NoReads(), historical, "a" * 40, 1, "EHotwagner", "refs/heads/main")
+
+    def test_package_closure_joins_projects_metadata_and_actual_built_bytes(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary)
+            files = {}
+            def copy_project(path):
+                relative = path.relative_to(ROOT)
+                if relative in files:
+                    return
+                files[relative] = path.read_bytes()
+                for reference in ElementTree.parse(path).iter('ProjectReference'):
+                    copy_project((path.parent / reference.attrib['Include']).resolve())
+            copy_project(ROOT / 'scripts/NewSddWorkspace/NewSddWorkspace.fsproj')
+            files[pathlib.Path('scripts/new-sdd-workspace-release.py')] = (ROOT / 'scripts/new-sdd-workspace-release.py').read_bytes()
+            for relative, body in files.items():
+                (root / relative).parent.mkdir(parents=True, exist_ok=True)
+                (root / relative).write_bytes(body)
+            output = root / 'scripts/NewSddWorkspace/bin/Release/net10.0'
+            output.mkdir(parents=True)
+            members = {}
+            for relative in files:
+                if relative.suffix == '.fsproj':
+                    xml = ElementTree.parse(root / relative)
+                    name = next((e.text for e in xml.iter('AssemblyName') if e.text), relative.stem) + '.dll'
+                    members[name] = ('synthetic, never executed: ' + name).encode()
+            members['new-sdd-workspace.deps.json'] = json.dumps({'libraries': {'FS.GG.Coord.Cli/0.97.0': {}}}).encode()
+            members['new-sdd-workspace.runtimeconfig.json'] = b'{}'
+            for name, body in members.items():
+                (output / name).write_bytes(body)
+            nuspec = b'<package><metadata><id>FS.GG.NewSddWorkspace</id><version>0.14.0</version><repository commit="' + b'a' * 40 + b'"/></metadata></package>'
+            package = root / 'creator.nupkg'
+            def pack(selected):
+                with zipfile.ZipFile(package, 'w') as archive:
+                    archive.writestr('FS.GG.NewSddWorkspace.nuspec', nuspec)
+                    for name, body in selected.items():
+                        archive.writestr('tools/net10.0/any/' + name, body)
+            pack(members)
+            self.assertEqual(board_package_closure(package, 'a' * 40, source_root=root)['projectCount'], 11)
+            for omitted in ('FS.GG.Coord.GitHub.dll', 'fsgg-coord-engine.dll', 'new-sdd-workspace.deps.json'):
+                with self.subTest(omitted=omitted):
+                    pack({name: body for name, body in members.items() if name != omitted})
+                    with self.assertRaises(ValueError):
+                        board_package_closure(package, 'a' * 40, source_root=root)
+            pack({**members, 'FS.GG.Coord.GitHub.dll': b'old assembly'})
+            with self.assertRaisesRegex(ValueError, 'differs from built source'):
+                board_package_closure(package, 'a' * 40, source_root=root)
+            old_deps = json.dumps({'libraries': {'FS.GG.Coord.Cli/0.96.0': {}}}).encode()
+            (output / 'new-sdd-workspace.deps.json').write_bytes(old_deps)
+            pack({**members, 'new-sdd-workspace.deps.json': old_deps})
+            with self.assertRaisesRegex(ValueError, 'current coherent CLI dependency metadata'):
+                board_package_closure(package, 'a' * 40, source_root=root)
+            with self.assertRaisesRegex(ValueError, 'package/source identity'):
+                board_package_closure(package, 'b' * 40, source_root=root)
+
     def test_every_effect_is_admitted_and_read_back_once(self):
         self.assertEqual(len(self.ordered), 8)
         for effect in self.ordered:
@@ -122,7 +253,7 @@ class WizardReleaseTests(unittest.TestCase):
             with zipfile.ZipFile(archive, "w") as zipped:
                 zipped.writestr("manifest.json", json.dumps(manifest()))
                 zipped.writestr("package-evidence.json", "{}")
-                zipped.writestr("FS.GG.NewSddWorkspace.0.13.0.nupkg", "fixture")
+                zipped.writestr("FS.GG.NewSddWorkspace.0.14.0.nupkg", "fixture")
             digest = hashlib.sha256(archive.read_bytes()).hexdigest()
             run = {"id": 123, "path": verifier.WORKFLOW, "head_sha": source,
                    "head_branch": "main", "event": "workflow_dispatch", "conclusion": "success",
@@ -133,7 +264,18 @@ class WizardReleaseTests(unittest.TestCase):
                                          "repository_id": verifier.REPOSITORY_ID,
                                          "head_repository_id": verifier.REPOSITORY_ID}}
             with patch.object(verifier.subprocess, "run"):
-                self.assertEqual(verifier.verify(artifact, run, archive, root / "good", source)["version"], "0.13.0")
+                self.assertEqual(verifier.verify(artifact, run, archive, root / "good", source)["version"], "0.14.0")
+            old_archive = root / "historical.zip"
+            with zipfile.ZipFile(old_archive, "w") as zipped:
+                zipped.writestr("manifest.json", json.dumps({**manifest(), "version": "0.13.0",
+                                                            "tag": "new-sdd-workspace/v0.13.0"}))
+                zipped.writestr("package-evidence.json", "{}")
+                zipped.writestr("FS.GG.NewSddWorkspace.0.13.0.nupkg", "fixture")
+            old_artifact = {**artifact, "digest": "sha256:" + hashlib.sha256(old_archive.read_bytes()).hexdigest()}
+            with patch.object(verifier.subprocess, "run") as package_check:
+                with self.assertRaises(ValueError):
+                    verifier.verify(old_artifact, run, old_archive, root / "old", source)
+                package_check.assert_not_called()
             altered = {**run, "run_attempt": 2}
             with self.assertRaisesRegex(ValueError, "first-attempt"):
                 verifier.verify(artifact, altered, archive, root / "rerun", source)
@@ -142,7 +284,8 @@ class WizardReleaseTests(unittest.TestCase):
                 verifier.verify(altered_artifact, run, archive, root / "tampered", source)
 
     def test_prior_release_identity_and_wrong_payload_are_refused(self):
-        for key, value in (("version", "0.12.0"), ("tag", "new-sdd-workspace/v0.12.0"),
+        for key, value in (("version", "0.13.0"), ("tag", "new-sdd-workspace/v0.13.0"),
+                           ("version", "0.12.0"), ("tag", "new-sdd-workspace/v0.12.0"),
                            ("version", "0.11.2"), ("tag", "new-sdd-workspace/v0.11.2"),
                            ("producerPayloadSha256", "bad")):
             row = manifest(); row[key] = value
@@ -151,14 +294,14 @@ class WizardReleaseTests(unittest.TestCase):
 
     def test_predecessor_manifest_cannot_reuse_successor_effects(self):
         prior = {**manifest(), "version": "0.12.0", "tag": "new-sdd-workspace/v0.12.0"}
-        with self.assertRaisesRegex(Refused, "exact Wizard 0.13.0"):
+        with self.assertRaisesRegex(Refused, "exact Wizard 0.14.0"):
             effects(prior)
 
     def test_fresh_journal_and_version_cut_retain_the_existing_boundary(self):
         publisher = (ROOT / "scripts/new-sdd-workspace-successor-publish.py").read_text()
-        self.assertIn('REF = "refs/heads/fsgg/v2/journal/release/tsdd-knowledge-wizard-013"', publisher)
+        self.assertIn('REF = "refs/heads/fsgg/v2/journal/release/board-v2-product-creator-014"', publisher)
         self.assertNotIn('REF = "refs/heads/fsgg/v2/journal/release/svg-d5-wizard-012"', publisher)
-        self.assertIn('"version": "0.13.0"', publisher)
+        self.assertIn('"version": "0.14.0"', publisher)
         self.assertEqual([e.identity for e in self.ordered],
                          ['tag', 'draft', 'github', 'nuget', 'package-asset', 'manifest-asset',
                           'publication-journal-asset', 'promote'])
@@ -170,10 +313,23 @@ class WizardReleaseTests(unittest.TestCase):
     def test_source_cut_and_candidate_package_names_agree(self):
         project = (ROOT / 'scripts/NewSddWorkspace/NewSddWorkspace.fsproj').read_text()
         candidate = (ROOT / '.github/workflows/release-new-sdd-workspace-successor-candidate.yml').read_text()
-        self.assertIn('<Version>0.13.0</Version>', project)
-        self.assertIn('test "$version" = 0.13.0', candidate)
-        self.assertIn('FS.GG.NewSddWorkspace.0.13.0.nupkg', candidate)
-        self.assertIn('--tag new-sdd-workspace/v0.13.0', candidate)
+        self.assertIn('<Version>0.14.0</Version>', project)
+        self.assertIn('test "$version" = 0.14.0', candidate)
+        self.assertIn('FS.GG.NewSddWorkspace.0.14.0.nupkg', candidate)
+        self.assertIn('--tag new-sdd-workspace/v0.14.0', candidate)
+
+    def test_workflow_retains_exact_historical_title_and_isolates_current_mode(self):
+        workflow = (ROOT / '.github/workflows/release-new-sdd-workspace.yml').read_text()
+        self.assertIn("inputs.promotion_recovery != 'off' && format('Wizard 0.13 recovery {0} {1} {2}', "
+                      "inputs.promotion_recovery, inputs.recovery_correlation, inputs.recovery_binding_sha256)", workflow)
+        self.assertIn("format('Wizard 0.14 successor {0}', inputs.candidate_run_id)", workflow)
+        self.assertIn("name: new-sdd-workspace-014-publisher", workflow)
+        for mode in ('diagnostic', 'complete'):
+            self.assertIn(f"inputs.promotion_recovery == '{mode}' && !inputs.publish && !inputs.verify_nuget_login", workflow)
+            self.assertIn(f"wizard013-recovery-{mode}", workflow)
+        publisher = (ROOT / 'scripts/new-sdd-workspace-successor-publish.py').read_text()
+        self.assertLess(publisher.index('if args.promotion_recovery:'), publisher.index('manifest ='))
+        self.assertIn('==\n                    (CANDIDATE_RUN, ARTIFACT, ARCHIVE)', publisher)
 
     def test_package_nuspec_must_bind_protected_source_commit(self):
         path = ROOT / "scripts" / "new-sdd-workspace-release.py"
@@ -182,19 +338,19 @@ class WizardReleaseTests(unittest.TestCase):
         checker = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(checker)
         with tempfile.TemporaryDirectory() as temporary:
-            package = pathlib.Path(temporary) / "FS.GG.NewSddWorkspace.0.13.0.nupkg"
+            package = pathlib.Path(temporary) / "FS.GG.NewSddWorkspace.0.14.0.nupkg"
             def write_package(commit):
                 nuspec = ("<package><metadata><id>FS.GG.NewSddWorkspace</id>"
-                          "<version>0.13.0</version><repository commit='" + commit + "'/></metadata></package>")
+                          "<version>0.14.0</version><repository commit='" + commit + "'/></metadata></package>")
                 with zipfile.ZipFile(package, "w") as archive:
                     archive.writestr("FS.GG.NewSddWorkspace.nuspec", nuspec)
             write_package("a" * 40)
             self.assertEqual(checker.package_identity(package),
-                             ("FS.GG.NewSddWorkspace", "0.13.0", "a" * 40))
+                             ("FS.GG.NewSddWorkspace", "0.14.0", "a" * 40))
             write_package("b" * 40)
             with self.assertRaisesRegex(ValueError, "repository commit differs"):
                 checker.build_manifest(type("Args", (), {"package": str(package), "source_sha": "a" * 40,
-                                                       "version": "0.13.0", "tag": "new-sdd-workspace/v0.13.0"})())
+                                                       "version": "0.14.0", "tag": "new-sdd-workspace/v0.14.0"})())
             write_package("")
             with self.assertRaisesRegex(ValueError, "repository commit"):
                 checker.package_identity(package)
@@ -253,9 +409,9 @@ class WizardReleaseTests(unittest.TestCase):
                 self.assets = {}
                 self.writes = []
             def get(self, path):
-                if path.endswith("/git/ref/tags/new-sdd-workspace/v0.13.0") and self.tag:
+                if path.endswith("/git/ref/tags/new-sdd-workspace/v0.14.0") and self.tag:
                     return {"object": {"sha": self.tag}}
-                if path.endswith("/releases/tags/new-sdd-workspace/v0.13.0") and self.release and not self.release["draft"]:
+                if path.endswith("/releases/tags/new-sdd-workspace/v0.14.0") and self.release and not self.release["draft"]:
                     return self.release
                 if path.endswith("/releases?per_page=100&page=1"):
                     return [self.release] if self.release else []
@@ -279,7 +435,7 @@ class WizardReleaseTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = pathlib.Path(temporary)
             row = manifest()
-            package = root / "FS.GG.NewSddWorkspace.0.13.0.nupkg"
+            package = root / "FS.GG.NewSddWorkspace.0.14.0.nupkg"
             package.write_bytes(b"exact original Wizard archive")
             row["archiveSha256"] = hashlib.sha256(package.read_bytes()).hexdigest()
             manifest_path = root / "manifest.json"
@@ -307,10 +463,10 @@ class WizardReleaseTests(unittest.TestCase):
             def __init__(self, raw):
                 self.raw = raw
             def get(self, path):
-                if path.endswith("/releases/tags/new-sdd-workspace/v0.13.0"):
+                if path.endswith("/releases/tags/new-sdd-workspace/v0.14.0"):
                     raise NotFound(path)
                 if path.endswith("/releases?per_page=100&page=1"):
-                    return [{"id": 1, "tag_name": "new-sdd-workspace/v0.13.0", "draft": True}]
+                    return [{"id": 1, "tag_name": "new-sdd-workspace/v0.14.0", "draft": True}]
                 if path.endswith("/releases/1/assets?per_page=100"):
                     return [{"id": 1, "name": "publication-journal.json"}]
                 raise AssertionError(path)
@@ -486,4 +642,20 @@ def load_tests(loader, tests, pattern):
 
 
 if __name__ == "__main__":
-    unittest.main()
+    if "--board-package" in sys.argv:
+        import argparse
+        parser = argparse.ArgumentParser()
+        parser.add_argument("--board-package", type=pathlib.Path, required=True)
+        parser.add_argument("--source-sha", required=True)
+        parser.add_argument("--release-manifest", type=pathlib.Path)
+        args = parser.parse_args()
+        closure = board_package_closure(args.board_package, args.source_sha)
+        if args.release_manifest:
+            checker = runpy.run_path(str(ROOT / "scripts/new-sdd-workspace-release.py"))
+            evidence = checker["verify_artifact"](args.release_manifest, args.board_package)
+            evidence["boardClosure"] = closure
+        else:
+            evidence = closure
+        print(json.dumps(evidence, sort_keys=True))
+    else:
+        unittest.main()

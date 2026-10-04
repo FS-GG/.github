@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Publish the exact Wizard 0.13.0 candidate through fresh admitted effects."""
+"""Publish the exact Wizard 0.14.0 candidate through fresh admitted effects."""
 
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ from new_sdd_workspace_successor_execution import effects
 from new_sdd_workspace_successor_provider import WizardProvider, publisher_error
 
 REPOSITORY = "FS-GG/.github"
-REF = "refs/heads/fsgg/v2/journal/release/tsdd-knowledge-wizard-013"
+REF = "refs/heads/fsgg/v2/journal/release/board-v2-product-creator-014"
 
 
 def require(ok: bool, detail: str) -> None:
@@ -88,7 +88,7 @@ def main() -> int:
         content_id, ordered = effects(manifest)
         admission = WizardAdmission(api, manifest, publisher_sha, run_id, operator, "refs/heads/main")
         provider = WizardProvider(api, manifest_path, github_token, nuget_key)
-        intent = {"contentId": content_id, "sourceSha": candidate_source, "version": "0.13.0",
+        intent = {"contentId": content_id, "sourceSha": candidate_source, "version": "0.14.0",
                   "candidateArchiveSha256": args.candidate_archive_sha256, "operator": operator}
         ledger_api = GitHubAPI(ledger_token)
         journal = ProtectedReleaseJournal(ledger_api, REF)

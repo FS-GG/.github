@@ -71,7 +71,7 @@ class Fixture:
   self.root=root;self.mode=mode;self.budget=r.Budget(mode,clock=lambda:0);self.paths=[];self.main='d'*40;self.matches=1;self.ancestry='ahead';self.release_gets=0;self.drift_at=None
   self.feed_unknown=False;self.patch_visible=True;self.patch_unknown=False;self.cas_conflict=False;self.cas_unknown=False;self.patches=0;self.cas=0;self.installs=0
   self.manifest={'schema':'fsgg.new-sdd-workspace-release/1','packageId':r.PACKAGE,'version':r.VERSION,'tag':r.TAG,'sourceSha':r.CANDIDATE_SOURCE,'archiveSha256':'b'*64,'producerPayloadSha256':'sha256:'+'c'*64}
-  self.cid,self.effects=r.effects(self.manifest)
+  self.cid,self.effects=r.effects(self.manifest,binding=r.HISTORICAL_013)
   self.binding={'heldSource':self.main,'heldTree':'e'*40,'journalHead':r.JOURNAL_HEAD,'releaseId':r.RELEASE,'failedRunId':r.FAILED_RUN,'correlation':'1'*32,'selectedAfter':'2026-10-04T00:00:00Z','priorRunIds':[98] if mode=='complete' else [],'predecessorReleaseId':12,'predecessorAssets':{'previous.json':r.digest(b'previous')},'home':os.environ.get('HOME'),'recipientSha256':'2'*64,'readinessRunId':None,'readinessArtifactId':None,'readinessArchiveSha256':None,'readinessBindingSha256':None,'readinessCiphertextSha256':None,'readinessCorrelation':None}
   self.native={'id':99,'display_title':f'Wizard 0.13 recovery {mode} '+self.binding['correlation']+' '+r.digest(r.canonical(self.binding)),'head_sha':self.main,'run_attempt':1,'event':'workflow_dispatch','head_branch':'main','path':r.WORKFLOW,'actor':{'login':'EHotwagner'},'status':'in_progress','repository':{'id':1269292704}}
   self.failed={**self.native,'id':r.FAILED_RUN,'head_sha':r.CANDIDATE_SOURCE,'status':'completed','conclusion':'failure'};self.prior={**self.native,'id':98,'status':'completed','conclusion':'success'}
@@ -98,7 +98,7 @@ class Fixture:
     index=(generation-2)//2;phase='intent' if generation%2==0 else 'verified';state={**state,'generation':generation,'effects':{**state['effects'],self.effects[index].identity:phase}}
    oid=r.JOURNAL_HEAD if generation==16 else f'{generation:040x}';self.nodes[oid]={'state':copy.deepcopy(state),'parent':parent};parent=oid
   self.head=parent;self.api=FakeAPI(self);self.journal=Journal(FakeAPI(self,True),r.REF)
-  self.admission=r.WizardAdmission(self.api,self.manifest,self.main,99,'EHotwagner','refs/heads/main')
+  self.admission=r.WizardAdmission(self.api,self.manifest,self.main,99,'EHotwagner','refs/heads/main',release_binding=r.HISTORICAL_013)
  def install(self,root,nuget):self.installs+=1;return {'synthetic':True}
  def engine(self):return r.Recovery(self.api,self.journal,self.admission,self.binding,self.manifest,self.original,99,self.mode,self.root,self.install)
  def run(self):
@@ -415,7 +415,6 @@ class ClosureControls(unittest.TestCase):
 
 def signal_module():return r.signal
 
-if __name__=='__main__':unittest.main(verbosity=2)
 
 class CustodySizeControls(unittest.TestCase):
  def setUp(self):self.tmp=tempfile.TemporaryDirectory();self.root=pathlib.Path(self.tmp.name)
@@ -760,3 +759,5 @@ class SDKScopeCallerChainControls(unittest.TestCase):
  def test_nonzero_failed_budget_reports_number_and_private_paths(self):
   # Counter-only fault fixture; actual CAS transport/allowlists are not invoked.
   self.run_failed_chain(('synthetic/git/blobs','synthetic/git/trees'))
+
+if __name__=='__main__':unittest.main(verbosity=2)

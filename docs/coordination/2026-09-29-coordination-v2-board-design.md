@@ -303,6 +303,32 @@ embeds the published Drivers payload, verifies manifest digests and writes both 
 clobbering owned content. Templates supplies provider metadata/composition; its product payload must
 not take ownership of SDD's `.fsgg/` tree. These are the implementation seams to extend, not replace.
 
+The creator/guidance source now consumes the canonical version-3 decoder through the existing
+CLI project dependency. Fresh and retained creation prepare an explicit immutable Kit reference,
+manifest-verified skills, exact CLI pin and selected repository provenance; preview, refusal and
+rollback controls preserve owned content. V2 product guidance selects the bounded inspection route
+and preserves human Blocked, Status, Track and Roadmap fields. The organization cohort is unchanged.
+
+The 2026-10-04 qualification retains four naturally successful restore/build/control commands,
+but its original overall verdict remains **FAILED** because force reevaluation reordered the
+unchanged CLI lock. The accepted locked-restore custody supplement preserves that failed result,
+joins all 284 immutable successor source leaves and composes the genuine build/control receipts.
+Its sealed source digest is `1ac15d8558a3eba4438c674bdf7cdc5095b083c57ac8901c8777f1f7d4dd8a10`.
+Canonical manifest/projection integration requires its separate bounded generator acceptance.
+These are source-progress receipts, not installed creator journeys or native product adoption.
+
+The next selected source targets are the shared CLI/Kit/Drivers coherent set **0.97.0** and the
+independent workspace creator **0.14.0**. Existing published 0.96.0 and 0.13.0 receipts remain
+immutable; successor candidate, journal, both-feed publication and receiver adoption joins are
+still required. Host retains its independent version axis. Milestones .5 and .6 remain open.
+
+Successor source uses internally selected immutable creator release bindings: current 0.14
+for ordinary candidate/preflight/publication and historical 0.13 only for the retained promotion
+recovery. Historical candidate/archive/journal/held-source guards remain in force. Coherent 0.97
+retains the existing single coherent-set tag route and published 0.96 predecessor contract.
+Canonical combined generation, evaluated package notes and actual package closure are pending
+separate bounded qualification; no source version or fixture accepts publication/adoption.
+
 Qualify the first product slice with **two separately bound organization-owned product projects**
 and one repository scope per project. An explicit owner kind is retained and unsupported user-owned
 product execution refuses until separately qualified; this initial slice does not claim all owner
