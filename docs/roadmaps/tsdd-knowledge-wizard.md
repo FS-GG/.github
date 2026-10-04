@@ -345,3 +345,49 @@ H3 success, H4 admission or public Wizard qualification follows from this source
 proposal. Any infeasible full-SDK contract requires a separate reviewed amendment.
 The independently refused observer log-redirect host is a separate source route
 issue and does not establish the native failure cause.
+
+
+### Selected SDK scope amendment — source preparation
+
+The distinct diagnostic run [37186728763, attempt 1](https://github.com/FS-GG/.github/actions/runs/37186728763)
+on protected `95c4c89cd7e142e6defaeba095050ea34d32ef83` failed in
+`outer-sdk-roster` with the closed `physical-roster-deadline` code,
+480.039 seconds after selection. No worker or encrypted custody artifact was
+produced. This authentic refusal identifies the outer SDK snapshot deadline;
+it does not establish its SDK version, roster size or hashing throughput.
+The original publisher failure and earlier diagnostic cause remain UNKNOWN.
+
+Root selected an explicit source scope amendment: hash every byte of exact SDK
+10.0.401, the whole canonical host/fxr tree, and the complete normally compatible
+NET 10 patch runtime trees required by both that SDK's runtime configuration
+and the original public Wizard configuration. The original Wizard's
+`rollForward: Major` remains unchanged. Whole applicable SDK manifests, CLI
+metadata and workloads remain included. Unrelated SDK and runtime payloads are
+outside this amended content scope; their installed version/layout selections
+are recorded and compared across all four pre/post snapshots. The actual normal
+runtime patches are derived by the guarded native read, rather than invented
+before admission.
+
+The selector refuses missing or ambiguous layouts, resolver overrides, a normal
+latestFeature selection newer than 10.0.401, external probing paths, and NET 11
+fallback. The complete selected SDK, host, runtime and CLI bytes are still
+hashed independently in all four production snapshots. Full source/global.json
+and original package runtime-configuration joins are retained. Closed safe
+progress exposes only approved public SDK paths, stable SDK directory names,
+selected-version presence, member/byte/hash counts and elapsed time; private
+paths, environment/configuration contents and free error text stay withheld.
+
+The 600-second whole / 480-second work / 120-second cleanup bounds, 120 reads,
+16 commands, capture/storage ceilings, normal trust, HOME, process custody and
+original candidate/journal boundaries remain unchanged. Storage accounts for
+the complete typed selection and member rosters. The adjacent receipt repair
+records `casWrites` as the numeric count and `casWritePaths` as the private
+actual path list, preserving CAS authority, invocation and limits.
+
+The 98 pure controls include all four actual outer/worker snapshot callers,
+failed-operation independent postchecks, selected-byte/layout drift, resolver
+and runtime refusals, storage accounting, and zero/nonzero CAS receipt types.
+They execute synthetic fixtures without SDK, network, crypto or native effects.
+This is source preparation pending root review and protected delivery. Hosted
+SDK/provider availability and fit remain UNKNOWN; no H3 replay, H4 admission,
+publisher recovery or public Wizard qualification is implied.
