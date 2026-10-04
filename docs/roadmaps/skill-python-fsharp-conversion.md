@@ -110,7 +110,7 @@ worker identities before dispatch. The proposed disjoint source allocation after
 These filenames are the initial allocation, not a requirement to keep an oversized module. Narrow changes to
 existing engine modules or shared tests go through the integrator; workers stop or rescope before touching
 another lane. Source lanes use local prepared commits until admitted. Apply the
-[Unified driver queue controls](../../.agents/skills/work-unified-roadmap/SKILL.md): stable campaign/chain
+[Unified driver queue controls](../../.agents/skills/work-programme/SKILL.md): stable campaign/chain
 identities, one open delivery PR per dependency chain, at most two newly qualifying managed PRs per repository,
 live open-PR/check-queue inspection, and `tools/pr-lane-admission.py` for integrator-created PRs. A ready third
 lane can prepare local commits; it does not open another PR. Existing PR repair stays in that PR.

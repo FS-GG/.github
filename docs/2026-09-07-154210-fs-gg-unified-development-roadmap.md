@@ -53,6 +53,20 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+
+**2026-10-04: temporary bounded programme driver source and focused acceptance CLOSED.**
+The repository-owned [work-programme](../.agents/skills/work-programme/SKILL.md) replaces
+`work-unified-roadmap`; both authored roots, catalog classification, trigger fixtures and current
+entry points move together. Its dependency-free F# helper derives an advisory frontier, builds
+pinned packets, streams mechanical artifact verification and retains private inputs/results and
+byte/duration measurements. The focused offline suite passes 31 cases; actual CLI packet/verification
+and logging are exercised against real source files, retaining the stale-pin refusal. Existing PR,
+qualification, native operation and telemetry authority are unchanged. The entry point is 59.5%
+smaller in bytes; token/compaction benefit remains unmeasured. The
+[temporary driver record](roadmaps/unified-programme-driver.md) keeps the first requested programme
+run as its operational trial, with same-PR debugging and no permanent Host or package rollout.
+
+
 **2026-10-04: V2-PREFLIGHT-01 E installed API source and bounded qualification CLOSED.**
 [Coordination PR #930](https://github.com/FS-GG/FS.GG.Coordination/pull/930) merged at
 `7baa4ae3817fd6b70fb2befc92ee046e6ef5ce7f` after exact-head native checks passed.
@@ -4729,7 +4743,7 @@ synonyms. No purported fallback may restore a fenced v1 writer.
 ### 4.4 Just-in-time feature planning and execution
 
 Use the temporary repository-owned
-[`work-unified-roadmap` skill](../.agents/skills/work-unified-roadmap/SKILL.md) to advance this programme.
+[`work-programme` skill](../.agents/skills/work-programme/SKILL.md) to advance this programme.
 It is committed in both declared agent skill roots, so a fresh checkout carries the instructions and
 supporting material. Creating or inspecting the skill does not start roadmap work.
 
@@ -5842,7 +5856,7 @@ If the part has no workspace effect, say so; if publication or adoption is pendi
 Record this in the feature plan and existing evidence rather than a new fleet registry.
 
 Routine delivery does not silently change the omitted lifecycle from `sdd` to `typed-sdd` or `none`.
-The temporary `work-unified-roadmap` coordinator remains repository-owned; it is not automatically
+The temporary `work-programme` coordinator replaces `work-unified-roadmap` and remains repository-owned; it is not automatically
 installed in product workspaces. Its eventual shared-driver successor must pass the same publication and
 materialization boundaries. The SVG/Fable product work retained in section 15 has its own provider and
 default decisions; progress through V0–V6 alone does not select a new product template or game runtime.

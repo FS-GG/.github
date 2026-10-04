@@ -272,7 +272,7 @@ REPO_NATIVE_EXEMPTIONS = {
     "pipeline-preflight": "initial pipeline-preflight standard and helpers; staged kit distribution follows measured pilot adoption",
     "technical-writer": "repo-native technical-writing and lightweight prose landing route; it has no producer manifest",
     "spectre-console": "repo-native co-tenant; it has no producer manifest",
-    "work-unified-roadmap": "temporary FS-GG Unified Roadmap coordinator; repo-native, not a shared driver package",
+    "work-programme": "temporary FS-GG Unified Roadmap coordinator; repo-native, not a shared driver package",
 }
 
 

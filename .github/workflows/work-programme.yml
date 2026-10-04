@@ -1,0 +1,27 @@
+name: work-programme
+on:
+  pull_request:
+    paths:
+      - '.agents/skills/work-programme/**'
+      - '.claude/skills/work-programme/**'
+      - 'tests/work-programme/**'
+      - '.github/workflows/work-programme.yml'
+  push:
+    branches: [main]
+    paths:
+      - '.agents/skills/work-programme/**'
+      - '.claude/skills/work-programme/**'
+      - 'tests/work-programme/**'
+      - '.github/workflows/work-programme.yml'
+permissions:
+  contents: read
+jobs:
+  acceptance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+      - run: bash tests/work-programme/run.sh
