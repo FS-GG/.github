@@ -53,6 +53,82 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-04: WASM-SHARED-01 bound-draft successor source capability CLOSED.**
+[Game PR #691](https://github.com/FS-GG/FS.GG.Game/pull/691) merged at
+02:25:37 UTC into protected executor `ad5db7ee70cf03fa4d860a0ede7157334d96793c`,
+tree `9f59e455b1eac7eb9e4334d68f3d6161750638f5`. All **34** native checks
+passed, including [run 37169896849](https://github.com/FS-GG/FS.GG.Game/actions/runs/37169896849).
+The [owning Game plan](https://github.com/FS-GG/FS.GG.Game/blob/ad5db7ee70cf03fa4d860a0ede7157334d96793c/docs/roadmaps/wasm-shared-01.md)
+retains original preparation executor `8b92b7c4a8061157c03155662c97d33c0bc01551`
+and tuple `6ba4084f7835e81cec93fe58b23ee9fa70cec67e0b01e2e4195b16e7f2b5d937`.
+A separate closed execution binding joins that unchanged custody to the reviewed
+descendant. Bounded draft discovery now covers the actual adapter, asset callers
+and installed binder/cache; reviewed job-local Contents-write for draft visibility
+and installed Actions-read use existing credential routes. No user credential
+replacement or manual permission change is required.
+
+This closes source capability only. Original promotion `37166812270` remains
+**FAILED**; the producer tag and bound draft `402763234` remain its partial
+transaction. Public 0.3.0 publication, installed acceptance and activation remain
+open. One separately admitted read-only inspection must establish native readiness
+before root can admit a fresh same-custody recovery. Neither operation has been
+admitted by this source closure, and the original tuple/journal is not repacked,
+relabeled or replayed.
+
+**2026-10-04: BARC-01.5f bounded managed-artifact preparation CLOSED.**
+Root accepted one fresh preparation from FSBarV2
+`fb00d0f77b6c7d0998f85a2039931c0c5eed2472`, tree
+`a3a99dad4ef2b301643157b4cd3d1b3fc626facc`, with unchanged HighBar
+`b57f11f290dc3239d894b0285ae272b6b21bc25d`. All **six** export/tools/restore/build
+phases returned **0** in **95.96816809196025 seconds**, using SDK **10.0.401**
+and serial CPU **2**. Independent readback accepted **75** canonical inputs,
+**eight** compiler receipts and managed products, **77** real SHA-256 source
+documents and **two** narrowly typed FSharp synthetic documents. The synthetic
+document joins claim no actual source bytes or remote source resolution.
+
+The full generated custody census covers **1,306** physical leaves; all **42**
+owned PID/start identities were absent after settlement. All **9,649** original
+input pins remained unchanged. Root acceptance SHA-256 is
+`9c1be35ea07a5c4ffd1f9f7033f730f60ac3721ee0c335f2ed1c18c845cf6327`;
+full generated custody SHA-256 is
+`182435987db71683b779f502c19dfe610f24912f1ce0a0162b6d7e221768506f`.
+
+This closes only the bounded managed preparation. The four earlier preparations
+remain **FAILED** with their original observations. Final artifact placement,
+source activation, a fresh game-operation grant and runtime acceptance remain
+separate open gates; expired or consumed grants are not renewed or replayed.
+Historical READY/map cause remains **Unknown** and useful native play **0/6**.
+This progress-only projection invokes no SDK or product CLI and admits no
+runtime operation.
+
+**2026-10-04: UTEL-H3 public 0.96 installed read-only readiness CLOSED (side-by-side operation).**
+Root accepted one fresh **FS.GG.Coord.Cli 0.96.0** installation through ordinary
+anonymous NuGet HTTPS with SDK **10.0.401** and runtime **10.0.12**. Tool install,
+tool list, and the installed CLI's workspace and dashboard status commands all
+returned **0 / 0 / 0 / 0** in **10.900900059 seconds**. Installed bytes join published
+source `f891b5b0723070c67e08d1a87b7d12b0b4d8bebe` and the successful first-attempt
+[publisher 37161212706](https://github.com/FS-GG/.github/actions/runs/37161212706).
+
+Independent readback verified all **82** original literal payloads and **84**
+installed physical objects. The cached original signed public NuGet archive hashes
+`01786b18261a908df7d9cb78d4ac28fbaa43f2f22f1565749bc4155c9abd1380`;
+the complete generated apphost joins the selected SDK template and hashes
+`b8df4b40febef281ea593de2bcfab27e74acd5267254d354a9aa7ad4068c84d9`.
+All **eight** owned PID/start identities settled and were absent. Source, SDK,
+protected local HOME files and launcher checks passed before and after operation.
+Both status commands reported **unconfigured** against an explicit absent private
+config; the workspace stayed empty with no Git repository or telemetry store.
+Private root acceptance SHA-256 is
+`457e0732e95684b635882eb322872e5c9336503264acd7f7e36ad1b810841138`;
+independent readiness receipt SHA-256 is
+`7eb398dcc89956a40eba0e6ec6c7933f23886d20e0504506b7ec5be3be3c766b`.
+
+This closes the bounded public installation and read-only readiness window.
+The separate remote Home **0.95.0** baseline remains unobserved by this operation;
+Home adoption and activation, defaults, consumer pins, R5 feedback and product
+adapters remain open. The wider UTEL feature remains active. Earlier publication,
+source-only refusals and custody packets retain their separate historical outcomes.
+
 **2026-10-04: WASM 8b92 preparation CLOSED (native qualification and original custody).**
 [Preparation 37163937340](https://github.com/FS-GG/FS.GG.Game/actions/runs/37163937340),
 attempt 1, succeeded at protected executor
