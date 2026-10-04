@@ -304,3 +304,19 @@ H1/H2 change release machinery only; H3 has no workspace effect; H4 publishes th
 already retained producer without changing its bytes. H5 is the first genuine
 public creation-acceptance window in this horizon. Lifecycle, default and opt-in
 choices retain their existing behavior.
+
+### Exact ancestry response role repair
+
+The protected 560 H2 assessment refused before install or effects: the authentic
+original-to-held comparison returned HTTP 200 but exceeded the ordinary 64 KiB
+JSON cap. The complete separately bounded diagnosis retained 229,508 bytes,
+status `ahead`, seven commits; the 65,536-byte prefix remains historical refusal
+evidence and establishes no ancestry. No H3 dispatch was admitted.
+
+The routine source repair gives only the exact original-candidate-to-bound-held
+GitHub compare GET a 1 MiB complete-response cap within the existing 4 MiB plan
+ceiling. Origin, repository, original and held revisions, method, query/fragment
+and no-redirect boundaries are checked; ordinary JSON stays at 64 KiB. Complete
+parsing is required. Both initial and immediate pre-PATCH response originals are
+retained and counted in current physical bytes before effect reservation; the
+role refuses after arming. Source controls do not claim a new H2/H3 result.
