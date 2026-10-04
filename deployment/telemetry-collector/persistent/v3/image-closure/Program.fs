@@ -24,7 +24,7 @@ let placeholder bytes=
     use document=JsonDocument.Parse(bytes:byte array)
     let mutable status=Unchecked.defaultof<JsonElement>
     if document.RootElement.TryGetProperty("status",&status)&&status.GetString()="acquisition-required" then
-        if OciEvidence.shaBytes bytes="63a6bd47f0e5def4d0690df6ed83c479629ed2461ab26b9fc6017415d52da7b8" then Some(Unavailable "native-image-closure-inventory-acquisition-required")
+        if OciEvidence.shaBytes bytes="dd7b2ec5b91b56f085c9492577b188b115ae4b99dafb29905b2e4c3b57317165" then Some(Unavailable "native-image-closure-inventory-acquisition-required")
         else Some(Refused "acquisition-required-selection-bytes-differ")
     else None
 let selection bytes=

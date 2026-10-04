@@ -79,8 +79,24 @@ match invokePlaceholder changedPlaceholder with
 File.Delete changedPlaceholder
 printfn "PASS actual canonical placeholder unavailability and changed-byte refusal"
 let prepared:byte array=match ImageClosure.prepare selected with ClosureResult.Prepared bytes->bytes|value->fail $"physical positive refused: %A{value}"
-let production={selected with IdentityClass="production";OwnerUid=0;HostSourceRevision=ImageClosure.HostSourceRevision;HostReleaseId=401538149L;HostRunId=36964135216L;HostArchiveSha256=ImageClosure.HostArchiveSha256;HostPackageSha256=ImageClosure.HostPackageSha256;HostPayloadSha256=ImageClosure.HostPayloadSha256;HostManifestSha256=ImageClosure.HostManifestSha256;HostJournalSha256=ImageClosure.HostJournalSha256;ManagerSourceRevision=ImageClosure.ManagerSourceRevision;ManagerSourceTree=ImageClosure.ManagerSourceTree;ManagerArtifactSha256=ImageClosure.ManagerArtifactSha256;ManagerManifestSha256=ImageClosure.ManagerManifestSha256;ManagerPreparedSha256=ImageClosure.ManagerPreparedSha256;ManagerArchiveSha256=ImageClosure.ManagerArchiveSha256;ManagerRunId=36983338783L;ManagerArtifactId=11216418410L;RuntimeImageDigest=ImageClosure.RuntimeImageDigest;RuntimeTreeSha256=ImageClosure.RuntimeTreeSha256;NativeElfSha256=ImageClosure.NativeElfSha256;NativeProfileSha256=ImageClosure.NativeProfileSha256;CanonicalVerifierSha256=ImageClosure.CanonicalVerifierSha256}
+let production={selected with IdentityClass="production";OwnerUid=0;HostSourceRevision=ImageClosure.HostSourceRevision;HostReleaseId=403127331L;HostRunId=37220419362L;HostArchiveSha256=ImageClosure.HostArchiveSha256;HostPackageSha256=ImageClosure.HostPackageSha256;HostPayloadSha256=ImageClosure.HostPayloadSha256;HostManifestSha256=ImageClosure.HostManifestSha256;HostJournalSha256=ImageClosure.HostJournalSha256;ManagerSourceRevision=ImageClosure.ManagerSourceRevision;ManagerSourceTree=ImageClosure.ManagerSourceTree;ManagerArtifactSha256=ImageClosure.ManagerArtifactSha256;ManagerManifestSha256=ImageClosure.ManagerManifestSha256;ManagerPreparedSha256=ImageClosure.ManagerPreparedSha256;ManagerArchiveSha256=ImageClosure.ManagerArchiveSha256;ManagerRunId=36983338783L;ManagerArtifactId=11216418410L;RuntimeImageDigest=ImageClosure.RuntimeImageDigest;RuntimeTreeSha256=ImageClosure.RuntimeTreeSha256;NativeElfSha256=ImageClosure.NativeElfSha256;NativeProfileSha256=ImageClosure.NativeProfileSha256;CanonicalVerifierSha256=ImageClosure.CanonicalVerifierSha256}
 match ImageClosure.prepare production with ClosureResult.Unavailable "trusted-native-selection-acquisition-required"->()|value->fail $"unacquired production closure did not require trusted root selection: %A{value}"
+// Each historical Host identity must fail the production release gate before acquisition.
+let historicalHostSelections=[
+  {production with HostSourceRevision="f43e0a1f94448aa8f7668b1ed72f3169a7cf925e"}
+  {production with HostReleaseId=401538149L}
+  {production with HostRunId=36964135216L}
+  {production with HostArchiveSha256="c7cbaa474fdcd0ba577f8577ec92bb381f032db7842f86ddb1b3fb050d8a97ad"}
+  {production with HostPackageSha256="7ad2c30894cb3eafbf498e5d247034bc3167ee30dd07c8b09c6b4915657c598a"}
+  {production with HostPayloadSha256="5572aa61f284abc5a37a12aa88f99b5169c4379be2aa9959e46c9934532f2836"}
+  {production with HostManifestSha256="7d61b4888d08299b5578df2e3e283dee88b5acabafa53490b4ba8d00e6676704"}
+  {production with HostJournalSha256="ec63822c627cfad490f9eea731257ac531c9ac3bd681f4790b9489dcfc8470ce"} ]
+for historical in historicalHostSelections do
+  match ImageClosure.prepare historical with
+  | ClosureResult.Refused "fixed-production-identity-mismatch"->()
+  | value->fail $"historical Host pin crossed current production release gate: %A{value}"
+printfn "PASS actual served Host 0.4 production identity and eight historical-pin refusals"
+
 let contractRoot=Directory.CreateTempSubdirectory("p2c3-production-contract-").FullName
 let contractManifestRoot=Directory.CreateTempSubdirectory("p2c3-production-authority-").FullName
 File.SetUnixFileMode(contractRoot,UnixFileMode.UserRead|||UnixFileMode.UserWrite|||UnixFileMode.UserExecute)
@@ -88,7 +104,7 @@ File.SetUnixFileMode(contractManifestRoot,UnixFileMode.UserRead|||UnixFileMode.U
 let contractRow source target sourceClass mode text =
   let path=write contractRoot source mode text
   {SourcePath=source;TargetPath=target;Bytes=FileInfo(path).Length;Sha256=sha(File.ReadAllBytes path);Mode=(if mode.HasFlag UnixFileMode.UserExecute then "0555" else "0444");SourceClass=sourceClass}
-let hostRow=contractRow "host/FS.GG.Telemetry.Host.0.3.0.nupkg" "/opt/fsgg/telemetry-host/FS.GG.Telemetry.Host.0.3.0.nupkg" "host" readMode "host-package"
+let hostRow=contractRow "host/FS.GG.Telemetry.Host.0.4.0.nupkg" "/opt/fsgg/telemetry-host/FS.GG.Telemetry.Host.0.4.0.nupkg" "host" readMode "host-package"
 let managerRow=contractRow "telemetry-host-manager-net10.0/TelemetryHostManager.dll" "/opt/fsgg/telemetry-host-manager/TelemetryHostManager.dll" "manager" readMode "manager-payload"
 let managerDependencyRow=contractRow "telemetry-host-manager-net10.0/FSharp.Core.dll" "/opt/fsgg/telemetry-host-manager/FSharp.Core.dll" "manager" readMode "manager-dependency"
 let runtimeRow=contractRow "runtime/dotnet" "/usr/share/dotnet/dotnet" "runtime" executeMode "runtime-dotnet"
@@ -124,7 +140,7 @@ let authorityFile name (bytes:byte array) =
   File.WriteAllBytes(path,bytes);File.SetUnixFileMode(path,readMode)
   sha bytes
 let hostPayload=h 'd'
-let hostManifestBytes=JsonSerializer.SerializeToUtf8Bytes({|archiveSha256=hostRow.Sha256;createdAt="2026-10-02T00:00:00Z";dependencyLockSha256=h 'a';framework="net10.0";packageId="FS.GG.Telemetry.Host";producerPayloadSha256="sha256:"+hostPayload;runtimePrerequisites=[|"Microsoft.AspNetCore.App 10.0";"Microsoft.NETCore.App 10.0"|];schema="fsgg.telemetry.host-release/1";sourceSha=String('a',40);supportedStoreSchemaMax=12;supportedStoreSchemaMin=10;tag="telemetry-host/v0.3.0";target="linux-x64";uiAssetTreeSha256=h 'b';version="0.3.0"|})
+let hostManifestBytes=JsonSerializer.SerializeToUtf8Bytes({|archiveSha256=hostRow.Sha256;createdAt="2026-10-02T00:00:00Z";dependencyLockSha256=h 'a';framework="net10.0";packageId="FS.GG.Telemetry.Host";producerPayloadSha256="sha256:"+hostPayload;runtimePrerequisites=[|"Microsoft.AspNetCore.App 10.0";"Microsoft.NETCore.App 10.0"|];schema="fsgg.telemetry.host-release/1";sourceSha=String('a',40);supportedStoreSchemaMax=12;supportedStoreSchemaMin=10;tag="telemetry-host/v0.4.0";target="linux-x64";uiAssetTreeSha256=h 'b';version="0.4.0"|})
 let hostManifestSha=authorityFile "host.json" hostManifestBytes
 let runtimeItem={|bytes=runtimeRow.Bytes;mode=runtimeRow.Mode;path="dotnet";sha256=runtimeRow.Sha256|}
 let runtimeManifestBytes=JsonSerializer.SerializeToUtf8Bytes [|runtimeItem|]
