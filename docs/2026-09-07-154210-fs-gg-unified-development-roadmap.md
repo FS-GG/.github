@@ -157,6 +157,32 @@ before root can admit a fresh same-custody recovery. Neither operation has been
 admitted by this source closure, and the original tuple/journal is not repacked,
 relabeled or replayed.
 
+**2026-10-04: BARC-01.5 original-archive ordinary signer verification CLOSED.**
+Root accepted one bounded SDK **10.0.401** / NuGet **7.9** verification of the
+four original Stock FSharp.Core, client FSharp.Core, Fable.Core and Elmish
+archives. All four ordinary `dotnet nuget verify --all --verbosity detailed`
+commands returned **0** in **5.736586061073467 seconds** overall. All **11,051**
+input pins and **196** SDK aliases remained unchanged; relevant HOME, trust and
+ordinary cache bytes were identical before and after. All **nine** observed
+owned process identities were absent after settlement.
+
+Stock FSharp.Core has a valid Microsoft author signature without a NuGet
+repository countersignature; client FSharp.Core has valid Microsoft author and
+NuGet repository countersignatures. Fable.Core and Elmish have valid NuGet
+repository primary signatures. The two original Core archives remain distinct;
+this verification supplies no catalog-only source-defect or maliciousness verdict.
+Ordinary online revocation mode was used, without independent observation of
+complete live-responder requests. Observed SDK mappings joined the pinned SDK;
+full loaded-artifact closure is not claimed. Root acceptance SHA-256 is
+`5a55a82ccd964fe9d7a36412bc4908b277587dce22a2ccb4d2e9f5e8efcd6a78`.
+
+This closes native archive verification only. Browser/guest producer provenance,
+final placement, source activation and a fresh game-operation grant remain open;
+the accepted eight managed products and four earlier FAILED preparations retain
+their outcomes. Historical READY/map cause remains **Unknown** and useful native
+play **0/6**. The consumed verification is not replayed. This documentation
+projection runs no SDK or producer and admits no game operation.
+
 **2026-10-04: BARC-01.5f bounded managed-artifact preparation CLOSED.**
 Root accepted one fresh preparation from FSBarV2
 `fb00d0f77b6c7d0998f85a2039931c0c5eed2472`, tree
