@@ -53,6 +53,32 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-04: BARC-01.5f bounded managed-artifact preparation CLOSED.**
+Root accepted one fresh preparation from FSBarV2
+`fb00d0f77b6c7d0998f85a2039931c0c5eed2472`, tree
+`a3a99dad4ef2b301643157b4cd3d1b3fc626facc`, with unchanged HighBar
+`b57f11f290dc3239d894b0285ae272b6b21bc25d`. All **six** export/tools/restore/build
+phases returned **0** in **95.96816809196025 seconds**, using SDK **10.0.401**
+and serial CPU **2**. Independent readback accepted **75** canonical inputs,
+**eight** compiler receipts and managed products, **77** real SHA-256 source
+documents and **two** narrowly typed FSharp synthetic documents. The synthetic
+document joins claim no actual source bytes or remote source resolution.
+
+The full generated custody census covers **1,306** physical leaves; all **42**
+owned PID/start identities were absent after settlement. All **9,649** original
+input pins remained unchanged. Root acceptance SHA-256 is
+`9c1be35ea07a5c4ffd1f9f7033f730f60ac3721ee0c335f2ed1c18c845cf6327`;
+full generated custody SHA-256 is
+`182435987db71683b779f502c19dfe610f24912f1ce0a0162b6d7e221768506f`.
+
+This closes only the bounded managed preparation. The four earlier preparations
+remain **FAILED** with their original observations. Final artifact placement,
+source activation, a fresh game-operation grant and runtime acceptance remain
+separate open gates; expired or consumed grants are not renewed or replayed.
+Historical READY/map cause remains **Unknown** and useful native play **0/6**.
+This progress-only projection invokes no SDK or product CLI and admits no
+runtime operation.
+
 **2026-10-04: UTEL-H3 public 0.96 installed read-only readiness CLOSED (side-by-side operation).**
 Root accepted one fresh **FS.GG.Coord.Cli 0.96.0** installation through ordinary
 anonymous NuGet HTTPS with SDK **10.0.401** and runtime **10.0.12**. Tool install,
