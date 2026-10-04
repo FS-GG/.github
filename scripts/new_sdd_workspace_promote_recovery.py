@@ -81,6 +81,32 @@ def validate_binding(binding, mode):
 # Closed recovery-only public observability. Never emit free text, raw capture,
 # argv, path, HOME, credential, HTTP query or SDK/provider inventory.
 SAFE_REFUSAL_CODES={
+    'SDK scope selected version unavailable or newer normal selection':'sdk-version-refusal',
+    'SDK scope normal net10 runtime unavailable':'sdk-runtime-refusal',
+    'SDK scope unsupported runtime policy':'sdk-runtime-policy-refusal',
+    'SDK scope external runtime config':'sdk-runtime-policy-refusal',
+    'SDK scope selected runtime config':'sdk-runtime-policy-refusal',
+    'SDK scope unsupported runtime family':'sdk-runtime-policy-refusal',
+    'SDK scope runtime config':'sdk-runtime-policy-refusal',
+    'SDK scope runtime framework roster':'sdk-runtime-policy-refusal',
+    'SDK scope framework ambiguity':'sdk-layout-refusal',
+    'SDK scope ambiguous version layout':'sdk-layout-refusal',
+    'SDK scope ambiguous shared layout':'sdk-layout-refusal',
+    'SDK scope required directory absent':'sdk-layout-refusal',
+    'SDK scope canonical host/fxr absent':'sdk-layout-refusal',
+    'SDK scope shared root':'sdk-layout-refusal',
+    'SDK scope resolver override':'sdk-resolution-refusal',
+    'SDK scope ordinary root disagreement':'sdk-resolution-refusal',
+    'SDK scope normal PATH absent':'sdk-resolution-refusal',
+    'SDK scope canonical PATH host disagreement':'sdk-resolution-refusal',
+    'SDK scope canonical host absent':'sdk-resolution-refusal',
+    'SDK scope held policy changed':'sdk-resolution-refusal',
+    'SDK scope global config':'sdk-runtime-policy-refusal',
+    'SDK scope config hash disagreement':'sdk-input-drift',
+    'SDK scope source config disagreement':'sdk-input-drift',
+    'SDK scope selection drift':'sdk-input-drift',
+    'SDK scope CLI metadata escape':'physical-scope-refusal',
+
     "operation deadline":"operation-deadline",
     "physical roster deadline":"physical-roster-deadline",
     "physical roster cap":"physical-member-cap",
@@ -517,7 +543,150 @@ def child_environment(root):
     require(not any(any(word in k.upper() for word in ("TOKEN","SECRET","KEY","PASSWORD","CREDENTIAL")) for k in env),"credential child environment")
     return env
 
-def physical_roster(root,cap=50000,deadline=None):
+# Root-selected architecture amendment: exact selected closure, no hidden fallback.
+SDK_SCOPE_POLICY={"schema":"fsgg.wizard-sdk-scope-policy/1","sdkVersion":"10.0.401","runtimeFamily":"10.0","hostFxr":"whole-canonical-tree","cliMetadata":"whole-applicable-trees","snapshotMembers":50000,"snapshotMemberBytes":256*1024*1024}
+ORIGINAL_RUNTIME_CONFIG_MEMBER="tools/net10.0/any/new-sdd-workspace.runtimeconfig.json"
+ORIGINAL_RUNTIME_CONFIG_SHA256="e4b3a5d18f436095616519e1c99f954e4b0a8952d2dc6681915a69bbae0c5f30"
+ORIGINAL_RUNTIME_OPTIONS={"tfm":"net10.0","rollForward":"Major","framework":{"name":"Microsoft.NETCore.App","version":"10.0.0"},"configProperties":{"System.Globalization.Invariant":True,"System.Globalization.PredefinedCulturesOnly":True,"System.Reflection.Metadata.MetadataUpdater.IsSupported":False,"System.Runtime.Serialization.EnableUnsafeBinaryFormatterSerialization":False}}
+SDK_FORBIDDEN_ENV={"DOTNET_ADDITIONAL_DEPS","DOTNET_SHARED_STORE","DOTNET_MULTILEVEL_LOOKUP","DOTNET_STARTUP_HOOKS","MSBuildSDKsPath"}
+
+def sdk_input_environment():
+    # Same resolver inputs as the closed SDK child environment. Other ambient
+    # settings cannot affect child resolution because they are never forwarded.
+    return {k:v for k,v in os.environ.items() if k in {"HOME","PATH","DOTNET_ROOT","LANG","LC_ALL","TZ","TERM","SSL_CERT_FILE","SSL_CERT_DIR"}}
+
+def sdk_scope_versions(directory):
+    require(directory.is_dir() and not directory.is_symlink(),"SDK scope required directory absent")
+    names=[]
+    for index,path in enumerate(directory.iterdir()):
+        require(index<64 and path.is_dir() and not path.is_symlink() and re.fullmatch(r"[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,6}",path.name),"SDK scope ambiguous version layout")
+        names.append(path.name)
+    return sorted(names,key=lambda value:tuple(map(int,value.split("."))))
+
+def sdk_scope_requirements(config):
+    require(isinstance(config,dict) and isinstance(config.get("runtimeOptions"),dict),"SDK scope runtime config")
+    options=config["runtimeOptions"]
+    require(set(options)<={"tfm","framework","frameworks","rollForward","applyPatches","configProperties"} and options.get("tfm","net10.0")=="net10.0","SDK scope external runtime config")
+    properties=options.get("configProperties",{});require(isinstance(properties,dict) and all(isinstance(k,str) and k.startswith("System.") and type(v) in {bool,int} for k,v in properties.items()),"SDK scope external runtime config")
+    require(options.get("rollForward","Minor") in {"Minor","LatestPatch","Major"} and options.get("applyPatches",True)is True,"SDK scope unsupported runtime policy")
+    require(not ("framework" in options and "frameworks" in options),"SDK scope framework ambiguity")
+    rows=options["frameworks"] if "frameworks" in options else [options["framework"]] if "framework" in options else []
+    require(isinstance(rows,list) and 1<=len(rows)<=2 and all(isinstance(row,dict) for row in rows),"SDK scope runtime framework roster")
+    require(len({row.get("name") for row in rows})==len(rows),"SDK scope framework ambiguity")
+    for row in rows:require(set(row)=={"name","version"} and row["name"] in {"Microsoft.NETCore.App","Microsoft.AspNetCore.App"} and isinstance(row["version"],str) and re.fullmatch(r"10\.0\.[0-9]{1,6}",row["version"]),"SDK scope unsupported runtime family")
+    return rows
+
+def selected_sdk_scope(root,source,environment,deadline):
+    root=Path(root).resolve();require(time.monotonic()<deadline,"physical roster deadline")
+    require(not any(k in SDK_FORBIDDEN_ENV or k.startswith(("DOTNET_ROLL_FORWARD","DOTNET_MSBUILD_SDK_RESOLVER_","DOTNET_ROOT_")) for k in environment),"SDK scope resolver override")
+    require("DOTNET_ROOT" not in environment or Path(environment["DOTNET_ROOT"]).resolve()==root,"SDK scope ordinary root disagreement")
+    require(isinstance(environment.get("PATH"),str) and 0<len(environment["PATH"])<=8192,"SDK scope normal PATH absent")
+    chosen_host=shutil.which("dotnet",path=environment["PATH"]);require(bool(chosen_host) and Path(chosen_host).resolve()==root/"dotnet","SDK scope canonical PATH host disagreement")
+    host=root/"dotnet";require((root/"host").is_dir() and not (root/"host").is_symlink(),"SDK scope canonical host/fxr absent");require(host.is_file() and not host.is_symlink(),"SDK scope canonical host absent")
+    global_path=Path(source)/"global.json";require(global_path.is_file() and global_path.stat().st_size<=SMALL_JSON_CAP,"SDK scope global config")
+    global_raw=global_path.read_bytes();global_sdk=json.loads(global_raw).get("sdk",{});require(isinstance(global_sdk,dict),"SDK scope global config")
+    require(global_sdk.get("version")==SDK_SCOPE_POLICY["sdkVersion"] and global_sdk.get("rollForward")=="latestFeature" and "paths" not in global_sdk,"SDK scope held policy changed")
+    installed=sdk_scope_versions(root/"sdk");compatible=[name for name in installed if name.startswith("10.0.")]
+    require(compatible and compatible[-1]==SDK_SCOPE_POLICY["sdkVersion"],"SDK scope selected version unavailable or newer normal selection")
+    fxr=sdk_scope_versions(root/"host"/"fxr");require(fxr,"SDK scope canonical host/fxr absent")
+    sdk_config_path=root/"sdk"/SDK_SCOPE_POLICY["sdkVersion"]/"dotnet.runtimeconfig.json"
+    require(sdk_config_path.is_file() and sdk_config_path.resolve().is_relative_to(root/"sdk"/SDK_SCOPE_POLICY["sdkVersion"]) and sdk_config_path.stat().st_size<=SMALL_JSON_CAP,"SDK scope selected runtime config")
+    require(not sdk_config_path.with_name("dotnet.runtimeconfig.dev.json").exists(),"SDK scope external runtime config")
+    sdk_raw=sdk_config_path.read_bytes();sdk_config=json.loads(sdk_raw)
+    requirements=sdk_scope_requirements(sdk_config)+sdk_scope_requirements({"runtimeOptions":ORIGINAL_RUNTIME_OPTIONS})
+    frameworks={row["name"] for row in requirements};runtime_layout={};selected={}
+    scope=["dotnet","sdk/"+SDK_SCOPE_POLICY["sdkVersion"],"host/fxr"]
+    shared_root=root/"shared";require(shared_root.is_dir() and not shared_root.is_symlink(),"SDK scope shared root")
+    shared_names=[]
+    for index,path in enumerate(shared_root.iterdir()):
+        require(index<64 and path.is_dir() and not path.is_symlink() and re.fullmatch(r"[A-Za-z][A-Za-z0-9.]{0,63}",path.name),"SDK scope ambiguous shared layout");shared_names.append(path.name)
+    for framework in sorted(frameworks):
+        versions=sdk_scope_versions(shared_root/framework);runtime_layout[framework]=versions
+        matching=[version for version in versions if version.startswith("10.0.")]
+        minimum=max(tuple(map(int,row["version"].split("."))) for row in requirements if row["name"]==framework)
+        require(matching and tuple(map(int,matching[-1].split(".")))>=minimum,"SDK scope normal net10 runtime unavailable")
+        selected[framework]=matching[-1];scope.append("shared/"+framework+"/"+matching[-1])
+    metadata={}
+    for relative in ("sdk-manifests","metadata/workloads"):
+        target=root/relative;metadata[relative]=target.exists()
+        if target.exists():require(target.is_dir() and not target.is_symlink(),"SDK scope CLI metadata escape");scope.append(relative)
+    require(time.monotonic()<deadline,"physical roster deadline")
+    return {"schema":"fsgg.wizard-sdk-scope-selection/1","policy":SDK_SCOPE_POLICY,"globalConfigSha256":digest(global_raw),"sdkRuntimeConfigSha256":digest(sdk_raw),"originalWizardRuntimeConfigSha256":ORIGINAL_RUNTIME_CONFIG_SHA256,"originalWizardRollForward":"Major","installedSDKDirectoryNames":installed,"hostFxrDirectoryNames":fxr,"sharedFrameworkDirectoryNames":sorted(shared_names),"runtimeDirectoryNames":runtime_layout,"selectedRuntimeClosures":selected,"cliMetadataLayout":metadata,"scope":scope}
+
+def selected_sdk_roster(root,selection,deadline,progress):
+    root=Path(root).resolve();members={}
+    for relative in selection["scope"]:
+        target=root/relative;require(target.resolve().is_relative_to(root) and not target.is_symlink(),"physical source escape")
+        if target.is_dir():
+            rows=physical_roster(target,deadline=deadline,progress=progress)
+            for name,row in rows.items():
+                key=relative+"/"+name;require(key not in members and len(members)<50000,"physical roster cap");members[key]=row
+        else:
+            require(relative=="dotnet" and target.is_file() and target.stat().st_size<=256*1024*1024,"physical member byte cap")
+            hashed=hashlib.sha256();progress("member",target.stat().st_size)
+            with target.open("rb") as stream:
+                for chunk in iter(lambda:stream.read(65536),b""):
+                    require(time.monotonic()<deadline,"physical roster deadline");hashed.update(chunk);progress("hashed",len(chunk))
+            progress("complete",0);members[relative]={"sha256":hashed.hexdigest(),"link":None}
+    return {"schema":"fsgg.wizard-selected-sdk-snapshot/1","selection":selection,"members":members}
+
+# Closed SDK progress; scope is the affirmative selected SDK architecture amendment.
+class SDKSnapshotMetrics:
+    MAX_ROWS=33
+    def __init__(self,root,source,phase):
+        require(phase in {"outer-sdk-roster","worker-sdk-roster","worker-sdk-post","outer-sdk-post"},"closed SDK snapshot phase")
+        self.root=Path(root).resolve();self.phase=phase;self.started=time.monotonic();self.last=self.started;self.rows=0;self.members=0;self.member_bytes=0;self.hashed_bytes=0;self.completed=0
+        version=None
+        try:
+            raw=(Path(source)/"global.json").read_bytes()
+            if len(raw)<=SMALL_JSON_CAP:
+                selected=json.loads(raw).get("sdk",{}).get("version")
+                if selected=="10.0.401":version=selected
+        except (OSError,ValueError,TypeError):pass
+        self.version=version;self.names=[];self.directory_complete=True;self.unrecognized=False;self.dotnet=None
+        selected_host=shutil.which("dotnet")
+        if selected_host:
+            resolved_host=Path(selected_host).resolve()
+            if resolved_host.parent==self.root:self.dotnet=resolved_host
+        try:
+            for index,path in enumerate((self.root/"sdk").iterdir()):
+                if index>=64:self.directory_complete=False;break
+                if not path.is_dir() or re.fullmatch(r"[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,6}(?:-[A-Za-z0-9][A-Za-z0-9.-]{0,24})?",path.name) is None:self.unrecognized=True;continue
+                self.names.append(path.name)
+        except OSError:self.directory_complete=False
+        self.exists=(self.root/"sdk"/version).is_dir() if version else None
+    @staticmethod
+    def public_path(path):
+        text=str(path)
+        pattern=r"/(?:usr/share/dotnet|usr/lib/dotnet|opt/dotnet|opt/hostedtoolcache/dotnet(?:/[0-9]+\.[0-9]+\.[0-9]+/x64)?|home/runner/\.dotnet)(?:/dotnet)?"
+        return text if re.fullmatch(pattern,text) else None
+    def emit(self,status="progress",code=None):
+        require(status in {"progress","complete","refused"} and (code is None or code in set(SAFE_REFUSAL_CODES.values())|{"unclassified"}),"closed SDK metric status")
+        elapsed=max(0,int((time.monotonic()-self.started)*1000));require(elapsed<=1200000 and self.rows<self.MAX_ROWS,"finite SDK metrics")
+        row={"schema":"fsgg.wizard-sdk-snapshot-progress/1","phase":self.phase,"status":status,"refusalCode":code,"dotnetResolvedPath":self.public_path(self.dotnet) if self.dotnet else None,"sdkParentResolvedPath":self.public_path(self.root),"pathDisclosure":"stock-public" if self.public_path(self.root) else "withheld-nonstock","installedSDKDirectoryNames":sorted(self.names),"completeSDKDirectoryEnumeration":self.directory_complete,"unrecognizedSDKDirectoryPresent":self.unrecognized,"selectedGlobalSDKVersion":self.version,"selectedSDKDirectoryExists":self.exists,"observedMembers":self.members,"observedMemberBytes":self.member_bytes,"hashedBytes":self.hashed_bytes,"completedMembers":self.completed,"elapsedMilliseconds":elapsed}
+        raw=canonical(row);require(len(raw)<=4096,"SDK metric row cap")
+        print("Wizard SDK snapshot: "+raw.decode(),flush=True);self.rows+=1;self.last=time.monotonic()
+    def progress(self,event,amount):
+        if event=="member":self.members+=1;self.member_bytes+=amount
+        elif event=="hashed":self.hashed_bytes+=amount
+        elif event=="complete":self.completed+=1
+        else:require(False,"closed SDK metric event")
+        require(self.members<=50000 and self.completed<=self.members and self.member_bytes<=50000*256*1024*1024 and self.hashed_bytes<=self.member_bytes,"finite SDK metric counters")
+        if self.rows<self.MAX_ROWS-1 and time.monotonic()-self.last>=15:self.emit()
+
+def sdk_snapshot(root,source,phase,deadline,environment=None):
+    metrics=SDKSnapshotMetrics(root,source,phase);metrics.emit()
+    try:
+        selection=selected_sdk_scope(root,source,sdk_input_environment() if environment is None else environment,deadline)
+        rows=selected_sdk_roster(root,selection,deadline,metrics.progress)
+        require(rows["members"]["sdk/"+SDK_SCOPE_POLICY["sdkVersion"]+"/dotnet.runtimeconfig.json"]["sha256"]==selection["sdkRuntimeConfigSha256"],"SDK scope config hash disagreement")
+        require(selected_sdk_scope(root,source,sdk_input_environment() if environment is None else environment,deadline)==selection,"SDK scope selection drift")
+    except BaseException as error:
+        metrics.emit("refused",getattr(error,"recoveryCode","unclassified") if getattr(error,"recoveryCode","unclassified") in set(SAFE_REFUSAL_CODES.values()) else "unclassified")
+        raise
+    metrics.emit("complete");return rows
+
+def physical_roster(root,cap=50000,deadline=None,progress=None):
     root=Path(root).resolve();rows={}
     for path in sorted(root.rglob("*")):
         relative=path.relative_to(root).as_posix()
@@ -527,10 +696,13 @@ def physical_roster(root,cap=50000,deadline=None):
             require(path.resolve().is_relative_to(root),"physical source escape")
             require(path.stat().st_size<=256*1024*1024,"physical member byte cap")
             hashed=hashlib.sha256()
+            if progress:progress("member",path.stat().st_size)
             with path.open("rb") as stream:
                 for chunk in iter(lambda:stream.read(65536),b""):
                     if deadline is not None:require(time.monotonic()<deadline,"physical roster deadline")
                     hashed.update(chunk)
+                    if progress:progress("hashed",len(chunk))
+            if progress:progress("complete",0)
             rows[relative]={"sha256":hashed.hexdigest(),"link":os.readlink(path) if path.is_symlink() else None}
     return rows
 
@@ -750,7 +922,8 @@ def worker(mode,binding,root,source,start=None):
     try:
         subreaper();before=source_snapshot(source,binding,runner,env)
         sdk_root=existing_sdk_root();require((sdk_root/"dotnet").is_file(),"existing SDK absent")
-        sdk_before=physical_roster(sdk_root,deadline=budget.work)
+        sdk_before=sdk_snapshot(sdk_root,source,"worker-sdk-roster",budget.work,env)
+        require(sdk_before["selection"]["globalConfigSha256"]==before.get("global.json",{}).get("sha256"),"SDK scope source config disagreement")
         budget.storage.bind_report_rosters(before,sdk_before)
         api=FiniteAPI(os.environ.get("GH_TOKEN"),budget,root,held_source=binding["heldSource"])
         report["stage"]="selected-native-admission"
@@ -762,6 +935,7 @@ def worker(mode,binding,root,source,start=None):
         report["sdkVersion"]=version.stdout.strip()
         report["stage"]="original-candidate"
         manifest,original,_=candidate(api,root)
+        require(digest(original[ORIGINAL_RUNTIME_CONFIG_MEMBER])==ORIGINAL_RUNTIME_CONFIG_SHA256 and json.loads(original[ORIGINAL_RUNTIME_CONFIG_MEMBER]).get("runtimeOptions")==ORIGINAL_RUNTIME_OPTIONS,"original Wizard runtime config changed")
         ledger=FiniteAPI(os.environ.get("ORDINARY_LEDGER_TOKEN"),budget,root,authority=True)
         report["stage"]="immutable-authority-primer"
         ledger.prime_journal()
@@ -777,7 +951,7 @@ def worker(mode,binding,root,source,start=None):
         report["sourceRoster"]=before;report["sdkRoster"]=sdk_before
         report["sdkRoot"]=str(sdk_root) if sdk_before is not None else None
         for name,read,expected in (("Source",lambda:source_snapshot(source,binding,runner,env),before),
-                                   ("Sdk",lambda:physical_roster(sdk_root,deadline=budget.end) if existing_sdk_root()==sdk_root else None,sdk_before)):
+                                   ("Sdk",lambda:sdk_snapshot(sdk_root,source,"worker-sdk-post",budget.end,env) if existing_sdk_root()==sdk_root else None,sdk_before)):
             try:
                 observed=read();report["post"+name+"Roster"]=observed
                 report["post"+name+"Matches"]=expected is not None and observed==expected
@@ -786,7 +960,7 @@ def worker(mode,binding,root,source,start=None):
                 report["post"+name+"ErrorKind"]=type(error).__name__;report["post"+name+"Matches"]=False;report["success"]=False
         report["custodyRoles"]=budget.storage.roles
         report["custodyProjection"]=getattr(locals().get("engine"),"custody_projection",None)
-        report["readCount"]=budget.reads;report["commandCount"]=budget.commands;report["releasePatchCount"]=budget.release_patches;report["casWrites"]=budget.cas_writes
+        report["readCount"]=budget.reads;report["commandCount"]=budget.commands;report["releasePatchCount"]=budget.release_patches;report["casWrites"]=len(budget.cas_writes);report["casWritePaths"]=budget.cas_writes
         data=canonical(report);require(len(data)<=budget.storage.worker_report_cap,"full schema report cap");(root/"worker-report.json").write_bytes(data)
     return 0 if report["success"] else 1
 def recipient(binding):
@@ -848,7 +1022,8 @@ def outer(mode,binding,root,source):
     recovery_phase("outer-sdk-resolve")
     sdk_root=existing_sdk_root()
     recovery_phase("outer-sdk-roster")
-    sdk_before=physical_roster(sdk_root,deadline=budget.work)
+    sdk_before=sdk_snapshot(sdk_root,source,"outer-sdk-roster",budget.work)
+    require(sdk_before["selection"]["globalConfigSha256"]==source_before.get("global.json",{}).get("sha256"),"SDK scope source config disagreement")
     recovery_phase("outer-report-reservation")
     outer_report_cap=len(canonical(source_before))+len(canonical(sdk_before))+256*1024
     require(outer_report_cap<=BINARY_CAP,"outer full roster report cap")
@@ -896,7 +1071,7 @@ def outer(mode,binding,root,source):
             recovery_phase("outer-source-post")
             report["independentSourceMatches"]=physical_roster(source,deadline=budget.end)==source_before
             recovery_phase("outer-sdk-post")
-            report["independentSdkMatches"]=physical_roster(sdk_root,deadline=budget.end)==sdk_before
+            report["independentSdkMatches"]=sdk_snapshot(sdk_root,source,"outer-sdk-post",budget.end)==sdk_before
             require(report["independentSourceMatches"] and report["independentSdkMatches"],"independent post-input failure")
         except BaseException as error:recovery_refusal(error);report["success"]=False;report["postErrorKind"]=type(error).__name__
         report["bindingSha256"]=digest(binding_path.read_bytes());report["actualSelectedRunId"]=int(os.environ["GITHUB_RUN_ID"])

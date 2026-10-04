@@ -278,14 +278,14 @@ class FiniteControls(unittest.TestCase):
   self.assertEqual(env['HOME'],os.environ['HOME']);self.assertEqual(env['DOTNET_GENERATE_ASPNET_CERTIFICATE'],'false');self.assertNotIn('GH_TOKEN',env);self.assertNotIn('NUGET_API_KEY',env);self.assertNotIn('DOTNET_NUGET_SIGNATURE_VERIFICATION',env)
  def test_failed_worker_runs_both_full_post_checks(self):
   f=Fixture(self.root,'diagnostic');source=self.root/'source';source.mkdir();(source/'global.json').write_text('{"sdk":{"version":"10.0.401"}}')
-  sdk=self.root/'sdk';sdk.mkdir();(sdk/'dotnet').write_bytes(b'synthetic-sdk-not-executed')
+  sdk=self.root/'sdk';sdk.mkdir();(sdk/'dotnet').write_bytes(b'synthetic-sdk-not-executed');selected_sdk_fixture(sdk,source)
   root=self.root/'worker';root.mkdir();calls=[]
   class Runner:
    def __init__(self,budget,root):self.budget=budget
    def run(self,*args,**kwargs):return subprocess.CompletedProcess(args[0],0,'10.0.401','')
   def snapshot(*args):calls.append('source');return {'source':'unchanged'}
-  def roster(*args,**kwargs):calls.append('sdk');return {'sdk':'unchanged'}
-  with patch.object(r,'subreaper'),patch.object(r,'Runner',Runner),patch.object(r,'source_snapshot',side_effect=snapshot),patch.object(r,'physical_roster',side_effect=roster),patch.object(r.shutil,'which',return_value=str(sdk/'dotnet')),patch.object(r,'candidate',side_effect=Refused('bounded native feed failure')),patch.object(r,'FiniteAPI',return_value=f.api),patch.dict(os.environ,{'GH_TOKEN':'mock','GITHUB_RUN_ID':'99'}):
+  def roster(*args,**kwargs):calls.append('sdk');return {'schema':'fsgg.wizard-selected-sdk-snapshot/1','members':{},'selection':{}}
+  with patch.object(r,'subreaper'),patch.object(r,'Runner',Runner),patch.object(r,'source_snapshot',side_effect=snapshot),patch.object(r,'sdk_snapshot',side_effect=roster),patch.object(r.shutil,'which',return_value=str(sdk/'dotnet')),patch.object(r,'candidate',side_effect=Refused('bounded native feed failure')),patch.object(r,'FiniteAPI',return_value=f.api),patch.dict(os.environ,{'GH_TOKEN':'mock','GITHUB_RUN_ID':'99'}):
    self.assertEqual(r.worker('diagnostic',f.binding,root,source),1)
   report=json.loads((root/'worker-report.json').read_bytes());self.assertEqual(calls,['source','sdk','source','sdk']);self.assertTrue(report['postSourceMatches']);self.assertTrue(report['postSdkMatches']);self.assertFalse(report['success'])
  def test_wrong_recipient_and_private_key_refuse_before_crypto(self):
@@ -583,6 +583,14 @@ class AncestryRoleControls(unittest.TestCase):
   request=r.urllib.request.Request(url)
   with self.assertRaises(Refused):r.Redirect(api.budget).redirect_request(request,None,302,'redirect',{},'https://api.github.com/other')
 
+
+def selected_sdk_fixture(sdk,source):
+ (sdk/'dotnet').chmod(0o700)
+ (source/'global.json').write_text('{"sdk":{"version":"10.0.401","rollForward":"latestFeature"}}')
+ (sdk/'sdk/10.0.401').mkdir(parents=True,exist_ok=True);(sdk/'sdk/10.0.401/dotnet.runtimeconfig.json').write_text('{"runtimeOptions":{"framework":{"name":"Microsoft.NETCore.App","version":"10.0.0"}}}')
+ (sdk/'host/fxr/10.0.2').mkdir(parents=True,exist_ok=True);(sdk/'host/fxr/10.0.2/libhostfxr.so').write_bytes(b'synthetic; never loaded')
+ (sdk/'shared/Microsoft.NETCore.App/10.0.2').mkdir(parents=True,exist_ok=True);(sdk/'shared/Microsoft.NETCore.App/10.0.2/coreclr').write_bytes(b'synthetic; never loaded')
+
 class RecoverySetupObservabilityTests(unittest.TestCase):
  def test_absent_sdk_refuses_before_unrelated_snapshot(self):self.setup_refusal(missing=True)
  def test_setup_deadline_has_closed_phase_code_without_ciphertext_claim(self):self.setup_refusal(missing=False)
@@ -590,14 +598,14 @@ class RecoverySetupObservabilityTests(unittest.TestCase):
   import contextlib
   with tempfile.TemporaryDirectory() as temporary:
    root=pathlib.Path(temporary);fixture=Fixture(root,'diagnostic');sdk=root/'sdk';sdk.mkdir();(sdk/'dotnet').write_bytes(b'synthetic; never executed')
-   source=root/'source';source.mkdir();clock=[40.0];calls=[];output=io.StringIO();original=r.physical_roster;budget_type=r.Budget
+   source=root/'source';source.mkdir();selected_sdk_fixture(sdk,source);clock=[40.0];calls=[];output=io.StringIO();original=r.physical_roster;budget_type=r.Budget
    def roster(path,**kwargs):
     calls.append(pathlib.Path(path))
     if len(calls)==1:return {'source.txt':{'sha256':'a'*64,'link':None}}
     clock[0]=480.0;return original(sdk,deadline=480.0)
    b=fixture.binding;selected=r.datetime.fromisoformat(b['selectedAfter'].replace('Z','+00:00')).timestamp()
    env={'GITHUB_EVENT_NAME':'workflow_dispatch','GITHUB_RUN_ATTEMPT':'1','GITHUB_REPOSITORY':r.REPO,'GITHUB_REF':'refs/heads/main','GITHUB_ACTOR':'EHotwagner','GITHUB_SHA':b['heldSource'],'RECOVERY_BINDING_SHA256':r.digest(r.canonical(b)),'RECOVERY_CORRELATION':b['correlation']}
-   with patch.dict(os.environ,env),patch.object(r,'recipient',return_value='synthetic public cert'),patch.object(r,'subreaper'),patch.object(r,'physical_roster',side_effect=roster),patch.object(r.shutil,'which',return_value=None if missing else str(sdk/'dotnet')),patch.object(r.time,'time',return_value=selected+40),patch.object(r.time,'monotonic',side_effect=lambda:clock[0]),patch.object(r,'Budget',side_effect=lambda mode,start:budget_type(mode,clock=lambda:clock[0],start=start)),patch.object(r,'encrypted_custody') as encrypt,patch.object(r,'Runner',side_effect=AssertionError('worker forbidden')),patch.object(subprocess,'Popen',side_effect=AssertionError('process forbidden')),patch.object(r.urllib.request.OpenerDirector,'open',side_effect=AssertionError('network forbidden')),contextlib.redirect_stdout(output),contextlib.redirect_stderr(output):
+   with patch.dict(os.environ,env),patch.object(r,'recipient',return_value='synthetic public cert'),patch.object(r,'subreaper'),patch.object(r,'physical_roster',side_effect=roster),patch.object(r,'selected_sdk_scope',return_value={'scope':['sdk/10.0.401']}),patch.object(r.shutil,'which',return_value=None if missing else str(sdk/'dotnet')),patch.object(r.time,'time',return_value=selected+40),patch.object(r.time,'monotonic',side_effect=lambda:clock[0]),patch.object(r,'Budget',side_effect=lambda mode,start:budget_type(mode,clock=lambda:clock[0],start=start)),patch.object(r,'encrypted_custody') as encrypt,patch.object(r,'Runner',side_effect=AssertionError('worker forbidden')),patch.object(subprocess,'Popen',side_effect=AssertionError('process forbidden')),patch.object(r.urllib.request.OpenerDirector,'open',side_effect=AssertionError('network forbidden')),contextlib.redirect_stdout(output),contextlib.redirect_stderr(output):
     with self.assertRaises(Refused):r.entry('diagnostic',r.canonical(b).decode(),str(root/'operation'),str(source))
     self.assertEqual(encrypt.call_count,0)
    self.assertEqual(len(calls),1 if missing else 2)
@@ -621,3 +629,134 @@ class RecoverySetupObservabilityTests(unittest.TestCase):
   b=r.Budget('diagnostic',clock=lambda:480,start=0);self.assertEqual((b.work,b.end),(480,600))
   with self.assertRaises(Refused):b.remaining(25)
   self.assertEqual(b.remaining(25,True),25);self.assertEqual((r.CUSTODY_CAP,r.READINESS_CAP,r.STREAM_CAP,r.CUSTODY_MEMBER_CAP),(128*1024*1024,128*1024*1024+8192,1024*1024,323))
+
+
+import contextlib,time
+class SDKSnapshotMetricsTests(unittest.TestCase):
+ def refused_snapshot(self):
+  with self.assertRaises(r.Refused):r.sdk_snapshot(self.sdk,self.source,'outer-sdk-roster',time.monotonic()+10)
+  return None
+ def setUp(self):
+  self.tmp=tempfile.TemporaryDirectory();self.root=pathlib.Path(self.tmp.name);self.sdk=self.root/'sdk-root';self.sdk.mkdir();self.source=self.root/'source';self.source.mkdir();(self.source/'global.json').write_text('{"sdk":{"version":"10.0.401","rollForward":"latestFeature"}}');(self.sdk/'sdk/10.0.401').mkdir(parents=True);(self.sdk/'sdk/9.0.100').mkdir();(self.sdk/'dotnet').write_bytes(b'synthetic host, never executed');(self.sdk/'sdk/10.0.401/payload').write_bytes(b'selected');(self.sdk/'sdk/9.0.100/payload').write_bytes(b'unrelated deliberately outside amended scope');selected_sdk_fixture(self.sdk,self.source)
+ def tearDown(self):self.tmp.cleanup()
+ def capture(self,fn):
+  output=io.StringIO()
+  with contextlib.redirect_stdout(output),patch.object(r.shutil,'which',return_value=str(self.sdk/'dotnet')),patch.object(r,'sdk_input_environment',return_value={'PATH':str(self.sdk)}),patch.object(r.subprocess,'Popen',side_effect=AssertionError('process forbidden')),patch.object(r.urllib.request.OpenerDirector,'open',side_effect=AssertionError('network forbidden')):result=fn()
+  return result,[json.loads(x.split(': ',1)[1]) for x in output.getvalue().splitlines()]
+ def test_complete_selected_payload_roster_and_unrelated_payload_excluded(self):
+  result,rows=self.capture(lambda:r.sdk_snapshot(self.sdk,self.source,'outer-sdk-roster',time.monotonic()+10));self.assertIn('sdk/10.0.401/payload',result['members']);self.assertNotIn('sdk/9.0.100/payload',result['members']);self.assertEqual(rows[-1]['completedMembers'],len(result['members']));self.assertGreater(rows[-1]['hashedBytes'],0);self.assertTrue(rows[-1]['selectedSDKDirectoryExists']);self.assertEqual(rows[-1]['installedSDKDirectoryNames'],['10.0.401','9.0.100'])
+ def test_actual_deadline_has_partial_closed_metrics_no_ciphertext(self):
+  output=io.StringIO()
+  with contextlib.redirect_stdout(output),patch.object(r,'encrypted_custody') as crypto:
+   with self.assertRaises(r.Refused):r.sdk_snapshot(self.sdk,self.source,'outer-sdk-roster',time.monotonic()-1)
+  rows=[json.loads(x.split(': ',1)[1]) for x in output.getvalue().splitlines()];self.assertEqual(rows[-1]['refusalCode'],'physical-roster-deadline');self.assertEqual(rows[-1]['status'],'refused');self.assertEqual(rows[-1]['completedMembers'],0);self.assertEqual(crypto.call_count,0)
+ def test_private_paths_and_arbitrary_sdk_names_not_public(self):
+  (self.sdk/'sdk/SECRET-user-token').mkdir();result,rows=self.capture(lambda:self.refused_snapshot());raw=json.dumps(rows);self.assertNotIn(str(self.root),raw);self.assertNotIn('SECRET',raw);self.assertTrue(rows[-1]['unrecognizedSDKDirectoryPresent']);self.assertIsNone(rows[-1]['sdkParentResolvedPath'])
+ def test_stock_paths_are_exact_and_nonstock_paths_withheld(self):
+  self.assertEqual(r.SDKSnapshotMetrics.public_path(pathlib.Path('/usr/share/dotnet')),'/usr/share/dotnet');self.assertEqual(r.SDKSnapshotMetrics.public_path(pathlib.Path('/usr/share/dotnet/dotnet')),'/usr/share/dotnet/dotnet');self.assertIsNone(r.SDKSnapshotMetrics.public_path(pathlib.Path('/home/private-user/.dotnet')))
+ def test_missing_selected_version_emits_false_without_fallback(self):
+  import shutil
+  shutil.rmtree(self.sdk/'sdk/10.0.401');_,rows=self.capture(lambda:self.refused_snapshot());self.assertFalse(rows[-1]['selectedSDKDirectoryExists']);self.assertIn('9.0.100',rows[-1]['installedSDKDirectoryNames'])
+ def test_finite_row_and_member_caps(self):
+  m=r.SDKSnapshotMetrics(self.sdk,self.source,'outer-sdk-roster');output=io.StringIO()
+  with contextlib.redirect_stdout(output):
+   for _ in range(33):m.emit()
+   with self.assertRaises(r.Refused):m.emit()
+  m.members=50000
+  with self.assertRaises(r.Refused):m.progress('member',0)
+ def test_original_caps_preserved(self):
+  b=r.Budget('diagnostic',clock=lambda:0,start=0);self.assertEqual((b.work,b.end),(480,600));self.assertEqual((r.CUSTODY_CAP,r.STREAM_CAP),(128*1024*1024,1024*1024));self.assertEqual(r.physical_roster.__defaults__[0],50000)
+ def test_member_scope_escape_still_refuses(self):
+  outside=self.root/'outside';outside.write_bytes(b'input');(self.sdk/'sdk/10.0.401/escape').symlink_to(outside)
+  with contextlib.redirect_stdout(io.StringIO()):
+   with self.assertRaises(r.Refused):r.sdk_snapshot(self.sdk,self.source,'outer-sdk-roster',time.monotonic()+10)
+
+
+class SDKScopeProductionControls(unittest.TestCase):
+ setUp=SDKSnapshotMetricsTests.setUp
+ tearDown=SDKSnapshotMetricsTests.tearDown
+ capture=SDKSnapshotMetricsTests.capture
+ def snapshot(self):return r.sdk_snapshot(self.sdk,self.source,'outer-sdk-roster',time.monotonic()+10,{'PATH':str(self.sdk)})
+ def test_all_four_typed_snapshots_same_complete_selection_and_bytes(self):
+  values=[]
+  with contextlib.redirect_stdout(io.StringIO()):
+   for phase in ('outer-sdk-roster','worker-sdk-roster','worker-sdk-post','outer-sdk-post'):values.append(r.sdk_snapshot(self.sdk,self.source,phase,time.monotonic()+10,{'PATH':str(self.sdk)}))
+  self.assertTrue(all(value==values[0] for value in values));self.assertIn('host/fxr/10.0.2/libhostfxr.so',values[0]['members']);self.assertIn('shared/Microsoft.NETCore.App/10.0.2/coreclr',values[0]['members']);self.assertEqual(values[0]['selection']['originalWizardRollForward'],'Major')
+ def test_newer_latestFeatureSDK_refuses_without_normalization(self):
+  (self.sdk/'sdk/10.0.500').mkdir()
+  with contextlib.redirect_stdout(io.StringIO()),self.assertRaises(Refused):self.snapshot()
+ def test_runtime_layout_change_even_unselected_patch_is_detected(self):
+  with contextlib.redirect_stdout(io.StringIO()):before=self.snapshot();(self.sdk/'shared/Microsoft.NETCore.App/9.0.100').mkdir();after=self.snapshot()
+  self.assertNotEqual(before,after);self.assertEqual(before['members'],after['members'])
+ def test_exact_selected_runtime_content_changes_entire_input(self):
+  with contextlib.redirect_stdout(io.StringIO()):before=self.snapshot();(self.sdk/'shared/Microsoft.NETCore.App/10.0.2/coreclr').write_bytes(b'changed');after=self.snapshot()
+  self.assertNotEqual(before,after)
+ def test_unrelatedSDKcontent_deliberately_outside_scope_but_layout_not(self):
+  with contextlib.redirect_stdout(io.StringIO()):before=self.snapshot();(self.sdk/'sdk/9.0.100/payload').write_bytes(b'changed unrelated');after=self.snapshot();(self.sdk/'sdk/9.0.200').mkdir();layout=self.snapshot()
+  self.assertEqual(before,after);self.assertNotEqual(after,layout)
+ def test_no_net11_major_fallback_when_net10_missing(self):
+  import shutil
+  shutil.rmtree(self.sdk/'shared/Microsoft.NETCore.App/10.0.2');(self.sdk/'shared/Microsoft.NETCore.App/11.0.0').mkdir()
+  with contextlib.redirect_stdout(io.StringIO()),self.assertRaises(Refused):self.snapshot()
+ def test_both_actual_sdk_and_original_wizard_frameworks_join(self):
+  (self.sdk/'shared/Microsoft.AspNetCore.App/10.0.3').mkdir(parents=True);(self.sdk/'shared/Microsoft.AspNetCore.App/10.0.3/web').write_bytes(b'synthetic selected runtime')
+  cfg={'runtimeOptions':{'frameworks':[{'name':'Microsoft.NETCore.App','version':'10.0.2'},{'name':'Microsoft.AspNetCore.App','version':'10.0.3'}]}};(self.sdk/'sdk/10.0.401/dotnet.runtimeconfig.json').write_text(json.dumps(cfg))
+  with contextlib.redirect_stdout(io.StringIO()):value=self.snapshot()
+  self.assertEqual(value['selection']['selectedRuntimeClosures'],{'Microsoft.NETCore.App':'10.0.2','Microsoft.AspNetCore.App':'10.0.3'});self.assertIn('shared/Microsoft.AspNetCore.App/10.0.3/web',value['members'])
+ def test_resolver_overrides_and_noncanonical_root_refuse(self):
+  for env in [{'DOTNET_ROLL_FORWARD':'LatestMajor'},{'DOTNET_STARTUP_HOOKS':'private'},{'DOTNET_ROOT':'/other'},{'DOTNET_ROOT_X64':str(self.sdk)}]:
+   with contextlib.redirect_stdout(io.StringIO()),self.assertRaises(Refused):r.sdk_snapshot(self.sdk,self.source,'outer-sdk-roster',time.monotonic()+10,env)
+ def test_additional_probing_or_dev_config_refused(self):
+  cfg=self.sdk/'sdk/10.0.401/dotnet.runtimeconfig.json';cfg.write_text(json.dumps({'runtimeOptions':{'framework':{'name':'Microsoft.NETCore.App','version':'10.0.0'},'additionalProbingPaths':['/private']}}))
+  with contextlib.redirect_stdout(io.StringIO()),self.assertRaises(Refused):self.snapshot()
+  selected_sdk_fixture(self.sdk,self.source);(cfg.parent/'dotnet.runtimeconfig.dev.json').write_text('{}')
+  with contextlib.redirect_stdout(io.StringIO()),self.assertRaises(Refused):self.snapshot()
+ def test_whole_host_fxr_and_cli_metadata_all_versions_pinned(self):
+  (self.sdk/'host/fxr/11.0.0').mkdir();(self.sdk/'host/fxr/11.0.0/fxr').write_bytes(b'synthetic host');(self.sdk/'sdk-manifests/9.0.100').mkdir(parents=True);(self.sdk/'sdk-manifests/9.0.100/manifest').write_bytes(b'synthetic metadata');(self.sdk/'metadata/workloads/state').mkdir(parents=True);(self.sdk/'metadata/workloads/state/data').write_bytes(b'synthetic discovery')
+  with contextlib.redirect_stdout(io.StringIO()):value=self.snapshot()
+  self.assertIn('host/fxr/11.0.0/fxr',value['members']);self.assertIn('sdk-manifests/9.0.100/manifest',value['members']);self.assertIn('metadata/workloads/state/data',value['members'])
+ def test_storage_counts_entire_typed_scope_and_refuses_before_effects(self):
+  with contextlib.redirect_stdout(io.StringIO()):value=self.snapshot()
+  source=r.physical_roster(self.source);storage=r.CustodyStorage(self.root/'storage');storage.root.mkdir();storage.bind_report_rosters(source,value);n=len(r.canonical(source))+len(r.canonical(value));self.assertEqual(storage.report_reservation,4*n+3*256*1024)
+  with self.assertRaises(Refused):storage.bind_report_rosters(source,{'schema':'synthetic-oversized','selection':{'layout':'x'*r.BINARY_CAP},'members':{}})
+ def test_selection_rederived_after_hash_refuses_metadata_race(self):
+  original=r.selected_sdk_roster
+  def mutate(root,selection,deadline,progress):
+   result=original(root,selection,deadline,progress);(self.sdk/'shared/Microsoft.NETCore.App/9.0.111').mkdir();return result
+  with patch.object(r,'selected_sdk_roster',side_effect=mutate),contextlib.redirect_stdout(io.StringIO()),self.assertRaises(Refused):self.snapshot()
+
+class SDKScopeCallerChainControls(unittest.TestCase):
+ def run_failed_chain(self,cas_paths=()):
+  from types import SimpleNamespace
+  with tempfile.TemporaryDirectory() as tmp:
+   base=pathlib.Path(tmp);source=base/'source';source.mkdir();sdk=base/'sdk';sdk.mkdir();(sdk/'dotnet').write_bytes(b'synthetic; never executed');selected_sdk_fixture(sdk,source);openssl=base/'openssl';openssl.write_bytes(b'synthetic; never executed')
+   fixture=Fixture(base,'diagnostic');binding=fixture.binding;selected=r.datetime.fromisoformat(binding['selectedAfter'].replace('Z','+00:00')).timestamp();stages=[];original_snapshot=r.sdk_snapshot;real_path=pathlib.Path
+   def observed(*args,**kwargs):stages.append(args[2]);return original_snapshot(*args,**kwargs)
+   class PureRunner:
+    def __init__(self,budget,root):
+     self.budget=budget;self.root=root;self.records=[]
+     if root.name=='worker':budget.cas_writes=list(cas_paths)
+    def run(self,argv,seconds,env,cwd=None):
+     self.budget.command(seconds)
+     if '--worker' in argv:
+      with patch.dict(os.environ,env):code=r.worker(argv[3],json.loads(real_path(argv[4]).read_bytes()),real_path(argv[5]),real_path(argv[6]),float(argv[7]))
+      return SimpleNamespace(returncode=code,stdout='',stderr='')
+     if argv==['dotnet','--version']:
+      raw=b'10.0.401\n';(self.root/'command-0-stdout.raw').write_bytes(raw);(self.root/'command-0-stderr.raw').write_bytes(b'');self.records.append({'index':0,'argv':argv,'actualExitCode':0,'stdout':{'file':'command-0-stdout.raw','bytes':len(raw),'sha256':r.digest(raw)},'stderr':{'file':'command-0-stderr.raw','bytes':0,'sha256':r.digest(b'')},'custody':{'leader':{'pid':9999999,'start':1},'leaderReaped':True,'remaining':[],'errors':[],'members':[]}})
+      (self.root/'commands.json').write_bytes(r.canonical(self.records));return SimpleNamespace(returncode=0,stdout=raw.decode(),stderr='')
+     raise AssertionError('unexpected command or SDK/install/crypto execution')
+   def paths(value):
+    if str(value) in {'/etc/ssl/openssl.cnf','/usr/lib/x86_64-linux-gnu/ossl-modules'}:return base/'absent-stock-fixture'
+    return real_path(value)
+   def which(name,**kwargs):return str(sdk/'dotnet') if name=='dotnet' else str(openssl)
+   def snapshot(*args,**kwargs):return r.physical_roster(source,deadline=time.monotonic()+10)
+   env={'GITHUB_RUN_ID':'99','GH_TOKEN':'synthetic','DOTNET_ROOT':str(sdk),'PATH':str(sdk)}
+   with patch.dict(os.environ,env),patch.object(r,'Path',side_effect=paths),patch.object(r.time,'time',return_value=selected+1),patch.object(r,'recipient',return_value='synthetic public cert'),patch.object(r,'subreaper'),patch.object(r.shutil,'which',side_effect=which),patch.object(r,'sdk_snapshot',side_effect=observed),patch.object(r,'Runner',PureRunner),patch.object(r,'source_snapshot',side_effect=snapshot),patch.object(r,'native_context'),patch.object(r,'FiniteAPI',return_value=fixture.api),patch.object(r,'candidate',side_effect=Refused('synthetic genuine-fetch refusal')),patch.object(r,'encrypted_custody',side_effect=Refused('synthetic crypto forbidden')),patch.object(subprocess,'Popen',side_effect=AssertionError('real process forbidden')),patch.object(r.urllib.request.OpenerDirector,'open',side_effect=AssertionError('real network forbidden')),contextlib.redirect_stdout(io.StringIO()),contextlib.redirect_stderr(io.StringIO()):
+    result=r.outer('diagnostic',binding,base/'operation',source)
+   self.assertEqual(result,1);self.assertEqual(stages,['outer-sdk-roster','worker-sdk-roster','worker-sdk-post','outer-sdk-post'])
+   worker=json.loads((base/'operation/worker/worker-report.json').read_bytes());terminal=json.loads((base/'operation/terminal.json').read_bytes());self.assertFalse(worker['success']);self.assertTrue(worker['postSourceMatches']);self.assertTrue(worker['postSdkMatches']);self.assertTrue(terminal['independentSourceMatches']);self.assertTrue(terminal['independentSdkMatches']);self.assertEqual(worker['releasePatchCount'],0);self.assertEqual(worker['casWrites'],len(cas_paths));self.assertEqual(worker['casWritePaths'],list(cas_paths));self.assertEqual(worker['sdkRoster']['selection']['policy'],r.SDK_SCOPE_POLICY)
+
+ def test_failed_actual_outer_worker_chain_runs_four_selected_snapshots(self):self.run_failed_chain()
+ def test_nonzero_failed_budget_reports_number_and_private_paths(self):
+  # Counter-only fault fixture; actual CAS transport/allowlists are not invoked.
+  self.run_failed_chain(('synthetic/git/blobs','synthetic/git/trees'))
