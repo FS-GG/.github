@@ -53,6 +53,28 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-04: WASM-SHARED-01 bound-draft successor source capability CLOSED.**
+[Game PR #691](https://github.com/FS-GG/FS.GG.Game/pull/691) merged at
+02:25:37 UTC into protected executor `ad5db7ee70cf03fa4d860a0ede7157334d96793c`,
+tree `9f59e455b1eac7eb9e4334d68f3d6161750638f5`. All **34** native checks
+passed, including [run 37169896849](https://github.com/FS-GG/FS.GG.Game/actions/runs/37169896849).
+The [owning Game plan](https://github.com/FS-GG/FS.GG.Game/blob/ad5db7ee70cf03fa4d860a0ede7157334d96793c/docs/roadmaps/wasm-shared-01.md)
+retains original preparation executor `8b92b7c4a8061157c03155662c97d33c0bc01551`
+and tuple `6ba4084f7835e81cec93fe58b23ee9fa70cec67e0b01e2e4195b16e7f2b5d937`.
+A separate closed execution binding joins that unchanged custody to the reviewed
+descendant. Bounded draft discovery now covers the actual adapter, asset callers
+and installed binder/cache; reviewed job-local Contents-write for draft visibility
+and installed Actions-read use existing credential routes. No user credential
+replacement or manual permission change is required.
+
+This closes source capability only. Original promotion `37166812270` remains
+**FAILED**; the producer tag and bound draft `402763234` remain its partial
+transaction. Public 0.3.0 publication, installed acceptance and activation remain
+open. One separately admitted read-only inspection must establish native readiness
+before root can admit a fresh same-custody recovery. Neither operation has been
+admitted by this source closure, and the original tuple/journal is not repacked,
+relabeled or replayed.
+
 **2026-10-04: BARC-01.5f bounded managed-artifact preparation CLOSED.**
 Root accepted one fresh preparation from FSBarV2
 `fb00d0f77b6c7d0998f85a2039931c0c5eed2472`, tree
