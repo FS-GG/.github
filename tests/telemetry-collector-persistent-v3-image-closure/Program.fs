@@ -96,6 +96,14 @@ for historical in historicalHostSelections do
   | ClosureResult.Refused "fixed-production-identity-mismatch"->()
   | value->fail $"historical Host pin crossed current production release gate: %A{value}"
 printfn "PASS actual served Host 0.4 production identity and eight historical-pin refusals"
+// A bounded source release-pin window does not run the full synthetic OCI mechanism.
+// The normal console and native CI retain every constructor, OCI and retirement control below.
+if Environment.GetEnvironmentVariable "PERSISTENT_V3_RELEASE_PIN_CONTROLS_ONLY" = "1" then
+  Directory.Delete(root,true)
+  Directory.Delete(manifestRoot,true)
+  printfn "PASS focused release-pin source controls; installed image qualification remains unknown"
+  Environment.Exit 0
+
 
 let contractRoot=Directory.CreateTempSubdirectory("p2c3-production-contract-").FullName
 let contractManifestRoot=Directory.CreateTempSubdirectory("p2c3-production-authority-").FullName
