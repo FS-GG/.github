@@ -6116,8 +6116,9 @@ and realistic soldier-instance performance qualification. It proposes container-
 fixtures exercised by a verified GPU-backed browser on host-main; the current container has no
 GPU acceleration, and host reachability/control/acceleration remain to be established. Because
 host GPU tests require active human intervention, complete autonomous implementation, container
-checks and integrated candidate preparation first, then batch host setup and GPU tests in one
-late qualification window before dependent acceptance/publication. Rendering
+checks and integrated candidate preparation first, then serve a self-running test page for one
+late open-URL/run-all/download session before dependent acceptance/publication. No host tooling
+installation is required; collect optional GPU diagnostics only for claims needing them. Rendering
 owns common implementation; this existing adoption sequence retains product migration ownership.
 New workspaces change only after the resulting producer/template publication and installed
 qualification; retained consumers require preserving upgrade/rollback evidence. This planning
