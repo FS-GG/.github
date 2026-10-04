@@ -345,8 +345,8 @@ streams and retained command/output evidence share one operation output allowanc
 
 Source preparation does not establish compiled or native custody. Affected compilation and
 console/correspondence checks use the existing safe source supervisor; controlled native
-custody fixtures require a separate admission in a qualified context. Current local UID/GID maps lack the required singleton non-host-root UID0
-mapping, and the cgroup mount is read-only. Delegation, workload control denial, foreign
+custody fixtures require a separate admission in a qualified context. Current local UID/GID
+maps lack the required singleton non-host-root UID0 mapping, and the cgroup mount is read-only. Delegation, workload control denial, foreign
 insertion exclusion, mapped-user runtime visibility, namespace authority and conservative
 32-thread/process capacity remain actual feasibility gates. No fallback or raised cap is
 admitted. The former 18:50 image-closure executable cannot be reused for the changed backend.
@@ -355,3 +355,26 @@ Fresh native diagnostic evidence and a successor acquisition admission are requi
 actual two-image/C5 qualification; the accepted 19:20 diagnostic is historical after its
 19:24:09 UTC expiry. Installed receiver adoption, grants, capture, restart/recovery, usage
 completeness and activation remain pending. Source controls do not close those gates.
+
+
+Root accepted the amended source compilation at `bd06cce1d50d42934377dfd9c3676b8a331a5c1e`.
+Private operation `learn-rootless-compile-root-operation-20261004-2106` completed restore,
+build and the actual default source console with three natural exit-zero steps in 16.815s;
+original/source pins settled and the final CLR census contained only the two reviewed
+infrastructure generations. The source console retained the unavailable placeholder,
+release-pin refusals, synthetic OCI/runner checks and five pure custody binding controls.
+Its in-process command fixture does not establish actual descendant custody.
+
+The source landing joins protected `2ab0c0ff9f37bdec9a11ba3604ebdc230711934f`; all 24
+compilation leaves remain byte-equal to the accepted candidate. This byte join preserves
+compilation provenance and does not call the joined revision newly compiled. Protected
+integration and exact-head checks retain their normal authority. The initial overload-failed
+operation and its consumed admission remain retained as failed evidence.
+
+Before native use, the fixed inherited-namespace C helper must join an independently pinned
+compiler, headers/linker and freshly compiled body. A bounded helper compilation
+can resolve that source dependency independently; it cannot supply cgroup delegation,
+required UID/GID mappings, private namespace/setns authority, actual mapped-user/guest runtime
+visibility, foreign-insertion exclusion, workload control denial or retirement qualification.
+Current native custody and all actual cold-image, installed receiver and activation gates
+remain open. Source delivery follows the Board publication fence.
