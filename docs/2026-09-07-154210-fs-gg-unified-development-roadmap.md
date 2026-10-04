@@ -53,6 +53,50 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-04: WASM-SHARED-01 H3 same-custody native publisher CLOSED.**
+The separately admitted first-attempt [Game recovery run
+37185764818](https://github.com/FS-GG/FS.GG.Game/actions/runs/37185764818)
+completed **SUCCESS** at 07:34:10 UTC on protected executor
+`8de4c2747d40e9993cc9a08cd50e1e2d599f69fb`. Preflight, fresh admission,
+begin, org, public, assets and complete passed in order; preparation, inspection
+and standalone readback skipped. Native admission rechecked all six current
+active/deleted/public occupancy results and genuine OIDC/account binding.
+Root verified all **six** original native artifacts and every expanded member:
+org archives preserve the frozen originals, and public payload members match
+with only the repository-signature member added.
+
+[Release `wasm/v0.3.0`](https://github.com/FS-GG/FS.GG.Game/releases/tag/wasm/v0.3.0)
+published at 07:34:06 UTC as release `402763234`, with the exact original SDK,
+manifest, checksums and unchanged journal asset `608859205`. Original producer
+`16a40169`, preparation executor `8b92b7c4`, preparation `37163937340` and tuple
+`6ba4084f` remain its custody. Failed publisher `37166812270` and both failed
+inspections remain immutable history; no automatic second recovery occurred.
+The [owning foundation plan](roadmaps/2026-10-02-shared-wasm-foundation.md#native-03-publisher-recovery--2026-10-04)
+records this native closure separately from **H4**, which remains open for
+independent genuine public-signature verification and fresh installed consumers.
+Receiver adoption and workspace defaults remain unchanged.
+
+**2026-10-04: SC2 bounded native producer qualification CLOSED.**
+Root accepted the fifth distinct operation: genuine `cc1`, `as` and `ld` each
+exited 0 with complete empty streams, producing a **680-byte** ELF (SHA-256
+`02db51951e5deb25487adeb5dfa6d2f2ddbaaa2eae917b68f1d474d696ab1965`).
+The output was never executed. All **258** inputs were rehashed after production;
+all four owned processes were observed absent and cleanup passed. Private root
+acceptance SHA-256 is
+`418f8f0ed451ff6a9c71ce0c9f9d7b7328b253fcdf3b128fbebfbaa379e180e0`.
+
+This qualifies the separate ordinary producer's **256 MiB controller-evidence-read**
+and **8 MiB retained-scratch** contract: actual controller evidence reads totaled
+**161,630,459 bytes**. Internal runtime/compiler reads and cumulative compiler writes
+remain **UNKNOWN**. The native-generation **16 MiB** contract is unchanged; no
+seven-entry cache generation or genuine apphost loader query is admitted.
+General P2, library-algorithm/runtime qualification, fresh actor/native grants and
+`.6f` acceptance remain open under the existing
+[SC2 owning plan](https://github.com/FS-GG/FS.GG.SC2.Client/blob/main/docs/SC2C-01.6-plan.md).
+All four failed producer attempts retain their outcomes, including the earlier
+lost diagnostic whose cause remains unknown. The private-cache milestone below
+retains its separate scope. This closure admits no further operation.
+
 **2026-10-04: WASM-SHARED-01 H2 effect-free native inspection CLOSED.**
 The separately admitted first-attempt [Game inspection run
 37182947872](https://github.com/FS-GG/FS.GG.Game/actions/runs/37182947872)

@@ -754,3 +754,27 @@ Game's canonical event qualifier repair is source Closed through
 `336c8113540dae0d295c247d0dcb2bc0f4a82ba6`, equal the approved candidate.
 Exact-head shared qualification `37099061357` passed with unchanged public 0.2.0
 inputs. The completed final .5-P2 packet above is the next producer window.
+
+## Native 0.3 publisher recovery — 2026-10-04
+
+The .5-P2 producer's **H3 native publisher is Closed** through the separately
+admitted first-attempt [Game recovery `37185764818`](https://github.com/FS-GG/FS.GG.Game/actions/runs/37185764818)
+on protected executor `8de4c2747d40e9993cc9a08cd50e1e2d599f69fb`.
+Seven ordered stages passed; preparation, inspection and standalone readback
+skipped. Fresh native occupancy/OIDC admission preceded the missing-original
+writers. Root authenticated all six original evidence archives and every expanded
+member, literal org archives and matching public payloads with the repository
+signature added. The native SDK signature checks passed; independent H4 public
+signature and installed acceptance remain pending.
+
+[Public release `wasm/v0.3.0`](https://github.com/FS-GG/FS.GG.Game/releases/tag/wasm/v0.3.0)
+`402763234` published at 07:34:06 UTC with the original SDK, manifest, checksums
+and unchanged journal `608859205`. Producer `16a40169`, preparation executor
+`8b92b7c4`, preparation `37163937340` and tuple `6ba4084f` remain immutable;
+the failed first publisher and failed inspections are retained, not relabeled.
+The [owning Game plan](https://github.com/FS-GG/FS.GG.Game/blob/8de4c2747d40e9993cc9a08cd50e1e2d599f69fb/docs/roadmaps/wasm-shared-01.md)
+and [Unified progress report](../2026-09-07-154210-fs-gg-unified-development-roadmap.md#0-current-progress-report)
+keep H4 independent publication/installed qualification separate from native
+recovery. This does not close the complete .5-P2 installed boundary, authorize a
+second recovery, move existing 0.2.0 consumers, or change product adoption and
+workspace defaults.
