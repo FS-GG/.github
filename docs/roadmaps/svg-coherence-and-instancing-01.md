@@ -1,7 +1,9 @@
 # SVG coherence, shared implementation and repeated-model performance
 
 Date: 2026-10-04. Status: proposed follow-on plan; no implementation, deployment or
-host-browser execution is established by this document. Proposed identity:
+host-browser execution is established by this document. Host GPU tests require
+active human intervention and are batched at the latest practical qualification
+boundary, after autonomous preparation and container validation. Proposed identity:
 **SVG-COHERENCE-01**. Rendering owns the reusable implementation and performance
 research; Game owns simulation; Templates owns the reference composition; product
 owners own migration. The programme integrator owns cross-repository joins.
@@ -187,21 +189,31 @@ semantic equivalence, useful measurements and no lifecycle/resource regression.
 ### Proposed execution topology
 
 The container builds immutable production fixtures and serves only their static
-artifact directory through a selected reachable port. Host-main runs the browser
-and the browser automation process, loads that URL, executes the workload locally,
-and retains traces/results locally. Rendering occurs on host-main, regardless of
+artifact directory through a selected reachable port. The existing browser on host-main opens that URL, runs the self-contained
+test queue locally, and downloads one combined result. No host-side installation,
+command-line runner or remote-control service is required for this default route. Rendering occurs on host-main, regardless of
 where the HTTP server runs. Serving on the container does not require a container GPU.
 
-Open ports make this feasible, but do not prove host routing, port forwarding,
-browser installation, an active display, GPU acceleration or permission to launch
-a host process. Milestone .2 verifies those facts before declaring readiness.
+Default user journey: **open the supplied URL → click Run all → download results**.
+The page owns warm-up, case sequencing, progress, bounded durations, checkpoint/resume
+and result export. The container owns all building and serving. Its open/reachable
+port is sufficient to deliver the page to host-main; no additional host setup is
+introduced as a prerequisite. Loading the page establishes reachability naturally.
+Milestone .2 prepares and container-tests the page; .7 is the late batched host run.
 
-Preferred route: a host-local Playwright runner against a supplied fixture base
-URL and expected artifact digest. Chromium gets detailed tracing; supported
-Firefox/WebKit profiles get their available functional/timing coverage. A hosted
-test page also offers a manual run and JSON download so basic evidence can be
-collected without remote browser-control access. Manual results identify their
-limitations; they do not substitute for unavailable privileged trace/host metrics.
+The page collects browser-exposed observations and marks unavailable host/GPU facts
+explicitly. A browser on host-main can use its GPU, but an ordinary page cannot
+reliably certify SVG hardware acceleration, driver identity or GPU/compositor timing.
+These limits do not prevent the page suite from running. When a specific acceptance
+claim requires those facts, collect browser diagnostics or a DevTools trace once
+in the same late session, as a clearly explained supplementary step.
+
+Optional enhanced route: an already available host-local Playwright runner loads
+that same URL for trusted input automation, browser-level diagnostics and detailed
+traces. It consumes the same workload/results contract. Installing or configuring
+such a runner is not required for the default page suite. Supported browser families
+can load the same page; any required manual browser changes are grouped into the
+one session rather than requested case by case.
 
 If host automation must attach to a browser, use an owned dedicated profile and
 an explicitly selected local/tunnelled endpoint. Do not expose a browser debugging
@@ -211,7 +223,7 @@ where possible; [Playwright documents CDP attachment as lower fidelity](https://
 also require attention to dedicated profile selection. This is a proposed route,
 not authorization or evidence of a running host browser.
 
-### Fixture and runner separation
+### Fixture and page-runner separation
 
 Refactor the existing harness into build/package, static serving, browser driving,
 measurement and reporting components within Rendering's existing test area.
@@ -233,15 +245,60 @@ Never subtract container wall-clock timestamps from browser performance timestam
 Use a stable origin for storage tests; use HTTPS or a suitable localhost forwarding
 route when tested APIs require a secure context. Record cache/service-worker state.
 
+### One late, consolidated human-assisted session
+
+Prepare the in-page runner, fixtures and result collection early, but do not schedule
+human-assisted host setup, reachability probes, baseline runs or individual GPU
+experiments as early milestone prerequisites. Complete inventory, container
+research, shared implementation, reference composition, selected product candidate
+integration and package preparation first. Container evidence supports CPU-side
+engineering decisions; GPU-specific choices remain provisional until the late batch.
+
+The session admission checklist is a concrete readiness bundle:
+
+- all affected pure, portable, software-browser, semantic, lifecycle and package
+  checks pass; no known defect still requires a host visit to diagnose;
+- immutable baseline and candidate builds, hashes, realistic assets, supported
+  browser/workload manifest and negative controls are staged together;
+- one self-contained page has container-tested capability checks, a sequential queue,
+  progress display, bounded run durations, checkpoint/resume and consolidated
+  result export; no manual navigation is required between ordinary cases;
+- the page states the URL/open/run/download steps, estimated total run duration
+  and result destination; any optional diagnostic step has a specific purpose;
+- proposed budgets and comparison rules are fixed before the host batch, including
+  honest unsupported/inconclusive outcomes.
+
+At that session's start, load the URL and collect available environment facts once.
+Record verified acceleration when supplementary browser diagnostics are available;
+otherwise label that fact unknown while preserving the useful host-browser results.
+Run baseline, alternatives, final candidate, integrated consumer journeys and
+negative controls in the same scheduled window, using controlled
+ordering and independent repetitions. Include all selected GPU-dependent browser
+profiles in that session. Missing privileged diagnostics do not block unrelated
+page tests or trigger tooling installation. A failed capability check produces one actionable report,
+not repeated individual prompts or benchmark requests.
+
+If the batch reveals defects, return to autonomous/container repair, collect all
+related fixes, and propose one focused follow-up batch covering changed subjects
+and necessary regression controls. Reuse unchanged exact-artifact evidence within
+its original scope; do not repeat the whole matrix by default. Earlier host work
+requires a concrete dependency that cannot be resolved through source inspection
+or container testing and an explicit scheduling decision; it is an exception,
+not the default research loop. A human-unavailable host leaves GPU acceptance
+pending while independent preparation continues.
+
 ### Host qualification
 
-Record OS, CPU, memory, GPU/vendor/device, driver, browser/version/channel, launch
+Collect page-visible facts automatically. For optional enhanced measurements,
+record OS, CPU, memory, GPU/vendor/device, driver, browser/version/channel, launch
 flags, hardware acceleration status, raster/compositor backend, display refresh,
 viewport, device pixel ratio, power mode and foreground/visibility state. Verify
 actual acceleration using browser GPU diagnostics, not merely the absence of
 `--disable-gpu`; headed mode alone is not proof. A remote desktop or virtual display
 may change the measured route and must be recorded. Unsupported/unobservable
-dimensions remain unknown.
+dimensions remain unknown; require them only for the acceptance claims that depend
+on them. Scripted page interactions do not establish trusted physical-input
+latency or privileged trace measurements.
 
 Prefer a visible host display for interactive acceptance, and prevent concurrent
 benchmark runs from competing for that GPU/display. Headless host runs may be a
@@ -253,11 +310,13 @@ are implementation references, not evidence that this host is configured.
 ## 6. Measurement and acceptance contract
 
 Preserve all earlier receipts with their software-rendering identity. Define new
-host profiles and versioned workload budgets before optimizing candidates. Proposed
+host profiles and versioned workload budgets before accepting optimized candidates.
+Prepare baseline artifacts and provisional targets during container research;
+measure baseline and candidates together in the late host batch. Proposed
 interactive targets start with the selected display/frame cadence (for example,
 16.67 ms at 60 Hz); freeze the supported soldier count, complexity, input-latency
-budget and missed-frame allowance after baseline characterization and an explicit
-product decision. Report baseline failures without relaxing thresholds to fit them.
+budget and missed-frame allowance after container baseline characterization and
+an explicit product decision, before the human-assisted host batch. Report baseline failures without relaxing thresholds to fit them.
 
 Record warm-up, run duration, sample count, independent repetitions, percentile
 method and raw samples. Use at least three independent measured repetitions for
@@ -290,21 +349,23 @@ even when an alternative is faster.
 | Milestone | Deliverable and owner | Acceptance and dependencies |
 |---|---|---|
 | .1 Inventory and contract decision | Rendering-led capability/consumer map; producer contract proposal; product classification | Exact source/caller evidence, no duplicate adoption ownership; links from existing owner plans; no runtime claim |
-| .2 Host measurement route | Rendering harness split plus host-main execution packet and manual page | Known reachable fixture URL, exact bytes, actual host/GPU diagnostics, original software profile retained; baseline/negative-control smoke; may proceed alongside .1 |
-| .3 Instance research | Rendering benchmarks and decision report using realistic glyphs | Screened matrix, raw repeatable results, equivalent outputs, supported envelope and unavailable dimensions; depends on .2, contract refinements join .1 |
-| .4 Shared implementation | Rendering instance updates/index/reconciliation/cache changes selected by .3 | Focused unit/portable/browser tests; before/after same-host results; versioned public API and compatibility checks; no speculative rewrite |
-| .5 Integrated reference | Templates soldier workload in the actual player, shared APIs and accessible alternatives | Same artifact browser journeys, local and external authority modes, stress/churn/focus/export; demonstrates API reuse beyond the isolated harness |
-| .6 Product adoption | FourD/SC2/BAR owner changes within FABLE-ADOPT-01's existing sequence | One qualified presentation owner per migrated path, existing native commands/receipts/disclosure preserved, real installed dependencies; replaced copies retired |
-| .7 Publication and installed qualification | Existing Rendering/Templates release owners | Coherent packages, clean feed-installed reference and retaining upgrade/rollback; source tests alone do not establish delivery |
-| .8 Closure and maintenance | Owner plans and unified projection | Consumer map reconciled with actual callers, host/software reports published with scope, supported instance envelope documented, regression gates maintained |
+| .2 Host route preparation | Rendering harness split and self-running test page with combined result download | Container dry runs, exact artifact identities, queued execution/checkpoint/export behavior and original software profile retained; no human-assisted host operation; may proceed alongside .1 |
+| .3 Container instance research | Rendering screened benchmarks and provisional design report using realistic glyphs | Raw software-profile results, CPU/allocation/update-path analysis, equivalent outputs and explicit GPU unknowns; depends on prepared harness, not host availability; contract refinements join .1 |
+| .4 Shared implementation | Rendering instance updates/index/reconciliation/cache changes selected by .3 | Focused unit/portable/software-browser tests, before/after container evidence, versioned API and compatibility checks; GPU conclusions remain provisional |
+| .5 Integrated reference | Templates soldier workload in the actual player, shared APIs and accessible alternatives | Container-qualified local/external authority, stress/churn/focus/export; actual application composition joins the staged host suite |
+| .6 Consumer and package candidate preparation | FourD/SC2/BAR owners within FABLE-ADOPT-01's existing sequence, plus release owners | Selected product source integration, native semantic obligations, exact package/clean-consumer/retaining-upgrade candidates and autonomous checks complete; freeze baseline/candidate artifacts and one consolidated host packet; no claim of GPU-qualified adoption |
+| .7 Late host-main GPU qualification batch | Rendering measurement owner and host operator | One open-URL/run-all/download session runs baseline/alternatives/candidates and selected consumer journeys; optional diagnostics verify GPU-specific claims without blocking page tests; depends on .1–.6 readiness; follow-up only for demonstrated affected gaps |
+| .8 Publication, installed adoption and closure | Existing release/product owners and programme integrator | Required .7 evidence accepted, coherent publication and final installed/upgrade readback, superseded copies retired, consumer map and owning/unified plans reconciled; an artifact change affecting GPU behavior rejoins a focused batch |
 
 Parallel preparation: consumer inventories, realistic assets, pure reference command
 streams and harness separation can proceed independently. Keep one owner for
 Scene/instance public contracts and one integrator for shared package/API joins.
-Serialize GPU benchmarks on the selected host; code preparation can continue.
-Do not merge consumers against unpublished or unqualified producer APIs under an
-assumed future version. Refresh active work/branches before assigning implementation
-so this proposal does not disrupt already running roadmap lanes.
+Serialize GPU benchmarks inside the late host window; do not turn each worker's
+milestone into a human-assisted test request. Prepare all selected consumers before
+that window, without waiting for unrelated portfolio work. Package candidates can
+support isolated consumer preparation; publication and qualified installed adoption
+remain distinct. Refresh active work/branches before assigning implementation so
+this proposal does not disrupt already running roadmap lanes.
 
 ## 8. Migration, release and completion
 
@@ -326,7 +387,8 @@ reuse it; which copies were removed or retained; how model definitions and insta
 are represented; what a change costs; which soldier counts/complexities and browsers
 were measured; which host used real GPU acceleration; and which limits remain open.
 
-Immediate implementation prerequisite: select the reachable fixture route and the
-host-main browser operator/runner, capture actual host capability, and agree the
-representative soldier asset. This planning change neither starts a server nor
+Immediate work: agree the representative soldier asset, inventory consumers, and
+prepare the container-tested harness and immutable comparison builds. Record a
+proposed fixture URL/browser route without requiring host setup or intervention now. Actual host
+capability discovery and all GPU browser cases are deferred to the late .7 batch. This planning change neither starts a server nor
 sends a worker handoff nor installs host tooling.
