@@ -1,0 +1,37 @@
+{
+  "capturedAt": "2026-10-04T23:14:06+00:00",
+  "field": {
+    "id": "PVTSSF_lADOEYAWY84BltswzhkZapc",
+    "name": "Status",
+    "options": [
+      {
+        "color": "GREEN",
+        "description": "This item hasn't been started",
+        "id": "f75ad846",
+        "name": "Todo"
+      },
+      {
+        "color": "YELLOW",
+        "description": "This is actively being worked on",
+        "id": "47fc9ee4",
+        "name": "In Progress"
+      },
+      {
+        "color": "PURPLE",
+        "description": "This has been completed",
+        "id": "98236657",
+        "name": "Done"
+      }
+    ]
+  },
+  "formatVersion": 1,
+  "itemTotalCount": 0,
+  "items": [],
+  "project": {
+    "id": "PVT_kwDOEYAWY84Bltsw",
+    "number": 5,
+    "owner": "FS-GG",
+    "title": "FS.GG.Rendering \u2014 Product V2 qualification"
+  },
+  "sha256": "f1449a07c8aa5432e3e17beb17a72f37f216f7557367e2057184edfbf31dee5b"
+}
