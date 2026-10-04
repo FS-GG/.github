@@ -38,6 +38,7 @@ on:
       - "deployment/telemetry-collector/persistent/v3/**"
       - "tests/telemetry-collector-persistent-v3/**"
       - "tests/telemetry-collector-persistent-v3-image-closure/**"
+      - "tests/telemetry-host-inactive-preparation/**"
       - "docs/roadmaps/learn-c2-persistent-receiver-v3.md"
       - "docs/roadmaps/2026-10-01-typed-administrative-fsharp-quint.md"
       - ".github/workflows/release-telemetry-host-successor-*.yml"
@@ -81,6 +82,7 @@ on:
       - "deployment/telemetry-collector/persistent/v3/**"
       - "tests/telemetry-collector-persistent-v3/**"
       - "tests/telemetry-collector-persistent-v3-image-closure/**"
+      - "tests/telemetry-host-inactive-preparation/**"
       - "docs/roadmaps/learn-c2-persistent-receiver-v3.md"
       - "docs/roadmaps/2026-10-01-typed-administrative-fsharp-quint.md"
       - ".github/workflows/release-telemetry-host-successor-*.yml"
@@ -294,6 +296,7 @@ jobs:
           FSGG_C2_TEST_EXE: ${{ runner.temp }}/c2-preparation/PersistentV3.Preparation.Tests
         run: |
           set -euo pipefail
+          bash tests/telemetry-host-inactive-preparation/run.sh
           manager_revision=e6f6631a2166f9d73639b1cbb96953ee3a768530
           manager_tree=9059c91396cc2963d15037867cde9a5a3cf1c9ba
           manager_source="$RUNNER_TEMP/c2-coordination-source"

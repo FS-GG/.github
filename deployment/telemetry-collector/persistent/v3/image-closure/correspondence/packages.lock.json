@@ -20,6 +20,13 @@
       "persistentv3.imageclosure": {
         "type": "Project",
         "dependencies": {
+          "FSharp.Core": "[10.1.401, )",
+          "PersistentV3.Preparation": "[1.0.0, )"
+        }
+      },
+      "persistentv3.preparation": {
+        "type": "Project",
+        "dependencies": {
           "FSharp.Core": "[10.1.401, )"
         }
       }
