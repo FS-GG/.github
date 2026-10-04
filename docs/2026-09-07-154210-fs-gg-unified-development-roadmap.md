@@ -53,6 +53,25 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-04: SC2C-01.6f installed checked preparation CLOSED (bounded refusal qualification).**
+The retained genuine public **0.2.1** invocation exited **0** in **3.070 seconds**.
+It observed the three declared source, compile-receipt and generic-API imports, then
+refused exact adapter/executor discovery. The missing-input case refused before checker
+startup. Both cases had zero actor, recovery and cleanup callbacks; three owned process
+generations settled and root independently rechecked the input pins. The diverse binding
+identities are explicitly synthetic fixtures; the installed API and imported inputs are genuine.
+Root acceptance SHA-256 is
+`0a564a278f17485d8d62d4d72f6b2ecc81efdb4f08f448f7729848ae68dda79e`,
+joined to original operation receipt
+`137b1824d286a05f4f751b537a41b8da80e7b83e737534c9e9b158707999abf2`.
+The accepted operation was retained without replay.
+
+Under the [owning SC2 plan](https://github.com/FS-GG/FS.GG.SC2.Client/blob/main/docs/SC2C-01.6-plan.md),
+whole-runtime fit within the unchanged **16 MiB** envelope, native semantics, readiness,
+epoch and custody gates remain open. No query or actor execution was accepted. Network
+isolation was not enforced; the CLR quota was observed fail-closed. Publication and installed
+product acceptance remain separate from this preparation result.
+
 **2026-10-04: temporary bounded programme driver source and focused acceptance CLOSED.**
 The repository-owned [work-programme](../.agents/skills/work-programme/SKILL.md) replaces
 `work-unified-roadmap`; both authored roots, catalog classification, trigger fixtures and current
