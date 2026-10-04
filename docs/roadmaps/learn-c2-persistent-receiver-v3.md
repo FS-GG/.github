@@ -271,9 +271,36 @@ Raw release manifest and publication-journal asset SHA-256 values are respective
 Root accepted all 17 protected journal generations at
 `203ba60f7df146743d4a7373a52f55fc6c22858e`, with eight verified effects.
 
-This closes Host successor publication. The image constructor still pins historical
-Host 0.3.0 and requires a separately qualified source rebinding to these served facts.
-Served repaired Manager distribution, genuine native/runtime/profile acquisition,
+This closes Host successor publication. The image constructor's Host 0.4.0 pin rebinding
+has passed the focused local source qualification described below; protected source
+integration and native checks remain separate. Served repaired Manager distribution,
+genuine native/runtime/profile acquisition,
 two cold OCI builds, C5 retirement and actual served Manager-to-Host inactive qualification
 remain open. Installation, grants, capture, restart/recovery, usage completeness and
 activation are unchanged; no receiver acceptance follows from publication.
+
+
+### Host 0.4.0 image pin source qualification, 2026-10-04
+
+Source candidate `90b0fbd0c9b020b0a74cf940be88820adbb31559` binds the accepted
+Host 0.4.0 source, publisher/release IDs, both archive hashes, normalized payload,
+raw manifest and publication-journal asset, and exact 6,134,924-byte GitHub package.
+The production declaration remains `acquisition-required`; its actual byte digest
+`dd7b2ec5b91b56f085c9492577b188b115ae4b99dafb29905b2e4c3b57317165`
+is bound by the CLI. Historical Host 0.3.0 C5 refusal remains unchanged.
+
+Root accepted a bounded local source qualification: three locked restore/build/console
+steps returned natural exit 0 in 10.488 seconds, every owned process settled and final
+pins stayed unchanged. The actual staged CLI preserved canonical-placeholder
+unavailability and changed-byte refusal. Twelve focused Host release cases include
+current production identity reaching missing-trusted-native unavailability and eight
+historical-pin refusals. Existing path-helper controls retain 29 genuine names and
+unsafe-path/extent checks; closed inactive-result controls also passed.
+The named focused mode leaves the full constructor/OCI/runner console as the default
+for native CI; no full OCI or installed-receiver acceptance is claimed.
+
+Local qualification does not replace protected source integration or exact-head native
+checks. Repaired
+served Manager distribution, owner-selected native/profile/Python/Tcl/Tk/search/runtime
+closure, two cold builds/reloads and C5 on each reload remain pending. Grants, capture,
+restart/recovery, usage completeness and activation remain open.
