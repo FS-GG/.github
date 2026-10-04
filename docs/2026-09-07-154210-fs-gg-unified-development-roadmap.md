@@ -53,6 +53,26 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-04: WASM-SHARED-01 H4 independent installed qualification CLOSED.**
+Fresh [installed run 37191263989](https://github.com/FS-GG/FS.GG.Game/actions/runs/37191263989)
+passed both org and public feeds at protected executor `8de4c2747d40e9993cc9a08cd50e1e2d599f69fb`.
+Root independently verified normal public repository signatures, replayed **2,495**
+readback checks and rehashed **1,687** retained inputs. Every frozen package/SDK
+member, selected cache Worker/model, archive/lock hash and immutable release binding
+joined. Each feed passed 47 default and 13 selected CLR/Fable traces through both
+Host facades, 25 default and eight selected browser tests, malformed numeric controls
+and the mutated-lock `NU1403` refusal.
+
+The exact native restored-source metadata guard and runtime Core equality receipts
+passed. Four hidden package metadata files and two runtime-copy Core DLLs were not
+archived; independent replay of those original bytes remains Unknown. The default
+consumer cache was removed by its declared trap. These retention limits remain
+explicit; no missing file was reconstructed. Root acceptance SHA-256:
+`67e750272e63a6fdffe6ef2bec2e079ab7a6aa1dbb2a1018c54c39ee54e03ba4`.
+The [owning plan](roadmaps/2026-10-02-shared-wasm-foundation.md#independent-03-installed-qualification--2026-10-04)
+records the published installed boundary separately from BAR/SC2 receiver adoption,
+native gameplay and workspace defaults, which remain open.
+
 **2026-10-04: WASM-SHARED-01 H3 same-custody native publisher CLOSED.**
 The separately admitted first-attempt [Game recovery run
 37185764818](https://github.com/FS-GG/FS.GG.Game/actions/runs/37185764818)
