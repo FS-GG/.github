@@ -335,6 +335,11 @@ value, publication, installation, native grant or completion claim.
 
 ### Language-independent product workspaces — 2026-09-29
 
+The settled [polyglot provider decision](adr/0092-descriptor-driven-polyglot-workspace-providers.md) and
+[linked producer design](design/polyglot-workspace-providers.md) define the separate catalog rollout
+through SDD#928, Governance#423, Templates#441 and `.github`#3010. Native language fixtures do not
+substitute for those packages' publication and public installed qualification.
+
 Select **V2-LANG-01** as a prospective product-integration extension. Product workspaces choose
 their own languages and toolchains, including multiple components in one repository; the coordination
 runtime and agent SDK do not become product dependencies. The
@@ -355,6 +360,21 @@ uses executable enrollment, build/test/product, artifact, cancellation, duplicat
 Agent Framework adoption remains optional. SDD/Templates and product owners publish and adopt their
 actual bindings before reporting support. The [product-board design](coordination/2026-09-29-coordination-v2-board-design.md#product-workspace-use)
 uses the same language-independent integration boundary.
+
+### Optional Box2D game physics — 2026-10-04
+
+Record **GAME-BOX2D-01** as an independent opt-in Game track. The
+[Box2D physics plan](roadmaps/game-box2d-physics.md) proposes a render-independent
+`FS.GG.Game.Physics.Box2D` package alongside Core, with owned mutable execution,
+immutable snapshots and gameplay events. Start with one headless falling-body/joint/sensor
+example, then qualify interpolation and repeatable input replay under a pinned profile.
+Public package qualification precedes explicit consumer adoption; rollback, broader
+determinism and Fable/browser compatibility retain separate contracts. Existing physics
+options and workspace defaults remain unchanged. This track does not gate full-V2
+acceptance or expand the current installed-API/BAR/SC2 preparation windows.
+The linked [area/portal extension](roadmaps/game-area-portals.md) adds arbitrary
+connections between local 2D areas, starting with rigid whole-body transfers; seamless
+cross-boundary physics and portal-aware rendering/queries retain separate qualification.
 
 ## 1. How work is executed
 

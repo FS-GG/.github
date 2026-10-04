@@ -198,3 +198,31 @@ organization Project3 population; SDD#935 remains unselected. Other driving cons
 initialization and generated bindings remain unswitched. Unrepresented/unresolved outcomes retain
 their owning roadmap authority and keep broader .4 open; .5–.6 remain separate. Unknown acceptance
 readers and failed/stale reads stay Unknown and never become ordinary source merge gates.
+
+
+## Work-unified-roadmap consumer acceptance — 2026-10-04
+
+Root selected the existing installed `0.95.0` four-target organization inspection for
+`work-unified-roadmap` at 10:14:51 UTC. Its actual fresh report was independently accepted at
+10:19:06 UTC: selected/attempted/verified four, all source observations Current and health Verified,
+no population gap and zero mutations. Root independently rechecked all 82 installed tool files
+against the retained public package. The accepted binding and shim remain `68375c…` and `47a06d…`
+from the earlier installed qualification; no target, executable, schema or writer was changed.
+
+The exact cohort remains SDD#928, Templates#441, `.github`#3010 and `.github`#3009. SDD#935 remains
+excluded. The three original human rows were Blocked; `.github`#3009 was Ready. The report explicitly
+leaves source-delivery, publication and native acceptance readers Unknown. Empty complete dependencies,
+Ready and Verified supplied no missing owning-plan acceptance. Root's bounded scheduling dry-run
+selected no board item; independently authorized roadmap source lanes continued.
+
+Private retained report SHA-256 is
+`cf41c02da02b7b59aa7d66fbb098f2e1905923ed1db0757aaecf573010065526`;
+root selection SHA-256 is `125ea93c4212e5ac099ca61b581e3f65aa749d4953f17c68ba22dd2dacf59f33`;
+independent consumer-acceptance SHA-256 is
+`6a38fa37317700558ad31070d99f8dbbb7d8ab99fdf4fcd4467413670158f50d`.
+Raw private reports and credentials are not copied into the repository.
+
+This accepts `work-unified-roadmap` for the same bounded organization planning scope after this
+canonical record lands. Check-board's earlier adoption remains valid. Other organization consumers,
+broader carryover and product bindings are separate; full COORD-BOARD-V2-01.4 stays open. This is
+read-only consumer acceptance, not a native issue dispatch, broader import or source-completion claim.

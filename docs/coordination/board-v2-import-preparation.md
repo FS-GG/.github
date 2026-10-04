@@ -322,3 +322,14 @@ and does not become an ordinary source merge gate.
 Broader unresolved/unrepresented carryover keeps .4 open; .5–.6 remain separate. No native issue
 lifecycle/dependency change, permission/credential change, hosted-workflow activation or legacy write
 was performed. Telemetry NOTCONFIG/no handle; native usage/economics Unknown.
+
+
+## Work-unified-roadmap selected consumer — 2026-10-04
+
+Root selected and accepted the existing installed `0.95.0` four-target organization inspection
+for `work-unified-roadmap`. The [actual installed consumer evidence](board-v2-installed-qualification.md#work-unified-roadmap-consumer-acceptance--2026-10-04)
+records the fresh report, executable/binding custody, zero mutations and bounded no-selection dry-run.
+The admitted scope remains SDD#928, Templates#441, `.github`#3010 and `.github`#3009; SDD#935 is
+excluded. This canonical follow-up records that selected consumer after native landing. The earlier
+check-board scope stays adopted; `drive-board`/normal/best, product boards and broader carryover
+remain separate. Full .4 stays open under the [current outcome dispositions](board-v2-outcome-dispositions.md#bounded-outcome-reconciliation--2026-10-04).
