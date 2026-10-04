@@ -118,6 +118,8 @@ registry like any other, and this org gates its registries.
 | [0090](0090-single-operator-v2-cutover-execution.md) | Prepare one-operator cutover execution with a protected human OpenV2 decision | Superseded by ADR-0091 for the clean-start route |
 | [0091](0091-speed-first-clean-v2-start.md) | Start v2 clean in `.github`, prove one real journey and rerun, then adopt repositories explicitly and repair forward | Accepted |
 
+| [0092](0092-descriptor-driven-polyglot-workspace-providers.md) | Descriptor-driven polyglot catalog, provider-owned identifiers and shared Quint/governance/skills contracts; downstream publication and adoption stay separate | Accepted architecture; record implements the maintainer decision |
+
 ## Supersession map
 
 Which record currently rules, and where a decision was amended. Every edge below is recorded in

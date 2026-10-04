@@ -10,7 +10,10 @@ remain the sources of delivery truth.
 On 2026-10-03 the exact four-target successor, public installed 0.95.0 closure,
 one-shot import with independent readbacks, zero-mutation refresh/inspection and
 root-selected check-board consumer qualified through [.github #4134](https://github.com/FS-GG/.github/pull/4134).
-Only that bounded organization consumer scope is adopted. Broader .4 carryover and
+Root also accepted the same four-target `work-unified-roadmap` consumer on 2026-10-04;
+[the actual consumer record](board-v2-installed-qualification.md#work-unified-roadmap-consumer-acceptance--2026-10-04)
+retains its fresh report and bounded no-selection dry-run. Only those named organization consumers
+are adopted. Broader .4 carryover and
 consumer adoption, and .5–.6 product publication/adoption remain pending below.
 **Owner:** `.github` owns the organization planning surface and shared consumer contract; SDD and
 Templates own published workspace integration, and product owners adopt their scoped boards.
@@ -71,7 +74,8 @@ freshly checks each selected map; source admission never supplies live credentia
 This stateless descriptor/view work needs no new Quint protocol or scheduler. Qualified legacy/fence
 behavior and dormant hosted activation remain unchanged.
 
-Organization-only work-unified-roadmap and drive-board/normal/best remain unswitched. The exact
+Organization-only `work-unified-roadmap` joins the selected check-board scope through the
+2026-10-04 actual consumer record; `drive-board` and normal/best remain unswitched. The exact
 four-target check-board organization scope passed the installed gate and root selected its adoption
 in the [canonical operation evidence](board-v2-import-preparation.md#four-target-successor-and-consumer-adoption--source-preparation).
 That admitted scope uses inspection as its primary queue,
@@ -260,3 +264,75 @@ pilot first changes planning in .2; shared tooling follows in .3 and explicit or
 in .4. Product integration is published in .5 and first changes fresh and retained receivers through
 .6's qualified adoption. Public package identities and actual materialized bytes must be read back;
 a project rename or producer source merge cannot qualify an existing-workspace upgrade.
+
+
+## Product binding integration window — 2026-10-04
+
+**Selected next source outcome: COORD-BOARD-V2-01.5 product binding and materialization.** Prepare
+it independently of broader .4 carryover and BAR/SC2 native qualification. The qualified .3 projection
+contract is the producer foundation. Publication and actual product adoption still need their own
+joins; this window does not enroll a hosted job or create any GitHub resource.
+
+### Current code and first supported scope
+
+The current `.github` [V2Projection](../../src/FS.GG.Coord.GitHub/V2Projection.fs) validates only the
+FS-GG organization / Coordination V2 target, an explicit three-to-five issue cohort and exact field
+options. [V2ProjectionSource](../../src/FS.GG.Coord.GitHub/V2ProjectionSource.fs) reads the fixed protected
+organization manifest; [BoardV2Application](../../src/FS.GG.Coord.Cli/BoardV2Application.fs) parses that
+binding, checks the loaded assembly hash and selects the bounded inspection/refresh transports.
+Changing a title or copying the organization binding cannot provide product support.
+
+The existing [workspace creator](../../scripts/NewSddWorkspace/Program.fs) writes owner/title
+`FSGG_COORD_*` wiring through `writeCoordinationEnv` and `retrofit`, merging `.claude/settings.json`.
+Its title-based legacy wiring lacks the immutable V2 target/field/repository binding. SDD's
+[DriverSkills materializer](https://github.com/FS-GG/FS.GG.SDD/blob/main/src/FS.GG.SDD.Commands/CommandWorkflow/DriverSkills.fs)
+embeds the published Drivers payload, verifies manifest digests and writes both runtime roots without
+clobbering owned content. Templates supplies provider metadata/composition; its product payload must
+not take ownership of SDD's `.fsgg/` tree. These are the implementation seams to extend, not replace.
+
+Qualify the first product slice with **two separately bound organization-owned product projects**
+and one repository scope per project. An explicit owner kind is retained and unsupported user-owned
+product execution refuses until separately qualified; this initial slice does not claim all owner
+kinds. Preserve the existing four-target organization Binding and all its exact target/cohort refusals.
+The shared adapter owner publishes any necessary additive product-scope contract through the existing
+Binding/decoder boundary; this plan introduces no parallel schema, guessed field names or scheduler.
+Product targets and population come from the selected receiver configuration/provenance, never the
+organization manifest or template-embedded project IDs. Credential selection remains external.
+
+### Executable source and receiver windows
+
+| Window and accountable owner | Exact implementation touch-set | Prerequisite and deliverable |
+|---|---|---|
+| `.5 shared adapter source`, one `.github` owner | `src/FS.GG.Coord.GitHub/V2Projection.fs/.fsi`, `V2ProjectionSource.fs/.fsi`, `V2ObservationTransport.fs/.fsi`; `src/FS.GG.Coord.Cli/BoardV2Application.fs/.fsi`; existing `tests/coord-board-v2-projection/` and `tests/coord-board-v2-cli-join/` | Qualified .3 and this selected product scope. Extend the existing binding/source/transport path for receiver-bound repository scope, preserving organization decoding and accepted exact cohort. No new scheduler, general shell recipe or lifecycle authority. |
+| `.5 creator and guidance source`, one `.github` owner after adapter contract stabilizes | `scripts/NewSddWorkspace/Program.fs` and README; existing `tests/new-sdd-workspace/`; paired `.agents/skills` / `.claude/skills` product `work-board`/variants, `padd-item` and initialization bodies, plus their existing manifest projections | Accepted additive adapter contract before consuming its shape. Bind fresh/retrofit configuration and provenance through existing creation/merge paths; generic product consumers resolve that selected V2 binding, retain local-only mode and avoid legacy reconcile/apply/flush for V2 rows. Never redirect a product to the organization driver. |
+| `.5 SDD/Templates receiver source`, their existing materialization/composition owners | SDD `CommandWorkflow/DriverSkills.fs` only if an actual materialization defect is demonstrated, its existing `WorkBoardScaffoldAcceptanceTests.fs` and package pins; Templates existing provider/composition tests and published producer pins | Receiver preparation can start with actual producer contract/bytes; adoption pins wait for coherent publication. Prove the generic materializer carries the selected product consumer byte-for-byte. Do not copy board credentials/IDs into template payloads or change provider/lifecycle defaults. |
+| `.6 first published receivers`, each product owner | Selected fresh/retained workspace binding and existing native adoption evidence only | Exact published adapter/Kit/Drivers and SDD/Templates receipts, authorized selected project/credential scope. Prove actual installed fresh and retained journeys before consumer switch or legacy writer retirement. Products join independently. |
+
+These rows are adjacent source outcomes within .5, not one PR per micro-step. The first two `.github`
+windows share contract/projection surfaces and remain ordered under one integrator; they must not race
+manifest or API edits. Independent SDD/Templates fixture preparation can use disjoint test surfaces,
+but cannot invent the unsettled producer shape. Declare narrower actual receiver paths before dispatch;
+an unknown materialization defect is a stop condition, not permission to edit the entire scaffold.
+
+### Controls and stop conditions
+
+At the existing adapter boundary, test each product's exact project/native repository/field identity,
+complete pagination, denial/unknown/stale behavior, duplicate/lost-response handling and Observation-only
+write scope. A request for the other product's repository/project, the organization target, Project1,
+an unsupported owner kind, changed fields or unavailable provenance must refuse before affected writes.
+Keep original organization positives and 935/wrong-cohort negatives unchanged. No refresh may overwrite
+human scheduling intent or accept delivery. Source controls use bounded recorded transport fixtures;
+actual native product qualification is a later authorized join.
+
+Creation/retrofit controls use existing no-partial-state and preserving-merge paths: fresh generation,
+retained preview, repeat/no-op, conflicting owner edits, wrong binding, missing published adapter and
+local-only/no-GitHub cases. Installed .6 additionally verifies both separately selected product bindings,
+actual product-local commands, scope refusals, unchanged native issue identities and zero unrelated
+writes. Missing publication, credential/target authority or fresh native coverage holds only its affected
+activation; it does not hold disjoint source preparation or revive legacy claim ceremony.
+
+Stop .5 source work at the reviewable accepted product adapter/materialization outcome. Publication
+uses the normal coherent producer route; installed activation is not a source-test assertion. The first
+workspace behavior change is .6's explicitly qualified receiver adoption. Existing configuration and
+legacy history are preserved until that receiver's readback; rollback of unactivated candidate files
+never restores V1 write authority. No universal provider/lifecycle change follows this feature.

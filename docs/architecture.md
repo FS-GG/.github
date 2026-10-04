@@ -45,6 +45,12 @@ historical economics, which remains insufficient with no efficiency benefit clai
 and migration proofs do not gate this route; generated workspace defaults and other receivers or operation
 classes retain their own adoption and authority.
 
+[ADR-0092](adr/0092-descriptor-driven-polyglot-workspace-providers.md) records the accepted descriptor-driven
+polyglot provider architecture. Its [implementation design](design/polyglot-workspace-providers.md) assigns
+catalog, naming, capability, skill and publication boundaries to SDD, Governance, Templates and the wizard.
+Generated product languages remain independent of F# orchestration and NuGet template transport;
+source design delivery does not establish the new providers' public installed support.
+
 This page is a map. Authoritative detail lives in each component repository and in
 the decision records linked throughout.
 

@@ -91,9 +91,40 @@ absence for3009; root must take complete fresh membership and all-fields snapsho
 
 ## Organization consumer selection
 
-Prepared routes: work-unified-roadmap, drive-board and its normal/best wrappers, and check-board.
+Historical prepared routes: work-unified-roadmap, drive-board and its normal/best wrappers, and check-board.
 Their [shared inspection contract](https://github.com/FS-GG/.github/blob/main/.claude/skills/check-board/references/organization-v2-inspection.md)
 remains gated until root qualifies the exact successor and records its selected consumer invocation.
-No current consumer switch is claimed. Work-roadmap/pnext-item keep native/routine delivery;
+The following dated reconciliation records the actual bounded consumer adoption. Work-roadmap/pnext-item keep native/routine delivery;
 work-board, initialization and generated product bindings remain unswitched .5–.6 receivers. Project1
 is the legacy reference; immutable bootstrap and scheduled archive retain exact authority and scope.
+
+
+## Bounded outcome reconciliation — 2026-10-04
+
+The earlier 37-row table remains its dated source inventory, not a current completion ledger. Root's
+[fresh consumer acceptance](board-v2-installed-qualification.md#work-unified-roadmap-consumer-acceptance--2026-10-04)
+adds `work-unified-roadmap` to the selected check-board organization scope. The exact four native
+issues were read open on 2026-10-04; complete current planning/native observations stay separate
+from the remaining deliverable. No issue, membership, dependency or planning field was mutated.
+
+| Selected outcome | Current disposition | Remaining actual join |
+|---|---|---|
+| SDD#928 | Keep selected; human Blocked. SDD#924 and #927 are natively closed, but that does not deliver #928's neutral catalog contract. Current provider `2.0.0` project-knowledge admission is not the complete typed catalog/prompt/naming contract. | SDD owns source/parser/public-contract/provenance and package-only controls, then exact published producer before receiver adoption. |
+| Templates#441 | Keep selected; human Blocked. Existing TypeScript/Rust/Go native fixtures and Python receiver repairs do not constitute the four TypeScript/JavaScript/Rust/Go CLI provider packs. | Compatible SDD/Governance producers, once-packed template/catalog/skills qualification, publication and public installed readback. |
+| `.github`#3010 | Keep selected; human Blocked. The current wizard's fixed provider selection remains a separate catalog consumer outcome. | Published Templates artifact, generic typed catalog discovery and public installed four-provider creation before registry/pin activation. |
+| `.github`#3009 | Keep selected until native delivery; architecture choice accepted in comment5430619257. [ADR-0092](../adr/0092-descriptor-driven-polyglot-workspace-providers.md) and its [linked design](../design/polyglot-workspace-providers.md) now supply the prepared organization source outcome. | Review and protected delivery of these documents; no repeat human architecture question and no downstream provider/publication completion inferred. |
+| Governance#423 | Remains outside the exact organization cohort; live issue is open and linked in the producer design. | Its neutral capability/binding producer remains necessary for Templates#441; this dependency does not authorize broader import. |
+| SDD#935 | Remains unselected. | Native child/membership is not admission to this queue. |
+
+Unrepresented named work continues through its owning roadmap. Project-knowledge .1–.3 source is
+now recorded through SDD#1091 in the current Unified index, while provider CI/composition, publication,
+installed qualification and retained extraction remain open. Coordination's owning portable plan
+records the exact `0.2.0` P3 publication as closed; the `0.2.1` trusted-provider candidate/P4 installed
+and publication/adoption joins remain open. These supersede the old table's broader unknown/pending
+source shorthand only within those proven scopes; they provide no new native board mappings.
+
+`drive-board` and its routed wrappers remain unswitched. Product `work-board`, initialization and
+generated V2 bindings remain .5–.6, with the next source window in the [owning board design](2026-09-29-coordination-v2-board-design.md#product-binding-integration-window--2026-10-04).
+Remaining approved carryover, exact native mappings/imports and consumer dispositions keep full .4
+open. Historical GS2/V1 rows retain their omit-superseded disposition; no unchecked historical gate
+is reopened by this reconciliation.
