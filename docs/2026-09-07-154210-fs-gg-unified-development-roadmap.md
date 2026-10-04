@@ -53,6 +53,22 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-04: V2-PREFLIGHT-01 E installed API source and bounded qualification CLOSED.**
+[Coordination PR #930](https://github.com/FS-GG/FS.GG.Coordination/pull/930) merged at
+`7baa4ae3817fd6b70fb2befc92ee046e6ef5ce7f` after exact-head native checks passed.
+Root independently matched its complete merge tree `5e0a77524fc95f437415d458974c11475123ebce`
+to the reviewed candidate. Both qualified source files remain byte-identical to their
+original installed-qualified head; the later branch join only inherited protected source.
+
+The retained installed FSI execution against genuine public **0.2.1** passed in **3.937 seconds**
+with the selected checkout unavailable and restored afterward. Six preparation refusals launched
+zero workloads; the instrumented positive executor ran once and cleaned up once. Root acceptance
+SHA-256 is `f739b9e6684aa497c62a5b52a2682b9226d4592afa89206b70cafdf583b1d56b`.
+This closes the generic installed API boundary under the
+[owning preflight plan](https://github.com/FS-GG/FS.GG.Coordination/blob/main/docs/roadmaps/v2-preflight-01.md).
+BAR/SC2 checked adapters, genuine native execution, product adoption and full filesystem isolation
+remain open. The accepted generic operation was not repeated for source integration.
+
 **2026-10-04: selected V2 consumer delivered; organization architecture issue #3009 CLOSED.**
 [PR #4192](https://github.com/FS-GG/.github/pull/4192) merged as
 `4fc6edf6acce60760cea858ba15e4384c9ce0340`; all required native checks passed and root verified
