@@ -53,6 +53,28 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-04: WASM 8b92 preparation CLOSED (native qualification and original custody).**
+[Preparation 37163937340](https://github.com/FS-GG/FS.GG.Game/actions/runs/37163937340),
+attempt 1, succeeded at protected executor
+`8b92b7c4a8061157c03155662c97d33c0bc01551`, tree
+`9813a780f8c77170002e005dbde9acc3f40e1765`, with unchanged producer
+`16a401692f4c0dee7f6da1a86d0cd49e6ea3ec2c`. Root independently accepted all six
+native gates and eligible artifact `11289067127`, outer SHA-256
+`7b7f957e2506ef1a2d4a257eaa334c80ca116abaa0462c71315a1079aa38d723`.
+All 590 outer files, the three original Contracts, Browser and SDK archive hashes,
+and all 159 original members passed the unchanged native-run and custody validators.
+The fresh reviewed tuple has SHA-256
+`6ba4084f7835e81cec93fe58b23ee9fa70cec67e0b01e2e4195b16e7f2b5d937`;
+private root acceptance has SHA-256
+`293584d8022010fc02bf7496b0e87b75c3960fec68106efea64cf2873f712c35`.
+
+Only preparation and original custody close. All publication jobs were skipped;
+publication, genuine both-feed installed qualification and consumer activation
+remain open. The protected Game executor remains held at 8b92. The earlier f8 and
+9fc originals, failed promotions and source repairs retain their separate outcomes;
+seven retained historical files still match their prior seals. Public/default WASM
+stays **0.2.0**. This closure selects no promotion or further operation.
+
 **2026-10-04: UTEL-H3 coherent 0.96 publication CLOSED (native publication and original custody).**
 [Publisher 37161212706](https://github.com/FS-GG/.github/actions/runs/37161212706),
 attempt 1, succeeded at protected source
