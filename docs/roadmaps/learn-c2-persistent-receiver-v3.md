@@ -5,8 +5,8 @@ protected integration, publication, container qualification, receiver custody, a
 
 ## Before P1
 
-The retained persistent receiver is v2. Published Host 0.3.0 contains the required installed-origin
-reader, while the immutable 0.2.1 release remains historical. There is no v3 image, installation,
+The retained persistent receiver is v2. Published Host 0.4.0 adds the inactive preparation
+reader; immutable Host 0.3.0 and 0.2.1 releases remain historical. There is no v3 image, installation,
 grant, activation, capture, custody, or native acceptance. The protected Coordination manager can emit
 v3 installation records, but that alone does not establish a receiver.
 
@@ -244,3 +244,36 @@ correction: SHA-256 `63a6bd47f0e5def4d0690df6ed83c479629ed2461ab26b9fc6017415d52
 An actual CLI control requires unavailable status for those exact bytes and refusal after appending
 one whitespace byte. The deliberate input-revalidation mutant remains unchanged and must still
 fail its safety property; that expected failure is distinct from later placeholder checks.
+
+
+### Host 0.4.0 source and publication closure, 2026-10-04
+
+[PR #4207](https://github.com/FS-GG/.github/pull/4207) merged as
+`09f06f5cc5278cbfbf7c02b0a7a9e72104aa4e3f`, tree
+`264b1f717fa3786f928cf5a3ad59ea8dcebac8a7`, after exact-source checks passed.
+Host 0.4.0 publishes the read-only `read-inactive-preparation` command. Root accepted
+first-attempt [candidate 37219926637](https://github.com/FS-GG/.github/actions/runs/37219926637),
+artifact `11309323841`, candidate archive SHA-256
+`e23611083c392cbe4a5332bba6a1b8628ea513884088b8b40ba4fc1c3ada2afd`,
+then the [publish=false preflight](https://github.com/FS-GG/.github/actions/runs/37220253239)
+and first-success [publisher 37220419362](https://github.com/FS-GG/.github/actions/runs/37220419362).
+
+Release [`telemetry-host/v0.4.0`](https://github.com/FS-GG/.github/releases/tag/telemetry-host/v0.4.0),
+ID `403127331`, serves the original package and manifest byte-identically. GitHub archive
+SHA-256 is `150f3e697e088a10170db4f2404fd4e73be856ccefc8d776c53076f55adce45a`;
+signed nuget.org archive SHA-256 is
+`293e2ccdbc7a4aed2c56d72cf82a7f806d7671b549439463cd93164dad574f77`.
+Both normalize to producer payload
+`d7e747cebd6f425d775177bc844d0b3d187a911ae4032e269b008c875a872240`.
+Raw release manifest and publication-journal asset SHA-256 values are respectively
+`144e5aa3d382b8bfc6ddcac76ed583c23ebe8fbb6744f844a94fa5347819d3f0` and
+`c2409342cd3448325fb1dc3dff53b6c2e3783c7634b75101834049b86aa11731`.
+Root accepted all 17 protected journal generations at
+`203ba60f7df146743d4a7373a52f55fc6c22858e`, with eight verified effects.
+
+This closes Host successor publication. The image constructor still pins historical
+Host 0.3.0 and requires a separately qualified source rebinding to these served facts.
+Served repaired Manager distribution, genuine native/runtime/profile acquisition,
+two cold OCI builds, C5 retirement and actual served Manager-to-Host inactive qualification
+remain open. Installation, grants, capture, restart/recovery, usage completeness and
+activation are unchanged; no receiver acceptance follows from publication.
