@@ -83,7 +83,7 @@ class FsharpSkillCallerTests(unittest.TestCase):
         for relative in (
             "skills/work-roadmap/SKILL.md",
             "skills/work-board/SKILL.md",
-            "skills/work-unified-roadmap/SKILL.md",
+            "skills/work-programme/SKILL.md",
             "skills/pipeline-preflight/SKILL.md",
             "skills/pipeline-preflight/references/examples.md",
         ):
@@ -91,7 +91,7 @@ class FsharpSkillCallerTests(unittest.TestCase):
             claude = (ROOT / ".claude" / relative).read_bytes()
             self.assertEqual(agents, claude, relative)
         selected = "fsgg-coord-engine skill roadmap-telemetry"
-        for skill in ("work-roadmap", "work-board", "work-unified-roadmap"):
+        for skill in ("work-roadmap", "work-board", "work-programme"):
             text = (ROOT / ".agents/skills" / skill / "SKILL.md").read_text(encoding="utf-8")
             self.assertIn(selected, text)
             self.assertNotIn("work-roadmap/scripts/roadmap-telemetry.py", text)
