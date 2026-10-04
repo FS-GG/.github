@@ -27,3 +27,22 @@ Each acknowledged A/B bundle owns its context, build/reload VFS stores and all p
 Reproducibility selects timestamp 1790899200 alone, linux/amd64, fixed context metadata, UID/GID 32768, gzip level 6 and OCI export policy. Evidence validates manifest/config/blob digest and length, ordered layer descriptors, config diff IDs, bounded decompression and applied whiteout inventories; raw archive and wrapper digests are separate identities. Missing/ambiguous platform, links in the OCI wrapper, duplicate/escaping paths and mismatched selected file metadata refuse. External artifacts are sealed before owned cleanup; the terminal result is durably sealed before successful CLI output.
 
 Focused tests use explicitly synthetic OCI bytes and fixed Python subprocesses beneath the same production mechanism. They do not invoke Podman, containers, installed native ELF, providers or receiver credentials, and establish source behavior only. Canonical model correspondence includes C4 success, stale input, late deadline/cancellation, failed sealing and cleanup refusal. Actual two builds, image probes, C5 qualification and protected readback remain independent gates.
+
+### Inactive served-code qualification
+
+`run-inactive` accepts the same five input/root flags as `run-c4` and selects
+the existing full inactive runner. It reuses the two cold builds and comparison,
+then runs a synthetic disposable Manager preparation and the read-only Host
+`read-inactive-preparation` command against each verified reload image. Only
+served Manager/Host bytes are used. The existing Host 0.3.0 archive is refused;
+a protected successor and coherent exact source/package/release/payload pins
+are prerequisites owned by the integrator. This source does not supply them.
+
+Each fixture uses fixed synthetic IDs, an explicit noncredential placeholder,
+empty Codex home and frozen reader profile. Native and verifier executables are
+never invoked in this qualification window. Receipt joins, closed Host output,
+fixture immutability, owned process drain and fixture absence must all pass.
+The C5 policy is included in the frozen input identity. Timeout or unknown
+retirement prevents store removal and retains an unknown/indeterminate outcome.
+`InactiveQualified` describes synthetic served-code preparation only; capture,
+native acceptance and activation remain false. `run-c4` still leaves C5 unknown.
