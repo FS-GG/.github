@@ -127,10 +127,19 @@ merge tree `52789947c229e79f9b6d70a5570f6e686e6ff2bb` to the reviewed exact head
 The read-only Host command validates inert preparation data before credentials or store
 initialization; `run-inactive` prepares disposable served Manager-to-Host qualification.
 The [owning LEARN-C2 plan](roadmaps/learn-c2-persistent-receiver-v3.md) retains separate
-source, installed and activation boundaries. Published Host **0.3.0** still lacks this
-command; a protected **0.4.0** successor, exact publication pins, genuine served-image
-qualification and capture acceptance remain pending. No real C5, OCI or activation result
-is inferred from the source merge.
+source, installed and activation boundaries. Host **0.4.0 source and publication are now CLOSED**:
+[source PR #4207](https://github.com/FS-GG/.github/pull/4207) merged as
+`09f06f5cc5278cbfbf7c02b0a7a9e72104aa4e3f`, tree
+`264b1f717fa3786f928cf5a3ad59ea8dcebac8a7`, with exact-source checks green.
+First-attempt [publisher 37220419362](https://github.com/FS-GG/.github/actions/runs/37220419362)
+promoted [release 403127331](https://github.com/FS-GG/.github/releases/tag/telemetry-host/v0.4.0)
+with original candidate package/manifest equality and both-feed normalized payload
+`d7e747cebd6f425d775177bc844d0b3d187a911ae4032e269b008c875a872240`.
+Root verified all 17 protected journal generations at
+`203ba60f7df146743d4a7373a52f55fc6c22858e` and eight effects.
+Image-source pin rebinding, served repaired Manager, genuine acquisition, two cold OCI
+builds, C5 retirement, installed receiver/capture/recovery and usage completeness remain open.
+No real C5, OCI or activation result follows from source or publication closure.
 
 **2026-10-04: BARC-01.5f six-phase producer build and Cargo custody CLOSED (bounded native build).**
 Root accepted the fresh sixth producer operation after all six actual phases returned **0**:
