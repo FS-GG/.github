@@ -53,6 +53,24 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-04: WASM-SHARED-01 inherited-mode preflight source repair CLOSED.**
+[Game PR #692](https://github.com/FS-GG/FS.GG.Game/pull/692) merged at
+03:38:27 UTC into protected executor `393c1c6caa204268f42b0c705d5d61f43a6ba8e2`,
+tree `fe1f0c127de782428b4ea4916d8ecea3946267e4`. All **34** native checks
+passed, including [run 37173762374](https://github.com/FS-GG/FS.GG.Game/actions/runs/37173762374);
+root verified the whole merged tree equals the reviewed source tree.
+Ordinary promotion fixtures now isolate their transaction inputs, while explicit
+successor fixtures and production guards retain their original behavior. The
+actual preflight passes under inherited inspection, recovery and preparation
+inputs; removing that isolation reproduces the native failure.
+
+Read-only inspection `37172924046` remains **FAILED** in preflight, with no
+inspection artifact or release effect. This source repair closes no inspection
+or publication: a separately admitted inspection bound to this distinct
+protected executor must precede recovery. Original preparation, tuple, producer
+tag, draft and failed publisher remain unchanged. Existing credentials remain
+sufficient; no user token replacement or manual access change is required.
+
 **2026-10-04: TSDD-KNOWLEDGE-01.4 Wizard forward-recovery source capability CLOSED.**
 The [owning Wizard plan](roadmaps/tsdd-knowledge-wizard.md#wizard-013-forward-recovery-horizon--w013-fr)
 records W013-FR-H1 source delivery under its existing TEMPLATES-H2 cost lineage.
