@@ -7,6 +7,11 @@ open System.Threading
 open System.Threading.Tasks
 open FSGG.Telemetry.PersistentV3.ImageClosure
 
+// Source-only targeted route exits before fixture creation or process-backed checks.
+PathControls.run()
+if Environment.GetEnvironmentVariable "PERSISTENT_V3_PATH_CONTROLS_ONLY" = "1" then
+    Environment.Exit 0
+
 type DelegateMechanism(handler:Effect*CancellationToken->Task<Observation>)=
   interface IRunnerMechanism with member _.Execute(effect,token)=handler(effect,token)
 
