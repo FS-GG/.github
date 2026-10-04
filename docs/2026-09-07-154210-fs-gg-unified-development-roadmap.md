@@ -162,10 +162,14 @@ cases passed, including the actual staged CLI's canonical/changed-byte placehold
 checks and eight historical-pin refusals; existing path and closed inactive-result
 controls also passed. The full constructor/OCI/runner console remains the native CI default.
 Local qualification does not replace protected integration or exact-head source checks.
-Served repaired
-Manager, genuine acquisition, two cold OCI builds/reloads, C5 retirement, installed
-receiver/capture/recovery and usage completeness remain open. No real C5, OCI or activation
-result follows from source or publication closure.
+Repaired served Manager distribution is closed: protected Coordination source
+`5468ce210ef4886806d70c4e333496a358efbdf1`, first-success run `37224476786`, artifact
+`11311024262`, with the nested manifest and all 19 payload sizes, hashes and modes verified.
+The receiver update at `9c22a393a6d8669bdd52df20ef0fd6f994dd2490` passed three
+natural-success restore/build/focused-console steps and 20 release-pin cases; every owned
+process group settled. Exact-head protected source checks remain the integration boundary.
+Current native capability/profile and trusted inventory, both cold OCI builds/reloads
+and C5, installed receiver/capture/recovery, usage completeness and activation remain open.
 
 **2026-10-04: BARC-01.5f six-phase producer build and Cargo custody CLOSED (bounded native build).**
 Root accepted the fresh sixth producer operation after all six actual phases returned **0**:
