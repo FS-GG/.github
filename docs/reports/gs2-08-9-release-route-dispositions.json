@@ -31,7 +31,7 @@
     },
     {
       "path": ".github/workflows/release-new-sdd-workspace.yml",
-      "sha256": "5704613f20a68efce211f699189f439af46c1a8387d1859625e06882978efa7a",
+      "sha256": "688becc5cda07f4f01834d67935b49c0286b0c412afedd2141db19b4d74b36e5",
       "disposition": "exact-source-protected-journal-successor-only",
       "successorAmendment": {
         "unit": "TSDD-KNOWLEDGE-01.4",
@@ -52,7 +52,14 @@
         "direct-package-publish",
         "repack-after-candidate",
         "unadmitted-release-effects"
-      ]
+      ],
+      "forwardRecoveryAmendment": {
+        "unit": "W013-FR-H1",
+        "owner": "TSDD-KNOWLEDGE-01.4",
+        "version": "0.13.0",
+        "previousSuccessorWorkflowSha256": "5704613f20a68efce211f699189f439af46c1a8387d1859625e06882978efa7a",
+        "scope": "Default-off, uniquely selected first-attempt native Wizard diagnostic or promotion-only forward completion of the original candidate and protected open intent. No package push/repack, new tag/assets, journal reset or generic replay. Diagnostic permissions are read-only; correction permits one exact release PATCH and ordinary forward protected CAS after independent matching readback. Private raw custody leaves the runner only as recipient-bound AES-GCM CMS ciphertext. Source readiness is not operation admission or publication acceptance."
+      }
     },
     {
       "path": ".github/workflows/release-telemetry-host.yml",

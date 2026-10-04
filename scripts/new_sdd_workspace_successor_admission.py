@@ -50,3 +50,14 @@ class WizardAdmission:
             return False
         head = self.api.get(f"repos/{REPOSITORY}/git/ref/heads/main")
         return head.get("object", {}).get("sha") == self.publisher_sha
+
+    def authorize_recovery(self, content_id, action, request_digest, binding, mode):
+        """Wizard-only selected native recovery; does not change ordinary admission."""
+        if (content_id != self.content_id or self.requests.get("promote") != request_digest
+                or action not in {"dispatch", "settle"} or mode not in {"diagnostic", "complete"}
+                or binding.get("heldSource") != self.publisher_sha):
+            return False
+        from new_sdd_workspace_promote_recovery import native_context
+        native_context(self.api, binding, mode, self.run_id)
+        repository = self.api.get(f"repos/{REPOSITORY}")
+        return repository.get("id") == REPOSITORY_ID and repository.get("full_name") == REPOSITORY

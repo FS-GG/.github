@@ -476,5 +476,14 @@ class WizardReleaseTests(unittest.TestCase):
             row = json.loads(output.getvalue().split(": ", 1)[1]);self.assertEqual(row["reason"], "draft-observed");self.assertEqual(api.writes, [])
 
 
+def load_tests(loader, tests, pattern):
+    # The existing native selftest route also exercises the actual recovery caller.
+    spec = importlib.util.spec_from_file_location("wizard_recovery_controls", pathlib.Path(__file__).with_name("recovery.py"))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    tests.addTests(loader.loadTestsFromModule(module))
+    return tests
+
+
 if __name__ == "__main__":
     unittest.main()

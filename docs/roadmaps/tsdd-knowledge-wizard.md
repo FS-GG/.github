@@ -177,3 +177,106 @@ it never replays the dispatch or install. The added bounded draft-readback recor
 makes that state explicit but cannot reconstruct the historical hidden result.
 Separate root review and admission remain necessary before any diagnostic or
 recovery operation.
+
+### Wizard 0.13 forward recovery horizon — W013-FR
+
+Accepted material plan digest:
+`90b96af1d851d93847f73aa3c37553ee9376b46cb2fb7637d557bb18c7ba2bd2`.
+This remains the existing **TSDD-KNOWLEDGE-01.4** composition item with original
+**TEMPLATES-H2 / TEMPLATES-H2** cost lineage and one dependent implementation lane.
+The routine roadmap route owns source delivery; root owns integration and all
+separately admitted operations. No planning-only PR or new feature row is needed.
+
+- [ ] **W013-FR-H1 — Reviewable, pure-tested recovery source.** Source is prepared
+  for root review. The trusted `release-new-sdd-workspace.yml` filename and normal
+  preflight/publication path remain authoritative. A default-off diagnostic or
+  completion branch binds the original candidate, failed publisher, full fixed
+  Authority intent/lineage, exact draft/assets, both genuine feeds, held current
+  source and one uniquely correlated first-attempt native run. Source/native
+  acceptance and operation admission remain pending.
+- [ ] **W013-FR-H2 — Integrate source and establish fresh current pins.** Root admits
+  one coherent implementation PR, checks its exact head and reads back its merge.
+  Root then refreshes original-candidate/predecessor/run/journal/draft custody and
+  holds accepted main for the selected operation. A source merge proves capability.
+- [ ] **W013-FR-H3 — One native diagnostic.** Depends on H2 and fresh diagnostic
+  admission. Read-only Actions/release/feed/Authority roles, normal public NuGet
+  install/help, finite captures and input/process custody prove only that native
+  diagnostic. No write-scoped App token or NuGet OIDC exchange is requested.
+- [ ] **W013-FR-H4 — One forward correction and protected settlement.** Depends on
+  accepted H3, held-source checks and fresh correction-specific native admission.
+  Exact matching already-public readback settles without a release PATCH. Exact
+  draft readiness permits one `draft:false, make_latest:false` PATCH to release
+  `402727082`. Independent matching promotion readback and fresh settle admission
+  permit the ordinary protected CAS from generation 16 to 17. Unknown PATCH/CAS
+  outcomes permit bounded readback, never automatic resend or reset. Root requires
+  authentic new native SUCCESS and independent complete publication custody.
+- [ ] **W013-FR-H5 — Resolve two-source public custody, then qualify creation.**
+  Depends on actual H4 acceptance and immediate Unified §0 publication closure.
+  The sealed future public guard currently requires candidate and publisher heads
+  to equal one source revision; original f891 and a descendant recovery publisher
+  cannot satisfy that join. A separately reviewed successor must represent those
+  actual producer/publisher identities and ancestry distinctly. H1 does not edit
+  the sealed guard or infer public creation, adoption, defaults or activation.
+
+The original failed publisher remains FAILED; its hidden inner cause remains
+UNKNOWN. The accepted local install diagnostic does not reconstruct that cause.
+Original candidate/source/package bytes, five fixed journal-intent fields, eight
+ordered effects, 0.12 predecessor and all historical proofs remain immutable.
+Generic executor, protected journal, shared provider and product runtime sources
+remain unchanged. An ordinary open-intent read still waits without install/PATCH.
+The Wizard-specific correction is a separately selected forward-completion branch,
+not a generic retry port or durable cross-run one-use counter. Every later selected
+writer must be terminal before another root decision; uncertainty is not a retry.
+
+Diagnostic limits are 600 seconds total, work stopped by 480, ≤120 reads including
+redirects, ≤16 commands, one install≤180 seconds/help≤60 seconds. Correction limits
+are 1200 seconds total, work stopped by 1000, ≤120 reads, ≤24 commands, one release
+PATCH≤25 seconds and one ordinary protected CAS (three object POSTs and one
+non-forced ref PATCH counted separately). Correction also binds the actual accepted diagnostic run, original ciphertext
+artifact/archive/binding hashes and native first-attempt SUCCESS. Future values
+are required inputs after H3; diagnostic mode refuses any future-readiness assertion.
+Readiness and independent post-PATCH
+readback use at most two install/help pairs; an already-public path uses one.
+The operation timer is anchored to the root-selected UTC dispatch instant and
+shared with the worker; queue/setup time cannot silently restart its budget.
+The command inventory includes two bounded native setup action units, the
+entrypoint/worker/encryption and every supervised SDK/Git command; descendants
+are separately enumerated by identity. Requests are clipped to remaining time
+and capped at 25 seconds. JSON responses
+are capped at 4 MiB, original binary bodies at 8 MiB (the separately accepted encrypted diagnostic
+archive has a closed 128 MiB + 8 KiB ceiling), archive expansion at 32 MiB and private
+command streams at 1 MiB each. Expiry, flooding, trust/feed uncertainty, changed
+inputs or cleanup uncertainty refuses. No SDK download fallback, build, pack,
+global tool install, browser/player/model, self-update or credential replacement
+is part of recovery. The existing runner SDK must match held global.json exactly.
+
+A Wizard-only finite adapter reads the original 16 commits and contents at their
+exact revisions. Canonical Git blob SHA1 and the complete one-file Git tree SHA1
+bind those immutable cached objects; unchanged ProtectedReleaseJournal validates
+all transitions and always freshly reads mutable refs. This bounds transport
+without skipping lineage. Exact source roster/tree, SDK physical inputs, original
+archives and installed 21-member closure/apphost target are checked before and
+after, including failed operations. HOME is inherited unchanged; public child
+CLI/cache/tool/temp paths are owned and fresh, cert generation is false and
+native credentials are excluded from public SDK/tool child environments.
+
+Pidfd/WNOWAIT, subreaper ownership and an independent outer process observer hold
+process identities through bounded capture and cleanup. An identity acquisition
+failure can clean only its unreaped owned child; numeric IDs are not blindly
+reused for signalling. Private raw SDK/transport captures stay out of native logs
+and plaintext artifacts. A root-held RSA recipient's public certificate is bound
+by DER SHA256 into the canonical dispatch binding, whose digest is in the actual
+native run title. One supervised OpenSSL CMS AES-256-GCM/RSA-OAEP-SHA256 command
+exports ciphertext and fixed safe hashes only; unsupported crypto refuses.
+Root separately authenticates the selected run/artifact, decrypts privately,
+checks AEAD success and full member/receipt/native joins, and accepts custody.
+Source controls do not establish actual crypto/provider availability or operation
+success. No admission, recipient/private key or future native artifact is created
+by this source preparation.
+
+The public-guard SHA256 remains
+`96d0a2457ac9414dbef46d56d136f0ea2a4686d75cdd65482dcb8205c530a7bd`.
+H1/H2 change release machinery only; H3 has no workspace effect; H4 publishes the
+already retained producer without changing its bytes. H5 is the first genuine
+public creation-acceptance window in this horizon. Lifecycle, default and opt-in
+choices retain their existing behavior.
