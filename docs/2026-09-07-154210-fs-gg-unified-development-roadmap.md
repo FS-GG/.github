@@ -53,6 +53,30 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-04: WASM-SHARED-01 Actions archive and installed hash-role source repair CLOSED.**
+[Game PR #693](https://github.com/FS-GG/FS.GG.Game/pull/693) merged at
+05:30:28 UTC into protected executor `8de4c2747d40e9993cc9a08cd50e1e2d599f69fb`,
+tree `9166218f92495cb2e9768fd58cfe54600a31fd4d`. All **34** native checks
+passed; root verified the whole merged tree equals the reviewed source tree.
+The [owning Game plan](https://github.com/FS-GG/FS.GG.Game/blob/8de4c2747d40e9993cc9a08cd50e1e2d599f69fb/docs/roadmaps/wasm-shared-01.md)
+records JSON media negotiation for Actions archive redirects while retaining raw
+archive bytes and release-asset binary negotiation. HTTP refusal now stays distinct
+from digest mismatch. Installed verification separately recomputes whole-archive
+SHA512 for the NuGet sidecar and the SDK-defined unsigned compressed-content hash
+for metadata and lock files, preserving signature trust and original payload guards.
+All **33** promotion and **8** evaluator controls passed, with source-only preflight
+also passing under preparation, inspection and recovery inputs.
+
+Distinct inspection `37176783775` remains **FAILED** after successful preflight:
+its original artifact request returned **415**, before archive download. Bounded
+read-only diagnosis with JSON negotiation recovered the byte-identical original
+archive and verified all **590** outer files and **159** original members; no digest
+drift was established. This closes source repair only. Original preparation,
+tuple, producer tag, draft and failed publisher remain unchanged. A separately
+admitted inspection bound to this new protected executor must precede recovery;
+no successful native inspection, publication, installed acceptance or activation
+is established. Workflow permissions and credentials remain unchanged.
+
 **2026-10-04: TSDD-KNOWLEDGE-01.4 Wizard exact ancestry response source repair CLOSED.**
 The [owning Wizard plan](roadmaps/tsdd-knowledge-wizard.md#exact-ancestry-response-role-repair)
 preserves the protected-560 read-only assessment's refusal: its ordinary 64 KiB
