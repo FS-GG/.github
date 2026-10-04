@@ -47,7 +47,10 @@ PREVIOUS_SOURCE="4889c446de0a431d1168a61a89ab660fc2062314"
 WORKFLOW=".github/workflows/release-new-sdd-workspace.yml"
 
 def require(ok, reason):
-    if not ok: raise Refused(reason)
+    if not ok:
+        error=Refused(reason)
+        error.recoveryCode=SAFE_REFUSAL_CODES.get(reason,"unclassified")
+        raise error
 def digest(raw): return hashlib.sha256(raw).hexdigest()
 def canonical(value): return json.dumps(value,sort_keys=True,separators=(",",":"),ensure_ascii=False).encode()
 def load_module(name):
@@ -73,6 +76,49 @@ def validate_binding(binding, mode):
         require(all(re.fullmatch(r"[0-9a-f]{64}",binding[k] or "") for k in ("readinessArchiveSha256","readinessBindingSha256","readinessCiphertextSha256")) and re.fullmatch(r"[0-9a-f]{32}",binding["readinessCorrelation"] or ""),"actual readiness custody required")
     require(binding["home"]==os.environ.get("HOME"),"actual HOME")
     return binding
+
+
+# Closed recovery-only public observability. Never emit free text, raw capture,
+# argv, path, HOME, credential, HTTP query or SDK/provider inventory.
+SAFE_REFUSAL_CODES={
+    "operation deadline":"operation-deadline",
+    "physical roster deadline":"physical-roster-deadline",
+    "physical roster cap":"physical-member-cap",
+    "physical member byte cap":"physical-member-byte-cap",
+    "physical source escape":"physical-scope-refusal",
+    "outer full roster report cap":"outer-report-cap",
+    "existing SDK absent":"sdk-unavailable",
+    "exact held SDK unavailable; no fallback":"sdk-version-refusal",
+    "stock OpenSSL unavailable; no setup fallback":"crypto-unavailable",
+    "CMS encryption unavailable/refused":"crypto-command-refusal",
+    "ciphertext cap":"crypto-size-refusal",
+    "AuthEnvelopedData AES256GCM required":"crypto-envelope-refusal",
+    "recovery worker failed":"worker-refusal",
+    "whole/work deadline":"operation-deadline",
+    "native HTTP read/write refused":"native-http-refusal",
+}
+SAFE_PHASES=frozenset({"entry","outer-source-roster","outer-sdk-resolve",
+    "outer-sdk-roster","outer-report-reservation","outer-crypto-snapshot",
+    "outer-worker-start","outer-source-post","outer-sdk-post",
+    "outer-terminal-reservation","outer-encrypted-custody","outer-final-report"})
+_current_phase="entry"
+def recovery_phase(phase):
+    global _current_phase
+    require(phase in SAFE_PHASES,"closed recovery phase")
+    _current_phase=phase
+    print("Wizard recovery phase: "+canonical({"schema":"fsgg.wizard-recovery-phase/1","phase":phase}).decode(),flush=True)
+def recovery_refusal(error):
+    code=getattr(error,"recoveryCode","unclassified")
+    if code not in set(SAFE_REFUSAL_CODES.values()):code="unclassified"
+    kind=type(error).__name__
+    if kind not in {"Refused","OSError","ValueError","KeyError","CalledProcessError"}:kind="unclassified"
+    print("Wizard recovery refusal: "+canonical({"schema":"fsgg.wizard-recovery-refusal/1","phase":_current_phase if _current_phase in SAFE_PHASES else "entry","code":code,"exceptionKind":kind}).decode(),file=sys.stderr,flush=True)
+def existing_sdk_root():
+    selected=shutil.which("dotnet")
+    require(bool(selected),"existing SDK absent")
+    executable=Path(selected).resolve()
+    require(executable.is_file(),"existing SDK absent")
+    return executable.parent
 
 class CustodyStorage:
     """Closed authenticated large role and one shared finite physical envelope."""
@@ -703,7 +749,7 @@ def worker(mode,binding,root,source,start=None):
     before=None;sdk_before=None;report={"success":False,"historicalCause":"UNKNOWN","publicWizardQualified":False,"adoptionReceiptEmitted":False}
     try:
         subreaper();before=source_snapshot(source,binding,runner,env)
-        sdk_root=Path(shutil.which("dotnet") or "").resolve().parent;require((sdk_root/"dotnet").is_file(),"existing SDK absent")
+        sdk_root=existing_sdk_root();require((sdk_root/"dotnet").is_file(),"existing SDK absent")
         sdk_before=physical_roster(sdk_root,deadline=budget.work)
         budget.storage.bind_report_rosters(before,sdk_before)
         api=FiniteAPI(os.environ.get("GH_TOKEN"),budget,root,held_source=binding["heldSource"])
@@ -724,14 +770,14 @@ def worker(mode,binding,root,source,start=None):
         engine=Recovery(api,journal,admission,binding,manifest,original,int(os.environ["GITHUB_RUN_ID"]),mode,root,lambda p,n:public_install(p,runner,original,n,env))
         report["stage"]="promotion-reconciliation"
         report.update(engine.run());report["success"]=True
-    except BaseException as error:report["errorKind"]=type(error).__name__;report["success"]=False
+    except BaseException as error:recovery_refusal(error);report["errorKind"]=type(error).__name__;report["success"]=False
     finally:
         # Failed operations retain the same full source/SDK membership checks.
         budget.reserve=True
         report["sourceRoster"]=before;report["sdkRoster"]=sdk_before
         report["sdkRoot"]=str(sdk_root) if sdk_before is not None else None
         for name,read,expected in (("Source",lambda:source_snapshot(source,binding,runner,env),before),
-                                   ("Sdk",lambda:physical_roster(sdk_root,deadline=budget.end) if Path(shutil.which("dotnet") or "").resolve().parent==sdk_root else None,sdk_before)):
+                                   ("Sdk",lambda:physical_roster(sdk_root,deadline=budget.end) if existing_sdk_root()==sdk_root else None,sdk_before)):
             try:
                 observed=read();report["post"+name+"Roster"]=observed
                 report["post"+name+"Matches"]=expected is not None and observed==expected
@@ -797,11 +843,16 @@ def outer(mode,binding,root,source):
     budget=Budget(mode,start=time.monotonic()-max(0,elapsed));budget.commands=3
     budget.remaining(25)
     require(not root.exists(),"fresh recovery root required");root.mkdir(mode=0o700,parents=True)
+    recovery_phase("outer-source-roster")
     source=source.resolve();source_before=physical_roster(source,deadline=budget.work)
-    sdk_root=Path(shutil.which("dotnet") or "").resolve().parent
+    recovery_phase("outer-sdk-resolve")
+    sdk_root=existing_sdk_root()
+    recovery_phase("outer-sdk-roster")
     sdk_before=physical_roster(sdk_root,deadline=budget.work)
+    recovery_phase("outer-report-reservation")
     outer_report_cap=len(canonical(source_before))+len(canonical(sdk_before))+256*1024
     require(outer_report_cap<=BINARY_CAP,"outer full roster report cap")
+    recovery_phase("outer-crypto-snapshot")
     openssl=Path(shutil.which("openssl") or "").resolve()
     require(openssl.is_file(),"stock OpenSSL unavailable; no setup fallback")
     crypto_before={str(openssl):digest(openssl.read_bytes())}
@@ -818,6 +869,7 @@ def outer(mode,binding,root,source):
     env["PYTHONDONTWRITEBYTECODE"]="1"
     runner=Runner(budget,root);report={"success":False,"historicalCause":"UNKNOWN","publicWizardQualified":False,"adoptionReceiptEmitted":False,"cryptoPhysicalInputs":crypto_before,"cryptoInputCoverage":"executable, present config and provider files only; loaded libcrypto/libssl/loader not observed", "nativeSetupInventory":[{"action":"actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1","stepSeconds":180},{"action":"actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1","stepSeconds":120}],"commandInventoryPolicy":"two bounded native action units, entrypoint, observer worker, encryption and every supervised SDK/git command; descendants separately enumerated by identity"}
     try:
+        recovery_phase("outer-worker-start")
         result=runner.run([sys.executable,str(Path(__file__).resolve()),"--worker",mode,str(binding_path),str(worker_root),str(source),str(budget.start)],480 if mode=="diagnostic" else 1000,env,cwd=source)
         require(result.returncode==0,"recovery worker failed")
         raw=(worker_root/"worker-report.json").read_bytes();require(len(raw)<=BINARY_CAP,"worker report cap");inner=json.loads(raw)
@@ -837,17 +889,20 @@ def outer(mode,binding,root,source):
             proof=installed_closure(install/"tool",original,cached)
             require(proof["closure"]=={name.removeprefix("tools/net10.0/any/"):{"sha256":digest(raw),"link":None} for name,raw in original.items() if name.startswith("tools/net10.0/any/")},"independent installed members")
         report.update({k:v for k,v in inner.items() if k not in {"sourceRoster","sdkRoster"}})
-    except BaseException as error:report["success"]=False;report["errorKind"]=type(error).__name__
+    except BaseException as error:recovery_refusal(error);report["success"]=False;report["errorKind"]=type(error).__name__
     finally:
         try:
             require(os.environ.get("HOME")==binding["home"],"actual HOME changed")
+            recovery_phase("outer-source-post")
             report["independentSourceMatches"]=physical_roster(source,deadline=budget.end)==source_before
+            recovery_phase("outer-sdk-post")
             report["independentSdkMatches"]=physical_roster(sdk_root,deadline=budget.end)==sdk_before
             require(report["independentSourceMatches"] and report["independentSdkMatches"],"independent post-input failure")
-        except BaseException as error:report["success"]=False;report["postErrorKind"]=type(error).__name__
+        except BaseException as error:recovery_refusal(error);report["success"]=False;report["postErrorKind"]=type(error).__name__
         report["bindingSha256"]=digest(binding_path.read_bytes());report["actualSelectedRunId"]=int(os.environ["GITHUB_RUN_ID"])
         report["elapsedSeconds"]=budget.clock()-budget.start
         report["totalLaunchedCommands"]=report.get("commandCount",0)+budget.commands+1
+        recovery_phase("outer-terminal-reservation")
         terminal_raw=canonical(report);require(len(terminal_raw)<=outer_report_cap,"terminal schema report cap")
     if "storage" in locals():storage.check(len(terminal_raw))
     (root/"terminal.json").write_bytes(terminal_raw)
@@ -865,6 +920,7 @@ def outer(mode,binding,root,source):
                 # rechecked independently; arbitrary large paths are refused.
                 storage.register_readiness(path,binding)
                 require(storage.roles[relative]==role,"outer readiness role drift")
+        recovery_phase("outer-encrypted-custody")
         report["encryptedCustody"]=encrypted_custody(root,binding,runner,storage)
         require(Path(shutil.which("openssl") or "").resolve()==openssl and all(Path(p).is_file() and digest(Path(p).read_bytes())==sha for p,sha in crypto_before.items()),"encryption physical input drift")
         report["cryptoPhysicalInputs"]=crypto_before
@@ -872,7 +928,9 @@ def outer(mode,binding,root,source):
         summary["cryptoInputCoverage"]=report["cryptoInputCoverage"];summary["cryptoInputsUnchanged"]=True;summary["cryptoPhysicalInputDigest"]=digest(canonical(crypto_before));summary["totalLaunchedCommands"]=report["totalLaunchedCommands"]
         summary_path.write_bytes(canonical(summary))
     except BaseException as error:
+        recovery_refusal(error)
         report["success"]=False;report["custodyErrorKind"]=type(error).__name__
+    recovery_phase("outer-final-report")
     terminal_raw=canonical(report);require(len(terminal_raw)<=outer_report_cap,"terminal schema report cap")
     if "storage" in locals():storage.check(len(terminal_raw))
     (root/"terminal.json").write_bytes(terminal_raw)
@@ -884,11 +942,16 @@ def outer(mode,binding,root,source):
     return 0 if report["success"] else 1
 
 def entry(mode,binding_text,root,source):
-    require(os.environ.get("GITHUB_EVENT_NAME")=="workflow_dispatch" and os.environ.get("GITHUB_RUN_ATTEMPT")=="1" and os.environ.get("GITHUB_REPOSITORY")==REPO and os.environ.get("GITHUB_REF")=="refs/heads/main" and os.environ.get("GITHUB_ACTOR")=="EHotwagner","native entrypoint role")
-    binding=json.loads(binding_text);validate_binding(binding,mode)
-    require(binding["heldSource"]==os.environ.get("GITHUB_SHA"),"native held source")
-    require(digest(canonical(binding))==os.environ.get("RECOVERY_BINDING_SHA256") and binding["correlation"]==os.environ.get("RECOVERY_CORRELATION"),"root-selected dispatch binding digest/correlation")
-    return outer(mode,binding,Path(root),Path(source))
+    recovery_phase("entry")
+    try:
+        require(os.environ.get("GITHUB_EVENT_NAME")=="workflow_dispatch" and os.environ.get("GITHUB_RUN_ATTEMPT")=="1" and os.environ.get("GITHUB_REPOSITORY")==REPO and os.environ.get("GITHUB_REF")=="refs/heads/main" and os.environ.get("GITHUB_ACTOR")=="EHotwagner","native entrypoint role")
+        binding=json.loads(binding_text);validate_binding(binding,mode)
+        require(binding["heldSource"]==os.environ.get("GITHUB_SHA"),"native held source")
+        require(digest(canonical(binding))==os.environ.get("RECOVERY_BINDING_SHA256") and binding["correlation"]==os.environ.get("RECOVERY_CORRELATION"),"root-selected dispatch binding digest/correlation")
+        return outer(mode,binding,Path(root),Path(source))
+    except BaseException as error:
+        recovery_refusal(error)
+        raise
 
 if __name__=="__main__":
     require(len(sys.argv)==7 and sys.argv[1]=="--worker","only supervised worker entry")

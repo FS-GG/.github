@@ -582,3 +582,42 @@ class AncestryRoleControls(unittest.TestCase):
    setattr(api,field,previous)
   request=r.urllib.request.Request(url)
   with self.assertRaises(Refused):r.Redirect(api.budget).redirect_request(request,None,302,'redirect',{},'https://api.github.com/other')
+
+class RecoverySetupObservabilityTests(unittest.TestCase):
+ def test_absent_sdk_refuses_before_unrelated_snapshot(self):self.setup_refusal(missing=True)
+ def test_setup_deadline_has_closed_phase_code_without_ciphertext_claim(self):self.setup_refusal(missing=False)
+ def setup_refusal(self,missing):
+  import contextlib
+  with tempfile.TemporaryDirectory() as temporary:
+   root=pathlib.Path(temporary);fixture=Fixture(root,'diagnostic');sdk=root/'sdk';sdk.mkdir();(sdk/'dotnet').write_bytes(b'synthetic; never executed')
+   source=root/'source';source.mkdir();clock=[40.0];calls=[];output=io.StringIO();original=r.physical_roster;budget_type=r.Budget
+   def roster(path,**kwargs):
+    calls.append(pathlib.Path(path))
+    if len(calls)==1:return {'source.txt':{'sha256':'a'*64,'link':None}}
+    clock[0]=480.0;return original(sdk,deadline=480.0)
+   b=fixture.binding;selected=r.datetime.fromisoformat(b['selectedAfter'].replace('Z','+00:00')).timestamp()
+   env={'GITHUB_EVENT_NAME':'workflow_dispatch','GITHUB_RUN_ATTEMPT':'1','GITHUB_REPOSITORY':r.REPO,'GITHUB_REF':'refs/heads/main','GITHUB_ACTOR':'EHotwagner','GITHUB_SHA':b['heldSource'],'RECOVERY_BINDING_SHA256':r.digest(r.canonical(b)),'RECOVERY_CORRELATION':b['correlation']}
+   with patch.dict(os.environ,env),patch.object(r,'recipient',return_value='synthetic public cert'),patch.object(r,'subreaper'),patch.object(r,'physical_roster',side_effect=roster),patch.object(r.shutil,'which',return_value=None if missing else str(sdk/'dotnet')),patch.object(r.time,'time',return_value=selected+40),patch.object(r.time,'monotonic',side_effect=lambda:clock[0]),patch.object(r,'Budget',side_effect=lambda mode,start:budget_type(mode,clock=lambda:clock[0],start=start)),patch.object(r,'encrypted_custody') as encrypt,patch.object(r,'Runner',side_effect=AssertionError('worker forbidden')),patch.object(subprocess,'Popen',side_effect=AssertionError('process forbidden')),patch.object(r.urllib.request.OpenerDirector,'open',side_effect=AssertionError('network forbidden')),contextlib.redirect_stdout(output),contextlib.redirect_stderr(output):
+    with self.assertRaises(Refused):r.entry('diagnostic',r.canonical(b).decode(),str(root/'operation'),str(source))
+    self.assertEqual(encrypt.call_count,0)
+   self.assertEqual(len(calls),1 if missing else 2)
+   self.assertIn('sdk-unavailable' if missing else 'physical-roster-deadline',output.getvalue())
+   self.assertIn('outer-sdk-resolve' if missing else 'outer-sdk-roster',output.getvalue());self.assertNotIn(temporary,output.getvalue())
+ def test_safe_refusal_cannot_echo_error_attributes_or_exception_name(self):
+  import contextlib
+  error=type('SECRETException',(RuntimeError,),{})('SECRET /private/path ?token=SECRET');error.recoveryCode='SECRET';output=io.StringIO();phase=r._current_phase;r._current_phase='SECRET'
+  try:
+   with contextlib.redirect_stderr(output):r.recovery_refusal(error)
+  finally:r._current_phase=phase
+  self.assertNotIn('SECRET',output.getvalue());self.assertNotIn('private',output.getvalue());row=json.loads(output.getvalue().split(': ',1)[1]);self.assertEqual((row['phase'],row['code'],row['exceptionKind']),('entry','unclassified','unclassified'))
+ def test_existing_sdk_path_has_no_cwd_fallback(self):
+  with tempfile.TemporaryDirectory() as temporary:
+   root=pathlib.Path(temporary);(root/'dotnet').write_bytes(b'synthetic')
+   with patch.object(r.shutil,'which',return_value=str(root/'dotnet')):self.assertEqual(r.existing_sdk_root(),root.resolve())
+   with patch.object(r.shutil,'which',return_value=None) as lookup:
+    with self.assertRaises(Refused):r.existing_sdk_root()
+    lookup.assert_called_once_with('dotnet')
+ def test_repair_does_not_raise_time_or_capture_caps(self):
+  b=r.Budget('diagnostic',clock=lambda:480,start=0);self.assertEqual((b.work,b.end),(480,600))
+  with self.assertRaises(Refused):b.remaining(25)
+  self.assertEqual(b.remaining(25,True),25);self.assertEqual((r.CUSTODY_CAP,r.READINESS_CAP,r.STREAM_CAP,r.CUSTODY_MEMBER_CAP),(128*1024*1024,128*1024*1024+8192,1024*1024,323))

@@ -53,6 +53,29 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-04: TSDD-KNOWLEDGE-01.4 Wizard safe native-refusal observability source CLOSED.**
+The [owning Wizard plan](roadmaps/tsdd-knowledge-wizard.md#native-diagnostic-refusal--source-observability-proposal)
+preserves the genuine first-attempt diagnostic
+[37178852784](https://github.com/FS-GG/.github/actions/runs/37178852784) on protected
+`4fdaae93d4a19aaf259649fc16704ea05505cabb`: **FAILED**, publisher and completion
+jobs skipped, no ciphertext artifact. Root failure acceptance SHA256
+`f6da6fa918afce47cc1ee031222c54b2fefb17271f0e0ef5437e2da9e4d678a8`
+retains the consumed dispatch and original masked logs. The native cause remains
+**UNKNOWN**. Refusal at 480.037 seconds from selection is consistent with the
+work boundary; mocked source scenarios do not identify the actual guard.
+
+The recovery-only source now emits closed phase/refusal codes without raw
+captures, free text, argv, paths or credentials, and refuses absent `dotnet`
+before an unrelated parent-folder snapshot. **76 owning pure controls** pass.
+Full SDK input membership and all **600/480/120-second**, **120-read**,
+**16-command** and **128 MiB** custody limits remain unchanged. Early setup
+failure can still lack ciphertext; the source makes that refusal observable.
+This source closure establishes no H3 success or H4 admission. Original
+candidate, failed publisher, generation16 open promotion intent and draft remain
+historical inputs; normal SDK/crypto availability still requires actual proof.
+Public Wizard qualification, adoption and defaults remain pending.
+
+
 **2026-10-04: WASM-SHARED-01 Actions archive and installed hash-role source repair CLOSED.**
 [Game PR #693](https://github.com/FS-GG/FS.GG.Game/pull/693) merged at
 05:30:28 UTC into protected executor `8de4c2747d40e9993cc9a08cd50e1e2d599f69fb`,

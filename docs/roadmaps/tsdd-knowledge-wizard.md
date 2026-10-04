@@ -320,3 +320,28 @@ and no-redirect boundaries are checked; ordinary JSON stays at 64 KiB. Complete
 parsing is required. Both initial and immediate pre-PATCH response originals are
 retained and counted in current physical bytes before effect reservation; the
 role refuses after arming. Source controls do not claim a new H2/H3 result.
+
+
+### Native diagnostic refusal — source observability proposal
+
+The separately admitted diagnostic run
+[37178852784, attempt1](https://github.com/FS-GG/.github/actions/runs/37178852784)
+on protected `4fdaae93d4a19aaf259649fc16704ea05505cabb` failed. Publisher and
+completion jobs skipped; no ciphertext artifact was produced. Root failure
+acceptance SHA256 `f6da6fa918afce47cc1ee031222c54b2fefb17271f0e0ef5437e2da9e4d678a8`
+retains the genuine masked logs and consumed one-POST history. The native cause
+remains UNKNOWN: the safe summary withheld free text and gave no phase. The
+refusal at480.037 seconds after selection fits the480-second work boundary,
+but does not identify the guard or prove SDK availability or absence.
+
+Source controls reproduce a pre-try setup roster refusal that cannot reach
+failed-custody encryption. They also expose absent `dotnet` resolution becoming
+the cwd's parent before the later worker SDK guard. The proposed recovery-only
+repair emits closed phase/refusal codes and refuses a missing existing SDK
+before that unrelated snapshot. It preserves the full literal SDK inventory,
+all time/read/command/custody limits, normal trust and the original candidate /
+publisher / generation16 open promotion intent. No fallback, SDK setup, retry,
+H3 success, H4 admission or public Wizard qualification follows from this source
+proposal. Any infeasible full-SDK contract requires a separate reviewed amendment.
+The independently refused observer log-redirect host is a separate source route
+issue and does not establish the native failure cause.
