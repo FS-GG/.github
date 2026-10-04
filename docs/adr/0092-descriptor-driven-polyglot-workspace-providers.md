@@ -2,6 +2,7 @@
 
 - **Status:** Accepted architecture; this record implements the maintainer decision of 2026-08-26
 - **Date:** 2026-10-04
+- **Affects:** SDD provider contracts, Templates catalogs and product skills, Governance capabilities, and the workspace wizard
 - **Decision owner:** FS-GG accountable programme owner
 - **Decision:** [.github#3009 maintainer decision](https://github.com/FS-GG/.github/issues/3009#issuecomment-5430619257)
 - **Implementation design:** [Polyglot workspace providers](../design/polyglot-workspace-providers.md)
