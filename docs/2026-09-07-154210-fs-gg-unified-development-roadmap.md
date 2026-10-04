@@ -104,8 +104,17 @@ run as its operational trial, with same-PR debugging and no permanent Host or pa
 and candidate-scoped coherent validation passed. The input-manifest helper now accepts
 only the new literal `portable-p4-python-private-inputs-20261004-dc934643`; causal controls
 refuse the consumed historical tag and arbitrary alternatives. The accepted stage and
-candidate-facts runs remain retained without redispatch. Genuine protected helper pins
-must next join the Sandbox source before any fresh private facts effect. No private
+candidate-facts runs remain retained without redispatch. [Sandbox PR #49](https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/pull/49)
+now joins those helper pins and the fresh literal tag at main
+`b75d6dda6faf0924e3f48778887a2af808f77a69`, with full tree
+`2702b29aeb68c219a9f5510af2b0fa4be3ca506b` equal to the qualified candidate.
+Eleven focused source controls and the genuine nine workflow fixtures passed; the latter
+used SDK 10.0.401/runtime 10.0.12, returned natural exit 0 with no failures, errors or skips,
+and settled every owned process. Original operation receipt SHA-256 is
+`dc434c9f30aab1f2bdceea86e7f597bf51360feb7f0b920e79dcf97fc0361152`.
+The synthetic helper fixture now explicitly uses the existing required mode 0644;
+production custody checks are unchanged. Native delivery observed no applicable automatic
+PR checks in this dispatch-only Sandbox repository. Fresh private-facts admission is next. No private
 release, qualification-ref advance, secret, dispatch or receiver grant follows from this
 source merge; private Python facts and runtime receiver acceptance remain pending under
 the [owning language plan](roadmaps/2026-09-29-language-independent-workspaces-and-agent-integration.md).
