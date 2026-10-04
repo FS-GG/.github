@@ -1,7 +1,7 @@
 # SVG coherence, shared implementation and repeated-model performance
 
-Date: 2026-10-04. Status: proposed follow-on plan; no implementation, deployment or
-host-browser execution is established by this document. Host GPU tests require
+Date: 2026-10-04. Status: active; milestones .1 and .2 delivered, .3 in progress.
+Shared implementation, deployment and host-browser acceptance remain open. Host GPU tests require
 active human intervention and are batched at the latest practical qualification
 boundary, after autonomous preparation and container validation. Proposed identity:
 **SVG-COHERENCE-01**. Rendering owns the reusable implementation and performance
@@ -18,6 +18,22 @@ and [scale qualification](svg-scale-01.md). Coordinate migration with
 [FABLE-ADOPT-01](2026-10-01-staged-fable-game-adoption.md); do not create a competing
 product-adoption sequence or mark its remaining outcomes complete. The new instance
 workload does not retroactively invalidate historical acceptance for other workloads.
+
+## Current progress
+
+The [consumer inventory](https://github.com/FS-GG/FS.GG.Rendering/pull/1380)
+merged at `da3f64bbbff205529c9845f779de335ead7af6c0`; the
+[self-running browser harness](https://github.com/FS-GG/FS.GG.Rendering/pull/1381)
+merged at `3f67e4b778c9880e91faf4be58f23c02423ad337`. These close .1 and .2.
+The harness passed its software-browser checks, including result download,
+resume, integrity and three fault controls. No host GPU qualification is claimed.
+
+Milestone .3 has one retained container diagnostic: 72 records, of which 43 meet
+the sample threshold, 23 are inconclusive and six composition cases are unsupported.
+Only one motion pair qualifies on both sides; it cannot establish a general speedup.
+Stage attribution and independent real-composition parity are separate active
+research windows. The original failed prototype and all raw results remain retained.
+Public API selection, shared optimization, integrated consumers and .7/.8 remain open.
 
 ## 1. Evidence and the missing qualification
 
@@ -387,8 +403,7 @@ reuse it; which copies were removed or retained; how model definitions and insta
 are represented; what a change costs; which soldier counts/complexities and browsers
 were measured; which host used real GPU acceleration; and which limits remain open.
 
-Immediate work: agree the representative soldier asset, inventory consumers, and
-prepare the container-tested harness and immutable comparison builds. Record a
-proposed fixture URL/browser route without requiring host setup or intervention now. Actual host
-capability discovery and all GPU browser cases are deferred to the late .7 batch. This planning change neither starts a server nor
-sends a worker handoff nor installs host tooling.
+Immediate work: finish stage attribution and real-composition parity under .3,
+then select the smallest demonstrated shared implementation change. Preserve the
+immutable baseline and software-browser profile. Actual host capability discovery
+and all GPU browser cases remain deferred to the late .7 batch.

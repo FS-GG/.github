@@ -1,5 +1,7 @@
 # Registry changelog
 
+- **2026-10-04** — Board product tooling and optional Game physics publication (github/game; release runs 37235030417, 37236913897, 37237849417): record coherent CLI/Kit/Drivers 0.97.0, creator 0.14.0 and Game 0.17.0 after actual both-feed readbacks. Register the optional Box2D adapter and advance the distributed CLI pin to 0.97.0. Public package-only physics/portal examples passed; product-board and explicit physics consumer adoption remain separate. Preserve independent telemetry Host 0.4.0.
+
 
 Reverse-chronological log of changes to [`dependencies.yml`](dependencies.yml), plus FS.GG.Kit
 republishes that change the fleet materialized by [`repos.yml`](repos.yml) without changing a

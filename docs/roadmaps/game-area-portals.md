@@ -1,9 +1,15 @@
 # GAME-PORTAL-01 — Area topology and rigid portal traversal
 
-Status: proposed extension, 2026-10-04. Game owns topology and traversal; the Box2D
-adapter owner implements local-world transfers; Rendering owns portal presentation.
-fdev integrates their joins. Parent: [GAME-BOX2D-01](game-box2d-physics.md#area-topology-and-portals).
-Implementation, package support and consumer adoption remain open.
+Status: P1/P2 delivered with public Game **0.17.0**, 2026-10-04. Game owns topology
+and traversal; the Box2D adapter owns local-world transfers; Rendering owns portal
+presentation. fdev integrates their joins. Parent: [GAME-BOX2D-01](game-box2d-physics.md#area-topology-and-portals).
+P3 explicit consumer/presentation and retained-workspace adoption remain open.
+
+The [owning Game plan](https://github.com/FS-GG/FS.GG.Game/blob/main/docs/roadmaps/game-area-portals.md)
+and [release run](https://github.com/FS-GG/FS.GG.Game/actions/runs/37237849417)
+record the fresh public package-only five-tick portal example: one traveller,
+one traversal, transformed pose/momentum and exact pinned-profile replay. This
+meets P3's public producer prerequisite, not its full adoption/removal outcome.
 
 ## Local geometry, arbitrary connections
 
