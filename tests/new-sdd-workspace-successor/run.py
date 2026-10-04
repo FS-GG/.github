@@ -4,6 +4,10 @@
 from __future__ import annotations
 
 import hashlib
+import contextlib
+import io
+import subprocess
+import urllib.error
 import ast
 import importlib.util
 import json
@@ -19,7 +23,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 from release_successor_execution import Dispatch, JournalState, Observation, Refused, advance_effects
 from new_sdd_workspace_successor_admission import WizardAdmission
 from new_sdd_workspace_successor_execution import effects
-from new_sdd_workspace_successor_provider import WizardProvider, NotFound
+from new_sdd_workspace_successor_provider import WizardProvider, NotFound, output_signals, publisher_error, DIAGNOSTIC_LIMIT
 
 
 def manifest():
@@ -357,6 +361,119 @@ class WizardReleaseTests(unittest.TestCase):
         self.assertFalse(admission.authorize(self.content_id, effect.identity, "dispatch", effect.request_digest))
         api.main = "d" * 40; api.actor = "someone-else"
         self.assertFalse(admission.authorize(self.content_id, effect.identity, "settle", effect.request_digest))
+
+    def diagnostic_fixture(self, root):
+        path = root / "manifest.json"
+        path.write_text(json.dumps(manifest()))
+        class API:
+            def __init__(self): self.writes = []
+            def patch(self, route, body): self.writes.append((route, body))
+        api = API()
+        provider = WizardProvider(api, path, "SECRET-GH-VALUE", "SECRET-NUGET-VALUE")
+        provider._release = lambda: {"id": 1, "draft": True}
+        provider._remote_journal = lambda: {"observations": {"github": {}, "nuget": {}}}
+        return provider, api
+
+    def test_output_projection_withholds_credentials_urls_queries_and_private_paths(self):
+        raw = "SECRET-GH-VALUE https://user:SECRET-NUGET-VALUE@example.invalid/private?q=SECRET-GH-VALUE /home/private/key NU3028 certificate hostfxr"
+        projected = output_signals(raw, ("SECRET-GH-VALUE", "SECRET-NUGET-VALUE"))
+        rendered = json.dumps(projected)
+        for value in ("SECRET-GH-VALUE", "SECRET-NUGET-VALUE", "https://", "/home/private", "?q=", "example.invalid"):
+            self.assertNotIn(value, rendered)
+        self.assertEqual(projected["codes"], ["NU3028"])
+        self.assertEqual(projected["signals"], ["certificate", "hostfxr"])
+        self.assertEqual(output_signals("NU1301", ("NU1301",))["codes"], [])
+        large = output_signals("x" * 9000 + "NU1301")
+        self.assertEqual(large["characters"], 9006)
+        self.assertEqual(large["scannedCharacters"], 8192)
+        self.assertEqual(large["codes"], [])
+
+    def test_public_install_failure_missing_apphost_and_help_diagnostics_preserve_refusal(self):
+        for outcome in ("install", "apphost", "help", "help-name"):
+            with tempfile.TemporaryDirectory() as temporary:
+                provider, api = self.diagnostic_fixture(pathlib.Path(temporary))
+                calls = []
+                def run(command, **kwargs):
+                    calls.append(command)
+                    if len(calls) == 1:
+                        if outcome not in ("install", "apphost"):
+                            tool = pathlib.Path(command[command.index("--tool-path") + 1]) / "new-sdd-workspace"
+                            tool.parent.mkdir(parents=True); tool.write_text("PURE FIXTURE")
+                        return subprocess.CompletedProcess(command, 17 if outcome == "install" else 0,
+                            "SECRET-GH-VALUE /private/path", "NU3028 signature SECRET-NUGET-VALUE")
+                    return subprocess.CompletedProcess(command, 33 if outcome == "help" else 0,
+                        "unrelated", "framework hostfxr /private/path?credential=SECRET-GH-VALUE")
+                output = io.StringIO()
+                with patch("new_sdd_workspace_successor_provider.subprocess.run", side_effect=run), contextlib.redirect_stdout(output):
+                    self.assertFalse(provider._public_install())
+                records = [json.loads(line.split(": ", 1)[1]) for line in output.getvalue().splitlines()]
+                if outcome == "install": self.assertEqual((records[-1]["stage"], records[-1]["actualExitCode"]), ("install", 17))
+                elif outcome == "apphost": self.assertEqual(records[-1]["reason"], "missing-apphost")
+                elif outcome == "help": self.assertEqual((records[-1]["stage"], records[-1]["actualExitCode"]), ("help", 33))
+                else: self.assertEqual(records[-1]["reason"], "help-name-absent")
+                self.assertEqual(api.writes, [])
+                for value in ("SECRET-GH-VALUE", "SECRET-NUGET-VALUE", "/private/path", "?credential"):
+                    self.assertNotIn(value, output.getvalue())
+
+    def test_timeout_diagnostic_rethrows_with_safe_bounded_projection(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            provider, _ = self.diagnostic_fixture(pathlib.Path(temporary));output = io.StringIO()
+            error = subprocess.TimeoutExpired(["SECRET-GH-VALUE"], 180,
+                output=b"NU1301 /private/path SECRET-NUGET-VALUE", stderr=b"certificate https://private/?key=SECRET-GH-VALUE")
+            with patch("new_sdd_workspace_successor_provider.subprocess.run", side_effect=error), contextlib.redirect_stdout(output):
+                with self.assertRaises(subprocess.TimeoutExpired): provider._public_install()
+            row = json.loads(output.getvalue().split(": ", 1)[1])
+            self.assertEqual(row["exceptionKind"], "TimeoutExpired")
+            self.assertIsNone(row["actualExitCode"])
+            self.assertNotIn("SECRET", output.getvalue());self.assertNotIn("/private", output.getvalue())
+
+    def test_promote_stage_identifies_unknown_boundary_without_retry_or_patch(self):
+        for stage in ("promote-release", "promote-journal", "promote-install", "promote-patch"):
+            with tempfile.TemporaryDirectory() as temporary:
+                provider, api = self.diagnostic_fixture(pathlib.Path(temporary));output = io.StringIO()
+                provider._public_install = lambda: True
+                if stage == "promote-release": provider._release = lambda: None
+                elif stage == "promote-journal": provider._remote_journal = lambda: None
+                elif stage == "promote-install": provider._public_install = lambda: False
+                else:
+                    def fail(*args): raise OSError("SECRET-GH-VALUE https://private/?key=SECRET-NUGET-VALUE")
+                    api.patch = fail
+                with contextlib.redirect_stdout(output):self.assertEqual(provider.dispatch(self.ordered[-1]).state, "unknown")
+                row = json.loads(output.getvalue().split(": ", 1)[1]);self.assertEqual(row["stage"], stage)
+                self.assertEqual(api.writes, []);self.assertNotIn("SECRET", output.getvalue());self.assertNotIn("https", output.getvalue())
+
+    def test_diagnostic_emission_cap_and_publisher_catch_never_print_argv(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            provider, _ = self.diagnostic_fixture(pathlib.Path(temporary));output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                for _ in range(DIAGNOSTIC_LIMIT + 20):provider._diagnostic("promote", "promote-patch", error=OSError("secret"))
+            self.assertEqual(len(output.getvalue().splitlines()), DIAGNOSTIC_LIMIT)
+            self.assertLess(max(len(line) for line in output.getvalue().splitlines()), 4096)
+        error = subprocess.CalledProcessError(17, ["dotnet", "--api-key", "SECRET-GH-VALUE"], output="/private/path", stderr="SECRET-NUGET-VALUE")
+        row = publisher_error(error);self.assertEqual(row["actualExitCode"], 17)
+        self.assertNotIn("SECRET", json.dumps(row));self.assertNotIn("private", json.dumps(row))
+        self.assertEqual(publisher_error(Refused("Wizard publication exceeded bounded reconciliation steps"))["detail"], "Wizard publication exceeded bounded reconciliation steps")
+
+    def test_safe_http_cause_and_dispatch_exit_code_do_not_echo_requests(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            provider, _ = self.diagnostic_fixture(pathlib.Path(temporary));output = io.StringIO()
+            cause = urllib.error.HTTPError("https://private/?key=SECRET-GH-VALUE", 403, "SECRET-NUGET-VALUE", {}, None)
+            error = RuntimeError("SECRET-GH-VALUE /private/path");error.__cause__ = cause
+            with contextlib.redirect_stdout(output):provider._diagnostic("promote", "promote-patch", error=error)
+            row = json.loads(output.getvalue().split(": ", 1)[1]);self.assertEqual(row["httpStatus"], 403);self.assertEqual(row["causeKind"], "URLError")
+            self.assertNotIn("SECRET", output.getvalue());self.assertNotIn("https", output.getvalue())
+            cause.close()
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):provider._diagnostic("nuget", "dispatch", error=subprocess.CalledProcessError(17, ["--api-key", "SECRET-NUGET-VALUE"]))
+            self.assertEqual(json.loads(output.getvalue().split(": ", 1)[1])["actualExitCode"], 17)
+            self.assertNotIn("SECRET", output.getvalue())
+
+    def test_existing_open_promote_readback_logs_draft_without_install_or_write(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            provider, api = self.diagnostic_fixture(pathlib.Path(temporary));output = io.StringIO()
+            with patch.object(provider, "_public_install", side_effect=AssertionError("install forbidden during draft readback")), contextlib.redirect_stdout(output):
+                self.assertEqual(provider.observe(self.ordered[-1]).state, "absent")
+            row = json.loads(output.getvalue().split(": ", 1)[1]);self.assertEqual(row["reason"], "draft-observed");self.assertEqual(api.writes, [])
 
 
 if __name__ == "__main__":
