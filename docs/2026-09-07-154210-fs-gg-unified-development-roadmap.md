@@ -53,6 +53,25 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-04: TSDD-KNOWLEDGE-01.4 Wizard exact ancestry response source repair CLOSED.**
+The [owning Wizard plan](roadmaps/tsdd-knowledge-wizard.md#exact-ancestry-response-role-repair)
+preserves the protected-560 read-only assessment's refusal: its ordinary 64 KiB
+response cap rejected the complete original-to-held GitHub comparison, whose
+separate bounded diagnosis retained **229,508 bytes**, status `ahead`.
+Only that exact constructor-bound ancestry GET now receives a **1 MiB** cap
+within the existing 4 MiB plan ceiling. Origin, repository, revisions, method,
+query, fragment, redirect and complete-body guards remain explicit; ordinary
+JSON stays at 64 KiB. Both comparison originals count toward physical custody
+before effects, and further comparisons refuse after custody arming.
+
+Root reviewed the full three-path repair and all **2,414** coherent source files,
+independently passed all **71** production pure tests and three authentic full
+response replay controls. The earlier truncated response remains refusal
+evidence. This source closure admits no diagnostic or writer and establishes no
+new H2/H3 result. Fresh protected-source/native/predecessor/Authority custody and
+separate diagnostic admission remain required; publication, genuine creation
+acceptance, receiver adoption and workspace defaults retain their prior status.
+
 **2026-10-04: WASM-SHARED-01 inherited-mode preflight source repair CLOSED.**
 [Game PR #692](https://github.com/FS-GG/FS.GG.Game/pull/692) merged at
 03:38:27 UTC into protected executor `393c1c6caa204268f42b0c705d5d61f43a6ba8e2`,

@@ -525,3 +525,60 @@ class CustodySizeControls(unittest.TestCase):
   storage.bind_report_rosters(source,sdk);n=len(r.canonical(source))+len(r.canonical(sdk))
   self.assertEqual(storage.worker_report_cap,2*n+256*1024);self.assertEqual(storage.report_reservation,4*n+3*256*1024)
   with self.assertRaises(Refused):storage.bind_report_rosters({'oversized':'x'*r.BINARY_CAP},sdk)
+
+class AncestryRoleControls(unittest.TestCase):
+ def setUp(self):self.tmp=tempfile.TemporaryDirectory();self.root=pathlib.Path(self.tmp.name);self.held='e'*40
+ def tearDown(self):self.tmp.cleanup()
+ def api(self,root,compare=None):
+  root.mkdir();api=r.FiniteAPI('synthetic',r.Budget('diagnostic'),root,held_source=self.held)
+  failed={'id':r.FAILED_RUN,'head_sha':r.CANDIDATE_SOURCE,'run_attempt':1,'status':'completed','conclusion':'failure','path':r.WORKFLOW,'actor':{'login':'EHotwagner'},'repository':{'id':1269292704},'event':'workflow_dispatch','head_branch':'main'}
+  raw=r.canonical({'status':'ahead','padding':'x'*(229508-len(r.canonical({'status':'ahead','padding':''})))}) if compare is None else compare
+  if compare is None:self.assertEqual(len(raw),229508)
+  class Response(io.BytesIO):
+   status=200
+   def __enter__(self):return self
+   def __exit__(self,*args):self.close()
+  def opened(request,timeout):
+   self.assertEqual(request.get_method(),'GET');self.assertLessEqual(timeout,25)
+   return Response(raw if '/compare/' in request.full_url else r.canonical(failed))
+  api.opener=SimpleNamespace(open=opened);return api
+ def test_complete_body_and_repeat_originals_retained_before_effect_projection(self):
+  api=self.api(self.root/'complete');api.storage=r.CustodyStorage(api.root)
+  binding={'heldSource':self.held,'priorRunIds':[]}
+  r.original_runs(api,binding);r.original_runs(api,binding)
+  rows=[row for row in api.records if row['role']=='bound-original-to-held-ancestry']
+  self.assertEqual(len(rows),2);self.assertTrue(all(row['bytes']==229508 and row['cap']==r.ANCESTRY_JSON_CAP for row in rows))
+  projection=api.storage.pre_effect(api.budget,{},False)
+  self.assertGreaterEqual(projection['currentBytes'],2*229508)
+  with self.assertRaises(Refused):r.original_runs(api,binding)
+ def test_wrong_origin_path_source_query_and_request_kind_refuse_before_transport(self):
+  api=self.api(self.root/'closed');base=f'https://api.github.com/repos/{r.REPO}/compare/{r.CANDIDATE_SOURCE}...{self.held}'
+  urls=[base.replace('api.github.com','api.nuget.org'),base.replace('/FS-GG/','/other/'),base.replace(r.CANDIDATE_SOURCE,'a'*40),base.replace(self.held,'b'*40),base+'?page=1',base+'#fragment',base+'/',base.replace('/compare/','/%63ompare/'),base.replace('api.github.com','api.github.com:444')]
+  api.opener.open=lambda *a,**k:(_ for _ in ()).throw(AssertionError('wrong role reached transport'))
+  for url in urls:
+   with self.subTest(url=url),self.assertRaises(Refused):api.request(url)
+  for kwargs in ({'method':'POST'},{'binary':True},{'custody':True}):
+   with self.assertRaises(Refused):api.request(base,**kwargs)
+  with self.assertRaises(Refused):r.original_runs(api,{'heldSource':'b'*40,'priorRunIds':[]})
+ def test_oversize_truncated_error_and_non_ahead_do_not_establish_ancestry(self):
+  for name,raw in [('oversize',r.canonical({'status':'ahead','padding':'x'*r.ANCESTRY_JSON_CAP})),('prefix',b'{"status":"ahead",'),('error',b'{"message":"unknown"}'),('behind',b'{"status":"behind"}')]:
+   api=self.api(self.root/name,raw)
+   with self.assertRaises(Exception):r.original_runs(api,{'heldSource':self.held,'priorRunIds':[]})
+  api=self.api(self.root/'http-error')
+  api.opener.open=lambda *a,**k:(_ for _ in ()).throw(r.urllib.error.HTTPError('https://api.github.com',403,'withheld',{},None))
+  with self.assertRaises(Refused):r.original_runs(api,{'heldSource':self.held,'priorRunIds':[]})
+ def test_ordinary_cap_unbound_authority_and_redirects_remain_refusals(self):
+  api=self.api(self.root/'ordinary')
+  class Response(io.BytesIO):
+   status=200
+   def __enter__(self):return self
+   def __exit__(self,*args):self.close()
+  api.opener.open=lambda *a,**k:Response(b'x'*(r.SMALL_JSON_CAP+1))
+  with self.assertRaises(Refused):api.get(f'repos/{r.REPO}')
+  url=f'https://api.github.com/repos/{r.REPO}/compare/{r.CANDIDATE_SOURCE}...{self.held}'
+  for field,value in [('held_source',None),('authority',True)]:
+   previous=getattr(api,field);setattr(api,field,value)
+   with self.assertRaises(Refused):api.request(url)
+   setattr(api,field,previous)
+  request=r.urllib.request.Request(url)
+  with self.assertRaises(Refused):r.Redirect(api.budget).redirect_request(request,None,302,'redirect',{},'https://api.github.com/other')

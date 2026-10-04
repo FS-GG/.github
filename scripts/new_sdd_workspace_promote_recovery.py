@@ -24,6 +24,7 @@ ZIP_CAP=32*1024*1024
 CUSTODY_CAP=128*1024*1024
 READINESS_CAP=CUSTODY_CAP+8192
 SMALL_JSON_CAP=64*1024
+ANCESTRY_JSON_CAP=1024*1024
 INSTALL_TREE_CAP=8*1024*1024
 # Closed source roles: 120 GET originals + four CAS response originals;
 # 19 inner + worker + encryption command streams, two command records/two
@@ -150,6 +151,9 @@ class CustodyStorage:
         # repeated five-body gate; remaining inner command streams; two outer
         # command streams; worker/outer reports, command/transport records and
         # fresh second install tree. Extra role calls refuse at streaming time.
+        # Both initial and immediate pre-PATCH ancestry originals already appear
+        # in this full physical inventory. No comparison may follow arming;
+        # their larger cap cannot consume the smaller future JSON reservation.
         future_binary=sum(binary_bodies.values()) if second_gate else 0
         require(not second_gate or len(binary_bodies)==5,"exact matched gate reservation")
         future_json=(max(0,120-budget.reads)+4)*SMALL_JSON_CAP+4*1024*1024
@@ -177,6 +181,7 @@ class Redirect(urllib.request.HTTPRedirectHandler):
     def __init__(self,budget):self.budget=budget
     def redirect_request(self,req,fp,code,msg,headers,newurl):
         parsed=urllib.parse.urlsplit(newurl)
+        require("/compare" not in urllib.parse.unquote(urllib.parse.urlsplit(req.full_url).path),"ancestry compare redirects forbidden")
         require(req.get_method()=="GET" and parsed.scheme=="https" and not parsed.username and not parsed.password,"redirect trust")
         host=parsed.hostname or ""
         require(host in {"api.github.com","release-assets.githubusercontent.com","objects.githubusercontent.com","api.nuget.org"} or host.endswith(".blob.core.windows.net"),"redirect host")
@@ -186,8 +191,10 @@ class Redirect(urllib.request.HTTPRedirectHandler):
         return result
 
 class FiniteAPI:
-    def __init__(self,token,budget,root,authority=False):
+    def __init__(self,token,budget,root,authority=False,held_source=None):
         require(bool(token),"native read credential absent");self.token=token;self.budget=budget;self.root=root;self.authority=authority;self.records=[]
+        require(held_source is None or re.fullmatch(r"[0-9a-f]{40}",held_source),"bound ancestry held source")
+        self.held_source=held_source
         self.expectedSettlement=None;self.cas_objects={};self.immutable={};self.storage=getattr(budget,"storage",None);self.matched_bodies={};self.future_pages=0;self.future_binaries=0
         self.opener=urllib.request.build_opener(Redirect(budget))
     def request(self,url,method="GET",body=None,binary=False,headers=None,custody=False):
@@ -197,6 +204,11 @@ class FiniteAPI:
         auth={"Authorization":"Bearer "+self.token,"User-Agent":"fsgg-wizard-recovery","Accept":"application/vnd.github+json","X-GitHub-Api-Version":"2022-11-28"} if parsed.hostname=="api.github.com" else {"User-Agent":"fsgg-wizard-recovery"}
         request=urllib.request.Request(url,data=rawbody,method=method,headers={**auth,**(headers or {}),**({"Content-Type":"application/json"} if body is not None else {})})
         cap=(READINESS_CAP if custody else BINARY_CAP) if binary else (1024*1024 if "/actions/workflows/" in parsed.path else 256*1024 if parsed.path.endswith("/commits") else SMALL_JSON_CAP)
+        ancestry="/compare" in urllib.parse.unquote(parsed.path)
+        if ancestry:
+            require(not self.authority and self.held_source is not None and method=="GET" and not binary and not custody and parsed.netloc=="api.github.com" and parsed.path==f"/repos/{REPO}/compare/{CANDIDATE_SOURCE}...{self.held_source}" and not parsed.query and not parsed.fragment,"exact bound ancestry response role")
+            require(not (self.storage and self.storage.armed),"ancestry reads precede effect reservation")
+            cap=ANCESTRY_JSON_CAP
         if self.storage and self.storage.armed:
             if binary:
                 require(url in self.matched_bodies and self.future_binaries<5,"closed future binary role")
@@ -205,7 +217,7 @@ class FiniteAPI:
                 self.future_pages+=1;require(self.future_pages<=4,"closed future workflow pages")
         require(not custody or (method=="GET" and binary and parsed.hostname=="api.github.com" and re.fullmatch(r"/repos/FS-GG/\.github/actions/artifacts/[0-9]+/zip",parsed.path)),"encrypted readiness archive route")
         index=len(self.records);target=self.root/f"response-{('authority' if self.authority else 'github')}-{index}.raw"
-        row={"method":method,"origin":parsed.hostname,"path":parsed.path,"query":"withheld","status":None,"bytes":0}
+        row={"method":method,"origin":parsed.hostname,"path":parsed.path,"query":"withheld","status":None,"bytes":0,"cap":cap,"role":"bound-original-to-held-ancestry" if ancestry else "ordinary"}
         self.records.append(row)
         try:
             with self.opener.open(request,timeout=timeout) as response,target.open("xb") as stream:
@@ -521,6 +533,7 @@ def native_context(api,binding,mode,run_id):
     require(api.get(f"repos/{REPO}/git/ref/heads/main").get("object",{}).get("sha")==binding["heldSource"],"held main drift")
 
 def original_runs(api,binding):
+    if hasattr(api,"held_source"):require(api.held_source==binding["heldSource"],"original runs held source drift")
     original=api.get(f"repos/{REPO}/actions/runs/{FAILED_RUN}")
     require(original.get("id")==FAILED_RUN and original.get("head_sha")==CANDIDATE_SOURCE and original.get("run_attempt")==1 and original.get("status")=="completed" and original.get("conclusion")=="failure" and original.get("path")==WORKFLOW and original.get("actor",{}).get("login")=="EHotwagner" and original.get("repository",{}).get("id")==1269292704 and original.get("event")=="workflow_dispatch" and original.get("head_branch")=="main","original failed publisher drift")
     for ident in binding["priorRunIds"]:
@@ -693,7 +706,7 @@ def worker(mode,binding,root,source,start=None):
         sdk_root=Path(shutil.which("dotnet") or "").resolve().parent;require((sdk_root/"dotnet").is_file(),"existing SDK absent")
         sdk_before=physical_roster(sdk_root,deadline=budget.work)
         budget.storage.bind_report_rosters(before,sdk_before)
-        api=FiniteAPI(os.environ.get("GH_TOKEN"),budget,root)
+        api=FiniteAPI(os.environ.get("GH_TOKEN"),budget,root,held_source=binding["heldSource"])
         report["stage"]="selected-native-admission"
         native_context(api,binding,mode,int(os.environ["GITHUB_RUN_ID"]))
         report["stage"]="existing-sdk-version"
