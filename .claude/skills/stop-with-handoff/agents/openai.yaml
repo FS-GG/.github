@@ -1,0 +1,4 @@
+interface:
+  display_name: "Stop With Handoff"
+  short_description: "Save a timestamped handoff and stop all roadmap work"
+  default_prompt: "Use $stop-with-handoff to stop workers, save and land a timestamped handoff, and stop all roadmap work."

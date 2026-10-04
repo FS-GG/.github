@@ -88,7 +88,18 @@ with tempfile.TemporaryDirectory(prefix="skill-catalog-") as raw:
 
     budget_root = root / "budget"
     budget_fixtures = {}
-    budget_skill_count = module.DESCRIPTION_CEILING // module.DESCRIPTION_MAX + 2
+    # Exercise every independent ceiling; raising one does not imply another is
+    # crossed by a fixture sized only from the description allowance.
+    minimum_entry_chars = (
+        module.DESCRIPTION_MAX
+        + len("budget-skill-0")
+        + min(len(f"{runtime}/budget-skill-0/SKILL.md") for runtime in module.SKILL_ROOTS)
+    )
+    budget_skill_count = max(
+        module.DESCRIPTION_CEILING // module.DESCRIPTION_MAX,
+        module.ROOT_CATALOG_CEILING // minimum_entry_chars,
+        module.CODEX_EFFECTIVE_CEILING // (minimum_entry_chars * len(module.CODEX_SKILL_ROOTS)),
+    ) + 2
     for index in range(budget_skill_count):
         name = f"budget-skill-{index}"
         for runtime in module.SKILL_ROOTS:
