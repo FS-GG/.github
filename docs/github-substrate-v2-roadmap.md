@@ -335,6 +335,11 @@ value, publication, installation, native grant or completion claim.
 
 ### Language-independent product workspaces — 2026-09-29
 
+The settled [polyglot provider decision](adr/0092-descriptor-driven-polyglot-workspace-providers.md) and
+[linked producer design](design/polyglot-workspace-providers.md) define the separate catalog rollout
+through SDD#928, Governance#423, Templates#441 and `.github`#3010. Native language fixtures do not
+substitute for those packages' publication and public installed qualification.
+
 Select **V2-LANG-01** as a prospective product-integration extension. Product workspaces choose
 their own languages and toolchains, including multiple components in one repository; the coordination
 runtime and agent SDK do not become product dependencies. The
