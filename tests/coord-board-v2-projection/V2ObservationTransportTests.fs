@@ -140,3 +140,57 @@ let ``successor retains original identity and refuses mixed fourth content and u
         let transport = V2ObservationTransport.compose successorBinding reads (fun _ -> writes <- writes + 1; response """{"data":{"updateProjectV2ItemFieldValue":{"clientMutationId":null}}}""") |> Result.defaultWith (Errors.explain >> failwith)
         Assert.Equal(accepted, Board.setField transport board item "Observation" (Board.Set "Verified") |> Result.isOk)
         Assert.Equal((if accepted then 1 else 0), writes)
+
+let private productBinding repository tag number =
+    { binding with BindingVersion = 3; Owner = "ExampleOrg"; OrganizationId = "O_products"; ProjectNumber = number
+                   ProjectTitle = tag + " V2"; ProjectId = "PVT_" + tag; Repositories = Set.singleton ("ExampleOrg/" + repository)
+                   SelectedIssues = Map.ofList [ "I_" + tag, "ExampleOrg/" + repository + "#7" ]
+                   Observation = { Id = tag + "_observation"; Options = Map.ofList [ "Verified", tag + "_verified"; "Stale", tag + "_stale"; "Unknown", tag + "_unknown" ] } }
+
+let private productA = productBinding "WidgetA" "product_a" 81
+let private productB = productBinding "WidgetB" "product_b" 82
+let private productBoard (selected: Binding) : Board.BoardMap =
+    { board with Owner = selected.Owner; Number = selected.ProjectNumber; Id = selected.ProjectId; Title = selected.ProjectTitle
+                 Fields = Map.ofList [ "Observation", { Id = selected.Observation.Id; Type = Board.SingleSelect selected.Observation.Options } ] }
+let private productIdentity (selected: Binding) =
+    let repository = Set.minElement selected.Repositories
+    let native = selected.SelectedIssues |> Map.keys |> Seq.exactlyOne
+    $"""{{"data":{{"node":{{"id":"item7","project":{{"id":"{selected.ProjectId}"}},"content":{{"id":"{native}","number":7,"repository":{{"nameWithOwner":"{repository}"}}}}}}}}}}"""
+
+[<Fact>]
+let ``two product authorities take target field and option only from their selected binding`` () =
+    for selected in [ productA; productB ] do
+        let mutable emitted = None
+        let reads = Fake.Recorder(fun _ -> response (productIdentity selected))
+        let guarded = V2ObservationTransport.compose selected reads (fun request -> emitted <- Some request; response """{"data":{"updateProjectV2ItemFieldValue":{"clientMutationId":null}}}""") |> Result.defaultWith (Errors.explain >> failwith)
+        Assert.True(Board.setField guarded (productBoard selected) "item7" "Observation" (Board.Set "Verified") |> Result.isOk)
+        match emitted.Value.Body with
+        | Query(_, variables) ->
+            Assert.Equal(Some(VId selected.ProjectId), List.tryFind (fst >> (=) "projectId") variables |> Option.map snd)
+            Assert.Equal(Some(VId selected.Observation.Id), List.tryFind (fst >> (=) "fieldId") variables |> Option.map snd)
+            Assert.Equal(Some(VString selected.Observation.Options["Verified"]), List.tryFind (fst >> (=) "optionId") variables |> Option.map snd)
+        | _ -> failwith "fixed typed mutation expected"
+        Assert.True(guarded.RetryMutation "arbitrary" |> Result.isError)
+
+[<Fact>]
+let ``other product target field options or fresh native identity never reach dispatch`` () =
+    let mutable original = None
+    let capture =
+        { new IGitHubTransport with
+            member _.Send _ = failwith "unexpected read"
+            member _.RetryMutation _ = failwith "unexpected replay"
+            member _.SendMutation intent = original <- Some intent; response "{}" }
+    Board.setField capture (productBoard productA) "item7" "Observation" (Board.Set "Verified") |> ignore
+    let intent = original.Value
+    for key, bad in [ "projectId", VId productB.ProjectId; "fieldId", VId productB.Observation.Id; "optionId", VString productB.Observation.Options["Verified"] ] do
+        let body = match intent.Request.Body with Query(document, variables) -> Query(document, variables |> List.map (fun (name, value) -> name, if name = key then bad else value)) | _ -> failwith "expected query"
+        Assert.True(V2ObservationTransport.authorize productA { intent with Request = { intent.Request with Body = body } } |> Result.isError)
+    for bad in [ productIdentity productB
+                 (productIdentity productA).Replace("ExampleOrg/WidgetA", "ExampleOrg/WidgetB")
+                 (productIdentity productA).Replace("I_product_a", "I_foreign")
+                 (productIdentity productA).Replace("\"number\":7", "\"number\":8") ] do
+        let mutable writes = 0
+        let reads = Fake.Recorder(fun _ -> response bad)
+        let guarded = V2ObservationTransport.compose productA reads (fun _ -> writes <- writes + 1; response "{}") |> Result.defaultWith (Errors.explain >> failwith)
+        Assert.True(Board.setField guarded (productBoard productA) "item7" "Observation" (Board.Set "Verified") |> Result.isError)
+        Assert.Equal(0, writes)

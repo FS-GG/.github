@@ -275,12 +275,25 @@ joins; this window does not enroll a hosted job or create any GitHub resource.
 
 ### Current code and first supported scope
 
-The current `.github` [V2Projection](../../src/FS.GG.Coord.GitHub/V2Projection.fs) validates only the
-FS-GG organization / Coordination V2 target, an explicit three-to-five issue cohort and exact field
-options. [V2ProjectionSource](../../src/FS.GG.Coord.GitHub/V2ProjectionSource.fs) reads the fixed protected
-organization manifest; [BoardV2Application](../../src/FS.GG.Coord.Cli/BoardV2Application.fs) parses that
-binding, checks the loaded assembly hash and selects the bounded inspection/refresh transports.
-Changing a title or copying the organization binding cannot provide product support.
+The shared adapter source extends [V2Projection](../../src/FS.GG.Coord.GitHub/V2Projection.fs)
+through the existing closed Binding wire: version 2 retains the selected organization target and
+cohort; version 3 admits one explicitly bound product repository and one to five exact native issue
+identities. [V2ProjectionSource](../../src/FS.GG.Coord.GitHub/V2ProjectionSource.fs) reads product
+population and owning evidence only from that selected repository; it cannot fall back to the
+organization manifest or another product. [BoardV2Application](../../src/FS.GG.Coord.Cli/BoardV2Application.fs)
+retains loaded-assembly verification and the bounded inspection/refresh routes. The guarded
+Observation transport derives project, field and option identities from the selected binding.
+
+The bounded adapter source qualified on 2026-10-04 through six naturally successful restore,
+build and native VSTest commands, with **65 projection and 7 CLI facts passing**. Qualification
+observed the exact .NET 10.0.12 runner and testhost, joined all 273 source leaves, retained unchanged
+source/package/SDK pins and independently observed all 20 owned process generations absent.
+The root acceptance digest is
+`15bba60d41063776f46a04e1396f6de2ad0b5fa8f3de4ee7e62f7331ac0ebb00`.
+Earlier runtime-discovery and fixture failures remain retained; they are not passing qualification.
+The suites use two recorded product bindings and fake transports. This accepts the shared adapter
+source scope; creator/guidance integration, coherent publication and actual installed/native product
+qualification remain separate. Milestones .5 and .6 remain open.
 
 The existing [workspace creator](../../scripts/NewSddWorkspace/Program.fs) writes owner/title
 `FSGG_COORD_*` wiring through `writeCoordinationEnv` and `retrofit`, merging `.claude/settings.json`.

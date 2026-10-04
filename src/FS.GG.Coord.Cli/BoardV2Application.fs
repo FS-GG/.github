@@ -48,6 +48,8 @@ module BoardV2Application =
                   ProjectNumber = number "projectNumber" root; ProjectTitle = text "projectTitle" root; ProjectId = text "projectId" root
                   Status = field "status"; RoadmapFieldId = text "roadmapFieldId" root; Track = field "track"
                   Observation = field "observation"; Repositories = Set.ofList repositories }
+            // Version 3 uses this same closed wire shape for a selected receiver repository.
+            // Local-only workspaces select no board command; no implicit binding is constructed.
             V2Projection.validateBinding binding |> Result.map (fun () -> binding) |> Result.mapError Errors.explain
         with error -> Error("invalid binding: " + error.Message)
 

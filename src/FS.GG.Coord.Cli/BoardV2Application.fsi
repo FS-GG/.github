@@ -4,7 +4,9 @@ namespace FS.GG.Coord.Cli
 module BoardV2Application =
     open FS.GG.Coord.GitHub
 
-    /// Decode a closed binding wire shape and validate its immutable organization/target contract.
+    /// Decode the same closed wire shape for organization version 2 or receiver repository version 3.
+    /// Product mode requires its selected organization-owned project, one repository and native cohort;
+    /// no organization default, user-owned execution or legacy board fallback is introduced.
     val parseBinding: json: string -> Result<V2Projection.Binding, string>
     /// Emit an explicit report wire shape, including gaps and independent acceptance facts.
     val encodeReport: report: V2ProjectionSource.BatchReport -> string
