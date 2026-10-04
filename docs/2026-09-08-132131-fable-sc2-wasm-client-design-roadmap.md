@@ -884,6 +884,16 @@ The genuine journeys exercised candidate `e20d37488ff71e019a9af7227302107dfc46f3
 
 SC2C-01.6a source contracts and author-toolchain qualification are complete through [SC2 Client #17](https://github.com/FS-GG/FS.GG.SC2.Client/pull/17), merged at protected `4be9a4c18598f8e63d5624a422f5f28621d68cd3`, tree `c9044372fb12858d10a12215047d317e7b2438cd`, matching qualified candidate `4ffe2cc296dabdda4e3c2f5d0ba07a1513cfa6b7`; [protected verification `36757984221`](https://github.com/FS-GG/FS.GG.SC2.Client/actions/runs/36757984221) passed. The [owning .6 plan](https://github.com/FS-GG/FS.GG.SC2.Client/blob/main/docs/SC2C-01.6-plan.md) defines this bounded contract, schema and freestanding author-toolchain window. `.6b–.6e` remain locally tested preparation awaiting production joins and independent-author acceptance. `.6f` native acceptance and `.7` release, installation and platform qualification remain open.
 
+**2026-10-04 bounded P2 progress:** the separate native producer completed one
+accepted three-tool operation (`cc1`, `as`, `ld`), with a retained 680-byte ELF
+that was never executed, all inputs rehashed and owned-process cleanup observed.
+The [Unified progress report](2026-09-07-154210-fs-gg-unified-development-roadmap.md#0-current-progress-report)
+records the artifact and root-acceptance pins, the distinct 256 MiB evidence-read /
+8 MiB scratch contract and four retained failed attempts. Internal compiler reads
+and cumulative writes remain unknown. The existing 16 MiB native-generation
+contract, seven-entry cache/apphost query readiness, general P2 and `.6f` native
+acceptance remain open; this producer result admits no further operation.
+
 Each expanded milestone names the product files/components it owns, its useful behavior, dependencies
 and substantive tests. SC2C-01.4 should select a representative scenario rather than equating a move
 demo with complete StarCraft command coverage. SC2C-01.6's author onboarding is part of the core user
