@@ -159,5 +159,19 @@
     "incomplete": "Continue the FS-GG Unified Roadmap",
     "negative": "Create a personal skill for an unrelated project without starting FS-GG development.",
     "boundary": "Inspect the Unified Roadmap and its temporary coordinator, but do not start planning or implementation."
+  },
+  "continue-from-handoff": {
+    "positive": "Use $continue-from-handoff to resume the newest saved report and finish the Unified Roadmap autonomously.",
+    "indirect": "Read the latest UTC handoff in docs/handoffs and carry the remaining FS-GG programme through acceptance without asking me for decisions.",
+    "incomplete": "Resume the programme from our last session save.",
+    "negative": "Create a resume skill without starting any roadmap work.",
+    "boundary": "Inspect the latest handoff and summarize its open work, but do not resume execution."
+  },
+  "stop-with-handoff": {
+    "positive": "Use $stop-with-handoff to stop all workers, save a timestamped report, PR/merge it, and end this session.",
+    "indirect": "The session is ending; preserve interrupted roadmap state under docs/handoffs and stop all programme work.",
+    "incomplete": "Save a handoff and stop.",
+    "negative": "Resume the latest saved report and continue the Unified Roadmap.",
+    "boundary": "Prepare a stop-skill draft without interrupting workers or creating a real session handoff."
   }
 }
