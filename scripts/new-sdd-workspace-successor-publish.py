@@ -36,8 +36,17 @@ def main() -> int:
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--preflight-only", action="store_true")
     mode.add_argument("--publish", action="store_true")
+    mode.add_argument("--promotion-recovery", choices=("diagnostic", "complete"))
+    parser.add_argument("--recovery-binding")
     args = parser.parse_args()
     try:
+        if args.promotion_recovery:
+            from new_sdd_workspace_promote_recovery import entry, CANDIDATE_RUN, ARTIFACT, ARCHIVE
+            require((args.candidate_run_id, args.candidate_artifact_id, args.candidate_archive_sha256) ==
+                    (CANDIDATE_RUN, ARTIFACT, ARCHIVE), "recovery original candidate differs")
+            require(args.recovery_binding is not None, "explicit recovery binding absent")
+            return entry(args.promotion_recovery, args.recovery_binding, args.workdir, pathlib.Path(__file__).resolve().parents[1])
+        require(args.recovery_binding is None, "recovery binding outside selected mode")
         publisher_sha = os.environ["GITHUB_SHA"]
         operator = os.environ["GITHUB_ACTOR"]
         run_id = int(os.environ["GITHUB_RUN_ID"])

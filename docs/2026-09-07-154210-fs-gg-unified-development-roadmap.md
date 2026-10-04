@@ -53,6 +53,27 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-04: TSDD-KNOWLEDGE-01.4 Wizard forward-recovery source capability CLOSED.**
+The [owning Wizard plan](roadmaps/tsdd-knowledge-wizard.md#wizard-013-forward-recovery-horizon--w013-fr)
+records W013-FR-H1 source delivery under its existing TEMPLATES-H2 cost lineage.
+The trusted release workflow now has default-off diagnostic and completion routes
+bound to the original 0.13 candidate, failed publisher, complete Authority lineage,
+draft/assets, held descendant source and a uniquely correlated native attempt.
+Root reviewed all eight implementation paths and 2,414 coherent source files,
+and independently passed all **67** native-route pure controls. Finite API,
+process, input and evidence-storage guards preserve original bytes; only encrypted
+custody and safe hashes can leave the private operation. A separate genuine local
+dummy-custody roundtrip and wrong-recipient/tampered-ciphertext controls passed;
+hosted crypto availability remains unproved.
+
+This closes source capability only. Publisher `37160659521` remains **FAILED**;
+original draft `402727082` and Authority head
+`dbc2c4e578cb41e9f6aa31f18557cd95745346f7` remain its partial transaction.
+Fresh protected-source/candidate/predecessor/native/journal custody and a separate
+diagnostic admission must precede any forward correction. Public promotion,
+genuine Wizard creation acceptance and receiver adoption remain open. This source
+delivery admits no diagnostic or writer and changes no workspace default.
+
 **2026-10-04: WASM-SHARED-01 bound-draft successor source capability CLOSED.**
 [Game PR #691](https://github.com/FS-GG/FS.GG.Game/pull/691) merged at
 02:25:37 UTC into protected executor `ad5db7ee70cf03fa4d860a0ede7157334d96793c`,

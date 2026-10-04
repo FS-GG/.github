@@ -1,4 +1,5 @@
 name: release-new-sdd-workspace
+run-name: "Wizard 0.13 recovery ${{ inputs.promotion_recovery }} ${{ inputs.recovery_correlation }} ${{ inputs.recovery_binding_sha256 }}"
 
 # TSDD-KNOWLEDGE-01.4: retain the existing NuGet Trusted Publishing filename.
 # GS2-08.9's no-effect seal is superseded only for this exact-source, protected-
@@ -29,6 +30,30 @@ on:
         default: false
         type: boolean
 
+      promotion_recovery:
+        description: Separately admitted forward recovery; ordinary publication stays unchanged
+        type: choice
+        options: ['off', diagnostic, complete]
+        default: 'off'
+        required: true
+      recovery_correlation:
+        description: Fresh root-selected 32-hex dispatch correlation (recovery only)
+        type: string
+        default: ''
+      recovery_binding:
+        description: Exact reviewed current source/journal/original-run/draft/predecessor binding JSON
+        type: string
+        default: ''
+
+      recovery_binding_sha256:
+        description: Root-selected canonical binding SHA256 included in authentic native run title
+        type: string
+        default: ''
+      recipient_certificate:
+        description: Root-held private key's public-only RSA certificate; DER SHA256 in binding
+        type: string
+        default: ''
+
 permissions:
   actions: read
   contents: write
@@ -42,7 +67,7 @@ concurrency:
 jobs:
   publish:
     name: new-sdd-workspace-013-publisher
-    if: github.ref == 'refs/heads/main' && github.actor == 'EHotwagner'
+    if: github.ref == 'refs/heads/main' && github.actor == 'EHotwagner' && inputs.promotion_recovery == 'off'
     runs-on: ubuntu-latest
     environment: release-successor
     timeout-minutes: 60
@@ -105,3 +130,135 @@ jobs:
             --candidate-artifact-id "$CANDIDATE_ARTIFACT_ID" \
             --candidate-archive-sha256 "$CANDIDATE_ARCHIVE_SHA256" \
             --workdir "$RUNNER_TEMP/new-sdd-workspace-successor"
+
+  recovery-diagnostic:
+    name: new-sdd-workspace-013-recovery-diagnostic
+    if: github.ref == 'refs/heads/main' && github.actor == 'EHotwagner' && inputs.promotion_recovery == 'diagnostic' && !inputs.publish && !inputs.verify_nuget_login
+    runs-on: ubuntu-latest
+    environment: release-successor
+    timeout-minutes: 18
+    permissions:
+      actions: read
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        timeout-minutes: 3
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      # Use the existing runner SDK, verified exactly by the finite helper.
+      # No setup/download fallback, OIDC exchange or package push in recovery.
+      - name: Mint the scoped ordinary Authority read token
+        id: ledger
+        timeout-minutes: 2
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          app-id: ${{ vars.FSGG_ORDINARY_LEDGER_APP_ID }}
+          private-key: ${{ secrets.FSGG_ORDINARY_LEDGER_APP_PRIVATE_KEY }}
+          owner: FS-GG
+          repositories: FS.GG.Coordination.Authority
+          permission-contents: read
+      - name: Bind scoped installation and finite selected recovery
+        timeout-minutes: 11
+        env:
+          ACTUAL_INSTALLATION_ID: ${{ steps.ledger.outputs.installation-id }}
+          EXPECTED_INSTALLATION_ID: ${{ secrets.FSGG_ORDINARY_LEDGER_INSTALLATION_ID }}
+          GH_TOKEN: ${{ github.token }}
+          ORDINARY_LEDGER_TOKEN: ${{ steps.ledger.outputs.token }}
+          RECOVERY_CORRELATION: ${{ inputs.recovery_correlation }}
+          RECOVERY_BINDING: ${{ inputs.recovery_binding }}
+          RECOVERY_BINDING_SHA256: ${{ inputs.recovery_binding_sha256 }}
+          RECOVERY_RECIPIENT_CERTIFICATE: ${{ inputs.recipient_certificate }}
+          CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+          CANDIDATE_ARTIFACT_ID: ${{ inputs.candidate_artifact_id }}
+          CANDIDATE_ARCHIVE_SHA256: ${{ inputs.candidate_archive_sha256 }}
+          PYTHONDONTWRITEBYTECODE: '1'
+          DOTNET_GENERATE_ASPNET_CERTIFICATE: 'false'
+        run: |
+          set -euo pipefail
+          test "$ACTUAL_INSTALLATION_ID" = "$EXPECTED_INSTALLATION_ID"
+          python3 scripts/new-sdd-workspace-successor-publish.py \
+            --promotion-recovery diagnostic --recovery-binding "$RECOVERY_BINDING" \
+            --candidate-run-id "$CANDIDATE_RUN_ID" \
+            --candidate-artifact-id "$CANDIDATE_ARTIFACT_ID" \
+            --candidate-archive-sha256 "$CANDIDATE_ARCHIVE_SHA256" \
+            --workdir "$RUNNER_TEMP/wizard013-recovery-diagnostic"
+      - name: Retain only authenticated-encryption ciphertext and safe hashes
+        if: always()
+        timeout-minutes: 2
+        uses: actions/upload-artifact@v7
+        with:
+          name: wizard013-recovery-diagnostic-${{ github.run_id }}-${{ inputs.recovery_correlation }}
+          path: |
+            ${{ runner.temp }}/wizard013-recovery-diagnostic/export/custody.cms
+            ${{ runner.temp }}/wizard013-recovery-diagnostic/export/summary.json
+          if-no-files-found: error
+          retention-days: 7
+
+  recovery-complete:
+    name: new-sdd-workspace-013-recovery-complete
+    if: github.ref == 'refs/heads/main' && github.actor == 'EHotwagner' && inputs.promotion_recovery == 'complete' && !inputs.publish && !inputs.verify_nuget_login
+    runs-on: ubuntu-latest
+    environment: release-successor
+    timeout-minutes: 28
+    permissions:
+      actions: read
+      contents: write
+      packages: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        timeout-minutes: 3
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      # Use the existing runner SDK, verified exactly by the finite helper.
+      # No setup/download fallback, OIDC exchange or package push in recovery.
+      - name: Mint the scoped ordinary Authority write token
+        id: ledger
+        timeout-minutes: 2
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          app-id: ${{ vars.FSGG_ORDINARY_LEDGER_APP_ID }}
+          private-key: ${{ secrets.FSGG_ORDINARY_LEDGER_APP_PRIVATE_KEY }}
+          owner: FS-GG
+          repositories: FS.GG.Coordination.Authority
+          permission-contents: write
+      - name: Bind scoped installation and finite selected recovery
+        timeout-minutes: 21
+        env:
+          ACTUAL_INSTALLATION_ID: ${{ steps.ledger.outputs.installation-id }}
+          EXPECTED_INSTALLATION_ID: ${{ secrets.FSGG_ORDINARY_LEDGER_INSTALLATION_ID }}
+          GH_TOKEN: ${{ github.token }}
+          ORDINARY_LEDGER_TOKEN: ${{ steps.ledger.outputs.token }}
+          RECOVERY_CORRELATION: ${{ inputs.recovery_correlation }}
+          RECOVERY_BINDING: ${{ inputs.recovery_binding }}
+          RECOVERY_BINDING_SHA256: ${{ inputs.recovery_binding_sha256 }}
+          RECOVERY_RECIPIENT_CERTIFICATE: ${{ inputs.recipient_certificate }}
+          CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+          CANDIDATE_ARTIFACT_ID: ${{ inputs.candidate_artifact_id }}
+          CANDIDATE_ARCHIVE_SHA256: ${{ inputs.candidate_archive_sha256 }}
+          PYTHONDONTWRITEBYTECODE: '1'
+          DOTNET_GENERATE_ASPNET_CERTIFICATE: 'false'
+        run: |
+          set -euo pipefail
+          test "$ACTUAL_INSTALLATION_ID" = "$EXPECTED_INSTALLATION_ID"
+          python3 scripts/new-sdd-workspace-successor-publish.py \
+            --promotion-recovery complete --recovery-binding "$RECOVERY_BINDING" \
+            --candidate-run-id "$CANDIDATE_RUN_ID" \
+            --candidate-artifact-id "$CANDIDATE_ARTIFACT_ID" \
+            --candidate-archive-sha256 "$CANDIDATE_ARCHIVE_SHA256" \
+            --workdir "$RUNNER_TEMP/wizard013-recovery-complete"
+      - name: Retain only authenticated-encryption ciphertext and safe hashes
+        if: always()
+        timeout-minutes: 2
+        uses: actions/upload-artifact@v7
+        with:
+          name: wizard013-recovery-complete-${{ github.run_id }}-${{ inputs.recovery_correlation }}
+          path: |
+            ${{ runner.temp }}/wizard013-recovery-complete/export/custody.cms
+            ${{ runner.temp }}/wizard013-recovery-complete/export/summary.json
+          if-no-files-found: error
+          retention-days: 7
