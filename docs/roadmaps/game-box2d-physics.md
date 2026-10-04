@@ -88,6 +88,17 @@ Fable JavaScript needs a separate backend or demonstrated compatibility strategy
 The .NET headless result cannot certify browser support. Keep both concerns outside
 the first executable example's prerequisites.
 
+## Area topology and portals
+
+The [GAME-PORTAL-01 extension](game-area-portals.md) adds an immutable area graph and
+rigid portal mappings above local physics. Its first runtime example transfers one
+whole body between two independent Box2D worlds through a rotated opening, preserving
+entity identity and momentum while marking the interpolation discontinuity. Pure
+topology preparation is independent; actual transfers wait for `.1`'s local adapter.
+Portal-aware queries, viewing through openings, mirrored/scaled mappings and seamless
+cross-boundary collisions/joints have separate follow-ups. This extension does not
+delay the first falling-body/joint/sensor example or broaden its acceptance claim.
+
 ## Workspace impact
 
 Affected families are opt-in .NET game/server consumers, with a later explicitly

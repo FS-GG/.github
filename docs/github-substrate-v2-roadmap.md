@@ -367,6 +367,9 @@ Public package qualification precedes explicit consumer adoption; rollback, broa
 determinism and Fable/browser compatibility retain separate contracts. Existing physics
 options and workspace defaults remain unchanged. This track does not gate full-V2
 acceptance or expand the current installed-API/BAR/SC2 preparation windows.
+The linked [area/portal extension](roadmaps/game-area-portals.md) adds arbitrary
+connections between local 2D areas, starting with rigid whole-body transfers; seamless
+cross-boundary physics and portal-aware rendering/queries retain separate qualification.
 
 ## 1. How work is executed
 
