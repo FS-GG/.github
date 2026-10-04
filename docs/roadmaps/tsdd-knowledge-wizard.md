@@ -275,13 +275,22 @@ as the large member; ordinary members remain capped at 8 MiB. Before PATCH or
 CAS, completion counts the current physical evidence plus the concrete repeated
 five-body gate, bounded remaining responses/streams, second install and
 postcheck/report reservations against the unchanged 128 MiB archive ceiling.
-Oversized envelopes refuse before effects. A shared streaming guard retains the
+The source role count is capped at 323, owned relative paths at 256 bytes,
+SDK first-use files at 16 and each install tree at 64 files/8 MiB. Full observed
+source/SDK roster sizes derive three bounded report reservations; their complete
+bytes are retained, with an 8 MiB hard ceiling per report. Stored-ZIP structural
+reservation uses those concrete role/path bounds. Oversized envelopes refuse
+before effects. A shared streaming guard retains the
 same ceiling during responses, captures and install observation. Finite JSON
 roles use 64 KiB, the original sixteen-commit list 256 KiB and workflow pages
 1 MiB; repeated binary bodies use their first authenticated exact sizes. Raw
 archives use stored ZIP members so structural overhead is explicit. The crypto
 inventory covers the executable, present configuration and provider files;
 loaded libcrypto/libssl and loader dependencies are not observed or claimed.
+Plaintext originals, their literal ZIP and pending/exported ciphertext have
+separate guarded phases: 128 MiB, 128 MiB and 128 MiB + 8 KiB, with a finite
+384 MiB + 8 KiB physical disk envelope. Serialization preserves all original
+bytes while avoiding double-counting those copies as plaintext members.
 Source controls do not establish actual crypto/provider availability or operation
 success. No admission, recipient/private key or future native artifact is created
 by this source preparation.

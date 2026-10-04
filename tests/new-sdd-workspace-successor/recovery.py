@@ -491,3 +491,37 @@ class CustodySizeControls(unittest.TestCase):
   relative=next(iter(f.api.storage.roles))
   with zipfile.ZipFile(f.root/'raw-custody.zip') as z:self.assertEqual(z.read(relative),f.readinesszip)
   self.assertEqual(set(p.name for p in (f.root/'export').iterdir()),{'custody.cms','summary.json'})
+
+ def test_production_runner_typed_archive_cipher_phases_do_not_double_count_plaintext(self):
+  root=self.root/'phases';root.mkdir()
+  for i in range(8):(root/f'raw-{i}').write_bytes(b'x'*(7*1024*1024))
+  pem='-----BEGIN CERTIFICATE-----\n'+base64.b64encode(bytes.fromhex('06092a864886f70d010101')).decode()+'\n-----END CERTIFICATE-----'
+  binding={'recipientSha256':r.digest(r.ssl.PEM_cert_to_DER_cert(pem))}
+  budget=r.Budget('complete');budget.reserve=True;runner=r.Runner(budget,root)
+  fakeproc=SimpleNamespace(stdout=io.BytesIO(),stderr=io.BytesIO())
+  custody={'leaderReaped':True,'remaining':[],'errors':[],'members':[]}
+  def captured(proc,child,deadline,storage):
+   self.assertEqual(storage.phase,'encrypt')
+   (root/'custody.pending.cms').write_bytes(bytes.fromhex('060b2a864886f70d0109100117060960864801650304012e')+b'0'*(56*1024*1024))
+   storage.check();self.assertGreater(sum(q.stat().st_size for q in root.rglob('*') if q.is_file()),r.CUSTODY_CAP)
+   return {'actualExitCode':0,'stdout':b'','stderr':b''}
+  with patch.dict(os.environ,{'RECOVERY_RECIPIENT_CERTIFICATE':pem,'GITHUB_RUN_ID':'99'}),patch.object(subprocess,'Popen',return_value=fakeproc),patch.object(r,'OwnedChild',return_value=SimpleNamespace(settle=lambda *a:custody)),patch.object(r,'capture',side_effect=captured):
+   summary=r.encrypted_custody(root,binding,runner)
+  self.assertEqual(budget.commands,1);self.assertEqual(budget.storage.phase,'export');self.assertEqual(summary['physicalCustodyLimit'],r.PHYSICAL_CUSTODY_CAP)
+ def test_concrete_member_path_and_serialized_output_limits(self):
+  root=self.root/'limits';root.mkdir();storage=r.CustodyStorage(root)
+  for i in range(r.CUSTODY_MEMBER_CAP+1):(root/f'file-{i}').touch()
+  with self.assertRaises(Refused):storage.check()
+  for q in root.iterdir():q.unlink()
+  deep=root/('x'*200);deep.mkdir();(deep/('y'*100)).touch()
+  with self.assertRaises(Refused):storage.check()
+  (deep/('y'*100)).unlink();deep.rmdir();storage.begin_archive()
+  archive=root/'raw-custody.zip'
+  with archive.open('wb') as out:out.truncate(r.CUSTODY_CAP+1)
+  with self.assertRaises(Refused):storage.check()
+
+ def test_full_rosters_derive_report_reservation_without_truncation(self):
+  storage=r.CustodyStorage(self.root);source={'x':{'sha256':'a'*64,'link':None}};sdk={'dotnet':{'sha256':'b'*64,'link':None}}
+  storage.bind_report_rosters(source,sdk);n=len(r.canonical(source))+len(r.canonical(sdk))
+  self.assertEqual(storage.worker_report_cap,2*n+256*1024);self.assertEqual(storage.report_reservation,4*n+3*256*1024)
+  with self.assertRaises(Refused):storage.bind_report_rosters({'oversized':'x'*r.BINARY_CAP},sdk)

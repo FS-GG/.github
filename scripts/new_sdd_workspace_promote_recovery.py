@@ -25,6 +25,13 @@ CUSTODY_CAP=128*1024*1024
 READINESS_CAP=CUSTODY_CAP+8192
 SMALL_JSON_CAP=64*1024
 INSTALL_TREE_CAP=8*1024*1024
+# Closed source roles: 120 GET originals + four CAS response originals;
+# 19 inner + worker + encryption command streams, two command records/two
+# transport records/five bound reports-inputs, three candidate leaves,
+# sixteen SDK first-use leaves, two at-most-64-file install trees, manifest.
+CUSTODY_MEMBER_CAP=323
+CUSTODY_PATH_CAP=256
+PHYSICAL_CUSTODY_CAP=3*CUSTODY_CAP+8192
 REF="refs/heads/fsgg/v2/journal/release/tsdd-knowledge-wizard-013"
 REPO="FS-GG/.github"
 CANDIDATE_SOURCE="f891b5b0723070c67e08d1a87b7d12b0b4d8bebe"
@@ -68,7 +75,7 @@ def validate_binding(binding, mode):
 
 class CustodyStorage:
     """Closed authenticated large role and one shared finite physical envelope."""
-    def __init__(self,root):self.root=Path(root);self.roles={};self.armed=False
+    def __init__(self,root):self.root=Path(root);self.roles={};self.armed=False;self.phase="plaintext";self.serialized={};self.report_reservation=3*BINARY_CAP;self.worker_report_cap=BINARY_CAP
     def register_readiness(self,path,binding):
         path=Path(path);relative=path.relative_to(self.root).as_posix()
         require(re.fullmatch(r"(?:worker/)?response-github-[0-9]+\.raw",relative),"literal readiness response role")
@@ -84,24 +91,58 @@ class CustodyStorage:
         require(digest(members["custody.cms"])==binding["readinessCiphertextSha256"] and summary.get("ciphertextSha256")==binding["readinessCiphertextSha256"] and summary.get("bindingSha256")==binding["readinessBindingSha256"] and summary.get("nativeRunId")==binding["readinessRunId"] and summary.get("schema")=="fsgg.wizard-recovery-encrypted-custody/1" and summary.get("commandExit")==0,"authenticated readiness member join")
         self.roles[relative]={"role":"authenticated-native-diagnostic-archive","bytes":len(raw),"sha256":digest(raw)}
     def inventory(self):
-        total=0;count=0;overhead=0
+        total=0;count=0;overhead=0;serialized_bytes=0
         for path in self.root.rglob("*"):
             if path.is_dir():continue
             relative=path.relative_to(self.root).as_posix()
             require(not path.is_symlink() and path.resolve().is_relative_to(self.root.resolve()),"custody physical scope")
-            require(len(relative.encode())<=1024,"custody path bound")
+            require(len(relative.encode())<=CUSTODY_PATH_CAP,"custody named-path bound")
+            if relative in self.serialized:
+                typed=self.serialized[relative];size=path.stat().st_size
+                require(size<=typed["cap"],"serialized custody cap")
+                if typed.get("sha256"):require(size==typed["bytes"] and digest(path.read_bytes())==typed["sha256"],"serialized archive drift")
+                serialized_bytes+=size;continue
             size=path.stat().st_size;role=self.roles.get(relative)
             require(size<=(READINESS_CAP if role else BINARY_CAP),"ordinary custody member remains 8MiB")
             if role:require(size==role["bytes"] and digest(path.read_bytes())==role["sha256"],"registered original drift")
             total+=size;count+=1;overhead+=512+3*len(relative.encode())
-        require(count<=10000,"custody member count")
+        require(count<=CUSTODY_MEMBER_CAP,"finite source custody member count")
+        require(total+serialized_bytes<=PHYSICAL_CUSTODY_CAP,"finite transient physical custody cap")
         return total,overhead,count
     def check(self,pending=0):
         total,overhead,count=self.inventory()
         require(total+overhead+pending+65536<=CUSTODY_CAP,"streaming custody total/archive cap")
         for install in self.root.glob("**/public-install-*"):
-            if install.is_dir():require(sum(p.stat().st_size for p in install.rglob('*') if p.is_file())<=INSTALL_TREE_CAP,"owned install tree cap")
+            if install.is_dir():
+                files=[p for p in install.rglob('*') if p.is_file()]
+                require(len(files)<=64 and sum(p.stat().st_size for p in files)<=INSTALL_TREE_CAP,"owned install tree cap/count")
+        for checks in self.root.glob("**/checks"):
+            if checks.is_dir():require(sum(1 for p in checks.rglob('*') if p.is_file())<=16,"SDK first-use member count")
         return total,overhead,count
+    def bind_report_rosters(self,source,sdk):
+        roster_bytes=len(canonical(source))+len(canonical(sdk))
+        self.worker_report_cap=2*roster_bytes+256*1024
+        self.outer_report_cap=roster_bytes+256*1024
+        require(max(self.worker_report_cap,self.outer_report_cap)<=BINARY_CAP,"full retained roster report schema exceeds ordinary cap")
+        self.report_reservation=self.worker_report_cap+2*self.outer_report_cap
+    def begin_archive(self):
+        require(self.phase=="plaintext" and not (self.root/"raw-custody.zip").exists(),"fresh archive phase")
+        self.check();self.phase="archive"
+        self.serialized["raw-custody.zip"]={"cap":CUSTODY_CAP}
+    def seal_archive(self):
+        require(self.phase=="archive","archive phase")
+        path=self.root/"raw-custody.zip";raw=path.read_bytes()
+        require(len(raw)<=CUSTODY_CAP,"literal original archive cap")
+        self.serialized["raw-custody.zip"].update({"bytes":len(raw),"sha256":digest(raw)})
+        self.check();self.phase="encrypt"
+        require(not (self.root/"custody.pending.cms").exists(),"fresh pending ciphertext")
+        self.serialized["custody.pending.cms"]={"cap":READINESS_CAP}
+    def exported(self):
+        require(self.phase=="encrypt","encryption phase")
+        self.serialized.pop("custody.pending.cms")
+        raw=(self.root/"export/custody.cms").read_bytes()
+        self.serialized["export/custody.cms"]={"cap":READINESS_CAP,"bytes":len(raw),"sha256":digest(raw)}
+        self.phase="export";self.check()
     def pre_effect(self,budget,binary_bodies,second_gate):
         total,overhead,count=self.check()
         # Concrete remaining roles: at most four bounded workflow pages;
@@ -113,9 +154,9 @@ class CustodyStorage:
         require(not second_gate or len(binary_bodies)==5,"exact matched gate reservation")
         future_json=(max(0,120-budget.reads)+4)*SMALL_JSON_CAP+4*1024*1024
         future_streams=max(0,19-budget.commands)*2*STREAM_CAP+4*STREAM_CAP
-        reports=2*BINARY_CAP+4*1024*1024+2*1024*1024
+        reports=self.report_reservation+4*1024*1024+2*1024*1024
         future_install=INSTALL_TREE_CAP if second_gate else 0
-        structure=(10000-count)*(512+3*1024)+65536 # worst permitted future names/member manifest and stored-ZIP headers
+        structure=(CUSTODY_MEMBER_CAP-count)*(512+3*CUSTODY_PATH_CAP)+65536 # finite remaining source roles, names, manifest and stored-ZIP headers
         projected=total+overhead+future_binary+future_json+future_streams+reports+future_install+structure
         require(projected<=CUSTODY_CAP,"projected required custody exceeds 128MiB before effect")
         self.armed=True
@@ -651,6 +692,7 @@ def worker(mode,binding,root,source,start=None):
         subreaper();before=source_snapshot(source,binding,runner,env)
         sdk_root=Path(shutil.which("dotnet") or "").resolve().parent;require((sdk_root/"dotnet").is_file(),"existing SDK absent")
         sdk_before=physical_roster(sdk_root,deadline=budget.work)
+        budget.storage.bind_report_rosters(before,sdk_before)
         api=FiniteAPI(os.environ.get("GH_TOKEN"),budget,root)
         report["stage"]="selected-native-admission"
         native_context(api,binding,mode,int(os.environ["GITHUB_RUN_ID"]))
@@ -686,7 +728,7 @@ def worker(mode,binding,root,source,start=None):
         report["custodyRoles"]=budget.storage.roles
         report["custodyProjection"]=getattr(locals().get("engine"),"custody_projection",None)
         report["readCount"]=budget.reads;report["commandCount"]=budget.commands;report["releasePatchCount"]=budget.release_patches;report["casWrites"]=budget.cas_writes
-        data=canonical(report);require(len(data)<=BINARY_CAP,"report cap");(root/"worker-report.json").write_bytes(data)
+        data=canonical(report);require(len(data)<=budget.storage.worker_report_cap,"full schema report cap");(root/"worker-report.json").write_bytes(data)
     return 0 if report["success"] else 1
 def recipient(binding):
     pem=os.environ.get("RECOVERY_RECIPIENT_CERTIFICATE","")
@@ -704,17 +746,20 @@ def encrypted_custody(root,binding,runner,storage=None):
     pem=recipient(binding);certificate=root/"recipient.pem";certificate.write_text(pem)
     export=root/"export";require(not export.exists(),"fresh ciphertext export");export.mkdir()
     archive=root/"raw-custody.zip";entries=[];total=0
+    storage.begin_archive()
     with zipfile.ZipFile(archive,"x",compression=zipfile.ZIP_STORED) as zipped:
         for path in sorted(root.rglob("*")):
             if path==archive or path.is_dir():continue
             relative=path.relative_to(root).as_posix()
             require(not path.is_symlink() and path.resolve().is_relative_to(root.resolve()),"raw archive physical scope")
-            require(len(entries)<10000 and path.stat().st_size<=(READINESS_CAP if relative in storage.roles else BINARY_CAP),"raw custody member cap")
+            require(len(entries)<CUSTODY_MEMBER_CAP and path.stat().st_size<=(READINESS_CAP if relative in storage.roles else BINARY_CAP),"raw custody member cap")
             total+=path.stat().st_size;require(total<=128*1024*1024,"raw custody total cap")
             runner.budget.remaining(25,True)
             raw=path.read_bytes();entries.append({"path":relative,"bytes":len(raw),"sha256":digest(raw)});zipped.writestr(relative,raw)
+            storage.check()
         zipped.writestr("custody-members.json",canonical(entries))
     require(archive.stat().st_size<=128*1024*1024,"custody archive cap")
+    storage.seal_archive();runner.budget.storage=storage
     ciphertext=root/"custody.pending.cms"
     # Source basis: OpenSSL 3.0 CMS docs specify AES-GCM AuthEnvelopedData and
     # -recip/-keyopt for RSA-OAEP. No provider, signature or TLS override.
@@ -724,10 +769,11 @@ def encrypted_custody(root,binding,runner,storage=None):
     raw=ciphertext.read_bytes();require(0<len(raw)<=128*1024*1024+8192,"ciphertext cap")
     require(bytes.fromhex("060b2a864886f70d0109100117") in raw and bytes.fromhex("060960864801650304012e") in raw,"AuthEnvelopedData AES256GCM required")
     require(archive.read_bytes()[:64] not in raw,"plaintext archive leak")
-    ciphertext.replace(export/"custody.cms")
-    summary={"schema":"fsgg.wizard-recovery-encrypted-custody/1","nativeRunId":int(os.environ["GITHUB_RUN_ID"]),"bindingSha256":digest(canonical(binding)),"recipientSha256":binding["recipientSha256"],"ciphertextSha256":digest(raw),"ciphertextBytes":len(raw),"plaintextArchiveSha256":digest(archive.read_bytes()),"plaintextMemberManifestSha256":digest(canonical(entries)),"memberCount":len(entries),"commandExit":result.returncode,"encryptionProcessCustodyClean":bool(runner.records[-1]["custody"]["leaderReaped"] and not runner.records[-1]["custody"]["remaining"]),"encryptionCommandRecordSha256":digest(canonical(runner.records[-1]))}
+    ciphertext.replace(export/"custody.cms");storage.exported()
+    summary={"schema":"fsgg.wizard-recovery-encrypted-custody/1","nativeRunId":int(os.environ["GITHUB_RUN_ID"]),"bindingSha256":digest(canonical(binding)),"recipientSha256":binding["recipientSha256"],"ciphertextSha256":digest(raw),"ciphertextBytes":len(raw),"plaintextArchiveSha256":digest(archive.read_bytes()),"plaintextMemberManifestSha256":digest(canonical(entries)),"memberCount":len(entries),"physicalCustodyLimit":PHYSICAL_CUSTODY_CAP,"serializedPhasePolicy":"plaintext128MiB + archive128MiB + ciphertext128MiB8KiB; distinct literal phase roles", "commandExit":result.returncode,"encryptionProcessCustodyClean":bool(runner.records[-1]["custody"]["leaderReaped"] and not runner.records[-1]["custody"]["remaining"]),"encryptionCommandRecordSha256":digest(canonical(runner.records[-1]))}
     (export/"summary.json").write_bytes(canonical(summary))
     require({p.name for p in export.iterdir()}=={"custody.cms","summary.json"},"ciphertext-only export allowlist")
+    storage.check()
     return summary
 
 def outer(mode,binding,root,source):
@@ -741,6 +787,8 @@ def outer(mode,binding,root,source):
     source=source.resolve();source_before=physical_roster(source,deadline=budget.work)
     sdk_root=Path(shutil.which("dotnet") or "").resolve().parent
     sdk_before=physical_roster(sdk_root,deadline=budget.work)
+    outer_report_cap=len(canonical(source_before))+len(canonical(sdk_before))+256*1024
+    require(outer_report_cap<=BINARY_CAP,"outer full roster report cap")
     openssl=Path(shutil.which("openssl") or "").resolve()
     require(openssl.is_file(),"stock OpenSSL unavailable; no setup fallback")
     crypto_before={str(openssl):digest(openssl.read_bytes())}
@@ -787,7 +835,9 @@ def outer(mode,binding,root,source):
         report["bindingSha256"]=digest(binding_path.read_bytes());report["actualSelectedRunId"]=int(os.environ["GITHUB_RUN_ID"])
         report["elapsedSeconds"]=budget.clock()-budget.start
         report["totalLaunchedCommands"]=report.get("commandCount",0)+budget.commands+1
-        terminal_raw=canonical(report);require(len(terminal_raw)<=BINARY_CAP,"terminal report cap");(root/"terminal.json").write_bytes(terminal_raw)
+        terminal_raw=canonical(report);require(len(terminal_raw)<=outer_report_cap,"terminal schema report cap")
+    if "storage" in locals():storage.check(len(terminal_raw))
+    (root/"terminal.json").write_bytes(terminal_raw)
     try:
         # Also encrypt failed-operation captures. The public export contains only
         # ciphertext and fixed safe hashes; raw files never reach upload-artifact.
@@ -810,9 +860,13 @@ def outer(mode,binding,root,source):
         summary_path.write_bytes(canonical(summary))
     except BaseException as error:
         report["success"]=False;report["custodyErrorKind"]=type(error).__name__
-    terminal_raw=canonical(report);require(len(terminal_raw)<=BINARY_CAP,"terminal report cap");(root/"terminal.json").write_bytes(terminal_raw)
+    terminal_raw=canonical(report);require(len(terminal_raw)<=outer_report_cap,"terminal schema report cap")
+    if "storage" in locals():storage.check(len(terminal_raw))
+    (root/"terminal.json").write_bytes(terminal_raw)
     if report["success"]:
-        (root/"recovery-receipt.json").write_bytes(canonical(report))
+        if "storage" in locals():storage.check(len(terminal_raw))
+        (root/"recovery-receipt.json").write_bytes(terminal_raw)
+        if "storage" in locals():storage.check()
     print(json.dumps({"scope":report.get("scope",mode),"success":report["success"],"historicalCause":"UNKNOWN","publicWizardQualified":False},sort_keys=True))
     return 0 if report["success"] else 1
 
