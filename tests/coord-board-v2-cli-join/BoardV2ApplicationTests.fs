@@ -161,3 +161,61 @@ let ``inspect emits unknown population evidence without any mutation dispatch`` 
         Assert.Equal(0, root.GetProperty("candidates").GetArrayLength())
         Assert.Equal(0, root.GetProperty("items").GetArrayLength())
     finally Directory.Delete(directory, true)
+
+let private productJson repository project number =
+    let json = bindingJson (loadedDigest ())
+    json.Replace("\"bindingVersion\":2", "\"bindingVersion\":3")
+        .Replace("FS-GG/.github", "ExampleOrg/" + repository).Replace("FS-GG", "ExampleOrg")
+        .Replace("O_fsgg", "O_products").Replace("Coordination V2", project + " V2").Replace("PVT_coord_v2", "PVT_" + project)
+        .Replace("\"projectNumber\":77", $"\"projectNumber\":{number}")
+
+[<Fact>]
+let ``unchanged closed wire decoder distinguishes two receiver repository bindings`` () =
+    for repository, project, number in [ "WidgetA", "product_a", 81; "WidgetB", "product_b", 82 ] do
+        let json = productJson repository project number
+        match BoardV2Application.parseBinding json with
+        | Ok binding ->
+            Assert.Equal(3, binding.BindingVersion)
+            Assert.Equal("PVT_" + project, binding.ProjectId)
+            Assert.Equal<Set<string>>(Set.singleton ("ExampleOrg/" + repository), binding.Repositories)
+        | Error error -> failwith error
+        for bad in [ json.Replace("organization", "user")
+                     json.Replace("ExampleOrg/" + repository + "#1", "ExampleOrg/Foreign#1")
+                     json.Replace("PVT_" + project, "PVT_kwDOEYAWY84Bldpa")
+                     json.Replace("PVT_" + project, "PVT_kwDOEYAWY84Bb08W")
+                     json.Insert(1, "\"current\":true,") ] do
+            Assert.True(BoardV2Application.parseBinding bad |> Result.isError)
+
+[<Fact>]
+let ``product inspect missing receiver provenance stays Unknown and never queries organization population`` () =
+    let directory = Path.Combine(Path.GetTempPath(), "board-v2-product-" + Guid.NewGuid().ToString("N"))
+    Directory.CreateDirectory directory |> ignore
+    try
+        for repository, project, number in [ "WidgetA", "product_a", 81; "WidgetB", "product_b", 82 ] do
+            let input = Path.Combine(directory, project + "-binding.json")
+            let output = Path.Combine(directory, project + "-report.json")
+            File.WriteAllText(input, productJson repository project number)
+            let mutable calls = 0
+            let transport =
+                { new IGitHubTransport with
+                    member _.Send request =
+                        calls <- calls + 1
+                        match request.Body with
+                        | Query(document, variables) ->
+                            Assert.DoesNotContain("repository(owner: \"FS-GG\"", document)
+                            Assert.Equal(Some(VString "ExampleOrg"), variables |> List.tryFind (fst >> (=) "owner") |> Option.map snd)
+                            Assert.Equal(Some(VString repository), variables |> List.tryFind (fst >> (=) "repo") |> Option.map snd)
+                        | _ -> failwith "receiver population must be a fixed query"
+                        Error(Errors.Unauthorized "receiver provenance unavailable")
+                    member _.SendMutation _ = failwith "inspect is structurally read-only"
+                    member _.RetryMutation _ = failwith "inspect cannot retry" }
+            Assert.Equal(3, BoardV2Application.runWithTransport transport [ "inspect"; "--binding-file"; input; "--report-file"; output ])
+            Assert.Equal(1, calls)
+            use document = JsonDocument.Parse(File.ReadAllText output)
+            let root = document.RootElement
+            Assert.Equal(3, root.GetProperty("bindingVersion").GetInt32())
+            Assert.Equal("PVT_" + project, root.GetProperty("projectId").GetString())
+            Assert.Equal(JsonValueKind.Null, root.GetProperty("selected").ValueKind)
+            Assert.Equal(0, root.GetProperty("mutationAttempts").GetInt32())
+        Assert.True(BoardV2Application.tryRun [] |> Option.isNone)
+    finally Directory.Delete(directory, true)

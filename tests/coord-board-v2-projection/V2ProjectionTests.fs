@@ -683,3 +683,218 @@ let ``inspection preserves only historical verification and cannot treat it as c
     Assert.Equal("Unknown", report.Items.Head.Evidence.Health)
     Assert.True(report.Items.Head.Evidence.Projection.IsNone)
     Assert.Empty inspection.Mutations
+
+// Version-3 fixtures use two independently selected receiver projects/repositories.
+let private productBinding repository tag number =
+    { canonicalBinding with
+        BindingVersion = 3; Owner = "ExampleOrg"; OrganizationId = "O_products"
+        ProjectNumber = number; ProjectTitle = tag + " V2"; ProjectId = "PVT_" + tag
+        Repositories = Set.singleton ("ExampleOrg/" + repository)
+        SelectedIssues = Map.ofList [ "I_" + tag, "ExampleOrg/" + repository + "#7" ]
+        Status = { binding.Status with Id = tag + "_status" }
+        RoadmapFieldId = tag + "_roadmap"
+        Track = { binding.Track with Id = tag + "_track" }
+        Observation = { Id = tag + "_observation"; Options = Map.ofList [ "Verified", tag + "_verified"; "Stale", tag + "_stale"; "Unknown", tag + "_unknown" ] } }
+
+let private productA = productBinding "WidgetA" "product_a" 81
+let private productB = productBinding "WidgetB" "product_b" 82
+let private productRequest (selected: Binding) =
+    { Issue = { Owner = selected.Owner; Repository = (Set.minElement selected.Repositories).Split('/')[1]; Number = 7 }
+      ExpectedNodeId = selected.SelectedIssues |> Map.keys |> Seq.exactlyOne }
+
+let private productResponse (selected: Binding) (response: IoResult<Response>) =
+    response |> Result.map (fun value ->
+        let body =
+            value.Body.Replace("FS-GG/.github", Set.minElement selected.Repositories).Replace("FS-GG", selected.Owner)
+                .Replace("O_fsgg", selected.OrganizationId).Replace("PVT_coord_v2", selected.ProjectId)
+                .Replace("Coordination V2", selected.ProjectTitle).Replace("\"number\":77", $"\"number\":{selected.ProjectNumber}")
+                .Replace("PVTI_2963", "PVTI_" + selected.ProjectId).Replace("I_native", (productRequest selected).ExpectedNodeId)
+                .Replace("2963", "7").Replace("PVTSSF_status_v2", selected.Status.Id).Replace("PVTF_roadmap_v2", selected.RoadmapFieldId)
+                .Replace("PVTSSF_track_v2", selected.Track.Id).Replace("PVTSSF_observation_v2", selected.Observation.Id)
+                .Replace("observation_verified", selected.Observation.Options["Verified"]).Replace("observation_stale", selected.Observation.Options["Stale"])
+                .Replace("observation_unknown", selected.Observation.Options["Unknown"])
+        { value with Body = body })
+
+let private productManifest (selected: Binding) =
+    Text.Json.JsonSerializer.Serialize
+        {| schema = "fsgg.coordination-board-v2-import/v1"
+           target = {| ownerKind = "organization"; owner = selected.Owner; title = selected.ProjectTitle; id = selected.ProjectId
+                       number = selected.ProjectNumber; creationState = "created-and-read-back" |}
+           binding = {| organizationId = selected.OrganizationId; visibility = "complete"; authorization = "root-selected"
+                        recipeRevision = selected.ImportRecipeRevision; artifactSha256 = selected.ImportArtifactSha256; repositories = Set.toList selected.Repositories |}
+           items = [ {| issue = selected.SelectedIssues |> Map.values |> Seq.exactlyOne; nodeId = (productRequest selected).ExpectedNodeId
+                        observedUpdatedAt = "2026-10-02T00:00:00Z"; observedState = "open"; decision = "import"
+                        adjudication = "verified-remaining"; pilot = true; roadmap = "docs/product-plan.md"; dependencies = Array.empty<obj> |} ] |}
+
+let private productBlob selected text = productResponse selected (protectedBlob text)
+let private productNative selected updated = productResponse selected (native 2963 updated)
+let private productSource selected =
+    [ productNative selected "2026-10-02T00:00:00Z"; ok "[]"; productBlob selected "owned product plan" ]
+let private productProject selected observationValue =
+    [ productResponse selected organization; productResponse selected target; productResponse selected membership
+      productResponse selected (observation observationValue) ]
+
+[<Fact>]
+let ``two receiver products use their own protected population and planning target`` () =
+    for selected in [ productA; productB ] do
+        let transport = scripted (productBlob selected (productManifest selected) :: (productSource selected @ productProject selected (Some "Verified")))
+        let report = V2ProjectionSource.runFixed transport selected None
+        Assert.Equal(Some 1, report.Selected)
+        Assert.Equal(1, report.Verified)
+        Assert.Equal(selected.ProjectId, report.ProjectId)
+        Assert.Equal((productRequest selected).Issue, report.Items.Head.Issue)
+        Assert.Equal(0, report.Items.Head.MutationAttempts)
+        Assert.Empty(transport.Mutations)
+        Assert.Contains(Set.minElement selected.Repositories, report.ProtectedInputs.Head |> fun (path, _, _) -> path)
+        Assert.True(transport.Logged (Set.minElement selected.Repositories + "#7 native observation"))
+
+[<Fact>]
+let ``receiver refresh guards its one write and duplicate retry independently reads`` () =
+    for selected in [ productA; productB ] do
+        let manifest = productBlob selected (productManifest selected)
+        let responses =
+            [ manifest ] @ productSource selected @ productProject selected (Some "Stale")
+            @ [ manifest ] @ productSource selected @ [ productResponse selected (observation None); productResponse selected (observation (Some "Verified")) ]
+        let reads = scripted responses
+        let mutable writes = 0
+        let guarded = V2ObservationTransport.compose selected reads (fun _ -> writes <- writes + 1; mutationSuccess) |> Result.defaultWith (Errors.explain >> failwith)
+        let first = V2ProjectionSource.runFixed guarded selected None
+        Assert.Equal(1, first.Verified)
+        Assert.Equal(1, first.Items.Head.MutationAttempts)
+        Assert.Equal(1, writes)
+        let duplicateReads = scripted (manifest :: (productSource selected @ productProject selected (Some "Verified")))
+        let duplicate = V2ObservationTransport.compose selected duplicateReads (fun _ -> failwith "duplicate write") |> Result.defaultWith (Errors.explain >> failwith)
+        let second = V2ProjectionSource.runFixed duplicate selected (Some first)
+        Assert.Equal(1, second.Verified)
+        Assert.Equal(0, second.Items.Head.MutationAttempts)
+        Assert.Equal(1, writes)
+
+[<Fact>]
+let ``receiver population source cannot fall back to organization or other product`` () =
+    // The organization cohort has several issues, so use its native blob fixture
+    // directly rather than the single-issue product response constructor.
+    for response in [ productBlob productB (productManifest productA)
+                      protectedBlob (productManifest productA) ] do
+        let transport = scripted [ response ]
+        let report = V2ProjectionSource.runFixed transport productA None
+        Assert.True(report.PopulationGap.IsSome)
+        Assert.True(report.Selected.IsNone)
+        Assert.Equal(1, transport.GraphQlCalls)
+        Assert.Equal(0, report.Attempted)
+        Assert.Empty(transport.Mutations)
+    for manifest in [ (productManifest productA).Replace("complete", "unknown")
+                      (productManifest productA).Replace(productA.ImportArtifactSha256, String.replicate 64 "0")
+                      productManifest productB ] do
+        let transport = scripted [ productBlob productA manifest ]
+        Assert.True((V2ProjectionSource.runFixed transport productA None).PopulationGap.IsSome)
+        Assert.Empty(transport.Mutations)
+
+[<Fact>]
+let ``receiver stale denied incomplete dependency and changed fields emit no mutation`` () =
+    let variants =
+        [ [ productBlob productA (productManifest productA); productNative productA "2026-10-02T01:00:00Z" ]
+          [ productBlob productA (productManifest productA); Error(Http(403, "denied")) ]
+          [ productBlob productA (productManifest productA); productNative productA "2026-10-02T00:00:00Z"; ok "[]" |> Result.map (fun response -> { response with NextLink = Some "https://api.github.com/next" }) ]
+          [ productBlob productA (productManifest productA) ] @ productSource productA
+          @ [ productResponse productA organization; productResponse productA (ok (exactProject binding.ProjectId "changed-observation-field")) ] ]
+    for responses in variants do
+        let transport = scripted responses
+        let report = V2ProjectionSource.runFixed transport productA None
+        Assert.Equal(0, report.Verified)
+        Assert.Equal(0, report.Items.Head.MutationAttempts)
+        Assert.Empty(transport.Mutations)
+
+[<Fact>]
+let ``receiver unsupported owner organization legacy and cross repository refuse before IO`` () =
+    for bad in [ { productA with OwnerKind = OwnerKind.User }
+                 { productA with ProjectId = "PVT_kwDOEYAWY84Bb08W" }
+                 { productA with ProjectId = "PVT_kwDOEYAWY84Bldpa" }
+                 { productA with Owner = "FS-GG"; ProjectNumber = 3; ProjectId = "PVT_kwDOEYAWY84Bldpa" }
+                 { productA with Owner = "FS-GG"; ProjectNumber = 1; ProjectId = "PVT_kwDOEYAWY84Bb08W" }
+                 { productA with Repositories = Set.union productA.Repositories productB.Repositories }
+                 { productA with SelectedIssues = productB.SelectedIssues } ] do
+        let transport = scripted []
+        Assert.True((V2ProjectionSource.runFixed transport bad None).PopulationGap.IsSome)
+        Assert.Equal(0, transport.GraphQlCalls)
+        Assert.Empty(transport.Mutations)
+    let transport = scripted []
+    let mutable verified = false
+    let source: SourceVerifier = fun _ -> verified <- true; Ok(Current "fixture")
+    Assert.True(runOneShot source transport productA (productRequest productB) |> Result.isError)
+    Assert.False(verified)
+    Assert.Equal(0, transport.GraphQlCalls)
+
+[<Fact>]
+let ``receiver cohort permits one through five exact local identities only`` () =
+    let cohort count =
+        [ 1 .. count ] |> List.map (fun number -> "I_product_" + string number, "ExampleOrg/WidgetA#" + string number) |> Map.ofList
+    for count in [ 1; 5 ] do
+        Assert.True(validateBinding { productA with SelectedIssues = cohort count } |> Result.isOk)
+    for selected in [ cohort 0; cohort 6
+                      Map.ofList [ "I_one", "ExampleOrg/WidgetA#7"; "I_two", "ExampleOrg/WidgetA#7" ]
+                      Map.ofList [ "I_one", "ExampleOrg/WidgetA#07" ] ] do
+        Assert.True(validateBinding { productA with SelectedIssues = selected } |> Result.isError)
+    let reads = scripted []
+    let mutable sourceCalls = 0
+    let source: SourceVerifier = fun _ -> sourceCalls <- sourceCalls + 1; Ok(Current "fixture")
+    for node in [ "I_foreign"; "" ] do
+        let request = { (productRequest productA) with ExpectedNodeId = node }
+        Assert.True(runOneShot source reads productA request |> Result.isError)
+        Assert.True(readPlanning reads productA request |> Result.isError)
+    Assert.Equal(0, sourceCalls)
+    Assert.Equal(0, reads.GraphQlCalls)
+    Assert.Empty(reads.Mutations)
+
+[<Fact>]
+let ``receiver fresh organization and exact project ownership must match the binding`` () =
+    for responses, calls in
+        [ [ productResponse productB organization |> Result.map (fun response -> { response with Body = response.Body.Replace("O_products", "O_foreign") }) ], 1
+          [ productResponse productA organization; productResponse productB target ], 2 ] do
+        let reads = scripted responses
+        Assert.True(runOneShot (fun _ -> Ok(Current "fixture")) reads productA (productRequest productA) |> Result.isError)
+        Assert.Equal(calls, reads.GraphQlCalls)
+        Assert.Empty(reads.Mutations)
+
+[<Fact>]
+let ``receiver membership pagination must complete before any selected write`` () =
+    for selected in [ productA; productB ] do
+        let first = productResponse selected membership |> Result.map (fun response ->
+            { response with Body = response.Body.Replace("\"hasNextPage\":false,\"endCursor\":null", "\"hasNextPage\":true,\"endCursor\":\"next\"") })
+        let transport = scripted [ productResponse selected organization; productResponse selected target; first; Error(Http(403, "membership page denied")) ]
+        Assert.True(runOneShot (fun _ -> Ok(Current "fixture")) transport selected (productRequest selected) |> Result.isError)
+        Assert.Equal(4, transport.GraphQlCalls)
+        Assert.Empty(transport.Mutations)
+
+[<Fact>]
+let ``receiver lost dispatch response remains unknown and repeat uses independent current read`` () =
+    for selected in [ productA; productB ] do
+        let manifest = productBlob selected (productManifest selected)
+        let responses = [ manifest ] @ productSource selected @ productProject selected (Some "Stale") @ [ manifest ] @ productSource selected @ [ productResponse selected (observation None) ]
+        let reads = scripted responses
+        let mutable writes = 0
+        let guarded = V2ObservationTransport.compose selected reads (fun _ -> writes <- writes + 1; Error(Transport "native response lost")) |> Result.defaultWith (Errors.explain >> failwith)
+        let unknown = V2ProjectionSource.runFixed guarded selected None
+        Assert.Equal(0, unknown.Verified)
+        Assert.True(unknown.Items.Head.Gap.IsSome)
+        Assert.Equal(1, writes)
+        Assert.True(guarded.RetryMutation "lost" |> Result.isError)
+        let repeatReads = scripted (manifest :: (productSource selected @ productProject selected (Some "Verified")))
+        let repeat = V2ObservationTransport.compose selected repeatReads (fun _ -> failwith "lost-response retry dispatched again") |> Result.defaultWith (Errors.explain >> failwith)
+        let report = V2ProjectionSource.runFixed repeat selected (Some unknown)
+        Assert.Equal(1, report.Verified)
+        Assert.Equal(0, report.Items.Head.MutationAttempts)
+        Assert.Equal(1, writes)
+
+[<Fact>]
+let ``receiver population blob drift before dispatch preserves the field`` () =
+    for selected in [ productA; productB ] do
+        let manifest = productBlob selected (productManifest selected)
+        let changed = manifest |> Result.map (fun response -> { response with Body = response.Body.Replace(String.replicate 40 "b", String.replicate 40 "d") })
+        let reads = scripted ([ manifest ] @ productSource selected @ productProject selected None @ [ changed ])
+        let mutable writes = 0
+        let guarded = V2ObservationTransport.compose selected reads (fun _ -> writes <- writes + 1; mutationSuccess) |> Result.defaultWith (Errors.explain >> failwith)
+        let report = V2ProjectionSource.runFixed guarded selected None
+        Assert.Equal(0, report.Verified)
+        Assert.Equal(0, report.Items.Head.MutationAttempts)
+        Assert.Equal(0, writes)
+        Assert.True(report.Items.Head.Gap.IsSome)

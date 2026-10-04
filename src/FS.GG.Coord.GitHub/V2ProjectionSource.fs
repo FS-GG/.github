@@ -69,18 +69,29 @@ module V2ProjectionSource =
                      BodySha256 = native.GetProperty("body").GetString() |> System.Text.Encoding.UTF8.GetBytes |> System.Security.Cryptography.SHA256.HashData |> Convert.ToHexStringLower }
             | _ -> Error(Malformed(subject, "native identity or revision is unreadable/mismatched")))
 
-    let private readProtectedBlob (transport: IGitHubTransport) (revision: string) (path: string) =
+    let private sourceRepository (binding: Binding) =
+        if binding.BindingVersion = 3 then Set.minElement binding.Repositories else "FS-GG/.github"
+
+    let private populationPath = "docs/coordination/board-v2-import-manifest.json"
+
+    let private readProtectedBlob (transport: IGitHubTransport) (binding: Binding) (revision: string) (path: string) =
         let subject = $"protected recipe {revision}:{path}"
         if revision.Length <> 40 || revision |> Seq.exists (fun character -> not (Uri.IsHexDigit character)) then
             Error(Malformed(subject, "reviewed recipe must be an immutable Git commit SHA"))
         elif not (path.StartsWith("docs/", StringComparison.Ordinal)) || path.Contains("..") || path.Contains(":") || path.Contains("\\") then
             Error(Malformed(subject, "reviewed source path must remain within canonical docs"))
         else
-            let document = "query($expression: String!, $currentExpression: String!) { repository(owner: \"FS-GG\", name: \".github\") { nameWithOwner ref(qualifiedName: \"refs/heads/main\") { target { oid } } object(expression: $expression) { ... on Blob { oid text } } current: object(expression: $currentExpression) { ... on Blob { oid text } } } rateLimit { cost remaining } }"
-            GraphQl.read transport (query document [ "expression", VString $"{revision}:{path}"; "currentExpression", VString $"main:{path}" ] subject) (fun data ->
+            let expectedRepository = sourceRepository binding
+            let document, ownerVariables =
+                if binding.BindingVersion = 3 then
+                    "query($owner: String!, $repo: String!, $expression: String!, $currentExpression: String!) { repository(owner: $owner, name: $repo) { nameWithOwner ref(qualifiedName: \"refs/heads/main\") { target { oid } } object(expression: $expression) { ... on Blob { oid text } } current: object(expression: $currentExpression) { ... on Blob { oid text } } } rateLimit { cost remaining } }",
+                    [ "owner", VString binding.Owner; "repo", VString (expectedRepository.Split('/')[1]) ]
+                else
+                    "query($expression: String!, $currentExpression: String!) { repository(owner: \"FS-GG\", name: \".github\") { nameWithOwner ref(qualifiedName: \"refs/heads/main\") { target { oid } } object(expression: $expression) { ... on Blob { oid text } } current: object(expression: $currentExpression) { ... on Blob { oid text } } } rateLimit { cost remaining } }", []
+            GraphQl.read transport (query document (ownerVariables @ [ "expression", VString $"{revision}:{path}"; "currentExpression", VString $"main:{path}" ]) subject) (fun data ->
                 let repository = data.GetProperty "repository"
                 let text = repository.GetProperty("object").GetProperty("text").GetString()
-                if repository.GetProperty("nameWithOwner").GetString() <> "FS-GG/.github"
+                if repository.GetProperty("nameWithOwner").GetString() <> expectedRepository
                    || repository.GetProperty("object").GetProperty("oid").GetString() <> repository.GetProperty("current").GetProperty("oid").GetString()
                    || text <> repository.GetProperty("current").GetProperty("text").GetString()
                    || String.IsNullOrWhiteSpace(repository.GetProperty("object").GetProperty("oid").GetString())
@@ -96,7 +107,7 @@ module V2ProjectionSource =
             Error(Malformed("reviewed native issue", "canonical OWNER/REPO#NUMBER required"))
         else Ok { Owner = value.Substring(0, slash); Repository = value.Substring(slash + 1, hash - slash - 1); Number = number }
 
-    let private readBlockedBy (transport: IGitHubTransport) (issue: IssueRef) =
+    let private readBlockedBy (transport: IGitHubTransport) (binding: Binding) (issue: IssueRef) =
         let subject = $"{issue.Owner}/{issue.Repository}#{issue.Number} native blocked_by"
         let request: Transport.Request =
             { Method = "GET"; Path = $"repos/{issue.Owner}/{issue.Repository}/issues/{issue.Number}/dependencies/blocked_by"
@@ -114,7 +125,8 @@ module V2ProjectionSource =
                         let url = node.GetProperty("html_url").GetString()
                         let uri = Uri url
                         let parts = uri.AbsolutePath.Trim('/').Split('/')
-                        if uri.Scheme <> "https" || uri.Host <> "github.com" || uri.UserInfo <> "" || uri.Query <> "" || uri.Fragment <> "" || parts.Length <> 4 || parts[0] <> "FS-GG" || parts[2] <> "issues" || (node.TryGetProperty("pull_request") |> fst) then
+                        if uri.Scheme <> "https" || uri.Host <> "github.com" || uri.UserInfo <> "" || uri.Query <> "" || uri.Fragment <> "" || parts.Length <> 4 || parts[0] <> (if binding.BindingVersion = 3 then binding.Owner else "FS-GG") || parts[2] <> "issues" || (node.TryGetProperty("pull_request") |> fst)
+                           || (binding.BindingVersion = 3 && not (binding.Repositories.Contains $"{parts[0]}/{parts[1]}")) then
                             Error(Malformed(subject, "native blocker identity is not an FS-GG issue"))
                         else
                             let native: NativeObservation =
@@ -135,13 +147,24 @@ module V2ProjectionSource =
             | :? ArgumentException -> Error(Malformed(subject, "unreadable native dependency snapshot"))
 
     let private readPlan (transport: IGitHubTransport) (binding: Binding) (path: string) =
-        if path = "https://github.com/FS-GG/.github/issues/3008" && binding.Repositories.Contains "FS-GG/.github" then
+        if binding.BindingVersion = 3 && not (path.StartsWith("docs/", StringComparison.Ordinal)) then
+            let prefix = $"https://github.com/{sourceRepository binding}/issues/"
+            let mutable number = 0
+            if not (path.StartsWith(prefix, StringComparison.Ordinal)) || not (Int32.TryParse(path.Substring(prefix.Length), &number)) || number <= 0 || path <> prefix + string number then
+                Error(Malformed("owning plan", "product plan must be canonical docs or a native issue in the selected repository"))
+            else
+                let repository = (sourceRepository binding).Split('/')[1]
+                readIssue transport { Owner = binding.Owner; Repository = repository; Number = number } |> Result.bind (fun native ->
+                    let emptyDigest = System.Security.Cryptography.SHA256.HashData(Array.empty<byte>) |> Convert.ToHexStringLower
+                    if native.BodySha256 = emptyDigest then Error(Malformed("owning plan", "selected native plan body is empty"))
+                    else Ok(Some native, $"{native.NodeId}@{native.UpdatedAt}:{native.Url}:{native.BodySha256}"))
+        elif path = "https://github.com/FS-GG/.github/issues/3008" && binding.Repositories.Contains "FS-GG/.github" then
             readIssue transport { Owner = "FS-GG"; Repository = ".github"; Number = 3008 } |> Result.bind (fun native ->
                 let emptyDigest = System.Security.Cryptography.SHA256.HashData(Array.empty<byte>) |> Convert.ToHexStringLower
                 if native.Url <> path || native.BodySha256 = emptyDigest then Error(Malformed("programme issue", "native URL/body is unreadable or mismatched"))
                 else Ok(Some native, $"{native.NodeId}@{native.UpdatedAt}:{native.Url}:{native.BodySha256}"))
         elif path.StartsWith("docs/", StringComparison.Ordinal) then
-            readProtectedBlob transport binding.PopulationRevision path |> Result.map (fun (_, _, blob) -> None, $"{path}:{blob}")
+            readProtectedBlob transport binding binding.PopulationRevision path |> Result.map (fun (_, _, blob) -> None, $"{path}:{blob}")
         else Error(Malformed("owning plan", "only canonical protected docs or the selected programme issue URL is admitted"))
 
     type private Selected =
@@ -170,7 +193,7 @@ module V2ProjectionSource =
                 Error(Malformed("reviewed population", "manifest is not bound to the exact admitted project"))
             else
                 let rows = root.GetProperty("items").EnumerateArray() |> Seq.filter (fun row -> row.GetProperty("pilot").GetBoolean() && (row.GetProperty("decision").GetString() = "import" || row.GetProperty("decision").GetString() = "follow-up") && row.GetProperty("adjudication").GetString() = "verified-remaining") |> Seq.toList
-                if rows.Length < 3 || rows.Length > 5 then Error(Malformed("reviewed population", "admitted pilot requires three to five native issues"))
+                if rows.Length < (if binding.BindingVersion = 3 then 1 else 3) || rows.Length > 5 then Error(Malformed("reviewed population", "admitted population is outside the selected bounded cohort"))
                 else
                     let parsed = rows |> List.map (fun row ->
                         match parseIssue (row.GetProperty("issue").GetString()) with
@@ -218,7 +241,7 @@ module V2ProjectionSource =
                 if observation.NodeId <> row.NodeId then Ok(Refused "native issue node identity changed")
                 elif observation.UpdatedAt <> row.UpdatedAt || observation.State <> "OPEN" then Ok(Stale None)
                 else
-                    match readBlockedBy transport row.Issue with
+                    match readBlockedBy transport binding row.Issue with
                     | Error error -> Error error
                     | Ok observed ->
                         dependencies <- observed
@@ -253,7 +276,7 @@ module V2ProjectionSource =
         match validateBinding binding |> Result.bind (fun () -> artifactCheck binding) with
         | Error error -> failed error
         | Ok() ->
-            match readProtectedBlob transport binding.PopulationRevision "docs/coordination/board-v2-import-manifest.json" |> Result.bind (fun (text, current, blob) -> population binding text |> Result.map (fun selected -> selected, current, blob)) with
+            match readProtectedBlob transport binding binding.PopulationRevision populationPath |> Result.bind (fun (text, current, blob) -> population binding text |> Result.map (fun selected -> selected, current, blob)) with
             | Error error -> failed error
             | Ok(selected, protectedRevision, populationBlob) ->
                 let items = selected |> List.map (fun row ->
@@ -272,7 +295,7 @@ module V2ProjectionSource =
                     let verifier: SourceVerifier = fun _ ->
                         let populationCurrent =
                             if sourceChecks = 0 then Ok()
-                            else readProtectedBlob counted binding.PopulationRevision "docs/coordination/board-v2-import-manifest.json" |> Result.bind (fun (_, _, blob) ->
+                            else readProtectedBlob counted binding binding.PopulationRevision populationPath |> Result.bind (fun (_, _, blob) ->
                                 if blob = populationBlob then Ok() else Error(Malformed("reviewed population", "population changed before mutation")))
                         sourceChecks <- sourceChecks + 1
                         match populationCurrent with
@@ -298,7 +321,7 @@ module V2ProjectionSource =
                       MembershipPages = projection |> Option.map (fun report -> report.ProjectReads - (if report.Mutations = 0 then 3 else 4))
                       Projection = projection; Gap = match result with Error error -> Some error | _ -> None
                       LastVerified = projection |> Option.orElse historical })
-                { ProjectId = binding.ProjectId; RecipeRevision = binding.RecipeRevision; PopulationRevision = binding.PopulationRevision; ImportRecipeRevision = binding.ImportRecipeRevision; ImportArtifactSha256 = binding.ImportArtifactSha256; ArtifactSha256 = binding.ArtifactSha256; NativeDispatch = []; ProtectedInputs = [ "docs/coordination/board-v2-import-manifest.json", protectedRevision, populationBlob ]; Selected = Some selected.Length
+                { ProjectId = binding.ProjectId; RecipeRevision = binding.RecipeRevision; PopulationRevision = binding.PopulationRevision; ImportRecipeRevision = binding.ImportRecipeRevision; ImportArtifactSha256 = binding.ImportArtifactSha256; ArtifactSha256 = binding.ArtifactSha256; NativeDispatch = []; ProtectedInputs = [ (if binding.BindingVersion = 3 then sourceRepository binding + ":" + populationPath else populationPath), protectedRevision, populationBlob ]; Selected = Some selected.Length
                   Attempted = items.Length; Verified = items |> List.filter (fun item -> item.Health = "Verified") |> List.length
                   Items = items; PopulationGap = None; Cleanup = "No resources, claims or background work created" }
 
@@ -350,7 +373,7 @@ module V2ProjectionSource =
         match validateBinding binding |> Result.bind (fun () -> artifactCheck binding) with
         | Error error -> failed error
         | Ok() ->
-            match readProtectedBlob reads binding.PopulationRevision "docs/coordination/board-v2-import-manifest.json" |> Result.bind (fun (text, current, blob) -> population binding text |> Result.map (fun selected -> selected, current, blob)) with
+            match readProtectedBlob reads binding binding.PopulationRevision populationPath |> Result.bind (fun (text, current, blob) -> population binding text |> Result.map (fun selected -> selected, current, blob)) with
             | Error error -> failed error
             | Ok(selected, current, blob) ->
                 let items = selected |> List.map (fun row ->
@@ -386,7 +409,7 @@ module V2ProjectionSource =
                           Reads = calls; MutationAttempts = 0; MembershipPages = observed |> Option.map _.MembershipPages
                           Projection = None; Gap = sourceGap; LastVerified = historical }
                     { Evidence = evidence; ExpectedNodeId = row.NodeId; SourceCurrentness = currentness; Planning = observed; PlanningGap = planningGap; Discrepancies = discrepancies })
-                { Binding = binding; Evidence = metadata (items |> List.map _.Evidence) (Some selected.Length) [ "docs/coordination/board-v2-import-manifest.json", current, blob ] None; Items = items }
+                { Binding = binding; Evidence = metadata (items |> List.map _.Evidence) (Some selected.Length) [ (if binding.BindingVersion = 3 then sourceRepository binding + ":" + populationPath else populationPath), current, blob ] None; Items = items }
 
     let planningCandidates (report: InspectionReport) (facts: IntegratorFacts) =
         if report.Evidence.Selected.IsNone || report.Evidence.PopulationGap.IsSome then []

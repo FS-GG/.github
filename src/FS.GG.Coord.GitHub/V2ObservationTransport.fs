@@ -27,8 +27,8 @@ module V2ObservationTransport =
     let validateScope (binding: Binding) =
         match validateBinding binding with
         | Error error -> Error error
-        | Ok() when binding.Owner <> "FS-GG" || binding.OrganizationId <> "O_kgDOEYAWYw" || binding.ProjectNumber <> 3 || binding.ProjectId <> project
-                    || binding.Observation.Id <> field || Map.tryFind "Verified" binding.Observation.Options <> Some verified || (binding.SelectedIssues <> cohort && binding.SelectedIssues <> successorCohort) ->
+        | Ok() when binding.BindingVersion = 2 && (binding.Owner <> "FS-GG" || binding.OrganizationId <> "O_kgDOEYAWYw" || binding.ProjectNumber <> 3 || binding.ProjectId <> project
+                    || binding.Observation.Id <> field || Map.tryFind "Verified" binding.Observation.Options <> Some verified || (binding.SelectedIssues <> cohort && binding.SelectedIssues <> successorCohort)) ->
             Error(Malformed("V2 Observation authority", "selected root-local project/field/native cohort differs from the reviewed three-target pilot or four-target successor"))
         | Ok() -> Ok()
 
@@ -36,6 +36,9 @@ module V2ObservationTransport =
         match validateScope binding with
         | Error error -> Error error
         | Ok() ->
+            let project = binding.ProjectId
+            let field = binding.Observation.Id
+            let verified = binding.Observation.Options["Verified"]
             let request = intent.Request
             match request.Body with
             | Query(actual, variables) when actual = document && request.Method = "POST" && request.Path = "graphql" && request.Budget = GraphQl && request.Query.IsEmpty && request.IfNoneMatch.IsNone ->
@@ -62,7 +65,7 @@ module V2ObservationTransport =
                             let repository = content.GetProperty("repository").GetProperty("nameWithOwner").GetString()
                             let number = content.GetProperty("number").GetInt32()
                             let issue = $"{repository}#{number}"
-                            if node.GetProperty("id").GetString() <> item || node.GetProperty("project").GetProperty("id").GetString() <> project || Map.tryFind nativeId binding.SelectedIssues <> Some issue then
+                            if node.GetProperty("id").GetString() <> item || node.GetProperty("project").GetProperty("id").GetString() <> binding.ProjectId || (binding.BindingVersion = 3 && not (binding.Repositories.Contains repository)) || Map.tryFind nativeId binding.SelectedIssues <> Some issue then
                                 Error(Malformed("V2 Observation authority", "fresh item project/content is not an admitted native pilot issue"))
                             else Ok()) |> Result.bind (fun () -> nativeOnce request)) })
 

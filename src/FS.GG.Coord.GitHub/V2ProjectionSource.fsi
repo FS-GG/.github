@@ -45,12 +45,16 @@ module V2ProjectionSource =
           Cleanup: string }
 
     /// Verify the loaded adapter assembly hash before IO. Read the fixed canonical manifest at the
-    /// admitted population commit, validate the complete three-to-five pilot and exact binding, then
+    /// admitted population commit, validate the complete three-to-five organization pilot or one-to-five
+    /// receiver repository cohort and exact binding, then
     /// freshly read each native issue, complete blocked_by snapshot (including empty) and finite owning plan.
     /// This selected pilot admits only reviewed empty dependency snapshots; any new edge is Stale.
     /// An issue revision differing from the reviewed manifest is Stale. Unknown reads license no write.
     /// Verified means complete/current native observation, never acceptance of the owning outcome.
-    /// Previous reports are historical display evidence only and cannot make a write current.
+    /// Version 2 retains the organization manifest. Version 3 reads the same import/v1 manifest path
+    /// from its sole selected receiver repository, checks its pinned/current main blob and reads only
+    /// that repository's canonical docs/native plan. Product metadata never comes from the organization
+    /// manifest. Previous reports are historical display evidence only and cannot make a write current.
     val runFixed:
         transport: IGitHubTransport ->
         binding: Binding ->

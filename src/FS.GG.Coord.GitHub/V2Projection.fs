@@ -102,16 +102,30 @@ module V2Projection =
         else
             Ok()
 
+    let private productPopulation (binding: Binding) =
+        if binding.Repositories.Count <> 1 then false
+        else
+            let repository = Set.minElement binding.Repositories
+            let prefix = repository + "#"
+            repository.StartsWith(binding.Owner + "/", StringComparison.Ordinal)
+            && canonicalRepository repository
+            && (binding.SelectedIssues |> Map.values |> Set.ofSeq |> Set.count) = binding.SelectedIssues.Count
+            && (binding.SelectedIssues |> Map.forall (fun node issue ->
+                let mutable number = 0
+                nonBlank node && nonBlank issue && issue.StartsWith(prefix, StringComparison.Ordinal)
+                && Int32.TryParse(issue.Substring(prefix.Length), &number) && number > 0
+                && issue = prefix + string number))
+
     let validateBinding (binding: Binding) =
         let subject = "the Coordination V2 binding"
         let allFieldIds = [ binding.Status.Id; binding.RoadmapFieldId; binding.Track.Id; binding.Observation.Id ]
 
-        if binding.BindingVersion <> 2 then
-            invalid subject "only refresh binding version 2 is supported"
+        if binding.BindingVersion <> 2 && binding.BindingVersion <> 3 then
+            invalid subject "only organization binding version 2 or repository binding version 3 is supported"
         elif String.IsNullOrWhiteSpace binding.ImportRecipeRevision || binding.ImportRecipeRevision.Length <> 40 || binding.ImportRecipeRevision |> Seq.exists (Uri.IsHexDigit >> not)
              || String.IsNullOrWhiteSpace binding.ImportArtifactSha256 || binding.ImportArtifactSha256.Length <> 64 || binding.ImportArtifactSha256 |> Seq.exists (Uri.IsHexDigit >> not) then
             invalid subject "distinct reviewed import constructor provenance is incomplete"
-        elif binding.SelectedIssues.Count < 3 || binding.SelectedIssues.Count > 5 || binding.SelectedIssues |> Map.exists (fun node issue -> String.IsNullOrWhiteSpace node || String.IsNullOrWhiteSpace issue) then
+        elif binding.SelectedIssues.Count < (if binding.BindingVersion = 3 then 1 else 3) || binding.SelectedIssues.Count > 5 || binding.SelectedIssues |> Map.exists (fun node issue -> String.IsNullOrWhiteSpace node || String.IsNullOrWhiteSpace issue) then
             invalid subject "explicit selected native cohort is incomplete"
         elif binding.SchemaVersion <> 1 then
             invalid subject "only schema version 1 is supported"
@@ -126,12 +140,17 @@ module V2Projection =
         elif not (nonBlank binding.Owner) || binding.ProjectNumber <= 0 || not (nonBlank binding.ProjectTitle) || not (nonBlank binding.ProjectId) then
             invalid subject "the exact organization project identity is incomplete"
         elif
-            String.Equals(binding.Owner, "FS-GG", StringComparison.OrdinalIgnoreCase)
-            && (binding.ProjectNumber = 1 || binding.ProjectId = "PVT_kwDOEYAWY84Bb08W")
+            (String.Equals(binding.Owner, "FS-GG", StringComparison.OrdinalIgnoreCase)
+             && (binding.ProjectNumber = 1 || binding.ProjectId = "PVT_kwDOEYAWY84Bb08W"))
+            || (binding.BindingVersion = 3 && binding.ProjectId = "PVT_kwDOEYAWY84Bb08W")
         then
             invalid subject "the legacy Coordination Project 1 identity is not a V2 projection target"
-        elif binding.Owner <> "FS-GG" || binding.ProjectTitle <> "Coordination V2" then
+        elif binding.BindingVersion = 2 && (binding.Owner <> "FS-GG" || binding.ProjectTitle <> "Coordination V2") then
             invalid subject "this restricted organization pilot requires the FS-GG Coordination V2 target"
+        elif binding.BindingVersion = 3 && (binding.ProjectId = "PVT_kwDOEYAWY84Bldpa" || (binding.Owner = "FS-GG" && binding.ProjectNumber = 3)) then
+            invalid subject "a repository binding cannot select the organization Coordination V2 target"
+        elif binding.BindingVersion = 3 && not (productPopulation binding) then
+            invalid subject "a repository binding requires one owner-local repository and an exact bounded native cohort"
         elif not (nonBlank binding.RoadmapFieldId) then
             invalid subject "the Roadmap field id is missing"
         elif List.distinct allFieldIds |> List.length <> allFieldIds.Length then
@@ -314,6 +333,8 @@ module V2Projection =
             invalid "the projection request" "the issue identity is incomplete"
         | Ok() when not (repositoryAllowed binding request.Issue) ->
             Error(Http(403, $"repository %s{request.Issue.Owner}/%s{request.Issue.Repository} is outside the reviewed V2 projection allowlist"))
+        | Ok() when binding.BindingVersion = 3 && Map.tryFind request.ExpectedNodeId binding.SelectedIssues <> Some $"{request.Issue.Owner}/{request.Issue.Repository}#{request.Issue.Number}" ->
+            invalid "the projection request" "the native issue is outside the selected receiver cohort"
         | Ok() ->
             match verifySource request.Issue with
             | Error error -> Error error

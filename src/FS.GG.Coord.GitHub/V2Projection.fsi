@@ -20,6 +20,9 @@ module V2Projection =
         }
 
     /// Immutable identities copied from an independently reviewed board binding.
+    /// BindingVersion 2 preserves the organization pilot; version 3 selects one organization-owned
+    /// product project and one owner-local repository with one-to-five explicit native issues.
+    /// The wire properties are unchanged. Version 3 never selects the organization/legacy target.
     type Binding =
         {
             BindingVersion: int
