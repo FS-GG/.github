@@ -31,13 +31,17 @@
     },
     {
       "path": ".github/workflows/release-new-sdd-workspace.yml",
-      "sha256": "688becc5cda07f4f01834d67935b49c0286b0c412afedd2141db19b4d74b36e5",
+      "sha256": "1906d1f6c2e43ec20e91829a69b90fe91cadb70d31b61cc1a89e788f92faca72",
       "disposition": "exact-source-protected-journal-successor-only",
       "successorAmendment": {
-        "unit": "TSDD-KNOWLEDGE-01.4",
-        "version": "0.13.0",
-        "reason": "The existing filename retains its NuGet Trusted Publishing identity. The accepted 0.13.0 source changes the prior successor comments and publisher job identity while delegating all effects to the same exact-source, protected-journal route. The historical direct publisher remains retired; no tag trigger or unadmitted effect is restored.",
-        "sealedPredecessorSha256": "28bb782d48c1d0fbf4f71e1000dc73fb1517fda3a8b71942358c604855a2360f"
+        "unit": "COORD-BOARD-V2-01.5",
+        "version": "0.14.0",
+        "reason": "The existing Trusted Publishing filename selects the current 0.14.0 singleton for ordinary publication while retaining the explicit historical 0.13.0 recovery singleton and exact recovery title/tuple. All effects remain delegated to the same exact-source protected-journal adapters; source controls do not admit publication.",
+        "sealedPredecessorSha256": "28bb782d48c1d0fbf4f71e1000dc73fb1517fda3a8b71942358c604855a2360f",
+        "previousSuccessorWorkflowSha256": "688becc5cda07f4f01834d67935b49c0286b0c412afedd2141db19b4d74b36e5",
+        "previousAcceptedSource": "560b01c2a74a361855cae410bb3c168cae5f914d",
+        "sourceQualification": "structural and fake-provider controls only",
+        "operationAcceptance": "candidate, journal initialization, protected preflight and 0.14 publication not performed"
       },
       "historicalDisposition": "manual-local-pack-only",
       "historicalCapabilityLoss": [
@@ -59,6 +63,109 @@
         "version": "0.13.0",
         "previousSuccessorWorkflowSha256": "5704613f20a68efce211f699189f439af46c1a8387d1859625e06882978efa7a",
         "scope": "Default-off, uniquely selected first-attempt native Wizard diagnostic or promotion-only forward completion of the original candidate and protected open intent. No package push/repack, new tag/assets, journal reset or generic replay. Diagnostic permissions are read-only; correction permits one exact release PATCH and ordinary forward protected CAS after independent matching readback. Private raw custody leaves the runner only as recipient-bound AES-GCM CMS ciphertext. Source readiness is not operation admission or publication acceptance."
+      },
+      "bindingIsolationProof": {
+        "test": "tests/release-effect-sealing/run.py",
+        "historicalRecoverySource": "d8297c9b5510fb2cf7d2ea4023fe6a99e2f813d9",
+        "historicalRecoveryConstants": {
+          "PROC_CAP": 8192,
+          "MEMBER_CAP": 128,
+          "CUSTODY_MEMBER_CAP": 323,
+          "CUSTODY_PATH_CAP": 256,
+          "REF": "refs/heads/fsgg/v2/journal/release/tsdd-knowledge-wizard-013",
+          "REPO": "FS-GG/.github",
+          "CANDIDATE_SOURCE": "f891b5b0723070c67e08d1a87b7d12b0b4d8bebe",
+          "CANDIDATE_RUN": 37159899280,
+          "ARTIFACT": 11287256853,
+          "ARCHIVE": "46055667bb35affacbc7c3be47a4eaea8983ae786267ff00bd9173d66b538244",
+          "ORIGINAL_PACKAGE": "accab9375f0adff5cc770f096ada7c56428674fc5c801449ad91cff4c39ccc37",
+          "FAILED_RUN": 37160659521,
+          "RELEASE": 402727082,
+          "JOURNAL_HEAD": "dbc2c4e578cb41e9f6aa31f18557cd95745346f7",
+          "PREVIOUS_SOURCE": "4889c446de0a431d1168a61a89ab660fc2062314",
+          "WORKFLOW": ".github/workflows/release-new-sdd-workspace.yml"
+        },
+        "historicalRecoveryJobSha256": {
+          "recovery-diagnostic": "521da9edc1772ecd845bd7f6cae4ad461e2f49ce93bc2110747bc32a819d9dcf",
+          "recovery-complete": "2011d23b1ef1e51f35afe89fa55f5c4b3fb334ba3b2c28a27d518f507dec924d"
+        },
+        "currentBinding": "CURRENT_014",
+        "historicalBinding": "HISTORICAL_013",
+        "effectAdmission": "pending independent native candidate, held-main and protected-journal authority; no source-test admission",
+        "historicalRecoveryAssignmentNames": [
+          "Path",
+          "STREAM_CAP",
+          "PROC_CAP",
+          "MEMBER_CAP",
+          "JSON_CAP",
+          "BINARY_CAP",
+          "ZIP_CAP",
+          "CUSTODY_CAP",
+          "READINESS_CAP",
+          "SMALL_JSON_CAP",
+          "ANCESTRY_JSON_CAP",
+          "INSTALL_TREE_CAP",
+          "CUSTODY_MEMBER_CAP",
+          "CUSTODY_PATH_CAP",
+          "PHYSICAL_CUSTODY_CAP",
+          "REF",
+          "REPO",
+          "CANDIDATE_SOURCE",
+          "CANDIDATE_RUN",
+          "ARTIFACT",
+          "ARCHIVE",
+          "ORIGINAL_PACKAGE",
+          "FAILED_RUN",
+          "RELEASE",
+          "JOURNAL_HEAD",
+          "PREVIOUS_SOURCE",
+          "WORKFLOW",
+          "SAFE_REFUSAL_CODES",
+          "SAFE_PHASES",
+          "_current_phase",
+          "SDK_SCOPE_POLICY",
+          "ORIGINAL_RUNTIME_CONFIG_MEMBER",
+          "ORIGINAL_RUNTIME_CONFIG_SHA256",
+          "ORIGINAL_RUNTIME_OPTIONS",
+          "SDK_FORBIDDEN_ENV"
+        ],
+        "historicalRecoveryAssignmentAstSha256": "ef38ec956e9bec766219fa6f6e7c1923b105b4508a0c5883cc84b294578b198a",
+        "historicalGuardFunctionAstSha256": {
+          "require": "905d170ad4ba5cc21063bff358ad7b1b4247121b079b204eb66c251155c3f7f3",
+          "digest": "bd18d7b3154ff142742f1a322332cd90646fec58f94b3e95de1037f7bfd61c7a",
+          "canonical": "b0ae88fbb67a394562a2cbe73e623fd1f685631b350c70364aef7f0d6a98438b",
+          "load_module": "9e74a0cc6d07a8346d48e5870e480720081b0337cd009b9c407d948273093d55",
+          "validate_binding": "3b66a9e342d5cafd95c157d28ed385077186923b77b7b7fd36f18dc81172827e",
+          "recovery_phase": "1b22a69e17be45d92a7afbfe7308f8bbb8c71a276c2f304dff299119b421bf47",
+          "recovery_refusal": "f61b36d24a5faec22a128532071ab3adeaa36bfd4dc470d88a7cab427dfd93a4",
+          "existing_sdk_root": "6ceb77718a00bbe079c768639a1ad552ca3eb581c2722d7aea97003ef826da48",
+          "proc_identity": "97ddf14aa4cf3ec1c1e768b7fd69c4ab94b18a7993c41635149681beed2c4495",
+          "all_processes": "78a4ed6f05b45e51638a1cc740431086ad0f3b9a6defd6507a42a1220e9aa869",
+          "same_process": "7a0c7ad93f23356d60c161e0e5ff9370811346cf69a2c0c6baec453cbaa82b45",
+          "capture": "fc5589161cdd8ca4dbf14c06d6fa597cada97986e10123275cf76adcc513253e",
+          "subreaper": "572895d73338809568bf96bfe2208b06762cf30be06a5028bade0f02dda542b5",
+          "child_environment": "83694ceca547675fe9eb411de00c5bfd97494918d54496280fd0c22148f828e7",
+          "sdk_input_environment": "eecf12fb2418f37fe5d0c479495111206382f24cc19a08ad9d6a9c196f5a0c7c",
+          "sdk_scope_versions": "2a05370df167b627ff706050d8097140b3f04079e55da0f5ccc37210a0b75242",
+          "sdk_scope_requirements": "34985bd2dd721a70765a12d60c578eaa95268f9be79eec5aed1a79c38ad8ba38",
+          "selected_sdk_scope": "dd312e67a34d00ed24aa515efd8d3f3b3dc7d0ee7b566e860c6322a1125c1a8b",
+          "selected_sdk_roster": "8b5ef932a312ef9e497b247f912133e7af7e70d48c606df6d630d3a8585d419d",
+          "sdk_snapshot": "58e90f9eb022375dfe50e2771a4770a9a9057a42028621263b3235854a75cc0f",
+          "physical_roster": "e9be6fa06cbca2eade268aaf8efd8e1684c9273c0c6dd5cbb6ec94d8359f1db7",
+          "source_snapshot": "28d35fa369e218f77e3b578962f911b3af12949b846beaf52214fb0f0cc69260",
+          "safe_zip": "8997ca13a31482a6a8b1cd80844cf46ebcd1e91db1adf69031f54b772f8a7c2b",
+          "native_context": "1a80b15e3ee42af33693307470d30ed5706ce6d6ad5811af4a45152105b0493a",
+          "original_runs": "a405fe3e73b9695355c7015c7cd8c879e8c7a63be7c22bb172a5dc497a206cb8",
+          "readiness": "be9db9121c03e20773a1a5701c71370d1e19391d424b48484a668b75abef48b8",
+          "predecessor": "9e5ccb04ef8487508b77325cafb8cee8dbe7d3b730a10860e86e830f990589ea",
+          "candidate": "db2a6b920c2acaaf28c5832415d51c5a91700a1e97da5024658b2f50efa9805c",
+          "installed_closure": "121c2fcc1753eeefd7565041b5260ca25cce6d80b067570a300555a9de09c217",
+          "public_install": "6658e91902478a832f6de373d61e95be28bb7c9f608d499f4e8fc27f92fbb32d",
+          "recipient": "c123744f977a5f347ce148b5039d0f82b07983b11e26b6db28568ee41d31825e",
+          "encrypted_custody": "a4e345fd85f4679b8bb55a4144d636a200934557d65fceeb641381353bb6c82d",
+          "outer": "8db0a12b5c70afcd04aaa511758978414f09011afd4530248ace13d448748c0e",
+          "entry": "79ebdcccba1e7d1bc24824f6bed99cd5d5595215cdbc2a4d0380528ba65e3ca2"
+        }
       }
     },
     {
@@ -180,6 +287,42 @@
           "repack-after-candidate",
           "unadmitted-release-effects"
         ]
+      }
+    },
+    {
+      "status": "non-current-history",
+      "acceptedSource": "560b01c2a74a361855cae410bb3c168cae5f914d",
+      "route": {
+        "path": ".github/workflows/release-new-sdd-workspace.yml",
+        "sha256": "688becc5cda07f4f01834d67935b49c0286b0c412afedd2141db19b4d74b36e5",
+        "disposition": "exact-source-protected-journal-successor-only",
+        "successorAmendment": {
+          "unit": "TSDD-KNOWLEDGE-01.4",
+          "version": "0.13.0",
+          "reason": "The existing filename retains its NuGet Trusted Publishing identity. The accepted 0.13.0 source changes the prior successor comments and publisher job identity while delegating all effects to the same exact-source, protected-journal route. The historical direct publisher remains retired; no tag trigger or unadmitted effect is restored.",
+          "sealedPredecessorSha256": "28bb782d48c1d0fbf4f71e1000dc73fb1517fda3a8b71942358c604855a2360f"
+        },
+        "historicalDisposition": "manual-local-pack-only",
+        "historicalCapabilityLoss": [
+          "tag-trigger",
+          "packages-write",
+          "oidc-token",
+          "github-package-publish",
+          "nuget-package-publish"
+        ],
+        "capabilityLoss": [
+          "tag-trigger",
+          "direct-package-publish",
+          "repack-after-candidate",
+          "unadmitted-release-effects"
+        ],
+        "forwardRecoveryAmendment": {
+          "unit": "W013-FR-H1",
+          "owner": "TSDD-KNOWLEDGE-01.4",
+          "version": "0.13.0",
+          "previousSuccessorWorkflowSha256": "5704613f20a68efce211f699189f439af46c1a8387d1859625e06882978efa7a",
+          "scope": "Default-off, uniquely selected first-attempt native Wizard diagnostic or promotion-only forward completion of the original candidate and protected open intent. No package push/repack, new tag/assets, journal reset or generic replay. Diagnostic permissions are read-only; correction permits one exact release PATCH and ordinary forward protected CAS after independent matching readback. Private raw custody leaves the runner only as recipient-bound AES-GCM CMS ciphertext. Source readiness is not operation admission or publication acceptance."
+        }
       }
     }
   ]
