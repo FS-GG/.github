@@ -195,6 +195,34 @@ Options accepted: `--board <owner>/<title>`, `--repo <owner>/<repo>`, `--chore-l
 scaffold step: a kit file that fails to fetch warns; only when the workspace is unwired **and** every
 fetch fails does it exit non-zero, having written nothing.
 
+### Selected product V2 integration (source preparation)
+
+For an explicitly selected product board, supply its canonical closed Binding v3, exact repository
+and immutable producer revision. The published tool pin and both skill manifests must match the
+creator's adapter closure. This source route is unqualified until coherent publication and actual
+fresh/retained receiver journeys pass; a local result never proves board adoption.
+
+```sh
+new-sdd-workspace ./MyApp MyApp --repo acme/MyApp --board-binding /private/product-binding.json --board-kit-ref <immutable-sha>
+new-sdd-workspace retrofit ./MyApp --repo acme/MyApp --board-binding /private/product-binding.json --board-kit-ref <immutable-sha> --preview
+```
+
+Preview stages exact manifest-verified kit and product consumer bytes, tool pin, binding, settings
+and additive `productBoard` scaffold provenance without writes. Repeat without `--preview` to apply
+within authorized local configuration scope. The prepared plan rechecks its file preimages before
+writing and rolls back original bytes on a write failure, reporting incomplete rollback explicitly.
+An unchanged integration is a no-op. Unrelated settings, tools and provenance are preserved;
+conflicting owner edits, legacy board environment, missing producer bytes, wrong repository,
+organization bindings and adapter mismatch refuse before installation. The original legacy route
+remains historical compatibility; it cannot authorize V2 consumers or migrate selected board rows.
+
+V2 writes `.fsgg/board-v2-binding.json`, selected V2 settings and immutable publication/provenance
+identities. It never embeds credentials in templates, creates a GitHub resource or performs a board
+write. Product guidance uses the canonical read-only `board-v2 inspect` route and preserves human
+planning fields, including Blocked. The bounded adapter does not implement general issue/membership
+intake; padd-item returns a concrete pending draft for that missing operation. Local-only creation
+and initialization continue without GitHub. Existing provider/lifecycle selections are independent.
+
 ### Currency by default (ADR-0030)
 
 By default, **step 2 self-updates the `fsgg-sdd` CLI to the newest published build before it

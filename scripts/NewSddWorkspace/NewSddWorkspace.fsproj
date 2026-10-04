@@ -33,6 +33,8 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="ProductBoard.fsi" />
+    <Compile Include="ProductBoard.fs" />
     <Compile Include="Program.fs" />
     <None Include="README.md" Pack="true" PackagePath="\" />
     <EmbeddedResource Include="../../.claude/skills/initialize-sdd-workspace/SKILL.md"
@@ -42,6 +44,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="../../src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj" />
     <PackageReference Include="FSharp.Core" />
     <PackageReference Include="Spectre.Console" />
   </ItemGroup>

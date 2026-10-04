@@ -8,6 +8,21 @@ description: Use when explicitly asked to add a described item to the current pr
 Turn the text after `$padd-item` into one durable issue in the current repository and project it onto
 this workspace's configured board. File the work; do not implement it.
 
+## Selected V2 product boundary
+
+Read `.fsgg/scaffold-provenance.json`, `.claude/settings.json` and the selected binding first.
+When `productBoard` or V2 mode is present, follow work-board's selected product V2 route for
+read-only scope/identity checks and native issue deduplication. Do not run the legacy intake,
+reconcile, apply, add, status or flush commands below. Their smaller-schema replacement is not
+qualified by the current bounded adapter.
+
+Return a concrete local intake draft naming the current repository, selected immutable project,
+requested outcome, native semantic matches, acceptance and exact source paths. The draft does
+not create an issue or board membership. Report filing as pending until a V2-compatible native
+issue/membership operation is explicitly authorized and qualified; additions outside the one-to-five
+exact cohort also require a reviewed binding change. Preserve native issue identity and human
+planning fields. Return after this draft; never redirect filing to the organization board.
+
 ## 1. Prove workspace wiring
 
 Resolve the current repository from its GitHub remote. Before any mutation, require:

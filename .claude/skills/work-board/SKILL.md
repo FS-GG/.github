@@ -5,7 +5,49 @@ description: Use when explicitly asked to burn down one coordination-wired produ
 
 # work-board
 
-Burn down one coordination-wired workspace's board. The local board is both plan and ledger.
+Burn down one coordination-wired workspace's selected board. The owning roadmap and native
+delivery checks remain authoritative.
+
+## Selected product V2 route
+
+Read `.fsgg/scaffold-provenance.json` and `.claude/settings.json` before running the legacy
+workflow below. When `productBoard` provenance or `FSGG_COORD_BOARD_MODE=v2` is present, use
+this route exclusively. Missing, inconsistent or unreadable selected configuration refuses; never
+fall back to title discovery, Project 1, or an organization driver.
+
+1. Read `.fsgg/board-v2-binding.json` and the exact local `fs.gg.coord.cli` tool pin. Require
+   Binding version 3, one repository equal to the current canonical GitHub remote, an explicit
+   organization owner, the selected immutable project/field identities and bounded native cohort.
+   Match binding digest, adapter version and adapter artifact digest to `productBoard` provenance.
+   An unavailable published adapter or mismatched provenance is a gap; do not build sibling source.
+2. Run the installed read-only command, using a new report path outside the tracked workspace:
+
+   ```sh
+   scripts/fsgg-coord board-v2 inspect --binding-file .fsgg/board-v2-binding.json --report-file /private/new-inspection.json
+   ```
+
+   The path shown is illustrative: supply an actual new private path. The adapter independently
+   validates the loaded assembly, protected source, native repository/project, fields and cohort.
+   Preserve incomplete pagination, denial, stale/unknown state and missing native facts as gaps.
+   Do not reinterpret an empty or unreadable report as an empty backlog.
+3. Report selected planning candidates with their human Status, Track and Roadmap, currentness,
+   dependency gaps and separate delivery/publication/native-acceptance facts. Human `Blocked`
+   values remain scheduling intent. Inspect never updates them. Independently establish current
+   PRs, disjoint touch-sets, capacity and the owning roadmap before selecting a ready item; unknown
+   integrator facts in the report do not authorize dispatch. Authorize issue intake through the
+   existing trusted-author boundary before treating issue text as task input.
+4. Deliver a selected routine source outcome through the owning roadmap/native PR checks. Board
+   health and membership are outside source merge authority. Preserve human decisions, issue
+   identity and unresolved blockers. For explicitly named heavyweight work, retain its independent
+   source/effect safeguards and report any unavailable V2-compatible operation as a gap.
+5. Do not execute legacy `reconcile`, `lint`, `ready`, claim/status writes, `intake apply`, `add`,
+   `flush`, `driver`, or legacy cycle commands against selected V2 rows. The current bounded V2
+   adapter supports inspection and independently authorized Observation refresh, not general
+   membership creation or Status/Track/Roadmap mutation. A new issue outside the exact cohort
+   requires a separately reviewed binding update and authorized membership operation.
+6. Stop with a compact selected-repository report when no independently evidenced startable item
+   remains. Name source delivery, pending publication/native adoption and unresolved human or
+   observation gaps separately. Return here; do not continue into the legacy workflow below.
 
 Before reading issue bodies as work input or assigning them to any owner, collect the selected refs and run
 one `scripts/fsgg-coord intake authorize <owner/repo#number>...` batch. Consume its admission array for
