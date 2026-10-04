@@ -11,7 +11,7 @@
     <!-- Independent one-package release line. This literal deliberately does not resolve from
          FsggCoherentSetVersion, which belongs only to Kit, Drivers and Coord.Cli. -->
     <FsggCoherentSetVersion />
-    <Version>0.3.0</Version>
+    <Version>0.4.0</Version>
     <PackageId>FS.GG.Telemetry.Host</PackageId>
     <AssemblyName>FS.GG.Telemetry.Host</AssemblyName>
     <IsPackable>true</IsPackable>
@@ -26,7 +26,7 @@
     <RepositoryUrl>https://github.com/FS-GG/.github</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageProjectUrl>https://github.com/FS-GG/.github/tree/main/src/FS.GG.Telemetry.Host</PackageProjectUrl>
-    <PackageReleaseNotes>0.3.0 — Add the protected installed-origin reader and canonical verifier boundary required by inactive persistent receiver v3 preparation. Preserve schema 10 through 12 compatibility and existing defaults.</PackageReleaseNotes>
+    <PackageReleaseNotes>0.4.0 — Add the read-only inactive preparation reader for served Manager-to-Host qualification. Preserve the installed-origin reader, schema 10 through 12 compatibility and existing defaults.</PackageReleaseNotes>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../FS.GG.Coord.Cli/SkillTelemetryReaders.fsi" Link="SkillTelemetryReaders.fsi" />
