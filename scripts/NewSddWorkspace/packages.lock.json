@@ -17,10 +17,155 @@
           "Spectre.Console.Ansi": "0.57.2"
         }
       },
+      "Microsoft.Data.Sqlite.Core": {
+        "type": "Transitive",
+        "resolved": "10.0.12",
+        "contentHash": "2aL9eL5HQr0V4b8V909SD+jQAx6qnTTl7sT/v3D8dIvmr2UGdpZIQxqm1pj2Js3e4EYTvpw0oMH7DjapJJuPPw==",
+        "dependencies": {
+          "SQLitePCLRaw.core": "2.1.12"
+        }
+      },
       "Spectre.Console.Ansi": {
         "type": "Transitive",
         "resolved": "0.57.2",
         "contentHash": "Y1+u73shwP+JYHmrkdN6bSt2kaGBEAafhi2nrecczbXdFRey+k7J/WF9YPfcB0rqivv2S8fmif6FSBq9m/AFvw=="
+      },
+      "SQLite": {
+        "type": "Transitive",
+        "resolved": "3.53.4",
+        "contentHash": "KN7jeWqgUPeBRe1FlcpZURzxomuKKEKHmBBQfg+Nx7NkY1LjKhzHvH+3ASkNvhayESE34nMBinL9CV21JfPRJw=="
+      },
+      "SQLitePCLRaw.config.e_sqlite3": {
+        "type": "Transitive",
+        "resolved": "3.0.5",
+        "contentHash": "aSk8WE5tF2MybESMgtZAEyMVCAWA0nBqOMc48HFoa9UoSdtm3goDXVzNRnefeKIwE6bV9NaNXptn1F9ReMQI0Q==",
+        "dependencies": {
+          "SQLitePCLRaw.provider.e_sqlite3": "3.0.5"
+        }
+      },
+      "SQLitePCLRaw.core": {
+        "type": "Transitive",
+        "resolved": "3.0.5",
+        "contentHash": "k81AYXXRCw3Zj8rOhyBoCsx/U97KYDFI2CSKr/ijl5BwpsW/hX/4kBiDmerFaoust8nxBwa0IHQFw8MmSHRtnQ=="
+      },
+      "SQLitePCLRaw.provider.e_sqlite3": {
+        "type": "Transitive",
+        "resolved": "3.0.5",
+        "contentHash": "um8YSWduhhuskTG2bHfZrBqMNQOydfU8pcseT+cu5RivOGyoUbCrGXxgoRNTmRYw2VbMWnEZVVFcneZT/5dsBg==",
+        "dependencies": {
+          "SQLitePCLRaw.core": "3.0.5"
+        }
+      },
+      "fs.gg.coord.cli": {
+        "type": "Project",
+        "dependencies": {
+          "FS.GG.Coord.Cli.BoardOps": "[1.0.0, )",
+          "FS.GG.Coord.Cli.Kernel": "[1.0.0, )",
+          "FS.GG.Coord.Cli.Lifecycle": "[1.0.0, )",
+          "FS.GG.Coord.Core": "[1.0.0, )",
+          "FS.GG.Coord.GitHub": "[1.0.0, )",
+          "FS.GG.Telemetry.Client": "[1.0.0, )",
+          "FS.GG.Telemetry.Dashboard": "[1.0.0, )",
+          "FS.GG.Telemetry.Store": "[1.0.0, )",
+          "FSharp.Core": "[10.1.401, )",
+          "YamlDotNet": "[18.1.0, )"
+        }
+      },
+      "fs.gg.coord.cli.boardops": {
+        "type": "Project",
+        "dependencies": {
+          "FS.GG.Coord.Cli.Kernel": "[1.0.0, )",
+          "FS.GG.Coord.Cli.Lifecycle": "[1.0.0, )",
+          "FS.GG.Coord.Core": "[1.0.0, )",
+          "FS.GG.Coord.GitHub": "[1.0.0, )",
+          "FSharp.Core": "[10.1.401, )"
+        }
+      },
+      "fs.gg.coord.cli.kernel": {
+        "type": "Project",
+        "dependencies": {
+          "FS.GG.Coord.Core": "[1.0.0, )",
+          "FS.GG.Coord.GitHub": "[1.0.0, )",
+          "FSharp.Core": "[10.1.401, )"
+        }
+      },
+      "fs.gg.coord.cli.lifecycle": {
+        "type": "Project",
+        "dependencies": {
+          "FS.GG.Coord.Cli.Kernel": "[1.0.0, )",
+          "FS.GG.Coord.Core": "[1.0.0, )",
+          "FS.GG.Coord.GitHub": "[1.0.0, )",
+          "FSharp.Core": "[10.1.401, )"
+        }
+      },
+      "fs.gg.coord.core": {
+        "type": "Project",
+        "dependencies": {
+          "FSharp.Core": "[10.1.401, )"
+        }
+      },
+      "fs.gg.coord.github": {
+        "type": "Project",
+        "dependencies": {
+          "FS.GG.Coord.Core": "[1.0.0, )",
+          "FSharp.Core": "[10.1.401, )"
+        }
+      },
+      "fs.gg.telemetry.client": {
+        "type": "Project",
+        "dependencies": {
+          "FS.GG.Telemetry.Contracts": "[1.0.0, )",
+          "FSharp.Core": "[10.1.401, )"
+        }
+      },
+      "fs.gg.telemetry.contracts": {
+        "type": "Project",
+        "dependencies": {
+          "FS.GG.Coord.Core": "[1.0.0, )",
+          "FSharp.Core": "[10.1.401, )"
+        }
+      },
+      "fs.gg.telemetry.dashboard": {
+        "type": "Project",
+        "dependencies": {
+          "FSharp.Core": "[10.1.401, )"
+        }
+      },
+      "fs.gg.telemetry.store": {
+        "type": "Project",
+        "dependencies": {
+          "FS.GG.Coord.Core": "[1.0.0, )",
+          "FSharp.Core": "[10.1.401, )",
+          "Microsoft.Data.Sqlite": "[10.0.12, )",
+          "SQLitePCLRaw.bundle_e_sqlite3": "[3.0.5, )"
+        }
+      },
+      "Microsoft.Data.Sqlite": {
+        "type": "CentralTransitive",
+        "requested": "[10.0.12, )",
+        "resolved": "10.0.12",
+        "contentHash": "xUq9xUc653ue7ac2rMfCaf8UQN+U3zS8poWYlugycpvJllplMM0Mk7v/+MM0CTlu9zGvbGML4BPH8YWhrUOfGw==",
+        "dependencies": {
+          "Microsoft.Data.Sqlite.Core": "10.0.12",
+          "SQLitePCLRaw.bundle_e_sqlite3": "2.1.12",
+          "SQLitePCLRaw.core": "2.1.12"
+        }
+      },
+      "SQLitePCLRaw.bundle_e_sqlite3": {
+        "type": "CentralTransitive",
+        "requested": "[3.0.5, )",
+        "resolved": "3.0.5",
+        "contentHash": "SW8iASIyWMrLzqabUHYQRvALhvD4ylSBsj4PgEVGwc36kQjc9xT5kSV/XQ9rU7nIpBWD+LPyX3Hlw5FzyUzGeQ==",
+        "dependencies": {
+          "SQLite": "3.53.4",
+          "SQLitePCLRaw.config.e_sqlite3": "3.0.5"
+        }
+      },
+      "YamlDotNet": {
+        "type": "CentralTransitive",
+        "requested": "[18.1.0, )",
+        "resolved": "18.1.0",
+        "contentHash": "5K+9KFg2TdTl7VXv88Qzi/0lqK6JFoNP3lRuImPYGRV7K/QYklDyTrj4+A+KAki1JsQi6qKY+hDyY7d6WRqjrw=="
       }
     }
   }
