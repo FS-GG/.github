@@ -187,13 +187,16 @@ This remains the existing **TSDD-KNOWLEDGE-01.4** composition item with original
 The routine roadmap route owns source delivery; root owns integration and all
 separately admitted operations. No planning-only PR or new feature row is needed.
 
-- [ ] **W013-FR-H1 — Reviewable, pure-tested recovery source.** Source is prepared
-  for root review. The trusted `release-new-sdd-workspace.yml` filename and normal
+- [x] **W013-FR-H1 — Reviewable, pure-tested recovery source.** Root reviewed the
+  complete coherent source and independently passed the native-route 67 pure
+  controls. The trusted `release-new-sdd-workspace.yml` filename and normal
   preflight/publication path remain authoritative. A default-off diagnostic or
   completion branch binds the original candidate, failed publisher, full fixed
   Authority intent/lineage, exact draft/assets, both genuine feeds, held current
-  source and one uniquely correlated first-attempt native run. Source/native
-  acceptance and operation admission remain pending.
+  source and one uniquely correlated first-attempt native run. The source delivery
+  includes finite evidence storage and ciphertext custody. Root's genuine local
+  dummy-custody encryption/decryption and rejection controls passed; hosted
+  crypto and operation acceptance remain pending. No operation is admitted here.
 - [ ] **W013-FR-H2 — Integrate source and establish fresh current pins.** Root admits
   one coherent implementation PR, checks its exact head and reads back its merge.
   Root then refreshes original-candidate/predecessor/run/journal/draft custody and
