@@ -123,3 +123,57 @@ This completes the genuine public negative dependency proof alongside the preser
 public 2.1.0 positive proof. The private Wizard binary remains a private source
 qualification; publication and installed acceptance of the future public 0.13.0
 archive remain separate milestones. No package publication or activation occurred.
+
+
+### Wizard 0.13 partial publication and install diagnostic — 2026-10-04
+
+The protected publisher [37160659521](https://github.com/FS-GG/.github/actions/runs/37160659521)
+failed on its first attempt against original candidate source
+`f891b5b0723070c67e08d1a87b7d12b0b4d8bebe`. Its 136 reconciliation results
+were seven verified effects and 129 waits, followed by the bounded-step refusal.
+The protected `tsdd-knowledge-wizard-013` journal remains generation 16 at
+`dbc2c4e578cb41e9f6aa31f18557cd95745346f7`: seven effects verified and promotion
+intent open. Release `402727082` remains a draft. Root accepted the complete
+failed-run, original candidate, draft assets and both native feed-journal custody
+with SHA-256 `d43574394529f77b803a2e1c00ec8b634142886007e9163b9c79c14bd2eab922`.
+The draft package asset's exact original bytes join the native GitHub archive
+hash; its actual route is a draft-release asset. The local GitHub package-feed
+403 remains unknown and is not substituted by that asset route.
+
+A separate root-admitted public Nuget-only install and `--help` diagnostic passed
+in 7.7737 seconds with actual exits 0/0, normal signature trust, certificate
+generation disabled and unchanged actual HOME. All 21 literal tool payloads,
+the signed original archive and physical apphost target matched; all ten owned
+process identities were gone. Root acceptance SHA-256 is
+`3e020b05780c750798c3272df918b9e4d090a96c24a95da412e09dbddc882a91`.
+The initial wrong-repository journal GET failed before output, admission or SDK
+execution and remains retained separately. Only the corrected Authority readback
+admitted the single install diagnostic. Its receipt has diagnostic scope; this
+local pass does not establish the native promotion cause, publisher completion,
+public Wizard creation qualification, activation or adoption.
+
+The original native promotion cause remains unknown because its install/help
+output and caught dispatch exception were not exposed. This source-only repair
+adds fixed promotion boundary names, actual exit codes, safe exception/cause
+classes and HTTP status, plus bounded stdout/stderr projections containing only
+allowlisted SDK codes and diagnostic signals. Free text, argv, credentials,
+URLs/queries and private paths are withheld. At most 64 provider records are
+emitted, scanning at most 8,192 characters per captured stream. No admission,
+journal, effect order, normal trust, install/help predicate or recovery rule is
+changed. The publisher's terminal catch also withholds arbitrary exception text
+while preserving the two existing bounded reconciliation reasons.
+
+Pure mocked successor controls cover each promotion boundary, install/help and
+timeout failures, missing apphost/help identity, output/credential/path/query
+withholding, HTTP cause/exit-code projection and the emission cap. The existing
+first-attempt, live admission, delayed readback, ordering and recovery controls
+remain required. No recovery or publisher dispatch is performed by this source
+change. Any separately admitted recovery must retain the original candidate
+contract and bytes; a diagnostic result cannot settle the open journal intent or
+satisfy the unchanged future public-qualification publisher-success guard.
+
+An already-open promotion intent still observes the draft as absent and waits;
+it never replays the dispatch or install. The added bounded draft-readback record
+makes that state explicit but cannot reconstruct the historical hidden result.
+Separate root review and admission remain necessary before any diagnostic or
+recovery operation.

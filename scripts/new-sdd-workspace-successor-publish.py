@@ -16,7 +16,7 @@ from release_successor_journal import ProtectedReleaseJournal, REPOSITORY as JOU
 from release_successor_provider import GitHubAPI, NotFound
 from new_sdd_workspace_successor_admission import WizardAdmission
 from new_sdd_workspace_successor_execution import effects
-from new_sdd_workspace_successor_provider import WizardProvider
+from new_sdd_workspace_successor_provider import WizardProvider, publisher_error
 
 REPOSITORY = "FS-GG/.github"
 REF = "refs/heads/fsgg/v2/journal/release/tsdd-knowledge-wizard-013"
@@ -113,7 +113,7 @@ def main() -> int:
             time.sleep(5)
         raise Refused("Wizard publication exceeded bounded reconciliation steps")
     except (KeyError, ValueError, OSError, Refused, subprocess.CalledProcessError) as error:
-        print(f"Wizard successor refused: {error}", file=sys.stderr)
+        print("Wizard successor refused: " + json.dumps(publisher_error(error), sort_keys=True), file=sys.stderr)
         return 1
 
 
