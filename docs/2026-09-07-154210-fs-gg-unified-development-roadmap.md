@@ -53,6 +53,74 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-04: UTEL-H3 coherent 0.96 publication CLOSED (native publication and original custody).**
+[Publisher 37161212706](https://github.com/FS-GG/.github/actions/runs/37161212706),
+attempt 1, succeeded at protected source
+`f891b5b0723070c67e08d1a87b7d12b0b4d8bebe`. The
+[public latest release](https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.96.0)
+(ID `402729638`) contains all seven verified assets. The original candidate archives
+for **FS.GG.Coord.Cli, FS.GG.Kit and FS.GG.Drivers 0.96.0** have SHA-256 values
+`1738787040e84b02e84a126d3a808929970327357aea1ba1de1eba2f2722791e`,
+`a3facae855035dff289bae0b8a63d83b55329577bee41a1e81916f2767b614bc` and
+`f630cf0ed7e6297e33c53b3044620c90acea2a4381ed64e4c10da6418e2c0df1`,
+respectively. Release package and both telemetry assets equal the accepted candidate
+bytes; all three public NuGet signed archives match the final manifest's external
+hashes and original producer payloads. Local GitHub-feed readback remains **403 / UNKNOWN**;
+the native publisher's verified GitHub readbacks are distinct evidence retained in
+the protected journal and final manifest.
+
+Root accepted all 33 generations of protected `utel-rel-11`, head
+`8d9f5466937a3de73c54b015cd7327b4a8cc6ada`, with all 16 effects verified.
+Manifest content ID is
+`sha256:cc301692416d54400738703a7352b768f266a5b673ccd56355a7ba51541c9c2f`;
+final manifest SHA-256 is
+`fdfb8ee0cbfbe6020b33ef98fb57d3bb635bd68c800a10b14e656858fbc21dca` and
+stable-channel SHA-256 is
+`fb064581da989c8a1eb0b664db884d575b2b71f8d02eee9da8c1d9c47c1354a6`.
+The accepted [candidate 37159913463](https://github.com/FS-GG/.github/actions/runs/37159913463)
+passed 587 CLI tests, 33 Telemetry tests and 44 package checks, including real Chromium.
+Its first 100 warm-admission samples have p95 **20.890 ms** against the unchanged
+100 ms limit, with five warmups and full runtime/CPU/GC/durability diagnostics retained.
+Private root publication acceptance SHA-256 is
+`fd8cc333c0dda58ecee3f1c48b03ab4cfd8799811ec22a81a4bb2ca1a6c84272`.
+
+This closes publication only. Installed HOME remains **0.95.0**; activation, default
+changes, installed adoption, R5 feedback and product adapters remain open. The old
+0.95 release and `utel-rel-10` are unchanged. The original failed first candidate
+[37156237563](https://github.com/FS-GG/.github/actions/runs/37156237563), its source
+and readiness evidence retain their historical outcomes; none was reused or rewritten.
+
+**2026-10-04: WASM inline custody import repair CLOSED (source and native qualification).**
+[Game #690](https://github.com/FS-GG/FS.GG.Game/pull/690) merged as
+`8b92b7c4a8061157c03155662c97d33c0bc01551` after all 34 native checks passed
+on exact accepted head `1cb8cb11cd8b8d52404b17b060687c6bb7be6f74`.
+All six inline custody imports now start with `python3 -B`. Source-only preflight
+passed 21 promotion controls and eight evaluator controls, including six missing-flag
+mutants and cold checks retaining dirty-source, wrong-tree and wrong-head refusals.
+The adapter, clean-checkout guards, permissions and credential routes retain their
+bytes and behavior; the earlier package permission repair remains in force.
+
+The accepted 9fc preparation below,
+[37157871393](https://github.com/FS-GG/FS.GG.Game/actions/runs/37157871393), retained
+artifact `11287095456`, outer SHA-256
+`dd040e206f1cc2e73366c94347a172ec7027428baee8f5a49c2e4d0fe0730ff2`.
+Its first fresh [promotion 37159983975](https://github.com/FS-GG/FS.GG.Game/actions/runs/37159983975)
+passed native admission, genuine NuGet OIDC and complete authenticated occupancy
+reads with all six active, deleted and public values false. Begin then refused
+`dirty or different executor tree` during the inline custody import, before tag
+or draft creation; every remaining publication job was skipped. Subsequent readback
+observed no tag or release. A cold fixture reproduced SourceFileLoader writing an
+untracked bytecode cache before the module disabled bytecode generation; `-B`
+preserved the clean checkout. The native log did not list the dirty filename.
+
+The 9fc originals, successful admission and failed begin remain historical and
+cannot qualify the changed 8b92 executor. After this source closure is projected,
+root must review the new executor, perform one fresh preparation and authenticate
+its new original custody and tuple before separately admitting promotion.
+No rerun, recovery, credential change or activation follows from this source closure.
+Publication and genuine both-feed installed acceptance remain pending;
+public/default WASM stays **0.2.0**.
+
 **2026-10-04: WASM fresh protected preparation CLOSED (native qualification and original custody).**
 [Preparation 37157871393](https://github.com/FS-GG/FS.GG.Game/actions/runs/37157871393),
 attempt 1, succeeded at protected executor
@@ -557,6 +625,27 @@ retains the scope and receipt digests. This closes the existing V2-PREFLIGHT-01 
 Rendering consumer window. It adds no publication or default activation; historical
 1.7 evidence and all nineteen original Rendering 0.32 archives remain unchanged.
 Telemetry returned `not-configured`; native usage remains unknown.
+
+**2026-10-03: V2-PREFLIGHT-01 A–B CLOSED (source and native qualification).**
+[Coordination #928](https://github.com/FS-GG/FS.GG.Coordination/pull/928) merged on
+protected main as `b6c7ef23b5a45bf62b0b7386132d9bcb0c29a386` at 23:12:44 UTC.
+Its tree equals reviewed candidate `ca02dafc1b1eb5dd87a53608612655ba809a05da`;
+all 70 exact-head checks completed: 68 passed and two were skipped. The
+[native bootstrap gate](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/37158237446)
+accepted the current stable receipt profile. The
+[owning plan](https://github.com/FS-GG/FS.GG.Coordination/blob/b6c7ef23b5a45bf62b0b7386132d9bcb0c29a386/docs/roadmaps/v2-preflight-01.md)
+retains opaque checked preparation, bounded capsule discovery and model/production
+correspondence, including the admitted physical baseline and 57 native witnesses.
+The 225 generated cases and 15 fault executions retain their semantics; the 117
+focused source tests retain their local scope. Historical receipts, failed heads
+and the explicit string-overload repair remain preserved.
+
+This closes the shared A–B source window. The feature's BAR/SC2 adapters,
+distribution and installed caller adoption remain open. Coherent engine 0.96.0
+candidate/publication, R5 feedback, live grants and runtime activation retain their
+separate boundaries. This progress entry grants no operation authority and changes
+no published package or workspace default. Native collector advisory readback was
+unavailable; usage remains unknown.
 
 **2026-10-03: Coupled SDD 2.1 validator adoption CLOSED (source).**
 Both native validator installers select published CLI 2.1.0. The engine admits its
