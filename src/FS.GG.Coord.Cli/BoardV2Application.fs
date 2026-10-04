@@ -135,21 +135,30 @@ module BoardV2Application =
                  Selected = None; Attempted = 0; Verified = 0; Items = items; PopulationGap = None; Cleanup = "historical-input" }
         with error -> Error("invalid previous report: " + error.Message)
 
-    let private parseArguments arguments =
+    let private parseSyntax arguments =
         let rec flags values = function
             | [] ->
                 match Map.tryFind "--binding-file" values, Map.tryFind "--report-file" values with
                 | Some binding, Some report when binding <> report && Map.tryFind "--previous-report-file" values <> Some report ->
-                    let bindingPath = Path.GetFullPath binding
-                    let reportPath = Path.GetFullPath report
-                    let previousPath = Map.tryFind "--previous-report-file" values |> Option.map Path.GetFullPath
-                    if bindingPath = reportPath || previousPath = Some reportPath || File.Exists reportPath then
-                        Error "report output must be a new path distinct from all inputs"
-                    else Ok(bindingPath, previousPath, reportPath)
+                    Ok(binding, Map.tryFind "--previous-report-file" values, report)
                 | _ -> Error "refresh requires distinct --binding-file PATH and --report-file PATH"
             | flag :: value :: rest when List.contains flag [ "--binding-file"; "--previous-report-file"; "--report-file" ] && not (Map.containsKey flag values) && not (String.IsNullOrWhiteSpace value) && not (value.StartsWith("--", StringComparison.Ordinal)) -> flags (Map.add flag value values) rest
             | _ -> Error "unknown, duplicate or incomplete refresh argument"
         match arguments with ("refresh" | "inspect") :: rest -> flags Map.empty rest | _ -> Error "expected board-v2 refresh or inspect"
+
+    let validateInvocation arguments =
+        match arguments with
+        | "board-v2" :: rest -> parseSyntax rest |> Result.map ignore |> Some
+        | _ -> None
+
+    let private parseArguments arguments =
+        parseSyntax arguments |> Result.bind (fun (binding, previous, report) ->
+            let bindingPath = Path.GetFullPath binding
+            let reportPath = Path.GetFullPath report
+            let previousPath = previous |> Option.map Path.GetFullPath
+            if bindingPath = reportPath || previousPath = Some reportPath || File.Exists reportPath then
+                Error "report output must be a new path distinct from all inputs"
+            else Ok(bindingPath, previousPath, reportPath))
 
     let private prepare arguments =
         (try parseArguments arguments with error -> Error("invalid input path: " + error.Message)) |> Result.bind (fun (bindingPath, previousPath, reportPath) ->
