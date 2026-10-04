@@ -1,0 +1,37 @@
+{
+  "capturedAt": "2026-10-04T23:14:05+00:00",
+  "field": {
+    "id": "PVTSSF_lADOEYAWY84BltsvzhkZaok",
+    "name": "Status",
+    "options": [
+      {
+        "color": "GREEN",
+        "description": "This item hasn't been started",
+        "id": "f75ad846",
+        "name": "Todo"
+      },
+      {
+        "color": "YELLOW",
+        "description": "This is actively being worked on",
+        "id": "47fc9ee4",
+        "name": "In Progress"
+      },
+      {
+        "color": "PURPLE",
+        "description": "This has been completed",
+        "id": "98236657",
+        "name": "Done"
+      }
+    ]
+  },
+  "formatVersion": 1,
+  "itemTotalCount": 0,
+  "items": [],
+  "project": {
+    "id": "PVT_kwDOEYAWY84Bltsv",
+    "number": 4,
+    "owner": "FS-GG",
+    "title": "FS.GG.Game \u2014 Product V2 qualification"
+  },
+  "sha256": "716dfb48abbac58bd502c0b194a697b55aa24c0b2004390e812cc7d8d8473482"
+}
