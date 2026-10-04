@@ -53,6 +53,34 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-04: UTEL-H3 public 0.96 installed read-only readiness CLOSED (side-by-side operation).**
+Root accepted one fresh **FS.GG.Coord.Cli 0.96.0** installation through ordinary
+anonymous NuGet HTTPS with SDK **10.0.401** and runtime **10.0.12**. Tool install,
+tool list, and the installed CLI's workspace and dashboard status commands all
+returned **0 / 0 / 0 / 0** in **10.900900059 seconds**. Installed bytes join published
+source `f891b5b0723070c67e08d1a87b7d12b0b4d8bebe` and the successful first-attempt
+[publisher 37161212706](https://github.com/FS-GG/.github/actions/runs/37161212706).
+
+Independent readback verified all **82** original literal payloads and **84**
+installed physical objects. The cached original signed public NuGet archive hashes
+`01786b18261a908df7d9cb78d4ac28fbaa43f2f22f1565749bc4155c9abd1380`;
+the complete generated apphost joins the selected SDK template and hashes
+`b8df4b40febef281ea593de2bcfab27e74acd5267254d354a9aa7ad4068c84d9`.
+All **eight** owned PID/start identities settled and were absent. Source, SDK,
+protected local HOME files and launcher checks passed before and after operation.
+Both status commands reported **unconfigured** against an explicit absent private
+config; the workspace stayed empty with no Git repository or telemetry store.
+Private root acceptance SHA-256 is
+`457e0732e95684b635882eb322872e5c9336503264acd7f7e36ad1b810841138`;
+independent readiness receipt SHA-256 is
+`7eb398dcc89956a40eba0e6ec6c7933f23886d20e0504506b7ec5be3be3c766b`.
+
+This closes the bounded public installation and read-only readiness window.
+The separate remote Home **0.95.0** baseline remains unobserved by this operation;
+Home adoption and activation, defaults, consumer pins, R5 feedback and product
+adapters remain open. The wider UTEL feature remains active. Earlier publication,
+source-only refusals and custody packets retain their separate historical outcomes.
+
 **2026-10-04: WASM 8b92 preparation CLOSED (native qualification and original custody).**
 [Preparation 37163937340](https://github.com/FS-GG/FS.GG.Game/actions/runs/37163937340),
 attempt 1, succeeded at protected executor
