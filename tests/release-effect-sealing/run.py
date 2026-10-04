@@ -105,14 +105,19 @@ for name, expected in proof["historicalRecoveryJobSha256"].items():
     assert hashlib.sha256(raw_workflow[start:end if end != -1 else None].encode()).hexdigest() == expected
 assert "format('Wizard 0.13 recovery {0} {1} {2}', inputs.promotion_recovery, inputs.recovery_correlation, inputs.recovery_binding_sha256)" in wizard
 assert "default: false" in wizard and "default: 'off'" in wizard
-recovery = ast.parse((ROOT / "scripts/new_sdd_workspace_promote_recovery.py").read_text())
-assignments = {",".join(ast.unparse(target) for target in node.targets): ast.dump(node, include_attributes=False)
-               for node in recovery.body if isinstance(node, ast.Assign)}
-frozen = {name: assignments[name] for name in proof["historicalRecoveryAssignmentNames"]}
-assert hashlib.sha256(json.dumps(frozen, sort_keys=True, separators=(",", ":")).encode()).hexdigest() == proof["historicalRecoveryAssignmentAstSha256"]
+recovery_source = (ROOT / "scripts/new_sdd_workspace_promote_recovery.py").read_text()
+recovery = ast.parse(recovery_source)
+# AST locates exact source spans; its interpreter-dependent dump is never hashed.
+assignments = {",".join(target.id for target in node.targets): node
+               for node in recovery.body if isinstance(node, ast.Assign)
+               and all(isinstance(target, ast.Name) for target in node.targets)}
 functions = {node.name: node for node in recovery.body if isinstance(node, ast.FunctionDef)}
-for name, expected in proof["historicalGuardFunctionAstSha256"].items():
-    assert hashlib.sha256(ast.dump(functions[name], include_attributes=False).encode()).hexdigest() == expected
+for spans, expected_spans in ((assignments, proof["historicalRecoveryAssignmentSourceSha256"]),
+                              (functions, proof["historicalGuardFunctionSourceSha256"])):
+    for name, expected in expected_spans.items():
+        source_span = ast.get_source_segment(recovery_source, spans[name])
+        assert source_span is not None
+        assert hashlib.sha256(source_span.encode("utf-8")).hexdigest() == expected, name
 calls = [node for node in ast.walk(recovery) if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)]
 for function, keyword, count in (("effects", "binding", 2), ("WizardAdmission", "release_binding", 1)):
     selected = [call for call in calls if call.func.id == function]
