@@ -53,7 +53,6 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
-
 **2026-10-04: temporary bounded programme driver source and focused acceptance CLOSED.**
 The repository-owned [work-programme](../.agents/skills/work-programme/SKILL.md) replaces
 `work-unified-roadmap`; both authored roots, catalog classification, trigger fixtures and current
@@ -66,6 +65,50 @@ smaller in bytes; token/compaction benefit remains unmeasured. The
 [temporary driver record](roadmaps/unified-programme-driver.md) keeps the first requested programme
 run as its operational trial, with same-PR debugging and no permanent Host or package rollout.
 
+**2026-10-04: V2-LANG-01.2 fresh Python facts tag admission CLOSED (Coordination source).**
+[Coordination PR #931](https://github.com/FS-GG/FS.GG.Coordination/pull/931) merged at
+`5468ce210ef4886806d70c4e333496a358efbdf1` after exact-head bootstrap, source-contract
+and candidate-scoped coherent validation passed. The input-manifest helper now accepts
+only the new literal `portable-p4-python-private-inputs-20261004-dc934643`; causal controls
+refuse the consumed historical tag and arbitrary alternatives. The accepted stage and
+candidate-facts runs remain retained without redispatch. Genuine protected helper pins
+must next join the Sandbox source before any fresh private facts effect. No private
+release, qualification-ref advance, secret, dispatch or receiver grant follows from this
+source merge; private Python facts and runtime receiver acceptance remain pending under
+the [owning language plan](roadmaps/2026-09-29-language-independent-workspaces-and-agent-integration.md).
+
+**2026-10-04: LEARN-C2 inactive preparation reader and served qualification adapter CLOSED (source).**
+[PR #4195](https://github.com/FS-GG/.github/pull/4195) merged at
+`07521f357e6fb3999566864ffdca2acfadc24594` after every selected native check passed,
+including the reader package qualification and final engine run. Root matched the entire
+merge tree `52789947c229e79f9b6d70a5570f6e686e6ff2bb` to the reviewed exact head.
+The read-only Host command validates inert preparation data before credentials or store
+initialization; `run-inactive` prepares disposable served Manager-to-Host qualification.
+The [owning LEARN-C2 plan](roadmaps/learn-c2-persistent-receiver-v3.md) retains separate
+source, installed and activation boundaries. Published Host **0.3.0** still lacks this
+command; a protected **0.4.0** successor, exact publication pins, genuine served-image
+qualification and capture acceptance remain pending. No real C5, OCI or activation result
+is inferred from the source merge.
+
+**2026-10-04: BARC-01.5f six-phase producer build and Cargo custody CLOSED (bounded native build).**
+Root accepted the fresh sixth producer operation after all six actual phases returned **0**:
+tool restore, client restore, direct pinned Fable, Vite, stock selection and manual guest Cargo.
+The producer and supervisor also returned **0**, with whole supervision **128.540 seconds**.
+Independent root and worker audits joined **1,507** physical output leaves totaling
+**298,567,775 bytes**, the two literal Cargo WASM aliases, genuine signed-package inputs,
+unchanged **11,364** input rows and absence of all **19** known owned process generations.
+The direct Fable route removed the authenticated resolver parent while preserving the
+**two-task-CLR plus two-infrastructure-CLR** ceiling. Existing managed assemblies were
+reused with their original source joins; no managed rebuild or game launch occurred.
+Root build acceptance SHA-256 is
+`978f7d8943b0416d5ecbfe7f19f0df4771c5334be3a73eb987bff10d2c01dc0d`.
+
+This accepts the build under the
+[owning useful-play plan](https://github.com/FS-GG/FSBarV2/blob/main/docs/roadmaps/barc-01-useful-play.md).
+Checked capsule/imports/discovery, missing-capture refusal, a dedicated one-unit capture
+and genuine builder/completion event attribution remain before actor eligibility. Any new
+managed attribution source requires fresh qualification. Native useful play remains **0/6**;
+publication, installed defaults and the full journeys remain open.
 
 **2026-10-04: V2-PREFLIGHT-01 E installed API source and bounded qualification CLOSED.**
 [Coordination PR #930](https://github.com/FS-GG/FS.GG.Coordination/pull/930) merged at
