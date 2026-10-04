@@ -58,7 +58,8 @@ def board_package_closure(package: pathlib.Path, source_sha: str, *, source_root
     required = {name + ".dll" for name in projects.values()}
     required.update({"new-sdd-workspace.deps.json", "new-sdd-workspace.runtimeconfig.json"})
     required.update(str(p.relative_to(output)) for p in output.rglob("*")
-                    if p.is_file() and p.suffix in {".dll", ".so", ".dylib"})
+                    if p.is_file() and p.relative_to(output).parts[0] != "publish"
+                    and p.suffix in {".dll", ".so", ".dylib"})
     if len(projects) != 11 or not {"FS.GG.Coord.GitHub.dll", "fsgg-coord-engine.dll"} <= required:
         raise ValueError("current creator board project closure differs")
     prefix = "tools/net10.0/any/"
@@ -192,6 +193,10 @@ class WizardReleaseTests(unittest.TestCase):
             members['new-sdd-workspace.runtimeconfig.json'] = b'{}'
             for name, body in members.items():
                 (output / name).write_bytes(body)
+            # PackAsTool stages another copy under publish; package destinations omit that prefix.
+            (output / 'publish').mkdir()
+            for name, body in members.items():
+                (output / 'publish' / name).write_bytes(body)
             nuspec = b'<package><metadata><id>FS.GG.NewSddWorkspace</id><version>0.14.0</version><repository commit="' + b'a' * 40 + b'"/></metadata></package>'
             package = root / 'creator.nupkg'
             def pack(selected):

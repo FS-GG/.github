@@ -623,9 +623,9 @@ product's `FS.GG.UI.*` pin), which is a different axis from the template package
 | `game-scene-adapter` | FS.GG.Game | `0.16.0` | `0.16.0` |
 | `fs-gg-audio` | FS.GG.Audio | `0.6.0` | `0.6.0` |
 | `fs-gg-net` | FS.GG.Net | `0.6.0` | `0.6.0` |
-| `coord-engine` | FS-GG/.github | `0.96.0` | `0.96.0` |
+| `coord-engine` | FS-GG/.github | `0.97.0` | `0.96.0` |
 | `telemetry-host` | FS-GG/.github | `0.4.0` | `0.4.0` |
-| `new-sdd-workspace` | FS-GG/.github | `0.13.0` | `0.13.0` |
+| `new-sdd-workspace` | FS-GG/.github | `0.14.0` | `0.13.0` |
 | `fs-gg-workspace-template` | FS.GG.Templates | `0.18.0` | `0.18.0` |
 | `game-skills` | FS.GG.Game | `0.9.0` | `0.9.0` |
 | `rendering-skills` | FS.GG.Rendering | `0.2.0` | `0.2.0` |
