@@ -51,9 +51,9 @@ try
         let bytes=load args[0]
         Environment.ExitCode<-match placeholder bytes with Some result->emit result|None->emit(ImageClosure.prepare(selection bytes))
     else
-        require(args.Length=5||args.Length=11) "usage: persistent-v3-image-closure prepare --selection ABS --trusted-native-selection ABS | run-c4 --selection ABS --trusted-native-selection ABS --parent-oci ABS --work-root FRESH_ABS --evidence-root FRESH_ABS"
+        require(args.Length=5||args.Length=11) "usage: persistent-v3-image-closure prepare --selection ABS --trusted-native-selection ABS | run-c4 or run-inactive --selection ABS --trusted-native-selection ABS --parent-oci ABS --work-root FRESH_ABS --evidence-root FRESH_ABS"
         let command=args[0]
-        require((command="prepare"&&args.Length=5)||(command="run-c4"&&args.Length=11)) "command-arguments"
+        require((command="prepare"&&args.Length=5)||((command="run-c4"||command="run-inactive")&&args.Length=11)) "command-arguments"
         let flags=Dictionary<string,string>()
         for index in 1..2..args.Length-1 do require(flags.TryAdd(args[index],args[index+1])&&Path.IsPathFullyQualified args[index+1]) "duplicate-flag-or-relative-path"
         let expected=if command="prepare" then set["--selection";"--trusted-native-selection"] else set["--selection";"--trusted-native-selection";"--parent-oci";"--work-root";"--evidence-root"]
@@ -69,18 +69,19 @@ try
                 RootlessPolicy.requirePrivateInput flags["--selection"]
                 RootlessPolicy.requirePrivateInput flags["--trusted-native-selection"]
             match ImageClosure.prepareWithTrustedNative(Some rootTrusted)selected with
-            | Prepared prepared when command="run-c4"->
+            | Prepared prepared when command="run-c4"||command="run-inactive"->
                 let inputs=RootlessPolicy.select selected rootTrusted flags["--selection"] flags["--trusted-native-selection"] flags["--parent-oci"] flags["--work-root"] flags["--evidence-root"] prepared
                 use cancellation=new CancellationTokenSource()
                 Console.CancelKeyPress.Add(fun event->event.Cancel<-true;cancellation.Cancel())
                 let mechanism=RootlessMechanism(inputs,RealProcessBackend())
                 let deadline=DateTimeOffset.UtcNow.AddMinutes 90.
-                let state,trace=RunnerExecution.runWithBudgets RunnerExecution.productionBudgets 32 deadline cancellation.Token mechanism (Runner.initialC4 inputs.ExpectedInput)
-                if Runner.c4Ready state then
+                let state,trace=RunnerExecution.runWithBudgets RunnerExecution.productionBudgets 32 deadline cancellation.Token mechanism (if command="run-c4" then Runner.initialC4 inputs.ExpectedInput else Runner.initial inputs.ExpectedInput)
+                if Runner.c4Ready state||Runner.qualificationAccepted state then
                     mechanism.SealTerminal(state,trace)
                     cancellation.Token.ThrowIfCancellationRequested()
                     require(DateTimeOffset.UtcNow<deadline) "terminal-seal-deadline"
-                    printfn "%s" (JsonSerializer.Serialize {|schema="fsgg.telemetry.persistent-v3-c4-result/1";status="C4Ready";input=inputs.ExpectedInput;qualificationAccepted=false;evidence=inputs.EvidenceRoot|})
+                    let accepted=Runner.qualificationAccepted state
+                    printfn "%s" (JsonSerializer.Serialize {|schema=(if accepted then "fsgg.telemetry.persistent-v3-inactive-result/1" else "fsgg.telemetry.persistent-v3-c4-result/1");status=(if accepted then "InactiveQualified" else "C4Ready");input=inputs.ExpectedInput;qualificationAccepted=accepted;evidence=inputs.EvidenceRoot|})
                     Environment.ExitCode<-0
                 else
                     eprintfn "persistent-v3-c4-not-ready: %A; refusal=%A; owned=%A; running=%A" state.Phase state.Refusal state.Owned state.Running
