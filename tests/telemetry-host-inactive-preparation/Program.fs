@@ -13,7 +13,7 @@ let fileHash path=hash(File.ReadAllBytes path)
 let privateMode=UnixFileMode.UserRead|||UnixFileMode.UserWrite
 let root=Directory.CreateTempSubdirectory("inactive-host-source-").FullName
 File.SetUnixFileMode(root,UnixFileMode.UserRead|||UnixFileMode.UserWrite|||UnixFileMode.UserExecute)
-let put name mode bytes=
+let put name mode (bytes:byte array)=
     let path=Path.Combine(root,name)
     File.WriteAllBytes(path,bytes);File.SetUnixFileMode(path,mode);path
 let configPath=Path.Combine(root,"host.json")
@@ -95,7 +95,8 @@ try
     entry["sha256"]<-JsonValue.Create(hash [||])
     installChangedManifest(Encoding.UTF8.GetBytes(emptyRequired.ToJsonString()));refuse();restore()
     let invalid=JsonNode.Parse(manifest).AsObject()
-    invalid["files"].AsArray()[0]["sha256"]<-JsonValue.Create "invalid"
+    let invalidEntry=invalid["files"].AsArray().[0]
+    invalidEntry["sha256"]<-JsonValue.Create "invalid"
     installChangedManifest(Encoding.UTF8.GetBytes(invalid.ToJsonString()));refuse();restore()
     File.SetUnixFileMode(configPath,UnixFileMode.UserRead);refuse();File.SetUnixFileMode(configPath,privateMode)
     File.SetUnixFileMode(empties[0],privateMode);refuse();File.SetUnixFileMode(empties[0],enum<UnixFileMode>0x124)
