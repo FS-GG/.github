@@ -53,6 +53,18 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-04: V2-LANG-01.2 fresh Python facts tag admission CLOSED (Coordination source).**
+[Coordination PR #931](https://github.com/FS-GG/FS.GG.Coordination/pull/931) merged at
+`5468ce210ef4886806d70c4e333496a358efbdf1` after exact-head bootstrap, source-contract
+and candidate-scoped coherent validation passed. The input-manifest helper now accepts
+only the new literal `portable-p4-python-private-inputs-20261004-dc934643`; causal controls
+refuse the consumed historical tag and arbitrary alternatives. The accepted stage and
+candidate-facts runs remain retained without redispatch. Genuine protected helper pins
+must next join the Sandbox source before any fresh private facts effect. No private
+release, qualification-ref advance, secret, dispatch or receiver grant follows from this
+source merge; private Python facts and runtime receiver acceptance remain pending under
+the [owning language plan](roadmaps/2026-09-29-language-independent-workspaces-and-agent-integration.md).
+
 **2026-10-04: LEARN-C2 inactive preparation reader and served qualification adapter CLOSED (source).**
 [PR #4195](https://github.com/FS-GG/.github/pull/4195) merged at
 `07521f357e6fb3999566864ffdca2acfadc24594` after every selected native check passed,
