@@ -86,6 +86,8 @@ elif "mutation ProjectFieldOptionsUpdate" in query:
         copied = dict(option)
         copied.setdefault("id", "opt_" + copied["name"].replace(".", "dot"))
         materialized.append(copied)
+    if os.environ.get("PROJECT_FIELD_OPTIONS_FAKE_REPLACE_RETAINED_ID"):
+        materialized[0]["id"] = "fixture-replaced-retained-id"
     if "native" in state:
         for field in state["native"]["fields"]["nodes"]:
             if field["name"] == "Status":

@@ -917,6 +917,9 @@ def _initialize_product_status(args: argparse.Namespace) -> None:
     actual_options = [{k: o[k] for k in ("name", "color", "description")} for o in actual["options"]]
     if actual["id"] != snapshot["field"]["id"] or actual_options != expected_options:
         raise Refused("Status outcome unknown/different; preserve intent and observe; never blind retry")
+    actual_ids = {option["name"]: option["id"] for option in actual["options"]}
+    if any(actual_ids.get(option["name"]) != option["id"] for option in options if "id" in option):
+        raise Refused("Status retained option ID changed; preserve intent and observe; never blind retry")
     print(json.dumps({"state": "verified", "requestSha256": request_sha, "responseGap": error, "native": post}, sort_keys=True))
 
 

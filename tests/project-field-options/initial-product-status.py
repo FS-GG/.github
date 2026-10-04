@@ -83,6 +83,15 @@ class InitialStatusControls(unittest.TestCase):
         self.assertEqual(field['options'][0]['id'],'fixture-0')
         self.assertEqual(field['options'][2]['id'],'fixture-1')
         self.assertEqual(field['options'][4]['id'],'fixture-2')
+    def test_retained_option_id_drift_refused_after_one_update(self):
+        result=self.run_tool(PROJECT_FIELD_OPTIONS_FAKE_REPLACE_RETAINED_ID='1')
+        self.assertNotEqual(result.returncode,0)
+        self.assertIn('retained option ID changed',result.stderr)
+        self.assertEqual(self.mutations(),1)
+        self.assertEqual(json.loads(self.paths['intent'].read_text())['state'],'intent')
+        result=self.run_tool()
+        self.assertNotEqual(result.returncode,0)
+        self.assertEqual(self.mutations(),1)
     def test_preview_zero_writes(self):
         result=self.run_tool(apply=False);self.assertEqual(result.returncode,0,result.stderr)
         self.assertEqual(self.mutations(),0);self.assertFalse(self.paths['intent'].exists())
