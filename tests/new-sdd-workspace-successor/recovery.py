@@ -45,7 +45,11 @@ class FakeAPI:
   elif 'api.nuget.org' in url:data=self.f.signedzip
   if self.f.feed_unknown and ('api.nuget.org' in url or 'nuget.pkg.github.com' in url):raise Refused('unknown feed')
   assert data is not None,url
-  path=self.f.root/f'read-{len(self.f.paths)}';path.write_bytes(data);return path
+  path=self.f.root/f'response-github-{len(self.f.paths)}.raw';path.write_bytes(data)
+  if custody:
+   rows=[{} for _ in range(len(self.f.paths)+1)];rows[-1]={'method':'GET','origin':'api.github.com','status':200,'path':f'/repos/{r.REPO}/actions/artifacts/97/zip','sha256':r.digest(data),'bytes':len(data)}
+   (self.f.root/'transport-github.json').write_bytes(r.canonical(rows))
+  return path
  def patch(self,path,body):
   self.f.paths.append(('PATCH',path,body));self.f.patches+=1
   assert path==f'repos/{r.REPO}/releases/{r.RELEASE}' and body=={'draft':False,'make_latest':'false'}
@@ -412,3 +416,78 @@ class ClosureControls(unittest.TestCase):
 def signal_module():return r.signal
 
 if __name__=='__main__':unittest.main(verbosity=2)
+
+class CustodySizeControls(unittest.TestCase):
+ def setUp(self):self.tmp=tempfile.TemporaryDirectory();self.root=pathlib.Path(self.tmp.name)
+ def tearDown(self):self.tmp.cleanup()
+ def fixture(self,name='case',large=False):
+  root=self.root/name;root.mkdir();f=Fixture(root)
+  if large:
+   ciphertext=b'x'*(r.BINARY_CAP+1)
+   summary={'schema':'fsgg.wizard-recovery-encrypted-custody/1','ciphertextSha256':r.digest(ciphertext),'bindingSha256':f.binding['readinessBindingSha256'],'nativeRunId':98,'commandExit':0}
+   out=io.BytesIO()
+   with zipfile.ZipFile(out,'w',compression=zipfile.ZIP_STORED) as z:
+    z.writestr('custody.cms',ciphertext);z.writestr('summary.json',r.canonical(summary))
+   f.readinesszip=out.getvalue();f.binding['readinessArchiveSha256']=r.digest(f.readinesszip);f.binding['readinessCiphertextSha256']=r.digest(ciphertext);f.readinessartifact['digest']='sha256:'+r.digest(f.readinesszip)
+   f.native['display_title']=f"Wizard 0.13 recovery complete {f.binding['correlation']} {r.digest(r.canonical(f.binding))}"
+  # Four preceding worker commands: three source Git reads and SDK version.
+  f.budget.commands=4
+  install=f.install
+  def counted_install(*args):
+   f.budget.command(180);f.budget.command(60);return install(*args)
+  f.install=counted_install
+  f.api.storage=r.CustodyStorage(root);f.api.budget=f.budget;f.api.matched_bodies={}
+  return f
+ def test_authentic_large_readiness_reaches_production_pre_effect_and_settlement(self):
+  f=self.fixture(large=True);engine=f.engine()
+  real=r.digest
+  def synthetic(raw):return '2e1d16a87400d8246cd31237b63e6366025619f26cb81742310de9a8426304c2' if raw==f.assetbytes[608701711] else real(raw)
+  with patch.object(r,'ORIGINAL_PACKAGE',real(f.originalzip)),patch.object(r,'digest',synthetic):result=engine.run()
+  self.assertTrue(result['publisherComplete']);self.assertEqual((f.patches,f.cas),(1,1));self.assertLess(engine.custody_projection['projectedBytes'],r.CUSTODY_CAP);self.assertEqual(len(f.api.storage.roles),1)
+ def test_unregistered_or_forged_large_path_refuses_before_effects(self):
+  for mutation in ('unregistered','forged'):
+   f=self.fixture(mutation);path=f.root/'response-github-0.raw';path.write_bytes(b'x'*(r.BINARY_CAP+1))
+   if mutation=='forged':
+    with self.assertRaises(Refused):f.api.storage.register_readiness(path,f.binding)
+   with self.assertRaises(Refused):f.run()
+   self.assertEqual((f.patches,f.cas),(0,0))
+ def test_total_projected_overflow_refuses_before_patch_or_cas(self):
+  for draft in (True,False):
+   f=self.fixture(str(draft));f.release['draft']=draft
+   for i in range(9):(f.root/f'ordinary-{i}.raw').write_bytes(b'x'*r.BINARY_CAP)
+   with self.assertRaises(Refused):f.run()
+   self.assertEqual((f.patches,f.cas),(0,0))
+ def test_ordinary_member_cap_and_global_pending_guard(self):
+  f=self.fixture();(f.root/'plain.raw').write_bytes(b'x'*(r.BINARY_CAP+1))
+  with self.assertRaises(Refused):f.api.storage.check()
+  (f.root/'plain.raw').unlink()
+  with self.assertRaises(Refused):f.api.storage.check(r.CUSTODY_CAP)
+ def test_registered_original_byte_drift_refuses(self):
+  f=self.fixture(large=True);r.readiness(f.api,f.binding)
+  relative=next(iter(f.api.storage.roles));path=f.root/relative
+  with path.open('r+b') as stream:stream.write(b'!')
+  with self.assertRaises(Refused):f.api.storage.check()
+ def test_endpoint_json_caps_and_post_effect_body_roles(self):
+  f=self.fixture();api=r.FiniteAPI('mock',f.budget,f.root)
+  class Response(io.BytesIO):
+   status=200
+   def __enter__(self):return self
+   def __exit__(self,*args):self.close()
+  api.opener=SimpleNamespace(open=lambda *a,**k:Response(b'x'*(r.SMALL_JSON_CAP+1)))
+  with self.assertRaises(Refused):api.get(f'repos/{r.REPO}')
+  api.storage=f.api.storage;api.storage.armed=True
+  with self.assertRaises(Refused):api.request('https://api.nuget.org/forged-package',binary=True)
+
+ def test_authentic_large_original_is_retained_whole_in_encrypted_archive(self):
+  f=self.fixture(large=True);r.readiness(f.api,f.binding)
+  pem='-----BEGIN CERTIFICATE-----\n'+base64.b64encode(bytes.fromhex('06092a864886f70d010101')).decode()+'\n-----END CERTIFICATE-----'
+  binding={**f.binding,'recipientSha256':r.digest(r.ssl.PEM_cert_to_DER_cert(pem))}
+  class Runner:
+   budget=r.Budget('complete');records=[]
+   def run(self,argv,*a,**k):
+    pathlib.Path(argv[argv.index('-out')+1]).write_bytes(bytes.fromhex('060b2a864886f70d0109100117060960864801650304012e'));self.records=[{'custody':{'leaderReaped':True,'remaining':[]}}]
+    return subprocess.CompletedProcess(argv,0,b'',b'')
+  with patch.dict(os.environ,{'RECOVERY_RECIPIENT_CERTIFICATE':pem,'GITHUB_RUN_ID':'99'}):summary=r.encrypted_custody(f.root,binding,Runner(),f.api.storage)
+  relative=next(iter(f.api.storage.roles))
+  with zipfile.ZipFile(f.root/'raw-custody.zip') as z:self.assertEqual(z.read(relative),f.readinesszip)
+  self.assertEqual(set(p.name for p in (f.root/'export').iterdir()),{'custody.cms','summary.json'})

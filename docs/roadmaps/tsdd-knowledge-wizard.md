@@ -270,6 +270,18 @@ native run title. One supervised OpenSSL CMS AES-256-GCM/RSA-OAEP-SHA256 command
 exports ciphertext and fixed safe hashes only; unsupported crypto refuses.
 Root separately authenticates the selected run/artifact, decrypts privately,
 checks AEAD success and full member/receipt/native joins, and accepts custody.
+The custody repair registers only the authenticated native diagnostic response
+as the large member; ordinary members remain capped at 8 MiB. Before PATCH or
+CAS, completion counts the current physical evidence plus the concrete repeated
+five-body gate, bounded remaining responses/streams, second install and
+postcheck/report reservations against the unchanged 128 MiB archive ceiling.
+Oversized envelopes refuse before effects. A shared streaming guard retains the
+same ceiling during responses, captures and install observation. Finite JSON
+roles use 64 KiB, the original sixteen-commit list 256 KiB and workflow pages
+1 MiB; repeated binary bodies use their first authenticated exact sizes. Raw
+archives use stored ZIP members so structural overhead is explicit. The crypto
+inventory covers the executable, present configuration and provider files;
+loaded libcrypto/libssl and loader dependencies are not observed or claimed.
 Source controls do not establish actual crypto/provider availability or operation
 success. No admission, recipient/private key or future native artifact is created
 by this source preparation.

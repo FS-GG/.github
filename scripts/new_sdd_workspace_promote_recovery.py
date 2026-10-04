@@ -21,6 +21,10 @@ MEMBER_CAP=128
 JSON_CAP=4*1024*1024
 BINARY_CAP=8*1024*1024
 ZIP_CAP=32*1024*1024
+CUSTODY_CAP=128*1024*1024
+READINESS_CAP=CUSTODY_CAP+8192
+SMALL_JSON_CAP=64*1024
+INSTALL_TREE_CAP=8*1024*1024
 REF="refs/heads/fsgg/v2/journal/release/tsdd-knowledge-wizard-013"
 REPO="FS-GG/.github"
 CANDIDATE_SOURCE="f891b5b0723070c67e08d1a87b7d12b0b4d8bebe"
@@ -62,6 +66,61 @@ def validate_binding(binding, mode):
     require(binding["home"]==os.environ.get("HOME"),"actual HOME")
     return binding
 
+class CustodyStorage:
+    """Closed authenticated large role and one shared finite physical envelope."""
+    def __init__(self,root):self.root=Path(root);self.roles={};self.armed=False
+    def register_readiness(self,path,binding):
+        path=Path(path);relative=path.relative_to(self.root).as_posix()
+        require(re.fullmatch(r"(?:worker/)?response-github-[0-9]+\.raw",relative),"literal readiness response role")
+        require(not self.roles and not path.is_symlink(),"one physical readiness role")
+        records_path=path.parent/"transport-github.json"
+        require(records_path.is_file(),"readiness authenticated transport record absent")
+        rows=json.loads(records_path.read_bytes());index=int(path.stem.rsplit('-',1)[1])
+        require(index<len(rows),"readiness original response identity")
+        row=rows[index]
+        require(row.get("method")=="GET" and row.get("origin")=="api.github.com" and row.get("status")==200 and row.get("path")==f"/repos/{REPO}/actions/artifacts/{binding['readinessArtifactId']}/zip" and row.get("sha256")==binding["readinessArchiveSha256"] and row.get("bytes")==path.stat().st_size,"readiness original authenticated route")
+        raw=path.read_bytes();require(len(raw)<=READINESS_CAP and digest(raw)==binding["readinessArchiveSha256"],"authenticated readiness original")
+        members=safe_zip(path,{"custody.cms","summary.json"},custody=True);summary=json.loads(members["summary.json"])
+        require(digest(members["custody.cms"])==binding["readinessCiphertextSha256"] and summary.get("ciphertextSha256")==binding["readinessCiphertextSha256"] and summary.get("bindingSha256")==binding["readinessBindingSha256"] and summary.get("nativeRunId")==binding["readinessRunId"] and summary.get("schema")=="fsgg.wizard-recovery-encrypted-custody/1" and summary.get("commandExit")==0,"authenticated readiness member join")
+        self.roles[relative]={"role":"authenticated-native-diagnostic-archive","bytes":len(raw),"sha256":digest(raw)}
+    def inventory(self):
+        total=0;count=0;overhead=0
+        for path in self.root.rglob("*"):
+            if path.is_dir():continue
+            relative=path.relative_to(self.root).as_posix()
+            require(not path.is_symlink() and path.resolve().is_relative_to(self.root.resolve()),"custody physical scope")
+            require(len(relative.encode())<=1024,"custody path bound")
+            size=path.stat().st_size;role=self.roles.get(relative)
+            require(size<=(READINESS_CAP if role else BINARY_CAP),"ordinary custody member remains 8MiB")
+            if role:require(size==role["bytes"] and digest(path.read_bytes())==role["sha256"],"registered original drift")
+            total+=size;count+=1;overhead+=512+3*len(relative.encode())
+        require(count<=10000,"custody member count")
+        return total,overhead,count
+    def check(self,pending=0):
+        total,overhead,count=self.inventory()
+        require(total+overhead+pending+65536<=CUSTODY_CAP,"streaming custody total/archive cap")
+        for install in self.root.glob("**/public-install-*"):
+            if install.is_dir():require(sum(p.stat().st_size for p in install.rglob('*') if p.is_file())<=INSTALL_TREE_CAP,"owned install tree cap")
+        return total,overhead,count
+    def pre_effect(self,budget,binary_bodies,second_gate):
+        total,overhead,count=self.check()
+        # Concrete remaining roles: at most four bounded workflow pages;
+        # remaining small JSON responses including four CAS responses; one
+        # repeated five-body gate; remaining inner command streams; two outer
+        # command streams; worker/outer reports, command/transport records and
+        # fresh second install tree. Extra role calls refuse at streaming time.
+        future_binary=sum(binary_bodies.values()) if second_gate else 0
+        require(not second_gate or len(binary_bodies)==5,"exact matched gate reservation")
+        future_json=(max(0,120-budget.reads)+4)*SMALL_JSON_CAP+4*1024*1024
+        future_streams=max(0,19-budget.commands)*2*STREAM_CAP+4*STREAM_CAP
+        reports=2*BINARY_CAP+4*1024*1024+2*1024*1024
+        future_install=INSTALL_TREE_CAP if second_gate else 0
+        structure=(10000-count)*(512+3*1024)+65536 # worst permitted future names/member manifest and stored-ZIP headers
+        projected=total+overhead+future_binary+future_json+future_streams+reports+future_install+structure
+        require(projected<=CUSTODY_CAP,"projected required custody exceeds 128MiB before effect")
+        self.armed=True
+        return {"currentBytes":total,"zipOverhead":overhead,"futureBinary":future_binary,"futureJson":future_json,"futureStreams":future_streams,"futureReports":reports,"futureInstall":future_install,"structure":structure,"projectedBytes":projected,"limit":CUSTODY_CAP}
+
 class Budget:
     def __init__(self,mode,clock=time.monotonic,start=None):
         self.clock=clock;self.start=clock() if start is None else start;self.end=self.start+(600 if mode=="diagnostic" else 1200);self.work=self.start+(480 if mode=="diagnostic" else 1000)
@@ -88,7 +147,7 @@ class Redirect(urllib.request.HTTPRedirectHandler):
 class FiniteAPI:
     def __init__(self,token,budget,root,authority=False):
         require(bool(token),"native read credential absent");self.token=token;self.budget=budget;self.root=root;self.authority=authority;self.records=[]
-        self.expectedSettlement=None;self.cas_objects={};self.immutable={}
+        self.expectedSettlement=None;self.cas_objects={};self.immutable={};self.storage=getattr(budget,"storage",None);self.matched_bodies={};self.future_pages=0;self.future_binaries=0
         self.opener=urllib.request.build_opener(Redirect(budget))
     def request(self,url,method="GET",body=None,binary=False,headers=None,custody=False):
         parsed=urllib.parse.urlsplit(url);require(parsed.scheme=="https" and parsed.hostname in {"api.github.com","nuget.pkg.github.com","api.nuget.org"} and not parsed.username and not parsed.password,"request origin")
@@ -96,7 +155,13 @@ class FiniteAPI:
         rawbody=None if body is None else canonical(body)
         auth={"Authorization":"Bearer "+self.token,"User-Agent":"fsgg-wizard-recovery","Accept":"application/vnd.github+json","X-GitHub-Api-Version":"2022-11-28"} if parsed.hostname=="api.github.com" else {"User-Agent":"fsgg-wizard-recovery"}
         request=urllib.request.Request(url,data=rawbody,method=method,headers={**auth,**(headers or {}),**({"Content-Type":"application/json"} if body is not None else {})})
-        cap=(128*1024*1024+8192 if custody else BINARY_CAP) if binary else JSON_CAP
+        cap=(READINESS_CAP if custody else BINARY_CAP) if binary else (1024*1024 if "/actions/workflows/" in parsed.path else 256*1024 if parsed.path.endswith("/commits") else SMALL_JSON_CAP)
+        if self.storage and self.storage.armed:
+            if binary:
+                require(url in self.matched_bodies and self.future_binaries<5,"closed future binary role")
+                self.future_binaries+=1;cap=self.matched_bodies[url]
+            elif "/actions/workflows/" in parsed.path:
+                self.future_pages+=1;require(self.future_pages<=4,"closed future workflow pages")
         require(not custody or (method=="GET" and binary and parsed.hostname=="api.github.com" and re.fullmatch(r"/repos/FS-GG/\.github/actions/artifacts/[0-9]+/zip",parsed.path)),"encrypted readiness archive route")
         index=len(self.records);target=self.root/f"response-{('authority' if self.authority else 'github')}-{index}.raw"
         row={"method":method,"origin":parsed.hostname,"path":parsed.path,"query":"withheld","status":None,"bytes":0}
@@ -108,12 +173,16 @@ class FiniteAPI:
                     self.budget.remaining(25)
                     data=response.read(min(65536,cap-row["bytes"]+1))
                     if not data:break
-                    row["bytes"]+=len(data);require(row["bytes"]<=cap,"response byte cap");stream.write(data)
+                    row["bytes"]+=len(data);require(row["bytes"]<=cap,"response byte cap")
+                    if self.storage and not custody:self.storage.check(len(data))
+                    stream.write(data)
             row["sha256"]=digest(target.read_bytes());return target if binary else json.loads(target.read_bytes())
         except urllib.error.HTTPError as error:
             row["status"]=error.code;raise Refused("native HTTP read/write refused") from error
         finally:
-            (self.root/f"transport-{('authority' if self.authority else 'github')}.json").write_bytes(canonical(self.records))
+            transport=canonical(self.records);require(len(transport)<=1024*1024,"transport metadata cap")
+            if self.storage and not custody:self.storage.check(len(transport))
+            (self.root/f"transport-{('authority' if self.authority else 'github')}.json").write_bytes(transport)
     def get(self,path):
         base=f"repos/{AUTHORITY if self.authority else REPO}"
         require(path==base or path.startswith(base+"/"),"repository request scope")
@@ -276,7 +345,7 @@ class OwnedChild:
         return record
 
 
-def capture(proc, custody, deadline):
+def capture(proc, custody, deadline,storage=None):
     buffers = {'stdout': bytearray(), 'stderr': bytearray()}; selector = selectors.DefaultSelector()
     for name in buffers:
         stream = getattr(proc, name); os.set_blocking(stream.fileno(), False); selector.register(stream, selectors.EVENT_READ, name)
@@ -284,6 +353,7 @@ def capture(proc, custody, deadline):
         while selector.get_map() or custody.exited() is None:
             require(time.monotonic() < deadline, 'command-deadline')
             custody.observe()
+            if storage:storage.check(sum(len(b) for b in buffers.values()))
             for key, mask in selector.select(min(0.05, max(0, deadline - time.monotonic()))):
                 data = os.read(key.fileobj.fileno(), 16 * 1024)
                 if not data: selector.unregister(key.fileobj); continue
@@ -309,7 +379,7 @@ class Runner:
         try:
             proc=subprocess.Popen(argv,stdout=subprocess.PIPE,stderr=subprocess.PIPE,start_new_session=True,env=env,cwd=cwd)
             child=OwnedChild(proc,adopted=True)
-            result=capture(proc,child,min(self.budget.end if self.budget.reserve else self.budget.work,self.budget.clock()+timeout))
+            result=capture(proc,child,min(self.budget.end if self.budget.reserve else self.budget.work,self.budget.clock()+timeout),getattr(self.budget,"storage",None))
             row["actualExitCode"]=result["actualExitCode"]
             return subprocess.CompletedProcess(argv,row["actualExitCode"],result["stdout"].decode("utf-8",errors="replace"),result["stderr"].decode("utf-8",errors="replace"))
         except BaseException as error:
@@ -326,9 +396,13 @@ class Runner:
                 row["errorKind"]=row["errorKind"] or "identity-unbound"
             for name in ("stdout","stderr"):
                 raw=(result or {}).get(name,b"");target=self.root/f"command-{index}-{name}.raw"
-                require(len(raw)<=STREAM_CAP,"raw capture cap");target.write_bytes(raw)
+                require(len(raw)<=STREAM_CAP,"raw capture cap")
+                if getattr(self.budget,"storage",None):self.budget.storage.check(len(raw))
+                target.write_bytes(raw)
                 row[name]={"file":target.name,"bytes":len(raw),"sha256":digest(raw),"safe":output_signals(raw)}
-            (self.root/"commands.json").write_bytes(canonical(self.records))
+            records=canonical(self.records);require(len(records)<=2*1024*1024,"command metadata cap")
+            if getattr(self.budget,"storage",None):self.budget.storage.check(len(records))
+            (self.root/"commands.json").write_bytes(records)
             require(row["custody"] is not None and row["custody"].get("leaderReaped") and not row["custody"].get("remaining") and not row["custody"].get("errors"),"child custody failed")
 
 def subreaper():
@@ -424,6 +498,8 @@ def readiness(api,binding):
     require(digest(archive.read_bytes())==binding["readinessArchiveSha256"],"original diagnostic archive")
     members=safe_zip(archive,{"custody.cms","summary.json"},custody=True);summary=json.loads(members["summary.json"])
     require(digest(members["custody.cms"])==binding["readinessCiphertextSha256"] and summary.get("ciphertextSha256")==binding["readinessCiphertextSha256"] and summary.get("bindingSha256")==binding["readinessBindingSha256"] and summary.get("nativeRunId")==ident and summary.get("schema")=="fsgg.wizard-recovery-encrypted-custody/1" and summary.get("commandExit")==0,"accepted readiness ciphertext/native join")
+    storage=getattr(api,"storage",None)
+    if storage:storage.register_readiness(archive,binding)
 
 def predecessor(api,binding):
     release=api.get(f"repos/{REPO}/releases/{binding['predecessorReleaseId']}")
@@ -483,6 +559,9 @@ def release_gate(api,manifest,original):
         row=remote["observations"][feed]
         require(row.get("archiveSha256")==digest(path.read_bytes()) and row.get("payloadSha256")==manifest["producerPayloadSha256"] and row.get("producerPayloadEqual")is True,"genuine feed journal join")
         feed_paths[feed]=path
+    if getattr(api,"storage",None) and not api.storage.armed:
+        api.matched_bodies={"https://api.github.com/repos/"+REPO+"/releases/assets/"+str(row['id']):len(bodies[row['name']]) for row in assets}
+        api.matched_bodies.update({("https://nuget.pkg.github.com/FS-GG/download/fs.gg.newsddworkspace/"+VERSION+"/fs.gg.newsddworkspace."+VERSION+".nupkg" if feed=="github" else "https://api.nuget.org/v3-flatcontainer/fs.gg.newsddworkspace/"+VERSION+"/fs.gg.newsddworkspace."+VERSION+".nupkg"):path.stat().st_size for feed,path in feed_paths.items()})
     return release,feed_paths
 
 def installed_closure(tool,original,nuget):
@@ -547,12 +626,14 @@ class Recovery:
             self.authority("dispatch");original_runs(self.api,self.binding);require(self.state()==current,"prepatch journal drift")
             immediate=self.api.get(f"repos/{REPO}/releases/{RELEASE}")
             require(all(immediate.get(key)==release.get(key) for key in ("id","tag_name","draft","prerelease","body","name","target_commitish","created_at")),"immediate draft identity/state drift")
+            if getattr(self.api,"storage",None):self.custody_projection=self.api.storage.pre_effect(self.api.budget,self.api.matched_bodies,True)
             try:self.api.patch(f"repos/{REPO}/releases/{RELEASE}",{"draft":False,"make_latest":"false"})
             except Exception:patch_unknown=True
             patched=True
             # The response is deliberately not inspected as completion evidence.
             observed,proof=self.matched_gate();require(observed["draft"]is False,"promotion unresolved; no resend")
         self.authority("settle");require(self.state()==current,"presettle journal drift")
+        if getattr(self.api,"storage",None) and not self.api.storage.armed:self.custody_projection=self.api.storage.pre_effect(self.api.budget,self.api.matched_bodies,False)
         uncertain=False
         if hasattr(self.journal.api,"arm_settlement"):self.journal.api.arm_settlement(self.journal._observed)
         try:require(self.journal.compare_and_swap(current,"promote","verified"),"settlement CAS conflict")
@@ -564,6 +645,7 @@ class Recovery:
 
 def worker(mode,binding,root,source,start=None):
     budget=Budget(mode,start=start);runner=Runner(budget,root);env=child_environment(root/"checks")
+    budget.storage=CustodyStorage(root.parent if (root.parent/"binding.json").exists() else root)
     before=None;sdk_before=None;report={"success":False,"historicalCause":"UNKNOWN","publicWizardQualified":False,"adoptionReceiptEmitted":False}
     try:
         subreaper();before=source_snapshot(source,binding,runner,env)
@@ -601,6 +683,8 @@ def worker(mode,binding,root,source,start=None):
                 if not report["post"+name+"Matches"]:report["success"]=False
             except BaseException as error:
                 report["post"+name+"ErrorKind"]=type(error).__name__;report["post"+name+"Matches"]=False;report["success"]=False
+        report["custodyRoles"]=budget.storage.roles
+        report["custodyProjection"]=getattr(locals().get("engine"),"custody_projection",None)
         report["readCount"]=budget.reads;report["commandCount"]=budget.commands;report["releasePatchCount"]=budget.release_patches;report["casWrites"]=budget.cas_writes
         data=canonical(report);require(len(data)<=BINARY_CAP,"report cap");(root/"worker-report.json").write_bytes(data)
     return 0 if report["success"] else 1
@@ -614,16 +698,18 @@ def recipient(binding):
     require(bytes.fromhex("06092a864886f70d010101") in der,"RSA recipient required")
     return pem
 
-def encrypted_custody(root,binding,runner):
+def encrypted_custody(root,binding,runner,storage=None):
+    storage=storage or CustodyStorage(root)
+    storage.check()
     pem=recipient(binding);certificate=root/"recipient.pem";certificate.write_text(pem)
     export=root/"export";require(not export.exists(),"fresh ciphertext export");export.mkdir()
     archive=root/"raw-custody.zip";entries=[];total=0
-    with zipfile.ZipFile(archive,"x",compression=zipfile.ZIP_DEFLATED) as zipped:
+    with zipfile.ZipFile(archive,"x",compression=zipfile.ZIP_STORED) as zipped:
         for path in sorted(root.rglob("*")):
             if path==archive or path.is_dir():continue
             relative=path.relative_to(root).as_posix()
             require(not path.is_symlink() and path.resolve().is_relative_to(root.resolve()),"raw archive physical scope")
-            require(len(entries)<10000 and path.stat().st_size<=BINARY_CAP,"raw custody member cap")
+            require(len(entries)<10000 and path.stat().st_size<=(READINESS_CAP if relative in storage.roles else BINARY_CAP),"raw custody member cap")
             total+=path.stat().st_size;require(total<=128*1024*1024,"raw custody total cap")
             runner.budget.remaining(25,True)
             raw=path.read_bytes();entries.append({"path":relative,"bytes":len(raw),"sha256":digest(raw)});zipped.writestr(relative,raw)
@@ -669,7 +755,7 @@ def outer(mode,binding,root,source):
     # SDK children receive a distinct credential-free child_environment.
     env={k:v for k,v in os.environ.items() if k in {"HOME","PATH","DOTNET_ROOT","LANG","LC_ALL","TZ","SSL_CERT_FILE","SSL_CERT_DIR","GH_TOKEN","ORDINARY_LEDGER_TOKEN","GITHUB_RUN_ID","GITHUB_ACTOR","GITHUB_REF","GITHUB_SHA","GITHUB_EVENT_NAME","GITHUB_RUN_ATTEMPT","GITHUB_REPOSITORY"}}
     env["PYTHONDONTWRITEBYTECODE"]="1"
-    runner=Runner(budget,root);report={"success":False,"historicalCause":"UNKNOWN","publicWizardQualified":False,"adoptionReceiptEmitted":False,"cryptoPhysicalInputs":crypto_before,"nativeSetupInventory":[{"action":"actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1","stepSeconds":180},{"action":"actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1","stepSeconds":120}],"commandInventoryPolicy":"two bounded native action units, entrypoint, observer worker, encryption and every supervised SDK/git command; descendants separately enumerated by identity"}
+    runner=Runner(budget,root);report={"success":False,"historicalCause":"UNKNOWN","publicWizardQualified":False,"adoptionReceiptEmitted":False,"cryptoPhysicalInputs":crypto_before,"cryptoInputCoverage":"executable, present config and provider files only; loaded libcrypto/libssl/loader not observed", "nativeSetupInventory":[{"action":"actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1","stepSeconds":180},{"action":"actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1","stepSeconds":120}],"commandInventoryPolicy":"two bounded native action units, entrypoint, observer worker, encryption and every supervised SDK/git command; descendants separately enumerated by identity"}
     try:
         result=runner.run([sys.executable,str(Path(__file__).resolve()),"--worker",mode,str(binding_path),str(worker_root),str(source),str(budget.start)],480 if mode=="diagnostic" else 1000,env,cwd=source)
         require(result.returncode==0,"recovery worker failed")
@@ -701,20 +787,30 @@ def outer(mode,binding,root,source):
         report["bindingSha256"]=digest(binding_path.read_bytes());report["actualSelectedRunId"]=int(os.environ["GITHUB_RUN_ID"])
         report["elapsedSeconds"]=budget.clock()-budget.start
         report["totalLaunchedCommands"]=report.get("commandCount",0)+budget.commands+1
-        (root/"terminal.json").write_bytes(canonical(report))
+        terminal_raw=canonical(report);require(len(terminal_raw)<=BINARY_CAP,"terminal report cap");(root/"terminal.json").write_bytes(terminal_raw)
     try:
         # Also encrypt failed-operation captures. The public export contains only
         # ciphertext and fixed safe hashes; raw files never reach upload-artifact.
         budget.reserve=True
-        report["encryptedCustody"]=encrypted_custody(root,binding,runner)
+        storage=CustodyStorage(root)
+        if (worker_root/"worker-report.json").is_file():
+            worker_report=json.loads((worker_root/"worker-report.json").read_bytes())
+            for relative,role in worker_report.get("custodyRoles",{}).items():
+                require(set(role)=={"role","bytes","sha256"} and role["role"]=="authenticated-native-diagnostic-archive","closed custody role")
+                path=root/relative
+                # The original digest and ciphertext/native/binding joins are
+                # rechecked independently; arbitrary large paths are refused.
+                storage.register_readiness(path,binding)
+                require(storage.roles[relative]==role,"outer readiness role drift")
+        report["encryptedCustody"]=encrypted_custody(root,binding,runner,storage)
         require(Path(shutil.which("openssl") or "").resolve()==openssl and all(Path(p).is_file() and digest(Path(p).read_bytes())==sha for p,sha in crypto_before.items()),"encryption physical input drift")
         report["cryptoPhysicalInputs"]=crypto_before
         summary_path=root/"export/summary.json";summary=json.loads(summary_path.read_bytes())
-        summary["cryptoInputsUnchanged"]=True;summary["cryptoPhysicalInputDigest"]=digest(canonical(crypto_before));summary["totalLaunchedCommands"]=report["totalLaunchedCommands"]
+        summary["cryptoInputCoverage"]=report["cryptoInputCoverage"];summary["cryptoInputsUnchanged"]=True;summary["cryptoPhysicalInputDigest"]=digest(canonical(crypto_before));summary["totalLaunchedCommands"]=report["totalLaunchedCommands"]
         summary_path.write_bytes(canonical(summary))
     except BaseException as error:
         report["success"]=False;report["custodyErrorKind"]=type(error).__name__
-    (root/"terminal.json").write_bytes(canonical(report))
+    terminal_raw=canonical(report);require(len(terminal_raw)<=BINARY_CAP,"terminal report cap");(root/"terminal.json").write_bytes(terminal_raw)
     if report["success"]:
         (root/"recovery-receipt.json").write_bytes(canonical(report))
     print(json.dumps({"scope":report.get("scope",mode),"success":report["success"],"historicalCause":"UNKNOWN","publicWizardQualified":False},sort_keys=True))
