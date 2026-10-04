@@ -53,6 +53,27 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-04: WASM-SHARED-01 H2 effect-free native inspection CLOSED.**
+The separately admitted first-attempt [Game inspection run
+37182947872](https://github.com/FS-GG/FS.GG.Game/actions/runs/37182947872)
+completed **SUCCESS** at 06:30:21 UTC on protected executor
+`8de4c2747d40e9993cc9a08cd50e1e2d599f69fb`. Preflight and inspection passed;
+all **eight** publication jobs were skipped. Root independently accepted original
+artifact `11296405037` (**10,544 bytes**, SHA256
+`72194223075d4adc5346b2bd82604baff93064e2e49aa31a1c8071bff34c7a72`).
+Its two members retain the exact successor binding and original transaction,
+plus **17** authentic GET-only receipts. The genuine workflow token received
+**200** for bound draft `402763234` and its sole original journal asset `608859205`.
+This establishes native draft visibility after the Actions archive negotiation repair.
+
+The [owning Game plan](https://github.com/FS-GG/FS.GG.Game/blob/8de4c2747d40e9993cc9a08cd50e1e2d599f69fb/docs/roadmaps/wasm-shared-01.md)
+retains original preparation `37163937340`, executor `8b92b7c4`, tuple
+`6ba4084f`, producer tag, draft and journal. Failed publisher `37166812270`,
+ad5 inspection `37172924046` and 393 inspection `37176783775` remain immutable
+history. This inspection admits no H3 recovery or publication effect. Package
+publication, installed acceptance and activation remain open; recovery requires
+root's separate fresh admission.
+
 **2026-10-04: TSDD-KNOWLEDGE-01.4 Wizard safe native-refusal observability source CLOSED.**
 The [owning Wizard plan](roadmaps/tsdd-knowledge-wizard.md#native-diagnostic-refusal--source-observability-proposal)
 preserves the genuine first-attempt diagnostic
