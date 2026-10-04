@@ -703,6 +703,223 @@ def cmd_add_option(args: argparse.Namespace) -> None:
     print(f"migration complete: added {args.name!r}; all {snapshot['itemTotalCount']} prior assignments match snapshot")
 
 
+# Initial-empty product initialization is a separate, closed use of the guarded transport.
+# It never changes an existing project or restores/seeds an item assignment.
+PRODUCT_STATUS = ("Backlog", "Ready", "In progress", "Blocked", "Done")
+PRODUCT_TARGETS = {
+    "game": ("FS.GG.Game — Product V2 qualification", "FS-GG/FS.GG.Game", "R_kgDOTPLzXQ"),
+    "rendering": ("FS.GG.Rendering — Product V2 qualification", "FS-GG/FS.GG.Rendering", "R_kgDOS6fcyw"),
+}
+PRODUCT_NATIVE_QUERY = r"""
+query InitialProductStatus($id:ID!){node(id:$id){... on ProjectV2{
+  id number title closed createdAt viewerCanUpdate owner{... on Organization{id login}}
+  repositories(first:10){nodes{id nameWithOwner} pageInfo{hasNextPage}}
+  fields(first:100){nodes{
+    ... on ProjectV2Field{id name dataType}
+    ... on ProjectV2SingleSelectField{id name dataType options{id name color description}}
+  } pageInfo{hasNextPage}}
+  items(first:1){totalCount nodes{id} pageInfo{hasNextPage}}
+}}}
+"""
+PRODUCT_BACKUP_QUERY = r"""
+query InitialProductStatusBackup($expression:String!){
+  repository(owner:"FS-GG",name:".github"){object(expression:$expression){... on Blob{text}}}
+}
+"""
+
+
+def product_json(path: str) -> dict[str, Any]:
+    import stat
+    p = Path(path)
+    if p.is_symlink() or not p.is_file() or stat.S_IMODE(p.stat().st_mode) != 0o600 or p.stat().st_uid != os.getuid():
+        raise Refused("product custody input must be a regular private mode-0600 file")
+    try:
+        value = json.loads(p.read_bytes())
+        if not isinstance(value, dict):
+            raise ValueError("not an object")
+        return value
+    except (OSError, ValueError) as exc:
+        raise Refused(f"unreadable product custody input: {exc}") from exc
+
+
+def product_native(product: str, identity: str, created: dict[str, Any]) -> dict[str, Any]:
+    native = graphql(PRODUCT_NATIVE_QUERY, {"id": identity}).get("node")
+    if not isinstance(native, dict):
+        raise Refused("selected new product project is not readable")
+    title, repository, repository_id = PRODUCT_TARGETS[product]
+    if (native.get("id") != identity or native.get("number") != created.get("number")
+        or native.get("title") != title or native.get("owner") != {"id": "O_kgDOEYAWYw", "login": "FS-GG"}
+        or native.get("closed") is not False or native.get("viewerCanUpdate") is not True
+        or native.get("createdAt") != created.get("createdAt")):
+        raise Refused("new product owner/title/identity/capability drift")
+    repos = native["repositories"]
+    if repos["pageInfo"]["hasNextPage"] or repos["nodes"] != [{"id": repository_id, "nameWithOwner": repository}]:
+        raise Refused("new product repository enrollment differs")
+    fields = native["fields"]
+    names = [f["name"] for f in fields["nodes"]]
+    ids = [f["id"] for f in fields["nodes"]]
+    if fields["pageInfo"]["hasNextPage"] or len(names) != len(set(names)) or len(ids) != len(set(ids)):
+        raise Refused("incomplete or duplicate initial fields")
+    # Field set and all unrelated native metadata must equal the initial creation readback.
+    old_other = [f for f in created["fields"]["nodes"] if f["name"] != "Status"]
+    new_other = [f for f in fields["nodes"] if f["name"] != "Status"]
+    if new_other != old_other:
+        raise Refused("other initial fields changed")
+    statuses = [f for f in fields["nodes"] if f["name"] == "Status"]
+    if len(statuses) != 1 or statuses[0].get("dataType") != "SINGLE_SELECT":
+        raise Refused("exactly one native single-select Status required")
+    options = statuses[0].get("options", [])
+    if (not options or any(set(o) != {"id", "name", "color", "description"} for o in options)
+        or any(not o["id"] for o in options)
+        or len({o["id"] for o in options}) != len(options)
+        or len({o["name"] for o in options}) != len(options)):
+        raise Refused("initial Status metadata incomplete or duplicated")
+    items = native["items"]
+    if items["totalCount"] != 0 or items["nodes"] or items["pageInfo"]["hasNextPage"]:
+        raise Refused("initial product project is not completely empty")
+    return native
+
+
+def product_snapshot(native: dict[str, Any]) -> dict[str, Any]:
+    field = next(f for f in native["fields"]["nodes"] if f["name"] == "Status")
+    return {"formatVersion": 1, "project": {"owner": "FS-GG", "number": native["number"], "id": native["id"], "title": native["title"]},
+            "field": {"id": field["id"], "name": "Status", "options": field["options"]},
+            "itemTotalCount": 0, "items": []}
+
+
+def product_options(snapshot: dict[str, Any]) -> list[dict[str, Any]]:
+    old = snapshot["field"]["options"]
+    if [o["name"] for o in old] != ["Todo", "In Progress", "Done"]:
+        raise Refused("unreviewed initial native Status vocabulary; no general rename capability")
+    originals = dict(zip(("Backlog", "In progress", "Done"), old))
+    desired = []
+    for name in PRODUCT_STATUS:
+        if name in originals:
+            option = dict(originals[name])
+            option["name"] = name
+        else:
+            option = {"name": name, "color": "GRAY", "description": "Qualification-only " + name}
+        desired.append(option)
+    return desired
+
+
+def product_creation(receipt: dict[str, Any], product: str) -> dict[str, Any]:
+    if set(receipt) != {"schema", "qualificationOnly", "baseline", "projects"} or receipt["schema"] != "fsgg.product-project-creation/1" or receipt["qualificationOnly"] is not True:
+        raise Refused("closed qualification creation receipt required")
+    baseline = receipt["baseline"]
+    if baseline["pageInfo"]["hasNextPage"] or set(receipt["projects"]) != set(PRODUCT_TARGETS):
+        raise Refused("complete baseline and exactly two selected creations required")
+    baseline_ids = {p["id"] for p in baseline["nodes"]}
+    forbidden = baseline_ids | {"PVT_kwDOEYAWY84Bldpa", "PVT_kwDOEYAWY84BiESo", "PVT_kwDOEYAWY84Bb08W"}
+    identities = []
+    for key, row in receipt["projects"].items():
+        response = row["response"]
+        if response.get("errors"):
+            raise Refused("creation receipt contains native errors")
+        created = response["data"]["createProjectV2"]["projectV2"]
+        native = row["initial"]
+        title = PRODUCT_TARGETS[key][0]
+        if (created["id"] in forbidden or created["title"] != title
+            or created["owner"] != {"id": "O_kgDOEYAWYw", "login": "FS-GG"}
+            or any(native.get(k) != created[k] for k in ("id", "number", "title", "owner"))
+            or not native.get("createdAt") or native["items"]["totalCount"] != 0
+            or native["items"]["nodes"] or native["items"]["pageInfo"]["hasNextPage"]
+            or native["fields"]["pageInfo"]["hasNextPage"]):
+            raise Refused("new resource creation/readback tuple differs")
+        identities.append(created["id"])
+    if len(set(identities)) != 2:
+        raise Refused("selected creations are not distinct")
+    return receipt["projects"][product]["initial"]
+
+
+def cmd_initialize_product_status(args: argparse.Namespace) -> None:
+    try:
+        _initialize_product_status(args)
+    except (KeyError, TypeError, ValueError, OSError) as exc:
+        raise Refused(f"invalid product input/native readback: {exc}") from exc
+
+
+def _initialize_product_status(args: argparse.Namespace) -> None:
+    receipt = product_json(args.creation_receipt)
+    created = product_creation(receipt, args.product)
+    # Missing parent native creation authority/readback never becomes a guessed ID.
+    initial = product_native(args.product, created["id"], created)
+    product_json(args.snapshot)
+    snapshot = load_snapshot(Path(args.snapshot))
+    if snapshot["itemTotalCount"] != 0 or snapshot["items"]:
+        raise Refused("nonempty snapshot refused")
+    assert_live_precondition(snapshot, product_snapshot(initial))
+    assert_live_precondition(snapshot, product_snapshot(created))
+    options = product_options(snapshot)
+    variables = {"field": snapshot["field"]["id"], "name": "Status", "options": options}
+    request = {"query": UPDATE_FIELD, "variables": variables}
+    request_sha = hashlib.sha256(canonical(request)).hexdigest()
+    if not args.apply:
+        print(json.dumps({"request": request, "requestSha256": request_sha, "projectId": created["id"], "qualificationOnly": True}, sort_keys=True))
+        return
+    backup = product_json(args.backup)
+    if set(backup) != {"repository", "revision", "path", "fileSha256"} or backup["repository"] != "FS-GG/.github" or not re.fullmatch(r"[0-9a-f]{40}", backup["revision"]):
+        raise Refused("immutable remote snapshot backup tuple required")
+    if not backup["path"] or backup["path"].startswith("/") or ".." in Path(backup["path"]).parts:
+        raise Refused("unsafe remote backup path")
+    remote = graphql(PRODUCT_BACKUP_QUERY, {"expression": backup["revision"] + ":" + backup["path"]})
+    text = (remote.get("repository") or {}).get("object")
+    if not text or not isinstance(text.get("text"), str):
+        raise Refused("durable remote snapshot backup is unreadable")
+    snapshot_bytes = Path(args.snapshot).read_bytes()
+    if (text["text"].encode() != snapshot_bytes
+        or hashlib.sha256(snapshot_bytes).hexdigest() != backup["fileSha256"]):
+        raise Refused("durable remote snapshot backup bytes differ")
+    admission = product_json(args.admission)
+    expected = {"approved", "owner", "operation", "product", "projectId", "fieldId", "requestSha256", "sourceSha256", "creationReceiptSha256", "snapshotSha256", "backupSha256", "intentPath", "issuedAt", "expiresAt", "qualificationOnly", "adoptionAuthorized"}
+    if set(admission) != expected:
+        raise Refused("closed root Status admission required")
+    now = dt.datetime.now(dt.timezone.utc)
+    issued = dt.datetime.fromisoformat(admission["issuedAt"])
+    expires = dt.datetime.fromisoformat(admission["expiresAt"])
+    if (issued.tzinfo is None or expires.tzinfo is None or not issued <= now <= expires
+        or not 0 < (expires-issued).total_seconds() <= 300):
+        raise Refused("Status admission expired or invalid")
+    joins = {"approved": True, "owner": "root-integrator", "operation": "initialize-empty-product-status",
+             "product": args.product, "projectId": created["id"], "fieldId": snapshot["field"]["id"],
+             "requestSha256": request_sha, "sourceSha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+             "creationReceiptSha256": hashlib.sha256(Path(args.creation_receipt).read_bytes()).hexdigest(),
+             "snapshotSha256": hashlib.sha256(snapshot_bytes).hexdigest(),
+             "backupSha256": hashlib.sha256(Path(args.backup).read_bytes()).hexdigest(),
+             "intentPath": str(Path(args.intent).absolute()), "qualificationOnly": True, "adoptionAuthorized": False}
+    if (admission["approved"] is not True or admission["qualificationOnly"] is not True
+        or admission["adoptionAuthorized"] is not False or any(admission.get(k) != v for k, v in joins.items())):
+        raise Refused("Status root admission identity/source/request/custody mismatch")
+    intent_path = Path(args.intent)
+    if not intent_path.is_absolute() or intent_path.parent.is_symlink():
+        raise Refused("intent must be an absolute root-selected custody path")
+    intent = {"schema": "fsgg.product-status-intent/1", "state": "intent", "request": request, "requestSha256": request_sha, "admission": admission}
+    # Exclusive, durable one-use intent; an existing intent (including unknown) cannot resend.
+    fd = os.open(intent_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, "wb") as stream:
+        stream.write(canonical(intent)); stream.flush(); os.fsync(stream.fileno())
+    directory = os.open(intent_path.parent, os.O_RDONLY)
+    try:
+        os.fsync(directory)
+    finally:
+        os.close(directory)
+    # Recheck native emptiness immediately after persisting intent and before the only mutation.
+    live = product_native(args.product, created["id"], created)
+    assert_live_precondition(snapshot, product_snapshot(live))
+    error = None
+    try:
+        graphql(UPDATE_FIELD, variables)
+    except Exception as exc:
+        error = str(exc)  # Unknown response never triggers a second mutation or item repair.
+    post = product_native(args.product, created["id"], created)
+    actual = product_snapshot(post)["field"]
+    expected_options = [{k: o[k] for k in ("name", "color", "description")} for o in options]
+    actual_options = [{k: o[k] for k in ("name", "color", "description")} for o in actual["options"]]
+    if actual["id"] != snapshot["field"]["id"] or actual_options != expected_options:
+        raise Refused("Status outcome unknown/different; preserve intent and observe; never blind retry")
+    print(json.dumps({"state": "verified", "requestSha256": request_sha, "responseGap": error, "native": post}, sort_keys=True))
+
+
 def common(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--owner", default="FS-GG")
     parser.add_argument("--project-number", type=int, default=1)
@@ -742,6 +959,15 @@ def parse_args() -> argparse.Namespace:
     add.add_argument("--description", default="")
     add.add_argument("--apply", action="store_true")
     add.set_defaults(func=cmd_add_option)
+    initial = subs.add_parser("initialize-product-status", help="guarded initial-empty qualification product Status only")
+    initial.add_argument("--product", choices=list(PRODUCT_TARGETS), required=True)
+    initial.add_argument("--creation-receipt", required=True)
+    initial.add_argument("--snapshot", required=True)
+    initial.add_argument("--backup")
+    initial.add_argument("--admission")
+    initial.add_argument("--intent")
+    initial.add_argument("--apply", action="store_true")
+    initial.set_defaults(func=cmd_initialize_product_status)
     return parser.parse_args()
 
 

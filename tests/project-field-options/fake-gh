@@ -31,7 +31,16 @@ def project(fields=False, items=None):
     return {"data": {"organization": {"projectV2": value}}}
 
 
-if "query ProjectFieldOptionsField" in query:
+if "query InitialProductStatusBackup" in query:
+    reply = {"data": {"repository": {"object": {"text": state.get("remoteBackupText")}}}}
+elif "query InitialProductStatus" in query:
+    native = dict(state["native"])
+    state["nativeReads"] = state.get("nativeReads", 0) + 1
+    if os.environ.get("PROJECT_FIELD_OPTIONS_FAKE_ITEM_AFTER_UPDATE") and state.get("fieldMutationCount"):
+        native["items"] = {"totalCount": 1, "nodes": [{"id":"fixture-foreign-item"}], "pageInfo":{"hasNextPage":False}}
+    state_path.write_text(json.dumps(state, indent=2, sort_keys=True) + "\n")
+    reply = {"data": {"node": native}}
+elif "query ProjectFieldOptionsField" in query:
     reply = project(fields=True)
 elif "query ProjectFieldOptionsItems" in query:
     all_items = state["items"]
@@ -65,6 +74,10 @@ elif "query ProjectFieldOptionsItems" in query:
         }
     )
 elif "mutation ProjectFieldOptionsUpdate" in query:
+    if os.environ.get("PROJECT_FIELD_OPTIONS_FAKE_FAIL_UPDATE_BEFORE_APPLY"):
+        state["fieldAttemptCount"] = state.get("fieldAttemptCount", 0) + 1
+        state_path.write_text(json.dumps(state, indent=2, sort_keys=True) + "\n")
+        fail("fixture response lost without applying update")
     if os.environ.get("PROJECT_FIELD_OPTIONS_FAKE_FORBID_MUTATION"):
         fail("field mutation was forbidden by fixture")
     options = variables["options"]
@@ -73,13 +86,20 @@ elif "mutation ProjectFieldOptionsUpdate" in query:
         copied = dict(option)
         copied.setdefault("id", "opt_" + copied["name"].replace(".", "dot"))
         materialized.append(copied)
-    state["field"]["options"] = materialized
+    if "native" in state:
+        for field in state["native"]["fields"]["nodes"]:
+            if field["name"] == "Status":
+                field["options"] = materialized
+    else:
+        state["field"]["options"] = materialized
     if os.environ.get("PROJECT_FIELD_OPTIONS_FAKE_CLEAR_ON_UPDATE"):
         for item in state["items"]:
             item["repoScope"] = None
     state["fieldMutationCount"] = state.get("fieldMutationCount", 0) + 1
     state_path.write_text(json.dumps(state, indent=2, sort_keys=True) + "\n")
-    reply = {"data": {"updateProjectV2Field": {"projectV2Field": state["field"]}}}
+    if os.environ.get("PROJECT_FIELD_OPTIONS_FAKE_LOST_UPDATE_RESPONSE"):
+        fail("fixture response lost after native update")
+    reply = {"data": {"updateProjectV2Field": {"projectV2Field": state.get("field")}}}
 elif "mutation ProjectFieldOptionsRestore" in query:
     if os.environ.get("PROJECT_FIELD_OPTIONS_FAKE_DROP_RESTORE"):
         reply = {"data": {}}

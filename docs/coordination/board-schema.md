@@ -310,3 +310,54 @@ Use this sequence from a clean, reviewed branch:
 The restore verifies all prior item ids even if new cards appeared during the
 operation. A disappeared prior item, missing option, dropped write, or mismatch
 leaves the command red and the snapshot usable for another recovery attempt.
+
+### Initial-empty product qualification Status
+
+`initialize-product-status` extends the guarded helper only for the two newly
+created Game/Rendering qualification projects selected under COORD-BOARD-V2-01.6.
+It is not a general rename route or production board adoption. The direct
+`updateProjectV2Field` prohibition remains; this command owns its one guarded
+update through the existing transport.
+
+Before using it, retain both native creation responses and complete initial
+owner/project/repository/field/item readbacks in a private creation receipt
+(`fsgg.product-project-creation/1`). Its complete pre-creation baseline excludes
+all existing targets; the two returned projects must be distinct. The command
+requires their exact selected titles, FS-GG organization identity, repository
+membership, update capability and empty item census. Unknown creation outcomes
+must be observed, never replaced with another creation attempt.
+
+Capture the selected Status with the existing `snapshot` command, preserve its
+exact bytes in an immutable remote `.github` commit, and read that backup back.
+The new command verifies those remote bytes itself. All custody input files must
+be regular, owner-held mode `0600`; an unverified local backup is insufficient.
+The only admitted initial vocabulary is the native creation-readback tuple
+`Todo`, `In Progress`, `Done`. Any different defaults require source review.
+The frozen output is `Backlog`, `Ready`, `In progress`, `Blocked`, `Done`; existing
+corresponding option IDs/colors/descriptions are retained in the request.
+
+A read-only preparation prints the exact request and digest:
+
+```sh
+scripts/project-field-options initialize-product-status \
+  --product game --creation-receipt /private/creation.json \
+  --snapshot /private/status-before.json
+```
+
+`--apply` additionally requires `--backup`, `--admission` and `--intent`. Root
+issues an effect-specific five-minute admission binding the exact project/field,
+source bytes, request, creation receipt, snapshot, backup and absolute intent path.
+That local check implements the root's reviewed operation boundary; it does not
+mint native permission. Qualification-only is required and adoption remains false.
+The helper durably creates the intent exclusively, then rechecks native emptiness
+and snapshot preconditions before its sole update. An existing intent refuses.
+
+After success or response loss, independently read the entire selected native
+schema and empty census. Exact target options settle the effect; a differing or
+unreadable outcome retains the intent and refuses. There is no automatic retry,
+assignment repair, membership write or rollback. Unexpected membership or other
+field drift stops subsequent import/seeding. GitHub offers no atomic empty-project
+compare-and-swap: root must serialize its fixture operations and retain the final
+readback; concurrent external edits leave qualification refused. Game maintenance
+seeds and Rendering's blocked scheduling require separate admitted item operations
+only after schema acceptance. No drivers, defaults or legacy writers activate here.

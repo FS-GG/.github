@@ -11,6 +11,8 @@ SKILL="$ROOT/.claude/skills/cross-repo-coordination"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
+python3 "$ROOT/tests/project-field-options/initial-product-status.py"
+
 ok=0
 bad=0
 pass() { echo "ok - $1"; ok=$((ok + 1)); }
