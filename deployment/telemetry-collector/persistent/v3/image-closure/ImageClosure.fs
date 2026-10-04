@@ -30,17 +30,17 @@ module ImageClosure =
     [<Literal>]
     let HostJournalSha256="c2409342cd3448325fb1dc3dff53b6c2e3783c7634b75101834049b86aa11731"
     [<Literal>]
-    let ManagerArtifactSha256="518041591b9b7f1827911f0e796a1815799841831b962d3112169d9241969cdd"
+    let ManagerArtifactSha256="00965f7bb4de96bfdfff4ff44a8f04c82173abf819591e1f4012e8c3233151b9"
     [<Literal>]
-    let ManagerManifestSha256="966e13e827b3b3a3f37c51bcc35fd57f4684741d19a3308905e5f66ac51ebf0e"
+    let ManagerManifestSha256="5f88ef87e6ec62eb538f2bb5f74a3124bb28e78ee3c4703effa394f50f7306a6"
     [<Literal>]
-    let ManagerSourceRevision="49fe964f0239ad3734f5fa5119b3227f2a04758d"
+    let ManagerSourceRevision="5468ce210ef4886806d70c4e333496a358efbdf1"
     [<Literal>]
-    let ManagerSourceTree="36b0be5cc74bfd10d045ab11ce978547464d5266"
+    let ManagerSourceTree="a299eeea6aecc73d6a820ddf38701419c7ae22e3"
     [<Literal>]
-    let ManagerPreparedSha256="287ea427ec040f4fc4b3791fbea7cfb6dd765a9ee45584dacffd960cc10c5d1a"
+    let ManagerPreparedSha256="0719232c2d3724057667eee0b30339e25a8128c1a0b45b0dd186d987dd756ece"
     [<Literal>]
-    let ManagerArchiveSha256="03d46e6553e99be27c0bbc06d8767e2aa2a5e9b588d608d4b4c229e7a87ad74f"
+    let ManagerArchiveSha256="88272bb6cd2604508734c8949a760e9f3ca6eb26f250d73ed232beeb24299ef4"
     [<Literal>]
     let RuntimeImageDigest="sha256:ed6a2d26633ddcd3d42a1d9f9866214ecbbc11ba6ac5e0e843da02c13da24072"
     [<Literal>]
@@ -74,7 +74,7 @@ module ImageClosure =
          | "runtime"->value.StartsWith("/usr/share/dotnet/",StringComparison.Ordinal)
          | "native"->[|"/opt/fsgg/";"/usr/local/";"/usr/lib/";"/lib/";"/lib64/";"/etc/";"/usr/share/"|]|>Array.exists(fun prefix->value.StartsWith(prefix,StringComparison.Ordinal))
          | _->false)
-    let private fixedProduction selection = selection.Platform="linux/amd64"&&selection.OwnerUid=0&&selection.HostSourceRevision=HostSourceRevision&&selection.HostReleaseId=403127331L&&selection.HostRunId=37220419362L&&selection.HostArchiveSha256=HostArchiveSha256&&selection.HostPackageSha256=HostPackageSha256&&selection.HostPayloadSha256=HostPayloadSha256&&selection.HostManifestSha256=HostManifestSha256&&selection.HostJournalSha256=HostJournalSha256&&selection.ManagerSourceRevision=ManagerSourceRevision&&selection.ManagerSourceTree=ManagerSourceTree&&selection.ManagerArtifactSha256=ManagerArtifactSha256&&selection.ManagerManifestSha256=ManagerManifestSha256&&selection.ManagerPreparedSha256=ManagerPreparedSha256&&selection.ManagerArchiveSha256=ManagerArchiveSha256&&selection.ManagerRunId=36983338783L&&selection.ManagerArtifactId=11216418410L&&selection.RuntimeImageDigest=RuntimeImageDigest&&selection.RuntimeTreeSha256=RuntimeTreeSha256&&selection.NativeElfSha256=NativeElfSha256&&selection.NativeProfileSha256=NativeProfileSha256&&selection.CanonicalVerifierSha256=CanonicalVerifierSha256
+    let private fixedProduction selection = selection.Platform="linux/amd64"&&selection.OwnerUid=0&&selection.HostSourceRevision=HostSourceRevision&&selection.HostReleaseId=403127331L&&selection.HostRunId=37220419362L&&selection.HostArchiveSha256=HostArchiveSha256&&selection.HostPackageSha256=HostPackageSha256&&selection.HostPayloadSha256=HostPayloadSha256&&selection.HostManifestSha256=HostManifestSha256&&selection.HostJournalSha256=HostJournalSha256&&selection.ManagerSourceRevision=ManagerSourceRevision&&selection.ManagerSourceTree=ManagerSourceTree&&selection.ManagerArtifactSha256=ManagerArtifactSha256&&selection.ManagerManifestSha256=ManagerManifestSha256&&selection.ManagerPreparedSha256=ManagerPreparedSha256&&selection.ManagerArchiveSha256=ManagerArchiveSha256&&selection.ManagerRunId=37224476786L&&selection.ManagerArtifactId=11311024262L&&selection.RuntimeImageDigest=RuntimeImageDigest&&selection.RuntimeTreeSha256=RuntimeTreeSha256&&selection.NativeElfSha256=NativeElfSha256&&selection.NativeProfileSha256=NativeProfileSha256&&selection.CanonicalVerifierSha256=CanonicalVerifierSha256
     let private modeText (path:string) = Convert.ToString(int(File.GetUnixFileMode path),8).PadLeft(4,'0')
     let private noLink (info:FileSystemInfo)=String.IsNullOrEmpty info.LinkTarget
     let ownerUid (path:string) =

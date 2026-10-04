@@ -79,7 +79,7 @@ match invokePlaceholder changedPlaceholder with
 File.Delete changedPlaceholder
 printfn "PASS actual canonical placeholder unavailability and changed-byte refusal"
 let prepared:byte array=match ImageClosure.prepare selected with ClosureResult.Prepared bytes->bytes|value->fail $"physical positive refused: %A{value}"
-let production={selected with IdentityClass="production";OwnerUid=0;HostSourceRevision=ImageClosure.HostSourceRevision;HostReleaseId=403127331L;HostRunId=37220419362L;HostArchiveSha256=ImageClosure.HostArchiveSha256;HostPackageSha256=ImageClosure.HostPackageSha256;HostPayloadSha256=ImageClosure.HostPayloadSha256;HostManifestSha256=ImageClosure.HostManifestSha256;HostJournalSha256=ImageClosure.HostJournalSha256;ManagerSourceRevision=ImageClosure.ManagerSourceRevision;ManagerSourceTree=ImageClosure.ManagerSourceTree;ManagerArtifactSha256=ImageClosure.ManagerArtifactSha256;ManagerManifestSha256=ImageClosure.ManagerManifestSha256;ManagerPreparedSha256=ImageClosure.ManagerPreparedSha256;ManagerArchiveSha256=ImageClosure.ManagerArchiveSha256;ManagerRunId=36983338783L;ManagerArtifactId=11216418410L;RuntimeImageDigest=ImageClosure.RuntimeImageDigest;RuntimeTreeSha256=ImageClosure.RuntimeTreeSha256;NativeElfSha256=ImageClosure.NativeElfSha256;NativeProfileSha256=ImageClosure.NativeProfileSha256;CanonicalVerifierSha256=ImageClosure.CanonicalVerifierSha256}
+let production={selected with IdentityClass="production";OwnerUid=0;HostSourceRevision=ImageClosure.HostSourceRevision;HostReleaseId=403127331L;HostRunId=37220419362L;HostArchiveSha256=ImageClosure.HostArchiveSha256;HostPackageSha256=ImageClosure.HostPackageSha256;HostPayloadSha256=ImageClosure.HostPayloadSha256;HostManifestSha256=ImageClosure.HostManifestSha256;HostJournalSha256=ImageClosure.HostJournalSha256;ManagerSourceRevision=ImageClosure.ManagerSourceRevision;ManagerSourceTree=ImageClosure.ManagerSourceTree;ManagerArtifactSha256=ImageClosure.ManagerArtifactSha256;ManagerManifestSha256=ImageClosure.ManagerManifestSha256;ManagerPreparedSha256=ImageClosure.ManagerPreparedSha256;ManagerArchiveSha256=ImageClosure.ManagerArchiveSha256;ManagerRunId=37224476786L;ManagerArtifactId=11311024262L;RuntimeImageDigest=ImageClosure.RuntimeImageDigest;RuntimeTreeSha256=ImageClosure.RuntimeTreeSha256;NativeElfSha256=ImageClosure.NativeElfSha256;NativeProfileSha256=ImageClosure.NativeProfileSha256;CanonicalVerifierSha256=ImageClosure.CanonicalVerifierSha256}
 match ImageClosure.prepare production with ClosureResult.Unavailable "trusted-native-selection-acquisition-required"->()|value->fail $"unacquired production closure did not require trusted root selection: %A{value}"
 // Each historical Host identity must fail the production release gate before acquisition.
 let historicalHostSelections=[
@@ -96,6 +96,21 @@ for historical in historicalHostSelections do
   | ClosureResult.Refused "fixed-production-identity-mismatch"->()
   | value->fail $"historical Host pin crossed current production release gate: %A{value}"
 printfn "PASS actual served Host 0.4 production identity and eight historical-pin refusals"
+// Reject each historical Manager field before native acquisition.
+let historicalManagerSelections=[
+  {production with ManagerSourceRevision="49fe964f0239ad3734f5fa5119b3227f2a04758d"}
+  {production with ManagerSourceTree="36b0be5cc74bfd10d045ab11ce978547464d5266"}
+  {production with ManagerRunId=36983338783L}
+  {production with ManagerArtifactId=11216418410L}
+  {production with ManagerArtifactSha256="518041591b9b7f1827911f0e796a1815799841831b962d3112169d9241969cdd"}
+  {production with ManagerManifestSha256="966e13e827b3b3a3f37c51bcc35fd57f4684741d19a3308905e5f66ac51ebf0e"}
+  {production with ManagerPreparedSha256="287ea427ec040f4fc4b3791fbea7cfb6dd765a9ee45584dacffd960cc10c5d1a"}
+  {production with ManagerArchiveSha256="03d46e6553e99be27c0bbc06d8767e2aa2a5e9b588d608d4b4c229e7a87ad74f"} ]
+for historical in historicalManagerSelections do
+  match ImageClosure.prepare historical with
+  | ClosureResult.Refused "fixed-production-identity-mismatch"->()
+  | value->fail $"historical Manager pin crossed current production release gate: %A{value}"
+printfn "PASS actual served repaired Manager identity and eight historical-pin refusals"
 // A bounded source release-pin window does not run the full synthetic OCI mechanism.
 // The normal console and native CI retain every constructor, OCI and retirement control below.
 if Environment.GetEnvironmentVariable "PERSISTENT_V3_RELEASE_PIN_CONTROLS_ONLY" = "1" then

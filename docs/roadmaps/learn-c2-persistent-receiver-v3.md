@@ -304,3 +304,29 @@ checks. Repaired
 served Manager distribution, owner-selected native/profile/Python/Tcl/Tk/search/runtime
 closure, two cold builds/reloads and C5 on each reload remain pending. Grants, capture,
 restart/recovery, usage completeness and activation remain open.
+
+### Repaired served Manager acquisition, 2026-10-04
+
+Root accepted Manager bundle run `37224476786`, first attempt, artifact `11311024262`,
+from protected Coordination source `5468ce210ef4886806d70c4e333496a358efbdf1`
+and tree `a299eeea6aecc73d6a820ddf38701419c7ae22e3`. Served artifact SHA-256
+`00965f7bb4de96bfdfff4ff44a8f04c82173abf819591e1f4012e8c3233151b9`
+contains the exact manifest and 19 payload files with accepted sizes, hashes and modes.
+Hosted focused tests and served verification passed. This closes repaired Manager
+distribution; native and installed receiver qualification remain pending.
+
+The next receiver source candidate binds this Manager tuple alongside published Host
+0.4.0. Its declaration remains `acquisition-required`, with reader profile and native
+inventory unset. Eight historical Manager-field refusals supplement the existing
+Host release cases. Root accepted the exact source candidate
+`9c22a393a6d8669bdd52df20ef0fd6f994dd2490`: three restore/build/focused console
+steps returned natural exit 0, all owned groups settled, and all 20 focused release-pin
+cases passed. Local qualification does not replace protected integration or exact-head
+checks; full OCI and installed receiver acceptance remain false.
+
+A retained served diagnostic-capable Coordination executable can be reused with a
+fresh owner-selected profile, after byte and provenance checks. Its Oct 3 profile
+and capability evidence are expired. Retained Python, ASP.NET, signed Tcl/Tk, native
+schema and flags are proposed acquisition evidence; trusted inventory/aliases and
+a fresh actual reader result remain required. No two cold OCI builds/reloads, C5,
+installed receiver, capture, recovery, usage or activation acceptance follows.
