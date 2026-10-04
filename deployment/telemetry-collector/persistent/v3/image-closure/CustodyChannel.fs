@@ -32,7 +32,7 @@ module CustodyProtocol=
         require(node.ValueKind=JsonValueKind.Object) "custody-object"
         let actual=node.EnumerateObject()|>Seq.map _.Name|>Seq.toArray
         require(actual.Length=List.length names&&Set.ofArray actual=Set.ofList names) "custody-fields"
-    let sha value=require(System.Text.RegularExpressions.Regex.IsMatch(value,"^[a-f0-9]{64}$")) "custody-sha256"
+    let sha (value:string)=require(System.Text.RegularExpressions.Regex.IsMatch(value,"^[a-f0-9]{64}$")) "custody-sha256"
     let binding (node:JsonElement)=
         exact ["schema";"identity";"deadline";"admissionSha256"] node
         require(node.GetProperty("schema").GetString()=Schema) "custody-schema"
