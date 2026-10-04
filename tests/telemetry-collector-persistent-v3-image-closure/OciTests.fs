@@ -91,37 +91,40 @@ let run selected prepared trusted =
     let prepared=match ImageClosure.prepare selected with ClosureResult.Prepared value->value|value->raise(InvalidOperationException(sprintf "synthetic prepare: %A" value))
     File.WriteAllBytes(selectionPath,JsonSerializer.SerializeToUtf8Bytes selected)
     File.WriteAllBytes(trustedPath,JsonSerializer.SerializeToUtf8Bytes trusted)
-    let expected=RootlessPolicy.inputIdentity selected selectionPath trustedPath original prepared
-    let inputs={Selection=selected;Trusted=trusted;SelectionPath=selectionPath;TrustedPath=trustedPath;ParentOci=original;WorkRoot=Path.Combine(root,"work");EvidenceRoot=Path.Combine(root,"evidence");ExpectedInput=expected;Prepared=prepared}
-    let fixtureScript=Path.Combine(root,"synthetic-podman.py")
-    File.WriteAllText(fixtureScript,"""import json, os, shutil, sys, time
-args=sys.argv[1:]
-assert '--remote=false' in args and '--storage-driver=vfs' in args
-assert os.environ.get('CONTAINER_HOST') is None
-if 'save' in args:
-    shutil.copyfile(os.environ['FIXTURE_OCI'],args[args.index('--output')+1])
-elif 'inspect' in args:
-    print(json.dumps([{'Digest':os.environ['FIXTURE_MANIFEST'],'Id':os.environ['FIXTURE_CONFIG'],'Os':'linux','Architecture':'amd64'}]))
-elif 'build' in args:
-    assert '--timestamp' in args and '--source-date-epoch' not in args
-    assert '--no-cache' in args and args[args.index('--network')+1]=='none'
-    time.sleep(.35)
-elif 'run' in args:
-    entry=args[args.index('--entrypoint')+1]
-    if entry.endswith('/dotnet'): print('Microsoft.NETCore.App 10.0.12\nMicrosoft.AspNetCore.App 10.0.12')
-    elif 'python' in entry: print('Python 3.14.0')
-    else: print('codex-cli 0.158.0')
-    """)
-    let real=RealProcessBackend():>IProcessBackend
+    let expected=RootlessPolicy.inputIdentity selected selectionPath trustedPath original prepared (String('c',64))
+    let inputs={CustodyIdentity=String('c',64);Selection=selected;Trusted=trusted;SelectionPath=selectionPath;TrustedPath=trustedPath;ParentOci=original;WorkRoot=Path.Combine(root,"work");EvidenceRoot=Path.Combine(root,"evidence");ExpectedInput=expected;Prepared=prepared}
+    // This fixture substitutes command effects, not production custody. Actual lease/process
+    // qualification belongs to the separately admitted private caller controls.
     let mutable actualBuilds=0
+    let runFixture archivePath (command:ProcessCommand)=
+        require(command.Executable=RootlessPolicy.Builder) "mechanism selected arbitrary production executable"
+        require(command.Arguments|>Array.contains "--remote=false") "remote builder"
+        require(command.Environment|>Map.containsKey "CONTAINER_HOST"|>not) "provider environment"
+        let has value=command.Arguments|>Array.contains value
+        let after value=command.Arguments[Array.findIndex((=)value)command.Arguments+1]
+        let mutable output=""
+        if has "save" then File.Copy(archivePath,after "--output")
+        elif has "inspect" then output<-JsonSerializer.Serialize [|{|Digest=manifestDigest;Id=configDigest;Os="linux";Architecture="amd64"|}|]
+        elif has "build" then
+            require(has "--timestamp"&&has "--no-cache"&&after "--network"="none") "builder arguments"
+            actualBuilds<-actualBuilds+1
+        elif has "run" then
+            let entry=after "--entrypoint"
+            output<-if entry.EndsWith("/dotnet",StringComparison.Ordinal) then "Microsoft.NETCore.App 10.0.12\nMicrosoft.AspNetCore.App 10.0.12" elif entry.Contains "python" then "Python 3.14.0" else "codex-cli 0.158.0"
+        let mutable retired=false
+        let identity="synthetic:"+Guid.NewGuid().ToString("N")
+        {new IOwnedProcess with
+            member _.Identity=identity
+            member _.Wait token=token.ThrowIfCancellationRequested();retired<-true;{ExitCode=0;Stdout=output;Stderr=""}
+            member _.Cancel token=token.ThrowIfCancellationRequested();retired<-true
+            member _.HasExited=retired
+            member _.Dispose()=()}
     let synthetic={new IProcessBackend with
       member _.ReadBuilderIdentity()=RootlessPolicy.BuilderSha256
       member _.ReadSupervisorIdentity()=RootlessPolicy.SupervisorSha256
       member _.ReadAvailableCapacity _=128L*1024L*1024L*1024L
-      member _.Start command=
-        require(command.Executable=RootlessPolicy.Builder) "mechanism selected arbitrary production executable"
-        if command.Arguments|>Array.contains "build" then actualBuilds<-actualBuilds+1
-        real.Start {command with Executable="/usr/bin/python3";Arguments=Array.append [|fixtureScript|] command.Arguments;Environment=command.Environment|>Map.add "FIXTURE_OCI" original|>Map.add "FIXTURE_MANIFEST" manifestDigest|>Map.add "FIXTURE_CONFIG" configDigest}}
+      member _.RetainCommandEvidence _=()
+      member _.Start command=runFixture original command}
     // Hosted CI capacity is unrelated to this synthetic process/OCI fixture. Production still
     // reads the real drive and requires the same 128 GiB reserve before acquiring any resources.
     let lowCapacityInputs={inputs with WorkRoot=Path.Combine(root,"low-capacity-work");EvidenceRoot=Path.Combine(root,"low-capacity-evidence")}
@@ -134,6 +137,7 @@ elif 'run' in args:
         require(path=lowCapacityInputs.WorkRoot) "capacity checked unrelated path"
         capacityObserved<-true
         128L*1024L*1024L*1024L-1L
+      member _.RetainCommandEvidence _=()
       member _.Start _=
         lowCapacityStarts<-lowCapacityStarts+1
         raise(InvalidOperationException "capacity refusal started a process")}
@@ -146,7 +150,7 @@ elif 'run' in args:
     require(capacityObserved&&capacityRefused&&lowCapacityStarts=0&&not(Directory.Exists lowCapacityInputs.WorkRoot)&&not(Directory.Exists lowCapacityInputs.EvidenceRoot)) "below-reserve capacity acquired resources"
     let mechanism=RootlessMechanism(inputs,synthetic)
     let final,trace=RunnerExecution.runWithBudgets RunnerExecution.productionBudgets 32 (DateTimeOffset.UtcNow.AddSeconds 30.) CancellationToken.None mechanism (Runner.initialC4 expected)
-    require(Runner.c4Ready final&&not(Runner.qualificationAccepted final)&&actualBuilds=2&&trace.Length=12) (sprintf "synthetic actual process/OCI mechanism did not reach narrower C4Ready: %A" final)
+    require(Runner.c4Ready final&&not(Runner.qualificationAccepted final)&&actualBuilds=2&&trace.Length=12) (sprintf "synthetic OCI mechanism did not reach narrower C4Ready: %A" final)
     mechanism.SealTerminal(final,trace)
     require(File.Exists(Path.Combine(inputs.EvidenceRoot,"terminal.json"))&&not(Directory.Exists(Path.Combine(inputs.WorkRoot,"bundle-a")))&&not(Directory.Exists(Path.Combine(inputs.WorkRoot,"bundle-b")))) "synthetic terminal evidence or scoped cleanup absent"
     for name in ["a-build.oci.tar";"b-build.oci.tar";"a-reload.oci.tar";"b-reload.oci.tar"] do require(File.Exists(Path.Combine(inputs.EvidenceRoot,name))) "external OCI archive lost during cleanup"
@@ -155,6 +159,7 @@ elif 'run' in args:
       member _.ReadBuilderIdentity()=RootlessPolicy.BuilderSha256
       member _.ReadSupervisorIdentity()=RootlessPolicy.SupervisorSha256
       member _.ReadAvailableCapacity _=128L*1024L*1024L*1024L
+      member _.RetainCommandEvidence _=()
       member _.Start command=
         if command.Arguments|>Array.contains "build" then raise(IOException "synthetic-lost-start-ack")
         synthetic.Start command}
@@ -166,14 +171,15 @@ elif 'run' in args:
       member _.ReadBuilderIdentity()=RootlessPolicy.BuilderSha256
       member _.ReadSupervisorIdentity()=RootlessPolicy.SupervisorSha256
       member _.ReadAvailableCapacity _=128L*1024L*1024L*1024L
+      member _.RetainCommandEvidence _=()
       member _.Start command=
         let second=(command.Arguments|>Array.exists(fun arg->arg.Contains("bundle-b",StringComparison.Ordinal)))
         if second&&(command.Arguments|>Array.contains "save") then
-            real.Start {command with Executable="/usr/bin/python3";Arguments=Array.append [|fixtureScript|] command.Arguments;Environment=command.Environment|>Map.add "FIXTURE_OCI" changed|>Map.add "FIXTURE_MANIFEST" manifestDigest|>Map.add "FIXTURE_CONFIG" configDigest}
+            runFixture changed command
         else synthetic.Start command}
     let mismatchMechanism=RootlessMechanism(changedInputs,mismatched)
     let mismatch,_=RunnerExecution.runWithBudgets RunnerExecution.productionBudgets 32 (DateTimeOffset.UtcNow.AddSeconds 30.) CancellationToken.None mismatchMechanism (Runner.initialC4 expected)
-    require(not(Runner.c4Ready mismatch)&&mismatch.Phase=Refused&&mismatch.Owned.IsEmpty&&mismatch.Refusal=Some "BuildMismatch") "actual different OCI config did not refuse and clean owned bundles"
+    require(not(Runner.c4Ready mismatch)&&mismatch.Phase=Refused&&mismatch.Owned.IsEmpty&&mismatch.Refusal=Some "BuildMismatch") "different OCI config did not refuse and clean owned bundles"
     // The unacknowledged backend above demonstrably never spawned its failing build.
     // Only the fixture owns this explicit reconciliation; production may not infer absence.
     for directory in Directory.EnumerateDirectories(failedInputs.WorkRoot,"*",SearchOption.AllDirectories) do File.SetUnixFileMode(directory,UnixFileMode.UserRead|||UnixFileMode.UserWrite|||UnixFileMode.UserExecute)
@@ -182,22 +188,12 @@ elif 'run' in args:
     Directory.Delete(root,true)
 
 let processBoundaries()=
-    let root=Directory.CreateTempSubdirectory("p2c4-synthetic-process-").FullName
-    let backend=RealProcessBackend():>IProcessBackend
-    let command code limit={Executable="/usr/bin/python3";Arguments=[|"-I";"-S";"-B";"-c";code|];Environment=Map.ofList["PATH","/usr/bin:/bin"];WorkingDirectory=root;OutputLimit=limit}
-    use longChild=backend.Start(command "import time; time.sleep(.35); print('CONTROLLED')" 1024)
-    let output=longChild.Wait CancellationToken.None
-    require(output.ExitCode=0&&output.Stdout.Trim()="CONTROLLED"&&longChild.HasExited) "actual controlled long child did not settle"
-    use cancelled=backend.Start(command "import time; time.sleep(60)" 1024)
-    use cancellation=new CancellationTokenSource(100)
-    let mutable timeoutObserved=false
-    try cancelled.Wait cancellation.Token|>ignore with :? OperationCanceledException->timeoutObserved<-true
-    use cleanup=new CancellationTokenSource(2000)
-    cancelled.Cancel cleanup.Token
-    require(timeoutObserved&&cancelled.HasExited) "actual child timeout did not acknowledge cancellation"
-    use overflow=backend.Start(command "print('x'*10000)" 64)
-    let mutable overflowObserved=false
-    try overflow.Wait CancellationToken.None|>ignore with :? IOException->overflowObserved<-true
-    overflow.Cancel cleanup.Token
-    require(overflowObserved&&overflow.HasExited) "actual bounded output overflow was accepted"
-    Directory.Delete(root,true)
+    // Pure schema controls; no legacy process backend or native acceptance.
+    let parse text=use doc=JsonDocument.Parse(text:string) in doc.RootElement.Clone()
+    let binding=JsonSerializer.Serialize {|schema=CustodyProtocol.Schema;identity=String('a',64);deadline=DateTimeOffset.UtcNow.AddMinutes(1.).ToString("O");admissionSha256=String('b',64)|}
+    CustodyProtocol.binding(parse binding)|>ignore
+    rejects "extra custody field" (fun()->CustodyProtocol.binding(parse(binding.TrimEnd('}')+",\"extra\":true}"))|>ignore)
+    rejects "duplicate custody field" (fun()->CustodyProtocol.binding(parse(binding.TrimEnd('}')+",\"identity\":\"x\"}"))|>ignore)
+    let expired=JsonSerializer.Serialize {|schema=CustodyProtocol.Schema;identity=String('a',64);deadline=DateTimeOffset.UtcNow.AddSeconds(-1.).ToString("O");admissionSha256=String('b',64)|}
+    rejects "expired original deadline" (fun()->CustodyProtocol.binding(parse expired)|>ignore)
+    rejects "recycled numeric identity" (fun()->CustodyProtocol.sha "pid:123:start:456")

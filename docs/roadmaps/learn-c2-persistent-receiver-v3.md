@@ -186,8 +186,10 @@ and actual producer execution are still required; neither source nor a synthetic
 them.
 
 Two independent cold OCI builds, complete runtime probes, and served Manager-to-Host inactive
-qualification remain open. The current C4 runner stops with qualification Unknown and needs its
-separate C5 adapter to execute the exact published Host bytes. This declaration correction creates
+qualification remain open. `run-c4` deliberately stops with qualification Unknown;
+`run-inactive` already runs the actual selected Manager and published Host on both cold-reloaded
+bundles through `InactiveQualification.run`. Its disposable synthetic fixture supplies no
+native or installed authority. This declaration correction creates
 no image, grant, installation, capture, enrollment or activation authority.
 
 ### P2-C empty native dependency admission repair, 2026-10-03
@@ -330,3 +332,49 @@ and capability evidence are expired. Retained Python, ASP.NET, signed Tcl/Tk, na
 schema and flags are proposed acquisition evidence; trusted inventory/aliases and
 a fresh actual reader result remain required. No two cold OCI builds/reloads, C5,
 installed receiver, capture, recovery, usage or activation acceptance follows.
+
+
+### P2-C rootless command custody source window, 2026-10-04
+
+The accepted narrow custody amendment preserves the existing cold OCI comparison and C5
+sequence. Source now requires a root-admitted inherited command channel for `run-c4` and
+`run-inactive`; command identity comes from the operation lease, and retirement is observed
+by the caller through retained pidfds and exclusive recursive cgroup handles. The original
+absolute deadline and custody identity join the selected input/evidence identity. Command
+streams and retained command/output evidence share one operation output allowance.
+
+Source preparation does not establish compiled or native custody. Affected compilation and
+console/correspondence checks use the existing safe source supervisor; controlled native
+custody fixtures require a separate admission in a qualified context. Current local UID/GID
+maps lack the required singleton non-host-root UID0 mapping, and the cgroup mount is read-only. Delegation, workload control denial, foreign
+insertion exclusion, mapped-user runtime visibility, namespace authority and conservative
+32-thread/process capacity remain actual feasibility gates. No fallback or raised cap is
+admitted. The former 18:50 image-closure executable cannot be reused for the changed backend.
+
+Fresh native diagnostic evidence and a successor acquisition admission are required before
+actual two-image/C5 qualification; the accepted 19:20 diagnostic is historical after its
+19:24:09 UTC expiry. Installed receiver adoption, grants, capture, restart/recovery, usage
+completeness and activation remain pending. Source controls do not close those gates.
+
+
+Root accepted the amended source compilation at `bd06cce1d50d42934377dfd9c3676b8a331a5c1e`.
+Private operation `learn-rootless-compile-root-operation-20261004-2106` completed restore,
+build and the actual default source console with three natural exit-zero steps in 16.815s;
+original/source pins settled and the final CLR census contained only the two reviewed
+infrastructure generations. The source console retained the unavailable placeholder,
+release-pin refusals, synthetic OCI/runner checks and five pure custody binding controls.
+Its in-process command fixture does not establish actual descendant custody.
+
+The source landing joins protected `2ab0c0ff9f37bdec9a11ba3604ebdc230711934f`; all 24
+compilation leaves remain byte-equal to the accepted candidate. This byte join preserves
+compilation provenance and does not call the joined revision newly compiled. Protected
+integration and exact-head checks retain their normal authority. The initial overload-failed
+operation and its consumed admission remain retained as failed evidence.
+
+Before native use, the fixed inherited-namespace C helper must join an independently pinned
+compiler, headers/linker and freshly compiled body. A bounded helper compilation
+can resolve that source dependency independently; it cannot supply cgroup delegation,
+required UID/GID mappings, private namespace/setns authority, actual mapped-user/guest runtime
+visibility, foreign-insertion exclusion, workload control denial or retirement qualification.
+Current native custody and all actual cold-image, installed receiver and activation gates
+remain open. Source delivery follows the Board publication fence.

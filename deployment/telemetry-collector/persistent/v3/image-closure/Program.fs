@@ -70,11 +70,13 @@ try
                 RootlessPolicy.requirePrivateInput flags["--trusted-native-selection"]
             match ImageClosure.prepareWithTrustedNative(Some rootTrusted)selected with
             | Prepared prepared when command="run-c4"||command="run-inactive"->
-                let inputs=RootlessPolicy.select selected rootTrusted flags["--selection"] flags["--trusted-native-selection"] flags["--parent-oci"] flags["--work-root"] flags["--evidence-root"] prepared
+                use custody=CustodyChannel.BindInherited()
+                let inputs=RootlessPolicy.select selected rootTrusted flags["--selection"] flags["--trusted-native-selection"] flags["--parent-oci"] flags["--work-root"] flags["--evidence-root"] prepared custody.Identity
+                custody.BindInput inputs.ExpectedInput
                 use cancellation=new CancellationTokenSource()
                 Console.CancelKeyPress.Add(fun event->event.Cancel<-true;cancellation.Cancel())
-                let mechanism=RootlessMechanism(inputs,RealProcessBackend())
-                let deadline=DateTimeOffset.UtcNow.AddMinutes 90.
+                let mechanism=RootlessMechanism(inputs,RealProcessBackend(custody))
+                let deadline=custody.Deadline
                 let state,trace=RunnerExecution.runWithBudgets RunnerExecution.productionBudgets 32 deadline cancellation.Token mechanism (if command="run-c4" then Runner.initialC4 inputs.ExpectedInput else Runner.initial inputs.ExpectedInput)
                 if Runner.c4Ready state||Runner.qualificationAccepted state then
                     mechanism.SealTerminal(state,trace)
