@@ -1,5 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net10.0</TargetFramework><TreatWarningsAsErrors>true</TreatWarningsAsErrors><IsPackable>false</IsPackable></PropertyGroup>
   <ItemGroup><PackageReference Include="FSharp.Core" /><ProjectReference Include="../PersistentV3.Preparation.fsproj" /></ItemGroup>
-  <ItemGroup><Compile Include="Runner.fs" /><Compile Include="ImageClosure.fs" /><Compile Include="OciEvidence.fs" /><Compile Include="InactiveQualification.fs" /><Compile Include="RootlessMechanism.fs" /><Compile Include="Program.fs" /></ItemGroup>
+  <ItemGroup><Compile Include="Runner.fs" /><Compile Include="ImageClosure.fs" /><Compile Include="OciEvidence.fs" /><Compile Include="InactiveQualification.fs" /><Compile Include="CustodyChannel.fs" /><Compile Include="RootlessMechanism.fs" /><Compile Include="Program.fs" /></ItemGroup>
 </Project>

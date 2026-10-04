@@ -186,8 +186,10 @@ and actual producer execution are still required; neither source nor a synthetic
 them.
 
 Two independent cold OCI builds, complete runtime probes, and served Manager-to-Host inactive
-qualification remain open. The current C4 runner stops with qualification Unknown and needs its
-separate C5 adapter to execute the exact published Host bytes. This declaration correction creates
+qualification remain open. `run-c4` deliberately stops with qualification Unknown;
+`run-inactive` already runs the actual selected Manager and published Host on both cold-reloaded
+bundles through `InactiveQualification.run`. Its disposable synthetic fixture supplies no
+native or installed authority. This declaration correction creates
 no image, grant, installation, capture, enrollment or activation authority.
 
 ### P2-C empty native dependency admission repair, 2026-10-03
@@ -330,3 +332,26 @@ and capability evidence are expired. Retained Python, ASP.NET, signed Tcl/Tk, na
 schema and flags are proposed acquisition evidence; trusted inventory/aliases and
 a fresh actual reader result remain required. No two cold OCI builds/reloads, C5,
 installed receiver, capture, recovery, usage or activation acceptance follows.
+
+
+### P2-C rootless command custody source window, 2026-10-04
+
+The accepted narrow custody amendment preserves the existing cold OCI comparison and C5
+sequence. Source now requires a root-admitted inherited command channel for `run-c4` and
+`run-inactive`; command identity comes from the operation lease, and retirement is observed
+by the caller through retained pidfds and exclusive recursive cgroup handles. The original
+absolute deadline and custody identity join the selected input/evidence identity. Command
+streams and retained command/output evidence share one operation output allowance.
+
+Source preparation does not establish compiled or native custody. Affected compilation and
+console/correspondence checks use the existing safe source supervisor; controlled native
+custody fixtures require a separate admission in a qualified context. Current local UID/GID maps lack the required singleton non-host-root UID0
+mapping, and the cgroup mount is read-only. Delegation, workload control denial, foreign
+insertion exclusion, mapped-user runtime visibility, namespace authority and conservative
+32-thread/process capacity remain actual feasibility gates. No fallback or raised cap is
+admitted. The former 18:50 image-closure executable cannot be reused for the changed backend.
+
+Fresh native diagnostic evidence and a successor acquisition admission are required before
+actual two-image/C5 qualification; the accepted 19:20 diagnostic is historical after its
+19:24:09 UTC expiry. Installed receiver adoption, grants, capture, restart/recovery, usage
+completeness and activation remain pending. Source controls do not close those gates.

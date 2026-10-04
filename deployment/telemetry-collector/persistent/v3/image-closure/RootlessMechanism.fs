@@ -10,99 +10,16 @@ open System.Threading.Tasks
 open System.Collections.Generic
 open System.Runtime.InteropServices
 
-module private OwnedProcessGroup=
-    [<DllImport("libc",SetLastError=true)>]
-    extern int getpgid(int pid)
-    [<DllImport("libc",SetLastError=true)>]
-    extern int kill(int pid,int signal)
-
-type ProcessCommand={Executable:string;Arguments:string array;Environment:Map<string,string>;WorkingDirectory:string;OutputLimit:int}
-type ProcessOutput={ExitCode:int;Stdout:string;Stderr:string}
-type IOwnedProcess=
-    abstract Identity:string
-    abstract Wait:CancellationToken->ProcessOutput
-    abstract Cancel:CancellationToken->unit
-    abstract HasExited:bool
-    inherit IDisposable
-type IProcessBackend=
-    abstract Start:ProcessCommand->IOwnedProcess
-    abstract ReadBuilderIdentity:unit->string
-    abstract ReadSupervisorIdentity:unit->string
-    abstract ReadAvailableCapacity:string->int64
-
-/// The test backend substitutes process mechanics and capacity observations. The CLI always selects this real backend.
-type RealProcessBackend()=
+/// Production commands are released only by the operation caller on the inherited channel.
+type RealProcessBackend(custody:CustodyChannel)=
     interface IProcessBackend with
         member _.ReadBuilderIdentity()=OciEvidence.shaFile "/usr/sbin/podman"
         member _.ReadSupervisorIdentity()=OciEvidence.shaFile "/usr/bin/setsid"
         member _.ReadAvailableCapacity path=DriveInfo(Path.GetPathRoot path).AvailableFreeSpace
-        member _.Start command=
-            let start=ProcessStartInfo("/usr/bin/setsid")
-            start.ArgumentList.Add "--wait"
-            start.ArgumentList.Add "--"
-            start.ArgumentList.Add command.Executable
-            start.UseShellExecute<-false
-            start.RedirectStandardOutput<-true;start.RedirectStandardError<-true;start.RedirectStandardInput<-true
-            start.WorkingDirectory<-command.WorkingDirectory
-            start.Environment.Clear()
-            for KeyValue(key,value) in command.Environment do start.Environment[key]<-value
-            for argument in command.Arguments do start.ArgumentList.Add argument
-            let child=new Process(StartInfo=start)
-            if not(child.Start()) then child.Dispose();raise(IOException "process-not-started")
-            child.StandardInput.Close()
-            let started=child.StartTime.ToUniversalTime().Ticks
-            let groupClock=Stopwatch.StartNew()
-            let mutable group=OwnedProcessGroup.getpgid child.Id
-            while group<>child.Id&&not child.HasExited&&groupClock.Elapsed<TimeSpan.FromMilliseconds 500. do
-                Thread.Sleep 1
-                group<-OwnedProcessGroup.getpgid child.Id
-            if group<>child.Id then
-                if not child.HasExited then child.Kill(true)
-                child.Dispose()
-                raise(IOException "process-group-acknowledgment-lost")
-            let identity = $"pid:{child.Id}:start:{started}:group:{group}:nonce:{Guid.NewGuid():N}"
-            let groupExists()=
-                if OwnedProcessGroup.kill(-group,0)=0 then true
-                else if Marshal.GetLastPInvokeError()=3 then false
-                else raise(IOException "process-group-observation-unknown")
-            let kill()=
-                if groupExists() then
-                    let result=OwnedProcessGroup.kill(-group,9)
-                    if result<>0&&Marshal.GetLastPInvokeError()<>3 then raise(IOException "process-group-kill-unacknowledged")
-            let drain (reader:StreamReader)=Task.Run(fun()->
-                let buffer=Array.zeroCreate<char> 4096
-                let output=StringBuilder()
-                let mutable outputBytes=0
-                let mutable count=reader.Read(buffer,0,buffer.Length)
-                while count>0 do
-                    outputBytes<-outputBytes+Encoding.UTF8.GetByteCount(buffer,0,count)
-                    if outputBytes>command.OutputLimit then kill();raise(IOException "process-output-overflow")
-                    output.Append(buffer,0,count)|>ignore
-                    count<-reader.Read(buffer,0,buffer.Length)
-                output.ToString())
-            let stdout=drain child.StandardOutput
-            let stderr=drain child.StandardError
-            {new IOwnedProcess with
-                member _.Identity=identity
-                member _.HasExited=child.HasExited&&stdout.IsCompleted&&stderr.IsCompleted&&not(groupExists())
-                member _.Wait token=
-                    try
-                        child.WaitForExitAsync(token).GetAwaiter().GetResult()
-                        let output=stdout.WaitAsync(token).GetAwaiter().GetResult()
-                        let error=stderr.WaitAsync(token).GetAwaiter().GetResult()
-                        if groupExists() then raise(IOException "process-group-descendant-remains")
-                        {ExitCode=child.ExitCode;Stdout=output;Stderr=error}
-                    with _->kill();reraise()
-                member _.Cancel token=
-                    kill()
-                    child.WaitForExitAsync(token).GetAwaiter().GetResult()
-                    // Drains must settle even when they failed due to overflow.
-                    try Task.WhenAll([|stdout:>Task;stderr:>Task|]).WaitAsync(token).GetAwaiter().GetResult() with _ when stdout.IsCompleted&&stderr.IsCompleted->()
-                    while groupExists() do token.ThrowIfCancellationRequested();Thread.Sleep 1
-                    if not child.HasExited then raise(IOException "process-cancellation-unacknowledged")
-                member _.Dispose()=child.Dispose()}
+        member _.RetainCommandEvidence bytes=custody.Retain bytes
+        member _.Start command=custody.Start command
 
-type RootlessInputs={Selection:Selection;Trusted:TrustedNativeSelection;SelectionPath:string;TrustedPath:string;ParentOci:string;WorkRoot:string;EvidenceRoot:string;ExpectedInput:string;Prepared:byte array}
+type RootlessInputs={CustodyIdentity:string;Selection:Selection;Trusted:TrustedNativeSelection;SelectionPath:string;TrustedPath:string;ParentOci:string;WorkRoot:string;EvidenceRoot:string;ExpectedInput:string;Prepared:byte array}
 type private Bundle={Logical:string;Root:string;Nonce:string;Environment:Map<string,string>;Contexts:string array;Children:Dictionary<string,IOwnedProcess>;mutable Build:IOwnedProcess option;mutable Result:OciResult option;mutable UnacknowledgedChild:bool;Gate:obj;mutable C5Active:bool;mutable C5Retired:bool;mutable C5Residue:bool}
 
 module RootlessPolicy=
@@ -131,16 +48,16 @@ module RootlessPolicy=
         if not file.Exists||not(String.IsNullOrEmpty file.LinkTarget)||ImageClosure.ownerUid path<>0||((File.GetUnixFileMode path)&&&(UnixFileMode.GroupWrite|||UnixFileMode.OtherWrite))<>enum 0 then fail "root-selected-input-custody"
         let parent=file.Directory
         if not parent.Exists||not(String.IsNullOrEmpty parent.LinkTarget)||ImageClosure.ownerUid parent.FullName<>0||((File.GetUnixFileMode parent.FullName)&&&(UnixFileMode.GroupWrite|||UnixFileMode.OtherWrite))<>enum 0 then fail "root-selected-parent-custody"
-    let inputIdentity (selection:Selection) selectionPath trustedPath parent prepared=
-        let hashes=Array.concat[[|OciEvidence.shaFile selectionPath;OciEvidence.shaFile trustedPath;OciEvidence.shaFile parent;OciEvidence.shaBytes prepared;commandPolicy;InactiveQualification.Policy;BuilderSha256;SupervisorSha256|];selection.RoleManifests|>Array.map(fun item->OciEvidence.shaFile(Path.Combine(selection.ManifestRoot,item.Path)));[|OciEvidence.shaFile(Path.Combine(selection.ManifestRoot,selection.NativeInventoryPath))|]]
+    let inputIdentity (selection:Selection) selectionPath trustedPath parent prepared custodyIdentity=
+        let hashes=Array.concat[[|OciEvidence.shaFile selectionPath;OciEvidence.shaFile trustedPath;OciEvidence.shaFile parent;OciEvidence.shaBytes prepared;custodyIdentity;commandPolicy;InactiveQualification.Policy;BuilderSha256;SupervisorSha256|];selection.RoleManifests|>Array.map(fun item->OciEvidence.shaFile(Path.Combine(selection.ManifestRoot,item.Path)));[|OciEvidence.shaFile(Path.Combine(selection.ManifestRoot,selection.NativeInventoryPath))|]]
         OciEvidence.shaBytes(Encoding.UTF8.GetBytes(String.concat "\n" hashes))
-    let select selection trusted selectionPath trustedPath parent work evidence prepared=
+    let select selection trusted selectionPath trustedPath parent work evidence prepared custodyIdentity=
         if selection.IdentityClass<>"production" then fail "run-requires-production-identity"
         requireRootlessNamespace()
         for path in [selectionPath;trustedPath;parent] do requirePrivateInput path
         privateDirectory work;privateDirectory evidence
         if work=evidence||work.StartsWith(evidence+"/",StringComparison.Ordinal)||evidence.StartsWith(work+"/",StringComparison.Ordinal) then fail "roots-overlap"
-        {Selection=selection;Trusted=trusted;SelectionPath=selectionPath;TrustedPath=trustedPath;ParentOci=parent;WorkRoot=work;EvidenceRoot=evidence;ExpectedInput=inputIdentity selection selectionPath trustedPath parent prepared;Prepared=prepared}
+        {CustodyIdentity=custodyIdentity;Selection=selection;Trusted=trusted;SelectionPath=selectionPath;TrustedPath=trustedPath;ParentOci=parent;WorkRoot=work;EvidenceRoot=evidence;ExpectedInput=inputIdentity selection selectionPath trustedPath parent prepared custodyIdentity;Prepared=prepared}
 
 /// One acknowledged bundle owns context, build store, reload store and all subprocess descendants.
 type RootlessMechanism(inputs:RootlessInputs,backend:IProcessBackend)=
@@ -156,6 +73,18 @@ type RootlessMechanism(inputs:RootlessInputs,backend:IProcessBackend)=
         require(String.IsNullOrEmpty(DirectoryInfo(inputs.EvidenceRoot).LinkTarget)&&ImageClosure.ownerUid inputs.EvidenceRoot=inputs.Selection.OwnerUid) "evidence-custody-changed"
         let path=Path.Combine(inputs.EvidenceRoot,name)
         let bytes=JsonSerializer.SerializeToUtf8Bytes value
+        if name.Contains("-command-",StringComparison.Ordinal)||name.Contains("-output",StringComparison.Ordinal)||name.EndsWith("-probes.json",StringComparison.Ordinal) then backend.RetainCommandEvidence bytes
+        if name="inactive-qualification.json" then
+            use document=JsonDocument.Parse bytes
+            let rec chargeRaw (node:JsonElement)=
+                match node.ValueKind with
+                | JsonValueKind.Object->
+                    for item in node.EnumerateObject() do
+                        if item.Name="managerStdout"||item.Name="hostStdout" then backend.RetainCommandEvidence(Encoding.UTF8.GetBytes(item.Value.GetRawText()))
+                        else chargeRaw item.Value
+                | JsonValueKind.Array->for item in node.EnumerateArray() do chargeRaw item
+                | _->()
+            chargeRaw document.RootElement
         use file=new FileStream(path,FileMode.CreateNew,FileAccess.Write,FileShare.None)
         file.Write bytes;file.Flush(true)
         File.SetUnixFileMode(path,UnixFileMode.UserRead)
@@ -164,7 +93,7 @@ type RootlessMechanism(inputs:RootlessInputs,backend:IProcessBackend)=
         match ImageClosure.prepareWithTrustedNative (Some inputs.Trusted) inputs.Selection with
         | Prepared bytes->require(bytes=inputs.Prepared) "prepared-input-changed"
         | _->raise(InvalidDataException "closed-input-no-longer-admitted")
-        require(RootlessPolicy.inputIdentity inputs.Selection inputs.SelectionPath inputs.TrustedPath inputs.ParentOci inputs.Prepared=inputs.ExpectedInput) "input-bytes-changed"
+        require(RootlessPolicy.inputIdentity inputs.Selection inputs.SelectionPath inputs.TrustedPath inputs.ParentOci inputs.Prepared inputs.CustodyIdentity=inputs.ExpectedInput) "input-bytes-changed"
         token.ThrowIfCancellationRequested()
     let globalArgs (bundle:Bundle) reload=
         let prefix=if reload then "reload-" else "build-"
@@ -252,7 +181,7 @@ type RootlessMechanism(inputs:RootlessInputs,backend:IProcessBackend)=
     member _.SealTerminal(state:State,trace:(Effect*Observation) list)=
         require((Runner.c4Ready state||Runner.qualificationAccepted state)&&comparisonSealed) "terminal-not-qualified"
         let accepted=Runner.qualificationAccepted state
-        seal "terminal.json" {|schema=(if accepted then "fsgg.telemetry.persistent-v3-inactive-result/1" else "fsgg.telemetry.persistent-v3-c4-result/1");status=(if accepted then "InactiveQualified" else "C4Ready");input=inputs.ExpectedInput;qualificationAccepted=accepted;cleanupObserved=state.Owned.IsEmpty&&state.Running.IsEmpty;effects=trace|>List.map(fun(effect,observation)->sprintf "%A -> %A" effect observation)|}
+        seal "terminal.json" {|schema=(if accepted then "fsgg.telemetry.persistent-v3-inactive-result/1" else "fsgg.telemetry.persistent-v3-c4-result/1");status=(if accepted then "InactiveQualified" else "C4Ready");input=inputs.ExpectedInput;custody=inputs.CustodyIdentity;qualificationAccepted=accepted;cleanupObserved=state.Owned.IsEmpty&&state.Running.IsEmpty;effects=trace|>List.map(fun(effect,observation)->sprintf "%A -> %A" effect observation)|}
     interface IRunnerMechanism with
         member _.Execute(effect,token)=Task.Run<Observation>((fun()->
             token.ThrowIfCancellationRequested()
@@ -266,7 +195,7 @@ type RootlessMechanism(inputs:RootlessInputs,backend:IProcessBackend)=
                 Directory.CreateDirectory(inputs.EvidenceRoot,UnixFileMode.UserRead|||UnixFileMode.UserWrite|||UnixFileMode.UserExecute)|>ignore
                 let parent=OciEvidence.read token inputs.ParentOci (Path.Combine(inputs.WorkRoot,"parent-admission"))
                 require(parent.ManifestDigest=inputs.Selection.RuntimeImageDigest) "parent-manifest-mismatch"
-                seal "input.json" {|schema="fsgg.telemetry.persistent-v3-c4-input/1";input=expected;parent=parent.ManifestDigest;builder=RootlessPolicy.BuilderSha256;supervisor=RootlessPolicy.SupervisorSha256;commandPolicy=RootlessPolicy.commandPolicy|}
+                seal "input.json" {|schema="fsgg.telemetry.persistent-v3-c4-input/1";input=expected;custody=inputs.CustodyIdentity;parent=parent.ManifestDigest;builder=RootlessPolicy.BuilderSha256;supervisor=RootlessPolicy.SupervisorSha256;commandPolicy=RootlessPolicy.commandPolicy|}
                 InputsAcquired expected
             | ValidateInputs expected->validate token;InputsValidated inputs.ExpectedInput
             | CreateStore logical->
