@@ -53,6 +53,20 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-04: COORD-BOARD-V2-01.5 shared product adapter CLOSED (bounded source scope).**
+Version 3 of the closed board binding admits one selected product repository and one to five
+exact native issue identities. Population reads and guarded Observation writes use that binding;
+foreign products, organization fallback, legacy targets and unsupported owners refuse. Version 2
+retains the selected organization cohort. The [owning board plan](coordination/2026-09-29-coordination-v2-board-design.md)
+keeps creator/guidance integration, publication and actual installed product adoption open.
+
+All six native restore/build/test commands exited **0**, with **65 projection and 7 CLI tests
+passing** on the exact .NET **10.0.12** runtime. Root joined 273 source leaves, unchanged package/SDK
+pins and absence of all 20 owned process generations. Root acceptance SHA-256 is
+`15bba60d41063776f46a04e1396f6de2ad0b5fa8f3de4ee7e62f7331ac0ebb00`.
+The two-product fixtures use fake transports; no live board mutation or product adoption is claimed.
+Earlier runtime and fixture failures remain retained. Whole milestones .5 and .6 remain open.
+
 **2026-10-04: SC2C-01.6f installed checked preparation CLOSED (bounded refusal qualification).**
 The retained genuine public **0.2.1** invocation exited **0** in **3.070 seconds**.
 It observed the three declared source, compile-receipt and generic-API imports, then
