@@ -364,17 +364,18 @@ uses the same language-independent integration boundary.
 ### Optional Box2D game physics — 2026-10-04
 
 Record **GAME-BOX2D-01** as an independent opt-in Game track. The
-[Box2D physics plan](roadmaps/game-box2d-physics.md) proposes a render-independent
-`FS.GG.Game.Physics.Box2D` package alongside Core, with owned mutable execution,
-immutable snapshots and gameplay events. Start with one headless falling-body/joint/sensor
-example, then qualify interpolation and repeatable input replay under a pinned profile.
-Public package qualification precedes explicit consumer adoption; rollback, broader
+[Box2D physics plan](roadmaps/game-box2d-physics.md) records the published render-independent
+`FS.GG.Game.Physics.Box2D` **0.17.0** package alongside Core, with owned mutable execution,
+immutable snapshots and gameplay events. Source, pinned-profile replay and a fresh public
+package-only falling-body/joint/sensor and portal example have passed (.1–.3).
+Explicit product/retained consumer adoption remains open; rollback, broader
 determinism and Fable/browser compatibility retain separate contracts. Existing physics
 options and workspace defaults remain unchanged. This track does not gate full-V2
 acceptance or expand the current installed-API/BAR/SC2 preparation windows.
 The linked [area/portal extension](roadmaps/game-area-portals.md) adds arbitrary
-connections between local 2D areas, starting with rigid whole-body transfers; seamless
-cross-boundary physics and portal-aware rendering/queries retain separate qualification.
+connections between local 2D areas. P1/P2 rigid whole-body transfers are delivered and
+publicly qualified; P3 adoption/presentation, seamless cross-boundary physics and
+portal-aware rendering/queries retain separate qualification.
 
 ## 1. How work is executed
 

@@ -1,9 +1,18 @@
 # GAME-BOX2D-01 — Optional Box2D physics backend
 
-Status: proposed implementation track, 2026-10-04. FS.GG.Game owns the adapter and
-qualification; fdev integrates the result. This plan records the selected direction,
-with implementation, publication and adoption still open. It is independent of full-V2
-acceptance and the current BAR/SC2 preparation lanes.
+Status: .1–.3 delivered, 2026-10-04. FS.GG.Game owns the adapter and qualification;
+fdev integrates the result. Game **0.17.0** publishes the optional adapter with
+Box2D.NET **3.1.654**. Explicit product/Template adoption (.4) remains open.
+This track is independent of full-V2 acceptance and BAR/SC2 preparation.
+
+The [owning Game plan](https://github.com/FS-GG/FS.GG.Game/blob/main/docs/roadmaps/game-box2d-physics.md)
+records source delivery and [release qualification](https://github.com/FS-GG/FS.GG.Game/actions/runs/37237849417)
+at `8cd158db8cb0836968df3f695fad75366434886c`: four-package custody, both-feed
+payload comparison and a fresh public package-only falling-body/joint/sensor and
+portal consumer on .NET 10.0.12 / Ubuntu 24.04.5 / X64. Retained snapshots and
+exact pinned-profile input replay passed. Public signed archives differ from the
+originals; all non-signature payload members agree. No product adoption or browser
+physics is inferred.
 
 Programme links: [Unified Roadmap §9.8](../2026-09-07-154210-fs-gg-unified-development-roadmap.md#98-feature-parts-and-subroadmap-index)
 and [V2 roadmap](../github-substrate-v2-roadmap.md#optional-box2d-game-physics--2026-10-04).

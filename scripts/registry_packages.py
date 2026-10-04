@@ -46,6 +46,7 @@ CONTRACT_PACKAGES: dict[str, list[str]] = {
     "fs-gg-ui-template": ["FS.GG.UI.Template"],
     "game-sim-core": ["FS.GG.Game.Core"],
     "game-scene-adapter": ["FS.GG.Game.Render"],
+    "game-physics-box2d": ["FS.GG.Game.Physics.Box2D"],
     # Independent WASM axis: both members must be available on both feeds.
     "wasm-shared-runtime": ["FS.GG.Wasm.Contracts", "FS.GG.Wasm.Browser"],
     # All five ship as one coherent set at one version; a partial publish is a real defect and
