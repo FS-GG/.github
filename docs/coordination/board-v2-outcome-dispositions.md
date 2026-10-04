@@ -1,8 +1,8 @@
 # Coordination V2 carryover dispositions — bounded source window
 
-This preparation follows COORD-BOARD-V2-01.4. It authorizes no native import, refresh, dispatch or
-consumer switch. The proposed successor remains exactly SDD#928, Templates#441, .github#3010 and
-.github#3009. SDD#935 remains unapproved. Source/plan acceptance, publication, native operation,
+This bounded reconciliation follows COORD-BOARD-V2-01.4. It authorizes no native import, refresh,
+dispatch or consumer switch. The admitted successor remains exactly SDD#928, Templates#441,
+.github#3010 and .github#3009. SDD#935 remains unapproved. Source/plan acceptance, publication, native operation,
 installed adoption and human evidence remain distinct. Full .4 closure is not claimed.
 
 ## Named programme outcomes
@@ -74,7 +74,7 @@ qualification remain owned by its linked plans. TSDD knowledge has no selected n
 | [SDD#928](https://github.com/FS-GG/FS.GG.SDD/issues/928), `I_kwDOS_PboM8AAAABOUVZAw` | Keep proposed selected successor; Blocked / Active delivery | SDD neutral provider/catalog contract and author SDK/harness; SDD provider owner. Preserve the manifest's actual source/publication/native acceptance gap. |
 | [Templates#441](https://github.com/FS-GG/FS.GG.Templates/issues/441), `I_kwDOTGkvVs8AAAABOUV4AA` | Keep proposed selected successor; Blocked / Active delivery | Four provider packs/operational skills and package-only qualification after SDD/Governance producers publish; Templates package owner. |
 | [.github#3010](https://github.com/FS-GG/.github/issues/3010), `I_kwDOS6feoM8AAAABOUWpiA` | Keep proposed selected successor; Blocked / Active delivery | Catalog-native wizard and coherent registry, then four-provider public installed proof; .github wizard/registry owner. |
-| [.github#3009](https://github.com/FS-GG/.github/issues/3009), `I_kwDOS6feoM8AAAABOUU1ew` | Append proposed selected successor; Ready / Active delivery seed only after root applies | Architecture choice settled by [comment5430619257](https://github.com/FS-GG/.github/issues/3009#issuecomment-5430619257); organization ADR/linked design remains. .github architecture/provider-contract owner; no repeated human architecture question. |
+| [.github#3009](https://github.com/FS-GG/.github/issues/3009), `I_kwDOS6feoM8AAAABOUU1ew` | Protected-delivered / native Closed (completed); retain admitted cohort identity | Architecture choice in [comment5430619257](https://github.com/FS-GG/.github/issues/3009#issuecomment-5430619257) is delivered by [PR #4192](https://github.com/FS-GG/.github/pull/4192), protected `4fc6edf6acce60760cea858ba15e4384c9ce0340`, with [ADR-0092](../adr/0092-descriptor-driven-polyglot-workspace-providers.md) and [linked design](../design/polyglot-workspace-providers.md). Root closed the native issue after its delivery comment. No further architecture outcome or planning-field mutation is inferred. |
 | [SDD#935](https://github.com/FS-GG/FS.GG.SDD/issues/935), `I_kwDOS_PboM8AAAABOda86Q` | Omit unapproved/unseeded membership | Distinct local/HTTPS provider-source extension after928. Native child/membership grants neither selection nor scheduling authority. |
 | [Governance#423](https://github.com/FS-GG/FS.GG.Governance/issues/423), `I_kwDOS-Fun88AAAABOUVf4g` | Follow-up outside repository scope | Neutral governance capabilities and current source/publication/native evidence need separate owner adjudication/read scope before a later import. |
 | .github#2954 / #2963 | Omit superseded / delivered | Preserve original manifest dispositions; open issue state does not revive V1 migration gates. |
@@ -104,15 +104,17 @@ is the legacy reference; immutable bootstrap and scheduled archive retain exact 
 The earlier 37-row table remains its dated source inventory, not a current completion ledger. Root's
 [fresh consumer acceptance](board-v2-installed-qualification.md#work-unified-roadmap-consumer-acceptance--2026-10-04)
 adds `work-unified-roadmap` to the selected check-board organization scope. The exact four native
-issues were read open on 2026-10-04; complete current planning/native observations stay separate
-from the remaining deliverable. No issue, membership, dependency or planning field was mutated.
+issues were read open in that dated inspection; root subsequently delivered [PR #4192](https://github.com/FS-GG/.github/pull/4192)
+and closed .github#3009 as completed on 2026-10-04. That native closure supersedes its earlier open
+issue observation. The admitted binding, membership, dependencies and planning fields are unchanged;
+accepted inspection/consumer receipts retain their original observation scope.
 
 | Selected outcome | Current disposition | Remaining actual join |
 |---|---|---|
 | SDD#928 | Keep selected; human Blocked. SDD#924 and #927 are natively closed, but that does not deliver #928's neutral catalog contract. Current provider `2.0.0` project-knowledge admission is not the complete typed catalog/prompt/naming contract. | SDD owns source/parser/public-contract/provenance and package-only controls, then exact published producer before receiver adoption. |
 | Templates#441 | Keep selected; human Blocked. Existing TypeScript/Rust/Go native fixtures and Python receiver repairs do not constitute the four TypeScript/JavaScript/Rust/Go CLI provider packs. | Compatible SDD/Governance producers, once-packed template/catalog/skills qualification, publication and public installed readback. |
 | `.github`#3010 | Keep selected; human Blocked. The current wizard's fixed provider selection remains a separate catalog consumer outcome. | Published Templates artifact, generic typed catalog discovery and public installed four-provider creation before registry/pin activation. |
-| `.github`#3009 | Keep selected until native delivery; architecture choice accepted in comment5430619257. [ADR-0092](../adr/0092-descriptor-driven-polyglot-workspace-providers.md) and its [linked design](../design/polyglot-workspace-providers.md) now supply the prepared organization source outcome. | Review and protected delivery of these documents; no repeat human architecture question and no downstream provider/publication completion inferred. |
+| `.github`#3009 | Protected-delivered / native Closed (completed). [PR #4192](https://github.com/FS-GG/.github/pull/4192) merged as `4fc6edf6acce60760cea858ba15e4384c9ce0340` after all required checks passed; root verified the entire reviewed merge tree. [ADR-0092](../adr/0092-descriptor-driven-polyglot-workspace-providers.md) and its [linked design](../design/polyglot-workspace-providers.md) deliver the accepted architecture choice. | No remaining architecture deliverable. Preserve its admitted cohort identity until a separately selected root reconciliation; native closure changes no planning field and implies no downstream provider/publication completion. |
 | Governance#423 | Remains outside the exact organization cohort; live issue is open and linked in the producer design. | Its neutral capability/binding producer remains necessary for Templates#441; this dependency does not authorize broader import. |
 | SDD#935 | Remains unselected. | Native child/membership is not admission to this queue. |
 
