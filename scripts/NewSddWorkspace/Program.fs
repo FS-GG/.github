@@ -91,6 +91,8 @@ type Options =
         /// Default `FS-GG` / `Coordination` (the org board); `--board <owner>/<title>` overrides.
         BoardOwner: string
         BoardTitle: string
+        BoardBinding: string option
+        BoardKitRef: string option
         /// Explicit public/private intent for a product Project. None preserves an existing board.
         PublicBoard: bool option
         /// Named team/user writer identities. Required whenever `--public-board` is requested.
@@ -124,6 +126,8 @@ let assembleWizardOptions (target: string) (product: string) : Options =
         WorkspaceRepo = None
         BoardOwner = "FS-GG"
         BoardTitle = "Coordination"
+        BoardBinding = None
+        BoardKitRef = None
         PublicBoard = None
         TrustedWriters = []
         ChoreLocks = None
@@ -1309,7 +1313,7 @@ let private writeCoordinationEnv (target: string) (owner: string) (title: string
 /// Vendor the coordination kit from FS-GG/.github@<ref> into the workspace and write the board env.
 /// Best-effort (mirrors governance): a file that 404s becomes a Warning — the env still lands, and the
 /// rest is fetchable by hand — never a fatal that would strand a good scaffold.
-let private wireCoordination (kitRef: string) (opts: Options) : Outcome =
+let private wireLegacyCoordination (kitRef: string) (opts: Options) : Outcome =
     let raw p =
         sprintf "https://raw.githubusercontent.com/FS-GG/.github/%s/%s" kitRef p
 
@@ -1378,12 +1382,15 @@ let private wireCoordination (kitRef: string) (opts: Options) : Outcome =
 /// meaningful here; the SDD/render/governance steps do not re-run on an existing workspace.
 type RetrofitOptions =
     {
+        Preview: bool
         Target: string
         /// The FS-GG/.github ref to vendor the kit from (default `main`). Mirrors `--ref` on scaffold.
         Ref: string
         WorkspaceRepo: string option
         BoardOwner: string
         BoardTitle: string
+        BoardBinding: string option
+        BoardKitRef: string option
         ChoreLocks: string option
     }
 
@@ -1709,7 +1716,9 @@ let private header (opts: Options) =
 
     grid.AddRow(
         "[grey]coordination[/]",
-        (if opts.Coordinate then
+        (if opts.BoardBinding.IsSome then
+             "selected product V2 binding (adoption pending)"
+         elif opts.Coordinate then
              sprintf "board [aqua]%s/%s[/]" (Markup.Escape opts.BoardOwner) (Markup.Escape opts.BoardTitle)
          else
              "[dim]disabled (--no-coordination)[/]")
@@ -2530,6 +2539,10 @@ let private parse (argv: string list) : Result<Options, string> =
         | "--ref" :: value :: _ when value.StartsWith "--" -> Error(sprintf "--ref needs a value (got flag '%s')" value)
         | "--ref" :: value :: t -> flags { acc with Ref = value } t
         | [ "--ref" ] -> Error "--ref needs a value"
+        | "--board-binding" :: value :: t when not (value.StartsWith "--") && acc.BoardBinding.IsNone -> flags { acc with BoardBinding = Some value } t
+        | "--board-kit-ref" :: value :: t when not (value.StartsWith "--") && acc.BoardKitRef.IsNone -> flags { acc with BoardKitRef = Some value } t
+        | "--board-binding" :: _ -> Error "--board-binding requires one path"
+        | "--board-kit-ref" :: _ -> Error "--board-kit-ref requires one immutable revision"
         | "--board" :: value :: _ when value.StartsWith "--" ->
             Error(sprintf "--board needs a value (got flag '%s')" value)
         | "--board" :: value :: t ->
@@ -2594,6 +2607,8 @@ let private parse (argv: string list) : Result<Options, string> =
                 WorkspaceRepo = None
                 BoardOwner = "FS-GG"
                 BoardTitle = "Coordination"
+                BoardBinding = None
+                BoardKitRef = None
                 PublicBoard = None
                 TrustedWriters = []
                 ChoreLocks = None
@@ -2614,6 +2629,11 @@ let private parseRetrofit (argv: string list) : Result<RetrofitOptions, string> 
     let rec flags (acc: RetrofitOptions) rest =
         match rest with
         | [] -> Ok acc
+        | "--preview" :: t -> flags { acc with Preview = true } t
+        | "--board-binding" :: value :: t when not (value.StartsWith "--") && acc.BoardBinding.IsNone -> flags { acc with BoardBinding = Some value } t
+        | "--board-kit-ref" :: value :: t when not (value.StartsWith "--") && acc.BoardKitRef.IsNone -> flags { acc with BoardKitRef = Some value } t
+        | "--board-binding" :: _ -> Error "--board-binding requires one path"
+        | "--board-kit-ref" :: _ -> Error "--board-kit-ref requires one immutable revision"
         | "--board" :: value :: _ when value.StartsWith "--" ->
             Error(sprintf "--board needs a value (got flag '%s')" value)
         | "--board" :: value :: t ->
@@ -2644,14 +2664,39 @@ let private parseRetrofit (argv: string list) : Result<RetrofitOptions, string> 
         flags
             {
                 RetrofitOptions.Target = target
+                Preview = false
                 Ref = "main"
                 WorkspaceRepo = None
                 BoardOwner = "FS-GG"
                 BoardTitle = "Coordination"
+                BoardBinding = None
+                BoardKitRef = None
                 ChoreLocks = None
             }
             rest
     | _ -> Error "retrofit needs a target directory (the workspace to wire): retrofit <target> [--board owner/title]"
+
+/// Resolve selected V2 bytes before any creator effects. All transport here is immutable raw
+/// producer content; no adapter/installed execution or GitHub resource operation is performed.
+let private prepareProductBoard target repository bindingPath kitRef =
+    match repository, bindingPath, kitRef with
+    | Some repo, Some path, Some revision ->
+        try
+            if Directory.Exists(Path.Combine(target, ".git")) || File.Exists(Path.Combine(target, ".git")) then
+                let exitCode, origin = runProcessIn (Some target) false "git" [ "remote"; "get-url"; "origin" ]
+                if exitCode <> 0 then invalidOp "retained workspace GitHub origin is unreadable"
+                ProductBoard.validateRemote repo (origin.Trim()) |> function Ok() -> () | Error error -> invalidOp error
+            ProductBoard.prepare target repo revision (File.ReadAllText path)
+                (fun relative -> fetchText (sprintf "https://raw.githubusercontent.com/FS-GG/.github/%s/%s" revision relative))
+        with error -> Error error.Message
+    | _ -> Error "V2 integration requires --repo, --board-binding and --board-kit-ref together"
+
+let private wireCoordination kitRef (opts: Options) =
+    if opts.BoardBinding.IsNone && opts.BoardKitRef.IsNone then wireLegacyCoordination kitRef opts
+    else
+        prepareProductBoard opts.Target opts.WorkspaceRepo opts.BoardBinding opts.BoardKitRef
+        |> Result.bind (ProductBoard.apply opts.Target)
+        |> function Ok() -> Succeeded | Error error -> Failed error
 
 // ── Orchestration ────────────────────────────────────────────────────────────
 
@@ -2806,7 +2851,17 @@ let private bootstrapTypedKnowledge (opts: Options) (version: string) : Outcome 
 let private run (opts: Options) : int =
     header opts
 
-    if not (onPath "fsgg-sdd") then
+    let productPreflight =
+        if opts.BoardBinding.IsSome || opts.BoardKitRef.IsSome then
+            if not opts.Coordinate || opts.BoardOwner <> "FS-GG" || opts.BoardTitle <> "Coordination" || opts.ChoreLocks.IsSome || opts.PublicBoard.IsSome || not (List.isEmpty opts.TrustedWriters) then
+                Error "V2 binding cannot be combined with legacy coordination/access options"
+            else prepareProductBoard opts.Target opts.WorkspaceRepo opts.BoardBinding opts.BoardKitRef |> Result.map ignore
+        else Ok()
+    if Result.isError productPreflight then
+        let error = productPreflight |> function Error message -> message | Ok _ -> ""
+        AnsiConsole.MarkupLine(sprintf "[red]product V2 refused:[/] %s" (Markup.Escape error))
+        2
+    elif not (onPath "fsgg-sdd") then
         // Preflight (matches the shell's exit 127): steps 2/3/5/6 drive `fsgg-sdd`, so fail fast
         // with an actionable message rather than a bare "command not found" mid-scaffold.
         let panel =
@@ -3063,6 +3118,8 @@ let private run (opts: Options) : int =
                     )
 
             (match outcome with
+             | Succeeded when opts.BoardBinding.IsSome ->
+                 AnsiConsole.MarkupLine "  [green]✓[/] selected product V2 files configured; adoption pending"
              | Succeeded ->
                  AnsiConsole.MarkupLine(
                      sprintf
@@ -3087,7 +3144,7 @@ let private run (opts: Options) : int =
         // 5b · repository issue-intake policy. This is intentionally a distinct, typed step from
         // board wiring: a board can be readable while its repository has not been created yet, and
         // that must produce a durable pending security result rather than a false secured summary.
-        if opts.Coordinate && not fatal then
+        if opts.Coordinate && opts.BoardBinding.IsNone && not fatal then
             step 5 "repository security"
             let report = workspaceSecurity opts
             let outcome = report.Outcome
@@ -3104,6 +3161,9 @@ let private run (opts: Options) : int =
                     Title = "repository security"
                     Outcome = outcome
                 }
+
+        if opts.BoardBinding.IsSome && (results |> Seq.exists (fun step -> match step.Outcome with Failed _ -> true | _ -> false)) then
+            fatal <- true
 
         // 6 · fsgg-sdd doctor (read-only, non-fatal — matches the shell's `|| true`)
         if not fatal then
@@ -3207,14 +3267,15 @@ let private retrofitHeader (opts: RetrofitOptions) =
 
     grid.AddRow(
         "[grey]board[/]",
-        sprintf "[aqua]%s/%s[/]" (Markup.Escape opts.BoardOwner) (Markup.Escape opts.BoardTitle)
+        (if opts.BoardBinding.IsSome then "selected product V2 binding (adoption pending)"
+         else sprintf "[aqua]%s/%s[/]" (Markup.Escape opts.BoardOwner) (Markup.Escape opts.BoardTitle))
     )
     |> ignore
 
     opts.WorkspaceRepo
     |> Option.iter (fun r -> grid.AddRow("[grey]repo[/]", Markup.Escape r) |> ignore)
 
-    grid.AddRow("[grey]kit ref[/]", Markup.Escape opts.Ref) |> ignore
+    grid.AddRow("[grey]kit ref[/]", Markup.Escape (opts.BoardKitRef |> Option.defaultValue opts.Ref)) |> ignore
     let panel = Panel(grid)
     panel.Header <- PanelHeader "[bold]new-sdd-workspace[/] [grey]· retrofit coordination[/]"
     panel.Border <- BoxBorder.Rounded
@@ -3230,7 +3291,35 @@ let private runRetrofit (opts: RetrofitOptions) : int =
     retrofitHeader opts
     let fsggDir = Path.Combine(opts.Target, ".fsgg")
 
-    if not (Directory.Exists fsggDir) then
+    if opts.BoardBinding.IsSome || opts.BoardKitRef.IsSome then
+        if not (Directory.Exists fsggDir) then
+            AnsiConsole.MarkupLine "[red]product V2 refused:[/] not a scaffolded workspace"
+            2
+        elif opts.ChoreLocks.IsSome || opts.BoardOwner <> "FS-GG" || opts.BoardTitle <> "Coordination" then
+            AnsiConsole.MarkupLine "[red]product V2 refused:[/] legacy chore-lock wiring is incompatible"
+            2
+        else
+            match prepareProductBoard opts.Target opts.WorkspaceRepo opts.BoardBinding opts.BoardKitRef with
+            | Error error ->
+                AnsiConsole.MarkupLine(sprintf "[red]%s[/]" (Markup.Escape error))
+                2
+            | Ok plan ->
+                for change in plan.Changes do AnsiConsole.WriteLine(change.Path)
+                if opts.Preview then
+                    AnsiConsole.WriteLine(sprintf "V2 preview: %s, %s, %d local file changes; adoption remains pending" plan.Repository plan.ProjectId plan.Changes.Length)
+                    0
+                else
+                    match ProductBoard.apply opts.Target plan with
+                    | Ok() ->
+                        AnsiConsole.WriteLine(sprintf "V2 configured: %s, %s; installed/native adoption remains pending" plan.Repository plan.ProjectId)
+                        0
+                    | Error error ->
+                        AnsiConsole.MarkupLine(sprintf "[red]%s[/]" (Markup.Escape error))
+                        2
+    elif opts.Preview then
+        AnsiConsole.MarkupLine "[red]--preview requires a selected V2 binding[/]"
+        2
+    elif not (Directory.Exists fsggDir) then
         // The precondition the issue names: a workspace has a `.fsgg/` config. No `.fsgg/` ⇒ this is not
         // a scaffolded workspace, so there is nothing to retrofit ONTO — refuse cleanly, naming the fix.
         // A concise leading line (no target path) so the refusal is greppable on one line at any width.

@@ -46,6 +46,10 @@ advances the pin to that CLI.
 - **YYYY-MM-DD** — HEADER (owner; refs): body
 -->
 
+- **2026-10-04** — COORD-BOARD-V2-01.5 canonical successor generation: reconcile only publishing-and-deployment digest changed by generated source-version projection; preserve all unrelated registry rows and published inventory.
+
+- **2026-10-04** — COORD-BOARD-V2-01.5: reconcile canonical work-board and padd-item V2 consumer digests. Retain Host-publication baseline digest repairs; successor publication and installed adoption remain pending.
+
 - **2026-10-04** — Reconcile Host 0.4 publication guidance and retained work-roadmap source digests (.github; Host publication run 37220419362, source PR #4207). Canonical producer bodies and mirrored guidance are byte-equal; work-roadmap source is unchanged.
 
 - **2026-09-28** — RECONCILE (auto; .github#299/#1200): `fsgg-skill-registry-check --write` reconciled 2 sha256 row(s) and 0 materializes-when value(s); homed 0 and appended 0 row(s) from the producer manifests. registry = manifest = bytes.

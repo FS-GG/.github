@@ -1,9 +1,9 @@
-"""Fresh per-effect native Actions and main-ref admission for Wizard 0.12.0."""
+"""Separate current publication and retained historical recovery admission."""
 
 from __future__ import annotations
 
 from release_successor_provider import GitHubAPI
-from new_sdd_workspace_successor_execution import effects
+from new_sdd_workspace_successor_execution import effects, CURRENT_014, HISTORICAL_013
 
 REPOSITORY = "FS-GG/.github"
 REPOSITORY_ID = 1269292704
@@ -16,11 +16,13 @@ class Refused(RuntimeError):
 
 
 class WizardAdmission:
-    def __init__(self, api: GitHubAPI, manifest: dict, publisher_sha: str, run_id: int, actor: str, ref: str):
+    def __init__(self, api: GitHubAPI, manifest: dict, publisher_sha: str, run_id: int, actor: str, ref: str,
+                 *, release_binding=CURRENT_014):
         self.api = api
         self.publisher_sha = publisher_sha
         self.run_id = run_id
-        self.content_id, ordered = effects(manifest)
+        self.release_binding = release_binding
+        self.content_id, ordered = effects(manifest, binding=release_binding)
         self.requests = {effect.identity: effect.request_digest for effect in ordered}
         self.requests["journal"] = self.content_id
         if actor != OPERATOR or ref != "refs/heads/main":
@@ -28,7 +30,8 @@ class WizardAdmission:
 
     def authorize(self, content_id: str, effect: str, action: str, request_digest: str) -> bool:
         if (
-            content_id != self.content_id
+            self.release_binding is not CURRENT_014
+            or content_id != self.content_id
             or self.requests.get(effect) != request_digest
             or action not in {"intent", "dispatch", "settle"}
         ):
@@ -53,7 +56,8 @@ class WizardAdmission:
 
     def authorize_recovery(self, content_id, action, request_digest, binding, mode):
         """Wizard-only selected native recovery; does not change ordinary admission."""
-        if (content_id != self.content_id or self.requests.get("promote") != request_digest
+        if (self.release_binding is not HISTORICAL_013
+                or content_id != self.content_id or self.requests.get("promote") != request_digest
                 or action not in {"dispatch", "settle"} or mode not in {"diagnostic", "complete"}
                 or binding.get("heldSource") != self.publisher_sha):
             return False

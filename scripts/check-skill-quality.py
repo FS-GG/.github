@@ -9,6 +9,7 @@ import importlib.util
 import json
 import os
 import re
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -260,6 +261,13 @@ def validate_invocations(root: Path, contract_path: Path, errors: list[str]) -> 
         "--require-reconciled", "--cycle", "--artifact", "--head", "--report", "--audit",
         "--phases", "--checkpoint", "--all-responses",
     }
+    # Board V2 is composed in Program.main before the Options dispatcher too.
+    # BoardV2Application.parseArguments owns these two operations and this exact
+    # flag surface; audit their names as well as their options.
+    for operation in ("inspect", "refresh"):
+        commands[f"board-v2 {operation}"] = {
+            "--binding-file", "--previous-report-file", "--report-file",
+        }
     if len(commands) < 35:
         fail(errors, f"command contract is implausibly small ({len(commands)} commands)")
         return
@@ -283,7 +291,7 @@ def validate_invocations(root: Path, contract_path: Path, errors: list[str]) -> 
             for hit in INVOCATION.finditer(segment):
                 command = hit.group(1)
                 command = re.split(r"\s(?:#(?!\d)|&&|\|\||[;|>])", command, maxsplit=1)[0]
-                name_match = re.match(r"(room\s+open|[a-z][a-z0-9-]*)", command)
+                name_match = re.match(r"(room\s+open|board-v2\s+[a-z][a-z0-9-]*|[a-z][a-z0-9-]*)", command)
                 if name_match is None:
                     continue
                 name = name_match.group(1)
@@ -291,6 +299,29 @@ def validate_invocations(root: Path, contract_path: Path, errors: list[str]) -> 
                 if allowed is None:
                     fail(errors, f"{source.relative_to(root)}:{line}: unknown documented command {name!r}")
                     continue
+                if name.startswith("board-v2 "):
+                    # Match the pure syntax owned by parseArguments. Filesystem
+                    # existence/new-output custody belongs to the live command.
+                    try:
+                        arguments = shlex.split(command)[2:]
+                    except ValueError as exc:
+                        fail(errors, f"{source.relative_to(root)}:{line}: invalid Board V2 arguments: {exc}")
+                        continue
+                    values: dict[str, str] = {}
+                    while arguments:
+                        if (len(arguments) < 2 or arguments[0] not in allowed
+                                or arguments[0] in values or not arguments[1].strip()
+                                or arguments[1].startswith("--")):
+                            fail(errors, f"{source.relative_to(root)}:{line}: unknown, duplicate or incomplete Board V2 argument")
+                            break
+                        values[arguments[0]] = arguments[1]
+                        arguments = arguments[2:]
+                    else:
+                        binding = values.get("--binding-file")
+                        report = values.get("--report-file")
+                        if (not binding or not report or binding == report
+                                or values.get("--previous-report-file") == report):
+                            fail(errors, f"{source.relative_to(root)}:{line}: Board V2 requires distinct --binding-file and --report-file paths")
                 found += 1
                 for token in FLAG.findall(command):
                     if token not in allowed:

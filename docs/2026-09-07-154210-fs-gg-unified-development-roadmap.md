@@ -53,6 +53,24 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-04: COORD-BOARD-V2-01.5 creator/guidance and successor source qualified (bounded scope).**
+The [owning board plan](coordination/2026-09-29-coordination-v2-board-design.md) joins explicit fresh/
+retained product binding preparation, mirrored V2 consumers and isolated current/historical creator
+release bindings. Selected source targets are coherent CLI/Kit/Drivers **0.97.0** and independent
+creator **0.14.0**; published inventories remain **0.96.0** and **0.13.0**. Host **0.4.0** publication
+and the separately merged LEARN receiver source are preserved.
+
+Fifteen current-source restore/build/generation/note/control/package phases exited naturally **0**.
+The original overall result remains **FAILED** because the package checker misread SDK `publish/`
+staging paths. The accepted pure repair composes those genuine phases with the actual **59-file /
+11-project** creator package closure, pinned CLI **0.97.0** metadata, all **3,446** retained objects
+and settled owned processes; it repeats no build or pack. Root acceptance SHA-256 is
+`e29ba5b36881c32cd191e03e50c809c6e57ba4d4868a651497e6c28e57d01b4d`.
+Original prepared archives retain source `f6daac35be2adbb062edcda1b3ad9b9d1913f458`; fresh final-source
+Actions candidates, protected journals, both-feed publication and receiver adoption remain pending.
+The creator preserves refusal of public CLI pin **0.96.0** against bundled **0.97.0** until the later
+publication/pin join. No board mutation or installed creator journey is accepted; whole .5/.6 stay open.
+
 **2026-10-04: COORD-BOARD-V2-01.5 shared product adapter CLOSED (bounded source scope).**
 Version 3 of the closed board binding admits one selected product repository and one to five
 exact native issue identities. Population reads and guarded Observation writes use that binding;

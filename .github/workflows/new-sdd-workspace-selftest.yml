@@ -19,6 +19,16 @@ on:
   pull_request:
     paths:
       - "scripts/NewSddWorkspace/**"
+      - "src/FS.GG.Coord.Cli/**"
+      - "src/FS.GG.Coord.Cli.BoardOps/**"
+      - "src/FS.GG.Coord.Cli.Kernel/**"
+      - "src/FS.GG.Coord.Cli.Lifecycle/**"
+      - "src/FS.GG.Coord.Core/**"
+      - "src/FS.GG.Coord.GitHub/**"
+      - "src/FS.GG.Telemetry.Client/**"
+      - "src/FS.GG.Telemetry.Contracts/**"
+      - "src/FS.GG.Telemetry.Dashboard/**"
+      - "src/FS.GG.Telemetry.Store/**"
       - "tests/new-sdd-workspace/**"
       - "tests/new-sdd-workspace-successor/**"
       - "tests/release-effect-sealing/**"
@@ -38,6 +48,16 @@ on:
     branches: [main]
     paths:
       - "scripts/NewSddWorkspace/**"
+      - "src/FS.GG.Coord.Cli/**"
+      - "src/FS.GG.Coord.Cli.BoardOps/**"
+      - "src/FS.GG.Coord.Cli.Kernel/**"
+      - "src/FS.GG.Coord.Cli.Lifecycle/**"
+      - "src/FS.GG.Coord.Core/**"
+      - "src/FS.GG.Coord.GitHub/**"
+      - "src/FS.GG.Telemetry.Client/**"
+      - "src/FS.GG.Telemetry.Contracts/**"
+      - "src/FS.GG.Telemetry.Dashboard/**"
+      - "src/FS.GG.Telemetry.Store/**"
       - "tests/new-sdd-workspace/**"
       - "tests/new-sdd-workspace-successor/**"
       - "tests/release-effect-sealing/**"

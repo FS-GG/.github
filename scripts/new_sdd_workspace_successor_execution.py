@@ -5,25 +5,35 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from dataclasses import dataclass
 
 from release_successor_execution import Effect, Refused
 
-PACKAGE = "FS.GG.NewSddWorkspace"
-VERSION = "0.13.0"
-TAG = "new-sdd-workspace/v0.13.0"
+@dataclass(frozen=True)
+class ReleaseBinding:
+    package: str
+    version: str
+    tag: str
 
 
-def effects(manifest: dict) -> tuple[str, tuple[Effect, ...]]:
+CURRENT_014 = ReleaseBinding("FS.GG.NewSddWorkspace", "0.14.0", "new-sdd-workspace/v0.14.0")
+HISTORICAL_013 = ReleaseBinding("FS.GG.NewSddWorkspace", "0.13.0", "new-sdd-workspace/v0.13.0")
+PACKAGE, VERSION, TAG = CURRENT_014.package, CURRENT_014.version, CURRENT_014.tag
+
+
+def effects(manifest: dict, *, binding: ReleaseBinding = CURRENT_014) -> tuple[str, tuple[Effect, ...]]:
+    if binding is not CURRENT_014 and binding is not HISTORICAL_013:
+        raise Refused("unknown Wizard release binding")
     if (
         manifest.get("schema") != "fsgg.new-sdd-workspace-release/1"
-        or manifest.get("packageId") != PACKAGE
-        or manifest.get("version") != VERSION
-        or manifest.get("tag") != TAG
+        or manifest.get("packageId") != binding.package
+        or manifest.get("version") != binding.version
+        or manifest.get("tag") != binding.tag
         or not re.fullmatch(r"[0-9a-f]{40}", manifest.get("sourceSha", ""))
         or not re.fullmatch(r"[0-9a-f]{64}", manifest.get("archiveSha256", ""))
         or not re.fullmatch(r"sha256:[0-9a-f]{64}", manifest.get("producerPayloadSha256", ""))
     ):
-        raise Refused("not an exact Wizard 0.13.0 release manifest")
+        raise Refused(f"not an exact Wizard {binding.version} release manifest")
     canonical = json.dumps(manifest, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
     manifest_digest = hashlib.sha256(canonical).hexdigest()
     manifest_archive_digest = hashlib.sha256(canonical + b"\n").hexdigest()

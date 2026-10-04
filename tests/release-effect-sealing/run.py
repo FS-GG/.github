@@ -4,6 +4,8 @@
 from __future__ import annotations
 
 import hashlib
+import ast
+import json
 import os
 import pathlib
 import re
@@ -79,6 +81,55 @@ for token in ("dotnet nuget push", "gh release create", "gh release upload", "gh
     assert token not in wizard, f"wizard workflow bypasses the successor adapter: {token}"
 admission = (ROOT / "scripts/new_sdd_workspace_successor_admission.py").read_text()
 assert f'WORKFLOW = "{WIZARD_SUCCESSOR}"' in admission
+
+# COORD-BOARD-V2-01.5 source successor: keep the accepted 0.13 route
+# as history and bind current bytes only after proving the retained boundaries.
+report = json.loads((ROOT / "docs/reports/gs2-08-9-release-route-dispositions.json").read_text())
+route = next(row for row in report["routes"] if row["path"] == WIZARD_SUCCESSOR)
+assert route["sha256"] == digest(ROOT / WIZARD_SUCCESSOR)
+assert route["disposition"] == "exact-source-protected-journal-successor-only"
+amendment = route["successorAmendment"]
+assert amendment["unit"] == "COORD-BOARD-V2-01.5" and amendment["version"] == "0.14.0"
+assert amendment["operationAcceptance"] == "candidate, journal initialization, protected preflight and 0.14 publication not performed"
+history = next(row for row in report["historicalRouteAttestations"]
+               if row["acceptedSource"] == amendment["previousAcceptedSource"])
+assert history["status"] == "non-current-history"
+assert history["route"]["sha256"] == amendment["previousSuccessorWorkflowSha256"]
+for key in ("forwardRecoveryAmendment", "capabilityLoss", "historicalCapabilityLoss", "historicalDisposition"):
+    assert route[key] == history["route"][key], f"retained recovery/retirement boundary changed: {key}"
+proof = route["bindingIsolationProof"]
+for name, expected in proof["historicalRecoveryJobSha256"].items():
+    raw_workflow = (ROOT / WIZARD_SUCCESSOR).read_text()
+    start = raw_workflow.index("  " + name + ":\n")
+    end = raw_workflow.find("\n  recovery-", start + 1)
+    assert hashlib.sha256(raw_workflow[start:end if end != -1 else None].encode()).hexdigest() == expected
+assert "format('Wizard 0.13 recovery {0} {1} {2}', inputs.promotion_recovery, inputs.recovery_correlation, inputs.recovery_binding_sha256)" in wizard
+assert "default: false" in wizard and "default: 'off'" in wizard
+recovery_source = (ROOT / "scripts/new_sdd_workspace_promote_recovery.py").read_text()
+recovery = ast.parse(recovery_source)
+# AST locates exact source spans; its interpreter-dependent dump is never hashed.
+assignments = {",".join(target.id for target in node.targets): node
+               for node in recovery.body if isinstance(node, ast.Assign)
+               and all(isinstance(target, ast.Name) for target in node.targets)}
+functions = {node.name: node for node in recovery.body if isinstance(node, ast.FunctionDef)}
+for spans, expected_spans in ((assignments, proof["historicalRecoveryAssignmentSourceSha256"]),
+                              (functions, proof["historicalGuardFunctionSourceSha256"])):
+    for name, expected in expected_spans.items():
+        source_span = ast.get_source_segment(recovery_source, spans[name])
+        assert source_span is not None
+        assert hashlib.sha256(source_span.encode("utf-8")).hexdigest() == expected, name
+calls = [node for node in ast.walk(recovery) if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)]
+for function, keyword, count in (("effects", "binding", 2), ("WizardAdmission", "release_binding", 1)):
+    selected = [call for call in calls if call.func.id == function]
+    assert len(selected) == count
+    assert all(any(arg.arg == keyword and isinstance(arg.value, ast.Name) and arg.value.id == "HISTORICAL_013"
+                   for arg in call.keywords) for call in selected)
+assert "self.release_binding is not CURRENT_014" in admission
+assert "self.release_binding is not HISTORICAL_013" in admission
+execution = (ROOT / "scripts/new_sdd_workspace_successor_execution.py").read_text()
+assert 'CURRENT_014 = ReleaseBinding("FS.GG.NewSddWorkspace", "0.14.0", "new-sdd-workspace/v0.14.0")' in execution
+assert 'HISTORICAL_013 = ReleaseBinding("FS.GG.NewSddWorkspace", "0.13.0", "new-sdd-workspace/v0.13.0")' in execution
+assert "binding is not CURRENT_014 and binding is not HISTORICAL_013" in execution
 
 with tempfile.TemporaryDirectory(prefix="gs2-08-9-release-seal.") as temporary:
     work = pathlib.Path(temporary)

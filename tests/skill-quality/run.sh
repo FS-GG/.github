@@ -221,6 +221,40 @@ printf '\n```sh\nscripts/fsgg-coord widen .github#1 --apply\n```\n' \
   >>"$WORK/tree/docs/coordination/semantic-regression.md"
 expect_rejection "documented option must belong to its verb" "--apply is not a flag of widen"
 
+# Board V2 is an early Program.main family rather than an Options command.
+# Its genuine inspect recipe is in the checked-in corpus; refresh shares the
+# producer's three flags, while an invented operation or option must still fail.
+seed
+printf '\n```sh\nscripts/fsgg-coord board-v2 refresh --binding-file /private/binding.json --previous-report-file /private/old.json --report-file /private/new.json\n```\n' \
+  >>"$WORK/tree/docs/coordination/semantic-regression.md"
+python3 "$ROOT/scripts/check-skill-quality.py" --root "$WORK/tree" --contract "$WORK/contract.json"
+echo "PASS  genuine Board V2 refresh options are audited"
+
+seed
+printf '\n```sh\nscripts/fsgg-coord board-v2 apply --binding-file /private/binding.json --report-file /private/new.json\n```\n' \
+  >>"$WORK/tree/docs/coordination/semantic-regression.md"
+expect_rejection "Board V2 cannot invent an operation" "unknown documented command 'board-v2 apply'"
+
+seed
+printf '\n```sh\nscripts/fsgg-coord board-v2 inspect --apply\n```\n' \
+  >>"$WORK/tree/docs/coordination/semantic-regression.md"
+expect_rejection "Board V2 cannot invent a flag" "--apply is not a flag of board-v2 inspect"
+
+seed
+printf '\n```sh\nscripts/fsgg-coord board-v2 inspect --binding-file /private/binding.json --report-file\n```\n' \
+  >>"$WORK/tree/docs/coordination/semantic-regression.md"
+expect_rejection "Board V2 requires flag values" "unknown, duplicate or incomplete Board V2 argument"
+
+seed
+printf '\n```sh\nscripts/fsgg-coord board-v2 inspect --binding-file /private/binding.json --binding-file /private/other.json --report-file /private/new.json\n```\n' \
+  >>"$WORK/tree/docs/coordination/semantic-regression.md"
+expect_rejection "Board V2 rejects duplicate flags" "unknown, duplicate or incomplete Board V2 argument"
+
+seed
+printf '\n```sh\nscripts/fsgg-coord board-v2 inspect --binding-file /private/same.json --report-file /private/same.json\n```\n' \
+  >>"$WORK/tree/docs/coordination/semantic-regression.md"
+expect_rejection "Board V2 requires distinct input and output" "Board V2 requires distinct --binding-file and --report-file paths"
+
 seed
 printf '\n[missing reference](references/does-not-exist.md)\n' \
   >>"$WORK/tree/.claude/skills/check-board/SKILL.md"
