@@ -159,6 +159,31 @@ Historical READY/map cause remains **Unknown** and useful native play **0/6**.
 This progress-only projection invokes no SDK or product CLI and admits no
 runtime operation.
 
+**2026-10-04: UTEL-H3 public Kit/Drivers 0.96 producer installed qualification CLOSED.**
+Root accepted one fresh ordinary anonymous NuGet HTTPS locked restore of
+**FS.GG.Kit and FS.GG.Drivers 0.96.0**, using SDK **10.0.401** and runtime
+**10.0.12**. Installed signed archives and all cache payloads join the accepted
+[0.96 publisher](https://github.com/FS-GG/.github/actions/runs/37161212706) at source
+`f891b5b0723070c67e08d1a87b7d12b0b4d8bebe`. The four outer commands returned
+**0 / 0 / 0 / 0**; the locked restore reported **853 ms**. Two materializations
+verified file hashes, modes and skill views: **36 files written**, then **0**.
+
+All **13** nested installed-package checks passed, including the expected
+integrity and hand-authored-file overwrite refusals, Drivers workspace and link
+checks, and the delivered routine helpers. Independent readback verified that
+signed-archive SHA-512 sidecars match the original signed bytes, while metadata
+and lock files use the distinct NuGet unsigned-content hashes. All **82** owned
+PID/start member records were absent after settlement; full SDK, helper, source,
+protected local HOME, cache and payload checks passed. Private root acceptance
+SHA-256 is `bfe4b14b32ef497b87f1fd862bfe4e9fc911206216954acf1110a014682fe821`;
+independent installed readiness receipt SHA-256 is
+`74ba5245589f9ba8c5d595a07f53da6246e92648948cca49b38b1a6ddade165d`.
+
+This closes the bounded public Kit/Drivers producer qualification. Home, SDD
+and Host receiver adoption, consumer pins, defaults and activation remain open;
+this operation changed none of them. The wider UTEL feature remains active,
+and all earlier custody, refusals and installation outcomes retain their scope.
+
 **2026-10-04: UTEL-H3 public 0.96 installed read-only readiness CLOSED (side-by-side operation).**
 Root accepted one fresh **FS.GG.Coord.Cli 0.96.0** installation through ordinary
 anonymous NuGet HTTPS with SDK **10.0.401** and runtime **10.0.12**. Tool install,
