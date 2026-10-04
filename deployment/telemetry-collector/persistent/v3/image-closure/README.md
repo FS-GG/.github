@@ -59,3 +59,8 @@ The declaration retains `acquisition-required`; no reader profile or native inve
 is inferred from publication. Repaired served Manager distribution, trusted native/Python/
 Tcl/Tk/search/runtime acquisition, two cold builds/reloads and C5 on each reload remain
 required. Source rebinding does not establish installation, capture, recovery or activation.
+
+The acquisition-required declaration binds the repaired served Manager from run
+`37224476786`, artifact `11311024262`, source `5468ce210ef4886806d70c4e333496a358efbdf1`.
+The focused source console also refuses each of eight historical Manager pins.
+This source rebinding does not accept a native inventory or an installed receiver.
