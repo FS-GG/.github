@@ -56,9 +56,15 @@ module ImageClosure =
     let private emptySha256="e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     let private validBytes role bytes digest mode =
         bytes>0L||(role="native"&&bytes=0L&&digest=emptySha256&&mode="0444")
-    let private canonicalSegments (value:string)=value.Split('/')|>Array.forall(fun segment->segment<>"."&&segment<>"..")
-    let private relativePath (value:string)=not(String.IsNullOrWhiteSpace value)&&Regex.IsMatch(value,"^[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*$")&&canonicalSegments value
-    let private canonicalAbsolute (value:string)=not(String.IsNullOrWhiteSpace value)&&Regex.IsMatch(value,"^/[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*$")&&canonicalSegments value
+    let private canonicalSegments (value:string)=
+        let segments=value.Split('/')
+        segments.Length<=64&&(segments|>Array.forall(fun segment->segment<>"."&&segment<>".."&&System.Text.Encoding.UTF8.GetByteCount(segment)<=255))
+    let private canonicalPath absolute (value:string)=
+        not(String.IsNullOrWhiteSpace value)&&System.Text.Encoding.UTF8.GetByteCount(value)<=4096&&
+        Regex.IsMatch(value,(if absolute then @"\A/[\p{L}\p{M}0-9._+=-]+(?:/[\p{L}\p{M}0-9._+=-]+)*\z" else @"\A[\p{L}\p{M}0-9._+=-]+(?:/[\p{L}\p{M}0-9._+=-]+)*\z"))&&
+        canonicalSegments (if absolute then value.Substring(1) else value)
+    let private relativePath (value:string)=canonicalPath false value
+    let private canonicalAbsolute (value:string)=canonicalPath true value
     let private targetPath role (value:string)=
         canonicalAbsolute value&&
         (value.StartsWith($"/opt/fsgg/image/{role}/",StringComparison.Ordinal)||

@@ -139,6 +139,14 @@ DECLARED_SITES: dict[str, str | None] = {
         "builds only PersistentV3.ImageClosure and its tests/correspondence/mutant; "
         "no coordination-engine project reference or tier-2a output path"
     ),
+    # The standalone reader console has no ProjectReference: it compiles only its
+    # Program.fs and linked Host InactivePreparation.fs/fsi, with FSharp.Core as
+    # its sole package. Its bin/obj stay under tests/telemetry-host-inactive-preparation,
+    # outside the src/FS.GG.Coord.Cli/bin paths tier 2a probes.
+    "tests/telemetry-host-inactive-preparation/run.sh": (
+        "builds only the standalone inactive-reader console with FSharp.Core; "
+        "no project references or coordination-engine tier-2a output path"
+    ),
     "tests/new-sdd-workspace/run.sh": (
         "builds scripts/NewSddWorkspace, not the engine; its output lands where tier 2a never probes"
     ),

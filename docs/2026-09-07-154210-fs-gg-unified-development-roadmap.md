@@ -53,6 +53,126 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-04: SC2C-01.6f installed checked preparation CLOSED (bounded refusal qualification).**
+The retained genuine public **0.2.1** invocation exited **0** in **3.070 seconds**.
+It observed the three declared source, compile-receipt and generic-API imports, then
+refused exact adapter/executor discovery. The missing-input case refused before checker
+startup. Both cases had zero actor, recovery and cleanup callbacks; three owned process
+generations settled and root independently rechecked the input pins. The diverse binding
+identities are explicitly synthetic fixtures; the installed API and imported inputs are genuine.
+Root acceptance SHA-256 is
+`0a564a278f17485d8d62d4d72f6b2ecc81efdb4f08f448f7729848ae68dda79e`,
+joined to original operation receipt
+`137b1824d286a05f4f751b537a41b8da80e7b83e737534c9e9b158707999abf2`.
+The accepted operation was retained without replay.
+
+Under the [owning SC2 plan](https://github.com/FS-GG/FS.GG.SC2.Client/blob/main/docs/SC2C-01.6-plan.md),
+whole-runtime fit within the unchanged **16 MiB** envelope, native semantics, readiness,
+epoch and custody gates remain open. No query or actor execution was accepted. Network
+isolation was not enforced; the CLR quota was observed fail-closed. Publication and installed
+product acceptance remain separate from this preparation result.
+
+**2026-10-04: temporary bounded programme driver source and focused acceptance CLOSED.**
+The repository-owned [work-programme](../.agents/skills/work-programme/SKILL.md) replaces
+`work-unified-roadmap`; both authored roots, catalog classification, trigger fixtures and current
+entry points move together. Its dependency-free F# helper derives an advisory frontier, builds
+pinned packets, streams mechanical artifact verification and retains private inputs/results and
+byte/duration measurements. The focused offline suite passes 31 cases; actual CLI packet/verification
+and logging are exercised against real source files, retaining the stale-pin refusal. Existing PR,
+qualification, native operation and telemetry authority are unchanged. The entry point is 59.5%
+smaller in bytes; token/compaction benefit remains unmeasured. The
+[temporary driver record](roadmaps/unified-programme-driver.md) keeps the first requested programme
+run as its operational trial, with same-PR debugging and no permanent Host or package rollout.
+
+**2026-10-04: V2-LANG-01.2 fresh Python facts tag admission CLOSED (Coordination source).**
+[Coordination PR #931](https://github.com/FS-GG/FS.GG.Coordination/pull/931) merged at
+`5468ce210ef4886806d70c4e333496a358efbdf1` after exact-head bootstrap, source-contract
+and candidate-scoped coherent validation passed. The input-manifest helper now accepts
+only the new literal `portable-p4-python-private-inputs-20261004-dc934643`; causal controls
+refuse the consumed historical tag and arbitrary alternatives. The accepted stage and
+candidate-facts runs remain retained without redispatch. Genuine protected helper pins
+must next join the Sandbox source before any fresh private facts effect. No private
+release, qualification-ref advance, secret, dispatch or receiver grant follows from this
+source merge; private Python facts and runtime receiver acceptance remain pending under
+the [owning language plan](roadmaps/2026-09-29-language-independent-workspaces-and-agent-integration.md).
+
+**2026-10-04: LEARN-C2 inactive preparation reader and served qualification adapter CLOSED (source).**
+[PR #4195](https://github.com/FS-GG/.github/pull/4195) merged at
+`07521f357e6fb3999566864ffdca2acfadc24594` after every selected native check passed,
+including the reader package qualification and final engine run. Root matched the entire
+merge tree `52789947c229e79f9b6d70a5570f6e686e6ff2bb` to the reviewed exact head.
+The read-only Host command validates inert preparation data before credentials or store
+initialization; `run-inactive` prepares disposable served Manager-to-Host qualification.
+The [owning LEARN-C2 plan](roadmaps/learn-c2-persistent-receiver-v3.md) retains separate
+source, installed and activation boundaries. Published Host **0.3.0** still lacks this
+command; a protected **0.4.0** successor, exact publication pins, genuine served-image
+qualification and capture acceptance remain pending. No real C5, OCI or activation result
+is inferred from the source merge.
+
+**2026-10-04: BARC-01.5f six-phase producer build and Cargo custody CLOSED (bounded native build).**
+Root accepted the fresh sixth producer operation after all six actual phases returned **0**:
+tool restore, client restore, direct pinned Fable, Vite, stock selection and manual guest Cargo.
+The producer and supervisor also returned **0**, with whole supervision **128.540 seconds**.
+Independent root and worker audits joined **1,507** physical output leaves totaling
+**298,567,775 bytes**, the two literal Cargo WASM aliases, genuine signed-package inputs,
+unchanged **11,364** input rows and absence of all **19** known owned process generations.
+The direct Fable route removed the authenticated resolver parent while preserving the
+**two-task-CLR plus two-infrastructure-CLR** ceiling. Existing managed assemblies were
+reused with their original source joins; no managed rebuild or game launch occurred.
+Root build acceptance SHA-256 is
+`978f7d8943b0416d5ecbfe7f19f0df4771c5334be3a73eb987bff10d2c01dc0d`.
+
+This accepts the build under the
+[owning useful-play plan](https://github.com/FS-GG/FSBarV2/blob/main/docs/roadmaps/barc-01-useful-play.md).
+Checked capsule/imports/discovery, missing-capture refusal, a dedicated one-unit capture
+and genuine builder/completion event attribution remain before actor eligibility. Any new
+managed attribution source requires fresh qualification. Native useful play remains **0/6**;
+publication, installed defaults and the full journeys remain open.
+
+**2026-10-04: V2-PREFLIGHT-01 E installed API source and bounded qualification CLOSED.**
+[Coordination PR #930](https://github.com/FS-GG/FS.GG.Coordination/pull/930) merged at
+`7baa4ae3817fd6b70fb2befc92ee046e6ef5ce7f` after exact-head native checks passed.
+Root independently matched its complete merge tree `5e0a77524fc95f437415d458974c11475123ebce`
+to the reviewed candidate. Both qualified source files remain byte-identical to their
+original installed-qualified head; the later branch join only inherited protected source.
+
+The retained installed FSI execution against genuine public **0.2.1** passed in **3.937 seconds**
+with the selected checkout unavailable and restored afterward. Six preparation refusals launched
+zero workloads; the instrumented positive executor ran once and cleaned up once. Root acceptance
+SHA-256 is `f739b9e6684aa497c62a5b52a2682b9226d4592afa89206b70cafdf583b1d56b`.
+This closes the generic installed API boundary under the
+[owning preflight plan](https://github.com/FS-GG/FS.GG.Coordination/blob/main/docs/roadmaps/v2-preflight-01.md).
+BAR/SC2 checked adapters, genuine native execution, product adoption and full filesystem isolation
+remain open. The accepted generic operation was not repeated for source integration.
+
+**2026-10-04: selected V2 consumer delivered; organization architecture issue #3009 CLOSED.**
+[PR #4192](https://github.com/FS-GG/.github/pull/4192) merged as
+`4fc6edf6acce60760cea858ba15e4384c9ce0340`; all required native checks passed and root verified
+its entire merge tree against the reviewed candidate. The protected record includes the accepted
+`work-unified-roadmap` consumer of the existing restricted four-target organization scope, plus
+[ADR-0092](adr/0092-descriptor-driven-polyglot-workspace-providers.md) and the
+[linked provider design](design/polyglot-workspace-providers.md).
+[.github#3009](https://github.com/FS-GG/.github/issues/3009) is natively Closed/completed after
+root's delivery comment. The accepted architecture decision is delivered; no repeat human decision
+or further organization ADR preparation remains for this issue.
+
+The [carryover dispositions](coordination/board-v2-outcome-dispositions.md#bounded-outcome-reconciliation--2026-10-04)
+retain the exact admitted cohort: SDD#928, Templates#441, .github#3010 and .github#3009. The first
+three remain human Blocked; native closure of #3009 changes neither the binding nor planning fields.
+Existing installed organization inspection and consumer acceptance remain valid at their recorded scopes.
+Full **.4** remains open for broader approved carryover, exact mappings/imports and remaining consumer
+adoption. Product-board binding integration and fresh/retained workspace qualification remain **.5–.6**
+under the [owning board design](coordination/2026-09-29-coordination-v2-board-design.md#product-binding-integration-window--2026-10-04).
+SDD#935 stays unselected; unrepresented work continues through its owning roadmap.
+
+**2026-10-04: newest-published package inventory reconciliation CLOSED.**
+[PR #4194](https://github.com/FS-GG/.github/pull/4194) merged as
+`1a00c681f27b1d8802633ac1603872cb9fce3c45` with all feed checks passing. The three
+`package-version` rows and their canonical dependency projections now record WASM Contracts/Browser
+**0.3.0**, Coordination CLI **0.96.0** and Wizard **0.13.0**, matching both live feeds.
+This records published availability. Source/profile/default, installed selections and receiver gates
+are unchanged; Wizard GitHub release promotion and installed/receiver qualification remain pending.
+
 **2026-10-04: WASM-SHARED-01 H4 independent installed qualification CLOSED.**
 Fresh [installed run 37191263989](https://github.com/FS-GG/FS.GG.Game/actions/runs/37191263989)
 passed both org and public feeds at protected executor `8de4c2747d40e9993cc9a08cd50e1e2d599f69fb`.
@@ -4685,7 +4805,7 @@ synonyms. No purported fallback may restore a fenced v1 writer.
 ### 4.4 Just-in-time feature planning and execution
 
 Use the temporary repository-owned
-[`work-unified-roadmap` skill](../.agents/skills/work-unified-roadmap/SKILL.md) to advance this programme.
+[`work-programme` skill](../.agents/skills/work-programme/SKILL.md) to advance this programme.
 It is committed in both declared agent skill roots, so a fresh checkout carries the instructions and
 supporting material. Creating or inspecting the skill does not start roadmap work.
 
@@ -5568,15 +5688,18 @@ Reuse that exact baseline and the later completed Choreo source/formal evidence;
 future E1 implementation programme. They do not establish unmeasured comparative value, a general default,
 federation or v2 migration completion.
 
-Coordination owns the remaining disposition of the Choreo production fixes with SystemAdmin as installed
-operator: compare the selected installed Host artifact's source identity with the C4 fixes; if absent, prepare
-and publish the appropriate immutable Host/runner artifact and separately authorize its bounded adoption.
-Qualify the affected proven-absence, retry-intent and recovery paths against that installed artifact and its
-supported store, retaining native readback and rollback/recovery ownership. If already included, retain the
-exact artifact and matching qualification evidence instead of repeating adoption. Until then, report the fixes
-as source-qualified only. Historical O3 acceptance and receipts remain unchanged; this is a targeted follow-up,
-not a second O3 programme, authorization to operate, or a blanket prerequisite for callable v2. Remaining
-E0/E1 extensions follow the conditions below.
+The Choreo C4 production fixes are shipped and source-qualified at Coordination PR #424
+(`58140bda721e45944a14c9e23f3ebe6d3cd8412e`). The reported historical installed source
+`889827c1c2a0ec3d444b2de0d2c0bd1bcff6d798` contains both fixes byte-for-byte. Retain that source
+comparison and the owner-reported artifact binding without inferring an installed behavior or store result.
+The current route is fdev communicating with the selected store containers; reviewed ordinary V2,
+Python-runtime and telemetry receiver contracts do not select the persistent orchestration Host or these
+hosted-writer components. This legacy fix lane therefore requires no Home/Main qualification, external
+operator reply, republication, replacement or adoption. Historical O3/C4 acceptance and receipts remain
+unchanged. Legacy retirement still requires its separate record-preserving inventory and authorization.
+Coordination and the current receiver owners retain their own actual artifact, authority, durable recovery
+and readback gates; source inclusion does not activate a receiver. Reuse the C4 safety cases where applicable
+without reopening O3 or repeating formal qualification. Remaining E0/E1 extensions follow the conditions below.
 
 [LEARN-01](roadmaps/2026-09-12-095059-stable-policy-orchestration-and-statistical-learning.md) is the
 bounded learning extension across V0 observation, E0 comparison and this selected E1 foundation.
@@ -5696,7 +5819,7 @@ Entry conditions constrain the dependent execution; earlier read-only planning m
 | **Stable-policy orchestration and statistical learning — LEARN-01** | V0 measurement, E0 controlled comparison and selected E1 context/allocation extensions: broad fixed profiles, whole-issue context/token efficiency and robust evidence before finer or adaptive routing | `.github` telemetry/policy/analysis owner with Coordination execution integration. .1 is delivered. .2 capture/export, credential-role and native-source binding mechanisms are source-delivered through .github #3916/#3927/#3940/#3986 and Coordination installer-v2 #876. .3 source is complete through executor dispatch and observation integration. .4 W1–W5, W7 and W8 technical preparation are delivered at their recorded scopes. Coordination #901 adds the fixed authenticated capability diagnostic; work-main's installed fixed diagnostic remains historical version/login evidence only. Main/work-main is not a future execution prerequisite. The Main-independent rootless collector and real Host 0.2.1 state journey are qualified through [.github #4002](https://github.com/FS-GG/.github/pull/4002), including receiver-owned grant refusal, one empty receipt with zero facts, replay, restart retention and cleanup. Native access, model support, capture application and activation remained false. Current .4 therefore waits for a genuine observed turn and capture through this boundary. W6 C2 P1 is Closed at protected d9a142d with native run 36953495898 passing. P2-A source preparation is Closed at protected c10885e with native run 36959036061 passing. P2-B Host publication is Closed through publisher 36964135216 with both feeds serving normalized payload `5572aa61f284abc5a37a12aa88f99b5169c4379be2aa9959e46c9934532f2836`; Coordination manager source is Closed through #923 and native-coherence run 36961953645. Manager distribution is served by successful run 36967367250 as artifact 11209647998, but the local compiled verifier refused its hosted dotnet, hostfxr and 191 runtime-mode identities; all 189 Core payload bytes matched. Inactive v3 image/runtime qualification remains open. Census/shared costs and enrollment follow; .5 still requires a locked dataset or truthful stopped-window result. No experiment, usage denominator or efficiency result is established | [LEARN-01 design and roadmap](roadmaps/2026-09-12-095059-stable-policy-orchestration-and-statistical-learning.md), design delivered in [PR #3449](https://github.com/FS-GG/.github/pull/3449), .1 source contract in [PR #3845](https://github.com/FS-GG/.github/pull/3845), bounded .3 source slices in Coordination [#882](https://github.com/FS-GG/FS.GG.Coordination/pull/882), [#885](https://github.com/FS-GG/FS.GG.Coordination/pull/885) and [#886](https://github.com/FS-GG/FS.GG.Coordination/pull/886) at `513acdbddcb52b6f3e219619605de458070e033f`, and the [executor/observation source plan](https://github.com/FS-GG/FS.GG.Coordination/blob/513acdbddcb52b6f3e219619605de458070e033f/docs/roadmaps/learn-01-executor-observation.md). Native PostgreSQL 18.6 passed 40/40 and current formal identities were qualified without changing retained trace behavior. The [bounded owner-input assessment](research/learn-01-observation-contract.md#bounded-pre-admission-owner-assessment), [owning installed-window plan](https://github.com/FS-GG/FS.GG.Coordination/blob/6210dc1612e38acc7f16a6a6ce62bfad9f280c97/docs/roadmaps/learn-01-installed-window.md), [fixed capability source](https://github.com/FS-GG/FS.GG.Coordination/pull/901), [served-candidate evidence](https://github.com/FS-GG/FS.GG.Coordination/blob/92669c866006dfb228f3034b8dd9b20842601c6c/docs/roadmaps/evidence/learn-01.4-served-candidates.md), [installed-boundary owner report](https://github.com/FS-GG/.github/blob/0d317ffc72fdcaafce8eb245a960e61124d4445f/MAILBOX.md), [capture-version gap report](https://github.com/FS-GG/.github/blob/4fdeca1ac6c1c459701d3f62affcb3257ff3ae19/MAILBOX.md), and [replacement-route steering](https://github.com/FS-GG/.github/blob/9dc0a67b1e46adaae12c5c07c1caf935542d33f9/MAILBOX.md) retain the historical and replacement boundaries. Reuse UTEL and O0–O3. Later community contribution, if selected, uses the same Main-independent deployment principle. Adaptive extensions remain conditional, with the [inactive C2 persistent-v3 owning plan](roadmaps/learn-c2-persistent-receiver-v3.md) |
 | **Shared bounded execution** | E1: finite attempts, atomic reservations, effect settlement and qualified CLI/runtime correspondence | Coordination; selected trusted single-host scope is already owned by O0–O3; E0 selects only additional gaps | [Standalone telemetry and orchestration](roadmaps/2026-09-09-190726-standalone-telemetry-host-and-orchestration.md#o3--controlled-adoption-and-later-options) and the [O3 controlled-adoption evidence](https://github.com/FS-GG/FS.GG.Coordination/blob/main/docs/roadmaps/o3-controlled-adoption.md) complete the selected shared Akka session core, PostgreSQL journal, capacity-1 subscription budget, provider-neutral executor/Host composition and installed two-project serial qualification. Reuse accepted source; wider execution profiles remain conditional |
 | **Authenticated hosting and recovery** | E1, relevant H2–H5: one selected host with sessions, durable recovery and a usable CLI fallback | Coordination; selected O0–O3 is complete, then qualify only additional hosting/cooperative requirements | [Standalone telemetry and orchestration](roadmaps/2026-09-09-190726-standalone-telemetry-host-and-orchestration.md) owns the completed selected O0–O3 single-host scope. The accepted pilot, physical-reboot same-attempt recovery and non-dispatching installed adoption establish this bounded profile. Akka.NET is selected for this scope; Codex subscription execution is first, while Claude, OpenCode and DeepSeek share the intended adapter contract. Automatic postboot-helper requalification and other hosting scope remain conditional. |
-| **Hosted-writer Choreo correspondence and fix adoption** | E1 foundation: C0–C6 source/formal qualification complete; installed inclusion of the two production fixes requires exact artifact evidence | Coordination source/qualification owner and SystemAdmin installed operator; section 9.6 owns targeted publication/adoption disposition without reopening historical O3 acceptance | [Completed Choreo roadmap](https://github.com/FS-GG/FS.GG.Coordination/blob/8135bb68bac07e941897ec556568c52ade6a492c/docs/roadmaps/choreo-akka-fsharp-trace-correspondence.md) and [maintenance guide](https://github.com/FS-GG/FS.GG.Coordination/blob/8135bb68bac07e941897ec556568c52ade6a492c/docs/architecture/choreo-correspondence.md). Reuse existing machinery; callable-v2 coverage remains its own qualification, and federation remains conditional |
+| **Hosted-writer Choreo correspondence and legacy fix disposition** | E1 historical foundation: C0–C6 source/formal qualification complete; reported installed889 source includes both C4 fixes; no current persistent orchestration receiver selected | Coordination retains source/correspondence evidence; fdev and current receiver owners qualify their selected container/CLI/store route. No Home qualification, external operator reply or legacy republication/adoption prerequisite; §9.6 preserves historical acceptance and separate retirement | [Completed Choreo roadmap](https://github.com/FS-GG/FS.GG.Coordination/blob/8135bb68bac07e941897ec556568c52ade6a492c/docs/roadmaps/choreo-akka-fsharp-trace-correspondence.md) and [maintenance guide](https://github.com/FS-GG/FS.GG.Coordination/blob/8135bb68bac07e941897ec556568c52ade6a492c/docs/architecture/choreo-correspondence.md). Reuse existing machinery; callable-v2 coverage remains its own qualification, and federation remains conditional |
 | **Scheduling and capacity allocation** | E1, relevant OR/PB scope: one planner over the shared executor, independent feasibility checks and class-specific shadow/canary/adoption | Coordination, with `.github` policy owner; measured scheduling need and required execution foundations | No subroadmap linked yet; conditional, with no second executor |
 | **Cooperative enrollment and sessions** | F0–F1: protocol, bilateral enrollment, outbound client connection, capacity/job offers and reconnect without project execution | Coordination; selected cooperative need; F0 research may precede v2, while F1 needs authenticated session foundations | No subroadmap linked yet; conditional |
 | **Cooperative contribution and verification** | F2–F3: bounded sandbox assignments, local agents, quarantined submissions and owner-controlled verification through recovery | Coordination; the applicable bounded execution, session and verification foundations from section 9.7 | No subroadmap linked yet; conditional |
@@ -5795,7 +5918,7 @@ If the part has no workspace effect, say so; if publication or adoption is pendi
 Record this in the feature plan and existing evidence rather than a new fleet registry.
 
 Routine delivery does not silently change the omitted lifecycle from `sdd` to `typed-sdd` or `none`.
-The temporary `work-unified-roadmap` coordinator remains repository-owned; it is not automatically
+The temporary `work-programme` coordinator replaces `work-unified-roadmap` and remains repository-owned; it is not automatically
 installed in product workspaces. Its eventual shared-driver successor must pass the same publication and
 materialization boundaries. The SVG/Fable product work retained in section 15 has its own provider and
 default decisions; progress through V0–V6 alone does not select a new product template or game runtime.

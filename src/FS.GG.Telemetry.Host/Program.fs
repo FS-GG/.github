@@ -1276,6 +1276,10 @@ module Operations =
         (assessmentFor: string -> TelemetryStore.DurabilityAssessment)
         (deliveryTransportFor: string -> IDisposable * Transport.ISinglePageGitHubTransport) =
         match List.ofArray argv with
+        | [ "read-inactive-preparation"; "--config"; path ] ->
+            let code,bytes=InactivePreparation.read path
+            Console.OpenStandardOutput().Write bytes
+            code
         | [ "init"; "--root"; root; "--workspace"; workspace ] ->
             match TelemetryStoreApplication.initialize root (assessmentFor root) with
             | Error errors -> resultExit "storage-unavailable" (Error errors)

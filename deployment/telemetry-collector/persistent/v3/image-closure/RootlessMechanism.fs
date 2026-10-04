@@ -72,9 +72,11 @@ type RealProcessBackend()=
             let drain (reader:StreamReader)=Task.Run(fun()->
                 let buffer=Array.zeroCreate<char> 4096
                 let output=StringBuilder()
+                let mutable outputBytes=0
                 let mutable count=reader.Read(buffer,0,buffer.Length)
                 while count>0 do
-                    if output.Length+count>command.OutputLimit then kill();raise(IOException "process-output-overflow")
+                    outputBytes<-outputBytes+Encoding.UTF8.GetByteCount(buffer,0,count)
+                    if outputBytes>command.OutputLimit then kill();raise(IOException "process-output-overflow")
                     output.Append(buffer,0,count)|>ignore
                     count<-reader.Read(buffer,0,buffer.Length)
                 output.ToString())
@@ -101,7 +103,7 @@ type RealProcessBackend()=
                 member _.Dispose()=child.Dispose()}
 
 type RootlessInputs={Selection:Selection;Trusted:TrustedNativeSelection;SelectionPath:string;TrustedPath:string;ParentOci:string;WorkRoot:string;EvidenceRoot:string;ExpectedInput:string;Prepared:byte array}
-type private Bundle={Logical:string;Root:string;Nonce:string;Environment:Map<string,string>;Contexts:string array;Children:Dictionary<string,IOwnedProcess>;mutable Build:IOwnedProcess option;mutable Result:OciResult option;mutable UnacknowledgedChild:bool}
+type private Bundle={Logical:string;Root:string;Nonce:string;Environment:Map<string,string>;Contexts:string array;Children:Dictionary<string,IOwnedProcess>;mutable Build:IOwnedProcess option;mutable Result:OciResult option;mutable UnacknowledgedChild:bool;Gate:obj;mutable C5Active:bool;mutable C5Retired:bool;mutable C5Residue:bool}
 
 module RootlessPolicy=
     [<Literal>]
@@ -130,7 +132,7 @@ module RootlessPolicy=
         let parent=file.Directory
         if not parent.Exists||not(String.IsNullOrEmpty parent.LinkTarget)||ImageClosure.ownerUid parent.FullName<>0||((File.GetUnixFileMode parent.FullName)&&&(UnixFileMode.GroupWrite|||UnixFileMode.OtherWrite))<>enum 0 then fail "root-selected-parent-custody"
     let inputIdentity (selection:Selection) selectionPath trustedPath parent prepared=
-        let hashes=Array.concat[[|OciEvidence.shaFile selectionPath;OciEvidence.shaFile trustedPath;OciEvidence.shaFile parent;OciEvidence.shaBytes prepared;commandPolicy;BuilderSha256;SupervisorSha256|];selection.RoleManifests|>Array.map(fun item->OciEvidence.shaFile(Path.Combine(selection.ManifestRoot,item.Path)));[|OciEvidence.shaFile(Path.Combine(selection.ManifestRoot,selection.NativeInventoryPath))|]]
+        let hashes=Array.concat[[|OciEvidence.shaFile selectionPath;OciEvidence.shaFile trustedPath;OciEvidence.shaFile parent;OciEvidence.shaBytes prepared;commandPolicy;InactiveQualification.Policy;BuilderSha256;SupervisorSha256|];selection.RoleManifests|>Array.map(fun item->OciEvidence.shaFile(Path.Combine(selection.ManifestRoot,item.Path)));[|OciEvidence.shaFile(Path.Combine(selection.ManifestRoot,selection.NativeInventoryPath))|]]
         OciEvidence.shaBytes(Encoding.UTF8.GetBytes(String.concat "\n" hashes))
     let select selection trusted selectionPath trustedPath parent work evidence prepared=
         if selection.IdentityClass<>"production" then fail "run-requires-production-identity"
@@ -225,6 +227,7 @@ type RootlessMechanism(inputs:RootlessInputs,backend:IProcessBackend)=
         let name="learn-p2c4-"+bundle.Nonce
         invoke bundle true (Array.concat[[|"run";"--name";name;"--rm";"--network";"none";"--read-only";"--cap-drop";"ALL";"--security-opt";"no-new-privileges";"--cpus";"1";"--memory";"512m";"--pids-limit";"64";"--user";"32768:32768";"--entrypoint";executable;"localhost/learn-p2c4:inert"|];arguments]) token
     let cleanup (bundle:Bundle) (token:CancellationToken)=
+        require(lock bundle.Gate (fun()->not bundle.C5Active&&bundle.C5Retired&&not bundle.C5Residue)) "cleanup-c5-effect-not-retired"
         require(not bundle.UnacknowledgedChild) "cleanup-unacknowledged-child"
         require(bundle.Children.Values|>Seq.forall _.HasExited) "cleanup-outstanding-child"
         for reload in [false;true] do
@@ -247,8 +250,9 @@ type RootlessMechanism(inputs:RootlessInputs,backend:IProcessBackend)=
         for child in bundle.Children.Values do child.Dispose()
         bundle.Children.Clear()
     member _.SealTerminal(state:State,trace:(Effect*Observation) list)=
-        require(Runner.c4Ready state&&comparisonSealed) "terminal-not-c4-ready"
-        seal "terminal.json" {|schema="fsgg.telemetry.persistent-v3-c4-result/1";status="C4Ready";input=inputs.ExpectedInput;qualificationAccepted=false;cleanupObserved=state.Owned.IsEmpty&&state.Running.IsEmpty;effects=trace|>List.map(fun(effect,observation)->sprintf "%A -> %A" effect observation)|}
+        require((Runner.c4Ready state||Runner.qualificationAccepted state)&&comparisonSealed) "terminal-not-qualified"
+        let accepted=Runner.qualificationAccepted state
+        seal "terminal.json" {|schema=(if accepted then "fsgg.telemetry.persistent-v3-inactive-result/1" else "fsgg.telemetry.persistent-v3-c4-result/1");status=(if accepted then "InactiveQualified" else "C4Ready");input=inputs.ExpectedInput;qualificationAccepted=accepted;cleanupObserved=state.Owned.IsEmpty&&state.Running.IsEmpty;effects=trace|>List.map(fun(effect,observation)->sprintf "%A -> %A" effect observation)|}
     interface IRunnerMechanism with
         member _.Execute(effect,token)=Task.Run<Observation>((fun()->
             token.ThrowIfCancellationRequested()
@@ -295,7 +299,7 @@ type RootlessMechanism(inputs:RootlessInputs,backend:IProcessBackend)=
                     Directory.SetLastWriteTimeUtc(directory,DateTimeOffset.FromUnixTimeSeconds(1790899200L).UtcDateTime)
                 File.SetUnixFileMode(context,UnixFileMode.UserRead|||UnixFileMode.UserExecute|||UnixFileMode.GroupRead|||UnixFileMode.GroupExecute|||UnixFileMode.OtherRead|||UnixFileMode.OtherExecute)
                 Directory.SetLastWriteTimeUtc(context,DateTimeOffset.FromUnixTimeSeconds(1790899200L).UtcDateTime)
-                let bundle={Logical=logical;Root=root;Nonce=nonce;Environment=env;Contexts=[|context|];Children=Dictionary();Build=None;Result=None;UnacknowledgedChild=false}
+                let bundle={Logical=logical;Root=root;Nonce=nonce;Environment=env;Contexts=[|context|];Children=Dictionary();Build=None;Result=None;UnacknowledgedChild=false;Gate=obj();C5Active=false;C5Retired=true;C5Residue=false}
                 bundles.Add(logical,bundle)
                 StoreCreated(logical,root+"#"+nonce)
             | StartBuild(logical,expected)->
@@ -349,7 +353,50 @@ type RootlessMechanism(inputs:RootlessInputs,backend:IProcessBackend)=
                     seal "comparison.json" {|schema="fsgg.telemetry.persistent-v3-c4-comparison/1";input=inputs.ExpectedInput;first=first.Result.Value;second=second.Result.Value;ociEqual=true;rawArchivesEqual=first.Result.Value.ArchiveSha256=second.Result.Value.ArchiveSha256;c5Qualification="unknown"|}
                     comparisonSealed<-true
                     BuildsCompared true
-            | QualifyInactive _->EffectFailed "c5-served-manager-host-adapter-unavailable"
+            | QualifyInactive digest->
+                require comparisonSealed "inactive-comparison-missing"
+                validate token
+                let owned=[|bundles["a"];bundles["b"]|]
+                for bundle in owned do require(bundle.Result.Value.ManifestDigest=digest) "inactive-image-digest-stale"
+                for bundle in owned do
+                    lock bundle.Gate (fun()->require(not bundle.C5Active&&bundle.C5Retired&&not bundle.C5Residue) "inactive-effect-not-fresh";bundle.C5Active<-true;bundle.C5Retired<-false)
+                let mutable firstFailure:string option=None
+                let cleanupFailures=ResizeArray<string>()
+                let results=ResizeArray<_>()
+                try
+                    for bundle in owned do
+                        token.ThrowIfCancellationRequested()
+                        inspect bundle true token
+                        let result=InactiveQualification.run inputs.Selection inputs.Trusted bundle.Root (fun arguments cancellation->invoke bundle true arguments cancellation) token
+                        results.Add(bundle.Logical,result)
+                    validate token
+                    token.ThrowIfCancellationRequested()
+                with error->firstFailure<-Some error.Message
+                // A timed-out Execute can finish late. Retirement remains false until all owned
+                // groups drain and fixtures are absent; RemoveStore refuses while this is active.
+                for bundle in owned do
+                    let mutable retired=false
+                    try
+                        use cleanupToken=new CancellationTokenSource(TimeSpan.FromSeconds 30.)
+                        require(not bundle.UnacknowledgedChild) "inactive-unacknowledged-child"
+                        for child in bundle.Children.Values do
+                            if not child.HasExited then child.Cancel cleanupToken.Token
+                            require child.HasExited "inactive-child-retirement-unknown"
+                        InactiveQualification.remove bundle.Root
+                        retired<-true
+                    with error->cleanupFailures.Add error.Message
+                    lock bundle.Gate (fun()->bundle.C5Retired<-retired;bundle.C5Residue<-not retired;bundle.C5Active<-false)
+                if firstFailure.IsSome||cleanupFailures.Count>0||token.IsCancellationRequested then
+                    let reason=firstFailure|>Option.defaultValue(if token.IsCancellationRequested then "inactive-cancelled" else "inactive-cleanup-unknown")
+                    seal "inactive-failure.json" {|input=inputs.ExpectedInput;firstFailure=reason;cleanupFailures=cleanupFailures.ToArray();qualification="unknown";retired=owned|>Array.map(fun bundle->bundle.Logical,bundle.C5Retired)|}
+                    EffectFailed reason
+                else
+                    validate token
+                    token.ThrowIfCancellationRequested()
+                    require(owned|>Array.forall(fun bundle->bundle.C5Retired&&not bundle.C5Residue)) "inactive-retirement-unobserved"
+                    seal "inactive-qualification.json" {|schema="fsgg.telemetry.served-inactive-qualification/1";input=inputs.ExpectedInput;image=digest;servedHostArchiveSha256=inputs.Selection.HostArchiveSha256;servedManagerArchiveSha256=inputs.Selection.ManagerArchiveSha256;results=results.ToArray();fixtureCleanupObserved=true;nativeAcceptanceClaimed=false;activationAuthorized=false|}
+                    token.ThrowIfCancellationRequested()
+                    QualificationObserved(true,inputs.ExpectedInput)
             | RemoveStore identity->
                 let bundle=bundles.Values|>Seq.find(fun b->b.Root+"#"+b.Nonce=identity)
                 cleanup bundle token

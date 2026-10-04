@@ -1,0 +1,4 @@
+interface:
+  display_name: "Continue From Handoff"
+  short_description: "Resume the latest handoff and finish the roadmap"
+  default_prompt: "Use $continue-from-handoff to resume the latest saved handoff and complete the Unified Roadmap autonomously."

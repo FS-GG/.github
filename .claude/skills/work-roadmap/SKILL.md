@@ -28,7 +28,7 @@ For routine delivery:
    as tested commits on that branch, then open one PR for a coherent, reviewable outcome. Do not open a
    draft PR for each checkpoint or test. The relevant roadmap checkbox updates and concise evidence land
    in the same PR, and completion is recorded only after its native merge readback. Under
-   `work-unified-roadmap`, the parent integrator admits that PR within its live queue capacity; workers
+   `work-programme`, the parent integrator admits that PR within its live queue capacity; workers
    keep branches local until admitted, and the integrator uses the canonical `.github`
    `tools/pr-lane-admission.py` helper for new PR creation.
 2. Do **not** create or require an issue, claim, SDD artifact family, phase lifecycle ledger,
@@ -58,7 +58,7 @@ For routine delivery:
 5. Re-read the roadmap from default branch and continue. Keep projection asynchronous; do not launch a
    model turn or PR merely to copy already-merged facts. The sole exception is the mandatory Unified
    Roadmap section 0 closure projection after authoritative cross-repository readback: land its immediate
-   progress-only follow-up under `work-unified-roadmap`. This exception does not apply to CI ticks, waits,
+   progress-only follow-up under `work-programme`. This exception does not apply to CI ticks, waits,
    intermediate checkpoints or any other status copy, and does not create a PR per checkpoint.
 
 Apply the permanent qualification-selection doctrine in

@@ -23,3 +23,17 @@ Version `0.1.1` is independently released under tag
 `telemetry-host/v0.1.1`. It is not part of the Kit, Drivers, and coordination CLI
 coherent release set. Source delivery does not mean the package has been
 published or activated on Main.
+
+## Read an inactive preparation
+
+`fsgg-telemetry-host read-inactive-preparation --config ABS` validates the
+Manager-created v3 sidecar, receipt, source references, verifier inventory and
+frozen reader-profile bytes. It reads configuration as inert data before normal
+Host configuration, credentials, locking or store initialization. Credential
+contents and native session/capture records are never read; no executable runs.
+
+The closed `fsgg.telemetry.inactive-preparation-read/1` result reports actual
+validated input hashes. Source verification, snapshot origin and shared-cost
+completeness remain `unknown`; capture qualification, native acceptance and
+activation remain false. This source addition requires a protected successor
+publication before served-code qualification; Host 0.3.0 does not contain it.
