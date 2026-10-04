@@ -778,3 +778,23 @@ keep H4 independent publication/installed qualification separate from native
 recovery. This does not close the complete .5-P2 installed boundary, authorize a
 second recovery, move existing 0.2.0 consumers, or change product adoption and
 workspace defaults.
+
+## Independent 0.3 installed qualification — 2026-10-04
+
+**H4 and the .5-P2 published installed boundary are Closed.** Fresh installed
+[run 37191263989](https://github.com/FS-GG/FS.GG.Game/actions/runs/37191263989)
+passed serial org/public qualification on protected executor `8de4c2747d40e9993cc9a08cd50e1e2d599f69fb`.
+Independent root signature verification and 2,495 readback checks joined all 159
+original package/SDK members per feed, selected cached Worker/model assets, exact
+locks and release/source bindings. Each feed passed default47/selected13 CLR/Fable
+traces through both facades, default25/selected8 browser tests and the expected
+malformed-numeric and mutated-lock refusal controls.
+
+Actual closed-source native guards checked restored package metadata and runtime
+Core equality. Four hidden metadata files and two runtime-copy Core DLLs were not
+retained, so replay of those original bytes remains Unknown; the two official
+cached Core variants were independently rehashed. The default temporary cache was
+removed by its declared trap. Root acceptance `67e750272e63a6fdffe6ef2bec2e079ab7a6aa1dbb2a1018c54c39ee54e03ba4`
+retains these limits and the immutable failed attempts. Product .5-S1/.5-S2 and
+.5-B2 adoption, native acceptance, publication and .7 removal keep their existing
+separate gates. No workspace default changed.
