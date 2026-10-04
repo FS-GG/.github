@@ -318,7 +318,11 @@ distribution; native and installed receiver qualification remain pending.
 The next receiver source candidate binds this Manager tuple alongside published Host
 0.4.0. Its declaration remains `acquisition-required`, with reader profile and native
 inventory unset. Eight historical Manager-field refusals supplement the existing
-Host release cases; this candidate still requires its own bounded source qualification.
+Host release cases. Root accepted the exact source candidate
+`9c22a393a6d8669bdd52df20ef0fd6f994dd2490`: three restore/build/focused console
+steps returned natural exit 0, all owned groups settled, and all 20 focused release-pin
+cases passed. Local qualification does not replace protected integration or exact-head
+checks; full OCI and installed receiver acceptance remain false.
 
 A retained served diagnostic-capable Coordination executable can be reused with a
 fresh owner-selected profile, after byte and provenance checks. Its Oct 3 profile
