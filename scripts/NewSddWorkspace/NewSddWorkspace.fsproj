@@ -44,7 +44,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../../src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj" />
+    <ProjectReference Include="../../src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj">
+      <!-- Keep compiler resolution; the frozen closure supplies copy-local bodies. -->
+      <Private Condition="'$(FsggFrozenCoordDependencies)' != ''">false</Private>
+    </ProjectReference>
     <PackageReference Include="FSharp.Core" />
     <PackageReference Include="Spectre.Console" />
   </ItemGroup>

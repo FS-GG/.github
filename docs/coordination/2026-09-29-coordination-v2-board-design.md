@@ -288,6 +288,14 @@ content queries, retaining assembly resolution through the same eleven-project g
 guards before staging. Seven focused custody checks and 109 pure successor/recovery checks pass;
 native compilation and actual packaged closure need a fresh exact-source qualification.
 
+The next native attempt passed restore, staging, compilation and compiled product controls,
+then naturally refused at pack with `NETSDK1152`: engine DLL/PDB/XML appeared through both
+the frozen closure and project-reference copy-local output. Frozen mode now marks that existing
+reference `Private=false`, retaining compiler resolution while publishing its accepted bodies
+solely through the explicit closure. Duplicate publish enforcement remains enabled. Eight focused
+custody checks include reference-copy and disabled-enforcement mutants; actual package acceptance
+still requires a fresh exact-source qualification. Both consumed attempts remain preserved.
+
 Creator 0.14 publication remains accepted history. Ordinary publication selects only the new 0.15
 singleton and journal; the separately qualified 0.13 recovery route remains unchanged. Creator 0.15
 candidate, publication and actual installed fresh/retained Rendering journeys are pending. Neither

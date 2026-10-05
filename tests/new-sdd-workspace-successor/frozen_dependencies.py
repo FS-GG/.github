@@ -22,7 +22,8 @@ class FrozenDependencyControls(unittest.TestCase):
         self.creator.parent.mkdir(parents=True)
         actual = ElementTree.parse(ROOT / "scripts/NewSddWorkspace/NewSddWorkspace.fsproj").getroot()
         self.creator.write_text('<Project><PropertyGroup><AssemblyName>new-sdd-workspace</AssemblyName></PropertyGroup>'
-                                '<ItemGroup><ProjectReference Include="../../src/Engine/Engine.fsproj" /></ItemGroup>'
+                                '<ItemGroup><ProjectReference Include="../../src/Engine/Engine.fsproj">'
+                                '<Private Condition="\'$(FsggFrozenCoordDependencies)\' != \'\'">false</Private></ProjectReference></ItemGroup>'
                                 + ''.join(ElementTree.tostring(group, encoding="unicode") for group in actual
                                           if group.get("Condition") == "'$(FsggFrozenCoordDependencies)' != ''") + '</Project>')
         self.project = self.root / "src/Engine/Engine.fsproj"
@@ -118,7 +119,7 @@ class FrozenDependencyControls(unittest.TestCase):
         for name in ("_GetChildProjectCopyToOutputDirectoryItems", "_GetChildProjectCopyToPublishDirectoryItems"):
             for mutant in (original.replace(f'<{name}>false</{name}>', ''),
                            original.replace(f'<{name}>false</{name}>', f'<{name}>true</{name}>'),
-                           original.replace(" Condition=\"'$(FsggFrozenCoordDependencies)' != ''\"", '', 1)):
+                           original.replace("<PropertyGroup Condition=\"'$(FsggFrozenCoordDependencies)' != ''\">", '<PropertyGroup>', 1)):
                 with self.subTest(guard=name, mutant=mutant):
                     self.creator.write_text(mutant)
                     with self.assertRaisesRegex(ValueError, "frozen dependency (copy guard|property scope) changed"):
@@ -132,6 +133,18 @@ class FrozenDependencyControls(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "frozen dependency content copy changed"):
             self.stage()
         self.assertFalse(self.dependencies.exists())
+
+    def test_duplicate_reference_copy_route_and_disabled_enforcement_refuse(self):
+        original = self.creator.read_text()
+        for mutant in (original.replace('>false</Private>', '>true</Private>'),
+                       original.replace('<Private Condition="\'$(FsggFrozenCoordDependencies)\' != \'\'">false</Private>', ''),
+                       original.replace('</Project>', '<PropertyGroup><ErrorOnDuplicatePublishOutputFiles>false</ErrorOnDuplicatePublishOutputFiles></PropertyGroup></Project>')):
+            with self.subTest(mutant=mutant):
+                self.creator.write_text(mutant)
+                with self.assertRaisesRegex(ValueError, "frozen dependency (reference copy route|duplicate publish enforcement) changed"):
+                    self.stage()
+                self.assertFalse(self.dependencies.exists())
+        self.creator.write_text(original)
 
 
 if __name__ == "__main__":

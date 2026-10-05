@@ -72,6 +72,13 @@ def frozen_copy_contract(xml):
             and content[0].get("CopyToPublishDirectory") == "Always"
             and content[0].get("Link") == "%(RecursiveDir)%(Filename)%(Extension)",
             "frozen dependency content copy changed")
+    references = list(xml.iter("ProjectReference"))
+    private = references[0].findall("Private") if len(references) == 1 else []
+    require(len(private) == 1 and private[0].attrib == {"Condition": condition}
+            and private[0].text == "false" and "Private" not in references[0].attrib,
+        "frozen dependency reference copy route changed")
+    require(not list(xml.iter("ErrorOnDuplicatePublishOutputFiles")),
+            "frozen dependency duplicate publish enforcement changed")
 
 
 def archive_members(package, pin):
