@@ -17,7 +17,7 @@
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>new-sdd-workspace</ToolCommandName>
     <PackageId>FS.GG.NewSddWorkspace</PackageId>
-    <Version>0.14.0</Version>
+    <Version>0.15.0</Version>
     <AssemblyName>new-sdd-workspace</AssemblyName>
 
     <Description>FS.GG workspace scaffolder — composes a selectable Standard or Typed SDD lifecycle, a runnable provider workspace, and an optional Governance overlay in one command, with a rich Spectre.Console progress UI. Orchestrates existing published machinery; no FS.GG.Templates checkout required.</Description>
@@ -48,4 +48,30 @@
     <PackageReference Include="FSharp.Core" />
     <PackageReference Include="Spectre.Console" />
   </ItemGroup>
+
+  <!-- The candidate may consume the exact published implementation outputs. Keep the
+       eleven-project graph: MSBuild GetTargetPath resolves the verified staged bodies,
+       while the release route compiles only this independently versioned creator. -->
+  <PropertyGroup Condition="'$(FsggFrozenCoordDependencies)' != ''">
+    <BuildProjectReferences>false</BuildProjectReferences>
+    <CompileUsingReferenceAssemblies>false</CompileUsingReferenceAssemblies>
+    <!-- GetTargetPath still resolves the staged implementation assemblies. Child
+         content queries would also advertise an unbuilt obj/apphost; the exact
+         published closure below supplies all dependency content instead. -->
+    <_GetChildProjectCopyToOutputDirectoryItems>false</_GetChildProjectCopyToOutputDirectoryItems>
+    <_GetChildProjectCopyToPublishDirectoryItems>false</_GetChildProjectCopyToPublishDirectoryItems>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(FsggFrozenCoordDependencies)' != ''">
+    <!-- The normal reference route copies these three verified staged files and
+         retains the coherent CLI runtime dependency metadata. Copy the other
+         published files here, avoiding duplicate destinations. -->
+    <None Include="$(FsggFrozenCoordDependencies)/**/*"
+          Exclude="$(FsggFrozenCoordDependencies)/fsgg-coord-engine.dll;$(FsggFrozenCoordDependencies)/fsgg-coord-engine.pdb;$(FsggFrozenCoordDependencies)/fsgg-coord-engine.xml"
+          Link="%(RecursiveDir)%(Filename)%(Extension)"
+          CopyToOutputDirectory="Always" CopyToPublishDirectory="Always" />
+  </ItemGroup>
+  <Target Name="VerifyFrozenCoordDependencies" BeforeTargets="PrepareForBuild"
+          Condition="'$(FsggFrozenCoordDependencies)' != ''">
+    <Exec Command="python3 &quot;$(MSBuildThisFileDirectory)../creator-frozen-coord-dependencies.py&quot; verify-layout --dependencies &quot;$(FsggFrozenCoordDependencies)&quot;" />
+  </Target>
 </Project>
