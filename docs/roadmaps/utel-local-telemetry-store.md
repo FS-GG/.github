@@ -176,3 +176,9 @@ bytes and proving its ingest ID, generation cursor, and runtime admission are ab
 Change only the colliding item fact identity, preserving the existing dispatch,
 activation, invocation, token, timestamps and batch identifiers. Retry the durable
 pending intent; historical unobserved child dispatches and usage remain gaps.
+
+The retained programme root was recovered under its original token and applied with four new facts
+and one feature replay. A prospective child completed and produced a native usage observation after
+its verified short agent name was bound correctly. The observation guide now distinguishes that name
+from the thread UUID. This establishes the selected recovery and collection path; historical root
+usage, whole-programme coverage and deployed emitter adoption remain separate and unresolved.
