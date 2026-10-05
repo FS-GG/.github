@@ -1,0 +1,114 @@
+"""Focused file-custody controls; synthetic DLL bytes are never executed."""
+import hashlib
+import json
+import pathlib
+import runpy
+import tempfile
+import unittest
+import zipfile
+
+ROOT = pathlib.Path(__file__).resolve().parents[2]
+HELPER = runpy.run_path(str(ROOT / "scripts/creator-frozen-coord-dependencies.py"))
+PREFIX = HELPER["PREFIX"]
+
+
+class FrozenDependencyControls(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = pathlib.Path(self.temp.name)
+        self.creator = self.root / "scripts/NewSddWorkspace/NewSddWorkspace.fsproj"
+        self.creator.parent.mkdir(parents=True)
+        self.creator.write_text('<Project><PropertyGroup><AssemblyName>new-sdd-workspace</AssemblyName></PropertyGroup>'
+                                '<ItemGroup><ProjectReference Include="../../src/Engine/Engine.fsproj" /></ItemGroup></Project>')
+        self.project = self.root / "src/Engine/Engine.fsproj"
+        self.project.parent.mkdir(parents=True)
+        self.project.write_text('<Project><AssemblyName>fsgg-coord-engine</AssemblyName></Project>')
+        self.members = {"fsgg-coord-engine" + suffix: b"synthetic frozen input " + suffix.encode()
+                        for suffix in (".dll", ".pdb", ".xml")}
+        self.members["runtimes/linux-x64/native/engine.so"] = b"synthetic native input"
+        self.package = self.root / "accepted.nupkg"
+        self.write_archive(self.members)
+        self.pin = {"projects": {"scripts/NewSddWorkspace/NewSddWorkspace.fsproj": "new-sdd-workspace",
+                                 "src/Engine/Engine.fsproj": "fsgg-coord-engine"},
+                    "sourceLeaves": [{"path": "src/Engine/Engine.fsproj", "sha256": self.hash(self.project.read_bytes())}],
+                    "archiveSha256": self.hash(self.package.read_bytes()), "sourceSha": "a" * 40,
+                    "members": {name: self.hash(body) for name, body in self.members.items()}}
+        self.dependencies = self.root / "frozen"
+
+    @staticmethod
+    def hash(body):
+        return hashlib.sha256(body).hexdigest()
+
+    def write_archive(self, members):
+        with zipfile.ZipFile(self.package, "w") as archive:
+            for name, body in members.items():
+                archive.writestr(PREFIX + name, body)
+
+    def stage(self):
+        return HELPER["stage"](self.root, self.dependencies, self.package, self.pin)
+
+    def test_stages_exact_runtime_and_project_bodies_and_refuses_repeat(self):
+        result = self.stage()
+        self.assertEqual(result["dependencyMembers"], 4)
+        for name, body in self.members.items():
+            self.assertEqual((self.dependencies / name).read_bytes(), body)
+        self.assertEqual((self.project.parent / "bin/Release/net10.0/fsgg-coord-engine.dll").read_bytes(),
+                         self.members["fsgg-coord-engine.dll"])
+        with self.assertRaisesRegex(ValueError, "already exists"):
+            self.stage()
+
+    def test_archive_and_source_mutants_refuse_before_output(self):
+        original = self.package.read_bytes()
+        self.package.write_bytes(b"changed archive")
+        with self.assertRaisesRegex(ValueError, "archive changed"):
+            self.stage()
+        self.assertFalse(self.dependencies.exists())
+        self.package.write_bytes(original)
+        self.project.write_text('<Project><AssemblyName>fsgg-coord-engine</AssemblyName><!-- changed --></Project>')
+        with self.assertRaisesRegex(ValueError, "source changed"):
+            self.stage()
+        self.assertFalse(self.dependencies.exists())
+
+    def test_linked_destination_refuses_before_write(self):
+        target = self.root / "other"
+        target.mkdir()
+        link = self.root / "linked"
+        link.symlink_to(target, target_is_directory=True)
+        self.dependencies = link / "frozen"
+        with self.assertRaisesRegex(ValueError, "linked frozen"):
+            self.stage()
+        self.assertEqual(list(target.iterdir()), [])
+
+    def test_layout_refuses_mutation_missing_extra_and_staged_project_drift(self):
+        self.stage()
+        body = self.dependencies / "fsgg-coord-engine.dll"
+        body.write_bytes(b"changed")
+        with self.assertRaisesRegex(ValueError, "body changed"):
+            HELPER["layout"](self.root, self.dependencies, self.pin)
+        body.write_bytes(self.members[body.name])
+        body.unlink()
+        with self.assertRaisesRegex(ValueError, "census differs"):
+            HELPER["layout"](self.root, self.dependencies, self.pin)
+        body.write_bytes(self.members[body.name])
+        extra = self.dependencies / "foreign.dll"
+        extra.write_bytes(b"foreign")
+        with self.assertRaisesRegex(ValueError, "census differs"):
+            HELPER["layout"](self.root, self.dependencies, self.pin)
+        extra.unlink()
+        staged = self.project.parent / "bin/Release/net10.0/fsgg-coord-engine.dll"
+        staged.write_bytes(b"rebuilt substitute")
+        with self.assertRaisesRegex(ValueError, "staged project dependency changed"):
+            HELPER["layout"](self.root, self.dependencies, self.pin)
+
+    def test_package_check_requires_every_frozen_body(self):
+        self.stage()
+        (self.root / "scripts/creator-frozen-coord-dependencies.json").write_text(json.dumps(self.pin))
+        self.assertEqual(HELPER["package_closure"](self.package, self.dependencies, self.root)["dependencyMembers"], 4)
+        self.write_archive({**self.members, "fsgg-coord-engine.dll": b"rebuilt substitute"})
+        with self.assertRaisesRegex(ValueError, "package changed published dependency"):
+            HELPER["package_closure"](self.package, self.dependencies, self.root)
+
+
+if __name__ == "__main__":
+    unittest.main()

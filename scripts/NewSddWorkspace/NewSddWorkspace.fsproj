@@ -48,4 +48,21 @@
     <PackageReference Include="FSharp.Core" />
     <PackageReference Include="Spectre.Console" />
   </ItemGroup>
+
+  <!-- The candidate may consume the exact published implementation outputs. Keep the
+       eleven-project graph: MSBuild GetTargetPath resolves the verified staged bodies,
+       while the release route compiles only this independently versioned creator. -->
+  <PropertyGroup Condition="'$(FsggFrozenCoordDependencies)' != ''">
+    <BuildProjectReferences>false</BuildProjectReferences>
+    <CompileUsingReferenceAssemblies>false</CompileUsingReferenceAssemblies>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(FsggFrozenCoordDependencies)' != ''">
+    <None Include="$(FsggFrozenCoordDependencies)/**/*"
+          Link="%(RecursiveDir)%(Filename)%(Extension)"
+          CopyToOutputDirectory="Always" CopyToPublishDirectory="Always" />
+  </ItemGroup>
+  <Target Name="VerifyFrozenCoordDependencies" BeforeTargets="PrepareForBuild"
+          Condition="'$(FsggFrozenCoordDependencies)' != ''">
+    <Exec Command="python3 &quot;$(MSBuildThisFileDirectory)../creator-frozen-coord-dependencies.py&quot; verify-layout --dependencies &quot;$(FsggFrozenCoordDependencies)&quot;" />
+  </Target>
 </Project>

@@ -1,0 +1,1175 @@
+{
+  "schema": "fsgg.creator-frozen-coord-dependencies/1",
+  "sourceSha": "2ab0c0ff9f37bdec9a11ba3604ebdc230711934f",
+  "version": "0.97.0",
+  "archiveSha256": "3e620f112676f76c5f247343f7cffde2f00d31c5e82dec1342ab94f30400a08d",
+  "releaseId": 403211100,
+  "assetId": 610712479,
+  "downloadUrl": "https://github.com/FS-GG/.github/releases/download/coherent-set/v0.97.0/FS.GG.Coord.Cli.0.97.0.nupkg",
+  "projects": {
+    "scripts/NewSddWorkspace/NewSddWorkspace.fsproj": "new-sdd-workspace",
+    "src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj": "fsgg-coord-engine",
+    "src/FS.GG.Coord.Core/FS.GG.Coord.Core.fsproj": "FS.GG.Coord.Core",
+    "src/FS.GG.Telemetry.Store/FS.GG.Telemetry.Store.fsproj": "FS.GG.Telemetry.Store",
+    "src/FS.GG.Telemetry.Client/FS.GG.Telemetry.Client.fsproj": "FS.GG.Telemetry.Client",
+    "src/FS.GG.Telemetry.Contracts/FS.GG.Telemetry.Contracts.fsproj": "FS.GG.Telemetry.Contracts",
+    "src/FS.GG.Telemetry.Dashboard/FS.GG.Telemetry.Dashboard.fsproj": "FS.GG.Telemetry.Dashboard",
+    "src/FS.GG.Coord.GitHub/FS.GG.Coord.GitHub.fsproj": "FS.GG.Coord.GitHub",
+    "src/FS.GG.Coord.Cli.Kernel/FS.GG.Coord.Cli.Kernel.fsproj": "FS.GG.Coord.Cli.Kernel",
+    "src/FS.GG.Coord.Cli.BoardOps/FS.GG.Coord.Cli.BoardOps.fsproj": "FS.GG.Coord.Cli.BoardOps",
+    "src/FS.GG.Coord.Cli.Lifecycle/FS.GG.Coord.Cli.Lifecycle.fsproj": "FS.GG.Coord.Cli.Lifecycle"
+  },
+  "sourceLeaves": [
+    {
+      "path": "src/FS.GG.Coord.Cli/BoardFactsApplication.fs",
+      "sha256": "500a510e7460f8385a0974baf0d3afa103fb6ebe838fb27670f8260d275525a5"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/BoardFactsApplication.fsi",
+      "sha256": "a6b55e4118556c1d5ff2254419113327189d9d3b2a31040774aa1cb11e84e782"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/BoardV2Application.fs",
+      "sha256": "0f73892036cd1a6feb9bef9b69049d3c96bae43c5309a438cfd5abfb21e65fea"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/BoardV2Application.fsi",
+      "sha256": "0bcaff479d3ef0e3f166bd4044267d9f53bf66b0e1144105c4e2d767839c852c"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/CHANGELOG.md",
+      "sha256": "4a0a4a7454679649512fd18831691de3babce1ce9a1e92979f8fcd0ebabe6046"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/Chores.fs",
+      "sha256": "f61e7c34f37d97766a374f8d0a2d0986355b7928cf415d13cead3cc0c9e69362"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/Chores.fsi",
+      "sha256": "2e08cb826a1a2afb62ac633f10eeb115731bee11d307312cebc3cd3091548491"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/Client.fs",
+      "sha256": "55888b87dcdf7d0d7adf538355f9904d9c6bf63ac6bb6465792cdbff2fcbd6c9"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/Client.fsi",
+      "sha256": "7ea0d8f31d18d6c13dcbaa604c4c734bd1331dae8e24881c15aa354b3076f1fb"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/CycleLedgerApplication.fs",
+      "sha256": "270e4d2d6fb3e86371826a79cd2e081a78a04887a3c3ee5e9f305e5960e36f57"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/CycleLedgerApplication.fsi",
+      "sha256": "57db43b18565fe067842dbc0c2ef54bbeb42390223724507031efdf5ed5c5442"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj",
+      "sha256": "b84249f3c60e007003e204aeb0f13d51408874f37b82ea3d516646cbc5b92d70"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/IntakeApplication.fs",
+      "sha256": "9022a8e28324627b4c925f99c58da89849caad284978f0ba9f3222237f710841"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/IntakeApplication.fsi",
+      "sha256": "070281554a4b46a9963d69c1887a610b8bbd438588d569665a92b4f69f92df4b"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/KitDigest.fs",
+      "sha256": "856266dc4865d13576d6587ab5a5fd566a9ebc256562d7a94c6a432b0252559a"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/KitDigest.fsi",
+      "sha256": "3cc17b906aba50f0edba052bad194c600bff3bd8197d513ac8fd29eb77fdab67"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/LintApplication.fs",
+      "sha256": "bb4878d0fe432ee68430c71350965fa225db70fc8a2da71868a6a19ddf6cb8e2"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/LintApplication.fsi",
+      "sha256": "b77fdfe796a39240a25c087cabb4768800f9a16ea526b8b13ec9e77affebe1c5"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/PacketApplication.fs",
+      "sha256": "a55a3261756a8ff11b06fdcdf742a3e553507246b6027af0fdad1472b9f8c12b"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/PacketApplication.fsi",
+      "sha256": "8569e997b8ee8a00a03729430e175f33b6e468ee4d1920e33f2fad18928a8760"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/Program.fs",
+      "sha256": "223cde1ad3c304542d0f7e641c8093eba5ec6ffee078c66c1498a2a39c6248fd"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/QualificationApplication.fs",
+      "sha256": "0e9100d75958154cfd281435451e0d524644168150b2f5b6ac5d48c9b4263cc7"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/QualificationApplication.fsi",
+      "sha256": "29df9b55e234064228aa4dd91ff6b22a0f0af3d5808d35f4dfe158dc7a30ac1a"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/README.md",
+      "sha256": "826589234cd3894a30ffdeb358a186f4ad942f9f22d2dd20f29116acaee831db"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/ReadyApplication.fs",
+      "sha256": "1f66f31ff4356f7ae8cddfada53da68b2a0e9c8c25459e0f8bbe345909279f3b"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/ReadyApplication.fsi",
+      "sha256": "83bfc9ccdd853d48ff36c6e4fb40aa4ad11525d7a655574b3740076be15de881"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/SemanticDiffApplication.fs",
+      "sha256": "87b45f54dda3743e790c187b4b7290e450c6eafaa383b6a634db52ba51248162"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/SemanticDiffApplication.fsi",
+      "sha256": "be0328101e5eb371a218dc5ac52dcfe8b80cf3bf4c4fe3ad2be0c52ad91236f1"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/SkillCommandApplication.fs",
+      "sha256": "7f11e4facac5b92c57dcee42b68493e01963b3372d9969d6fe0047364df2843c"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/SkillCommandApplication.fsi",
+      "sha256": "94422d09c69c8207417c70ffe21e94fe457aebc814686e715855056c79534553"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/SkillPreflight.fs",
+      "sha256": "53af92bcbcdfac738319217d3b6401c672785cfbb9a0d1ff52f7f852738c5279"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/SkillPreflight.fsi",
+      "sha256": "c520e445ddb04baa45ae33961209e9ceb1988f5ed13f707a05d9f48c107a1a41"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/SkillTelemetryAdapter.fs",
+      "sha256": "34241058e93fb85687edabb402f10ace121b7a134078b08001da0a35b3cc776a"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/SkillTelemetryAdapter.fsi",
+      "sha256": "8f47b9383063412d940f7da22970abc9caf44b4c7e637131d6a89dd93a556b54"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/SkillTelemetryReaders.fs",
+      "sha256": "3a6a6f5d332238070746f862a835df32a08e30c6f581634bca94f0aa6e474fe2"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/SkillTelemetryReaders.fsi",
+      "sha256": "57293af13d8d6b7d1723d5b8119844f4659b70978254f73feefae816fd127613"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/Snapshot.fs",
+      "sha256": "2af982e9001aadacd91d6e900966c390441627f270168bd9079e322818730532"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/Snapshot.fsi",
+      "sha256": "876535e762935846586f4f148be19e8f3ffbe425b00b65a504374b75825bd4f8"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/TelemetryApplication.fs",
+      "sha256": "435feb0d765a3a319a70e3d61d55d305dbea56e1ab92f4d2a799cb4c671bf58c"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/TelemetryApplication.fsi",
+      "sha256": "8b715c7e9eb399ded8b2fd3c7ba8a1726c9513eee711e1af237f57e79043be14"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/TelemetryCiApplication.fs",
+      "sha256": "2c77827228c10c680b61797edeca32cd0265413b5485de99539e42e3a90e83f3"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/TelemetryCiApplication.fsi",
+      "sha256": "68e459006163c8b7e10cd508cc2f36548c6f8964ff8358c943199bac241bf125"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/TelemetryDashboardApplication.fs",
+      "sha256": "236fb001c1fbe53abcfb08a21ca419dc0de05921c37988d988d7a29f87367ccf"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/TelemetryDashboardApplication.fsi",
+      "sha256": "b09b6f5ddde9482aafae9eca11484447a07fa6865311863c0614be8c7786c334"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/TelemetryDashboardServer.fs",
+      "sha256": "75ea377e589a9bfe5edda1f7c20011aa4531bca6e787cd5cf606afcfec9d3b7e"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/TelemetryDashboardServer.fsi",
+      "sha256": "c4d24d54a19c0b71774f987f7aa5a0bb702e7703ffab550a902c5d213f07b400"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/TelemetryRuntimeApplication.fs",
+      "sha256": "a2d30e0cccb63a51ea3923b8084855c6dfdc46dbfeb800cb0b0e8329747f569c"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/TelemetryRuntimeApplication.fsi",
+      "sha256": "5cbfb1f94ed60fefe2829a33956b137cb3e155a133b42fd921a0a81ecda952a4"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/TelemetryStoreApplication.fs",
+      "sha256": "700a3376a10babfc4311ddaf82a8b87b49c108a9eda11d15f9631e18249dbd43"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/TelemetryStoreApplication.fsi",
+      "sha256": "8c3f06a868f8ee027787cdd9b0c1695f9d890893ce2ba958a429bfa2d96c63ec"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/WorkspaceTelemetryApplication.fs",
+      "sha256": "20cfa8756339660afe291c698e1b3f70d6869c0db53554f6426ab59451cbded7"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/WorkspaceTelemetryApplication.fsi",
+      "sha256": "7f033b35c2f46c4db172f544ec9bbcd8b53a39c8263d82a320b0e6fe6b298087"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/packages.lock.json",
+      "sha256": "ae0c80f7aeb813b41f3661a3bb93c04c8e4bde2c9594a14749dbaf9a26b2990b"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli.BoardOps/FS.GG.Coord.Cli.BoardOps.fsproj",
+      "sha256": "62b71f8bb3029a2361f9d758b372b51b53af7f139b2fcbc617ee617d9cf6b73c"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli.BoardOps/HandlerRegistration.fs",
+      "sha256": "4854ab2d2910214ba45820a62afecea4e2a62e08cce28af27534e85603b0313c"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli.BoardOps/HandlerRegistration.fsi",
+      "sha256": "6bd497598301aca19041de55d89a0bd65eb9410740b480176fe7f8157d048c59"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli.BoardOps/Handlers.fs",
+      "sha256": "6e1c663ec939b0f8697489996b5d099accd10fa9ebcf12e1726d0849b7721306"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli.BoardOps/Handlers.fsi",
+      "sha256": "f5ccf2e0dbe823d604cf1c7a1002e1f8ad7215017c01fd7cea684f19c7f44535"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli.BoardOps/packages.lock.json",
+      "sha256": "a070ef264dece5b22889eb968f9cb66bb90865651142f5018cf012811f0c631a"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli.Kernel/FS.GG.Coord.Cli.Kernel.fsproj",
+      "sha256": "c4d5425dbaef3bb695b44c842a83c2ebe84647100b40108f49e06501b0c949ba"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli.Kernel/Identity.fs",
+      "sha256": "00150c4d64ace32b63969806c3937ddab938fa98f25d3de1cb0d58bd816782cd"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli.Kernel/Identity.fsi",
+      "sha256": "97d2253ddab8cffbcfa6d79a59c935281a1ccef59bf28a9db482ab9683378ea6"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli.Kernel/Json.fs",
+      "sha256": "30c7875846db0f7c83cec5160bd05c70cb3c2ae0c185b2e572434c2b116a60c8"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli.Kernel/Json.fsi",
+      "sha256": "160b6db7eb7fbf219b7bdc5b9c0eefdba6d871bfa7dd8e8040f2108c85c51cc2"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli.Kernel/Kernel.fs",
+      "sha256": "c69c54071bb70cee82485daf260a0579afe7613784e7075fd6a94d71f7401ce0"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli.Kernel/Kernel.fsi",
+      "sha256": "3d80ccbd03086d29572cb75ff3c37c6d5a2cfea72c3684a9b6d41bf37236f63b"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli.Kernel/Options.fs",
+      "sha256": "a50a8b3d46ed0781e63b2eff6450bea7a53869678f38d4171b52c5d9402ab796"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli.Kernel/Options.fsi",
+      "sha256": "98ce7f5d2ab0356c0f41fdd5d582153b6af2dc73915b1b3005c764637a7d6fae"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli.Kernel/RefParsing.fs",
+      "sha256": "25f8bed7120679e51fa4674e6667bb0142883df62b31f474424f1dd89e2a82fe"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli.Kernel/RefParsing.fsi",
+      "sha256": "a3b362711b436728a72712797d8a6eb1bb2ae031c8836deb7ee3286a53f77149"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli.Kernel/Render.fs",
+      "sha256": "060bf025d2466756eb00b8e279c755e4485d92bd44720a99e06844829b612164"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli.Kernel/Render.fsi",
+      "sha256": "7d1c2a7965885bdd7d3273fabcc078cae445a2b8771904a1918b39aa7b38ce70"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli.Kernel/packages.lock.json",
+      "sha256": "f4c74eebd1a38fcaf9f61a8e1b41f1bf5c9caa7239ed4ea522267184fbcb3a53"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli.Lifecycle/DeliveryApplication.fs",
+      "sha256": "a37d4bce607e0e58c938af80c6a310f426e09d0e6561b00ebc748330e06a2e3e"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli.Lifecycle/DeliveryApplication.fsi",
+      "sha256": "0e334765f8a10ceb3c4cd074a5f7d7b58359dd080b1c707885e9c66cd9fe65c1"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli.Lifecycle/DeliveryReceiptProducer.fs",
+      "sha256": "9ec92beb2d7708f254262ac5d64ce7c79c65a5dfd86dfa4258076b2c70915542"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli.Lifecycle/DeliveryReceiptProducer.fsi",
+      "sha256": "9bac6279d047cf6dd3f5b2bdcd43be0d6b8681c9803db1d9ab6111ec743cb095"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli.Lifecycle/DeliveryRouteApplication.fs",
+      "sha256": "910348f5caec9551b8183f9d3debf5820b5bb003fef31388773cb65025a44fa8"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli.Lifecycle/DeliveryRouteApplication.fsi",
+      "sha256": "b3a649bdd99ec7a4ac9bdef7560e56bb6a8004d0c7f4c9c6f443d454d8e364c1"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli.Lifecycle/FS.GG.Coord.Cli.Lifecycle.fsproj",
+      "sha256": "5aff07f15d90da1230208f4fe8797e91cd1360435e99fa1576ba056b32247e3f"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli.Lifecycle/FollowupAudit.fs",
+      "sha256": "35b4091208998cd7f5a72e7c24c580d5df9a159e47990f35143ae3432f86174d"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli.Lifecycle/FollowupAudit.fsi",
+      "sha256": "f288c7a5af20df72f42d5ab6b57e7a2c8d771e9e0df1e77afdb8b17ada68e0b3"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli.Lifecycle/Followups.fs",
+      "sha256": "3c3c470d1b83724a063bef89e3c65922e4f4587eebeaecfc01608b9a41ea2a43"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli.Lifecycle/Followups.fsi",
+      "sha256": "7f63dd33e1dc21e7d8ce3a2c0777b1e93460b600a3c01b818a65c08fbaad776f"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli.Lifecycle/HandlerRegistration.fs",
+      "sha256": "09eaac40fa89cf43ec04cd16bb3eb24861b52c0038d7d698c15d370aacf61655"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli.Lifecycle/HandlerRegistration.fsi",
+      "sha256": "9be14f00f3e7a8df24fda6f1a0ef7c8776b8d80bed47914c48b34bd40ed70d0e"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli.Lifecycle/Handlers.fs",
+      "sha256": "89abb85b8c8e575142e5a217978a72bad4e49d6157897169124a7ac65b8f2074"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli.Lifecycle/Handlers.fsi",
+      "sha256": "53759eaea412ca264ccb18ba7efc5ec697a9d80731df925416bb1434f4dd33f5"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli.Lifecycle/LiveHandlers.fs",
+      "sha256": "8151f318c8ec590ce63e55659b891b9eb753dc30ff6888406c7c93c60b55d9aa"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli.Lifecycle/LiveHandlers.fsi",
+      "sha256": "d3bb62569a35cd58b7ed0f87c16b77474399ae73bf573fd13a2c1eb59e3f414d"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli.Lifecycle/ReviewApplication.fs",
+      "sha256": "67ccdf9ad40407b6a5fd138719b42f09b3ecf4708646a04ddcb04fe4241e8c0b"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli.Lifecycle/ReviewApplication.fsi",
+      "sha256": "f6afdec3be2841f6c5962ab658c9a79ced2967282f7f969fc301dc0d5b74678c"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli.Lifecycle/packages.lock.json",
+      "sha256": "e5a5679fe83a6b88c9674b5c175e048481ddb81331e648cca54fcf097ee0aa62"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/Batch.fs",
+      "sha256": "33ffde93b1d90a4fa54df63ebd7411e3e61628718ae5b150b50f26434316eb11"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/Batch.fsi",
+      "sha256": "59039969d45ca83d06e8ef30a93618ceb472c3a2e2f63af405fdc472e7553a9e"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/Blockers.fs",
+      "sha256": "214a0c87c8ca19ab3577ae1dc5a1e2912a6529f4c879cef3a9d8f30ec1e0c5ba"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/Blockers.fsi",
+      "sha256": "b9a65c61aefc23595e0f2e8decc0a585edcef84895518341125117bc16ca5a4a"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/Chore.fs",
+      "sha256": "c5897c7308826184f6a3e0a927fce3dbe857930b2f30dfd07ea907381f7f19af"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/Chore.fsi",
+      "sha256": "c1531f4979d5ef59f9da7f33a3aee9bcfe225d8160217a7dd0537e5ed42465de"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/ChurnReading.fs",
+      "sha256": "1e4521f8c1fe85c3da49cd70b46f7e1ef3585209aeb08bdc022e88b3a8310b79"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/ChurnReading.fsi",
+      "sha256": "d875b221420a7a00abb2db9ce6b85c7bb6783023ac4537ea7fe9ebab8e92128d"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/Class.fs",
+      "sha256": "c920c6f10615a7b141ecb4451a64f33eddcaeb7e306a80f82321732b957c2e0b"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/Class.fsi",
+      "sha256": "4f743cb62c9a1efb50bcee493639d21afaa8a1491067d511a2f927b5265c94b4"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/CycleLedger.fs",
+      "sha256": "dff231a23cd739bf219b95fce9767c2b6927a8cd46ebca4b8ecc2d938ac5c6a2"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/CycleLedger.fsi",
+      "sha256": "bb84e8d0af1fc6e8f8d1a62da8f6096e81cef7f6d0d5e988929b545c4eec51b3"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/Delivery.fs",
+      "sha256": "88ee2d9cadc74e9ebca82565bbf207be4ddbbaa67c5edb252cd433c7a086357e"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/Delivery.fsi",
+      "sha256": "bad052ab36e24a805af61f0188fe61bbc9fd2a0eaa4473cf82b07832a94f727b"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/DeliveryRoute.fs",
+      "sha256": "89ad0f80b043886e72e2d4101d91f21d425a43a3172db954836ec5f0f8677bfe"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/DeliveryRoute.fsi",
+      "sha256": "584d85909716aa2036cfc839ae1a19022b1588773b230ec5024331f7f0fc3aee"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/Driver.fs",
+      "sha256": "b9dc50c2d4c27380270e8525ab0e3e8175252ab5e24a89e6a91690f64a728f9a"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/Driver.fsi",
+      "sha256": "e0f4014e41c73a450681a37805756f3cab67dda90966cbc8acdaec4898441841"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/DriverEvents.fs",
+      "sha256": "4cc219b210195b5db36bed871e281e6d020f8923db03600819e182eb040b9666"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/DriverEvents.fsi",
+      "sha256": "68f6429afc1a2f2926a669442214ec8315d1f3d0b92c87d878a4cf14cbb70f31"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/EpicBody.fs",
+      "sha256": "6e3238ed36159275cfbff3980f4ba8a339ad81c87c2d806c25af162b4fc9cd0e"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/EpicBody.fsi",
+      "sha256": "de7671587fb3e04580707456e78a4230ba8864b0259a6acb61d6e99bd4719c67"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/ExitCode.fs",
+      "sha256": "8b7a670af67f92561151560069ab7d1df722feef0abe776921d078785c5f5c25"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/ExitCode.fsi",
+      "sha256": "2495fa52871c6ca3520566329dd95e24d0d2f07dde1f3d64a2d93ae068ad877c"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/FS.GG.Coord.Core.fsproj",
+      "sha256": "f7d44aa55107bc005c54b276e87755ead1760ecc28252441b8bf9e6fb10fca1b"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/FindingPacket.fs",
+      "sha256": "57c410620d4beb73eff0f8cadf206a69371acafa4a01ab67477d34b530e53244"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/FindingPacket.fsi",
+      "sha256": "955d5be7a6d7bccabcd072e744729b76adb2b59f38f4f06d4fefb7536f3ca972"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/HistoricalLossRegistry.fs",
+      "sha256": "04a8eb8484bd1d1870b520ca95260adeab597a6185f223b7af6bd2a1a765d6fe"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/HistoricalLossRegistry.fsi",
+      "sha256": "831c77273d474ef0b15743b80a986548a742a99261e40bbbfe8cdd4381950123"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/HumanBlock.fs",
+      "sha256": "f6bd84d7b8d97693d52581dd88fba4fb5f7efb7124563b393986ad2e66041be9"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/HumanBlock.fsi",
+      "sha256": "6ca42e00d8f6f9a737793c856b18d22ed28c961eb9066174736a61bbad9e9ca6"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/Intake.fs",
+      "sha256": "59c60b6006f0cdd6538ec14e2a102874db0eb68cda15570fb61b31ae7bc090d1"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/Intake.fsi",
+      "sha256": "efc1a71caa6bd01f42430bb96ea56ba021646e0732d13f362f406da7879db8fc"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/IntakeReceipt.fs",
+      "sha256": "6ae65a6b3b48f7f865330efca90e41a1786dd820da01c19f5623698b2761baa6"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/IntakeReceipt.fsi",
+      "sha256": "8cd9a44f251286967b8bb57dd41d635ceaaf8e6a9e56e5a5c08b78a112a8cd16"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/IntakeTransaction.fs",
+      "sha256": "25e3874dff23e5c8072556f4122a1461f13de6890bca1a09ab808455520c3310"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/IntakeTransaction.fsi",
+      "sha256": "8dcef72836eb5e66dd8c46901e30d7bcf603988a3ac899c5da0bdbc23677414e"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/Kind.fs",
+      "sha256": "13e4748f9ffb1ee110e7e5940e9b2c67034ee58a9efbca014a23a08f1ff5e92d"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/Kind.fsi",
+      "sha256": "2f5e92fe8780d2883a8c8501e8cdedd4512a2a73142a16fa2f405a77781c14b7"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/Kit.fs",
+      "sha256": "70a6bcdbfbbe2bf33bb96c9c564672c4b974ba42637d0d3be6cc0bea0f82a7ad"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/Kit.fsi",
+      "sha256": "f61373d6f9576658e861a4bdc442ac5dfb225c7b9df843b8684ae6bab27385f6"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/Landable.fs",
+      "sha256": "af4d4beb9b57186a783dd0c44f3238b3eda61b0d9563dfaf95ecee86437dd555"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/Landable.fsi",
+      "sha256": "2328a24f57d5d7415106aa71956f4bd244287f95f69d56d85bf982f886d7393d"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/Lanes.fs",
+      "sha256": "af4aa5b979d15554ed72c0b438839bd48464dfff5a06c791079ff0a3c10651e6"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/Lanes.fsi",
+      "sha256": "c7bd8f13abe7467a518eb70c8ccb4e032ccd24f0e28f8f8bab307a41d804ebbb"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/LifecycleProjection.fs",
+      "sha256": "e2e3951870a103a185772548a4644243d2a43074686ae152b734db0f83486852"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/LifecycleProjection.fsi",
+      "sha256": "4177ad2487cfdcb3a0a49637d2c28a3152ea69b94dd21839688bc2c99e594922"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/Markdown.fs",
+      "sha256": "ab3cf6aa3658d88205eaf4e97002d2d731a6097d301b41ed4797323b44ada146"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/Markdown.fsi",
+      "sha256": "2a1feac5c7eb93c011d689e1a7053e506bd213d005d2f936171998602eb7d6cd"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/Operation.fs",
+      "sha256": "c0462e308664a0b1dd03d499ea510c23db9de9d5498a158f5017276c051075e3"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/Operation.fsi",
+      "sha256": "5df7dd6bb9e13b59b723af7eb0ae0511557e152c6101d357b93f6ffbf312da1b"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/Protocol.fs",
+      "sha256": "c65812b61cd26d67a1f149a261053e97497de92bc4b69af06be82626c7410aa8"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/Protocol.fsi",
+      "sha256": "54cca40ddaf77e875b008fa9a1fa54da2b3414abc115803a566a3f0445e01e37"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/Qualification.fs",
+      "sha256": "9120861e42c3b3dee3eaa839bb074f8b5547ab0bb92a132caec3b10225a9aa18"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/Qualification.fsi",
+      "sha256": "7dbff8ff11fcaa93fb66b605f6d4e264841980d80c31ad39561a3c20c1e5ed7d"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/Rank.fs",
+      "sha256": "1fbaca187c663558e513b5848bcd0de7f39340ac1a63dd359c04e105d20baa58"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/Rank.fsi",
+      "sha256": "efdf1229f7fd83153dea4f35628842716bae0c5889d770fa1d7c2140a82edba5"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/RegistryPredicate.fs",
+      "sha256": "acce2c665e8f57d5c23e6e6cd324303b541acfefb3eeeab0629050165e4b081e"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/RegistryPredicate.fsi",
+      "sha256": "6cb1a375831390e1daeb63902020242df23a12873e837e5a02e1cb69300be056"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/RepoScope.fs",
+      "sha256": "ed5717aa0b1314b4ced20738df2637fc60d0e1b147eb45dcb217712b8e4302cd"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/RepoScope.fsi",
+      "sha256": "798cb91169a9bbe09061fef45410a071898785ec9669293669d4f62269f49d3b"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/Review.fs",
+      "sha256": "540a55701124c77c7474edca2895a0d63d3beea5e448e9cd640ddf3e5afa143a"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/Review.fsi",
+      "sha256": "5ef89bf8286e84001c1f21c545b3abc95a6573582a2c82dd20857662bbd7618f"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/ReviewWait.fs",
+      "sha256": "951872f3752fd08cb416106fcb8e845ab215be8cfb508115badaf33aad5d1c4e"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/ReviewWait.fsi",
+      "sha256": "0132b4459f99311bda940d47c33551b9af1b9b08777bcdb15380faab258fd236"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/RoadmapWorkUnit.fs",
+      "sha256": "4ff9d1383954be354a8a5b2672c5d043fb8272cd1779d044504aee5fe80945b7"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/RoadmapWorkUnit.fsi",
+      "sha256": "9098c27d46d9babee067362193642e7bab43658f07e74ee7e0ad52d50b6a158e"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/Rooms.fs",
+      "sha256": "29dc307d8ad889c19fb8af72fa7436c2044da6f87246a04bd8126db23d42da5f"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/Rooms.fsi",
+      "sha256": "2bdf7bc4dae6cd7c258639ed968e23ac72ab195737af1eb33bfc1dfecd3f2dd7"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/Schedulability.fs",
+      "sha256": "9a60fa10956f58f6d9d5b7b5c7aec817108b803c20bc5f197e30579727146f26"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/Schedulability.fsi",
+      "sha256": "925c3a30aebc5a152cc4967b89ddfc1529cf6f6e326bd70e6e59b9e072f8d58a"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/SelfHost.fs",
+      "sha256": "18b832aedbed777e93e1b8b65f4df67ab283802d25c2c83dd733a08dd56e9c3f"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/SelfHost.fsi",
+      "sha256": "31a77be1aaf92726e3b5c79cfc624f123e737e4813a3c933a316314918e5764f"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/SemanticDiff.fs",
+      "sha256": "a43f556b07b0f732109f050a57c3bc47d1c8befac4db7aa8d27773d55f317702"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/SemanticDiff.fsi",
+      "sha256": "6ccb94f0af118fb881a689d52fd199fedfcade6813da0573d2efeac0c6e64a2b"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/StructuredDecision.fs",
+      "sha256": "15582bf44e6cfbda1c556ad61f65d7c9361e654da8fd359ddb62fa3d899d35a7"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/StructuredDecision.fsi",
+      "sha256": "cf0dbe7dbc0039c9ed377e6924fefee8651c9a2862b02754cca5e6df31107965"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/Telemetry.fs",
+      "sha256": "e1fc9d43e75bb6130bf9163349c242e75ec98955d765c562ebe68fbc3a566b23"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/Telemetry.fsi",
+      "sha256": "02aa9424e619474aceb985235b5c8d1c03254f980e1d606c797ce6a29906ae91"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/TelemetryBudget.fs",
+      "sha256": "f280a22b1bcadcfe3a8847b7e1e5e04789f241a54c9246e6f95ac56833bb64c7"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/TelemetryBudget.fsi",
+      "sha256": "0404ba3a026b46b9a5c949e79ecc45bd56726b1e1362da8ffc23e14737ea7bff"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/TelemetryCi.fs",
+      "sha256": "bb128f28e3ae1bf42ded665053f45ff439f77b4e47384d7fb54268e1d21ac447"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/TelemetryCi.fsi",
+      "sha256": "e920e1fe23223510933c2aa239cf350518f29a4023d02dbf86d1ea28a7985309"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/TelemetryReceipt.fs",
+      "sha256": "ad438ff9a7f4bb94befc4f9d3bed414b8320b767772220019eaa75dee3ea379e"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/TelemetryReceipt.fsi",
+      "sha256": "3eca317a1f88ac6753cc6caf392b8858ef9072bfd2ebfc54adef0dcbd1a931d3"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/TelemetryRuntime.fs",
+      "sha256": "8d571378ae492eb5aadebf6a4917322a1dab8df5857e2a4830601526f7f14e2e"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/TelemetryRuntime.fsi",
+      "sha256": "709363c31288d779f7d3612dc7006c0f12cd611aa43155efac921fa5a6abc97c"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/TelemetryStore.fs",
+      "sha256": "e835ccba7feb6662acc4212d6ac2958f0e12fde33c81c3ce2911e933ac5dbfcf"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/TelemetryStore.fsi",
+      "sha256": "15377bbc717870518bad542d4307644a39094e02548689e6d0c883925761c31c"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/TouchSet.fs",
+      "sha256": "0e89c6625d96ea2adb64812450cefe0d346b67868854a18460a173e2b8bbb42d"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/TouchSet.fsi",
+      "sha256": "2906258fea7e1dfb8bbf40c18ecc33ef433280d897bb500c6af30511d3be76cf"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/Types.fs",
+      "sha256": "1c1ebcb65c757c6c1a639c172e437a6f3f4e190ea6b8f0e962e8683c47737e6d"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/Types.fsi",
+      "sha256": "e56c138c19b9685dfa478a745dce4a40c669e716f3780ab1c3279492e874433c"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/packages.lock.json",
+      "sha256": "01c145e67fc46567f4e4e158be1e8d275004d4435e4c305bcff514b068638f89"
+    },
+    {
+      "path": "src/FS.GG.Coord.GitHub/Board.fs",
+      "sha256": "568294d1d80658d07af21e00c18c727815617320e334707c981a4a0f2e5bf729"
+    },
+    {
+      "path": "src/FS.GG.Coord.GitHub/Board.fsi",
+      "sha256": "690417de558aa9e670aa522c00e5f72696fc0a20afb2b5c967a68de960b6a599"
+    },
+    {
+      "path": "src/FS.GG.Coord.GitHub/BoardIntake.fs",
+      "sha256": "11ae6057aef9db627e6a142eabb0becec386b805fe29773d2cab398da3677c8c"
+    },
+    {
+      "path": "src/FS.GG.Coord.GitHub/BoardIntake.fsi",
+      "sha256": "7142d40037fad0ff95ba9058bb624bb8c469aab056f85361c6a8bdb34cf1468e"
+    },
+    {
+      "path": "src/FS.GG.Coord.GitHub/Budget.fs",
+      "sha256": "5aae9198ddac339767ca8cfed9153d2990887adf21b2061edc232e100eab13d0"
+    },
+    {
+      "path": "src/FS.GG.Coord.GitHub/Budget.fsi",
+      "sha256": "54c62d49f66bd8e3d597159f64c098b005e46d2354d9700cbfe632e9d717a9aa"
+    },
+    {
+      "path": "src/FS.GG.Coord.GitHub/Cache.fs",
+      "sha256": "727336cab4b3b5ed806f873b6cd2344edffba8880337aac92a25261cdaab46b9"
+    },
+    {
+      "path": "src/FS.GG.Coord.GitHub/Cache.fsi",
+      "sha256": "6047741de589cf270beae950bae77751d7c7748815b2d7c74099dea85650ded3"
+    },
+    {
+      "path": "src/FS.GG.Coord.GitHub/CiReads.fs",
+      "sha256": "1d2b64f959ab94d85b6b7c209f6b153b3ac10e3af1db78d1046c21b6225a08a8"
+    },
+    {
+      "path": "src/FS.GG.Coord.GitHub/CiReads.fsi",
+      "sha256": "a6c5cf3a89568961477b9bc53f639c16596f94b2f29a53a8f7decfe02b2c0d7b"
+    },
+    {
+      "path": "src/FS.GG.Coord.GitHub/Done.fs",
+      "sha256": "148107a73abda2ee3f2db82a4aaaf951047b8d657b54be9352f07637757a3fef"
+    },
+    {
+      "path": "src/FS.GG.Coord.GitHub/Done.fsi",
+      "sha256": "a12059878d7da772ce0143bf1115690c03bfe2880ce740f96630cdb8260d3f71"
+    },
+    {
+      "path": "src/FS.GG.Coord.GitHub/Errors.fs",
+      "sha256": "928bd46f134135c793b6fe887842aac6ea39dd3353d97f821bb01796c88bca5a"
+    },
+    {
+      "path": "src/FS.GG.Coord.GitHub/Errors.fsi",
+      "sha256": "cbf3a75708c6baa55a024fa2f695c02e1a27b71d2cee8cc61933e6be640d595f"
+    },
+    {
+      "path": "src/FS.GG.Coord.GitHub/FS.GG.Coord.GitHub.fsproj",
+      "sha256": "7d02522c941d1f0808f95ae4fb846689ef7d883861c7535b55215b5d065c177c"
+    },
+    {
+      "path": "src/FS.GG.Coord.GitHub/Fake.fs",
+      "sha256": "b28c88fdddebe8961b424a59ec46a9c8f904ccbb62996b2fb832075de78a78b9"
+    },
+    {
+      "path": "src/FS.GG.Coord.GitHub/Fake.fsi",
+      "sha256": "57296c46332f1a0d3767634a660a9256004dec4542a816b34dc836a6529c46c2"
+    },
+    {
+      "path": "src/FS.GG.Coord.GitHub/Generated/Coordination/ShardedJournalAdapter.fs",
+      "sha256": "f0b6a5854c208c4cc88cccf003516d80d781ae5c4140ae9c123dc82942a17e09"
+    },
+    {
+      "path": "src/FS.GG.Coord.GitHub/Generated/Coordination/ShardedJournalAdapter.fsi",
+      "sha256": "790f6b3d6d787a0e613f4eacd97dceee79cdca17518a365d5c2f981df8f1136b"
+    },
+    {
+      "path": "src/FS.GG.Coord.GitHub/Generated/Coordination/V1AdmissionRegistry.fs",
+      "sha256": "5da24c4ea07f8a9d8934bdb6f716662c4c412f641369dc9ef6250f21cecaa081"
+    },
+    {
+      "path": "src/FS.GG.Coord.GitHub/Generated/Coordination/V1AdmissionRegistry.fsi",
+      "sha256": "7e4736da1efb91cd5ffcd176d1e72ddd561048f8b4b8d8c034a4071531ccafb2"
+    },
+    {
+      "path": "src/FS.GG.Coord.GitHub/Generated/Coordination/V1EffectFenceAdapter.fs",
+      "sha256": "1e0bb9ae31dfe2a72ee34abdb25b3b7c79401197766486fc00dff60501bc9dfd"
+    },
+    {
+      "path": "src/FS.GG.Coord.GitHub/Generated/Coordination/V1EffectFenceAdapter.fsi",
+      "sha256": "281c87ec29e69268ce8bacefe7167e814114c9b2a36f0f21564cbaf8df3d158a"
+    },
+    {
+      "path": "src/FS.GG.Coord.GitHub/Generated/Coordination/source-subset.json",
+      "sha256": "a8ab4885c75367742f6ef2e78ad07f836009b322053ddf2b2fe23e2dc15fc5b3"
+    },
+    {
+      "path": "src/FS.GG.Coord.GitHub/GraphQl.fs",
+      "sha256": "d3acb55eded0ddf4bce5ab21b9bacc43d3c14a1b400d81df0dfd9eca469097fd"
+    },
+    {
+      "path": "src/FS.GG.Coord.GitHub/GraphQl.fsi",
+      "sha256": "e3ddaa14e0243f867104c3bb03a2ced1eb60da5ca439da442d35c01124770c5e"
+    },
+    {
+      "path": "src/FS.GG.Coord.GitHub/GraphQlEnvelope.fs",
+      "sha256": "1ad272658f4538f2321138b7af346c99547c6a3de8c8b0c47179503966085982"
+    },
+    {
+      "path": "src/FS.GG.Coord.GitHub/GraphQlEnvelope.fsi",
+      "sha256": "62e45d3352f557dbb154e8d0cc3cc64c9e522303a2585def0739f982f7f42fb8"
+    },
+    {
+      "path": "src/FS.GG.Coord.GitHub/HistoricalLossApprovalRead.fs",
+      "sha256": "2b04f824588feee4885867e06b53249ae0514985c0e692985c33ba7399dd0c6c"
+    },
+    {
+      "path": "src/FS.GG.Coord.GitHub/HistoricalLossApprovalRead.fsi",
+      "sha256": "c2a98b70533bc1c4e099271625451ea790a2bc2be4a50dca2aac15b6c854456f"
+    },
+    {
+      "path": "src/FS.GG.Coord.GitHub/OperationalGraphQl.fs",
+      "sha256": "00d6d098a556d6e7a24a94373f26546dbccb282f0a753cb4be06f98683111c8b"
+    },
+    {
+      "path": "src/FS.GG.Coord.GitHub/OperationalGraphQl.fsi",
+      "sha256": "21fa04e9eead48a71ce838510f103f2567949d31e4d83375de500a16eb7f2863"
+    },
+    {
+      "path": "src/FS.GG.Coord.GitHub/ProtectedIntakeAuthority.fs",
+      "sha256": "006f72f316ecc51dcb35ccc211894d5ee2fb3f68b18eb38fcb6e20f44287cc7a"
+    },
+    {
+      "path": "src/FS.GG.Coord.GitHub/ProtectedIntakeAuthority.fsi",
+      "sha256": "abfe67a756366057ab6dbccaf5f3e0bab0bfbbff2ca1e57deceebfc677414439"
+    },
+    {
+      "path": "src/FS.GG.Coord.GitHub/ProtectedIntakeGenesis.fs",
+      "sha256": "442c2ec6ee16aef25308933d4643fd9d20190c7ef1b1012c322bc57cf847c6b2"
+    },
+    {
+      "path": "src/FS.GG.Coord.GitHub/ProtectedIntakeGenesis.fsi",
+      "sha256": "263f78c070762254c9830a3fce8234617b7a0c8381be34e45a9ae249f1a5a04a"
+    },
+    {
+      "path": "src/FS.GG.Coord.GitHub/ProtectedIntakeJournal.fs",
+      "sha256": "7b6b681e3603071ed6e0018ee23c59b9db9d3fb77f785725a66293f3d2e8cb90"
+    },
+    {
+      "path": "src/FS.GG.Coord.GitHub/ProtectedIntakeJournal.fsi",
+      "sha256": "38cf4ac3768f854c3bf8be2208ff2c18988440e57531a71b0538f5433ae0b5bc"
+    },
+    {
+      "path": "src/FS.GG.Coord.GitHub/ProtectedIntakeProvider.fs",
+      "sha256": "76d175fdebe1bccf4205f1060965d558fad5841026aeeaaaaa5cf4006733f0bb"
+    },
+    {
+      "path": "src/FS.GG.Coord.GitHub/ProtectedIntakeProvider.fsi",
+      "sha256": "2d4efbdfd6b18244b6ec8844d382d959ac1a5cf4f331969f652d174e1d77e30f"
+    },
+    {
+      "path": "src/FS.GG.Coord.GitHub/QualificationEvidence.fs",
+      "sha256": "8952c59aa8f18e3b3c52a38f2fb65278609a5c15e3dbb1edd10ac54ab6e70e32"
+    },
+    {
+      "path": "src/FS.GG.Coord.GitHub/QualificationEvidence.fsi",
+      "sha256": "98fe16fa2d594dc608dee1206d7de0f37cacdb734290d7d0e09edc5287a156ec"
+    },
+    {
+      "path": "src/FS.GG.Coord.GitHub/Reads.fs",
+      "sha256": "49a4eeaece440f04d4623be6c76a2ca0fd1dfa6f887614c1be9cbb8e0340fa2e"
+    },
+    {
+      "path": "src/FS.GG.Coord.GitHub/Reads.fsi",
+      "sha256": "e6719ac6a5044afd65ecba73e29fc9ac4c08ed7cce595dadcd72eb7c31d8d98f"
+    },
+    {
+      "path": "src/FS.GG.Coord.GitHub/Scan.fs",
+      "sha256": "d75fb28824fd364d6286fb3dcd3c782cf7a39c6e6ab045d3c29ed025e101dea0"
+    },
+    {
+      "path": "src/FS.GG.Coord.GitHub/Scan.fsi",
+      "sha256": "6fba5349ce74800b99bf10b11e6b3aceb0d7a30ccb3bd12f249a4e5db2fbb899"
+    },
+    {
+      "path": "src/FS.GG.Coord.GitHub/Transport.fs",
+      "sha256": "9ec973b14b687c95beaf456c0bf3258f143efc68a47b2c41b1d9fa146a2161d5"
+    },
+    {
+      "path": "src/FS.GG.Coord.GitHub/Transport.fsi",
+      "sha256": "3c3f27952b08e94d3ec6b4873ac3248203dea41fcef1f63db52244e41200bb5b"
+    },
+    {
+      "path": "src/FS.GG.Coord.GitHub/V1Admission.fs",
+      "sha256": "90f0a05daede51e173c54b32278e41101adcd30e1a5024e8ac8586ab6af1fb24"
+    },
+    {
+      "path": "src/FS.GG.Coord.GitHub/V1Admission.fsi",
+      "sha256": "a477966ec30ecfb28f8e33f7ed0840a1901f8eadff914fc806b02e619e31afa2"
+    },
+    {
+      "path": "src/FS.GG.Coord.GitHub/V2ObservationTransport.fs",
+      "sha256": "95a8f1221a257616ee1ea494a5b95ba1bbf4e726eb55175d1a9815b50c26ff84"
+    },
+    {
+      "path": "src/FS.GG.Coord.GitHub/V2ObservationTransport.fsi",
+      "sha256": "574ff54ed52d98f765c4422aa69bb83942e5facbd0e697eaaf05e8e071ecc499"
+    },
+    {
+      "path": "src/FS.GG.Coord.GitHub/V2Projection.fs",
+      "sha256": "769639375a07d9dc2640725f9ba40a7b2d5d3651d2b9ce33e60447cfea2c168e"
+    },
+    {
+      "path": "src/FS.GG.Coord.GitHub/V2Projection.fsi",
+      "sha256": "569657fe25522d3690742a87441c621bc0ba2da6c201048139879c5a2bb90830"
+    },
+    {
+      "path": "src/FS.GG.Coord.GitHub/V2ProjectionSource.fs",
+      "sha256": "678a2fff57659daffd22d48a8f4b3f7ef16fa609fe7694c705a4eed47a509e9e"
+    },
+    {
+      "path": "src/FS.GG.Coord.GitHub/V2ProjectionSource.fsi",
+      "sha256": "64dcc223892d1b5c69a4da7d8b88645aa6039eec29a9c23b5947fb1eab763a16"
+    },
+    {
+      "path": "src/FS.GG.Coord.GitHub/Writes.fs",
+      "sha256": "194e5f22d99573c6de564c17148317125dfe277dbe8e45d839161329f7905c5b"
+    },
+    {
+      "path": "src/FS.GG.Coord.GitHub/Writes.fsi",
+      "sha256": "f0b84a4697cdda0d680f2cfa16fad7baebeb61a4218fb107a84ca84b06c4fe50"
+    },
+    {
+      "path": "src/FS.GG.Coord.GitHub/packages.lock.json",
+      "sha256": "e53ae3a50cfc2b33eb759a7d3fb8c109ce1470c9da7b19aef7b584e6224a33f4"
+    },
+    {
+      "path": "src/FS.GG.Telemetry.Client/FS.GG.Telemetry.Client.fsproj",
+      "sha256": "62de6663533fd0038647e3ac7098232427629086fba7f9906c258794ddbe1654"
+    },
+    {
+      "path": "src/FS.GG.Telemetry.Client/RemoteClient.fs",
+      "sha256": "8e03d5ff3609812e2241463ab8cd0bcd05094b208df6e30870e4bc1a045e6713"
+    },
+    {
+      "path": "src/FS.GG.Telemetry.Client/RemoteClient.fsi",
+      "sha256": "ad0c8ce8742aa499bc284e2408ffae2c8046ec9627b108bff224ae371355c71e"
+    },
+    {
+      "path": "src/FS.GG.Telemetry.Client/packages.lock.json",
+      "sha256": "6cf5cf355a23dce03fd891f84c0d88fb199c1ab929af3ec494cf545e582ca5c6"
+    },
+    {
+      "path": "src/FS.GG.Telemetry.Contracts/FS.GG.Telemetry.Contracts.fsproj",
+      "sha256": "ff266aede8241a07cdaf58144d2e54a2d94db56a9c6fe4bf9c5972d355f4c5cf"
+    },
+    {
+      "path": "src/FS.GG.Telemetry.Contracts/RemoteContract.fs",
+      "sha256": "f078baf5e7d12e0541dedce8702834f4de59129ca9ee3e238dd84c5e78bf08c1"
+    },
+    {
+      "path": "src/FS.GG.Telemetry.Contracts/RemoteContract.fsi",
+      "sha256": "4693c2625188a1d2c0b7066f2efc21b0f94c1b674bc527e150d86cc282b270f5"
+    },
+    {
+      "path": "src/FS.GG.Telemetry.Contracts/packages.lock.json",
+      "sha256": "e53ae3a50cfc2b33eb759a7d3fb8c109ce1470c9da7b19aef7b584e6224a33f4"
+    },
+    {
+      "path": "src/FS.GG.Telemetry.Dashboard/Assets/app.js",
+      "sha256": "511ab4ada1c27b689c8ca80edad994d5e11c9632bac47e61f6b2c46cb2e8389a"
+    },
+    {
+      "path": "src/FS.GG.Telemetry.Dashboard/Assets/index.html",
+      "sha256": "4719e4b3f5884d44be08aa0e7c0641915b7c1c5550a28b4c68f1c757d23857b8"
+    },
+    {
+      "path": "src/FS.GG.Telemetry.Dashboard/Assets/styles.css",
+      "sha256": "41905201d0a9c3c8e4d812fd8c321a3bc668220c7c1de1f961942ca1ac763f89"
+    },
+    {
+      "path": "src/FS.GG.Telemetry.Dashboard/DashboardProjection.fs",
+      "sha256": "035c70aa67998bb1cf11725c164c0aba6e2c734e0e76e8898e7ca7f107cbb56a"
+    },
+    {
+      "path": "src/FS.GG.Telemetry.Dashboard/DashboardProjection.fsi",
+      "sha256": "cbd439dc8cb55d4662f824c9bb83754ff29e078869f62aa47e23fa05c57afbcb"
+    },
+    {
+      "path": "src/FS.GG.Telemetry.Dashboard/FS.GG.Telemetry.Dashboard.fsproj",
+      "sha256": "d388954cfa7d3fe897506cfb01b615fdf6be078cc2cb3869cd28f32e0fb90574"
+    },
+    {
+      "path": "src/FS.GG.Telemetry.Dashboard/packages.lock.json",
+      "sha256": "01c145e67fc46567f4e4e158be1e8d275004d4435e4c305bcff514b068638f89"
+    },
+    {
+      "path": "src/FS.GG.Telemetry.Store/FS.GG.Telemetry.Store.fsproj",
+      "sha256": "64fe6866b7c522a1ddb17f409ed196a84bf86cfa9b204e6a6fa4a169a908290c"
+    },
+    {
+      "path": "src/FS.GG.Telemetry.Store/packages.lock.json",
+      "sha256": "d72a3ac77587f4586f97a8adc6f8cc052d9cccf13f445b6b4f9268665e4c836e"
+    },
+    {
+      "path": "Directory.Build.props",
+      "sha256": "a780f4641904ac81e31e164dbdf0ca4c4ac3c7824aaa352c44c5a9563a969150"
+    },
+    {
+      "path": "Directory.Packages.props",
+      "sha256": "dfa4c30c237e1474f770012a5a21225836766ae4d8c1fdd59745ea01071ce3f5"
+    },
+    {
+      "path": "global.json",
+      "sha256": "884c3d68b436980197e5c5871b6be07dc75b894b2a9e210f70a73468e9f9bd8e"
+    },
+    {
+      "path": "dist/dotnet/Directory.Build.props",
+      "sha256": "f29e3b29afed4f93258003519c5af5676b0a9bfea7623350491f2d60ee082d0c"
+    }
+  ],
+  "members": {
+    "FS.GG.Coord.Cli.BoardOps.dll": "49d6eacc11405f5e751473afd9c1c4a7455c4807eb16e0176d01812e0b0e2ac3",
+    "FS.GG.Coord.Cli.BoardOps.pdb": "1ed2211c489f6d58f40c6cf09da129613dec8d19be7fbd8e450d5f31488ae9df",
+    "FS.GG.Coord.Cli.BoardOps.xml": "e84b0c28377b28e27e1d511e107d9589ca5af6c633cea5ec895555442211a9ce",
+    "FS.GG.Coord.Cli.Kernel.dll": "6f1c88324814f2f3a0ca63acd1b98107d76b4f67fff20a1a5063607f9958f367",
+    "FS.GG.Coord.Cli.Kernel.pdb": "070917bb7577a317b582152ed9d706de10c4ef5e0975e7ea945f62c067c4cf9f",
+    "FS.GG.Coord.Cli.Kernel.xml": "4fe566b90ecc174be73e6df1294a3121bda5b9be1fea476353bf9d56a976d2d1",
+    "FS.GG.Coord.Cli.Lifecycle.dll": "1d0d3b1981c007e3910927b79966d754434e8916b0f7ebffa7ca61e32fc8d7ef",
+    "FS.GG.Coord.Cli.Lifecycle.pdb": "fa9abd9fe665a94c52307825b610e011bf818b2d4d56889e2ee418a048561c43",
+    "FS.GG.Coord.Cli.Lifecycle.xml": "358b1c3a14eae371470d44274744064a54b9dd3cfb683ae163e68c8fe0e4736b",
+    "FS.GG.Coord.Core.dll": "3a1f53202566d63a57685f768ad8ff12383eb03604b11e5cc5a02559da0a2d12",
+    "FS.GG.Coord.Core.pdb": "b3ddc65570156227942fa734e083a7c931bf7e1e782c1cb02f7ee7330bd5b73b",
+    "FS.GG.Coord.Core.xml": "623e481279318c1a77e5dfa54d4d9ea14da8c3b353ea53bd7ba0867ca3e5944f",
+    "FS.GG.Coord.GitHub.dll": "063c0365122b7ce63cdbbf0b33f88b63cb59894102997466d410f56aee04048f",
+    "FS.GG.Coord.GitHub.pdb": "d40c72674e5271b9464f90288da32c0d8d0a041d179af12821f0a0bf648ce022",
+    "FS.GG.Coord.GitHub.xml": "c67fad64f5621d4a136e19332dbacf406ddc25a2f7751c8aaf3dfb7299d498de",
+    "FS.GG.Telemetry.Client.dll": "9039d3f1f960187a9f60b9d09f26d3e416f8c0419a9894fd445732b7403639cb",
+    "FS.GG.Telemetry.Client.pdb": "4446ac7fa6611ef3c192613120806f4b39470d233021561ee9d2c63e22096936",
+    "FS.GG.Telemetry.Client.xml": "0e27fa484c1e4204ec3129fe89940c331473e9bfcde0715b91e4a936a423aebb",
+    "FS.GG.Telemetry.Contracts.dll": "123def36817190b32ec936cd7d939c463cdb1d8e51b59ebc26590f4c903d46ac",
+    "FS.GG.Telemetry.Contracts.pdb": "ccef1f189cad89706aa640b9bd26cd8a363aeac496889352b1d2eefc54deda1c",
+    "FS.GG.Telemetry.Contracts.xml": "1577f8605671efabeae4e6a49e338a21537b1bced924552db83f320ce5a9d6ce",
+    "FS.GG.Telemetry.Dashboard.dll": "02afa12cf20c27eb088b2fd554e9d1355deedad1fcc068c9ca08aee442fecc68",
+    "FS.GG.Telemetry.Dashboard.pdb": "f36f4870d346a67b36ea2bd2e8751941b20978676f5279a306923b6129069c43",
+    "FS.GG.Telemetry.Dashboard.xml": "7c2002ea25217b58b4eb73522d8c9878ac53fbcea803bd5eddebfc5a0a69786b",
+    "FS.GG.Telemetry.Store.dll": "72a58ba715761e924a24c3661f5825e11b9fc7cf57379a7150fdbdd8d2ea70fd",
+    "FS.GG.Telemetry.Store.pdb": "125df9c8c28b7bef9194bd6723e34a70e980e54f75c4af85ebfe34491135c1a1",
+    "FS.GG.Telemetry.Store.xml": "69f55c649af98694db955f20e4b705668ce968a9e9d0b0fbb37ae3a890ca522f",
+    "FSharp.Core.dll": "39b0b7f06c11bedd93f94b6f101fffd645f1c4437a5a6d3ee79259f855aeb11a",
+    "Microsoft.Data.Sqlite.dll": "b98d957462be432895b00dccca012d3c127e118d3d4262418014b92c7bbd66cf",
+    "SQLitePCLRaw.batteries_v2.dll": "1ee3c6ff4d39171690d6ff6f84b4d876ed038ca28e39bb6e74995f52d2aacf8b",
+    "SQLitePCLRaw.core.dll": "b72c9dfe1479a568d6b84e249eaf949e76c757888f8056fb6ddb9c0480e0dd25",
+    "SQLitePCLRaw.provider.e_sqlite3.dll": "1d4cb69b3aaf6a9cf40dfe179cc16dd678f12bc024b212d4297654e0a29e220d",
+    "YamlDotNet.dll": "d618138109a40e4a7250e49e2abad8c450e3636bee18d7499ab231e37fa9150a",
+    "cs/FSharp.Core.resources.dll": "39abc8ba8136994f2486fbfb9bbb15dfc2e29573ee6b4ddb7c943aa641101836",
+    "de/FSharp.Core.resources.dll": "9f1195204de5486e502b08530499a3b47ae74d0802e97f9f5769a91a2f24340f",
+    "es/FSharp.Core.resources.dll": "cb1b86d6ece9335ac72891d764052385dcf84c17a784a763a4041e6c6a2538a5",
+    "fr/FSharp.Core.resources.dll": "6b1b09397595fea3dc159a78e5a4f28316d4a7b45d0017ededa43d9c8ea8e3af",
+    "fsgg-coord-engine.deps.json": "f5551b231e6461c421a49402a28adc1ca93b85c7be1c73729f2fe271ce19a51c",
+    "fsgg-coord-engine.dll": "cb318977a143085680b27ba4c86fffd6fb3f5a91dc6a7e07cf79ef7c67825615",
+    "fsgg-coord-engine.pdb": "08be6f4848bbe16df8a9667c9e7d81c03e61229c66bf199d306b82b6b84e2fbc",
+    "fsgg-coord-engine.runtimeconfig.json": "e4b3a5d18f436095616519e1c99f954e4b0a8952d2dc6681915a69bbae0c5f30",
+    "fsgg-coord-engine.xml": "cbe65f9761eec5fd0ed845f8db1c4d6ff93e8e670b46901ba5a2e2f2cde15ef0",
+    "it/FSharp.Core.resources.dll": "d666d34802d2e6518b70f259ae25578f97d4b54e1c4bc514e4283d6271624af5",
+    "ja/FSharp.Core.resources.dll": "a23e0b7b795fad83fbf7c7602229789ba78afa364e9a59c9cd2af94651e13195",
+    "ko/FSharp.Core.resources.dll": "42a346e25767af235c02287a4632d32e74f17fbe8fb2607f52493398c49044c2",
+    "pl/FSharp.Core.resources.dll": "8aa4aa395b024fe48eb8e984eb10d8d212986255cdaeb999dc1a69ecc4c2fad6",
+    "pt-BR/FSharp.Core.resources.dll": "288d77fa358be771fd8191353a44f00422f84fc0ae601fcdcc407e37928d8b67",
+    "ru/FSharp.Core.resources.dll": "ac840e6612e162f3594437e1f333fb9bd00095760d332c1611075dbebb6cb861",
+    "runtimes/android-arm/native/libe_sqlite3.so": "6846178c7337b5b9a3c9d7090808a6621dd09db6879efdf16075ce2afc260212",
+    "runtimes/android-arm64/native/libe_sqlite3.so": "52d49cc84918c112d5713a6de83269d33f03c4c7c3ed721fbd2c8c00adf4ca80",
+    "runtimes/android-x64/native/libe_sqlite3.so": "8088b315ee0b7db13c053051dae063c8bdf9318c25d3f8b9024b9786bd27cab1",
+    "runtimes/android-x86/native/libe_sqlite3.so": "43731d621cc2b1fbde62bae8ff465cfe0fd1ea9c2f25d566d3e61e495d226d9f",
+    "runtimes/browser-wasm/nativeassets/net9.0/e_sqlite3.a": "73675fcf71a65531ea10763f2029300bb4dc1528c24fc9bebc6bb2cbccf7656f",
+    "runtimes/ios-arm/native/e_sqlite3.a": "0c2cf95c369c37330ecfbc0870c1d214ed727b17bf7b86bce0bac94db4a9acd9",
+    "runtimes/ios-arm64/native/e_sqlite3.a": "0c2cf95c369c37330ecfbc0870c1d214ed727b17bf7b86bce0bac94db4a9acd9",
+    "runtimes/iossimulator-arm64/native/e_sqlite3.a": "87076969e5e0ffc22877e6a5603131f34f2e33bdfc61d11b77dba7c0fcc8f8e1",
+    "runtimes/iossimulator-x64/native/e_sqlite3.a": "87076969e5e0ffc22877e6a5603131f34f2e33bdfc61d11b77dba7c0fcc8f8e1",
+    "runtimes/linux-arm/native/libe_sqlite3.so": "9a697f00c70420314a3604cea281c8859cb925680f935c23f6261e9a6f769368",
+    "runtimes/linux-arm64/native/libe_sqlite3.so": "66436d4bd02b1b1c25b964a744b5230122bca6a5d006aa80add129ef892c273a",
+    "runtimes/linux-armel/native/libe_sqlite3.so": "f6cd622eee5d5df12419c7a11eaf4a17ed1948c28f41db8395959682978c870a",
+    "runtimes/linux-mips64/native/libe_sqlite3.so": "f66410709bd4b5ec6b9fb9b4f89f1e49c842e9f9fa21c95766f1ea20c66074ba",
+    "runtimes/linux-musl-arm/native/libe_sqlite3.so": "98e03c2b80ae3924d1ed6da32d036f933db48b28ee2ef55c417f48ef0a382c62",
+    "runtimes/linux-musl-arm64/native/libe_sqlite3.so": "91e5ff240be8cdc24068c149754d3506dd3f7098cb0fd3d6606c4f0ce3b5fd42",
+    "runtimes/linux-musl-riscv64/native/libe_sqlite3.so": "033f84cbe93cb46eb0b5a96d5acbf1089f1716e9e0e9ee117d9d039c3c58060f",
+    "runtimes/linux-musl-s390x/native/libe_sqlite3.so": "31d53eafaefec15651dac766665171e7d8f2dd4f1c021c7a21e754aba2091b17",
+    "runtimes/linux-musl-x64/native/libe_sqlite3.so": "7d275542af8aac5a19f5a873da7cdadcc20c453fb52b7df57bd747e2f02ab92b",
+    "runtimes/linux-ppc64le/native/libe_sqlite3.so": "9d5e453ad17fb857b123da69adfa067e55bb716816979e4131fe76e513866f53",
+    "runtimes/linux-riscv64/native/libe_sqlite3.so": "a7ac179be5d4a25cea62781fab3a0266903745f5929e0c880dd20fd0e84f2593",
+    "runtimes/linux-s390x/native/libe_sqlite3.so": "55296ed2a74253a8e998d2ca8d4d5471e03c573bdd109ee83f089499ef9aedf7",
+    "runtimes/linux-x64/native/libe_sqlite3.so": "eddcd4aa561d5b8f252db77e8272e7d1aed96bcab9fda3f177ca542f916290bf",
+    "runtimes/linux-x86/native/libe_sqlite3.so": "0269d385a7a8cbbc385c4688bf57c030351036aaae8c6e06f02ecf2d5ada96de",
+    "runtimes/maccatalyst-arm64/native/libe_sqlite3.dylib": "144793f8f993837a66249c0bb8898dd3171904cc796048acd1bede20ce1dab69",
+    "runtimes/maccatalyst-x64/native/libe_sqlite3.dylib": "ac224e3e18f8227dc964b3cf29a0f6244e475af37eed5744708e222fe9691c19",
+    "runtimes/osx-arm64/native/libe_sqlite3.dylib": "2b27f45233818ae11d97016ca2a16dffcf63a53c46f60bcd52b342fc187b0c83",
+    "runtimes/osx-x64/native/libe_sqlite3.dylib": "20143ee08a1af0a510368e14109f512d7c7870481ba16937ae5733a415d0a201",
+    "runtimes/win-arm64/native/e_sqlite3.dll": "a59c169757d12a8bfc30c1760b8dd1f04cf9519f3774bdee6a9b595469f22be6",
+    "runtimes/win-x64/native/e_sqlite3.dll": "6ad8e149f8ce3ed3716402b4b3a2268ebbdc7b64391b5fafed747e03bb1b9418",
+    "runtimes/win-x86/native/e_sqlite3.dll": "8d76b5d0faa6f3a3c6204605d1a3d31dad57a0104b92fce3df19b12bdd983ae7",
+    "tr/FSharp.Core.resources.dll": "a46090442f1e2c4c45443879d76981af4ba53b4b89775e88af3d19f58197826a",
+    "zh-Hans/FSharp.Core.resources.dll": "eaeb7b4703d337f53f155470502cbf3209705cd44ae71ffa7b90d765c16a61db",
+    "zh-Hant/FSharp.Core.resources.dll": "9619f737a5446b72be21313f18adab4359702b21e86ff3ca189a661c11f1f016"
+  }
+}

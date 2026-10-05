@@ -36,7 +36,8 @@ def manifest():
     }
 
 
-def board_package_closure(package: pathlib.Path, source_sha: str, *, source_root: pathlib.Path = ROOT):
+def board_package_closure(package: pathlib.Path, source_sha: str, *, source_root: pathlib.Path = ROOT,
+                          frozen_dependencies: pathlib.Path | None = None):
     """Join the actual current package to its freshly built creator/dependency output."""
     spec = importlib.util.spec_from_file_location("wizard_package_identity", source_root / "scripts/new-sdd-workspace-release.py")
     checker = importlib.util.module_from_spec(spec)
@@ -76,10 +77,15 @@ def board_package_closure(package: pathlib.Path, source_sha: str, *, source_root
         deps = json.loads(archive.read(prefix + "new-sdd-workspace.deps.json"))
         if "FS.GG.Coord.Cli/0.97.0" not in deps["libraries"]:
             raise ValueError("creator package must carry current coherent CLI dependency metadata")
-    return {"schema": "fsgg.creator-board-package-closure/1", "version": CURRENT_014.version,
+    result = {"schema": "fsgg.creator-board-package-closure/1", "version": CURRENT_014.version,
             "sourceSha": source_sha, "coherentVersion": "0.97.0", "projectCount": len(projects),
             "builtFilesCompared": len(required), "archiveSha256": hashlib.sha256(package.read_bytes()).hexdigest(),
             "installedAdoptionAccepted": False}
+    if frozen_dependencies is not None:
+        helper = runpy.run_path(str(source_root / "scripts/creator-frozen-coord-dependencies.py"))
+        result["publishedDependencyClosure"] = helper["package_closure"](
+            package, frozen_dependencies, source_root)
+    return result
 
 
 class Journal:
@@ -643,6 +649,10 @@ def load_tests(loader, tests, pattern):
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     tests.addTests(loader.loadTestsFromModule(module))
+    frozen_spec = importlib.util.spec_from_file_location("wizard_frozen_dependency_controls", pathlib.Path(__file__).with_name("frozen_dependencies.py"))
+    frozen_module = importlib.util.module_from_spec(frozen_spec)
+    frozen_spec.loader.exec_module(frozen_module)
+    tests.addTests(loader.loadTestsFromModule(frozen_module))
     return tests
 
 
@@ -653,8 +663,10 @@ if __name__ == "__main__":
         parser.add_argument("--board-package", type=pathlib.Path, required=True)
         parser.add_argument("--source-sha", required=True)
         parser.add_argument("--release-manifest", type=pathlib.Path)
+        parser.add_argument("--frozen-coord-dependencies", type=pathlib.Path)
         args = parser.parse_args()
-        closure = board_package_closure(args.board_package, args.source_sha)
+        closure = board_package_closure(args.board_package, args.source_sha,
+                                        frozen_dependencies=args.frozen_coord_dependencies)
         if args.release_manifest:
             checker = runpy.run_path(str(ROOT / "scripts/new-sdd-workspace-release.py"))
             evidence = checker["verify_artifact"](args.release_manifest, args.board_package)
