@@ -54,6 +54,9 @@ def require(ok, reason):
         error.recoveryCode=SAFE_REFUSAL_CODES.get(reason,"unclassified")
         raise error
 def digest(raw): return hashlib.sha256(raw).hexdigest()
+def api_contents_bytes(content):
+    """GitHub wraps API base64 with CR/LF; every other character stays strict."""
+    return base64.b64decode(content.replace("\r", "").replace("\n", ""), validate=True)
 def canonical(value): return json.dumps(value,sort_keys=True,separators=(",",":"),ensure_ascii=False).encode()
 def load_module(name):
     spec=importlib.util.spec_from_file_location(name.replace("-","_"),Path(__file__).with_name(name+".py"))
@@ -401,7 +404,7 @@ class FiniteAPI:
             parent=parents[0]["sha"] if parents else None
             contents=self.get(prefix+f"/contents/release-state.json?ref={oid}")
             require(contents.get("type")=="file" and contents.get("path")=="release-state.json" and contents.get("encoding")=="base64","exact protected blob source")
-            raw=base64.b64decode(contents["content"]);blob=contents.get("sha")
+            raw=api_contents_bytes(contents["content"]);blob=contents.get("sha")
             require(hashlib.sha1(b"blob "+str(len(raw)).encode()+b"\0"+raw).hexdigest()==blob,"immutable Git blob digest")
             value=json.loads(raw);require(raw==canonical(value)+b"\n","immutable canonical journal blob")
             tree_raw=b"100644 release-state.json\0"+bytes.fromhex(blob)
@@ -1282,7 +1285,7 @@ class ReadbackAPI(FiniteAPI):
             parent=parents[0]["sha"] if parents else None
             contents=self.get(prefix+f"/contents/release-state.json?ref={oid}")
             require(contents.get("type")=="file" and contents.get("path")=="release-state.json" and contents.get("encoding")=="base64","readback exact journal blob")
-            raw=base64.b64decode(contents["content"],validate=True);blob=contents.get("sha")
+            raw=api_contents_bytes(contents["content"]);blob=contents.get("sha")
             require(hashlib.sha1(b"blob "+str(len(raw)).encode()+b"\0"+raw).hexdigest()==blob,"readback Git blob identity")
             require(raw==canonical(json.loads(raw))+b"\n","readback canonical journal blob")
             tree_raw=b"100644 release-state.json\0"+bytes.fromhex(blob)
@@ -1313,7 +1316,7 @@ def readback_native(api,binding,run_id):
     require(current.get("sha")==binding["observerSource"] and current.get("tree",{}).get("sha")==binding["observerTree"],"readback observer commit/tree")
     workflow=api.get(f"repos/{REPO}/contents/{WORKFLOW}?ref={binding['observerSource']}")
     require(workflow.get("type")=="file" and workflow.get("path")==WORKFLOW and workflow.get("encoding")=="base64","readback observer workflow role")
-    require(digest(base64.b64decode(workflow["content"],validate=True))==binding["observerWorkflowSha256"],"readback observer workflow bytes")
+    require(digest(api_contents_bytes(workflow["content"]))==binding["observerWorkflowSha256"],"readback observer workflow bytes")
     run=api.get(f"repos/{REPO}/actions/runs/{ORIGINAL_H4['originalRunId']}")
     title=f"Wizard 0.13 recovery complete {ORIGINAL_H4['originalCorrelation']} {ORIGINAL_H4['originalBindingSha256']}"
     require(run.get("id")==ORIGINAL_H4["originalRunId"] and run.get("display_title")==title and run.get("head_sha")==ORIGINAL_H4["originalHeldSource"] and run.get("run_attempt")==1 and run.get("conclusion")=="success" and run.get("status")=="completed" and run.get("path")==WORKFLOW and run.get("event")=="workflow_dispatch" and run.get("head_branch")=="main" and run.get("actor",{}).get("login")=="EHotwagner" and run.get("repository",{}).get("id")==1269292704,"readback original H4 native metadata")
