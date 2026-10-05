@@ -53,6 +53,32 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-05: TSDD-KNOWLEDGE-01.6 retained findings CLOSED (installed curated-fixture scope).**
+The existing published SDD **2.1.0** CLI passed all **52 native steps** for six
+manually reviewed public findings in fresh isolated tool and package homes. The
+retained public archive, SHA-256
+`18af7f13259babce00f58131100697e643e957e944e45a7baa43c011098afcf8`, was natively
+signature-verified and joined to every installed tool payload at published source
+`518517f6b90330a6e99f90bbce68faa0a891287f`. This was installation from retained
+public bytes, not a new direct-feed installation. Source fixtures delivered through
+[SDD #1095](https://github.com/FS-GG/FS.GG.SDD/pull/1095) passed 14 focused tests,
+including deterministic CI source-path mapping; the
+[owning acceptance #1096](https://github.com/FS-GG/FS.GG.SDD/pull/1096) merged at
+`4f35ef88e7254937f9c3d85d9506ff5484d112ac` and records the separate installed result.
+
+Original documents, dates, provenance, negative results and qualification limits
+were preserved. Repeated capture was byte-idempotent; owner edits survived stale
+capture and conflicting restore, with explicit current-revision reconciliation.
+Selected records round-tripped losslessly, and an external Git bundle recovered
+three versions in a fresh clone without cache. The canonical store measured
+**9,088 of 10,485,760 bytes**. Root accepted clear terminal cleanup; earlier source
+terminal uncertainty and its distinct read-only supplements remain preserved.
+
+This closes .6's admitted manual curated-review route. Automatic extraction,
+real old-store retirement and private BAR migration are outside acceptance.
+Provider .4, broader published adoption .5 and the whole knowledge feature remain
+separate under the [owning plan](https://github.com/FS-GG/FS.GG.SDD/blob/main/docs/roadmaps/tsdd-knowledge-01.md).
+
 **2026-10-04: Board product tooling and Game physics publication accepted.**
 CLI/Kit/Drivers **0.97.0** and creator **0.14.0** are published from `2ab0c0ff`, with
 all 16 coherent and eight creator journal effects verified. The
