@@ -19,6 +19,8 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-10-05** — Creator 0.15 source preparation (github; COORD-BOARD-V2-01.6): advance `new-sdd-workspace` source to 0.15.0 for the fresh-scaffold origin repair and exact published 0.97 dependency closure. Published `package-version` remains 0.14.0; candidate, publication and installed adoption remain pending.
+
 - **2026-10-04** — Board product tooling and optional Game physics publication (github/game; release runs 37235030417, 37236913897, 37237849417): record coherent CLI/Kit/Drivers 0.97.0, creator 0.14.0 and Game 0.17.0 after actual both-feed readbacks. Register the optional Box2D adapter and advance the distributed CLI pin to 0.97.0. Public package-only physics/portal examples passed; product-board and explicit physics consumer adoption remain separate. Preserve independent telemetry Host 0.4.0.
 
 - **2026-10-04** — COORD-BOARD-V2-01.5 SOURCE PREPARED: shared CLI/Kit/Drivers 0.97.0 and independent NewSddWorkspace 0.14.0 add explicit product V2 binding/creator guidance and isolated current/historical successor contracts. Published inventories remain 0.96.0/0.13.0; Host 0.4 publication closure is preserved. Candidate, protected-journal, both-feed publication and receiver adoption joins remain pending.

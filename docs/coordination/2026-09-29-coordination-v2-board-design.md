@@ -268,6 +268,23 @@ a project rename or producer source merge cannot qualify an existing-workspace u
 
 ## Product binding integration window — 2026-10-04
 
+### Creator publication preparation — 2026-10-05
+
+The fresh-scaffold origin repair landed through [.github #4223](https://github.com/FS-GG/.github/pull/4223)
+at `73eccda884b218571beebababd30c0afea8f1826`. Creator 0.15 source selects the exact published
+coordination 0.97 dependency archive from immutable release `403211100`, asset `610712479`,
+SHA-256 `3e620f112676f76c5f247343f7cffde2f00d31c5e82dec1342ab94f30400a08d`.
+The candidate verifies 267 dependency source/import leaves and all 81 selected dependency files,
+preserves the eleven-project reference graph, and compiles the creator against those staged published
+implementation bodies. Package checks retain their built-output comparisons and additionally require
+every selected published dependency body to remain exact. Synthetic custody controls exercise archive,
+source, destination, layout and packaged-body refusal; they do not establish a real build or install.
+
+Creator 0.14 publication remains accepted history. Ordinary publication selects only the new 0.15
+singleton and journal; the separately qualified 0.13 recovery route remains unchanged. Creator 0.15
+candidate, publication and actual installed fresh/retained Rendering journeys are pending. Neither
+milestone .5 nor .6 closes through this source preparation.
+
 **Selected next source outcome: COORD-BOARD-V2-01.5 product binding and materialization.** Prepare
 it independently of broader .4 carryover and BAR/SC2 native qualification. The qualified .3 projection
 contract is the producer foundation. Publication and actual product adoption still need their own

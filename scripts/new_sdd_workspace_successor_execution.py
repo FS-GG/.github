@@ -16,13 +16,15 @@ class ReleaseBinding:
     tag: str
 
 
+# Retained identity only: no current or historical-recovery effect authority.
 CURRENT_014 = ReleaseBinding("FS.GG.NewSddWorkspace", "0.14.0", "new-sdd-workspace/v0.14.0")
+CURRENT_015 = ReleaseBinding("FS.GG.NewSddWorkspace", "0.15.0", "new-sdd-workspace/v0.15.0")
 HISTORICAL_013 = ReleaseBinding("FS.GG.NewSddWorkspace", "0.13.0", "new-sdd-workspace/v0.13.0")
-PACKAGE, VERSION, TAG = CURRENT_014.package, CURRENT_014.version, CURRENT_014.tag
+PACKAGE, VERSION, TAG = CURRENT_015.package, CURRENT_015.version, CURRENT_015.tag
 
 
-def effects(manifest: dict, *, binding: ReleaseBinding = CURRENT_014) -> tuple[str, tuple[Effect, ...]]:
-    if binding is not CURRENT_014 and binding is not HISTORICAL_013:
+def effects(manifest: dict, *, binding: ReleaseBinding = CURRENT_015) -> tuple[str, tuple[Effect, ...]]:
+    if binding is not CURRENT_015 and binding is not HISTORICAL_013:
         raise Refused("unknown Wizard release binding")
     if (
         manifest.get("schema") != "fsgg.new-sdd-workspace-release/1"
