@@ -266,12 +266,32 @@
             "readback_binding": "ed037504b60fb1c66bd943a3605be41ccd80a3e9256644076c03674317ce8455",
             "ReadbackRedirect": "69d69267fa0f96d103a240a306bd4bf1c98cea9709df7b7d9cd97bb1c9c630f9",
             "ReadbackTransport": "728b37a75e3dfa14903edb46fa7b4562bc2ece911c0b7001ec095e12100c8c9e",
+            "ReadbackAPI": "00c18647cac7f4c72c23e7abfe629bce7fa70989225eeb9a4e87593573a60807",
+            "readback_native": "2cf591fae814af27d47c1810bec00033f71b60b4ac14384cf95b8397c6009d85",
+            "post_complete_readback": "1207c64e171da2bc03bf4ea668755f9c11420ee99f7aba3d350583cfe78a7e1b",
+            "readback_worker": "89a60c6cb3f4c5857ee2d4d45ca5b1b07901b4795f7aa132fd42843542f5bec2",
+            "readback_entry": "eceb24157be209bb138ac7e00dbe19dc29c4a1e85623d34b3f260e72501be98c",
+            "api_contents_bytes": "2b3e641322f2cfb38dd8f594318900a0a0fc781aa9396aec0fc5b95fa2c589e1"
+          }
+        },
+        "apiContentsWrappingAmendment": {
+          "unit": "TSDD-KNOWLEDGE-01.4",
+          "sourceCandidate": "b9418c5555e3c9a1978f6f217d9b93c795219c8b",
+          "previousReaderSourceSpanSha256": {
+            "READBACK_MODE": "b90aa61dd9bae99bbdcff8092b30f105413703b2fd0df6988ec058931e599fa4",
+            "ORIGINAL_H4": "8fb7bed604e046294489897ec5beec24e160eeaedff2b458e3b77ad4145e7544",
+            "readback_binding": "ed037504b60fb1c66bd943a3605be41ccd80a3e9256644076c03674317ce8455",
+            "ReadbackRedirect": "69d69267fa0f96d103a240a306bd4bf1c98cea9709df7b7d9cd97bb1c9c630f9",
+            "ReadbackTransport": "728b37a75e3dfa14903edb46fa7b4562bc2ece911c0b7001ec095e12100c8c9e",
             "ReadbackAPI": "0007d692aea4dee9eafba155be769d9b113e911d62ffe31e8a76d29a4fe297a5",
             "readback_native": "b955cb22efc325d07bf1f47a557f1c1b057fb667c7aed7efd7e32e43ab684924",
             "post_complete_readback": "1207c64e171da2bc03bf4ea668755f9c11420ee99f7aba3d350583cfe78a7e1b",
             "readback_worker": "89a60c6cb3f4c5857ee2d4d45ca5b1b07901b4795f7aa132fd42843542f5bec2",
             "readback_entry": "eceb24157be209bb138ac7e00dbe19dc29c4a1e85623d34b3f260e72501be98c"
-          }
+          },
+          "currentApiContentsBytesSourceSha256": "2b3e641322f2cfb38dd8f594318900a0a0fc781aa9396aec0fc5b95fa2c589e1",
+          "currentOriginal16PrimerSourceSha256": "e623de971fabb7c1e25b3716e3c36d57a3026f30844e1538319e9fd917e4941d",
+          "scope": "Inbound GitHub API contents CR/LF wrapping only, followed by strict base64 validation; original Git blob/tree/workflow digest joins unchanged. Outbound CAS strict validation and GET-only reader role unchanged. Original failed run37349422772 retained, first refusal cause unknown, no native replay or operation acceptance."
         }
       }
     },
