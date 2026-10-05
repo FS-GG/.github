@@ -111,11 +111,28 @@ Every return has schema `fsgg.programme.lane-return/1` and these required groups
   `mechanical`), `reference` (at most1024 characters), `sha256`, `scope` (at
   most256 characters). A digest checks the declared identity; the projection
   does not read/authenticate evidence or infer semantic acceptance.
-- Unknowns and continuation: `unknowns` (0–8 strings, each at most256
-  characters), `exception` (explicit `none` when absent), `continuation`
-  (each nonempty, at most1024 characters), `narrative` (nonempty, at most2048
-  UTF-8 bytes). Overflow must remain in referenced evidence rather than be
-  silently truncated.
+- Unknowns: `unknowns` is an array of 0–8 strings, each at most256 characters.
+- Continuation: `exception` and `continuation` are each one nonempty string of
+  at most1024 characters, never arrays. Use `"none"` for no exception. Put
+  several next actions into the single continuation string or reference their
+  detailed artifact. `narrative` is one nonempty string of at most2048 UTF-8
+  bytes. Overflow stays in referenced evidence; never truncate it silently.
+
+For example, the continuation group has this JSON shape:
+
+```json
+{
+  "unknowns": ["Native acceptance remains pending."],
+  "exception": "none",
+  "continuation": "Root reviews the source, then admits the bounded native window.",
+  "narrative": "Source preparation passed its focused controls; no native operation ran."
+}
+```
+
+Use the packet's lane identity in `lane`; `owner` names its accountable worker.
+Validate the complete return against the installed helper before reporting it.
+A rejected return grants no outcome: retain its original bytes and have the same
+owner repair its shape without changing observed facts or inventing old revisions.
 
 Campaign, item, feature and original-item mismatch refuse. Current owner,
 current attempt, candidate and source revision join the existing snapshot
