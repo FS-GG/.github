@@ -148,3 +148,76 @@ properties refuse through the shared reader. Replay executes only the pure
 Use `dotnet fsi --exec tests/work-programme/context-delta.fsx` for the focused
 additive controls and retain the legacy acceptance run separately. Tests do not
 establish installed adoption, native usage, compaction or context savings.
+
+## Additive bounded evidence view
+
+`view INPUT PRIVATE_ROOT` reads one explicit artifact; there is no archive crawl.
+Input `fsgg.programme.evidence-view-input/1` requires `path` (absolute), raw
+`sha256`, exact `bytes`, `startLine`/`endLine`, `maximumBytes` (1–65536),
+`trust` (instruction/plan/data), `mandatory`, `obligationsComplete`, `access`
+(allowed/denied/unknown), and bounded nonempty `provenance`.
+
+Access and obligation completeness are caller-declared observations. They cannot
+grant OS permission, prove universal instruction discovery, or promote data into
+authoritative instructions. Missing/unknown admission refuses before reading.
+Governing instruction transport requires whole-file0/0, mandatory true and
+owner-declared complete obligation discovery. Existing packet instructions remain
+whole-file mandatory; this command does not replace their obligation population.
+
+The helper rejects links and checks the complete raw file's size/hash before
+UTF-8 decoding or selecting a range. Full artifacts are at most2MiB. Lines use
+the existing inclusive one-based convention;0/0 returns the whole text. Output
+`fsgg.programme.evidence-view/1` retains identity, verification flag, provenance,
+trust and requested range. Typed status distinguishes passed, drift, missing,
+permission-unestablished, permission-denied, linked, unreadable, invalid-range,
+oversize, instruction-must-be-mandatory-whole-file and obligations-incomplete.
+Refusals return empty text; acceptance-relevant content is never silently cut.
+Untrusted embedded instructions stay data with no authority minted. Serialized
+input/output are bounded256KiB; escaped JSON overflow also refuses. View refusal
+is exit3; successful view is exit0.
+
+## Additive declared mechanical reuse
+
+`reuse INPUT PRIVATE_ROOT` is a pure advisory reuse decision. It reads no input
+artifacts, runs no evaluator, persists no cache/journal and never reuses semantic
+or native acceptance, permission, signatures or completion. Ordinary helper
+input/result/measurement retention remains unchanged. A reuse suggestion requires
+external trustworthy provenance and current native admission wherever applicable.
+
+Input `fsgg.programme.reuse-input/1` has explicit `evaluationTime`,
+`maxAgeSeconds` (1–3600), `identity`, `closureComplete`, `requiredInputIds`,
+`inputs`, `priorReceipt`, and `priorReceiptSha256`.
+`identity` holds policy/profile/evaluator/source-config SHA256 pins in
+`policySha256`, `profileSha256`, `evaluatorSha256`, `sourceConfigSha256`.
+Each input fact has `id`, `kind` (evidence/source/configuration/policy/profile/
+evaluator), `reference`, `sha256`, exact nonnegative `bytes`, original
+`observedAt`, and current caller-declared `access`. IDs are unique and bounded;
+required and supplied populations are at most32. The owner must declare the
+complete transitive closure. The helper cannot discover an undeclared hidden read.
+
+A prior receipt is `fsgg.programme.mechanical-receipt/1`, kind
+`declared-byte-equality`, with the same `identity`, `inputClosureSha256`,
+`evaluatedAt` and `result` (only passed is reusable). Its expected pin hashes the
+helper's encoded typed receipt, not arbitrary raw JSON formatting. Equality to a
+caller-supplied pin does not authenticate the producer or make that expectation
+trustworthy. This command validates correspondence only; it creates no receipt
+and does not silently promote the prior byte check into broader acceptance.
+
+The closure fingerprint includes the requested required population, all supplied
+facts sorted by ID, their original observation times and access, and all four
+identity pins. Unknown/incomplete closure, missing required facts or undeclared
+extra facts produce request-missing. Changed policy/profile/evaluator/config,
+evidence/source/transitive identity, expired/future facts or receipt, missing or
+failed receipt, revoked/unknown access, wrong scope or pin mismatch produce
+recompute. Only exact complete fresh correspondence suggests reuse. Copying a
+fact or receipt cannot renew its timestamp. Freshness of each source fact and the
+receipt is checked independently.
+
+Output `fsgg.programme.reuse/1` retains explicit time, closure digest, decision
+(reuse/recompute/request-missing), typed reason strings, mechanical-only scope,
+caller-declaration coverage and authority explicitly none. Advisory recompute or
+request-missing is exit0, not successful evaluation. Invalid schemas, duplicate
+keys/IDs, unknown JSON properties or bounds refuse. Input/output remain256KiB
+bounded. Run `tests/work-programme/context-evidence.fsx` for focused controls;
+`tests/work-programme/run.sh` includes it in the existing linear suite. No
+installed integration, live context savings or token usage is inferred.

@@ -1,7 +1,7 @@
 # Programme context efficiency and deterministic coordination
 
 Identity: **V2-CTX-01**. Authored: **2026-10-05**.
-Status: **bounded .1 offline smoke and .2 source implementation; adoption and economics pending**.
+Status: **bounded .1 offline smoke and .2–.3 source implementations; adoption and economics pending**.
 Owner: `.github` programme-driver maintainer, with Coordination execution and UTEL/LEARN measurement owners.
 Parent: [Unified Roadmap, section 9.8](../2026-09-07-154210-fs-gg-unified-development-roadmap.md#98-feature-parts-and-subroadmap-index).
 
@@ -259,7 +259,7 @@ only independently justified correctness improvements.
 
 ## Implementation roadmap and parallelism
 
-The bounded .1/.2 source window below is locally tested; milestone closure and operational adoption
+The bounded .1–.3 source window below is locally tested; milestone closure and operational adoption
 remain separate. These are bounded extensions of the existing driver,
 not a second rollout programme. Detail the next window when assigned; later rows define outcomes and
 acceptance, not pre-authorized operation launches.
@@ -297,13 +297,22 @@ The additive [.2 delta contract](../../.agents/skills/work-programme/references/
 retains legacy commands and separate boundary statuses, owner/original-attempt/candidate joins,
 explicit evaluation time and policy/evaluator/scope identity, and complete active reservations.
 Conflicts reconcile, missing bases resynchronize, and acknowledgment cannot mint completion.
-Root qualification passed34 focused source controls and31 legacy cases, plus10 Python baseline
-controls. Two synthetic CLI runs retained exact inputs, matched the expected projection and reproduced
-identical result bytes; a relative-private-root invocation refused before its corrected runs. The
-[focused suite](../../tests/work-programme/context-delta.fsx) also includes a35th pure fixture control
-for the same correspondence, added after that root suite run. These checks establish bounded local
-source/CLI behavior; installed owner/watcher integration, live economics and operational adoption
-remain pending. Existing skill entry-point instructions are unchanged; .3–.6 remain open.
+[PR #4235](https://github.com/FS-GG/.github/pull/4235) delivered the bounded .1/.2 source window.
+Its combined entry point passed31 legacy,35 delta and10 Python baseline controls; two synthetic CLI
+runs retained exact inputs and reproduced the expected result. This establishes source/CLI behavior,
+not the original .1 whole-family measurement exit or operational adoption.
+
+The additive [.3 evidence-view/reuse contract](../../.agents/skills/work-programme/references/adapter.md#additive-bounded-evidence-view)
+verifies a complete artifact's raw identity before bounded excerpts, preserves whole mandatory
+instructions, and returns typed refusals without truncation. The shared reader consumes at most the
+limit plus one overflow-detection byte during growth. Pure reuse advice requires the caller-declared
+complete input population, pinned mechanical receipt, policy/profile/evaluator/source-config identity,
+current access and independently fresh facts/receipt. It cannot reuse semantic/native acceptance or
+authenticate a caller's pin. Root source qualification passed44 focused view/reuse controls and the
+full120-case combined suite (31 legacy,35 delta,44 view/reuse,10 baseline); the initial compile failure
+remains retained separately. This .3 window is source qualification only. Owner/watcher integration,
+live economics and operational adoption remain pending; default skill instructions are unchanged
+and .4–.6 remain open.
 
 ## Validation, risks and rollback
 
