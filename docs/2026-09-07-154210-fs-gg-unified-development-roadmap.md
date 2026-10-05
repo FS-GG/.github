@@ -60,7 +60,8 @@ reviewed public aggregate releases on GitHub.
 The [owning Wizard plan](roadmaps/tsdd-knowledge-wizard.md#post-completion-h4-reader-source--2026-10-05)
 adds an isolated read-only observer for the original public assets, both package feeds and settled
 Authority generation17. New observer pins remain separate from original H4 provenance, and the
-transport rejects writes and request bodies. All144 tests in the existing hosted entry point passed,
+transport rejects writes and request bodies. Bounded native run enumeration refuses an unexhausted
+four-page population, even when it contains a matching run. All144 tests in the existing hosted entry point passed,
 including16 new controls. Historical diagnostic/complete behavior remains unchanged. This source
 boundary grants no rerun, release mutation, installed qualification or Creator adoption; original H4
 acceptance remains failed/unaccepted. A fresh bounded admission is required before hosted execution.

@@ -130,9 +130,10 @@ class ReadbackTests(unittest.TestCase):
   artifact={'id':r.ORIGINAL_H4['originalArtifactId'],'expired':False,'digest':'sha256:'+r.ORIGINAL_H4['originalArchiveSha256'],'name':f"wizard013-recovery-complete-{r.ORIGINAL_H4['originalRunId']}-{r.ORIGINAL_H4['originalCorrelation']}",'workflow_run':{'id':r.ORIGINAL_H4['originalRunId'],'head_sha':r.ORIGINAL_H4['originalHeldSource'],'repository_id':1269292704,'head_repository_id':1269292704}}
   paths=[]
   class API:
+   def __init__(self,pages=None):self.pages=pages
    def get(self,path):
     paths.append(path)
-    if '/actions/workflows/' in path:return {'workflow_runs':[observer]}
+    if '/actions/workflows/' in path:return {'workflow_runs':self.pages[int(path.rsplit('=',1)[1])-1] if self.pages is not None else [observer]}
     if path.endswith('/actions/runs/99'):return observer
     if '/actions/runs/' in path:return original
     if '/actions/artifacts/' in path:return artifact
@@ -141,6 +142,14 @@ class ReadbackTests(unittest.TestCase):
     if '/contents/' in path:return {'type':'file','path':r.WORKFLOW,'encoding':'base64','content':base64.b64encode(workflow).decode()}
     return {'id':1269292704}
   r.readback_native(API(),b,99);self.assertFalse(any('/user' in path for path in paths))
+  # One match in four full pages still leaves the bounded enumeration open.
+  full=[[observer]+[{'id':n,'display_title':'other'} for n in range(99)]]+[[{'id':100*page+n,'display_title':'other'} for n in range(100)] for page in range(1,4)]
+  paths.clear()
+  with self.assertRaisesRegex(Refused,'enumeration unexhausted'):r.readback_native(API(full),b,99)
+  self.assertEqual(len([path for path in paths if '/actions/workflows/' in path]),4)
+  self.assertFalse(any('/actions/runs/99' in path for path in paths))
+  # A full page followed by an empty final page proves exhaustion within the cap.
+  r.readback_native(API([full[0],[]]),b,99)
   for key,value in [('actor',{'login':'foreign'}),('path','other.yml'),('run_attempt',2),('head_sha','f'*40),('status','completed')]:
    old=observer[key];observer[key]=value
    with self.assertRaises(Refused):r.readback_native(API(),b,99)
