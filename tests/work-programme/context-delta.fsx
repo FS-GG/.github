@@ -124,4 +124,10 @@ test "two current original attempts reconcile instead of parallel updates" (fun 
 test "newer return cannot hide lower revision cross-base conflict" (fun () ->
     let result=delta {spec with CurrentReturns=[|newer;{old with Narrative="conflicting lower revision"}|]}
     expect (result.Changed.Length=0 && has "equal-revision-conflict-reconcile" result))
+test "exact synthetic CLI input matches retained expected projection" (fun () ->
+    let input=Path.Combine(__SOURCE_DIRECTORY__,"context-delta-input.json")
+    let expectedPath=Path.Combine(__SOURCE_DIRECTORY__,"context-delta-expected.json")
+    let fixture,inputDigest=read<DeltaInput> input
+    let expected,_=read<DeltaResult> expectedPath
+    expect (encode(contextDelta inputDigest fixture)=encode expected))
 printfn "PASS %d context delta controls; no effects dispatched" passed
