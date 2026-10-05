@@ -128,4 +128,45 @@ native agent-name binding, terminal drain, retry and follow-up baseline. This do
 not replay the already completed original root recovery. Missing parent-thread
 relationships and the resumed 0.97.0 duplicate-identity begin refusal retain unknown
 usage; never invent a parent token or infer whole-programme coverage from the repair.
-Publication, installed adoption and prospective native acceptance remain pending.
+
+### Accepted 0.97.1 release and selected local adoption — 2026-10-05
+
+[PR #4245](https://github.com/FS-GG/.github/pull/4245) delivered source
+`99ea75286f5c3cea2a261fef4e5b45cd70378185`. The first-attempt
+[candidate 37342478014](https://github.com/FS-GG/.github/actions/runs/37342478014),
+[no-effect preflight 37343711905](https://github.com/FS-GG/.github/actions/runs/37343711905)
+and [publisher 37344008752](https://github.com/FS-GG/.github/actions/runs/37344008752)
+passed. [Coherent set 0.97.1](https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.97.1)
+is promoted with content ID
+`sha256:02dfc44d64e1b807fe20591fc2e0fdb9d02f28435a8b027fddd8ff5631e22714`;
+protected `utel-rel-13` generation 33 verifies all 16 effects. The hosted publisher
+verified all three packages on both feeds. Root independently matched the nuget.org
+payloads and release archives; its direct GitHub Packages reads returned HTTP 403.
+That access limitation is retained separately from the hosted verification and does
+not establish a byte mismatch. The predecessor and sealed legacy routes are unchanged.
+
+Ordinary user-level side-by-side adoption selected the promoted CLI 0.97.1 and passed
+version and existing store-only configuration checks. The first adoption attempt
+failed before installation because its cleared environment lacked the existing GitHub
+authentication; the retained successor passed after memory-only credential transport.
+No Main service or remote Host installation is established. A useful native child
+independently matched all 84 extracted installed payload members. The explanation for
+the generated NuGet SHA-512 sidecar remains unknown, separately from that payload match.
+
+The fresh prospective local cycle passed equal feature/item root begin, byte-identical
+retry, actual short-name child binding, truthful terminal reconciliation, genuine
+same-owner follow-up and final local drain. Two distinct source-bound native turn
+usage facts were joined; the captured follow-up baseline excluded the prior child
+turn. All nine serial stages exited naturally with clean owned retirement within the
+original deadline, and final local pending batches were zero. This accepts the selected
+installed repair and local collection route, without replaying earlier completed attempts.
+
+The [coverage reference](../reference/local-telemetry-store.md#native-collaboration-observations),
+corrected in [PR #4249](https://github.com/FS-GG/.github/pull/4249), distinguishes verified
+joined turn facts from the conservative unknown response label. Root usage remains
+unsupported; historical and whole-programme usage remain unknown. Independent remote
+Host receipts, complete population coverage and the original wider milestones remain
+unresolved. The root finish's dashboard publication reported an advisory subprocess
+failure: source inspection traces script discovery to the controlled home working
+directory, with no script override. Nested stderr was not retained. No publisher retry
+was needed for this local-cycle acceptance, and dashboard publication is not established.
