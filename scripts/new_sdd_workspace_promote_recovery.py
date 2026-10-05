@@ -141,6 +141,16 @@ def recovery_refusal(error):
     kind=type(error).__name__
     if kind not in {"Refused","OSError","ValueError","KeyError","CalledProcessError"}:kind="unclassified"
     print("Wizard recovery refusal: "+canonical({"schema":"fsgg.wizard-recovery-refusal/1","phase":_current_phase if _current_phase in SAFE_PHASES else "entry","code":code,"exceptionKind":kind}).decode(),file=sys.stderr,flush=True)
+def http_failure_projection(error):
+    """Finite private report fallback when original transport custody fails."""
+    status=getattr(error,"httpStatus",None)
+    if type(status) is not int or not 100<=status<=599:return None
+    kinds={"Refused","OSError","RuntimeError","ValueError","FileExistsError","TimeoutError","unclassified"}
+    value={"status":status}
+    for field in ("errorCaptureFailureKind","errorCloseFailureKind","transportCaptureFailureKind"):
+        kind=getattr(error,field,None)
+        if kind is not None:value[field]=kind if kind in kinds else "unclassified"
+    return value
 def existing_sdk_root():
     selected=shutil.which("dotnet")
     require(bool(selected),"existing SDK absent")
@@ -271,8 +281,60 @@ class FiniteAPI:
         self.held_source=held_source
         self.expectedSettlement=None;self.cas_objects={};self.immutable={};self.storage=getattr(budget,"storage",None);self.matched_bodies={};self.future_pages=0;self.future_binaries=0
         self.opener=urllib.request.build_opener(Redirect(budget))
+    def capture_http_error(self,error,target,row,cap,custody):
+        """One original bounded error response; never a successful API value."""
+        row.update({"bodyComplete":False,"bodyBytesRetained":0,"bodyOverflow":False,
+                    "responseHeaders":{},"headersComplete":True})
+        allowed=("content-type","content-length","x-github-request-id","x-accepted-github-permissions",
+                 "x-ratelimit-limit","x-ratelimit-remaining","x-ratelimit-reset","x-ratelimit-resource",
+                 "retry-after","x-github-api-version-selected")
+        created=False
+        try:
+            header_bytes=0
+            for name in allowed:
+                value=error.headers.get(name) if error.headers is not None else None
+                if value is None:continue
+                prefix=value[:513].encode("utf-8");complete=len(value)<=513 and len(prefix)<=512
+                retained=prefix[:512].decode("utf-8",errors="ignore")
+                header_bytes+=len(name.encode())+len(retained.encode())
+                require(header_bytes<=8192,"HTTP error header metadata cap")
+                row["responseHeaders"][name]={"value":retained,"complete":complete}
+                row["headersComplete"]=row["headersComplete"] and complete
+            fd=os.open(target,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600)
+            created=True
+            with os.fdopen(fd,"wb") as stream:
+                while True:
+                    self.budget.remaining(25)
+                    data=error.read(min(65536,cap-row["bodyBytesRetained"]+1))
+                    if not data:
+                        row["bodyComplete"]=True
+                        length=row["responseHeaders"].get("content-length")
+                        if length is not None:
+                            valid=length["complete"] and re.fullmatch(r"[0-9]+",length["value"]) is not None
+                            row["contentLengthMatches"]=bool(valid and int(length["value"])==row["bytes"])
+                            row["bodyComplete"]=row["contentLengthMatches"]
+                        break
+                    row["bytes"]+=len(data)
+                    if self.storage and not custody:self.storage.check(len(data))
+                    retained=data[:cap-row["bodyBytesRetained"]]
+                    stream.write(retained);row["bodyBytesRetained"]+=len(retained)
+                    if len(retained)!=len(data):
+                        row["bodyOverflow"]=True;break
+            raw=target.read_bytes();row["retainedBodySha256"]=digest(raw)
+            if row["bodyComplete"]:row["sha256"]=row["retainedBodySha256"]
+        except BaseException as secondary:
+            row["bodyComplete"]=False
+            row["errorCaptureFailureKind"]=type(secondary).__name__
+            if created and target.is_file():
+                try:
+                    raw=target.read_bytes();row["bodyBytesRetained"]=len(raw);row["retainedBodySha256"]=digest(raw)
+                except BaseException:pass
+        finally:
+            try:error.close()
+            except BaseException as secondary:row["errorCloseFailureKind"]=type(secondary).__name__
     def request(self,url,method="GET",body=None,binary=False,headers=None,custody=False):
         parsed=urllib.parse.urlsplit(url);require(parsed.scheme=="https" and parsed.hostname in {"api.github.com","nuget.pkg.github.com","api.nuget.org"} and not parsed.username and not parsed.password,"request origin")
+        require(self.budget.mode!="diagnostic" or (method=="GET" and body is None),"diagnostic direct GET-only transport")
         timeout=self.budget.read() if method=="GET" else self.budget.remaining(25)
         rawbody=None if body is None else canonical(body)
         auth={"Authorization":"Bearer "+self.token,"User-Agent":"fsgg-wizard-recovery","Accept":"application/vnd.github+json","X-GitHub-Api-Version":"2022-11-28"} if parsed.hostname=="api.github.com" else {"User-Agent":"fsgg-wizard-recovery"}
@@ -292,7 +354,7 @@ class FiniteAPI:
         require(not custody or (method=="GET" and binary and parsed.hostname=="api.github.com" and re.fullmatch(r"/repos/FS-GG/\.github/actions/artifacts/[0-9]+/zip",parsed.path)),"encrypted readiness archive route")
         index=len(self.records);target=self.root/f"response-{('authority' if self.authority else 'github')}-{index}.raw"
         row={"method":method,"origin":parsed.hostname,"path":parsed.path,"query":"withheld","status":None,"bytes":0,"cap":cap,"role":"bound-original-to-held-ancestry" if ancestry else "ordinary"}
-        self.records.append(row)
+        self.records.append(row);primary=None
         try:
             with self.opener.open(request,timeout=timeout) as response,target.open("xb") as stream:
                 row["status"]=response.status
@@ -307,11 +369,21 @@ class FiniteAPI:
             if ancestry:require(row["status"]==200,"paged ancestry HTTP status")
             return target if binary else json.loads(target.read_bytes())
         except urllib.error.HTTPError as error:
-            row["status"]=error.code;raise Refused("native HTTP read/write refused") from error
+            row["status"]=error.code
+            primary=Refused("native HTTP read/write refused");primary.httpStatus=error.code
+            self.capture_http_error(error,target,row,cap,custody)
+            for field in ("errorCaptureFailureKind","errorCloseFailureKind"):
+                if field in row:setattr(primary,field,row[field])
+            raise primary from error
         finally:
-            transport=canonical(self.records);require(len(transport)<=1024*1024,"transport metadata cap")
-            if self.storage and not custody:self.storage.check(len(transport))
-            (self.root/f"transport-{('authority' if self.authority else 'github')}.json").write_bytes(transport)
+            try:
+                transport=canonical(self.records);require(len(transport)<=1024*1024,"transport metadata cap")
+                if self.storage and not custody:self.storage.check(len(transport))
+                (self.root/f"transport-{('authority' if self.authority else 'github')}.json").write_bytes(transport)
+            except BaseException as secondary:
+                if primary is None:raise
+                row["transportCaptureFailureKind"]=type(secondary).__name__
+                primary.transportCaptureFailureKind=type(secondary).__name__
     def get(self,path):
         base=f"repos/{AUTHORITY if self.authority else REPO}"
         require(path==base or path.startswith(base+"/"),"repository request scope")
@@ -965,7 +1037,10 @@ def worker(mode,binding,root,source,start=None):
         engine=Recovery(api,journal,admission,binding,manifest,original,int(os.environ["GITHUB_RUN_ID"]),mode,root,lambda p,n:public_install(p,runner,original,n,env))
         report["stage"]="promotion-reconciliation"
         report.update(engine.run());report["success"]=True
-    except BaseException as error:recovery_refusal(error);report["errorKind"]=type(error).__name__;report["success"]=False
+    except BaseException as error:
+        recovery_refusal(error);report["errorKind"]=type(error).__name__;report["success"]=False
+        failure=http_failure_projection(error)
+        if failure is not None:report["httpFailure"]=failure
     finally:
         # Failed operations retain the same full source/SDK membership checks.
         budget.reserve=True

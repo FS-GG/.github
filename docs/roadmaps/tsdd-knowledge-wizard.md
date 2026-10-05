@@ -421,3 +421,20 @@ and non-200 responses, quotas and refusal before install, PATCH or CAS. The
 custody limits are unchanged. Protected source delivery, refreshed private
 source seals, fresh native readback and distinct root H3 admission remain
 pending; this preparation establishes no diagnostic or public creation result.
+
+The next H3 diagnostic, run `37269305353` at protected `b1181b1`, also failed
+and remains consumed. Authenticated failure custody joins matching source/SDK
+snapshots and SDK `10.0.401`, then an HTTP403 on the first original draft-release
+metadata GET (`402727082`), before asset/feed/install checks; it records zero
+release PATCH and CAS writes. The provider cause remains unknown because the
+prior helper did not retain HTTP error bodies. The selected source repair keeps
+the existing diagnostic `contents: read` token and entrypoint: retain bounded
+original error body/status and allowlisted permission/rate headers privately,
+mark partial/overflow custody explicitly, close the stream, and preserve primary
+HTTP failure through secondary capture failures. The existing bounded worker
+report independently retains that HTTP status and finite secondary failure kinds
+when transport metadata cannot be retained. Direct diagnostic transport
+requires GET with no body. Existing response/time/read/storage caps and historical
+0.13 effect guards remain unchanged. A future capability change is separately
+reviewed; this source repair grants no diagnostic admission or acceptance. Fresh
+root selection must include this failed run among immutable prior diagnostics.

@@ -134,13 +134,27 @@ assert ancestry_amendment["acceptedReviewSha256"] == "05928c08a8bc9ab59c76d65b0d
 assert ancestry_amendment["previousOriginalRunsSourceSha256"] == "0a5cbcb4ec4143998834aee2018ca303d87b00f37da757fdc1089badb35385c6"
 assert ancestry_amendment["currentOriginalRunsSourceSha256"] == proof["historicalGuardFunctionSourceSha256"]["original_runs"]
 assert {"ancestry_url", "validate_ancestry", "original_runs"} <= set(proof["historicalGuardFunctionSourceSha256"])
-assert set(proof["pagedAncestryMethodSourceSha256"]) == {"FiniteAPI.request", "Redirect.redirect_request"}
+assert set(proof["pagedAncestryMethodSourceSha256"]) == {"FiniteAPI.request", "FiniteAPI.capture_http_error", "Redirect.redirect_request"}
+error_amendment = proof["httpErrorCustodyAmendment"]
+assert error_amendment["decisionSha256"] == "f2cd587a96859d7d8ab30e130f6563a63ef1fcd1c5b90f9bc579d683f2569798"
+assert error_amendment["failedRun"] == 37269305353
+assert error_amendment["previousRequestSourceSha256"] == "116cad46812e920fb713681ad37143450a1f4fcaadcc8fa81b90de14af18c775"
+assert "diagnostic contents:read unchanged" in error_amendment["scope"]
 recovery = verify_recovery_source_spans(recovery_source, proof)
 
 # Causal offline negatives mutate production bytes, not fabricated native receipts.
 # The same span verifier must refuse an accidental weakening of the new role and
 # drift of a retained source/effect guard, even though metadata names an amendment.
 mutations = (
+    ('if failure is not None:report["httpFailure"]=failure', 'if False:report["httpFailure"]=failure'),
+    ('kind if kind in kinds else "unclassified"', 'kind'),
+    ('self.budget.mode!="diagnostic" or (method=="GET" and body is None)', 'True'),
+    ('error.read(min(65536,cap-row["bodyBytesRetained"]+1))', 'error.read()'),
+    ('retained=data[:cap-row["bodyBytesRetained"]]', 'retained=data'),
+    ('row["bodyOverflow"]=True;break', 'row["bodyComplete"]=True;break'),
+    ('try:error.close()', 'try:pass'),
+    ('"retry-after","x-github-api-version-selected"', '"authorization","x-github-api-version-selected"'),
+
     ("total>=2", "total>=1"),
     ("?per_page=1&page=2", "?per_page=1&page=1"),
     ('response["behind_by"]==0', 'response["behind_by"]>=0'),
