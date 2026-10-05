@@ -31,7 +31,7 @@
     },
     {
       "path": ".github/workflows/release-new-sdd-workspace.yml",
-      "sha256": "060d63be16394bca11cbb8ced3d05b1916c07b029ae065399c2c1b2e581fc9da",
+      "sha256": "b3d61bfbabbc0f7eed13c4cc224352d913d444843800d2d7c2391ecce3a820c8",
       "disposition": "exact-source-protected-journal-successor-only",
       "successorAmendment": {
         "unit": "COORD-BOARD-V2-01.5",
@@ -193,6 +193,42 @@
           "failedRun": 37269305353,
           "previousWorkerSourceSha256": "baac8aa72df7d9f7fd13a6e51aa61236c7b143155d4be58d289a17f9c1314cbe",
           "durableFallback": "Existing bounded worker report retains primary HTTP status and finite capture/close/transport failure kinds if transport custody fails; raw values never enter this fallback"
+        },
+        "draftReadCapabilityAmendment": {
+          "unit": "TSDD-KNOWLEDGE-01.4",
+          "originalItem": "TEMPLATES-H2",
+          "decisionSha256": "42c6a8e8cf7e0ad947ec2c4ff1ee26e0fe1221536c0355b52bf85cac09e94893",
+          "previousProtectedSource": "1b064690647dcfc871520b8f572d8a5bf7394344",
+          "failedRun": 37273763257,
+          "originalHTTPStatus": 403,
+          "originalErrorBodySha256": "7caac76bcb938ccbb5aa84f338b2f4ce5b59c2f31d7b524231d699a62d3673d2",
+          "previousWorkflowSha256": "060d63be16394bca11cbb8ced3d05b1916c07b029ae065399c2c1b2e581fc9da",
+          "previousRecoveryJobSha256": {
+            "recovery-diagnostic": "521da9edc1772ecd845bd7f6cae4ad461e2f49ce93bc2110747bc32a819d9dcf",
+            "recovery-complete": "2011d23b1ef1e51f35afe89fa55f5c4b3fb334ba3b2c28a27d518f507dec924d"
+          },
+          "currentJobSourceSha256": {
+            "publish": "21c6dbe4b43845835a01062baa1c600eb087a1f96007cbf3a332142d0b85b797",
+            "recovery-diagnostic": "cfe0642f9c65edba2873cda1b1e17ab89d52b01e08d78c9d3c2675497eca5e4b",
+            "recovery-complete": "2011d23b1ef1e51f35afe89fa55f5c4b3fb334ba3b2c28a27d518f507dec924d"
+          },
+          "diagnosticPermissions": {
+            "actions": "read",
+            "contents": "write",
+            "packages": "read"
+          },
+          "scope": "Explicit capability increase: only existing diagnostic job ephemeral repository GITHUB_TOKEN contents:read to contents:write for draft visibility. Actual diagnostic source remains GET/bodyNone only; zero release PATCH/Authority CAS. Authority App remains repository-scoped contents:read. No PAT/new credential, job, environment, publisher/current015 or historical013 binding change.",
+          "sourceQualification": "exact job permissions/role controls and production guard mutants; no diagnostic admission or acceptance",
+          "priorFailedDiagnostics": [
+            37178852784,
+            37186728763,
+            37269305353,
+            37273763257
+          ]
+        },
+        "currentRecoveryJobSha256": {
+          "recovery-diagnostic": "d9b5b274b23370c956b61135974a2e0b959540fc63c9b14202c0f7109426833c",
+          "recovery-complete": "2011d23b1ef1e51f35afe89fa55f5c4b3fb334ba3b2c28a27d518f507dec924d"
         }
       }
     },

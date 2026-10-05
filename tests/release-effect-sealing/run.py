@@ -98,11 +98,78 @@ assert history["route"]["sha256"] == amendment["previousSuccessorWorkflowSha256"
 for key in ("forwardRecoveryAmendment", "capabilityLoss", "historicalCapabilityLoss", "historicalDisposition"):
     assert route[key] == history["route"][key], f"retained recovery/retirement boundary changed: {key}"
 proof = route["bindingIsolationProof"]
-for name, expected in proof["historicalRecoveryJobSha256"].items():
+for name, expected in proof["currentRecoveryJobSha256"].items():
     raw_workflow = (ROOT / WIZARD_SUCCESSOR).read_text()
     start = raw_workflow.index("  " + name + ":\n")
     end = raw_workflow.find("\n  recovery-", start + 1)
     assert hashlib.sha256(raw_workflow[start:end if end != -1 else None].encode()).hexdigest() == expected
+# Selected draft-readable token capability is source-constrained GET-only, not
+# a platform read-only credential. Parse the exact existing job permission map.
+def workflow_jobs(source):
+    body = source[source.index("jobs:\n") + 6:]
+    matches = list(re.finditer(r"^  ([a-z][a-z-]+):\n", body, re.MULTILINE))
+    assert len({m[1] for m in matches}) == len(matches), "duplicate job"
+    return {m[1]: body[m.start():matches[i + 1].start() if i + 1 < len(matches) else None]
+            for i, m in enumerate(matches)}
+
+def verify_diagnostic_job(source):
+    global_permissions = source.split("\npermissions:\n", 1)[1].split("\nconcurrency:\n", 1)[0]
+    assert global_permissions == "  actions: read\n  contents: write\n  packages: write\n  id-token: write\n"
+    jobs = workflow_jobs(source)
+    assert set(jobs) == {"publish", "recovery-diagnostic", "recovery-complete"}
+    job = jobs["recovery-diagnostic"]
+    assert job.count("    permissions:\n") == 1
+    permissions = job.split("    permissions:\n", 1)[1].split("    steps:\n", 1)[0]
+    rows = [line for line in permissions.splitlines() if line.strip() and not line.lstrip().startswith("#")]
+    parsed = [re.fullmatch(r"      ([a-z-]+): (read|write|none)", line) for line in rows]
+    assert all(parsed) and len({m[1] for m in parsed}) == len(parsed), "exact permission map"
+    assert {m[1]: m[2] for m in parsed} == {"actions": "read", "contents": "write", "packages": "read"}
+    assert "    name: new-sdd-workspace-013-recovery-diagnostic\n" in job
+    guard = "    if: github.ref == 'refs/heads/main' && github.actor == 'EHotwagner' && inputs.promotion_recovery == 'diagnostic' && !inputs.publish && !inputs.verify_nuget_login\n"
+    assert guard in job and "    environment: release-successor\n" in job
+    assert "          persist-credentials: false\n" in job
+    assert "          GH_TOKEN: ${{ github.token }}\n" in job
+    assert "          ORDINARY_LEDGER_TOKEN: ${{ steps.ledger.outputs.token }}\n" in job
+    mint = job.split("      - name: Mint the scoped ordinary Authority read token\n", 1)[1].split("      - name:", 1)[0]
+    for field, value in (("owner", "FS-GG"), ("repositories", "FS.GG.Coordination.Authority"), ("permission-contents", "read")):
+        assert mint.count("          " + field + ": " + value + "\n") == 1
+    assert "--promotion-recovery diagnostic --recovery-binding" in job
+    for name, expected in proof["draftReadCapabilityAmendment"]["currentJobSourceSha256"].items():
+        assert hashlib.sha256(jobs[name].encode()).hexdigest() == expected, name
+
+capability_amendment = proof["draftReadCapabilityAmendment"]
+assert capability_amendment["decisionSha256"] == "42c6a8e8cf7e0ad947ec2c4ff1ee26e0fe1221536c0355b52bf85cac09e94893"
+assert capability_amendment["failedRun"] == 37273763257
+assert capability_amendment["originalErrorBodySha256"] == "7caac76bcb938ccbb5aa84f338b2f4ce5b59c2f31d7b524231d699a62d3673d2"
+assert capability_amendment["previousWorkflowSha256"] == "060d63be16394bca11cbb8ced3d05b1916c07b029ae065399c2c1b2e581fc9da"
+assert capability_amendment["previousRecoveryJobSha256"] == proof["historicalRecoveryJobSha256"]
+raw_workflow = (ROOT / WIZARD_SUCCESSOR).read_text()
+verify_diagnostic_job(raw_workflow)
+diagnostic = workflow_jobs(raw_workflow)["recovery-diagnostic"]
+permission_mutations = (
+    ("      contents: write", "      contents: read"),
+    ("      packages: read", "      packages: write"),
+    ("      actions: read", "      actions: write"),
+    ("      packages: read", "      packages: read\n      id-token: write"),
+    ("      contents: write", "      contents: write\n      contents: read"),
+    ("permission-contents: read", "permission-contents: write"),
+    ("repositories: FS.GG.Coordination.Authority", "repositories: .github"),
+    ("persist-credentials: false", "persist-credentials: true"),
+    ("GH_TOKEN: ${{ github.token }}", "GH_TOKEN: ${{ secrets.OTHER_TOKEN }}"),
+    ("github.actor == 'EHotwagner'", "true"),
+    ("&& !inputs.publish", ""),
+    ("--promotion-recovery diagnostic", "--promotion-recovery complete"),
+)
+for original, changed in permission_mutations:
+    assert original in diagnostic
+    mutated = raw_workflow.replace(diagnostic, diagnostic.replace(original, changed, 1), 1)
+    try:
+        verify_diagnostic_job(mutated)
+    except AssertionError:
+        pass
+    else:
+        raise AssertionError("diagnostic permission/role mutant accepted: " + original)
+print(f"Wizard draft-read capability seal: {len(permission_mutations)} permission/role mutants refused")
 assert "format('Wizard 0.13 recovery {0} {1} {2}', inputs.promotion_recovery, inputs.recovery_correlation, inputs.recovery_binding_sha256)" in wizard
 assert "default: false" in wizard and "default: 'off'" in wizard
 recovery_source = (ROOT / "scripts/new_sdd_workspace_promote_recovery.py").read_text()
