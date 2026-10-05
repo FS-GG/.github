@@ -28,12 +28,34 @@ merged at `3f67e4b778c9880e91faf4be58f23c02423ad337`. These close .1 and .2.
 The harness passed its software-browser checks, including result download,
 resume, integrity and three fault controls. No host GPU qualification is claimed.
 
-Milestone .3 has one retained container diagnostic: 72 records, of which 43 meet
-the sample threshold, 23 are inconclusive and six composition cases are unsupported.
-Only one motion pair qualifies on both sides; it cannot establish a general speedup.
-Stage attribution and independent real-composition parity are separate active
-research windows. The original failed prototype and all raw results remain retained.
-Public API selection, shared optimization, integrated consumers and .7/.8 remain open.
+Milestone .3 now includes stage attribution, composition parity, fixed-operation
+motion/diversity/churn comparisons and lifetime diagnostics. The original 72-record
+screen remains unchanged: 43 records meet its sample threshold, 23 are inconclusive
+and six composition cases are unsupported under that original protocol. Later
+composition parity is a separate four-case functional result, not a retroactive
+success for those six cases.
+
+The first bounded .4 change, [unchanged-attribute reconciliation](https://github.com/FS-GG/FS.GG.Rendering/pull/1382),
+merged at `98861065e911581b8e27034b63351c637127b373`. It skips DOM attribute writes
+when the accepted value already matches, preserving the existing public API.
+All 17 browser controls and native CI passed. Its compiled candidate completed
+24 comparison records; median update CPU was lower in all 12 paired cells
+(shared geometry 1.18–8.89%, expanded geometry 4.13–8.18%). Tail results were mixed
+and animation-frame cadence was unchanged. These are software-browser diagnostics,
+not a universal performance or GPU claim; the rest of .4 remains open.
+
+A separate 30-record diversity/churn window completed all 3,000 measured updates.
+Twelve lifetime records completed 6,000 updates and 60 exact ownership-fault
+controls. Four subsequent teardown cases completed 2,000 updates: residual DOM
+counts fell after the page run returned, and blank navigation left four nodes,
+one document and no listeners in each case. This narrows the fixture's earlier
+residual to continuation/page lifetime; it does not prove producer leak freedom.
+Original raw evidence, failed attempts and private asset boundaries remain retained.
+
+Visible-count scaling, dynamic composition, allocation-stage evidence, integrated
+consumers and the late host GPU batch remain open. A Templates reference planning
+lane can prepare existing-API composition alongside research. No new instance API,
+published package or installed product adoption is inferred from the guard merge.
 
 ## 1. Evidence and the missing qualification
 
@@ -403,7 +425,8 @@ reuse it; which copies were removed or retained; how model definitions and insta
 are represented; what a change costs; which soldier counts/complexities and browsers
 were measured; which host used real GPU acceleration; and which limits remain open.
 
-Immediate work: finish stage attribution and real-composition parity under .3,
-then select the smallest demonstrated shared implementation change. Preserve the
+Immediate work: extend visible-count and sparse-motion qualification under .3,
+prepare the Templates reference, and select further producer changes only from
+demonstrated gaps. Preserve the
 immutable baseline and software-browser profile. Actual host capability discovery
 and all GPU browser cases remain deferred to the late .7 batch.
