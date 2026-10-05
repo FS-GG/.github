@@ -46,6 +46,8 @@ advances the pin to that CLI.
 - **YYYY-MM-DD** — HEADER (owner; refs): body
 -->
 
+- **2026-10-05** — Reconcile publishing-and-deployment operator digest after Creator 0.15 source projection (github; producer PR #4227). Registry row now matches the exact mirrored skill body and generated producer manifest; scope and materialization stay unchanged, with no Kit/Drivers release or receiver rollout.
+
 - **2026-10-04** — COORD-BOARD-V2-01.5 canonical successor generation: reconcile only publishing-and-deployment digest changed by generated source-version projection; preserve all unrelated registry rows and published inventory.
 
 - **2026-10-04** — COORD-BOARD-V2-01.5: reconcile canonical work-board and padd-item V2 consumer digests. Retain Host-publication baseline digest repairs; successor publication and installed adoption remain pending.
