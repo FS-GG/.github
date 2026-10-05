@@ -202,6 +202,17 @@ process group settled. Exact-head protected source checks remain the integration
 Current native capability/profile and trusted inventory, both cold OCI builds/reloads
 and C5, installed receiver/capture/recovery, usage completeness and activation remain open.
 
+**2026-10-05: BARC-01.5f policy placement and retained transport prerequisites accepted.**
+The [owning useful-play plan](https://github.com/FS-GG/FSBarV2/blob/f0890796578e7a2dd07ea05ae7eabb461f9cb06f/docs/roadmaps/barc-01-useful-play.md)
+now records the nineteen-role canonical placement and the three observed no-game
+policy outcomes: accepted consumption, malformed-input refusal and held timeout.
+All three processes were reaped. A separately accepted pure review corrected the
+stable-generation comparison while preserving the original failed result and its
+volatile state observations; no policy execution was repeated for that review.
+[FSBar #36](https://github.com/FS-GG/FSBarV2/pull/36) lands the scoped evidence.
+Concrete native host/data/seed/mapping preparation is next. Native seed, browser
+Arm and requested-unit acceptance remain separate; useful play is still **0/6**.
+
 **2026-10-04: BARC-01.5f six-phase producer build and Cargo custody CLOSED (bounded native build).**
 Root accepted the fresh sixth producer operation after all six actual phases returned **0**:
 tool restore, client restore, direct pinned Fable, Vite, stock selection and manual guest Cargo.
