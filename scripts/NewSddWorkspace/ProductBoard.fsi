@@ -26,6 +26,18 @@ module ProductBoard =
     /// Require a credential-free canonical HTTPS or SSH GitHub origin matching the selected product.
     val validateRemote: repository: string -> origin: string -> Result<unit, string>
 
+    /// Invocation-start Git authority; fresh scaffold effects do not turn it into retained authority.
+    type OriginAuthority = RetainedGit | FreshTarget
+
+    /// Read Git metadata presence before scaffold effects without changing the target.
+    val captureOriginAuthority: target: string -> OriginAuthority
+
+    /// Require the selected credential-free origin. Only successful fresh scaffolds may have
+    /// readable, newly initialized unborn Git without an origin; retained/retrofit paths refuse.
+    val validateOrigin:
+        authority: OriginAuthority -> scaffoldSucceeded: bool -> target: string -> repository: string ->
+        runGit: (string list -> int * string) -> Result<unit, string>
+
     /// Read-only preparation from an immutable producer revision and injected raw-file transport.
     /// Verify manifest leaf digests, complete selected kit/driver directories and coherent adapter pin.
     /// Preserve unrelated JSON; reject authored conflicts, legacy wiring and incomplete publication.

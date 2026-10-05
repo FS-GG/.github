@@ -56,8 +56,6 @@ module ProductBoard =
         | Some value when (if value.EndsWith(".git", StringComparison.Ordinal) then value.Substring(0, value.Length - 4) else value) = repository -> Ok()
         | _ -> Error "workspace origin does not match the exact selected GitHub repository"
 
-    /// Stage reviewed producer bytes and preserving JSON merges. Fetch is injected for offline controls.
-    /// The immutable kit revision identifies both manifest projections, shim and exact local tool pin.
     /// Authority is captured before scaffold effects, never inferred from provider-created Git.
     type OriginAuthority = RetainedGit | FreshTarget
 
@@ -87,6 +85,8 @@ module ProductBoard =
                 else Error "fresh scaffold Git is not a readable originless unborn repository"
             else Error "retained workspace GitHub origin is unreadable"
 
+    /// Stage reviewed producer bytes and preserving JSON merges. Fetch is injected for offline controls.
+    /// The immutable kit revision identifies both manifest projections, shim and exact local tool pin.
     let prepare (target: string) (repository: string) (kitRevision: string) (bindingJson: string) (fetch: string -> Result<string, string>) =
         try
             if not (immutableRevision kitRevision) then invalidOp "--board-kit-ref requires an immutable 40 hexadecimal revision"
