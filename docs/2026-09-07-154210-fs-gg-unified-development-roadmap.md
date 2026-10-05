@@ -56,6 +56,19 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-05: V2-CTX-01 offline baseline and typed return/delta source delivered.**
+[PR #4235](https://github.com/FS-GG/.github/pull/4235) merged at
+`b442eddf1b94788d45a943b56436dcca3dd35f84`. The opt-in helper command preserves
+legacy behavior and all active reservations; stale or conflicting returns request
+refresh or reconciliation instead of granting completion. The combined entry point
+passed 31 legacy cases, 35 delta controls and 10 baseline checks. Two actual CLI
+runs retained exact inputs and produced identical results; hosted validation passed.
+The five-operation baseline measures retained helper artifacts only. Actual parent
+rereads, native usage, compactions and whole-family cost remain unknown or inconclusive.
+The [owning plan](roadmaps/2026-10-05-programme-context-efficiency.md#bounded-source-window-2026-10-05)
+keeps operational adoption, measured savings and milestones .3–.6 open; default
+skill instructions and workspace behavior are unchanged.
+
 **2026-10-05: TSDD-KNOWLEDGE-01.6 retained findings CLOSED (installed curated-fixture scope).**
 The existing published SDD **2.1.0** CLI passed all **52 native steps** for six
 manually reviewed public findings in fresh isolated tool and package homes. The
