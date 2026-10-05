@@ -154,7 +154,7 @@
           "source_snapshot": "76f77fa96921bc21d29ace61f952a9cb749981888084129124373be2fdbe374c",
           "safe_zip": "72a08fa2d2bf9c5be4dca84724262eb5aea434b7503f3dc7ef9b7569766ab44f",
           "native_context": "0af5921c1ef18e9b801240f757056ff93313f0f0ef7915b9b309b0b5b99fc704",
-          "original_runs": "0a5cbcb4ec4143998834aee2018ca303d87b00f37da757fdc1089badb35385c6",
+          "original_runs": "f1e7a7523106e1255be9fc8763c6005614caab957eb1f16855b8b3092f8fbcfd",
           "readiness": "b5df49c97c5b75fed60c22fb8aa01f60748c1d5529be12550a01d26c7a4eaf61",
           "predecessor": "42ce73c68a363113e8a6292188ed482efa89589fd9ae20f7e3ea4d5508636bf4",
           "candidate": "fc27b8c7e2001b638c64ad1c0e6122cf0ab3a84645495c334391197525a4aeb1",
@@ -163,9 +163,24 @@
           "recipient": "7b9f4c3730b9ed1e08e8b54bda70eb83980f20f267fb54cae111874f799ee40d",
           "encrypted_custody": "024c0407712abe23d3d9a78c0ad6a945f05470a96b5ed0265089777cf2574143",
           "outer": "45c982686a927efca46eb86aaef65275b2c48bbdc1a26668498a5d633ff95c93",
-          "entry": "85d410ecd5190a086a14b9d8dbec0ef88e9c5bf1a65acfa4be525b5f591ac770"
+          "entry": "85d410ecd5190a086a14b9d8dbec0ef88e9c5bf1a65acfa4be525b5f591ac770",
+          "ancestry_url": "d4d2d11483a8145dee1439610bea2616af30f0021289dbd542269d633a49ce2e",
+          "validate_ancestry": "224e6b4fbed77a449910be7f99830923ff9c2ea252398e580f3082afb0b4eea4"
         },
-        "sourceSpanContract": "SHA-256 of exact UTF-8 ast.get_source_segment bytes for each named top-level assignment/function, including internal whitespace/comments; AST serialization is not evidence."
+        "sourceSpanContract": "SHA-256 of exact UTF-8 ast.get_source_segment bytes for each named top-level assignment/function and explicitly named method, including internal whitespace/comments; AST serialization is not evidence.",
+        "pagedAncestryMethodSourceSha256": {
+          "FiniteAPI.request": "116cad46812e920fb713681ad37143450a1f4fcaadcc8fa81b90de14af18c775",
+          "Redirect.redirect_request": "b4c529308be5f519e01cf4a27f6e230d1c55834b5e22451ffb7ab98ae7ab65fe"
+        },
+        "pagedAncestryAmendment": {
+          "unit": "TSDD-KNOWLEDGE-01.4",
+          "originalItem": "TEMPLATES-H2",
+          "sourceCandidate": "44667c54a81ed9fdc63ab5bc4174b8448bb49f32",
+          "acceptedReviewSha256": "05928c08a8bc9ab59c76d65b0d2a5cac25f3458e37f43769bf38f2ada2e298e3",
+          "previousOriginalRunsSourceSha256": "0a5cbcb4ec4143998834aee2018ca303d87b00f37da757fdc1089badb35385c6",
+          "currentOriginalRunsSourceSha256": "f1e7a7523106e1255be9fc8763c6005614caab957eb1f16855b8b3092f8fbcfd",
+          "scope": "One exact bodyless fixed-header second-page comparison GET and typed native ancestry joins; HTTP200, at least two commits, no files. Complete original raw response custody, source/effect identities and all prior caps/admission controls remain. This source-span amendment is not H3 or publication acceptance."
+        }
       }
     },
     {

@@ -391,3 +391,33 @@ They execute synthetic fixtures without SDK, network, crypto or native effects.
 This is source preparation pending root review and protected delivery. Hosted
 SDK/provider availability and fit remain UNKNOWN; no H3 replay, H4 admission,
 publisher recovery or public Wizard qualification is implied.
+
+### Exact paged ancestry response — source preparation
+
+The selected-SDK amendment merged through PR 4191 at
+`f7da537b306bf6bcaf04fb39db7818866b9061de`. The subsequent current-source
+ancestry response grew to 1,357,287 bytes, exceeding the unchanged 1 MiB
+transport limit. Neither earlier failed diagnostic is replayed. The current
+source preparation selects only the exact original-to-held comparison URL with
+`?per_page=1&page=2`; all other queries, header overrides, request bodies and
+redirects refuse. GitHub's [comparison contract](https://docs.github.com/en/rest/commits/commits#compare-two-commits)
+places changed files on the first page. The selected second page is retained
+completely as native raw bytes, status and digest, rather than locally clipped
+or rewritten custody.
+
+The transport requires HTTP 200. The shared validator requires the exact native
+comparison URL, original source as both base and merge base, `ahead`, zero behind commits and
+equal integer ahead/total counts of at least two. Exactly one safe commit row
+and absence of the `files` field qualify the selected page. One-commit
+comparisons refuse; the row is not asserted to be the held head or a complete
+commit graph. Independent current-main, source/tree, candidate, workflow and
+journal joins remain mandatory, including explicit historical 0.13 recovery
+binding alongside the separate current 0.14 publisher.
+
+All 106 pure owning controls passed, including production-path controls for
+exact request/header and typed response boundaries, complete repeated raw custody before effect reservation, malformed
+and non-200 responses, quotas and refusal before install, PATCH or CAS. The
+1 MiB response, 4 MiB JSON/plan, 120-read and existing time, command and physical
+custody limits are unchanged. Protected source delivery, refreshed private
+source seals, fresh native readback and distinct root H3 admission remain
+pending; this preparation establishes no diagnostic or public creation result.
