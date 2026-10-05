@@ -365,6 +365,128 @@ let verify (spec: Verification) =
     { Schema = "fsgg.programme.verification-result/1"; MechanicalOnly = true; Claim = spec.Claim
       Checked = spec.Artifacts.Length; Bytes = total; Failures = failures.ToArray() }
 
+// Explicit bounded views. Caller-declared access/obligations are observations,
+// never OS permission grants, universal instruction discovery or authenticity.
+type EvidenceViewInput = {
+    Schema: string; Path: string; Sha256: string; Bytes: int64; StartLine: int; EndLine: int
+    MaximumBytes: int; Trust: string; Mandatory: bool; ObligationsComplete: bool; Access: string; Provenance: string
+}
+type EvidenceViewResult = {
+    Schema: string; Status: string; Path: string; Sha256: string; IdentityVerified: bool
+    StartLine: int; EndLine: int; Trust: string; Mandatory: bool; Provenance: string
+    Text: string; Bytes: int; DeclarationScope: string; InstructionAuthority: string
+}
+let evidenceView (spec: EvidenceViewInput) =
+    let result status verified text : EvidenceViewResult = {
+        Schema="fsgg.programme.evidence-view/1";Status=status;Path=spec.Path;Sha256=spec.Sha256
+        IdentityVerified=verified;StartLine=spec.StartLine;EndLine=spec.EndLine;Trust=spec.Trust
+        Mandatory=spec.Mandatory;Provenance=spec.Provenance;Text=text;Bytes=Encoding.UTF8.GetByteCount text
+        DeclarationScope="access and obligation completeness caller-declared; equality not authenticity"
+        InstructionAuthority="none minted; data never overrides governing instructions" }
+    require (Encoding.UTF8.GetByteCount(encode spec)<=262144) "view-input-payload-bound"
+    require (spec.Schema="fsgg.programme.evidence-view-input/1" && nonempty spec.Path && spec.Path.Length<=4096 && Path.IsPathRooted spec.Path &&
+             isDigest spec.Sha256 && spec.Bytes >= 0L &&
+             spec.MaximumBytes > 0 && spec.MaximumBytes <= 65536 && nonempty spec.Provenance && spec.Provenance.Length <= 1024) "invalid-view-input"
+    oneOf spec.Trust ["instruction";"plan";"data"]
+    oneOf spec.Access ["allowed";"denied";"unknown"]
+    if spec.Access <> "allowed" then result "permission-unestablished" false ""
+    elif spec.Bytes>2097152L then result "oversize" false ""
+    elif spec.Trust="instruction" && (not spec.Mandatory || spec.StartLine<>0 || spec.EndLine<>0) then result "instruction-must-be-mandatory-whole-file" false ""
+    elif spec.Trust="instruction" && not spec.ObligationsComplete then result "obligations-incomplete" false ""
+    else
+        try
+            let raw = boundedFile 2097152 spec.Path
+            if int64 raw.Length <> spec.Bytes || digest raw <> spec.Sha256.ToLowerInvariant() then result "drift" false ""
+            else
+                // Full raw identity precedes UTF-8 decoding, range selection and exposure.
+                let text = UTF8Encoding(false,true).GetString raw
+                let lines = text.Split('\n')
+                let validRange = (spec.StartLine=0 && spec.EndLine=0) ||
+                                 (spec.StartLine>=1 && spec.EndLine>=spec.StartLine && spec.EndLine<=lines.Length)
+                if not validRange then result "invalid-range" true ""
+                else
+                    let selected = if spec.StartLine=0 then text else String.Join("\n",lines[spec.StartLine-1..spec.EndLine-1])
+                    if Encoding.UTF8.GetByteCount selected > spec.MaximumBytes then result "oversize" true ""
+                    else
+                        let candidate = result "passed" true selected
+                        if Encoding.UTF8.GetByteCount(encode candidate) > 262144 then result "oversize" true "" else candidate
+        with
+        | :? FileNotFoundException | :? DirectoryNotFoundException -> result "missing" false ""
+        | :? UnauthorizedAccessException -> result "permission-denied" false ""
+        | :? InvalidOperationException as error when error.Message="symlink-refused" -> result "linked" false ""
+        | :? InvalidOperationException as error when error.Message="input-too-large" || error.Message="input-grew-too-large" -> result "oversize" false ""
+        | :? IOException | :? DecoderFallbackException -> result "unreadable" false ""
+
+// This is a pure reuse suggestion for one byte-check receipt. The caller must
+// supply a trustworthy expected receipt digest and complete transitive closure.
+// No semantic/native finding, permission, signature or completion is cached.
+type MechanicalIdentity = { PolicySha256: string; ProfileSha256: string; EvaluatorSha256: string; SourceConfigSha256: string }
+type MechanicalInputFact = {
+    Id: string; Kind: string; Reference: string; Sha256: string; Bytes: int64; ObservedAt: DateTimeOffset; Access: string
+}
+type MechanicalReceipt = {
+    Schema: string; Kind: string; Identity: MechanicalIdentity; InputClosureSha256: string
+    EvaluatedAt: DateTimeOffset; Result: string
+}
+type ReuseInput = {
+    Schema: string; EvaluationTime: DateTimeOffset; MaxAgeSeconds: int; Identity: MechanicalIdentity
+    ClosureComplete: bool; RequiredInputIds: string array; Inputs: MechanicalInputFact array
+    PriorReceipt: MechanicalReceipt; PriorReceiptSha256: string
+}
+type ReuseResult = {
+    Schema: string; Decision: string; Reasons: string array; EvaluationTime: DateTimeOffset
+    InputClosureSha256: string; MechanicalOnly: bool; Authority: string; Coverage: string
+}
+let mechanicalClosure (identity: MechanicalIdentity) (required: string array) (inputs: MechanicalInputFact array) =
+    encode {| identity=identity; requiredInputIds=required |> Array.sort
+              inputs=inputs |> Array.sortBy _.Id |} |> Encoding.UTF8.GetBytes |> digest
+let validateMechanicalIdentity (identity: MechanicalIdentity) =
+    require (not (obj.ReferenceEquals(identity,null))) "missing-mechanical-identity"
+    [identity.PolicySha256;identity.ProfileSha256;identity.EvaluatorSha256;identity.SourceConfigSha256]
+    |> List.iter (fun value -> require (isDigest value) "invalid-mechanical-identity")
+let mechanicalReuse (spec: ReuseInput) =
+    require (spec.Schema="fsgg.programme.reuse-input/1" && spec.EvaluationTime<>DateTimeOffset.MinValue &&
+             spec.MaxAgeSeconds>=1 && spec.MaxAgeSeconds<=3600) "invalid-reuse-input"
+    require (Encoding.UTF8.GetByteCount(encode spec)<=262144) "reuse-input-payload-bound"
+    validateMechanicalIdentity spec.Identity
+    array "required-inputs" spec.RequiredInputIds;array "mechanical-inputs" spec.Inputs
+    require (spec.RequiredInputIds.Length>0 && spec.RequiredInputIds.Length<=32 && spec.Inputs.Length<=32) "reuse-population-bound"
+    require (spec.RequiredInputIds |> Array.forall id) "invalid-required-input-id"
+    require ((spec.RequiredInputIds |> Array.distinct |> Array.length) = spec.RequiredInputIds.Length) "duplicate-required-input"
+    let seen=Collections.Generic.HashSet<string>()
+    for fact in spec.Inputs do
+        require (id fact.Id && seen.Add fact.Id && nonempty fact.Reference && fact.Reference.Length<=1024 &&
+                 isDigest fact.Sha256 && fact.Bytes>=0L && fact.ObservedAt<>DateTimeOffset.MinValue) "invalid-or-duplicate-mechanical-input"
+        oneOf fact.Kind ["evidence";"source";"configuration";"policy";"profile";"evaluator"]
+        oneOf fact.Access ["allowed";"denied";"unknown"]
+    let reasons=ResizeArray<string>()
+    if not spec.ClosureComplete then reasons.Add "closure-unknown-request-missing"
+    for required in spec.RequiredInputIds do if not (seen.Contains required) then reasons.Add ("missing-input:"+required)
+    for fact in spec.Inputs do
+        if not (Array.contains fact.Id spec.RequiredInputIds) then reasons.Add ("undeclared-input:"+fact.Id)
+    let populationMissing=reasons.Count>0
+    let closure=mechanicalClosure spec.Identity spec.RequiredInputIds spec.Inputs
+    let fresh (time: DateTimeOffset) = time<=spec.EvaluationTime && (spec.EvaluationTime-time).TotalSeconds<=float spec.MaxAgeSeconds
+    for fact in spec.Inputs do
+        if fact.Access<>"allowed" then reasons.Add ("access-unestablished:"+fact.Id)
+        if not (fresh fact.ObservedAt) then reasons.Add ("stale-or-future-input:"+fact.Id)
+    if obj.ReferenceEquals(spec.PriorReceipt,null) then reasons.Add "receipt-missing-recompute"
+    else
+        let receipt=spec.PriorReceipt
+        validateMechanicalIdentity receipt.Identity
+        if receipt.Schema<>"fsgg.programme.mechanical-receipt/1" || receipt.Kind<>"declared-byte-equality" then reasons.Add "receipt-scope-not-reusable"
+        if not (isDigest spec.PriorReceiptSha256) || digest(Encoding.UTF8.GetBytes(encode receipt))<>spec.PriorReceiptSha256.ToLowerInvariant() then reasons.Add "receipt-pin-mismatch"
+        if receipt.Result<>"passed" then reasons.Add "failed-or-unknown-receipt-recompute"
+        if receipt.Identity<>spec.Identity then reasons.Add "policy-profile-evaluator-source-config-changed"
+        if not (isDigest receipt.InputClosureSha256) || receipt.InputClosureSha256<>closure then reasons.Add "input-closure-changed"
+        if receipt.EvaluatedAt=DateTimeOffset.MinValue || not (fresh receipt.EvaluatedAt) then reasons.Add "receipt-stale-or-future"
+    let result : ReuseResult = { Schema="fsgg.programme.reuse/1";Decision=(if populationMissing then "request-missing" elif reasons.Count>0 then "recompute" else "reuse")
+      Reasons=reasons |> Seq.distinct |> Seq.sort |> Seq.toArray;EvaluationTime=spec.EvaluationTime;InputClosureSha256=closure
+      MechanicalOnly=true;Authority="none; no semantic/native acceptance, permission or completion reused"
+      Coverage="caller-declared complete closure, access and trustworthy receipt pin; no authentication or live readback" }
+    require (Encoding.UTF8.GetByteCount(encode result)<=262144) "reuse-output-payload-bound"
+    result
+
 let privateRoot (path: string) =
     require (Path.IsPathRooted path) "private-root-must-be-absolute"
     let full = Path.GetFullPath path
@@ -418,6 +540,16 @@ let run (command: string) (input: string) (root: string) =
             writePrivate path bytes
             output <- encode {| schema = "fsgg.programme.packet-result/1"; lane = spec.Lane; packetPath = path
                                 sha256 = digest bytes; bytes = bytes.Length; selected = selected; omitted = omitted |}
+        | "view" ->
+            let spec, hash = read<EvidenceViewInput> inputPath
+            inputDigest <- hash
+            let observation = evidenceView spec
+            if observation.Status <> "passed" then result <- "refused"
+            output <- encode observation
+        | "reuse" ->
+            let spec, hash = read<ReuseInput> inputPath
+            inputDigest <- hash
+            output <- mechanicalReuse spec |> encode
         | "verify" ->
             let spec, hash = read<Verification> inputPath
             inputDigest <- hash
@@ -464,6 +596,6 @@ if fsi.CommandLineArgs.Length > 1 then
             match arguments with
             | [| "report"; root |] -> report root
             | [| command; input; root |] -> run command input root
-            | _ -> fail "usage: programme.fsx <frontier|packet|verify|delta> INPUT PRIVATE_ROOT, or report PRIVATE_ROOT"
+            | _ -> fail "usage: programme.fsx <frontier|packet|verify|delta|view|reuse> INPUT PRIVATE_ROOT, or report PRIVATE_ROOT"
         exit code
     with error -> eprintfn "%s" error.Message; exit 3
