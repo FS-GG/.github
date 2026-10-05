@@ -321,6 +321,21 @@ singleton and journal; the separately qualified 0.13 recovery route remains unch
 candidate, publication and actual installed fresh/retained Rendering journeys are pending. Neither
 milestone .5 nor .6 closes through this source preparation.
 
+The later exact-source [candidate 37268962676](https://github.com/FS-GG/.github/actions/runs/37268962676),
+protected preflight and first-attempt [publisher 37269935925](https://github.com/FS-GG/.github/actions/runs/37269935925)
+qualified and published Creator **0.15.0** at `b1181b1afd6d0aa7da57e179c44bddcea50d8054`.
+The promoted [three-asset release](https://github.com/FS-GG/.github/releases/tag/new-sdd-workspace/v0.15.0)
+retains the candidate package and manifest byte-identically; the canonical Creator015 journal has
+17 generations and eight verified effects. Independent signed nuget.org readback matches all
+93 candidate entries, including the 81 exact accepted coordination 0.97 bodies and coherent CLI
+metadata. Genuine publisher public install/help passed. Independent GitHub feed download and
+metadata returned 403; hosted feed verification remains joined, and this evidence gap is retained.
+Root accepted publication execution and released the common main hold. This closes the Creator015
+publication boundary, not milestone .6: actual fresh and retained installed Rendering product
+journeys, consumer switch and retirement still require their own bounded native window.
+Historical 0.14 publication and selected 0.13 recovery stay immutable.
+
+
 **Selected next source outcome: COORD-BOARD-V2-01.5 product binding and materialization.** Prepare
 it independently of broader .4 carryover and BAR/SC2 native qualification. The qualified .3 projection
 contract is the producer foundation. Publication and actual product adoption still need their own
