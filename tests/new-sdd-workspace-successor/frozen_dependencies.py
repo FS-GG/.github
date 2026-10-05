@@ -6,6 +6,7 @@ import runpy
 import tempfile
 import unittest
 import zipfile
+from xml.etree import ElementTree
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 HELPER = runpy.run_path(str(ROOT / "scripts/creator-frozen-coord-dependencies.py"))
@@ -19,8 +20,11 @@ class FrozenDependencyControls(unittest.TestCase):
         self.root = pathlib.Path(self.temp.name)
         self.creator = self.root / "scripts/NewSddWorkspace/NewSddWorkspace.fsproj"
         self.creator.parent.mkdir(parents=True)
+        actual = ElementTree.parse(ROOT / "scripts/NewSddWorkspace/NewSddWorkspace.fsproj").getroot()
         self.creator.write_text('<Project><PropertyGroup><AssemblyName>new-sdd-workspace</AssemblyName></PropertyGroup>'
-                                '<ItemGroup><ProjectReference Include="../../src/Engine/Engine.fsproj" /></ItemGroup></Project>')
+                                '<ItemGroup><ProjectReference Include="../../src/Engine/Engine.fsproj" /></ItemGroup>'
+                                + ''.join(ElementTree.tostring(group, encoding="unicode") for group in actual
+                                          if group.get("Condition") == "'$(FsggFrozenCoordDependencies)' != ''") + '</Project>')
         self.project = self.root / "src/Engine/Engine.fsproj"
         self.project.parent.mkdir(parents=True)
         self.project.write_text('<Project><AssemblyName>fsgg-coord-engine</AssemblyName></Project>')
@@ -108,6 +112,26 @@ class FrozenDependencyControls(unittest.TestCase):
         self.write_archive({**self.members, "fsgg-coord-engine.dll": b"rebuilt substitute"})
         with self.assertRaisesRegex(ValueError, "package changed published dependency"):
             HELPER["package_closure"](self.package, self.dependencies, self.root)
+
+    def test_unbuilt_child_content_guards_refuse_missing_enabled_or_unscoped(self):
+        original = self.creator.read_text()
+        for name in ("_GetChildProjectCopyToOutputDirectoryItems", "_GetChildProjectCopyToPublishDirectoryItems"):
+            for mutant in (original.replace(f'<{name}>false</{name}>', ''),
+                           original.replace(f'<{name}>false</{name}>', f'<{name}>true</{name}>'),
+                           original.replace(" Condition=\"'$(FsggFrozenCoordDependencies)' != ''\"", '', 1)):
+                with self.subTest(guard=name, mutant=mutant):
+                    self.creator.write_text(mutant)
+                    with self.assertRaisesRegex(ValueError, "frozen dependency (copy guard|property scope) changed"):
+                        self.stage()
+                    self.assertFalse(self.dependencies.exists())
+        self.creator.write_text(original)
+
+    def test_explicit_frozen_body_copy_cannot_be_dropped(self):
+        original = self.creator.read_text()
+        self.creator.write_text(original.replace('CopyToOutputDirectory="Always"', 'CopyToOutputDirectory="Never"'))
+        with self.assertRaisesRegex(ValueError, "frozen dependency content copy changed"):
+            self.stage()
+        self.assertFalse(self.dependencies.exists())
 
 
 if __name__ == "__main__":

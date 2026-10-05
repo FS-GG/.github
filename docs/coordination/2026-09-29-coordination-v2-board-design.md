@@ -280,6 +280,14 @@ implementation bodies. Package checks retain their built-output comparisons and 
 every selected published dependency body to remain exact. Synthetic custody controls exercise archive,
 source, destination, layout and packaged-body refusal; they do not establish a real build or install.
 
+The first CLR10 qualification restored and staged successfully, then naturally refused during
+creator compilation: SDK 10.0.401 queried content from the unbuilt engine project and advertised
+its absent `obj/Release/net10.0/apphost`. The frozen route now disables child output/publish
+content queries, retaining assembly resolution through the same eleven-project graph and all
+81 explicit published dependency files. Source checks refuse removed, enabled or unscoped copy
+guards before staging. Seven focused custody checks and 109 pure successor/recovery checks pass;
+native compilation and actual packaged closure need a fresh exact-source qualification.
+
 Creator 0.14 publication remains accepted history. Ordinary publication selects only the new 0.15
 singleton and journal; the separately qualified 0.13 recovery route remains unchanged. Creator 0.15
 candidate, publication and actual installed fresh/retained Rendering journeys are pending. Neither

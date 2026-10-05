@@ -55,6 +55,11 @@
   <PropertyGroup Condition="'$(FsggFrozenCoordDependencies)' != ''">
     <BuildProjectReferences>false</BuildProjectReferences>
     <CompileUsingReferenceAssemblies>false</CompileUsingReferenceAssemblies>
+    <!-- GetTargetPath still resolves the staged implementation assemblies. Child
+         content queries would also advertise an unbuilt obj/apphost; the exact
+         published closure below supplies all dependency content instead. -->
+    <_GetChildProjectCopyToOutputDirectoryItems>false</_GetChildProjectCopyToOutputDirectoryItems>
+    <_GetChildProjectCopyToPublishDirectoryItems>false</_GetChildProjectCopyToPublishDirectoryItems>
   </PropertyGroup>
   <ItemGroup Condition="'$(FsggFrozenCoordDependencies)' != ''">
     <None Include="$(FsggFrozenCoordDependencies)/**/*"

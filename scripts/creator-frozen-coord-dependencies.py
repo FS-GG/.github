@@ -31,6 +31,8 @@ def regular(path):
 
 
 def source_projects(root, pin):
+    creator = root / "scripts/NewSddWorkspace/NewSddWorkspace.fsproj"
+    frozen_copy_contract(ElementTree.fromstring(regular(creator)))
     projects = {}
     def visit(path):
         relative = path.relative_to(root).as_posix()
@@ -51,6 +53,25 @@ def source_projects(root, pin):
         require(digest(regular(root / row["path"])) == row["sha256"],
                 "published dependency source changed: " + row["path"])
     return projects
+
+
+def frozen_copy_contract(xml):
+    """Refuse source drift that asks unbuilt project references for content."""
+    condition = "'$(FsggFrozenCoordDependencies)' != ''"
+    groups = [group for group in xml.findall("PropertyGroup") if group.get("Condition") == condition]
+    require(len(groups) == 1, "frozen dependency property scope changed")
+    for name in ("BuildProjectReferences", "CompileUsingReferenceAssemblies",
+                 "_GetChildProjectCopyToOutputDirectoryItems", "_GetChildProjectCopyToPublishDirectoryItems"):
+        values = groups[0].findall(name)
+        require(len(values) == 1 and values[0].text == "false" and not values[0].attrib,
+                "frozen dependency copy guard changed: " + name)
+        require(len(list(xml.iter(name))) == 1, "duplicate frozen dependency copy guard: " + name)
+    content = [item for group in xml.findall("ItemGroup") if group.get("Condition") == condition
+               for item in group.findall("None") if item.get("Include") == "$(FsggFrozenCoordDependencies)/**/*"]
+    require(len(content) == 1 and content[0].get("CopyToOutputDirectory") == "Always"
+            and content[0].get("CopyToPublishDirectory") == "Always"
+            and content[0].get("Link") == "%(RecursiveDir)%(Filename)%(Extension)",
+            "frozen dependency content copy changed")
 
 
 def archive_members(package, pin):
