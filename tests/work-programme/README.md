@@ -16,7 +16,9 @@ settlement and reporting, within the unchanged three-minute hosted job limit.
 The whole invocation captures at most 1 MiB of child output. Deadline/output
 exhaustion, launch uncertainty, signal termination or unobserved cleanup stops
 further launches. Each child owns a new process group and scratch directory;
-settlement kills only that group and observes its disappearance before continuing.
+settlement retains the unreaped direct leader while signalling its group and
+observing that no live group members remain through Linux `/proc`, then reaps the
+leader last. It never signals or probes the numeric group after reaping.
 This ordinary runner assumes trusted repository tests; it is not a native custody
 or hostile-process sandbox.
 

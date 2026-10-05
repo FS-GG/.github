@@ -47,19 +47,47 @@ def identity(root, paths):
     return pins
 
 
+def group_alive(group):
+    """Linux hosted/local entry: observe live members while retaining its leader."""
+    for entry in Path('/proc').iterdir():
+        if not entry.name.isdigit():
+            continue
+        try:
+            stat = (entry / 'stat').read_text()
+        except FileNotFoundError:
+            continue  # This member exited during the census.
+        fields = stat[stat.rfind(')') + 2:].split()
+        if int(fields[2]) == group and fields[0] not in ('Z', 'X'):
+            return True
+    return False
+
+
+def exited_unreaped(child):
+    # Unlike poll()/wait(), WNOWAIT retains the original PID/group generation.
+    return os.waitid(os.P_PID, child.pid, os.WEXITED | os.WNOHANG | os.WNOWAIT) is not None
+
+
 def settle(child, deadline):
-    """Own only the new child's process group; observe termination before continuing."""
+    """Signal only with an unreaped, waitable direct leader; reap last."""
+    if child.returncode is not None:
+        return 'leader-already-reaped'
     try:
-        os.killpg(child.pid, signal.SIGKILL)
-    except ProcessLookupError:
-        pass
+        exited_unreaped(child)  # ChildProcessError means custody is no longer held.
+    except ChildProcessError:
+        return 'leader-not-waitable'
     try:
+        try:
+            os.killpg(child.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        while group_alive(child.pid):
+            if time.monotonic() >= deadline:
+                return 'unobserved-process-group'
+            time.sleep(min(0.01, max(0, deadline - time.monotonic())))
         child.wait(timeout=max(0.001, deadline - time.monotonic()))
-        os.killpg(child.pid, 0)
-        return 'unobserved-process-group'
-    except ProcessLookupError:
+        # No numeric group signal/query is permitted after this reap.
         return 'passed'
-    except (OSError, subprocess.TimeoutExpired):
+    except (OSError, ValueError, subprocess.TimeoutExpired):
         return 'unobserved-process-group'
 
 
@@ -92,7 +120,10 @@ def run_child(command, root, scratch, deadline, remaining):
                     break
         if not reason:
             try:
-                code = child.wait(timeout=max(0.001, deadline - CLEANUP_SECONDS - time.monotonic()))
+                while not exited_unreaped(child):
+                    if time.monotonic() >= deadline - CLEANUP_SECONDS:
+                        reason = 'deadline'; break
+                    time.sleep(0.01)
             except subprocess.TimeoutExpired:
                 reason = 'deadline'
     except OSError as error:

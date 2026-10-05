@@ -101,6 +101,30 @@ class RunnerTests(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertEqual(report['suites'][1]['reason'], 'cleanup-unobserved')
 
+    def test_natural_exit_keeps_leader_until_last_group_signal(self):
+        original_popen = runner.subprocess.Popen
+        original_signal = runner.os.killpg
+        children = []
+        signals = []
+        def launch(*args, **kwargs):
+            child = original_popen(*args, **kwargs)
+            children.append(child)
+            return child
+        def signal_group(group, sig):
+            self.assertIsNone(children[-1].returncode, 'leader reaped before group signal')
+            signals.append((group, sig))
+            return original_signal(group, sig)
+        with patch.object(runner.subprocess, 'Popen', side_effect=launch), patch.object(runner.os, 'killpg', side_effect=signal_group):
+            report, code = self.collect([self.suite('natural', 'print("natural exit")')])
+        self.assertEqual(code, 0)
+        self.assertEqual(report['suites'][0]['exit'], 0)
+        self.assertEqual(len(signals), 1)
+        self.assertEqual(children[0].returncode, 0)
+        # A previously reaped leader must never address its reusable number.
+        with patch.object(runner.os, 'killpg') as signal_group:
+            self.assertEqual(runner.settle(children[0], runner.time.monotonic() + 1), 'leader-already-reaped')
+            signal_group.assert_not_called()
+
     def test_real_shell_entry_controlled_children_success_and_two_failures(self):
         target = self.root / 'tests/work-programme'
         target.mkdir(parents=True)
