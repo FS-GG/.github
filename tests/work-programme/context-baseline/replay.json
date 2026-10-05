@@ -1,0 +1,427 @@
+{
+  "boundary": "Artifact accounting only; no acceptance, dispatch or effect authority.",
+  "coverage": {
+    "actualRetrievals": "unknown",
+    "compactions": "not-observed",
+    "helperOperations": 5,
+    "nativeUsage": "unknown",
+    "observedModelTurns": null,
+    "waits": "unknown",
+    "wholeFamilyCost": "unknown",
+    "workerReturnFailures": "unknown"
+  },
+  "helper": {
+    "commit": "49a5e93668d4647999cd7171a26d4ad4d151b66b",
+    "historicalProducerIdentity": "not-recorded-in-measurement; current-source-compatible-only",
+    "path": ".agents/skills/work-programme/scripts/programme.fsx",
+    "repository": "FS-GG/.github",
+    "sha256": "bff95c7be46ddeb3594a7efb931f228213a2bfe6f5a1e6d6c5e9a37cdbaeefed"
+  },
+  "identity": {
+    "attempt": "baseline-01",
+    "campaign": "unified-roadmap-20261003",
+    "feature": "V2-CTX-01",
+    "item": "V2-CTX-01.1",
+    "originalItem": "V2-CTX-01.1"
+  },
+  "operations": [
+    {
+      "artifactBytes": 911,
+      "elapsedMs": 43,
+      "id": "operation-01",
+      "inputBytes": 3358,
+      "inputDigest": "804d25fa6e8754bcf1944bfd7ff33f7ff009346fe219f40f7e7680210fdc1847",
+      "measurementDigest": "5537b409ce19ae01e2437c64439780dba421380794060bdba2c9aeefcd919eac",
+      "omittedCount": 0,
+      "operation": "packet",
+      "outputBytes": 911,
+      "packetBytes": 67688,
+      "packetDigest": "f2f3930af4cf1f25ccf49adf88c0c312c147445584fa52c3b76fd6b301db3c08",
+      "references": [
+        {
+          "bytes": 332,
+          "digest": "ca45ccab446565ab84fb64c17fcd9276425a6085883352a29bf05874d5dd2525",
+          "mandatory": true,
+          "range": [
+            0,
+            0
+          ],
+          "trust": "instruction"
+        },
+        {
+          "bytes": 22647,
+          "digest": "aab0c90516143063a200612cf0fb8a476aa083e7b345e5e1bc50101ea2a5ef92",
+          "mandatory": true,
+          "range": [
+            0,
+            0
+          ],
+          "trust": "instruction"
+        },
+        {
+          "bytes": 8599,
+          "digest": "63c02a380882f3c53baa8bc582df8d4fc17e745739e45580e1620b376b78c200",
+          "mandatory": true,
+          "range": [
+            0,
+            0
+          ],
+          "trust": "instruction"
+        },
+        {
+          "bytes": 23330,
+          "digest": "f81f00d75b7b7c0662c7a910359e176efb479c734cf838d71a5561da1cbd65b6",
+          "mandatory": true,
+          "range": [
+            0,
+            0
+          ],
+          "trust": "data"
+        },
+        {
+          "bytes": 6005,
+          "digest": "36709016005c260ea68a50063acd2cf60671096ff92570c34b1c073eeec31f7e",
+          "mandatory": true,
+          "range": [
+            0,
+            0
+          ],
+          "trust": "plan"
+        },
+        {
+          "bytes": 678,
+          "digest": "595a3633c900f6611e9598de54979975cfb97c23d89b5498bb2b78e2f4cae0b2",
+          "mandatory": true,
+          "range": [
+            0,
+            0
+          ],
+          "trust": "instruction"
+        },
+        {
+          "bytes": 4059,
+          "digest": "54b40aa0f8bc49833511fee9faba7ade13782a6a895e3a83889b6288ab84ae42",
+          "mandatory": true,
+          "range": [
+            0,
+            0
+          ],
+          "trust": "data"
+        }
+      ],
+      "result": "passed",
+      "resultDigest": "3f14727df3cef35673a8a01e64c47f299cc188646378d798a3b6f98697f520f3"
+    },
+    {
+      "artifactBytes": 1285,
+      "elapsedMs": 45,
+      "id": "operation-02",
+      "inputBytes": 4851,
+      "inputDigest": "d366310bd5b1f19b1f22d00173e538b9084b738b26aba2e47fba07447bb07dda",
+      "measurementDigest": "8c954e3a49f18ec437eb56769f29c0995d6ab7c05bba1c425a1ef9a60ed0b641",
+      "omittedCount": 0,
+      "operation": "packet",
+      "outputBytes": 1285,
+      "packetBytes": 106075,
+      "packetDigest": "e6d8dec7f838fe8aee8e7a7c4eb02934d50e2c3c631f9d8e565bad1524d97d62",
+      "references": [
+        {
+          "bytes": 332,
+          "digest": "ca45ccab446565ab84fb64c17fcd9276425a6085883352a29bf05874d5dd2525",
+          "mandatory": true,
+          "range": [
+            0,
+            0
+          ],
+          "trust": "instruction"
+        },
+        {
+          "bytes": 22647,
+          "digest": "aab0c90516143063a200612cf0fb8a476aa083e7b345e5e1bc50101ea2a5ef92",
+          "mandatory": true,
+          "range": [
+            0,
+            0
+          ],
+          "trust": "instruction"
+        },
+        {
+          "bytes": 8599,
+          "digest": "63c02a380882f3c53baa8bc582df8d4fc17e745739e45580e1620b376b78c200",
+          "mandatory": true,
+          "range": [
+            0,
+            0
+          ],
+          "trust": "instruction"
+        },
+        {
+          "bytes": 23330,
+          "digest": "f81f00d75b7b7c0662c7a910359e176efb479c734cf838d71a5561da1cbd65b6",
+          "mandatory": true,
+          "range": [
+            0,
+            0
+          ],
+          "trust": "data"
+        },
+        {
+          "bytes": 6731,
+          "digest": "069bd9c30b6761f766a3d42e63df28827e6e3cb19a060552eef23b5fd449c2f2",
+          "mandatory": true,
+          "range": [
+            0,
+            0
+          ],
+          "trust": "instruction"
+        },
+        {
+          "bytes": 678,
+          "digest": "595a3633c900f6611e9598de54979975cfb97c23d89b5498bb2b78e2f4cae0b2",
+          "mandatory": true,
+          "range": [
+            0,
+            0
+          ],
+          "trust": "instruction"
+        },
+        {
+          "bytes": 7551,
+          "digest": "464be1f0537ad644719243f81c5a9c65cc48f6b0133cf19b81ca9defeebd2d39",
+          "mandatory": true,
+          "range": [
+            0,
+            0
+          ],
+          "trust": "data"
+        },
+        {
+          "bytes": 11215,
+          "digest": "1cf18cb401d339ecb77396acd82939cc86f6af91cde20fbfa5073c43a3dee1ad",
+          "mandatory": true,
+          "range": [
+            0,
+            0
+          ],
+          "trust": "data"
+        },
+        {
+          "bytes": 14379,
+          "digest": "ea1cda52fc6bb6852330b1dc109e454e12611b1c022ed0ead4b8bc3fdbaa0908",
+          "mandatory": true,
+          "range": [
+            0,
+            0
+          ],
+          "trust": "data"
+        },
+        {
+          "bytes": 7716,
+          "digest": "48fc85fddace03e0dff7b5adfd0e0da374e16bcf8c907e7c740f8db7cd42f9d2",
+          "mandatory": true,
+          "range": [
+            0,
+            0
+          ],
+          "trust": "data"
+        }
+      ],
+      "result": "passed",
+      "resultDigest": "ab067a638d21dcbf3fb1178d930541d048e4bbffa983dbdab9a27056c9b40c73"
+    },
+    {
+      "artifactBytes": 1026,
+      "elapsedMs": 43,
+      "id": "operation-03",
+      "inputBytes": 3754,
+      "inputDigest": "534b4f0e47a4f75c7cf4d211b55dc458a300a059324bbd22051e011e7e12c80b",
+      "measurementDigest": "1b8e1ab9c01c15cf98c08fcc0685d20d92de1da00667e45e5c538ed5e3c34e09",
+      "omittedCount": 0,
+      "operation": "packet",
+      "outputBytes": 1026,
+      "packetBytes": 93779,
+      "packetDigest": "12862668f778f35a667c37e8ce94048b21847f077a49d080cde0e7fec9a246d0",
+      "references": [
+        {
+          "bytes": 332,
+          "digest": "ca45ccab446565ab84fb64c17fcd9276425a6085883352a29bf05874d5dd2525",
+          "mandatory": true,
+          "range": [
+            0,
+            0
+          ],
+          "trust": "instruction"
+        },
+        {
+          "bytes": 22647,
+          "digest": "aab0c90516143063a200612cf0fb8a476aa083e7b345e5e1bc50101ea2a5ef92",
+          "mandatory": true,
+          "range": [
+            0,
+            0
+          ],
+          "trust": "instruction"
+        },
+        {
+          "bytes": 8599,
+          "digest": "63c02a380882f3c53baa8bc582df8d4fc17e745739e45580e1620b376b78c200",
+          "mandatory": true,
+          "range": [
+            0,
+            0
+          ],
+          "trust": "instruction"
+        },
+        {
+          "bytes": 23330,
+          "digest": "f81f00d75b7b7c0662c7a910359e176efb479c734cf838d71a5561da1cbd65b6",
+          "mandatory": true,
+          "range": [
+            0,
+            0
+          ],
+          "trust": "data"
+        },
+        {
+          "bytes": 19504,
+          "digest": "127ee269473fd75ff2b1465d656686816a10146dda05a7e3e0b80743c2605930",
+          "mandatory": true,
+          "range": [
+            0,
+            0
+          ],
+          "trust": "plan"
+        },
+        {
+          "bytes": 13528,
+          "digest": "6fa9415d2e0fb8aacdd8db1ce01268e958feae22e4ccb4375e3bb0865829dbdd",
+          "mandatory": true,
+          "range": [
+            0,
+            0
+          ],
+          "trust": "plan"
+        },
+        {
+          "bytes": 686,
+          "digest": "bf913fd3b462250e68cf40956b5a154b63596352a29b64bbfeef25d39efbfe86",
+          "mandatory": true,
+          "range": [
+            0,
+            0
+          ],
+          "trust": "instruction"
+        },
+        {
+          "bytes": 2921,
+          "digest": "4a32c7d7148a9ee976e5bac536ddb0db99424930e19bfe4f8565add283c487c7",
+          "mandatory": true,
+          "range": [
+            0,
+            0
+          ],
+          "trust": "data"
+        }
+      ],
+      "result": "passed",
+      "resultDigest": "d0384393b9889bb62587e3b730d191c9063ba57ea1c7b97e7c70a83a782e65b0"
+    },
+    {
+      "artifactBytes": 74,
+      "elapsedMs": 42,
+      "id": "operation-04",
+      "inputBytes": 13709,
+      "inputDigest": "62bd237f7b674de3d41c9b65075a09de379d0868ee9f78050723b26975eda0d3",
+      "laneCount": 11,
+      "measurementDigest": "f876e524e904c0fd7361c12edf0aa8f0ea908f642aa3bc273251a5b130c5b2b2",
+      "operation": "frontier",
+      "outputBytes": 74,
+      "refusalDigest": "84f082483eb3e3e0a8f284c3aa385ecee8677e85d84d25931fef17b137b75dc0",
+      "result": "refused",
+      "resultDigest": "41b0d461ac76d932b55a0c98cba35cb2d2c5e554fb2951759e8d5ff637e06532"
+    },
+    {
+      "actions": [
+        {
+          "action": "continue",
+          "lane": "lane-01"
+        },
+        {
+          "action": "reconcile",
+          "lane": "lane-02"
+        },
+        {
+          "action": "continue",
+          "lane": "lane-03"
+        },
+        {
+          "action": "continue",
+          "lane": "lane-04"
+        },
+        {
+          "action": "reconcile",
+          "lane": "lane-05"
+        },
+        {
+          "action": "decision",
+          "lane": "lane-06"
+        },
+        {
+          "action": "continue",
+          "lane": "lane-07"
+        },
+        {
+          "action": "continue",
+          "lane": "lane-08"
+        },
+        {
+          "action": "decision",
+          "lane": "lane-09"
+        },
+        {
+          "action": "repair",
+          "lane": "lane-10"
+        },
+        {
+          "action": "retain",
+          "lane": "lane-11"
+        }
+      ],
+      "active": [
+        "lane-01",
+        "lane-03",
+        "lane-04",
+        "lane-07",
+        "lane-08",
+        "lane-10"
+      ],
+      "artifactBytes": 1370,
+      "elapsedMs": 43,
+      "evaluationTime": "2026-10-05T04:56:05.9747486+00:00",
+      "id": "operation-05",
+      "inputBytes": 13874,
+      "inputDigest": "829949efbca8d5826f7b8f3669f9922d40ab0a268e12897418b650ebca447037",
+      "laneCount": 11,
+      "measurementDigest": "f6547a8a83f643160b9f1b9328c26141d36c2eaa7cc9c08527b99872305d81f8",
+      "operation": "frontier",
+      "outputBytes": 1370,
+      "result": "passed",
+      "resultDigest": "399d7221c5b13772cb992a4070db5d442811e3f231ca9cec041e594650fc22c3"
+    }
+  ],
+  "packetProjection": {
+    "interpretation": "Cross-owner packet construction overlap; actual exposure, parent rereads and justification unknown.",
+    "repeatedConstructionBytes": 110494,
+    "selectedReferences": 25,
+    "uniqueDigestRanges": 16
+  },
+  "schema": "fsgg.programme.context-baseline/1",
+  "selectionDigest": "8234bec05f7832d9997ad0eb3fc8848335cba5c323e8683dc49feeb945c7b303",
+  "totals": {
+    "artifactBytes": 4666,
+    "elapsedMs": 216,
+    "inputBytes": 39546,
+    "outputBytes": 4666,
+    "packetBytes": 267542
+  }
+}

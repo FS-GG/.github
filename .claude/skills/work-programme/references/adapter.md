@@ -78,3 +78,73 @@ and record the command outcomes. No live model or roadmap operation is needed to
 On the first requested programme run, refresh a small actual lane snapshot and debug observed gaps through
 ordinary same-PR repair. Existing telemetry supplies native usage; the adapter records bytes and duration
 only, with native tokens unknown and compactions not observed.
+
+## Additive offline delta input
+
+`delta INPUT PRIVATE_ROOT` preserves the existing commands and schemas. Input is
+`fsgg.programme.delta-input/1`; it projects advisory current facts and dispatches
+no effects. It uses the existing campaign/feature/item/original-item/attempt/owner
+and candidate identities. It creates no journal, persistent current-state store,
+acceptance receipt or new execution attempt.
+
+Required fields: `evaluationTime` (explicit UTC-compatible instant),
+`evaluatorIdentity`, `policyIdentity`, `userScopeRevision`, `baseRevision`,
+`currentRevision`, `baseEvaluatorIdentity`, `basePolicyIdentity`,
+`baseUserScopeRevision`, `baseReturns`, `currentReturns`, and `snapshot` (complete
+legacy `fsgg.programme.snapshot/1`). Revision/identity strings are opaque IDs;
+only each owner/candidate stream's numeric return revisions have local ordering.
+No order across providers is invented. Missing base is represented by empty
+`baseRevision` and empty `baseReturns`; base identity strings can then be empty.
+With a base, all three base identities are required.
+
+Every return has schema `fsgg.programme.lane-return/1` and these required groups:
+
+- Identity: `campaign`, `lane`, `feature`, `item`, `originalItem`,
+  `originalAttempt`, `attempt`, `candidate`, `owner`.
+- Revision/provenance: positive numeric `revision`, nonnegative `supersedes`
+  less than revision, `sourceRevision`, `inputPacketSha256`, `observedAt`.
+- Outcome: `outcome` is `acknowledgment` or `window-reported`; `boundaries`
+  contains the exact six legacy `source`, `validation`, `publication`,
+  `installed`, `native`, `projection` enums. A window report is not completion
+  authority. Its boundaries must correspond to the snapshot's observed lane.
+- Evidence: 1–8 entries with `kind` (one of the six boundary names or
+  `mechanical`), `reference` (at most1024 characters), `sha256`, `scope` (at
+  most256 characters). A digest checks the declared identity; the projection
+  does not read/authenticate evidence or infer semantic acceptance.
+- Unknowns and continuation: `unknowns` (0–8 strings, each at most256
+  characters), `exception` (explicit `none` when absent), `continuation`
+  (each nonempty, at most1024 characters), `narrative` (nonempty, at most2048
+  UTF-8 bytes). Overflow must remain in referenced evidence rather than be
+  silently truncated.
+
+Campaign, item, feature and original-item mismatch refuse. Current owner,
+current attempt, candidate and source revision join the existing snapshot
+lane's owner, attempt and head; superseded/incomparable returns are explicit
+notices. Original attempts cannot silently change across base/current joins.
+Identical duplicates are idempotent, older returns remain historical, and equal
+revision/different content reconciles rather than selecting arrival order.
+A revision gap against the supplied base requires resynchronization. A stream
+absent from the base must start at revision1/supersedes0; a partial base cannot
+prove an unseen superseded revision. Different original attempts for the same
+current owner/attempt/candidate reconcile. A newer row cannot erase a conflicting
+lower revision across the supplied base/current closure.
+
+Output `fsgg.programme.delta/1` retains input digest, explicit time and identities,
+base/current revisions, `changed`, full `activeReservations` as legacy lane
+records, typed `notices`, coverage and `effectAuthority` explicitly none.
+Missing base or changed scope/policy/evaluator requests `resynchronize` and
+emits no incremental `changed` rows. Reservations come from the complete
+snapshot, independently of missing/partial/stale/conflicting returns. Snapshot
+completeness is caller-declared and advisory, not independently discovered.
+Stale/unreadable/future facts request refresh without renewing their source time.
+Acknowledgments cannot mint closure; owner success cannot upgrade snapshot
+boundaries. Late validation disputes/native failures fence dependent acceptance
+through notices; native adapters and semantic acceptance remain external.
+
+Both return populations are at most128, serialized delta input and output are
+at most256KiB, and existing snapshot bounds remain. Unknown/duplicate JSON
+properties refuse through the shared reader. Replay executes only the pure
+`contextDelta` function; CLI retention writes ordinary private helper artifacts.
+Use `dotnet fsi --exec tests/work-programme/context-delta.fsx` for the focused
+additive controls and retain the legacy acceptance run separately. Tests do not
+establish installed adoption, native usage, compaction or context savings.

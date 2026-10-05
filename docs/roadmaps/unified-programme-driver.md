@@ -40,7 +40,10 @@ the same owning branch/PR, preserving all substantive acceptance, original linea
 Charge debugging and specialist work to that item; never infer usage from bytes or elapsed time. Retire
 the skill and adapter when this programme ends or a qualified successor replaces them.
 
-The proposed [V2-CTX-01 extension](2026-10-05-programme-context-efficiency.md) audits the current
-implementation and prior art, then stages typed observations/returns, deterministic deltas, selective
-evidence retrieval and a whole-task comparison. It does not change this driver's active contract or
-establish measured savings; implementation and operational adoption remain open.
+The [V2-CTX-01 extension](2026-10-05-programme-context-efficiency.md#bounded-source-window-2026-10-05)
+adds an offline five-operation baseline and an opt-in typed return/delta source command. The baseline
+establishes retained helper byte accounting; actual parent rereads, native usage, compactions and
+whole-family economics remain unknown or inconclusive. Root tested34 additive controls,31 legacy
+cases,10 Python collector controls and two matching CLI replays. Existing commands and skill entry
+instructions remain unchanged. This bounded source behavior does not establish operational adoption
+or measured savings; owner/watcher integration, selective evidence views and .3–.6 remain pending.

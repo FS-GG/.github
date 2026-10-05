@@ -1,7 +1,7 @@
 # Programme context efficiency and deterministic coordination
 
 Identity: **V2-CTX-01**. Authored: **2026-10-05**.
-Status: **proposed implementation; analysis and roadmap only**.
+Status: **bounded .1 offline smoke and .2 source implementation; adoption and economics pending**.
 Owner: `.github` programme-driver maintainer, with Coordination execution and UTEL/LEARN measurement owners.
 Parent: [Unified Roadmap, section 9.8](../2026-09-07-154210-fs-gg-unified-development-roadmap.md#98-feature-parts-and-subroadmap-index).
 
@@ -259,7 +259,8 @@ only independently justified correctness improvements.
 
 ## Implementation roadmap and parallelism
 
-All implementation milestones remain open. These are bounded extensions of the existing driver,
+The bounded .1/.2 source window below is locally tested; milestone closure and operational adoption
+remain separate. These are bounded extensions of the existing driver,
 not a second rollout programme. Detail the next window when assigned; later rows define outcomes and
 acceptance, not pre-authorized operation launches.
 
@@ -281,6 +282,28 @@ helper/observer processes within actual capacity. Do not replace an active opera
 Shared-file integration uses one integrator. .3 and .4 may proceed concurrently only after agreeing on
 .2's contract and reserving disjoint touch-sets. Keep one current PR per dependency chain and existing
 repository admission limits. Completed historical V2 work gains no retroactive dependency on this plan.
+
+### Bounded source window, 2026-10-05
+
+The [.1 baseline fixture](../../tests/work-programme/context-baseline/README.md) selects five retained
+helper operations: three packet builds, a refused frontier and its repaired evaluation. Reproducible
+artifact accounting covers39,546 input bytes,4,666 output bytes and267,542 packet bytes. Repeated
+packet construction across owners is not actual parent reread evidence. Model turns, native usage,
+compactions, waits, return failures and whole-family economics remain unknown or unobserved; this
+population is an offline smoke comparison only, with economic conclusions inconclusive. The original
+.1 measurement exit is not claimed complete.
+
+The additive [.2 delta contract](../../.agents/skills/work-programme/references/adapter.md#additive-offline-delta-input)
+retains legacy commands and separate boundary statuses, owner/original-attempt/candidate joins,
+explicit evaluation time and policy/evaluator/scope identity, and complete active reservations.
+Conflicts reconcile, missing bases resynchronize, and acknowledgment cannot mint completion.
+Root qualification passed34 focused source controls and31 legacy cases, plus10 Python baseline
+controls. Two synthetic CLI runs retained exact inputs, matched the expected projection and reproduced
+identical result bytes; a relative-private-root invocation refused before its corrected runs. The
+[focused suite](../../tests/work-programme/context-delta.fsx) also includes a35th pure fixture control
+for the same correspondence, added after that root suite run. These checks establish bounded local
+source/CLI behavior; installed owner/watcher integration, live economics and operational adoption
+remain pending. Existing skill entry-point instructions are unchanged; .3–.6 remain open.
 
 ## Validation, risks and rollback
 
