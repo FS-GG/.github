@@ -7,7 +7,12 @@ with the feature, item, attempt, selected model and effort. Pass a stable `--ori
 when distinct roadmap items belong to one canonical original; otherwise the item is its own original. Bind the
 non-self root mapping through the protected `docs/coordination/telemetry-original-item-assignments.json`
 registry before dispatch; the adapter verifies the protected GitHub revision. Bind the
-returned native agent id with `started` immediately after every `spawn_agent`. Before every child or `followup_task`, run
+native agent id with `started` immediately after every `spawn_agent`. For a returned collaboration task
+path such as `/root/worker_name`, pass the final component `worker_name` as the native agent id. The current
+reader accepts 1–128 letters, digits, underscores or hyphens and resolves exactly one child whose parent
+thread identities match and whose `agent_path` ends with `/worker_name`. `CODEX_THREAD_ID` is a distinct
+thread UUID used for the host metadata join; keep it separate from the native agent id. Missing or ambiguous
+child matches remain usage gaps. Before every child or `followup_task`, run
 another `begin` with the parent's token/attempt and the correct `child` or `follow-up` relation, then bind and
 close it the same way. After each child becomes terminal, run `finish` with its real outcome; close the driver's
 root observation before the driver itself returns. Pass feature/item/attempt identities to
