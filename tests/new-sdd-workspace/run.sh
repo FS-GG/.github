@@ -598,7 +598,7 @@ expect_execution() {
     || ! grep -qF 'fsgg:workspace-initialization:start' "$target/AGENTS.md" \
     || ! grep -qF '$initialize-sdd-workspace' "$target/CLAUDE.md" \
     || ! grep -qF 'Initialization required:' <<<"$OUT" \
-    || ! grep -qF 'The wizard does not run initialization.' <<<"$OUT"; then
+    || ! grep -qE 'The[[:space:]]+wizard[[:space:]]+does[[:space:]]+not[[:space:]]+run[[:space:]]+initialization\.' <<<"${OUT//$'\n'/ }"; then
     bad "$desc" "want successful real route, selected descriptor, provider '$template', pending initialization handoff, and params '$expected_params'; got rc=$rc"$'\n'"--- output ---"$'\n'"$OUT"$'\n'"--- fsgg-sdd ---"$'\n'"$(cat "$log" 2>/dev/null || true)"
   else
     ok "$desc"
