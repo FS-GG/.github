@@ -63,7 +63,7 @@ module ProductBoard =
     type FreshScaffoldTarget = private FreshScaffoldTarget of string
     type GeneratedToolManifest = private GeneratedToolManifest of string * byte array * UnixFileMode option
 
-    let captureFreshScaffoldTarget target =
+    let captureFreshScaffoldTarget (target: string) =
         let absent =
             try File.GetAttributes target |> ignore; false
             with
