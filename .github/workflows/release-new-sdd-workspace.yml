@@ -33,7 +33,7 @@ on:
       promotion_recovery:
         description: Separately admitted forward recovery; ordinary publication stays unchanged
         type: choice
-        options: ['off', diagnostic, complete]
+        options: ['off', diagnostic, complete, post-completion-readback]
         default: 'off'
         required: true
       recovery_correlation:
@@ -133,7 +133,7 @@ jobs:
 
   recovery-diagnostic:
     name: new-sdd-workspace-013-recovery-diagnostic
-    if: github.ref == 'refs/heads/main' && github.actor == 'EHotwagner' && inputs.promotion_recovery == 'diagnostic' && !inputs.publish && !inputs.verify_nuget_login
+    if: github.ref == 'refs/heads/main' && github.actor == 'EHotwagner' && (inputs.promotion_recovery == 'diagnostic' || inputs.promotion_recovery == 'post-completion-readback') && !inputs.publish && !inputs.verify_nuget_login
     runs-on: ubuntu-latest
     environment: release-successor
     timeout-minutes: 18
@@ -168,6 +168,7 @@ jobs:
           EXPECTED_INSTALLATION_ID: ${{ secrets.FSGG_ORDINARY_LEDGER_INSTALLATION_ID }}
           GH_TOKEN: ${{ github.token }}
           ORDINARY_LEDGER_TOKEN: ${{ steps.ledger.outputs.token }}
+          PROMOTION_RECOVERY_MODE: ${{ inputs.promotion_recovery }}
           RECOVERY_CORRELATION: ${{ inputs.recovery_correlation }}
           RECOVERY_BINDING: ${{ inputs.recovery_binding }}
           RECOVERY_BINDING_SHA256: ${{ inputs.recovery_binding_sha256 }}
@@ -180,21 +181,27 @@ jobs:
         run: |
           set -euo pipefail
           test "$ACTUAL_INSTALLATION_ID" = "$EXPECTED_INSTALLATION_ID"
-          python3 scripts/new-sdd-workspace-successor-publish.py \
-            --promotion-recovery diagnostic --recovery-binding "$RECOVERY_BINDING" \
-            --candidate-run-id "$CANDIDATE_RUN_ID" \
-            --candidate-artifact-id "$CANDIDATE_ARTIFACT_ID" \
-            --candidate-archive-sha256 "$CANDIDATE_ARCHIVE_SHA256" \
-            --workdir "$RUNNER_TEMP/wizard013-recovery-diagnostic"
+          if [ "$PROMOTION_RECOVERY_MODE" = post-completion-readback ]; then
+            python3 scripts/new_sdd_workspace_promote_recovery.py \
+              --post-completion-readback "$RECOVERY_BINDING" \
+              "$RUNNER_TEMP/wizard013-post-completion-readback" "$GITHUB_WORKSPACE"
+          else
+            python3 scripts/new-sdd-workspace-successor-publish.py \
+              --promotion-recovery diagnostic --recovery-binding "$RECOVERY_BINDING" \
+              --candidate-run-id "$CANDIDATE_RUN_ID" \
+              --candidate-artifact-id "$CANDIDATE_ARTIFACT_ID" \
+              --candidate-archive-sha256 "$CANDIDATE_ARCHIVE_SHA256" \
+              --workdir "$RUNNER_TEMP/wizard013-recovery-diagnostic"
+          fi
       - name: Retain only authenticated-encryption ciphertext and safe hashes
         if: always()
         timeout-minutes: 2
         uses: actions/upload-artifact@v7
         with:
-          name: wizard013-recovery-diagnostic-${{ github.run_id }}-${{ inputs.recovery_correlation }}
+          name: ${{ inputs.promotion_recovery == 'post-completion-readback' && 'wizard013-post-completion-readback' || 'wizard013-recovery-diagnostic' }}-${{ github.run_id }}-${{ inputs.recovery_correlation }}
           path: |
-            ${{ runner.temp }}/wizard013-recovery-diagnostic/export/custody.cms
-            ${{ runner.temp }}/wizard013-recovery-diagnostic/export/summary.json
+            ${{ runner.temp }}/${{ inputs.promotion_recovery == 'post-completion-readback' && 'wizard013-post-completion-readback' || 'wizard013-recovery-diagnostic' }}/export/custody.cms
+            ${{ runner.temp }}/${{ inputs.promotion_recovery == 'post-completion-readback' && 'wizard013-post-completion-readback' || 'wizard013-recovery-diagnostic' }}/export/summary.json
           if-no-files-found: error
           retention-days: 7
 

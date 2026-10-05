@@ -456,3 +456,22 @@ write-capable credential constrained by reviewed source, not a platform read-onl
 token. Original 0.13/current 0.15/literal 014 job identities, caps and historical
 seals remain intact. All four consumed failures must remain in fresh selection;
 source delivery does not grant H3 acceptance, adoption or another diagnostic.
+
+### Post-completion H4 reader source — 2026-10-05
+
+The separately selected `post-completion-readback` role uses the existing diagnostic job's
+`packages: read` and repository-scoped Authority `contents: read` App route. It observes the exact
+original public release/assets, both feed payloads and settled generation-17 lineage. It performs
+no publication, journal write, installation, workload dispatch or H5 qualification. Original H4
+hosted/crypto/install custody remains original evidence; its final acceptance is failed/unaccepted.
+
+The observer binding separates original `49a5e936` / run `37288088411` provenance from the new
+observer commit/tree/workflow/current-main pins. GET with no request body is enforced before
+transport and through redirects, including legacy API aliases. The original generation-16
+`diagnostic` and `complete` routes retain their behavior and must not be rerun against settled17.
+
+This is source preparation only. New token minting, hosted dispatch, cryptographic custody export
+and artifact retrieval require a fresh root-selected admission, correlation, binding and original
+600s total / 480s work / 120s cleanup budget. No original grant or consumed attempt is renewed.
+The reader's successful report alone grants no public Wizard qualification, installed adoption or
+Creator-dependent acceptance. Root independently joins the retained H4 custody and fresh evidence.

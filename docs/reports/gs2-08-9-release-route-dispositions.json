@@ -31,7 +31,7 @@
     },
     {
       "path": ".github/workflows/release-new-sdd-workspace.yml",
-      "sha256": "b3d61bfbabbc0f7eed13c4cc224352d913d444843800d2d7c2391ecce3a820c8",
+      "sha256": "3f141aab18bf96543c35ffbe3bac6a62ffcd3f2bc0c95b8bc1683092152fc237",
       "disposition": "exact-source-protected-journal-successor-only",
       "successorAmendment": {
         "unit": "COORD-BOARD-V2-01.5",
@@ -227,8 +227,51 @@
           ]
         },
         "currentRecoveryJobSha256": {
-          "recovery-diagnostic": "d9b5b274b23370c956b61135974a2e0b959540fc63c9b14202c0f7109426833c",
+          "recovery-diagnostic": "4940506bc96750b3dbd6f468d8cf1975b95575aec0da81f348048d9c781f84cb",
           "recovery-complete": "2011d23b1ef1e51f35afe89fa55f5c4b3fb334ba3b2c28a27d518f507dec924d"
+        },
+        "postCompletionReadbackAmendment": {
+          "unit": "TSDD-KNOWLEDGE-01.4",
+          "scope": "Explicit post-completion-readback selection only: fresh generation17 public release and exact feeds; GET/bodyNone guarded at transport and redirects; no reinstall, publication, settlement, original H4 acceptance or effect grant renewal. Existing job read grants unchanged.",
+          "previousWorkflowSha256": "b3d61bfbabbc0f7eed13c4cc224352d913d444843800d2d7c2391ecce3a820c8",
+          "previousRecoveryJobSha256": {
+            "recovery-diagnostic": "d9b5b274b23370c956b61135974a2e0b959540fc63c9b14202c0f7109426833c",
+            "recovery-complete": "2011d23b1ef1e51f35afe89fa55f5c4b3fb334ba3b2c28a27d518f507dec924d"
+          },
+          "previousDraftReadJobSourceSha256": {
+            "publish": "21c6dbe4b43845835a01062baa1c600eb087a1f96007cbf3a332142d0b85b797",
+            "recovery-diagnostic": "cfe0642f9c65edba2873cda1b1e17ab89d52b01e08d78c9d3c2675497eca5e4b",
+            "recovery-complete": "2011d23b1ef1e51f35afe89fa55f5c4b3fb334ba3b2c28a27d518f507dec924d"
+          },
+          "currentJobSourceSha256": {
+            "publish": "21c6dbe4b43845835a01062baa1c600eb087a1f96007cbf3a332142d0b85b797",
+            "recovery-diagnostic": "235568b19eccd10461d9d6344f707b84200b410eb95f73e8639478afd0acc315",
+            "recovery-complete": "2011d23b1ef1e51f35afe89fa55f5c4b3fb334ba3b2c28a27d518f507dec924d"
+          },
+          "originalH4Source": "49a5e93668d4647999cd7171a26d4ad4d151b66b",
+          "sourceQualification": "Pure source controls only; fresh root admission required; original H4 remains unaccepted.",
+          "role": "post-completion-readback",
+          "journalGeneration": 17,
+          "method": "GET",
+          "body": "None",
+          "releaseMutation": false,
+          "journalMutation": false,
+          "install": false,
+          "originalH4Accepted": false,
+          "oldEffectGrantRenewed": false,
+          "freshRootAdmissionRequired": true,
+          "readerSourceSpanSha256": {
+            "READBACK_MODE": "b90aa61dd9bae99bbdcff8092b30f105413703b2fd0df6988ec058931e599fa4",
+            "ORIGINAL_H4": "8fb7bed604e046294489897ec5beec24e160eeaedff2b458e3b77ad4145e7544",
+            "readback_binding": "ed037504b60fb1c66bd943a3605be41ccd80a3e9256644076c03674317ce8455",
+            "ReadbackRedirect": "69d69267fa0f96d103a240a306bd4bf1c98cea9709df7b7d9cd97bb1c9c630f9",
+            "ReadbackTransport": "728b37a75e3dfa14903edb46fa7b4562bc2ece911c0b7001ec095e12100c8c9e",
+            "ReadbackAPI": "0007d692aea4dee9eafba155be769d9b113e911d62ffe31e8a76d29a4fe297a5",
+            "readback_native": "44354b2cfe4503b0c55694bdff7efcdd5c7b30690ee6e0be38d0838c809a7568",
+            "post_complete_readback": "1207c64e171da2bc03bf4ea668755f9c11420ee99f7aba3d350583cfe78a7e1b",
+            "readback_worker": "89a60c6cb3f4c5857ee2d4d45ca5b1b07901b4795f7aa132fd42843542f5bec2",
+            "readback_entry": "eceb24157be209bb138ac7e00dbe19dc29c4a1e85623d34b3f260e72501be98c"
+          }
         }
       }
     },

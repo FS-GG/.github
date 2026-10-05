@@ -125,8 +125,9 @@ def verify_diagnostic_job(source):
     assert all(parsed) and len({m[1] for m in parsed}) == len(parsed), "exact permission map"
     assert {m[1]: m[2] for m in parsed} == {"actions": "read", "contents": "write", "packages": "read"}
     assert "    name: new-sdd-workspace-013-recovery-diagnostic\n" in job
-    guard = "    if: github.ref == 'refs/heads/main' && github.actor == 'EHotwagner' && inputs.promotion_recovery == 'diagnostic' && !inputs.publish && !inputs.verify_nuget_login\n"
+    guard = "    if: github.ref == 'refs/heads/main' && github.actor == 'EHotwagner' && (inputs.promotion_recovery == 'diagnostic' || inputs.promotion_recovery == 'post-completion-readback') && !inputs.publish && !inputs.verify_nuget_login\n"
     assert guard in job and "    environment: release-successor\n" in job
+    assert "inputs.promotion_recovery == 'complete' && !inputs.publish && !inputs.verify_nuget_login" in jobs["recovery-complete"]
     assert "          persist-credentials: false\n" in job
     assert "          GH_TOKEN: ${{ github.token }}\n" in job
     assert "          ORDINARY_LEDGER_TOKEN: ${{ steps.ledger.outputs.token }}\n" in job
@@ -134,9 +135,18 @@ def verify_diagnostic_job(source):
     for field, value in (("owner", "FS-GG"), ("repositories", "FS.GG.Coordination.Authority"), ("permission-contents", "read")):
         assert mint.count("          " + field + ": " + value + "\n") == 1
     assert "--promotion-recovery diagnostic --recovery-binding" in job
-    for name, expected in proof["draftReadCapabilityAmendment"]["currentJobSourceSha256"].items():
+    assert "if [ \"$PROMOTION_RECOVERY_MODE\" = post-completion-readback ]; then" in job
+    assert "python3 scripts/new_sdd_workspace_promote_recovery.py \\\n              --post-completion-readback \"$RECOVERY_BINDING\"" in job
+    for name, expected in proof["postCompletionReadbackAmendment"]["currentJobSourceSha256"].items():
         assert hashlib.sha256(jobs[name].encode()).hexdigest() == expected, name
 
+readback_amendment = proof["postCompletionReadbackAmendment"]
+assert set(readback_amendment) == {"unit", "scope", "previousWorkflowSha256", "previousRecoveryJobSha256", "previousDraftReadJobSourceSha256", "currentJobSourceSha256", "originalH4Source", "sourceQualification", "role", "journalGeneration", "method", "body", "releaseMutation", "journalMutation", "install", "originalH4Accepted", "oldEffectGrantRenewed", "freshRootAdmissionRequired", "readerSourceSpanSha256"}
+assert {k: readback_amendment[k] for k in ("role", "journalGeneration", "method", "body", "releaseMutation", "journalMutation", "install", "originalH4Accepted", "oldEffectGrantRenewed", "freshRootAdmissionRequired")} == {"role": "post-completion-readback", "journalGeneration": 17, "method": "GET", "body": "None", "releaseMutation": False, "journalMutation": False, "install": False, "originalH4Accepted": False, "oldEffectGrantRenewed": False, "freshRootAdmissionRequired": True}
+assert readback_amendment["previousDraftReadJobSourceSha256"] == proof["draftReadCapabilityAmendment"]["currentJobSourceSha256"]
+assert readback_amendment["previousWorkflowSha256"] == "b3d61bfbabbc0f7eed13c4cc224352d913d444843800d2d7c2391ecce3a820c8"
+assert readback_amendment["originalH4Source"] == "49a5e93668d4647999cd7171a26d4ad4d151b66b"
+assert readback_amendment["previousRecoveryJobSha256"]["recovery-complete"] == proof["currentRecoveryJobSha256"]["recovery-complete"]
 capability_amendment = proof["draftReadCapabilityAmendment"]
 assert capability_amendment["decisionSha256"] == "42c6a8e8cf7e0ad947ec2c4ff1ee26e0fe1221536c0355b52bf85cac09e94893"
 assert capability_amendment["failedRun"] == 37273763257
@@ -159,6 +169,8 @@ permission_mutations = (
     ("github.actor == 'EHotwagner'", "true"),
     ("&& !inputs.publish", ""),
     ("--promotion-recovery diagnostic", "--promotion-recovery complete"),
+    ("inputs.promotion_recovery == 'post-completion-readback'", "true"),
+    ("--post-completion-readback", "--worker"),
 )
 for original, changed in permission_mutations:
     assert original in diagnostic
@@ -207,6 +219,31 @@ assert error_amendment["decisionSha256"] == "f2cd587a96859d7d8ab30e130f6563a63ef
 assert error_amendment["failedRun"] == 37269305353
 assert error_amendment["previousRequestSourceSha256"] == "116cad46812e920fb713681ad37143450a1f4fcaadcc8fa81b90de14af18c775"
 assert "diagnostic contents:read unchanged" in error_amendment["scope"]
+def verify_readback_source_spans(source):
+    found = {}
+    for node in ast.parse(source).body:
+        name = node.name if isinstance(node, (ast.FunctionDef, ast.ClassDef)) else node.targets[0].id if isinstance(node, ast.Assign) and isinstance(node.targets[0], ast.Name) else None
+        if name in readback_amendment["readerSourceSpanSha256"]:
+            found[name] = hashlib.sha256(ast.get_source_segment(source, node).encode()).hexdigest()
+    assert found == readback_amendment["readerSourceSpanSha256"]
+verify_readback_source_spans(recovery_source)
+readback_mutations = (
+    ('method=="GET" and body is None,"readback request write forbidden"', 'True,"readback request write forbidden"'),
+    ('request.get_method()=="GET" and request.data is None', 'True'),
+    ('req.get_method()=="GET" and req.data is None', 'True'),
+    ('result.get_method()=="GET" and result.data is None', 'True'),
+    ('require(False,"readback journal write forbidden")', 'require(True,"readback journal write forbidden")'),
+    ('require(False,"readback release write forbidden")', 'require(True,"readback release write forbidden")'),
+)
+for original, changed in readback_mutations:
+    assert original in recovery_source
+    try:
+        verify_readback_source_spans(recovery_source.replace(original, changed, 1))
+    except AssertionError:
+        pass
+    else:
+        raise AssertionError("readback transport/effect mutant accepted: " + original)
+print(f"Wizard post-completion readback seal: {len(readback_mutations)} transport/effect mutants refused")
 recovery = verify_recovery_source_spans(recovery_source, proof)
 
 # Causal offline negatives mutate production bytes, not fabricated native receipts.
@@ -244,7 +281,7 @@ for original, changed in mutations:
         raise AssertionError(f"unexpected source/effect seal weakening accepted: {original}")
 print(f"Wizard paged ancestry source seals: {len(mutations)} mutated production guards refused")
 calls = [node for node in ast.walk(recovery) if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)]
-for function, keyword, count in (("effects", "binding", 2), ("WizardAdmission", "release_binding", 1)):
+for function, keyword, count in (("effects", "binding", 3), ("WizardAdmission", "release_binding", 1)):
     selected = [call for call in calls if call.func.id == function]
     assert len(selected) == count
     assert all(any(arg.arg == keyword and isinstance(arg.value, ast.Name) and arg.value.id == "HISTORICAL_013"

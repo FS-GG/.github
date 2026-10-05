@@ -353,8 +353,9 @@ class WizardReleaseTests(unittest.TestCase):
                       "inputs.promotion_recovery, inputs.recovery_correlation, inputs.recovery_binding_sha256)", workflow)
         self.assertIn("format('Wizard 0.15 successor {0}', inputs.candidate_run_id)", workflow)
         self.assertIn("name: new-sdd-workspace-014-publisher", workflow)
+        self.assertIn("(inputs.promotion_recovery == 'diagnostic' || inputs.promotion_recovery == 'post-completion-readback') && !inputs.publish && !inputs.verify_nuget_login", workflow)
+        self.assertIn("inputs.promotion_recovery == 'complete' && !inputs.publish && !inputs.verify_nuget_login", workflow)
         for mode in ('diagnostic', 'complete'):
-            self.assertIn(f"inputs.promotion_recovery == '{mode}' && !inputs.publish && !inputs.verify_nuget_login", workflow)
             self.assertIn(f"wizard013-recovery-{mode}", workflow)
         publisher = (ROOT / 'scripts/new-sdd-workspace-successor-publish.py').read_text()
         self.assertLess(publisher.index('if args.promotion_recovery:'), publisher.index('manifest ='))
@@ -671,6 +672,10 @@ def load_tests(loader, tests, pattern):
     frozen_module = importlib.util.module_from_spec(frozen_spec)
     frozen_spec.loader.exec_module(frozen_module)
     tests.addTests(loader.loadTestsFromModule(frozen_module))
+    readback_spec = importlib.util.spec_from_file_location("wizard_readback_controls", pathlib.Path(__file__).with_name("readback.py"))
+    readback_module = importlib.util.module_from_spec(readback_spec)
+    readback_spec.loader.exec_module(readback_module)
+    tests.addTests(loader.loadTestsFromModule(readback_module))
     return tests
 
 

@@ -1212,6 +1212,214 @@ def outer(mode,binding,root,source):
     print(json.dumps({"scope":report.get("scope",mode),"success":report["success"],"historicalCause":"UNKNOWN","publicWizardQualified":False},sort_keys=True))
     return 0 if report["success"] else 1
 
+# Explicit post-completion observer; no recovery/admission/effect engine is constructed.
+READBACK_MODE="post-completion-readback"
+ORIGINAL_H4={"originalHeldSource":"49a5e93668d4647999cd7171a26d4ad4d151b66b",
+ "originalHeldTree":"d1f2214d702be0b6e41aa4a26f6799caf656ba24","originalRunId":37288088411,
+ "originalArtifactId":11335084216,"originalArchiveSha256":"f34e9f33a3a0518e2a8d0c7613b048b8ad08f64b5c10de75a09aba8b9535a93e",
+ "originalBindingSha256":"bdaecd6734185366328035595ffa189364870171cffbeab71f4c3cad21ccfe48",
+ "originalCiphertextSha256":"eb2ad03c07e1934438c63a491ebee5bfc2ff8e7e3e21a33a2082f88d39de1648",
+ "originalCorrelation":"6af5fbe162112ef890a4761b74d06831"}
+
+def readback_binding(raw):
+    def unique(pairs):
+        value={}
+        for key,item in pairs:
+            require(key not in value,"readback duplicate binding property");value[key]=item
+        return value
+    require(isinstance(raw,str) and len(raw.encode())<=SMALL_JSON_CAP,"readback binding byte cap")
+    binding=json.loads(raw,object_pairs_hook=unique)
+    fields=set(ORIGINAL_H4)|{"schema","observerSource","observerTree","observerWorkflowSha256","observerMain","completedJournalHead","correlation","selectedAfter","recipientSha256"}
+    require(isinstance(binding,dict) and set(binding)==fields,"readback binding shape")
+    require(binding["schema"]=="fsgg.wizard-postcomplete-readback-binding/1","readback binding schema")
+    require(all(binding[k]==v and type(binding[k]) is type(v) for k,v in ORIGINAL_H4.items()),"original H4 provenance differs")
+    require(all(isinstance(binding[k],str) and re.fullmatch(r"[0-9a-f]{40}",binding[k]) for k in ("observerSource","observerTree","observerMain","completedJournalHead")),"readback revisions")
+    require(binding["observerSource"]==binding["observerMain"] and binding["observerSource"]!=binding["originalHeldSource"],"distinct current observer source")
+    require(all(isinstance(binding[k],str) and re.fullmatch(r"[0-9a-f]{64}",binding[k]) for k in ("observerWorkflowSha256","recipientSha256")),"readback digests")
+    require(isinstance(binding["correlation"],str) and re.fullmatch(r"[0-9a-f]{32}",binding["correlation"]) and binding["correlation"]!=binding["originalCorrelation"],"fresh readback correlation")
+    require(isinstance(binding["selectedAfter"],str) and re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z",binding["selectedAfter"]),"readback selection instant")
+    datetime.fromisoformat(binding["selectedAfter"].replace("Z","+00:00"))
+    return binding
+
+class ReadbackRedirect(Redirect):
+    def redirect_request(self,req,fp,code,msg,headers,newurl):
+        require(req.get_method()=="GET" and req.data is None,"readback redirect write forbidden")
+        result=super().redirect_request(req,fp,code,msg,headers,newurl)
+        require(result is not None and result.get_method()=="GET" and result.data is None,"readback redirected request write forbidden")
+        return result
+
+class ReadbackTransport:
+    """Actual pre-transport guard, including direct legacy class-method aliases."""
+    def __init__(self,opener):self._opener=opener
+    def open(self,request,*args,**kwargs):
+        require(isinstance(request,urllib.request.Request) and request.get_method()=="GET" and request.data is None,"readback transport write forbidden")
+        require({key.lower() for key,_ in request.header_items()}<={"authorization","user-agent","accept","x-github-api-version"},"readback transport closed headers")
+        require(not args and set(kwargs)=={"timeout"},"readback transport arguments")
+        return self._opener.open(request,**kwargs)
+
+class ReadbackAPI(FiniteAPI):
+    def __init__(self,*args,**kwargs):
+        super().__init__(*args,**kwargs)
+        self.opener=ReadbackTransport(urllib.request.build_opener(ReadbackRedirect(self.budget)))
+    def request(self,url,method="GET",body=None,**kwargs):
+        require(method=="GET" and body is None,"readback request write forbidden")
+        headers=kwargs.get("headers")
+        require(headers is None or (isinstance(headers,dict) and set(headers)<={"Accept","Authorization"}),"readback closed request headers")
+        return super().request(url,method,body,**kwargs)
+    def post(self,*args,**kwargs):require(False,"readback journal write forbidden")
+    def patch(self,*args,**kwargs):require(False,"readback release write forbidden")
+    def arm_settlement(self,*args,**kwargs):require(False,"readback settlement forbidden")
+    def prime_completed_journal(self,head):
+        require(self.authority,"readback Authority scope")
+        prefix=f"repos/{AUTHORITY}"
+        commits=self.get(prefix+f"/commits?sha={head}&per_page=100")
+        require(isinstance(commits,list) and len(commits)==17,"readback full17 commit roster")
+        require(commits[0].get("sha")==head and commits[1].get("sha")==JOURNAL_HEAD,"readback original16 parent")
+        parent=head;seen=set()
+        for commit in commits:
+            oid=commit.get("sha");require(oid==parent and oid not in seen,"readback full17 lineage identity")
+            seen.add(oid);parents=commit.get("parents",[]);require(len(parents)<=1,"readback full17 parent roster")
+            parent=parents[0]["sha"] if parents else None
+            contents=self.get(prefix+f"/contents/release-state.json?ref={oid}")
+            require(contents.get("type")=="file" and contents.get("path")=="release-state.json" and contents.get("encoding")=="base64","readback exact journal blob")
+            raw=base64.b64decode(contents["content"],validate=True);blob=contents.get("sha")
+            require(hashlib.sha1(b"blob "+str(len(raw)).encode()+b"\0"+raw).hexdigest()==blob,"readback Git blob identity")
+            require(raw==canonical(json.loads(raw))+b"\n","readback canonical journal blob")
+            tree_raw=b"100644 release-state.json\0"+bytes.fromhex(blob)
+            tree=hashlib.sha1(b"tree "+str(len(tree_raw)).encode()+b"\0"+tree_raw).hexdigest()
+            require(commit.get("commit",{}).get("tree",{}).get("sha")==tree,"readback complete Git tree identity")
+            self.immutable[prefix+"/git/commits/"+oid]={"sha":oid,"parents":[{"sha":p["sha"]} for p in parents],"tree":{"sha":tree}}
+            self.immutable[prefix+"/git/trees/"+tree]={"tree":[{"path":"release-state.json","sha":blob}]}
+            self.immutable[prefix+"/git/blobs/"+blob]={"sha":blob,"encoding":"base64","content":contents["content"]}
+        require(parent is None,"readback full17 lineage root")
+
+def readback_native(api,binding,run_id):
+    # Job GITHUB_TOKEN has no /user contract. Authenticate existing run/repo/workflow roles.
+    require(api.get(f"repos/{REPO}").get("id")==1269292704,"readback repository identity")
+    title=f"Wizard 0.13 recovery {READBACK_MODE} {binding['correlation']} {digest(canonical(binding))}"
+    matches=[]
+    for page in range(1,5):
+        data=api.get(f"repos/{REPO}/actions/workflows/release-new-sdd-workspace.yml/runs?event=workflow_dispatch&branch=main&per_page=100&page={page}")
+        rows=data.get("workflow_runs",[]);require(isinstance(rows,list) and len(rows)<=100,"readback workflow page bound")
+        matches.extend(row for row in rows if row.get("display_title")==title)
+        if len(rows)<100:break
+    require(len(matches)==1 and matches[0].get("id")==run_id,"readback native correlation")
+    observer=api.get(f"repos/{REPO}/actions/runs/{run_id}")
+    require(observer.get("id")==run_id and observer.get("display_title")==title and observer.get("head_sha")==binding["observerSource"] and observer.get("run_attempt")==1 and observer.get("status")=="in_progress" and observer.get("path")==WORKFLOW and observer.get("event")=="workflow_dispatch" and observer.get("head_branch")=="main" and observer.get("actor",{}).get("login")=="EHotwagner" and observer.get("repository",{}).get("id")==1269292704,"readback native observer role")
+    require(api.get(f"repos/{REPO}/git/ref/heads/main").get("object",{}).get("sha")==binding["observerMain"],"readback current main drift")
+    current=api.get(f"repos/{REPO}/git/commits/{binding['observerSource']}")
+    require(current.get("sha")==binding["observerSource"] and current.get("tree",{}).get("sha")==binding["observerTree"],"readback observer commit/tree")
+    workflow=api.get(f"repos/{REPO}/contents/{WORKFLOW}?ref={binding['observerSource']}")
+    require(workflow.get("type")=="file" and workflow.get("path")==WORKFLOW and workflow.get("encoding")=="base64","readback observer workflow role")
+    require(digest(base64.b64decode(workflow["content"],validate=True))==binding["observerWorkflowSha256"],"readback observer workflow bytes")
+    run=api.get(f"repos/{REPO}/actions/runs/{ORIGINAL_H4['originalRunId']}")
+    title=f"Wizard 0.13 recovery complete {ORIGINAL_H4['originalCorrelation']} {ORIGINAL_H4['originalBindingSha256']}"
+    require(run.get("id")==ORIGINAL_H4["originalRunId"] and run.get("display_title")==title and run.get("head_sha")==ORIGINAL_H4["originalHeldSource"] and run.get("run_attempt")==1 and run.get("conclusion")=="success" and run.get("status")=="completed" and run.get("path")==WORKFLOW and run.get("event")=="workflow_dispatch" and run.get("head_branch")=="main" and run.get("actor",{}).get("login")=="EHotwagner" and run.get("repository",{}).get("id")==1269292704,"readback original H4 native metadata")
+    artifact=api.get(f"repos/{REPO}/actions/artifacts/{ORIGINAL_H4['originalArtifactId']}")
+    origin=artifact.get("workflow_run",{})
+    require(artifact.get("id")==ORIGINAL_H4["originalArtifactId"] and artifact.get("expired")is False and artifact.get("digest")=="sha256:"+ORIGINAL_H4["originalArchiveSha256"] and artifact.get("name")==f"wizard013-recovery-complete-{ORIGINAL_H4['originalRunId']}-{ORIGINAL_H4['originalCorrelation']}" and origin.get("id")==ORIGINAL_H4["originalRunId"] and origin.get("head_sha")==ORIGINAL_H4["originalHeldSource"] and origin.get("repository_id")==1269292704 and origin.get("head_repository_id")==1269292704,"readback original H4 artifact metadata")
+
+def post_complete_readback(api,journal,binding,manifest,original,run_id):
+    cid,ordered=effects(manifest,binding=HISTORICAL_013)
+    expected=JournalState(17,cid,{e.identity:"verified" for e in ordered})
+    def state():
+        current=journal.read()
+        require(current==expected and journal._observed.head==binding["completedJournalHead"] and journal._lineage_length==17,"readback exact settled full17")
+        journal.validate_intent({"contentId":cid,"sourceSha":CANDIDATE_SOURCE,"version":VERSION,"candidateArchiveSha256":ARCHIVE,"operator":"EHotwagner"})
+        return current
+    readback_native(api,binding,run_id);state()
+    release,feeds=release_gate(api,manifest,original)
+    require(release["draft"]is False,"readback public release required")
+    state()
+    after,after_feeds=release_gate(api,manifest,original)
+    require(after==release and {name:digest(path.read_bytes()) for name,path in after_feeds.items()}=={name:digest(path.read_bytes()) for name,path in feeds.items()},"readback release/feed drift")
+    state();readback_native(api,binding,run_id)
+    return {"scope":"post-completion-readback","generation":17,"authorityHead":binding["completedJournalHead"],"observerSource":binding["observerSource"],"observerTree":binding["observerTree"],"observerWorkflowSha256":binding["observerWorkflowSha256"],"originalH4":dict(ORIGINAL_H4),"freshFeeds":{name:{"bytes":path.stat().st_size,"sha256":digest(path.read_bytes())} for name,path in feeds.items()},"freshPublicRelease":True,"newInstalledQualification":False,"publicWizardQualified":False,"adoptionReceiptEmitted":False,"publisherComplete":False}
+
+def readback_worker(binding,root,source,start):
+    require(os.environ.get("PROMOTION_RECOVERY_MODE")==READBACK_MODE and os.environ.get("GITHUB_EVENT_NAME")=="workflow_dispatch" and os.environ.get("GITHUB_RUN_ATTEMPT")=="1" and os.environ.get("GITHUB_REPOSITORY")==REPO and os.environ.get("GITHUB_REF")=="refs/heads/main" and os.environ.get("GITHUB_ACTOR")=="EHotwagner" and os.environ.get("GITHUB_SHA")==binding["observerSource"] and os.environ.get("RECOVERY_BINDING_SHA256")==digest(canonical(binding)) and os.environ.get("RECOVERY_CORRELATION")==binding["correlation"],"readback worker explicit native role")
+    budget=Budget("diagnostic",start=start);runner=Runner(budget,root)
+    before=None;report={"success":False,"scope":READBACK_MODE,"publicWizardQualified":False,"adoptionReceiptEmitted":False,"newInstalledQualification":False}
+    source_binding={"heldSource":binding["observerSource"],"heldTree":binding["observerTree"]}
+    env=child_environment(root/"checks")
+    try:
+        subreaper();before=source_snapshot(source,source_binding,runner,env)
+        require(digest((source/WORKFLOW).read_bytes())==binding["observerWorkflowSha256"],"readback local workflow bytes")
+        api=ReadbackAPI(os.environ.get("GH_TOKEN"),budget,root,held_source=binding["observerSource"])
+        manifest,original,_=candidate(api,root)
+        ledger=ReadbackAPI(os.environ.get("ORDINARY_LEDGER_TOKEN"),budget,root,authority=True)
+        ledger.prime_completed_journal(binding["completedJournalHead"])
+        report.update(post_complete_readback(api,ProtectedReleaseJournal(ledger,REF),binding,manifest,original,int(os.environ["GITHUB_RUN_ID"])));report["success"]=True
+    except BaseException as error:
+        recovery_refusal(error);report["errorKind"]=type(error).__name__;report["success"]=False
+    finally:
+        budget.reserve=True
+        report["sourceRoster"]=before
+        try:
+            after=source_snapshot(source,source_binding,runner,env)
+            report["postSourceRoster"]=after;report["postSourceMatches"]=before is not None and after==before
+            if not report["postSourceMatches"]:report["success"]=False
+        except BaseException as error:
+            report["postSourceErrorKind"]=type(error).__name__;report["postSourceMatches"]=False;report["success"]=False
+        report["readCount"]=budget.reads;report["commandCount"]=budget.commands
+        require(len(canonical(report))<=BINARY_CAP,"readback report cap")
+        (root/"worker-result.json").write_bytes(canonical(report))
+        (root/"commands.json").write_bytes(canonical(runner.records))
+    return 0 if report["success"] else 1
+
+def readback_entry(binding_text,root,source):
+    require(os.environ.get("GITHUB_EVENT_NAME")=="workflow_dispatch" and os.environ.get("GITHUB_RUN_ATTEMPT")=="1" and os.environ.get("GITHUB_REPOSITORY")==REPO and os.environ.get("GITHUB_REF")=="refs/heads/main" and os.environ.get("GITHUB_ACTOR")=="EHotwagner","readback native entry role")
+    require(os.environ.get("PROMOTION_RECOVERY_MODE")==READBACK_MODE,"readback explicit selection")
+    binding=readback_binding(binding_text)
+    require(binding["observerSource"]==os.environ.get("GITHUB_SHA") and digest(canonical(binding))==os.environ.get("RECOVERY_BINDING_SHA256") and binding["correlation"]==os.environ.get("RECOVERY_CORRELATION"),"readback selected source/binding")
+    require(os.environ.get("CANDIDATE_RUN_ID")==str(CANDIDATE_RUN) and os.environ.get("CANDIDATE_ARTIFACT_ID")==str(ARTIFACT) and os.environ.get("CANDIDATE_ARCHIVE_SHA256")==ARCHIVE,"readback original candidate selection")
+    recipient(binding);subreaper()
+    elapsed=time.time()-datetime.fromisoformat(binding["selectedAfter"].replace("Z","+00:00")).timestamp()
+    require(elapsed>=-5,"readback future selection")
+    budget=Budget("diagnostic",start=time.monotonic()-max(0,elapsed));budget.commands=3;budget.remaining(25)
+    root=Path(root);source=Path(source).resolve()
+    require(not root.exists(),"fresh readback root required");root.mkdir(mode=0o700,parents=True)
+    before=physical_roster(source,deadline=budget.work)
+    openssl=Path(shutil.which("openssl") or "").resolve();require(openssl.is_file(),"stock OpenSSL unavailable; no setup fallback")
+    crypto={str(openssl):digest(openssl.read_bytes())}
+    for path in [Path("/etc/ssl/openssl.cnf"),*sorted(Path("/usr/lib/x86_64-linux-gnu/ossl-modules").glob("*.so"))]:
+        if path.is_file():crypto[str(path.resolve())]=digest(path.read_bytes())
+    binding_path=root/"binding.json";binding_path.write_bytes(canonical(binding));binding_path.chmod(0o600)
+    worker_root=root/"worker";worker_root.mkdir(mode=0o700)
+    env={k:v for k,v in os.environ.items() if k in {"HOME","PATH","LANG","LC_ALL","TZ","SSL_CERT_FILE","SSL_CERT_DIR","GH_TOKEN","ORDINARY_LEDGER_TOKEN","GITHUB_RUN_ID","GITHUB_EVENT_NAME","GITHUB_RUN_ATTEMPT","GITHUB_REPOSITORY","GITHUB_REF","GITHUB_ACTOR","GITHUB_SHA","RECOVERY_BINDING_SHA256","RECOVERY_CORRELATION","PROMOTION_RECOVERY_MODE"}}
+    env["PYTHONDONTWRITEBYTECODE"]="1"
+    runner=Runner(budget,root);report={"success":False,"scope":READBACK_MODE,"publicWizardQualified":False,"adoptionReceiptEmitted":False,"newInstalledQualification":False}
+    try:
+        result=runner.run([sys.executable,str(Path(__file__).resolve()),"--readback-worker",str(binding_path),str(worker_root),str(source),str(budget.start)],480,env,cwd=source)
+        inner=json.loads((worker_root/"worker-result.json").read_bytes());report.update(inner)
+        require(result.returncode==0 and inner["success"],"readback worker refused")
+    except BaseException as error:
+        report["success"]=False;report["errorKind"]=type(error).__name__;recovery_refusal(error)
+    budget.reserve=True
+    try:
+        require(physical_roster(source,deadline=budget.end)==before,"readback observer source drift")
+        require(Path(shutil.which("openssl") or "").resolve()==openssl and all(Path(p).is_file() and digest(Path(p).read_bytes())==sha for p,sha in crypto.items()),"readback crypto input drift")
+        commands=json.loads((worker_root/"commands.json").read_bytes())
+        require(len(commands)<=6 and len(commands)==report.get("commandCount"),"readback inner command count")
+        require(all(c.get("custody",{}).get("leaderReaped") and not c.get("custody",{}).get("remaining") for c in [*runner.records,*commands]),"readback process custody unresolved")
+        report["cryptoPhysicalInputs"]=crypto
+        report["cryptoInputCoverage"]="executable, present config and provider files only; loaded libcrypto/libssl/loader not observed"
+        # This newly attributed custody never replaces or accepts original H4.
+        (root/"observer-result.json").write_bytes(canonical(report))
+        report["encryptedCustody"]=encrypted_custody(root,binding,runner)
+        require(Path(shutil.which("openssl") or "").resolve()==openssl and all(Path(p).is_file() and digest(Path(p).read_bytes())==sha for p,sha in crypto.items()),"readback crypto input drift")
+        budget.remaining(25,True)
+    except BaseException as error:
+        report["success"]=False;report["custodyErrorKind"]=type(error).__name__;recovery_refusal(error)
+    terminal=canonical(report);require(len(terminal)<=BINARY_CAP,"readback terminal report cap")
+    (root/"terminal.json").write_bytes(terminal)
+    try:budget.remaining(25,True)
+    except BaseException as error:
+        report["success"]=False;report["publicationErrorKind"]=type(error).__name__
+        (root/"terminal.json").write_bytes(canonical(report))
+    print(json.dumps({"scope":READBACK_MODE,"success":report["success"],"publicWizardQualified":False,"newInstalledQualification":False,"adoptionReceiptEmitted":False},sort_keys=True))
+    return 0 if report["success"] else 1
+
 def entry(mode,binding_text,root,source):
     recovery_phase("entry")
     try:
@@ -1225,6 +1433,11 @@ def entry(mode,binding_text,root,source):
         raise
 
 if __name__=="__main__":
+    if len(sys.argv)==5 and sys.argv[1]=="--post-completion-readback":
+        raise SystemExit(readback_entry(sys.argv[2],sys.argv[3],sys.argv[4]))
+    if len(sys.argv)==6 and sys.argv[1]=="--readback-worker":
+        _,_,binding_path,root,source,start=sys.argv
+        raise SystemExit(readback_worker(readback_binding(Path(binding_path).read_text()),Path(root),Path(source),float(start)))
     require(len(sys.argv)==7 and sys.argv[1]=="--worker","only supervised worker entry")
     _,_,mode,binding_path,root,source,start=sys.argv
     binding=json.loads(Path(binding_path).read_bytes());validate_binding(binding,mode)

@@ -56,6 +56,15 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-05: Wizard post-completion readback source qualified; execution pending.**
+The [owning Wizard plan](roadmaps/tsdd-knowledge-wizard.md#post-completion-h4-reader-source--2026-10-05)
+adds an isolated read-only observer for the original public assets, both package feeds and settled
+Authority generation17. New observer pins remain separate from original H4 provenance, and the
+transport rejects writes and request bodies. All144 tests in the existing hosted entry point passed,
+including16 new controls. Historical diagnostic/complete behavior remains unchanged. This source
+boundary grants no rerun, release mutation, installed qualification or Creator adoption; original H4
+acceptance remains failed/unaccepted. A fresh bounded admission is required before hosted execution.
+
 **2026-10-05: V2-CTX-01.4 bounded native-check watcher slice qualified.**
 The existing delivery tool now offers an opt-in read-only watcher with bounded time, queries and output.
 It suppresses unchanged observations, preserves exact-head checks and requires fresh canonical delivery
