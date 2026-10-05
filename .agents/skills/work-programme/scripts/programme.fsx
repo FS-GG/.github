@@ -241,7 +241,7 @@ let contextDelta inputDigest (spec: DeltaInput) =
     reduce closure |> ignore
     closure |> Array.groupBy (fun row -> row.Campaign,row.Lane,row.Owner,row.Attempt,row.Candidate)
     |> Array.iter (fun (_, rows) ->
-        if rows |> Array.map _.OriginalAttempt |> Array.distinct |> Array.length |> fun count -> count > 1 then
+        if (rows |> Array.map _.OriginalAttempt |> Array.distinct |> Array.length) > 1 then
             notice rows[0].Lane "original-lineage-conflict-reconcile")
     let candidates = ResizeArray<LaneReturn>()
     for row in incoming do
