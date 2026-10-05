@@ -130,13 +130,13 @@ bytes under 0.52.0 would make the same version identify different artifacts. Ado
 coherent set cut from corrected source. All three partial sets are recorded in
 `registry/dependencies.yml`.</FsggStandingAdvisories>
 
-    <PackageReleaseNotes>0.97.0 — explicit product-scoped V2 board inspection and workspace preparation.
+    <PackageReleaseNotes>0.97.1 — compatible telemetry identity and native agent binding repairs.
 
-Selected organization-owned product bindings retain exact repository/project identity and
-human scheduling fields. The workspace creator and product guidance prepare immutable
-binding provenance and verified skill/tool closure through the existing decoder. Organization
-cohort controls remain unchanged. CLI, Kit and Drivers advance together; publication and
-installed receiver adoption require their separate exact-source evidence.
+Equal feature/item identities now produce distinct native fact identities while preserving
+logical lineage, durable retries and population-only behavior. Packaged guidance binds the
+native agent name and retains a fresh follow-up baseline. CLI, Kit and Drivers advance together.
+Publication and installed acceptance require separate exact-source evidence; historical usage
+gaps remain unknown.
 
 $(FsggStandingAdvisories)
 
