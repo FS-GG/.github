@@ -14,7 +14,9 @@ thread identities match and whose `agent_path` ends with `/worker_name`. `CODEX_
 thread UUID used for the host metadata join; keep it separate from the native agent id. Missing or ambiguous
 child matches remain usage gaps. Before every child or `followup_task`, run
 another `begin` with the parent's token/attempt and the correct `child` or `follow-up` relation, then bind and
-close it the same way. After each child becomes terminal, run `finish` with its real outcome; close the driver's
+close it the same way. For a follow-up to an existing owner, use that owner's previous dispatch token and
+attempt as the parent, so the collector captures its completed-turn baseline and excludes earlier usage.
+A missing baseline remains unknown; using the programme root token cannot substitute for that baseline. After each child becomes terminal, run `finish` with its real outcome; close the driver's
 root observation before the driver itself returns. Pass feature/item/attempt identities to
 `tools/routine-delivery.py` so its CI assignment is discovered and created privately by default. Missing host
 configuration or publication remains advisory to delivery but must be reported once as an attributed coverage
