@@ -46,6 +46,8 @@ advances the pin to that CLI.
 - **YYYY-MM-DD** — HEADER (owner; refs): body
 -->
 
+- **2026-10-05** — Reconcile publishing-and-deployment operator digest after Creator016 source-only projection; published015 and Kit/Drivers unchanged.
+
 - **2026-10-05** — Reconcile publishing-and-deployment operator digest after accepted Creator0.15 publication inventory; scope/materialization unchanged, no Kit/Drivers release.
 
 - **2026-10-05** — Reconcile publishing-and-deployment operator digest after Creator 0.15 source projection (github; producer PR #4227). Registry row now matches the exact mirrored skill body and generated producer manifest; scope and materialization stay unchanged, with no Kit/Drivers release or receiver rollout.

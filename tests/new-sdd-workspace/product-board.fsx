@@ -88,6 +88,71 @@ try
         | path when path.StartsWith ".claude/skills/" -> Ok content
         | path -> Error("missing " + path)
     let prepare fetch = ProductBoard.prepare root "acme/app" (String.replicate 40 "a") binding fetch
+    let freshRoot = Path.Combine(root, "fresh-generated")
+    let freshAuthority = ProductBoard.captureFreshScaffoldTarget freshRoot |> Option.get
+    let ownerPath = Path.Combine(root, "existing-owner-file")
+    File.WriteAllText(ownerPath, "owner")
+    if ProductBoard.captureFreshScaffoldTarget ownerPath |> Option.isSome then failwith "existing owner file gained fresh authority"
+    File.Delete ownerPath
+    Directory.CreateDirectory(Path.Combine(freshRoot, ".config")) |> ignore
+    Directory.CreateDirectory(Path.Combine(freshRoot, ".fsgg")) |> ignore
+    let freshTools = Path.Combine(freshRoot, ".config/dotnet-tools.json")
+    let freshProvenance = Path.Combine(freshRoot, ".fsgg/scaffold-provenance.json")
+    let generated = """{"version":1,"isRoot":true,"tools":{"fs.gg.coord.cli":{"version":"0.94.0","commands":["fsgg-coord-engine"]},"fs.gg.sdd.cli":{"version":"2.1.0","commands":["fsgg-sdd"]},"owner-tool":{"version":"1.2.3","commands":["keep"]}}}"""
+    let generatedProvenance = """{"schemaVersion":1,"generator":{"id":"FS.GG.SDD.Artifacts"},"sddOwnedPaths":[{"path":".config/dotnet-tools.json","owner":"sdd"}]}"""
+    File.WriteAllText(freshTools, generated)
+    File.WriteAllText(freshProvenance, generatedProvenance)
+    if ProductBoard.captureFreshScaffoldTarget freshRoot |> Option.isSome then failwith "existing owner directory gained fresh authority"
+    ProductBoard.prepare freshRoot "acme/app" (String.replicate 40 "a") binding fetch |> refuse "preexisting/retained generated-looking owner pin"
+    ProductBoard.captureGeneratedToolManifest freshAuthority freshRoot false |> refuse "failed scaffold snapshot"
+    File.WriteAllText(freshProvenance, generatedProvenance.Replace("\"owner\":\"sdd\"", "\"owner\":\"authored\""))
+    ProductBoard.captureGeneratedToolManifest freshAuthority freshRoot true |> refuse "foreign manifest ownership"
+    File.Delete freshProvenance
+    ProductBoard.captureGeneratedToolManifest freshAuthority freshRoot true |> refuse "missing scaffold provenance"
+    File.WriteAllText(freshProvenance, generatedProvenance)
+    File.WriteAllText(freshTools, generated.Replace("\"isRoot\":true", "\"isRoot\":false"))
+    ProductBoard.captureGeneratedToolManifest freshAuthority freshRoot true |> refuse "nonroot generated manifest"
+    File.WriteAllText(freshTools, generated)
+    let snapshot = ProductBoard.captureGeneratedToolManifest freshAuthority freshRoot true |> pass
+    let prepareFresh fetch = ProductBoard.prepareGenerated snapshot freshRoot "acme/app" (String.replicate 40 "a") binding fetch
+    File.AppendAllText(freshTools, " ")
+    prepareFresh fetch |> refuse "fresh generated manifest edited after capture"
+    File.WriteAllText(freshTools, generated)
+    if not (OperatingSystem.IsWindows()) then
+        let mode = File.GetUnixFileMode freshTools
+        File.SetUnixFileMode(freshTools, mode ^^^ UnixFileMode.UserExecute)
+        prepareFresh fetch |> refuse "fresh generated manifest mode edited after capture"
+        File.SetUnixFileMode(freshTools, mode)
+    let mutable mutatedDuringFetch = false
+    prepareFresh (fun path ->
+        if not mutatedDuringFetch then
+            mutatedDuringFetch <- true
+            File.AppendAllText(freshTools, " ")
+        fetch path) |> refuse "fresh generated manifest changed during producer fetch"
+    File.WriteAllText(freshTools, generated)
+    let freshPlan = prepareFresh fetch |> pass
+    let captureMode = if OperatingSystem.IsWindows() then None else Some(File.GetUnixFileMode freshTools)
+    let blocked = Path.Combine(freshRoot, "blocked")
+    File.WriteAllText(blocked, "owner bytes")
+    let impossible: ProductBoard.FileChange = { Path = "blocked/child"; Before = None; After = [| 1uy |]; Executable = false; BeforeMode = None }
+    ProductBoard.apply freshRoot { freshPlan with Changes = freshPlan.Changes @ [ impossible ] } |> refuse "late failure must roll back generated pin and staged files"
+    if File.ReadAllText(freshTools) <> generated || File.ReadAllText(blocked) <> "owner bytes" then failwith "rollback changed generated or owner preimages"
+    if captureMode |> Option.exists (fun mode -> File.GetUnixFileMode freshTools <> mode) then failwith "rollback changed generated manifest mode"
+    if File.Exists(Path.Combine(freshRoot, "scripts/fsgg-coord")) then failwith "rollback retained staged producer bytes"
+    File.Delete blocked
+    let staleFresh = prepareFresh fetch |> pass
+    File.AppendAllText(freshTools, " ")
+    ProductBoard.apply freshRoot staleFresh |> refuse "fresh generated preimage changed after plan"
+    File.WriteAllText(freshTools, generated)
+    ProductBoard.apply freshRoot (prepareFresh fetch |> pass) |> pass
+    let installedTools = JsonNode.Parse(File.ReadAllText freshTools)
+    if installedTools.["tools"].["fs.gg.coord.cli"].["version"].GetValue<string>() <> pin
+       || installedTools.["tools"].["fs.gg.sdd.cli"].["version"].GetValue<string>() <> "2.1.0"
+       || installedTools.["tools"].["owner-tool"].["commands"].[0].GetValue<string>() <> "keep" then
+        failwith "fresh generated replacement changed nonCoord tools"
+    if not ((ProductBoard.prepare freshRoot "acme/app" (String.replicate 40 "a") binding fetch |> pass).Changes.IsEmpty) then
+        failwith "ordinary exact selected pin repeat must be noop"
+    Directory.Delete(freshRoot, true)
     let plan = prepare fetch |> pass
     if Directory.EnumerateFileSystemEntries(root) |> Seq.isEmpty |> not then failwith "preview wrote workspace files"
     prepare (fun _ -> Error "producer unavailable") |> refuse "missing publication"

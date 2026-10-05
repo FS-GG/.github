@@ -31,17 +31,17 @@
     },
     {
       "path": ".github/workflows/release-new-sdd-workspace.yml",
-      "sha256": "b3d61bfbabbc0f7eed13c4cc224352d913d444843800d2d7c2391ecce3a820c8",
+      "sha256": "42d94dfe30342d9530634d523e260025a2e75b3e86c740caf0fa46df3666da31",
       "disposition": "exact-source-protected-journal-successor-only",
       "successorAmendment": {
         "unit": "COORD-BOARD-V2-01.5",
-        "version": "0.15.0",
-        "reason": "The existing Trusted Publishing filename selects the current 0.15.0 singleton with exact accepted public 0.97 dependency bodies. Published 0.14 identities remain history; historical 0.13 recovery and its exact title/tuple remain unchanged. Source controls admit no publication.",
+        "version": "0.16.0",
+        "reason": "The existing Trusted Publishing filename selects current Creator0.16 fresh-generated default provenance repair, reusing exact accepted public coordination0.97 bodies. Published0.15 and0.14 identities remain immutable history; selected historical0.13 recovery is unchanged. Source controls admit no publication.",
         "sealedPredecessorSha256": "28bb782d48c1d0fbf4f71e1000dc73fb1517fda3a8b71942358c604855a2360f",
-        "previousSuccessorWorkflowSha256": "1906d1f6c2e43ec20e91829a69b90fe91cadb70d31b61cc1a89e788f92faca72",
-        "previousAcceptedSource": "2ab0c0ff9f37bdec9a11ba3604ebdc230711934f",
+        "previousSuccessorWorkflowSha256": "060d63be16394bca11cbb8ced3d05b1916c07b029ae065399c2c1b2e581fc9da",
+        "previousAcceptedSource": "b1181b1afd6d0aa7da57e179c44bddcea50d8054",
         "sourceQualification": "structural and fake-provider controls only",
-        "operationAcceptance": "candidate, journal initialization, protected preflight and 0.15 publication not performed"
+        "operationAcceptance": "candidate, journal initialization, protected preflight and 0.16 publication not performed"
       },
       "historicalDisposition": "manual-local-pack-only",
       "historicalCapabilityLoss": [
@@ -89,7 +89,7 @@
           "recovery-diagnostic": "521da9edc1772ecd845bd7f6cae4ad461e2f49ce93bc2110747bc32a819d9dcf",
           "recovery-complete": "2011d23b1ef1e51f35afe89fa55f5c4b3fb334ba3b2c28a27d518f507dec924d"
         },
-        "currentBinding": "CURRENT_015",
+        "currentBinding": "CURRENT_016",
         "historicalBinding": "HISTORICAL_013",
         "effectAdmission": "pending independent native candidate, held-main and protected-journal authority; no source-test admission",
         "historicalRecoveryAssignmentSourceSha256": {
@@ -535,6 +535,177 @@
         "run": 37236913897,
         "release": 403220770,
         "version": "0.14.0"
+      }
+    },
+    {
+      "status": "non-current-history",
+      "acceptedSource": "b1181b1afd6d0aa7da57e179c44bddcea50d8054",
+      "route": {
+        "path": ".github/workflows/release-new-sdd-workspace.yml",
+        "sha256": "060d63be16394bca11cbb8ced3d05b1916c07b029ae065399c2c1b2e581fc9da",
+        "disposition": "exact-source-protected-journal-successor-only",
+        "successorAmendment": {
+          "unit": "COORD-BOARD-V2-01.5",
+          "version": "0.15.0",
+          "reason": "The existing Trusted Publishing filename selects the current 0.15.0 singleton with exact accepted public 0.97 dependency bodies. Published 0.14 identities remain history; historical 0.13 recovery and its exact title/tuple remain unchanged. Source controls admit no publication.",
+          "sealedPredecessorSha256": "28bb782d48c1d0fbf4f71e1000dc73fb1517fda3a8b71942358c604855a2360f",
+          "previousSuccessorWorkflowSha256": "1906d1f6c2e43ec20e91829a69b90fe91cadb70d31b61cc1a89e788f92faca72",
+          "previousAcceptedSource": "2ab0c0ff9f37bdec9a11ba3604ebdc230711934f",
+          "sourceQualification": "structural and fake-provider controls only",
+          "operationAcceptance": "candidate, journal initialization, protected preflight and 0.15 publication not performed"
+        },
+        "historicalDisposition": "manual-local-pack-only",
+        "historicalCapabilityLoss": [
+          "tag-trigger",
+          "packages-write",
+          "oidc-token",
+          "github-package-publish",
+          "nuget-package-publish"
+        ],
+        "capabilityLoss": [
+          "tag-trigger",
+          "direct-package-publish",
+          "repack-after-candidate",
+          "unadmitted-release-effects"
+        ],
+        "forwardRecoveryAmendment": {
+          "unit": "W013-FR-H1",
+          "owner": "TSDD-KNOWLEDGE-01.4",
+          "version": "0.13.0",
+          "previousSuccessorWorkflowSha256": "5704613f20a68efce211f699189f439af46c1a8387d1859625e06882978efa7a",
+          "scope": "Default-off, uniquely selected first-attempt native Wizard diagnostic or promotion-only forward completion of the original candidate and protected open intent. No package push/repack, new tag/assets, journal reset or generic replay. Diagnostic permissions are read-only; correction permits one exact release PATCH and ordinary forward protected CAS after independent matching readback. Private raw custody leaves the runner only as recipient-bound AES-GCM CMS ciphertext. Source readiness is not operation admission or publication acceptance."
+        },
+        "bindingIsolationProof": {
+          "test": "tests/release-effect-sealing/run.py",
+          "historicalRecoverySource": "d8297c9b5510fb2cf7d2ea4023fe6a99e2f813d9",
+          "historicalRecoveryConstants": {
+            "PROC_CAP": 8192,
+            "MEMBER_CAP": 128,
+            "CUSTODY_MEMBER_CAP": 323,
+            "CUSTODY_PATH_CAP": 256,
+            "REF": "refs/heads/fsgg/v2/journal/release/tsdd-knowledge-wizard-013",
+            "REPO": "FS-GG/.github",
+            "CANDIDATE_SOURCE": "f891b5b0723070c67e08d1a87b7d12b0b4d8bebe",
+            "CANDIDATE_RUN": 37159899280,
+            "ARTIFACT": 11287256853,
+            "ARCHIVE": "46055667bb35affacbc7c3be47a4eaea8983ae786267ff00bd9173d66b538244",
+            "ORIGINAL_PACKAGE": "accab9375f0adff5cc770f096ada7c56428674fc5c801449ad91cff4c39ccc37",
+            "FAILED_RUN": 37160659521,
+            "RELEASE": 402727082,
+            "JOURNAL_HEAD": "dbc2c4e578cb41e9f6aa31f18557cd95745346f7",
+            "PREVIOUS_SOURCE": "4889c446de0a431d1168a61a89ab660fc2062314",
+            "WORKFLOW": ".github/workflows/release-new-sdd-workspace.yml"
+          },
+          "historicalRecoveryJobSha256": {
+            "recovery-diagnostic": "521da9edc1772ecd845bd7f6cae4ad461e2f49ce93bc2110747bc32a819d9dcf",
+            "recovery-complete": "2011d23b1ef1e51f35afe89fa55f5c4b3fb334ba3b2c28a27d518f507dec924d"
+          },
+          "currentBinding": "CURRENT_015",
+          "historicalBinding": "HISTORICAL_013",
+          "effectAdmission": "pending independent native candidate, held-main and protected-journal authority; no source-test admission",
+          "historicalRecoveryAssignmentSourceSha256": {
+            "Path": "2f4c7565b6098124301826b8ae62a305c58187badcba2ccbafa0dfd3e8a05819",
+            "STREAM_CAP": "3dc581ee96f7b54a539768574d979742ff24658cf7bfa956c90c4fc12e12e06b",
+            "PROC_CAP": "b1bbe79c5ca89b2cefcbf98979d76640cc0466cd02c6f0acc326e6daac47a762",
+            "MEMBER_CAP": "0937996c2a29fe3a23d2ee81090cf9452f825820c1326cb5c05941168d5d771f",
+            "JSON_CAP": "99cfcf5da994279b14aac9901fb6d30f6d051d540540a195f3135ce208a8eb3c",
+            "BINARY_CAP": "065df542f62e536600807e09cb2a5ead4bf8e195ff79dc5d87cbe3bea3cf7b44",
+            "ZIP_CAP": "fe5bdef0143584cfae9398d0fdbd5a66c90e8b2988ac004aeebd3d5d288f49bb",
+            "CUSTODY_CAP": "9cada8fce6b294c1899cd3ea1209196cf4fcbe24502240276346299f9f525889",
+            "READINESS_CAP": "b59b681160b18d599aba76d3552fbecf5998016ed5944f5ba9f9a17d116e4bca",
+            "SMALL_JSON_CAP": "eb2462c97d2cdbf44b739da9faf075253693ce14aaa592d2a58df965187e0401",
+            "ANCESTRY_JSON_CAP": "6630a5b7e4767971fd413fe4fcfcd1485a5eb312415376a55f0f0b42c206b73c",
+            "INSTALL_TREE_CAP": "a8226171f0e527836b165dca817b190d20e64ae3684d475574972fec3ae314db",
+            "CUSTODY_MEMBER_CAP": "6dcb5e78948273b8e868629e226d56332821c2a2ec08e51d81144b2b0893a3e0",
+            "CUSTODY_PATH_CAP": "ebd0f367b8f7555b3e073f3255d0fdadcb9e8edb4bb12c7117bf96fec13768df",
+            "PHYSICAL_CUSTODY_CAP": "590fcb75332cf0ab0afd7392e1f3eea54f2f63b49792f6e12f6c22c47c02ca07",
+            "REF": "cb7e2cc2adeba05e1f7f92b2035b77ba69b33180f0869b026b72910a4b0de7f3",
+            "REPO": "cc3d010f98e52f2015466de845d26ce855547d4e626c5a374fae3f826a0bbfef",
+            "CANDIDATE_SOURCE": "63720fb2390ac212486c4bf23db45a587ecf0b0506c9cb601e8162a91fab28e9",
+            "CANDIDATE_RUN": "7b63f3cf4f4b1f799e6aa2c9823ca9a6a0648fd3fe4bf059e35f4dc6b2cc9c8d",
+            "ARTIFACT": "40b9d2fd062fde331f4efc3186ffd3323f1a64754ed994e9226e2bc9ac10eed8",
+            "ARCHIVE": "eca567c491b600a6bc8c19a28e08339b8db87b8e1a1cb4ad5c3883d0ca80aa09",
+            "ORIGINAL_PACKAGE": "fac8fdb444b704ef7a44f111b27c6a7a3fca0b01928bec02891b560a2f881542",
+            "FAILED_RUN": "e79e033b2a2dc0997ec9b2e12ea7c3786d2dd010eb546ff3ac3a43428f104a90",
+            "RELEASE": "4aca661088dac0b975d97c1167ac555ec88fee9aa81b130eb62457eaa2eff7ce",
+            "JOURNAL_HEAD": "9afa971b72680910b5eda5e616747cf4346284e764598a69002d2c40c9571b8f",
+            "PREVIOUS_SOURCE": "acb357db0dcb29ea4396fcd5dddb90cb4436ea38fd93b9758475d6b03d6e53b5",
+            "WORKFLOW": "f16467d0fb13fbdbea70965d02fbe1e180bc149b41f850c602efe3fb7f5a3046",
+            "SAFE_REFUSAL_CODES": "9cd639b58d32fd1668090605eb2661f46b48f7c326b1f129a809a27ebfb2339a",
+            "SAFE_PHASES": "b617d494cdc7bd0056c7ec584d0642e355289b551fcc98f7e7720c536492e1da",
+            "_current_phase": "7515b5f7c15cff32643f32d9a440e65ae0ff3a8bf780362e9c8099829fe7815a",
+            "SDK_SCOPE_POLICY": "4461d8a05e9c1c8b1d2e3b6c89cbb0d48724eed177e1cd9844425641b8454ed0",
+            "ORIGINAL_RUNTIME_CONFIG_MEMBER": "949de1cedcb3efe922ccbda0f06c680bfa09dce89e78405ffcc0df27173bf99e",
+            "ORIGINAL_RUNTIME_CONFIG_SHA256": "489d5e8e00e03d36f1417124f6b6996491bd8508b95341d0bf579ebf7eccde6f",
+            "ORIGINAL_RUNTIME_OPTIONS": "ac6b4f012de73e44a0442a6604be4cd074ba96d1be3f356d13bdd7cb5cc4fd52",
+            "SDK_FORBIDDEN_ENV": "aafde3e9875b1ef610aa22475c35130ff0ec6e07b8ebcb1dd5bbb37baf7f46a8"
+          },
+          "historicalGuardFunctionSourceSha256": {
+            "require": "911f7b9d9387f8dc174f050d2fa1a36fa73217a9acca24356570d42c403ba44e",
+            "digest": "c36fee10252da2653bd4463a40c0b17609ec00a6c1c18c61ea743db668e851b1",
+            "canonical": "928ef04c56d4adb1bccc6771a20def6aef5746b265f98e9e0a9411b8ef8e5e69",
+            "load_module": "8abadd91fcdfbd33ef5fa2999c284fe7646de712a22a624123115972f5ea2c2d",
+            "validate_binding": "fcf1aa0418a9c93af13ea980528ddb26cf81793c0807ad69fba14b5d1ee3ffaf",
+            "recovery_phase": "8c76d1346a333028493c8ec1aa76d1235000e3a311bc94fc57bc39b0136e5fd2",
+            "recovery_refusal": "4b9d69d1f42588fec1d327970fd94b4bc84d5770defad2f75d491933c11963a2",
+            "existing_sdk_root": "4df3979f72f9dbbe8dae7d087460e3398ffb610cd9e2cfe425e7c1589a9e6b47",
+            "proc_identity": "519c48c35b0d8a3094fd2e502d2d5588001cb6ee65c894b8341e8666bbcdbf56",
+            "all_processes": "5a77c37c4a3be495af8b0d96f38550ee85f2102d2f3aede8ed2df2b46628b1e6",
+            "same_process": "17bd73576055550bca2598eb4003d774d4ad112b71614d3b76765f5b1f201118",
+            "capture": "bdb6a437b90f6b5b10c165439a4552c2ace032081b8985cb45aeaf2214d1943c",
+            "subreaper": "9b99f6cbe121e4e259a61384cdc4fa921a1a58f7992a213357ca6fff0ff263ae",
+            "child_environment": "2039265e1e185b8045c1589971fc8826906cbc4fa667f1be15df1c13716c60f5",
+            "sdk_input_environment": "460ae71b64949d261b85b3320b668369f6a37551a0776296fba96ea3487b0d7b",
+            "sdk_scope_versions": "0c7157d4e60261298945004e4a61d5b9953d26155008fd26cc287dc8fd9375ad",
+            "sdk_scope_requirements": "08c02c2f772b2b4c428c3df4fb078fe833fb8b4bc85ece34bfc37c634315fe02",
+            "selected_sdk_scope": "ce983bc30e0e73fd1787904a5bfbda8382e918fb3fc11b7442237c05196ffd7c",
+            "selected_sdk_roster": "c40cefb18383c044dea795ff7d8d44be9dedd5b063dea14b45f7ce52e5f33f8c",
+            "sdk_snapshot": "62ab34d292556b777d0871d0a2341f45422d01c89086007546f29ec721721887",
+            "physical_roster": "276d9bbae6e0708b876d2745abaf7ad7a858a4956a2b2244c357c185615e437a",
+            "source_snapshot": "76f77fa96921bc21d29ace61f952a9cb749981888084129124373be2fdbe374c",
+            "safe_zip": "72a08fa2d2bf9c5be4dca84724262eb5aea434b7503f3dc7ef9b7569766ab44f",
+            "native_context": "0af5921c1ef18e9b801240f757056ff93313f0f0ef7915b9b309b0b5b99fc704",
+            "original_runs": "f1e7a7523106e1255be9fc8763c6005614caab957eb1f16855b8b3092f8fbcfd",
+            "readiness": "b5df49c97c5b75fed60c22fb8aa01f60748c1d5529be12550a01d26c7a4eaf61",
+            "predecessor": "42ce73c68a363113e8a6292188ed482efa89589fd9ae20f7e3ea4d5508636bf4",
+            "candidate": "fc27b8c7e2001b638c64ad1c0e6122cf0ab3a84645495c334391197525a4aeb1",
+            "installed_closure": "1a30a74878ee4c7be99ae028f54ecd5546f06da8f088bb1e48c3e4fc06bee13f",
+            "public_install": "b1c360bad8b3d0946733bc0690e3c707b775cac07e0f54cc947e1f13fac7a2c7",
+            "recipient": "7b9f4c3730b9ed1e08e8b54bda70eb83980f20f267fb54cae111874f799ee40d",
+            "encrypted_custody": "024c0407712abe23d3d9a78c0ad6a945f05470a96b5ed0265089777cf2574143",
+            "outer": "45c982686a927efca46eb86aaef65275b2c48bbdc1a26668498a5d633ff95c93",
+            "entry": "85d410ecd5190a086a14b9d8dbec0ef88e9c5bf1a65acfa4be525b5f591ac770",
+            "ancestry_url": "d4d2d11483a8145dee1439610bea2616af30f0021289dbd542269d633a49ce2e",
+            "validate_ancestry": "224e6b4fbed77a449910be7f99830923ff9c2ea252398e580f3082afb0b4eea4",
+            "http_failure_projection": "ffcbb64df9c3865db0696f78a1adc5fd48b96d9c8af8c4c36dcd91daa2d3d014",
+            "worker": "abc1e27c729b7408ff26bedb4e42370220afb29630be292c25854722249a2692"
+          },
+          "sourceSpanContract": "SHA-256 of exact UTF-8 ast.get_source_segment bytes for each named top-level assignment/function and explicitly named method, including internal whitespace/comments; AST serialization is not evidence.",
+          "pagedAncestryMethodSourceSha256": {
+            "FiniteAPI.request": "9e1f15f7345d9d86cc1893102f76e2906889dc3a4c4cd75d3f3604462448941f",
+            "Redirect.redirect_request": "b4c529308be5f519e01cf4a27f6e230d1c55834b5e22451ffb7ab98ae7ab65fe",
+            "FiniteAPI.capture_http_error": "93f2ee934ac9dc0a2cb5b577498af753dfbf33b26b73b7f2de40b79d006d6c6b"
+          },
+          "pagedAncestryAmendment": {
+            "unit": "TSDD-KNOWLEDGE-01.4",
+            "originalItem": "TEMPLATES-H2",
+            "sourceCandidate": "44667c54a81ed9fdc63ab5bc4174b8448bb49f32",
+            "acceptedReviewSha256": "05928c08a8bc9ab59c76d65b0d2a5cac25f3458e37f43769bf38f2ada2e298e3",
+            "previousOriginalRunsSourceSha256": "0a5cbcb4ec4143998834aee2018ca303d87b00f37da757fdc1089badb35385c6",
+            "currentOriginalRunsSourceSha256": "f1e7a7523106e1255be9fc8763c6005614caab957eb1f16855b8b3092f8fbcfd",
+            "scope": "One exact bodyless fixed-header second-page comparison GET and typed native ancestry joins; HTTP200, at least two commits, no files. Complete original raw response custody, source/effect identities and all prior caps/admission controls remain. This source-span amendment is not H3 or publication acceptance."
+          },
+          "httpErrorCustodyAmendment": {
+            "unit": "TSDD-KNOWLEDGE-01.4",
+            "originalItem": "TEMPLATES-H2",
+            "decisionSha256": "f2cd587a96859d7d8ab30e130f6563a63ef1fcd1c5b90f9bc579d683f2569798",
+            "previousRequestSourceSha256": "116cad46812e920fb713681ad37143450a1f4fcaadcc8fa81b90de14af18c775",
+            "scope": "Original bounded HTTPError custody and diagnostic GET/bodyNone guard only; diagnostic contents:read unchanged; no capability/effect acceptance",
+            "failedRun": 37269305353,
+            "previousWorkerSourceSha256": "baac8aa72df7d9f7fd13a6e51aa61236c7b143155d4be58d289a17f9c1314cbe",
+            "durableFallback": "Existing bounded worker report retains primary HTTP status and finite capture/close/transport failure kinds if transport custody fails; raw values never enter this fallback"
+          }
+        }
       }
     }
   ]

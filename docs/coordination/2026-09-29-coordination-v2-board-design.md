@@ -336,6 +336,22 @@ journeys, consumer switch and retirement still require their own bounded native 
 Historical 0.14 publication and selected 0.13 recovery stay immutable.
 
 
+The later actual installed Creator015 Rendering fresh attempt completed SDD scaffold and captured
+all five loaded managed-body roles, then naturally exited1 at coordination: the SDD-created
+manifest selects Coord0.94 while immutable selected Kit members select0.97. There was no
+supervisor refusal (task3/total5 below10); owned generations were retired and the consumed receiver
+is preserved. Authenticated UI031 template starts with0.75.4; actual SDD provenance/report records
+creation of the resulting0.94 manifest. This is a generated-default ownership distinction, not
+a capacity or origin failure. Retained baseline and .6 adoption remain unperformed.
+
+Creator016 source adds only an internally captured originally absent-target authority, immediate
+successful SDD-owned full manifest byte/mode snapshot and unchanged-preimage guard. Fresh final
+coordination may replace its generated Coord row; preexisting/no-Git/retained/retrofit owner
+conflicts stay strict, unrelated tools are preserved, and atomic apply/rollback remains. Published015
+and coordination097 artifacts stay immutable. Offline controls cover provenance/refusal, concurrent
+byte/mode changes and late rollback. Native qualification, exactsource016 publication and actual
+fresh/retained journeys still require separate root admissions.
+
 **Selected next source outcome: COORD-BOARD-V2-01.5 product binding and materialization.** Prepare
 it independently of broader .4 carryover and BAR/SC2 native qualification. The qualified .3 projection
 contract is the producer foundation. Publication and actual product adoption still need their own
