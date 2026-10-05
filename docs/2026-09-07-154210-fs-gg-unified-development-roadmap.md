@@ -72,14 +72,21 @@ LEARN's rootless custody source merged through [#4215](https://github.com/FS-GG/
 Its source and static helper compile passed; native execution still needs a qualified
 namespace/cgroup environment. Source delivery does not close native acceptance.
 
-**2026-10-05: SVG-COHERENCE-01 first shared guard delivered; research and reference preparation continue.**
+**2026-10-05: SVG-COHERENCE-01 first shared guard and reference preparation delivered.**
 The [owning SVG plan](roadmaps/svg-coherence-and-instancing-01.md) retains completed
 inventory/harness milestones .1/.2 and joins the first bounded .4 change:
 [Rendering #1382](https://github.com/FS-GG/FS.GG.Rendering/pull/1382) skips unchanged
 DOM attribute writes without changing the public API. Native checks and 17 browser
 controls passed. Separate software-browser comparisons, composition parity,
 diversity/churn and teardown diagnostics advance .3 without closing its remaining
-scale and allocation coverage. Templates reference planning runs in parallel.
+scale and allocation coverage. Templates [#670](https://github.com/FS-GG/FS.GG.Templates/pull/670)
+merged the original MIT soldier glyph, deterministic workload and pure document
+projection at `773584bd6f30812331e1aa401a17314207e61132`. Its
+[preparation evidence](https://github.com/FS-GG/FS.GG.Templates/blob/773584bd6f30812331e1aa401a17314207e61132/docs/roadmaps/evidence/svg-coherence-01.5-reference-preparation.md)
+records 6,222 focused pure checks, six source-template generations and native
+qualification. Complete-only source inclusion preserves default/player exclusion;
+the reference is uncompiled and not mounted. This closes the .5 preparation window;
+whole .5 still requires actual-player local/external composition and qualification.
 Full shared implementation, consumer integration, the late host GPU batch and
 final publication/adoption remain open; original failures and inconclusive results
 are preserved.
