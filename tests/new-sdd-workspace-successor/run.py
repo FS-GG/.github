@@ -75,7 +75,13 @@ def board_package_closure(package: pathlib.Path, source_sha: str, *, source_root
             if archive.read(prefix + name) != built.read_bytes():
                 raise ValueError("creator package dependency differs from built source: " + name)
         deps = json.loads(archive.read(prefix + "new-sdd-workspace.deps.json"))
-        if "FS.GG.Coord.Cli/0.97.0" not in deps["libraries"]:
+        cli = "FS.GG.Coord.Cli/0.97.0"
+        targets = deps.get("targets", {})
+        if (deps.get("libraries", {}).get(cli, {}).get("type") != "project"
+                or not targets or any(
+                    target.get("new-sdd-workspace/0.15.0", {}).get("dependencies", {}).get("FS.GG.Coord.Cli") != "0.97.0"
+                    or "fsgg-coord-engine.dll" not in target.get(cli, {}).get("runtime", {})
+                    for target in targets.values())):
             raise ValueError("creator package must carry current coherent CLI dependency metadata")
     result = {"schema": "fsgg.creator-board-package-closure/1", "version": CURRENT_015.version,
             "sourceSha": source_sha, "coherentVersion": "0.97.0", "projectCount": len(projects),
@@ -200,7 +206,10 @@ class WizardReleaseTests(unittest.TestCase):
                     xml = ElementTree.parse(root / relative)
                     name = next((e.text for e in xml.iter('AssemblyName') if e.text), relative.stem) + '.dll'
                     members[name] = ('synthetic, never executed: ' + name).encode()
-            members['new-sdd-workspace.deps.json'] = json.dumps({'libraries': {'FS.GG.Coord.Cli/0.97.0': {}}}).encode()
+            deps = {'libraries': {'FS.GG.Coord.Cli/0.97.0': {'type': 'project'}}, 'targets': {
+                '.NETCoreApp,Version=v10.0': {'new-sdd-workspace/0.15.0': {'dependencies': {'FS.GG.Coord.Cli': '0.97.0'}},
+                                           'FS.GG.Coord.Cli/0.97.0': {'runtime': {'fsgg-coord-engine.dll': {}}}}}}
+            members['new-sdd-workspace.deps.json'] = json.dumps(deps).encode()
             members['new-sdd-workspace.runtimeconfig.json'] = b'{}'
             for name, body in members.items():
                 (output / name).write_bytes(body)
@@ -225,11 +234,15 @@ class WizardReleaseTests(unittest.TestCase):
             pack({**members, 'FS.GG.Coord.GitHub.dll': b'old assembly'})
             with self.assertRaisesRegex(ValueError, 'differs from built source'):
                 board_package_closure(package, 'a' * 40, source_root=root)
-            old_deps = json.dumps({'libraries': {'FS.GG.Coord.Cli/0.96.0': {}}}).encode()
-            (output / 'new-sdd-workspace.deps.json').write_bytes(old_deps)
-            pack({**members, 'new-sdd-workspace.deps.json': old_deps})
-            with self.assertRaisesRegex(ValueError, 'current coherent CLI dependency metadata'):
-                board_package_closure(package, 'a' * 40, source_root=root)
+            for mutant in ({'libraries': {'FS.GG.Coord.Cli/0.96.0': {}}},
+                           {**deps, 'targets': {}},
+                           {**deps, 'targets': {'.NETCoreApp,Version=v10.0': {'FS.GG.Coord.Cli/0.97.0': {'runtime': {'fsgg-coord-engine.dll': {}}}}}},
+                           {**deps, 'targets': {'.NETCoreApp,Version=v10.0': {'new-sdd-workspace/0.15.0': {'dependencies': {'FS.GG.Coord.Cli': '0.97.0'}}}}}):
+                old_deps = json.dumps(mutant).encode()
+                (output / 'new-sdd-workspace.deps.json').write_bytes(old_deps)
+                pack({**members, 'new-sdd-workspace.deps.json': old_deps})
+                with self.assertRaisesRegex(ValueError, 'current coherent CLI dependency metadata'):
+                    board_package_closure(package, 'a' * 40, source_root=root)
             with self.assertRaisesRegex(ValueError, 'package/source identity'):
                 board_package_closure(package, 'b' * 40, source_root=root)
 

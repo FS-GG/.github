@@ -22,8 +22,7 @@ class FrozenDependencyControls(unittest.TestCase):
         self.creator.parent.mkdir(parents=True)
         actual = ElementTree.parse(ROOT / "scripts/NewSddWorkspace/NewSddWorkspace.fsproj").getroot()
         self.creator.write_text('<Project><PropertyGroup><AssemblyName>new-sdd-workspace</AssemblyName></PropertyGroup>'
-                                '<ItemGroup><ProjectReference Include="../../src/Engine/Engine.fsproj">'
-                                '<Private Condition="\'$(FsggFrozenCoordDependencies)\' != \'\'">false</Private></ProjectReference></ItemGroup>'
+                                '<ItemGroup><ProjectReference Include="../../src/Engine/Engine.fsproj" /></ItemGroup>'
                                 + ''.join(ElementTree.tostring(group, encoding="unicode") for group in actual
                                           if group.get("Condition") == "'$(FsggFrozenCoordDependencies)' != ''") + '</Project>')
         self.project = self.root / "src/Engine/Engine.fsproj"
@@ -134,16 +133,26 @@ class FrozenDependencyControls(unittest.TestCase):
             self.stage()
         self.assertFalse(self.dependencies.exists())
 
-    def test_duplicate_reference_copy_route_and_disabled_enforcement_refuse(self):
+    def test_runtime_reference_copy_route_and_duplicate_enforcement_cannot_be_disabled(self):
         original = self.creator.read_text()
-        for mutant in (original.replace('>false</Private>', '>true</Private>'),
-                       original.replace('<Private Condition="\'$(FsggFrozenCoordDependencies)\' != \'\'">false</Private>', ''),
+        for mutant in (original.replace('Engine.fsproj" />', 'Engine.fsproj" Private="false" />'),
+                       original.replace('Engine.fsproj" />', 'Engine.fsproj"><Private>false</Private></ProjectReference>'),
                        original.replace('</Project>', '<PropertyGroup><ErrorOnDuplicatePublishOutputFiles>false</ErrorOnDuplicatePublishOutputFiles></PropertyGroup></Project>')):
             with self.subTest(mutant=mutant):
                 self.creator.write_text(mutant)
                 with self.assertRaisesRegex(ValueError, "frozen dependency (reference copy route|duplicate publish enforcement) changed"):
                     self.stage()
                 self.assertFalse(self.dependencies.exists())
+        self.creator.write_text(original)
+
+    def test_exact_three_overlap_exclusions_cannot_be_missing_or_broadened(self):
+        original = self.creator.read_text()
+        for mutant in (original.replace('/fsgg-coord-engine.xml', '/foreign.xml'),
+                       original.replace('/fsgg-coord-engine.dll', '/*.dll')):
+            self.creator.write_text(mutant)
+            with self.assertRaisesRegex(ValueError, 'frozen dependency content copy changed'):
+                self.stage()
+            self.assertFalse(self.dependencies.exists())
         self.creator.write_text(original)
 
 

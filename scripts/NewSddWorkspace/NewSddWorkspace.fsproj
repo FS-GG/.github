@@ -44,10 +44,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../../src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj">
-      <!-- Keep compiler resolution; the frozen closure supplies copy-local bodies. -->
-      <Private Condition="'$(FsggFrozenCoordDependencies)' != ''">false</Private>
-    </ProjectReference>
+    <ProjectReference Include="../../src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj" />
     <PackageReference Include="FSharp.Core" />
     <PackageReference Include="Spectre.Console" />
   </ItemGroup>
@@ -65,7 +62,11 @@
     <_GetChildProjectCopyToPublishDirectoryItems>false</_GetChildProjectCopyToPublishDirectoryItems>
   </PropertyGroup>
   <ItemGroup Condition="'$(FsggFrozenCoordDependencies)' != ''">
+    <!-- The normal reference route copies these three verified staged files and
+         retains the coherent CLI runtime dependency metadata. Copy the other
+         published files here, avoiding duplicate destinations. -->
     <None Include="$(FsggFrozenCoordDependencies)/**/*"
+          Exclude="$(FsggFrozenCoordDependencies)/fsgg-coord-engine.dll;$(FsggFrozenCoordDependencies)/fsgg-coord-engine.pdb;$(FsggFrozenCoordDependencies)/fsgg-coord-engine.xml"
           Link="%(RecursiveDir)%(Filename)%(Extension)"
           CopyToOutputDirectory="Always" CopyToPublishDirectory="Always" />
   </ItemGroup>

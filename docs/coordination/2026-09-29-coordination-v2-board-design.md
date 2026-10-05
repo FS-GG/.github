@@ -296,6 +296,16 @@ solely through the explicit closure. Duplicate publish enforcement remains enabl
 custody checks include reference-copy and disabled-enforcement mutants; actual package acceptance
 still requires a fresh exact-source qualification. Both consumed attempts remain preserved.
 
+The following attempt passed native pack, then refused coherent CLI dependency metadata:
+`Private=false` omitted the CLI library and creator runtime dependency edge from the generated
+deps file. Pure inspection of the retained actual package verifies all 81 accepted dependency
+bodies while reproducing the metadata refusal without changing that archive. The reference now
+retains normal runtime metadata and copies its three verified staged DLL/PDB/XML files; the
+explicit frozen content excludes exactly those three overlapping destinations. All other selected
+files and full-closure checks remain required. The package checker also requires the coherent
+library type, creator dependency edge and engine runtime asset. The 111 pure checks pass;
+fresh native qualification remains pending and previous consumed attempts remain immutable.
+
 Creator 0.14 publication remains accepted history. Ordinary publication selects only the new 0.15
 singleton and journal; the separately qualified 0.13 recovery route remains unchanged. Creator 0.15
 candidate, publication and actual installed fresh/retained Rendering journeys are pending. Neither
