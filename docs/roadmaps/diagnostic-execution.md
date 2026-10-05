@@ -1,6 +1,6 @@
 # V2-DIAG-01: Collect independent failures within bounded execution
 
-Date: 2026-10-05. Status: shared guidance source prepared; runtime implementation and receiver adoption pending.
+Date: 2026-10-05. Status: shared guidance landed; ordinary pilot source qualified locally; native pilot and receiver adoption pending.
 Design: [diagnostic execution](../designs/diagnostic-execution.md).
 Parent: [V2 roadmap](../github-substrate-v2-roadmap.md#v2-diag-01--diagnostic-execution--2026-10-05).
 
@@ -12,7 +12,7 @@ the relevant shared contracts and each adapter's current admission.
 
 ## Delivery sequence
 
-- [ ] **V2-DIAG-01.1 — Shared policy and existing-contract assessment.** `.github` owns the permanent
+- [x] **V2-DIAG-01.1 — Shared policy and existing-contract assessment.** `.github` owns the permanent
   policy and links from `work-roadmap`, `work-programme` and `pipeline-preflight`, including applicable
   installed skill variants. Coordination and runner owners inspect existing prerequisite/result
   contracts and identify reusable dependency and outcome semantics. Record exact implementation
@@ -46,8 +46,11 @@ The permanent [execution policy](../coordination/diagnostic-execution.md) and eq
 and `.claude` `work-roadmap`, `work-programme` and `pipeline-preflight` source variants implement
 the guidance portion of this item. Focused routine-route, byte-equality and local-link controls
 passed. The source assessment below selects bounded pilots; no runtime entry point, installed
-skill receiver or native runner was qualified by this source window. All delivery
-checkboxes remain open until their complete acceptance obligations and native source readback hold.
+skill receiver or native runner was qualified by that guidance-only window. Guidance and assessment
+landed in [PR #4251](https://github.com/FS-GG/.github/pull/4251), merge
+[`f0b6fe1`](https://github.com/FS-GG/.github/commit/f0b6fe1583d104e4b5a253ef80bc59902da3836a).
+Root read back the merge on 2026-10-05 after 52 checks passed and two skipped. This closes .1;
+installed receiver refresh remains separate under .4.
 
 ### Existing contracts and bounded pilots
 
@@ -70,10 +73,10 @@ partitions only for demonstrated caller/result joins. Qualify aggregate defects,
 first-cause retention and original cumulative bounds through actual entry points and existing replay.
 
 The selected ordinary pilot is [`tests/work-programme/run.sh`](../../tests/work-programme/run.sh),
-called by its [workflow](../../.github/workflows/work-programme.yml). It currently stops at the first
-suite failure; existing Python unittest cases already collect independent assertions. Extend serial
-suite continuation only for declared independent suites, retaining the original job timeout and
-bounded local deadline. Setup or shared-input failure blocks dependent suites. The selected native
+called by its [workflow](../../.github/workflows/work-programme.yml). At assessment it stopped at the
+first suite failure; existing Python unittest cases already collected independent assertions. The
+ordinary source window below implements serial continuation for declared independent suites with
+the original job timeout and bounded local deadline. Setup or shared-input failure blocks dependents. The selected native
 pilot is Coordination's existing
 [`eng/prepared-attempt-installed-qualification.fsx`](https://github.com/FS-GG/FS.GG.Coordination/blob/8861ef868805346776b67155676d8ccee2b7d260/eng/prepared-attempt-installed-qualification.fsx),
 through `eng/run-packaged-portable-workspace-qualification.py` against an exact installed Execution
@@ -87,8 +90,30 @@ adoption remains a separate V2-PREFLIGHT obligation. The native pilot requires f
 identity, installed-status and host/resource readback before root admits it. Existing coherent release
 and receiver refresh routes own publication and installed adoption; source twins or a package alone
 prove neither. This assessment ran no CLR, native qualification or fault injection and establishes no
-measured savings. Guidance and assessment source are covered; .1 completion still awaits exact-head
-required checks and native merge readback, and .2–.4 remain open.
+measured savings. Guidance and assessment are now merged as recorded above; .2–.4 remain open.
+
+## Ordinary pilot source and actual entry — 2026-10-05
+
+The existing [work-programme entry](../../tests/work-programme/run.sh) now collects explicitly
+independent suites serially, checks declared input identities before and after each suite, and
+blocks failed or unknown prerequisites and contaminated shared inputs. It retains first cause,
+additional failures, actual exits, cleanup/reporting and omitted coverage under one 170-second
+local deadline, a five-second cleanup reserve and a cumulative 1 MiB output cap. The hosted
+three-minute timeout and existing collector unittest behavior remain unchanged. Settlement retains
+the unreaped child leader while observing its group, then reaps last; it never signals a numeric
+group after reaping.
+
+Eleven disposable [runner controls](../../tests/work-programme/test_run.py) cover independent
+assertions, dependency and unknown blocking, shared contamination, deadline/output exhaustion,
+reporter failure and scratch/process cleanup uncertainty. Root qualified the complete actual entry
+at source `36430e2e7e10f1bfcf23cd3ea6adcd0afec48b60`: all three FSI suites, ten collector controls and
+eleven runner controls passed. Exit, all cleanup and reporting succeeded; no coverage was omitted.
+The observed outer duration was 9.728 seconds, with no resource failure under sampled limits.
+The four runner source files remain byte-identical after rebasing onto the guidance merge.
+
+Hosted exact-head checks and source merge readback remain pending for this ordinary candidate.
+Coordination's native pilot, publication, installed adoption and whole-feature evaluation remain
+pending; .2, .3 and .4 remain open. No comparable savings baseline is established.
 
 ## Completion and rollout limits
 
