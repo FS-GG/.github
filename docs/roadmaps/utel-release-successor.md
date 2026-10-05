@@ -103,3 +103,29 @@ Unknown or conflicting effects remain incomplete. After any partial effect, reco
 from the original candidate archives and journal without repacking or resetting.
 Publication requires native verification of every effect and both feeds; Home
 adoption, consumer pins and default configuration remain separate decisions.
+
+## UTEL-REL-13 — 0.97.1 telemetry identity repair
+
+The selected coherent source cut is **0.97.1**, a compatible patch carrying the
+merged equal feature/item fact identity repair (PR #4242) and native agent binding
+and follow-up guidance (PR #4243). CLI, Kit and Drivers advance together. The
+promoted predecessor is **0.97.0**, source
+`2ab0c0ff9f37bdec9a11ba3604ebdc230711934f`, content
+`sha256:b78fd7bdff1251e32c07ffb181c31b8c2009e3174cfe305b0761f5ca8b4e245d`.
+Its release and completed `board-v2-product-coherent-097` journal remain immutable.
+The fresh journal is `refs/heads/fsgg/v2/journal/release/utel-rel-13`.
+
+Use the existing candidate and publisher entry points, exact-main first-attempt
+candidate, retained seven-file archive, separate no-effect preflight, sole operator,
+environment and sixteen-effect admission/recovery contract. Hold final main stable
+through candidate qualification, preflight and first publication. Recheck both-feed
+uniqueness and journal absence immediately before any first effect. Source selection
+creates no journal, tag or publication. Preserve all five sealed legacy workflows.
+
+After native readback establishes both feeds and immutable promotion, adopt only
+the promoted manifest side by side and qualify the installed equal-identity begin,
+native agent-name binding, terminal drain, retry and follow-up baseline. This does
+not replay the already completed original root recovery. Missing parent-thread
+relationships and the resumed 0.97.0 duplicate-identity begin refusal retain unknown
+usage; never invent a parent token or infer whole-programme coverage from the repair.
+Publication, installed adoption and prospective native acceptance remain pending.
