@@ -39,3 +39,8 @@ parent context, refusal reasons, duplicate retrieval and helper timings. Repair 
 the same owning branch/PR, preserving all substantive acceptance, original lineage and model routes.
 Charge debugging and specialist work to that item; never infer usage from bytes or elapsed time. Retire
 the skill and adapter when this programme ends or a qualified successor replaces them.
+
+The proposed [V2-CTX-01 extension](2026-10-05-programme-context-efficiency.md) audits the current
+implementation and prior art, then stages typed observations/returns, deterministic deltas, selective
+evidence retrieval and a whole-task comparison. It does not change this driver's active contract or
+establish measured savings; implementation and operational adoption remain open.
