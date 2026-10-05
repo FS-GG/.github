@@ -67,19 +67,19 @@ class CandidateUniquenessTests(unittest.TestCase):
         with self.assertRaisesRegex(gate.GateError, "not predecessor"):
             gate.check("0.96.0", "0.95.0", "test-token")
 
-    def test_selected_0971_window_requires_the_097_frontier_on_all_six_coordinates(self) -> None:
-        self.github_read.return_value = ["0.97.0"]
-        self.nuget_read.return_value = ["0.97.0"]
-        self.assertEqual(len(gate.check("0.97.1", "0.97.0", "test-token")), 6)
+    def test_selected_0972_window_requires_the_0971_frontier_on_all_six_coordinates(self) -> None:
+        self.github_read.return_value = ["0.97.1"]
+        self.nuget_read.return_value = ["0.97.1"]
+        self.assertEqual(len(gate.check("0.97.2", "0.97.1", "test-token")), 6)
         for feed in (self.github_read, self.nuget_read):
             with self.subTest(feed=feed):
-                feed.return_value = ["0.97.0", "0.97.1"]
+                feed.return_value = ["0.97.1", "0.97.2"]
                 with self.assertRaisesRegex(gate.GateError, "already exists"):
-                    gate.check("0.97.1", "0.97.0", "test-token")
-                feed.return_value = ["0.97.0"]
+                    gate.check("0.97.2", "0.97.1", "test-token")
+                feed.return_value = ["0.97.1"]
         self.nuget_read.return_value = ["0.95.0"]
         with self.assertRaisesRegex(gate.GateError, "not predecessor"):
-            gate.check("0.97.1", "0.97.0", "test-token")
+            gate.check("0.97.2", "0.97.1", "test-token")
 
     def test_an_occupied_version_on_either_feed_refuses(self) -> None:
         for feed in (self.github_read, self.nuget_read):
@@ -111,13 +111,13 @@ class CandidateUniquenessTests(unittest.TestCase):
 class SuccessorRailBindingTests(unittest.TestCase):
     def test_candidate_binds_the_next_version_and_exact_predecessor(self) -> None:
         workflow = (ROOT / ".github/workflows/release-successor-candidate.yml").read_text()
-        self.assertIn('test "$version" = 0.97.1', workflow)
-        self.assertIn("gh release download coherent-set/v0.97.0", workflow)
-        self.assertIn("--tag-source 2ab0c0ff9f37bdec9a11ba3604ebdc230711934f", workflow)
-        self.assertEqual(workflow.count("--predecessor 0.97.0"), 2)
-        self.assertIn("--release-tag coherent-set/v0.97.0", workflow)
+        self.assertIn('test "$version" = 0.97.2', workflow)
+        self.assertIn("gh release download coherent-set/v0.97.1", workflow)
+        self.assertIn("--tag-source 99ea75286f5c3cea2a261fef4e5b45cd70378185", workflow)
+        self.assertEqual(workflow.count("--predecessor 0.97.1"), 2)
+        self.assertIn("--release-tag coherent-set/v0.97.1", workflow)
         for namespace in ("coherent-set", "kit", "drivers", "coord-engine"):
-            self.assertIn(f"refs/tags/{namespace}/v0.97.1", workflow)
+            self.assertIn(f"refs/tags/{namespace}/v0.97.2", workflow)
         for project in ("FS.GG.Coord.Cli", "FS.GG.Kit", "FS.GG.Drivers"):
             self.assertEqual(workflow.count(f"dotnet pack src/{project}/"), 1)
         self.assertIn("--policy-version release-successor/1", workflow)
@@ -131,11 +131,11 @@ class SuccessorRailBindingTests(unittest.TestCase):
     def test_publisher_and_journal_bind_one_unused_successor(self) -> None:
         publisher = (ROOT / "scripts/release-successor-publish.py").read_text()
         journal = (ROOT / "scripts/release_successor_journal.py").read_text()
-        self.assertEqual(publisher.count('"version": "0.97.1"'), 1)
-        self.assertIn('manifest["descriptor"]["version"] == "0.97.1"', publisher)
-        self.assertIn('"--version", "0.97.1", "--predecessor", "0.97.0"', publisher)
-        self.assertIn('api.get("repos/FS-GG/.github/git/ref/tags/coherent-set/v0.97.1")', publisher)
-        self.assertIn('REF = "refs/heads/fsgg/v2/journal/release/utel-rel-13"', journal)
+        self.assertEqual(publisher.count('"version": "0.97.2"'), 1)
+        self.assertIn('manifest["descriptor"]["version"] == "0.97.2"', publisher)
+        self.assertIn('"--version", "0.97.2", "--predecessor", "0.97.1"', publisher)
+        self.assertIn('api.get("repos/FS-GG/.github/git/ref/tags/coherent-set/v0.97.2")', publisher)
+        self.assertIn('REF = "refs/heads/fsgg/v2/journal/release/utel-rel-14"', journal)
         self.assertNotIn("utel-rel-10", journal)
         workflow = (ROOT / ".github/workflows/release-successor-publish.yml").read_text()
         self.assertIn("github.ref == 'refs/heads/main' && github.actor == 'EHotwagner'", workflow)

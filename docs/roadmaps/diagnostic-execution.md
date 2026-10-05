@@ -1,6 +1,6 @@
 # V2-DIAG-01: Collect independent failures within bounded execution
 
-Date: 2026-10-05. Status: shared guidance landed; ordinary pilot source qualified locally; native pilot and receiver adoption pending.
+Date: 2026-10-05. Status: shared guidance and selected ordinary pilot delivered; native pilot and installed receiver adoption pending.
 Design: [diagnostic execution](../designs/diagnostic-execution.md).
 Parent: [V2 roadmap](../github-substrate-v2-roadmap.md#v2-diag-01--diagnostic-execution--2026-10-05).
 
@@ -111,9 +111,24 @@ eleven runner controls passed. Exit, all cleanup and reporting succeeded; no cov
 The observed outer duration was 9.728 seconds, with no resource failure under sampled limits.
 The four runner source files remain byte-identical after rebasing onto the guidance merge.
 
-Hosted exact-head checks and source merge readback remain pending for this ordinary candidate.
-Coordination's native pilot, publication, installed adoption and whole-feature evaluation remain
-pending; .2, .3 and .4 remain open. No comparable savings baseline is established.
+[PR #4252](https://github.com/FS-GG/.github/pull/4252) delivered the ordinary runner at
+`4d333986d7d20a664ad447e49c79841c75e507e9`. The complete pre-merge
+[hosted run 37360993148](https://github.com/FS-GG/.github/actions/runs/37360993148)
+passed at exact head `ba05c29ea8b816e76c176b4d8227dad6cf2e1605`; root verified that its
+twelve source-input pins match the delivered runner. All five suites, cleanup and reporting
+passed with no omitted coverage. This join establishes delivered-byte execution, not a separate
+post-merge hosted run. The hosted entry took 39.908 seconds, including 1.445 seconds for the eleven
+runner controls; the actual local entry took 9.534 seconds inside the 9.728-second outer envelope.
+
+One disposable entry invocation retained two injected independent assertion defects and returned
+nonzero qualification. The actual local and hosted complete entries found no assertion or
+infrastructure failures. No before/after savings baseline exists: total diagnostic overhead,
+avoided attempts, model token overhead and family usage remain unknown. Local and hosted durations
+come from different environments and do not establish an overhead estimate.
+
+This is partial ordinary-pilot evaluation under .4. Coordination's native pilot, packaged
+publication and installed receivers remain pending; .2, .3 and .4 remain unchecked. Repository
+source twins do not establish packaged Drivers adoption or whole-feature acceptance.
 
 ## Completion and rollout limits
 

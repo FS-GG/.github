@@ -170,3 +170,33 @@ unresolved. The root finish's dashboard publication reported an advisory subproc
 failure: source inspection traces script discovery to the controlled home working
 directory, with no script override. Nested stderr was not retained. No publisher retry
 was needed for this local-cycle acceptance, and dashboard publication is not established.
+
+## UTEL-REL-14 — 0.97.2 packaged diagnostic guidance
+
+The selected compatible patch is **0.97.2** for the work-roadmap diagnostic guidance
+merged in [PR #4251](https://github.com/FS-GG/.github/pull/4251). Work-roadmap is
+FS.GG.Drivers content; work-programme and pipeline-preflight remain repository-native
+and create no package obligation. CLI, Kit and Drivers still share the existing scalar.
+The genuine promoted predecessor is **0.97.1**, source
+`99ea75286f5c3cea2a261fef4e5b45cd70378185`, content
+`sha256:02dfc44d64e1b807fe20591fc2e0fdb9d02f28435a8b027fddd8ff5631e22714`.
+Preserve its completed `utel-rel-13` journal, all 16 effect receipts and accepted local
+adoption. The fresh selected journal is `refs/heads/fsgg/v2/journal/release/utel-rel-14`.
+The prior acceptance projection landed in [PR #4253](https://github.com/FS-GG/.github/pull/4253)
+at `62bb3f68557e844c0cee89cd229eeb69d8bf2577`; this clears the source-chain dependency.
+
+Use the existing exact-main, first-attempt candidate and original seven-file archive,
+separate no-effect publisher preflight, sole operator, environment, sixteen-effect
+admission and forward-recovery route. The full source/package/runtime candidate
+qualification remains required. Hold the final merged source stable through candidate,
+preflight and first publication; recheck both-feed uniqueness and journal absence
+immediately before effects. Keep all five legacy workflows sealed and never repack,
+replace or reset an existing version, archive or journal.
+
+Installed Drivers acceptance follows genuine 0.97.2 promotion and verifies its served
+work-roadmap bytes, manifest digests and canonical diagnostic-policy URL in a separate
+ordinary side-by-side receiver. It does not qualify changed Coordination.Cli DIAG
+assemblies, authorize its 0.2.1 publisher, enable a service or complete V2-DIAG-01.
+Source-only preparation performs no candidate, publication or native adoption.
+Root/historical/whole-programme usage and independent remote Host receipts remain
+unknown; failed missing-parent telemetry begin evidence is retained without reconstruction.
