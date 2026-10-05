@@ -1,6 +1,6 @@
 ---
 name: work-programme
-description: "Advance the temporary FS-GG Unified Roadmap with bounded lane packets, deterministic F# frontier and evidence checks, and compact parent decisions."
+description: "Advance the temporary FS-GG Unified Roadmap with typed lane returns, compact delta views, bounded evidence and check watchers."
 ---
 
 # Work Programme
@@ -8,6 +8,14 @@ description: "Advance the temporary FS-GG Unified Roadmap with bounded lane pack
 Temporary repository-owned replacement for `work-unified-roadmap`. The existing roadmap and owner
 plans remain authoritative. This skill starts development only when the user requests advancement;
 inspection, skill maintenance and audits remain within their requested scope.
+
+## Default coordination workflow
+
+Use the delivered V2-CTX-01 workflow by default: pinned packets, typed owner returns, `delta`
+parent views, bounded `view` retrieval, declared mechanical `reuse` and the existing check watcher.
+The user selected this default on 2026-10-05. This selects delivered coordination behavior; remaining
+integration and whole-family cost measurements stay open. It changes no operation admission or
+resource limit. See the [context-efficiency plan](../../../docs/roadmaps/2026-10-05-programme-context-efficiency.md).
 
 ## Enter and recover
 
@@ -34,6 +42,11 @@ The snapshot is a derived observation cache, not a second roadmap or an authoriz
 fresh source/PR/check/operation references, timestamps, unreadable observations, retained reservations,
 disjoint touch-sets and selected dependency boundaries. The helper returns advisory actions and the
 complete reserved active inventory. Read its compact output; retain raw histories outside parent context.
+Use `delta` with explicit evaluation time and policy/evaluator/user-scope identities for subsequent
+parent decisions. Keep the complete active-reservation inventory even when owner returns are missing.
+On a missing base, changed identity or revision gap, resynchronize from source observations; retain
+unknown reservations and original timestamps. Legacy prose remains historical evidence: never invent
+packet digests or return revisions to migrate it. Start typed returns with the next genuine packet.
 Native tools and governing contracts still independently admit every effect.
 Act on ready lanes up to actual capacity, then integrate or repair the active set before opening more
 PR lanes when that queue is limiting. Refresh this view after material native changes; use bounded machine
@@ -45,6 +58,9 @@ The parent owns user scope, capacity, shared surfaces, integration and exception
 retain source investigation, failures, tests and detailed evidence. Do not repeat a worker's investigation
 or routinely load all seals, successful hash rows, logs or diffs into the parent. Retrieve the exact
 artifact when a finding, dispute, architectural join or explicitly root-owned safeguard requires it.
+Use `view` for pinned bounded excerpts; transport governing instructions whole. Use `reuse` only for
+declared complete mechanical input closures. A refusal or incomplete closure requires retrieval or
+recomputation, never inferred acceptance.
 
 For each ready lane, use one accountable owner and isolated worktree with an explicit touch-set. Reuse
 the same owner for ordinary milestones and repairs. Prepare a pinned packet with `packet`; read only the
@@ -65,9 +81,13 @@ owner subroadmap, ready window, current branch/PR, authority, acceptance and sto
 reviewers or incident investigators return exact-source findings; routine work never requires a critic.
 All agents count toward available capacity; do not add another coordinator per lane.
 
-Ask workers to retain detailed results privately and return roughly 150–300 words: stable identity,
+Require new packet-bound owners to retain a `fsgg.programme.lane-return/1` artifact using the
+[adapter contract](references/adapter.md#additive-offline-delta-input), and return its path with roughly
+150–300 words: stable identity,
 exact candidate/operation, established outcome, unknowns, artifact references and any concrete decision.
-This is a target, not permission to omit material findings. The parent expands exceptions, not every success.
+This is a target, not permission to omit material findings. Keep packet digest, original attempt,
+source revision and return revision joins truthful. Have the same owner repair malformed returns;
+a return cannot itself establish completion. The parent expands exceptions, not every success.
 
 ## Integrate through existing boundaries
 
@@ -79,6 +99,10 @@ The named parent integrator admits remote PR creation using `tools/pr-lane-admis
 and chain, exact pushed head, prepared title/body; one open PR per chain and at most two managed PRs per
 repository. Its lock is local and participating callers only. Read the live check queue too. Prepare
 locally when CI/integration is the bottleneck; repair the existing PR. Shared-file joins use one integrator.
+For pending hosted checks, default to `tools/routine-delivery.py --watch-checks --watch-seconds N`
+with the selected repo, PR and exact head (N 1–600). Consume material changes or terminal/deadline
+records; unchanged polls need no model turn. The watcher never applies delivery and owns only direct
+query children. Count its resources and defer it during incompatible qualification windows.
 Use `tools/routine-delivery.py` and [ADR-0084](../../../docs/adr/0084-semantic-reuse-never-cancels-coherent-validation.md)
 for exact-head checks, validated reuse, coherent validation, merge and native readback. Never reinterpret
 `pending` as `disputed`, cancel the coherent obligation, or accept dependent activation after a late failure.

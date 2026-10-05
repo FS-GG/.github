@@ -1,4 +1,4 @@
 interface:
   display_name: "Work Programme"
   short_description: "Coordinate FS-GG roadmap lanes with bounded context"
-  default_prompt: "Use $work-programme to resume the FS-GG Unified Roadmap through bounded lane assignments."
+  default_prompt: "Use $work-programme to resume the FS-GG Unified Roadmap through typed lane returns, compact delta views and bounded check watchers."

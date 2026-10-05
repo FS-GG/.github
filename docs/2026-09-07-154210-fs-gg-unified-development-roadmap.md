@@ -66,6 +66,13 @@ including16 new controls. Historical diagnostic/complete behavior remains unchan
 boundary grants no rerun, release mutation, installed qualification or Creator adoption; original H4
 acceptance remains failed/unaccepted. A fresh bounded admission is required before hosted execution.
 
+**2026-10-05: improved work-programme coordination selected as default.**
+At the user's explicit request, the [skill](../.agents/skills/work-programme/SKILL.md) now defaults to
+typed lane returns, compact delta views, bounded evidence retrieval, mechanical reuse advice and
+bounded check watchers. The [owner plan](roadmaps/2026-10-05-programme-context-efficiency.md#user-selected-default-2026-10-05)
+records the selection separately from remaining integration and cost measurement. Existing operation
+admission, resource limits and original attempt identities remain authoritative.
+
 **2026-10-05: V2-CTX-01.4 bounded native-check watcher slice qualified.**
 The existing delivery tool now offers an opt-in read-only watcher with bounded time, queries and output.
 It suppresses unchanged observations, preserves exact-head checks and requires fresh canonical delivery

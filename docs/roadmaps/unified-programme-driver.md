@@ -59,3 +59,11 @@ The opt-in delivery-tool watcher (`--watch-checks --watch-seconds N`) bounds nat
 material changes, failure, terminal state or deadline. It bypasses telemetry discovery and cannot
 apply a merge. Its67 focused tests and an actual three-query terminal read passed; full owner/restart
 integration and measured savings remain pending. Existing default delivery behavior is unchanged.
+
+### User-selected coordination default, 2026-10-05
+
+The user selected the delivered V2-CTX-01 improvements as the `$work-programme` default.
+The [skill](../../.agents/skills/work-programme/SKILL.md) now routes applicable work through typed
+returns, compact deltas, bounded evidence views, mechanical reuse advice and native-check watchers.
+This supersedes the earlier default deferral for these components. Full integration and economic
+measurement remain open; operation authority, original attempts and unknown reservations are preserved.
