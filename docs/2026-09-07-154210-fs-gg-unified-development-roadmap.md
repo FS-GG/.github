@@ -66,6 +66,12 @@ including16 new controls. Historical diagnostic/complete behavior remains unchan
 boundary grants no rerun, release mutation, installed qualification or Creator adoption; original H4
 acceptance remains failed/unaccepted. A fresh bounded admission is required before hosted execution.
 
+**2026-10-05: programme telemetry root recovered and prospective child usage collected.**
+The original pending root batch was applied without replacement lineage. A fresh child completed and
+its native usage was collected; the [observation guide](../.agents/skills/work-programme/references/observation.md)
+now specifies the short agent-name binding required by the existing reader. Historical usage and
+whole-programme coverage remain unknown, and the merged emitter fix still requires deployed adoption.
+
 **2026-10-05: telemetry equal-ID initialization repair.**
 The roadmap adapter now gives an item fact a deterministic distinct identity when its logical feature
 and item IDs are equal. Logical references, dispatch tokens and ordinary distinct-ID emission remain
