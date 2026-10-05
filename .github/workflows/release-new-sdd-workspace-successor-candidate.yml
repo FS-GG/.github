@@ -60,7 +60,7 @@ jobs:
             --output artifacts/dependency-input/FS.GG.Coord.Cli.0.97.0.nupkg
           python3 scripts/creator-frozen-coord-dependencies.py stage \
             --package artifacts/dependency-input/FS.GG.Coord.Cli.0.97.0.nupkg \
-            --dependencies "$FsggFrozenCoordDependencies"
+            --dependencies "${FsggFrozenCoordDependencies:?job frozen dependency path required}"
       - name: Qualify wizard source
         run: bash tests/new-sdd-workspace/run.sh
       - name: Qualify the real compiled product board boundary
@@ -89,7 +89,7 @@ jobs:
           python3 tests/new-sdd-workspace-successor/run.py
           python3 tests/new-sdd-workspace-successor/run.py \
             --board-package "$package" --source-sha "$SOURCE_SHA" --release-manifest "$manifest" \
-            --frozen-coord-dependencies "$FsggFrozenCoordDependencies" \
+            --frozen-coord-dependencies "${FsggFrozenCoordDependencies:?job frozen dependency path required}" \
             > artifacts/new-sdd-workspace/package-evidence.json
       - name: Refuse changed main before retaining candidate
         env:
