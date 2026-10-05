@@ -110,4 +110,18 @@ try
         refuses (fun () -> read<DeltaInput> temp |> ignore))
 finally
     if File.Exists temp then File.Delete temp
+test "absent stream cannot establish superseded revision" (fun () ->
+    let result=delta {spec with BaseReturns=[||]}
+    expect (result.Resynchronize && result.Changed.Length=0 && has "missing-return-base-resynchronize" result))
+test "fresh stream revision1 supersedes0 remains valid" (fun () ->
+    let result=delta {spec with BaseReturns=[||];CurrentReturns=[|old|]}
+    expect (not result.Resynchronize && result.Changed=[|old|]))
+test "two current original attempts reconcile instead of parallel updates" (fun () ->
+    let other={old with OriginalAttempt="other-original"}
+    let result=delta {spec with BaseReturns=[||];CurrentReturns=[|old;other|]}
+    expect (result.Changed.Length=0 && has "original-lineage-conflict-reconcile" result &&
+            encode result=encode(delta {spec with BaseReturns=[||];CurrentReturns=[|other;old|]})))
+test "newer return cannot hide lower revision cross-base conflict" (fun () ->
+    let result=delta {spec with CurrentReturns=[|newer;{old with Narrative="conflicting lower revision"}|]}
+    expect (result.Changed.Length=0 && has "equal-revision-conflict-reconcile" result))
 printfn "PASS %d context delta controls; no effects dispatched" passed

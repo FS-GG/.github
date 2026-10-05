@@ -235,6 +235,14 @@ let contextDelta inputDigest (spec: DeltaInput) =
             else Some (group |> Array.maxBy _.Revision))
     let baseline = reduce spec.BaseReturns
     let incoming = reduce spec.CurrentReturns
+    // A newer row cannot erase equal-revision disagreement in the supplied
+    // base/current closure; original attempts are identity, not parallel streams.
+    let closure = Array.append spec.BaseReturns spec.CurrentReturns
+    reduce closure |> ignore
+    closure |> Array.groupBy (fun row -> row.Campaign,row.Lane,row.Owner,row.Attempt,row.Candidate)
+    |> Array.iter (fun (_, rows) ->
+        if rows |> Array.map _.OriginalAttempt |> Array.distinct |> Array.length |> fun count -> count > 1 then
+            notice rows[0].Lane "original-lineage-conflict-reconcile")
     let candidates = ResizeArray<LaneReturn>()
     for row in incoming do
         require (row.Campaign = spec.Snapshot.Campaign) "return-campaign-mismatch"
@@ -249,6 +257,10 @@ let contextDelta inputDigest (spec: DeltaInput) =
                 let lanePrior = baseline |> Array.filter (fun old -> old.Lane = row.Lane)
                 if notices |> Seq.exists (fun n -> n.Lane = row.Lane && n.Kind = "equal-revision-conflict-reconcile") then
                     notice row.Lane "conflicted-base-or-return-reconcile"
+                elif notices |> Seq.exists (fun n -> n.Lane = row.Lane && n.Kind = "original-lineage-conflict-reconcile") then
+                    notice row.Lane "original-lineage-conflict-reconcile"
+                elif prior.IsNone && (row.Revision <> 1L || row.Supersedes <> 0L) then
+                    notice row.Lane "missing-return-base-resynchronize"
                 elif lanePrior |> Array.exists (fun old -> old.OriginalItem <> row.OriginalItem || old.OriginalAttempt <> row.OriginalAttempt) then
                     notice row.Lane "original-lineage-conflict-reconcile"
                 elif prior |> Option.exists (fun old -> row.Revision < old.Revision) then notice row.Lane "older-return-retained-as-history"

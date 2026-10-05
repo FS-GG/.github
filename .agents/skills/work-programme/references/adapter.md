@@ -123,7 +123,11 @@ lane's owner, attempt and head; superseded/incomparable returns are explicit
 notices. Original attempts cannot silently change across base/current joins.
 Identical duplicates are idempotent, older returns remain historical, and equal
 revision/different content reconciles rather than selecting arrival order.
-A revision gap against the supplied base requires resynchronization.
+A revision gap against the supplied base requires resynchronization. A stream
+absent from the base must start at revision1/supersedes0; a partial base cannot
+prove an unseen superseded revision. Different original attempts for the same
+current owner/attempt/candidate reconcile. A newer row cannot erase a conflicting
+lower revision across the supplied base/current closure.
 
 Output `fsgg.programme.delta/1` retains input digest, explicit time and identities,
 base/current revisions, `changed`, full `activeReservations` as legacy lane
