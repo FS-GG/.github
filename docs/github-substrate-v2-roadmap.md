@@ -333,6 +333,21 @@ Partitioned reuse must not substitute stale evidence for changed inputs or model
 verified without executing its actual discovery check. This roadmap amendment supplies no prepared
 value, publication, installation, native grant or completion claim.
 
+### V2-DIAG-01 — Diagnostic execution — 2026-10-05
+
+Owner: `.github` for permanent shared guidance, Coordination for reusable execution contracts,
+and selected runner owners for actual adoption. Status: design agreed; implementation planned.
+The [design](designs/diagnostic-execution.md) and [delivery roadmap](roadmaps/diagnostic-execution.md)
+extend V2-PREFLIGHT-01 with collection of independent failures within existing execution budgets.
+Failed or unknown prerequisites block dependent work; uncertainty in authority, ownership,
+resource accounting or cleanup stops affected execution. Partial diagnostics never qualify a run.
+
+The four delivery parts cover shared guidance, aggregate preparation/results, ordinary and native
+runner pilots, and publication/adoption with measured evaluation. Reuse the selected prerequisite
+contracts and existing runner infrastructure. This addition neither replaces the next-item selection
+nor interrupts admitted operations; it establishes no runtime change, new grant or completed V2
+outcome. Detailed acceptance and unchecked implementation work remain in the owning roadmap.
+
 ### Language-independent product workspaces — 2026-09-29
 
 The settled [polyglot provider decision](adr/0092-descriptor-driven-polyglot-workspace-providers.md) and
