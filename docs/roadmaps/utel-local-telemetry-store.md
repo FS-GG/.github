@@ -155,3 +155,24 @@ unchanged; source publication and adoption remain pending.
 The orchestrating agent authors the review after terminal state; this adds no LLM service, daemon, transcript
 collection, or native-tool interception. SQLite remains the host-local WAL store with atomic inbox publication
 and one drainer. Source delivery and future host activation are separate operational steps.
+
+## Equal feature and item identities
+
+The roadmap adapter permits a root whose feature and item IDs are equal. Native fact
+identities are global across kinds, so that root emits its item fact with the stable
+`roadmap-item-<digest>` identity while retaining the literal item ID in `itemId` and
+feature ID in `featureId`. The feature fact and every distinct-ID root retain their
+existing identities. Population-only emission uses the same rule. This internal
+repair changes no public signature, schema, dispatch token, usage accounting, or
+logical item reference. Adapter regressions cover equal IDs, unchanged distinct
+IDs, and retry without a second publication. The receiver fixture rejects duplicate
+fact identities across kinds and the population-only case uses a declared protected
+original-item mapping. Locked restore, Release build, and the complete adapter
+harness pass; fixture usage counters establish adapter behavior only, not actual
+programme token coverage.
+
+A rejected pending publication may be repaired only after retaining its original
+bytes and proving its ingest ID, generation cursor, and runtime admission are absent.
+Change only the colliding item fact identity, preserving the existing dispatch,
+activation, invocation, token, timestamps and batch identifiers. Retry the durable
+pending intent; historical unobserved child dispatches and usage remain gaps.

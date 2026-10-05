@@ -86,6 +86,10 @@ module SkillTelemetryAdapter =
     let private digest prefix (values: string list) =
         prefix + (values |> String.concat "\u001f" |> utf8.GetBytes |> sha256).Substring(0, 32)
 
+    // Fact identities are global across kinds; keep the logical item ID in itemId.
+    let private itemFactIdentity feature item =
+        if feature = item then digest "roadmap-item-" [ item ] else item
+
     let private validateIdentity (name: string) (optional: bool) (value: string option) =
         match value with
         | None when optional -> None
@@ -481,7 +485,7 @@ module SkillTelemetryAdapter =
             let events = ResizeArray<JsonNode>()
             if actualRelation = "root" then
                 events.Add(event "feature" feature None [ ("name", node feature) ])
-                events.Add(event "item" item (Some item) [ ("featureId", node feature) ])
+                events.Add(event "item" (itemFactIdentity feature item) (Some item) [ ("featureId", node feature) ])
                 let key = digest "" [ item; original ]
                 events.Add(event "budget-population" ("budget-population-" + key) (Some item) [ "originalItemId", node original; "state", node "open"; "sourceKind", node "native-item"; "sourceRef", node ("roadmap-dispatch:" + key) ])
                 events.Add(event "operational-activation" ("operational-activation-" + activation) (Some item) [ "activationId", node activation; "scope", node "explicit-future-dispatches"; "runtime", node runtime; "activatedAt", node at; "clockProvenance", node "host-wall"; "lateAfterSeconds", node lateAfter ])
@@ -915,7 +919,7 @@ module SkillTelemetryAdapter =
             let state = expected.DeepClone() :?> JsonObject
             state["originalAssignmentDigest"] <- node assignmentDigest; state["phase"] <- node "pending"; state["sequence"] <- node 0; state["invocationId"] <- node ("original-binding-" + token)
             let key = digest "" [ item; original ]
-            let events = [ event "feature" feature None [ ("name", node feature) ]; event "item" item (Some item) [ ("featureId", node feature) ]; event "budget-population" ("budget-population-" + key) (Some item) [ "originalItemId", node original; "state", node "open"; "sourceKind", node "native-item"; "sourceRef", node ("roadmap-dispatch:" + key) ] ]
+            let events = [ event "feature" feature None [ ("name", node feature) ]; event "item" (itemFactIdentity feature item) (Some item) [ ("featureId", node feature) ]; event "budget-population" ("budget-population-" + key) (Some item) [ "originalItemId", node original; "state", node "open"; "sourceKind", node "native-item"; "sourceRef", node ("roadmap-dispatch:" + key) ] ]
             publish config state "population-only" "applied" events
         jsonObject [ "schema", node "fsgg.telemetry.original-binding-result/1"; "status", node "applied" ]
 
