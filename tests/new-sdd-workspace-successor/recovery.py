@@ -1,5 +1,5 @@
 """Pure production recovery callers. Synthetic bodies/processes; no SDK/network/crypto."""
-import base64,copy,hashlib,io,json,os,pathlib,subprocess,sys,tempfile,unittest,zipfile
+import base64,binascii,copy,hashlib,io,json,os,pathlib,subprocess,sys,tempfile,unittest,zipfile
 from types import SimpleNamespace
 from unittest.mock import patch
 sys.path.insert(0,str(pathlib.Path(__file__).resolve().parents[2]/'scripts'))
@@ -207,7 +207,7 @@ class FiniteControls(unittest.TestCase):
   for oid in reversed(list(f.nodes)):
    node=f.nodes[oid];raw=canonical(node['state']);blob=hashlib.sha1(b'blob '+str(len(raw)).encode()+b'\0'+raw).hexdigest();tree_raw=b'100644 release-state.json\0'+bytes.fromhex(blob);tree=hashlib.sha1(b'tree '+str(len(tree_raw)).encode()+b'\0'+tree_raw).hexdigest()
    commits.append({'sha':oid,'parents':[{'sha':node['parent']}] if node['parent'] else [],'commit':{'tree':{'sha':tree}}})
-   responses[f'/contents/release-state.json?ref={oid}']={'type':'file','path':'release-state.json','encoding':'base64','content':base64.b64encode(raw).decode(),'sha':blob}
+   responses[f'/contents/release-state.json?ref={oid}']={'type':'file','path':'release-state.json','encoding':'base64','content':base64.encodebytes(raw).decode(),'sha':blob}
   responses[f'/commits?sha={r.JOURNAL_HEAD}&per_page=100']=commits
   def request(url,*args,**kwargs):
    budget.read();return copy.deepcopy(responses[url.split(f'repos/{AUTHORITY}',1)[1]])
@@ -215,6 +215,14 @@ class FiniteControls(unittest.TestCase):
   with patch.object(api,'request',side_effect=request):api.prime_journal()
   self.assertEqual(budget.reads,17);self.assertEqual(len(api.immutable),48)
   path=f'repos/{AUTHORITY}/git/commits/{r.JOURNAL_HEAD}';api.get(path);api.get(path);self.assertEqual(budget.reads,17)
+  for reply in responses.values():
+   if isinstance(reply,dict):reply['content']=reply['content'].replace('\n','\r\n')
+  with patch.object(api,'request',side_effect=request):api.prime_journal()
+  content_reply=responses[f'/contents/release-state.json?ref={r.JOURNAL_HEAD}'];original_content=content_reply['content']
+  for suffix in [' ', '!', '\t']:
+   content_reply['content']=original_content+suffix
+   with patch.object(api,'request',side_effect=request),self.assertRaises(binascii.Error):api.prime_journal()
+  content_reply['content']=original_content
   commits[0]['commit']['tree']['sha']='0'*40
   api=r.FiniteAPI('mock',r.Budget('diagnostic',clock=lambda:0),self.root,authority=True)
   with patch.object(api,'request',side_effect=request),self.assertRaises(Refused):api.prime_journal()

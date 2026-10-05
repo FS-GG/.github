@@ -1,5 +1,5 @@
 """Pure readback callers and transport guards; no network/process/crypto/token mint."""
-import ast,base64,copy,importlib.util,io,json,pathlib,sys,tempfile,unittest,urllib.request
+import ast,base64,binascii,copy,importlib.util,io,json,pathlib,sys,tempfile,unittest,urllib.request
 from unittest.mock import patch
 sys.dont_write_bytecode=True
 sys.path.insert(0,str(pathlib.Path(__file__).resolve().parents[2]/'scripts'))
@@ -103,7 +103,7 @@ class ReadbackTests(unittest.TestCase):
   oid=fixture.head
   while oid:
    node=fixture.nodes[oid];raw=canonical(node['state']);blob=r.hashlib.sha1(b'blob '+str(len(raw)).encode()+b'\0'+raw).hexdigest();tree_raw=b'100644 release-state.json\0'+bytes.fromhex(blob);tree=r.hashlib.sha1(b'tree '+str(len(tree_raw)).encode()+b'\0'+tree_raw).hexdigest()
-   commits.append({'sha':oid,'parents':[{'sha':node['parent']}] if node['parent'] else [],'commit':{'tree':{'sha':tree}}});contents[oid]={'type':'file','path':'release-state.json','encoding':'base64','sha':blob,'content':base64.b64encode(raw).decode()};oid=node['parent']
+   commits.append({'sha':oid,'parents':[{'sha':node['parent']}] if node['parent'] else [],'commit':{'tree':{'sha':tree}}});contents[oid]={'type':'file','path':'release-state.json','encoding':'base64','sha':blob,'content':base64.encodebytes(raw).decode()};oid=node['parent']
   with tempfile.TemporaryDirectory() as root:
    api=r.ReadbackAPI('synthetic',r.Budget('diagnostic'),pathlib.Path(root),authority=True)
    def get(path):
@@ -115,6 +115,13 @@ class ReadbackTests(unittest.TestCase):
    with patch.object(api,'get',side_effect=get):
     api.prime_completed_journal(fixture.head);journal=ProtectedReleaseJournal(api,r.REF);state=journal.read()
    self.assertEqual(state.generation,17);self.assertEqual(journal._lineage_length,17)
+   for item in contents.values():item['content']=item['content'].replace('\n','\r\n')
+   with patch.object(api,'get',side_effect=get):api.prime_completed_journal(fixture.head)
+   original=contents[fixture.head]['content']
+   for suffix in [' ', '!', '\t']:
+    contents[fixture.head]['content']=original+suffix
+    with patch.object(api,'get',side_effect=get),self.assertRaises(binascii.Error):api.prime_completed_journal(fixture.head)
+   contents[fixture.head]['content']=original
    for mutation in ['missing','parent','blob','tree']:
     original_commits=copy.deepcopy(commits);original_contents=copy.deepcopy(contents)
     if mutation=='missing':commits.pop()
@@ -128,7 +135,7 @@ class ReadbackTests(unittest.TestCase):
   observer={'id':99,'display_title':f"Wizard 0.13 recovery {r.READBACK_MODE} {b['correlation']} {r.digest(r.canonical(b))}",'head_sha':b['observerSource'],'run_attempt':1,'status':'in_progress','path':r.WORKFLOW,'event':'workflow_dispatch','head_branch':'main','actor':{'login':'EHotwagner'},'repository':{'id':1269292704}}
   original={**observer,'id':r.ORIGINAL_H4['originalRunId'],'display_title':f"Wizard 0.13 recovery complete {r.ORIGINAL_H4['originalCorrelation']} {r.ORIGINAL_H4['originalBindingSha256']}",'head_sha':r.ORIGINAL_H4['originalHeldSource'],'status':'completed','conclusion':'success'}
   artifact={'id':r.ORIGINAL_H4['originalArtifactId'],'expired':False,'digest':'sha256:'+r.ORIGINAL_H4['originalArchiveSha256'],'name':f"wizard013-recovery-complete-{r.ORIGINAL_H4['originalRunId']}-{r.ORIGINAL_H4['originalCorrelation']}",'workflow_run':{'id':r.ORIGINAL_H4['originalRunId'],'head_sha':r.ORIGINAL_H4['originalHeldSource'],'repository_id':1269292704,'head_repository_id':1269292704}}
-  paths=[]
+  paths=[];encoded_workflow=base64.encodebytes(workflow).decode()
   class API:
    def __init__(self,pages=None):self.pages=pages
    def get(self,path):
@@ -139,9 +146,19 @@ class ReadbackTests(unittest.TestCase):
     if '/actions/artifacts/' in path:return artifact
     if '/git/ref/' in path:return {'object':{'sha':b['observerMain']}}
     if '/git/commits/' in path:return {'sha':b['observerSource'],'tree':{'sha':b['observerTree']}}
-    if '/contents/' in path:return {'type':'file','path':r.WORKFLOW,'encoding':'base64','content':base64.b64encode(workflow).decode()}
+    if '/contents/' in path:return {'type':'file','path':r.WORKFLOW,'encoding':'base64','content':encoded_workflow}
     return {'id':1269292704}
   r.readback_native(API(),b,99);self.assertFalse(any('/user' in path for path in paths))
+  encoded_workflow=encoded_workflow.replace('\n','\r\n');r.readback_native(API(),b,99)
+  original_encoding=encoded_workflow
+  for suffix in [' ', '!', '\t']:
+   encoded_workflow=original_encoding+suffix
+   with self.assertRaises(binascii.Error):r.readback_native(API(),b,99)
+  encoded_workflow=original_encoding
+  original_hash=b['observerWorkflowSha256'];b['observerWorkflowSha256']='0'*64
+  observer['display_title']=f"Wizard 0.13 recovery {r.READBACK_MODE} {b['correlation']} {r.digest(r.canonical(b))}"
+  with self.assertRaisesRegex(Refused,'workflow bytes'):r.readback_native(API(),b,99)
+  b['observerWorkflowSha256']=original_hash;observer['display_title']=f"Wizard 0.13 recovery {r.READBACK_MODE} {b['correlation']} {r.digest(r.canonical(b))}"
   # One match in four full pages still leaves the bounded enumeration open.
   full=[[observer]+[{'id':n,'display_title':'other'} for n in range(99)]]+[[{'id':100*page+n,'display_title':'other'} for n in range(100)] for page in range(1,4)]
   paths.clear()

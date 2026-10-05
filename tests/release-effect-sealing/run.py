@@ -227,7 +227,21 @@ def verify_readback_source_spans(source):
             found[name] = hashlib.sha256(ast.get_source_segment(source, node).encode()).hexdigest()
     assert found == readback_amendment["readerSourceSpanSha256"]
 verify_readback_source_spans(recovery_source)
+wrapping_amendment = proof["apiContentsWrappingAmendment"]
+assert wrapping_amendment["unit"] == "TSDD-KNOWLEDGE-01.4"
+assert wrapping_amendment["sourceCandidate"] == "b9418c5555e3c9a1978f6f217d9b93c795219c8b"
+assert wrapping_amendment["currentApiContentsBytesSourceSha256"] == readback_amendment["readerSourceSpanSha256"]["api_contents_bytes"]
+previous_reader_spans = wrapping_amendment["previousReaderSourceSpanSha256"]
+assert set(previous_reader_spans) == set(readback_amendment["readerSourceSpanSha256"]) - {"api_contents_bytes"}
+for name, previous_sha in previous_reader_spans.items():
+    if name not in {"ReadbackAPI", "readback_native"}:
+        assert readback_amendment["readerSourceSpanSha256"][name] == previous_sha
+for owner in ast.parse(recovery_source).body:
+    if isinstance(owner, ast.ClassDef) and owner.name == "FiniteAPI":
+        primer = next(node for node in owner.body if isinstance(node, ast.FunctionDef) and node.name == "prime_journal")
+        assert hashlib.sha256(ast.get_source_segment(recovery_source, primer).encode()).hexdigest() == wrapping_amendment["currentOriginal16PrimerSourceSha256"]
 readback_mutations = (
+    ('content.replace("\\r", "").replace("\\n", ""), validate=True', 'content.replace("\\r", "").replace("\\n", ""), validate=False'),
     ('method=="GET" and body is None,"readback request write forbidden"', 'True,"readback request write forbidden"'),
     ('request.get_method()=="GET" and request.data is None', 'True'),
     ('req.get_method()=="GET" and req.data is None', 'True'),
