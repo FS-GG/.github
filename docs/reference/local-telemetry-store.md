@@ -333,11 +333,15 @@ late corrected turn advances its revision. `usage-reconcile` also recovers turns
 ran. The collector never publishes rollout messages or raw JSON.
 
 An unmatched child, absent counters, incomplete turn, unavailable host, or missing parent thread identity never
-becomes zero usage. Supported children report `native-collaboration-usage-unknown` until every observed turn is
-verified, then `native-collaboration-usage-complete`. Roots and hosts without this Codex identity source retain
-`native-collaboration-usage-unsupported`. `native-process-id-unavailable` remains explicit. These observations
-establish usage for the joined native turns, not native timing or billing. Missing configuration or publication
-remains advisory to native delivery.
+becomes zero usage. Supported children retain `native-collaboration-usage-unknown` even after verified turn
+counters and source-bound inventory facts are published. The [adapter](../../src/FS.GG.Coord.Cli/SkillTelemetryAdapter.fs)
+separately records `nativeInventoryIntegration.locallyReconciled` when the complete eligible turn roster,
+verified usage ledger and published turn roster match. Joined native turn counters can therefore be observed
+while the dispatch response retains an unknown coverage label; neither establishes whole-programme coverage.
+
+Roots and hosts without this Codex identity source retain `native-collaboration-usage-unsupported`.
+`native-process-id-unavailable` remains explicit. These observations establish usage for the joined native
+turns, not native timing or billing. Missing configuration or publication remains advisory to native delivery.
 
 ## Process reviews, activity, and complications
 
