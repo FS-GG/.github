@@ -13,6 +13,22 @@ let encode value = JsonSerializer.Serialize(value, options)
 let fail message = invalidOp message
 let require condition message = if not condition then fail message
 let digest (bytes: byte array) = SHA256.HashData bytes |> Convert.ToHexString |> _.ToLowerInvariant()
+// Read at most limit+1 actual bytes, including concurrent growth. The extra
+// byte detects overflow without reading to EOF or growing memory unboundedly.
+let readBoundedStream limit (stream: Stream) =
+    require (limit >= 0 && limit < Int32.MaxValue) "invalid-stream-bound"
+    use memory = new MemoryStream()
+    let buffer = Array.zeroCreate<byte> (min 65536 (limit+1))
+    let mutable remaining = limit+1
+    let mutable ended = false
+    while remaining > 0 && not ended do
+        let count = stream.Read(buffer,0,min buffer.Length remaining)
+        if count = 0 then ended <- true
+        else
+            memory.Write(buffer,0,count)
+            remaining <- remaining-count
+    require (memory.Length <= int64 limit) "input-grew-too-large"
+    memory.ToArray()
 let boundedFile limit path =
     let full = Path.GetFullPath path
     let mutable current = full
@@ -21,10 +37,7 @@ let boundedFile limit path =
         current <- Path.GetDirectoryName current
     use stream = new FileStream(full, FileMode.Open, FileAccess.Read, FileShare.Read)
     require (stream.Length <= int64 limit) "input-too-large"
-    use memory = new MemoryStream()
-    stream.CopyTo memory
-    require (memory.Length <= int64 limit) "input-grew-too-large"
-    memory.ToArray()
+    readBoundedStream limit stream
 let read<'a> path =
     let bytes = boundedFile (2 * 1024 * 1024) path
     use document = JsonDocument.Parse bytes
@@ -480,10 +493,16 @@ let mechanicalReuse (spec: ReuseInput) =
         if receipt.Identity<>spec.Identity then reasons.Add "policy-profile-evaluator-source-config-changed"
         if not (isDigest receipt.InputClosureSha256) || receipt.InputClosureSha256<>closure then reasons.Add "input-closure-changed"
         if receipt.EvaluatedAt=DateTimeOffset.MinValue || not (fresh receipt.EvaluatedAt) then reasons.Add "receipt-stale-or-future"
-    let result : ReuseResult = { Schema="fsgg.programme.reuse/1";Decision=(if populationMissing then "request-missing" elif reasons.Count>0 then "recompute" else "reuse")
-      Reasons=reasons |> Seq.distinct |> Seq.sort |> Seq.toArray;EvaluationTime=spec.EvaluationTime;InputClosureSha256=closure
-      MechanicalOnly=true;Authority="none; no semantic/native acceptance, permission or completion reused"
-      Coverage="caller-declared complete closure, access and trustworthy receipt pin; no authentication or live readback" }
+    let result : ReuseResult = {
+        Schema="fsgg.programme.reuse/1"
+        Decision=(if populationMissing then "request-missing" elif reasons.Count>0 then "recompute" else "reuse")
+        Reasons=reasons |> Seq.distinct |> Seq.sort |> Seq.toArray
+        EvaluationTime=spec.EvaluationTime
+        InputClosureSha256=closure
+        MechanicalOnly=true
+        Authority="none; no semantic/native acceptance, permission or completion reused"
+        Coverage="caller-declared complete closure, access and trustworthy receipt pin; no authentication or live readback"
+    }
     require (Encoding.UTF8.GetByteCount(encode result)<=262144) "reuse-output-payload-bound"
     result
 
