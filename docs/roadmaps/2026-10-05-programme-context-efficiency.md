@@ -310,9 +310,27 @@ complete input population, pinned mechanical receipt, policy/profile/evaluator/s
 current access and independently fresh facts/receipt. It cannot reuse semantic/native acceptance or
 authenticate a caller's pin. Root source qualification passed44 focused view/reuse controls and the
 full120-case combined suite (31 legacy,35 delta,44 view/reuse,10 baseline); the initial compile failure
-remains retained separately. This .3 window is source qualification only. Owner/watcher integration,
+remains retained separately. [PR #4237](https://github.com/FS-GG/.github/pull/4237) delivered this source
+with hosted checks and two actual CLI checks: whole-instruction evidence correspondence and
+mechanical-only reuse advice. This .3 window is source qualification only. Owner/watcher integration,
 live economics and operational adoption remain pending; default skill instructions are unchanged
 and .4–.6 remain open.
+
+The bounded .4 watcher slice extends the existing [delivery tool](../../tools/routine-delivery.py)
+with opt-in `--watch-checks --watch-seconds N` (1–600 seconds). It checks the expected PR head before
+and after each native check read, bounds direct query time and combined output during acquisition,
+and emits initial/material changes, terminal state, observation failure or deadline. Unchanged polling
+and unrelated PR update timestamps do not emit another revision. The route branches before telemetry
+discovery and rejects `--apply`; delivery still requires its fresh canonical checks. It owns only its
+direct query children and makes no descendant-containment claim.
+
+All67 focused delivery tests passed, including deadline, cancellation, overflow, changed-head and
+unchanged-output controls. An actual read-only invocation against merged PR #4237 made three native
+queries and returned one terminal record covering57 checks, with readiness unevaluated and no apply
+authority. This proves that terminal adapter path; it is not a measured context saving. Full .4 remains
+open: historical prose dispatches lack the original packet/revision bindings required for truthful typed
+returns, and interrupted dispatch, missed-event recovery and complete reservation reconstruction still
+need an actual integrated window. No missing identity is reconstructed as fact.
 
 ## Validation, risks and rollback
 

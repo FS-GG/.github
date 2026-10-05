@@ -56,7 +56,18 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
-**2026-10-05: V2-CTX-01.3 bounded evidence-view and mechanical-reuse source qualified locally.**
+**2026-10-05: V2-CTX-01.4 bounded native-check watcher slice qualified.**
+The existing delivery tool now offers an opt-in read-only watcher with bounded time, queries and output.
+It suppresses unchanged observations, preserves exact-head checks and requires fresh canonical delivery
+checks before merge. All67 focused tests passed; an actual invocation made three native queries and
+returned one terminal record for merged PR #4237's57 checks. This covers the terminal adapter path;
+full typed owner/restart integration and measured efficiency remain open in the
+[owning plan](roadmaps/2026-10-05-programme-context-efficiency.md#bounded-source-window-2026-10-05).
+Missing historical dispatch identities remain unknown. Default skill instructions are unchanged.
+
+**2026-10-05: V2-CTX-01.3 bounded evidence-view and mechanical-reuse source delivered.**
+[PR #4237](https://github.com/FS-GG/.github/pull/4237) merged at
+`f20599977922116cced6e0ec913aa8ce4e100d98` after hosted checks and two actual CLI checks.
 Root qualification passed the120-case combined suite:31 legacy cases,35 delta controls,
 44 view/reuse controls and10 baseline checks. Full artifact identity is checked before excerpts;
 whole mandatory instructions and typed refusal boundaries remain intact. The shared reader stops

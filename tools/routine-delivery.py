@@ -8,6 +8,9 @@ import hashlib
 import io
 import json
 import pathlib
+import os
+import selectors
+import time
 import re
 import subprocess
 import sys
@@ -688,6 +691,210 @@ def summarize(
     )
 
 
+# This opt-in native observer owns only its direct gh query children. It is not
+# a process-tree supervisor, readiness evaluator or delivery authorization.
+WATCH_MAX_SECONDS = 600
+WATCH_MAX_QUERIES = 384
+WATCH_MAX_CHECKS = 128
+WATCH_QUERY_BYTES = 262_144
+WATCH_EMIT_BYTES = 4_194_304
+WATCH_QUERY_SECONDS = 30.0
+WATCH_CLEANUP_SECONDS = 0.5
+WATCH_INTERVAL_SECONDS = 5.0
+WATCH_FIELDS = "bucket,completedAt,event,link,name,startedAt,state,workflow"
+
+
+class WatchDeadline(RuntimeError):
+    """The original watch budget cannot fit another bounded query."""
+
+
+def bounded_watch_query(
+    command: list[str], deadline: float, *, clock: Callable[[], float] = time.monotonic,
+    popen: Callable[..., Any] = subprocess.Popen,
+) -> tuple[int, bytes]:
+    """Bound both streams before retaining; kill/reap the same direct child on error."""
+    work_end = min(deadline - WATCH_CLEANUP_SECONDS, clock() + WATCH_QUERY_SECONDS)
+    if work_end <= clock():
+        raise WatchDeadline("original watch cleanup reserve reached")
+    process = popen(command, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE, close_fds=True)
+    output = bytearray()
+    used = 0
+    selector = None
+    try:
+        selector = selectors.DefaultSelector()
+        for stream, stdout in ((process.stdout, True), (process.stderr, False)):
+            os.set_blocking(stream.fileno(), False)
+            selector.register(stream, selectors.EVENT_READ, stdout)
+        while selector.get_map() or process.poll() is None:
+            remaining = work_end - clock()
+            if remaining <= 0:
+                if clock() >= deadline - WATCH_CLEANUP_SECONDS:
+                    raise WatchDeadline("native query reached original watch cleanup reserve")
+                raise RuntimeError("native query exceeded its clipped timeout")
+            for key, _mask in selector.select(min(remaining, 0.1)):
+                raw = os.read(key.fileobj.fileno(), min(65_536, WATCH_QUERY_BYTES - used + 1))
+                if not raw:
+                    selector.unregister(key.fileobj)
+                    continue
+                if used + len(raw) > WATCH_QUERY_BYTES:
+                    raise RuntimeError("native query combined stdout/stderr exceeded byte bound")
+                used += len(raw)
+                if key.data:
+                    output.extend(raw)
+        process.wait(timeout=max(0, min(WATCH_CLEANUP_SECONDS, deadline - clock())))
+        return process.returncode, bytes(output)
+    finally:
+        try:
+            if process.poll() is None:
+                process.kill()  # Popen retains the original unreaped direct child.
+            process.wait(timeout=max(0, min(WATCH_CLEANUP_SECONDS, deadline - clock())))
+        except subprocess.TimeoutExpired as error:
+            raise RuntimeError("original native query retirement is unknown at watch deadline") from error
+        finally:
+            if selector is not None:
+                selector.close()
+            process.stdout.close()
+            process.stderr.close()
+
+
+class WatchGhApi(GhApi):
+    """Existing native adapter with watch-only finite query/population controls."""
+
+    def __init__(self, deadline: float, *, query: Callable[..., tuple[int, bytes]] = bounded_watch_query,
+                 clock: Callable[[], float] = time.monotonic):
+        self.deadline, self.query, self.clock = deadline, query, clock
+        self.query_count = 0
+
+    def _watch_read(self, command: list[str], accepted: tuple[int, ...]) -> tuple[int, Any]:
+        if self.query_count >= WATCH_MAX_QUERIES:
+            raise RuntimeError("native watch query-count bound reached")
+        if self.clock() >= self.deadline - WATCH_CLEANUP_SECONDS:
+            raise WatchDeadline("original watch cleanup reserve reached")
+        self.query_count += 1
+        code, raw = self.query(command, self.deadline, clock=self.clock)
+        if len(raw) > WATCH_QUERY_BYTES:
+            raise RuntimeError("native query response exceeded byte bound")
+        if code not in accepted:
+            raise RuntimeError(f"native read failed with exit code {code}")
+        try:
+            return code, json.loads(raw)
+        except (UnicodeDecodeError, json.JSONDecodeError) as error:
+            raise RuntimeError("native read returned malformed JSON") from error
+
+    def get_pr(self, repo: str, pr: int) -> dict[str, Any]:
+        _code, value = self._watch_read(["gh", "api", f"repos/{repo}/pulls/{pr}"], (0,))
+        if not isinstance(value, dict):
+            raise RuntimeError("native read returned a non-object pull request")
+        return value
+
+    def checks(self, repo: str, pr: int) -> list[dict[str, Any]]:
+        # Native bucket meanings/fields: https://cli.github.com/manual/gh_pr_checks
+        code, value = self._watch_read(
+            ["gh", "pr", "checks", str(pr), "--repo", repo, "--json", WATCH_FIELDS], (0,),
+        )
+        if not isinstance(value, list) or len(value) > WATCH_MAX_CHECKS:
+            raise RuntimeError("native checks population is malformed or exceeds bound")
+        fields = set(WATCH_FIELDS.split(","))
+        identities: set[tuple[str, ...]] = set()
+        for row in value:
+            if (not isinstance(row, dict) or set(row) != fields
+                    or any(not isinstance(row[name], str) for name in fields)
+                    or not row["name"] or not row["state"]
+                    or row["bucket"] not in {"pass", "fail", "pending", "skipping", "cancel"}):
+                raise RuntimeError("native checks contain incomplete or unknown fields")
+            identity = tuple(row[name] for name in ("name", "workflow", "link", "event"))
+            if identity in identities:
+                raise RuntimeError("native checks contain duplicate identities")
+            identities.add(identity)
+        return sorted(value, key=lambda row: tuple(row[name] for name in ("name", "workflow", "link", "event")))
+
+
+def watch_checks(
+    repo: str, pr: int, head: str, seconds: int, *,
+    clock: Callable[[], float] = time.monotonic, sleep: Callable[[float], None] = time.sleep,
+    utc_now: Callable[[], datetime] = lambda: datetime.now(timezone.utc),
+    api_factory: Callable[..., Any] = WatchGhApi,
+    emit: Callable[[dict[str, Any]], None] | None = None,
+) -> int:
+    """Emit compact changes only; a terminal native sample never grants apply."""
+    if type(seconds) is not int or not 1 <= seconds <= WATCH_MAX_SECONDS:
+        raise ValueError("--watch-seconds must be between 1 and 600")
+    deadline = clock() + seconds
+    api = api_factory(deadline, clock=clock)
+    previous = None
+    revision = 0
+    emitted_bytes = 0
+
+    def publish(event: str, projection: Any = None, reason: str | None = None) -> None:
+        nonlocal emitted_bytes
+        value = {"schema": "fsgg.routine-check-watch/v1", "event": event,
+                 "repository": repo, "pullRequest": pr, "expectedHead": head,
+                 "revision": revision, "observedAt": utc_now().isoformat(),
+                 "nativeQueries": api.query_count, "projection": projection,
+                 "reason": reason, "readiness": "not-evaluated", "applyAuthorized": False}
+        raw = json.dumps(value, separators=(",", ":"), sort_keys=True)
+        size = len(raw.encode("utf-8")) + 1
+        limit = WATCH_EMIT_BYTES if event in {"observation-failure", "deadline"} else WATCH_EMIT_BYTES - 4096
+        if emitted_bytes + size > limit:
+            raise RuntimeError("watch emitted-output byte bound reached")
+        emitted_bytes += size
+        if emit is None:
+            print(raw, flush=True)
+        else:
+            emit(value)
+
+    try:
+        while True:
+            if clock() >= deadline - WATCH_CLEANUP_SECONDS:
+                publish("deadline", reason="original watch deadline or cleanup reserve reached")
+                return 3
+            before = api.get_pr(repo, pr)
+            if head_of(before) != head:
+                raise RuntimeError("exact expected head changed before native check read")
+            checks = api.checks(repo, pr)
+            after = api.get_pr(repo, pr)
+            if head_of(after) != head:
+                raise RuntimeError("exact expected head changed after native check read")
+            if (after.get("state") not in {"open", "closed"}
+                    or type(after.get("merged")) is not bool or type(after.get("draft")) is not bool):
+                raise RuntimeError("native pull request state observation is incomplete")
+            if clock() >= deadline:
+                raise WatchDeadline("completed read arrived after original watch deadline")
+            projection = {"head": head, "state": after["state"], "merged": after["merged"],
+                          "draft": after["draft"], "checks": checks,
+                          "sourceUpdatedAt": after.get("updated_at")}
+            # Actual source check timestamps identify starts/completions. Observer
+            # time and unrelated PR update timestamps do not wake the caller.
+            material = {key: value for key, value in projection.items() if key != "sourceUpdatedAt"}
+            fingerprint = json.dumps(material, separators=(",", ":"), sort_keys=True)
+            changed = fingerprint != previous
+            if changed:
+                revision += 1
+            buckets = {row["bucket"] for row in checks}
+            failed = bool(buckets & {"fail", "cancel"})
+            terminal = after["state"] == "closed" or failed or (bool(checks) and "pending" not in buckets)
+            if terminal:
+                publish("terminal", projection, "pull request closed" if after["state"] == "closed"
+                        else "native failed/cancelled check observed" if failed else "native checks no longer pending")
+                return 2 if failed or after["state"] == "closed" else 0
+            if changed:
+                publish("initial" if previous is None else "revision", projection,
+                        "no checks observed; completeness and readiness remain unknown" if not checks else None)
+                previous = fingerprint
+            sleep(min(WATCH_INTERVAL_SECONDS, max(0, deadline - WATCH_CLEANUP_SECONDS - clock())))
+    except WatchDeadline as error:
+        publish("deadline", reason=str(error))
+        return 3
+    except KeyboardInterrupt:
+        publish("observation-failure", reason="caller cancelled watch; no retry or mutation")
+        return 130
+    except (OSError, RuntimeError) as error:
+        # Reserve a tiny final failure even if prior material output filled its cap.
+        publish("observation-failure", reason=str(error)[:1024])
+        return 3
+
+
 def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(description=__doc__)
     result.add_argument("--repo", required=True, help="OWNER/REPO")
@@ -704,6 +911,8 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--telemetry-attempt", help="stable attempt identity for a discovered telemetry assignment")
     result.add_argument("--telemetry-parent-attempt", help="optional stable parent attempt identity")
     result.add_argument("--telemetry-engine", help="installed telemetry-capable coordination engine; overrides host configuration")
+    result.add_argument("--watch-checks", action="store_true", help="read-only bounded native-check watch; never grants apply")
+    result.add_argument("--watch-seconds", type=int, help="required watch budget, 1..600 seconds")
     result.add_argument("--apply", action="store_true")
     return result
 
@@ -716,6 +925,16 @@ def main(argv: list[str]) -> int:
         parser().error("--pr must be positive")
     if not SHA_RE.fullmatch(args.head):
         parser().error("--head must be a lowercase 40-hex commit SHA")
+    if args.watch_checks:
+        if len(args.repo) > 255:
+            parser().error("watch repository identity exceeds 255 characters")
+        if args.apply:
+            parser().error("--watch-checks is incompatible with --apply; apply requires a fresh canonical recheck")
+        if args.watch_seconds is None or not 1 <= args.watch_seconds <= WATCH_MAX_SECONDS:
+            parser().error("--watch-checks requires --watch-seconds between 1 and 600")
+        return watch_checks(args.repo, args.pr, args.head, args.watch_seconds)
+    if args.watch_seconds is not None:
+        parser().error("--watch-seconds requires --watch-checks")
     if args.telemetry_store_root and not args.telemetry_assignment:
         parser().error("--telemetry-store-root requires --telemetry-assignment")
     identity_values = [args.telemetry_feature, args.telemetry_item, args.telemetry_attempt]

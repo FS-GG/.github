@@ -45,10 +45,17 @@ adds an offline five-operation baseline and opt-in typed return/delta, bounded e
 mechanical-reuse source commands. The baseline
 establishes retained helper byte accounting; actual parent rereads, native usage, compactions and
 whole-family economics remain unknown or inconclusive. The .1/.2 source window delivered through
-[PR #4235](https://github.com/FS-GG/.github/pull/4235). Root qualified the .3 source with the120-case
+[PR #4235](https://github.com/FS-GG/.github/pull/4235), and
+[PR #4237](https://github.com/FS-GG/.github/pull/4237) delivered .3 after hosted and actual CLI checks.
+Root qualified the .3 source with the120-case
 combined suite:31 legacy,35 delta,44 view/reuse and10 collector checks. Earlier .2 CLI replays matched
 the expected retained result. Evidence views check full raw identity before excerpts; whole governing
 instructions cannot be excerpted. Reuse is advisory mechanical correspondence over a caller-declared
 complete/fresh input closure and never semantic/native acceptance. Existing commands and skill entry
 instructions remain unchanged. This bounded source behavior does not establish operational adoption
 or measured savings; owner/watcher integration, live comparison and .4–.6 remain pending.
+
+The opt-in delivery-tool watcher (`--watch-checks --watch-seconds N`) bounds native reads and emits
+material changes, failure, terminal state or deadline. It bypasses telemetry discovery and cannot
+apply a merge. Its67 focused tests and an actual three-query terminal read passed; full owner/restart
+integration and measured savings remain pending. Existing default delivery behavior is unchanged.
