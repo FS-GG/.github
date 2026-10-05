@@ -150,6 +150,149 @@ let frontier now inputDigest snapshot =
     { Schema = "fsgg.programme.frontier/1"; Advisory = true; InputSha256 = inputDigest; ObservedAt = now
       Active = snapshot.Lanes |> Array.filter _.InFlight |> Array.map _.Id; Actions = actions.ToArray() }
 
+// Additive offline return/delta projection. Snapshot facts remain advisory;
+// neither owner reports nor this projection mint acceptance or effect authority.
+type ReturnBoundaries = {
+    Source: string; Validation: string; Publication: string; Installed: string; Native: string; Projection: string
+}
+type ReturnEvidence = { Kind: string; Reference: string; Sha256: string; Scope: string }
+type LaneReturn = {
+    Schema: string; Campaign: string; Lane: string; Feature: string; Item: string; OriginalItem: string
+    OriginalAttempt: string; Attempt: string; Candidate: string; Owner: string
+    Revision: int64; Supersedes: int64; SourceRevision: string; InputPacketSha256: string
+    ObservedAt: DateTimeOffset; Outcome: string; Boundaries: ReturnBoundaries
+    Evidence: ReturnEvidence array; Unknowns: string array; Exception: string; Continuation: string; Narrative: string
+}
+type DeltaInput = {
+    Schema: string; EvaluationTime: DateTimeOffset; EvaluatorIdentity: string; PolicyIdentity: string; UserScopeRevision: string
+    BaseRevision: string; CurrentRevision: string
+    BaseEvaluatorIdentity: string; BasePolicyIdentity: string; BaseUserScopeRevision: string
+    BaseReturns: LaneReturn array; CurrentReturns: LaneReturn array; Snapshot: Snapshot
+}
+type DeltaNotice = { Lane: string; Kind: string }
+type DeltaResult = {
+    Schema: string; Advisory: bool; InputSha256: string; EvaluationTime: DateTimeOffset
+    EvaluatorIdentity: string; PolicyIdentity: string; UserScopeRevision: string
+    BaseRevision: string; CurrentRevision: string; Resynchronize: bool
+    Changed: LaneReturn array; ActiveReservations: Lane array; Notices: DeltaNotice array
+    Coverage: string; EffectAuthority: string
+}
+let returnBoundaries (lane: Lane) : ReturnBoundaries =
+    { Source=lane.Source; Validation=lane.Validation; Publication=lane.Publication
+      Installed=lane.Installed; Native=lane.Native; Projection=lane.Projection }
+let validateReturn (row: LaneReturn) =
+    require (row.Schema = "fsgg.programme.lane-return/1") "invalid-return-schema"
+    [row.Campaign;row.Lane;row.Feature;row.Item;row.OriginalItem;row.OriginalAttempt;row.Attempt;row.Owner]
+    |> List.iter (fun value -> require (id value) "invalid-return-identity")
+    require (nonempty row.Candidate && row.Candidate.Length <= 256 && nonempty row.SourceRevision && row.SourceRevision.Length <= 256) "missing-return-candidate-source"
+    require (row.Revision > 0L && row.Supersedes >= 0L && row.Supersedes < row.Revision) "invalid-return-revision"
+    require (isDigest row.InputPacketSha256 && row.ObservedAt <> DateTimeOffset.MinValue) "missing-return-input-time"
+    oneOf row.Outcome ["acknowledgment"; "window-reported"]
+    require (not (obj.ReferenceEquals(row.Boundaries,null))) "missing-return-boundaries"
+    let b = row.Boundaries
+    oneOf b.Source ["none";"local";"pr";"merged"]
+    oneOf b.Validation ["not-required";"pending";"passed";"disputed";"unknown"]
+    oneOf b.Publication ["not-required";"pending";"published"]
+    oneOf b.Installed ["not-required";"pending";"qualified"]
+    oneOf b.Native ["not-required";"pending";"succeeded";"failed";"unknown"]
+    oneOf b.Projection ["not-required";"pending";"landed"]
+    array "return-evidence" row.Evidence; array "return-unknowns" row.Unknowns
+    require (row.Evidence.Length > 0 && row.Evidence.Length <= 8 && row.Unknowns.Length <= 8) "return-evidence-bound"
+    for evidence in row.Evidence do
+        oneOf evidence.Kind ["source";"validation";"publication";"installed";"native";"projection";"mechanical"]
+        require (nonempty evidence.Reference && evidence.Reference.Length <= 1024 && isDigest evidence.Sha256 &&
+                 nonempty evidence.Scope && evidence.Scope.Length <= 256) "invalid-return-evidence"
+    for unknown in row.Unknowns do require (nonempty unknown && unknown.Length <= 256) "invalid-return-unknown"
+    require (nonempty row.Exception && row.Exception.Length <= 1024 && nonempty row.Continuation && row.Continuation.Length <= 1024 &&
+             nonempty row.Narrative && Encoding.UTF8.GetByteCount row.Narrative <= 2048) "return-text-bound"
+let returnStream (row: LaneReturn) = row.Campaign,row.Lane,row.Owner,row.OriginalAttempt,row.Attempt,row.Candidate
+let returnContent (row: LaneReturn) = encode row
+let contextDelta inputDigest (spec: DeltaInput) =
+    require (spec.Schema = "fsgg.programme.delta-input/1") "invalid-delta-schema"
+    require (spec.EvaluationTime <> DateTimeOffset.MinValue && id spec.EvaluatorIdentity && id spec.PolicyIdentity && id spec.UserScopeRevision &&
+             id spec.CurrentRevision && (spec.BaseRevision = "" || id spec.BaseRevision)) "invalid-delta-identity-time"
+    array "base-returns" spec.BaseReturns; array "current-returns" spec.CurrentReturns
+    require (spec.BaseReturns.Length <= 128 && spec.CurrentReturns.Length <= 128) "delta-return-population-bound"
+    require (Encoding.UTF8.GetByteCount(encode spec) <= 262144) "delta-input-payload-bound"
+    validateSnapshot spec.Snapshot
+    Array.append spec.BaseReturns spec.CurrentReturns |> Array.iter (fun row ->
+        validateReturn row
+        require (row.Campaign = spec.Snapshot.Campaign) "return-campaign-mismatch")
+    let notices = ResizeArray<DeltaNotice>()
+    let notice lane kind = notices.Add {Lane=lane;Kind=kind}
+    let missingBase = spec.BaseRevision = ""
+    require (not missingBase || spec.BaseReturns.Length = 0) "missing-base-with-content"
+    if not missingBase then
+        require (id spec.BaseEvaluatorIdentity && id spec.BasePolicyIdentity && id spec.BaseUserScopeRevision) "missing-base-identities"
+    let invalidated = not missingBase && (spec.BaseEvaluatorIdentity <> spec.EvaluatorIdentity ||
+                                          spec.BasePolicyIdentity <> spec.PolicyIdentity || spec.BaseUserScopeRevision <> spec.UserScopeRevision)
+    if missingBase then notice "all" "missing-base-resynchronize"
+    if invalidated then notice "all" "scope-policy-evaluator-invalidated"
+    let reduce (rows: LaneReturn array) =
+        rows |> Array.groupBy returnStream |> Array.sortBy fst |> Array.choose (fun (_, group) ->
+            let conflict = group |> Array.groupBy _.Revision |> Array.exists (fun (_, values) -> values |> Array.map returnContent |> Array.distinct |> Array.length |> fun count -> count > 1)
+            if conflict then notice group[0].Lane "equal-revision-conflict-reconcile"; None
+            else Some (group |> Array.maxBy _.Revision))
+    let baseline = reduce spec.BaseReturns
+    let incoming = reduce spec.CurrentReturns
+    // A newer row cannot erase equal-revision disagreement in the supplied
+    // base/current closure; original attempts are identity, not parallel streams.
+    let closure = Array.append spec.BaseReturns spec.CurrentReturns
+    reduce closure |> ignore
+    closure |> Array.groupBy (fun row -> row.Campaign,row.Lane,row.Owner,row.Attempt,row.Candidate)
+    |> Array.iter (fun (_, rows) ->
+        if (rows |> Array.map _.OriginalAttempt |> Array.distinct |> Array.length) > 1 then
+            notice rows[0].Lane "original-lineage-conflict-reconcile")
+    let candidates = ResizeArray<LaneReturn>()
+    for row in incoming do
+        require (row.Campaign = spec.Snapshot.Campaign) "return-campaign-mismatch"
+        match spec.Snapshot.Lanes |> Array.tryFind (fun lane -> lane.Id = row.Lane) with
+        | None -> notice row.Lane "unknown-lane-reconcile"
+        | Some lane ->
+            require (row.Feature=lane.Feature && row.Item=lane.Item && row.OriginalItem=lane.OriginalItem) "return-item-lineage-mismatch"
+            let matched = row.Owner=lane.Owner && row.Attempt=lane.Attempt && row.Candidate=lane.Head && row.SourceRevision=lane.Head
+            if not matched then notice row.Lane "superseded-or-incomparable-owner-candidate"
+            else
+                let prior = baseline |> Array.tryFind (fun old -> returnStream old = returnStream row)
+                let lanePrior = baseline |> Array.filter (fun old -> old.Lane = row.Lane)
+                if notices |> Seq.exists (fun n -> n.Lane = row.Lane && n.Kind = "equal-revision-conflict-reconcile") then
+                    notice row.Lane "conflicted-base-or-return-reconcile"
+                elif notices |> Seq.exists (fun n -> n.Lane = row.Lane && n.Kind = "original-lineage-conflict-reconcile") then
+                    notice row.Lane "original-lineage-conflict-reconcile"
+                elif prior.IsNone && (row.Revision <> 1L || row.Supersedes <> 0L) then
+                    notice row.Lane "missing-return-base-resynchronize"
+                elif lanePrior |> Array.exists (fun old -> old.OriginalItem <> row.OriginalItem || old.OriginalAttempt <> row.OriginalAttempt) then
+                    notice row.Lane "original-lineage-conflict-reconcile"
+                elif prior |> Option.exists (fun old -> row.Revision < old.Revision) then notice row.Lane "older-return-retained-as-history"
+                elif prior |> Option.exists (fun old -> row.Revision = old.Revision && returnContent row <> returnContent old) then notice row.Lane "equal-revision-conflict-reconcile"
+                elif prior |> Option.exists (fun old -> row.Revision > old.Revision && row.Supersedes <> old.Revision) then notice row.Lane "missing-return-base-resynchronize"
+                elif not (lane.Readable && lane.ObservedAt <= spec.EvaluationTime &&
+                          (spec.EvaluationTime-lane.ObservedAt).TotalSeconds <= float spec.Snapshot.MaxAgeSeconds &&
+                          row.ObservedAt <= spec.EvaluationTime && (spec.EvaluationTime-row.ObservedAt).TotalSeconds <= float spec.Snapshot.MaxAgeSeconds) then
+                    notice row.Lane "stale-or-unreadable-fact-refresh"
+                elif row.Boundaries <> returnBoundaries lane then notice row.Lane "boundary-correspondence-reconcile"
+                elif row.Outcome = "acknowledgment" then notice row.Lane "acknowledgment-not-completion"
+                elif (prior |> Option.exists (fun old -> returnContent row = returnContent old)) && not invalidated then ()
+                else candidates.Add row
+    // Snapshot reservation inventory is independent of return freshness, arrival
+    // order, acknowledgment, conflicts, missing base and owner reports.
+    for lane in spec.Snapshot.Lanes do
+        if lane.Validation = "disputed" || lane.Native = "failed" then notice lane.Id "late-failure-dependent-acceptance-fenced"
+    let resync = missingBase || invalidated || (notices |> Seq.exists (fun n -> n.Kind = "missing-return-base-resynchronize"))
+    let changed = candidates.ToArray() |> Array.sortBy (fun row -> row.Lane,returnStream row)
+    if spec.BaseRevision = spec.CurrentRevision && changed.Length > 0 then notice "all" "view-revision-content-conflict-reconcile"
+    let result : DeltaResult = {
+        Schema="fsgg.programme.delta/1";Advisory=true;InputSha256=inputDigest;EvaluationTime=spec.EvaluationTime
+        EvaluatorIdentity=spec.EvaluatorIdentity;PolicyIdentity=spec.PolicyIdentity;UserScopeRevision=spec.UserScopeRevision
+        BaseRevision=spec.BaseRevision;CurrentRevision=spec.CurrentRevision;Resynchronize=resync
+        Changed=(if resync || spec.BaseRevision=spec.CurrentRevision then [||] else changed)
+        ActiveReservations=spec.Snapshot.Lanes |> Array.filter _.InFlight |> Array.sortBy _.Id
+        Notices=notices |> Seq.distinct |> Seq.sortBy (fun n -> n.Lane,n.Kind) |> Seq.toArray
+        Coverage="caller-declared-complete-snapshot; returns-may-be-partial; native-usage-unknown"
+        EffectAuthority="none; external acceptance and current native admission required" }
+    require (Encoding.UTF8.GetByteCount(encode result) <= 262144) "delta-output-payload-bound"
+    result
+
 type Reference = { Path: string; Sha256: string; StartLine: int; EndLine: int; Mandatory: bool; Trust: string; Reason: string }
 type Packet = { Schema: string; Lane: string; Objective: string; Stop: string; MandatoryPaths: string array; MaximumBytes: int; References: Reference array }
 let packet (spec: Packet) =
@@ -262,6 +405,10 @@ let run (command: string) (input: string) (root: string) =
             let spec, hash = read<Snapshot> inputPath
             inputDigest <- hash
             output <- frontier DateTimeOffset.UtcNow hash spec |> encode
+        | "delta" ->
+            let spec, hash = read<DeltaInput> inputPath
+            inputDigest <- hash
+            output <- contextDelta hash spec |> encode
         | "packet" ->
             let spec, hash = read<Packet> inputPath
             inputDigest <- hash
@@ -317,6 +464,6 @@ if fsi.CommandLineArgs.Length > 1 then
             match arguments with
             | [| "report"; root |] -> report root
             | [| command; input; root |] -> run command input root
-            | _ -> fail "usage: programme.fsx <frontier|packet|verify> INPUT PRIVATE_ROOT, or report PRIVATE_ROOT"
+            | _ -> fail "usage: programme.fsx <frontier|packet|verify|delta> INPUT PRIVATE_ROOT, or report PRIVATE_ROOT"
         exit code
     with error -> eprintfn "%s" error.Message; exit 3
