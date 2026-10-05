@@ -40,6 +40,35 @@ ProductBoard.validateRemote "acme/app" "https://user:secret@github.com/acme/app.
 let root = Path.Combine(Path.GetTempPath(), "product-board-controls-" + Guid.NewGuid().ToString "N")
 Directory.CreateDirectory root |> ignore
 try
+    // Use the shipped origin helper: authority is captured before fake provider Git creation.
+    let freshAuthority = ProductBoard.captureOriginAuthority root
+    Directory.CreateDirectory(Path.Combine(root, ".git")) |> ignore
+    let git origin head rootResult configResult args =
+        match args with
+        | [ "remote"; "get-url"; "origin" ] -> origin
+        | [ "rev-parse"; "--show-toplevel" ] -> rootResult
+        | [ "config"; "--local"; "--get"; "remote.origin.url" ] -> configResult
+        | [ "symbolic-ref"; "--quiet"; "HEAD" ] -> 0, "refs/heads/main"
+        | [ "rev-parse"; "--verify"; "HEAD" ] -> head
+        | _ -> failwith "unexpected production Git probe"
+    let unborn = git (2, "") (128, "") (0, root) (1, "")
+    let originCheck authority succeeded probe = ProductBoard.validateOrigin authority succeeded root "acme/app" probe
+    originCheck freshAuthority false unborn |> refuse "originless Git before successful scaffold"
+    originCheck freshAuthority true unborn |> pass
+    originCheck freshAuthority true (git (0, "git@github.com:acme/app.git") (128, "") (0, root) (1, "")) |> pass
+    let retainedAuthority = ProductBoard.captureOriginAuthority root
+    originCheck retainedAuthority true unborn |> refuse "retained originless Git"
+    originCheck retainedAuthority false unborn |> refuse "retrofit originless Git"
+    originCheck retainedAuthority false (git (0, "https://github.com/acme/other.git") (0, "commit") (0, root) (0, "origin")) |> refuse "retained foreign origin"
+    originCheck retainedAuthority false (git (0, "https://github.com/acme/app.git") (0, "commit") (0, root) (0, "origin")) |> pass
+    originCheck freshAuthority true (git (0, "https://github.com/acme/other.git") (128, "") (0, root) (1, "")) |> refuse "fresh foreign origin"
+    originCheck retainedAuthority false (git (0, "https://user:secret@github.com/acme/app.git") (0, "commit") (0, root) (0, "origin")) |> refuse "retained credential-bearing origin"
+    originCheck freshAuthority true (git (2, "") (0, "commit") (0, root) (1, "")) |> refuse "fresh committed originless Git"
+    originCheck freshAuthority true (git (2, "") (128, "") (128, "") (1, "")) |> refuse "unreadable fresh Git"
+    originCheck freshAuthority true (git (2, "") (128, "") (0, root + "-foreign") (1, "")) |> refuse "foreign Git root"
+    originCheck freshAuthority true (git (2, "") (128, "") (0, root) (128, "")) |> refuse "unreadable origin configuration"
+    Directory.Delete(Path.Combine(root, ".git"), true)
+    originCheck retainedAuthority true unborn |> refuse "retained Git disappearance"
     let kit = [ "check-board"; "cross-repo-coordination"; "initialize-sdd-workspace"; "intra-repo-parallel-work"; "pnext-item" ]
     let drivers = [ "work-board"; "work-board-normal"; "work-board-best"; "padd-item" ]
     let content = "fixture consumer\n"

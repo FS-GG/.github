@@ -56,6 +56,35 @@ module ProductBoard =
         | Some value when (if value.EndsWith(".git", StringComparison.Ordinal) then value.Substring(0, value.Length - 4) else value) = repository -> Ok()
         | _ -> Error "workspace origin does not match the exact selected GitHub repository"
 
+    /// Authority is captured before scaffold effects, never inferred from provider-created Git.
+    type OriginAuthority = RetainedGit | FreshTarget
+
+    let captureOriginAuthority target =
+        if Directory.Exists(Path.Combine(target, ".git")) || File.Exists(Path.Combine(target, ".git")) then RetainedGit
+        else FreshTarget
+
+    /// A fresh successful scaffold may initialize an unborn repository without choosing an origin.
+    /// Existing repositories and retrofit never receive this allowance; any present origin is exact.
+    let validateOrigin authority scaffoldSucceeded target repository (runGit: string list -> int * string) =
+        let hasGit = captureOriginAuthority target = RetainedGit
+        if not hasGit then
+            if authority = RetainedGit then Error "retained workspace Git metadata disappeared"
+            else Ok()
+        else
+            let code, origin = runGit [ "remote"; "get-url"; "origin" ]
+            if code = 0 then validateRemote repository (origin.Trim())
+            elif authority = FreshTarget && scaffoldSucceeded && Directory.Exists(Path.Combine(target, ".git")) then
+                let rootCode, root = runGit [ "rev-parse"; "--show-toplevel" ]
+                let configCode, configured = runGit [ "config"; "--local"; "--get"; "remote.origin.url" ]
+                let branchCode, branch = runGit [ "symbolic-ref"; "--quiet"; "HEAD" ]
+                let headCode, _ = runGit [ "rev-parse"; "--verify"; "HEAD" ]
+                if rootCode = 0 && Path.GetFullPath(root.Trim()) = Path.GetFullPath target
+                   && configCode = 1 && String.IsNullOrWhiteSpace configured
+                   && branchCode = 0 && branch.Trim().StartsWith("refs/heads/", StringComparison.Ordinal)
+                   && headCode = 128 then Ok()
+                else Error "fresh scaffold Git is not a readable originless unborn repository"
+            else Error "retained workspace GitHub origin is unreadable"
+
     /// Stage reviewed producer bytes and preserving JSON merges. Fetch is injected for offline controls.
     /// The immutable kit revision identifies both manifest projections, shim and exact local tool pin.
     let prepare (target: string) (repository: string) (kitRevision: string) (bindingJson: string) (fetch: string -> Result<string, string>) =
