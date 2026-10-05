@@ -121,6 +121,15 @@ def selection_archive(entries: list[tuple[str, bytes]]) -> bytes:
 
 
 class RoutineDeliveryTests(unittest.TestCase):
+    def setUp(self):
+        # Legacy main-path fixtures must remain pure: an implicit advisory
+        # discovery may otherwise execute an installed CLR helper during tests.
+        def unavailable(*_args, **_kwargs):
+            raise OSError("pure fixture: compiled telemetry unavailable")
+        patcher = mock.patch.dict(MODULE.discover_telemetry_config.__kwdefaults__, {"runner": unavailable})
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def call(self, api: FakeApi, *, apply: bool = True, publication: bool = False,
              coherent: bool = False):
         return MODULE.summarize(
@@ -623,6 +632,244 @@ class RoutineDeliveryTests(unittest.TestCase):
             coherent_workflow="coherent.yml", candidate_observer=callbacks.append,
         )
         self.assertEqual((code, result.outcome, callbacks), (2, "refused", []))
+
+
+class FakeWatchClock:
+    def __init__(self):
+        self.value = 0.0
+        self.sleeps = []
+
+    def __call__(self):
+        return self.value
+
+    def sleep(self, seconds):
+        assert seconds >= 0
+        self.sleeps.append(seconds)
+        self.value += seconds
+
+
+def native_check(bucket="pending", *, link="https://github.test/run/1", started="2026-10-05T00:00:00Z"):
+    return {"bucket": bucket, "completedAt": "", "event": "pull_request", "link": link,
+            "name": "test", "startedAt": started, "state": "IN_PROGRESS" if bucket == "pending" else "SUCCESS",
+            "workflow": "CI"}
+
+
+class FakeWatchApi:
+    def __init__(self, samples, *, heads=None, fail_at=None):
+        self.samples = iter(samples)
+        self.heads = iter(heads) if heads is not None else None
+        self.query_count = 0
+        self.fail_at = fail_at
+
+    def get_pr(self, _repo, _pr):
+        self.query_count += 1
+        if self.query_count == self.fail_at:
+            raise RuntimeError("synthetic unreadable observation")
+        result = opened(next(self.heads) if self.heads is not None else HEAD)
+        result['updated_at'] = str(self.query_count)
+        return result
+
+    def checks(self, _repo, _pr):
+        self.query_count += 1
+        if self.query_count == self.fail_at:
+            raise RuntimeError("synthetic unreadable observation")
+        return next(self.samples)
+
+
+class CheckWatchTests(unittest.TestCase):
+    def observe(self, api, seconds=12, *, sleep=None):
+        clock = FakeWatchClock()
+        events = []
+        code = MODULE.watch_checks("FS-GG/.github", 7, HEAD, seconds,
+            clock=clock, sleep=sleep or clock.sleep,
+            utc_now=lambda: datetime(2026, 10, 5, 0, 0, int(clock.value), tzinfo=timezone.utc),
+            api_factory=lambda *_args, **_kwargs: api, emit=events.append)
+        return code, events, clock
+
+    def test_unchanged_samples_emit_no_heartbeat_and_keep_actual_observation_time(self):
+        api = FakeWatchApi([[native_check()]] * 3)
+        code, events, clock = self.observe(api)
+        self.assertEqual((code, [e['event'] for e in events], api.query_count), (3, ['initial', 'deadline'], 9))
+        self.assertEqual(events[0]['observedAt'], '2026-10-05T00:00:00+00:00')
+        self.assertEqual(events[-1]['observedAt'], '2026-10-05T00:00:11+00:00')
+        self.assertEqual(clock.value, 11.5)
+        self.assertEqual(events[0]['projection']['sourceUpdatedAt'], '3')
+        self.assertTrue(all(not e['applyAuthorized'] and e['readiness']=='not-evaluated' for e in events))
+
+    def test_changed_identity_and_terminal_check_emit_material_revisions(self):
+        api = FakeWatchApi([[native_check()], [native_check(link='https://github.test/run/2')], [native_check('pass')]])
+        code, events, _clock = self.observe(api)
+        self.assertEqual((code, [e['event'] for e in events]), (0, ['initial', 'revision', 'terminal']))
+        self.assertEqual([e['revision'] for e in events], [1, 2, 3])
+
+    def test_check_source_timestamp_change_is_material_not_observer_heartbeat(self):
+        api = FakeWatchApi([[native_check()], [native_check(started='2026-10-05T00:00:01Z')], [native_check('pass')]])
+        code, events, _clock = self.observe(api)
+        self.assertEqual((code, [e['event'] for e in events]), (0, ['initial', 'revision', 'terminal']))
+
+    def test_failed_or_cancelled_check_ends_without_waiting_for_pending_sibling(self):
+        for bucket in ('fail', 'cancel'):
+            code, events, _clock = self.observe(FakeWatchApi([[native_check(bucket), native_check(link='other')]]))
+            self.assertEqual((code, len(events), events[0]['event']), (2, 1, 'terminal'))
+
+    def test_empty_native_population_remains_unknown_until_deadline(self):
+        code, events, _clock = self.observe(FakeWatchApi([[], [], []]))
+        self.assertEqual((code, [e['event'] for e in events]), (3, ['initial', 'deadline']))
+        self.assertIn('unknown', events[0]['reason'])
+
+    def test_head_drift_before_or_after_checks_refuses_same_original_watch(self):
+        for heads, count in ((['c'*40], 1), ([HEAD, 'c'*40], 3)):
+            api = FakeWatchApi([[native_check()]], heads=heads)
+            code, events, _clock = self.observe(api)
+            self.assertEqual((code, api.query_count, events[-1]['event']), (3, count, 'observation-failure'))
+
+    def test_failed_read_is_not_retried(self):
+        api = FakeWatchApi([], fail_at=2)
+        code, events, clock = self.observe(api)
+        self.assertEqual((code, api.query_count, clock.sleeps), (3, 2, []))
+        self.assertEqual(events[0]['event'], 'observation-failure')
+
+    def test_caller_cancellation_is_fail_visible_without_next_query(self):
+        def interrupt(_seconds):
+            raise KeyboardInterrupt()
+        api = FakeWatchApi([[native_check()]])
+        code, events, _clock = self.observe(api, sleep=interrupt)
+        self.assertEqual((code, api.query_count, [e['event'] for e in events]), (130, 3, ['initial', 'observation-failure']))
+
+    def test_deadline_during_read_does_not_accept_late_terminal_data(self):
+        clock=FakeWatchClock();events=[]
+        api=FakeWatchApi([[native_check('pass')]])
+        original=api.checks
+        def late(*args):
+            value=original(*args);clock.value=13;return value
+        api.checks=late
+        code=MODULE.watch_checks('FS-GG/.github',7,HEAD,12,clock=clock,sleep=clock.sleep,
+            api_factory=lambda *_a,**_k:api,emit=events.append)
+        self.assertEqual((code,[event['event'] for event in events]),(3,['deadline']))
+        self.assertFalse(events[0]['applyAuthorized'])
+
+    def test_native_adapter_uses_exact_commands_and_json_buckets_not_exit_policy(self):
+        calls = []
+        def query(command, deadline, **kwargs):
+            calls.append((command, deadline))
+            return 0, json.dumps([native_check('fail')]).encode() if command[1]=='pr' else json.dumps(opened()).encode()
+        api = MODULE.WatchGhApi(12, query=query, clock=lambda:0)
+        self.assertEqual(api.get_pr('FS-GG/.github', 7)['head']['sha'], HEAD)
+        self.assertEqual(api.checks('FS-GG/.github', 7)[0]['bucket'], 'fail')
+        self.assertEqual(calls[0][0], ['gh','api','repos/FS-GG/.github/pulls/7'])
+        self.assertEqual(calls[1][0], ['gh','pr','checks','7','--repo','FS-GG/.github','--json',MODULE.WATCH_FIELDS])
+        self.assertEqual(api.query_count, 2)
+
+    def test_native_adapter_rejects_unknown_missing_duplicate_oversized_and_failed_reads(self):
+        bad = [[dict(native_check(), bucket='unknown')], [dict(native_check(), state=None)],
+               [{'name':'test'}], [native_check(), native_check()], [native_check(link=str(i)) for i in range(129)]]
+        for value in bad:
+            api = MODULE.WatchGhApi(12, query=lambda *_a, **_k:(0,json.dumps(value).encode()), clock=lambda:0)
+            with self.assertRaises(RuntimeError):api.checks('FS-GG/.github',7)
+            self.assertEqual(api.query_count,1)
+        for code, raw in ((1,b'[]'),(8,b'[]'),(0,b'{bad'),(0,b'x'*(MODULE.WATCH_QUERY_BYTES+1))):
+            api = MODULE.WatchGhApi(12, query=lambda *_a, **_k:(code,raw), clock=lambda:0)
+            with self.assertRaises(RuntimeError):api.checks('FS-GG/.github',7)
+            self.assertEqual(api.query_count,1)
+
+    def test_query_count_and_original_deadline_prevent_another_launch(self):
+        query = mock.Mock(return_value=(0,json.dumps(opened()).encode()))
+        api = MODULE.WatchGhApi(12, query=query, clock=lambda:0)
+        api.query_count = MODULE.WATCH_MAX_QUERIES
+        with self.assertRaises(RuntimeError):api.get_pr('FS-GG/.github',7)
+        query.assert_not_called()
+        api = MODULE.WatchGhApi(.5, query=query, clock=lambda:0)
+        with self.assertRaises(MODULE.WatchDeadline):api.get_pr('FS-GG/.github',7)
+        query.assert_not_called()
+
+    def test_emitted_output_bound_preserves_one_final_failure(self):
+        with mock.patch.object(MODULE,'WATCH_EMIT_BYTES',5000):
+            api = FakeWatchApi([[native_check(link='x'*600)]] * 3)
+            code, events, _clock = self.observe(api)
+        self.assertEqual((code,events[-1]['event']), (3,'observation-failure'))
+        self.assertLessEqual(sum(len(json.dumps(e,separators=(',',':'),sort_keys=True).encode())+1 for e in events),5000)
+
+    def test_watch_cli_bypasses_telemetry_and_delivery_and_refuses_apply(self):
+        args=['--repo','FS-GG/.github','--pr','7','--head',HEAD,'--watch-checks','--watch-seconds','12']
+        with mock.patch.object(MODULE,'watch_checks',return_value=3) as watch, \
+             mock.patch.object(MODULE,'discover_telemetry_config',side_effect=AssertionError('telemetry')), \
+             mock.patch.object(MODULE,'summarize',side_effect=AssertionError('delivery')):
+            self.assertEqual(MODULE.main(args),3)
+            watch.assert_called_once_with('FS-GG/.github',7,HEAD,12)
+            with self.assertRaises(SystemExit):MODULE.main(args+['--apply'])
+            self.assertEqual(watch.call_count,1)
+        for extra in (['--watch-checks'],['--watch-seconds','12'],['--watch-checks','--watch-seconds','601']):
+            with self.assertRaises(SystemExit):MODULE.main(args[:6]+extra)
+
+
+class BoundedQueryTests(unittest.TestCase):
+    def query(self, *, chunks=None, stderr_chunks=None, never=False, interrupt=False, seconds=5, reaping_unknown=False):
+        clock=FakeWatchClock();streams=[mock.Mock(),mock.Mock()]
+        streams[0].fileno.return_value=101;streams[1].fileno.return_value=102
+        process=mock.Mock(stdout=streams[0],stderr=streams[1],returncode=0)
+        process.poll.side_effect=lambda:None if (never or interrupt) and not process.kill.called else 0
+        if reaping_unknown:
+            process.wait.side_effect=subprocess.TimeoutExpired('original-query',.5)
+        mapping={};reads={101:iter((chunks or [b'[]'])+[b'']),102:iter((stderr_chunks or [])+[b''])}
+        selector=mock.Mock();selector.get_map.side_effect=lambda:mapping
+        def register(stream,_events,data):mapping[stream.fileno()]=type('Key',(),{'fileobj':stream,'data':data})()
+        selector.register.side_effect=register;selector.unregister.side_effect=lambda stream:mapping.pop(stream.fileno())
+        def selected(timeout):
+            clock.value+=timeout
+            if interrupt:raise KeyboardInterrupt()
+            return [] if never else [(key,1) for key in list(mapping.values())]
+        selector.select.side_effect=selected
+        with mock.patch.object(MODULE.selectors,'DefaultSelector',return_value=selector), \
+             mock.patch.object(MODULE.os,'set_blocking'), \
+             mock.patch.object(MODULE.os,'read',side_effect=lambda fd,_count:next(reads[fd])):
+            try:
+                result=MODULE.bounded_watch_query(['gh','api','read-only'],seconds,clock=clock,popen=lambda *_a,**_k:process)
+                return result,process,clock
+            except BaseException as error:
+                return error,process,clock
+
+    def test_streams_are_read_bounded_without_communicate_and_owned_child_reaped(self):
+        result,process,_clock=self.query()
+        self.assertEqual(result,(0,b'[]'))
+        process.communicate.assert_not_called();process.kill.assert_not_called()
+        self.assertGreaterEqual(process.wait.call_count,1)
+        process.stdout.close.assert_called_once();process.stderr.close.assert_called_once()
+
+    def test_original_timeout_and_cancellation_kill_and_reap_only_owned_child(self):
+        for kwargs in ({'never':True},{'interrupt':True}):
+            result,process,clock=self.query(**kwargs)
+            self.assertIsInstance(result,(MODULE.WatchDeadline,KeyboardInterrupt))
+            process.kill.assert_called_once();process.wait.assert_called_once()
+            self.assertLessEqual(process.wait.call_args.kwargs['timeout'],.5)
+            self.assertLessEqual(clock.value,5)
+
+    def test_output_overflow_is_charged_before_retention_then_query_is_reaped(self):
+        result,process,_clock=self.query(chunks=[b'x'*(MODULE.WATCH_QUERY_BYTES+1)])
+        self.assertIsInstance(result,RuntimeError)
+        self.assertIn('byte bound',str(result));process.wait.assert_called_once()
+        process.communicate.assert_not_called()
+
+    def test_stderr_shares_stdout_budget_and_failed_reaping_is_explicit_unknown(self):
+        result,process,_clock=self.query(chunks=[b'x'*(MODULE.WATCH_QUERY_BYTES//2)],stderr_chunks=[b'y'*(MODULE.WATCH_QUERY_BYTES//2+1)])
+        self.assertIsInstance(result,RuntimeError)
+        self.assertIn('byte bound',str(result))
+        result,process,_clock=self.query(never=True,reaping_unknown=True)
+        self.assertIsInstance(result,RuntimeError)
+        self.assertIn('retirement is unknown',str(result))
+        process.kill.assert_called_once()
+
+    def test_per_query_timeout_is_clipped_to_original_watch_and_not_renewed(self):
+        result,process,clock=self.query(never=True,seconds=100)
+        self.assertIsInstance(result,RuntimeError)
+        self.assertIn('clipped timeout',str(result))
+        self.assertLessEqual(clock.value,30.1)
+        process.kill.assert_called_once();process.wait.assert_called_once()
+
+    def test_no_child_is_started_inside_original_cleanup_reserve(self):
+        popen=mock.Mock()
+        with self.assertRaises(MODULE.WatchDeadline):
+            MODULE.bounded_watch_query(['gh','api','read-only'],.5,clock=lambda:0,popen=popen)
+        popen.assert_not_called()
 
 
 if __name__ == "__main__":
