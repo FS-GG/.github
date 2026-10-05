@@ -280,7 +280,7 @@ class FiniteAPI:
         cap=(READINESS_CAP if custody else BINARY_CAP) if binary else (1024*1024 if "/actions/workflows/" in parsed.path else 256*1024 if parsed.path.endswith("/commits") else SMALL_JSON_CAP)
         ancestry="/compare" in urllib.parse.unquote(parsed.path)
         if ancestry:
-            require(not self.authority and self.held_source is not None and method=="GET" and not binary and not custody and parsed.netloc=="api.github.com" and parsed.path==f"/repos/{REPO}/compare/{CANDIDATE_SOURCE}...{self.held_source}" and not parsed.query and not parsed.fragment,"exact bound ancestry response role")
+            require(not self.authority and self.held_source is not None and method=="GET" and body is None and headers is None and not binary and not custody and url==ancestry_url(self.held_source),"exact bound paged ancestry response role")
             require(not (self.storage and self.storage.armed),"ancestry reads precede effect reservation")
             cap=ANCESTRY_JSON_CAP
         if self.storage and self.storage.armed:
@@ -303,7 +303,9 @@ class FiniteAPI:
                     row["bytes"]+=len(data);require(row["bytes"]<=cap,"response byte cap")
                     if self.storage and not custody:self.storage.check(len(data))
                     stream.write(data)
-            row["sha256"]=digest(target.read_bytes());return target if binary else json.loads(target.read_bytes())
+            row["sha256"]=digest(target.read_bytes())
+            if ancestry:require(row["status"]==200,"paged ancestry HTTP status")
+            return target if binary else json.loads(target.read_bytes())
         except urllib.error.HTTPError as error:
             row["status"]=error.code;raise Refused("native HTTP read/write refused") from error
         finally:
@@ -752,6 +754,22 @@ def native_context(api,binding,mode,run_id):
     require(run.get("id")==run_id and run.get("display_title")==title and run.get("head_sha")==binding["heldSource"] and run.get("run_attempt")==1 and run.get("event")=="workflow_dispatch" and run.get("head_branch")=="main" and run.get("path")==WORKFLOW and run.get("actor",{}).get("login")=="EHotwagner" and run.get("status")=="in_progress" and run.get("repository",{}).get("id")==1269292704,"selected native role")
     require(api.get(f"repos/{REPO}/git/ref/heads/main").get("object",{}).get("sha")==binding["heldSource"],"held main drift")
 
+def ancestry_url(held_source,paged=True):
+    require(isinstance(held_source,str) and re.fullmatch(r"[0-9a-f]{40}",held_source),"exact ancestry held source")
+    return f"https://api.github.com/repos/{REPO}/compare/{CANDIDATE_SOURCE}...{held_source}"+("?per_page=1&page=2" if paged else "")
+
+def validate_ancestry(response,held_source):
+    """Native descendant assertion from one complete, exact second page."""
+    require(isinstance(response,dict) and response.get("url")==ancestry_url(held_source,False),"native ancestry subject")
+    for field in ("base_commit","merge_base_commit"):
+        require(isinstance(response.get(field),dict) and response[field].get("sha")==CANDIDATE_SOURCE,"native ancestry original base")
+    require(response.get("status")=="ahead" and type(response.get("behind_by")) is int and response["behind_by"]==0,"native ancestry ahead only")
+    ahead=response.get("ahead_by");total=response.get("total_commits")
+    require(type(ahead) is int and type(total) is int and ahead==total and total>=2,"paged ancestry requires at least two commits")
+    commits=response.get("commits")
+    require(isinstance(commits,list) and len(commits)==1 and isinstance(commits[0],dict) and isinstance(commits[0].get("sha"),str) and re.fullmatch(r"[0-9a-f]{40}",commits[0]["sha"]) and "files" not in response,"exact second-page ancestry shape")
+    return response
+
 def original_runs(api,binding):
     if hasattr(api,"held_source"):require(api.held_source==binding["heldSource"],"original runs held source drift")
     original=api.get(f"repos/{REPO}/actions/runs/{FAILED_RUN}")
@@ -759,7 +777,8 @@ def original_runs(api,binding):
     for ident in binding["priorRunIds"]:
         row=api.get(f"repos/{REPO}/actions/runs/{ident}")
         require(row.get("id")==ident and row.get("status")=="completed" and row.get("path")==WORKFLOW and row.get("repository",{}).get("id")==1269292704 and row.get("actor",{}).get("login")=="EHotwagner" and row.get("run_attempt")==1,"intervening writer not terminal")
-    require(api.get(f"repos/{REPO}/compare/{CANDIDATE_SOURCE}...{binding['heldSource']}").get("status")=="ahead","candidate ancestry differs")
+    path=ancestry_url(binding["heldSource"]).removeprefix("https://api.github.com/")
+    validate_ancestry(api.get(path),binding["heldSource"])
 
 def readiness(api,binding):
     ident=binding["readinessRunId"];artifact_id=binding["readinessArtifactId"]

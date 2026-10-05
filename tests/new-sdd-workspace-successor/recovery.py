@@ -7,6 +7,9 @@ import new_sdd_workspace_promote_recovery as r
 from release_successor_journal import ProtectedReleaseJournal,canonical,SCHEMA,REPOSITORY as AUTHORITY,Refused as JournalRefused
 from release_successor_execution import Refused
 
+def synthetic_ancestry(held,status="ahead",total=51):
+ return {'url':r.ancestry_url(held,False),'base_commit':{'sha':r.CANDIDATE_SOURCE},'merge_base_commit':{'sha':r.CANDIDATE_SOURCE},'status':status,'behind_by':0,'ahead_by':total,'total_commits':total,'commits':[{'sha':'a'*40}]}
+
 class FakeAPI:
  def __init__(self,fixture,authority=False):self.f=fixture;self.authority=authority;self.token='synthetic-native-token'
  def get(self,path):
@@ -24,7 +27,7 @@ class FakeAPI:
   if path.endswith('/actions/artifacts/97'):return self.f.readinessartifact
   if '/actions/runs/' in path:
    ident=int(path.rsplit('/',1)[1]);return copy.deepcopy(self.f.native if ident==99 else self.f.failed if ident==r.FAILED_RUN else self.f.prior)
-  if '/compare/' in path:return {'status':self.f.ancestry}
+  if '/compare/' in path:return synthetic_ancestry(self.f.main,self.f.ancestry)
   if path.endswith('git/ref/heads/main'):return {'object':{'sha':self.f.main}}
   if path.endswith('git/ref/tags/'+r.TAG):return {'object':{'sha':r.CANDIDATE_SOURCE}}
   if path.endswith('git/ref/tags/new-sdd-workspace/v0.12.0'):return {'object':{'sha':r.PREVIOUS_SOURCE}}
@@ -528,43 +531,77 @@ class CustodySizeControls(unittest.TestCase):
 class AncestryRoleControls(unittest.TestCase):
  def setUp(self):self.tmp=tempfile.TemporaryDirectory();self.root=pathlib.Path(self.tmp.name);self.held='e'*40
  def tearDown(self):self.tmp.cleanup()
- def api(self,root,compare=None):
+ def api(self,root,compare=None,status=200):
   root.mkdir();api=r.FiniteAPI('synthetic',r.Budget('diagnostic'),root,held_source=self.held)
   failed={'id':r.FAILED_RUN,'head_sha':r.CANDIDATE_SOURCE,'run_attempt':1,'status':'completed','conclusion':'failure','path':r.WORKFLOW,'actor':{'login':'EHotwagner'},'repository':{'id':1269292704},'event':'workflow_dispatch','head_branch':'main'}
-  raw=r.canonical({'status':'ahead','padding':'x'*(229508-len(r.canonical({'status':'ahead','padding':''})))}) if compare is None else compare
+  value=synthetic_ancestry(self.held)
+  value['padding']='x'*(229508-len(r.canonical({**value,'padding':''})))
+  raw=r.canonical(value) if compare is None else compare
   if compare is None:self.assertEqual(len(raw),229508)
   class Response(io.BytesIO):
-   status=200
    def __enter__(self):return self
    def __exit__(self,*args):self.close()
   def opened(request,timeout):
-   self.assertEqual(request.get_method(),'GET');self.assertLessEqual(timeout,25)
-   return Response(raw if '/compare/' in request.full_url else r.canonical(failed))
+   self.assertEqual(request.get_method(),'GET');self.assertIsNone(request.data);self.assertLessEqual(timeout,25)
+   ancestry='/compare/' in request.full_url
+   if ancestry:
+    self.assertEqual(request.full_url,r.ancestry_url(self.held))
+    self.assertEqual(request.get_header('Accept'),'application/vnd.github+json')
+    self.assertEqual(request.get_header('X-github-api-version'),'2022-11-28')
+   response=Response(raw if ancestry else r.canonical(failed));response.status=status if ancestry else 200;return response
   api.opener=SimpleNamespace(open=opened);return api
  def test_complete_body_and_repeat_originals_retained_before_effect_projection(self):
   api=self.api(self.root/'complete');api.storage=r.CustodyStorage(api.root)
   binding={'heldSource':self.held,'priorRunIds':[]}
   r.original_runs(api,binding);r.original_runs(api,binding)
   rows=[row for row in api.records if row['role']=='bound-original-to-held-ancestry']
-  self.assertEqual(len(rows),2);self.assertTrue(all(row['bytes']==229508 and row['cap']==r.ANCESTRY_JSON_CAP for row in rows))
+  self.assertEqual(len(rows),2);self.assertTrue(all(row['bytes']==229508 and row['cap']==r.ANCESTRY_JSON_CAP and row['status']==200 for row in rows))
+  originals=list(api.root.glob('response-github-*.raw'));ancestry=[p.read_bytes() for p in originals if b'"padding"' in p.read_bytes()]
+  self.assertEqual(len(ancestry),2);self.assertEqual(ancestry[0],ancestry[1]);self.assertEqual(rows[0]['sha256'],r.digest(ancestry[0]))
   projection=api.storage.pre_effect(api.budget,{},False)
   self.assertGreaterEqual(projection['currentBytes'],2*229508)
   with self.assertRaises(Refused):r.original_runs(api,binding)
+ def test_two_and_larger_populations_do_not_pin_row_to_head(self):
+  for total in (2,51,1000):
+   value=synthetic_ancestry(self.held,total=total)
+   self.assertNotEqual(value['commits'][0]['sha'],self.held)
+   api=self.api(self.root/str(total),r.canonical(value));r.original_runs(api,{'heldSource':self.held,'priorRunIds':[]})
  def test_wrong_origin_path_source_query_and_request_kind_refuse_before_transport(self):
-  api=self.api(self.root/'closed');base=f'https://api.github.com/repos/{r.REPO}/compare/{r.CANDIDATE_SOURCE}...{self.held}'
-  urls=[base.replace('api.github.com','api.nuget.org'),base.replace('/FS-GG/','/other/'),base.replace(r.CANDIDATE_SOURCE,'a'*40),base.replace(self.held,'b'*40),base+'?page=1',base+'#fragment',base+'/',base.replace('/compare/','/%63ompare/'),base.replace('api.github.com','api.github.com:444')]
+  api=self.api(self.root/'closed');base=r.ancestry_url(self.held,False);exact=r.ancestry_url(self.held)
+  urls=[base,base+'?page=1',base+'?per_page=1&page=1',base+'?page=2&per_page=1',base+'?per_page=2&page=2',base+'?per_page=1&page=2&page=2',base+'?per_page=%31&page=2',exact+'#',exact+'#fragment',exact.replace('api.github.com','api.nuget.org'),exact.replace('/FS-GG/','/other/'),exact.replace(r.CANDIDATE_SOURCE,'a'*40),exact.replace(self.held,'b'*40),exact.replace('/compare/','/%63ompare/'),exact.replace('api.github.com','api.github.com:443'),exact.replace('api.github.com','api.github.com:444'),exact.replace('https://','http://'),exact.replace('api.github.com','synthetic@api.github.com'),exact.replace('/compare/','/compare/\n'),exact.replace('/compare/','/compare/\t'),exact.replace('page=2','page=2&'),exact.replace('...','..')]
   api.opener.open=lambda *a,**k:(_ for _ in ()).throw(AssertionError('wrong role reached transport'))
   for url in urls:
    with self.subTest(url=url),self.assertRaises(Refused):api.request(url)
-  for kwargs in ({'method':'POST'},{'binary':True},{'custody':True}):
-   with self.assertRaises(Refused):api.request(base,**kwargs)
+  for kwargs in ({'method':'POST'},{'method':'get'},{'body':{}},{'headers':{}},{'headers':{'Accept':'text/plain'}},{'binary':True},{'custody':True}):
+   with self.subTest(kwargs=kwargs),self.assertRaises(Refused):api.request(exact,**kwargs)
   with self.assertRaises(Refused):r.original_runs(api,{'heldSource':'b'*40,'priorRunIds':[]})
- def test_oversize_truncated_error_and_non_ahead_do_not_establish_ancestry(self):
-  for name,raw in [('oversize',r.canonical({'status':'ahead','padding':'x'*r.ANCESTRY_JSON_CAP})),('prefix',b'{"status":"ahead",'),('error',b'{"message":"unknown"}'),('behind',b'{"status":"behind"}')]:
+ def test_typed_native_subject_count_and_shape_refusals(self):
+  cases=[]
+  for field in ('url','base_commit','merge_base_commit','status','behind_by','ahead_by','total_commits','commits'):
+   value=synthetic_ancestry(self.held);del value[field];cases.append((field+'-missing',value))
+  for field,wrong in [('url',r.ancestry_url(self.held)),('url',r.ancestry_url('b'*40,False)),('base_commit',[]),('base_commit',None),('base_commit',{'sha':'b'*40}),('merge_base_commit',{'sha':'b'*40}),('merge_base_commit',[]),('merge_base_commit',None),('status','behind'),('status','diverged'),('status','identical'),('commits',{}),('commits',None),('commits',[]),('commits',[{'sha':'a'*40},{'sha':'b'*40}]),('commits',[None]),('commits',[{}]),('commits',[{'sha':'A'*40}]),('commits',[{'sha':'../unsafe'}]),('commits',[{'sha':123}])]:
+   value=synthetic_ancestry(self.held);value[field]=wrong;cases.append((field+'-'+repr(wrong),value))
+  for field in ('behind_by','ahead_by','total_commits'):
+   for wrong in (True,False,'51',51.0,-1,None):
+    value=synthetic_ancestry(self.held);value[field]=wrong;cases.append((field+'-'+repr(wrong),value))
+  for total in (0,1,-1):cases.append(('population-'+str(total),synthetic_ancestry(self.held,total=total)))
+  value=synthetic_ancestry(self.held);value['behind_by']=1;cases.append(('behind-positive',value))
+  value=synthetic_ancestry(self.held);value['ahead_by']=50;cases.append(('count-mismatch',value))
+  for files in (None,[],{}):
+   value=synthetic_ancestry(self.held);value['files']=files;cases.append(('files-'+repr(files),value))
+  cases.extend([('top-list',[]),('top-null',None),('top-string','ahead')])
+  for index,(name,value) in enumerate(cases):
+   api=self.api(self.root/f'shape-{index}',r.canonical(value))
+   with self.subTest(name=name),self.assertRaises(Refused):r.original_runs(api,{'heldSource':self.held,'priorRunIds':[]})
+ def test_oversize_truncated_error_non_json_and_non200_refuse(self):
+  for name,raw in [('oversize',r.canonical({**synthetic_ancestry(self.held),'padding':'x'*r.ANCESTRY_JSON_CAP})),('prefix',b'{"status":"ahead",'),('error',b'{"message":"unknown"}'),('nonjson',b'not JSON')]:
    api=self.api(self.root/name,raw)
    with self.assertRaises(Exception):r.original_runs(api,{'heldSource':self.held,'priorRunIds':[]})
-  api=self.api(self.root/'http-error')
-  api.opener.open=lambda *a,**k:(_ for _ in ()).throw(r.urllib.error.HTTPError('https://api.github.com',403,'withheld',{},None))
+  for status in (201,204,206,301,403,500):
+   raw=r.canonical(synthetic_ancestry(self.held));api=self.api(self.root/f'status-{status}',raw,status)
+   with self.subTest(status=status),self.assertRaises(Refused):r.original_runs(api,{'heldSource':self.held,'priorRunIds':[]})
+   row=api.records[-1];self.assertEqual(row['status'],status);self.assertEqual(row['sha256'],r.digest(raw));self.assertEqual(row['bytes'],len(raw))
+  api=self.api(self.root/'http-error');api.opener.open=lambda *a,**k:(_ for _ in ()).throw(r.urllib.error.HTTPError('https://api.github.com',403,'withheld',{},None))
   with self.assertRaises(Refused):r.original_runs(api,{'heldSource':self.held,'priorRunIds':[]})
  def test_ordinary_cap_unbound_authority_and_redirects_remain_refusals(self):
   api=self.api(self.root/'ordinary')
@@ -574,13 +611,34 @@ class AncestryRoleControls(unittest.TestCase):
    def __exit__(self,*args):self.close()
   api.opener.open=lambda *a,**k:Response(b'x'*(r.SMALL_JSON_CAP+1))
   with self.assertRaises(Refused):api.get(f'repos/{r.REPO}')
-  url=f'https://api.github.com/repos/{r.REPO}/compare/{r.CANDIDATE_SOURCE}...{self.held}'
+  url=r.ancestry_url(self.held)
   for field,value in [('held_source',None),('authority',True)]:
    previous=getattr(api,field);setattr(api,field,value)
    with self.assertRaises(Refused):api.request(url)
    setattr(api,field,previous)
   request=r.urllib.request.Request(url)
   with self.assertRaises(Refused):r.Redirect(api.budget).redirect_request(request,None,302,'redirect',{},'https://api.github.com/other')
+ def test_exhausted_read_deadline_and_custody_refuse_before_acceptance(self):
+  for kind in ('reads','deadline','custody'):
+   api=self.api(self.root/kind)
+   if kind=='reads':api.budget.reads=120
+   elif kind=='deadline':api.budget=r.Budget('diagnostic',clock=lambda:601,start=0)
+   else:
+    api.storage=r.CustodyStorage(api.root)
+    for index in range(17):
+     with (api.root/f'full-{index}').open('wb') as stream:stream.truncate(r.BINARY_CAP)
+   with self.subTest(kind=kind),self.assertRaises(Refused):r.original_runs(api,{'heldSource':self.held,'priorRunIds':[]})
+ def test_malformed_ancestry_cannot_install_patch_or_settle(self):
+  for index,field in enumerate(('base_commit','total_commits','files')):
+   root=self.root/f'effect-refusal-{index}';root.mkdir();fixture=Fixture(root,'complete');get=fixture.api.get
+   malformed=synthetic_ancestry(fixture.main)
+   if field=='files':malformed[field]=[]
+   elif field=='total_commits':malformed[field]=1
+   else:malformed[field]={'sha':'b'*40}
+   def response(path):return malformed if '/compare/' in path else get(path)
+   with patch.object(fixture.api,'get',side_effect=response),self.subTest(field=field),self.assertRaises(Refused):fixture.run()
+   self.assertEqual((fixture.installs,fixture.patches,fixture.cas),(0,0,0))
+
 
 
 def selected_sdk_fixture(sdk,source):
