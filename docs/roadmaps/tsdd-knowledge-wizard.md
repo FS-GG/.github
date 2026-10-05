@@ -467,7 +467,8 @@ hosted/crypto/install custody remains original evidence; its final acceptance is
 
 The observer binding separates original `49a5e936` / run `37288088411` provenance from the new
 observer commit/tree/workflow/current-main pins. GET with no request body is enforced before
-transport and through redirects, including legacy API aliases. The original generation-16
+transport and through redirects, including legacy API aliases. Native run enumeration must exhaust
+within four pages; four full pages refuse even when one matching run was observed. The original generation-16
 `diagnostic` and `complete` routes retain their behavior and must not be rerun against settled17.
 
 This is source preparation only. New token minting, hosted dispatch, cryptographic custody export

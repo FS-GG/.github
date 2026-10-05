@@ -1303,6 +1303,8 @@ def readback_native(api,binding,run_id):
         rows=data.get("workflow_runs",[]);require(isinstance(rows,list) and len(rows)<=100,"readback workflow page bound")
         matches.extend(row for row in rows if row.get("display_title")==title)
         if len(rows)<100:break
+    else:
+        raise Refused("readback workflow enumeration unexhausted")
     require(len(matches)==1 and matches[0].get("id")==run_id,"readback native correlation")
     observer=api.get(f"repos/{REPO}/actions/runs/{run_id}")
     require(observer.get("id")==run_id and observer.get("display_title")==title and observer.get("head_sha")==binding["observerSource"] and observer.get("run_attempt")==1 and observer.get("status")=="in_progress" and observer.get("path")==WORKFLOW and observer.get("event")=="workflow_dispatch" and observer.get("head_branch")=="main" and observer.get("actor",{}).get("login")=="EHotwagner" and observer.get("repository",{}).get("id")==1269292704,"readback native observer role")
