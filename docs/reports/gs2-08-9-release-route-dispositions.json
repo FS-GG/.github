@@ -165,12 +165,15 @@
           "outer": "45c982686a927efca46eb86aaef65275b2c48bbdc1a26668498a5d633ff95c93",
           "entry": "85d410ecd5190a086a14b9d8dbec0ef88e9c5bf1a65acfa4be525b5f591ac770",
           "ancestry_url": "d4d2d11483a8145dee1439610bea2616af30f0021289dbd542269d633a49ce2e",
-          "validate_ancestry": "224e6b4fbed77a449910be7f99830923ff9c2ea252398e580f3082afb0b4eea4"
+          "validate_ancestry": "224e6b4fbed77a449910be7f99830923ff9c2ea252398e580f3082afb0b4eea4",
+          "http_failure_projection": "ffcbb64df9c3865db0696f78a1adc5fd48b96d9c8af8c4c36dcd91daa2d3d014",
+          "worker": "abc1e27c729b7408ff26bedb4e42370220afb29630be292c25854722249a2692"
         },
         "sourceSpanContract": "SHA-256 of exact UTF-8 ast.get_source_segment bytes for each named top-level assignment/function and explicitly named method, including internal whitespace/comments; AST serialization is not evidence.",
         "pagedAncestryMethodSourceSha256": {
-          "FiniteAPI.request": "116cad46812e920fb713681ad37143450a1f4fcaadcc8fa81b90de14af18c775",
-          "Redirect.redirect_request": "b4c529308be5f519e01cf4a27f6e230d1c55834b5e22451ffb7ab98ae7ab65fe"
+          "FiniteAPI.request": "9e1f15f7345d9d86cc1893102f76e2906889dc3a4c4cd75d3f3604462448941f",
+          "Redirect.redirect_request": "b4c529308be5f519e01cf4a27f6e230d1c55834b5e22451ffb7ab98ae7ab65fe",
+          "FiniteAPI.capture_http_error": "93f2ee934ac9dc0a2cb5b577498af753dfbf33b26b73b7f2de40b79d006d6c6b"
         },
         "pagedAncestryAmendment": {
           "unit": "TSDD-KNOWLEDGE-01.4",
@@ -180,6 +183,16 @@
           "previousOriginalRunsSourceSha256": "0a5cbcb4ec4143998834aee2018ca303d87b00f37da757fdc1089badb35385c6",
           "currentOriginalRunsSourceSha256": "f1e7a7523106e1255be9fc8763c6005614caab957eb1f16855b8b3092f8fbcfd",
           "scope": "One exact bodyless fixed-header second-page comparison GET and typed native ancestry joins; HTTP200, at least two commits, no files. Complete original raw response custody, source/effect identities and all prior caps/admission controls remain. This source-span amendment is not H3 or publication acceptance."
+        },
+        "httpErrorCustodyAmendment": {
+          "unit": "TSDD-KNOWLEDGE-01.4",
+          "originalItem": "TEMPLATES-H2",
+          "decisionSha256": "f2cd587a96859d7d8ab30e130f6563a63ef1fcd1c5b90f9bc579d683f2569798",
+          "previousRequestSourceSha256": "116cad46812e920fb713681ad37143450a1f4fcaadcc8fa81b90de14af18c775",
+          "scope": "Original bounded HTTPError custody and diagnostic GET/bodyNone guard only; diagnostic contents:read unchanged; no capability/effect acceptance",
+          "failedRun": 37269305353,
+          "previousWorkerSourceSha256": "baac8aa72df7d9f7fd13a6e51aa61236c7b143155d4be58d289a17f9c1314cbe",
+          "durableFallback": "Existing bounded worker report retains primary HTTP status and finite capture/close/transport failure kinds if transport custody fails; raw values never enter this fallback"
         }
       }
     },

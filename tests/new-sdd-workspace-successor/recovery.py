@@ -819,3 +819,104 @@ class SDKScopeCallerChainControls(unittest.TestCase):
   self.run_failed_chain(('synthetic/git/blobs','synthetic/git/trees'))
 
 if __name__=='__main__':unittest.main(verbosity=2)
+
+class HTTPErrorCustodyControls(unittest.TestCase):
+ def setUp(self):self.tmp=tempfile.TemporaryDirectory();self.root=pathlib.Path(self.tmp.name)
+ def tearDown(self):self.tmp.cleanup()
+ def attempt(self,name,raw=b'{"message":"Resource not accessible by integration"}',headers=None,storage=None,stream=None):
+  root=self.root/name;root.mkdir();budget=r.Budget('diagnostic');budget.storage=storage
+  api=r.FiniteAPI('synthetic-secret-not-for-custody',budget,root);body=stream if stream is not None else io.BytesIO(raw)
+  error=r.urllib.error.HTTPError('https://api.github.com',403,'Forbidden',headers or {},body);calls=[]
+  def open_(request,**kwargs):calls.append(request);raise error
+  api.opener.open=open_
+  with self.assertRaises(Refused) as caught:api.get(f'repos/{r.REPO}/releases/{r.RELEASE}')
+  self.assertEqual(caught.exception.httpStatus,403);self.assertEqual(len(calls),1);self.assertEqual(budget.reads,1)
+  self.assertEqual(budget.cas_writes,[]);self.assertEqual(budget.release_patches,0);self.assertTrue(body.closed)
+  return api,root,caught.exception
+ def test_original_permission_rate_empty_malformed_and_exact_cap(self):
+  for index,raw in enumerate((b'{"message":"permission"}',b'{"message":"rate limit"}',b'',b'not JSON',b'x'*r.SMALL_JSON_CAP)):
+   api,root,_=self.attempt(str(index),raw,{'x-ratelimit-remaining':'0','authorization':'synthetic-secret-not-for-custody','set-cookie':'secret'})
+   row=api.records[-1];self.assertTrue(row['bodyComplete']);self.assertFalse(row['bodyOverflow']);self.assertEqual(row['sha256'],r.digest(raw));self.assertEqual(row['bytes'],len(raw))
+   path=root/'response-github-0.raw';self.assertEqual(path.read_bytes(),raw);self.assertEqual(path.stat().st_mode&0o777,0o600)
+   self.assertEqual(set(row['responseHeaders']),{'x-ratelimit-remaining'});self.assertNotIn(b'synthetic-secret-not-for-custody',(root/'transport-github.json').read_bytes())
+ def test_overflow_is_explicit_prefix_never_full_digest(self):
+  api,root,_=self.attempt('overflow',b'x'*(r.SMALL_JSON_CAP+1));row=api.records[-1]
+  self.assertFalse(row['bodyComplete']);self.assertTrue(row['bodyOverflow']);self.assertNotIn('sha256',row);self.assertEqual(row['bytes'],r.SMALL_JSON_CAP+1);self.assertEqual(row['bodyBytesRetained'],r.SMALL_JSON_CAP);self.assertEqual(row['retainedBodySha256'],r.digest((root/'response-github-0.raw').read_bytes()))
+ def test_partial_read_failure_retains_primary_and_partial_original(self):
+  class Broken(io.BytesIO):
+   def read(self,size=-1):
+    if self.tell():raise OSError('secondary synthetic failure')
+    return super().read(min(size,3))
+  api,root,_=self.attempt('partial',stream=Broken(b'original'));row=api.records[-1]
+  self.assertFalse(row['bodyComplete']);self.assertEqual(row['errorCaptureFailureKind'],'OSError');self.assertEqual((root/'response-github-0.raw').read_bytes(),b'ori');self.assertNotIn('sha256',row)
+ def test_headers_are_bounded_allowlisted_and_explicit(self):
+  api,_,_=self.attempt('headers',headers={'x-accepted-github-permissions':'x'*600,'x-github-sso':'private URL','location':'signed URL'});row=api.records[-1]
+  self.assertFalse(row['headersComplete']);self.assertEqual(set(row['responseHeaders']),{'x-accepted-github-permissions'});self.assertEqual(len(row['responseHeaders']['x-accepted-github-permissions']['value'].encode()),512)
+ def test_storage_and_transport_failure_never_replace_primary403(self):
+  class Full:
+   armed=False
+   def check(self,pending=0):raise RuntimeError('synthetic full custody')
+  api,_,error=self.attempt('full',storage=Full());row=api.records[-1]
+  self.assertEqual(row['status'],403);self.assertEqual(row['errorCaptureFailureKind'],'RuntimeError');self.assertEqual(error.transportCaptureFailureKind,'RuntimeError');self.assertFalse(row['bodyComplete'])
+ def test_existing_custody_response_role_is_charged_without_new_member(self):
+  class Storage:
+   armed=False
+   def __init__(self):self.charges=[]
+   def check(self,pending=0):self.charges.append(pending)
+  storage=Storage();api,root,_=self.attempt('charged',raw=b'body',storage=storage)
+  self.assertIn(4,storage.charges);self.assertEqual({p.name for p in root.iterdir()},{'response-github-0.raw','transport-github.json'})
+ def test_diagnostic_direct_mutations_refuse_before_transport_or_charge(self):
+  root=self.root/'guard';root.mkdir();budget=r.Budget('diagnostic');api=r.FiniteAPI('synthetic',budget,root);api.opener.open=lambda *a,**k:self.fail('mutation reached opener')
+  for method,body in [('POST',None),('PATCH',{}),('PUT',{}),('GET',{})]:
+   with self.subTest(method=method),self.assertRaises(Refused):api.request('https://api.github.com/repos/'+r.REPO,method=method,body=body)
+  self.assertEqual(budget.reads,0);self.assertEqual(api.records,[]);self.assertEqual(list(root.iterdir()),[])
+ def test_error_original_enters_existing_private_archive_only(self):
+  api,root,_=self.attempt('archive',raw=b'private provider permission message')
+  storage=r.CustodyStorage(root)
+  class FakeEncryptionRunner:
+   def __init__(self):self.budget=r.Budget('diagnostic');self.records=[{'custody':{'leaderReaped':True,'remaining':[]}}]
+   def run(self,argv,*args):
+    # Pure encrypted-custody caller control; no process/crypto/native qualification.
+    output=pathlib.Path(argv[argv.index('-out')+1]);output.write_bytes(bytes.fromhex('060b2a864886f70d0109100117')+bytes.fromhex('060960864801650304012e')+b'synthetic ciphertext');return SimpleNamespace(returncode=0)
+  with patch.object(r,'recipient',return_value='synthetic public certificate'),patch.dict(os.environ,{'GITHUB_RUN_ID':'99'}):
+   summary=r.encrypted_custody(root,{'recipientSha256':'a'*64},FakeEncryptionRunner(),storage)
+  with zipfile.ZipFile(root/'raw-custody.zip') as zipped:
+   self.assertEqual(zipped.read('response-github-0.raw'),b'private provider permission message')
+   entries=json.loads(zipped.read('custody-members.json'));entry=next(x for x in entries if x['path']=='response-github-0.raw');self.assertEqual(entry['sha256'],r.digest(zipped.read(entry['path'])))
+  self.assertEqual({p.name for p in (root/'export').iterdir()},{'custody.cms','summary.json'})
+  self.assertNotIn(b'private provider permission message',(root/'export/summary.json').read_bytes());self.assertEqual(summary['memberCount'],3)
+ def test_stale_error_file_is_not_adopted_as_original(self):
+  root=self.root/'stale';root.mkdir();target=root/'response-github-0.raw';target.write_bytes(b'stale original')
+  budget=r.Budget('diagnostic');api=r.FiniteAPI('synthetic',budget,root);body=io.BytesIO(b'new error');error=r.urllib.error.HTTPError('https://api.github.com',403,'Forbidden',{},body)
+  api.opener.open=lambda *a,**k:(_ for _ in ()).throw(error)
+  with self.assertRaises(Refused) as caught:api.get('repos/'+r.REPO)
+  self.assertEqual(caught.exception.httpStatus,403);self.assertTrue(body.closed);self.assertEqual(target.read_bytes(),b'stale original');row=api.records[-1]
+  self.assertEqual(row['errorCaptureFailureKind'],'FileExistsError');self.assertEqual(row['bodyBytesRetained'],0);self.assertNotIn('retainedBodySha256',row)
+ def test_error_capture_uses_original_deadline_and_no_extra_read(self):
+  root=self.root/'deadline';root.mkdir();budget=r.Budget('diagnostic');api=r.FiniteAPI('synthetic',budget,root);body=io.BytesIO(b'error');error=r.urllib.error.HTTPError('https://api.github.com',403,'Forbidden',{},body)
+  def open_(*args,**kwargs):budget.work=0;raise error
+  api.opener.open=open_
+  with self.assertRaises(Refused) as caught:api.get('repos/'+r.REPO)
+  self.assertEqual(caught.exception.httpStatus,403);self.assertTrue(body.closed);self.assertEqual(budget.reads,1);row=api.records[-1]
+  self.assertFalse(row['bodyComplete']);self.assertEqual(row['errorCaptureFailureKind'],'Refused');self.assertEqual(row['bytes'],0)
+ def test_content_length_mismatch_is_not_complete_original(self):
+  for index,length in enumerate(('100','invalid')):
+   api,root,_=self.attempt('length-'+str(index),raw=b'short',headers={'content-length':length});row=api.records[-1]
+   self.assertFalse(row['bodyComplete']);self.assertFalse(row['contentLengthMatches']);self.assertNotIn('sha256',row);self.assertEqual(row['retainedBodySha256'],r.digest(b'short'))
+  api,_,_=self.attempt('length-match',raw=b'short',headers={'content-length':'5'});self.assertTrue(api.records[-1]['bodyComplete'])
+ def test_actual_worker_durably_reports_primary403_when_transport_custody_fails(self):
+  class Full:
+   armed=False
+   def check(self,pending=0):raise RuntimeError('private synthetic storage failure')
+  api,_,failure=self.attempt('durable-error',storage=Full())
+  source=self.root/'source';source.mkdir();(source/'global.json').write_text('{"sdk":{"version":"10.0.401"}}');sdk=self.root/'sdk';sdk.mkdir();(sdk/'dotnet').write_bytes(b'synthetic not executed');selected_sdk_fixture(sdk,source);root=self.root/'worker';root.mkdir();f=Fixture(self.root,'diagnostic')
+  class Runner:
+   def __init__(self,budget,root):self.budget=budget
+   def run(self,*args,**kwargs):return SimpleNamespace(returncode=0,stdout='10.0.401',stderr='')
+  with patch.object(r,'subreaper'),patch.object(r,'Runner',Runner),patch.object(r,'source_snapshot',return_value={'global.json':{'sha256':'a'*64,'link':None}}),patch.object(r,'sdk_snapshot',return_value={'members':{},'selection':{'globalConfigSha256':'a'*64}}),patch.object(r.shutil,'which',return_value=str(sdk/'dotnet')),patch.object(r,'candidate',side_effect=failure),patch.object(r,'FiniteAPI',return_value=f.api),patch.object(r,'native_context'),patch.dict(os.environ,{'GH_TOKEN':'synthetic','GITHUB_RUN_ID':'99'}),contextlib.redirect_stderr(io.StringIO()) as logs:
+   self.assertEqual(r.worker('diagnostic',f.binding,root,source),1)
+  report=json.loads((root/'worker-report.json').read_bytes());self.assertEqual(report['httpFailure'],{'status':403,'errorCaptureFailureKind':'RuntimeError','transportCaptureFailureKind':'RuntimeError'});self.assertFalse(report['success']);self.assertEqual(report['releasePatchCount'],0);self.assertEqual(report['casWrites'],0);self.assertTrue(report['postSourceMatches']);self.assertTrue(report['postSdkMatches']);self.assertNotIn('private synthetic storage failure',logs.getvalue())
+ def test_failure_projection_is_closed_and_never_serializes_raw_fields(self):
+  error=Refused('private provider body');error.httpStatus=403;error.errorCaptureFailureKind='private arbitrary string';error.responseHeaders={'authorization':'secret'}
+  self.assertEqual(r.http_failure_projection(error),{'status':403,'errorCaptureFailureKind':'unclassified'})
+  for value in (True,'403',None,99,600):error.httpStatus=value;self.assertIsNone(r.http_failure_projection(error))
