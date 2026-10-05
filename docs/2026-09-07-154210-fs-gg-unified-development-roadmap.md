@@ -56,6 +56,19 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-05: V2-CTX-01.3 bounded evidence-view and mechanical-reuse source qualified locally.**
+Root qualification passed the120-case combined suite:31 legacy cases,35 delta controls,
+44 view/reuse controls and10 baseline checks. Full artifact identity is checked before excerpts;
+whole mandatory instructions and typed refusal boundaries remain intact. The shared reader stops
+at the limit plus one overflow-detection byte even during growth. Reuse advice requires a declared
+complete input closure with pinned policy/profile/evaluator/source-config identity, current access
+and independently fresh facts/receipt; it cannot reuse semantic/native acceptance or authenticate
+an untrusted expected pin. This records bounded source qualification, not operational adoption or
+context savings. The [owning plan](roadmaps/2026-10-05-programme-context-efficiency.md#bounded-source-window-2026-10-05)
+keeps owner/watcher integration and .4–.6 pending; actual parent rereads, native usage, compactions
+and whole-family economics remain unknown or inconclusive. Default skill instructions and workspace
+behavior are unchanged. The earlier delivered .1/.2 source boundary is preserved below.
+
 **2026-10-05: V2-CTX-01 offline baseline and typed return/delta source delivered.**
 [PR #4235](https://github.com/FS-GG/.github/pull/4235) merged at
 `b442eddf1b94788d45a943b56436dcca3dd35f84`. The opt-in helper command preserves

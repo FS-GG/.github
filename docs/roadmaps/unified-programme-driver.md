@@ -41,9 +41,14 @@ Charge debugging and specialist work to that item; never infer usage from bytes 
 the skill and adapter when this programme ends or a qualified successor replaces them.
 
 The [V2-CTX-01 extension](2026-10-05-programme-context-efficiency.md#bounded-source-window-2026-10-05)
-adds an offline five-operation baseline and an opt-in typed return/delta source command. The baseline
+adds an offline five-operation baseline and opt-in typed return/delta, bounded evidence-view and
+mechanical-reuse source commands. The baseline
 establishes retained helper byte accounting; actual parent rereads, native usage, compactions and
-whole-family economics remain unknown or inconclusive. Root tested34 additive controls,31 legacy
-cases,10 Python collector controls and two matching CLI replays. Existing commands and skill entry
+whole-family economics remain unknown or inconclusive. The .1/.2 source window delivered through
+[PR #4235](https://github.com/FS-GG/.github/pull/4235). Root qualified the .3 source with the120-case
+combined suite:31 legacy,35 delta,44 view/reuse and10 collector checks. Earlier .2 CLI replays matched
+the expected retained result. Evidence views check full raw identity before excerpts; whole governing
+instructions cannot be excerpted. Reuse is advisory mechanical correspondence over a caller-declared
+complete/fresh input closure and never semantic/native acceptance. Existing commands and skill entry
 instructions remain unchanged. This bounded source behavior does not establish operational adoption
-or measured savings; owner/watcher integration, selective evidence views and .3–.6 remain pending.
+or measured savings; owner/watcher integration, live comparison and .4–.6 remain pending.
