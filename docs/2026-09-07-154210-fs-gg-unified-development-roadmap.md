@@ -66,19 +66,27 @@ including16 new controls. Historical diagnostic/complete behavior remains unchan
 boundary grants no rerun, release mutation, installed qualification or Creator adoption; original H4
 acceptance remains failed/unaccepted. A fresh bounded admission is required before hosted execution.
 
-**2026-10-05: programme telemetry root recovered and prospective child usage collected.**
-The original pending root batch was applied without replacement lineage. A fresh child completed and
-its native usage was collected; the [observation guide](../.agents/skills/work-programme/references/observation.md)
-now specifies the short agent-name binding required by the existing reader. Historical usage and
-whole-programme coverage remain unknown, and the merged emitter fix still requires deployed adoption.
+**2026-10-05: telemetry 0.97.1 published, adopted and qualified for a fresh local cycle.**
+The [release owner](roadmaps/utel-release-successor.md#accepted-0971-release-and-selected-local-adoption--2026-10-05)
+records source `99ea75286f5c3cea2a261fef4e5b45cd70378185`, successful first-attempt
+candidate/preflight/publication and promoted coherent set 0.97.1. The hosted publisher
+verified all 16 effects and both package feeds; root independently matched nuget.org
+payloads and release archives. Root's direct GitHub Packages HTTP 403 limitation remains
+separate from hosted verification. Ordinary user-level CLI adoption passed version and
+existing store-only configuration checks; all 84 extracted installed payload members
+matched, while the generated NuGet SHA-512 sidecar explanation remains unknown.
 
-**2026-10-05: telemetry equal-ID initialization repair.**
-The roadmap adapter now gives an item fact a deterministic distinct identity when its logical feature
-and item IDs are equal. Logical references, dispatch tokens and ordinary distinct-ID emission remain
-unchanged. The [UTEL plan](roadmaps/utel-local-telemetry-store.md#equal-feature-and-item-identities)
-records the repair and rejected-pending-intent recovery boundary. The adapter harness passes equal-ID,
-retry and population-only controls. Live ingest/linkage verification and deployed emitter adoption remain
-separate; missing historical usage is not reconstructed.
+A fresh prospective local cycle passed equal-ID begin/retry, actual native short-name
+binding, terminal reconciliation, same-owner follow-up baseline exclusion and final
+drain. Two distinct joined native turn usage facts were retained; all nine stages exited
+naturally with clean owned retirement and zero pending local batches. The
+[coverage reference](reference/local-telemetry-store.md#native-collaboration-observations)
+keeps the installed unknown label separate from verified joined facts. Root usage is
+unsupported; historical and whole-programme coverage, independent remote Host receipts
+and the original wider milestones remain unresolved. Dashboard publication reported an advisory
+script-discovery failure and was not retried. This accepts the selected release,
+ordinary installed repair and local collection route without replaying earlier attempts
+or adopting Main/Host services, wider receivers or generated-workspace defaults.
 
 **2026-10-05: improved work-programme coordination selected as default.**
 At the user's explicit request, the [skill](../.agents/skills/work-programme/SKILL.md) now defaults to
