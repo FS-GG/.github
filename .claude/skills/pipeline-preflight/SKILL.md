@@ -42,7 +42,8 @@ control, not demonstrated CI savings.
 
 ## Collect independent failures within the attempt
 
-Apply the permanent [diagnostic execution policy](../../../docs/coordination/diagnostic-execution.md).
+Apply the permanent diagnostic execution policy at
+<https://github.com/FS-GG/.github/blob/main/docs/coordination/diagnostic-execution.md>.
 Collect independently checkable preparation defects against the actual candidate; failed or unknown
 prerequisites block dependent effects. Continue only known independent checks with valid shared state,
 ownership, custody and accounting within the original budgets. Stop affected execution on safeguard
