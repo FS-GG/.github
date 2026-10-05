@@ -867,7 +867,7 @@ class HTTPErrorCustodyControls(unittest.TestCase):
   self.assertIn(4,storage.charges);self.assertEqual({p.name for p in root.iterdir()},{'response-github-0.raw','transport-github.json'})
  def test_diagnostic_direct_mutations_refuse_before_transport_or_charge(self):
   root=self.root/'guard';root.mkdir();budget=r.Budget('diagnostic');api=r.FiniteAPI('synthetic',budget,root);api.opener.open=lambda *a,**k:self.fail('mutation reached opener')
-  for method,body in [('POST',None),('PATCH',{}),('PUT',{}),('GET',{})]:
+  for method,body in [('POST',None),('PATCH',{}),('PUT',{}),('DELETE',None),('GET',{})]:
    with self.subTest(method=method),self.assertRaises(Refused):api.request('https://api.github.com/repos/'+r.REPO,method=method,body=body)
   self.assertEqual(budget.reads,0);self.assertEqual(api.records,[]);self.assertEqual(list(root.iterdir()),[])
  def test_error_original_enters_existing_private_archive_only(self):

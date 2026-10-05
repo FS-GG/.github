@@ -438,3 +438,21 @@ requires GET with no body. Existing response/time/read/storage caps and historic
 0.13 effect guards remain unchanged. A future capability change is separately
 reviewed; this source repair grants no diagnostic admission or acceptance. Fresh
 root selection must include this failed run among immutable prior diagnostics.
+
+The next diagnostic, `37273763257` at protected `1b064690`, also failed.
+Authenticated failure custody retained the complete original 150-byte HTTP403
+response from the original 0.13 draft GET, with `Resource not accessible by
+integration`, accepted permissions `contents=read` and remaining rate limit 4731.
+This establishes an authorization refusal; insufficient draft visibility is the
+selected fix hypothesis, awaiting an actual diagnostic result.
+
+The selected source amendment increases only the existing diagnostic job's
+ephemeral repository GITHUB_TOKEN capability from `contents: read` to
+`contents: write`. GitHub documents draft visibility for accounts with push
+access. Actions/packages remain read; the separately scoped Authority App remains
+read-only. The diagnostic helper still refuses direct mutations or a GET body
+before transport and permits zero release PATCH or Authority CAS. This is a
+write-capable credential constrained by reviewed source, not a platform read-only
+token. Original 0.13/current 0.15/literal 014 job identities, caps and historical
+seals remain intact. All four consumed failures must remain in fresh selection;
+source delivery does not grant H3 acceptance, adoption or another diagnostic.
