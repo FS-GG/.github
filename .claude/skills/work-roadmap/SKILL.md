@@ -73,6 +73,18 @@ For source work associated with a protected operation, use the routine steps for
 operation pending until its independent authority and safeguards permit it. Invalid or unknown technical or
 operation authorization fails the affected effect; it does not reclassify delivery as heavyweight.
 
+## Collect independent failures within the attempt
+
+Apply the permanent [diagnostic execution policy](../../../docs/coordination/diagnostic-execution.md).
+Collect independently checkable preparation defects against the actual candidate; failed or unknown
+prerequisites block dependent effects. Continue only known independent checks with valid shared state,
+ownership, custody and accounting within the original budgets. Stop affected execution on safeguard
+uncertainty and use existing cleanup. Preserve the first cause, additional findings, blocked/unknown/
+budget-limited coverage and separate exit, cleanup and reporting outcomes; partial failures cannot
+qualify. Diagnostic mode is optional. Repeated first-failure repairs require a bounded composition
+review in the existing work artifact, without additional mandatory runs, forms or approval ceremony. Guidance source
+changes do not establish runtime qualification or installed adoption.
+
 ## Opt in one item to observed normal-root execution
 
 Native collaboration remains the default roadmap route. For one assigned item selected prospectively, the

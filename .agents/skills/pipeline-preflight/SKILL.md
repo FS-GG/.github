@@ -40,6 +40,18 @@ For a single 30-minute pipeline run, prefer a short inspection and existing chec
 12-hour custom model. A safety obligation may justify greater effort, but label it as risk
 control, not demonstrated CI savings.
 
+## Collect independent failures within the attempt
+
+Apply the permanent [diagnostic execution policy](../../../docs/coordination/diagnostic-execution.md).
+Collect independently checkable preparation defects against the actual candidate; failed or unknown
+prerequisites block dependent effects. Continue only known independent checks with valid shared state,
+ownership, custody and accounting within the original budgets. Stop affected execution on safeguard
+uncertainty and use existing cleanup. Preserve the first cause, additional findings, blocked/unknown/
+budget-limited coverage and separate exit, cleanup and reporting outcomes; partial failures cannot
+qualify. Diagnostic mode is optional. Repeated first-failure repairs require a bounded composition
+review in the existing work artifact, without additional mandatory runs, forms or approval ceremony. Guidance source
+changes do not establish runtime qualification or installed adoption.
+
 ## Implement and qualify
 
 For literal GitHub Actions dependencies, the helper's `graph` command checks the **actual YAML**

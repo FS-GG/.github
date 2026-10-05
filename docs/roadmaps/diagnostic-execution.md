@@ -1,6 +1,6 @@
 # V2-DIAG-01: Collect independent failures within bounded execution
 
-Date: 2026-10-05. Status: planned; no implementation or receiver adoption claimed.
+Date: 2026-10-05. Status: shared guidance source prepared; runtime implementation and receiver adoption pending.
 Design: [diagnostic execution](../designs/diagnostic-execution.md).
 Parent: [V2 roadmap](../github-substrate-v2-roadmap.md#v2-diag-01--diagnostic-execution--2026-10-05).
 
@@ -39,6 +39,15 @@ the relevant shared contracts and each adapter's current admission.
   collection, attempts, overhead and infrastructure failures over a bounded pilot window; missing
   baseline data remains unknown. Acceptance: both pilot owners verify adopted behavior and remaining
   limits, required qualification stays intact, and the V2 roadmap records the actual outcome.
+
+## V2-DIAG-01.1 source window — 2026-10-05
+
+The permanent [execution policy](../coordination/diagnostic-execution.md) and equivalent `.agents`
+and `.claude` `work-roadmap`, `work-programme` and `pipeline-preflight` source variants implement
+the guidance portion of this item. Focused routine-route, byte-equality and local-link controls
+passed. Existing-contract assessment and exact pilot selection remain pending; no runtime entry
+point, installed skill receiver or native runner was qualified by this source window. All delivery
+checkboxes remain open until their complete acceptance obligations and native source readback hold.
 
 ## Completion and rollout limits
 
