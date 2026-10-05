@@ -106,18 +106,62 @@ for name, expected in proof["historicalRecoveryJobSha256"].items():
 assert "format('Wizard 0.13 recovery {0} {1} {2}', inputs.promotion_recovery, inputs.recovery_correlation, inputs.recovery_binding_sha256)" in wizard
 assert "default: false" in wizard and "default: 'off'" in wizard
 recovery_source = (ROOT / "scripts/new_sdd_workspace_promote_recovery.py").read_text()
-recovery = ast.parse(recovery_source)
-# AST locates exact source spans; its interpreter-dependent dump is never hashed.
-assignments = {",".join(target.id for target in node.targets): node
-               for node in recovery.body if isinstance(node, ast.Assign)
-               and all(isinstance(target, ast.Name) for target in node.targets)}
-functions = {node.name: node for node in recovery.body if isinstance(node, ast.FunctionDef)}
-for spans, expected_spans in ((assignments, proof["historicalRecoveryAssignmentSourceSha256"]),
-                              (functions, proof["historicalGuardFunctionSourceSha256"])):
-    for name, expected in expected_spans.items():
-        source_span = ast.get_source_segment(recovery_source, spans[name])
-        assert source_span is not None
-        assert hashlib.sha256(source_span.encode("utf-8")).hexdigest() == expected, name
+def verify_recovery_source_spans(source, expected_proof):
+    """Verify exact production spans; metadata does not exempt amended guards."""
+    parsed = ast.parse(source)
+    assignments = {",".join(target.id for target in node.targets): node
+                   for node in parsed.body if isinstance(node, ast.Assign)
+                   and all(isinstance(target, ast.Name) for target in node.targets)}
+    functions = {node.name: node for node in parsed.body if isinstance(node, ast.FunctionDef)}
+    methods = {owner.name + "." + node.name: node
+               for owner in parsed.body if isinstance(owner, ast.ClassDef)
+               for node in owner.body if isinstance(node, ast.FunctionDef)}
+    # AST locates exact bytes; interpreter-dependent serialization is not evidence.
+    for spans, expected_spans in ((assignments, expected_proof["historicalRecoveryAssignmentSourceSha256"]),
+                                  (functions, expected_proof["historicalGuardFunctionSourceSha256"]),
+                                  (methods, expected_proof["pagedAncestryMethodSourceSha256"])):
+        for name, expected in expected_spans.items():
+            source_span = ast.get_source_segment(source, spans[name])
+            assert source_span is not None
+            assert hashlib.sha256(source_span.encode("utf-8")).hexdigest() == expected, name
+    return parsed
+
+ancestry_amendment = proof["pagedAncestryAmendment"]
+assert ancestry_amendment["unit"] == "TSDD-KNOWLEDGE-01.4"
+assert ancestry_amendment["originalItem"] == "TEMPLATES-H2"
+assert ancestry_amendment["sourceCandidate"] == "44667c54a81ed9fdc63ab5bc4174b8448bb49f32"
+assert ancestry_amendment["acceptedReviewSha256"] == "05928c08a8bc9ab59c76d65b0d2a5cac25f3458e37f43769bf38f2ada2e298e3"
+assert ancestry_amendment["previousOriginalRunsSourceSha256"] == "0a5cbcb4ec4143998834aee2018ca303d87b00f37da757fdc1089badb35385c6"
+assert ancestry_amendment["currentOriginalRunsSourceSha256"] == proof["historicalGuardFunctionSourceSha256"]["original_runs"]
+assert {"ancestry_url", "validate_ancestry", "original_runs"} <= set(proof["historicalGuardFunctionSourceSha256"])
+assert set(proof["pagedAncestryMethodSourceSha256"]) == {"FiniteAPI.request", "Redirect.redirect_request"}
+recovery = verify_recovery_source_spans(recovery_source, proof)
+
+# Causal offline negatives mutate production bytes, not fabricated native receipts.
+# The same span verifier must refuse an accidental weakening of the new role and
+# drift of a retained source/effect guard, even though metadata names an amendment.
+mutations = (
+    ("total>=2", "total>=1"),
+    ("?per_page=1&page=2", "?per_page=1&page=1"),
+    ('response["behind_by"]==0', 'response["behind_by"]>=0'),
+    ("headers is None", "True"),
+    ("body is None and headers", "True and headers"),
+    ('row["status"]==200', 'row["status"]==201'),
+    ('stream.write(data)', 'stream.write(data[:1])'),
+    ('"/compare" not in urllib.parse.unquote', '"/unrelated" not in urllib.parse.unquote'),
+    ('CANDIDATE_SOURCE="f891b5b0723070c67e08d1a87b7d12b0b4d8bebe"', 'CANDIDATE_SOURCE="' + "a" * 40 + '"'),
+    ('original.get("conclusion")=="failure"', 'original.get("conclusion")=="success"'),
+)
+for original, changed in mutations:
+    assert original in recovery_source, f"negative control no longer selects production bytes: {original}"
+    mutated = recovery_source.replace(original, changed, 1)
+    try:
+        verify_recovery_source_spans(mutated, proof)
+    except AssertionError:
+        pass
+    else:
+        raise AssertionError(f"unexpected source/effect seal weakening accepted: {original}")
+print(f"Wizard paged ancestry source seals: {len(mutations)} mutated production guards refused")
 calls = [node for node in ast.walk(recovery) if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)]
 for function, keyword, count in (("effects", "binding", 2), ("WizardAdmission", "release_binding", 1)):
     selected = [call for call in calls if call.func.id == function]
