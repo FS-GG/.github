@@ -1,7 +1,7 @@
 # Programme context efficiency and deterministic coordination
 
 Identity: **V2-CTX-01**. Authored: **2026-10-05**.
-Status: **bounded .1 offline smoke and .2–.3 source implementations; adoption and economics pending**.
+Status: **delivered coordination components selected as the user-requested default; full integration and economics pending**.
 Owner: `.github` programme-driver maintainer, with Coordination execution and UTEL/LEARN measurement owners.
 Parent: [Unified Roadmap, section 9.8](../2026-09-07-154210-fs-gg-unified-development-roadmap.md#98-feature-parts-and-subroadmap-index).
 
@@ -24,6 +24,20 @@ resource limits, execution authority, required checks or generated workspace byt
 active lanes nor replaces their supervisors. No new permanent orchestrator, event journal, memory
 service, vector database or per-lane manager is selected. Adoption remains bounded to the temporary
 programme driver unless a later consumer is explicitly selected.
+
+## User-selected default, 2026-10-05
+
+The user explicitly selected the improved `$work-programme` workflow as the default. The skill now
+uses delivered typed owner returns and compact delta views, bounded evidence retrieval, mechanical
+reuse advice and bounded hosted-check watchers for applicable new work. Existing prose-only attempts
+retain their identities and evidence; new packet-bound continuations establish truthful typed returns.
+Missing bases resynchronize without releasing unknown reservations or renewing source timestamps.
+
+This instruction supersedes the proposal's earlier default/adoption deferral for these delivered
+components. It does not claim completion of .1 or .4–.6, an end-to-end deterministic executor, measured
+savings, new process containment or installed consumer qualification. Resource and native acceptance
+contracts remain in force. Continue measurement and recovery validation during ordinary work; roll
+back the affected coordination component if it loses obligations, lineage or effect correspondence.
 
 ## What exists and what remains unproved
 
