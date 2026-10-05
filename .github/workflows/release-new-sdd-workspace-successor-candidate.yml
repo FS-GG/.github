@@ -1,6 +1,6 @@
 name: release-new-sdd-workspace-successor-candidate
 
-# Product V2 wizard 0.14.0: protected source and package-byte qualification only.
+# Product V2 wizard 0.15.0: protected source and package-byte qualification only.
 # The GS2-08.9 sealed legacy workflow remains unchanged.
 on:
   workflow_dispatch:
@@ -15,10 +15,12 @@ concurrency:
 
 jobs:
   candidate:
-    name: new-sdd-workspace-014-candidate
+    name: new-sdd-workspace-015-candidate
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    env:
+      FsggFrozenCoordDependencies: ${{ github.workspace }}/artifacts/frozen-coord-dependencies
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -40,15 +42,25 @@ jobs:
           test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
           test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$SOURCE_SHA"
           version="$(dotnet msbuild scripts/NewSddWorkspace/NewSddWorkspace.fsproj -getProperty:Version | tr -d '[:space:]')"
-          test "$version" = 0.14.0
-          test -z "$(git ls-remote --tags origin refs/tags/new-sdd-workspace/v0.14.0)"
+          test "$version" = 0.15.0
+          test -z "$(git ls-remote --tags origin refs/tags/new-sdd-workspace/v0.15.0)"
           response="$(curl --silent --show-error --location --output /dev/null --write-out '%{http_code}' \
-            https://api.nuget.org/v3-flatcontainer/fs.gg.newsddworkspace/0.14.0/fs.gg.newsddworkspace.0.14.0.nupkg)"
+            https://api.nuget.org/v3-flatcontainer/fs.gg.newsddworkspace/0.15.0/fs.gg.newsddworkspace.0.15.0.nupkg)"
           test "$response" = 404
           response="$(curl --silent --show-error --location --output /dev/null --write-out '%{http_code}' \
             -u "$GITHUB_ACTOR:$GITHUB_TOKEN" \
-            https://nuget.pkg.github.com/FS-GG/download/fs.gg.newsddworkspace/0.14.0/fs.gg.newsddworkspace.0.14.0.nupkg)"
+            https://nuget.pkg.github.com/FS-GG/download/fs.gg.newsddworkspace/0.15.0/fs.gg.newsddworkspace.0.15.0.nupkg)"
           test "$response" = 404
+      - name: Stage the exact accepted public coordination dependency bodies
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/dependency-input
+          curl --fail --silent --show-error --location --max-time 120 --max-filesize 67108864 \
+            https://github.com/FS-GG/.github/releases/download/coherent-set/v0.97.0/FS.GG.Coord.Cli.0.97.0.nupkg \
+            --output artifacts/dependency-input/FS.GG.Coord.Cli.0.97.0.nupkg
+          python3 scripts/creator-frozen-coord-dependencies.py stage \
+            --package artifacts/dependency-input/FS.GG.Coord.Cli.0.97.0.nupkg \
+            --dependencies "${FsggFrozenCoordDependencies:?job frozen dependency path required}"
       - name: Qualify wizard source
         run: bash tests/new-sdd-workspace/run.sh
       - name: Qualify the real compiled product board boundary
@@ -67,16 +79,17 @@ jobs:
           mkdir -p artifacts/new-sdd-workspace
           dotnet pack scripts/NewSddWorkspace/NewSddWorkspace.fsproj -c Release \
             -p:RepositoryCommit="$SOURCE_SHA" -o artifacts/new-sdd-workspace
-          package=artifacts/new-sdd-workspace/FS.GG.NewSddWorkspace.0.14.0.nupkg
+          package=artifacts/new-sdd-workspace/FS.GG.NewSddWorkspace.0.15.0.nupkg
           manifest=artifacts/new-sdd-workspace/manifest.json
           test -f "$package"
           python3 scripts/new-sdd-workspace-release.py prepare --package "$package" \
-            --source-sha "$SOURCE_SHA" --version 0.14.0 \
-            --tag new-sdd-workspace/v0.14.0 --output "$manifest"
+            --source-sha "$SOURCE_SHA" --version 0.15.0 \
+            --tag new-sdd-workspace/v0.15.0 --output "$manifest"
           python3 scripts/new-sdd-workspace-release.py verify --manifest "$manifest" --package "$package"
           python3 tests/new-sdd-workspace-successor/run.py
           python3 tests/new-sdd-workspace-successor/run.py \
             --board-package "$package" --source-sha "$SOURCE_SHA" --release-manifest "$manifest" \
+            --frozen-coord-dependencies "${FsggFrozenCoordDependencies:?job frozen dependency path required}" \
             > artifacts/new-sdd-workspace/package-evidence.json
       - name: Refuse changed main before retaining candidate
         env:
@@ -86,7 +99,7 @@ jobs:
         with:
           name: new-sdd-workspace-successor-candidate-${{ github.sha }}-${{ github.run_id }}
           path: |
-            artifacts/new-sdd-workspace/FS.GG.NewSddWorkspace.0.14.0.nupkg
+            artifacts/new-sdd-workspace/FS.GG.NewSddWorkspace.0.15.0.nupkg
             artifacts/new-sdd-workspace/manifest.json
             artifacts/new-sdd-workspace/package-evidence.json
           if-no-files-found: error

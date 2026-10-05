@@ -268,6 +268,59 @@ a project rename or producer source merge cannot qualify an existing-workspace u
 
 ## Product binding integration window — 2026-10-04
 
+### Creator publication preparation — 2026-10-05
+
+The fresh-scaffold origin repair landed through [.github #4223](https://github.com/FS-GG/.github/pull/4223)
+at `73eccda884b218571beebababd30c0afea8f1826`. Creator 0.15 source selects the exact published
+coordination 0.97 dependency archive from immutable release `403211100`, asset `610712479`,
+SHA-256 `3e620f112676f76c5f247343f7cffde2f00d31c5e82dec1342ab94f30400a08d`.
+The candidate verifies 267 dependency source/import leaves and all 81 selected dependency files,
+preserves the eleven-project reference graph, and compiles the creator against those staged published
+implementation bodies. Package checks retain their built-output comparisons and additionally require
+every selected published dependency body to remain exact. Synthetic custody controls exercise archive,
+source, destination, layout and packaged-body refusal; they do not establish a real build or install.
+
+The first CLR10 qualification restored and staged successfully, then naturally refused during
+creator compilation: SDK 10.0.401 queried content from the unbuilt engine project and advertised
+its absent `obj/Release/net10.0/apphost`. The frozen route now disables child output/publish
+content queries, retaining assembly resolution through the same eleven-project graph and all
+81 explicit published dependency files. Source checks refuse removed, enabled or unscoped copy
+guards before staging. Seven focused custody checks and 109 pure successor/recovery checks pass;
+native compilation and actual packaged closure need a fresh exact-source qualification.
+
+The next native attempt passed restore, staging, compilation and compiled product controls,
+then naturally refused at pack with `NETSDK1152`: engine DLL/PDB/XML appeared through both
+the frozen closure and project-reference copy-local output. Frozen mode now marks that existing
+reference `Private=false`, retaining compiler resolution while publishing its accepted bodies
+solely through the explicit closure. Duplicate publish enforcement remains enabled. Eight focused
+custody checks include reference-copy and disabled-enforcement mutants; actual package acceptance
+still requires a fresh exact-source qualification. Both consumed attempts remain preserved.
+
+The following attempt passed native pack, then refused coherent CLI dependency metadata:
+`Private=false` omitted the CLI library and creator runtime dependency edge from the generated
+deps file. Pure inspection of the retained actual package verifies all 81 accepted dependency
+bodies while reproducing the metadata refusal without changing that archive. The reference now
+retains normal runtime metadata and copies its three verified staged DLL/PDB/XML files; the
+explicit frozen content excludes exactly those three overlapping destinations. All other selected
+files and full-closure checks remain required. The package checker also requires the coherent
+library type, creator dependency edge and engine runtime asset. The 111 pure checks pass;
+fresh native qualification remains pending and previous consumed attempts remain immutable.
+
+Local qualification at `42e63f1ae1b9e7d6cfe3a1f56743292e4d1e3b65` subsequently passed all
+six bounded phases: restore, accepted dependency staging, compilation, compiled product controls,
+pack and actual package metadata/full 81-body closure. Caller and operation cleanup were verified.
+Integration with protected main `875aa4781aa9a81a0177c4828d245698fb76836a` retains the Wizard's
+paged-ancestry recovery seals and the creator's qualified source inputs. All 115 integrated pure
+successor/recovery checks and release-effect sealing pass, including ten ancestry guard mutants.
+The final integrated source still requires coherent CI and an exact-source hosted candidate;
+local qualification does not establish publication or installed adoption. Creator ordinary publication
+and Wizard historical recovery need one coordinated held-main window after both source outcomes land.
+
+Creator 0.14 publication remains accepted history. Ordinary publication selects only the new 0.15
+singleton and journal; the separately qualified 0.13 recovery route remains unchanged. Creator 0.15
+candidate, publication and actual installed fresh/retained Rendering journeys are pending. Neither
+milestone .5 nor .6 closes through this source preparation.
+
 **Selected next source outcome: COORD-BOARD-V2-01.5 product binding and materialization.** Prepare
 it independently of broader .4 carryover and BAR/SC2 native qualification. The qualified .3 projection
 contract is the producer foundation. Publication and actual product adoption still need their own

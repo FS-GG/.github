@@ -396,6 +396,15 @@ for meaningful values: it follows default-on coordination without a second confi
 offer the normally redundant immediate `fsgg-sdd upgrade`. The explicit CLI escape hatches remain
 `--no-coordination` and `--upgrade`.
 
+The Creator's 0.15 source candidate reuses the accepted coordination 0.97 binaries
+for product-scoped board preparation. Its eleven-project graph remains intact;
+the [dependency manifest](../scripts/creator-frozen-coord-dependencies.json) pins
+the published archive and all 81 selected files, and candidate checks require exact
+source and packaged-file closure. This independently versioned Creator release
+does not republish the coordination coherent set. Creator 0.14 remains published;
+0.15 publication and fresh/retained workspace adoption are pending in the
+[board integration plan](coordination/2026-09-29-coordination-v2-board-design.md).
+
 **The `fs-gg-governance` overlay** ships a **populated** gate set (real
 build/test/evidence checks wired to tooling commands), authored to Governance's
 schemas. The composition harness
@@ -626,7 +635,7 @@ product's `FS.GG.UI.*` pin), which is a different axis from the template package
 | `fs-gg-net` | FS.GG.Net | `0.6.0` | `0.6.0` |
 | `coord-engine` | FS-GG/.github | `0.97.0` | `0.97.0` |
 | `telemetry-host` | FS-GG/.github | `0.4.0` | `0.4.0` |
-| `new-sdd-workspace` | FS-GG/.github | `0.14.0` | `0.14.0` |
+| `new-sdd-workspace` | FS-GG/.github | `0.15.0` | `0.14.0` |
 | `fs-gg-workspace-template` | FS.GG.Templates | `0.18.0` | `0.18.0` |
 | `game-skills` | FS.GG.Game | `0.9.0` | `0.9.0` |
 | `rendering-skills` | FS.GG.Rendering | `0.2.0` | `0.2.0` |
