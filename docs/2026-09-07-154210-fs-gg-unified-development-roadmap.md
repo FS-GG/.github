@@ -66,6 +66,14 @@ including16 new controls. Historical diagnostic/complete behavior remains unchan
 boundary grants no rerun, release mutation, installed qualification or Creator adoption; original H4
 acceptance remains failed/unaccepted. A fresh bounded admission is required before hosted execution.
 
+**2026-10-05: telemetry equal-ID initialization repair.**
+The roadmap adapter now gives an item fact a deterministic distinct identity when its logical feature
+and item IDs are equal. Logical references, dispatch tokens and ordinary distinct-ID emission remain
+unchanged. The [UTEL plan](roadmaps/utel-local-telemetry-store.md#equal-feature-and-item-identities)
+records the repair and rejected-pending-intent recovery boundary. The adapter harness passes equal-ID,
+retry and population-only controls. Live ingest/linkage verification and deployed emitter adoption remain
+separate; missing historical usage is not reconstructed.
+
 **2026-10-05: improved work-programme coordination selected as default.**
 At the user's explicit request, the [skill](../.agents/skills/work-programme/SKILL.md) now defaults to
 typed lane returns, compact delta views, bounded evidence retrieval, mechanical reuse advice and

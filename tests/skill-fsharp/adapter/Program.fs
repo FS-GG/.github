@@ -24,6 +24,10 @@ module Program =
     let private fakeEngine (args: string array) =
         match option "--input" args, Environment.GetEnvironmentVariable "FSGG_ADAPTER_TEST_LOG" with
         | Some input, log when not (String.IsNullOrEmpty log) ->
+            // Synthetic receiver enforces the production parser's cross-kind identity rule.
+            use batch = JsonDocument.Parse(File.ReadAllBytes input)
+            let identities = batch.RootElement.GetProperty("events").EnumerateArray() |> Seq.map (fun value -> value.GetProperty("identity").GetString()) |> Seq.toArray
+            require (identities.Length = (identities |> Set.ofArray |> Set.count)) "batch contains duplicate native fact identities"
             let encoded = File.ReadAllBytes input |> Convert.ToBase64String
             File.AppendAllText(log, encoded + "\n")
         | _ -> ()
@@ -74,6 +78,11 @@ module Program =
         let beginResult =
             run (Some host) (Begin("SKILL-FS-01", "SKILL-FS-01.3", None, "attempt-a", None, None, "root", "fixture-producer", "gpt-6-sol", "medium", 60))
         require (beginResult.ExitCode = 0) (text beginResult.Stderr)
+        let log = Environment.GetEnvironmentVariable "FSGG_ADAPTER_TEST_LOG"
+        use batch = JsonDocument.Parse(Convert.FromBase64String(File.ReadAllLines(log)[0]))
+        let events = batch.RootElement.GetProperty("events").EnumerateArray() |> Seq.toArray
+        let item = events |> Array.find (fun value -> value.GetProperty("kind").GetString() = "item")
+        require (item.GetProperty("identity").GetString() = "SKILL-FS-01.3") "distinct logical item identity changed"
         let token = (resultJson beginResult).GetProperty("token").GetString()
         require (token.Length = 32) "begin did not return a durable token"
         let startedResult = run (Some host) (Started(token, "native-agent-a"))
@@ -88,6 +97,33 @@ module Program =
         let changed = run (Some host) (Finish(token, "failed", None))
         require (changed.ExitCode = 1 && (text changed.Stderr).Contains "durable terminal intent") "changed terminal retry was accepted"
         token
+
+    let private equalFeatureItem root =
+        let isolated = Path.Combine(root, "equal-feature-item")
+        Directory.CreateDirectory isolated |> ignore
+        let host = config isolated
+        let log = Path.Combine(isolated, "publications.log")
+        let previousLog = Environment.GetEnvironmentVariable "FSGG_ADAPTER_TEST_LOG"
+        Environment.SetEnvironmentVariable("FSGG_ADAPTER_TEST_LOG", log)
+        try
+            let command = Begin("SAME", "SAME", None, "equal-attempt", None, None, "root", "fixture-producer", "fixture-model", "medium", 60)
+            let first = run (Some host) command
+            require (first.ExitCode = 0) (text first.Stderr)
+            let retry = run (Some host) command
+            require (retry.ExitCode = 0 && first.Stdout = retry.Stdout) "equal identity retry changed the dispatch token"
+            let publications = File.ReadAllLines log
+            require (publications.Length = 1) "equal identity retry republished the batch"
+            use batch = JsonDocument.Parse(Convert.FromBase64String publications[0])
+            let events = batch.RootElement.GetProperty("events").EnumerateArray() |> Seq.toArray
+            let identities = events |> Array.map (fun value -> value.GetProperty("identity").GetString())
+            require (identities.Length = (identities |> Set.ofArray |> Set.count)) "equal feature/item emitted duplicate native fact identities"
+            let item = events |> Array.find (fun value -> value.GetProperty("kind").GetString() = "item")
+            require (item.GetProperty("identity").GetString().StartsWith("roadmap-item-")) "colliding item fact was not namespaced"
+            require (item.GetProperty("itemId").GetString() = "SAME" && item.GetProperty("featureId").GetString() = "SAME") "logical item/feature references changed"
+            let feature = events |> Array.find (fun value -> value.GetProperty("kind").GetString() = "feature")
+            require (feature.GetProperty("identity").GetString() = "SAME") "existing feature fact identity changed"
+        finally
+            Environment.SetEnvironmentVariable("FSGG_ADAPTER_TEST_LOG", previousLog)
 
     let private observations root token =
         let host = config root
@@ -396,7 +432,7 @@ module Program =
         let configPath = Path.Combine(isolated, "workspace.json")
         File.WriteAllText(configPath, "{\"schema\":\"fsgg.telemetry.workspace-config/1\",\"engine\":\"" + engineName + "\",\"associations\":[{\"producerId\":\"fixture-association\",\"repositories\":[\"FS-GG/.github\"],\"destination\":{\"credentialReference\":\"fixture-ref\"}}],\"retiredAssociations\":[]}")
         if not (OperatingSystem.IsWindows()) then File.SetUnixFileMode(configPath, enum<UnixFileMode> 0o600)
-        let source = "{\"schema\":\"fsgg.telemetry.original-item-assignments/1\",\"assignments\":[{\"featureId\":\"F\",\"itemId\":\"F.2\",\"originalItemId\":\"F\"}]}"
+        let source = "{\"schema\":\"fsgg.telemetry.original-item-assignments/1\",\"assignments\":[{\"featureId\":\"F\",\"itemId\":\"F.2\",\"originalItemId\":\"F\"},{\"featureId\":\"F\",\"itemId\":\"F\",\"originalItemId\":\"OTHER\"}]}"
         let encoded = Convert.ToBase64String(Encoding.UTF8.GetBytes source)
         let bin = Path.Combine(isolated, "bin")
         Directory.CreateDirectory bin |> ignore
@@ -419,6 +455,8 @@ module Program =
             require (first.ExitCode = 0 && (resultJson first).GetProperty("status").GetString() = "applied") (text first.Stderr)
             let second = run (Some host) command
             require (second.ExitCode = 0) (text second.Stderr)
+            let same = run (Some host) (PopulationOnly("F", "F", "OTHER", "roadmap-orchestrator"))
+            require (same.ExitCode = 0) (text same.Stderr)
         finally
             Environment.SetEnvironmentVariable("PATH", previousPath)
             for name in [ "FSGG_TELEMETRY_REPOSITORY"; "FSGG_TELEMETRY_CREDENTIAL_FIXTURE_REF"; "SKILL_FS_01_STATE_ROOT" ] do Environment.SetEnvironmentVariable(name, null)
@@ -433,6 +471,7 @@ module Program =
         try
             Environment.SetEnvironmentVariable("FSGG_ADAPTER_TEST_LOG", Path.Combine(root, "publications.log"))
             let token = lifecycle root
+            equalFeatureItem root
             observations root token
             nativeUsage root
             ambiguousReplay root
