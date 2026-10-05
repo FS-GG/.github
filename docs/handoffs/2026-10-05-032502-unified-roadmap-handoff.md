@@ -66,7 +66,9 @@ Telemetry child/follow-up begins repeatedly refused `parent dispatch must be
 started`; one shutdown-adjacent attempt reported unavailable dispatch state.
 Native collaboration usage remains unsupported or unknown. Rejected begins are
 not started observations that can honestly be finished; no synthetic completion
-or token totals were fabricated. Retained `S/telemetry-followups-0323.json` and
+or token totals were fabricated. The root observation was closed as cancelled
+and usage reconciliation drained successfully, with native collaboration usage
+still unsupported (`S/stop-root-telemetry-finish.log` and adjacent usage log). Retained `S/telemetry-followups-0323.json` and
 other timestamped logs preserve these gaps. The programme helper report observed
 69 operations and 14 refusals, not model cost or bureaucracy compliance. Its two
 latest refusals were derived snapshot enum errors, repaired before the successful
