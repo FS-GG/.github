@@ -296,8 +296,9 @@ DELETE FROM schema_migrations WHERE version=14;
         connection.Open()
         use downgrade = connection.CreateCommand()
         downgrade.CommandText <-
-            """
-BEGIN IMMEDIATE;
+            "BEGIN IMMEDIATE;"
+            + dropEfficiencySchema
+            + """
 DROP VIEW current_ingest_facts; DROP TABLE ci_effective_attribution;
 DROP TABLE ci_correction_evidence;
 DROP TABLE ci_attribution_corrections;
@@ -820,13 +821,13 @@ COMMIT;
         TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
         let payload = batch "batch-1" "usage-1" 0L "c1" 10L
         TelemetryStoreApplication.publish path approved payload |> unwrap |> ignore
-        pragma path 14
+        pragma path 15
         Assert.Contains("newer than supported", sprintf "%A" (TelemetryStoreApplication.drain path approved))
 
         Assert.Single(Directory.GetFiles(Path.Combine(path, "inbox", "worker-a"), "*.ready"))
         |> ignore
 
-        pragma path 13
+        pragma path 14
         TelemetryStoreApplication.drain path approved |> unwrap |> ignore
 
         let output =
