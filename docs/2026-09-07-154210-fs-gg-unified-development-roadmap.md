@@ -56,6 +56,17 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-06: Closed Responses Manager and canonical custody source delivered.**
+Coordination [PR #950](https://github.com/FS-GG/FS.GG.Coordination/pull/950) merged exact
+`d177ec403dab1dd04b0f555c57ed0cc769424bdd` as
+`3d74e69be05cbd5253e901e40e36f5a1186253fa`, with 47 passed and six skipped hosted checks.
+The retained local twelve refusal cases also passed through the grouped CI route. The Manager
+checks pinned installation evidence and runtime closure; canonical custody documentation and its
+source manifest are coherent without changing execution tokens. One attributed routine delivery
+reported current validation and telemetry health `open`. Positive installation, installed release
+adoption, provider/model use and assessment acceptance remain separate; V2-EFF-01.3 and .6 stay
+open. See the [owning evidence](roadmaps/process-efficiency-telemetry.md).
+
 **2026-10-06: Nullable schema-14 dashboard summary correction qualified in source.**
 The collector requires all six canonical usage fields and preserves explicit null as unknown;
 known aggregates retain exact Int64 values and refuse overflow. Matching host-5 UI validation
