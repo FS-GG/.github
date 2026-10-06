@@ -141,6 +141,18 @@ the last valid host-5 data; an initial mismatch shows unavailable/error state, n
 The parent owns sequencing of matching feed publication and Pages deployment; source delivery
 does not establish live acceptance during a version mismatch.
 
+The host-5 source context projection exposes fixed approved `Historical` and `Current work`
+labels. Private `host-config/3` selects those two store roots explicitly; the same configuration
+is read by snapshot, recurring publisher setup and event publication routes. Each source retains
+its own complete host projection and approved original item aliases. Workspace authority, epoch
+IDs, raw item IDs, costs and totals are never joined across sources. Source failure yields an
+unavailable context with unknown work counts. A shared 1 MiB public limit can withhold a whole
+context with `public-budget-exceeded`; it does not produce a false complete empty population.
+The accessible source selector updates completed items, source deliveries, efficiency and local
+host panels together and retains selection across valid refreshes. These source controls remain
+uninstalled, and the two new browser cases require actual parent-owned qualification.
+
+
 The source includes native keyboard controls, search/scope/measurement filters, ten-item pages,
 accessible table captions/headings and the existing last-valid-feed fallback. Fourteen focused
 projection checks and twelve export-consumer checks pass. The latest full Python run had 122 passes and

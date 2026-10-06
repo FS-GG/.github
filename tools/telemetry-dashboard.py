@@ -563,6 +563,12 @@ def collect_deliveries(repo: str, token: str, cap: int) -> dict[str, Any]:
 
 
 def config(explicit: pathlib.Path | None = None) -> tuple[pathlib.Path, dict[str, str]]:
+    if explicit is not None:
+        raw=read_private_bytes(explicit,65536,"HOST_CONFIG_UNSAFE")
+        try: supplied=json.loads(raw)
+        except (UnicodeError,json.JSONDecodeError): supplied=None
+        if isinstance(supplied,dict) and str(supplied.get("schema","")).startswith("fsgg.telemetry.host-config/"):
+            return _explicit_producer_config(explicit)
     command = ["fsgg-coord-engine", "skill", "telemetry-config", "discover"]
     if explicit is not None: command.extend(["--config", str(explicit)])
     try:
@@ -1152,20 +1158,28 @@ def _explicit_producer_config(path: pathlib.Path) -> tuple[pathlib.Path, dict[st
     engine=value.get("engine")
     if not isinstance(engine,str) or not engine or os.path.sep in engine:
         raise HostSourceError("HANDOFF_CONFIG_INVALID")
-    if list(value)==["schema","storeRoot","engine"] and value.get("schema")=="fsgg.telemetry.host-config/1":
+    if set(value)=={"schema","storeRoot","engine"} and value.get("schema")=="fsgg.telemetry.host-config/1":
         store=pathlib.Path(value["storeRoot"]) if isinstance(value.get("storeRoot"),str) else pathlib.Path()
         if not store.is_absolute(): raise HostSourceError("HANDOFF_CONFIG_INVALID")
         return path.resolve(strict=True),{"storeRoot":str(store),"engine":engine}
-    if list(value)==["schema","storeRoots","engine"] and value.get("schema")=="fsgg.telemetry.host-config/2":
+    if set(value)=={"schema","storeRoots","engine"} and value.get("schema")=="fsgg.telemetry.host-config/2":
         roots=value["storeRoots"]
         if (not isinstance(roots,list) or len(roots)!=2 or any(not isinstance(root,str) or not pathlib.Path(root).is_absolute() for root in roots)
             or len({os.path.realpath(root) for root in roots})!=2): raise HostSourceError("HANDOFF_CONFIG_INVALID")
         return path.resolve(strict=True),{"storeRoots":roots,"engine":engine}
+    if set(value)=={"schema","sources","engine"} and value.get("schema")=="fsgg.telemetry.host-config/3":
+        sources=value["sources"]
+        if (not isinstance(sources,list) or len(sources)!=2
+            or any(not isinstance(row,dict) or set(row)!={"key","storeRoot"} for row in sources)
+            or [row["key"] for row in sources]!=["historical","current"]
+            or any(not isinstance(row["storeRoot"],str) or not pathlib.Path(row["storeRoot"]).is_absolute() for row in sources)
+            or len({os.path.realpath(row["storeRoot"]) for row in sources})!=2): raise HostSourceError("HANDOFF_CONFIG_INVALID")
+        return path.resolve(strict=True),{"sources":sources,"engine":engine}
     raise HostSourceError("HANDOFF_CONFIG_INVALID")
 
 
-def _read_host_snapshot(store: str, engine: str) -> tuple[dict[str,Any],dict[str,Any]]:
-    envelope=engine_json(engine,["telemetry","item-detail","--format-version","3","--all","--store-root",store])
+def _read_host_snapshot(store: str, engine: str, timeout_seconds: float = 45) -> tuple[dict[str,Any],dict[str,Any]]:
+    envelope=engine_json(engine,["telemetry","item-detail","--format-version","3","--all","--store-root",store],timeout_seconds=timeout_seconds)
     envelope_fields={"schema","observedAt","revision","canonicalSnapshotGzip","operational"}
     if not isinstance(envelope,dict) or set(envelope) not in (envelope_fields,envelope_fields|{"workspaceId"}) or envelope.get("schema") not in {"fsgg.telemetry.item-detail/2","fsgg.telemetry.item-detail/3"} or not re.fullmatch(r"[0-9a-f]{64}",str(envelope.get("revision"))): raise HostSourceError("HOST_ENGINE_SNAPSHOT_INCOMPATIBLE")
     compressed=bounded_base64(envelope["canonicalSnapshotGzip"],MAX_JSON,"HOST_ENGINE_SNAPSHOT_REVISION_MISMATCH")
@@ -1246,10 +1260,50 @@ def _join_host_snapshots(sources: list[tuple[dict[str,Any],dict[str,Any]]]) -> t
 def build_host(labels_path: pathlib.Path | None = None, config_path: pathlib.Path | None = None, engine_path: str | None = None, resolved_config: dict[str,Any] | None = None) -> dict[str, Any]:
     cfg=resolved_config or config(config_path)[1]
     engine=engine_path or cfg["engine"]
+    deadline=time.monotonic()+45
+    def read_source(store: str) -> tuple[dict[str,Any],dict[str,Any]]:
+        remaining=deadline-time.monotonic()
+        if remaining<=0: raise HostSourceError("HOST_ENGINE_UNAVAILABLE")
+        return _read_host_snapshot(store,engine,min(45,remaining))
+    if "sources" in cfg:
+        contexts=[]
+        for selected in cfg["sources"]:
+            try:
+                snapshot,envelope=read_source(selected["storeRoot"])
+                host=_project_host_snapshot(snapshot,envelope,labels_path)
+            except (HostSourceError,ValueError,OSError):
+                host=None
+            contexts.append({"key":selected["key"],"label":CONTEXT_LABELS[selected["key"]],"status":"ready" if host is not None else "unavailable","reason":None if host is not None else "source-unavailable","host":host})
+        return project_host_contexts(contexts)
     stores=cfg.get("storeRoots") or [cfg["storeRoot"]]
     if len(stores) not in (1,2): raise HostSourceError("HOST_CONFIG_INVALID")
-    sources=[_read_host_snapshot(store,engine) for store in stores]
+    sources=[read_source(store) for store in stores]
     snapshot,envelope=sources[0] if len(sources)==1 else _join_host_snapshots(sources)
+    return _project_host_snapshot(snapshot,envelope,labels_path,"configured-local-stores" if len(sources)==2 else "configured-local-store")
+
+
+CONTEXT_LABELS={"historical":"Historical","current":"Current work"}
+
+
+def project_host_contexts(contexts: list[dict[str,Any]], max_bytes: int = MAX_JSON) -> dict[str,Any]:
+    # Preserve complete single-authority projections; never partially trim a measured population.
+    if type(max_bytes) is not int or not 1024 <= max_bytes <= MAX_JSON: raise ValueError("invalid context byte budget")
+    value={"schema":HOST_SCHEMA,"observedAt":now(),"source":{"kind":"independent-local-stores"},"contexts":contexts}
+    def seal() -> bytes:
+        value.pop("revision",None)
+        raw=json.dumps(value,sort_keys=True,separators=(",",":"),ensure_ascii=True).encode()
+        value["revision"]=hashlib.sha256(raw).hexdigest()
+        return json.dumps(value,sort_keys=True,separators=(",",":"),ensure_ascii=True).encode()+b"\n"
+    while len(seal())>max_bytes:
+        candidates=[row for row in contexts if row["host"] is not None]
+        if not candidates: raise ValueError("context metadata exceeds byte budget")
+        largest=max(candidates,key=lambda row:len(json.dumps(row["host"])))
+        largest.update(host=None,status="unavailable",reason="public-budget-exceeded")
+    validate_host(value)
+    return value
+
+
+def _project_host_snapshot(snapshot: dict[str,Any], envelope: dict[str,Any], labels_path: pathlib.Path | None, kind: str = "configured-local-store") -> dict[str,Any]:
     store_projection=snapshot["store"]
     public={"schema":"fsgg.telemetry.public-export/1","items":snapshot.get("summaries")}
     if not isinstance(public["items"],list): raise HostSourceError("HOST_ENGINE_SNAPSHOT_MALFORMED")
@@ -1271,7 +1325,6 @@ def build_host(labels_path: pathlib.Path | None = None, config_path: pathlib.Pat
     store_status={"status":"ready","schemaVersion":store_projection["schemaVersion"],"journalMode":"wal","pendingBatches":checked_int(operational.get("pendingBatches"),"pending batches")}
     labels=load_labels(labels_path)
     completed=project_completed_items(snapshot,status,labels,ci_by_item,budgets_by_item)
-    kind="configured-local-stores" if len(sources)==2 else "configured-local-store"
     return aggregate_host(public,ci,budgets,status,envelope["observedAt"],[],health,store_status,completed,kind,project_source_deliveries(snapshot,labels,completed))
 
 
@@ -1389,7 +1442,12 @@ def publisher_setup(args: argparse.Namespace) -> dict[str,Any]:
         if load_event_receipt(receipt_path)!=receipt: raise HostSourceError("EVENT_ACTIVATION_CHANGE_REFUSED")
     if read_private_bytes(config_path,8192,"HOST_CONFIG_CHANGED_DURING_PREVIEW")!=config_bytes: raise HostSourceError("HOST_CONFIG_CHANGED_DURING_PREVIEW")
     units=publisher_units(engine,config_path,labels_path,args.repo,args.branch,args.path,args.output)
-    report={"schema":"fsgg.telemetry.publisher-setup/1","mode":"preview","engine":resolved_engine,"config":str(config_path),"labelsDigest":label_digest,"counts":{"approved":len(labels["items"]),"eligible":snapshot["completedItems"]["coverage"]["eligible"],"published":snapshot["completedItems"]["coverage"]["published"]},"revision":snapshot["revision"],"destination":{"repository":args.repo,"branch":args.branch,"path":args.path},"actions":["validate-config","resolve-engine","validate-labels","build-preview"],"effects":[]}
+    counts={"approved":len(labels["items"])}
+    if snapshot.get("source",{}).get("kind")=="independent-local-stores":
+        counts["contexts"]=[{"key":row["key"],"status":row["status"],"eligible":row["host"]["completedItems"]["coverage"]["eligible"] if row["host"] is not None else None,"published":row["host"]["completedItems"]["coverage"]["published"] if row["host"] is not None else None} for row in snapshot["contexts"]]
+    else:
+        counts.update(eligible=snapshot["completedItems"]["coverage"]["eligible"],published=snapshot["completedItems"]["coverage"]["published"])
+    report={"schema":"fsgg.telemetry.publisher-setup/1","mode":"preview","engine":resolved_engine,"config":str(config_path),"labelsDigest":label_digest,"counts":counts,"revision":snapshot["revision"],"destination":{"repository":args.repo,"branch":args.branch,"path":args.path},"actions":["validate-config","resolve-engine","validate-labels","build-preview"],"effects":[]}
     if args.activate and (args.approve_labels!=label_digest or not args.authorize_recurring_publication):
         raise HostSourceError("PUBLISHER_ACTIVATION_NOT_AUTHORIZED")
     if args.install_only or args.activate:
@@ -2091,6 +2149,22 @@ def validate_deliveries(value: Any) -> None:
 def validate_host(value: Any) -> None:
     schema=value.get("schema") if isinstance(value,dict) else None
     if schema != HOST_SCHEMA: raise ValueError("host schema 5 required")
+    if isinstance(value.get("source"),dict) and value["source"].get("kind")=="independent-local-stores":
+        exact(value,{"schema","observedAt","revision","source","contexts"},"host contexts")
+        exact(value["source"],{"kind"},"context source")
+        if parse_time(value["observedAt"]) is None: raise ValueError("invalid context observation")
+        projected=dict(value); projected.pop("revision")
+        if hashlib.sha256(json.dumps(projected,sort_keys=True,separators=(",",":"),ensure_ascii=True).encode()).hexdigest()!=value["revision"]: raise ValueError("context revision mismatch")
+        rows=value["contexts"]
+        if not isinstance(rows,list) or len(rows)!=2 or [row.get("key") for row in rows if isinstance(row,dict)]!=["historical","current"]: raise ValueError("invalid context selection")
+        for row in rows:
+            exact(row,{"key","label","status","reason","host"},"context")
+            if row["label"]!=CONTEXT_LABELS[row["key"]]: raise ValueError("unapproved context label")
+            if row["status"]=="ready":
+                if row["reason"] is not None or not isinstance(row["host"],dict) or row["host"].get("source",{}).get("kind")!="configured-local-store": raise ValueError("invalid ready context")
+                validate_host(row["host"])
+            elif row["status"]!="unavailable" or row["host"] is not None or row["reason"] not in {"source-unavailable","public-budget-exceeded"}: raise ValueError("invalid unavailable context")
+        return
     fields={"schema","observedAt","source","scope","totals","usage","launcherPopulation","quality","operational","store","localCi","budget","completedItems","revision","sourceDeliveries","processEfficiency"}
     exact(value,fields,"host feed")
     if parse_time(value["observedAt"]) is None: raise ValueError("invalid host identity")

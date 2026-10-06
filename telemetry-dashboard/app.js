@@ -1,7 +1,7 @@
 (() => {
   "use strict";
   const $ = (id) => document.getElementById(id);
-  const state = { runs: [], items: [], deliveries: [], deliveryFeed: null, data: null, itemStatus: "Item details await a configured host", limit: 250, lastSuccessfulCheck: null, lastCheckStarted: null, refreshError: null, restoring: false };
+  const state = { runs: [], items: [], deliveries: [], deliveryFeed: null, data: null, itemStatus: "Item details await a configured host", limit: 250, lastSuccessfulCheck: null, lastCheckStarted: null, refreshError: null, restoring: false, sourceKey: "current" };
   const REFRESH_MS = 60000;
   const REQUEST_TIMEOUT_MS = 10000;
   const AGE_TICK_MS = 60000;
@@ -611,6 +611,18 @@
       return;
     }
     if (host.schema !== "fsgg.telemetry.dashboard-host/5") throw new Error("Host schema 5 is required; host data awaits the matching published feed.");
+    if (host.source?.kind === "independent-local-stores") {
+      if (Object.keys(host).sort().join()!==["schema","observedAt","revision","source","contexts"].sort().join() || !timestamp(host.observedAt) || typeof host.revision!=="string" || !/^[0-9a-f]{64}$/.test(host.revision) || Object.keys(host.source).join()!=="kind" || !Array.isArray(host.contexts) || host.contexts.length!==2) malformed();
+      host.contexts.forEach((row,index)=>{
+        const key=index===0?"historical":"current", name=index===0?"Historical":"Current work";
+        if (!object(row) || Object.keys(row).sort().join()!==["key","label","status","reason","host"].sort().join() || row.key!==key || row.label!==name) malformed();
+        if (row.status==="ready") {
+          if (row.reason!==null || row.host?.source?.kind!=="configured-local-store") malformed();
+          validateHost(row.host);
+        } else if (row.status!=="unavailable" || row.host!==null || !["source-unavailable","public-budget-exceeded"].includes(row.reason)) malformed();
+      });
+      return;
+    }
     if (typeof host.revision!=="string" || !/^[0-9a-f]{64}$/.test(host.revision)) malformed();
     if (!timestamp(host.observedAt) || !object(host.totals) || !finite(host.totals.usageObservations) || !object(host.usage) || !finite(host.usage.input) || !finite(host.usage.cachedInput) || !finite(host.usage.cacheWriteInput) || !finite(host.usage.output) || (host.usage.reasoning != null && !finite(host.usage.reasoning)) || !finite(host.usage.total) || !numericValues(host.launcherPopulation) || !object(host.budget) || !Array.isArray(host.budget.assessments) || !flattenable(host.budget.health) || !flattenable(host.budget.dimensions) || !object(host.localCi) || !numericValues(host.localCi.counts) || !object(host.localCi.seconds) || !flattenable(host.localCi.coverage) || !object(host.store) || !flattenable(host.quality) || !object(host.operational) || !flattenable(host.operational.lineage) || !flattenable(host.operational.timing)) malformed();
     Object.values(host.localCi.seconds).forEach((value) => { if (!object(value) || !finite(value.knownItems) || !finite(value.unknownItems) || !finite(value.totalItemSeconds)) malformed(); });
@@ -683,21 +695,45 @@
     outcomes.sort().forEach((value)=>{const option=document.createElement("option");option.value=value;option.textContent=`${value.replaceAll("_", " ")}${state.runs.some((run)=>label(run)===value)?"":" (0)"}`;select.append(option);});
     select.value=selected || "all";
   }
+  function selectedHost(host) {
+    if (host.source?.kind!=="independent-local-stores") return host;
+    const selected=host.contexts.find((row)=>row.key===state.sourceKey);
+    return selected.host || {schema:"fsgg.telemetry.dashboard-host-unavailable/1",status:"unavailable"};
+  }
+  function renderContextSelection(host) {
+    const wrapper=$("source-context"), select=$("source-context-select");
+    const contexts=host.source?.kind==="independent-local-stores"?host.contexts:null;
+    wrapper.hidden=!contexts;
+    if (!contexts) return;
+    select.replaceChildren();
+    contexts.forEach((row)=>{const option=document.createElement("option");option.value=row.key;option.textContent=`${row.label}${row.status==="unavailable"?" · unavailable":""}`;select.append(option);});
+    select.value=state.sourceKey;
+    const selected=contexts.find((row)=>row.key===state.sourceKey);
+    text("source-context-note", selected.status==="ready"?`${selected.label}: one independent source. Totals and item evidence apply only to this view.`:`${selected.label}: ${selected.reason==="public-budget-exceeded"?"withheld because the shared public feed byte limit was reached":"source unavailable"}. Work counts are unknown; the other source remains separately selectable.`);
+  }
+  $("source-context-select").addEventListener("change",(event)=>{
+    state.sourceKey=event.target.value;
+    // Original aliases can repeat in distinct stores: never carry an open item across contexts.
+    document.querySelectorAll(".item-card[open], #local-content details[open], #efficiency-items details[open]").forEach((node)=>node.open=false);
+    if (state.data) { applyData(state.data,false); updateFreshness(); }
+  });
   function applyData(data, initial) {
     const view=initial?null:captureView();
     state.restoring=Boolean(view);
     state.runs=data.actions.runs;
-    const itemCapable=data.host.schema === "fsgg.telemetry.dashboard-host/5";
-    state.items=itemCapable?data.host.completedItems.items:[];
-    state.itemStatus=itemCapable?(data.host.completedItems.coverage.incompatible?"Some completed-item details were rejected as incompatible":data.host.completedItems.coverage.unmapped?"Completed items await approved public labels":data.host.completedItems.coverage.dirty?"Item completion is pending canonical reduction":"No completed item is present in the observed host snapshot"):"Item details await a current host-5 snapshot";
+    renderContextSelection(data.host);
+    const host=selectedHost(data.host);
+    const itemCapable=host.schema === "fsgg.telemetry.dashboard-host/5";
+    state.items=itemCapable?host.completedItems.items:[];
+    state.itemStatus=itemCapable?(host.completedItems.coverage.incompatible?"Some completed-item details were rejected as incompatible":host.completedItems.coverage.unmapped?"Completed items await approved public labels":host.completedItems.coverage.dirty?"Item completion is pending canonical reduction":"No completed item is present in the observed host snapshot"):"Item details await a current host-5 snapshot";
     renderItems(view?.openItems || null, initial);
     renderDeliveries(data.deliveries);
-    renderSourceDeliveries(data.host);
-    window.ProcessEfficiency.render(data.host.schema === "fsgg.telemetry.dashboard-host/5" ? data.host.processEfficiency : null);
-    const itemCoverage=data.host.completedItems?.coverage;
+    renderSourceDeliveries(host);
+    window.ProcessEfficiency.render(host.schema === "fsgg.telemetry.dashboard-host/5" ? host.processEfficiency : null);
+    const itemCoverage=host.completedItems?.coverage;
     text("items-note",itemCoverage?`${itemCoverage.published} published · ${itemCoverage.unmapped} awaiting an approved label · ${itemCoverage.dirty} pending canonical reduction · ${itemCoverage.incompatible} incompatible.`:"Host item projection unavailable. Showing independent public merged deliveries.");
     const counts=renderOutcomes(state.runs);
-    renderTrend(state.runs); renderWorkflowHealth(state.runs); renderLocal(data.host);
+    renderTrend(state.runs); renderWorkflowHealth(state.runs); renderLocal(host);
     if (view) document.querySelectorAll("#local-content details").forEach((node)=>{node.open=view.openLocal.has(node.dataset.detailKey);});
     reconcileOutcomes(); renderTable();
     const completed=state.runs.filter((run)=>run.durationSeconds!=null).map((run)=>run.durationSeconds).sort((a,b)=>a-b), middle=Math.floor(completed.length/2);
@@ -706,7 +742,7 @@
     text("observed-at",date(data.actions.observedAt));
     const selection=data.actions.selection;
     text("sample-note",`${selection.returned} newest runs${selection.truncated?` of ${fmt.format(selection.repositoryTotalAtObservation)} at observation`:""}. Coverage: ${date(selection.oldestCreatedAt)} → ${date(selection.newestCreatedAt)}. ${selection.pagesFetched} API page${selection.pagesFetched===1?"":"s"}.`);
-    text("provenance",`Source revision ${data.sourceRevision} · data build ${date(data.builtAt)} · Actions observation ${date(data.actions.observedAt)}${data.host.observedAt?` · host observation ${date(data.host.observedAt)} · public payload ${data.host.revision||"legacy"} · host commit ${data.hostRevision}`:""}`);
+    text("provenance",`Source revision ${data.sourceRevision} · data build ${date(data.builtAt)} · Actions observation ${date(data.actions.observedAt)}${host.observedAt?` · host observation ${date(host.observedAt)} · public payload ${host.revision||"legacy"} · host commit ${data.hostRevision}`:""}`);
     state.data=data;
     if (view) {
       history.replaceState(null,"",`${location.pathname}${location.search}${view.hash}`);
@@ -731,7 +767,7 @@
       const age=Date.now()-Date.parse(state.data.actions.observedAt), live=state.runs.length>0&&age<=30*60*1000;
       text("health-label",state.runs.length?(live?"Public Actions live":"Public Actions stale"):"Public Actions sample empty");
       $("pulse-dot").classList.toggle("live",live);
-      const host=state.data.host;
+      const host=selectedHost(state.data.host);
       if (host.schema === "fsgg.telemetry.dashboard-host/5") {
         const hostAge=Date.now()-Date.parse(host.observedAt);
         text("local-state",`${hostAge>60*60*1000?"Stale · ":""}Observed ${date(host.observedAt)}`);

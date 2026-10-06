@@ -407,3 +407,49 @@ test("canonical efficiency export shows queued analysis, omitted populations and
   await expect(page.locator("#efficiency-missing-example")).toContainText("Source observed: unknown");
   await expect(page.locator("#efficiency-items")).not.toContainText("PRIVATE");
 });
+
+function contextHost(historical,current) {
+  historical.source={kind:"configured-local-store",publicExportSchema:"fsgg.telemetry.public-export/1"};
+  if(current)current.source={kind:"configured-local-store",publicExportSchema:"fsgg.telemetry.public-export/1"};
+  return {schema:"fsgg.telemetry.dashboard-host/5",observedAt:"2026-09-09T08:00:00Z",revision:"c".repeat(64),source:{kind:"independent-local-stores"},contexts:[
+    {key:"historical",label:"Historical",status:"ready",reason:null,host:historical},
+    {key:"current",label:"Current work",status:current?"ready":"unavailable",reason:current?null:"source-unavailable",host:current}
+  ]};
+}
+
+test("independent Historical and Current work selection retains completed work and source uncertainty",async({page})=>{
+  await page.clock.install();let requests=0;
+  const historical=efficiencyHost(),current=efficiencyHost();
+  historical.completedItems=completedHost(["history-done"]).completedItems;
+  historical.processEfficiency.items[0].label="Historical approved item";
+  current.processEfficiency.items[0].label="Current approved item";
+  historical.usage.total=111;current.usage.total=222;
+  await page.route("**/data/dashboard.json",route=>{requests++;return route.fulfill({json:payload(contextHost(historical,requests>1?null:current))});});
+  await page.goto("/#efficiency");
+  await expect(page.locator("#source-context-note")).toContainText("Current work: one independent source");
+  await expect(page.locator("#efficiency-items")).toContainText("Current approved item");
+  await expect(page.locator("#efficiency-items")).not.toContainText("Historical approved item");
+  await page.selectOption("#source-context-select","historical");
+  await expect(page.locator("#efficiency-items")).toContainText("Historical approved item");
+  await expect(page.locator("#completed-items")).toContainText("Completed history-done");
+  await page.clock.runFor(60000);await expect.poll(()=>requests).toBeGreaterThan(1);
+  await expect(page.locator("#source-context-select")).toHaveValue("historical");
+  await expect(page.locator("#efficiency-items")).toContainText("Historical approved item");
+  await page.selectOption("#source-context-select","current");
+  await expect(page.locator("#source-context-note")).toContainText("Work counts are unknown");
+  await expect(page.locator("#local-state")).toHaveText("Host unavailable");
+  await expect(page.locator("#items-note")).toContainText("Host item projection unavailable");
+  await expect(page.locator("#efficiency-items")).not.toContainText("Historical approved item");
+  await page.setViewportSize({width:390,height:844});await expectMobileContainment(page);
+});
+
+test("malformed source context refresh retains validated selected source",async({page})=>{
+  await page.clock.install();let requests=0;
+  await page.route("**/data/dashboard.json",route=>{const host=contextHost(efficiencyHost(),efficiencyHost());if(++requests>1)host.contexts[1].label="PRIVATE WORKSPACE";return route.fulfill({json:payload(host)});});
+  await page.goto("/#efficiency");await page.selectOption("#source-context-select","historical");
+  await page.clock.runFor(60000);await expect.poll(()=>requests).toBeGreaterThan(1);
+  await expect(page.locator("#error")).toContainText("showing last good data");
+  await expect(page.locator("#source-context-select")).toHaveValue("historical");
+  await expect(page.locator("#source-context-note")).toContainText("Historical: one independent source");
+  await expect(page.locator("#source-context")).not.toContainText("PRIVATE WORKSPACE");
+});
