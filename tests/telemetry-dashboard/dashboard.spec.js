@@ -341,6 +341,12 @@ test("malformed fields and prior host schema keep last valid host5; matching hos
     return route.fulfill({json:payload(host)});
   });
   await page.goto("/");
+  // Initial refresh.finally updates this status and arms the next timer in one task.
+  // Navigation alone can finish before the routed fetch has settled.
+  await expect(page.locator("#refresh-status")).toContainText("Checked");
+  await expect(page.locator("#refresh-status")).toContainText("checking every minute");
+  await expect(page.locator(".item-card")).toHaveCount(5);
+  await expect(page.locator("#source-deliveries article")).toHaveCount(1);
   for(let i=0;i<3;i++){
     await page.clock.runFor(60000);await expect.poll(()=>requests).toBeGreaterThanOrEqual(i+2);
     await expect(page.locator("#error")).toContainText("showing last good data");
