@@ -1,0 +1,147 @@
+{
+  "schema": "fsgg.telemetry.process-efficiency/1",
+  "policyVersion": "efficiency-public-projection/1",
+  "source": "canonical-export",
+  "status": "partial",
+  "coverage": {
+    "published": 2,
+    "unmapped": 0,
+    "withheld": 0,
+    "unsupported": 0
+  },
+  "exports": [
+    {
+      "key": "s0",
+      "baseSnapshotRevision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "sourceFingerprint": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "cutoff": "2026-10-06T12:00:00Z",
+      "observedAt": "2026-10-06T12:00:00Z",
+      "selection": {
+        "limit": 200,
+        "returned": 2,
+        "omitted": 3,
+        "complete": false
+      },
+      "metricSelection": {
+        "limit": 1000,
+        "returned": 1,
+        "omitted": 4,
+        "complete": false
+      }
+    }
+  ],
+  "items": [
+    {
+      "key": "missing-example",
+      "label": "Synthetic missing runtime",
+      "url": "https://github.com/FS-GG/.github/pull/2",
+      "summary": "accounting-unestablished",
+      "analysisState": "pending",
+      "scope": "unestablished",
+      "metrics": [],
+      "problems": [],
+      "timeline": [],
+      "improvements": [],
+      "exportHealth": {
+        "sourceKey": "s0",
+        "requestState": "pending",
+        "assessmentState": null,
+        "pendingSince": "2026-10-06T12:00:00Z",
+        "lastAttemptAt": "2026-10-06T12:00:00Z",
+        "failureCode": null,
+        "sourceObservedAt": null,
+        "ingestedAt": null,
+        "metricSelection": {
+          "limit": 32,
+          "returned": 0,
+          "omitted": 4,
+          "complete": false
+        }
+      }
+    },
+    {
+      "key": "native-example",
+      "label": "Synthetic native example",
+      "url": "https://github.com/FS-GG/.github/pull/1",
+      "summary": "native-observation",
+      "analysisState": "pending",
+      "scope": "native-item",
+      "metrics": [
+        {
+          "metric": "observed-resource",
+          "unit": "tokens-total",
+          "calculationVersion": "efficiency-calculation/1",
+          "coverage": {
+            "population": "complete",
+            "usage": "complete",
+            "classification": "complete",
+            "lineage": "complete",
+            "dependency": "complete"
+          },
+          "policyProfile": null,
+          "observedAt": "2026-10-06T12:00:00Z",
+          "eventTime": "2026-10-06T12:00:00Z",
+          "purpose": null,
+          "healthDimension": null,
+          "key": "m0",
+          "value": {
+            "status": "known",
+            "numerator": 70,
+            "denominator": null,
+            "unknownAmount": null
+          },
+          "windowStart": "2026-10-06T12:00:00Z",
+          "windowEnd": "2026-10-06T12:00:00Z",
+          "cutoff": "2026-10-06T12:00:00Z",
+          "openItems": 0,
+          "abandonedItems": 0,
+          "excludedItems": 0,
+          "populationItems": [
+            "native-example"
+          ],
+          "unmappedPopulationItems": 0,
+          "evidenceUrls": [],
+          "sourceEvidence": [],
+          "unmappedEvidenceRefs": 1
+        }
+      ],
+      "problems": [
+        {
+          "primaryCause": "telemetry-loss",
+          "necessity": "uncertain",
+          "epistemicStatus": "hypothesis",
+          "evidenceUrls": []
+        }
+      ],
+      "timeline": [
+        {
+          "kind": "metric-observed",
+          "at": "2026-10-06T12:00:00Z",
+          "evidenceUrls": []
+        },
+        {
+          "kind": "analysis-generated",
+          "at": "2026-10-06T12:00:00Z",
+          "evidenceUrls": []
+        }
+      ],
+      "improvements": [],
+      "exportHealth": {
+        "sourceKey": "s0",
+        "requestState": "pending",
+        "assessmentState": "ready",
+        "pendingSince": "2026-10-06T12:00:00Z",
+        "lastAttemptAt": "2026-10-06T12:00:00Z",
+        "failureCode": null,
+        "sourceObservedAt": "2026-10-06T12:00:00Z",
+        "ingestedAt": null,
+        "metricSelection": {
+          "limit": 32,
+          "returned": 1,
+          "omitted": 0,
+          "complete": true
+        }
+      }
+    }
+  ]
+}

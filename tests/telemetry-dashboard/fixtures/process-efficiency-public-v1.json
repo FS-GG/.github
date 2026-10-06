@@ -9,6 +9,7 @@
     "withheld": 0,
     "unsupported": 0
   },
+  "exports": [],
   "items": [
     {
       "key": "missing-example",
@@ -92,7 +93,8 @@
       ],
       "improvements": [
         "collect-missing-evidence"
-      ]
+      ],
+      "exportHealth": null
     },
     {
       "key": "native-example",
@@ -174,7 +176,8 @@
           ]
         }
       ],
-      "improvements": []
+      "improvements": [],
+      "exportHealth": null
     }
   ]
 }

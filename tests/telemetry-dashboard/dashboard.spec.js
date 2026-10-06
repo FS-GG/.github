@@ -66,7 +66,7 @@ function completedHost(keys = ["one", "two"]) {
     schema: "fsgg.telemetry.dashboard-host/5",
     revision: "a".repeat(64),
     sourceDeliveries: {schema:"fsgg.telemetry.source-deliveries/1",coverage:{eligible:0,published:0,unmapped:0,dirty:0,incompatible:0},items:[]},
-    processEfficiency: {schema:"fsgg.telemetry.process-efficiency/1",policyVersion:"efficiency-public-projection/1",source:"unavailable",status:"unavailable",coverage:{published:0,unmapped:0,withheld:0,unsupported:0},items:[]},
+    processEfficiency: {schema:"fsgg.telemetry.process-efficiency/1",policyVersion:"efficiency-public-projection/1",source:"unavailable",status:"unavailable",coverage:{published:0,unmapped:0,withheld:0,unsupported:0},exports:[],items:[]},
     observedAt: "2026-09-09T08:00:00Z",
     totals: { usageObservations: 0 },
     usage: { input: 0, cachedInput: 0, cacheWriteInput: 0, output: 0, reasoning: null, total: 0 },
@@ -381,4 +381,20 @@ test("host5 malformed efficiency refresh preserves the last valid explanation",a
   await expect(page.locator("#error")).toContainText("showing last good data");
   await expect(page.locator("#efficiency-missing-example")).toHaveAttribute("open","");
   await expect(page.locator("#efficiency-items")).not.toContainText("PRIVATE SENTINEL");
+});
+
+test("canonical efficiency export shows queued analysis, omitted populations and unknown clocks",async({page})=>{
+  const host=efficiencyHost();host.processEfficiency=JSON.parse(JSON.stringify(require("./fixtures/process-efficiency-canonical-public-v1.json")));
+  await page.route("**/data/dashboard.json",route=>route.fulfill({json:payload(host)}));
+  await page.goto("/#efficiency");
+  await expect(page.locator("#efficiency-health")).toContainText("Canonical export");
+  await expect(page.locator("#efficiency-health")).toContainText("3 omitted");
+  await page.locator("#efficiency-native-example-toggle").click();
+  await expect(page.locator("#efficiency-native-example")).toContainText("Request: pending · accepted assessment: ready");
+  await expect(page.locator("#efficiency-native-example")).toContainText("ingested: unknown");
+  await page.locator("#efficiency-missing-example-toggle").click();
+  await expect(page.locator("#efficiency-missing-example")).toContainText("4 omitted");
+  await expect(page.locator("#efficiency-missing-example")).toContainText("Selected measurements unavailable");
+  await expect(page.locator("#efficiency-missing-example")).toContainText("Source observed: unknown");
+  await expect(page.locator("body")).not.toContainText("PRIVATE");
 });

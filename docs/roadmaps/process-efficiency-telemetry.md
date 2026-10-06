@@ -140,8 +140,8 @@ does not establish live acceptance during a version mismatch.
 
 The source includes native keyboard controls, search/scope/measurement filters, ten-item pages,
 accessible table captions/headings and the existing last-valid-feed fallback. Fourteen focused
-projection checks and six export-consumer checks pass. The full Python roster has 118 passes and
-one expected stale two-UID proof digest failure (119 tests); a new actual proof must qualify final exporter bytes. Two browser tests
+projection checks and ten export-consumer checks pass. The full Python roster has 122 passes and
+one expected stale two-UID proof digest failure (123 tests); a new actual proof must qualify final exporter bytes. Three additional browser tests
 are authored but have not run at this checkpoint. No publication, installation or native/store
 qualification is claimed from source fixtures.
 
@@ -161,6 +161,14 @@ pending/last-attempt times and only fixed failure codes; other reasons become un
 request state (pending/claimed/settled/failed/unavailable) remains distinct from assessment state;
 a new pending/claimed request stays visible even when a prior assessment is ready. Explicit
 original groups preserve the existing public-label boundary.
+
+The pure canonical projection retains up to two public-local source bindings, each with its exact
+compact base revision, full source fingerprint and verbatim omitted counts. Health-only items remain
+visible with unavailable measurements and unknown clocks. Queue and accepted-assessment states
+remain separate. Ambiguous approved identities across stores are withheld; metrics are never
+aggregated in Python. Output is bounded before entering the host feed; unsupported exact quantities
+and omitted public rows remain explicit. The collector reader is still inactive pending actual
+endpoint admission, so these source tests do not establish installed or live efficiency.
 
 The reader makes one batch call per store using the caller's remaining monotonic deadline, bounded
 by the existing 45-second call cap. Private input is bounded to 4 MiB and public output remains

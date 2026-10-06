@@ -43,7 +43,7 @@ EFF_URL = re.compile(r'https://github\.com/FS-GG/[A-Za-z0-9_.-]+/(?:issues|pull|
 
 
 def unavailable_process_efficiency():
-    return {'schema': EFF_SCHEMA, 'policyVersion': EFF_POLICY, 'source': 'unavailable', 'status': 'unavailable', 'coverage': {'published': 0, 'unmapped': 0, 'withheld': 0, 'unsupported': 0}, 'items': []}
+    return {'schema': EFF_SCHEMA, 'policyVersion': EFF_POLICY, 'source': 'unavailable', 'status': 'unavailable', 'coverage': {'published': 0, 'unmapped': 0, 'withheld': 0, 'unsupported': 0}, 'exports': [], 'items': []}
 
 
 def _eff_exact(value, keys):
@@ -70,8 +70,8 @@ def _eff_stamp(value):
 
 
 def validate_process_efficiency(value):
-    _eff_exact(value, ('schema', 'policyVersion', 'source', 'status', 'coverage', 'items'))
-    if value['schema'] != EFF_SCHEMA or value['policyVersion'] != EFF_POLICY or value['source'] not in {'fixtures', 'unavailable'} or value['status'] not in {'partial', 'unavailable'}:
+    _eff_exact(value, ('schema', 'policyVersion', 'source', 'status', 'coverage', 'exports', 'items'))
+    if value['schema'] != EFF_SCHEMA or value['policyVersion'] != EFF_POLICY or value['source'] not in {'fixtures', 'canonical-export', 'unavailable'} or value['status'] not in {'partial', 'unavailable'}:
         raise ValueError('invalid efficiency identity')
     _eff_exact(value['coverage'], ('published', 'unmapped', 'withheld', 'unsupported'))
     for count in value['coverage'].values(): _eff_integer(count)
@@ -80,14 +80,33 @@ def validate_process_efficiency(value):
     if value['coverage']['unsupported'] > value['coverage']['withheld']: raise ValueError('invalid unsupported population')
     if value['source'] == 'unavailable' and (value['status'] != 'unavailable' or value['items']):
         raise ValueError('unavailable efficiency contains data')
+    if not isinstance(value['exports'], list) or len(value['exports']) > 2: raise ValueError('efficiency source bound')
+    export_keys = set()
+    for source in value['exports']:
+        _eff_exact(source, ('key', 'baseSnapshotRevision', 'sourceFingerprint', 'cutoff', 'observedAt', 'selection', 'metricSelection'))
+        if source['key'] not in {'s0', 's1'} or source['key'] in export_keys or not isinstance(source['baseSnapshotRevision'], str) or not re.fullmatch(r'[a-f0-9]{64}', source['baseSnapshotRevision']) or not isinstance(source['sourceFingerprint'], str) or not re.fullmatch(r'sha256:[a-f0-9]{64}', source['sourceFingerprint']): raise ValueError('invalid public source binding')
+        export_keys.add(source['key'])
+        for field in ('cutoff', 'observedAt'): _eff_stamp(source[field])
+        _eff_selection(source['selection'], 200, source['selection'].get('returned') if isinstance(source['selection'], dict) else None)
+        _eff_selection(source['metricSelection'], 1000, source['metricSelection'].get('returned') if isinstance(source['metricSelection'], dict) else None)
+    if (value['source'] == 'canonical-export') != bool(value['exports']): raise ValueError('efficiency source mismatch')
     keys = set()
     for item in value['items']:
-        _eff_exact(item, ('key', 'label', 'url', 'summary', 'analysisState', 'scope', 'metrics', 'problems', 'timeline', 'improvements'))
+        _eff_exact(item, ('key', 'label', 'url', 'summary', 'analysisState', 'scope', 'metrics', 'problems', 'timeline', 'improvements', 'exportHealth'))
         if not isinstance(item['key'], str) or not re.fullmatch(r'[a-z0-9][a-z0-9-]{0,63}', item['key']) or item['key'] in keys: raise ValueError('invalid public item key')
         keys.add(item['key'])
         if not isinstance(item['label'], str) or not 1 <= len(item['label']) <= 120 or not isinstance(item['url'], str) or not EFF_URL.fullmatch(item['url']): raise ValueError('invalid approved item')
         if item['scope'] not in {'native-item', 'provisional-delivery', 'unestablished'} or item['analysisState'] not in EFF_STATES or item['summary'] not in {'native-observation', 'delivery-accounting-incomplete', 'accounting-unestablished'}: raise ValueError('invalid efficiency summary')
         if item['summary'] != ({'native-item': 'native-observation', 'provisional-delivery': 'delivery-accounting-incomplete', 'unestablished': 'accounting-unestablished'}[item['scope']]): raise ValueError('summary scope mismatch')
+        health = item['exportHealth']
+        if value['source'] == 'canonical-export':
+            _eff_exact(health, ('sourceKey', 'requestState', 'assessmentState', 'pendingSince', 'lastAttemptAt', 'failureCode', 'sourceObservedAt', 'ingestedAt', 'metricSelection'))
+            if health['sourceKey'] not in export_keys: raise ValueError('missing public source binding')
+            _eff_analysis_health({'state': item['analysisState'], **{field: health[field] for field in ('requestState', 'assessmentState', 'pendingSince', 'lastAttemptAt', 'failureCode')}})
+            for field in ('sourceObservedAt', 'ingestedAt'):
+                if health[field] is not None: _eff_stamp(health[field])
+            _eff_selection(health['metricSelection'], 32, len(item['metrics']))
+        elif health is not None: raise ValueError('fixture contains canonical health')
         if item['scope'] == 'provisional-delivery' and item['analysisState'] == 'ready': raise ValueError('provisional final analysis')
         if not isinstance(item['metrics'], list) or len(item['metrics']) > 32: raise ValueError('efficiency metric bound')
         ids = set()
@@ -141,8 +160,8 @@ def _eff_links(value):
     if not isinstance(value, list) or len(value) > 16 or any(not isinstance(v, str) or not EFF_URL.fullmatch(v) for v in value): raise ValueError('invalid public evidence links')
 
 
-def project_process_efficiency(metrics, assessments, labels, evidence_links=None):
-    """Fixture-only adapter over admitted canonical records; never compute metrics.
+def project_process_efficiency(metrics, assessments, labels, evidence_links=None, selected_subjects=None):
+    """Closed adapter over canonical records; defaults to fixture qualification.
 
     Existing labels approve item identity only. POLICY separately approves typed
     metric facts, taxonomy labels and fixed summary/improvement templates. The
@@ -163,6 +182,7 @@ def project_process_efficiency(metrics, assessments, labels, evidence_links=None
         if assessment['schema'] != 'fsgg.telemetry.efficiency-assessment/1': raise ValueError('invalid assessment schema')
         groups.setdefault(assessment['subject']['itemId'], {'metrics': [], 'assessments': []})['assessments'].append(assessment)
     for subject, group in sorted(groups.items()):
+        if selected_subjects is not None and subject not in selected_subjects: continue
         approved = labels['items'].get(subject)
         if approved is None: result['coverage']['unmapped'] += 1; continue
         if len(group['metrics']) > 32 or len(group['assessments']) > 1 or len({m['metricId'] for m in group['metrics']}) != len(group['metrics']): result['coverage']['withheld'] += 1; continue
@@ -175,12 +195,13 @@ def project_process_efficiency(metrics, assessments, labels, evidence_links=None
         elif assessment and assessment['provenance']['validationResult'] != 'accepted' and state == 'ready': state = 'partial'
         if assessment and (assessment['subject']['outcomeEpoch'] is None or scope == 'provisional-delivery') and state == 'ready': state = 'partial'
         row = {k: approved[k] for k in ('key', 'label', 'url')}
-        row.update(summary={'native-item': 'native-observation', 'provisional-delivery': 'delivery-accounting-incomplete', 'unestablished': 'accounting-unestablished'}[scope], analysisState=state, scope=scope, metrics=[], problems=[], timeline=[], improvements=[])
+        row.update(summary={'native-item': 'native-observation', 'provisional-delivery': 'delivery-accounting-incomplete', 'unestablished': 'accounting-unestablished'}[scope], analysisState=state, scope=scope, metrics=[], problems=[], timeline=[], improvements=[], exportHealth=None)
         if assessment and any(ref not in {m['metricId'] for m in group['metrics']} for ref in assessment['metricRefs']):
             result['coverage']['withheld'] += 1; continue
         for index, metric in enumerate(group['metrics']):
             population = metric['population']
             public = {k: metric[k] for k in ('metric', 'unit', 'calculationVersion', 'coverage', 'policyProfile', 'observedAt', 'eventTime', 'purpose', 'healthDimension')}
+            public['coverage'] = dict(public['coverage'])
             public.update(key=f'm{index}', value={k: metric['value'][k] for k in ('status', 'numerator', 'denominator', 'unknownAmount')}, **{k: population[k] for k in ('windowStart', 'windowEnd', 'cutoff', 'openItems', 'abandonedItems')}, excludedItems=len(population['excludedItems']), populationItems=sorted({labels['items'][subject]['key'] for subject in population['itemIds'] if subject in labels['items']}), unmappedPopulationItems=sum(subject not in labels['items'] for subject in population['itemIds']), evidenceUrls=evidence([r['id'] for r in metric['sourceRefs']]))
             approved_refs = [{'url': evidence_links[r['id']], 'kind': r['kind'], 'revision': r['revision']} for r in metric['sourceRefs'] if r['id'] in evidence_links]
             public.update(sourceEvidence=approved_refs[:16], unmappedEvidenceRefs=len(metric['sourceRefs'])-len(approved_refs[:16]))
@@ -205,6 +226,16 @@ def _eff_selection(value, limit, returned):
     for field in ('limit', 'returned', 'omitted'): _eff_integer(value[field])
     if value['limit'] != limit or value['returned'] != returned or returned > limit or type(value['complete']) is not bool or value['complete'] != (value['omitted'] == 0):
         raise ValueError('invalid efficiency export selection')
+
+
+def _eff_analysis_health(health):
+    _eff_exact(health, ('state', 'requestState', 'assessmentState', 'pendingSince', 'lastAttemptAt', 'failureCode'))
+    if health['state'] not in EFF_STATES or (health['failureCode'] is not None and health['failureCode'] not in EFF_FAILURE_CODES): raise ValueError('invalid analysis export health')
+    if health['requestState'] is not None and health['requestState'] not in {'pending', 'claimed', 'settled', 'failed', 'unavailable'}: raise ValueError('invalid canonical request state')
+    if health['assessmentState'] is not None and health['assessmentState'] not in EFF_STATES: raise ValueError('invalid assessment state')
+    if health['requestState'] in {'pending', 'claimed'} and health['state'] != {'pending': 'pending', 'claimed': 'running'}[health['requestState']]: raise ValueError('pending request hidden by assessment')
+    for field in ('pendingSince', 'lastAttemptAt'):
+        if health[field] is not None: _eff_stamp(health[field])
 
 
 def validate_efficiency_export(value, expected_snapshot_revision):
@@ -241,19 +272,62 @@ def validate_efficiency_export(value, expected_snapshot_revision):
         assessment = item['assessment']
         if assessment is not None and (not isinstance(assessment, dict) or assessment.get('schema') != 'fsgg.telemetry.efficiency-assessment/1' or not isinstance(assessment.get('subject'), dict) or assessment['subject'].get('itemId') != item['itemId']):
             raise ValueError('efficiency export assessment subject mismatch')
-        health = item['analysisHealth']; _eff_exact(health, ('state', 'requestState', 'assessmentState', 'pendingSince', 'lastAttemptAt', 'failureCode'))
-        if health['state'] not in EFF_STATES or (health['failureCode'] is not None and health['failureCode'] not in EFF_FAILURE_CODES): raise ValueError('invalid analysis export health')
-        if health['requestState'] is not None and health['requestState'] not in {'pending', 'claimed', 'settled', 'failed', 'unavailable'}: raise ValueError('invalid canonical request state')
-        if health['assessmentState'] is not None and health['assessmentState'] not in EFF_STATES: raise ValueError('invalid assessment state')
-        if health['requestState'] in {'pending', 'claimed'} and health['state'] != {'pending': 'pending', 'claimed': 'running'}[health['requestState']]: raise ValueError('pending request hidden by assessment')
-        for field in ('pendingSince', 'lastAttemptAt'):
-            if health[field] is not None: _eff_stamp(health[field])
+        _eff_analysis_health(item['analysisHealth'])
         _eff_exact(item['freshness'], ('sourceObservedAt', 'ingestedAt'))
         for instant in item['freshness'].values():
             if instant is not None: _eff_stamp(instant)
     _eff_selection(value['metricSelection'], 1000, total_metrics)
     if value['metricSelection']['omitted'] < sum(item['metricSelection']['omitted'] for item in value['items']):
         raise ValueError('efficiency export omitted metrics mismatch')
+
+
+def project_efficiency_exports(exports, labels, evidence_links=None):
+    """Pure bounded consumer join; exporters own revisions and all calculations.
+
+    Each (envelope, exact base revision) pair was read by one canonical transaction.
+    Original identities resolve only through approved labels. Ambiguous public
+    identities are withheld across stores; hashes are source bindings, not grants.
+    """
+    if not isinstance(exports, list) or not 1 <= len(exports) <= 2: raise ValueError('efficiency source bound')
+    result = unavailable_process_efficiency(); result.update(source='canonical-export', status='partial')
+    rows = {}; duplicates = set()
+    for index, (value, revision) in enumerate(exports):
+        validate_efficiency_export(value, revision)
+        source_key = f's{index}'
+        result['exports'].append({'key': source_key, 'baseSnapshotRevision': revision, **{field: value[field] for field in ('sourceFingerprint', 'cutoff', 'observedAt', 'selection', 'metricSelection')}})
+        result['exports'][-1]['selection'] = dict(value['selection'])
+        result['exports'][-1]['metricSelection'] = dict(value['metricSelection'])
+        for item in value['items']:
+            approved = labels['items'].get(item['originalItemId'])
+            if approved is None:
+                result['coverage']['unmapped'] += 1; continue
+            aliases = {'items': {**labels['items'], item['itemId']: approved}}
+            projected = project_process_efficiency(item['metrics'], [item['assessment']] if item['assessment'] is not None else [], aliases, evidence_links, {item['itemId']})
+            if projected['coverage']['withheld']:
+                result['coverage']['withheld'] += 1
+                result['coverage']['unsupported'] += projected['coverage']['unsupported']; continue
+            if projected['items']:
+                row = projected['items'][0]
+            else:
+                row = {field: approved[field] for field in ('key', 'label', 'url')}
+                row.update(summary='accounting-unestablished', analysisState='unavailable', scope='unestablished', metrics=[], problems=[], timeline=[], improvements=[], exportHealth=None)
+            row['analysisState'] = item['analysisHealth']['state']
+            if row['scope'] == 'provisional-delivery' and row['analysisState'] == 'ready': row['analysisState'] = 'partial'
+            row['exportHealth'] = {'sourceKey': source_key, **{field: item['analysisHealth'][field] for field in ('requestState', 'assessmentState', 'pendingSince', 'lastAttemptAt', 'failureCode')}, **item['freshness'], 'metricSelection': dict(item['metricSelection'])}
+            key = row['key']
+            if key in rows or key in duplicates:
+                if key in rows: del rows[key]; result['coverage']['withheld'] += 1
+                duplicates.add(key); result['coverage']['withheld'] += 1; continue
+            rows[key] = row
+    ordered = [rows[key] for key in sorted(rows)]
+    result['coverage']['withheld'] += max(0, len(ordered)-200)
+    result['items'] = ordered[:200]
+    result['coverage']['published'] = len(result['items'])
+    # Bound the whole public DTO before it can enter a 1MiB host feed.
+    while len(json.dumps(result, ensure_ascii=True, separators=(',', ':'), allow_nan=False).encode()) > 768 * 1024 and result['items']:
+        result['items'].pop(); result['coverage']['published'] -= 1; result['coverage']['withheld'] += 1
+    validate_process_efficiency(result)
+    return result
 
 
 def read_efficiency_export(store, engine, snapshot_revision, deadline, config_path=None, repository=None):

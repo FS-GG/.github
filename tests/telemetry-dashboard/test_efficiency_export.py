@@ -2,7 +2,8 @@
 import copy
 import unittest
 from unittest import mock
-from test_process_efficiency import D, metric, assessment, WHEN
+from test_process_efficiency import D, metric, assessment, labels, WHEN
+import json
 
 
 def export():
@@ -62,6 +63,57 @@ class ExportTests(unittest.TestCase):
             with mock.patch.object(D, 'engine_json') as engine:
                 with self.assertRaises(D.HostSourceError): D.read_efficiency_export('/private/store', 'engine', 'a'*64, deadline)
                 engine.assert_not_called()
+
+    def test_canonical_join_uses_original_approved_identity_and_exact_bindings(self):
+        value = export(); approved = labels(); approved['items']['PRIVATE-ORIGINAL'] = approved['items'].pop('PRIVATE-NATIVE')
+        result = D.project_efficiency_exports([(value, 'a'*64)], approved)
+        self.assertEqual(result['source'], 'canonical-export')
+        self.assertEqual(result['exports'][0]['sourceFingerprint'], value['sourceFingerprint'])
+        self.assertEqual(result['exports'][0]['baseSnapshotRevision'], value['snapshotRevision'])
+        item = result['items'][0]
+        self.assertEqual(item['key'], 'native-example')
+        self.assertEqual(item['metrics'][0]['value']['numerator'], 70)
+        self.assertIsNone(item['exportHealth']['ingestedAt'])
+        self.assertEqual(item['exportHealth']['sourceKey'], 's0')
+        for secret in ('PRIVATE', 'metricId', 'itemId', 'summaryText', 'reason'):
+            self.assertNotIn(secret, json.dumps(result))
+
+    def test_health_only_rows_and_older_assessment_preserve_new_queue(self):
+        for request, state in [('pending', 'pending'), ('claimed', 'running')]:
+            value = export(); value['items'][0]['originalItemId'] = 'PRIVATE-NATIVE'
+            value['items'][0]['analysisHealth'].update(requestState=request, state=state, pendingSince=WHEN)
+            result = D.project_efficiency_exports([(value, 'a'*64)], labels())
+            self.assertEqual(result['items'][0]['analysisState'], state)
+            self.assertEqual(result['items'][0]['exportHealth']['assessmentState'], 'ready')
+        value = export(); item = value['items'][0]
+        item.update(originalItemId='PRIVATE-NATIVE', metrics=[], assessment=None)
+        item['metricSelection'].update(returned=0, omitted=4, complete=False)
+        value['metricSelection'].update(returned=0, omitted=4, complete=False)
+        value['selection'].update(omitted=3, complete=False)
+        item['analysisHealth'].update(state='pending', requestState='pending', assessmentState=None, pendingSince=WHEN)
+        result = D.project_efficiency_exports([(value, 'a'*64)], labels())
+        row = result['items'][0]
+        self.assertEqual(row['summary'], 'accounting-unestablished')
+        self.assertEqual(row['metrics'], [])
+        self.assertEqual(row['analysisState'], 'pending')
+        self.assertEqual(row['exportHealth']['metricSelection']['omitted'], 4)
+        self.assertEqual(result['exports'][0]['selection']['omitted'], 3)
+        self.assertIsNone(row['exportHealth']['assessmentState'])
+
+    def test_two_store_duplicate_identity_is_withheld_without_aggregation(self):
+        value = export(); value['items'][0]['originalItemId'] = 'PRIVATE-NATIVE'
+        second = copy.deepcopy(value); second.update(snapshotRevision='c'*64, sourceFingerprint='sha256:'+'d'*64)
+        result = D.project_efficiency_exports([(value, 'a'*64), (second, 'c'*64)], labels())
+        self.assertEqual(result['items'], [])
+        self.assertEqual(result['coverage']['withheld'], 2)
+        self.assertEqual([s['key'] for s in result['exports']], ['s0', 's1'])
+        with self.assertRaises(ValueError): D.project_efficiency_exports([(value, 'a'*64)]*3, labels())
+
+    def test_public_queue_binding_clocks_and_omissions_remain_closed(self):
+        value = export(); value['items'][0]['originalItemId'] = 'PRIVATE-NATIVE'
+        for mutation in (lambda r: r['exports'][0].update(sourceFingerprint='sha256:private'), lambda r: r['items'][0]['exportHealth'].update(sourceKey='private'), lambda r: r['items'][0]['exportHealth'].update(ingestedAt=0), lambda r: r['items'][0]['exportHealth']['metricSelection'].update(omitted=1), lambda r: r['items'][0]['exportHealth'].update(requestState='claimed')):
+            result = D.project_efficiency_exports([(value, 'a'*64)], labels()); mutation(result)
+            with self.assertRaises(ValueError): D.validate_process_efficiency(result)
 
     def test_reader_is_inactive_and_never_replaces_source_deliveries(self):
         self.assertEqual(D.EFF.unavailable()['status'], 'unavailable')
