@@ -188,11 +188,14 @@ def validate(assessment, packet, schema, admitted_review=None, usage_refs=(), al
         raise ValueError('unresolved supersession')
     if not any(r['ref']['id'] == subject['outcomeId'] and r['ref']['kind'] == 'outcome' for r in packet['records']):
         raise ValueError('unresolved outcome')
-    if state == 'ready':
-        # The exporter must resolve this actual existing admitted record and all populations.
+    if review is not None:
+        # The trusted exporter must resolve this actual existing admitted record.
         matches = [r for r in all_records if r['ref']['kind'] == 'process-review' and r['ref']['id'] == review]
         if len(matches) != 1 or admitted_review != matches[0] or matches[0]['payload'].get('scope') != 'item':
             raise ValueError('existing admitted item review required')
+    if state == 'ready':
+        if review is None:
+            raise ValueError('ready requires admitted item review')
         if any(packet['coverage'][n] != 'complete' for n in ('population', 'usage', 'lineage')):
             raise ValueError('incomplete native population')
         if assessment['provenance']['validationResult'] != 'accepted':
