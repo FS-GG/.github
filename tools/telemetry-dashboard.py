@@ -920,6 +920,102 @@ def project_source_deliveries(snapshot: dict[str,Any], labels: dict[str,Any], co
     return {"schema":"fsgg.telemetry.source-deliveries/1","coverage":coverage,"items":result}
 
 
+
+RESPONSE_COST_FIELDS = ("input", "cachedInput", "cacheWriteInput", "output", "reasoning", "total")
+
+def project_provider_responses(snapshot, labels, snapshot_revision):
+    """Copy canonical per-response counters; never derive or combine costs."""
+    result={"schema":"fsgg.telemetry.provider-response-costs/1","status":"unavailable","snapshotRevision":None,"coverage":{"eligible":0,"published":0,"unmapped":0,"withheld":0,"incompatible":0},"items":[]}
+    if snapshot.get("store",{}).get("schemaVersion") != 14 or "responseUsage" not in snapshot:
+        return result
+    rows=snapshot["responseUsage"]
+    if not isinstance(rows,list) or len(rows)>10000 or not isinstance(snapshot_revision,str) or not re.fullmatch(r"[0-9a-f]{64}",snapshot_revision):
+        raise ValueError("invalid provider-response population")
+    result.update(status="available",snapshotRevision=snapshot_revision)
+    membership={}
+    for row in snapshot_rows(snapshot,"populations"):
+        item,original=row.get("item_id"),row.get("original_item_id")
+        if isinstance(item,str) and isinstance(original,str): membership.setdefault(item,set()).add(original)
+    groups={}; seen=set()
+    for row in rows:
+        result["coverage"]["eligible"]+=1
+        if not isinstance(row,dict): result["coverage"]["incompatible"]+=1; continue
+        original=row.get("item_id")
+        if not isinstance(original,str): result["coverage"]["incompatible"]+=1; continue
+        if original not in labels["items"]:
+            owners=membership.get(original,set())
+            original=next(iter(owners)) if len(owners)==1 else None
+        approval=labels["items"].get(original)
+        if approval is None: result["coverage"]["unmapped"]+=1; continue
+        try:
+            identity=row.get("identity")
+            if not isinstance(identity,str) or identity in seen: raise ValueError("duplicate response fact")
+            seen.add(identity)
+            revision=checked_int(row.get("revision"),"response revision")
+            digest=row.get("content_digest")
+            if not isinstance(digest,str) or not re.fullmatch(r"sha256:[0-9a-f]{64}",digest): raise ValueError("invalid response digest")
+            canonical=json.loads(row["canonical"],object_pairs_hook=_response_pairs)
+            if not isinstance(canonical,dict) or canonical.get("provider")!="openai" or canonical.get("sourceVariant")!="openai-responses/1" or canonical.get("scope")!="provider-response" or canonical.get("provenance")!="openai-responses": raise ValueError("invalid response namespace")
+            if canonical.get("itemId")!=row["item_id"]: raise ValueError("response item mismatch")
+            counters={field:None if canonical[field] is None else str(checked_int(canonical[field],field)) for field in RESPONSE_COST_FIELDS}
+            projected={"key":"", "revision":str(revision),"coverage":"complete" if all(counters[k] is not None for k in ("input","output","total")) else "partial", "requestedModel":labels["models"].get(canonical.get("requestedModel"),"unknown"),"observedModel":labels["models"].get(canonical.get("observedModel"),"unknown"),"requestedEffort":labels["efforts"].get(canonical.get("requestedEffort"),"unknown"),"observedEffort":labels["efforts"].get(canonical.get("observedEffort"),"unknown"),"counters":counters}
+            if all(value is None for value in counters.values()): raise ValueError("empty response usage")
+            groups.setdefault(original,[]).append((identity,projected))
+        except (ValueError,TypeError,KeyError): result["coverage"]["incompatible"]+=1
+    remaining=1000
+    for original, entries in sorted(groups.items(),key=lambda pair:labels["items"][pair[0]]["key"]):
+        approval=labels["items"][original]; count=min(32,remaining,len(entries)) if len(result["items"])<200 else 0
+        selected=[]
+        for index,(_,row) in enumerate(sorted(entries,key=lambda pair:pair[0])[:count]):
+            # Local references are scoped to this exact snapshot and approved item;
+            # private/provider identifiers are never public join keys.
+            row["key"]=f"r{index+1}";selected.append(row)
+        result["coverage"]["published"]+=count;result["coverage"]["withheld"]+=len(entries)-count;remaining-=count
+        if selected: result["items"].append({"key":approval["key"],"label":approval["label"],"url":approval["url"],"rows":selected,"withheld":len(entries)-count})
+    # Share the existing whole-feed bound; this subpopulation gets no extra feed.
+    while len(dump(result))>131072 and result["items"]:
+        removed=result["items"].pop();n=len(removed["rows"]);result["coverage"]["published"]-=n;result["coverage"]["withheld"]+=n
+    if any(result["coverage"][k] for k in ("unmapped","withheld","incompatible")): result["status"]="partial"
+    validate_provider_responses(result)
+    return result
+
+def _response_pairs(pairs):
+    value={}
+    for key,item in pairs:
+        if key in value: raise ValueError("duplicate response field")
+        value[key]=item
+    return value
+
+def validate_provider_responses(value):
+    exact(value,{"schema","status","snapshotRevision","coverage","items"},"provider response costs")
+    if value["schema"]!="fsgg.telemetry.provider-response-costs/1" or value["status"] not in {"available","partial","unavailable"}: raise ValueError("invalid provider costs")
+    validate_count_map(value["coverage"],{"eligible","published","unmapped","withheld","incompatible"},"provider cost coverage")
+    coverage=value["coverage"]
+    if coverage["eligible"]!=sum(coverage[k] for k in ("published","unmapped","withheld","incompatible")): raise ValueError("invalid provider cost remainder")
+    if not isinstance(value["items"],list) or len(value["items"])>200: raise ValueError("provider item bound")
+    if value["status"]=="unavailable":
+        if value["snapshotRevision"] is not None or any(coverage.values()) or value["items"]: raise ValueError("unavailable provider costs")
+    elif not isinstance(value["snapshotRevision"],str) or not re.fullmatch(r"[0-9a-f]{64}",value["snapshotRevision"]): raise ValueError("provider snapshot reference")
+    count=0;keys=set()
+    for item in value["items"]:
+        exact(item,{"key","label","url","rows","withheld"},"provider cost item")
+        if not isinstance(item["key"],str) or not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,63}",item["key"]) or item["key"] in keys: raise ValueError("provider item key")
+        keys.add(item["key"]);public_text(item["label"],160,"provider item label");_eff_links([item["url"]]);checked_int(item["withheld"],"withheld responses")
+        if not isinstance(item["rows"],list) or not 1<=len(item["rows"])<=32: raise ValueError("provider row bound")
+        for index,row in enumerate(item["rows"]):
+            exact(row,{"key","revision","coverage","requestedModel","observedModel","requestedEffort","observedEffort","counters"},"provider cost row")
+            if row["key"]!=f"r{index+1}" or row["coverage"] not in {"complete","partial"}: raise ValueError("provider row reference")
+            for field in ("requestedModel","observedModel","requestedEffort","observedEffort"): public_text(row[field],100,field)
+            values=[row["revision"],*exact(row["counters"],set(RESPONSE_COST_FIELDS),"provider counters").values()]
+            for n in values:
+                if n is not None and (not isinstance(n,str) or not re.fullmatch(r"0|[1-9][0-9]{0,18}",n) or int(n)>2**63-1): raise ValueError("invalid exact provider quantity")
+            if row["revision"] is None or all(n is None for n in row["counters"].values()): raise ValueError("unknown provider fact")
+            expected="complete" if all(row["counters"][k] is not None for k in ("input","output","total")) else "partial"
+            if row["coverage"]!=expected: raise ValueError("invalid provider quantity coverage")
+            count+=1
+    if count!=coverage["published"] or count>1000: raise ValueError("provider published count")
+
+
 def project_one_item(snapshot: dict[str,Any], original: str, members: list[str], outcomes: list[dict[str,Any]], approval: dict[str,Any], labels: dict[str,Any], ci_by_item: dict[str,dict[str,Any]], budgets_by_item: dict[str,dict[str,Any]], epoch: Any) -> dict[str,Any]:
     member_set=set(members); terminals=snapshot_rows(snapshot,"terminals",member_set)
     if len(terminals)>4096: raise ValueError("item projection exceeds runtime bound")
@@ -1350,7 +1446,10 @@ def _project_host_snapshot(snapshot: dict[str,Any], envelope: dict[str,Any], lab
     store_status={"status":"ready","schemaVersion":store_projection["schemaVersion"],"journalMode":"wal","pendingBatches":checked_int(operational.get("pendingBatches"),"pending batches")}
     labels=load_labels(labels_path)
     completed=project_completed_items(snapshot,status,labels,ci_by_item,budgets_by_item)
-    return aggregate_host(public,ci,budgets,status,envelope["observedAt"],[],health,store_status,completed,kind,project_source_deliveries(snapshot,labels,completed))
+    host=aggregate_host(public,ci,budgets,status,envelope["observedAt"],[],health,store_status,completed,kind,project_source_deliveries(snapshot,labels,completed))
+    host["providerResponses"]=project_provider_responses(snapshot,labels,envelope.get("revision"))
+    host.pop("revision");host["revision"]=hashlib.sha256(json.dumps(host,sort_keys=True,separators=(",",":"),ensure_ascii=True).encode()).hexdigest()
+    return host
 
 
 def publish(repo: str, branch: str, path: str, token: str, snapshot: dict[str, Any]) -> str:
@@ -2191,6 +2290,8 @@ def validate_host(value: Any) -> None:
             elif row["status"]!="unavailable" or row["host"] is not None or row["reason"] not in {"source-unavailable","public-budget-exceeded"}: raise ValueError("invalid unavailable context")
         return
     fields={"schema","observedAt","source","scope","totals","usage","launcherPopulation","quality","operational","store","localCi","budget","completedItems","revision","sourceDeliveries","processEfficiency"}
+    if "providerResponses" in value:
+        fields.add("providerResponses");validate_provider_responses(value["providerResponses"])
     exact(value,fields,"host feed")
     if parse_time(value["observedAt"]) is None: raise ValueError("invalid host identity")
     revision=value["revision"]

@@ -55,6 +55,7 @@ def main() -> int:
                 "/src/", "/tests/", "/.agents/skills/", "/.claude/skills/",
             )) or normalized in (
                 "/tools/telemetry-dashboard.py",
+                "/telemetry-dashboard/app.js",
                 "/.github/workflows/telemetry-host-package.yml",
                 "/deployment/telemetry-collector/host-attempt/tests/hostattempttests.fs",
             )

@@ -269,6 +269,25 @@ passed in 13.136 seconds, with no skips, retries or unexpected results, clean cu
 failure. The earlier failed windows remain retained. This fixture result does not establish an
 installed schema-14 exporter or live efficiency; deployment and full .4/.6 acceptance remain open.
 
+Provider-response cost source qualification (2026-10-06): the separate bounded population
+publishes canonical per-response counters for approved pending, source-delivered and completed
+items. The structured publication policy also permits these six nullable counters, approved
+model/effort aliases, current revisions, snapshot-scoped public-local references and explicit
+eligible/published/unmapped/withheld/incompatible counts. Counters are exact decimal strings;
+unknowns remain null and consistent over-policy actual costs remain visible. Provider identities,
+private fact identifiers, response hashes and canonical JSON stay private. The projection neither
+sums costs nor inserts provider responses into native-turn totals, and cost observations do not
+establish successful assessment or item completion.
+
+Parent-selected browser root08 qualified exact UI/test source `af5913c1`: all 21 authored cases
+passed in 17.0088 seconds with zero skips/retries/unexpected results, clean retirement, no resource
+failure and core limit zero. Fresh two-UID root02 passed all six permission checks in 1.0305 seconds,
+with both original groups retired and empty disposable scopes; its actual result binds collector
+SHA `409b20b5884075899b707fceb82223e5dbc5655f1074b510df3950c29bab24b6`.
+All 143 pure dashboard tests pass with that genuine proof. Earlier proof and failed windows remain
+retained. Current installed 0.98/schema-13 live feed remains unchanged; actual 0.99/Host 0.5/schema-14
+collection, authenticated provider observations and full .4/.6 acceptance remain pending.
+
 Depends on .1 for fixture-driven work; live projection acceptance requires .2 and .3. Touch-set:
 dashboard collector/projection, static UI/assets and focused projection/UI tests. Coordinate ownership
 of shared DTOs with .2; the UI does not edit canonical completion logic.

@@ -1,5 +1,5 @@
 {
-  "candidateToolDigest": "184723284a4205914811c4d2c78c89d338b3da75a372068a8647bdf7b8ee0a5f",
+  "candidateToolDigest": "409b20b5884075899b707fceb82223e5dbc5655f1074b510df3950c29bab24b6",
   "checks": [
     "publisher-read-handoff",
     "publisher-write-handoff-denied",

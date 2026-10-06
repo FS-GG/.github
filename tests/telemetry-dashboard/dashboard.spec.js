@@ -516,3 +516,22 @@ test("source selector is hidden for single and unavailable feeds and visible for
   await expect(page.locator("#source-context-select")).toHaveValue("current");
   await expect(page.locator("#source-context-note")).toContainText("Current work: one independent source");
 });
+
+test("provider-response costs retain exact nullable observations, pagination and last-valid privacy",async({page})=>{
+  await page.clock.install();let requests=0;
+  await page.route("**/data/dashboard.json",route=>{
+    const host=efficiencyHost();host.store.schemaVersion=14;
+    const items=Array.from({length:11},(_,i)=>({key:`response-item-${i}`,label:`Approved response item ${i}`,url:`https://github.com/FS-GG/.github/issues/${i+1}`,withheld:0,rows:[{key:"r1",revision:"9007199254740993",coverage:i===0?"partial":"complete",requestedModel:"Approved model",observedModel:"Approved model",requestedEffort:"Medium",observedEffort:"unknown",counters:{input:"9007199254740993",cachedInput:null,cacheWriteInput:null,output:i===0?null:"1501",reasoning:null,total:i===0?null:"9007199254742494"}}]}));
+    host.providerResponses={schema:"fsgg.telemetry.provider-response-costs/1",status:"partial",snapshotRevision:"c".repeat(64),coverage:{eligible:15,published:11,unmapped:1,withheld:2,incompatible:1},items};
+    requests++;
+    if(requests===2)host.providerResponses.items[0].rows[0].responseId="PRIVATE PROVIDER ID";
+    if(requests>2)host.providerResponses={schema:"fsgg.telemetry.provider-response-costs/1",status:"unavailable",snapshotRevision:null,coverage:{eligible:0,published:0,unmapped:0,withheld:0,incompatible:0},items:[]};
+    return route.fulfill({json:payload(host)});
+  });
+  await page.goto("/#provider-responses");await expect(page.locator("#refresh-status")).toContainText("checking every minute");
+  const panel=page.locator("#provider-responses");await expect(panel).toContainText("11/15 observed response cost records");await expect(panel).toContainText("separate from native-turn totals");await expect(panel).toContainText("9007199254740993");await expect(panel).toContainText("Unknown");await expect(panel.locator("article")).toHaveCount(10);
+  await page.getByRole("button",{name:"Next response items"}).click();await expect(panel.locator("article")).toHaveCount(1);await expect(panel).toContainText("Approved response item 10");
+  await page.setViewportSize({width:390,height:844});await expectMobileContainment(page);
+  await page.clock.runFor(60000);await expect.poll(()=>requests).toBe(2);await expect(page.locator("#refresh-status")).toContainText("showing last good data");await expect(panel).toContainText("Approved response item 10");await expect(page.locator("body")).not.toContainText("PRIVATE PROVIDER ID");
+  await page.clock.runFor(60000);await expect.poll(()=>requests).toBe(3);await expect(panel).toContainText("Provider-response population unavailable");await expect(panel.locator("article")).toHaveCount(0);
+});
