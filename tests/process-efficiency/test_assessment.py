@@ -98,6 +98,15 @@ class AssessmentTests(unittest.TestCase):
         self.assertEqual(pilot['tokenLimitSupport'], 'observed-only')
         with self.assertRaises(ValueError):
             a.restore_packet(base64.b64encode(raw + b' ').decode(), digest, packet['metrics'])
+        for canonical_kind, semantic_kind in (('runtime-native-inventory/1', 'invocation'),
+                                               ('runtime-native-inventory-source/1', 'invocation'),
+                                               ('learn-installed-origin/1', 'adoption')):
+            witness = copy.deepcopy(raw_packet)
+            witness['records'][0]['canonicalRef']['kind'] = canonical_kind
+            witness['records'][0]['ref']['kind'] = semantic_kind
+            restored_witness = a.restore_packet(base64.b64encode(a.encode(witness)).decode(),
+                                                a.digest(witness), packet['metrics'])
+            self.assertEqual(restored_witness['records'][0]['ref']['kind'], semantic_kind)
         mismatched = copy.deepcopy(raw_packet)
         mismatched['records'][0]['canonicalRef']['kind'] = 'efficiency-assessment/1'
         changed = a.encode(mismatched)
