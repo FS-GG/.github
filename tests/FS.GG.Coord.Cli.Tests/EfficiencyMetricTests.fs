@@ -148,7 +148,7 @@ module EfficiencyMetricTests =
         Assert.Equal("B",(after.RootElement.GetProperty("items")).[0].GetProperty("itemId").GetString())
         ratio 1L 2L (metric after "retry-burden" "ci-observed")
         ratio 2L 1L (metric after "observed-resource" "ci-observed")
-        Assert.NotEqual(before.RootElement.GetProperty("sourceFingerprint").GetString(),after.RootElement.GetProperty("sourceFingerprint").GetString())
+        Assert.NotEqual<string>(before.RootElement.GetProperty("sourceFingerprint").GetString(),after.RootElement.GetProperty("sourceFingerprint").GetString())
 
     [<Fact>]
     let ``finer than supported clock precision is unavailable instead of rounded into a false zero`` () =
