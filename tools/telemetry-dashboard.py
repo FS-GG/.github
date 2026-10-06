@@ -241,8 +241,11 @@ def validate_efficiency_export(value, expected_snapshot_revision):
         assessment = item['assessment']
         if assessment is not None and (not isinstance(assessment, dict) or assessment.get('schema') != 'fsgg.telemetry.efficiency-assessment/1' or not isinstance(assessment.get('subject'), dict) or assessment['subject'].get('itemId') != item['itemId']):
             raise ValueError('efficiency export assessment subject mismatch')
-        health = item['analysisHealth']; _eff_exact(health, ('state', 'pendingSince', 'lastAttemptAt', 'failureCode'))
+        health = item['analysisHealth']; _eff_exact(health, ('state', 'requestState', 'assessmentState', 'pendingSince', 'lastAttemptAt', 'failureCode'))
         if health['state'] not in EFF_STATES or (health['failureCode'] is not None and health['failureCode'] not in EFF_FAILURE_CODES): raise ValueError('invalid analysis export health')
+        if health['requestState'] is not None and health['requestState'] not in {'pending', 'claimed', 'settled', 'failed', 'unavailable'}: raise ValueError('invalid canonical request state')
+        if health['assessmentState'] is not None and health['assessmentState'] not in EFF_STATES: raise ValueError('invalid assessment state')
+        if health['requestState'] in {'pending', 'claimed'} and health['state'] != {'pending': 'pending', 'claimed': 'running'}[health['requestState']]: raise ValueError('pending request hidden by assessment')
         for field in ('pendingSince', 'lastAttemptAt'):
             if health[field] is not None: _eff_stamp(health[field])
         _eff_exact(item['freshness'], ('sourceObservedAt', 'ingestedAt'))

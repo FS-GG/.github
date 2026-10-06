@@ -13,7 +13,7 @@ def export():
             'selection': {'limit': 200, 'returned': 1, 'omitted': 0, 'complete': True},
             'metricSelection': {'limit': 1000, 'returned': 1, 'omitted': 0, 'complete': True},
             'items': [{'itemId': 'PRIVATE-NATIVE', 'originalItemId': 'PRIVATE-ORIGINAL', 'metrics': metrics, 'metricSelection': selected, 'assessment': assessment(),
-                       'analysisHealth': {'state': 'ready', 'pendingSince': None, 'lastAttemptAt': WHEN, 'failureCode': None},
+                       'analysisHealth': {'state': 'ready', 'requestState': 'settled', 'assessmentState': 'ready', 'pendingSince': None, 'lastAttemptAt': WHEN, 'failureCode': None},
                        'freshness': {'sourceObservedAt': WHEN, 'ingestedAt': None}}]}
 
 
@@ -31,6 +31,16 @@ class ExportTests(unittest.TestCase):
         value['metricSelection'].update(returned=0, omitted=1, complete=False)
         D.validate_efficiency_export(value, 'a'*64)
         value['metricSelection']['complete'] = True
+        with self.assertRaises(ValueError): D.validate_efficiency_export(value, 'a'*64)
+
+    def test_new_pending_request_does_not_hide_older_ready_assessment(self):
+        for request, display in [('pending', 'pending'), ('claimed', 'running')]:
+            value = export(); health = value['items'][0]['analysisHealth']
+            health.update(requestState=request, state=display, assessmentState='ready', pendingSince=WHEN)
+            D.validate_efficiency_export(value, 'a'*64)
+            health['state'] = 'ready'
+            with self.assertRaises(ValueError): D.validate_efficiency_export(value, 'a'*64)
+        value = export(); value['items'][0]['analysisHealth']['requestState'] = 'running'
         with self.assertRaises(ValueError): D.validate_efficiency_export(value, 'a'*64)
 
     def test_subjects_duplicates_and_global_counts_refuse(self):

@@ -134,8 +134,8 @@ and producer freshness remain unavailable without approved canonical exports.
 
 The source includes native keyboard controls, search/scope/measurement filters, ten-item pages,
 accessible table captions/headings and the existing last-valid-feed fallback. Fourteen focused
-projection checks and five export-consumer checks pass. The full Python roster has 117 passes and
-one expected stale two-UID proof digest failure (118 tests); a new actual proof must qualify final exporter bytes. Two browser tests
+projection checks and six export-consumer checks pass. The full Python roster has 118 passes and
+one expected stale two-UID proof digest failure (119 tests); a new actual proof must qualify final exporter bytes. Two browser tests
 are authored but have not run at this checkpoint. No publication, installation or native/store
 qualification is claimed from source fixtures.
 
@@ -151,7 +151,9 @@ selection and item rows. Selection declares limit, returned, omitted and complet
 items, 1,000 serialized metrics globally and 32 per item. Each row retains private item/original-group
 identities, canonical metrics, one selected assessment or null, typed analysis health and nullable
 witnessed source/ingestion clocks. Private analysis packets are excluded. Analysis health exposes
-pending/last-attempt times and only fixed failure codes; other reasons become unknown. Explicit
+pending/last-attempt times and only fixed failure codes; other reasons become unknown. Canonical
+request state (pending/claimed/settled/failed/unavailable) remains distinct from assessment state;
+a new pending/claimed request stays visible even when a prior assessment is ready. Explicit
 original groups preserve the existing public-label boundary.
 
 The reader makes one batch call per store using the caller's remaining monotonic deadline, bounded
