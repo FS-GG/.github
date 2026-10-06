@@ -63,7 +63,7 @@ module NativeExecStoreTests =
         let mixed = inventory()
         mixed["expectedTurnIds"] <- textArray "native-turn"
         Assert.True(parse mixed |> Result.isError)
-        old["expectedTurns"] <- inventory()["expectedTurns"].DeepClone()
+        old["expectedTurns"] <- (inventory()).["expectedTurns"].DeepClone()
         Assert.True(parse old |> Result.isError)
 
     [<Theory>]

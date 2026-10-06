@@ -2900,8 +2900,8 @@ ORDER BY f.identity LIMIT 65;
                 && (if exec then
                         let present, ns = node.TryGetProperty "turnNamespace"
                         present && ns.GetString()="codex-exec-jsonl/1"
-                        && node.GetProperty("expectedTurns")[0].GetProperty("localTurnKey").GetRawText() = binding.GetProperty("turnRoster")[0].GetProperty("localTurnKey").GetRawText()
-                        && node.GetProperty("expectedTurns")[0].GetProperty("turnSequence").GetInt64()=1L
+                        && (node.GetProperty("expectedTurns")).[0].GetProperty("localTurnKey").GetRawText() = (binding.GetProperty("turnRoster")).[0].GetProperty("localTurnKey").GetRawText()
+                        && (node.GetProperty("expectedTurns")).[0].GetProperty("turnSequence").GetInt64()=1L
                     else not (node.TryGetProperty "turnNamespace" |> fst)))
             let origins = byKind "learn-installed-origin/1" |> List.filter (fun row ->
                 let _,_,_,_,canonical,_,_,_,_ = row
@@ -2947,7 +2947,7 @@ ORDER BY f.identity LIMIT 65;
             let node = document.RootElement
             if node.TryGetProperty "turnNamespace" |> fst then
                 // Authenticate correspondence to the existing runtime-produced row; never insert another usage.
-                let expected = node.GetProperty("expectedTurns")[0]
+                let expected = (node.GetProperty("expectedTurns")).[0]
                 let key = expected.GetProperty "localTurnKey"
                 let sourceId,_,sourceRevision,sourceDigest = witnesses |> List.find (fun (_,kind,_,_) -> kind="runtime-native-inventory-source/1")
                 use source = connection.CreateCommand()
