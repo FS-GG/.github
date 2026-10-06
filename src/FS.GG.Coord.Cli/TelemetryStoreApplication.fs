@@ -4154,7 +4154,7 @@ ORDER BY f.identity;
             if actualBytes <> payloadBytes then invalidOp "efficiency-packet-source-content-mismatch"
         packet
 
-    let private efficiencyEnqueue connection (principal: TelemetryReceipt.Principal) (request: JsonElement) packet now =
+    let private efficiencyEnqueue (connection: SqliteConnection) (principal: TelemetryReceipt.Principal) (request: JsonElement) (packet: byte array) (now: string) =
         let subject = request.GetProperty "subject"
         let item = subject.GetProperty("itemId").GetString()
         let outcome = subject.GetProperty("outcomeId").GetString()
@@ -4263,7 +4263,7 @@ ORDER BY f.identity;
                                             if revision <> cas.GetProperty("expectedRevision").GetInt64() || digest <> cas.GetProperty("expectedContentDigest").GetString() then invalidOp "efficiency-cas-conflict"
                                             let authority = input.GetProperty "authority"
                                             let effective = efficiencyAuthority connection principal (authority.GetProperty("sourceIdentity").GetString()) authority
-                                            let subject = record["canonicalRequest"]["subject"]
+                                            let subject = record.["canonicalRequest"].["subject"]
                                             let outcome = subject["outcomeId"].GetValue<string>()
                                             let item = receiptScalar connection "SELECT item_id FROM native_item_outcomes WHERE identity=$id;" [ "$id", box outcome ] |> string
                                             if effective <> Some item then invalidOp "efficiency-effective-authority-conflict"
@@ -4281,7 +4281,7 @@ ORDER BY f.identity;
                                                 if subjectJoined<>1L then invalidOp "efficiency-claim-dispatch-subject"
                                                 let dispatchOwned = receiptScalar connection "SELECT count(*) FROM fact_admissions a JOIN receipt_admissions ra ON ra.receipt_key=a.receipt_key AND ra.envelope_digest=a.envelope_digest AND ra.producer=a.producer AND ra.stream=a.stream JOIN transport_receipts t ON t.producer=ra.producer AND t.batch=ra.batch AND t.state='applied' WHERE a.identity=$dispatch AND a.producer=$producer AND a.stream=$stream;" [ "$dispatch",box (dispatch.GetProperty("id").GetString()); "$producer",box producer; "$stream",box stream ] |> Convert.ToInt64
                                                 if dispatchOwned<>1L then invalidOp "efficiency-prospective-dispatch-owner"
-                                                let policy = (record["canonicalRequest"]["analysisPolicyVersion"]).GetValue<string>()
+                                                let policy = (record.["canonicalRequest"].["analysisPolicyVersion"]).GetValue<string>()
                                                 // Count stable outcome history across both scopes and every corrected alias.
                                                 // Unknown-epoch reservations remain chargeable when an epoch is later witnessed.
                                                 let epochNode = subject["outcomeEpoch"]
@@ -4318,7 +4318,7 @@ ORDER BY f.identity;
                                                 if not (isNull record["invocationRef"]) then invalidOp "efficiency-invocation-already-attached"
                                                 if efficiencyJson record["dispatchRef"] <> (input.GetProperty("dispatchRef").GetRawText() |> JsonNode.Parse |> efficiencyJson) then invalidOp "efficiency-dispatch-mismatch"
                                                 let invocation = input.GetProperty("invocationRef").GetString()
-                                                let dispatch = (record["dispatchRef"]["id"]).GetValue<string>()
+                                                let dispatch = (record.["dispatchRef"].["id"]).GetValue<string>()
                                                 if Convert.ToInt64(receiptScalar connection
                                                     "SELECT count(*) FROM expected_dispatches d JOIN invocation_lineage l ON l.dispatch_id=d.dispatch_id AND l.item_id=d.item_id JOIN runtime_admissions a ON a.invocation_id=l.invocation_id AND a.item_id=l.item_id WHERE d.identity=$dispatch AND d.item_id=$item AND a.invocation_id=$invocation;"
                                                     [ "$dispatch", box dispatch; "$item", box item; "$invocation", box invocation ]) <> 1L then invalidOp "efficiency-runtime-lineage-unavailable"
@@ -4572,7 +4572,7 @@ ORDER BY f.identity;
                             while packet.Length > 24576 && records.Count > 0 do
                                 records.RemoveAt(records.Count - 1)
                                 references.RemoveAt(references.Count - 1)
-                                packetNode["coverage"]["population"] <- JsonValue.Create "partial"
+                                packetNode.["coverage"].["population"] <- JsonValue.Create "partial"
                                 packetNode["omissions"] <- JsonSerializer.SerializeToNode([| "evidence-packet-byte-bound; canonical records omitted" |])
                                 packet <- efficiencyJson packetNode
                             if packet.Length > 24576 then invalidOp "efficiency-evidence-packet-byte-bound"
@@ -6711,7 +6711,7 @@ WHERE n.source_ref=$source;
                 match fraction with
                 | None -> ()
                 | Some value ->
-                    let node = metrics[metrics.Count - 1]["value"]
+                    let node = metrics.[metrics.Count - 1].["value"]
                     node["numerator"] <- exactValue value.Numerator
                     node["denominator"] <- exactValue value.Denominator
             // Native resource identities are reduced once per dimension/provider/scope.
@@ -6738,9 +6738,11 @@ WHERE n.source_ref=$source;
                                 document.RootElement.GetProperty("shares").EnumerateArray()
                                 |> Seq.map (fun share ->
                                     let value = share.GetProperty "fraction"
-                                    { ProcessEfficiency.Share.ItemId = share.GetProperty("itemId").GetString()
-                                      Purpose = purposeOf (share.GetProperty("purpose").GetString())
-                                      Fraction = { Numerator = bigint (value.GetProperty("numerator").GetInt64()); Denominator = bigint (value.GetProperty("denominator").GetInt64()) } })
+                                    let selected: ProcessEfficiency.Share =
+                                        { ItemId = share.GetProperty("itemId").GetString()
+                                          Purpose = purposeOf (share.GetProperty("purpose").GetString())
+                                          Fraction = { Numerator = bigint (value.GetProperty("numerator").GetInt64()); Denominator = bigint (value.GetProperty("denominator").GetInt64()) } }
+                                    selected)
                                 |> Seq.toList
                             | _ -> []
                         resourceRows.Add
@@ -6806,7 +6808,7 @@ WHERE n.source_ref=$source;
                                   NativeEligible = delivered > 0I && nativeWitnessComplete && not epochDispatches.IsEmpty }
                              |> Result.defaultWith invalidOp
             let openItems = if population.NativeCompletions > 0 then 0 else 1
-            for node in metrics do node["population"]["openItems"] <- JsonValue.Create openItems
+            for node in metrics do node.["population"].["openItems"] <- JsonValue.Create openItems
             let compatibleNativeCounters =
                 facts |> List.filter (fun row -> row[1]=Some "runtime-turn-usage")
                 |> List.map (fun row ->
@@ -6821,11 +6823,11 @@ WHERE n.source_ref=$source;
                 "Observed cohort resource includes unsuccessful and analyst counters. The independently witnessed native denominator does not prove that unobserved resource is zero; this quotient is a lower bound." (null: string) (null: string)
             match acceptedCost with
             | Some value ->
-                metrics[metrics.Count - 1]["value"]["numerator"] <- exactValue value.Numerator
-                metrics[metrics.Count - 1]["value"]["denominator"] <- exactValue value.Denominator
-                metrics[metrics.Count - 1]["coverage"]["population"] <- JsonValue.Create "complete"
-                metrics[metrics.Count - 1]["coverage"]["usage"] <- JsonValue.Create "partial"
-                metrics[metrics.Count - 1]["coverage"]["lineage"] <- JsonValue.Create "complete"
+                metrics.[metrics.Count - 1].["value"].["numerator"] <- exactValue value.Numerator
+                metrics.[metrics.Count - 1].["value"].["denominator"] <- exactValue value.Denominator
+                metrics.[metrics.Count - 1].["coverage"].["population"] <- JsonValue.Create "complete"
+                metrics.[metrics.Count - 1].["coverage"].["usage"] <- JsonValue.Create "partial"
+                metrics.[metrics.Count - 1].["coverage"].["lineage"] <- JsonValue.Create "complete"
             | None -> ()
             // Full canonical acceptance and witnessed time are never derived from missing inputs.
             for name, unit in [ "retry-incidence", "ratio"; "retry-burden", "ratio"; "first-pass-delivery", "ratio"; "lead-time", "seconds"; "touch-time", "seconds"; "wait-time", "seconds"; "flow-ratio", "ratio"; "critical-path-delay", "seconds" ] do
@@ -6840,14 +6842,14 @@ WHERE n.source_ref=$source;
                 |> List.choose (function [ Some timestamp ] -> Some timestamp | _ -> None)
                 |> List.sortByDescending (fun timestamp -> DateTimeOffset.Parse(timestamp, Globalization.CultureInfo.InvariantCulture))
                 |> List.tryHead
-            let age dimension witnessed =
+            let age (dimension: string) (witnessed: string option) =
                 metric "data-health" "seconds" "receiver-observed" "not-applicable" None "unknown" "No applicable witnessed clock; another clock is not substituted." (null:string) dimension
                 match witnessed with
                 | Some timestamp ->
                     let ticks = (DateTimeOffset.Parse(cutoff,Globalization.CultureInfo.InvariantCulture)-DateTimeOffset.Parse(timestamp,Globalization.CultureInfo.InvariantCulture)).Ticks
                     if ticks>=0L then
                         let age = ProcessEfficiency.fraction (bigint ticks) (bigint TimeSpan.TicksPerSecond) |> Result.defaultWith invalidOp
-                        let value = metrics[metrics.Count-1]["value"]
+                        let value = metrics.[metrics.Count-1].["value"]
                         value["status"] <- JsonValue.Create "known"
                         value["numerator"] <- exactValue age.Numerator
                         value["denominator"] <- exactValue age.Denominator
@@ -6874,9 +6876,9 @@ WHERE n.source_ref=$source;
                 | [ [ Some canonical ] ] ->
                     let root = JsonNode.Parse canonical
                     let value = root["assessment"]
-                    if (value["provenance"]["validationResult"]).GetValue<string>() = "accepted" then value.DeepClone() else null
+                    if (value.["provenance"].["validationResult"]).GetValue<string>() = "accepted" then value.DeepClone() else null
                 | _ -> null
-            let assessmentState = if isNull assessment then None else Some((assessment["lifecycle"]["state"]).GetValue<string>())
+            let assessmentState = if isNull assessment then None else Some((assessment.["lifecycle"].["state"]).GetValue<string>())
             let state = match requestState with Some "pending" -> "pending" | Some "claimed" -> "running" | Some "failed" -> "failed" | Some "unavailable" -> "unavailable" | _ -> assessmentState |> Option.defaultValue "unavailable"
             let available = min 32 (maxMetrics - returned)
             let priority (node: JsonNode) =
@@ -7208,7 +7210,7 @@ WHERE n.source_ref=$source;
             let record,packet,_,_,_,_ = efficiencyQueueRow connection requestId
             record["packetBase64"] <- JsonValue.Create(Convert.ToBase64String packet)
             record["rawDigest"] <- JsonValue.Create("sha256:"+CanonicalJson.sha256 packet)
-            let item = (record["canonicalRequest"]["subject"]["itemId"]).GetValue<string>()
+            let item = (record.["canonicalRequest"].["subject"].["itemId"]).GetValue<string>()
             // Metric and analyst-record selection shares the compact base read transaction.
             use originalCommand = connection.CreateCommand()
             originalCommand.Transaction <- transaction
