@@ -9,6 +9,8 @@ on:
       - "tools/telemetry-dashboard.py"
       - "scripts/telemetry-dashboard-refresh.py"
       - "tests/telemetry-dashboard/**"
+      - "contracts/process-efficiency/**"
+      - "tests/process-efficiency/**"
       - ".github/workflows/telemetry-dashboard.yml"
       - "docs/roadmaps/utel-telemetry-dashboard.md"
   push:
@@ -20,6 +22,8 @@ on:
       - "tools/telemetry-dashboard.py"
       - "scripts/telemetry-dashboard-refresh.py"
       - "tests/telemetry-dashboard/**"
+      - "contracts/process-efficiency/**"
+      - "tests/process-efficiency/**"
       - ".github/workflows/telemetry-dashboard.yml"
       - "docs/roadmaps/utel-telemetry-dashboard.md"
   schedule:
@@ -49,6 +53,8 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: "3.x"
+      - name: Verify process efficiency contract and metric examples
+        run: python3 tests/process-efficiency/test_contract.py
       - name: Verify feed and dashboard behavior
         env:
           FSGG_DASHBOARD_SKIP_BROWSER: ${{ github.event_name == 'schedule' }}

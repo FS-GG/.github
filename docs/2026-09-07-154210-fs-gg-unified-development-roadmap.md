@@ -56,6 +56,31 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-06: V2-EFF-01 selected as the priority; source-delivery dashboard consumers landed.**
+The [process efficiency roadmap](roadmaps/process-efficiency-telemetry.md) is now active:
+shared measurement contracts and examples lead parallel canonical metrics, bounded assessment
+and dashboard implementation. Research and synthetic examples do not establish live analysis,
+calibration or savings. The existing supported 0.98.0 attribution correction is reused.
+[PR #4269](https://github.com/FS-GG/.github/pull/4269) merged at
+`edf27765d69bf0c4ad2f5be3506f73e1ee2b247a`, adding a separate `dashboard-host/4`
+source-delivery view for known merges with incomplete runtime accounting. Its source passed
+99 Python tests, six genuine two-UID isolation checks and 13 browser tests. The compatible
+consumer is delivered; the installed producer remains the qualified 0.98.0 exporter until
+coherent successor publication and explicit adoption. Source delivery does not add a native
+completion or imply zero cost. The current Pages feed migration remains independently verified.
+
+Independent source repairs also landed: Coordination [#947](https://github.com/FS-GG/FS.GG.Coordination/pull/947)
+merged at `ae85785cc69f0532b4247e5feefce83b35ee0f9e` after all 70 observed checks
+settled without failure, including the fresh formal base. Earlier failed compiler attempts retain
+their original unknown causes; this source does not itself activate C2/P4. Rendering
+[#1394](https://github.com/FS-GG/FS.GG.Rendering/pull/1394) merged at
+`6ea40861d15b581735655fbe7253673bf1cee907`, providing the selected-producer tag-only
+route; tags, package publication and downstream notification remain separate pending operations.
+SDD [#1088](https://github.com/FS-GG/FS.GG.SDD/pull/1088) merged at
+`cf2f046a10497a336d6243c9a314c3f91fb15771`: Drivers 0.98.0, seven genuinely regenerated
+locks and three verified embedded-skill digest goldens passed hosted checks. Installed receiver
+and fresh-scaffold adoption remain open under V2-DIAG-01.4.
+
 **2026-10-06: Coherent telemetry 0.98.0 published and local attribution corrected; current dashboard feed deployed and verified.**
 [Publisher 37434982959/1](https://github.com/FS-GG/.github/actions/runs/37434982959)
 promoted CLI, Kit and Drivers 0.98.0 from protected source

@@ -29,7 +29,7 @@
     "dashboardHostSchema": "fsgg.telemetry.dashboard-host/4",
     "sourceDeliveryPopulation": "sourceDeliveries",
     "nativePopulation": "native completion eligibility",
-    "state": "separate source-deliveries worktree; additive consumer integration belongs to .2-.4"
+    "state": "Source-delivery host/4 consumers delivered by PR4269 at edf27765d69bf0c4ad2f5be3506f73e1ee2b247a; installed producer remains 0.98.0 host/3. Efficiency host/5 is separate unmerged .4 work."
   },
   "schemas": {
     "assessment": "fsgg.telemetry.efficiency-assessment/1",
