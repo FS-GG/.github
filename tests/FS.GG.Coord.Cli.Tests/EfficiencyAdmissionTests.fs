@@ -49,9 +49,9 @@ module EfficiencyAdmissionTests =
         JsonNode.Parse(JsonSerializer.Serialize {| id = fact.Identity; kind = fact.Kind; revision = fact.Revision; contentDigest = "sha256:" + fact.ContentDigest |})
     let private allocation () =
         let node = JsonNode.Parse("""{"kind":"efficiency-resource-allocation/1","identity":"allocation-a","itemId":null,"revision":0,"resource":{"sourceRef":null,"dimension":"model-tokens","provider":"openai","accountingScope":"completed-turn","unit":"tokens-total","amount":100},"shares":[{"itemId":"A","purpose":"direct-product","fraction":{"numerator":3,"denominator":5},"epistemicStatus":"observed","necessity":"required","evidenceRefs":[],"alternative":null},{"itemId":"A","purpose":"unknown","fraction":{"numerator":2,"denominator":5},"epistemicStatus":"unknown","necessity":"uncertain","evidenceRefs":[],"alternative":null}],"coverage":{"allocation":"complete","evidence":"partial"},"provenance":{"sourceIdentity":"test-source","authorityRole":"root-reviewer","authorityRef":null,"rootDispatchRef":null,"invocationRef":"invoke-a"},"occurredAt":null,"observedAt":"2026-10-06T00:21:00Z"}""")
-        node["resource"]["sourceRef"] <- sourceRef (usage 0)
-        node["provenance"]["authorityRef"] <- sourceRef review
-        (node["shares"][0]["evidenceRefs"]).AsArray().Add(sourceRef (usage 0))
+        node.["resource"].["sourceRef"] <- sourceRef (usage 0)
+        node.["provenance"].["authorityRef"] <- sourceRef review
+        (node.["shares"].[0].["evidenceRefs"]).AsArray().Add(sourceRef (usage 0))
         node
     let private fixture receiptSources =
         let cleanup, path = root ()
@@ -95,7 +95,7 @@ module EfficiencyAdmissionTests =
         let cleanup, path = fixture true
         use cleanup = cleanup
         let node = allocation ()
-        node["resource"]["sourceRef"]["contentDigest"] <- JsonValue.Create("sha256:" + String.replicate 64 "0")
+        node.["resource"].["sourceRef"].["contentDigest"] <- JsonValue.Create("sha256:" + String.replicate 64 "0")
         assertRejected path "wrong-digest" node
 
     [<Fact>]
@@ -116,10 +116,10 @@ module EfficiencyAdmissionTests =
         use cleanup = cleanup
         let node = allocation ()
         match field with
-        | "amount" -> node["resource"][field] <- JsonValue.Create(99)
-        | "unit" -> node["resource"][field] <- JsonValue.Create("tokens-output")
-        | "accountingScope" -> node["resource"][field] <- JsonValue.Create("legacy-usage")
-        | _ -> node["resource"][field] <- JsonValue.Create("other-provider")
+        | "amount" -> node.["resource"].[field] <- JsonValue.Create(99)
+        | "unit" -> node.["resource"].[field] <- JsonValue.Create("tokens-output")
+        | "accountingScope" -> node.["resource"].[field] <- JsonValue.Create("legacy-usage")
+        | _ -> node.["resource"].[field] <- JsonValue.Create("other-provider")
         assertRejected path ("mismatch-" + field) node
 
     [<Fact>]
@@ -127,7 +127,7 @@ module EfficiencyAdmissionTests =
         let cleanup, path = fixture true
         use cleanup = cleanup
         let node = allocation ()
-        node["shares"][1]["fraction"]["numerator"] <- JsonValue.Create(3)
+        node.["shares"].[1].["fraction"].["numerator"] <- JsonValue.Create(3)
         assertRejected path "overallocated" node
         Assert.Equal("100", scalar path "SELECT json_extract(canonical,'$.total') FROM ingest_facts WHERE identity='usage-a';")
 
@@ -162,8 +162,8 @@ module EfficiencyAdmissionTests =
         let cleanup,path = fixture true
         use cleanup = cleanup
         let node = allocation ()
-        node["provenance"]["authorityRole"] <- JsonValue.Create("runtime-observer")
-        node["provenance"]["authorityRef"] <- sourceRef admission
+        node.["provenance"].["authorityRole"] <- JsonValue.Create("runtime-observer")
+        node.["provenance"].["authorityRef"] <- sourceRef admission
         assertRejected path "generic-native-role" node
 
     let private sourceOutcome =
@@ -181,7 +181,7 @@ module EfficiencyAdmissionTests =
         let node = JsonNode.Parse("""{"schema":"fsgg.telemetry.efficiency-analysis-claim-input/1","cas":null,"claimId":"claim","modelAlias":"sol","invocationRef":null,"authority":null,"claimedAt":"2026-10-06T00:21:00Z","limitSupport":{"inputTokens":"unavailable","outputTokens":"unavailable","seconds":"enforced"}}""")
         node["claimId"] <- JsonValue.Create(claim: string)
         node["cas"] <- JsonSerializer.SerializeToNode {| requestId=pending["requestId"].GetValue<string>(); expectedRevision=pending["revision"].GetValue<int64>(); expectedContentDigest=pending["contentDigest"].GetValue<string>() |}
-        node["authority"] <- pending["canonicalRequest"]["authority"].DeepClone()
+        node["authority"] <- pending.["canonicalRequest"].["authority"].DeepClone()
         Encoding.UTF8.GetBytes(node.ToJsonString())
 
     [<Fact>]
@@ -251,7 +251,7 @@ module EfficiencyAdmissionTests =
         let attach = JsonNode.Parse("""{"schema":"fsgg.telemetry.efficiency-analysis-attach-invocation-input/1","cas":null,"claimId":"attach","dispatchRef":null,"invocationRef":"analyst-invocation","lineageRefs":[],"authority":null,"attachedAt":"2026-10-06T00:22:00Z"}""")
         attach["cas"] <- JsonSerializer.SerializeToNode {| requestId=claimed["requestId"].GetValue<string>(); expectedRevision=claimed["revision"].GetValue<int64>(); expectedContentDigest=claimed["contentDigest"].GetValue<string>() |}
         attach["dispatchRef"] <- claimed["dispatchRef"].DeepClone()
-        attach["authority"] <- pending["canonicalRequest"]["authority"].DeepClone()
+        attach["authority"] <- pending.["canonicalRequest"].["authority"].DeepClone()
         attach["lineageRefs"].AsArray().Add(sourceRef admissionEvent)
         attach["lineageRefs"].AsArray().Add(sourceRef lineageEvent)
         let result = TelemetryStoreApplication.efficiencyAnalysis path approved principal "attach-invocation" (Encoding.UTF8.GetBytes(attach.ToJsonString())) None
@@ -284,9 +284,9 @@ module EfficiencyAdmissionTests =
             let successor = review.Replace("\"revision\":0",$"\"revision\":{revision}")
             Assert.Contains("\"rejected\":0",submit path ($"review-{revision}") [successor])
             use response = JsonDocument.Parse(TelemetryStoreApplication.efficiencyAnalysisReconcile path approved principal (Some "A") |> unwrap)
-            let id = response.RootElement.GetProperty("requestIds")[0].GetString()
+            let id = (response.RootElement.GetProperty("requestIds")).[0].GetString()
             pending.Add(JsonNode.Parse(scalar path ($"SELECT canonical FROM efficiency_analysis_requests WHERE request_id='{id}';")))
-        let latestAuthority = (pending[3]["canonicalRequest"]["authority"]).DeepClone()
+        let latestAuthority = (pending.[3].["canonicalRequest"].["authority"]).DeepClone()
         for index in 0 .. 2 do
             let dispatchIdentity = $"analyst-dispatch-{index}"
             let event = analystDispatch.Replace("analyst-dispatch",dispatchIdentity).Replace("\"dispatchId\":\"analyst\"",$"\"dispatchId\":\"analyst-{index}\"")
