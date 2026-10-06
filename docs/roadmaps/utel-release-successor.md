@@ -227,5 +227,8 @@ pending batches with no replay or quarantine and verified zero remaining in 2.85
 the subsequent empty drain also verified zero remaining with no replay or quarantine.
 The settled schema 13 sanitized export publishes five eligible approved completed groups at
 [feed commit `279f195…`](https://github.com/FS-GG/.github/commit/279f19561559238b49bed73f5956cd9881296f59),
-with immutable bytes, public revision and current-branch readback verified. Pages selection and
-event adoption remain pending; unknown Governance runtime coverage is not promoted to completion.
+with immutable bytes, public revision and current-branch readback verified. Activation then verified
+[feed commit `7a4f81d…`](https://github.com/FS-GG/.github/commit/7a4f81d15a5d1cbb765ce78d8a8e5f4bfc13c2a5)
+and authorized event publication. User units are installed inert; timer recurrence is unavailable
+without a user bus. Pages selection/deployed readback remains pending, and unknown Governance
+runtime coverage is not promoted to completion.

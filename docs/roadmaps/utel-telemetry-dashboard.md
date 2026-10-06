@@ -151,5 +151,10 @@ verified immutable bytes, payload revision and the current `telemetry-data-curre
 The 35,759-byte payload has SHA256 `7b92ceaac1ae997307116533a45ce73bf10d2e8c80cb944c653ec5bfa5f797de`
 and public revision `4b2708f0ec95012121da3b77304682a225d15f5fa9bbc448f8a48985fe2b015a`.
 Governance runtime coverage remains unknown, so the corrected CI attribution does not itself
-establish an eligible completed group. Pages selector delivery/deployment and event activation
-remain pending; feed publication does not establish a live page update or recurring publication.
+establish an eligible completed group. Activation subsequently verified [feed commit `7a4f81d…`](https://github.com/FS-GG/.github/commit/7a4f81d15a5d1cbb765ce78d8a8e5f4bfc13c2a5)
+at public revision `3a65e4c90b6ed798ca43368f7dfb387ae3aaf3cbe646fa8e8ce23a490711a7d3`
+and authorized the event publisher, with six approved labels and five eligible published groups.
+It settled in 8.000 seconds with clean custody and no resource failure. User units are installed
+inert; timer recurrence is unavailable because the user bus is absent. Pages selector delivery
+and deployed readback remain pending. Neither feed receipt establishes a live page update,
+timer recurrence or complete runtime coverage.

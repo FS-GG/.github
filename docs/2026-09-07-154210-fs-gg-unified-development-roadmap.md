@@ -56,7 +56,7 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
-**2026-10-06: Coherent telemetry 0.98.0 published and local attribution corrected; dashboard activation remains pending.**
+**2026-10-06: Coherent telemetry 0.98.0 published and local attribution corrected; event publication active; Pages adoption remains pending.**
 [Publisher 37434982959/1](https://github.com/FS-GG/.github/actions/runs/37434982959)
 promoted CLI, Kit and Drivers 0.98.0 from protected source
 `3d4f7e9c6337fb020e269e632653de0faeef6d72`. Root accepted the retained final readback:
@@ -73,8 +73,11 @@ failure. The supported drain accepted both pending spool batches with no replay 
 status now reports zero remaining batches. The settled schema 13 sanitized export contains five
 eligible approved completed groups, zero pending batches and no dirty items. Publication at
 [feed commit `279f195…`](https://github.com/FS-GG/.github/commit/279f19561559238b49bed73f5956cd9881296f59)
-verified immutable bytes, payload revision and the current branch. Pages selection/deployment
-and event publisher activation remain pending. Governance runtime coverage remains unknown;
+verified immutable bytes, payload revision and the current branch. Activation then verified
+[feed commit `7a4f81d…`](https://github.com/FS-GG/.github/commit/7a4f81d15a5d1cbb765ce78d8a8e5f4bfc13c2a5)
+and authorized event publication. User units are installed inert; timer recurrence is unavailable
+because the user bus is absent. Pages selection/deployment remains pending.
+Governance runtime coverage remains unknown;
 the attribution correction alone does not make its group completion-eligible. UTEL remains open.
 
 **2026-10-06: Coordination source 2 helper dependency delivered; fresh P4 producers remain pending.**
