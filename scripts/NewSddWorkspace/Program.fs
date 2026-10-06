@@ -2678,22 +2678,24 @@ let private parseRetrofit (argv: string list) : Result<RetrofitOptions, string> 
 
 /// Resolve selected V2 bytes before any creator effects. All transport here is immutable raw
 /// producer content; no adapter/installed execution or GitHub resource operation is performed.
-let private prepareProductBoard authority scaffoldSucceeded target repository bindingPath kitRef =
+let private prepareProductBoard generatedManifest authority scaffoldSucceeded target repository bindingPath kitRef =
     match repository, bindingPath, kitRef with
     | Some repo, Some path, Some revision ->
         try
             ProductBoard.validateOrigin authority scaffoldSucceeded target repo
                 (runProcessIn (Some target) false "git")
             |> function Ok() -> () | Error error -> invalidOp error
-            ProductBoard.prepare target repo revision (File.ReadAllText path)
-                (fun relative -> fetchText (sprintf "https://raw.githubusercontent.com/FS-GG/.github/%s/%s" revision relative))
+            let fetch relative = fetchText (sprintf "https://raw.githubusercontent.com/FS-GG/.github/%s/%s" revision relative)
+            match generatedManifest with
+            | Some snapshot -> ProductBoard.prepareGenerated snapshot target repo revision (File.ReadAllText path) fetch
+            | None -> ProductBoard.prepare target repo revision (File.ReadAllText path) fetch
         with error -> Error error.Message
     | _ -> Error "V2 integration requires --repo, --board-binding and --board-kit-ref together"
 
-let private wireCoordination authority kitRef (opts: Options) =
+let private wireCoordination generatedManifest authority kitRef (opts: Options) =
     if opts.BoardBinding.IsNone && opts.BoardKitRef.IsNone then wireLegacyCoordination kitRef opts
     else
-        prepareProductBoard authority true opts.Target opts.WorkspaceRepo opts.BoardBinding opts.BoardKitRef
+        prepareProductBoard generatedManifest authority true opts.Target opts.WorkspaceRepo opts.BoardBinding opts.BoardKitRef
         |> Result.bind (ProductBoard.apply opts.Target)
         |> function Ok() -> Succeeded | Error error -> Failed error
 
@@ -2851,11 +2853,12 @@ let private run (opts: Options) : int =
     header opts
 
     let authority = ProductBoard.captureOriginAuthority opts.Target
+    let freshTarget = ProductBoard.captureFreshScaffoldTarget opts.Target
     let productPreflight =
         if opts.BoardBinding.IsSome || opts.BoardKitRef.IsSome then
             if not opts.Coordinate || opts.BoardOwner <> "FS-GG" || opts.BoardTitle <> "Coordination" || opts.ChoreLocks.IsSome || opts.PublicBoard.IsSome || not (List.isEmpty opts.TrustedWriters) then
                 Error "V2 binding cannot be combined with legacy coordination/access options"
-            else prepareProductBoard authority false opts.Target opts.WorkspaceRepo opts.BoardBinding opts.BoardKitRef |> Result.map ignore
+            else prepareProductBoard None authority false opts.Target opts.WorkspaceRepo opts.BoardBinding opts.BoardKitRef |> Result.map ignore
         else Ok()
     if Result.isError productPreflight then
         let error = productPreflight |> function Error message -> message | Ok _ -> ""
@@ -2877,6 +2880,7 @@ let private run (opts: Options) : int =
     else
         let results = ResizeArray<StepResult>()
         let mutable fatal = false
+        let mutable generatedManifest = None
 
         // 1 · fetch descriptor (fatal on failure)
         step 1 "fetch provider descriptor"
@@ -3003,7 +3007,16 @@ let private run (opts: Options) : int =
                      @ lifecycleParam
                      @ [ "--param"; sprintf "productName=%s" opts.Product ])
 
-            if code = 0 then
+            let capture =
+                if code <> 0 then Error(sprintf "scaffold failed (exit %d)" code)
+                else
+                    match freshTarget with
+                    | Some captured when opts.BoardBinding.IsSome ->
+                        ProductBoard.captureGeneratedToolManifest captured opts.Target true |> Result.map Some
+                    | _ -> Ok None
+            match capture with
+            | Ok snapshot ->
+                generatedManifest <- snapshot
                 AnsiConsole.MarkupLine(
                     sprintf "  [green]✓[/] SDD skeleton + %s workspace scaffolded" (Markup.Escape opts.Template)
                 )
@@ -3013,13 +3026,13 @@ let private run (opts: Options) : int =
                         Title = "scaffold"
                         Outcome = Succeeded
                     }
-            else
-                AnsiConsole.MarkupLine(sprintf "  [red]✗[/] scaffold failed (exit %d)" code)
+            | Error error ->
+                AnsiConsole.MarkupLine(sprintf "  [red]✗[/] %s" (Markup.Escape error))
 
                 results.Add
                     {
                         Title = "scaffold"
-                        Outcome = Failed(sprintf "exit %d" code)
+                        Outcome = Failed error
                     }
 
                 fatal <- true
@@ -3114,7 +3127,7 @@ let private run (opts: Options) : int =
                     .Status()
                     .Start(
                         sprintf "vendoring the coordination kit for %s/%s…" opts.BoardOwner opts.BoardTitle,
-                        fun _ -> wireCoordination authority "main" opts
+                        fun _ -> wireCoordination generatedManifest authority "main" opts
                     )
 
             (match outcome with
@@ -3299,7 +3312,7 @@ let private runRetrofit (opts: RetrofitOptions) : int =
             AnsiConsole.MarkupLine "[red]product V2 refused:[/] legacy chore-lock wiring is incompatible"
             2
         else
-            match prepareProductBoard (ProductBoard.captureOriginAuthority opts.Target) false opts.Target opts.WorkspaceRepo opts.BoardBinding opts.BoardKitRef with
+            match prepareProductBoard None (ProductBoard.captureOriginAuthority opts.Target) false opts.Target opts.WorkspaceRepo opts.BoardBinding opts.BoardKitRef with
             | Error error ->
                 AnsiConsole.MarkupLine(sprintf "[red]%s[/]" (Markup.Escape error))
                 2

@@ -29,6 +29,19 @@ module ProductBoard =
     /// Invocation-start Git authority; fresh scaffold effects do not turn it into retained authority.
     type OriginAuthority = RetainedGit | FreshTarget
 
+    /// Opaque authority captured only for a target absent before invocation effects.
+    type FreshScaffoldTarget
+
+    /// Exact successful SDD-owned manifest snapshot; callers cannot construct this authority.
+    type GeneratedToolManifest
+
+    val captureFreshScaffoldTarget: target: string -> FreshScaffoldTarget option
+
+    /// Capture complete bytes and mode immediately after this successful fresh scaffold.
+    val captureGeneratedToolManifest:
+        authority: FreshScaffoldTarget -> target: string -> scaffoldSucceeded: bool ->
+        Result<GeneratedToolManifest, string>
+
     /// Read Git metadata presence before scaffold effects without changing the target.
     val captureOriginAuthority: target: string -> OriginAuthority
 
@@ -45,6 +58,12 @@ module ProductBoard =
     val prepare:
         target: string -> repository: string -> kitRevision: string -> bindingJson: string ->
         fetch: (string -> Result<string, string>) -> Result<Plan, string>
+
+    /// Fresh-only replacement requires the opaque, unchanged manifest snapshot. Other tool entries
+    /// and atomic preimages are preserved; ordinary prepare remains strict for existing owners.
+    val prepareGenerated:
+        snapshot: GeneratedToolManifest -> target: string -> repository: string -> kitRevision: string ->
+        bindingJson: string -> fetch: (string -> Result<string, string>) -> Result<Plan, string>
 
     /// Recheck every preimage before local installation. Retain modes and restore prior file bytes
     /// on failure; incomplete rollback is reported explicitly. An empty plan performs no writes.
