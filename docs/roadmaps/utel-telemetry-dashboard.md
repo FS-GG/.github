@@ -137,7 +137,39 @@ available for complication counts; `/2` remains unchanged. Native qualification 
 91 tests, and its exact source passed six genuine producer/publisher UID-isolation checks.
 
 The selected destination is `telemetry-data-current/host.json`. The legacy store is not a
-migration dependency. The source exporter is ready, but coherent publication, verified installed
-adoption, backed-up schema migration and the actual canonical export remain required. Publish
-and read back the new feed before landing the separate Pages selector. These source tests do
-not establish fresh completed-item counts, recurring publication or a live dashboard update.
+migration dependency. Coherent 0.98.0 publication is verified, and the existing installation's
+payload and runtime closure are accepted without a global switch. The backed-up canonical
+store now uses schema 13 with all 55 tables preserved. Supported Governance #444 correction
+joins 204 targets to GOV-423-C3, preserves the original raw facts and all 144 native outcomes,
+and verifies one audit entry and an idempotent retry. These are local migration and correction
+receipts, not public dashboard adoption.
+
+The supported drain accepted both pending spool batches, with no replay or quarantine, and
+verified zero remaining in 2.857 seconds with clean custody and no resource or storage failure.
+A subsequent empty drain verified zero accepted, replayed, quarantined and remaining batches.
+The settled schema 13 sanitized export has five eligible approved completed groups, zero pending
+batches and no dirty items. [Feed commit `279f195…`](https://github.com/FS-GG/.github/commit/279f19561559238b49bed73f5956cd9881296f59)
+verified immutable bytes, payload revision and the current `telemetry-data-current` branch.
+The 35,759-byte payload has SHA256 `7b92ceaac1ae997307116533a45ce73bf10d2e8c80cb944c653ec5bfa5f797de`
+and public revision `4b2708f0ec95012121da3b77304682a225d15f5fa9bbc448f8a48985fe2b015a`.
+Governance runtime coverage remains unknown, so the corrected CI attribution does not itself
+establish an eligible completed group. Activation subsequently verified [feed commit `7a4f81d…`](https://github.com/FS-GG/.github/commit/7a4f81d15a5d1cbb765ce78d8a8e5f4bfc13c2a5)
+at public revision `3a65e4c90b6ed798ca43368f7dfb387ae3aaf3cbe646fa8e8ce23a490711a7d3`
+and authorized the event publisher, with six approved labels and five eligible published groups.
+It settled in 8.000 seconds with clean custody and no resource failure. User units are installed
+inert; timer recurrence is unavailable because the user bus is absent.
+
+[Selector PR #4266](https://github.com/FS-GG/.github/pull/4266) merged at
+`d97ad7eb485979afbc4fabfe8282971d8c4261c9`. [Pages run 37447862730](https://github.com/FS-GG/.github/actions/runs/37447862730)
+passed test, build and deployment. HTTP 200 deployed readback at 10:15:51 UTC on 2026-10-06
+joined the exact source, feed commit `7a4f81d…`, public revision `3a65e4c…` and immutable host
+payload, with five published/eligible groups and zero dirty or unmapped groups. The current
+canonical-feed migration and deployed page are accepted; the legacy cards are no longer the
+selected feed.
+
+The active event receipt refreshes publication after completed-root skill-finish/postterminal
+records. CI reconciliation does not emit those events, so CI-only updates are not automatically
+published through this path. The supported CI-to-event refresh proposal remains pending.
+The existing Pages schedule collects public sources on GitHub's best-effort cadence; it does not
+repair missing producer events. Timer recurrence without a user bus and complete Governance
+runtime coverage remain open. This migration does not close those limits or whole UTEL.

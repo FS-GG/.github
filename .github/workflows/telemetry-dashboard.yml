@@ -73,7 +73,7 @@ jobs:
           REQUESTED_HOST_REVISION: ${{ inputs.host_revision }}
         run: |
           rc=0
-          current="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/telemetry-data" --jq .object.sha 2>host-error.txt)" || rc=$?
+          current="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/telemetry-data-current" --jq .object.sha 2>host-error.txt)" || rc=$?
           if [ "$rc" -ne 0 ]; then
             if grep -q 'HTTP 404' host-error.txt; then
               current=""
@@ -169,7 +169,7 @@ jobs:
             echo "deploy=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          current="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/telemetry-data" --jq .object.sha)"
+          current="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/telemetry-data-current" --jq .object.sha)"
           if [ "$current" = "$REQUESTED_HOST_REVISION" ]; then
             echo "deploy=true" >> "$GITHUB_OUTPUT"
           else
