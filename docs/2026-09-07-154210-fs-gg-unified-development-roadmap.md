@@ -82,15 +82,19 @@ the earlier adapter-pin and report-framing failures remain retained.
 The [owning roadmap](roadmaps/diagnostic-execution.md) keeps .4 open: genuine provider artifact
 intake, private facts/grants, publication and installed receiver adoption remain separate gates.
 
-**2026-10-06: Creator016 integrated source/private package qualified; delivery and adoption pending.**
+**2026-10-06: Creator016 source delivered; publication and installed adoption pending.**
 The [owning board plan](coordination/2026-09-29-coordination-v2-board-design.md) records
 PR4232's local successor `ddd79655` and genuine `260bfe`/`7e8` integration ancestry.
 Fresh canonical generation passed four commands; separate Creator qualification passed
 all six phases and verified **59 built files / 11 projects / 81 authentic published0971
 bodies**. Source/cache/runtime checks and owned cleanup passed; the earlier frozen0970
-stage refusal and all original attempts remain preserved. Exact-head hosted/coherent CI
-and protected merge are pending, with the separate Contracts7.6source/7.5.2public C4/GOV-C3
-publication fence unchanged. Creator016 publication, fresh/retained installed journeys and
+stage refusal and all original attempts remain preserved.
+[PR4232](https://github.com/FS-GG/.github/pull/4232) merged at
+`09d779330c639b90303574f884e415ea1f5cf4b4` after exact-head coherent validation
+of `2968bbf9de67b49feb933ce19a0a14e32c84127b`. Its final registry projections passed
+the production check and 40 mutation controls. The earlier native receipts retain their
+original `ddd79655` scope; they do not qualify every byte of the later projection changes.
+The separate Contracts7.6source/7.5.2public C4/GOV-C3 publication fence is unchanged. Creator016 publication, fresh/retained installed journeys and
 whole .5/.6 adoption remain open. Published015 stays accepted history; local package proof
 and this projection do not establish installed support or whole-programme completion.
 

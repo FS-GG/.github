@@ -352,8 +352,11 @@ and coordination097 artifacts stay immutable. Offline controls cover provenance/
 byte/mode changes and late rollback. Native qualification, exactsource016 publication and actual
 fresh/retained journeys still require separate root admissions.
 
-**2026-10-06: Creator016 integrated source and private package qualified; delivery pending.**
-[PR4232](https://github.com/FS-GG/.github/pull/4232)'s local successor
+**2026-10-06: Creator016 source delivered; publication and installed adoption pending.**
+[PR4232](https://github.com/FS-GG/.github/pull/4232) merged at
+`09d779330c639b90303574f884e415ea1f5cf4b4` after coherent validation of final head
+`2968bbf9de67b49feb933ce19a0a14e32c84127b`. The final registry projection repair passed
+its production check and 40 mutation controls. Historical local successor
 `ddd79655f6b25f51636cd4f5c2fb12d299af89c1` descends through the genuine
 `260bfe`/`7e8` integration merge `b78b3c7`. It preserves current telemetry0971 and
 selects authentic published coordination **0.97.1** dependency source/archive/member pins;
@@ -370,10 +373,11 @@ both windows had no resource or storage failure. Original terminal SHA-256s are
 `7cb5c38af81a032fcb2946fc36064d8a53de386e07c23a111edfa9bdbe1b2c9d` and
 `fc3b4888a93aa77cfdbb126f092fe193c3d7e607c07e20dd38fc94a851ab1c64`.
 
-These are local source/private-package results, not protected delivery,016 publication or
-installed product journeys. Exact-head hosted/coherent CI and merge remain pending, including
-the independent Contracts **7.6.0** source / **7.5.2** public-feed fence under SDD928-C4 and
-GOV423-C3. Published015 and earlier attempts remain immutable; independent org-feed403
+These native results retain their original `ddd79655` source/private-package scope;
+the later registry projections do not inherit its complete source seal. Protected source
+delivery is now established separately by the merged PR and exact-head coherent validation.
+Creator016 publication and installed product journeys remain pending, with the independent
+Contracts **7.6.0** source / **7.5.2** public-feed fence under SDD928-C4 and GOV423-C3. Published015 and earlier attempts remain immutable; independent org-feed403
 visibility stays unknown alongside accepted hosted observations. Fresh/retained installed016
 receivers, consumer switch and retirement remain open under .6; no whole .5/.6 closure is claimed.
 
