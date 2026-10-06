@@ -5,10 +5,12 @@
 ## Current successor route
 
 The [successor roadmap](../roadmaps/utel-release-successor.md) owns the selected operating window.
-Current source selects version **0.97.1**, promoted predecessor **0.97.0** from
-`2ab0c0ff9f37bdec9a11ba3604ebdc230711934f`, and fresh protected Authority journal `utel-rel-13`.
-The completed 0.97.0 release and `board-v2-product-coherent-097` journal remain immutable.
-Source qualification alone does not publish that version.
+Current source and verified promoted set are **0.98.0**, from `3d4f7e9c6337fb020e269e632653de0faeef6d72`
+under protected Authority journal `utel-rel-15` and publisher `37434982959`.
+The predecessor 0.97.1 from `99ea75286f5c3cea2a261fef4e5b45cd70378185`, consumed
+`utel-rel-13`, completed 0.97.0 and deferred unpublished 0.97.2/`utel-rel-14` remain immutable.
+Installed schema 13 migration, supported attribution correction and current dashboard feed
+export/activation remain separate obligations; source qualification never substitutes for publication.
 
 Dispatch `release-successor-candidate.yml` once on accepted current `main`. Authenticate the successful
 first-attempt run and the original raw Actions archive, including exactly three packages, release manifest,

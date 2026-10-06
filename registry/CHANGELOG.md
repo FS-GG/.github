@@ -19,6 +19,8 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-10-06** — Reconcile `coord-engine` published package-version/tag to coherent 0.98.0 (github; UTEL-REL-15, PR #4264): verified producer `3d4f7e9c6337fb020e269e632653de0faeef6d72`, original candidate `37433117226`/artifact `11397568554`/raw SHA256 `ac322752d09cfdbc7c9fc209448dba0b9d95c56af979bedd876fa3d97c2cd650`, publisher `37434982959` and journal `utel-rel-15` establish all three members on both feeds and promoted channel content `sha256:15a3bc4c133216cde77d1fef5b639d1842588a5754802eaa11b098e7b62c2a06`. Preserve prior 0.97.1/consumedutel-rel-13 and deferred unpublished 0.97.2/utel-rel-14. Installed schema migration, attribution correction and dashboard publication/adoption remain separate.
+
 - **2026-10-06** — Reconcile only `fsgg-contracts` SOURCE `version` to7.6.0 from SDD PR1099 merge `3297d3298fdd35579d9bcb09c65fdb7ad423a568` (github; PR #4264, source-coherence #741). Published `package-version` remains7.5.2; no7.6 feed availability or package/consumer pin change is claimed. Regenerate source/published projections independently; coherent Contracts publication remains pending.
 
 - **2026-10-06** — Prepare coherent0.98.0 telemetry successor (github; UTEL-01/UTEL-REL-15): select additive schema13 attribution correction and native compact/3 report inputs after exact-source qualification. Published package/tag stays accepted0.97.1 at `99ea75286f5c3cea2a261fef4e5b45cd70378185`; fresh journal `utel-rel-15` is source-selected only. Preserve consumed0.97.1/utel-rel-13 and deferred unpublished0.97.2/utel-rel-14. No candidate, effect or installed migration is established by this selection.

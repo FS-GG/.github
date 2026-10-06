@@ -30,6 +30,8 @@ advances the pin to that CLI.
 
 ## Entries
 
+- **2026-10-06** — Reconcile the operator-scoped `publishing-and-deployment` row from the local driver manifest after accepted coherent 0.98.0 publication (github; UTEL-REL-15, PR #4264). Both skill variants record the verified published inventory and preserved release/recovery boundaries. Refresh body/tree hashes only; no schema, materialization predicate or package release changes. Installed migration and dashboard activation remain separate.
+
 - **2026-10-06** — Reconcile the operator publishing-and-deployment digest after source-only Contracts7.6.0 projection (github; PR #4264). Generated inventory preserves published7.5.2 independently; mirrored roots, manifest and registry row agree. No delivered Kit/Drivers skill or materialization predicate change.
 
 - **2026-10-06** — Reconcile the operator publishing-and-deployment manifest and registry digest after coherent0.98 source preparation (github; UTEL-01/UTEL-REL-15). Exact unchanged registry renderer and pure manifest emitter derive both skill roots; published frontier stays0.97.1. No materialized Kit/Drivers roster change or receiver acceptance follows.
