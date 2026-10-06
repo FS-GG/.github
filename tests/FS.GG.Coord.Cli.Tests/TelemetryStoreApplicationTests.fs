@@ -3295,6 +3295,17 @@ COMMIT;
         command.CommandText <- sql
         string (command.ExecuteScalar())
 
+    let private correctionSnapshot (json: string) =
+        use envelope = JsonDocument.Parse json
+        Assert.Equal("fsgg.telemetry.item-detail/2", envelope.RootElement.GetProperty("schema").GetString())
+        use compressed = new MemoryStream(Convert.FromBase64String(envelope.RootElement.GetProperty("canonicalSnapshotGzip").GetString()))
+        use decompressor = new GZipStream(compressed, CompressionMode.Decompress)
+        use decoded = new MemoryStream()
+        decompressor.CopyTo decoded
+        let bytes = decoded.ToArray()
+        Assert.Equal(envelope.RootElement.GetProperty("revision").GetString(), CanonicalJson.sha256 bytes)
+        JsonDocument.Parse(Encoding.UTF8.GetString bytes)
+
     let private correctionFixture fullPopulation =
         let cleanup, path = root ()
         TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
@@ -3355,7 +3366,17 @@ COMMIT;
         Assert.Contains("\"active\":true", history)
         Assert.Equal(Error [ "corrected-native-delivery-source-unsupported" ], TelemetryStoreApplication.resolveNativeDeliveryCandidate path approved ("routine-delivery:" + request.Prior.ItemId))
         Assert.Contains(request.Effective.ItemId, TelemetryStoreApplication.itemDetail path approved request.Effective.ItemId |> unwrap)
-        Assert.Contains(request.Effective.ItemId, TelemetryStoreApplication.dashboardSnapshot path approved None |> unwrap)
+        use snapshot = TelemetryStoreApplication.dashboardSnapshot path approved None |> unwrap |> correctionSnapshot
+        let items = snapshot.RootElement.GetProperty("items").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList
+        Assert.Contains(request.Effective.ItemId, items)
+        Assert.DoesNotContain(request.Prior.ItemId, items)
+        let outcomes = snapshot.RootElement.GetProperty("outcomes").EnumerateArray() |> Seq.toList
+        let delivered = Assert.Single outcomes
+        Assert.Equal(request.Effective.ItemId, delivered.GetProperty("item_id").GetString())
+        Assert.Equal(request.Head, delivered.GetProperty("head").GetString())
+        Assert.Equal(request.MergeCommit, delivered.GetProperty("merge_commit").GetString())
+        let currentSummary = snapshot.RootElement.GetProperty("summaries").EnumerateArray() |> Seq.find (fun row -> row.GetProperty("item").GetString() = request.Effective.ItemId)
+        Assert.Equal((if fullPopulation then 10L else 1L), currentSummary.GetProperty("factCount").GetInt64())
 
     [<Fact>]
     let ``UTEL-06.8 rollback stale concurrent predecessor cross-store and content conflicts have zero partial writes`` () =
@@ -3382,8 +3403,15 @@ COMMIT;
         Assert.Equal("0", correctionSql path $"SELECT count(*) FROM current_ingest_facts WHERE item_id='{request.Effective.ItemId}';")
         Assert.Equal("10", correctionSql path $"SELECT count(*) FROM ingest_facts WHERE item_id='{request.Prior.ItemId}';")
         Assert.Contains("\"factCount\":0", TelemetryStoreApplication.summary path approved request.Effective.ItemId |> unwrap)
-        let currentSnapshot = TelemetryStoreApplication.dashboardSnapshot path approved None |> unwrap
-        Assert.Contains(chainedRequest.Effective.ItemId, currentSnapshot)
+        use currentSnapshot = TelemetryStoreApplication.dashboardSnapshot path approved None |> unwrap |> correctionSnapshot
+        let currentItems = currentSnapshot.RootElement.GetProperty("items").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList
+        Assert.Contains(chainedRequest.Effective.ItemId, currentItems)
+        Assert.DoesNotContain(request.Prior.ItemId, currentItems)
+        Assert.DoesNotContain(request.Effective.ItemId, currentItems)
+        let currentOutcome = Assert.Single(currentSnapshot.RootElement.GetProperty("outcomes").EnumerateArray() |> Seq.toList)
+        Assert.Equal(chainedRequest.Effective.ItemId, currentOutcome.GetProperty("item_id").GetString())
+        Assert.Contains("\"deliveries\":0", TelemetryStoreApplication.ciSummary path approved request.Effective.ItemId |> unwrap)
+        Assert.Contains("\"deliveries\":1", TelemetryStoreApplication.ciSummary path approved chainedRequest.Effective.ItemId |> unwrap)
         Assert.Equal(Error [ "ci-correction-predecessor-conflict" ], TelemetryStoreApplication.ciCorrectionPlan path approved { chainedRequest with CorrectionId = "stale" })
 
     [<Fact>]
@@ -3392,14 +3420,32 @@ COMMIT;
         use cleanup = cleanup
         let plan = TelemetryStoreApplication.ciCorrectionPlan path approved request |> unwrap |> Encoding.UTF8.GetBytes
         TelemetryStoreApplication.ciCorrect path approved plan |> unwrap |> ignore
+        let rawBefore = correctionSql path "SELECT content_digest || canonical FROM ingest_facts;"
+        let ledgerBefore = correctionSql path "SELECT plan_digest || plan FROM ci_attribution_corrections;"
+        let evidenceBefore = correctionSql path "SELECT digest || canonical FROM ci_correction_evidence;"
         let original = nativeOutcome request.Prior.ItemId 2L "delivered" "delivered" "2026-09-08T10:04:02Z"
         Assert.True(TelemetryStoreApplication.ingest path approved (operationalBatch "late-original" request.Prior.ItemId [ original ]) |> Result.isError)
         let corrected = nativeOutcome request.Effective.ItemId 2L "delivered" "delivered" "2026-09-08T10:04:02Z"
         Assert.True(TelemetryStoreApplication.ingest path approved (operationalBatch "late-corrected" request.Effective.ItemId [ corrected ]) |> Result.isError)
         Assert.Equal("1", correctionSql path "SELECT count(*) FROM native_item_outcomes;")
-        let independent = corrected.Replace(request.Head, String.replicate 40 "c")
+        Assert.Equal(request.Effective.ItemId, correctionSql path "SELECT item_id FROM native_item_outcomes;")
+        Assert.Equal(rawBefore, correctionSql path "SELECT content_digest || canonical FROM ingest_facts;")
+        Assert.Equal(ledgerBefore, correctionSql path "SELECT plan_digest || plan FROM ci_attribution_corrections;")
+        Assert.Equal(evidenceBefore, correctionSql path "SELECT digest || canonical FROM ci_correction_evidence;")
+        Assert.Empty(Directory.GetFiles(Path.Combine(path, "inbox"), "*.ready", SearchOption.AllDirectories))
+        let rejected = Directory.GetFiles(Path.Combine(path, "quarantine"), "*.rejected", SearchOption.AllDirectories)
+        Assert.Equal(2, rejected.Length)
+        let reasons = rejected |> Array.map (fun file -> File.ReadAllText(file + ".reason"))
+        Assert.Contains("ci-attribution-corrected-fact-is-immutable", reasons)
+        Assert.Contains("ci-attribution-corrected-candidate-reconcile-refused", reasons)
+        let distinctHead = String.replicate 40 "c"
+        let independent = corrected.Replace(request.Head, distinctHead)
         TelemetryStoreApplication.ingest path approved (operationalBatch "distinct-head" request.Effective.ItemId [ independent ]) |> unwrap |> ignore
         Assert.Equal("2", correctionSql path "SELECT count(*) FROM native_item_outcomes;")
+        Assert.Equal("1", correctionSql path $"SELECT count(*) FROM native_item_outcomes WHERE head='{request.Head}' AND item_id='{request.Effective.ItemId}';")
+        Assert.Equal("1", correctionSql path $"SELECT count(*) FROM native_item_outcomes WHERE head='{distinctHead}' AND item_id='{request.Effective.ItemId}';")
+        Assert.Equal(ledgerBefore, correctionSql path "SELECT plan_digest || plan FROM ci_attribution_corrections;")
+        Assert.Equal(evidenceBefore, correctionSql path "SELECT digest || canonical FROM ci_correction_evidence;")
 
     [<Fact>]
     let ``UTEL-06.8 schema12 migration and stale digest refuse before mutation`` () =

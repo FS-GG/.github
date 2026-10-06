@@ -607,3 +607,7 @@ Producer replacements of corrected facts and new reconcile outcomes for the same
 candidate refuse. The unchanged canonical evidence remains available in correction history. Consumers requiring
 an immutable native-source item binding receive `corrected-native-delivery-source-unsupported`; this local
 correction does not qualify a corrected source for LEARN acceptance.
+
+A queued local batch hitting either exact permanent correction fence retains its bytes and explicit refusal
+reason in the existing quarantine. That ingest call still reports an error, and the rejected ready file cannot
+poison later independent batches. Unknown or transient errors keep their existing retry behavior.

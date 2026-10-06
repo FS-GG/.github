@@ -3181,6 +3181,15 @@ AND NOT EXISTS(SELECT 1 FROM budget_attribution_facts f WHERE f.item_id=budget_b
                         | Ok batch ->
                             match ingestBatchLocked root hooks.BeforeCommit (not reevaluated) batch with
                             | Error errors when
+                                errors |> List.exists (fun error ->
+                                    error = "ci-attribution-corrected-fact-is-immutable"
+                                    || error = "ci-attribution-corrected-candidate-reconcile-refused") ->
+                                // These exact permanent conflicts retain their evidence and
+                                // explicit refusal without poisoning later independent batches.
+                                quarantine root ready errors
+                                quarantined <- quarantined + 1
+                                failures <- (String.concat "; " errors) :: failures
+                            | Error errors when
                                 errors
                                 |> List.exists (fun error ->
                                     error.Contains("identity conflict", StringComparison.Ordinal)
