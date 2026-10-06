@@ -88,6 +88,22 @@ selected gates in the [owning plan](https://github.com/FS-GG/FS.GG.Coordination/
 Historical source1 failures and unknown cleanup remain preserved; this is bounded
 source closure, not whole V2-LANG completion.
 
+**2026-10-06: Repaired public receiver caller source delivered.**
+[Rendering #1397](https://github.com/FS-GG/FS.GG.Rendering/pull/1397) merged exact
+`bc9161f015cc91a0dc805d8e006362d9728543d8` as
+`998f4e41ec0f2822e927d311ff534238d12785b1` at 17:45:31 UTC, with 22 checks
+passed and one skipped. Both the reusable workflow and source checkout now
+select protected Templates `208e5bffe99153375f7d3e2e1c84653104883cd3`, which
+contains the admitted codec reference repair. The explicit public Rendering
+0.32.1 mode, read-only permissions, original producer custody joins, forced PR
+preflight and existing 35-minute receiver bound remain unchanged; 12 negative
+wrapper controls passed. This closes the repaired caller source step within
+SVG-COHERENCE-01.8. A new full request can now name this protected caller through
+an exact branch/readback, but has not been dispatched or accepted. The first
+failed full run and its partial proofs remain retained below. Full public-input
+qualification, Templates successor publication and final installed/default/wizard
+acceptance remain open, alongside broader adoption and host GPU qualification.
+
 **2026-10-06: Public receiver codec reference repair delivered.**
 The first full public-input [run 37498421148/a1](https://github.com/FS-GG/FS.GG.Rendering/actions/runs/37498421148)
 failed before locked restore because the validator rejected the codec probes’
@@ -102,7 +118,7 @@ were not completed. The preceding raw-SHA dispatch request was refused with HTTP
 passed and four skipped. Its validator admits only the probes’ exact existing
 local edges and rejects conditional ancestors or alternative project references;
 25 focused pure controls and ordinary source CI passed. This closes the repair
-source step within SVG-COHERENCE-01.8. The Rendering caller must select this
+source step within SVG-COHERENCE-01.8. At that repair checkpoint, the Rendering caller still needed to select this
 protected receiver before a new full request. Full public-input qualification,
 Templates successor publication and final installed/default/wizard acceptance
 remain open, alongside broader adoption and host GPU qualification.
