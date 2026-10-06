@@ -48,6 +48,10 @@ class ExportTests(unittest.TestCase):
         with mock.patch.object(D.time, 'monotonic', return_value=100), mock.patch.object(D, 'engine_json') as engine:
             with self.assertRaises(D.HostSourceError): D.read_efficiency_export('/private/store', 'engine', 'a'*64, 100)
             engine.assert_not_called()
+        for deadline in (float('nan'), float('inf'), True, None):
+            with mock.patch.object(D, 'engine_json') as engine:
+                with self.assertRaises(D.HostSourceError): D.read_efficiency_export('/private/store', 'engine', 'a'*64, deadline)
+                engine.assert_not_called()
 
     def test_reader_is_inactive_and_never_replaces_source_deliveries(self):
         self.assertEqual(D.EFF.unavailable()['status'], 'unavailable')

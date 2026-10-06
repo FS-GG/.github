@@ -10,6 +10,7 @@ import gzip
 import hashlib
 import io
 import json
+import math
 import os
 import pathlib
 import re
@@ -259,6 +260,7 @@ def read_efficiency_export(store, engine, snapshot_revision, deadline, config_pa
     retry here or spend a fresh timeout for each item. Base source delivery is
     independent from any unavailable or unsupported efficiency result.
     """
+    if isinstance(deadline, bool) or not isinstance(deadline, (int, float)) or not math.isfinite(deadline): raise HostSourceError('HOST_EFFICIENCY_DEADLINE')
     remaining = deadline - time.monotonic()
     if remaining <= 0: raise HostSourceError('HOST_EFFICIENCY_DEADLINE')
     args = ['telemetry', 'efficiency-export', '--snapshot-revision', snapshot_revision, '--store-root', store, '--max-items', '200', '--max-metrics', '1000']
