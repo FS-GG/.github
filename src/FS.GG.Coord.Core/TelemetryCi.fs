@@ -17,7 +17,7 @@ module TelemetryCi =
             ProducerStream: string
         }
 
-    /// Operator evidence plus exact delivery truth; never an observation or token record.
+    // Operator evidence plus exact delivery truth; never an observation or token record.
     type CorrectionRequest =
         {
             CorrectionId: string
