@@ -454,8 +454,8 @@ class Journal:
             os.close(lock)
 
 
-def prepare_claim(inspected, packet, claim_id, model_alias, dispatch_ref, authority, limit_support, claimed_at, schema):
-    """Prepare only; the canonical store owns principal resolution and CAS admission."""
+def prepare_claim_template(inspected, packet, claim_id, model_alias, authority, limit_support, claimed_at, schema):
+    """Private prelaunch descriptor; no guessed dispatch or canonical admission."""
     request = inspected['canonicalRequest']
     expected = key(packet['subject'], packet['evidenceDigest'])
     if (inspected['requestId'] != expected or request['requestId'] != expected
@@ -468,7 +468,20 @@ def prepare_claim(inspected, packet, claim_id, model_alias, dispatch_ref, author
                           expectedContentDigest=inspected['contentDigest']),
                  claimId=claim_id, modelAlias=model_alias, invocationRef=None,
                  authority=copy.deepcopy(authority), claimedAt=claimed_at,
-                 dispatchRef=copy.deepcopy(dispatch_ref), limitSupport=copy.deepcopy(limit_support))
+                 limitSupport=copy.deepcopy(limit_support))
+    descriptor_schema = copy.deepcopy(schema)
+    descriptor_schema['required'].remove('dispatchRef')
+    descriptor_schema['properties'].pop('dispatchRef')
+    schema_validate(value, descriptor_schema)
+    if len(encode(value)) > 16384:
+        raise ValueError('private claim template byte bound exceeded')
+    return value
+
+
+def prepare_claim(inspected, packet, claim_id, model_alias, dispatch_ref, authority, limit_support, claimed_at, schema):
+    """Prepare only; the canonical store owns principal resolution and CAS admission."""
+    value = prepare_claim_template(inspected, packet, claim_id, model_alias, authority, limit_support, claimed_at, schema)
+    value['dispatchRef'] = copy.deepcopy(dispatch_ref)
     schema_validate(value, schema)
     return value
 

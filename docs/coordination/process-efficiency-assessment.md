@@ -170,6 +170,28 @@ uses that canonical association to exclude the generated review from substantive
 review time, item identity or requested reviewer metadata alone does not establish authorship. Failed
 output without an accepted association remains unknown/provisional and cannot cause automatic retry.
 
+## Selected prelaunch claim source
+
+The explicit `telemetry runtime codex-exec --efficiency-claim-template PRIVATE_FILE` source
+route admits the generated prospective dispatch before launching Codex. The private owned `0600`
+template is bounded to 16 KiB and contains the frozen claim fields except `dispatchRef`.
+`prepare_claim_template` checks the exact current pending request and retained packet, with no
+placeholder dispatch or invocation. This incomplete descriptor cannot pass the full claim schema.
+
+The runtime generates one dispatch, publishes its prospective events, resolves the exact enrolled
+local config/repository/store binding, drains those events and asks the store to resolve the actual
+canonical reference and perform the existing claim CAS. A stale request, missing receipt, unresolved
+binding, malformed template or unavailable claim refuses before the child starts. The claim retains
+null `invocationRef`; only a later genuine started observation can support attachment. No second
+dispatch, new queue action or automatic retry is introduced. The ordinary runtime route has no
+prelaunch callback. Root's original wall deadline must cover the gate as well as launch and closure;
+this source change supplies no universal provider token cap.
+
+The store helper and actual-start admission guard are a coherent successor dependency. The new
+runtime source and its fake-child sequencing/refusal controls require their own qualification after
+integration. Prior reader/adapter qualification does not establish this gate, an installed queue or an
+actual admitted assessment pilot.
+
 ## Single-invocation pilot qualification
 
 The selected pilot is measured, with input and output token support marked `observed-only` and a

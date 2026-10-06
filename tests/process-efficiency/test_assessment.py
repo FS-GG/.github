@@ -69,6 +69,13 @@ class AssessmentTests(unittest.TestCase):
                          state='pending', claimId=None, invocationRef=None, canonicalRequest=request)
         claim = a.prepare_claim(inspected, packet, sample['claimId'], sample['modelAlias'], sample['dispatchRef'],
                                 sample['authority'], sample['limitSupport'], sample['claimedAt'], schema)
+        template = a.prepare_claim_template(inspected, packet, sample['claimId'], sample['modelAlias'],
+                                            sample['authority'], sample['limitSupport'], sample['claimedAt'], schema)
+        self.assertNotIn('dispatchRef', template)
+        self.assertIsNone(template['invocationRef'])
+        self.assertEqual(dict(template, dispatchRef=sample['dispatchRef']), claim)
+        with self.assertRaises(ValueError):
+            a.schema_validate(template, schema)  # Incomplete preparation cannot be a canonical claim.
         self.assertEqual(claim['cas']['expectedRevision'], inspected['revision'])
         self.assertEqual(claim['cas']['expectedContentDigest'], inspected['contentDigest'])
         self.assertIsNone(claim['invocationRef'])
