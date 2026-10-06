@@ -118,7 +118,9 @@ installed behavior and live acceptance remain pending. This checkpoint does not 
 
 The projection policy `efficiency-public-projection/1` explicitly expands the existing item-label
 approval for structured metric values, coverage, purpose/health dimensions, taxonomy enums and
-fixed summary templates. Item identity still requires the approved label registry; public evidence
+fixed summary templates, closed queue/assessment states, fixed failure codes, witnessed clocks,
+source hashes and bounded selection counts. This is an explicit structured-field publication policy;
+it does not approve private analysis prose. Item identity still requires the approved label registry; public evidence
 needs a separate explicit GitHub URL map. Private synopsis, findings, rationale, improvements,
 identifiers, metric reasons and arbitrary URLs are excluded. Policy profile names are contract
 aliases, not claims that those profiles were already installed. Numeric facts come from canonical
