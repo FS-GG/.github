@@ -402,8 +402,14 @@ inputs remain byte-identical to the accepted local F# source window. A separate
 21.647-second guard reproduction confirmed the retained stale-report failure, the
 corrected structural verdict, zero observed feed requests without opt-in and
 missing-input refusal, with clean custody and no resource failure. The
-[owning SVG plan](roadmaps/svg-coherence-and-instancing-01.md) records later accepted
-publication above; installed Templates receiver qualification remains pending.
+[owning SVG plan](roadmaps/svg-coherence-and-instancing-01.md) records that candidate
+receiver qualification was pending at this source checkpoint. Root subsequently
+accepted [receiver 37428584026/a1](https://github.com/FS-GG/FS.GG.Rendering/actions/runs/37428584026)
+at Templates `4eff52b27933c69a9ab4e276b3a29032d279b7e0`, through Rendering caller
+`67091200bc7bbcbb8189b2cf84244b2af919ecd1`: 12 browser cases, 180 provider checks
+and the package/Fable qualification passed. The publisher
+admitted that source-bound candidate proof; published-feed consumer adoption and
+final installed use remain pending.
 Original failures remain retained; .3/.4, consumer adoption and the late GPU batch
 remain open.
 
@@ -417,8 +423,9 @@ retains three pairs, a median CPU reduction of 25.70%, individual maximum regres
 and prior failed attempts. This used GPU-disabled Chromium and the SVG development
 8GiB allowance; peak summed RSS was 2,583,908,352 bytes, so it establishes neither
 2GiB fit nor host GPU acceptance. The [owning plan](roadmaps/svg-coherence-and-instancing-01.md)
-keeps .3/.4 open. The coherent 0.32.1 successor publication is accepted above; installed
-receiver qualification remains open. This source milestone does not close adoption
+keeps .3/.4 open. The coherent 0.32.1 successor publication and source-bound candidate
+receiver proof are accepted above; published-feed consumer adoption and final installed
+use remain open. This source milestone does not close adoption
 or the late host GPU batch.
 
 **2026-10-05: SVG-COHERENCE-01 first shared guard and reference preparation delivered.**

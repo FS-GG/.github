@@ -68,8 +68,8 @@ records three pairs and a median CPU reduction of 25.70%, with individual maximu
 regressions and original failures preserved. GPU-disabled Chromium used the SVG
 8GiB development allowance and peaked at 2,583,908,352 bytes; no 2GiB fit or GPU
 acceptance is claimed. The coherent 0.32.1 publication is now accepted as recorded
-above; genuine installed receiver qualification remains pending. This closes only that source
-window; .3/.4, consumer adoption and the late host GPU batch remain open.
+above; published-feed consumer adoption and final installed use remain pending.
+This closes only that source window; .3/.4, consumer adoption and the late host GPU batch remain open.
 
 The 0.32.1 release-route source window delivered through
 [Rendering #1390](https://github.com/FS-GG/FS.GG.Rendering/pull/1390) at
@@ -92,11 +92,16 @@ its retained source-bound custody manifest and all 19 package hashes.
 receiver input bindings at `4eff52b27933c69a9ab4e276b3a29032d279b7e0` after required
 composition, static controls and coherent checks passed.
 
-The installed receiver still needs to qualify the selected package bytes through the
-Rendering caller bound to the protected Templates revision. The later selected
+Candidate receiver qualification was pending at the Stage C checkpoint above.
+Root subsequently accepted the source-bound native
+[receiver run 37428584026/a1](https://github.com/FS-GG/FS.GG.Rendering/actions/runs/37428584026)
+through Rendering caller `67091200bc7bbcbb8189b2cf84244b2af919ecd1` at protected
+Templates `4eff52b27933c69a9ab4e276b3a29032d279b7e0`: 12 browser cases,
+180 provider checks and the package/Fable qualification passed. The publisher admitted that candidate receiver proof. The later selected
 publication attempt has its own accepted readiness, feed, tag and authority joins,
-recorded above; the original source plan remains immutable. Candidate custody and
-publication do not close .3/.4, consumer adoption or the late GPU batch.
+recorded above; the original source plan remains immutable. Published-feed consumer
+adoption and final installed use remain pending. Candidate proof and publication do
+not close .3/.4, consumer adoption or the late GPU batch.
 
 A separate 30-record diversity/churn window completed all 3,000 measured updates.
 Twelve lifetime records completed 6,000 updates and 60 exact ownership-fault
