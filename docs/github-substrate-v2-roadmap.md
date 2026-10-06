@@ -336,17 +336,23 @@ value, publication, installation, native grant or completion claim.
 ### V2-DIAG-01 — Diagnostic execution — 2026-10-05
 
 Owner: `.github` for permanent shared guidance, Coordination for reusable execution contracts,
-and selected runner owners for actual adoption. Status: design agreed; implementation planned.
+and selected runner owners for actual adoption. Status: shared guidance and aggregate preparation
+are delivered; ordinary and local packaged native pilot acceptance is complete; coherent release
+and installed receiver adoption remain open.
 The [design](designs/diagnostic-execution.md) and [delivery roadmap](roadmaps/diagnostic-execution.md)
 extend V2-PREFLIGHT-01 with collection of independent failures within existing execution budgets.
 Failed or unknown prerequisites block dependent work; uncertainty in authority, ownership,
 resource accounting or cleanup stops affected execution. Partial diagnostics never qualify a run.
 
-The four delivery parts cover shared guidance, aggregate preparation/results, ordinary and native
-runner pilots, and publication/adoption with measured evaluation. Reuse the selected prerequisite
-contracts and existing runner infrastructure. This addition neither replaces the next-item selection
-nor interrupts admitted operations; it establishes no runtime change, new grant or completed V2
-outcome. Detailed acceptance and unchecked implementation work remain in the owning roadmap.
+The [owning roadmap](roadmaps/diagnostic-execution.md) closes .1–.3 for the selected scope:
+ordinary runner PR4252 and Coordination preparation PR943 are merged, and the local packaged
+native entry passed 21 observation records with real checker processes. Independent defects are
+retained together without producing readiness; unknown prerequisites, custody or accounting
+uncertainty stop affected work. Earlier failed evidence remains failed. The bounded evaluation
+records observed timing and no comparable savings baseline. Canonical `0.2.1`/P4 joins, coherent
+publication and installed receiver adoption remain open under .4; the later Drivers PR4254
+Contracts source/feed blocker does not erase the original ordinary acceptance. These milestones
+grant no product execution authority or fleet-wide adoption.
 
 ### Language-independent product workspaces — 2026-09-29
 

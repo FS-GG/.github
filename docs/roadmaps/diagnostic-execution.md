@@ -1,6 +1,6 @@
 # V2-DIAG-01: Collect independent failures within bounded execution
 
-Date: 2026-10-05. Status: shared guidance landed; ordinary pilot source qualified locally; native pilot and receiver adoption pending.
+Date: 2026-10-06. Status: guidance and ordinary runner landed; local ordinary and packaged native pilots qualified; canonical release and receiver adoption pending.
 Design: [diagnostic execution](../designs/diagnostic-execution.md).
 Parent: [V2 roadmap](../github-substrate-v2-roadmap.md#v2-diag-01--diagnostic-execution--2026-10-05).
 
@@ -19,13 +19,13 @@ the relevant shared contracts and each adapter's current admission.
   surfaces and a bounded pilot plan in the existing work artifacts. Acceptance: guidance defines
   independent continuation, dependency blocking, shared-state invalidation, hard stops and honest
   partial results without adding mandatory diagnostic runs or approval ceremony.
-- [ ] **V2-DIAG-01.2 — Aggregate preparation and bounded result collection.** Coordination owns reusable
+- [x] **V2-DIAG-01.2 — Aggregate preparation and bounded result collection.** Coordination owns reusable
   changes where appropriate; adapters retain product behavior. Integrate with V2-PREFLIGHT-01 rather
   than adding a second readiness mechanism. Acceptance: the actual assembled entry point reports at
   least two independent prerequisite defects in one attempt, blocks their dependent effects, and
   distinguishes failed, blocked, unknown and budget-limited checks. Preserve the first causal failure,
   additional findings, candidate identity and cleanup result under existing time/output/resource bounds.
-- [ ] **V2-DIAG-01.3 — Qualify ordinary and native continuation boundaries.** Select one ordinary
+- [x] **V2-DIAG-01.3 — Qualify ordinary and native continuation boundaries.** Select one ordinary
   test/CI runner and one bounded native runner with their owners. Keep each pilot's scope explicit;
   BAR, SC2 or LEARN are candidates, not implicitly admitted executions. Acceptance controls cover
   two independent assertion failures collected together, shared-state contamination, unknown
@@ -64,7 +64,7 @@ cleanup replaces the original checker failure. The optional CLI prerequisite sou
 to reviewed-contract preparation when absent; that fallback does not establish capsule discovery
 or product-adapter adoption.
 
-The next Coordination source window extends those existing surfaces with bounded detailed results
+The assessed Coordination source window extends those existing surfaces with bounded detailed results
 and explicit dependency/isolation declarations keyed by check IDs. Preserve current public record
 construction and `prepareAsync` compatibility, keeping the genuine prepared capability as the sole
 readiness authority. Missing dependency declarations retain conservative behavior. Start with
@@ -86,11 +86,13 @@ including complete success, independent failures, contamination, unknown prerequ
 bounds and reporting/cleanup failure. Faults belong in disposable fixtures under applicable admission.
 
 BAR, SC2 and LEARN remain deferred product adapters and are not admitted pilots. BAR/SC2 checked-route
-adoption remains a separate V2-PREFLIGHT obligation. The native pilot requires fresh package/source/tool
-identity, installed-status and host/resource readback before root admits it. Existing coherent release
+adoption remains a separate V2-PREFLIGHT obligation. At assessment, the native pilot required fresh package/source/tool
+identity, installed-status and host/resource readback before root admission. The later local package
+qualification below records its exact scope. Existing coherent release
 and receiver refresh routes own publication and installed adoption; source twins or a package alone
 prove neither. This assessment ran no CLR, native qualification or fault injection and establishes no
-measured savings. Guidance and assessment are now merged as recorded above; .2–.4 remain open.
+measured savings. Guidance and assessment are merged as recorded above. The later pilot evaluation below records
+.2/.3 acceptance; coherent release and installed receiver adoption remain open under .4.
 
 ## Ordinary pilot source and actual entry — 2026-10-05
 
@@ -111,9 +113,66 @@ eleven runner controls passed. Exit, all cleanup and reporting succeeded; no cov
 The observed outer duration was 9.728 seconds, with no resource failure under sampled limits.
 The four runner source files remain byte-identical after rebasing onto the guidance merge.
 
-Hosted exact-head checks and source merge readback remain pending for this ordinary candidate.
-Coordination's native pilot, publication, installed adoption and whole-feature evaluation remain
-pending; .2, .3 and .4 remain open. No comparable savings baseline is established.
+The ordinary source landed through [PR #4252](https://github.com/FS-GG/.github/pull/4252), merge
+[`4d33398`](https://github.com/FS-GG/.github/commit/4d333986d7d20a664ad447e49c79841c75e507e9).
+The complete exact-head [hosted entry](https://github.com/FS-GG/.github/actions/runs/37360993148)
+passed all five suites; its retained input closure matches the merged source. Its runner duration
+was 39.908 seconds, including 1.445 seconds for the eleven runner controls. This proves the delivered
+ordinary entry, with no claim of a separate post-merge hosted run. Repository skill twins were
+verified equal; separate execution of the other twin and packaged receiver adoption remain pending.
+
+## Local packaged native pilot and bounded evaluation — 2026-10-06
+
+Coordination's preparation changes landed through
+[PR #943](https://github.com/FS-GG/FS.GG.Coordination/pull/943), merge
+[`065f6b1`](https://github.com/FS-GG/FS.GG.Coordination/commit/065f6b1e462e299fc85a9ff0a125c4910bbe1ac4),
+after required hosted and coherent validation. Four separately qualified local test selections
+passed 35, 64, 2 and 2 cases: 103 selected tests in total. They are separate from the ordinary
+complete entry and the installed observations below, and do not substitute for whole-suite gates.
+
+The existing packaged qualification entry exercised a genuine local package from source `54b10c4f`
+with the independently pinned qualification-script correction prepared at `4445feea`. This was a
+synthetic capsule with real checker subprocesses, held custody, accounting and cleanup. The actual
+successful attempt exited 0 in 4.441 seconds, with sampled peaks of 440,401,920 RSS bytes, three
+owned processes and one CLR process; settlement completed and no resource failure was reported.
+Its evidence contains **21 observation records**, including complete success and ten diagnostic
+negative groups. These records are not 21 additional source tests.
+
+One independent-failure observation retained both missing-import defects in one attempt:
+`imports` and `discovery` each exited 1 with cleanup observed, the first cause stayed unchanged,
+the second finding remained additional, and no prepared capability was issued. The complete-success
+observation passed both checks and produced readiness. Other controls covered dependency and
+unknown blocking, shared-state contamination, exhausted bounds, reporting failure and cleanup
+uncertainty. In the output-bound case, malformed observation remained the first cause, output-budget
+refusal was recorded separately, and the next checker was blocked with no exit because it was never
+launched. Cleanup uncertainty also preserved its first cause and stopped the next checker.
+
+An earlier installed attempt exited 2 with `output-bound-unreported`. Its custody settled without
+resource failure, but it remains failed; the un-emitted detailed output branch remains unknown.
+The later independently qualified success does not rewrite that failure.
+
+| Bounded evaluation | Observed result and limit |
+|---|---|
+| Controlled defect collection | Ordinary fixtures collected two independent assertion failures in one invocation; native fixtures retained two independent prerequisite defects in one attempt. These are injected defects, not natural production yield. |
+| Complete ordinary entry | Local outer 9.728 seconds; hosted runner 39.908 seconds. Both passed all five suites and found no natural assertion or infrastructure failures. Local sampled peaks were 414,289,920 RSS bytes, five owned processes and two CLR processes. |
+| Separate local source qualification | Four selected filters passed 103 tests. The final two-case window took 4.534 seconds with sampled peaks of 391,192,576 RSS bytes, six owned processes and three CLR processes; custody was clean and resource failure false. |
+| Local packaged native pilot | One earlier failed attempt and one later successful 4.441-second attempt are retained separately. Success qualifies the local package and independently pinned script only. |
+| Baseline and savings | No comparable before/after baseline, avoided-attempt count, total diagnostic overhead or complete model-usage coverage is established. Timing differences across environments do not measure savings. |
+
+The canonical Coordination `0.2.1` release, fresh V2-LANG P4 package/provider/facts/grant joins,
+coherent publication and selected installed receiver adoption remain pending. The local package
+qualification does not establish canonical distribution or product adoption. The later Drivers
+source in [PR #4254](https://github.com/FS-GG/.github/pull/4254) remains blocked by the genuine Contracts
+source/feed coherence gate: the retained source frontier was `7.6.0`, while the registry/public feed
+was `7.5.2`; organization-feed presence was unreadable. Publication proof must precede a registry
+update and fresh source qualification. The original ordinary PR4252 acceptance stays scoped and valid.
+This closes .2 and .3 for the selected ordinary runner and local packaged native pilot. The
+aggregate result, independent-failure, dependency/unknown/shared-state, cumulative-bound,
+reporting/cleanup and successful-consumption controls meet their stated acceptance. The separately
+qualified executor controls refuse foreign or stale authority and oversized custody evidence;
+earlier raw-exit/accounting proof refusals remain unqualified. Uncertainty never creates readiness
+or a successful qualification. Canonical release, distribution and installed receiver adoption
+belong to .4, which remains open. BAR, SC2 and LEARN are not admitted by these local results.
 
 ## Completion and rollout limits
 
