@@ -88,6 +88,21 @@ selected gates in the [owning plan](https://github.com/FS-GG/FS.GG.Coordination/
 Historical source1 failures and unknown cleanup remain preserved; this is bounded
 source closure, not whole V2-LANG completion.
 
+**2026-10-06: Rendering public-input receiver caller source delivered.**
+[Rendering #1396](https://github.com/FS-GG/FS.GG.Rendering/pull/1396) merged head
+`c7dbc9bdb90bbce4ba46d63063dc1d6d6c92c991` as
+`77c270f8c50fdc35b90f18bcad3f3ae25f6b27f2` at 16:34:19 UTC, with 22 checks
+passed and one skipped. The existing caller selects protected Templates
+`b2fb539b2707d52fc323fddf0570fafa1449e13d` for both workflow and source, and
+explicitly selects the public Rendering 0.32.1 input mode. Its source checks
+preserve read-only permissions, exact custody joins and forced PR preflight;
+the receiver keeps its existing 35-minute qualification bound.
+The full public-mode workflow request is prepared against that actual caller
+revision but has not been dispatched or accepted. This closes the caller source
+step within SVG-COHERENCE-01.8; native public-input qualification, publication of
+the Templates successor and its final installed/default/wizard acceptance remain
+open, alongside broader adoption and host GPU qualification.
+
 **2026-10-06: Templates Fable Rendering 0.32.1 source adoption delivered.**
 [Templates #674](https://github.com/FS-GG/FS.GG.Templates/pull/674) merged head
 `8748d3304297036a82532841e7b76ead14efb848` as
