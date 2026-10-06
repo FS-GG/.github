@@ -4592,11 +4592,12 @@ ORDER BY f.identity;
                             request["evidenceDigest"] <- JsonValue.Create evidenceDigest
                             request["analysisPolicyVersion"] <- JsonValue.Create policy
                             request["evidenceRefs"] <- references
-                            request["authority"] <- JsonSerializer.SerializeToNode
-                                {| sourceIdentity = principal.Scope.Producer
-                                   authorityRole = (if authorityKind = "process-review" then "root-reviewer" elif authorityKind = "runtime-admission" then "runtime-observer" else "ci-observer")
-                                   authorityRef = {| id = authorityId; kind = authorityKind; revision = authorityRevision; contentDigest = "sha256:" + authorityDigest |}
-                                   rootDispatchRef = (null: string); invocationRef = (null: string) |}
+                            request["authority"] <-
+                                JsonSerializer.SerializeToNode
+                                    {| sourceIdentity = principal.Scope.Producer
+                                       authorityRole = (if authorityKind = "process-review" then "root-reviewer" elif authorityKind = "runtime-admission" then "runtime-observer" else "ci-observer")
+                                       authorityRef = {| id = authorityId; kind = authorityKind; revision = authorityRevision; contentDigest = "sha256:" + authorityDigest |}
+                                       rootDispatchRef = (null: string); invocationRef = (null: string) |}
                             request["nativeReviewRef"] <- JsonValue.Create(if authorityKind = "process-review" then authorityId else null)
                             request["populationWitnessRefs"] <- epochRefs
                             request["requestedAt"] <- JsonValue.Create now
@@ -6666,16 +6667,17 @@ WHERE n.source_ref=$source;
                     {| itemIds = List.toArray members; repository = "unknown"; workType = "observed-population-at-cutoff"
                        acceptanceScope = scope; windowStart = cutoff; windowEnd = cutoff; cutoff = cutoff
                        excludedItems = ([||] : obj array); openItems = 0; abandonedItems = 0 |}
-                let node = JsonSerializer.SerializeToNode
-                    {| schema = "fsgg.telemetry.efficiency-metric/1"
-                       metricId = "sha256:" + CanonicalJson.sha256(Encoding.UTF8.GetBytes(item + "\n" + metricName + "\n" + unit + "\n" + provider + "\n" + scope + "\n" + (if isNull purpose then "" else purpose) + "\n" + (if isNull health then "" else health)))
-                       metric = metricName; calculationVersion = "efficiency-calculation/1"; unit = unit
-                       population = population
-                       coverage = {| population = "unknown"; usage = "partial"; classification = "unknown"; lineage = "unknown"; dependency = "unknown" |}
-                       policyProfile = (null : string)
-                       price = {| kind = "not-applicable"; currency = (null : string); version = (null : string) |}
-                       eventTime = (null : string); observedAt = cutoff; projectedAt = cutoff
-                       purpose = purpose; healthDimension = health |}
+                let node =
+                    JsonSerializer.SerializeToNode
+                        {| schema = "fsgg.telemetry.efficiency-metric/1"
+                           metricId = "sha256:" + CanonicalJson.sha256(Encoding.UTF8.GetBytes(item + "\n" + metricName + "\n" + unit + "\n" + provider + "\n" + scope + "\n" + (if isNull purpose then "" else purpose) + "\n" + (if isNull health then "" else health)))
+                           metric = metricName; calculationVersion = "efficiency-calculation/1"; unit = unit
+                           population = population
+                           coverage = {| population = "unknown"; usage = "partial"; classification = "unknown"; lineage = "unknown"; dependency = "unknown" |}
+                           policyProfile = (null : string)
+                           price = {| kind = "not-applicable"; currency = (null : string); version = (null : string) |}
+                           eventTime = (null : string); observedAt = cutoff; projectedAt = cutoff
+                           purpose = purpose; healthDimension = health |}
                 node["sourceRefs"] <- refs.DeepClone()
                 let value = JsonObject()
                 value["status"] <- JsonValue.Create status
@@ -6887,21 +6889,23 @@ WHERE n.source_ref=$source;
             returned <- returned + selected.Length
             let omittedHere = metrics.Count - selected.Length
             omitted <- omitted + omittedHere
-            let exported = JsonSerializer.SerializeToNode
-                {| itemId = item; originalItemId = original
-                   metricSelection = {| limit = 32; returned = selected.Length; omitted = omittedHere; complete = omittedHere = 0 |}
-                   analysisHealth = {| state = state; requestState = requestState; assessmentState = assessmentState
-                                       pendingSince = pendingSince; lastAttemptAt = lastAttemptAt
-                                       failureCode = if state = "unavailable" then Some "missing-authority" else None |}
-                   freshness = {| sourceObservedAt = sourceObservedAt; ingestedAt = ingestedAt |} |}
+            let exported =
+                JsonSerializer.SerializeToNode
+                    {| itemId = item; originalItemId = original
+                       metricSelection = {| limit = 32; returned = selected.Length; omitted = omittedHere; complete = omittedHere = 0 |}
+                       analysisHealth = {| state = state; requestState = requestState; assessmentState = assessmentState
+                                           pendingSince = pendingSince; lastAttemptAt = lastAttemptAt
+                                           failureCode = if state = "unavailable" then Some "missing-authority" else None |}
+                       freshness = {| sourceObservedAt = sourceObservedAt; ingestedAt = ingestedAt |} |}
             exported["metrics"] <- JsonArray(selected |> Array.map _.DeepClone())
             exported["assessment"] <- assessment
             outputItems.Add exported
-        let output = JsonSerializer.SerializeToNode
-            {| schema = "fsgg.telemetry.efficiency-export/1"; snapshotRevision = revision
-               sourceFingerprint = fingerprint; cutoff = cutoff; observedAt = cutoff
-               selection = {| limit = maxItems; returned = outputItems.Count; omitted = max 0 (items.Length - outputItems.Count); complete = items.Length = outputItems.Count |}
-               metricSelection = {| limit = maxMetrics; returned = returned; omitted = omitted; complete = omitted = 0 |} |}
+        let output =
+            JsonSerializer.SerializeToNode
+                {| schema = "fsgg.telemetry.efficiency-export/1"; snapshotRevision = revision
+                   sourceFingerprint = fingerprint; cutoff = cutoff; observedAt = cutoff
+                   selection = {| limit = maxItems; returned = outputItems.Count; omitted = max 0 (items.Length - outputItems.Count); complete = items.Length = outputItems.Count |}
+                   metricSelection = {| limit = maxMetrics; returned = returned; omitted = omitted; complete = omitted = 0 |} |}
         output["items"] <- outputItems
         let encoded = output.ToJsonString() + "\n"
         if Encoding.UTF8.GetByteCount encoded > 4 * 1024 * 1024 then invalidOp "efficiency-export-byte-bound"
