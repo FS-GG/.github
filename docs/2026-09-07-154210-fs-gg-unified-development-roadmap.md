@@ -88,6 +88,27 @@ selected gates in the [owning plan](https://github.com/FS-GG/FS.GG.Coordination/
 Historical source1 failures and unknown cleanup remain preserved; this is bounded
 source closure, not whole V2-LANG completion.
 
+**2026-10-06: Templates Fable Rendering 0.32.1 source adoption delivered.**
+[Templates #674](https://github.com/FS-GG/FS.GG.Templates/pull/674) merged head
+`8748d3304297036a82532841e7b76ead14efb848` as
+`b2fb539b2707d52fc323fddf0570fafa1449e13d` at 15:56:35 UTC, with 15 checks
+passed and four skipped. Five Fable project/lock pairs and the player/Studio build
+scripts now select published Rendering 0.32.1. Source CI passed the ordinary
+composition, Release C source and installed Typed SDD checks; composition ran
+for 19 minutes 15 seconds within its existing 30-minute job bound. The initial
+stale pin expectation, build-driver override and receipt-fixture failures remain
+historical evidence; their source repairs preserve locked restores and the
+separate historical 0.31.0 API mirror.
+
+The existing receiver now declares an explicit public mode with bounded archive
+acquisition, exact custody/source joins and separate signed archive and NuGet
+lock hashes. This prepares the selected public-mode caller qualification; that
+full run remains pending. Workspace Template publication remains 0.18.0, so
+publication and fresh installed/default/wizard acceptance of a Templates package
+containing these new pins remain open. Original notification failed before either
+POST and is not credited as adoption. This closes the Fable source/pin step within
+SVG-COHERENCE-01.8; broader adoption, .3/.4 and host GPU acceptance remain open.
+
 **2026-10-06: Templates Rendering 0.32.1 provider source adoption delivered.**
 [Templates #673](https://github.com/FS-GG/FS.GG.Templates/pull/673) merged head
 `e3ec11993b1f17ac9cc88afcac89df67f49c9309` as
@@ -97,8 +118,8 @@ passed and three skipped. The two-file descriptor/README change selects publishe
 workspaces; the deterministic effective-provider fixture passed five cases and
 generator checks passed. The [registry consumption projection](../registry/dependencies.yml)
 now records this protected source adoption. Workspace Template source/package
-version remains 0.18.0 and its existing publication remains unchanged. Separate
-Fable SvgFoundation pins remain Rendering 0.31.0. Original 0.32.1 publication and
+version remains 0.18.0 and its existing publication remains unchanged. At that provider checkpoint, Fable SvgFoundation pins remained Rendering 0.31.0;
+the later PR674 source adoption is recorded above. Original 0.32.1 publication and
 source-bound candidate receiver proof remain established, while published-feed
 installed receiver qualification and host GPU acceptance remain open. Historical
 notification failed credential preflight before either POST and is not credited
@@ -453,8 +474,9 @@ readbacks matched. Retained archive `11414392696` has SHA256
 Tags `fs-gg-ui/v0.32.1`, `fs-gg-ui-template/v0.32.1` and `v0.32.1` bind the
 original producer. The immutable source plan's `publicationReady=false` remains
 historical source evidence; readiness and acceptance of this selected publication
-attempt are separate observations. Notification, receiver adoption and installed
-use remain open. The [owning SVG plan](roadmaps/svg-coherence-and-instancing-01.md)
+attempt are separate observations. Provider and Fable source adoption are now
+delivered as recorded above; selected public-mode qualification and final
+published Templates installed use remain open. Notification failed before POST. The [owning SVG plan](roadmaps/svg-coherence-and-instancing-01.md)
 closes publication only within .8; .3/.4, broader .8 adoption and the late host GPU
 batch remain open.
 
