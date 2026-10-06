@@ -222,6 +222,7 @@ payload and runtime-closure verification without a global switch. Backed-up cano
 to schema 13 preserved all 55 tables. The supported Governance #444 correction joined 204
 targets to GOV-423-C3, preserved the original raw-fact hash and all 144 native outcomes, and
 verified one audit entry plus an idempotent retry. The correction operation completed in 8.026
-seconds with clean custody and no resource or storage failure. Two spool batches remain pending;
+seconds with clean custody and no resource or storage failure. The supported drain accepted both
+pending batches with no replay or quarantine and verified zero remaining in 2.857 seconds;
 current-store sanitized export, public-feed verification, Pages selection and event adoption
 still require their own genuine receipts.

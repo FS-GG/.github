@@ -142,7 +142,9 @@ joins 204 targets to GOV-423-C3, preserves the original raw facts and all 144 na
 and verifies one audit entry and an idempotent retry. These are local migration and correction
 receipts, not public dashboard adoption.
 
-Two spool batches remain pending. The publisher is inactive; the actual sanitized canonical
+The supported drain accepted both pending spool batches, with no replay or quarantine, and
+verified zero remaining in 2.857 seconds with clean custody and no resource or storage failure.
+The publisher is inactive; the actual sanitized canonical
 export, verified new feed, separate Pages selector and event activation remain required. Publish
 and read back the new feed before landing the selector. No fresh public completed-item count,
 recurring publication or live dashboard update follows from the local receipts.

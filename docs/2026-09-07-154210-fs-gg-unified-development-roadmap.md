@@ -69,7 +69,8 @@ performed. The backed-up canonical store migrated to schema 13 with all 55 table
 The supported Governance #444 attribution correction joined 204 targets to GOV-423-C3,
 retained the original raw-fact hash and all 144 native outcomes, and verified an idempotent
 retry with one audit entry. These local operations settled with clean custody and no resource
-failure. Two spool batches still require the supported drain. The current-store sanitized export,
+failure. The supported drain accepted both pending spool batches with no replay or quarantine;
+status now reports zero remaining batches. The current-store sanitized export,
 verified public feed, Pages selector and event publisher activation remain pending; UTEL is not
 closed by the local correction.
 
