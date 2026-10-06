@@ -149,6 +149,8 @@
     <Compile Include="TelemetryCi.fs" />
     <Compile Include="TelemetryBudget.fsi" />
     <Compile Include="TelemetryBudget.fs" />
+    <Compile Include="ProcessEfficiency.fsi" />
+    <Compile Include="ProcessEfficiency.fs" />
     <Compile Include="Qualification.fsi" />
     <Compile Include="Qualification.fs" />
     <Compile Include="RoadmapWorkUnit.fsi" />
