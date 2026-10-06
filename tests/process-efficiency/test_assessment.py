@@ -11,6 +11,7 @@ import tempfile
 import time
 import fcntl
 import unittest
+from unittest.mock import patch
 import sys
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -163,6 +164,18 @@ class AssessmentTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             a.validate(output, packet, SCHEMA, admitted_review=published, metric_schema=METRIC_SCHEMA)
         self.assertEqual(check(output, packet), output)  # Old admitted review is still legitimate.
+
+    def test_date_time_format_and_missing_dependency_fail_closed(self):
+        output, packet = fixture()
+        for timestamp in ('not-a-date', '2026-02-30T00:00:00Z', '2026-10-06T00:00:00'):
+            changed = copy.deepcopy(output)
+            changed['lifecycle']['generatedAt'] = timestamp
+            with self.subTest(timestamp=timestamp), self.assertRaises(ValueError):
+                check(changed, packet)
+        from jsonschema import FormatChecker
+        with patch('jsonschema.FormatChecker', return_value=FormatChecker(formats=['date'])):
+            with self.assertRaisesRegex(ValueError, 'date-time dependency missing'):
+                check(output, packet)
 
     def test_missing_observer_remains_unknown(self):
         output, packet = fixture(2)

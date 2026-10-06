@@ -41,7 +41,7 @@ again before validation. Missing dispatch observations stay unknown, including a
 whose batch had duplicate native identities. No start time, usage or historical dispatch is rebuilt.
 
 `prompt` supplies a private instruction/rubric and a separately labeled untrusted evidence field.
-`validate` requires full Draft 2020-12 validation through the pinned Python dependency, then validates
+`validate` requires full Draft 2020-12 validation through the pinned Python dependencies (including the required RFC 3339 format checker), then validates
 subject, snapshot digest, exact reference revisions, metric subject, coverage, supersession and usage
 references. Numeric prose is conservatively refused; measured numbers appear through deterministic
 metric references. This restriction also rejects harmless numeric identifiers in prose. Supported

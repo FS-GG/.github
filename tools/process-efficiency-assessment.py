@@ -47,7 +47,10 @@ def schema_validate(value, schema):
     except ImportError as error:
         raise ValueError('assessment validator unavailable: jsonschema dependency missing') from error
     Draft202012Validator.check_schema(schema)
-    errors = list(Draft202012Validator(schema, format_checker=FormatChecker()).iter_errors(value))
+    formats = FormatChecker()
+    if 'date-time' not in formats.checkers:
+        raise ValueError('assessment validator unavailable: RFC3339 date-time dependency missing')
+    errors = list(Draft202012Validator(schema, format_checker=formats).iter_errors(value))
     if errors:
         raise ValueError('assessment schema rejected: ' + errors[0].message)
 
