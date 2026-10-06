@@ -5618,6 +5618,10 @@ WHERE f.kind='learn-installed-origin/1' AND a.producer=$producer AND a.stream=$s
                                 error.Contains("conflict", StringComparison.OrdinalIgnoreCase)
                                 || error.Contains("constraint", StringComparison.OrdinalIgnoreCase)
                                 || error = "invalid-request"
+                                // These exact receiver admission refusals are semantic, not storage faults.
+                                || error = "responses-native-receipt-required"
+                                || error = "responses-current-installed-origin-required"
+                                || error = "activity usage attribution requires known source counters"
                                 || error.StartsWith("efficiency-", StringComparison.Ordinal))
                             ->
                             terminal connection "rejected" (box "semantic-conflict")

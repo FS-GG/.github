@@ -592,6 +592,8 @@ module EfficiencyAdmissionTests =
         let cleanup,path,_,_,_,usageEvent = responseFixture "completed"
         use cleanup = cleanup
         Assert.Contains("\"rejected\":1",submit path "generic-response-cost" [responseIdentity "generic-response" usageEvent])
+        Assert.Equal("1",scalar path "SELECT count(*) FROM transport_receipts WHERE batch='generic-response-cost' AND state='rejected';")
+        Assert.Equal("0",scalar path "SELECT count(*) FROM transport_receipts WHERE batch='generic-response-cost' AND state='durably-received';")
         Assert.Equal("1",scalar path "SELECT count(*) FROM current_ingest_facts WHERE kind='runtime-response-usage/1';")
 
     [<Fact>]
@@ -673,6 +675,8 @@ module EfficiencyAdmissionTests =
         // Decoder-valid arithmetic reaches the receiver, which refuses unknown source counters.
         TelemetryStore.parseBatch(batch "invented-counter-shape" [invented]) |> unwrap |> ignore
         Assert.Contains("\"rejected\":1",submit path "invented-response-attribution" [invented])
+        Assert.Equal("1",scalar path "SELECT count(*) FROM transport_receipts WHERE batch='invented-response-attribution' AND state='rejected';")
+        Assert.Equal("0",scalar path "SELECT count(*) FROM transport_receipts WHERE batch='invented-response-attribution' AND state='durably-received';")
         Assert.Equal("0",scalar path "SELECT count(*) FROM activity_usage_attributions WHERE usage_identity='response-usage';")
         Assert.Equal("99",scalar path "SELECT json_extract(canonical,'$.input') FROM current_ingest_facts WHERE identity='response-usage';")
 
