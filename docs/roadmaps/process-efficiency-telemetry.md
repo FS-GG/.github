@@ -298,10 +298,13 @@ integer ceiling; the UI validates and renders them with BigInt without Number co
 compact rounding. Aggregate Int64 overflow and malformed operands refuse publication. Separate
 provider-response rows retain their exact counters and do not establish successful completion.
 Focused pure controls cover the exact nullable compact-summary shape, mixed known/unknown
-summaries, available response rows and integer boundaries. A new browser regression is authored
-for unknown rendering, exact Int64 text, mobile containment and last-valid unsafe-feed refusal;
-this successor has not received native/browser or installed qualification. Prior source qualification
-and current installed 0.98/schema-13 live feed remain separate, and full .4/.6 remain open.
+summaries, available response rows and integer boundaries. Parent-selected browser root10
+qualified all 22 cases with no skips or retries, including unknown rendering, exact Int64 text,
+mobile containment and last-valid unsafe-feed refusal. The corrected two-UID root04 qualified all
+six permission checks for the exact collector bytes; its genuine fixture result replaces the prior
+proof. The earlier browser 20-pass/two-failure window and pre-fixture staging refusal remain
+separate historical evidence. Current installed 0.98/schema-13 feed remains unchanged; installed
+0.99/schema-14 qualification and full .4/.6 remain open.
 
 Depends on .1 for fixture-driven work; live projection acceptance requires .2 and .3. Touch-set:
 dashboard collector/projection, static UI/assets and focused projection/UI tests. Coordinate ownership
