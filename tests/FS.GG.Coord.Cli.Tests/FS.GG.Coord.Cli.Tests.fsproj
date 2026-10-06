@@ -22,6 +22,7 @@
     <Compile Include="TelemetryCliTests.fs" />
     <Compile Include="TelemetryStoreApplicationTests.fs" />
     <Compile Include="EfficiencyAdmissionTests.fs" />
+    <Compile Include="EfficiencyMetricTests.fs" />
     <Compile Include="TelemetryReceiptTests.fs" />
     <Compile Include="TelemetryRuntimeApplicationTests.fs" />
     <Compile Include="WorkspaceTelemetryApplicationTests.fs" />
