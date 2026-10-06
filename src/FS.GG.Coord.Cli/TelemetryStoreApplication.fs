@@ -333,9 +333,9 @@ CREATE INDEX efficiency_analysis_outcome ON efficiency_analysis_requests(stable_
 CREATE TABLE efficiency_analysis_history(request_id TEXT NOT NULL, revision INTEGER NOT NULL CHECK(revision >= 0), content_digest TEXT NOT NULL, canonical TEXT NOT NULL, recorded_at TEXT NOT NULL, PRIMARY KEY(request_id,revision)) STRICT;
 CREATE TABLE efficiency_analysis_reservations(stable_outcome_identity TEXT NOT NULL, epoch_key TEXT NOT NULL, policy_version TEXT NOT NULL, reservation INTEGER NOT NULL CHECK(reservation BETWEEN 1 AND 3), request_id TEXT NOT NULL REFERENCES efficiency_analysis_requests(request_id), claim_id TEXT NOT NULL UNIQUE, producer TEXT NOT NULL, stream TEXT NOT NULL, dispatch_ref TEXT NOT NULL, generation INTEGER NOT NULL CHECK(generation > 0), state TEXT NOT NULL CHECK(state IN ('reserved','started','settled','failed','unknown','proven-no-effect')), PRIMARY KEY(stable_outcome_identity,epoch_key,policy_version,reservation)) STRICT;
 CREATE UNIQUE INDEX efficiency_analysis_dispatch_once ON efficiency_analysis_reservations(dispatch_ref);
-CREATE UNIQUE INDEX efficiency_one_active_analysis ON efficiency_analysis_reservations(stable_outcome_identity,policy_version) WHERE state IN ('reserved','started');
+CREATE UNIQUE INDEX efficiency_one_active_analysis ON efficiency_analysis_reservations(stable_outcome_identity,epoch_key,policy_version) WHERE state IN ('reserved','started');
 CREATE TABLE efficiency_receiver_order(sequence INTEGER PRIMARY KEY AUTOINCREMENT,receipt_key TEXT NOT NULL UNIQUE,producer TEXT NOT NULL,stream TEXT NOT NULL,accepted_at TEXT NOT NULL) STRICT;
-CREATE TABLE efficiency_outcome_epochs(original_item_id TEXT NOT NULL,epoch INTEGER NOT NULL CHECK(epoch>0),dispatch_identity TEXT NOT NULL UNIQUE,effective_item_id TEXT NOT NULL,begin_receipt_key TEXT NOT NULL REFERENCES efficiency_receiver_order(receipt_key),begin_sequence INTEGER NOT NULL REFERENCES efficiency_receiver_order(sequence),state TEXT NOT NULL CHECK(state IN ('open','closed')),begin_refs TEXT NOT NULL,outcome_identity TEXT UNIQUE,close_sequence INTEGER REFERENCES efficiency_receiver_order(sequence),close_refs TEXT,CHECK((state='open' AND outcome_identity IS NULL AND close_sequence IS NULL AND close_refs IS NULL) OR (state='closed' AND outcome_identity IS NOT NULL AND close_sequence>=begin_sequence AND close_refs IS NOT NULL)),PRIMARY KEY(original_item_id,epoch)) STRICT;
+CREATE TABLE efficiency_outcome_epochs(original_item_id TEXT NOT NULL,epoch INTEGER NOT NULL CHECK(epoch>0),dispatch_identity TEXT NOT NULL UNIQUE,effective_item_id TEXT NOT NULL,begin_receipt_key TEXT NOT NULL REFERENCES efficiency_receiver_order(receipt_key),begin_sequence INTEGER NOT NULL REFERENCES efficiency_receiver_order(sequence),state TEXT NOT NULL CHECK(state IN ('open','closed')),begin_refs TEXT NOT NULL,outcome_identity TEXT,outcome_revision INTEGER CHECK(outcome_revision>=0),close_sequence INTEGER REFERENCES efficiency_receiver_order(sequence),close_refs TEXT,CHECK((state='open' AND outcome_identity IS NULL AND outcome_revision IS NULL AND close_sequence IS NULL AND close_refs IS NULL) OR (state='closed' AND outcome_identity IS NOT NULL AND outcome_revision IS NOT NULL AND close_sequence>=begin_sequence AND close_refs IS NOT NULL)),PRIMARY KEY(original_item_id,epoch),UNIQUE(outcome_identity,outcome_revision)) STRICT;
 CREATE UNIQUE INDEX efficiency_one_open_epoch ON efficiency_outcome_epochs(original_item_id) WHERE state='open';
 CREATE TABLE efficiency_epoch_gaps(receipt_key TEXT NOT NULL,original_item_id TEXT NOT NULL,reason TEXT NOT NULL,PRIMARY KEY(receipt_key,original_item_id,reason)) STRICT;
 
@@ -3079,7 +3079,7 @@ WHERE a.identity=$identity AND (($native=1 AND a.authority_role='native-collecto
                        || assessment.GetProperty("provenance").GetProperty("validationResult").GetString()<>"accepted" then
                         invalidOp "efficiency-ready-request-association-mismatch"
                     use closed = connection.CreateCommand()
-                    closed.CommandText <- "SELECT count(*) FROM efficiency_outcome_epochs WHERE outcome_identity=$outcome AND epoch=$epoch AND state='closed';"
+                    closed.CommandText <- "SELECT count(*) FROM efficiency_outcome_epochs WHERE outcome_identity=$outcome AND outcome_revision=(SELECT fact_revision FROM native_item_outcomes WHERE identity=$outcome) AND epoch=$epoch AND state='closed';"
                     parameter closed "$outcome" outcome
                     parameter closed "$epoch" (epoch.GetInt64())
                     if Convert.ToInt64(closed.ExecuteScalar())<>1L then invalidOp "efficiency-ready-receiver-epoch-unavailable"
@@ -3198,23 +3198,10 @@ ORDER BY f.identity;
                 [ while reader.Read() do yield reader.GetString 0,reader.GetString 1,reader.GetInt64 2,reader.GetString 3,reader.GetInt64 4 ]
             if rootRefs.Length = 4 then
                 // Existing rooted child/follow-up populations must all have actual terminals.
-                let unsettled = scalarValues """
-WITH RECURSIVE population(dispatch_id) AS (
- SELECT dispatch_id FROM expected_dispatches WHERE identity=$dispatch AND item_id=$item
- UNION SELECT d.dispatch_id FROM expected_dispatches d JOIN population p ON p.dispatch_id=d.parent_dispatch_id WHERE d.item_id=$item
-)
-SELECT count(*) FROM expected_dispatches d JOIN population p ON p.dispatch_id=d.dispatch_id WHERE d.item_id=$item AND NOT EXISTS(
- SELECT 1 FROM invocation_lineage l JOIN runtime_admissions a ON a.item_id=l.item_id AND a.invocation_id=l.invocation_id
- JOIN runtime_terminals t ON t.item_id=l.item_id AND t.invocation_id=l.invocation_id
- JOIN expected_dispatches root ON root.identity=$dispatch JOIN invocation_lineage rl ON rl.item_id=root.item_id AND rl.dispatch_id=root.dispatch_id
- WHERE l.item_id=d.item_id AND l.dispatch_id=d.dispatch_id AND l.root_invocation_id=rl.invocation_id
- AND (SELECT count(*) FROM invocation_lineage other WHERE other.item_id=l.item_id AND other.dispatch_id=l.dispatch_id)=1
- AND NOT EXISTS(SELECT 1 FROM current_ingest_facts f WHERE f.identity IN (d.identity,l.identity,a.identity,t.identity) AND NOT EXISTS(
-   SELECT 1 FROM fact_acceptance_times c JOIN efficiency_receiver_order q ON q.receipt_key=c.receipt_key
-   WHERE c.identity=f.identity AND c.fact_revision=f.revision AND c.content_digest=f.content_digest AND q.sequence>=$sequence)));
-""" rootValues |> Convert.ToInt64
+                let unsettledSql = "WITH RECURSIVE population(dispatch_id) AS ( SELECT dispatch_id FROM expected_dispatches WHERE identity=$dispatch AND item_id=$item UNION SELECT d.dispatch_id FROM expected_dispatches d JOIN population p ON p.dispatch_id=d.parent_dispatch_id WHERE d.item_id=$item ) SELECT count(*) FROM expected_dispatches d JOIN population p ON p.dispatch_id=d.dispatch_id WHERE d.item_id=$item AND NOT EXISTS( SELECT 1 FROM invocation_lineage l JOIN runtime_admissions a ON a.item_id=l.item_id AND a.invocation_id=l.invocation_id JOIN runtime_terminals t ON t.item_id=l.item_id AND t.invocation_id=l.invocation_id JOIN expected_dispatches root ON root.identity=$dispatch JOIN invocation_lineage rl ON rl.item_id=root.item_id AND rl.dispatch_id=root.dispatch_id WHERE l.item_id=d.item_id AND l.dispatch_id=d.dispatch_id AND l.root_invocation_id=rl.invocation_id AND (SELECT count(*) FROM invocation_lineage other WHERE other.item_id=l.item_id AND other.dispatch_id=l.dispatch_id)=1 AND NOT EXISTS(SELECT 1 FROM current_ingest_facts f WHERE f.identity IN (d.identity,l.identity,a.identity,t.identity) AND NOT EXISTS( SELECT 1 FROM fact_acceptance_times c JOIN efficiency_receiver_order q ON q.receipt_key=c.receipt_key WHERE c.identity=f.identity AND c.fact_revision=f.revision AND c.content_digest=f.content_digest AND q.sequence>=$sequence)));"
+                let unsettled = scalarValues unsettledSql rootValues |> Convert.ToInt64
                 use outcomeCommand = connection.CreateCommand()
-                outcomeCommand.CommandText <- "SELECT f.identity,f.kind,f.revision,f.content_digest,q.sequence FROM native_item_outcomes o JOIN current_ingest_facts f ON f.identity=o.identity JOIN ingest_facts raw ON raw.identity=o.identity JOIN fact_acceptance_times c ON c.identity=f.identity AND c.fact_revision=f.revision AND c.content_digest=f.content_digest JOIN efficiency_receiver_order q ON q.receipt_key=c.receipt_key WHERE (o.item_id=$item OR raw.item_id=$item) AND q.sequence>$sequence AND NOT EXISTS(SELECT 1 FROM efficiency_outcome_epochs e WHERE e.outcome_identity=o.identity) ORDER BY q.sequence,f.identity LIMIT 2;"
+                outcomeCommand.CommandText <- "SELECT f.identity,f.kind,f.revision,f.content_digest,q.sequence FROM native_item_outcomes o JOIN current_ingest_facts f ON f.identity=o.identity JOIN ingest_facts raw ON raw.identity=o.identity JOIN fact_acceptance_times c ON c.identity=f.identity AND c.fact_revision=f.revision AND c.content_digest=f.content_digest JOIN efficiency_receiver_order q ON q.receipt_key=c.receipt_key WHERE (o.item_id=$item OR raw.item_id=$item) AND q.sequence>$sequence AND NOT EXISTS(SELECT 1 FROM efficiency_outcome_epochs e WHERE e.outcome_identity=o.identity AND e.outcome_revision=f.revision) ORDER BY q.sequence,f.identity LIMIT 2;"
                 rootValues |> List.iter (fun (name,value) -> parameter outcomeCommand name value)
                 let outcomes =
                     use reader = outcomeCommand.ExecuteReader()
@@ -3241,8 +3228,8 @@ SELECT count(*) FROM expected_dispatches d JOIN population p ON p.dispatch_id=d.
                     for id,kind,revision,digest in nativeRefs |> List.concat |> List.distinct do
                         refs.Add(JsonSerializer.SerializeToNode({|id=id;kind=kind;revision=revision;contentDigest="sha256:"+digest|}))
                     refs.Add(JsonSerializer.SerializeToNode({|id=outcomeId;kind=outcomeKind;revision=outcomeRevision;contentDigest="sha256:"+outcomeDigest|}))
-                    executeValues "UPDATE efficiency_outcome_epochs SET state='closed',outcome_identity=$outcome,close_sequence=$sequence,close_refs=$refs WHERE original_item_id=$original AND epoch=$epoch AND state='open';"
-                        [ "$outcome", box outcomeId; "$sequence", box (max receiverSequence outcomeSequence); "$refs", box (refs.ToJsonString()); "$original", box original; "$epoch", box epoch ]
+                    executeValues "UPDATE efficiency_outcome_epochs SET state='closed',outcome_identity=$outcome,outcome_revision=$outcomeRevision,close_sequence=$sequence,close_refs=$refs WHERE original_item_id=$original AND epoch=$epoch AND state='open';"
+                        [ "$outcome", box outcomeId; "$outcomeRevision",box outcomeRevision; "$sequence", box (max receiverSequence outcomeSequence); "$refs", box (refs.ToJsonString()); "$original", box original; "$epoch", box epoch ]
                 | _ -> ()
 
     let private recordEfficiencyAcceptance connection admission (allFacts: TelemetryStore.Fact list) (facts: TelemetryStore.Fact list) =
@@ -4186,7 +4173,7 @@ SELECT count(*) FROM expected_dispatches d JOIN population p ON p.dispatch_id=d.
         | None -> ()
         | Some epoch ->
             use witness = connection.CreateCommand()
-            witness.CommandText <- "SELECT begin_refs,close_refs FROM efficiency_outcome_epochs WHERE outcome_identity=$outcome AND epoch=$epoch AND state='closed';"
+            witness.CommandText <- "SELECT begin_refs,close_refs FROM efficiency_outcome_epochs WHERE outcome_identity=$outcome AND outcome_revision=(SELECT fact_revision FROM native_item_outcomes WHERE identity=$outcome) AND epoch=$epoch AND state='closed';"
             parameter witness "$outcome" outcome
             parameter witness "$epoch" epoch
             use reader = witness.ExecuteReader()
@@ -4289,19 +4276,29 @@ SELECT count(*) FROM expected_dispatches d JOIN population p ON p.dispatch_id=d.
                                                 let dispatch = input.GetProperty "dispatchRef"
                                                 if dispatch.GetProperty("kind").GetString() <> "expected-dispatch" then invalidOp "efficiency-claim-dispatch-kind"
                                                 let _, dispatchItem = efficiencyReference connection dispatch
-                                                if dispatchItem <> Some item then invalidOp "efficiency-claim-dispatch-subject"
-                                                let policy = record["canonicalRequest"]["analysisPolicyVersion"].GetValue<string>()
+                                                let dispatchSubject = dispatchItem |> Option.defaultWith (fun () -> invalidOp "efficiency-claim-dispatch-subject")
+                                                let subjectJoined = receiptScalar connection "WITH RECURSIVE aliases(item) AS (SELECT $item UNION SELECT c.prior_item FROM ci_attribution_corrections c JOIN aliases a ON c.effective_item=a.item UNION SELECT c.effective_item FROM ci_attribution_corrections c JOIN aliases a ON c.prior_item=a.item) SELECT count(*) FROM aliases WHERE item=$dispatchItem;" [ "$item",box item; "$dispatchItem",box dispatchSubject ] |> Convert.ToInt64
+                                                if subjectJoined<>1L then invalidOp "efficiency-claim-dispatch-subject"
+                                                let dispatchOwned = receiptScalar connection "SELECT count(*) FROM fact_admissions a JOIN receipt_admissions ra ON ra.receipt_key=a.receipt_key AND ra.envelope_digest=a.envelope_digest AND ra.producer=a.producer AND ra.stream=a.stream JOIN transport_receipts t ON t.producer=ra.producer AND t.batch=ra.batch AND t.state='applied' WHERE a.identity=$dispatch AND a.producer=$producer AND a.stream=$stream;" [ "$dispatch",box (dispatch.GetProperty("id").GetString()); "$producer",box producer; "$stream",box stream ] |> Convert.ToInt64
+                                                if dispatchOwned<>1L then invalidOp "efficiency-prospective-dispatch-owner"
+                                                let policy = (record["canonicalRequest"]["analysisPolicyVersion"]).GetValue<string>()
                                                 // Count stable outcome history across both scopes and every corrected alias.
                                                 // Unknown-epoch reservations remain chargeable when an epoch is later witnessed.
-                                                let active = receiptScalar connection "SELECT count(*) FROM efficiency_analysis_reservations WHERE stable_outcome_identity=$outcome AND policy_version=$policy AND state IN ('reserved','started');" [ "$outcome", box outcome; "$policy", box policy ] |> Convert.ToInt64
+                                                let epochNode = subject["outcomeEpoch"]
+                                                let epochKey = if isNull epochNode then "unknown" else epochNode.GetValue<int64>().ToString(Globalization.CultureInfo.InvariantCulture)
+                                                let outcomeRevision = receiptScalar connection "SELECT fact_revision FROM native_item_outcomes WHERE identity=$id;" [ "$id",box outcome ] |> Convert.ToInt64
+                                                let unknownKey = "unknown:"+outcomeRevision.ToString(Globalization.CultureInfo.InvariantCulture)
+                                                let epochKey = if isNull epochNode then unknownKey else epochKey
+                                                let budgetValues = [ "$outcome",box outcome; "$policy",box policy; "$epoch",box epochKey; "$unknown",box unknownKey ]
+                                                let active = receiptScalar connection "SELECT count(*) FROM efficiency_analysis_reservations WHERE stable_outcome_identity=$outcome AND policy_version=$policy AND (epoch_key=$epoch OR epoch_key=$unknown) AND state IN ('reserved','started');" budgetValues |> Convert.ToInt64
                                                 if active<>0L then invalidOp "efficiency-analysis-concurrent-claim"
-                                                let used = receiptScalar connection "SELECT count(*) FROM efficiency_analysis_reservations WHERE stable_outcome_identity=$outcome AND policy_version=$policy;" [ "$outcome", box outcome; "$policy", box policy ] |> Convert.ToInt64
+                                                let used = receiptScalar connection "SELECT count(*) FROM efficiency_analysis_reservations WHERE stable_outcome_identity=$outcome AND policy_version=$policy AND (epoch_key=$epoch OR epoch_key=$unknown);" budgetValues |> Convert.ToInt64
                                                 if used >= 3L then invalidOp "analysis-budget-exhausted"
                                                 let claim = input.GetProperty("claimId").GetString()
                                                 let generation = used + 1L
                                                 receiptExecute connection
-                                                    "INSERT INTO efficiency_analysis_reservations VALUES($outcome,'unknown',$policy,$reservation,$request,$claim,$producer,$stream,$dispatch,$generation,'reserved');"
-                                                    [ "$outcome", box outcome; "$policy", box policy; "$reservation", box generation
+                                                    "INSERT INTO efficiency_analysis_reservations VALUES($outcome,$epoch,$policy,$reservation,$request,$claim,$producer,$stream,$dispatch,$generation,'reserved');"
+                                                    [ "$outcome", box outcome; "$epoch",box epochKey; "$policy", box policy; "$reservation", box generation
                                                       "$request", box id; "$claim", box claim; "$producer", box producer; "$stream", box stream
                                                       "$dispatch", box (dispatch.GetProperty("id").GetString()); "$generation", box generation ]
                                                 record["claimId"] <- JsonValue.Create claim
@@ -4316,10 +4313,26 @@ SELECT count(*) FROM expected_dispatches d JOIN population p ON p.dispatch_id=d.
                                                 if not (isNull record["invocationRef"]) then invalidOp "efficiency-invocation-already-attached"
                                                 if efficiencyJson record["dispatchRef"] <> (input.GetProperty("dispatchRef").GetRawText() |> JsonNode.Parse |> efficiencyJson) then invalidOp "efficiency-dispatch-mismatch"
                                                 let invocation = input.GetProperty("invocationRef").GetString()
-                                                let dispatch = record["dispatchRef"]["id"].GetValue<string>()
+                                                let dispatch = (record["dispatchRef"]["id"]).GetValue<string>()
                                                 if Convert.ToInt64(receiptScalar connection
                                                     "SELECT count(*) FROM expected_dispatches d JOIN invocation_lineage l ON l.dispatch_id=d.dispatch_id AND l.item_id=d.item_id JOIN runtime_admissions a ON a.invocation_id=l.invocation_id AND a.item_id=l.item_id WHERE d.identity=$dispatch AND d.item_id=$item AND a.invocation_id=$invocation;"
                                                     [ "$dispatch", box dispatch; "$item", box item; "$invocation", box invocation ]) <> 1L then invalidOp "efficiency-runtime-lineage-unavailable"
+                                                use started = connection.CreateCommand()
+                                                started.CommandText <- "SELECT f.identity,f.kind,f.revision,f.content_digest,t.accepted_at FROM runtime_starts s JOIN current_ingest_facts f ON f.identity=s.identity JOIN fact_admissions a ON a.identity=s.identity JOIN fact_acceptance_times t ON t.identity=f.identity AND t.fact_revision=f.revision AND t.content_digest=f.content_digest WHERE s.item_id=$item AND s.invocation_id=$invocation AND ((s.phase='process' AND s.process_id>0) OR (s.phase='thread' AND s.thread_id IS NOT NULL)) AND a.producer=$producer AND a.stream=$stream ORDER BY f.identity;"
+                                                [ "$item",box item; "$invocation",box invocation; "$producer",box producer; "$stream",box stream ]
+                                                |> List.iter (fun (name,value) -> parameter started name value)
+                                                let startRows =
+                                                    use reader = started.ExecuteReader()
+                                                    [ while reader.Read() do yield reader.GetString 0,reader.GetString 1,reader.GetInt64 2,reader.GetString 3,reader.GetString 4 ]
+                                                let suppliedRefs = input.GetProperty("lineageRefs").EnumerateArray() |> Seq.toArray
+                                                let claimedAt = DateTimeOffset.Parse(record["claimedAt"].GetValue<string>(),Globalization.CultureInfo.InvariantCulture)
+                                                let acceptedStart = startRows |> List.exists (fun (id,kind,revision,digest,acceptedAt) ->
+                                                    DateTimeOffset.Parse(acceptedAt,Globalization.CultureInfo.InvariantCulture)>=claimedAt
+                                                    && (suppliedRefs |> Array.exists (fun reference ->
+                                                        reference.GetProperty("id").GetString()=id && reference.GetProperty("kind").GetString()=kind
+                                                        && reference.GetProperty("revision").GetInt64()=revision
+                                                        && reference.GetProperty("contentDigest").GetString()="sha256:"+digest)))
+                                                if not acceptedStart then invalidOp "efficiency-actual-start-witness-unavailable"
                                                 record["invocationRef"] <- JsonValue.Create invocation
                                                 record["lineageRefs"] <- JsonNode.Parse(input.GetProperty("lineageRefs").GetRawText())
                                                 receiptExecute connection "UPDATE efficiency_analysis_reservations SET state='started' WHERE claim_id=$claim;" [ "$claim", box (input.GetProperty("claimId").GetString()) ]
@@ -4408,6 +4421,44 @@ SELECT count(*) FROM expected_dispatches d JOIN population p ON p.dispatch_id=d.
             | :? JsonException as error -> Error [ error.Message ]
             | :? InvalidOperationException as error -> Error [ error.Message ]
 
+    /// Resolve only an already applied dispatch owned by this association; the claim
+    /// transaction rechecks its exact revision/digest and existing CAS/budget guards.
+    let efficiencyAnalysisClaimProspective path assessment (principal: TelemetryReceipt.Principal) dispatchIdentity itemId (templateBytes: byte array) =
+        if isNull templateBytes || templateBytes.Length=0 || templateBytes.Length>16384 then Error [ "efficiency-command-byte-bound" ]
+        else
+            try
+                use template = JsonDocument.Parse templateBytes
+                let value = template.RootElement
+                if value.ValueKind<>JsonValueKind.Object || (value.EnumerateObject() |> Seq.exists (fun property -> property.Name="dispatchRef")) then
+                    Error [ "efficiency-prospective-template-shape" ]
+                else
+                    let resolved = receiptLocked path assessment (fun _ connection ->
+                        if not (principalAuthorized connection principal) then Error [ "efficiency-authenticated-producer-required" ]
+                        else
+                            use command = connection.CreateCommand()
+                            command.CommandText <- "SELECT f.identity,f.kind,f.revision,f.content_digest FROM expected_dispatches d JOIN current_ingest_facts f ON f.identity=d.identity JOIN fact_admissions a ON a.identity=f.identity JOIN receipt_admissions ra ON ra.receipt_key=a.receipt_key AND ra.envelope_digest=a.envelope_digest AND ra.producer=a.producer AND ra.stream=a.stream JOIN transport_receipts t ON t.producer=ra.producer AND t.batch=ra.batch AND t.state='applied' WHERE d.identity=$dispatch AND d.item_id=$item AND a.producer=$producer AND a.stream=$stream;"
+                            [ "$dispatch",box dispatchIdentity; "$item",box itemId; "$producer",box principal.Scope.Producer; "$stream",box principal.Scope.Stream ]
+                            |> List.iter (fun (name,parameterValue) -> parameter command name parameterValue)
+                            use reader = command.ExecuteReader()
+                            if not (reader.Read()) then Error [ "efficiency-prospective-dispatch-unavailable" ]
+                            else
+                                let reference = JsonObject()
+                                reference["id"] <- JsonValue.Create(reader.GetString 0)
+                                reference["kind"] <- JsonValue.Create(reader.GetString 1)
+                                reference["revision"] <- JsonValue.Create(reader.GetInt64 2)
+                                reference["contentDigest"] <- JsonValue.Create("sha256:"+reader.GetString 3)
+                                if reader.Read() then Error [ "efficiency-prospective-dispatch-ambiguous" ] else Ok reference)
+                    match resolved with
+                    | Error reasons -> Error reasons
+                    | Ok reference ->
+                        let input = JsonNode.Parse(templateBytes).AsObject()
+                        input["dispatchRef"] <- reference
+                        let bytes = Encoding.UTF8.GetBytes(input.ToJsonString())
+                        efficiencyAnalysis path assessment principal "claim" bytes None
+            with
+            | :? JsonException as error -> Error [ error.Message ]
+            | :? InvalidOperationException as error -> Error [ error.Message ]
+
     let efficiencyAnalysisReconcile path assessment (principal: TelemetryReceipt.Principal) selectedItem =
         receiptLocked path assessment (fun _ connection ->
             if not (principalAuthorized connection principal) then Error [ "efficiency-authenticated-producer-required" ]
@@ -4421,10 +4472,11 @@ SELECT count(*) FROM expected_dispatches d JOIN population p ON p.dispatch_id=d.
                         values |> List.iter (fun (name, value) -> parameter command name value)
                         command
                     let outcomes =
-                        use command = parameterized
-                            "SELECT o.identity,o.item_id,f.revision,f.content_digest,f.canonical FROM native_item_outcomes o JOIN current_ingest_facts f ON f.identity=o.identity JOIN fact_admissions a ON a.identity=o.identity WHERE a.producer=$producer AND a.stream=$stream AND ($item IS NULL OR o.item_id=$item) ORDER BY o.item_id,o.identity LIMIT 201;"
-                            [ "$producer", box principal.Scope.Producer; "$stream", box principal.Scope.Stream
-                              "$item", selectedItem |> Option.map box |> Option.defaultValue DBNull.Value ]
+                        use command =
+                            parameterized
+                                "SELECT o.identity,o.item_id,f.revision,f.content_digest,f.canonical FROM native_item_outcomes o JOIN current_ingest_facts f ON f.identity=o.identity JOIN fact_admissions a ON a.identity=o.identity WHERE a.producer=$producer AND a.stream=$stream AND ($item IS NULL OR o.item_id=$item) ORDER BY o.item_id,o.identity LIMIT 201;"
+                                [ "$producer", box principal.Scope.Producer; "$stream", box principal.Scope.Stream
+                                  "$item", selectedItem |> Option.map box |> Option.defaultValue DBNull.Value ]
                         use reader = command.ExecuteReader()
                         [ while reader.Read() do yield reader.GetString 0, reader.GetString 1 ]
                     let ids = ResizeArray<string>()
@@ -4434,14 +4486,16 @@ SELECT count(*) FROM expected_dispatches d JOIN population p ON p.dispatch_id=d.
                     let mutable reason: string = null
                     for outcome, item in outcomes |> List.truncate 200 do
                         try
-                            let unresolved = receiptScalar connection
-                                "SELECT count(*) FROM efficiency_analysis_requests WHERE stable_outcome_identity=$outcome AND state IN ('claimed','failed','unavailable');"
-                                [ "$outcome", box outcome ] |> Convert.ToInt64
+                            let unresolved =
+                                receiptScalar connection
+                                    "SELECT count(*) FROM efficiency_analysis_requests WHERE stable_outcome_identity=$outcome AND state IN ('claimed','failed','unavailable');"
+                                    [ "$outcome", box outcome ] |> Convert.ToInt64
                             if unresolved > 0L then invalidOp "analysis-pending-unresolved-claim"
                             let authority =
-                                use command = parameterized
-                                    "SELECT f.identity,f.kind,f.revision,f.content_digest FROM current_ingest_facts f JOIN fact_admissions a ON a.identity=f.identity JOIN receipt_admissions ra ON ra.receipt_key=a.receipt_key AND ra.envelope_digest=a.envelope_digest AND ra.producer=a.producer AND ra.stream=a.stream JOIN transport_receipts r ON r.producer=ra.producer AND r.batch=ra.batch AND r.state='applied' WHERE f.item_id=$item AND f.kind IN ('process-review','runtime-admission','native-item-outcome') AND a.producer=$producer AND a.stream=$stream ORDER BY CASE f.kind WHEN 'process-review' THEN 0 WHEN 'runtime-admission' THEN 1 ELSE 2 END,f.identity LIMIT 1;"
-                                    [ "$item", box item; "$producer", box principal.Scope.Producer; "$stream", box principal.Scope.Stream ]
+                                use command =
+                                    parameterized
+                                        "SELECT f.identity,f.kind,f.revision,f.content_digest FROM current_ingest_facts f JOIN fact_admissions a ON a.identity=f.identity JOIN receipt_admissions ra ON ra.receipt_key=a.receipt_key AND ra.envelope_digest=a.envelope_digest AND ra.producer=a.producer AND ra.stream=a.stream JOIN transport_receipts r ON r.producer=ra.producer AND r.batch=ra.batch AND r.state='applied' WHERE f.item_id=$item AND f.kind IN ('process-review','runtime-admission','native-item-outcome') AND a.producer=$producer AND a.stream=$stream ORDER BY CASE f.kind WHEN 'process-review' THEN 0 WHEN 'runtime-admission' THEN 1 ELSE 2 END,f.identity LIMIT 1;"
+                                        [ "$item", box item; "$producer", box principal.Scope.Producer; "$stream", box principal.Scope.Stream ]
                                 use reader = command.ExecuteReader()
                                 if not (reader.Read()) then invalidOp "missing-authority"
                                 reader.GetString 0, reader.GetString 1, reader.GetInt64 2, reader.GetString 3
@@ -4450,9 +4504,10 @@ SELECT count(*) FROM expected_dispatches d JOIN population p ON p.dispatch_id=d.
                             let references = JsonArray()
                             let omissions = ResizeArray<string>()
                             let mutable rawBytes = 0
-                            use command = parameterized
-                                "SELECT identity,kind,revision,content_digest,canonical FROM current_ingest_facts WHERE item_id=$item ORDER BY CASE kind WHEN 'complication' THEN 0 WHEN 'process-review' THEN 1 WHEN 'native-item-outcome' THEN 2 ELSE 3 END,identity LIMIT 4097;"
-                                [ "$item", box item ]
+                            use command =
+                                parameterized
+                                    "SELECT identity,kind,revision,content_digest,canonical FROM current_ingest_facts WHERE item_id=$item ORDER BY CASE kind WHEN 'complication' THEN 0 WHEN 'process-review' THEN 1 WHEN 'native-item-outcome' THEN 2 ELSE 3 END,identity LIMIT 4097;"
+                                    [ "$item", box item ]
                             let sourceRows =
                                 use reader = command.ExecuteReader()
                                 [ while reader.Read() do yield reader.GetString 0, reader.GetString 1, reader.GetInt64 2, reader.GetString 3, reader.GetString 4 ]
@@ -4461,12 +4516,14 @@ SELECT count(*) FROM expected_dispatches d JOIN population p ON p.dispatch_id=d.
                                 if rawBytes > 4194304 || Encoding.UTF8.GetByteCount canonical > 16384 then invalidOp "efficiency-source-byte-bound"
                                 let reference = JsonSerializer.SerializeToNode({| id = identity; kind = kind; revision = revision; contentDigest = "sha256:" + digest |})
                                 use referenceDocument = JsonDocument.Parse(reference.ToJsonString())
-                                let analysisUsage = receiptScalar connection
-                                    "SELECT count(*) FROM current_ingest_facts f JOIN efficiency_analysis_requests q ON (q.invocation_ref IS NOT NULL AND json_extract(f.canonical,'$.invocationId')=q.invocation_ref) OR json_extract(q.canonical,'$.dispatchRef.id')=f.identity WHERE f.identity=$id;"
-                                    [ "$id", box identity ] |> Convert.ToInt64
-                                let generatedReview = receiptScalar connection
-                                    "SELECT count(*) FROM efficiency_analysis_requests WHERE state='settled' AND json_extract(canonical,'$.generatedReviewRef.id')=$id AND json_extract(canonical,'$.generatedReviewRef.revision')=$revision;"
-                                    [ "$id", box identity; "$revision", box revision ] |> Convert.ToInt64
+                                let analysisUsage =
+                                    receiptScalar connection
+                                        "SELECT count(*) FROM current_ingest_facts f JOIN efficiency_analysis_requests q ON (q.invocation_ref IS NOT NULL AND json_extract(f.canonical,'$.invocationId')=q.invocation_ref) OR json_extract(q.canonical,'$.dispatchRef.id')=f.identity WHERE f.identity=$id;"
+                                        [ "$id", box identity ] |> Convert.ToInt64
+                                let generatedReview =
+                                    receiptScalar connection
+                                        "SELECT count(*) FROM efficiency_analysis_requests WHERE state='settled' AND json_extract(canonical,'$.generatedReviewRef.id')=$id AND json_extract(canonical,'$.generatedReviewRef.revision')=$revision;"
+                                        [ "$id", box identity; "$revision", box revision ] |> Convert.ToInt64
                                 match EfficiencyEvidence.semanticKind kind, EfficiencyInput.validateReference referenceDocument.RootElement with
                                 | Some semantic, Ok () when analysisUsage = 0L && generatedReview = 0L ->
                                     if records.Count < 128 then
@@ -4484,7 +4541,7 @@ SELECT count(*) FROM expected_dispatches d JOIN population p ON p.dispatch_id=d.
                                 | _ -> omissions.Add("unsupported-substantive-kind:" + kind)
                             if sourceRows.Length > 4096 then omissions.Add "canonical-source-selection-bound"
                             let epoch, epochRefs =
-                                use command = parameterized "SELECT epoch,begin_refs,close_refs FROM efficiency_outcome_epochs WHERE outcome_identity=$outcome AND state='closed';" [ "$outcome", box outcome ]
+                                use command = parameterized "SELECT e.epoch,e.begin_refs,e.close_refs FROM efficiency_outcome_epochs e JOIN native_item_outcomes o ON o.identity=e.outcome_identity AND o.fact_revision=e.outcome_revision WHERE e.outcome_identity=$outcome AND e.state='closed' ORDER BY e.epoch DESC LIMIT 1;" [ "$outcome", box outcome ]
                                 use reader = command.ExecuteReader()
                                 if not (reader.Read()) then None, JsonArray()
                                 else
@@ -6516,11 +6573,14 @@ WHERE n.source_ref=$source;
             [ "SELECT identity,kind,item_id,revision,content_digest FROM current_ingest_facts ORDER BY identity;"
               "SELECT correction_id,plan_digest,outcome_identity,effective_item,applied_at FROM ci_attribution_corrections ORDER BY correction_id;"
               "SELECT identity,fact_revision,content_digest,accepted_at,receipt_key FROM fact_acceptance_times ORDER BY identity,fact_revision;"
+              "SELECT identity,kind,item_id,fact_revision,content_digest,canonical FROM efficiency_records ORDER BY identity;"
+              "SELECT identity,resource_identity,resource_revision,resource_digest,effective_item_id,correction_identity,correction_digest,dimension,provider,accounting_scope,unit FROM efficiency_allocation_context ORDER BY identity;"
+              "SELECT identity,item_id,invocation_id,event,occurred_at,occurred_clock_provenance,observed_at,observed_clock_provenance,fact_revision FROM operational_event_times ORDER BY identity;"
               "SELECT request_id,revision,content_digest,state,updated_at FROM efficiency_analysis_requests ORDER BY request_id;"
               "SELECT producer,stream,authority_role,grant_id,grant_generation FROM receipt_producers ORDER BY producer,stream;"
               "SELECT identity,producer,stream,authority_role,grant_id,grant_generation,receipt_key,envelope_digest FROM fact_admissions ORDER BY identity;"
               "SELECT sequence,receipt_key,producer,stream,accepted_at FROM efficiency_receiver_order ORDER BY sequence;"
-              "SELECT original_item_id,epoch,dispatch_identity,state,outcome_identity,begin_sequence,close_sequence,begin_refs,close_refs FROM efficiency_outcome_epochs ORDER BY original_item_id,epoch;"
+              "SELECT original_item_id,epoch,dispatch_identity,state,outcome_identity,outcome_revision,begin_sequence,close_sequence,begin_refs,close_refs FROM efficiency_outcome_epochs ORDER BY original_item_id,epoch;"
               "SELECT receipt_key,original_item_id,reason FROM efficiency_epoch_gaps ORDER BY receipt_key,original_item_id,reason;"
               "SELECT stable_outcome_identity,epoch_key,policy_version,reservation,claim_id,state FROM efficiency_analysis_reservations ORDER BY stable_outcome_identity,epoch_key,policy_version,reservation;" ] do
             append sql
@@ -6546,18 +6606,32 @@ WHERE n.source_ref=$source;
         let query (sql: string) (values: (string * obj) list) =
             use command = connection.CreateCommand()
             command.Transaction <- transaction
-            command.CommandText <- sql
-            values |> List.iter (fun (name, value) -> parameter command name value)
+            let members = values |> List.tryFind (fun (name,_) -> name="$members")
+            command.CommandText <- if members.IsSome then sql.Replace("item_id=$item","item_id IN (SELECT value FROM json_each($members))") else sql
+            values |> List.filter (fun (name,_) -> name<>"$members" || command.CommandText.Contains("$members",StringComparison.Ordinal))
+                   |> List.iter (fun (name, value) -> parameter command name value)
             use reader = command.ExecuteReader()
             [ while reader.Read() do
                 yield [ for index in 0 .. reader.FieldCount - 1 ->
                             if reader.IsDBNull index then None else Some(Convert.ToString(reader.GetValue index, Globalization.CultureInfo.InvariantCulture)) ] ]
-        let items = baseSnapshot["items"].AsArray() |> Seq.map (fun node -> node.GetValue<string>()) |> Seq.toList
+        let sourceItems = baseSnapshot["items"].AsArray() |> Seq.map (fun node -> node.GetValue<string>()) |> Seq.toList
+        let groups =
+            sourceItems |> List.map (fun item ->
+                let original =
+                    match query "SELECT DISTINCT original_item_id FROM (SELECT original_item_id FROM budget_population_facts WHERE item_id=$item UNION SELECT original_item_id FROM efficiency_outcome_epochs WHERE effective_item_id=$item) ORDER BY original_item_id LIMIT 2;" [ "$item",box item ] with
+                    | [ [ Some original ] ] -> original
+                    | [] -> item
+                    | _ -> invalidOp "efficiency-original-item-lineage-conflict"
+                original,item)
+            |> List.groupBy fst |> List.map (fun (original,rows) -> original,(rows |> List.map snd |> List.distinct |> List.sort)) |> List.sortBy fst
+        let items = groups |> List.map fst
         let outputItems = JsonArray()
         let mutable returned = 0
         let mutable omitted = 0
-        for item in items |> List.truncate maxItems do
-            let values = [ "$item", box item ]
+        for item,members in groups |> List.truncate maxItems do
+            // Canonical group scope is witnessed by the actual store population/epoch
+            // mapping. Each source identity appears once across its exact member roster.
+            let values = [ "$item",box item; "$members",box(JsonSerializer.Serialize members) ]
             let facts =
                 query "SELECT identity,kind,revision,content_digest,canonical FROM current_ingest_facts WHERE item_id=$item AND kind IN ('runtime-turn-usage','usage','native-item-outcome') ORDER BY identity LIMIT 4097;" values
             if facts.Length > 4096 then invalidOp "efficiency-export-source-selection-bound"
@@ -6581,14 +6655,10 @@ WHERE n.source_ref=$source;
                     for property, unit in [ "input", "tokens-input"; "output", "tokens-output"; "total", "tokens-total" ] do
                         counters.Add(provider, scope, property, unit, bigint (source.GetProperty(property).GetInt64()))
             let metrics = JsonArray()
-            let original =
-                match query "SELECT DISTINCT original_item_id FROM budget_population_facts WHERE item_id=$item ORDER BY original_item_id LIMIT 2;" values with
-                | [ [ Some original ] ] -> original
-                | [] -> item
-                | _ -> invalidOp "efficiency-original-item-lineage-conflict"
+            let original = item
             let metric (metricName: string) (unit: string) (scope: string) (provider: string) (amount: bigint option) (status: string) (reason: string) (purpose: string) (health: string) =
                 let population =
-                    {| itemIds = [|item|]; repository = "unknown"; workType = "observed-population-at-cutoff"
+                    {| itemIds = List.toArray members; repository = "unknown"; workType = "observed-population-at-cutoff"
                        acceptanceScope = scope; windowStart = cutoff; windowEnd = cutoff; cutoff = cutoff
                        excludedItems = ([||] : obj array); openItems = 0; abandonedItems = 0 |}
                 let node = JsonSerializer.SerializeToNode
@@ -6690,22 +6760,30 @@ WHERE n.source_ref=$source;
                     let avoidable = allocation.ByPurpose |> Map.tryFind ProcessEfficiency.AvoidableProcess |> Option.defaultValue { Numerator = 0I; Denominator = 1I }
                     let share = ProcessEfficiency.fraction avoidable.Numerator (avoidable.Denominator * allocation.Total) |> Result.defaultWith invalidOp
                     ratio "avoidable-share" provider scope (null: string) (Some share) (if allocation.Unallocated.Numerator > 0I || (allocation.ByPurpose |> Map.tryFind ProcessEfficiency.UnknownPurpose |> Option.exists (fun amount -> amount.Numerator > 0I)) then "partial" else "known") "Only supported avoidability classifications contribute; this is a lower bound when classification is incomplete."
+            let analysisIds = query "SELECT DISTINCT u.identity FROM runtime_turn_usage u JOIN efficiency_analysis_requests q ON q.invocation_ref=u.invocation_id WHERE u.item_id=$item;" values |> List.choose (function [ Some id ] -> Some id | _ -> None) |> Set.ofList
+            let analysisCounters = ResizeArray<string*string*string*bigint>()
+            for row in facts do
+                if row[1]=Some "runtime-turn-usage" && Set.contains row[0].Value analysisIds then
+                    use document = JsonDocument.Parse row[4].Value
+                    let node = document.RootElement
+                    for name,unit in [ "input","tokens-input";"output","tokens-output";"total","tokens-total" ] do
+                        analysisCounters.Add(node.GetProperty("provider").GetString(),node.GetProperty("scope").GetString(),unit,bigint(node.GetProperty(name).GetInt64()))
+            for ((provider,scope,unit),rows) in analysisCounters |> Seq.groupBy (fun (provider,scope,unit,_) -> provider,scope,unit) do
+                metric "analysis-burden" unit scope provider (Some(rows |> Seq.sumBy (fun (_,_,_,amount) -> amount))) "partial" "Exact observed analyst counters are a subset of observed resources; missing turns or unresolved starts are not inferred." (null:string) (null:string)
             metric "delivered-outcomes" "outcomes" "source-delivery" "not-applicable" (Some delivered) "known" "Code delivery is distinct from native feature acceptance." (null: string) (null: string)
             let terminalInvocations = query "SELECT invocation_id FROM runtime_terminals WHERE item_id=$item;" values |> List.choose (function [ Some id ] -> Some id | _ -> None) |> Set.ofList
             let usageInvocations = query "SELECT DISTINCT invocation_id FROM runtime_turn_usage WHERE item_id=$item;" values |> List.choose (function [ Some id ] -> Some id | _ -> None) |> Set.ofList
-            let epochDispatches = query "SELECT DISTINCT json_extract(j.value,'$.id') FROM efficiency_outcome_epochs e JOIN json_each(e.close_refs) j JOIN native_item_outcomes o ON o.identity=e.outcome_identity WHERE o.item_id=$item AND e.state='closed' AND json_extract(j.value,'$.kind')='expected-dispatch';" values |> List.choose (function [ Some id ] -> Some id | _ -> None) |> Set.ofList
-            let expected = query "SELECT d.dispatch_id,l.invocation_id,d.identity FROM expected_dispatches d LEFT JOIN invocation_lineage l ON l.item_id=d.item_id AND l.dispatch_id=d.dispatch_id WHERE d.item_id=$item ORDER BY d.dispatch_id;" values
-                           |> List.filter (function [ _;_;Some id ] -> Set.contains id epochDispatches | _ -> false)
-                           |> List.map (fun row -> row |> List.take 2)
+            let epochDispatches = query "SELECT DISTINCT json_extract(j.value,'$.id') FROM efficiency_outcome_epochs e JOIN json_each(e.close_refs) j JOIN native_item_outcomes o ON o.identity=e.outcome_identity WHERE o.item_id=$item AND e.outcome_revision=o.fact_revision AND e.state='closed' AND json_extract(j.value,'$.kind')='expected-dispatch';" values |> List.choose (function [ Some id ] -> Some id | _ -> None) |> Set.ofList
+            let expectedRows = query "SELECT d.dispatch_id,l.invocation_id,d.identity,d.item_id FROM expected_dispatches d LEFT JOIN invocation_lineage l ON l.item_id=d.item_id AND l.dispatch_id=d.dispatch_id WHERE d.item_id=$item ORDER BY d.dispatch_id;" values
+                               |> List.filter (function [ _;_;Some id;_ ] -> Set.contains id epochDispatches | _ -> false)
+            let expected = expectedRows |> List.map (fun row -> row |> List.take 2)
             let expectedSet = expected |> List.choose (function [ Some _;Some id ] -> Some id | _ -> None) |> Set.ofList
-            let nativeFacts = facts |> List.filter (fun row ->
-                if row[1]<>Some "runtime-turn-usage" then false
-                else
-                    use document = JsonDocument.Parse row[4].Value
-                    Set.contains (document.RootElement.GetProperty("invocationId").GetString()) expectedSet)
-            let nativeWitnessComplete = not expectedSet.IsEmpty && (expectedSet |> Set.forall (efficiencyNativeUsageComplete connection item))
+            let closedMembers = query "SELECT DISTINCT o.item_id FROM efficiency_outcome_epochs e JOIN native_item_outcomes o ON o.identity=e.outcome_identity WHERE o.item_id=$item AND e.outcome_revision=o.fact_revision AND e.state='closed';" values |> List.choose (function [ Some member ] -> Some member | _ -> None) |> Set.ofList
+            let nativeWitnessComplete = closedMembers=Set.ofList members && not expectedRows.IsEmpty && (expectedRows |> List.forall (function
+                | [ _;Some invocation;_;Some member ] -> efficiencyNativeUsageComplete connection member invocation
+                | _ -> false))
             let nativeUsage =
-                nativeFacts
+                facts |> List.filter (fun row -> row[1]=Some "runtime-turn-usage")
                 |> List.sumBy (fun row ->
                     use document = JsonDocument.Parse row[4].Value
                     bigint (document.RootElement.GetProperty("total").GetInt64()))
@@ -6722,7 +6800,7 @@ WHERE n.source_ref=$source;
             let openItems = if population.NativeCompletions > 0 then 0 else 1
             for node in metrics do node["population"]["openItems"] <- JsonValue.Create openItems
             let compatibleNativeCounters =
-                nativeFacts
+                facts |> List.filter (fun row -> row[1]=Some "runtime-turn-usage")
                 |> List.map (fun row ->
                     use document = JsonDocument.Parse row[4].Value
                     document.RootElement.GetProperty("provider").GetRawText(), document.RootElement.GetProperty("scope").GetString())
@@ -6731,18 +6809,18 @@ WHERE n.source_ref=$source;
                 (if compatibleNativeCounters.Length = 1 then population.WholeItemUsage else None)
                 |> Option.bind (fun amount -> ProcessEfficiency.costPerAccepted amount population.NativeCompletions |> Result.defaultWith invalidOp)
             metric "cost-per-accepted" "tokens-per-accepted" "native-item" "mixed-provider-observed-tokens" None
-                (if acceptedCost.IsSome then "known" else "unknown")
-                "Native quotient requires the complete joined invocation and usage population; source delivery alone is insufficient." (null: string) (null: string)
+                (if acceptedCost.IsSome then "partial" else "unknown")
+                "Observed cohort resource includes unsuccessful and analyst counters. The independently witnessed native denominator does not prove that unobserved resource is zero; this quotient is a lower bound." (null: string) (null: string)
             match acceptedCost with
             | Some value ->
                 metrics[metrics.Count - 1]["value"]["numerator"] <- exactValue value.Numerator
                 metrics[metrics.Count - 1]["value"]["denominator"] <- exactValue value.Denominator
                 metrics[metrics.Count - 1]["coverage"]["population"] <- JsonValue.Create "complete"
-                metrics[metrics.Count - 1]["coverage"]["usage"] <- JsonValue.Create "complete"
+                metrics[metrics.Count - 1]["coverage"]["usage"] <- JsonValue.Create "partial"
                 metrics[metrics.Count - 1]["coverage"]["lineage"] <- JsonValue.Create "complete"
             | None -> ()
             // Full canonical acceptance and witnessed time are never derived from missing inputs.
-            for name, unit in [ "retry-incidence", "ratio"; "retry-burden", "ratio"; "first-pass-delivery", "ratio"; "lead-time", "seconds"; "touch-time", "seconds"; "wait-time", "seconds"; "flow-ratio", "ratio"; "critical-path-delay", "seconds"; "analysis-burden", "ratio" ] do
+            for name, unit in [ "retry-incidence", "ratio"; "retry-burden", "ratio"; "first-pass-delivery", "ratio"; "lead-time", "seconds"; "touch-time", "seconds"; "wait-time", "seconds"; "flow-ratio", "ratio"; "critical-path-delay", "seconds" ] do
                 metric name unit "native-item" "unknown-provider" None "unknown" "Required witnessed population, operation or acceptance joins are unavailable." (null: string) (null: string)
             let sourceObservedAt =
                 query "SELECT observed_at FROM operational_event_times WHERE item_id=$item AND observed_at IS NOT NULL;" values
@@ -6754,22 +6832,52 @@ WHERE n.source_ref=$source;
                 |> List.choose (function [ Some timestamp ] -> Some timestamp | _ -> None)
                 |> List.sortByDescending (fun timestamp -> DateTimeOffset.Parse(timestamp, Globalization.CultureInfo.InvariantCulture))
                 |> List.tryHead
-            let request = query "SELECT state,requested_at,claimed_at FROM efficiency_analysis_requests WHERE stable_outcome_identity IN (SELECT identity FROM native_item_outcomes WHERE item_id=$item) ORDER BY updated_at DESC,request_id DESC LIMIT 1;" values
+            let age dimension witnessed =
+                metric "data-health" "seconds" "receiver-observed" "not-applicable" None "unknown" "No applicable witnessed clock; another clock is not substituted." (null:string) dimension
+                match witnessed with
+                | Some timestamp ->
+                    let ticks = (DateTimeOffset.Parse(cutoff,Globalization.CultureInfo.InvariantCulture)-DateTimeOffset.Parse(timestamp,Globalization.CultureInfo.InvariantCulture)).Ticks
+                    if ticks>=0L then
+                        let age = ProcessEfficiency.fraction (bigint ticks) (bigint TimeSpan.TicksPerSecond) |> Result.defaultWith invalidOp
+                        let value = metrics[metrics.Count-1]["value"]
+                        value["status"] <- JsonValue.Create "known"
+                        value["numerator"] <- exactValue age.Numerator
+                        value["denominator"] <- exactValue age.Denominator
+                        value["reason"] <- JsonValue.Create "Exact age of the separately witnessed clock at this cutoff."
+                | None -> ()
+            age "source-age" sourceObservedAt
+            age "ingestion-age" ingestedAt
+            age "publication-age" None
+            let unresolvedLineage = query "SELECT count(*) FROM expected_dispatches d WHERE d.item_id=$item AND (SELECT count(*) FROM invocation_lineage l WHERE l.dispatch_id=d.dispatch_id AND l.item_id=d.item_id)<>1;" values
+            let pending = query "SELECT count(*) FROM efficiency_analysis_requests WHERE stable_outcome_identity IN (SELECT identity FROM native_item_outcomes WHERE item_id=$item) AND state IN ('pending','claimed');" values
+            let countOf = function [ [ Some amount ] ] -> bigint(Int64.Parse amount) | _ -> invalidOp "efficiency-health-count-unavailable"
+            metric "data-health" "records" "receiver-observed" "not-applicable" (Some(countOf unresolvedLineage)) "known" "Unresolved lineage in the current observed dispatch selection; absent expected populations remain unknown." (null:string) "unresolved-lineage"
+            metric "data-health" "records" "receiver-observed" "not-applicable" (Some(countOf pending)) "known" "Current pending or claimed canonical requests, including claims whose invocation is not yet witnessed." (null:string) "pending-analysis"
+            let producers = query "SELECT count(DISTINCT a.producer) FROM fact_admissions a JOIN current_ingest_facts f ON f.identity=a.identity WHERE f.item_id=$item;" values
+            metric "data-health" "records" "receiver-observed" "not-applicable" (Some(countOf producers)) "partial" "Observed authenticated producers only; a complete expected producer roster is not inferred." (null:string) "producer-population"
+            let request = query "SELECT state,requested_at,claimed_at FROM efficiency_analysis_requests WHERE stable_outcome_identity IN (SELECT identity FROM native_item_outcomes WHERE item_id=$item) ORDER BY CASE state WHEN 'claimed' THEN 0 WHEN 'pending' THEN 1 WHEN 'failed' THEN 2 WHEN 'unavailable' THEN 3 ELSE 4 END,updated_at DESC,request_id DESC LIMIT 1;" values
             let requestState, pendingSince, lastAttemptAt =
                 match request with
                 | [ [ Some state; requested; updated ] ] -> Some state, (if state = "pending" then requested else None), (if state = "pending" then None else updated)
                 | _ -> None, None, None
             let assessment =
-                match query "SELECT r.canonical FROM efficiency_records r JOIN efficiency_analysis_requests q ON json_extract(q.canonical,'$.resultAssessmentRef')=r.identity AND q.state='settled' JOIN native_item_outcomes o ON o.identity=q.stable_outcome_identity AND o.item_id=r.item_id WHERE r.item_id=$item AND r.kind='efficiency-assessment/1' AND json_extract(r.canonical,'$.assessment.evidenceDigest')=q.evidence_digest ORDER BY r.fact_revision DESC,r.identity DESC LIMIT 1;" values with
+                let assessmentValues = ("$group",box item)::values
+                match query "SELECT r.canonical FROM efficiency_records r JOIN efficiency_analysis_requests q ON json_extract(q.canonical,'$.resultAssessmentRef')=r.identity AND q.state='settled' JOIN native_item_outcomes o ON o.identity=q.stable_outcome_identity AND o.item_id=r.item_id WHERE r.item_id=$item AND json_extract(r.canonical,'$.assessment.subject.itemId')=$group AND r.kind='efficiency-assessment/1' AND json_extract(r.canonical,'$.assessment.evidenceDigest')=q.evidence_digest ORDER BY r.fact_revision DESC,r.identity DESC LIMIT 1;" assessmentValues with
                 | [ [ Some canonical ] ] ->
                     let root = JsonNode.Parse canonical
                     let value = root["assessment"]
-                    if value["provenance"]["validationResult"].GetValue<string>() = "accepted" then value.DeepClone() else null
+                    if (value["provenance"]["validationResult"]).GetValue<string>() = "accepted" then value.DeepClone() else null
                 | _ -> null
-            let assessmentState = if isNull assessment then None else Some(assessment["lifecycle"]["state"].GetValue<string>())
+            let assessmentState = if isNull assessment then None else Some((assessment["lifecycle"]["state"]).GetValue<string>())
             let state = match requestState with Some "pending" -> "pending" | Some "claimed" -> "running" | Some "failed" -> "failed" | Some "unavailable" -> "unavailable" | _ -> assessmentState |> Option.defaultValue "unavailable"
             let available = min 32 (maxMetrics - returned)
-            let selected = metrics |> Seq.truncate available |> Seq.toArray
+            let priority (node: JsonNode) =
+                match node["metric"].GetValue<string>() with
+                | "data-health" -> 0
+                | "observed-resource" | "analysis-burden" | "delivered-outcomes" | "cost-per-accepted" -> 1
+                | "work-mix" | "avoidable-share" -> 2
+                | _ -> 3
+            let selected = metrics |> Seq.sortBy (fun node -> priority node,node["metricId"].GetValue<string>()) |> Seq.truncate available |> Seq.toArray
             returned <- returned + selected.Length
             let omittedHere = metrics.Count - selected.Length
             omitted <- omitted + omittedHere
@@ -7090,12 +7198,18 @@ WHERE n.source_ref=$source;
             let record,packet,_,_,_,_ = efficiencyQueueRow connection requestId
             record["packetBase64"] <- JsonValue.Create(Convert.ToBase64String packet)
             record["rawDigest"] <- JsonValue.Create("sha256:"+CanonicalJson.sha256 packet)
-            let item = record["canonicalRequest"]["subject"]["itemId"].GetValue<string>()
+            let item = (record["canonicalRequest"]["subject"]["itemId"]).GetValue<string>()
             // Metric and analyst-record selection shares the compact base read transaction.
-            let selectedBase = baseSnapshot.DeepClone().AsObject()
-            selectedBase["items"] <- JsonArray(JsonValue.Create(item))
-            use exportDocument = JsonDocument.Parse(efficiencyExportInSnapshot revision 200 1000 connection transaction selectedBase revision)
-            let rows = exportDocument.RootElement.GetProperty("items").EnumerateArray() |> Seq.toArray
+            use originalCommand = connection.CreateCommand()
+            originalCommand.Transaction <- transaction
+            originalCommand.CommandText <- "SELECT DISTINCT original_item_id FROM (SELECT original_item_id FROM budget_population_facts WHERE item_id=$item UNION SELECT original_item_id FROM efficiency_outcome_epochs WHERE effective_item_id=$item) LIMIT 2;"
+            parameter originalCommand "$item" item
+            let originals =
+                use reader = originalCommand.ExecuteReader()
+                [ while reader.Read() do yield reader.GetString 0 ]
+            let original = match originals with [] -> item | [ original ] -> original | _ -> invalidOp "efficiency-original-item-lineage-conflict"
+            use exportDocument = JsonDocument.Parse(efficiencyExportInSnapshot revision 200 1000 connection transaction baseSnapshot revision)
+            let rows = exportDocument.RootElement.GetProperty("items").EnumerateArray() |> Seq.filter (fun row -> row.GetProperty("itemId").GetString()=original) |> Seq.toArray
             if rows.Length<>1 then invalidOp "efficiency-inspect-metrics-unavailable"
             record["metrics"] <- JsonNode.Parse(rows[0].GetProperty("metrics").GetRawText())
             record["sourceFingerprint"] <- JsonValue.Create(exportDocument.RootElement.GetProperty("sourceFingerprint").GetString())

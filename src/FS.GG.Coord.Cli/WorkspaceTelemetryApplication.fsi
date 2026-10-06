@@ -12,6 +12,9 @@ module WorkspaceTelemetryApplication =
             AssociationDigest: string
         }
 
+    /// Read the exact bounded, caller-owned private prelaunch claim descriptor.
+    val readEfficiencyClaimTemplate: path: string -> Result<byte array, string list>
+
     val resolveBinding: configArg: string option -> repositoryArg: string option -> Result<Binding, string list>
 
     val resolveLocalDashboard:

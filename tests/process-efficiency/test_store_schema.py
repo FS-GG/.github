@@ -64,9 +64,9 @@ class SchemaControls(unittest.TestCase):
             self.db.execute("INSERT INTO efficiency_analysis_requests(request_id,stable_outcome_identity,effective_item_id,scope,evidence_digest,policy_version,state,revision,content_digest,canonical,evidence_packet,owner_producer,owner_stream,requested_at,updated_at) VALUES(?, 'outcome', ?, ?, 'digest','policy','pending',0,'content','{}',?,'p','s','now','now')",(identity,item,scope,b'{}'))
         self.db.execute("INSERT INTO efficiency_analysis_reservations VALUES('outcome','unknown','policy',1,'first','claim1','p','s','dispatch1',1,'reserved')")
         with self.assertRaises(sqlite3.IntegrityError):
-            self.db.execute("INSERT INTO efficiency_analysis_reservations VALUES('outcome','1','policy',2,'second','claim2','p','s','dispatch2',2,'reserved')")
+            self.db.execute("INSERT INTO efficiency_analysis_reservations VALUES('outcome','unknown','policy',2,'second','claim2','p','s','dispatch2',2,'reserved')")
         self.db.execute("UPDATE efficiency_analysis_reservations SET state='unknown' WHERE claim_id='claim1'")
-        self.db.execute("INSERT INTO efficiency_analysis_reservations VALUES('outcome','1','policy',2,'second','claim2','p','s','dispatch2',2,'reserved')")
+        self.db.execute("INSERT INTO efficiency_analysis_reservations VALUES('outcome','unknown','policy',2,'second','claim2','p','s','dispatch2',2,'reserved')")
         self.assertEqual(2,self.db.execute('SELECT count(*) FROM efficiency_analysis_reservations').fetchone()[0])
 
     def test_queue_refuses_running_vocabulary_and_fourth_reservation(self):
@@ -118,14 +118,37 @@ class SchemaControls(unittest.TestCase):
 
     def test_epoch_duplicate_open_and_out_of_order_close_are_rejected(self):
         self.db.execute("INSERT INTO efficiency_receiver_order(receipt_key,producer,stream,accepted_at) VALUES('begin','p','s','observed')")
-        self.db.execute("INSERT INTO efficiency_outcome_epochs VALUES('original',1,'dispatch','OLD','begin',1,'open','[]',NULL,NULL,NULL)")
+        self.db.execute("INSERT INTO efficiency_outcome_epochs VALUES('original',1,'dispatch','OLD','begin',1,'open','[]',NULL,NULL,NULL,NULL)")
         with self.assertRaises(sqlite3.IntegrityError):
-            self.db.execute("INSERT INTO efficiency_outcome_epochs VALUES('original',2,'new-dispatch','NEW','begin',1,'open','[]',NULL,NULL,NULL)")
+            self.db.execute("INSERT INTO efficiency_outcome_epochs VALUES('original',2,'new-dispatch','NEW','begin',1,'open','[]',NULL,NULL,NULL,NULL)")
         with self.assertRaises(sqlite3.IntegrityError):
-            self.db.execute("UPDATE efficiency_outcome_epochs SET state='closed',outcome_identity='outcome',close_sequence=0,close_refs='[]'")
-        self.db.execute("UPDATE efficiency_outcome_epochs SET state='closed',outcome_identity='outcome',close_sequence=1,close_refs='[]'")
-        self.db.execute("INSERT INTO efficiency_outcome_epochs VALUES('original',2,'new-dispatch','NEW','begin',1,'open','[]',NULL,NULL,NULL)")
+            self.db.execute("UPDATE efficiency_outcome_epochs SET state='closed',outcome_identity='outcome',outcome_revision=0,close_sequence=0,close_refs='[]'")
+        self.db.execute("UPDATE efficiency_outcome_epochs SET state='closed',outcome_identity='outcome',outcome_revision=0,close_sequence=1,close_refs='[]'")
+        self.db.execute("INSERT INTO efficiency_outcome_epochs VALUES('original',2,'new-dispatch','NEW','begin',1,'open','[]',NULL,NULL,NULL,NULL)")
         self.assertEqual([1,2], [row[0] for row in self.db.execute('SELECT epoch FROM efficiency_outcome_epochs ORDER BY epoch')])
+
+    def test_original_group_selection_deduplicates_members_without_minting_legacy_facts(self):
+        for identity,item,source in [('parent-pop','OLD','p'),('child-pop','CHILD','c'),('parent-replay','OLD','p2')]:
+            self.db.execute("INSERT INTO budget_population_facts VALUES(?,?,'GROUP','open','fixture',?,0)",(identity,item,source))
+        self.db.execute("UPDATE ingest_facts SET canonical='{\"total\":10}' WHERE identity='u'")
+        self.db.execute("INSERT INTO ingest_facts VALUES('u2','runtime-turn-usage','CHILD',0,'child','{\"total\":20}')")
+        text=SOURCE.read_text()
+        query=re.search(r'"(SELECT identity,kind,revision,content_digest,canonical FROM current_ingest_facts WHERE item_id=\$item[^"\n]+)"',text[text.index('    let private efficiencyExportInSnapshot '):])[1]
+        grouped=query.replace('item_id=$item','item_id IN (SELECT value FROM json_each($members))')
+        rows=self.db.execute(grouped,{'item':'GROUP','members':json.dumps(['OLD','CHILD'])}).fetchall()
+        self.assertEqual(['u','u2'],[row[0] for row in rows])
+        self.assertEqual(30,sum(json.loads(row[4])['total'] for row in rows))
+        self.assertEqual(2,len(set(row[0] for row in rows)))
+        self.assertEqual(0,self.db.execute('SELECT count(*) FROM fact_acceptance_times').fetchone()[0])
+
+    def test_genuine_reopen_can_close_a_new_revision_of_same_outcome_identity(self):
+        self.db.execute("INSERT INTO efficiency_receiver_order(receipt_key,producer,stream,accepted_at) VALUES('first','p','s','first')")
+        self.db.execute("INSERT INTO efficiency_receiver_order(receipt_key,producer,stream,accepted_at) VALUES('reopen','p','s','later')")
+        self.db.execute("INSERT INTO efficiency_outcome_epochs VALUES('original',1,'dispatch1','OLD','first',1,'closed','[]','same-outcome',0,1,'[]')")
+        self.db.execute("INSERT INTO efficiency_outcome_epochs VALUES('original',2,'dispatch2','NEW','reopen',2,'closed','[]','same-outcome',1,2,'[]')")
+        with self.assertRaises(sqlite3.IntegrityError):
+            self.db.execute("INSERT INTO efficiency_outcome_epochs VALUES('original',3,'dispatch3','NEW','reopen',2,'closed','[]','same-outcome',1,2,'[]')")
+        self.assertEqual([(1,0),(2,1)],self.db.execute('SELECT epoch,outcome_revision FROM efficiency_outcome_epochs ORDER BY epoch').fetchall())
 
     def test_action_replay_returns_original_receipt_after_later_queue_revision(self):
         first = {'revision':1,'lastAction':'claim','lastInputDigest':'original-input','claimedAt':'receiver-first'}

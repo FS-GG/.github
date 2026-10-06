@@ -179,6 +179,7 @@ module TelemetryApplication =
                         "--repository"
                         "--relation"
                         "--late-after-seconds"
+                        "--efficiency-claim-template"
                     ]
                     []
                     args[.. delimiter - 1]

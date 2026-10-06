@@ -82,6 +82,9 @@ module TelemetryStoreApplication =
     val efficiencyAnalysis:
         path: string -> assessment: TelemetryStore.DurabilityAssessment -> principal: TelemetryReceipt.Principal ->
         action: string -> bytes: byte array -> packet: byte array option -> Result<string, string list>
+    val efficiencyAnalysisClaimProspective:
+        path: string -> assessment: TelemetryStore.DurabilityAssessment -> principal: TelemetryReceipt.Principal ->
+        dispatchIdentity: string -> itemId: string -> templateBytes: byte array -> Result<string, string list>
     val efficiencyAnalysisInspect:
         path: string -> assessment: TelemetryStore.DurabilityAssessment -> requestId: string -> Result<string, string list>
     val efficiencyAnalysisReconcile:
