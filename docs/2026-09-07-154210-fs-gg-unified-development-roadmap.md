@@ -56,6 +56,22 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-06: SDD candidate Contracts custody source delivered; publication remains pending.**
+[SDD #1099](https://github.com/FS-GG/FS.GG.SDD/pull/1099) merged at
+`3297d3298fdd35579d9bcb09c65fdb7ad423a568` after required checks and coherent validation passed.
+The release route retains four candidate archives, including Contracts, and verifies the same
+candidate bytes for both feeds. Local focused release-contract tests passed; the formatter repair
+was verified with the workflow's exact Fantomas version. This closes the source change only:
+coherent publication and C2 runtime acceptance remain separate outstanding obligations.
+
+**2026-10-06: P4 Podman failure diagnostics delivered; private facts remain unqualified.**
+[Sandbox #57](https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/pull/57) merged at
+`d22ff4dfefd21b64ce12b83915b4b2e74065b1a5` after 53 local controls passed. The private
+repository has no hosted PR checks. The amendment classifies already captured Podman
+stderr into bounded codes while preserving the first failure and cleanup guards.
+The [owning diagnostic roadmap](roadmaps/diagnostic-execution.md) records the failed facts
+attempt, verified temporary admission removal, and outstanding provider qualification.
+
 **2026-10-06: SVG candidate custody and Templates source binding delivered.**
 [Templates #672](https://github.com/FS-GG/FS.GG.Templates/pull/672) merged at
 `4eff52b27933c69a9ab4e276b3a29032d279b7e0` after required checks and coherent validation passed.
