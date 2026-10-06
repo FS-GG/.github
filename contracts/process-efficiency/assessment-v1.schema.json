@@ -22,7 +22,8 @@
   ],
   "properties": {
     "schema": {
-      "const": "fsgg.telemetry.efficiency-assessment/1"
+      "const": "fsgg.telemetry.efficiency-assessment/1",
+      "type": "string"
     },
     "assessmentId": {
       "type": "string",
@@ -71,7 +72,8 @@
           "enum": [
             "native-item",
             "provisional-delivery"
-          ]
+          ],
+          "type": "string"
         }
       }
     },
@@ -103,7 +105,8 @@
             "partial",
             "unknown",
             "not-applicable"
-          ]
+          ],
+          "type": "string"
         },
         "usage": {
           "enum": [
@@ -111,7 +114,8 @@
             "partial",
             "unknown",
             "not-applicable"
-          ]
+          ],
+          "type": "string"
         },
         "classification": {
           "enum": [
@@ -119,7 +123,8 @@
             "partial",
             "unknown",
             "not-applicable"
-          ]
+          ],
+          "type": "string"
         },
         "lineage": {
           "enum": [
@@ -127,7 +132,8 @@
             "partial",
             "unknown",
             "not-applicable"
-          ]
+          ],
+          "type": "string"
         },
         "dependency": {
           "enum": [
@@ -135,7 +141,8 @@
             "partial",
             "unknown",
             "not-applicable"
-          ]
+          ],
+          "type": "string"
         }
       }
     },
@@ -203,7 +210,8 @@
               "context-recovery",
               "other",
               "unknown"
-            ]
+            ],
+            "type": "string"
           },
           "purpose": {
             "enum": [
@@ -213,7 +221,8 @@
               "process-improvement",
               "avoidable-process",
               "unknown"
-            ]
+            ],
+            "type": "string"
           },
           "trigger": {
             "enum": [
@@ -228,7 +237,8 @@
               "missing-observation",
               "other",
               "unknown"
-            ]
+            ],
+            "type": "string"
           },
           "primaryCause": {
             "enum": [
@@ -246,7 +256,8 @@
               "telemetry-loss",
               "other",
               "unknown"
-            ]
+            ],
+            "type": "string"
           },
           "contributingCauses": {
             "type": "array",
@@ -266,7 +277,8 @@
                 "telemetry-loss",
                 "other",
                 "unknown"
-              ]
+              ],
+              "type": "string"
             },
             "maxItems": 6
           },
@@ -275,7 +287,8 @@
               "required",
               "avoidable",
               "uncertain"
-            ]
+            ],
+            "type": "string"
           },
           "epistemicStatus": {
             "enum": [
@@ -283,7 +296,8 @@
               "supported-inference",
               "hypothesis",
               "unknown"
-            ]
+            ],
+            "type": "string"
           },
           "severity": {
             "enum": [
@@ -292,7 +306,8 @@
               "major",
               "critical",
               "unknown"
-            ]
+            ],
+            "type": "string"
           },
           "summary": {
             "type": "string",
@@ -376,7 +391,8 @@
             "maxLength": 1024
           },
           "status": {
-            "const": "hypothesis"
+            "const": "hypothesis",
+            "type": "string"
           }
         }
       },
@@ -414,13 +430,16 @@
           "maxLength": 256
         },
         "rubricVersion": {
-          "const": "efficiency-rubric/1"
+          "const": "efficiency-rubric/1",
+          "type": "string"
         },
         "taxonomyVersion": {
-          "const": "efficiency-taxonomy/1"
+          "const": "efficiency-taxonomy/1",
+          "type": "string"
         },
         "analysisPolicyVersion": {
-          "const": "efficiency-analysis-policy/1"
+          "const": "efficiency-analysis-policy/1",
+          "type": "string"
         },
         "usageRefs": {
           "type": "array",
@@ -450,7 +469,8 @@
             "pending",
             "accepted",
             "rejected"
-          ]
+          ],
+          "type": "string"
         }
       }
     },
@@ -473,7 +493,8 @@
             "ready",
             "failed",
             "unavailable"
-          ]
+          ],
+          "type": "string"
         },
         "idempotencyKey": {
           "type": "string",
@@ -508,7 +529,8 @@
       ],
       "properties": {
         "visibility": {
-          "const": "private"
+          "const": "private",
+          "type": "string"
         },
         "policyVersion": {
           "type": [
@@ -554,7 +576,8 @@
             "process-review",
             "correction",
             "assessment"
-          ]
+          ],
+          "type": "string"
         },
         "revision": {
           "type": "integer",
