@@ -84,8 +84,8 @@ def validate_process_efficiency(value):
         if not isinstance(item['key'], str) or not re.fullmatch(r'[a-z0-9][a-z0-9-]{0,63}', item['key']) or item['key'] in keys: raise ValueError('invalid public item key')
         keys.add(item['key'])
         if not isinstance(item['label'], str) or not 1 <= len(item['label']) <= 120 or not isinstance(item['url'], str) or not EFF_URL.fullmatch(item['url']): raise ValueError('invalid approved item')
-        if item['scope'] not in {'native-item', 'provisional-delivery'} or item['analysisState'] not in EFF_STATES or item['summary'] not in {'native-observation', 'delivery-accounting-incomplete'}: raise ValueError('invalid efficiency summary')
-        if item['summary'] != ('native-observation' if item['scope'] == 'native-item' else 'delivery-accounting-incomplete'): raise ValueError('summary scope mismatch')
+        if item['scope'] not in {'native-item', 'provisional-delivery', 'unestablished'} or item['analysisState'] not in EFF_STATES or item['summary'] not in {'native-observation', 'delivery-accounting-incomplete', 'accounting-unestablished'}: raise ValueError('invalid efficiency summary')
+        if item['summary'] != ({'native-item': 'native-observation', 'provisional-delivery': 'delivery-accounting-incomplete', 'unestablished': 'accounting-unestablished'}[item['scope']]): raise ValueError('summary scope mismatch')
         if item['scope'] == 'provisional-delivery' and item['analysisState'] == 'ready': raise ValueError('provisional final analysis')
         if not isinstance(item['metrics'], list) or len(item['metrics']) > 32: raise ValueError('efficiency metric bound')
         ids = set()
@@ -165,13 +165,13 @@ def project_process_efficiency(metrics, assessments, labels, evidence_links=None
         if approved is None: result['coverage']['unmapped'] += 1; continue
         if len(group['metrics']) > 32 or len(group['assessments']) > 1 or len({m['metricId'] for m in group['metrics']}) != len(group['metrics']): result['coverage']['withheld'] += 1; continue
         assessment = group['assessments'][0] if group['assessments'] else None
-        scope = assessment['subject']['scope'] if assessment else 'provisional-delivery'
+        scope = assessment['subject']['scope'] if assessment else 'unestablished'
         state = assessment['lifecycle']['state'] if assessment else 'unavailable'
         if assessment and assessment['provenance']['validationResult'] == 'rejected': state = 'failed'
         elif assessment and assessment['provenance']['validationResult'] != 'accepted' and state == 'ready': state = 'partial'
         if assessment and (assessment['subject']['outcomeEpoch'] is None or scope == 'provisional-delivery') and state == 'ready': state = 'partial'
         row = {k: approved[k] for k in ('key', 'label', 'url')}
-        row.update(summary='native-observation' if scope == 'native-item' else 'delivery-accounting-incomplete', analysisState=state, scope=scope, metrics=[], problems=[], timeline=[], improvements=[])
+        row.update(summary={'native-item': 'native-observation', 'provisional-delivery': 'delivery-accounting-incomplete', 'unestablished': 'accounting-unestablished'}[scope], analysisState=state, scope=scope, metrics=[], problems=[], timeline=[], improvements=[])
         if assessment and any(ref not in {m['metricId'] for m in group['metrics']} for ref in assessment['metricRefs']):
             result['coverage']['withheld'] += 1; continue
         for index, metric in enumerate(group['metrics']):

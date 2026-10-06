@@ -63,6 +63,8 @@ class EfficiencyTests(unittest.TestCase):
         record = metric(name='retry-incidence', numerator=2, denominator=3)
         record['unit'] = 'ratio'
         result = E.project([record], [], labels())
+        self.assertEqual(result['items'][0]['summary'], 'accounting-unestablished')
+        self.assertEqual(result['items'][0]['scope'], 'unestablished')
         self.assertEqual(result['items'][0]['metrics'][0]['value'], {'status': 'known', 'numerator': 2, 'denominator': 3, 'unknownAmount': None})
 
     def test_work_mix_uses_admitted_purpose_dimension_and_keeps_repair_separate(self):
