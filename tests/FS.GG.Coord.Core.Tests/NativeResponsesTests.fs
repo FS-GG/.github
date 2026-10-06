@@ -83,10 +83,11 @@ module NativeResponsesTests =
         Assert.Equal(Convert.ToHexStringLower(SHA256.HashData raw),result.CountResponseSha256)
 
     [<Theory>]
-    [<InlineData("{\"object\":\"response.input_tokens\",\"input_tokens\":17,\"input_tokens\":18}")>]
-    [<InlineData("{\"object\":\"unknown\",\"input_tokens\":17}")>]
-    [<InlineData("{\"object\":\"response.input_tokens\",\"input_tokens\":17,\"extra\":0}")>]
-    let ``count duplicates unknown object and extra fields refuse generation`` value =
+    [<InlineData("duplicate-counter", "{\"object\":\"response.input_tokens\",\"input_tokens\":17,\"input_tokens\":18}")>]
+    [<InlineData("unknown-object", "{\"object\":\"unknown\",\"input_tokens\":17}")>]
+    [<InlineData("extra-field", "{\"object\":\"response.input_tokens\",\"input_tokens\":17,\"extra\":0}")>]
+    let ``count duplicates unknown object and extra fields refuse generation`` (caseLabel: string) (value: string) =
+        Assert.False(String.IsNullOrWhiteSpace caseLabel)
         Assert.True(NativeResponses.admitCount (frozen ()) (bytes value) |> Result.isError)
 
     [<Fact>]
@@ -143,10 +144,11 @@ module NativeResponsesTests =
         Assert.Equal<int64 option>(Some 24L,observed.Usage.TotalTokens)
 
     [<Theory>]
-    [<InlineData("{\"input_tokens\":17,\"output_tokens\":7,\"total_tokens\":28}")>]
-    [<InlineData("{\"input_tokens\":17,\"output_tokens\":7,\"total_tokens\":24,\"output_tokens_details\":{\"reasoning_tokens\":8}}")>]
-    [<InlineData("{\"input_tokens\":17,\"output_tokens\":7,\"total_tokens\":24,\"input_tokens_details\":{\"cached_tokens\":18}}")>]
-    let ``contradictory totals and breakout bounds remain partial`` counters =
+    [<InlineData("total-mismatch", "{\"input_tokens\":17,\"output_tokens\":7,\"total_tokens\":28}")>]
+    [<InlineData("reasoning-overflow", "{\"input_tokens\":17,\"output_tokens\":7,\"total_tokens\":24,\"output_tokens_details\":{\"reasoning_tokens\":8}}")>]
+    [<InlineData("cached-overflow", "{\"input_tokens\":17,\"output_tokens\":7,\"total_tokens\":24,\"input_tokens_details\":{\"cached_tokens\":18}}")>]
+    let ``contradictory totals and breakout bounds remain partial`` (caseLabel: string) (counters: string) =
+        Assert.False(String.IsNullOrWhiteSpace caseLabel)
         let observed = NativeResponses.decodeResponse (response "completed" counters) |> unwrap
         Assert.Equal(NativeResponses.Partial,observed.Usage.State)
         Assert.True(NativeResponses.validateCompletion (count "17" |> unwrap) observed |> Result.isError)
