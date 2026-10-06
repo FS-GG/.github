@@ -57,7 +57,7 @@ not when another general planning document is written.
 
 Contract acceptance: [versioned declarations](../../contracts/process-efficiency/README.md)
 freeze the vocabulary, canonical joins, existing economics-profile aliases, additive producer inputs
-and atomic assessment-request lifecycle. Twelve focused Python tests and 23 hand-calculated cases
+and atomic assessment-request lifecycle. Thirteen focused Python tests and 23 hand-calculated cases
 passed; all nine Draft 2020-12 schemas and 20 samples passed full schema validation. The synthetic
 corpus contains 30 development and 30 reserved held-out episodes. Historical source pins were
 verified locally; shallow CI explicitly skips only that historical-object check, without fetching
