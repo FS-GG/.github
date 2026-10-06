@@ -52,8 +52,10 @@ class FsharpSkillCallerTests(unittest.TestCase):
             "engine": "configured-engine", "repository": None, "workspace": False,
         }
         completed = subprocess.CompletedProcess([], 0, json.dumps(projection) + "\n", "")
-        with mock.patch.object(DASHBOARD.subprocess, "run", return_value=completed) as invoked:
+        with mock.patch.object(DASHBOARD, "read_private_bytes", return_value=b"{}") as read_config, \
+                mock.patch.object(DASHBOARD.subprocess, "run", return_value=completed) as invoked:
             path, found = DASHBOARD.config(Path("/private/config.json"))
+        read_config.assert_called_once_with(Path("/private/config.json"), 65536, "HOST_CONFIG_UNSAFE")
         self.assertEqual(path, Path("/private/config.json"))
         self.assertEqual(found, {"storeRoot": "/private/store", "engine": "configured-engine"})
         self.assertEqual(
