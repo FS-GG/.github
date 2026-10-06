@@ -530,3 +530,84 @@ restore guarantee.
 The immutable batch is a future Akka message contract. A per-host telemetry-writer actor may later serialize
 normal drains and supervision, while SQLite locking and native deduplication remain mandatory for process
 recovery, upgrades and old/new overlap.
+
+## Correct a CI delivery assignment
+
+The local operator correction preserves one exact native delivery and its provable CI population while
+superseding its feature, item and attempt assignment. Schema 13 adds an append-only correction ledger and
+original evidence snapshots. Existing canonical facts, native identities, merge, timestamps and usage values
+remain unchanged. Current CI, item, budget and dashboard projections read the effective typed assignment;
+private correction history is separate and never counts as another delivery or invocation.
+
+Create a private, absolute, regular mode-0600 request file using this closed schema. Supply the actual
+repository, PR, base/head/merge and prior assignment from retained evidence; the example values below are
+illustrative. `observedAt` is the correction observation time, not the original execution time. The evidence
+digest names the separately retained source proof; it does not reconstruct missing execution or token data.
+
+```json
+{
+  "schema": "fsgg.telemetry.ci-correction-request/1",
+  "correctionId": "operator-correction-one",
+  "expectedPredecessor": null,
+  "repository": "owner/repository",
+  "pullRequest": 7,
+  "baseRef": "main",
+  "baseSha": "dddddddddddddddddddddddddddddddddddddddd",
+  "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "mergeCommit": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "prior": {
+    "schema": "fsgg.telemetry.ci-assignment/1",
+    "featureId": "old-feature", "itemId": "old-item", "attemptId": "old-attempt",
+    "parentAttemptId": null, "producerStream": "routine-delivery"
+  },
+  "effective": {
+    "schema": "fsgg.telemetry.ci-assignment/1",
+    "featureId": "genuine-feature", "itemId": "genuine-item", "attemptId": "genuine-attempt",
+    "parentAttemptId": null, "producerStream": "routine-delivery"
+  },
+  "evidenceSha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+  "reason": "Exact retained source assignment",
+  "operatorSource": "private-source-proof",
+  "observedAt": "2026-10-06T12:00:00Z"
+}
+```
+
+```console
+fsgg-coord-engine telemetry ci correction-plan --store-root /private/store --input /private/request.json --output /private/plan.json
+fsgg-coord-engine telemetry ci correct --store-root /private/store --plan /private/plan.json
+fsgg-coord-engine telemetry ci correction-history --store-root /private/store --correction-id operator-correction-one
+```
+
+Planning opens one read-only WAL snapshot, requires one exact delivered outcome, verifies the retained digests
+and discovers at most 4096 targets. The newly created plan is mode 0600, at most 1 MiB, and binds the Store's
+identity, original revisions/digests and expected predecessor. Apply rediscovers that closure inside the existing
+writer transaction; editing the target list cannot broaden it. Retain and retry the identical plan bytes after a
+lost acknowledgement. An exact retry reports `already-applied`; different bytes under the same correction ID,
+stale evidence, competing predecessors, cross-store selection and ambiguous ownership refuse without partial
+writes. A later correction names the currently active correction as `expectedPredecessor` and uses its effective
+assignment as `prior`.
+
+The closure requires matching population admission and assignment binding, then follows collection and native
+run/job/step identities. Shared heads or ambiguous native ownership refuse. Check observations lack a collection
+key, so moving them requires a uniquely owned repository population under the prior item. An outcome-only
+correction retains unknown CI coverage and records the recovered assignment in the operator evidence; it creates
+no admission, feature, attempt or usage observation to fill that gap.
+
+Both affected items are rederived in the same transaction. Obsolete derived inputs disappear when the old item
+loses its last outcome, and missing current assessment inputs become unknown. Explicit population/runtime/usage
+inputs and historical assessment revisions remain. Frozen epoch breaches remain historical; correction does not
+reset an epoch or create/close an overhead intervention. It does not prove whole-item completion or compliance.
+
+Use `--config FILE --repository OWNER/REPO` instead of `--store-root` for an explicitly selected local workspace
+association. The repository must match the request/plan. An explicit remote destination reports
+`ci-attribution-correction-remote-unsupported` with zero local fallback, publication or drain. Planning and
+history do not execute any mutation, and apply does not drain pending inbox data.
+
+Producer replacements of corrected facts and new reconcile outcomes for the same exact corrected delivery
+candidate refuse. The unchanged canonical evidence remains available in correction history. Consumers requiring
+an immutable native-source item binding receive `corrected-native-delivery-source-unsupported`; this local
+correction does not qualify a corrected source for LEARN acceptance.
+
+A queued local batch hitting either exact permanent correction fence retains its bytes and explicit refusal
+reason in the existing quarantine. That ingest call still reports an error, and the rejected ready file cannot
+poison later independent batches. Unknown or transient errors keep their existing retry behavior.
