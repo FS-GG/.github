@@ -16,6 +16,7 @@ import math
 from pathlib import Path
 import re
 import sys
+from functools import lru_cache
 
 ROOT = Path(__file__).resolve().parents[1]
 MAX_BYTES = 2 * 1024 * 1024
@@ -69,49 +70,31 @@ def ref_key(value):
         raise ValueError('malformed source reference')
     if not isinstance(value['id'], str) or not isinstance(value['kind'], str) or type(value['revision']) is not int or value['revision'] < 0:
         raise ValueError('invalid source identity/revision')
+    if set(value)-{'id','kind','revision','contentDigest'}:
+        raise ValueError('unexpected source-reference field')
+    if 'contentDigest' in value and not re.fullmatch(r'sha256:[a-f0-9]{64}',value['contentDigest']):
+        raise ValueError('invalid source-reference content digest')
     return value['id'], value['kind'], value['revision']
 
 
-def check_shape(value, schema, document=None):
-    """Offline checker for the frozen schema vocabulary only; not canonical admission."""
-    document = document or schema
-    if '$ref' in schema:
-        node = document
-        for part in schema['$ref'].removeprefix('#/').split('/'):
-            node = node[part]
-        return check_shape(value, node, document)
-    if 'const' in schema and value != schema['const']:
-        raise ValueError('wrong contract constant')
-    if 'enum' in schema and value not in schema['enum']:
-        raise ValueError('unknown contract enum')
-    if 'type' in schema:
-        kinds = schema['type'] if isinstance(schema['type'], list) else [schema['type']]
-        predicates = {'object': lambda v:isinstance(v,dict), 'array':lambda v:isinstance(v,list), 'integer':lambda v:type(v) is int, 'string':lambda v:isinstance(v,str), 'null':lambda v:v is None}
-        if not any(predicates[kind](value) for kind in kinds):
-            raise ValueError('contract type mismatch')
-    if isinstance(value, dict):
-        if not set(schema.get('required', [])) <= value.keys():
-            raise ValueError('missing contract field')
-        properties = schema.get('properties', {})
-        if schema.get('additionalProperties') is False and value.keys() - properties.keys():
-            raise ValueError('unexpected contract field')
-        for key, val in value.items():
-            if key in properties:
-                check_shape(val, properties[key], document)
-    elif isinstance(value, list):
-        if len(value) > schema.get('maxItems', len(value)):
-            raise ValueError('contract array bound')
-        for val in value:
-            check_shape(val, schema['items'], document)
-    elif isinstance(value, str):
-        if len(value) < schema.get('minLength', 0) or len(value) > schema.get('maxLength', len(value)):
-            raise ValueError('contract text bound')
-        if 'pattern' in schema and not re.search(schema['pattern'], value):
-            raise ValueError('contract pattern mismatch')
-        if schema.get('format') == 'date-time' and dt.datetime.fromisoformat(value.replace('Z','+00:00')).tzinfo is None:
-            raise ValueError('timestamp needs timezone')
-    elif type(value) is int and (value < schema.get('minimum',value) or value > schema.get('maximum',value)):
-        raise ValueError('contract numeric bound')
+@lru_cache(maxsize=4)
+def compiled_validator(schema_bytes):
+    # Reuse the already selected .3/CI jsonschema dependency; never silently fall back.
+    try:
+        from jsonschema import Draft202012Validator, FormatChecker
+    except ImportError as error:
+        raise ValueError('Selected jsonschema dependency unavailable; use the qualified .3/CI Python environment.') from error
+    schema=json.loads(schema_bytes)
+    Draft202012Validator.check_schema(schema)
+    return Draft202012Validator(schema,format_checker=FormatChecker())
+
+
+def check_shape(value, schema):
+    validator=compiled_validator(canonical(schema))
+    failures=sorted(validator.iter_errors(value),key=lambda error:tuple(str(part) for part in error.path))
+    if failures:
+        path='.'.join(str(part) for part in failures[0].path)
+        raise ValueError('Frozen Draft202012 schema rejected field '+(path or '<root>'))
 
 
 def rate(numerator, denominator):
@@ -149,6 +132,8 @@ def evidence_index(truth, episode_ids):
         key = ref_key(row['sourceRef'])
         if not re.fullmatch(r'sha256:[a-f0-9]{64}',row['contentDigest']):
             raise ValueError('invalid evidence content digest')
+        if 'contentDigest' in row['sourceRef'] and row['sourceRef']['contentDigest']!=row['contentDigest']:
+            raise ValueError('contradictory evidence truth source digest')
         if key in records:
             raise ValueError('duplicate evidence truth identity')
         records[key] = row['contentDigest']
@@ -158,6 +143,8 @@ def evidence_index(truth, episode_ids):
         if row['episodeId'] not in episode_ids:
             raise ValueError('evidence binding episode absent from frozen corpus')
         key = ref_key(row['sourceRef'])
+        if 'contentDigest' in row['sourceRef'] and row['sourceRef']['contentDigest']!=row['contentDigest']:
+            raise ValueError('contradictory evidence binding source digest')
         if records.get(key) != row['contentDigest']:
             raise ValueError('evidence binding digest/reference mismatch')
         join = row['episodeId'],row['episodeEvidenceId']
@@ -217,7 +204,7 @@ def evaluate(corpus, corpus_digest, predictions, *, split, evidence_truth=None, 
     records = {}
     replays = 0
     for record in bounded_rows(predictions['records']):
-        exact_keys(record, {'episodeId','assessment','assessmentSha256','findingId'})
+        exact_keys(record, {'episodeId','assessment','assessmentSha256','findingId','sourceRefs'})
         episode_id = record['episodeId']
         if episode_id not in episodes:
             raise ValueError('prediction episode absent from frozen corpus')
@@ -266,6 +253,13 @@ def evaluate(corpus, corpus_digest, predictions, *, split, evidence_truth=None, 
                 raise ValueError('supported finding missing evidence')
             if supported and finding['necessity']=='avoidable' and not finding['alternative']:
                 raise ValueError('supported avoidability missing feasible alternative')
+            commitments={}
+            for commitment in bounded_rows(record['sourceRefs']):
+                exact_keys(commitment,{'id','kind','revision','contentDigest'})
+                key=ref_key(commitment)
+                if key in commitments:
+                    raise ValueError('ambiguous packet source commitment')
+                commitments[key]=commitment['contentDigest']
             refs = {}
             for ref in assessment['evidenceRefs']:
                 if ref['id'] in refs:
@@ -282,7 +276,7 @@ def evaluate(corpus, corpus_digest, predictions, *, split, evidence_truth=None, 
                     continue
                 key = ref_key(ref)
                 if source_records is not None:
-                    valid = key in source_records and (name in finding['recoveryRefs'] or key in expected_keys)
+                    valid = key in source_records and commitments.get(key)==source_records[key] and (name in finding['recoveryRefs'] or key in expected_keys)
                     reference_valid += valid
                     reference_ok &= valid
             if source_records is not None and not reference_ok:
@@ -339,6 +333,7 @@ def evaluate(corpus, corpus_digest, predictions, *, split, evidence_truth=None, 
         'avoidability':{'expectedPositiveEpisodes':sum(row['expected']['measuredAvoidable'] for row in selected.values()),'positivePopulationCoverage':rate(avoid_tp+avoid_fn,sum(row['expected']['measuredAvoidable'] for row in selected.values())),'truePositive':avoid_tp,'falsePositive':avoid_fp,'falseNegative':avoid_fn,'trueNegative':avoid_tn,'precision':rate(avoid_tp,avoid_tp+avoid_fp),'recall':rate(avoid_tp,avoid_tp+avoid_fn)},
         'familyCoverage':family,'references':{'status':'checked' if source_records is not None else 'unknown-independent-truth-missing','validity':rate(reference_valid,reference_checked)},
         'numericAccuracy':{'status':'checked' if truths is not None else 'unknown-independent-truth-missing','exactCorrespondence':rate(numeric_correct,numeric_checked),'unknownQuantities':numeric_unknown,'unresolvedReferences':numeric_unresolved,'semantics':'metric-reference quantity/unit/population/source correspondence only; unstructured prose numeric assertions are not scored as verified facts'},
+        'validator':{'dialect':'Draft202012','implementation':'selected jsonschema dependency with FormatChecker','canonicalAdmission':'not established by schema validation'},
         'rejections':rejected[:32],'rejectionsOmitted':max(0,len(rejected)-32),'limits':{'maxRecords':MAX_RECORDS,'maxMetrics':MAX_METRICS,'maxEvidenceRecords':MAX_EVIDENCE,'maxInputBytes':MAX_BYTES},
         'qualification':{'verdict':'not-established','reason':'Offline evaluator behavior only; synthetic predictions are plumbing tests. Actual held-out calibration needs real admitted outputs, independently adjudicated labels and disclosed uncertainty. Economics and installed acceptance are separate.'},
         'uncertainty':'Wilson 95% binomial intervals are descriptive; authored synthetic labels, sparse families, missing outputs and unverified source authority prevent causal or general performance claims.'}
