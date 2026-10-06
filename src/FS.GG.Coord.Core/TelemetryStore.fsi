@@ -83,7 +83,7 @@ module TelemetryStore =
     /// Capture-local identity; never an AppServer provider turn ID or authority receipt.
     type ExecLocalTurn =
         { CaptureSha256: string
-          ThreadId: Guid
+          ThreadId: System.Guid
           StartFrameOrdinal: int64
           TurnSequence: int64 }
 
