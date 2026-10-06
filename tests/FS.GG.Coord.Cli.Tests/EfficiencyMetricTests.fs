@@ -116,7 +116,10 @@ module EfficiencyMetricTests =
         use cleanup = cleanup
         let first = timestamp "2026-10-06T00:00:00Z"
         let next = timestamp "2026-10-06T00:00:01Z"
-        ingest path "unbound" [run "A" 1;coverage "A" "complete";job "A" 1 11 first next next]
+        // Coverage requires its genuine collection binding, but that binding
+        // names another head and cannot establish this selected run's cohort.
+        let otherHeadBinding = (binding "A").Replace(String.replicate 40 "a",String.replicate 40 "c")
+        ingest path "unbound" [otherHeadBinding;run "A" 1;coverage "A" "complete";job "A" 1 11 first next next]
         use result = export path
         Assert.Equal("unknown",(metric result "retry-incidence" "ci-observed").GetProperty("value").GetProperty("status").GetString())
         Assert.Equal("partial",(metric result "wait-time" "ci-observed").GetProperty("value").GetProperty("status").GetString())
@@ -128,7 +131,7 @@ module EfficiencyMetricTests =
         let first = timestamp "2026-10-06T00:00:00Z"
         let next = timestamp "2026-10-06T00:00:01Z"
         let ended = timestamp "2026-10-06T00:00:02Z"
-        let outcome = """{"kind":"native-item-outcome","identity":"routine-delivery:A","itemId":"A","revision":0,"repository":"o/r","prNumber":7,"baseRef":"main","baseSha":"dddddddddddddddddddddddddddddddddddddddd","head":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","outcome":"delivered","codeDelivery":"delivered","mergeCommit":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","occurredAt":"2026-10-06T00:00:02Z","observedAt":"2026-10-06T00:00:03Z","sourceKind":"routine-delivery","sourceRef":"routine-delivery:A"}"""
+        let outcome = """{"kind":"native-item-outcome","identity":"native-outcome-A","itemId":"A","revision":0,"repository":"o/r","prNumber":7,"baseRef":"main","baseSha":"dddddddddddddddddddddddddddddddddddddddd","head":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","outcome":"delivered","codeDelivery":"delivered","mergeCommit":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","occurredAt":"2026-10-06T00:00:02Z","observedAt":"2026-10-06T00:00:03Z","sourceKind":"routine-delivery","sourceRef":"routine-delivery:A"}"""
         let admission = """{"kind":"ci-population-admission","identity":"ci-admission","itemId":"A","revision":0,"collectionId":"collection-A","repository":"o/r","prNumber":7,"baseRef":"main","baseSha":"dddddddddddddddddddddddddddddddddddddddd","head":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","witness":"native-pr-head"}"""
         ingest path "prior" [outcome;admission;binding "A";coverage "A" "complete";run "A" 1;run "A" 2;job "A" 1 11 first next ended;job "A" 2 21 first next ended]
         use before = export path
