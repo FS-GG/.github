@@ -1371,7 +1371,7 @@ exec /usr/bin/python3 "{patchedFixture}" "$@"
                   CredentialReference = "collector"
                   ExecutablePath = reader; CodexHome = codexHome; EvidenceRoot = evidenceRoot
                   Provider = "openai"; Model = "fixture-model"; Effort = "medium"; NativeVerifier = None }
-            let installationJson value =
+            let installationJson (value: NativeCollectorInstallationConfig) =
                 let node = JsonSerializer.SerializeToNode(value).AsObject()
                 node.Remove "NativeVerifier" |> ignore
                 if qualified then

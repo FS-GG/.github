@@ -52,7 +52,7 @@ module NativeResponsesCollectionTests =
         let input = evidenceInput()
         match NativeResponsesCollection.validateInputPacket input with
         | Error errors -> failwithf "%A" errors
-        | Ok bytes -> Assert.True(bytes = Encoding.UTF8.GetBytes input)
+        | Ok bytes -> Assert.True((bytes = Encoding.UTF8.GetBytes input))
 
     [<Theory>]
     [<InlineData("whitespace")>]
@@ -69,7 +69,7 @@ module NativeResponsesCollectionTests =
                 let reordered = System.Text.Json.Nodes.JsonObject()
                 for pair in original |> Seq.rev do reordered.[pair.Key] <- pair.Value.DeepClone()
                 reordered.ToJsonString()
-        Assert.NotEqual(input, altered)
+        Assert.NotEqual<string>(input, altered)
         match NativeResponsesCollection.validateInputPacket altered with
         | Ok _ -> failwith "noncanonical request would reach claim"
         | Error errors -> Assert.Contains("responses-evidence-packet-not-canonical", errors)
