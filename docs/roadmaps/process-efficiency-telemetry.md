@@ -245,9 +245,11 @@ zero analysis work. All 137 dashboard Python checks pass. The first parent-selec
 attempt refused an unproved live-worker memory observation and retired cleanly; a separately selected
 fresh attempt passed the resource guard and recorded 19 passes with one mobile-containment failure
 in the new regression. The canonical provenance line now wraps its complete revision/fingerprint
-strings, with a targeted width assertion beside the whole-page check. Qualification of this repair
-remains pending. This source change is not installed or deployed and does not extend the earlier
-browser qualification to these changed UI bytes.
+strings, with a targeted width assertion beside the whole-page check. Parent-selected root07
+qualified the repaired UI/test source `e6076710986784db112415e3d464a1828c2be665`: all 20 cases
+passed in 13.136 seconds, with no skips, retries or unexpected results, clean custody and no resource
+failure. The earlier failed windows remain retained. This fixture result does not establish an
+installed schema-14 exporter or live efficiency; deployment and full .4/.6 acceptance remain open.
 
 Depends on .1 for fixture-driven work; live projection acceptance requires .2 and .3. Touch-set:
 dashboard collector/projection, static UI/assets and focused projection/UI tests. Coordinate ownership
