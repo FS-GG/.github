@@ -10,6 +10,24 @@ Roadmap position: **Simplified baseline and v2 policy binding / V0**
 
 Publish a useful, privacy-bounded GitHub Pages dashboard for FS-GG delivery telemetry. Public GitHub Actions and merged-delivery data remain useful on their own. An approved private host may add closed aggregates and bounded item detail only through explicit public aliases, category mappings, links and notes; missing or stale host evidence stays visible and never becomes zero or compliant.
 
+## Delivered source repair — 2026-10-06
+
+[PR4259](https://github.com/FS-GG/.github/pull/4259) merged at
+`da4c66c76b9a5e9cc7caf6041001cafefd95a138` after exact-head coherent qualification.
+The canonical snapshot reader now accepts store schemas 8–13; label materialization and
+same-version two-store aggregation accept 10–13. Unknown schema 14, mixed store versions,
+incomplete snapshots and overlapping identities remain refused. Five additional public PR
+selectors describe eligible delivered work without changing canonical completion or runtime
+coverage gates. All 83 pure dashboard tests, six actual two-UID privacy checks and the hosted
+dashboard/path-coherence checks passed. Milestone projections now trigger the existing Pages refresh.
+
+The earlier manual Pages refresh restored recent merged-delivery entries while preserving the
+four historical completed cards. The active publisher remains `main-legacy`; the current store
+has not replaced its feed. The genuine legacy canonical source and publisher access are still
+unresolved, so a supported aggregate and newly published completed rows remain pending.
+Partial or unknown runtime usage stays explicit; source delivery does not establish live feed
+repair, publisher cutover or whole-feature completion.
+
 ## Current operation — 2026-09-21
 
 Private completed-item proof combines native delivery with schema-10 terminal, usage, and lineage readback and requires zero unexplained gaps. The protected public-selector registry is default-deny: only explicitly approved selectors that resolve to a completed delivered canonical item can authorize a public row. An approved public row aggregates token usage across all genuine attempts for that item, including retries and follow-ups; missing usage remains an explicit coverage gap. See the [publication handoff](../reference/telemetry-publication-handoff.md#approved-label-rotation-after-cutover).

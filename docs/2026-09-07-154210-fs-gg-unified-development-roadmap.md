@@ -56,6 +56,16 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-06: Public dashboard source repair delivered; completed-feed refresh pending.**
+[PR4259](https://github.com/FS-GG/.github/pull/4259) merged at
+`da4c66c76b9a5e9cc7caf6041001cafefd95a138` after coherent qualification. The
+[owning roadmap](roadmaps/utel-telemetry-dashboard.md#delivered-source-repair--2026-10-06)
+records schema 11–13 compatibility, five scoped public selectors, 83 pure tests and six actual
+two-UID privacy checks. The manual Pages refresh restored recent merged-delivery entries;
+the four historical completed cards remain intact. The publisher is still `main-legacy`:
+genuine legacy-source access and supported aggregation with the current store are pending,
+so source delivery does not close the live completed-feed gap or infer feature completion.
+
 **2026-10-06: Governance Config consumer repair delivered; publication pending.**
 [Governance PR444](https://github.com/FS-GG/FS.GG.Governance/pull/444) merged at
 `dbbffb5f659c0c33ddcc35aa07aa4557cca37eb2` through the normal routine boundary
