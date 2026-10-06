@@ -56,14 +56,23 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
-**2026-10-06: Telemetry0.98 release source prepared; qualification and effects pending.**
-The [owning release plan](roadmaps/utel-release-successor.md#utel-rel-15--0980-correction-and-native-compact-successor)
-selects coherent0.98.0 after native compact/3 and schema13 attribution-correction source
-are qualified and integrated. Its authenticated predecessor remains promoted0.97.1
-at `99ea7528`; consumed `utel-rel-13` and deferred0.97.2/`utel-rel-14` source stay historical.
-Distinct `utel-rel-15` is a source selection only. Candidate, sixteen-effect publication,
-installed schema/compact adoption and dashboard migration remain separate future gates;
-original erroneous attribution, root/historical usage and remote Host coverage remain unknown.
+**2026-10-06: Compact telemetry export qualified; coherent 0.98 release prepared.**
+The native compact `/3` snapshot preserves one database transaction and bounded CI summaries,
+allowing the current dashboard store to exceed the old raw CI-step row limit. It passed 171
+focused native tests; the Python exporter passed 91 tests and six actual two-UID privacy checks.
+The [release plan](roadmaps/utel-release-successor.md#utel-rel-15--0980-correction-and-native-compact-successor)
+selects coherent 0.98.0 after promoted 0.97.1, using the distinct `utel-rel-15` journal.
+Publication, installed schema migration, Governance attribution correction and the actual current-feed
+export remain pending. The Pages selector stays on its existing feed until the new feed is verified.
+
+**2026-10-06: Rendering candidate receiver qualified across three browser families.**
+[Run 37428584026](https://github.com/FS-GG/FS.GG.Rendering/actions/runs/37428584026)
+qualified protected Templates `4eff52b2` through Rendering caller `67091200` using the original
+0.32.1 Stage C packages. Root verified the original evidence archive: all four cases passed in each
+of Chromium, Firefox and WebKit, with zero failures, skips or flaky cases; 180 provider checks passed.
+Candidate installation and source-package identity are accepted. Publication and adoption of the
+published packages remain open in the [owning roadmap](roadmaps/svg-coherence-and-instancing-01.md).
+Actual screen-reader use was not observed; this result covers DOM automation.
 
 **2026-10-06: Supported local CI attribution correction source delivered.**
 [PR #4262](https://github.com/FS-GG/.github/pull/4262) adds an audited schema-13 correction
