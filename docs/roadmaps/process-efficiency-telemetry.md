@@ -109,6 +109,101 @@ Analysis cost is visible; additional evidence revisions remain within a declared
 - [ ] Add accessible tables, keyboard interaction, coverage/denominator labels, stable filters,
   bounded pagination and last-valid-feed fallback.
 
+Source checkpoint (2026-10-06): the local fixture slice extends the Source Deliveries
+foundation ([PR #4269](https://github.com/FS-GG/.github/pull/4269), `428ef7f6`) with
+host schema 5 and a closed `process-efficiency/1` projection. Public collection and presentation
+require host schema 5 under the user-selected current-only migration.
+The source collector now joins the bounded schema-14 canonical measurement/assessment export
+to its exact compact snapshot revision. Endpoint/exporter native qualification, installed behavior
+and live acceptance remain pending; unavailable or invalid exports retain the base completed-work
+and source-delivery view with efficiency unavailable. This checkpoint does not close .4.
+
+The projection policy `efficiency-public-projection/1` explicitly expands the existing item-label
+approval for structured metric values, coverage, purpose/health dimensions, taxonomy enums and
+fixed summary templates, closed queue/assessment states, fixed failure codes, witnessed clocks,
+source hashes and bounded selection counts. This is an explicit structured-field publication policy;
+it does not approve private analysis prose. Item identity still requires the approved label registry, including its repository-root item URLs;
+public evidence
+needs a separate explicit GitHub URL map. Private synopsis, findings, rationale, improvements,
+identifiers, metric reasons and arbitrary URLs are excluded. Policy profile names are contract
+aliases, not claims that those profiles were already installed. Numeric facts come from canonical
+records; projection neither computes metrics nor chooses current canonical revisions.
+
+The synthetic vertical slice shows native-item observations and a provisional missing-runtime
+explanation. Tables retain exact numerator/denominator, unknown quantity, coverage, public cohort,
+open/abandoned/excluded population, cutoff, observation/event times and mapped source revisions.
+Work mix uses the .1 purpose dimension; data health uses independent source/ingestion/publication
+age dimensions. Purpose amounts and different resource units are not combined. Public problem
+labels retain their epistemic status. Fixed missing-evidence guidance is marked hypothetical;
+private analyst improvement prose stays unavailable. Repository/work-type/acceptance dimensions
+and producer freshness remain unavailable without approved canonical exports.
+
+An older installed host feed is rejected with a host-schema-5 requirement. Refresh failure retains
+the last valid host-5 data; an initial mismatch shows unavailable/error state, never empty success.
+The parent owns sequencing of matching feed publication and Pages deployment; source delivery
+does not establish live acceptance during a version mismatch.
+
+The host-5 source context projection exposes fixed approved `Historical` and `Current work`
+labels. Private `host-config/3` selects those two store roots explicitly; the same configuration
+is read by snapshot, recurring publisher setup and event publication routes. Each source retains
+its own complete host projection and approved original item aliases. Workspace authority, epoch
+IDs, raw item IDs, costs and totals are never joined across sources. Source failure yields an
+unavailable context with unknown work counts. A shared 1 MiB public limit can withhold a whole
+context with `public-budget-exceeded`; it does not produce a false complete empty population.
+The accessible source selector updates completed items, source deliveries, efficiency and local
+host panels together and retains selection across valid refreshes. These source controls remain
+uninstalled. Parent-owned browser root03 passed all 18 cases with clean custody; root04 passed
+all 19 cases after the scoped selector-visibility regression. Neither browser fixture result
+establishes canonical collection or live acceptance. Collector-only source integration preserves
+those exact frontend bytes and shares one absolute 45-second budget across compact/export reads;
+public projection receives only the remaining host byte budget. No metrics are recalculated here.
+
+
+The source includes native keyboard controls, search/scope/measurement filters, ten-item pages,
+accessible table captions/headings and the existing last-valid-feed fallback. All 137 existing
+Python source tests pass, including the current two-UID proof digest binding. Parent-owned browser
+root04 genuinely passed all 19 fixture cases with clean custody. Earlier root01 observer failure
+and root02 nine-pass/seven-fail test window remain failed and retained separately.
+
+The parent-owned two-UID root01 genuinely passed six handoff permission checks with both original
+process groups retired and empty before/after disposable UID/temp scopes. Its fixture result binds
+exporter SHA `184723284a4205914811c4d2c78c89d338b3da75a372068a8647bdf7b8ee0a5f`; terminal
+SHA `718b260bb7bbfa3eaea878e5dfcf27bd4529d5695dc94134b39aed8cfcba6c54` retains the actual
+result. The old proof was preserved privately before updating the checked-in proof from that genuine
+fixture result. This qualifies handoff permissions for the exact source exporter, not schema-14
+endpoint behavior, native measurements, publication, installation or live feed acceptance.
+
+The .2/.3 owners agreed a separate read-only `telemetry efficiency-export` batch interface.
+Its source consumer seam binds `snapshotRevision` to the exact compact `item-detail/3` base and
+keeps a distinct `sourceFingerprint` over current facts, usage, corrected attribution, efficiency
+records, queue health and receiver clocks. The exporter owns selection in one WAL snapshot; an
+analysis update cannot pretend that an unchanged compact-base digest covers changed efficiency
+sources. The consumer performs no canonical reductions or revision selection.
+
+The closed `efficiency-export/1` response has cutoff/observation times, item selection, global metric
+selection and item rows. Selection declares limit, returned, omitted and complete; limits are 200
+items, 1,000 serialized metrics globally and 32 per item. Each row retains private item/original-group
+identities, canonical metrics, one selected assessment or null, typed analysis health and nullable
+witnessed source/ingestion clocks. Private analysis packets are excluded. Analysis health exposes
+pending/last-attempt times and only fixed failure codes; other reasons become unknown. Canonical
+request state (pending/claimed/settled/failed/unavailable) remains distinct from assessment state;
+a new pending/claimed request stays visible even when a prior assessment is ready. Explicit
+original groups preserve the existing public-label boundary.
+
+The pure canonical projection retains up to two public-local source bindings, each with its exact
+compact base revision, full source fingerprint and verbatim omitted counts. Health-only items remain
+visible with unavailable measurements and unknown clocks. Queue and accepted-assessment states
+remain separate. Ambiguous approved identities within a selected export are withheld; metrics are never
+aggregated in Python. Output is bounded before entering the host feed; its caller can supply the remaining public byte
+budget, while source counts remain intact when public rows are withheld. Unsupported exact quantities
+and omitted public rows remain explicit. The source collector reader is connected; actual endpoint qualification and operator execution
+remain pending, so these source tests do not establish installed or live efficiency.
+
+The reader makes one batch call per store using the caller's remaining monotonic deadline, bounded
+by the existing 45-second call cap. Private input is bounded to 4 MiB and public output remains
+bounded to 1 MiB. Schema-14 `build_host` calls this source seam; actual endpoint acceptance remains pending. Integers beyond JavaScript's exact safe range are withheld as unsupported items (a subset
+of withheld coverage), preserving Source Deliveries independently and never rounding measured facts.
+
 Depends on .1 for fixture-driven work; live projection acceptance requires .2 and .3. Touch-set:
 dashboard collector/projection, static UI/assets and focused projection/UI tests. Coordinate ownership
 of shared DTOs with .2; the UI does not edit canonical completion logic.
