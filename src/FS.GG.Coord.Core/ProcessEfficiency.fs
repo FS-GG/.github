@@ -23,7 +23,7 @@ module ProcessEfficiency =
     type Operation = { Identity: string; PopulationComplete: bool; Attempts: Attempt list }
     type RetrySummary =
         { ObservedUsage: bigint; KnownOperations: int; RetriedOperations: int
-          AdditionalUsage: bigint; SameInputUsage: bigint; ChangedInputUsage: bigint
+          AdditionalUsage: bigint; SameInputUsage: bigint; ChangedInputUsage: bigint; UnknownInputUsage: bigint
           Incidence: Fraction option; Burden: Fraction option }
     type NativePopulation =
         { ExpectedInvocations: Set<string> option; TerminalInvocations: Set<string>
@@ -154,17 +154,21 @@ module ProcessEfficiency =
                 let total = prepared |> List.sumBy (fun (_, rows) -> rows |> List.sumBy _.Usage)
                 let known = prepared |> List.filter (fun (o, _) -> o.PopulationComplete)
                 let retried = known |> List.filter (fun (_, rows) -> rows.Length > 1) |> List.length
+                // Retry input changes are relative to the preceding executed attempt.
+                // Missing predecessor observations leave input classification unknown, while
+                // every witnessed additional ordinal still contributes resource exposure.
                 let additions =
-                    [ for o, rows in prepared do
-                        match rows with
-                        | first :: tail when first.Ordinal = 1 ->
-                            for a in tail do yield a, a.InputDigest = first.InputDigest
-                        | _ -> () ]
+                    [ for _, rows in prepared do
+                        let byOrdinal = rows |> List.map (fun a -> a.Ordinal, a) |> Map.ofList
+                        for a in rows do
+                            if a.Ordinal > 1 then
+                                yield a, Map.tryFind (a.Ordinal - 1) byOrdinal |> Option.map (fun previous -> a.InputDigest = previous.InputDigest) ]
                 let additional = additions |> List.sumBy (fun (a, _) -> a.Usage)
                 Ok { ObservedUsage = total; KnownOperations = known.Length; RetriedOperations = retried
                      AdditionalUsage = additional
-                     SameInputUsage = additions |> List.sumBy (fun (a, same) -> if same then a.Usage else 0I)
-                     ChangedInputUsage = additions |> List.sumBy (fun (a, same) -> if same then 0I else a.Usage)
+                     SameInputUsage = additions |> List.sumBy (fun (a, same) -> if same = Some true then a.Usage else 0I)
+                     ChangedInputUsage = additions |> List.sumBy (fun (a, same) -> if same = Some false then a.Usage else 0I)
+                     UnknownInputUsage = additions |> List.sumBy (fun (a, same) -> if same.IsNone then a.Usage else 0I)
                      Incidence = if List.isEmpty known then None else Some(normalized (bigint retried) (bigint known.Length))
                      Burden = if total = 0I || (unique |> List.exists (fun o -> not o.PopulationComplete)) then None else Some(normalized additional total) }
 

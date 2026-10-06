@@ -194,3 +194,17 @@ module ProcessEfficiencyTests =
         let result = freshness cutoff (Some earlier) None None None Set.empty |> value
         Assert.Equal(Some 0.5M, result.SourceAgeSeconds)
         Assert.Equal(Error "future-freshness-time", freshness cutoff (Some(cutoff.AddTicks 1L)) None None None Set.empty)
+
+    [<Fact>]
+    let ``A to B to B counts changed repair then same input retry`` () =
+        let result = retries [operation "x" true [attempt "a" 1 "A" 10I; attempt "b" 2 "B" 20I; attempt "c" 3 "B" 30I]] |> value
+        Assert.Equal(60I, result.ObservedUsage)
+        Assert.Equal(50I, result.AdditionalUsage)
+        Assert.Equal(20I, result.ChangedInputUsage)
+        Assert.Equal(30I, result.SameInputUsage)
+        Assert.Equal(0I, result.UnknownInputUsage)
+        let missing = retries [operation "x" false [attempt "c" 3 "B" 30I]] |> value
+        Assert.Equal(30I, missing.AdditionalUsage)
+        Assert.Equal(30I, missing.UnknownInputUsage)
+        Assert.Equal(0I, missing.ChangedInputUsage)
+        Assert.Equal(None, missing.Burden)

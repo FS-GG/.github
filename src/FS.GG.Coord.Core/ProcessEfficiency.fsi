@@ -23,7 +23,7 @@ module ProcessEfficiency =
     type Operation = { Identity: string; PopulationComplete: bool; Attempts: Attempt list }
     type RetrySummary =
         { ObservedUsage: bigint; KnownOperations: int; RetriedOperations: int
-          AdditionalUsage: bigint; SameInputUsage: bigint; ChangedInputUsage: bigint
+          AdditionalUsage: bigint; SameInputUsage: bigint; ChangedInputUsage: bigint; UnknownInputUsage: bigint
           Incidence: Fraction option; Burden: Fraction option }
     type NativePopulation =
         { ExpectedInvocations: Set<string> option; TerminalInvocations: Set<string>
