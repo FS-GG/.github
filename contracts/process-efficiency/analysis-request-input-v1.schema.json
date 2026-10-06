@@ -1,0 +1,211 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "kind",
+    "requestId",
+    "subject",
+    "evidenceDigest",
+    "analysisPolicyVersion",
+    "evidenceRefs",
+    "authority",
+    "nativeReviewRef",
+    "populationWitnessRefs",
+    "requestedAt",
+    "modelAlias",
+    "claimant",
+    "invocationRef"
+  ],
+  "properties": {
+    "schema": {
+      "const": "fsgg.telemetry.efficiency-analysis-request-input/1"
+    },
+    "kind": {
+      "const": "efficiency-analysis-request/1"
+    },
+    "requestId": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "subject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "itemId",
+        "outcomeId",
+        "outcomeEpoch",
+        "scope"
+      ],
+      "properties": {
+        "itemId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "outcomeId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "outcomeEpoch": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        },
+        "scope": {
+          "enum": [
+            "native-item",
+            "provisional-delivery"
+          ]
+        }
+      }
+    },
+    "evidenceDigest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "analysisPolicyVersion": {
+      "const": "efficiency-analysis-policy/1"
+    },
+    "evidenceRefs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/sourceRef"
+      },
+      "maxItems": 128
+    },
+    "authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sourceIdentity",
+        "authorityRole",
+        "authorityRef",
+        "rootDispatchRef",
+        "invocationRef"
+      ],
+      "properties": {
+        "sourceIdentity": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "authorityRole": {
+          "enum": [
+            "runtime-observer",
+            "ci-observer",
+            "root-reviewer",
+            "completion-analyst"
+          ]
+        },
+        "authorityRef": {
+          "$ref": "#/$defs/sourceRef"
+        },
+        "rootDispatchRef": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 256
+        },
+        "invocationRef": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 256
+        }
+      }
+    },
+    "nativeReviewRef": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 256
+    },
+    "populationWitnessRefs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/sourceRef"
+      },
+      "maxItems": 32
+    },
+    "requestedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "modelAlias": {
+      "type": "null"
+    },
+    "claimant": {
+      "type": "null"
+    },
+    "invocationRef": {
+      "type": "null"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:fsgg:telemetry:efficiency-analysis-request-input:1",
+  "$defs": {
+    "sourceRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "kind",
+        "revision",
+        "contentDigest"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "kind": {
+          "enum": [
+            "runtime-turn-usage",
+            "usage",
+            "ci-run",
+            "ci-job",
+            "ci-step",
+            "activity-span",
+            "complication",
+            "process-review",
+            "native-item-outcome",
+            "expected-dispatch",
+            "invocation-lineage",
+            "runtime-admission",
+            "operational-activation",
+            "efficiency-resource-allocation/1",
+            "efficiency-problem-episode/1",
+            "efficiency-assessment/1",
+            "evidence",
+            "pull-request-head",
+            "source",
+            "runtime-start",
+            "runtime-terminal",
+            "runtime-gap",
+            "runtime-native-inventory/1",
+            "runtime-native-inventory-source/1",
+            "learn-installed-origin/1"
+          ]
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9223372036854775807
+        },
+        "contentDigest": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        }
+      }
+    }
+  },
+  "$comment": "Enqueue-only inactive proposal. Claim/model/invocation must be null until engine-owned CAS claim. RequestId hashes subject/snapshot/policy same key as assessment. Direct generic ingest cannot claim/settle this lifecycle."
+}

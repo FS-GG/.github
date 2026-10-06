@@ -1,0 +1,201 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "cas",
+    "claimId",
+    "modelAlias",
+    "invocationRef",
+    "authority",
+    "claimedAt",
+    "dispatchRef",
+    "limitSupport"
+  ],
+  "properties": {
+    "schema": {
+      "const": "fsgg.telemetry.efficiency-analysis-claim-input/1"
+    },
+    "cas": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "requestId",
+        "expectedRevision",
+        "expectedContentDigest"
+      ],
+      "properties": {
+        "requestId": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "expectedContentDigest": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        }
+      }
+    },
+    "claimId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "modelAlias": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "invocationRef": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 256
+    },
+    "authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sourceIdentity",
+        "authorityRole",
+        "authorityRef",
+        "rootDispatchRef",
+        "invocationRef"
+      ],
+      "properties": {
+        "sourceIdentity": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "authorityRole": {
+          "enum": [
+            "runtime-observer",
+            "ci-observer",
+            "root-reviewer",
+            "completion-analyst"
+          ]
+        },
+        "authorityRef": {
+          "$ref": "#/$defs/sourceRef"
+        },
+        "rootDispatchRef": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 256
+        },
+        "invocationRef": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 256
+        }
+      }
+    },
+    "claimedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "dispatchRef": {
+      "$ref": "#/$defs/sourceRef"
+    },
+    "limitSupport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "inputTokens",
+        "outputTokens",
+        "seconds"
+      ],
+      "properties": {
+        "inputTokens": {
+          "enum": [
+            "enforced",
+            "unavailable",
+            "observed-only"
+          ]
+        },
+        "outputTokens": {
+          "enum": [
+            "enforced",
+            "unavailable",
+            "observed-only"
+          ]
+        },
+        "seconds": {
+          "enum": [
+            "enforced",
+            "unavailable",
+            "observed-only"
+          ]
+        }
+      }
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:fsgg:telemetry:analysis-claim-input-v1",
+  "$defs": {
+    "sourceRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "kind",
+        "revision",
+        "contentDigest"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "kind": {
+          "enum": [
+            "runtime-turn-usage",
+            "usage",
+            "ci-run",
+            "ci-job",
+            "ci-step",
+            "activity-span",
+            "complication",
+            "process-review",
+            "native-item-outcome",
+            "expected-dispatch",
+            "invocation-lineage",
+            "runtime-admission",
+            "operational-activation",
+            "efficiency-resource-allocation/1",
+            "efficiency-problem-episode/1",
+            "efficiency-assessment/1",
+            "evidence",
+            "pull-request-head",
+            "source",
+            "runtime-start",
+            "runtime-terminal",
+            "runtime-gap",
+            "runtime-native-inventory/1",
+            "runtime-native-inventory-source/1",
+            "learn-installed-origin/1"
+          ]
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9223372036854775807
+        },
+        "contentDigest": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        }
+      }
+    }
+  }
+}

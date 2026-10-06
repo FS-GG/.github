@@ -6,12 +6,15 @@ open System.Text
 open System.Text.Json
 
 module EfficiencyEvidence =
-    let semanticKind = function
+    let semanticKind (kind: string) =
+        match kind with
         | "usage" | "runtime-turn-usage" -> Some "usage"
         | "native-item-outcome" -> Some "outcome"
         | "attempt" -> Some "attempt"
         | "runtime-admission" | "runtime-start" | "runtime-terminal" | "runtime-gap"
-        | "expected-dispatch" | "invocation-lineage" | "operational-activation" -> Some "invocation"
+        | "expected-dispatch" | "invocation-lineage" | "operational-activation"
+        | "runtime-native-inventory/1" | "runtime-native-inventory-source/1" -> Some "invocation"
+        | "learn-installed-origin/1" -> Some "adoption"
         | "ci-run" -> Some "ci-run"
         | "ci-job" -> Some "ci-job"
         | "ci-step" -> Some "operation"
@@ -61,6 +64,15 @@ module EfficiencyEvidence =
         while runes.MoveNext() do values.Add runes.Current.Value
         values.ToArray()
 
+    let private compareCodePoints (first: string) (last: string) =
+        let firstPoints, lastPoints = codePoints first, codePoints last
+        let mutable index = 0
+        let mutable ordering = 0
+        while ordering = 0 && index < min firstPoints.Length lastPoints.Length do
+            ordering <- compare firstPoints[index] lastPoints[index]
+            index <- index + 1
+        if ordering = 0 then compare firstPoints.Length lastPoints.Length else ordering
+
     let encode (node: JsonElement) =
         try
             let builder = StringBuilder()
@@ -72,7 +84,7 @@ module EfficiencyEvidence =
                         invalidOp "efficiency-evidence-duplicate-property"
                     builder.Append '{' |> ignore
                     properties
-                    |> Array.sortWith (fun first last -> compare (codePoints first.Name) (codePoints last.Name))
+                    |> Array.sortWith (fun first last -> compareCodePoints first.Name last.Name)
                     |> Array.iteri (fun index property ->
                         if index > 0 then builder.Append ',' |> ignore
                         quoted builder property.Name
@@ -110,8 +122,35 @@ module EfficiencyEvidence =
                 let closed names (node: JsonElement) =
                     node.ValueKind = JsonValueKind.Object
                     && (node.EnumerateObject() |> Seq.map _.Name |> Seq.sort |> Seq.toList) = List.sort names
+                let boundedString limit (node: JsonElement) =
+                    if node.ValueKind <> JsonValueKind.String then false
+                    else
+                        let mutable runes = node.GetString().EnumerateRunes()
+                        let mutable length = 0
+                        while runes.MoveNext() do length <- length + 1
+                        length > 0 && length <= limit
+                let validCoverage (node: JsonElement) =
+                    let names = [ "population"; "usage"; "classification"; "lineage"; "dependency" ]
+                    closed names node && (names |> List.forall (fun name ->
+                        let value = node.GetProperty name
+                        value.ValueKind = JsonValueKind.String
+                        && Set.contains (value.GetString()) (set [ "complete"; "partial"; "unknown"; "not-applicable" ])))
+                let validSubject (node: JsonElement) =
+                    closed [ "itemId"; "outcomeId"; "outcomeEpoch"; "scope" ] node
+                    && boundedString 256 (node.GetProperty "itemId")
+                    && boundedString 256 (node.GetProperty "outcomeId")
+                    && (let epoch = node.GetProperty "outcomeEpoch"
+                        epoch.ValueKind = JsonValueKind.Null || (match epoch.TryGetInt64() with true, value -> value >= 1L | _ -> false))
+                    && node.GetProperty("scope").ValueKind = JsonValueKind.String
+                    && Set.contains (node.GetProperty("scope").GetString()) (set [ "native-item"; "provisional-delivery" ])
+                let validOmissions (node: JsonElement) =
+                    node.ValueKind = JsonValueKind.Array && node.GetArrayLength() <= 32
+                    && (node.EnumerateArray() |> Seq.forall (boundedString 1024))
                 if not (closed [ "schema"; "subject"; "coverage"; "omissions"; "records" ] root)
                    || root.GetProperty("schema").GetString() <> "fsgg.telemetry.efficiency-evidence-packet/1"
+                   || not (validSubject (root.GetProperty "subject"))
+                   || not (validCoverage (root.GetProperty "coverage"))
+                   || not (validOmissions (root.GetProperty "omissions"))
                    || root.GetProperty("records").ValueKind <> JsonValueKind.Array
                    || root.GetProperty("records").GetArrayLength() > 128 then
                     Error "efficiency-evidence-packet-shape"
@@ -127,10 +166,19 @@ module EfficiencyEvidence =
                         && (let reference = record.GetProperty "ref"
                             let canonical = record.GetProperty "canonicalRef"
                             reference.GetProperty("id").GetString() = canonical.GetProperty("id").GetString()
-                            && reference.GetProperty("revision").GetInt64() = canonical.GetProperty("revision").GetInt64()
+                            && (match reference.GetProperty("revision").TryGetInt64() with
+                                | true, revision -> revision >= 0L && revision = canonical.GetProperty("revision").GetInt64()
+                                | _ -> false)
                             && semanticKind (canonical.GetProperty("kind").GetString()) = Some(reference.GetProperty("kind").GetString()))
                         && Set.contains (record.GetProperty("priority").GetString()) (set [ "failure"; "correction"; "success"; "other" ])
-                    if not (records |> Array.forall validRecord) then
+                    let uniqueReferences =
+                        if not (records |> Array.forall validRecord) then false
+                        else
+                            let identities = records |> Array.map (fun record ->
+                                let reference = record.GetProperty "canonicalRef"
+                                reference.GetProperty("id").GetString(), reference.GetProperty("kind").GetString(), reference.GetProperty("revision").GetInt64())
+                            (identities |> Set.ofArray |> Set.count) = records.Length
+                    if not uniqueReferences then
                         Error "efficiency-evidence-record-shape-or-bound"
                     else
                         match encode root with

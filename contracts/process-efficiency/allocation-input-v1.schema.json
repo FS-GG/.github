@@ -1,0 +1,313 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "kind",
+    "identity",
+    "itemId",
+    "revision",
+    "resource",
+    "shares",
+    "coverage",
+    "provenance",
+    "occurredAt",
+    "observedAt"
+  ],
+  "properties": {
+    "schema": {
+      "const": "fsgg.telemetry.efficiency-resource-allocation-input/1"
+    },
+    "kind": {
+      "const": "efficiency-resource-allocation/1"
+    },
+    "identity": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "itemId": {
+      "type": "null"
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9223372036854775807
+    },
+    "resource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sourceRef",
+        "dimension",
+        "provider",
+        "accountingScope",
+        "unit",
+        "amount"
+      ],
+      "properties": {
+        "sourceRef": {
+          "$ref": "#/$defs/sourceRef"
+        },
+        "dimension": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "provider": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "accountingScope": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "unit": {
+          "enum": [
+            "tokens-input",
+            "tokens-output",
+            "tokens-total",
+            "tokens-cached-input",
+            "tokens-cache-write-input",
+            "tokens-reasoning",
+            "runner-seconds",
+            "observed-span-seconds",
+            "human-seconds",
+            "estimated-currency",
+            "billed-currency"
+          ]
+        },
+        "amount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9223372036854775807
+        }
+      }
+    },
+    "shares": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "itemId",
+          "purpose",
+          "fraction",
+          "epistemicStatus",
+          "necessity",
+          "evidenceRefs",
+          "alternative"
+        ],
+        "properties": {
+          "itemId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "purpose": {
+            "enum": [
+              "direct-product",
+              "useful-assurance",
+              "necessary-coordination",
+              "process-improvement",
+              "avoidable-process",
+              "unknown"
+            ]
+          },
+          "fraction": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "numerator",
+              "denominator"
+            ],
+            "properties": {
+              "numerator": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9223372036854775807
+              },
+              "denominator": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 9223372036854775807
+              }
+            }
+          },
+          "epistemicStatus": {
+            "enum": [
+              "observed",
+              "supported-inference",
+              "hypothesis",
+              "unknown"
+            ]
+          },
+          "necessity": {
+            "enum": [
+              "required",
+              "avoidable",
+              "uncertain"
+            ]
+          },
+          "evidenceRefs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/sourceRef"
+            },
+            "maxItems": 16
+          },
+          "alternative": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 1024
+          }
+        }
+      },
+      "maxItems": 64
+    },
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "allocation",
+        "evidence"
+      ],
+      "properties": {
+        "allocation": {
+          "enum": [
+            "complete",
+            "partial",
+            "unknown",
+            "not-applicable"
+          ]
+        },
+        "evidence": {
+          "enum": [
+            "complete",
+            "partial",
+            "unknown",
+            "not-applicable"
+          ]
+        }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sourceIdentity",
+        "authorityRole",
+        "authorityRef",
+        "rootDispatchRef",
+        "invocationRef"
+      ],
+      "properties": {
+        "sourceIdentity": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "authorityRole": {
+          "enum": [
+            "runtime-observer",
+            "ci-observer",
+            "root-reviewer",
+            "completion-analyst"
+          ]
+        },
+        "authorityRef": {
+          "$ref": "#/$defs/sourceRef"
+        },
+        "rootDispatchRef": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 256
+        },
+        "invocationRef": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 256
+        }
+      }
+    },
+    "occurredAt": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time"
+    },
+    "observedAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:fsgg:telemetry:efficiency-resource-allocation-input:1",
+  "$defs": {
+    "sourceRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "kind",
+        "revision",
+        "contentDigest"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "kind": {
+          "enum": [
+            "runtime-turn-usage",
+            "usage",
+            "ci-run",
+            "ci-job",
+            "ci-step",
+            "activity-span",
+            "complication",
+            "process-review",
+            "native-item-outcome",
+            "expected-dispatch",
+            "invocation-lineage",
+            "runtime-admission",
+            "operational-activation",
+            "efficiency-resource-allocation/1",
+            "efficiency-problem-episode/1",
+            "efficiency-assessment/1",
+            "evidence",
+            "pull-request-head",
+            "source",
+            "runtime-start",
+            "runtime-terminal",
+            "runtime-gap",
+            "runtime-native-inventory/1",
+            "runtime-native-inventory-source/1",
+            "learn-installed-origin/1"
+          ]
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9223372036854775807
+        },
+        "contentDigest": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        }
+      }
+    }
+  },
+  "$comment": "Inactive declaration. Wire event removes schema only; .2 activation adds kind to unchanged ingest/1. Global resource-level allocation has null itemId; shares name effective canonical items. Source amount never becomes a second usage event."
+}

@@ -74,6 +74,19 @@ module TelemetryStoreApplication =
         }
 
     val databaseFileName: string
+    /// Export current efficiency records joined to the exact compact base in one read transaction.
+    val efficiencyExport:
+        path: string -> assessment: TelemetryStore.DurabilityAssessment ->
+        expectedRevision: string -> maxItems: int -> maxMetrics: int -> Result<string, string list>
+    /// Named authenticated lifecycle mutations; no model invocation is performed.
+    val efficiencyAnalysis:
+        path: string -> assessment: TelemetryStore.DurabilityAssessment -> principal: TelemetryReceipt.Principal ->
+        action: string -> bytes: byte array -> packet: byte array option -> Result<string, string list>
+    val efficiencyAnalysisInspect:
+        path: string -> assessment: TelemetryStore.DurabilityAssessment -> requestId: string -> Result<string, string list>
+    val efficiencyAnalysisReconcile:
+        path: string -> assessment: TelemetryStore.DurabilityAssessment -> principal: TelemetryReceipt.Principal ->
+        selectedItem: string option -> Result<string, string list>
     val assessProductionRoot: path: string -> TelemetryStore.DurabilityAssessment
     val initialize: path: string -> assessment: TelemetryStore.DurabilityAssessment -> Result<string, string list>
     val status: path: string -> assessment: TelemetryStore.DurabilityAssessment -> Result<string, string list>

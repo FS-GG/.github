@@ -197,6 +197,11 @@ module TelemetryApplication =
         | "telemetry" :: "budget" :: "status" :: args -> shape [ "--store-root" ] [] args
         | "telemetry" :: "budget" :: "summary" :: args -> shape [ "--item"; "--store-root" ] [] args
         | "telemetry" :: "review" :: "summary" :: args -> shape [ "--item"; "--store-root" ] [] args
+        | "telemetry" :: "efficiency" :: "analysis" :: action :: args when
+            [ "enqueue"; "claim"; "attach-invocation"; "settle"; "inspect"; "reconcile" ] |> List.contains action ->
+            shape [ "--store-root"; "--config"; "--repository"; "--input"; "--packet"; "--request-id"; "--item" ] [] args
+        | "telemetry" :: "efficiency-export" :: args ->
+            shape [ "--snapshot-revision"; "--store-root"; "--max-items"; "--max-metrics"; "--config"; "--repository" ] [] args
         | "telemetry" :: "item-detail" :: args ->
             shape [ "--item"; "--store-root"; "--format-version" ] [ "--all" ] args
         | "roadmap" :: "unit" :: "prepare" :: action :: args when
@@ -1098,6 +1103,78 @@ module TelemetryApplication =
                     args
                     (TelemetryStoreApplication.runReview action)
             )
+        | "telemetry" :: "efficiency" :: "analysis" :: action :: args when
+            [ "enqueue"; "claim"; "attach-invocation"; "settle"; "inspect"; "reconcile" ] |> List.contains action ->
+            Some(validated "telemetry efficiency analysis"
+                [ "--store-root"; "--config"; "--repository"; "--input"; "--packet"; "--request-id"; "--item" ] [] args
+                (fun args ->
+                    let result =
+                        WorkspaceTelemetryApplication.resolveEfficiencyProducer (option "--config" args) (option "--repository" args)
+                        |> Result.bind (fun (path, principal, _) ->
+                            match option "--store-root" args with
+                            | Some explicit when Path.GetFullPath explicit <> Path.GetFullPath path -> Error [ "efficiency-config-store-mismatch" ]
+                            | _ ->
+                                let assessment = TelemetryStoreApplication.assessProductionRoot path
+                                if action = "reconcile" then
+                                    TelemetryStoreApplication.efficiencyAnalysisReconcile path assessment principal (option "--item" args)
+                                elif action = "inspect" then
+                                    match option "--request-id" args with
+                                    | Some id when Regex.IsMatch(id, "^[a-f0-9]{64}$", RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds 50.) ->
+                                        TelemetryStoreApplication.efficiencyAnalysisInspect path assessment id
+                                    | _ -> Error [ "efficiency-request-id-required" ]
+                                else
+                                    let readBounded bound (name: string) =
+                                        match option name args with
+                                        | None -> Error [ name + " is required" ]
+                                        | Some file ->
+                                            try
+                                                use stream = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.Read)
+                                                if stream.Length < 1L || stream.Length > int64 bound then Error [ "efficiency-input-byte-bound" ]
+                                                else
+                                                    let bytes = Array.zeroCreate<byte> (int stream.Length)
+                                                    stream.ReadExactly bytes
+                                                    if stream.ReadByte() <> -1 then Error [ "efficiency-input-changed" ] else Ok bytes
+                                            with error -> Error [ error.Message ]
+                                    readBounded 16384 "--input"
+                                    |> Result.bind (fun bytes ->
+                                        let packet = if action = "enqueue" then readBounded 24576 "--packet" |> Result.map Some else Ok None
+                                        packet |> Result.bind (TelemetryStoreApplication.efficiencyAnalysis path assessment principal action bytes)))
+                    match result with
+                    | Ok value -> Console.Out.Write value; green
+                    | Error reasons -> fail "telemetry efficiency analysis" reasons))
+        | "telemetry" :: "efficiency-export" :: args ->
+            Some(validated "telemetry efficiency-export"
+                [ "--snapshot-revision"; "--store-root"; "--max-items"; "--max-metrics"; "--config"; "--repository" ] [] args
+                (fun args ->
+                    match option "--snapshot-revision" args with
+                    | None -> fail "telemetry efficiency-export" [ "--snapshot-revision is required" ]
+                    | Some revision when not (Regex.IsMatch(revision, "^[a-f0-9]{64}$", RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds 50.)) ->
+                        fail "telemetry efficiency-export" [ "invalid snapshot revision" ]
+                    | Some revision ->
+                        let bound name fallback =
+                            match option name args with
+                            | None -> Ok fallback
+                            | Some value ->
+                                match Int32.TryParse value with
+                                | true, parsed when parsed = fallback -> Ok parsed
+                                | _ -> Error [ "unsupported export selection bound" ]
+                        let destination =
+                            if option "--config" args |> Option.isSome then
+                                WorkspaceTelemetryApplication.resolveLocalDashboard (option "--config" args) (option "--repository" args)
+                                |> Result.bind (fun binding ->
+                                    match option "--store-root" args with
+                                    | Some path when Path.GetFullPath path <> Path.GetFullPath binding.StoreRoot -> Error [ "efficiency-config-store-mismatch" ]
+                                    | _ -> Ok binding.StoreRoot)
+                            else
+                                match option "--store-root" args with
+                                | Some path -> Ok path
+                                | None -> Error [ "--store-root or configured association is required" ]
+                        match destination, bound "--max-items" 200, bound "--max-metrics" 1000 with
+                        | Ok path, Ok itemBound, Ok metricBound ->
+                            match TelemetryStoreApplication.efficiencyExport path (TelemetryStoreApplication.assessProductionRoot path) revision itemBound metricBound with
+                            | Ok value -> Console.Out.Write value; green
+                            | Error reasons -> fail "telemetry efficiency-export" reasons
+                        | Error reasons, _, _ | _, Error reasons, _ | _, _, Error reasons -> fail "telemetry efficiency-export" reasons))
         | "telemetry" :: "item-detail" :: args ->
             Some(
                 validated

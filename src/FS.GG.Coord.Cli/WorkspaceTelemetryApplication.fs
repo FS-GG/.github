@@ -755,6 +755,22 @@ module WorkspaceTelemetryApplication =
             | Error errors, _ -> Error errors
             | _ -> Error [ "repository-required" ]
 
+    let resolveEfficiencyProducer configArg repositoryArg =
+        match load configArg with
+        | Error errors -> Error errors
+        | Ok config ->
+            match select repositoryArg config, repository repositoryArg with
+            | Ok association, Some _ ->
+                match association.Destination with
+                | Local root ->
+                    let scope: TelemetryReceipt.Scope =
+                        { Workspace = association.Workspace; Producer = association.Producer; Stream = association.Stream }
+                    // This accessor does not infer a privileged collector grant from enrollment.
+                    Ok(root, TelemetryReceipt.genericPrincipal scope, associationDigest association)
+                | Remote _ -> Error [ "local-destination-required" ]
+            | Error errors, _ -> Error errors
+            | _ -> Error [ "repository-required" ]
+
     let tryPublishBound
         configArg
         repositoryArg

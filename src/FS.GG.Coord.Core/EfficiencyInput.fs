@@ -1,10 +1,10 @@
-// allocation-input-v1.schema.json sha256:df6bd60c8571e0cf6a77fa17fa457694d67a253ab38d661db3937949a90a2bb2
-// episode-input-v1.schema.json sha256:3b8b07112b55e218cb375bd5352d21b38e24c5a1c14f07b328eae17c1666e7aa
-// assessment-input-v1.schema.json sha256:5266e28f31a2479d69e9796d17c9105fcf411792a2ca8975509a1326fc1e4c56
-// analysis-request-input-v1.schema.json sha256:105916ce1e08f4e05fb8217c64857f7ee54301088d2355f902fcf689b6945593
-// analysis-claim-input-v1.schema.json sha256:c0b01812e16817f324ad8cfc82fb5964621549770a71e25fec8edb1958c51ede
-// analysis-attach-invocation-input-v1.schema.json sha256:40f57ed99036903073fbdaafd8031966caa9acc105faec6833095c7b90729481
-// analysis-settle-input-v1.schema.json sha256:882218250c5d06f9ab66de7b9617fc226c2b3a83dc2593c6bf7bd21056d85c34
+// allocation-input-v1.schema.json sha256:f0c5983046634290a0b3d104d2b56a1a162579ae19cfad9e2cf16a768afee355
+// episode-input-v1.schema.json sha256:93196f9b3d636733694b1b3bfa31a573798d68af176eadf08c158982e7657bc9
+// assessment-input-v1.schema.json sha256:04c37661ee3ca54d6d298444b2769ee1e2d8595e5f15e5060c2a55f4e50dbdfd
+// analysis-request-input-v1.schema.json sha256:1ad60fa267a268fcf1d89076251ee0734f66b688c3f05f9483093abbc8ee1a07
+// analysis-claim-input-v1.schema.json sha256:21287dee852843feb4cec42afbcc8526e10bf5e2bbccc7797b1def3de45f8e3c
+// analysis-attach-invocation-input-v1.schema.json sha256:8784ccc9cf457749a23c2957abf40033687a433e71ed0748ad9fa4d3ce1e0bdb
+// analysis-settle-input-v1.schema.json sha256:83b02cfd130d495ea53e5a448bda559464a94dc9298a1b66f5cf68bb8ea37eb8
 namespace FS.GG.Coord
 
 open System
@@ -63,7 +63,7 @@ module EfficiencyInput =
     let private check4 (label: string) (node: JsonElement) =
         require label (node.ValueKind = JsonValueKind.String) "expected string"
         let text = node.GetString()
-        require label (Set.contains text (set [ "runtime-turn-usage"; "usage"; "ci-run"; "ci-job"; "ci-step"; "activity-span"; "complication"; "process-review"; "native-item-outcome"; "expected-dispatch"; "invocation-lineage"; "runtime-admission"; "operational-activation"; "efficiency-resource-allocation/1"; "efficiency-problem-episode/1"; "efficiency-assessment/1"; "evidence"; "pull-request-head"; "source" ])) "unsupported value"
+        require label (Set.contains text (set [ "runtime-turn-usage"; "usage"; "ci-run"; "ci-job"; "ci-step"; "activity-span"; "complication"; "process-review"; "native-item-outcome"; "expected-dispatch"; "invocation-lineage"; "runtime-admission"; "operational-activation"; "efficiency-resource-allocation/1"; "efficiency-problem-episode/1"; "efficiency-assessment/1"; "evidence"; "pull-request-head"; "source"; "runtime-start"; "runtime-terminal"; "runtime-gap"; "runtime-native-inventory/1"; "runtime-native-inventory-source/1"; "learn-installed-origin/1" ])) "unsupported value"
 
     let private check5 (label: string) (node: JsonElement) =
         require label (node.ValueKind = JsonValueKind.String) "expected string"

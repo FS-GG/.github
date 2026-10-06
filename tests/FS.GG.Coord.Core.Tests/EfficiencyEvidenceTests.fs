@@ -28,11 +28,43 @@ module EfficiencyEvidenceTests =
 
     [<Fact>]
     let ``retained packet rejects byte reformatting`` () =
-        let raw = Encoding.UTF8.GetBytes """{"coverage":{},"omissions":[],"records":[],"schema":"fsgg.telemetry.efficiency-evidence-packet/1","subject":{}}"""
+        let raw = Encoding.UTF8.GetBytes """{"coverage":{"classification":"unknown","dependency":"unknown","lineage":"unknown","population":"unknown","usage":"unknown"},"omissions":[],"records":[],"schema":"fsgg.telemetry.efficiency-evidence-packet/1","subject":{"itemId":"A","outcomeEpoch":null,"outcomeId":"out","scope":"provisional-delivery"}}"""
         Assert.True(match EfficiencyEvidence.validate raw with Ok _ -> true | _ -> false)
-        let changed = Encoding.UTF8.GetBytes """{ "coverage":{},"omissions":[],"records":[],"schema":"fsgg.telemetry.efficiency-evidence-packet/1","subject":{}}"""
+        let changed = Encoding.UTF8.GetBytes """{ "coverage":{"classification":"unknown","dependency":"unknown","lineage":"unknown","population":"unknown","usage":"unknown"},"omissions":[],"records":[],"schema":"fsgg.telemetry.efficiency-evidence-packet/1","subject":{"itemId":"A","outcomeEpoch":null,"outcomeId":"out","scope":"provisional-delivery"}}"""
         Assert.True(match EfficiencyEvidence.validate changed with Error _ -> true | _ -> false)
 
     [<Fact>]
     let ``private capture has finite aggregate bounds`` () =
         Assert.True(match EfficiencyEvidence.validate (Array.zeroCreate<byte> (4 * 1024 * 1024 + 1)) with Error _ -> true | _ -> false)
+
+    [<Theory>]
+    [<InlineData("0.5")>]
+    [<InlineData("9223372036854775808")>]
+    let ``semantic reference fractional or oversized revision is a Result refusal`` (revision: string) =
+        let digest = String.replicate 64 "a"
+        let raw = """{"coverage":{"classification":"unknown","dependency":"unknown","lineage":"unknown","population":"unknown","usage":"unknown"},"omissions":[],"records":[{"analysisGenerated":false,"canonicalRef":{"contentDigest":"sha256:""" + digest + """","id":"u","kind":"usage","revision":0},"itemId":"A","payload":{},"priority":"other","ref":{"id":"u","kind":"usage","revision":""" + revision + """}}],"schema":"fsgg.telemetry.efficiency-evidence-packet/1","subject":{"itemId":"A","outcomeEpoch":null,"outcomeId":"out","scope":"provisional-delivery"}}"""
+        Assert.True(match EfficiencyEvidence.validate (Encoding.UTF8.GetBytes raw) with Error _ -> true | _ -> false)
+
+    let private validEmptyPacket =
+        """{"coverage":{"classification":"unknown","dependency":"unknown","lineage":"unknown","population":"unknown","usage":"unknown"},"omissions":[],"records":[],"schema":"fsgg.telemetry.efficiency-evidence-packet/1","subject":{"itemId":"A","outcomeEpoch":null,"outcomeId":"out","scope":"provisional-delivery"}}"""
+
+    [<Theory>]
+    [<InlineData("coverage", "{}")>]
+    [<InlineData("coverage", "{\"population\":\"complete\",\"usage\":\"complete\",\"classification\":\"complete\",\"lineage\":\"complete\",\"dependency\":\"invented\"}")>]
+    [<InlineData("omissions", "[1]")>]
+    [<InlineData("subject", "{}")>]
+    let ``closed packet subject coverage and omission shapes refuse malformed values`` (field: string) (replacement: string) =
+        let node = System.Text.Json.Nodes.JsonNode.Parse validEmptyPacket
+        node[field] <- System.Text.Json.Nodes.JsonNode.Parse replacement
+        Assert.True(match EfficiencyEvidence.validate (Encoding.UTF8.GetBytes(node.ToJsonString())) with Error _ -> true | _ -> false)
+
+    [<Fact>]
+    let ``duplicate packet reference population cannot masquerade as two sources`` () =
+        let digest = String.replicate 64 "a"
+        let row = System.Text.Json.Nodes.JsonNode.Parse("""{"analysisGenerated":false,"canonicalRef":{"contentDigest":"sha256:""" + digest + """","id":"u","kind":"usage","revision":0},"itemId":"A","payload":{},"priority":"other","ref":{"id":"u","kind":"usage","revision":0}}""")
+        let node = System.Text.Json.Nodes.JsonNode.Parse validEmptyPacket
+        node["records"].AsArray().Add row
+        node["records"].AsArray().Add(row.DeepClone())
+        use document = JsonDocument.Parse(node.ToJsonString())
+        let bytes = EfficiencyEvidence.encode document.RootElement |> Result.defaultWith failwith
+        Assert.True(match EfficiencyEvidence.validate bytes with Error _ -> true | _ -> false)
