@@ -505,7 +505,7 @@
         "activity": "validation",
         "purpose": "useful-assurance",
         "trigger": "retry",
-        "primaryCause": "requirements",
+        "primaryCause": "unknown",
         "contributingCauses": [],
         "necessity": "required",
         "epistemicStatus": "observed",
@@ -513,9 +513,10 @@
           "changed-input-rerun-01-e1"
         ],
         "alternative": null,
-        "measuredAvoidable": false
+        "measuredAvoidable": false,
+        "uncertainty": "Rerun/input or policy change is observed; these facts do not establish requirements, infrastructure, nondeterminism or avoidability as a cause."
       },
-      "rationale": "Head changed between checks; new head must be validated. Classification is confined to this evidence; no historical programme usage is asserted."
+      "rationale": "Head changed between checks; new head must be validated. Classification is confined to this evidence; no historical programme usage is asserted. Input or policy differences establish the witnessed revalidation boundary, not the underlying problem cause."
     },
     {
       "id": "changed-input-rerun-02",
@@ -532,7 +533,7 @@
         "activity": "validation",
         "purpose": "useful-assurance",
         "trigger": "retry",
-        "primaryCause": "requirements",
+        "primaryCause": "unknown",
         "contributingCauses": [],
         "necessity": "required",
         "epistemicStatus": "observed",
@@ -540,9 +541,10 @@
           "changed-input-rerun-02-e1"
         ],
         "alternative": null,
-        "measuredAvoidable": false
+        "measuredAvoidable": false,
+        "uncertainty": "Rerun/input or policy change is observed; these facts do not establish requirements, infrastructure, nondeterminism or avoidability as a cause."
       },
-      "rationale": "Dependency lock changed before repeated validation. Classification is confined to this evidence; no historical programme usage is asserted."
+      "rationale": "Dependency lock changed before repeated validation. Classification is confined to this evidence; no historical programme usage is asserted. Input or policy differences establish the witnessed revalidation boundary, not the underlying problem cause."
     },
     {
       "id": "changed-input-rerun-03",
@@ -586,7 +588,7 @@
         "activity": "validation",
         "purpose": "useful-assurance",
         "trigger": "retry",
-        "primaryCause": "requirements",
+        "primaryCause": "unknown",
         "contributingCauses": [],
         "necessity": "required",
         "epistemicStatus": "observed",
@@ -594,9 +596,10 @@
           "changed-input-rerun-04-e1"
         ],
         "alternative": null,
-        "measuredAvoidable": false
+        "measuredAvoidable": false,
+        "uncertainty": "Rerun/input or policy change is observed; these facts do not establish requirements, infrastructure, nondeterminism or avoidability as a cause."
       },
-      "rationale": "Toolchain digest changed; rerun provides required current evidence. Classification is confined to this evidence; no historical programme usage is asserted."
+      "rationale": "Toolchain digest changed; rerun provides required current evidence. Classification is confined to this evidence; no historical programme usage is asserted. Input or policy differences establish the witnessed revalidation boundary, not the underlying problem cause."
     },
     {
       "id": "changed-input-rerun-05",
@@ -613,7 +616,7 @@
         "activity": "validation",
         "purpose": "useful-assurance",
         "trigger": "retry",
-        "primaryCause": "requirements",
+        "primaryCause": "unknown",
         "contributingCauses": [],
         "necessity": "required",
         "epistemicStatus": "observed",
@@ -621,9 +624,10 @@
           "changed-input-rerun-05-e1"
         ],
         "alternative": null,
-        "measuredAvoidable": false
+        "measuredAvoidable": false,
+        "uncertainty": "Rerun/input or policy change is observed; these facts do not establish requirements, infrastructure, nondeterminism or avoidability as a cause."
       },
-      "rationale": "Policy requires coherent validation even with accepted semantic reuse. Classification is confined to this evidence; no historical programme usage is asserted."
+      "rationale": "Policy requires coherent validation even with accepted semantic reuse. Classification is confined to this evidence; no historical programme usage is asserted. Input or policy differences establish the witnessed revalidation boundary, not the underlying problem cause."
     },
     {
       "id": "changed-input-rerun-06",
@@ -640,7 +644,7 @@
         "activity": "validation",
         "purpose": "useful-assurance",
         "trigger": "retry",
-        "primaryCause": "requirements",
+        "primaryCause": "unknown",
         "contributingCauses": [],
         "necessity": "required",
         "epistemicStatus": "observed",
@@ -648,9 +652,10 @@
           "changed-input-rerun-06-e1"
         ],
         "alternative": null,
-        "measuredAvoidable": false
+        "measuredAvoidable": false,
+        "uncertainty": "Rerun/input or policy change is observed; these facts do not establish requirements, infrastructure, nondeterminism or avoidability as a cause."
       },
-      "rationale": "Same job name with changed environment digest; old result is not reusable. Classification is confined to this evidence; no historical programme usage is asserted."
+      "rationale": "Same job name with changed environment digest; old result is not reusable. Classification is confined to this evidence; no historical programme usage is asserted. Input or policy differences establish the witnessed revalidation boundary, not the underlying problem cause."
     },
     {
       "id": "infrastructure-01",
@@ -856,7 +861,7 @@
         "activity": "context-recovery",
         "purpose": "necessary-coordination",
         "trigger": "handoff-return",
-        "primaryCause": "context-loss",
+        "primaryCause": "orchestration-handoff",
         "contributingCauses": [],
         "necessity": "uncertain",
         "epistemicStatus": "supported-inference",
@@ -864,9 +869,10 @@
           "context-handoff-02-e1"
         ],
         "alternative": null,
-        "measuredAvoidable": false
+        "measuredAvoidable": false,
+        "uncertainty": "The missing handoff field is evidenced; context loss or avoidable recovery is not established."
       },
-      "rationale": "Typed packet omitted dependency evidence; downstream owner retrieves it. Classification is confined to this evidence; no historical programme usage is asserted."
+      "rationale": "Typed packet omitted dependency evidence; downstream owner retrieves it. Classification is confined to this evidence; no historical programme usage is asserted. The explicit packet/return omission supports the handoff classification; no context-loss claim is inferred."
     },
     {
       "id": "context-handoff-03",
@@ -910,7 +916,7 @@
         "activity": "context-recovery",
         "purpose": "necessary-coordination",
         "trigger": "handoff-return",
-        "primaryCause": "context-loss",
+        "primaryCause": "orchestration-handoff",
         "contributingCauses": [],
         "necessity": "uncertain",
         "epistemicStatus": "supported-inference",
@@ -918,9 +924,10 @@
           "context-handoff-04-e1"
         ],
         "alternative": null,
-        "measuredAvoidable": false
+        "measuredAvoidable": false,
+        "uncertainty": "The missing handoff field is evidenced; context loss or avoidable recovery is not established."
       },
-      "rationale": "Owner return omitted changed file list; parent independently recovers it. Classification is confined to this evidence; no historical programme usage is asserted."
+      "rationale": "Owner return omitted changed file list; parent independently recovers it. Classification is confined to this evidence; no historical programme usage is asserted. The explicit packet/return omission supports the handoff classification; no context-loss claim is inferred."
     },
     {
       "id": "context-handoff-05",

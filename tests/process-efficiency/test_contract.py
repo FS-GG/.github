@@ -291,6 +291,21 @@ class ContractTests(unittest.TestCase):
             if row['family'] in ['useful-failure','changed-input-rerun','required-duplicate']:
                 self.assertFalse(expected['measuredAvoidable'])
 
+    def test_changed_inputs_do_not_infer_problem_cause(self):
+        episodes={row['id']:row for row in CORPUS['episodes']}
+        for suffix in ['01','02','04','05','06']:
+            row=episodes['changed-input-rerun-'+suffix]
+            self.assertEqual(row['expected']['primaryCause'],'unknown')
+            self.assertTrue(row['expected']['uncertainty'])
+            self.assertEqual(row['expected']['purpose'],'useful-assurance')
+            self.assertFalse(row['expected']['measuredAvoidable'])
+        self.assertEqual(episodes['changed-input-rerun-03']['expected']['primaryCause'],'requirements')
+        for suffix in ['02','04']:
+            row=episodes['context-handoff-'+suffix]
+            self.assertEqual(row['expected']['primaryCause'],'orchestration-handoff')
+            self.assertTrue(row['expected']['uncertainty'])
+            self.assertFalse(row['expected']['measuredAvoidable'])
+
     def test_legacy_categories_and_pin_metadata(self):
         inspected=CONTRACT['sourceInspection']
         self.assertEqual(inspected['storeSchemaVersion'],13)
