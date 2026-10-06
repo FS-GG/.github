@@ -103,16 +103,16 @@ changes native output, exit or delivery.
 
 ## UTEL-06.8 — Supported CI attribution correction
 
-- [ ] **UTEL-06.8a — Preserve and supersede CI assignment in the Store — routine.** Add a schema-13
+- [x] **UTEL-06.8a — Preserve and supersede CI assignment in the Store — routine.** Add a schema-13
   append-only correction/evidence ledger, exact predecessor/revision/digest closure, one effective attribution,
   atomic old/new derived reconciliation and immutable native-source integrity. Source preparation does not repair
   an installed Store. Historical UTEL-06.1–06.7 completion and accepted releases remain evidence.
-- [ ] **UTEL-06.8b — Supported local operator correction and coherent reports — routine.** Land with .8a:
+- [x] **UTEL-06.8b — Supported local operator correction and coherent reports — routine.** Land with .8a:
   bounded read-only `ci correction-plan`, explicit `ci correct`, separate non-counting `ci correction-history`,
   local destination selection and producer replay fencing. Qualify real SQLite rollback/restart/chain/content/
   stale/concurrent controls, exact CI closure, unrelated work preservation, outcome-only coverage and CLI-to-report
-  consistency. Remote correction is explicitly unsupported without local fallback. Required exact-head checks and
-  native merge readback remain pending until source delivery.
+  consistency. Remote correction is explicitly unsupported without local fallback. [Source delivery](https://github.com/FS-GG/.github/pull/4262) retains the normal required checks and
+  coherent validation; publication and installed correction remain the following obligations.
 - [ ] **UTEL-06.8c — Publish the coherent corrected producer.** After .8a–b delivery, use the existing release
   successor route for a fresh unused coherent CLI/Kit/Drivers version and journal; verify both feeds and promotion.
 - [ ] **UTEL-06.8d — Adopt and qualify installed local correction.** Verify published bytes side by side,
