@@ -186,7 +186,13 @@
             "efficiency-assessment/1",
             "evidence",
             "pull-request-head",
-            "source"
+            "source",
+            "runtime-start",
+            "runtime-terminal",
+            "runtime-gap",
+            "runtime-native-inventory/1",
+            "runtime-native-inventory-source/1",
+            "learn-installed-origin/1"
           ]
         },
         "revision": {

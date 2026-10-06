@@ -299,6 +299,7 @@ module TelemetryStore =
             occurredClockProvenance: string option *
             observedAt: string option *
             observedClockProvenance: string option
+        | EfficiencyRecord of EfficiencyInput.Record
         | ProcessReview of ProcessReview
         | ActivitySpan of ActivitySpan
         | ActivityUsageAttribution of ActivityUsageAttribution
