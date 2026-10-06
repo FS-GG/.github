@@ -115,6 +115,16 @@ class ExportTests(unittest.TestCase):
             result = D.project_efficiency_exports([(value, 'a'*64)], labels()); mutation(result)
             with self.assertRaises(ValueError): D.validate_process_efficiency(result)
 
+    def test_public_byte_budget_withholds_rows_but_retains_exact_source_counts(self):
+        value = export(); value['items'][0]['originalItemId'] = 'PRIVATE-NATIVE'
+        result = D.project_efficiency_exports([(value, 'a'*64)], labels(), max_bytes=1024)
+        self.assertLessEqual(len(json.dumps(result, ensure_ascii=True, separators=(',', ':')).encode()), 1024)
+        self.assertEqual(result['items'], [])
+        self.assertEqual(result['coverage']['withheld'], 1)
+        self.assertEqual(result['exports'][0]['selection']['returned'], 1)
+        for budget in (0, True, 1_048_577):
+            with self.assertRaises(ValueError): D.project_efficiency_exports([(value, 'a'*64)], labels(), max_bytes=budget)
+
     def test_reader_is_inactive_and_never_replaces_source_deliveries(self):
         self.assertEqual(D.EFF.unavailable()['status'], 'unavailable')
         import inspect

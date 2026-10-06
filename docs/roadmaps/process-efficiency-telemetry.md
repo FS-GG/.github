@@ -142,7 +142,7 @@ does not establish live acceptance during a version mismatch.
 
 The source includes native keyboard controls, search/scope/measurement filters, ten-item pages,
 accessible table captions/headings and the existing last-valid-feed fallback. Fourteen focused
-projection checks and ten export-consumer checks pass. The full Python roster has 122 passes and
+projection checks and eleven export-consumer checks pass. The latest full Python run had 122 passes and
 one expected stale two-UID proof digest failure (123 tests); a new actual proof must qualify final exporter bytes. Three additional browser tests
 are authored but have not run at this checkpoint. No publication, installation or native/store
 qualification is claimed from source fixtures.
@@ -168,7 +168,8 @@ The pure canonical projection retains up to two public-local source bindings, ea
 compact base revision, full source fingerprint and verbatim omitted counts. Health-only items remain
 visible with unavailable measurements and unknown clocks. Queue and accepted-assessment states
 remain separate. Ambiguous approved identities across stores are withheld; metrics are never
-aggregated in Python. Output is bounded before entering the host feed; unsupported exact quantities
+aggregated in Python. Output is bounded before entering the host feed; its caller can supply the remaining public byte
+budget, while source counts remain intact when public rows are withheld. Unsupported exact quantities
 and omitted public rows remain explicit. The collector reader is still inactive pending actual
 endpoint admission, so these source tests do not establish installed or live efficiency.
 

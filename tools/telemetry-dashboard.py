@@ -281,13 +281,14 @@ def validate_efficiency_export(value, expected_snapshot_revision):
         raise ValueError('efficiency export omitted metrics mismatch')
 
 
-def project_efficiency_exports(exports, labels, evidence_links=None):
+def project_efficiency_exports(exports, labels, evidence_links=None, max_bytes=768 * 1024):
     """Pure bounded consumer join; exporters own revisions and all calculations.
 
     Each (envelope, exact base revision) pair was read by one canonical transaction.
     Original identities resolve only through approved labels. Ambiguous public
     identities are withheld across stores; hashes are source bindings, not grants.
     """
+    if type(max_bytes) is not int or not 1024 <= max_bytes <= 1_048_576: raise ValueError('efficiency public byte bound')
     if not isinstance(exports, list) or not 1 <= len(exports) <= 2: raise ValueError('efficiency source bound')
     result = unavailable_process_efficiency(); result.update(source='canonical-export', status='partial')
     rows = {}; duplicates = set()
@@ -324,8 +325,9 @@ def project_efficiency_exports(exports, labels, evidence_links=None):
     result['items'] = ordered[:200]
     result['coverage']['published'] = len(result['items'])
     # Bound the whole public DTO before it can enter a 1MiB host feed.
-    while len(json.dumps(result, ensure_ascii=True, separators=(',', ':'), allow_nan=False).encode()) > 768 * 1024 and result['items']:
+    while len(json.dumps(result, ensure_ascii=True, separators=(',', ':'), allow_nan=False).encode()) > max_bytes and result['items']:
         result['items'].pop(); result['coverage']['published'] -= 1; result['coverage']['withheld'] += 1
+    if len(json.dumps(result, ensure_ascii=True, separators=(',', ':'), allow_nan=False).encode()) > max_bytes: raise ValueError('efficiency public metadata byte bound')
     validate_process_efficiency(result)
     return result
 
