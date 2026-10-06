@@ -752,7 +752,486 @@
       },
       "eventTime": "2026-10-06T00:20:00Z",
       "observedAt": "2026-10-06T00:21:00Z",
-      "projectedAt": "2026-10-06T00:22:00Z"
+      "projectedAt": "2026-10-06T00:22:00Z",
+      "purpose": null,
+      "healthDimension": null
+    },
+    {
+      "schema": "fsgg.telemetry.efficiency-metric/1",
+      "metricId": "metric-purpose-direct-product",
+      "metric": "work-mix",
+      "calculationVersion": "efficiency-calculation/1",
+      "unit": "tokens-total",
+      "population": {
+        "itemIds": [
+          "A"
+        ],
+        "repository": "FS-GG/example",
+        "workType": "source-change",
+        "acceptanceScope": "source-merged",
+        "windowStart": "2026-10-06T00:00:00Z",
+        "windowEnd": "2026-10-06T00:20:00Z",
+        "cutoff": "2026-10-06T00:21:00Z",
+        "excludedItems": [],
+        "openItems": 0,
+        "abandonedItems": 0
+      },
+      "sourceRefs": [
+        {
+          "id": "usage-a",
+          "kind": "usage",
+          "revision": 1
+        }
+      ],
+      "coverage": {
+        "population": "complete",
+        "usage": "complete",
+        "classification": "complete",
+        "lineage": "complete",
+        "dependency": "complete"
+      },
+      "value": {
+        "status": "known",
+        "numerator": 60,
+        "denominator": null,
+        "unknownAmount": 0,
+        "reason": null
+      },
+      "policyProfile": null,
+      "price": {
+        "kind": "not-applicable",
+        "currency": null,
+        "version": null
+      },
+      "eventTime": "2026-10-06T00:20:00Z",
+      "observedAt": "2026-10-06T00:21:00Z",
+      "projectedAt": "2026-10-06T00:22:00Z",
+      "purpose": "direct-product",
+      "healthDimension": null
+    },
+    {
+      "schema": "fsgg.telemetry.efficiency-metric/1",
+      "metricId": "metric-purpose-useful-assurance",
+      "metric": "work-mix",
+      "calculationVersion": "efficiency-calculation/1",
+      "unit": "tokens-total",
+      "population": {
+        "itemIds": [
+          "A"
+        ],
+        "repository": "FS-GG/example",
+        "workType": "source-change",
+        "acceptanceScope": "source-merged",
+        "windowStart": "2026-10-06T00:00:00Z",
+        "windowEnd": "2026-10-06T00:20:00Z",
+        "cutoff": "2026-10-06T00:21:00Z",
+        "excludedItems": [],
+        "openItems": 0,
+        "abandonedItems": 0
+      },
+      "sourceRefs": [
+        {
+          "id": "usage-a",
+          "kind": "usage",
+          "revision": 1
+        }
+      ],
+      "coverage": {
+        "population": "complete",
+        "usage": "complete",
+        "classification": "complete",
+        "lineage": "complete",
+        "dependency": "complete"
+      },
+      "value": {
+        "status": "known",
+        "numerator": 30,
+        "denominator": null,
+        "unknownAmount": 0,
+        "reason": null
+      },
+      "policyProfile": null,
+      "price": {
+        "kind": "not-applicable",
+        "currency": null,
+        "version": null
+      },
+      "eventTime": "2026-10-06T00:20:00Z",
+      "observedAt": "2026-10-06T00:21:00Z",
+      "projectedAt": "2026-10-06T00:22:00Z",
+      "purpose": "useful-assurance",
+      "healthDimension": null
+    },
+    {
+      "schema": "fsgg.telemetry.efficiency-metric/1",
+      "metricId": "metric-purpose-necessary-coordination",
+      "metric": "work-mix",
+      "calculationVersion": "efficiency-calculation/1",
+      "unit": "tokens-total",
+      "population": {
+        "itemIds": [
+          "A"
+        ],
+        "repository": "FS-GG/example",
+        "workType": "source-change",
+        "acceptanceScope": "source-merged",
+        "windowStart": "2026-10-06T00:00:00Z",
+        "windowEnd": "2026-10-06T00:20:00Z",
+        "cutoff": "2026-10-06T00:21:00Z",
+        "excludedItems": [],
+        "openItems": 0,
+        "abandonedItems": 0
+      },
+      "sourceRefs": [
+        {
+          "id": "usage-a",
+          "kind": "usage",
+          "revision": 1
+        }
+      ],
+      "coverage": {
+        "population": "complete",
+        "usage": "complete",
+        "classification": "complete",
+        "lineage": "complete",
+        "dependency": "complete"
+      },
+      "value": {
+        "status": "known",
+        "numerator": 10,
+        "denominator": null,
+        "unknownAmount": 0,
+        "reason": null
+      },
+      "policyProfile": null,
+      "price": {
+        "kind": "not-applicable",
+        "currency": null,
+        "version": null
+      },
+      "eventTime": "2026-10-06T00:20:00Z",
+      "observedAt": "2026-10-06T00:21:00Z",
+      "projectedAt": "2026-10-06T00:22:00Z",
+      "purpose": "necessary-coordination",
+      "healthDimension": null
+    },
+    {
+      "schema": "fsgg.telemetry.efficiency-metric/1",
+      "metricId": "metric-purpose-process-improvement",
+      "metric": "work-mix",
+      "calculationVersion": "efficiency-calculation/1",
+      "unit": "tokens-total",
+      "population": {
+        "itemIds": [
+          "A"
+        ],
+        "repository": "FS-GG/example",
+        "workType": "source-change",
+        "acceptanceScope": "source-merged",
+        "windowStart": "2026-10-06T00:00:00Z",
+        "windowEnd": "2026-10-06T00:20:00Z",
+        "cutoff": "2026-10-06T00:21:00Z",
+        "excludedItems": [],
+        "openItems": 0,
+        "abandonedItems": 0
+      },
+      "sourceRefs": [
+        {
+          "id": "usage-a",
+          "kind": "usage",
+          "revision": 1
+        }
+      ],
+      "coverage": {
+        "population": "complete",
+        "usage": "complete",
+        "classification": "complete",
+        "lineage": "complete",
+        "dependency": "complete"
+      },
+      "value": {
+        "status": "known",
+        "numerator": 0,
+        "denominator": null,
+        "unknownAmount": 0,
+        "reason": null
+      },
+      "policyProfile": null,
+      "price": {
+        "kind": "not-applicable",
+        "currency": null,
+        "version": null
+      },
+      "eventTime": "2026-10-06T00:20:00Z",
+      "observedAt": "2026-10-06T00:21:00Z",
+      "projectedAt": "2026-10-06T00:22:00Z",
+      "purpose": "process-improvement",
+      "healthDimension": null
+    },
+    {
+      "schema": "fsgg.telemetry.efficiency-metric/1",
+      "metricId": "metric-purpose-avoidable-process",
+      "metric": "work-mix",
+      "calculationVersion": "efficiency-calculation/1",
+      "unit": "tokens-total",
+      "population": {
+        "itemIds": [
+          "A"
+        ],
+        "repository": "FS-GG/example",
+        "workType": "source-change",
+        "acceptanceScope": "source-merged",
+        "windowStart": "2026-10-06T00:00:00Z",
+        "windowEnd": "2026-10-06T00:20:00Z",
+        "cutoff": "2026-10-06T00:21:00Z",
+        "excludedItems": [],
+        "openItems": 0,
+        "abandonedItems": 0
+      },
+      "sourceRefs": [
+        {
+          "id": "usage-a",
+          "kind": "usage",
+          "revision": 1
+        }
+      ],
+      "coverage": {
+        "population": "complete",
+        "usage": "complete",
+        "classification": "complete",
+        "lineage": "complete",
+        "dependency": "complete"
+      },
+      "value": {
+        "status": "known",
+        "numerator": 0,
+        "denominator": null,
+        "unknownAmount": 0,
+        "reason": null
+      },
+      "policyProfile": null,
+      "price": {
+        "kind": "not-applicable",
+        "currency": null,
+        "version": null
+      },
+      "eventTime": "2026-10-06T00:20:00Z",
+      "observedAt": "2026-10-06T00:21:00Z",
+      "projectedAt": "2026-10-06T00:22:00Z",
+      "purpose": "avoidable-process",
+      "healthDimension": null
+    },
+    {
+      "schema": "fsgg.telemetry.efficiency-metric/1",
+      "metricId": "metric-purpose-unknown",
+      "metric": "work-mix",
+      "calculationVersion": "efficiency-calculation/1",
+      "unit": "tokens-total",
+      "population": {
+        "itemIds": [
+          "A"
+        ],
+        "repository": "FS-GG/example",
+        "workType": "source-change",
+        "acceptanceScope": "source-merged",
+        "windowStart": "2026-10-06T00:00:00Z",
+        "windowEnd": "2026-10-06T00:20:00Z",
+        "cutoff": "2026-10-06T00:21:00Z",
+        "excludedItems": [],
+        "openItems": 0,
+        "abandonedItems": 0
+      },
+      "sourceRefs": [
+        {
+          "id": "usage-a",
+          "kind": "usage",
+          "revision": 1
+        }
+      ],
+      "coverage": {
+        "population": "complete",
+        "usage": "complete",
+        "classification": "complete",
+        "lineage": "complete",
+        "dependency": "complete"
+      },
+      "value": {
+        "status": "known",
+        "numerator": 0,
+        "denominator": null,
+        "unknownAmount": 0,
+        "reason": null
+      },
+      "policyProfile": null,
+      "price": {
+        "kind": "not-applicable",
+        "currency": null,
+        "version": null
+      },
+      "eventTime": "2026-10-06T00:20:00Z",
+      "observedAt": "2026-10-06T00:21:00Z",
+      "projectedAt": "2026-10-06T00:22:00Z",
+      "purpose": "unknown",
+      "healthDimension": null
+    },
+    {
+      "schema": "fsgg.telemetry.efficiency-metric/1",
+      "metricId": "metric-source-age",
+      "metric": "data-health",
+      "calculationVersion": "efficiency-calculation/1",
+      "unit": "seconds",
+      "population": {
+        "itemIds": [
+          "A"
+        ],
+        "repository": "FS-GG/example",
+        "workType": "source-change",
+        "acceptanceScope": "source-merged",
+        "windowStart": "2026-10-06T00:00:00Z",
+        "windowEnd": "2026-10-06T00:20:00Z",
+        "cutoff": "2026-10-06T00:21:00Z",
+        "excludedItems": [],
+        "openItems": 0,
+        "abandonedItems": 0
+      },
+      "sourceRefs": [
+        {
+          "id": "usage-a",
+          "kind": "usage",
+          "revision": 1
+        }
+      ],
+      "coverage": {
+        "population": "complete",
+        "usage": "complete",
+        "classification": "complete",
+        "lineage": "complete",
+        "dependency": "complete"
+      },
+      "value": {
+        "status": "known",
+        "numerator": 100,
+        "denominator": null,
+        "unknownAmount": 0,
+        "reason": null
+      },
+      "policyProfile": null,
+      "price": {
+        "kind": "not-applicable",
+        "currency": null,
+        "version": null
+      },
+      "eventTime": "2026-10-06T00:20:00Z",
+      "observedAt": "2026-10-06T00:21:00Z",
+      "projectedAt": "2026-10-06T00:22:00Z",
+      "purpose": null,
+      "healthDimension": "source-age"
+    },
+    {
+      "schema": "fsgg.telemetry.efficiency-metric/1",
+      "metricId": "metric-ingestion-age",
+      "metric": "data-health",
+      "calculationVersion": "efficiency-calculation/1",
+      "unit": "seconds",
+      "population": {
+        "itemIds": [
+          "A"
+        ],
+        "repository": "FS-GG/example",
+        "workType": "source-change",
+        "acceptanceScope": "source-merged",
+        "windowStart": "2026-10-06T00:00:00Z",
+        "windowEnd": "2026-10-06T00:20:00Z",
+        "cutoff": "2026-10-06T00:21:00Z",
+        "excludedItems": [],
+        "openItems": 0,
+        "abandonedItems": 0
+      },
+      "sourceRefs": [
+        {
+          "id": "usage-a",
+          "kind": "usage",
+          "revision": 1
+        }
+      ],
+      "coverage": {
+        "population": "complete",
+        "usage": "complete",
+        "classification": "complete",
+        "lineage": "complete",
+        "dependency": "complete"
+      },
+      "value": {
+        "status": "known",
+        "numerator": 10,
+        "denominator": null,
+        "unknownAmount": 0,
+        "reason": null
+      },
+      "policyProfile": null,
+      "price": {
+        "kind": "not-applicable",
+        "currency": null,
+        "version": null
+      },
+      "eventTime": "2026-10-06T00:20:00Z",
+      "observedAt": "2026-10-06T00:21:00Z",
+      "projectedAt": "2026-10-06T00:22:00Z",
+      "purpose": null,
+      "healthDimension": "ingestion-age"
+    },
+    {
+      "schema": "fsgg.telemetry.efficiency-metric/1",
+      "metricId": "metric-publication-age",
+      "metric": "data-health",
+      "calculationVersion": "efficiency-calculation/1",
+      "unit": "seconds",
+      "population": {
+        "itemIds": [
+          "A"
+        ],
+        "repository": "FS-GG/example",
+        "workType": "source-change",
+        "acceptanceScope": "source-merged",
+        "windowStart": "2026-10-06T00:00:00Z",
+        "windowEnd": "2026-10-06T00:20:00Z",
+        "cutoff": "2026-10-06T00:21:00Z",
+        "excludedItems": [],
+        "openItems": 0,
+        "abandonedItems": 0
+      },
+      "sourceRefs": [
+        {
+          "id": "usage-a",
+          "kind": "usage",
+          "revision": 1
+        }
+      ],
+      "coverage": {
+        "population": "complete",
+        "usage": "complete",
+        "classification": "complete",
+        "lineage": "complete",
+        "dependency": "complete"
+      },
+      "value": {
+        "status": "known",
+        "numerator": 2,
+        "denominator": null,
+        "unknownAmount": 0,
+        "reason": null
+      },
+      "policyProfile": null,
+      "price": {
+        "kind": "not-applicable",
+        "currency": null,
+        "version": null
+      },
+      "eventTime": "2026-10-06T00:20:00Z",
+      "observedAt": "2026-10-06T00:21:00Z",
+      "projectedAt": "2026-10-06T00:22:00Z",
+      "purpose": null,
+      "healthDimension": "publication-age"
     }
   ],
   "assessmentSamples": [
@@ -946,5 +1425,230 @@
       }
     }
   ],
-  "schemaPremises": "Synthetic native sample explicitly witnesses initial outcome epoch1, complete admitted lineage and root item review; real producers may not infer these premises from counts."
+  "schemaPremises": "Synthetic native sample explicitly witnesses initial outcome epoch1, complete admitted lineage and root item review; real producers may not infer these premises from counts.",
+  "allocationInputSamples": [
+    {
+      "schema": "fsgg.telemetry.efficiency-resource-allocation-input/1",
+      "kind": "efficiency-resource-allocation/1",
+      "identity": "allocation-usage-a",
+      "itemId": null,
+      "revision": 0,
+      "resource": {
+        "sourceRef": {
+          "id": "usage-a",
+          "kind": "runtime-turn-usage",
+          "revision": 0,
+          "contentDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        "dimension": "model-tokens",
+        "provider": "openai",
+        "accountingScope": "completed-turn",
+        "unit": "tokens-total",
+        "amount": 100
+      },
+      "shares": [
+        {
+          "itemId": "A",
+          "purpose": "direct-product",
+          "fraction": {
+            "numerator": 3,
+            "denominator": 5
+          },
+          "epistemicStatus": "observed",
+          "necessity": "required",
+          "evidenceRefs": [
+            {
+              "id": "usage-a",
+              "kind": "runtime-turn-usage",
+              "revision": 0,
+              "contentDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+            }
+          ],
+          "alternative": null
+        },
+        {
+          "itemId": "A",
+          "purpose": "unknown",
+          "fraction": {
+            "numerator": 2,
+            "denominator": 5
+          },
+          "epistemicStatus": "unknown",
+          "necessity": "uncertain",
+          "evidenceRefs": [],
+          "alternative": null
+        }
+      ],
+      "coverage": {
+        "allocation": "complete",
+        "evidence": "partial"
+      },
+      "provenance": {
+        "sourceIdentity": "synthetic-fixture",
+        "authorityRole": "runtime-observer",
+        "authorityRef": {
+          "id": "admission-a",
+          "kind": "runtime-admission",
+          "revision": 0,
+          "contentDigest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+        },
+        "rootDispatchRef": "dispatch-a",
+        "invocationRef": "invocation-a"
+      },
+      "occurredAt": null,
+      "observedAt": "2026-10-06T00:21:00Z"
+    }
+  ],
+  "episodeInputSamples": [
+    {
+      "schema": "fsgg.telemetry.efficiency-problem-episode-input/1",
+      "kind": "efficiency-problem-episode/1",
+      "identity": "episode-a",
+      "itemId": "A",
+      "revision": 0,
+      "subject": {
+        "outcomeRef": "source-a",
+        "outcomeEpoch": null,
+        "attemptRef": "attempt-a",
+        "activityRef": null,
+        "scope": "attempt"
+      },
+      "finding": {
+        "id": "episode-a",
+        "activity": "validation",
+        "purpose": "useful-assurance",
+        "trigger": "check-failure",
+        "primaryCause": "product-defect",
+        "contributingCauses": [],
+        "necessity": "required",
+        "epistemicStatus": "supported-inference",
+        "severity": "minor",
+        "summary": "Synthetic check exposed a product defect.",
+        "evidenceRefs": [
+          "usage-a"
+        ],
+        "affectedObjects": [
+          {
+            "id": "usage-a",
+            "kind": "runtime-turn-usage",
+            "revision": 0,
+            "contentDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          }
+        ],
+        "alternative": null,
+        "recoveryRefs": [],
+        "uncertainty": ""
+      },
+      "evidenceRefs": [
+        {
+          "id": "usage-a",
+          "kind": "runtime-turn-usage",
+          "revision": 0,
+          "contentDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        }
+      ],
+      "allocationRefs": [],
+      "provenance": {
+        "sourceIdentity": "synthetic-fixture",
+        "authorityRole": "runtime-observer",
+        "authorityRef": {
+          "id": "admission-a",
+          "kind": "runtime-admission",
+          "revision": 0,
+          "contentDigest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+        },
+        "rootDispatchRef": "dispatch-a",
+        "invocationRef": "invocation-a"
+      },
+      "occurredAt": null,
+      "observedAt": "2026-10-06T00:21:00Z"
+    }
+  ],
+  "assessmentInputSamples": [
+    {
+      "schema": "fsgg.telemetry.efficiency-assessment-input/1",
+      "kind": "efficiency-assessment/1",
+      "identity": "assessment-native-item",
+      "itemId": "A",
+      "revision": 1,
+      "assessment": {
+        "schema": "fsgg.telemetry.efficiency-assessment/1",
+        "assessmentId": "assessment-native-item",
+        "revision": 1,
+        "supersedes": null,
+        "subject": {
+          "itemId": "A",
+          "outcomeId": "source-a",
+          "outcomeEpoch": 1,
+          "scope": "native-item"
+        },
+        "evidenceDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "evidenceRefs": [
+          {
+            "id": "source-a",
+            "kind": "outcome",
+            "revision": 1
+          },
+          {
+            "id": "review-a",
+            "kind": "process-review",
+            "revision": 1
+          }
+        ],
+        "coverage": {
+          "population": "complete",
+          "usage": "complete",
+          "classification": "complete",
+          "lineage": "complete",
+          "dependency": "complete"
+        },
+        "omissions": [],
+        "outcomeSynopsis": "Synthetic source change merged; native population is complete.",
+        "wentWell": [
+          "Source outcome has a stable canonical reference."
+        ],
+        "findings": [],
+        "metricRefs": [
+          "metric-observed-a"
+        ],
+        "improvements": [],
+        "provenance": {
+          "producer": "synthetic-fixture",
+          "modelAlias": "fixture-model",
+          "promptVersion": "efficiency-prompt/1",
+          "rubricVersion": "efficiency-rubric/1",
+          "taxonomyVersion": "efficiency-taxonomy/1",
+          "analysisPolicyVersion": "efficiency-analysis-policy/1",
+          "usageRefs": [],
+          "startedAt": "2026-10-06T00:22:00Z",
+          "finishedAt": "2026-10-06T00:23:00Z",
+          "validationResult": "accepted"
+        },
+        "lifecycle": {
+          "state": "ready",
+          "idempotencyKey": "6b6ab0e4cda0153bb7f88d308acaa5ab66b9557522669a52374e253afc5f7677",
+          "failureReason": null,
+          "itemReviewRef": "review-a",
+          "generatedAt": "2026-10-06T00:23:00Z"
+        },
+        "publication": {
+          "visibility": "private",
+          "policyVersion": null
+        }
+      },
+      "provenance": {
+        "sourceIdentity": "synthetic-fixture",
+        "authorityRole": "root-reviewer",
+        "authorityRef": {
+          "id": "review-a",
+          "kind": "process-review",
+          "revision": 0,
+          "contentDigest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+        },
+        "rootDispatchRef": "dispatch-a",
+        "invocationRef": "invocation-a"
+      },
+      "observedAt": "2026-10-06T00:24:00Z"
+    }
+  ]
 }

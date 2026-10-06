@@ -33,7 +33,10 @@
   },
   "schemas": {
     "assessment": "fsgg.telemetry.efficiency-assessment/1",
-    "metric": "fsgg.telemetry.efficiency-metric/1"
+    "metric": "fsgg.telemetry.efficiency-metric/1",
+    "allocationInput": "fsgg.telemetry.efficiency-resource-allocation-input/1",
+    "episodeInput": "fsgg.telemetry.efficiency-problem-episode-input/1",
+    "assessmentInput": "fsgg.telemetry.efficiency-assessment-input/1"
   },
   "axes": {
     "activity": [
@@ -203,7 +206,8 @@
     "work-mix": {
       "unit": "selected resource",
       "numerator": "exclusive purpose amounts plus unknown",
-      "denominator": "observed-resource"
+      "denominator": "observed-resource",
+      "purposeDimension": "One metric per explicit closed purpose, same resource unit/window/cohort; all six purposes including unknown emitted by canonical reducer. Never decode purpose from metricId. Null purpose invalid for work-mix, required null for other metrics."
     },
     "avoidable-share": {
       "unit": "ratio",
@@ -268,7 +272,8 @@
     "data-health": {
       "unit": "records or seconds",
       "numerator": "expected/observed producer populations and unresolved gaps; producer, ingestion, publication ages separate",
-      "denominator": "explicit expected population or null if unknown"
+      "denominator": "explicit expected population or null if unknown",
+      "healthDimension": "Explicit closed healthDimension: source-age, ingestion-age, publication-age, producer-population, unresolved-lineage, pending-analysis; data-health requires dimension, others null. Missing source/ingestion/publication witness => unknown value, never other clock substitution."
     }
   },
   "policyProfiles": [
@@ -364,8 +369,68 @@
     "mode": "additive versioned sidecar contracts; no new ingest/1 kind activated by .1",
     "legacy": "retain all existing records, readers, vocabulary and budget policies; do not reinterpret old prose as labeled findings",
     "unsupportedVersion": "explicit incompatible state, retain last valid snapshot; never empty successful feed",
-    "store": "No migration selected here; .2 owns storage implementation using existing supported correction; qualify installed versions independently",
+    "store": ".2 implements additive declared input/assessment kinds in the existing sole canonical store; concrete schema declarations freeze record/admission shapes but activate no migration or runtime writer here. Existing schema13 correction and legacy readers remain unchanged.",
     "externalTraceConvention": null,
-    "externalTraceReason": "No new OCEL/OpenTelemetry/FOCUS adapter selected; explicit object joins only. An actual adapter must pin its convention before activation."
+    "externalTraceReason": "No new OCEL/OpenTelemetry/FOCUS adapter selected; explicit object joins only. An actual adapter must pin its convention before activation.",
+    "targetStoreSchemaVersion": 14,
+    "activation": "Selected additive schema14 for .2 new declared records plus receiver acceptance clocks; .1 only freezes shapes. Source implementation, native qualification and installed migration remain separate."
+  },
+  "producerAdmission": {
+    "activation": "Frozen shapes, inactive until .2 decoder/store/native admission is delivered and independently qualified; schema declaration cannot authorize writes.",
+    "batch": "fsgg.telemetry.ingest/1 unchanged. Allocation/episode input schema is an adapter marker removed before embedding the otherwise identical event in existing events[]. Existing ingest identity/generation/cursor, batch limits, content digest, source producer enrollment, grants and receiver applied receipts remain mandatory.",
+    "recordKinds": {
+      "efficiency-resource-allocation/1": {
+        "inputSchema": "allocation-input-v1.schema.json",
+        "itemId": "null resource-global; shares resolve effective canonical items",
+        "identity": "one stable allocation identity per source resource/dimension/provider/accountingScope/unit; no item-specific copies of shared cost"
+      },
+      "efficiency-problem-episode/1": {
+        "inputSchema": "episode-input-v1.schema.json",
+        "itemId": "owning effective item; no completion effect"
+      },
+      "efficiency-assessment/1": {
+        "inputSchema": "assessment-input-v1.schema.json",
+        "wire": "existing fact identity=assessmentId; itemId=subject.itemId; revision=assessment.revision; assessment=exact frozen object; provenance=admitted producer context; no standalone schema key inside event",
+        "scope": "native-item or provisional-delivery retained as distinct scopes; not a legacy ProcessReview kind"
+      }
+    },
+    "revision": "Canonical fact revision is nonnegative (legacy starts0); assessment revision positive. Current selection uses effective source revision/content digest at cutoff, not arrival time; equal revision conflicts refuse.",
+    "provenance": "Batch sourceIdentity must equal declared sourceIdentity. authorityRole is a claim checked against existing producer enrollment, applicable operational origin/grant and native invocation/dispatch authority. authorityRef resolves exact existing admitted fact; a caller-authored role/ref does not confer authority. Preserve original canonical bytes and receipt admissions.",
+    "allocationAdmission": "Source reference resolves one current native usage or CI resource and measured amount in same unit/provider/scope. Canonical reducer validates amount against original counters/witnessed intervals (cached/reasoning subsets preserved). One resource registry, exact shares<=1 with remainder unallocated. Items resolve effective canonical lineage; cross-item CI support reuses qualified correction. Unsupported shared ownership remains unallocated; unsupported purpose remains unknown. No classification derives from actor role or activity alone.",
+    "shareAdmission": "Non-unknown purpose needs observed/supported-inference evidence resolving source policy/input/operation context. Avoidable-process additionally requires avoidable necessity and feasible then-permitted alternative. Hypothesis/unknown shares cannot enter supported purpose or avoidable totals; reject or require unknown purpose. Fractions normalize exactly before aggregate, never infer allocation from elapsed time.",
+    "episodeAdmission": "Attempt/activity/affected references resolve same effective item and admitted invocation; provisional requires known native source outcome and does not require forged terminal attempt. Evidence/recovery refs exist at exact revisions; supported primary cause requires evidence; supported avoidability requires permitted alternative. Each episode links allocations without copying their amount; contributing causes are counts, never another cost population.",
+    "assessmentAdmission": "Final ready requires existing complete admitted root item review, native eligibility and witnessed epoch; rootDispatch/invocation authority must match. Provisional joins known source outcome, may lack runtime root, requires enrolled completion-analyst producer authority, has no itemReviewRef and never claims ready/native completion. Both use same immutable evidence/ref and bounded revision rules.",
+    "derivedExistingFacts": [
+      "observed native counters and unknown-purpose work mix",
+      "witnessed CI runner/queue/time summaries",
+      "current canonical outcome/source-delivery facts",
+      "expected/terminal/usage eligibility and coverage",
+      "existing review presence and broad complication labels"
+    ],
+    "requiresNewInputs": [
+      "supported exclusive purpose/shared allocations",
+      "structured primary/contributing cause and necessity episodes",
+      "bounded provisional/final efficiency assessment records"
+    ],
+    "clockAdmission": "occurredAt is source-witnessed or null; observedAt is actual producer observation; receipt ingestion time is receiver-owned applied terminal receipt or null, never copied from observedAt. projectedAt is projection-owned. No generic per-fact ingestion timestamp exists at base.",
+    "allocationCorrection": "Metric fingerprint includes selected correction identity/revision/content digest/effective item as well as original resource. Stale/conflicting allocation after correction contributes no supported purpose/ownership: preserve original resource amount once as unknown/unallocated, retain rejected allocation in audit, and expose gap. Never drop or duplicate measured usage to repair classification.",
+    "receiverClock": "Schema14 implementation adds receiver-owned acceptedAt for new admitted records, tied to actual applied terminal receipt/transaction clock. Do not reconstruct acceptedAt for historical records; null age explicit. Older records/receipt populations remain supported.",
+    "minimumSourceContexts": "Existing usage/CI/admission/activity facts supply measured resources and lineage; explicit evidence facts may retain policy/input closures. Amount observation alone cannot support purpose/avoidability. Existing sourceIdentity enrollment/association and native grant/root review remain authority.",
+    "durableAnalysisState": {
+      "ownership": ".3 local private execution journal, not canonical ingest or completion authority",
+      "fields": [
+        "key",
+        "subject",
+        "evidenceDigest",
+        "state",
+        "reason",
+        "invocations",
+        "startedAt",
+        "updatedAt",
+        "usageRefs",
+        "result"
+      ],
+      "packet": "Immutable private key.packet; state key.json. Idempotency binds declared subject/digest/policy; preserve invocation/budget failure state on restart. Missing authenticated canonical evidence cannot be replaced by the journal."
+    }
   }
 }

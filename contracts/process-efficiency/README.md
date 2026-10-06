@@ -4,6 +4,8 @@ V2-EFF-01.1 freezes an additive measurement contract and executable synthetic ex
 The normative vocabulary, mappings, formulas, population boundaries and policy aliases are in
 [measurement-contract-v1.json](measurement-contract-v1.json). The two Draft 2020-12 schemas
 are [assessment](assessment-v1.schema.json) and [metric](metric-v1.schema.json).
+The [allocation input](allocation-input-v1.schema.json), [episode input](episode-input-v1.schema.json)
+and [assessment input](assessment-input-v1.schema.json) freeze the concrete additive producer shapes.
 These declarations do not activate an ingest kind, storage migration, analyst, public feed or receiver.
 
 ## Canonical joins and compatibility
@@ -22,7 +24,8 @@ attempt/item; CI allocations reference their original run/job and resource scope
 `TelemetryCi` plan/apply/history and existing `current_*` effective-attribution views. No new event
 or ingestion time overrides their authority. Conflicting equal revisions remain unknown.
 
-The JSON source reference `revision` is the canonical fact revision, not a Git SHA. The evidence
+The JSON source reference `revision` is a **nonnegative** canonical fact revision (legacy starts at
+zero), not a Git SHA. Assessment revisions independently start at one. The evidence
 snapshot retains the repository revision/digest identifying external input bytes. Source timing,
 observation timing and projection timing remain separate. Budget epochs are not outcome epochs:
 no native reopen epoch producer was found. `subject.outcomeEpoch` must be null unless an explicit
@@ -47,6 +50,36 @@ a budget verdict and may not relabel useful assurance to improve a ratio. These 
 No external trace adapter is selected. OCEL/OpenTelemetry/FOCUS remain conceptual references;
 there is no implied external wire conformance. A future adapter must pin its actual convention.
 
+## Inactive producer admission selected for .2
+
+The new event kinds are exactly `efficiency-resource-allocation/1`,
+`efficiency-problem-episode/1` and `efficiency-assessment/1`. Their `/1` suffix versions the
+payload; the existing batch schema remains `fsgg.telemetry.ingest/1`. The adapter drops only the
+standalone input's `schema` key before embedding its exact event into existing `events[]`.
+The selected .2 store extension is additive **schema 14**, with receiver-owned acceptance clocks;
+no migration or write is activated by this milestone. Existing readers and supported CI correction
+remain valid. The contract's `producerAdmission` specifies exact new-versus-existing joins.
+
+An allocation is resource-global (`itemId: null`), with one identity per native resource/unit/scope;
+its rational shares name effective canonical items and exclusive purposes. The original resource
+amount is measured once, never supplied again as a new usage event. Its reference must match actual
+native counters or witnessed CI intervals, provider/unit/scope and content digest. Existing producer
+enrollment/association, operational grant/origin, root dispatch and native invocation remain the
+admission authority. Provenance strings are claims, not grants. Unknown mixed evidence cannot acquire
+supported purpose or avoidability. Shared ownership gaps preserve an unallocated remainder.
+
+Supported correction selection enters the metric fingerprint with its revision/digest/effective item.
+A stale or conflicting allocation after correction becomes unknown/unallocated while conserving the
+original measured resource once. Rejected classification stays in audit; it neither loses cost nor
+creates a second outcome. An episode contains structured findings and allocation references rather
+than copied measured cost. Its attempt/activity/evidence/recovery joins must resolve at exact revisions.
+Provisional episode/assessment scope joins known source delivery without forging a terminal attempt.
+Final ready still requires existing root-admitted item review and complete native population.
+
+Receiver `acceptedAt` records the actual applied receipt/transaction clock for new records. Historical
+records without that clock retain null ingestion age. The .3 private journal fields are frozen separately
+under `producerAdmission.durableAnalysisState`; that journal cannot confer canonical completion authority.
+
 ## Mandatory semantic validation
 
 Schema validation is necessary but does not prove admission, attribution or causality. Consumers
@@ -67,6 +100,10 @@ must additionally enforce these joins and invariants:
   `ensure_ascii=true`. Revision selection is canonical and append-only. Final review may supersede
   provisional explanation, preserving both histories and one source delivery. Reopen preserves prior
   epoch cost and history; it does not silently reset cohort expenditure.
+- `work-mix` metrics require an explicit closed `purpose` dimension, including unknown; other
+  metrics use `purpose: null`. `data-health` similarly requires explicit `healthDimension` for
+  source/ingestion/publication age or producer population/lineage/pending analysis. Metric IDs are
+  opaque and cannot supply those meanings.
 - Amounts stay in separate resource units and accounting scopes. Native total is input + output;
   cached input and reasoning are subsets. Shared rational shares sum to at most one; the remainder
   is unallocated. Deduplicate original resource identities before allocating, and round only display.
@@ -103,7 +140,9 @@ python3 tests/process-efficiency/test_contract.py
 hand-calculated cases, final/provisional schema samples, exact allocation fractions, overlapping
 spans/waits, cancellations, same/changed-input retries, observation replay, zero acceptance, analyst
 cost, incomplete/late usage, reopen history, equal-revision conflict and supported correction.
-The Python oracle calculates totals from inputs rather than copying expected values. Mutation checks
+The Python oracle calculates totals from inputs rather than copying expected values. Historical
+source-byte verification explicitly skips when a shallow checkout lacks the pinned object; the other
+semantic cases still run, and retained exact-source qualification remains separately required. Mutation checks
 reject over-allocation, conflicting identities, unknown evidence/metrics, fabricated measured fields,
 unsupported taxonomy, incomplete final reviews and provisional ready state. Its bounded offline schema
 checker covers only the vocabulary used here; production consumers use a full Draft 2020-12 validator

@@ -15,7 +15,9 @@
     "price",
     "eventTime",
     "observedAt",
-    "projectedAt"
+    "projectedAt",
+    "purpose",
+    "healthDimension"
   ],
   "properties": {
     "schema": {
@@ -323,6 +325,36 @@
     "projectedAt": {
       "type": "string",
       "format": "date-time"
+    },
+    "purpose": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "enum": [
+        null,
+        "direct-product",
+        "useful-assurance",
+        "necessary-coordination",
+        "process-improvement",
+        "avoidable-process",
+        "unknown"
+      ]
+    },
+    "healthDimension": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "enum": [
+        null,
+        "source-age",
+        "ingestion-age",
+        "publication-age",
+        "producer-population",
+        "unresolved-lineage",
+        "pending-analysis"
+      ]
     }
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -363,7 +395,7 @@
         },
         "revision": {
           "type": "integer",
-          "minimum": 1
+          "minimum": 0
         }
       }
     }

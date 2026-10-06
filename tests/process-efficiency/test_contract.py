@@ -237,6 +237,10 @@ def assessment_check(value, metric_ids):
 def metric_check(value):
     schema_check(value,json.loads((ROOT/'contracts/process-efficiency/metric-v1.schema.json').read_text()))
     amount=value['value']
+    if (value['metric']=='work-mix') != (value['purpose'] is not None):
+        raise ValueError('work mix requires explicit exclusive purpose dimension')
+    if (value['metric']=='data-health') != (value['healthDimension'] is not None):
+        raise ValueError('data health requires explicit clock or population dimension')
     if value['unit']=='ratio' and amount['status']=='known' and (amount['denominator'] is None or amount['denominator']==0):
         raise ValueError('known ratio requires positive denominator')
     if amount['status']=='unknown' and (amount['numerator'] is not None or not amount['reason']):
@@ -287,15 +291,23 @@ class ContractTests(unittest.TestCase):
             if row['family'] in ['useful-failure','changed-input-rerun','required-duplicate']:
                 self.assertFalse(expected['measuredAvoidable'])
 
-    def test_source_pin_and_legacy_categories(self):
+    def test_legacy_categories_and_pin_metadata(self):
         inspected=CONTRACT['sourceInspection']
         self.assertEqual(inspected['storeSchemaVersion'],13)
-        for file,digest in inspected['fileSha256'].items():
-            pinned=subprocess.run(['git','show',f"{inspected['revision']}:{file}"],cwd=ROOT,check=True,capture_output=True,timeout=5).stdout
-            self.assertEqual(hashlib.sha256(pinned).hexdigest(),digest)
+        self.assertRegex(inspected['revision'],r'^[a-f0-9]{40}$')
+        for digest in inspected['fileSha256'].values():self.assertRegex(digest,r'^[a-f0-9]{64}$')
         mapping=CONTRACT['canonicalMappings']['ActivitySpan.Category']
         self.assertEqual(set(mapping),{'planning','implementation','review','validation','delivery','repair','operations','other','unclassified'})
         self.assertEqual(mapping['unclassified'],'unknown')
+
+    def test_retained_historical_source_pin(self):
+        inspected=CONTRACT['sourceInspection']
+        present=subprocess.run(['git','cat-file','-e',inspected['revision']+'^{commit}'],cwd=ROOT,capture_output=True,timeout=5)
+        if present.returncode:
+            self.skipTest('Historical source object unavailable in shallow checkout; retained exact-source verification required separately.')
+        for file,digest in inspected['fileSha256'].items():
+            pinned=subprocess.run(['git','show',f"{inspected['revision']}:{file}"],cwd=ROOT,check=True,capture_output=True,timeout=5).stdout
+            self.assertEqual(hashlib.sha256(pinned).hexdigest(),digest)
 
     def test_schema_samples_and_semantics(self):
         metric_ids={row['metricId'] for row in FIXTURES['metricSamples']}
@@ -323,6 +335,26 @@ class ContractTests(unittest.TestCase):
         for mutate in [lambda x:x.update(alternative=None),lambda x:x.update(evidenceRefs=[]),lambda x:x.update(evidenceRefs=['missing']),lambda x:x.update(epistemicStatus='hypothesis')]:
             bad=copy.deepcopy(sample);mutate(bad['findings'][0])
             with self.assertRaises(ValueError):assessment_check(bad,{'metric-observed-a'})
+
+    def test_declared_producer_shapes_and_conservation(self):
+        for group,file in [('allocationInputSamples','allocation-input-v1.schema.json'),('episodeInputSamples','episode-input-v1.schema.json'),('assessmentInputSamples','assessment-input-v1.schema.json')]:
+            schema=json.loads((ROOT/'contracts/process-efficiency'/file).read_text())
+            for sample in FIXTURES[group]:schema_check(sample,schema)
+        sample=copy.deepcopy(FIXTURES['allocationInputSamples'][0])
+        shares=sample['shares'];self.assertEqual(sum(Fraction(**row['fraction']) for row in shares),1)
+        # Unsupported mixed knowledge explicitly occupies unknown purpose rather than avoidability.
+        self.assertEqual(shares[1]['purpose'],'unknown')
+        self.assertEqual(sample['resource']['sourceRef']['revision'],0)
+        bad=copy.deepcopy(sample);bad['resource']['amount']=-1
+        with self.assertRaises(ValueError):schema_check(bad,json.loads((ROOT/'contracts/process-efficiency/allocation-input-v1.schema.json').read_text()))
+        mix=[sample for sample in FIXTURES['metricSamples'] if sample['metric']=='work-mix']
+        self.assertEqual({row['purpose'] for row in mix},set(CONTRACT['axes']['purpose']))
+        self.assertEqual(sum(row['value']['numerator'] for row in mix),100)
+        for sample in mix:
+            bad=copy.deepcopy(sample);bad['purpose']=None
+            with self.assertRaises(ValueError):metric_check(bad)
+        clocks=[row for row in FIXTURES['metricSamples'] if row['metric']=='data-health']
+        self.assertEqual({row['healthDimension']:row['value']['numerator'] for row in clocks},{'source-age':100,'ingestion-age':10,'publication-age':2})
 
     def test_metric_unknown_denominators_and_pricing(self):
         sample=copy.deepcopy(FIXTURES['metricSamples'][0])
