@@ -64,6 +64,20 @@ with tempfile.TemporaryDirectory(prefix="fsgg-telemetry-safety-") as scratch:
     subprocess.run(["git", "-C", str(repo), "add", str(implementation)], check=True)
     assert subprocess.run([str(GUARD), "--repo", str(repo)], capture_output=True).returncode == 1
     subprocess.run(["git", "-C", str(repo), "reset", "-q", str(implementation)], check=True)
+    dashboard = repo / "telemetry-dashboard"; dashboard.mkdir()
+    app = dashboard / "app.js"
+    app.write_text("// implementation source\n" + " " * (64 * 1024 + 1))
+    subprocess.run(["git", "-C", str(repo), "add", str(app)], check=True)
+    assert subprocess.run([str(GUARD), "--repo", str(repo)], capture_output=True).returncode == 0
+    app.write_text('{"session_' + 'id":"private"}')
+    subprocess.run(["git", "-C", str(repo), "add", str(app)], check=True)
+    assert subprocess.run([str(GUARD), "--repo", str(repo)], capture_output=True).returncode == 1
+    subprocess.run(["git", "-C", str(repo), "reset", "-q", str(app)], check=True)
+    dashboard_evidence = dashboard / "telemetry-evidence.json"
+    dashboard_evidence.write_text(" " * (64 * 1024 + 1))
+    subprocess.run(["git", "-C", str(repo), "add", str(dashboard_evidence)], check=True)
+    assert subprocess.run([str(GUARD), "--repo", str(repo)], capture_output=True).returncode == 1
+    subprocess.run(["git", "-C", str(repo), "reset", "-q", str(dashboard_evidence)], check=True)
     workflows = repo / ".github" / "workflows"; workflows.mkdir(parents=True)
     host_workflow = workflows / "telemetry-host-package.yml"
     host_workflow.write_text("name: host-package\n# " + " " * (64 * 1024 + 1))
