@@ -275,7 +275,7 @@ class Journal:
                     if [other['subject'][n] for n in ('itemId', 'outcomeId', 'outcomeEpoch')] == epoch:
                         count += 1
                 state = dict(key=identity, subject=packet['subject'], evidenceDigest=packet['evidenceDigest'],
-                             state='pending' if count < 2 else 'partial', reason=None if count < 2 else 'revision-budget-exhausted',
+                             state='pending' if count < 1 + BUDGET['automaticRevisionsPerEpoch'] else 'partial', reason=None if count < 1 + BUDGET['automaticRevisionsPerEpoch'] else 'revision-budget-exhausted',
                              invocations=0, startedAt=None, updatedAt=now, usageRefs=[], result=None)
             elif action == 'start' and state['state'] == 'pending':
                 state.update(state='running', invocations=1, startedAt=now)

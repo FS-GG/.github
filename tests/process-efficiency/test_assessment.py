@@ -135,11 +135,14 @@ class AssessmentTests(unittest.TestCase):
             recovered = a.Journal(Path(parent) / 'private').transact(packet, 'recover', 'later')
             self.assertEqual(recovered['reason'], 'interrupted-analysis-outcome-unknown')
             self.assertEqual(journal.transact(packet, 'start', 'retry')['invocations'], 1)
-            for revision in (2, 3):
+            for revision in (2, 3, 4):
                 rows = copy.deepcopy(packet['records'])
                 rows[0]['ref']['revision'] = revision
-                revised = a.assemble(output['subject'], rows, [], output['coverage'])
+                subject = dict(output['subject'], scope='provisional-delivery') if revision == 3 else output['subject']
+                revised = a.assemble(subject, rows, [], output['coverage'])
                 state = journal.transact(revised, 'schedule', 'late')
+                if revision == 3:
+                    self.assertEqual(state['state'], 'pending')
             self.assertEqual(state['reason'], 'revision-budget-exhausted')
 
     def test_concurrent_notifications_and_timeout(self):

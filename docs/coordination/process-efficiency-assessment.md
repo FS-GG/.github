@@ -60,8 +60,8 @@ Finalizing a provisional explanation preserves history and does not add an outco
 all checkouts; records and advisory locks are `0600`, regular, owner-matched and symlink-refusing.
 The exact analysis input is retained in a separate immutable packet file before the execution state.
 An exclusive lock, fsynced atomic replacement and directory fsync serialize transitions. Duplicate
-schedule/start notifications retain one invocation. Two automatic evidence snapshots per explicit
-subject/epoch are admitted; further snapshots remain partial with budget exhaustion. This does not
+schedule/start notifications retain one invocation. One initial snapshot plus two automatic evidence revisions per explicit
+subject/epoch are admitted, sharing the budget across native and provisional scopes; further snapshots remain partial with budget exhaustion. This does not
 mint an outcome epoch or grant execution authority.
 
 Missing token, authority, exporter or provider may defer pending analysis to explicit unavailable
