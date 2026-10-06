@@ -72,7 +72,8 @@ module Program =
           Workspace = false
           Producer = None
           BindingDigest = None
-          CredentialReference = None }
+          CredentialReference = None
+          Destination = None }
 
     let private resultJson result =
         use document = JsonDocument.Parse result.Stdout
@@ -441,7 +442,7 @@ module Program =
         let engineDirectory = Path.GetDirectoryName Environment.ProcessPath
         let engineName = Path.GetFileName Environment.ProcessPath
         let configPath = Path.Combine(isolated, "workspace.json")
-        File.WriteAllText(configPath, "{\"schema\":\"fsgg.telemetry.workspace-config/1\",\"engine\":\"" + engineName + "\",\"associations\":[{\"producerId\":\"fixture-association\",\"repositories\":[\"FS-GG/.github\"],\"destination\":{\"credentialReference\":\"fixture-ref\"}}],\"retiredAssociations\":[]}")
+        File.WriteAllText(configPath, "{\"schema\":\"fsgg.telemetry.workspace-config/1\",\"engine\":\"" + engineName + "\",\"associations\":[{\"producerId\":\"fixture-association\",\"repositories\":[\"FS-GG/.github\"],\"destination\":{\"kind\":\"remote\",\"endpoint\":\"https://collector.invalid\",\"credentialReference\":\"fixture-ref\",\"spoolRoot\":\"" + stateRoot.Replace("\\", "\\\\") + "\"}}],\"retiredAssociations\":[]}")
         if not (OperatingSystem.IsWindows()) then File.SetUnixFileMode(configPath, enum<UnixFileMode> 0o600)
         let source = "{\"schema\":\"fsgg.telemetry.original-item-assignments/1\",\"assignments\":[{\"featureId\":\"F\",\"itemId\":\"F.2\",\"originalItemId\":\"F\"},{\"featureId\":\"F\",\"itemId\":\"F\",\"originalItemId\":\"OTHER\"}]}"
         let encoded = Convert.ToBase64String(Encoding.UTF8.GetBytes source)

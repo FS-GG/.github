@@ -196,3 +196,13 @@ synthetic held-child controls qualify local custody only; escaped processes and 
 effects remain unknown. Native usage must still be joined separately before settlement. Root reviews the concrete request and supervision route before
 execution. Actual complete usage is checked against the unchanged thresholds before result settlement,
 and admitted review plus receiver readback remains necessary for any canonical native result.
+
+
+The existing `telemetry workspace activate-local` route uses a dedicated workspace configuration;
+it does not replace the canonical host configuration or grant authority from a path. Adapter discovery
+matches the exact binding config/repository/producer and a typed local or remote destination to the
+selected association's store or spool root. Only a validated local destination omits the remote
+credential wrapper. Remote destinations still require their explicit credential reference and
+owner-controlled loader. The receiver independently resolves actual enrollment and canonical review
+membership. Reader/adapter fixture controls cover local selection, store/config/destination mismatch
+and remote credential refusal; source controls do not qualify a live activation.
