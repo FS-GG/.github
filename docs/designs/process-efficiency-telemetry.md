@@ -19,6 +19,15 @@ facts or installed behavior. It extends the existing telemetry system and GitHub
 It selects no new hosted analytics platform, scheduler or model provider. Agent explanations are
 assessments; canonical authorities still establish delivery, execution, usage and accounting facts.
 
+## Frozen measurement declarations (V2-EFF-01.1)
+
+The additive [version 1 contract](../../contracts/process-efficiency/README.md) now declares
+concrete schemas, legacy mappings, policy aliases and population/accounting rules against protected
+`8a60856075aaff7614b1286ddc41ef204fe605cc` schema 13. Its synthetic corpus and hand-calculated
+fixtures provide the shared consumer boundary for .2–.4; they do not activate production collection,
+analysis or publication, or demonstrate calibration/installed acceptance. The implementation
+sections below remain proposed until their respective milestones land.
+
 ## Current capability and the gap
 
 The source audit uses `.github` protected main

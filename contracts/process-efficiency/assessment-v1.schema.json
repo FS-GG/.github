@@ -1,0 +1,567 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "assessmentId",
+    "revision",
+    "supersedes",
+    "subject",
+    "evidenceDigest",
+    "evidenceRefs",
+    "coverage",
+    "omissions",
+    "outcomeSynopsis",
+    "wentWell",
+    "findings",
+    "metricRefs",
+    "improvements",
+    "provenance",
+    "lifecycle",
+    "publication"
+  ],
+  "properties": {
+    "schema": {
+      "const": "fsgg.telemetry.efficiency-assessment/1"
+    },
+    "assessmentId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "supersedes": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 256
+    },
+    "subject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "itemId",
+        "outcomeId",
+        "outcomeEpoch",
+        "scope"
+      ],
+      "properties": {
+        "itemId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "outcomeId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "outcomeEpoch": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        },
+        "scope": {
+          "enum": [
+            "native-item",
+            "provisional-delivery"
+          ]
+        }
+      }
+    },
+    "evidenceDigest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "evidenceRefs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/sourceRef"
+      },
+      "maxItems": 128
+    },
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "population",
+        "usage",
+        "classification",
+        "lineage",
+        "dependency"
+      ],
+      "properties": {
+        "population": {
+          "enum": [
+            "complete",
+            "partial",
+            "unknown",
+            "not-applicable"
+          ]
+        },
+        "usage": {
+          "enum": [
+            "complete",
+            "partial",
+            "unknown",
+            "not-applicable"
+          ]
+        },
+        "classification": {
+          "enum": [
+            "complete",
+            "partial",
+            "unknown",
+            "not-applicable"
+          ]
+        },
+        "lineage": {
+          "enum": [
+            "complete",
+            "partial",
+            "unknown",
+            "not-applicable"
+          ]
+        },
+        "dependency": {
+          "enum": [
+            "complete",
+            "partial",
+            "unknown",
+            "not-applicable"
+          ]
+        }
+      }
+    },
+    "omissions": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 1024
+      },
+      "maxItems": 32
+    },
+    "outcomeSynopsis": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024
+    },
+    "wentWell": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 1024
+      },
+      "maxItems": 8
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "activity",
+          "purpose",
+          "trigger",
+          "primaryCause",
+          "contributingCauses",
+          "necessity",
+          "epistemicStatus",
+          "severity",
+          "summary",
+          "evidenceRefs",
+          "affectedObjects",
+          "alternative",
+          "recoveryRefs",
+          "uncertainty"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "activity": {
+            "enum": [
+              "planning",
+              "implementation",
+              "review",
+              "validation",
+              "delivery",
+              "repair",
+              "operations",
+              "coordination",
+              "context-recovery",
+              "other",
+              "unknown"
+            ]
+          },
+          "purpose": {
+            "enum": [
+              "direct-product",
+              "useful-assurance",
+              "necessary-coordination",
+              "process-improvement",
+              "avoidable-process",
+              "unknown"
+            ]
+          },
+          "trigger": {
+            "enum": [
+              "check-failure",
+              "retry",
+              "timeout",
+              "cancellation",
+              "refusal",
+              "handoff-return",
+              "reopen",
+              "data-conflict",
+              "missing-observation",
+              "other",
+              "unknown"
+            ]
+          },
+          "primaryCause": {
+            "enum": [
+              "product-defect",
+              "requirements",
+              "dependency-drift",
+              "test-nondeterminism",
+              "infrastructure",
+              "authorization",
+              "capacity-custody",
+              "orchestration-handoff",
+              "context-loss",
+              "duplicate-process",
+              "bookkeeping-lineage",
+              "telemetry-loss",
+              "other",
+              "unknown"
+            ]
+          },
+          "contributingCauses": {
+            "type": "array",
+            "items": {
+              "enum": [
+                "product-defect",
+                "requirements",
+                "dependency-drift",
+                "test-nondeterminism",
+                "infrastructure",
+                "authorization",
+                "capacity-custody",
+                "orchestration-handoff",
+                "context-loss",
+                "duplicate-process",
+                "bookkeeping-lineage",
+                "telemetry-loss",
+                "other",
+                "unknown"
+              ]
+            },
+            "maxItems": 6
+          },
+          "necessity": {
+            "enum": [
+              "required",
+              "avoidable",
+              "uncertain"
+            ]
+          },
+          "epistemicStatus": {
+            "enum": [
+              "observed",
+              "supported-inference",
+              "hypothesis",
+              "unknown"
+            ]
+          },
+          "severity": {
+            "enum": [
+              "info",
+              "minor",
+              "major",
+              "critical",
+              "unknown"
+            ]
+          },
+          "summary": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1024
+          },
+          "evidenceRefs": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "maxItems": 16
+          },
+          "affectedObjects": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/sourceRef"
+            },
+            "maxItems": 16
+          },
+          "alternative": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 1024
+          },
+          "recoveryRefs": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "maxItems": 16
+          },
+          "uncertainty": {
+            "type": "string",
+            "maxLength": 1024
+          }
+        }
+      },
+      "maxItems": 16
+    },
+    "metricRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 256
+      },
+      "maxItems": 32
+    },
+    "improvements": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "ownerRole",
+          "mechanism",
+          "validationMethod",
+          "status"
+        ],
+        "properties": {
+          "ownerRole": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "mechanism": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1024
+          },
+          "validationMethod": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1024
+          },
+          "status": {
+            "const": "hypothesis"
+          }
+        }
+      },
+      "maxItems": 3
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "producer",
+        "modelAlias",
+        "promptVersion",
+        "rubricVersion",
+        "taxonomyVersion",
+        "analysisPolicyVersion",
+        "usageRefs",
+        "startedAt",
+        "finishedAt",
+        "validationResult"
+      ],
+      "properties": {
+        "producer": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "modelAlias": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "promptVersion": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "rubricVersion": {
+          "const": "efficiency-rubric/1"
+        },
+        "taxonomyVersion": {
+          "const": "efficiency-taxonomy/1"
+        },
+        "analysisPolicyVersion": {
+          "const": "efficiency-analysis-policy/1"
+        },
+        "usageRefs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "maxItems": 16
+        },
+        "startedAt": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "finishedAt": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "validationResult": {
+          "enum": [
+            "pending",
+            "accepted",
+            "rejected"
+          ]
+        }
+      }
+    },
+    "lifecycle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "idempotencyKey",
+        "failureReason",
+        "itemReviewRef",
+        "generatedAt"
+      ],
+      "properties": {
+        "state": {
+          "enum": [
+            "pending",
+            "running",
+            "partial",
+            "ready",
+            "failed",
+            "unavailable"
+          ]
+        },
+        "idempotencyKey": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "failureReason": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 1024
+        },
+        "itemReviewRef": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 256
+        },
+        "generatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "publication": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "visibility",
+        "policyVersion"
+      ],
+      "properties": {
+        "visibility": {
+          "const": "private"
+        },
+        "policyVersion": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 256
+        }
+      }
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:fsgg:telemetry:efficiency-assessment:1",
+  "$defs": {
+    "sourceRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "kind",
+        "revision"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "kind": {
+          "enum": [
+            "outcome",
+            "attempt",
+            "invocation",
+            "operation",
+            "pr",
+            "ci-run",
+            "ci-job",
+            "release",
+            "adoption",
+            "usage",
+            "activity",
+            "complication",
+            "process-review",
+            "correction",
+            "assessment"
+          ]
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    }
+  },
+  "$comment": "Cross-reference, admission, revision and numeric validation additionally required by README; schema alone does not establish authority."
+}

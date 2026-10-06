@@ -1,0 +1,372 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "metricId",
+    "metric",
+    "calculationVersion",
+    "unit",
+    "population",
+    "sourceRefs",
+    "coverage",
+    "value",
+    "policyProfile",
+    "price",
+    "eventTime",
+    "observedAt",
+    "projectedAt"
+  ],
+  "properties": {
+    "schema": {
+      "const": "fsgg.telemetry.efficiency-metric/1"
+    },
+    "metricId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "metric": {
+      "enum": [
+        "delivered-outcomes",
+        "observed-resource",
+        "work-mix",
+        "avoidable-share",
+        "retry-incidence",
+        "retry-burden",
+        "first-pass-delivery",
+        "churn",
+        "lead-time",
+        "touch-time",
+        "wait-time",
+        "flow-ratio",
+        "critical-path-delay",
+        "cost-per-accepted",
+        "analysis-burden",
+        "data-health"
+      ]
+    },
+    "calculationVersion": {
+      "const": "efficiency-calculation/1"
+    },
+    "unit": {
+      "enum": [
+        "tokens-input",
+        "tokens-output",
+        "tokens-total",
+        "tokens-cached-input",
+        "tokens-cache-write-input",
+        "tokens-reasoning",
+        "runner-seconds",
+        "observed-span-seconds",
+        "human-seconds",
+        "seconds",
+        "estimated-currency",
+        "billed-currency",
+        "outcomes",
+        "events",
+        "records",
+        "ratio",
+        "tokens-per-accepted",
+        "currency-per-accepted"
+      ]
+    },
+    "population": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "itemIds",
+        "repository",
+        "workType",
+        "acceptanceScope",
+        "windowStart",
+        "windowEnd",
+        "cutoff",
+        "excludedItems",
+        "openItems",
+        "abandonedItems"
+      ],
+      "properties": {
+        "itemIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "maxItems": 1000
+        },
+        "repository": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "workType": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "acceptanceScope": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "windowStart": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "windowEnd": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "cutoff": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "excludedItems": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "itemId",
+              "reason"
+            ],
+            "properties": {
+              "itemId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              }
+            }
+          },
+          "maxItems": 1000
+        },
+        "openItems": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "abandonedItems": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "sourceRefs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/sourceRef"
+      },
+      "maxItems": 1000
+    },
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "population",
+        "usage",
+        "classification",
+        "lineage",
+        "dependency"
+      ],
+      "properties": {
+        "population": {
+          "enum": [
+            "complete",
+            "partial",
+            "unknown",
+            "not-applicable"
+          ]
+        },
+        "usage": {
+          "enum": [
+            "complete",
+            "partial",
+            "unknown",
+            "not-applicable"
+          ]
+        },
+        "classification": {
+          "enum": [
+            "complete",
+            "partial",
+            "unknown",
+            "not-applicable"
+          ]
+        },
+        "lineage": {
+          "enum": [
+            "complete",
+            "partial",
+            "unknown",
+            "not-applicable"
+          ]
+        },
+        "dependency": {
+          "enum": [
+            "complete",
+            "partial",
+            "unknown",
+            "not-applicable"
+          ]
+        }
+      }
+    },
+    "value": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "numerator",
+        "denominator",
+        "unknownAmount",
+        "reason"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "known",
+            "partial",
+            "unknown",
+            "not-applicable"
+          ]
+        },
+        "numerator": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "denominator": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "unknownAmount": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "reason": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 1024
+        }
+      }
+    },
+    "policyProfile": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "enum": [
+        null,
+        "v2-model-overhead/2026-09-29",
+        "utel-narrow-bureaucracy/1"
+      ]
+    },
+    "price": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "currency",
+        "version"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "not-applicable",
+            "estimate",
+            "bill"
+          ]
+        },
+        "currency": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 256
+        },
+        "version": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 256
+        }
+      }
+    },
+    "eventTime": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time"
+    },
+    "observedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "projectedAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:fsgg:telemetry:efficiency-metric:1",
+  "$defs": {
+    "sourceRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "kind",
+        "revision"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "kind": {
+          "enum": [
+            "outcome",
+            "attempt",
+            "invocation",
+            "operation",
+            "pr",
+            "ci-run",
+            "ci-job",
+            "release",
+            "adoption",
+            "usage",
+            "activity",
+            "complication",
+            "process-review",
+            "correction",
+            "assessment"
+          ]
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    }
+  },
+  "$comment": "Numerator/denominator encode an exact rational in the declared unit; null denominator denotes scalar integer or unknown ratio, never infer1 for unknown ratios. Zero accepted ratio is not-applicable. Semantic joins required."
+}

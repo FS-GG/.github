@@ -1,0 +1,950 @@
+{
+  "schema": "fsgg.telemetry.efficiency-fixtures/1",
+  "synthetic": true,
+  "calculationVersion": "efficiency-calculation/1",
+  "fixtures": [
+    {
+      "id": "clean-work",
+      "kind": "allocation",
+      "sources": [
+        {
+          "id": "native-a",
+          "amount": 100,
+          "shares": [
+            {
+              "item": "A",
+              "purpose": "direct-product",
+              "numerator": 3,
+              "denominator": 5
+            },
+            {
+              "item": "A",
+              "purpose": "useful-assurance",
+              "numerator": 3,
+              "denominator": 10
+            },
+            {
+              "item": "A",
+              "purpose": "necessary-coordination",
+              "numerator": 1,
+              "denominator": 10
+            }
+          ]
+        }
+      ],
+      "expected": {
+        "total": 100,
+        "allocated": 100,
+        "unallocated": 0,
+        "byPurpose": {
+          "direct-product": 60,
+          "useful-assurance": 30,
+          "necessary-coordination": 10
+        },
+        "byItem": {
+          "A": 100
+        }
+      },
+      "handCalculation": "100*(3/5+3/10+1/10)=100; 60+30+10=100."
+    },
+    {
+      "id": "shared-ci",
+      "kind": "allocation",
+      "sources": [
+        {
+          "id": "ci-shared",
+          "amount": 120,
+          "shares": [
+            {
+              "item": "A",
+              "purpose": "useful-assurance",
+              "numerator": 1,
+              "denominator": 2
+            },
+            {
+              "item": "B",
+              "purpose": "useful-assurance",
+              "numerator": 1,
+              "denominator": 4
+            }
+          ]
+        }
+      ],
+      "expected": {
+        "total": 120,
+        "allocated": 90,
+        "unallocated": 30,
+        "byPurpose": {
+          "useful-assurance": 90
+        },
+        "byItem": {
+          "A": 60,
+          "B": 30
+        }
+      },
+      "handCalculation": "120*1/2=60; 120*1/4=30; remainder=30. Never count120 twice."
+    },
+    {
+      "id": "fractional-allocation",
+      "kind": "allocation",
+      "sources": [
+        {
+          "id": "tiny",
+          "amount": 1,
+          "shares": [
+            {
+              "item": "A",
+              "purpose": "direct-product",
+              "numerator": 1,
+              "denominator": 3
+            },
+            {
+              "item": "B",
+              "purpose": "direct-product",
+              "numerator": 1,
+              "denominator": 3
+            }
+          ]
+        }
+      ],
+      "expected": {
+        "total": 1,
+        "allocated": [
+          2,
+          3
+        ],
+        "unallocated": [
+          1,
+          3
+        ],
+        "byPurpose": {
+          "direct-product": [
+            2,
+            3
+          ]
+        },
+        "byItem": {
+          "A": [
+            1,
+            3
+          ],
+          "B": [
+            1,
+            3
+          ]
+        }
+      },
+      "handCalculation": "1/3+1/3+unallocated1/3=1 exactly, before rounding."
+    },
+    {
+      "id": "mixed-unknown",
+      "kind": "allocation",
+      "sources": [
+        {
+          "id": "u",
+          "amount": 60,
+          "shares": [
+            {
+              "item": "A",
+              "purpose": "unknown",
+              "numerator": 1,
+              "denominator": 1
+            }
+          ]
+        }
+      ],
+      "expected": {
+        "total": 60,
+        "allocated": 60,
+        "unallocated": 0,
+        "byPurpose": {
+          "unknown": 60
+        },
+        "byItem": {
+          "A": 60
+        }
+      },
+      "handCalculation": "Mixed native usage without supported split stays unknown60."
+    },
+    {
+      "id": "overlapping-touch-and-wait",
+      "kind": "time",
+      "window": [
+        0,
+        20
+      ],
+      "touch": [
+        [
+          0,
+          10
+        ],
+        [
+          5,
+          15
+        ]
+      ],
+      "wait": [
+        [
+          8,
+          18
+        ],
+        [
+          12,
+          20
+        ]
+      ],
+      "expected": {
+        "elapsed": 20,
+        "observedSpan": 20,
+        "touchUnion": 15,
+        "waitUnion": 12,
+        "touchWaitOverlap": 7,
+        "flowRatio": [
+          3,
+          4
+        ]
+      },
+      "handCalculation": "touch[0,15]=15, span10+10=20; wait[8,20]=12; overlap[8,15]=7;15/20=3/4."
+    },
+    {
+      "id": "clipped-touch",
+      "kind": "time",
+      "window": [
+        5,
+        15
+      ],
+      "touch": [
+        [
+          0,
+          8
+        ],
+        [
+          12,
+          20
+        ]
+      ],
+      "wait": [],
+      "expected": {
+        "elapsed": 10,
+        "observedSpan": 16,
+        "touchUnion": 6,
+        "waitUnion": null,
+        "touchWaitOverlap": null,
+        "flowRatio": [
+          3,
+          5
+        ]
+      },
+      "handCalculation": "Clip touch to[5,8] and[12,15]:3+3=6. Empty wait observations are unknown, not zero."
+    },
+    {
+      "id": "retries-and-replay",
+      "kind": "attempts",
+      "operations": [
+        {
+          "id": "x",
+          "population": "complete",
+          "attempts": [
+            {
+              "id": "x1",
+              "inputs": "h1",
+              "usage": 40
+            },
+            {
+              "id": "x2",
+              "inputs": "h1",
+              "usage": 10
+            },
+            {
+              "id": "x2",
+              "inputs": "h1",
+              "usage": 10
+            }
+          ]
+        },
+        {
+          "id": "y",
+          "population": "complete",
+          "attempts": [
+            {
+              "id": "y1",
+              "inputs": "h1",
+              "usage": 20
+            },
+            {
+              "id": "y2",
+              "inputs": "h2",
+              "usage": 30
+            }
+          ]
+        },
+        {
+          "id": "z",
+          "population": "complete",
+          "attempts": [
+            {
+              "id": "z1",
+              "inputs": "h1",
+              "usage": 50
+            }
+          ]
+        }
+      ],
+      "expected": {
+        "total": 150,
+        "operations": 3,
+        "retriedOperations": 2,
+        "additionalUsage": 40,
+        "sameInputUsage": 10,
+        "changedInputUsage": 30,
+        "incidence": [
+          2,
+          3
+        ],
+        "burden": [
+          4,
+          15
+        ]
+      },
+      "handCalculation": "Dedupx2.40+10+20+30+50=150;2/3 operations retry; (10+30)/150=4/15."
+    },
+    {
+      "id": "cancelled-and-incomplete",
+      "kind": "attempts",
+      "operations": [
+        {
+          "id": "c",
+          "population": "complete",
+          "attempts": [
+            {
+              "id": "c1",
+              "inputs": "h1",
+              "usage": 15,
+              "outcome": "cancelled"
+            },
+            {
+              "id": "c2",
+              "inputs": "h1",
+              "usage": 35
+            }
+          ]
+        },
+        {
+          "id": "missing",
+          "population": "unknown",
+          "attempts": [
+            {
+              "id": "m1",
+              "inputs": "h1",
+              "usage": 10
+            }
+          ]
+        }
+      ],
+      "expected": {
+        "total": 60,
+        "operations": 1,
+        "retriedOperations": 1,
+        "additionalUsage": 35,
+        "sameInputUsage": 35,
+        "changedInputUsage": 0,
+        "incidence": 1,
+        "burden": null
+      },
+      "handCalculation": "Cancelled15 retained. Total observed60; onlyc has known population. Complete burden unknown, observed additional35."
+    },
+    {
+      "id": "supported-avoidable",
+      "kind": "avoidability",
+      "amounts": [
+        {
+          "amount": 70,
+          "necessity": "required",
+          "status": "observed",
+          "purpose": "direct-product"
+        },
+        {
+          "amount": 20,
+          "necessity": "uncertain",
+          "status": "hypothesis",
+          "purpose": "avoidable-process"
+        },
+        {
+          "amount": 10,
+          "necessity": "avoidable",
+          "status": "supported-inference",
+          "purpose": "avoidable-process"
+        }
+      ],
+      "expected": {
+        "total": 100,
+        "supportedAvoidable": 10,
+        "share": [
+          1,
+          10
+        ],
+        "supportedClassification": 80
+      },
+      "handCalculation": "Only supported10 enters numerator; hypothesis20 remains total and unknown classification.10/100=1/10."
+    },
+    {
+      "id": "zero-accepted",
+      "kind": "accepted",
+      "costs": [
+        70,
+        20,
+        10
+      ],
+      "accepted": 0,
+      "expected": {
+        "total": 100,
+        "ratio": null,
+        "status": "not-applicable"
+      },
+      "handCalculation": "All unsuccessful/analyst costs100 remain; division by zero not a0cost ratio."
+    },
+    {
+      "id": "cost-with-analysis",
+      "kind": "accepted",
+      "costs": [
+        70,
+        20,
+        10,
+        5
+      ],
+      "accepted": 2,
+      "expected": {
+        "total": 105,
+        "ratio": [
+          105,
+          2
+        ],
+        "status": "known"
+      },
+      "handCalculation": "Successful70, failed20, shared10, failed analyst5 all included;105/2."
+    },
+    {
+      "id": "cross-item-correction",
+      "kind": "revision",
+      "records": [
+        {
+          "id": "outcome-1",
+          "revision": 1,
+          "item": "wrong",
+          "cost": 144,
+          "outcome": "source-1",
+          "current": false
+        },
+        {
+          "id": "outcome-1",
+          "revision": 2,
+          "item": "correct",
+          "cost": 144,
+          "outcome": "source-1",
+          "current": true
+        },
+        {
+          "id": "outcome-1",
+          "revision": 2,
+          "item": "correct",
+          "cost": 144,
+          "outcome": "source-1",
+          "current": true
+        },
+        {
+          "id": "outcome-1",
+          "revision": 1,
+          "item": "wrong",
+          "cost": 144,
+          "outcome": "source-1",
+          "current": false
+        }
+      ],
+      "expected": {
+        "total": 144,
+        "outcomes": 1,
+        "byItem": {
+          "correct": 144
+        },
+        "auditDistinctRecords": 2,
+        "conflict": false
+      },
+      "handCalculation": "Immutable audit2 revisions. Canonical current selects revision2 once; attribution moveswrong\u2192correct,144\u2192144, outcomes1\u21921. Late/replay excluded."
+    },
+    {
+      "id": "revision-conflict",
+      "kind": "revision",
+      "records": [
+        {
+          "id": "u",
+          "revision": 2,
+          "item": "A",
+          "cost": 10,
+          "outcome": "o",
+          "current": true
+        },
+        {
+          "id": "u",
+          "revision": 2,
+          "item": "B",
+          "cost": 20,
+          "outcome": "o",
+          "current": true
+        }
+      ],
+      "expected": {
+        "total": null,
+        "outcomes": null,
+        "byItem": {},
+        "auditDistinctRecords": 2,
+        "conflict": true
+      },
+      "handCalculation": "Same stable identity and revision conflict; no last-ingestion-wins total."
+    },
+    {
+      "id": "delivered-missing-runtime",
+      "kind": "population",
+      "sourceOutcomes": [
+        "merged-1"
+      ],
+      "expectedInvocations": 2,
+      "terminalInvocations": 1,
+      "usageInvocations": 1,
+      "observedUsage": 40,
+      "expected": {
+        "sourceDeliveries": 1,
+        "nativeCompletions": 0,
+        "observedUsage": 40,
+        "wholeItemTotal": null,
+        "assessmentScope": "provisional-delivery"
+      },
+      "handCalculation": "1known merge visible;1/2terminal andusage incomplete, observed40 is lower bound not whole total."
+    },
+    {
+      "id": "late-usage-completes",
+      "kind": "population",
+      "sourceOutcomes": [
+        "merged-1",
+        "merged-1"
+      ],
+      "expectedInvocations": 2,
+      "terminalInvocations": 2,
+      "usageInvocations": 2,
+      "observedUsage": 70,
+      "expected": {
+        "sourceDeliveries": 1,
+        "nativeCompletions": 1,
+        "observedUsage": 70,
+        "wholeItemTotal": 70,
+        "assessmentScope": "native-item"
+      },
+      "handCalculation": "Same outcome dedup; complete joined population allows native review,70known; no second delivery."
+    },
+    {
+      "id": "v2-upper-bound",
+      "kind": "profile",
+      "profile": "v2-model-overhead/2026-09-29",
+      "productive": 80,
+      "overhead": 10,
+      "unknownBound": 10,
+      "expected": {
+        "share": [
+          1,
+          5
+        ],
+        "ceilingBreach": false,
+        "severe": false,
+        "status": "bounded"
+      },
+      "handCalculation": "(10+10)/(80+10+10)=20/100=1/5, at20%ceiling."
+    },
+    {
+      "id": "v2-unquantified",
+      "kind": "profile",
+      "profile": "v2-model-overhead/2026-09-29",
+      "productive": 80,
+      "overhead": 10,
+      "unknownBound": null,
+      "expected": {
+        "share": null,
+        "ceilingBreach": null,
+        "severe": null,
+        "status": "insufficient"
+      },
+      "handCalculation": "Unquantified missingU: cannot establish upper share or ceiling."
+    },
+    {
+      "id": "utel-equal-ceiling",
+      "kind": "profile",
+      "profile": "utel-narrow-bureaucracy/1",
+      "productive": 90,
+      "overhead": 10,
+      "unknownBound": 0,
+      "expected": {
+        "share": [
+          1,
+          10
+        ],
+        "ceilingBreach": false,
+        "severe": false,
+        "status": "known"
+      },
+      "handCalculation": "10/100=10%; strictgreater-than boundary is not breached."
+    },
+    {
+      "id": "utel-severe",
+      "kind": "profile",
+      "profile": "utel-narrow-bureaucracy/1",
+      "productive": 74,
+      "overhead": 26,
+      "unknownBound": 0,
+      "expected": {
+        "share": [
+          13,
+          50
+        ],
+        "ceilingBreach": true,
+        "severe": true,
+        "status": "known"
+      },
+      "handCalculation": "26/100=26%, above10% and25%; one severe triggers intervention."
+    },
+    {
+      "id": "reopened-history",
+      "kind": "epochs",
+      "outcomes": [
+        {
+          "id": "o1",
+          "epoch": 1,
+          "status": "historical",
+          "cost": 40
+        },
+        {
+          "id": "o2",
+          "epoch": 2,
+          "status": "current",
+          "cost": 60
+        }
+      ],
+      "expected": {
+        "totalExposure": 100,
+        "currentAccepted": 1,
+        "historicalAccepted": 1
+      },
+      "handCalculation": "Prior review/outcome epoch remains historical;40+60=100cohort exposure, current epoch one accepted."
+    },
+    {
+      "id": "first-pass-complete-cohort",
+      "kind": "first-pass",
+      "items": [
+        {
+          "id": "A",
+          "population": "complete",
+          "acceptedAttempt": 1,
+          "state": "accepted"
+        },
+        {
+          "id": "B",
+          "population": "complete",
+          "acceptedAttempt": 2,
+          "state": "accepted"
+        },
+        {
+          "id": "C",
+          "population": "complete",
+          "acceptedAttempt": null,
+          "state": "abandoned"
+        },
+        {
+          "id": "D",
+          "population": "unknown",
+          "acceptedAttempt": 1,
+          "state": "accepted"
+        },
+        {
+          "id": "E",
+          "population": "partial",
+          "acceptedAttempt": null,
+          "state": "open"
+        }
+      ],
+      "expected": {
+        "eligibleItems": 3,
+        "firstPassItems": 1,
+        "rate": [
+          1,
+          3
+        ],
+        "excludedItems": 2,
+        "openItems": 1,
+        "abandonedItems": 1
+      },
+      "handCalculation": "OnlyA/B/C complete terminal populations enter denominator; onlyA first-pass.1/3. D/E excluded, open1/abandoned1 visible."
+    },
+    {
+      "id": "independent-freshness",
+      "kind": "health",
+      "cutoff": 120,
+      "producerTime": 20,
+      "ingestionTime": 110,
+      "publicationTime": 118,
+      "expectedProducers": 4,
+      "observedProducers": 3,
+      "expected": {
+        "sourceAge": 100,
+        "ingestionAge": 10,
+        "publicationAge": 2,
+        "producerCoverage": [
+          3,
+          4
+        ]
+      },
+      "handCalculation": "At120: source120-20=100; ingestion10; publication2. Fresh publication cannot hide missing1of4producer."
+    }
+  ],
+  "metricSamples": [
+    {
+      "schema": "fsgg.telemetry.efficiency-metric/1",
+      "metricId": "metric-observed-a",
+      "metric": "observed-resource",
+      "calculationVersion": "efficiency-calculation/1",
+      "unit": "tokens-total",
+      "population": {
+        "itemIds": [
+          "A"
+        ],
+        "repository": "FS-GG/example",
+        "workType": "source-change",
+        "acceptanceScope": "source-merged",
+        "windowStart": "2026-10-06T00:00:00Z",
+        "windowEnd": "2026-10-06T00:20:00Z",
+        "cutoff": "2026-10-06T00:21:00Z",
+        "excludedItems": [],
+        "openItems": 0,
+        "abandonedItems": 0
+      },
+      "sourceRefs": [
+        {
+          "id": "usage-a",
+          "kind": "usage",
+          "revision": 1
+        }
+      ],
+      "coverage": {
+        "population": "complete",
+        "usage": "complete",
+        "classification": "complete",
+        "lineage": "complete",
+        "dependency": "complete"
+      },
+      "value": {
+        "status": "known",
+        "numerator": 100,
+        "denominator": null,
+        "unknownAmount": 0,
+        "reason": null
+      },
+      "policyProfile": null,
+      "price": {
+        "kind": "not-applicable",
+        "currency": null,
+        "version": null
+      },
+      "eventTime": "2026-10-06T00:20:00Z",
+      "observedAt": "2026-10-06T00:21:00Z",
+      "projectedAt": "2026-10-06T00:22:00Z"
+    }
+  ],
+  "assessmentSamples": [
+    {
+      "schema": "fsgg.telemetry.efficiency-assessment/1",
+      "assessmentId": "assessment-native-item",
+      "revision": 1,
+      "supersedes": null,
+      "subject": {
+        "itemId": "A",
+        "outcomeId": "source-a",
+        "outcomeEpoch": 1,
+        "scope": "native-item"
+      },
+      "evidenceDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "evidenceRefs": [
+        {
+          "id": "source-a",
+          "kind": "outcome",
+          "revision": 1
+        },
+        {
+          "id": "review-a",
+          "kind": "process-review",
+          "revision": 1
+        }
+      ],
+      "coverage": {
+        "population": "complete",
+        "usage": "complete",
+        "classification": "complete",
+        "lineage": "complete",
+        "dependency": "complete"
+      },
+      "omissions": [],
+      "outcomeSynopsis": "Synthetic source change merged; native population is complete.",
+      "wentWell": [
+        "Source outcome has a stable canonical reference."
+      ],
+      "findings": [],
+      "metricRefs": [
+        "metric-observed-a"
+      ],
+      "improvements": [],
+      "provenance": {
+        "producer": "synthetic-fixture",
+        "modelAlias": "fixture-model",
+        "promptVersion": "efficiency-prompt/1",
+        "rubricVersion": "efficiency-rubric/1",
+        "taxonomyVersion": "efficiency-taxonomy/1",
+        "analysisPolicyVersion": "efficiency-analysis-policy/1",
+        "usageRefs": [],
+        "startedAt": "2026-10-06T00:22:00Z",
+        "finishedAt": "2026-10-06T00:23:00Z",
+        "validationResult": "accepted"
+      },
+      "lifecycle": {
+        "state": "ready",
+        "idempotencyKey": "6b6ab0e4cda0153bb7f88d308acaa5ab66b9557522669a52374e253afc5f7677",
+        "failureReason": null,
+        "itemReviewRef": "review-a",
+        "generatedAt": "2026-10-06T00:23:00Z"
+      },
+      "publication": {
+        "visibility": "private",
+        "policyVersion": null
+      }
+    },
+    {
+      "schema": "fsgg.telemetry.efficiency-assessment/1",
+      "assessmentId": "assessment-provisional-delivery",
+      "revision": 1,
+      "supersedes": null,
+      "subject": {
+        "itemId": "A",
+        "outcomeId": "source-a",
+        "outcomeEpoch": 1,
+        "scope": "provisional-delivery"
+      },
+      "evidenceDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "evidenceRefs": [
+        {
+          "id": "source-a",
+          "kind": "outcome",
+          "revision": 1
+        }
+      ],
+      "coverage": {
+        "population": "partial",
+        "usage": "partial",
+        "classification": "complete",
+        "lineage": "complete",
+        "dependency": "complete"
+      },
+      "omissions": [
+        "One expected runtime invocation missing."
+      ],
+      "outcomeSynopsis": "Synthetic source change merged; runtime accounting incomplete.",
+      "wentWell": [
+        "Source outcome has a stable canonical reference."
+      ],
+      "findings": [],
+      "metricRefs": [
+        "metric-observed-a"
+      ],
+      "improvements": [],
+      "provenance": {
+        "producer": "synthetic-fixture",
+        "modelAlias": "fixture-model",
+        "promptVersion": "efficiency-prompt/1",
+        "rubricVersion": "efficiency-rubric/1",
+        "taxonomyVersion": "efficiency-taxonomy/1",
+        "analysisPolicyVersion": "efficiency-analysis-policy/1",
+        "usageRefs": [],
+        "startedAt": "2026-10-06T00:22:00Z",
+        "finishedAt": "2026-10-06T00:23:00Z",
+        "validationResult": "accepted"
+      },
+      "lifecycle": {
+        "state": "partial",
+        "idempotencyKey": "484f80759365f4dc10c2af1113c69e00b4cdf789285e79675f757819adcaa0cc",
+        "failureReason": null,
+        "itemReviewRef": null,
+        "generatedAt": "2026-10-06T00:23:00Z"
+      },
+      "publication": {
+        "visibility": "private",
+        "policyVersion": null
+      }
+    },
+    {
+      "schema": "fsgg.telemetry.efficiency-assessment/1",
+      "assessmentId": "assessment-unknown-epoch",
+      "revision": 1,
+      "supersedes": null,
+      "subject": {
+        "itemId": "A",
+        "outcomeId": "source-a",
+        "outcomeEpoch": null,
+        "scope": "provisional-delivery"
+      },
+      "evidenceDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "evidenceRefs": [
+        {
+          "id": "source-a",
+          "kind": "outcome",
+          "revision": 1
+        }
+      ],
+      "coverage": {
+        "population": "partial",
+        "usage": "partial",
+        "classification": "complete",
+        "lineage": "complete",
+        "dependency": "complete"
+      },
+      "omissions": [
+        "One expected runtime invocation missing."
+      ],
+      "outcomeSynopsis": "Synthetic source change merged; runtime accounting incomplete.",
+      "wentWell": [
+        "Source outcome has a stable canonical reference."
+      ],
+      "findings": [],
+      "metricRefs": [
+        "metric-observed-a"
+      ],
+      "improvements": [],
+      "provenance": {
+        "producer": "synthetic-fixture",
+        "modelAlias": "fixture-model",
+        "promptVersion": "efficiency-prompt/1",
+        "rubricVersion": "efficiency-rubric/1",
+        "taxonomyVersion": "efficiency-taxonomy/1",
+        "analysisPolicyVersion": "efficiency-analysis-policy/1",
+        "usageRefs": [],
+        "startedAt": "2026-10-06T00:22:00Z",
+        "finishedAt": "2026-10-06T00:23:00Z",
+        "validationResult": "accepted"
+      },
+      "lifecycle": {
+        "state": "partial",
+        "idempotencyKey": "c90793d84a1fd3706c36cb5a30f546314808db815b690710da2b807524736d1e",
+        "failureReason": null,
+        "itemReviewRef": null,
+        "generatedAt": "2026-10-06T00:23:00Z"
+      },
+      "publication": {
+        "visibility": "private",
+        "policyVersion": null
+      }
+    }
+  ],
+  "schemaPremises": "Synthetic native sample explicitly witnesses initial outcome epoch1, complete admitted lineage and root item review; real producers may not infer these premises from counts."
+}
