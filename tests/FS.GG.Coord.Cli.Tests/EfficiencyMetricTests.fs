@@ -120,3 +120,32 @@ module EfficiencyMetricTests =
         use result = export path
         Assert.Equal("unknown",(metric result "retry-incidence" "ci-observed").GetProperty("value").GetProperty("status").GetString())
         Assert.Equal("partial",(metric result "wait-time" "ci-observed").GetProperty("value").GetProperty("status").GetString())
+
+    [<Fact>]
+    let ``supported correction moves the metric cohort without duplicating resource or resetting ordinals`` () =
+        let cleanup,path = create ()
+        use cleanup = cleanup
+        let first = timestamp "2026-10-06T00:00:00Z"
+        let next = timestamp "2026-10-06T00:00:01Z"
+        let ended = timestamp "2026-10-06T00:00:02Z"
+        let outcome = """{"kind":"native-item-outcome","identity":"routine-delivery:A","itemId":"A","revision":0,"repository":"o/r","prNumber":7,"baseRef":"main","baseSha":"dddddddddddddddddddddddddddddddddddddddd","head":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","outcome":"delivered","codeDelivery":"delivered","mergeCommit":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","occurredAt":"2026-10-06T00:00:02Z","observedAt":"2026-10-06T00:00:03Z","sourceKind":"routine-delivery","sourceRef":"routine-delivery:A"}"""
+        let admission = """{"kind":"ci-population-admission","identity":"ci-admission","itemId":"A","revision":0,"collectionId":"collection-A","repository":"o/r","prNumber":7,"baseRef":"main","baseSha":"dddddddddddddddddddddddddddddddddddddddd","head":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","witness":"native-pr-head"}"""
+        ingest path "prior" [outcome;admission;binding "A";coverage "A" "complete";run "A" 1;run "A" 2;job "A" 1 11 first next ended;job "A" 2 21 first next ended]
+        use before = export path
+        ratio 1L 2L (metric before "retry-burden" "ci-observed")
+        let assignment item : TelemetryCi.Assignment =
+            { FeatureId="EFF";ItemId=item;AttemptId="test";ParentAttemptId=None;ProducerStream="ci-worker" }
+        let request: TelemetryCi.CorrectionRequest =
+            { CorrectionId="metric-correction";ExpectedPredecessor=None;Repository="o/r";PullRequest=7L
+              BaseRef="main";BaseSha=String.replicate 40 "d";Head=String.replicate 40 "a";MergeCommit=String.replicate 40 "b"
+              Prior=assignment "A";Effective=assignment "B";EvidenceSha256=String.replicate 64 "e"
+              Reason="Recovered exact CI fixture assignment";OperatorSource="retained-test-receipt";ObservedAt="2026-10-06T00:01:00Z" }
+        let plan = TelemetryStoreApplication.ciCorrectionPlan path approved request |> unwrap |> Encoding.UTF8.GetBytes
+        Assert.Contains("applied",TelemetryStoreApplication.ciCorrect path approved plan |> unwrap)
+        Assert.Contains("already-applied",TelemetryStoreApplication.ciCorrect path approved plan |> unwrap)
+        use after = export path
+        Assert.Equal(1,after.RootElement.GetProperty("items").GetArrayLength())
+        Assert.Equal("B",after.RootElement.GetProperty("items")[0].GetProperty("itemId").GetString())
+        ratio 1L 2L (metric after "retry-burden" "ci-observed")
+        ratio 2L 1L (metric after "observed-resource" "ci-observed")
+        Assert.NotEqual(before.RootElement.GetProperty("sourceFingerprint").GetString(),after.RootElement.GetProperty("sourceFingerprint").GetString())
