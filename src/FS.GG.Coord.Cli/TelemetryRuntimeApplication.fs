@@ -12,6 +12,8 @@ open System.Threading.Channels
 open FS.GG.Coord
 
 module TelemetryRuntimeApplication =
+    exception private AnalysisPrelaunchRefused of string list
+
     let private maxAssignmentBytes = 8L * 1024L
     // A Codex tool-output item can exceed the telemetry event limit without carrying usage.
     // Inspect only a bounded complete frame; unknown or usage-bearing oversized frames remain gaps.
@@ -136,7 +138,7 @@ module TelemetryRuntimeApplication =
         root["lateAfterSeconds"] <- context.LateAfterSeconds
         root.ToJsonString(JsonSerializerOptions(WriteIndented = false))
 
-    let runObservedCodexExecWith
+    let runObservedCodexExecWithPrelaunch
         executable
         (assignment: TelemetryRuntime.Assignment)
         (parentContext: TelemetryRuntime.InvocationContext option)
@@ -146,6 +148,7 @@ module TelemetryRuntimeApplication =
         workspaceBinding
         codexArgs
         (publish: byte array -> Result<string, string list>)
+        (prelaunch: (TelemetryRuntime.InvocationContext -> Result<unit, string list>) option)
         =
         if not (List.contains "--json" codexArgs && List.contains "--ephemeral" codexArgs) then
             Console.Error.WriteLine(
@@ -279,6 +282,20 @@ module TelemetryRuntimeApplication =
             codexArgs |> List.iter info.ArgumentList.Add
 
             try
+                // This context is prospective identity only. The selected callback admits
+                // and claims this exact dispatch before any model process can start.
+                match prelaunch with
+                | None -> ()
+                | Some _ when publicationLost ->
+                    raise (AnalysisPrelaunchRefused [ "analysis-prelaunch-publication-unavailable" ])
+                | Some admit ->
+                    let admitted =
+                        try admit context
+                        with _ -> Error [ "analysis-prelaunch-unavailable" ]
+                    match admitted with
+                    | Ok () -> ()
+                    | Error errors -> raise (AnalysisPrelaunchRefused errors)
+
                 use child = Process.Start info
                 let startAt = timestamp ()
 
@@ -529,7 +546,29 @@ module TelemetryRuntimeApplication =
                     )
 
                 child.ExitCode
-            with error ->
+            with
+            | AnalysisPrelaunchRefused errors ->
+                errors |> List.iter (fun error -> Console.Error.WriteLine("fsgg-coord-engine: " + error))
+                let gap = commonEvent "runtime-gap" ($"runtime-analysis-prelaunch-%s{invocation}") assignment
+                gap["invocationId"] <- invocation
+                gap["code"] <- "analysis-prelaunch-refused"
+                emit gap
+                let terminal = commonEvent "runtime-terminal" ($"runtime-terminal-%s{invocation}") assignment
+                terminal["invocationId"] <- invocation
+                terminal["threadId"] <- null
+                terminal["outcome"] <- "launch-failed"
+                terminal["exitCode"] <- 2
+                emit terminal
+                let terminalTime = commonEvent "event-time" ($"event-time-%s{invocation}-terminal") assignment
+                terminalTime["invocationId"] <- invocation
+                terminalTime["event"] <- "terminal"
+                terminalTime["occurredAt"] <- timestamp ()
+                terminalTime["occurredClockProvenance"] <- "host-wall"
+                terminalTime["observedAt"] <- timestamp ()
+                terminalTime["observedClockProvenance"] <- "host-wall"
+                emit terminalTime
+                2
+            | error ->
                 let terminalAt = timestamp ()
                 Console.Error.WriteLine("fsgg-coord-engine: telemetry runtime codex-exec: " + error.Message)
 
@@ -559,6 +598,9 @@ module TelemetryRuntimeApplication =
                     )
 
                 127
+
+    let runObservedCodexExecWith executable assignment parentContext relation storeRoot lateAfterSeconds workspaceBinding codexArgs publish =
+        runObservedCodexExecWithPrelaunch executable assignment parentContext relation storeRoot lateAfterSeconds workspaceBinding codexArgs publish None
 
     let runCodexExecWith executable (assignment: TelemetryRuntime.Assignment) codexArgs publish =
         runObservedCodexExecWith executable assignment None TelemetryRuntime.Root None 60L None codexArgs publish
@@ -740,12 +782,48 @@ module TelemetryRuntimeApplication =
                         else
                             None)
 
+                let analysisPrelaunch =
+                    option "--efficiency-claim-template" wrapperArgs
+                    |> Option.map (fun templatePath ->
+                        fun (context: TelemetryRuntime.InvocationContext) ->
+                            match option "--model" codexArgs with
+                            | None -> Error [ "analysis-prelaunch-explicit-model-required" ]
+                            | Some selectedModel ->
+                                match
+                                    resolvedBinding,
+                                    frozenDigest,
+                                    storeRoot,
+                                    WorkspaceTelemetryApplication.resolveEfficiencyProducer workspaceConfig workspaceRepository
+                                with
+                                | Some(_, _, bindingDigest), Some expectedDigest, Some selectedRoot, Ok(path, principal, producerDigest)
+                                    when bindingDigest = producerDigest && expectedDigest = producerDigest &&
+                                         Path.GetFullPath selectedRoot = Path.GetFullPath path ->
+                                    WorkspaceTelemetryApplication.readEfficiencyClaimTemplate templatePath
+                                    |> Result.bind (fun template ->
+                                        use document = JsonDocument.Parse(ReadOnlyMemory<byte>(template))
+                                        let root = document.RootElement
+                                        if root.GetProperty("modelAlias").GetString() <> selectedModel ||
+                                           root.GetProperty("invocationRef").ValueKind <> JsonValueKind.Null then
+                                            Error [ "analysis-prelaunch-model-or-invocation-conflict" ]
+                                        else
+                                            WorkspaceTelemetryApplication.tryDrainExpected workspaceConfig workspaceRepository frozenDigest
+                                            |> Result.bind (fun _ ->
+                                                TelemetryStoreApplication.efficiencyAnalysisClaimProspective
+                                                    path
+                                                    (TelemetryStoreApplication.assessProductionRoot path)
+                                                    principal
+                                                    ($"expected-dispatch-%s{context.DispatchId}")
+                                                    context.Assignment.ItemId
+                                                    template)
+                                            |> Result.map ignore)
+                                | _ -> Error [ "analysis-prelaunch-binding-unavailable" ])
+
                 let exitCode =
                     if conflicting then
                         Console.Error.WriteLine("fsgg-coord-engine: inherited workspace association cannot be replaced")
                         2
                     else
-                        runObservedCodexExecWith
+                        runObservedCodexExecWithPrelaunch
                             "codex"
                             assignment
                             parent
@@ -755,6 +833,7 @@ module TelemetryRuntimeApplication =
                             binding
                             codexArgs
                             publish
+                            analysisPrelaunch
 
                 if useWorkspace then
                     match
