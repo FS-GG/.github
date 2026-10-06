@@ -114,6 +114,24 @@ selected gates in the [owning plan](https://github.com/FS-GG/FS.GG.Coordination/
 Historical source1 failures and unknown cleanup remain preserved; this is bounded
 source closure, not whole V2-LANG completion.
 
+**2026-10-06: Templates 0.18.1 publication source delivered.**
+[Templates #676](https://github.com/FS-GG/FS.GG.Templates/pull/676) merged exact
+`2e90e9312db1410f543bda099bc9db322118d858` as
+`d9fe65ea8a456f59d663f20c647a38a195e13c2c` at 19:06:10 UTC, with 15 checks
+passed and four skipped. The one Workspace Template package and five descriptor
+self-pins now select 0.18.1; Rendering 0.32.1 pins remain unchanged. The existing
+public receiver admits a closed Templates-only mode and a separate full mode
+requiring genuinely published Wizard 0.16.0 inputs. Ten focused preflight controls
+and the hosted pack, composition, source and installed-receiver checks passed.
+This closes the successor source step within SVG-COHERENCE-01.8. Workspace Template
+publication remains 0.18.0: fresh 0.18.1 feed occupancy, tag/publication, both-feed
+readback and installed successor adoption remain open. Templates-only public
+qualification can proceed after genuine publication; full Wizard adoption waits
+for the coherent successor dependency after 0.99 is genuinely published. The
+original frozen 0.97.1 Wizard predecessor remains historical; no additional
+predecessor qualification or new workflow route is selected. Broader adoption,
+effective defaults and host GPU qualification remain open; native usage is unknown.
+
 **2026-10-06: Published Rendering inputs qualified in the source-built receiver.**
 Root accepted [full run 37506865594/a1](https://github.com/FS-GG/FS.GG.Rendering/actions/runs/37506865594)
 at 18:05:43 UTC: Rendering caller `998f4e41ec0f2822e927d311ff534238d12785b1`
