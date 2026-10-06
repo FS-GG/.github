@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import math
 import hashlib
 import io
 import json
@@ -325,6 +326,8 @@ def observe_candidate(
     repository: str | None = None,
     engine: str,
     runner: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
+    deadline: float | None = None,
+    clock: Callable[[], float] = time.monotonic,
 ) -> str:
     """Invoke advisory CI reconciliation with the exact generated delivery JSON."""
     payload = json.dumps(asdict(summary), separators=(",", ":"), sort_keys=True) + "\n"
@@ -343,10 +346,13 @@ def observe_candidate(
                     command.extend(["--config", config])
                 if repository is not None:
                     command.extend(["--repository", repository])
-            completed = runner(
-                command,
-                check=False, capture_output=True, text=True, timeout=35,
-            )
+            if deadline is None:
+                completed = runner(
+                    command, check=False, capture_output=True, text=True, timeout=35,
+                )
+            else:
+                code, raw = bounded_watch_query(command, deadline, clock=clock, max_seconds=35)
+                completed = subprocess.CompletedProcess(command, code, raw.decode("utf-8"), "")
         if completed.returncode == 0:
             try:
                 result = json.loads(completed.stdout)
@@ -356,9 +362,55 @@ def observe_candidate(
             except (json.JSONDecodeError, AttributeError):
                 pass
             return "pending"
-    except (OSError, subprocess.SubprocessError):
+    except (OSError, subprocess.SubprocessError, RuntimeError, UnicodeDecodeError):
         pass
     print("fsgg routine telemetry: CI observation unavailable; native delivery is unchanged", file=sys.stderr)
+    return "unavailable"
+
+
+
+def observe_dashboard_event(
+    *, engine: str, config: str | None, deadline: float | None,
+    clock: Callable[[], float] = time.monotonic,
+    query: Callable[..., tuple[int, bytes]] | None = None,
+) -> str:
+    """One advisory final refresh within the caller's original absolute boundary.
+
+    No activation, retry or credential lookup here. The native publisher owns its
+    existing receipt/credential/destination contract and remote verification.
+    """
+    if deadline is None:
+        return "not-run-budget-unavailable"
+    if clock() >= deadline - WATCH_CLEANUP_SECONDS:
+        return "not-run-budget-exhausted"
+    if config is None:
+        return "not-run-config-unavailable"
+    try:
+        code, raw = (query or bounded_watch_query)(
+            [engine, "telemetry", "dashboard", "publisher-event", "--config", config],
+            deadline, clock=clock, max_seconds=60, max_bytes=8192,
+        )
+        if code != 0 or clock() > deadline:
+            return "unavailable"
+        value = json.loads(raw)
+        if not isinstance(value, dict):
+            return "unavailable"
+        status, reason = value.get("status"), value.get("reason")
+        if not isinstance(status, str) or not isinstance(reason, str):
+            return "unavailable"
+        pair = (status, reason)
+        if pair in {("published", "PUBLICATION_VERIFIED"),
+                    ("unchanged", "SEMANTIC_CONTENT_UNCHANGED")}:
+            if (value.get("schema") == "fsgg.telemetry.dashboard-event-health/1"
+                    and isinstance(value.get("publicRevision"), str)
+                    and re.fullmatch(r"[0-9a-f]{64}", value["publicRevision"])
+                    and isinstance(value.get("commit"), str)
+                    and SHA_RE.fullmatch(value["commit"])):
+                return value["status"]
+        if value.get("status") == "skipped":
+            return "skipped"
+    except (OSError, subprocess.SubprocessError, RuntimeError, ValueError):
+        pass
     return "unavailable"
 
 
@@ -711,9 +763,10 @@ class WatchDeadline(RuntimeError):
 def bounded_watch_query(
     command: list[str], deadline: float, *, clock: Callable[[], float] = time.monotonic,
     popen: Callable[..., Any] = subprocess.Popen,
+    max_seconds: float = WATCH_QUERY_SECONDS, max_bytes: int = WATCH_QUERY_BYTES,
 ) -> tuple[int, bytes]:
     """Bound both streams before retaining; kill/reap the same direct child on error."""
-    work_end = min(deadline - WATCH_CLEANUP_SECONDS, clock() + WATCH_QUERY_SECONDS)
+    work_end = min(deadline - WATCH_CLEANUP_SECONDS, clock() + max_seconds)
     if work_end <= clock():
         raise WatchDeadline("original watch cleanup reserve reached")
     process = popen(command, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
@@ -733,11 +786,11 @@ def bounded_watch_query(
                     raise WatchDeadline("native query reached original watch cleanup reserve")
                 raise RuntimeError("native query exceeded its clipped timeout")
             for key, _mask in selector.select(min(remaining, 0.1)):
-                raw = os.read(key.fileobj.fileno(), min(65_536, WATCH_QUERY_BYTES - used + 1))
+                raw = os.read(key.fileobj.fileno(), min(65_536, max_bytes - used + 1))
                 if not raw:
                     selector.unregister(key.fileobj)
                     continue
-                if used + len(raw) > WATCH_QUERY_BYTES:
+                if used + len(raw) > max_bytes:
                     raise RuntimeError("native query combined stdout/stderr exceeded byte bound")
                 used += len(raw)
                 if key.data:
@@ -911,6 +964,10 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--telemetry-attempt", help="stable attempt identity for a discovered telemetry assignment")
     result.add_argument("--telemetry-parent-attempt", help="optional stable parent attempt identity")
     result.add_argument("--telemetry-engine", help="installed telemetry-capable coordination engine; overrides host configuration")
+    result.add_argument("--telemetry-publisher-event", action="store_true",
+                        help="one advisory dashboard refresh after completed final CI observation")
+    result.add_argument("--telemetry-advisory-deadline-monotonic", type=float,
+                        help="caller-owned absolute monotonic deadline including direct-child cleanup; no default")
     result.add_argument("--watch-checks", action="store_true", help="read-only bounded native-check watch; never grants apply")
     result.add_argument("--watch-seconds", type=int, help="required watch budget, 1..600 seconds")
     result.add_argument("--apply", action="store_true")
@@ -925,6 +982,11 @@ def main(argv: list[str]) -> int:
         parser().error("--pr must be positive")
     if not SHA_RE.fullmatch(args.head):
         parser().error("--head must be a lowercase 40-hex commit SHA")
+    deadline = args.telemetry_advisory_deadline_monotonic
+    if deadline is not None and (not math.isfinite(deadline) or deadline <= 0):
+        parser().error("--telemetry-advisory-deadline-monotonic must be finite and positive")
+    if args.watch_checks and (args.telemetry_publisher_event or deadline is not None):
+        parser().error("advisory event/deadline options are incompatible with --watch-checks")
     if args.watch_checks:
         if len(args.repo) > 255:
             parser().error("watch repository identity exceeds 255 characters")
@@ -974,6 +1036,8 @@ def main(argv: list[str]) -> int:
             options = {"assignment": assignment, "store_root": store_root, "engine": engine}
             if workspace_transport:
                 options.update({"config": config_path, "repository": telemetry_repository})
+            if deadline is not None:
+                options["deadline"] = deadline
             observation_health.append(observe_candidate(summary, **options))
     try:
         code, result = summarize(
@@ -989,11 +1053,17 @@ def main(argv: list[str]) -> int:
             "pending" if args.publication == "required" else "not-required",
             None, 0, str(error), "current", "unobserved",
         )
+    dashboard_health = "not-run-final-ci-unavailable"
     if observer is not None and result.outcome != "ready":
         observer(result)
+        if args.telemetry_publisher_event and observation_health[-1] != "unavailable":
+            dashboard_health = observe_dashboard_event(engine=engine, config=config_path, deadline=deadline)
     if observer is not None or observation_health:
         result = replace(result, telemetryHealth=observation_health[-1] if observation_health else "unavailable")
-    print(json.dumps(asdict(result), separators=(",", ":"), sort_keys=True))
+    output = asdict(result)
+    if args.telemetry_publisher_event:
+        output["dashboardPublicationHealth"] = dashboard_health
+    print(json.dumps(output, separators=(",", ":"), sort_keys=True))
     return code
 
 
