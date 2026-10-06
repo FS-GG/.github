@@ -56,6 +56,32 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-06: Governance Config consumer repair delivered; publication pending.**
+[Governance PR444](https://github.com/FS-GG/FS.GG.Governance/pull/444) merged at
+`dbbffb5f659c0c33ddcc35aa07aa4557cca37eb2` through the normal routine boundary
+after coherent qualification. Its exact source `ea59bf66a72d960ece30e5cca7adf120db41c639`
+fixes duplicate NuGet aliases for a selected nuget.org dependency feed while preserving
+Config archive isolation and distinct-endpoint mappings. The selected hosted reruns
+passed; original runner-acquisition failures remain historical. The real package-only
+consumer passed all eight commands against the original Config0.3.0 archive
+`01766c48ecc9653011ddeff3f63528b13171bd1a6248ff348877dd39086f5d31`, packed once from
+`734752039a7d1bab53d0faab0db2da5b661a67f2` after cold locked restore and83 tests.
+No Config repack or publication occurred. The separate unmerged C2 observer/MVU
+candidate is not part of this source closure. Final C2 execution, changed SDD package
+compatibility, coherent producer publication and independent installed/readback gates
+remain open; C1-only SDD publication is not selected.
+
+**2026-10-06: V2-DIAG-01 canonical candidate and provider diagnostic source delivered.**
+[Coordination #945](https://github.com/FS-GG/FS.GG.Coordination/pull/945) delivered the
+protected helper and dormant publisher binding. The genuine canonical `0.2.1` preparation
+and its installed 21-record diagnostic qualification passed without repacking the candidate.
+[Sandbox #56](https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/pull/56) delivered
+bounded provider failure and cleanup diagnostics at `b1186d37c23a2fe9502a5725c47d9776a377fc8f`.
+Its exact candidate passed 59 pure controls and the offline 87-test compiler/caller qualification;
+the earlier adapter-pin and report-framing failures remain retained.
+The [owning roadmap](roadmaps/diagnostic-execution.md) keeps .4 open: genuine provider artifact
+intake, private facts/grants, publication and installed receiver adoption remain separate gates.
+
 **2026-10-06: Creator016 integrated source/private package qualified; delivery and adoption pending.**
 The [owning board plan](coordination/2026-09-29-coordination-v2-board-design.md) records
 PR4232's local successor `ddd79655` and genuine `260bfe`/`7e8` integration ancestry.
@@ -199,6 +225,20 @@ cross-platform determinism are not qualified.
 LEARN's rootless custody source merged through [#4215](https://github.com/FS-GG/.github/pull/4215).
 Its source and static helper compile passed; native execution still needs a qualified
 namespace/cgroup environment. Source delivery does not close native acceptance.
+
+**2026-10-06: SVG-COHERENCE-01 export-prefix source window delivered; publication pending.**
+[Rendering #1389](https://github.com/FS-GG/FS.GG.Rendering/pull/1389) merged at
+`f133cb9f979cb4d5053e67c72ac7a6041524fc31` with exact-head coherent validation
+passed. It computes the document export prefix once and preserves curated Fable
+package content and the public API. The
+[qualified software comparison](https://github.com/FS-GG/FS.GG.Rendering/blob/f133cb9f979cb4d5053e67c72ac7a6041524fc31/docs/reports/svg-export-prefix-20261005.md)
+retains three pairs, a median CPU reduction of 25.70%, individual maximum regressions
+and prior failed attempts. This used GPU-disabled Chromium and the SVG development
+8GiB allowance; peak summed RSS was 2,583,908,352 bytes, so it establishes neither
+2GiB fit nor host GPU acceptance. The [owning plan](roadmaps/svg-coherence-and-instancing-01.md)
+keeps .3/.4 open. The coherent 0.32.1 successor still needs package custody, installed
+receiver qualification and publication; this source milestone does not close adoption
+or the late host GPU batch.
 
 **2026-10-05: SVG-COHERENCE-01 first shared guard and reference preparation delivered.**
 The [owning SVG plan](roadmaps/svg-coherence-and-instancing-01.md) retains completed
