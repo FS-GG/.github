@@ -1350,6 +1350,14 @@ module Operations =
                                 principal
                             |> resultExit "storage-unavailable"
                     | _ -> resultExit "invalid-configuration" (Error [ "enrollment is not declared by config" ]))
+        | [ "collect-responses"; "--config"; path; "--runtime-credential"; runtimeReference
+            "--dispatch"; dispatchIdentity; "--item"; itemId; "--request"; requestPath ] ->
+            match load path with
+            | Error errors -> resultExit "invalid-configuration" (Error errors)
+            | Ok config ->
+                withLock config (fun () ->
+                    NativeResponsesEntry.run path config runtimeReference dispatchIdentity itemId requestPath
+                    |> resultExit "responses-collector-refused")
         | [ "collect-native"
             "--config"
             path

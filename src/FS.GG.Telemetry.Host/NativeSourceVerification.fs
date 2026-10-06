@@ -59,10 +59,10 @@ module NativeSourceVerification =
                 (UnixFileMode.UserExecute ||| UnixFileMode.GroupExecute ||| UnixFileMode.OtherExecute)) <> enum 0)
         && sha256 (File.ReadAllBytes path) = expectedDigest
 
-    let private validateManifest (verifier: NativeVerifierConfig) =
+    let private validateManifestFor expectedModuleSha256 (verifier: NativeVerifierConfig) =
         try
             let bytes = File.ReadAllBytes verifier.RuntimeManifestPath
-            if verifier.ModuleSha256 <> "8d6a33beae9a4de84fa7a703809e9b1a1656359a085f92091cf56de3b77fd3ba"
+            if verifier.ModuleSha256 <> expectedModuleSha256
                || bytes.Length = 0 || bytes.Length > 1024 * 1024 || sha256 bytes <> verifier.RuntimeManifestSha256 then false
             else
                 use document = JsonDocument.Parse bytes
@@ -95,7 +95,9 @@ module NativeSourceVerification =
                                     previous <- path
                                     if length <= 0L || length > 512L * 1024L * 1024L
                                        || not (Regex.IsMatch(digest, "^[0-9a-f]{64}$"))
-                                       || not (immutableFile (path = verifier.RuntimeExecutablePath) path length digest) then
+                                       || not (immutableFile (path = verifier.RuntimeExecutablePath) path length digest)
+                                       || (expectedModuleSha256 = "599034490c93333875b169c7fc4d3e873e3d911fe5571ad90127ea86b1e8b373"
+                                           && not (Configuration.responsesImmutableFile path)) then
                                         valid <- false
                                     total <- total + length
                             let declared =
@@ -110,6 +112,12 @@ module NativeSourceVerification =
                             && immutableFile false verifier.ModulePath
                                 (FileInfo(verifier.ModulePath).Length) verifier.ModuleSha256
         with _ -> false
+
+    let private validateManifest verifier =
+        validateManifestFor "8d6a33beae9a4de84fa7a703809e9b1a1656359a085f92091cf56de3b77fd3ba" verifier
+
+    let internal validateResponsesManifest verifier =
+        validateManifestFor "599034490c93333875b169c7fc4d3e873e3d911fe5571ad90127ea86b1e8b373" verifier
 
     let private readBounded (stream: Stream) maximum (cancellation: CancellationTokenSource) =
         task {
@@ -136,9 +144,20 @@ module NativeSourceVerification =
         stream.Flush true
         path
 
-    let private runVerifier limits (verifier: NativeVerifierConfig) evidenceRoot
+    let private runVerifier limits command (originalRemaining: (unit -> int) option) (verifier: NativeVerifierConfig) evidenceRoot
                             (captureBytes: byte array) (snapshotBytes: byte array) : byte array =
-        let directory = Path.Combine(evidenceRoot, ".native-source-verification-" + Guid.NewGuid().ToString("N"))
+        let suffix =
+            match originalRemaining with
+            | None -> Guid.NewGuid().ToString("N")
+            | Some _ ->
+                use capture = JsonDocument.Parse captureBytes
+                let operation = capture.RootElement.GetProperty("operationId").GetString()
+                if not (Regex.IsMatch(operation, "^[0-9a-f]{32}$")) then invalidOp "responses-verifier-operation-id"
+                operation
+        let directory = Path.Combine(evidenceRoot, ".native-source-verification-" + suffix)
+        if originalRemaining.IsSome && (Directory.Exists directory || File.Exists directory) then
+            invalidOp "responses-verifier-retained-operation-exists"
+        let mutable cleanupAllowed = originalRemaining.IsNone
         try
             Directory.CreateDirectory(directory, UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute) |> ignore
             let capture = writePrivate directory "capture.json" captureBytes
@@ -149,7 +168,7 @@ module NativeSourceVerification =
             start.ArgumentList.Add "-S"
             start.ArgumentList.Add "-B"
             start.ArgumentList.Add verifier.ModulePath
-            start.ArgumentList.Add "verify"
+            start.ArgumentList.Add command
             start.ArgumentList.Add "--capture"
             start.ArgumentList.Add capture
             start.ArgumentList.Add "--telemetry-snapshot"
@@ -161,26 +180,48 @@ module NativeSourceVerification =
             start.CreateNoWindow <- true
             start.WorkingDirectory <- directory
             start.Environment.Clear()
+            let timeout =
+                match originalRemaining with
+                | None -> limits.Timeout
+                | Some remaining ->
+                    let available = remaining () - 500
+                    if available <= 0 then invalidOp "responses-verifier-original-deadline"
+                    min limits.Timeout (TimeSpan.FromMilliseconds(float available))
             use child = new Process(StartInfo = start)
             if not (child.Start()) then invalidOp "native verifier failed to start"
             child.StandardInput.Close()
-            use cancellation = new CancellationTokenSource(limits.Timeout)
+            use cancellation = new CancellationTokenSource(timeout)
             let stdout = readBounded child.StandardOutput.BaseStream limits.StdoutBytes cancellation
             let stderr = readBounded child.StandardError.BaseStream limits.StderrBytes cancellation
             let exited = child.WaitForExitAsync cancellation.Token
             try
-                Task.WhenAll([| stdout :> Task; stderr :> Task; exited |]).GetAwaiter().GetResult()
-            with _ ->
-                if not child.HasExited then child.Kill true
-                try child.WaitForExit()
-                with _ -> ()
-                reraise()
+                let all = Task.WhenAll([| stdout :> Task; stderr :> Task; exited |])
+                match originalRemaining with
+                | None -> all.GetAwaiter().GetResult()
+                | Some _ -> all.WaitAsync(cancellation.Token).GetAwaiter().GetResult()
+                cleanupAllowed <- child.HasExited && stdout.IsCompleted && stderr.IsCompleted
+            with first ->
+                match originalRemaining with
+                | None ->
+                    if not child.HasExited then child.Kill true
+                    try child.WaitForExit() with _ -> ()
+                    reraise()
+                | Some remaining ->
+                    try if not child.HasExited then child.Kill true with _ -> ()
+                    let available = remaining ()
+                    if available > 0 then
+                        try child.WaitForExit available |> ignore with _ -> ()
+                    cleanupAllowed <- child.HasExited && stdout.IsCompleted && stderr.IsCompleted
+                    if not cleanupAllowed then
+                        raise (InvalidOperationException("responses-verifier-retirement-unproved", first))
+                    else reraise()
             let output = stdout.GetAwaiter().GetResult()
             stderr.GetAwaiter().GetResult() |> ignore
-            if child.ExitCode <> 0 || output.Length = 0 then invalidOp "native verifier refused"
+            if output.Length = 0 || (child.ExitCode <> 0 && not(command = "verify-responses" && child.ExitCode = 1)) then
+                invalidOp "native verifier refused"
             output
         finally
-            if Directory.Exists directory then Directory.Delete(directory, true)
+            if cleanupAllowed && Directory.Exists directory then Directory.Delete(directory, true)
 
     let verifyRetainedWithLimits limits verifier evidenceRoot (captureBytes: byte array) (snapshotBytes: byte array)
                                  (retainedVerificationBytes: byte array) =
@@ -191,7 +232,7 @@ module NativeSourceVerification =
                 use retainedDocument = JsonDocument.Parse retainedVerificationBytes
                 if not (noDuplicateProperties retainedDocument.RootElement) then unavailable ()
                 else
-                    let actual = runVerifier limits verifier evidenceRoot captureBytes snapshotBytes
+                    let actual = runVerifier limits "verify" None verifier evidenceRoot captureBytes snapshotBytes
                     use actualDocument = JsonDocument.Parse actual
                     if not (noDuplicateProperties actualDocument.RootElement) then unavailable ()
                     else
@@ -219,3 +260,36 @@ module NativeSourceVerification =
 
     let verifyRetained verifier evidenceRoot captureBytes snapshotBytes retainedVerificationBytes =
         verifyRetainedWithLimits productionLimits verifier evidenceRoot captureBytes snapshotBytes retainedVerificationBytes
+
+
+    let internal verifyResponses (phase: FS.GG.Telemetry.DirectResponses.Phase) verifier evidenceRoot
+                                 (captureBytes: byte array) (snapshotBytes: byte array) =
+        try
+            if obj.ReferenceEquals(phase, null) || phase.RemainingMilliseconds <= 500
+               || isNull captureBytes || captureBytes.Length = 0 || captureBytes.Length > 1100000
+               || isNull snapshotBytes || snapshotBytes.Length = 0 || snapshotBytes.Length > 400000
+               || not (validateResponsesManifest verifier) then Error [ "responses-verifier-unavailable" ]
+            else
+                let limits = { Timeout = TimeSpan.FromMilliseconds(float (phase.RemainingMilliseconds - 500))
+                               StdoutBytes = 65536; StderrBytes = 65536 }
+                let actual = runVerifier limits "verify-responses" (Some(fun () -> phase.RemainingMilliseconds)) verifier evidenceRoot captureBytes snapshotBytes
+                use parsed = JsonDocument.Parse actual
+                if not (noDuplicateProperties parsed.RootElement) || phase.RemainingMilliseconds <= 0
+                   || not (validateResponsesManifest verifier) then Error [ "responses-verifier-closure-or-deadline" ]
+                else
+                    let value = JsonNode.Parse(actual).AsObject()
+                    let fields = set [ "schema"; "sourceVariant"; "captureSha256"; "snapshotSha256"; "profileSha256"
+                                       "requestSha256"; "countRequestSha256"; "countResponseSha256"; "responseSha256"
+                                       "responseId"; "status"; "usageState"; "observationVerified"; "accepted"; "errors" ]
+                    if not(exactNames value fields)
+                       || value.["schema"].GetValue<string>() <> "fsgg.telemetry.responses-verification/1"
+                       || value.["sourceVariant"].GetValue<string>() <> "openai-responses/1"
+                       || value.["captureSha256"].GetValue<string>() <> sha256 captureBytes
+                       || value.["snapshotSha256"].GetValue<string>() <> sha256 snapshotBytes then
+                        Error [ "responses-verifier-output-join" ]
+                    elif phase.RemainingMilliseconds <= 0 then Error [ "responses-verifier-original-deadline" ]
+                    else Ok actual
+        with
+        | :? InvalidOperationException as error when error.Message = "responses-verifier-retirement-unproved" ->
+            Error [ "responses-verifier-incomplete"; "responses-verifier-retirement-unproved" ]
+        | _ -> Error [ "responses-verifier-incomplete" ]

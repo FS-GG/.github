@@ -74,6 +74,27 @@ type NativeCollectorInstallationConfig =
         NativeVerifier: NativeVerifierConfig option
     }
 
+type ResponsesCollectorInstallationConfig =
+    { Schema: string
+      SourceVariant: string
+      CredentialReference: string
+      ProviderCredentialReference: string
+      ProviderCredentialFile: string
+      EvidenceRoot: string
+      Provider: string
+      Model: string
+      Effort: string
+      CountEndpoint: string
+      GenerationEndpoint: string
+      InputTokenLimit: int64
+      OutputTokenLimit: int64
+      WholeMilliseconds: int
+      CapabilityProfilePath: string
+      CapabilityProfileSha256: string
+      CapabilityResultPath: string
+      CapabilityResultSha256: string
+      NativeVerifier: NativeVerifierConfig }
+
 type NativeDeliverySourceInstallationConfig =
     {
         Schema: string
@@ -83,6 +104,9 @@ type NativeDeliverySourceInstallationConfig =
     }
 
 module Configuration =
+    val internal responsesOwnerUid: unit -> uint32
+    val internal readResponsesPrivateBytes: hostConfigPath: string -> file: string -> maximum: int -> Result<byte array, string list>
+    val internal responsesImmutableFile: path: string -> bool
     val validate: HostConfig -> Result<HostConfig, string list>
     val load: string -> Result<HostConfig, string list>
     val credentials: HostConfig -> Map<string, AuthEntry>
@@ -90,6 +114,12 @@ module Configuration =
         hostConfigPath: string ->
         hostConfig: HostConfig ->
             Result<NativeCollectorInstallationConfig * TelemetryReceipt.Principal, string list>
+    /// Reads closed installation metadata only. It does not read provider credentials,
+    /// establish installed capability, claim a queue item, or authorize HTTP effects.
+    val loadResponsesCollectorInstallation:
+        hostConfigPath: string ->
+        hostConfig: HostConfig ->
+            Result<ResponsesCollectorInstallationConfig * TelemetryReceipt.Principal, string list>
     val loadNativeDeliverySourceInstallation:
         hostConfigPath: string ->
         hostConfig: HostConfig ->

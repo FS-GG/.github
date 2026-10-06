@@ -39,6 +39,12 @@
     <Compile Include="NativeDeliverySource.fs" />
     <Compile Include="NativeSourceVerification.fsi" />
     <Compile Include="NativeSourceVerification.fs" />
+    <Compile Include="NativeResponsesCollection.fsi" />
+    <Compile Include="NativeResponsesCollection.fs" />
+    <Compile Include="NativeResponsesFacts.fsi" />
+    <Compile Include="NativeResponsesFacts.fs" />
+    <Compile Include="NativeResponsesEntry.fsi" />
+    <Compile Include="NativeResponsesEntry.fs" />
     <Compile Include="BrowserEndpoints.fsi" />
     <Compile Include="BrowserEndpoints.fs" />
     <Compile Include="InactivePreparation.fsi" />
@@ -46,6 +52,9 @@
     <Compile Include="Program.fsi" />
     <Compile Include="Program.fs" />
     <None Include="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute"><_Parameter1>FS.GG.Telemetry.Tests</_Parameter1></AssemblyAttribute>
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../FS.GG.Telemetry.Contracts/FS.GG.Telemetry.Contracts.fsproj" />
