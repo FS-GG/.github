@@ -76,7 +76,7 @@ def load_snapshot(envelope):
     store = snapshot.get("store") if isinstance(snapshot, dict) else None
     operational = envelope["operational"]
     if (not isinstance(selection, dict) or selection.get("mode") != "all" or selection.get("complete") is not True
-            or not isinstance(store, dict) or store.get("schemaVersion") != 10 or store.get("journalMode") != "wal"
+            or not isinstance(store, dict) or store.get("schemaVersion") not in (10, 11, 12, 13) or store.get("journalMode") != "wal"
             or not isinstance(operational, dict) or operational.get("pendingBatches") != 0):
         raise Refusal("private snapshot is not complete and settled")
     return snapshot

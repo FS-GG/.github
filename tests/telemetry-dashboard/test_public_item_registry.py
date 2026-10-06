@@ -60,6 +60,28 @@ class MaterializerTests(unittest.TestCase):
         snapshot = M.load_snapshot(envelope)
         self.assertEqual(snapshot["store"]["schemaVersion"], 10)
 
+    def test_additive_store_versions_keep_labels_private_and_unknown_versions_refuse(self):
+        registry, snapshot, envelope, base = self.fixture()
+        for version in (11, 12, 13, 14):
+            snapshot["store"]["schemaVersion"] = version
+            raw = json.dumps(snapshot, sort_keys=True, separators=(",", ":")).encode()
+            envelope["revision"] = hashlib.sha256(raw).hexdigest()
+            envelope["canonicalSnapshotGzip"] = base64.b64encode(gzip.compress(raw)).decode()
+            if version == 14:
+                with self.assertRaisesRegex(M.Refusal, "complete and settled"):
+                    M.load_snapshot(envelope)
+            else:
+                resolved = M.materialize(registry, M.load_snapshot(envelope), base)
+                self.assertEqual(resolved["items"]["private-root"]["key"], "public-work")
+                self.assertNotIn("private-root", json.dumps(registry))
+        snapshot["store"]["schemaVersion"] = 13
+        raw = json.dumps(snapshot, sort_keys=True, separators=(",", ":")).encode()
+        envelope["revision"] = hashlib.sha256(raw).hexdigest()
+        envelope["canonicalSnapshotGzip"] = base64.b64encode(gzip.compress(raw)).decode()
+        envelope["operational"]["pendingBatches"] = 1
+        with self.assertRaisesRegex(M.Refusal, "complete and settled"):
+            M.load_snapshot(envelope)
+
 
 if __name__ == "__main__":
     unittest.main()
