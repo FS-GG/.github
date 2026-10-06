@@ -33,7 +33,7 @@ Registry release inventory: 17 package-bearing contracts across 9 producers; 15 
 | `game` | `game-scene-adapter` | `0.17.0` | `0.17.0` | `game:0.17.0` | FS.GG.Game.Render package — Adapter (sim-state -> FS.GG.UI.Scene drawables) |
 | `audio` | `fs-gg-audio` | `0.6.0` | `0.6.0` | `audio:0.6.0` | FS.GG.Audio.Core/.Host/.Engine/.Elmish/.WebBrowser public .fsi surfaces — AudioEffect vocabulary + IAudioBackend/IMixingBackend seam + mixing Engine + Audio.Cmd Elmish bridge + browser Web Audio host |
 | `net` | `fs-gg-net` | `0.6.0` | `0.6.0` | `net:0.6.0` | FS.GG.Net.Core/.WebSocket/.WebSocket.Server/.Protobuf/.Grpc/.Elmish public .fsi surfaces — ITransport/IMessageChannel seam + Sequential/Multiplexed correlation + serve/ServerEcho + WebSocket client/server transport + Google.Protobuf/protobuf-net codecs + gRPC lifecycle bridge + Elmish Cmd/Sub |
-| `github` | `coord-engine` | `0.97.1` | `0.97.1` | `github:0.97.1` | the `fsgg-coord-engine` CLI verb surface (claim/take/batch/who/widen/set-paths/say/landable/done/release/flush/…) + its exit-code contract, emitted from src/FS.GG.Coord.Core/Protocol.fs; shipped as the FS.GG.Coord.Cli dotnet tool |
+| `github` | `coord-engine` | `0.98.0` | `0.97.1` | `github:0.97.1` | the `fsgg-coord-engine` CLI verb surface (claim/take/batch/who/widen/set-paths/say/landable/done/release/flush/…) + its exit-code contract, emitted from src/FS.GG.Coord.Core/Protocol.fs; shipped as the FS.GG.Coord.Cli dotnet tool |
 | `github` | `telemetry-host` | `0.4.0` | `0.4.0` | `github:0.4.0` | optional Linux x64 FS.GG.Telemetry.Host dotnet tool — authenticated workspace-scoped ingestion, private dashboard, protected native capture and bounded learning export; independently versioned from the github coordination coherent set |
 | `github` | `new-sdd-workspace` | `0.16.0` | `0.15.0` | `github:0.15.0` | the `new-sdd-workspace` scaffolder CLI (package FS.GG.NewSddWorkspace) — one-command full-stack SDD workspace creation, wrapping the FS.GG.Templates `rendering` provider (ADR-0016); shipped as a dotnet tool |
 | `templates` | `fs-gg-workspace-template` | `0.18.0` | `0.18.0` | `templates:0.18.0` | FS.GG.Workspace.Template package, five packaged `dotnet new` identities: four workspace-provider identities — `fs-gg-console` (provider `console` — minimal F# executable, no npm lane, ADR-0072 §2); `fs-gg-web` (provider `web` — F# ASP.NET Core + plain TypeScript/Vite website, ADR-0071 §3); `fs-gg-fable-game` (provider `fable-game` — F# ASP.NET Core + Fable/Elmish game client, SignalR for connection-oriented real-time traffic + plain HTTP endpoints with explicit versioned DTOs for typed request/response per ADR-0073, consuming the published `fs-gg-game-core-fable-lockstep-v1` profile per ADR-0069); `fs-gg-fable-bindings` (provider `fable-bindings` — Fable interop library over an exactly pinned npm package/declaration closure, ADR-0072 §3, first proved by the unreleased EHotwagner/babylonjsBindings reference) — plus `fs-gg-governance`, the separately registered pre-existing governance overlay template folded into this package at the same rename.  |
@@ -106,9 +106,11 @@ published a `.nupkg` byte-identical to `0.46.0` that can never be un-tagged (`.g
 
 For the `github` coherent set (`FS.GG.Kit`, `FS.GG.Drivers`, and `FS.GG.Coord.Cli`), use the
 selected successor operating window in [utel-release-successor](../../../docs/roadmaps/utel-release-successor.md).
-The current source selects **0.97.1**, promoted predecessor **0.97.0** from
-`2ab0c0ff9f37bdec9a11ba3604ebdc230711934f`, and fresh protected journal `utel-rel-13`.
-The completed 0.97.0 release and `board-v2-product-coherent-097` journal remain immutable. Historical
+The current source selects **0.98.0**, promoted predecessor **0.97.1** from
+`99ea75286f5c3cea2a261fef4e5b45cd70378185`, and distinct protected journal `utel-rel-15`.
+The completed0.97.1 release/`utel-rel-13` and unpublished0.97.2/`utel-rel-14` source remain
+immutable history. Qualify and merge native compact/3 and schema13 correction source before
+selecting the exact-main candidate. Historical
 `release-saga-start`, prepare, component publishers and promote workflows remain sealed
 under GS2-08.9; their recipes do not authorize current publication.
 
@@ -120,7 +122,7 @@ under GS2-08.9; their recipes do not authorize current publication.
    the raw `candidate_archive_sha256`, and `publish=false`. Verify its genuine authority, collision,
    exact-byte and eligibility observations before selecting `publish=true` with those same inputs.
 3. Observe all sixteen durable effects and both feeds before declaring publication complete. The
-   successor creates only `coherent-set/v0.97.1`; component tags would enter sealed historical routes.
+   successor creates only `coherent-set/v0.98.0`; component tags would enter sealed historical routes.
    After journal initialization, forward recovery uses the original archive and the existing admission
    and journal rules. Unknown or conflicting effects remain incomplete; never reset the journal,
    repack, replace published bytes or blindly retry an unresolved write.

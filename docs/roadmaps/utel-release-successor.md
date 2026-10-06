@@ -170,3 +170,42 @@ unresolved. The root finish's dashboard publication reported an advisory subproc
 failure: source inspection traces script discovery to the controlled home working
 directory, with no script override. Nested stderr was not retained. No publisher retry
 was needed for this local-cycle acceptance, and dashboard publication is not established.
+
+
+## UTEL-REL-15 — 0.98.0 correction and native compact successor
+
+Prepare the existing coherent successor rail for **0.98.0** (minor: additive
+schema13 audited local CI attribution correction and native compact/3 report
+contract). The promoted predecessor is **0.97.1**, source
+`99ea75286f5c3cea2a261fef4e5b45cd70378185`, content ID
+`sha256:02dfc44d64e1b807fe20591fc2e0fdb9d02f28435a8b027fddd8ff5631e22714`,
+release403934888. Its consumed `utel-rel-13` journal and accepted installed/local
+cycle remain immutable. The deferred unpublished0.97.2/`utel-rel-14` source and
+all refused attempts remain history; this selection uses distinct
+`refs/heads/fsgg/v2/journal/release/utel-rel-15`. Journal absence and target/feed
+uniqueness are future live gates, not observations from source preparation.
+
+Root must first integrate and qualify native compact/3 and schema13 correction
+source, including the Telemetry Host tests repaired by PR4262. Then qualify this
+version and its canonical projections/manifests on the complete final source,
+merge through exact-head coherent CI, and hold main stable. The read-only candidate
+must pack CLI, Kit and Drivers once, qualify the retained CLI bytes and retain its
+original seven-file archive with predecessor and standalone evidence. Authenticate
+its successful first-attempt exact-main run, artifact and raw archive digest.
+
+Use separate no-effect `release-successor-publish.yml` preflight on that same SHA,
+then the existing root-owned publication route with the same authenticated archive
+inputs. Recheck all six feed coordinates, fresh tag/release and journal absence,
+sole operator/environment and current authority before the first effect. Preserve
+all sixteen effect admissions, protected journal CAS and forward readback recovery;
+never repack, reset or replay a consumed operation. Create only `coherent-set/v0.98.0`;
+all five sealed GS2-08.9 publishers remain unchanged.
+
+Publication acceptance requires all16 effects and both-feed byte/payload readback.
+Root's direct org-feed403 remains an access limitation alongside authenticated
+hosted verification, not a payload failure. Adopt only the promoted manifest using
+the existing user-level side-by-side updater. Verify actual installed schema13
+correction and compact/3 before selecting dashboard migration or a fresh prospective
+cycle; preserve original erroneous attribution and unknown historical populations.
+No Home/Main service, remote Host adoption, credential expansion or whole-programme
+coverage is implied. Old0.97.1 adoption and completed cycles must not be replayed.

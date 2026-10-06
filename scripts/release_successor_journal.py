@@ -17,7 +17,7 @@ from release_successor_execution import JournalState
 
 REPOSITORY = "FS-GG/FS.GG.Coordination.Authority"
 REPOSITORY_ID = 1351660651
-REF = "refs/heads/fsgg/v2/journal/release/utel-rel-13"
+REF = "refs/heads/fsgg/v2/journal/release/utel-rel-15"
 PATH = "release-state.json"
 SCHEMA = "fsgg.release-successor-journal/1"
 

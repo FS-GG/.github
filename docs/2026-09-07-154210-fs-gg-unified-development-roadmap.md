@@ -56,6 +56,15 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-06: Telemetry0.98 release source prepared; qualification and effects pending.**
+The [owning release plan](roadmaps/utel-release-successor.md#utel-rel-15--0980-correction-and-native-compact-successor)
+selects coherent0.98.0 after native compact/3 and schema13 attribution-correction source
+are qualified and integrated. Its authenticated predecessor remains promoted0.97.1
+at `99ea7528`; consumed `utel-rel-13` and deferred0.97.2/`utel-rel-14` source stay historical.
+Distinct `utel-rel-15` is a source selection only. Candidate, sixteen-effect publication,
+installed schema/compact adoption and dashboard migration remain separate future gates;
+original erroneous attribution, root/historical usage and remote Host coverage remain unknown.
+
 **2026-10-06: Supported local CI attribution correction source delivered.**
 [PR #4262](https://github.com/FS-GG/.github/pull/4262) adds an audited schema-13 correction
 ledger, sealed plan/apply/history commands and effective attribution in current reports. Original
