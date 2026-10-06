@@ -57,7 +57,7 @@ reviewed public aggregate releases on GitHub.
 ## 0. Current progress report
 
 **2026-10-06: P4 private Sandbox helper-binding source delivered; native successor remains unqualified.**
-[Sandbox #58](https://github.com/FS-GG/FS.GG.Sandbox/pull/58) merged head
+[Sandbox #58](https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/pull/58) merged head
 `93cd981bc64b5eaba0edc01e60375a14eb5fb441` as
 `7166d7b833ebb6e5e742e631a5463354b7bd30e1` at 13:59:34 UTC, with canonical
 routine delivery accepted and no hosted checks configured. The five-file
