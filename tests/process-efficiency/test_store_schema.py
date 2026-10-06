@@ -105,12 +105,19 @@ class SchemaControls(unittest.TestCase):
 
     def test_native_witness_queries_resolve_real_tables_without_widening_native_ingest(self):
         text = SOURCE.read_text()
-        region = text[text.index('    let private efficiencyNativeWitnesses '):text.index('    let private efficiencyResourceCounter ')]
-        sqls = re.findall(r'"""(.*?)"""', region, re.S)
-        self.assertEqual(2, len(sqls))
-        for sql in sqls:
-            parameters = {name: None for name in re.findall(r'\$([A-Za-z][A-Za-z0-9_]*)', sql)}
-            self.db.execute('EXPLAIN '+sql,parameters).fetchall()
+        # Check both Responses and native-process usage branches, plus their
+        # witness and authority joins, against the actual migrated schema.
+        queries = [('efficiencyNativeWitnesses', 'efficiencyNativeUsageComplete', 1),
+                   ('efficiencyNativeUsageComplete', 'efficiencyAuthority', 2),
+                   ('efficiencyAuthority', 'efficiencyResourceCounter', 1)]
+        for start, end, expected in queries:
+            with self.subTest(function=start):
+                region = text[text.index('    let private '+start+' '):text.index('    let private '+end+' ')]
+                sqls = re.findall(r'"""(.*?)"""', region, re.S)
+                self.assertEqual(expected, len(sqls))
+                for sql in sqls:
+                    parameters = {name: None for name in re.findall(r'\$([A-Za-z][A-Za-z0-9_]*)', sql)}
+                    self.db.execute('EXPLAIN '+sql,parameters).fetchall()
         whitelist = text[text.index('set [ "runtime-native-inventory/1"'):]
         whitelist = whitelist[:whitelist.index(']')]
         self.assertNotIn('runtime-admission', whitelist)
