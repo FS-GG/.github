@@ -65,7 +65,7 @@ module EfficiencyAdmissionTests =
             TelemetryStoreApplication.enrollReceiptPrincipal path approved other |> unwrap |> ignore
             Assert.Contains("\"rejected\":0", submitAs other path "sources" [admission; usage 0; terminal; review])
         cleanup, path
-    let private assertRejected path name node =
+    let private assertRejected path name (node: JsonNode) =
         // Every negative allocation passes the decoder: refusal must come from store joins.
         TelemetryStore.parseBatch(batch name [node.ToJsonString()]) |> unwrap |> ignore
         let result = submit path name [node.ToJsonString()]
