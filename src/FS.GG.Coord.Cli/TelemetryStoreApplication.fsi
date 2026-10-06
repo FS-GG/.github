@@ -284,6 +284,15 @@ module TelemetryStoreApplication =
         itemId: string option ->
             Result<string, string list>
 
+    /// Dashboard-only compact CI summaries bound to the same readonly snapshot; item-detail/3.
+    val compactDashboardSnapshot:
+        path: string -> assessment: TelemetryStore.DurabilityAssessment ->
+        itemId: string option -> Result<string, string list>
+
+    val compactDashboardSnapshotWithHooks:
+        path: string -> assessment: TelemetryStore.DurabilityAssessment ->
+        hooks: DashboardSnapshotHooks -> itemId: string option -> Result<string, string list>
+
     val scopedDashboardSnapshot:
         path: string ->
         assessment: TelemetryStore.DurabilityAssessment ->

@@ -3589,3 +3589,91 @@ SELECT 1;
         Assert.Equal(frozen, correctionSql path "SELECT group_concat(epoch_id || item_id || assessment_revision,'|') FROM budget_breaches WHERE epoch_id='frozen-epoch';")
         Assert.Equal("2", correctionSql path "SELECT count(*) FROM budget_assessment_revisions WHERE assessment_revision=1;")
         Assert.Equal("0", correctionSql path "SELECT count(*) FROM budget_interventions;")
+
+
+    let private compactCiSql path sql =
+        use connection = new SqliteConnection($"Data Source={Path.Combine(path, TelemetryStoreApplication.databaseFileName)};Pooling=False")
+        connection.Open()
+        use command = connection.CreateCommand()
+        command.CommandText <- sql
+        command.ExecuteNonQuery() |> ignore
+
+    let private compactCiSnapshot path =
+        TelemetryStoreApplication.compactDashboardSnapshot path approved None |> unwrap |> correctionSnapshot
+
+    [<Fact>]
+    let ``compact dashboard CI preserves empty summary and version two`` () =
+        let cleanup, path = root ()
+        use cleanup = cleanup
+        TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
+        compactCiSql path "INSERT INTO budget_population_facts VALUES('p','item','item','open','test','test:p',0);"
+        use compact = compactCiSnapshot path
+        let summary = compact.RootElement.GetProperty("ciSummaries")[0]
+        use expected = JsonDocument.Parse(TelemetryStoreApplication.ciSummary path approved "item" |> unwrap)
+        Assert.Equal(CanonicalJson.canonicalize (Encoding.UTF8.GetBytes(expected.RootElement.GetRawText())) |> unwrap, CanonicalJson.canonicalize (Encoding.UTF8.GetBytes(summary.GetRawText())) |> unwrap)
+        Assert.Equal(0L, summary.GetProperty("steps").GetInt64())
+        Assert.Equal(JsonValueKind.Null, summary.GetProperty("runnerSeconds").ValueKind)
+        let mutable omitted = Unchecked.defaultof<JsonElement>
+        Assert.False(compact.RootElement.TryGetProperty("ciSteps", &omitted))
+        use original = TelemetryStoreApplication.dashboardSnapshot path approved None |> unwrap |> correctionSnapshot
+        Assert.Equal(JsonValueKind.Array, original.RootElement.GetProperty("ciSteps").ValueKind)
+
+    [<Fact>]
+    let ``compact dashboard CI uses exact overlap unions for all five classes`` () =
+        let cleanup, path = root ()
+        use cleanup = cleanup
+        TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
+        compactCiSql path "INSERT INTO budget_population_facts VALUES('p','item','item','open','test','test:p',0);"
+        let classes = [ "useful-validation", "usefulValidationSeconds"; "admin", "administrativeSeconds"; "necessary-setup", "necessarySetupSeconds"; "mixed", "mixedSeconds"; "unclassified", "unclassifiedSeconds" ]
+        for index, (classification, _) in List.indexed classes do
+            compactCiSql path ($"INSERT INTO ci_steps VALUES('s{index}a','item','FS-GG/.github',1,1,1,{index * 3},'step','completed','success','2026-10-06T00:00:00Z','2026-10-06T00:00:10Z','{classification}','test'),('s{index}b','item','FS-GG/.github',1,1,1,{index * 3 + 1},'step','completed','success','2026-10-06T00:00:05Z','2026-10-06T00:00:15Z','{classification}','test'),('s{index}c','item','FS-GG/.github',1,1,1,{index * 3 + 2},'step','completed','success','2026-10-06T00:00:15Z','2026-10-06T00:00:00Z','{classification}','test');")
+        use compact = compactCiSnapshot path
+        let summary = compact.RootElement.GetProperty("ciSummaries")[0]
+        use expected = JsonDocument.Parse(TelemetryStoreApplication.ciSummary path approved "item" |> unwrap)
+        Assert.Equal(CanonicalJson.canonicalize (Encoding.UTF8.GetBytes(expected.RootElement.GetRawText())) |> unwrap, CanonicalJson.canonicalize (Encoding.UTF8.GetBytes(summary.GetRawText())) |> unwrap)
+        Assert.Equal(15L, summary.GetProperty("steps").GetInt64())
+        for _, metric in classes do Assert.Equal(15L, summary.GetProperty(metric).GetInt64())
+
+    [<Fact>]
+    let ``compact dashboard CI does not truncate a large step population`` () =
+        let cleanup, path = root ()
+        use cleanup = cleanup
+        TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
+        compactCiSql path "INSERT INTO budget_population_facts VALUES('p','item','item','open','test','test:p',0); WITH RECURSIVE n(x) AS (SELECT 1 UNION ALL SELECT x+1 FROM n WHERE x<10001) INSERT INTO ci_steps SELECT 's'||x,'item','FS-GG/.github',1,1,1,x,'step','completed','success','2026-10-06T00:00:00Z','2026-10-06T00:00:15Z','useful-validation','test' FROM n;"
+        Assert.True(TelemetryStoreApplication.dashboardSnapshot path approved None |> Result.isError)
+        use compact = compactCiSnapshot path
+        let summary = compact.RootElement.GetProperty("ciSummaries")[0]
+        Assert.Equal(10001L, summary.GetProperty("steps").GetInt64())
+        Assert.Equal(15L, summary.GetProperty("usefulValidationSeconds").GetInt64())
+
+    [<Fact>]
+    let ``compact dashboard CI stays in original WAL snapshot after first read`` () =
+        let cleanup, path = root ()
+        use cleanup = cleanup
+        TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
+        compactCiSql path "INSERT INTO budget_population_facts VALUES('p','item','item','open','test','test:p',0);"
+        let hooks: TelemetryStoreApplication.DashboardSnapshotHooks =
+            { AfterFirstRead = fun () -> compactCiSql path "INSERT INTO ci_steps VALUES('late','item','FS-GG/.github',1,1,1,1,'step','completed','success',NULL,NULL,'admin','test');" }
+        use compact = TelemetryStoreApplication.compactDashboardSnapshotWithHooks path approved hooks None |> unwrap |> correctionSnapshot
+        Assert.Equal(0L, compact.RootElement.GetProperty("ciSummaries")[0].GetProperty("steps").GetInt64())
+        use after = JsonDocument.Parse(TelemetryStoreApplication.ciSummary path approved "item" |> unwrap)
+        Assert.Equal(1L, after.RootElement.GetProperty("steps").GetInt64())
+
+    [<Fact>]
+    let ``compact dashboard keeps item and non CI relation bounds`` () =
+        let cleanup, path = root ()
+        use cleanup = cleanup
+        TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
+        compactCiSql path "WITH RECURSIVE n(x) AS (SELECT 1 UNION ALL SELECT x+1 FROM n WHERE x<201) INSERT INTO budget_population_facts SELECT 'p'||x,'item'||x,'item'||x,'open','test','test:'||x,0 FROM n;"
+        Assert.True(TelemetryStoreApplication.compactDashboardSnapshot path approved None |> Result.isError)
+        compactCiSql path "DELETE FROM budget_population_facts; WITH RECURSIVE n(x) AS (SELECT 1 UNION ALL SELECT x+1 FROM n WHERE x<10001) INSERT INTO budget_epochs SELECT 'epoch'||x,x,'verified' FROM n;"
+        Assert.True(TelemetryStoreApplication.compactDashboardSnapshot path approved None |> Result.isError)
+
+
+    [<Fact>]
+    let ``compact dashboard keeps original byte bounds`` () =
+        let cleanup, path = root ()
+        use cleanup = cleanup
+        TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
+        compactCiSql path "INSERT INTO budget_population_facts VALUES('p','item','item','open','test','test:p',0); INSERT INTO budget_epochs VALUES('epoch',1,'verified'); WITH RECURSIVE n(x) AS (SELECT 1 UNION ALL SELECT x+1 FROM n WHERE x<40) INSERT INTO budget_epochs SELECT hex(randomblob(65536)),x+1,'verified' FROM n;"
+        Assert.True(TelemetryStoreApplication.compactDashboardSnapshot path approved None |> Result.isError)

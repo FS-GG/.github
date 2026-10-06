@@ -1500,3 +1500,9 @@ module TelemetryCliTests =
         Assert.NotEqual(0, code)
         Assert.Equal("", stdout)
         Assert.Contains("changed artifact bytes", stderr)
+
+
+    [<Fact>]
+    let ``compact dashboard version three keeps ordinary command shape`` () =
+        Assert.Equal(Some(Ok()), TelemetryApplication.validateInvocation [ "telemetry"; "item-detail"; "--format-version"; "3"; "--all" ])
+        Assert.True(TelemetryApplication.validateInvocation [ "telemetry"; "item-detail"; "--format-version"; "3"; "--all"; "--invented-bound"; "65536" ] |> Option.exists Result.isError)
