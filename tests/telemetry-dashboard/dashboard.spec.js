@@ -539,7 +539,7 @@ test("provider-response costs retain exact nullable observations, pagination and
 test("nullable canonical aggregates retain exact Int64 values and refuse unsafe refresh",async({page})=>{
   await page.clock.install();let requests=0;
   await page.route("**/data/dashboard.json",route=>{
-    const host=efficiencyHost();host.store.schemaVersion=14;
+    const host=efficiencyHost();host.store.schemaVersion=14;host.totals.usageObservations=1;
     host.usage={input:100,cachedInput:null,cacheWriteInput:null,output:null,reasoning:null,total:"9223372036854775807"};
     if(++requests>1)host.usage.total=9007199254740992;
     return route.fulfill({json:payload(host)});

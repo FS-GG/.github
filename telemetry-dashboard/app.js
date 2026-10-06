@@ -466,7 +466,7 @@
       [
         "Observed tokens",
         known(host.usage.total),
-        "All-time canonical observed usage across retained accounting scopes. Population tables are related and must not be added; missing counters remain unknown, and dashboard date filters do not apply.",
+        "All-time canonical observed usage across retained accounting scopes. Population tables are related and must not be added; coverage gaps can make this a partial total, missing counters remain unknown, and dashboard date filters do not apply.",
       ],
       [
         "Admitted / terminal",
