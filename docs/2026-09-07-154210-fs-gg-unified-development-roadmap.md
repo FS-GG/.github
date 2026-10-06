@@ -56,6 +56,17 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-06: Public dashboard source repair delivered; completed-feed refresh pending.**
+[PR4259](https://github.com/FS-GG/.github/pull/4259) merged at
+`da4c66c76b9a5e9cc7caf6041001cafefd95a138` after coherent qualification. The
+[owning roadmap](roadmaps/utel-telemetry-dashboard.md#delivered-source-repair--2026-10-06)
+records schema 11–13 compatibility, five scoped public selectors, 83 pure tests and six actual
+two-UID privacy checks. The manual refresh restored recent merged-delivery entries; the
+merge-triggered Pages run 37419167012 passed, and HTTP 200 readback confirmed deployed source
+`da4c66c` with the same four historical completed cards. The publisher is still `main-legacy`:
+genuine legacy-source access and supported aggregation with the current store are pending,
+so source delivery does not close the live completed-feed gap or infer feature completion.
+
 **2026-10-06: Governance Config consumer repair delivered; publication pending.**
 [Governance PR444](https://github.com/FS-GG/FS.GG.Governance/pull/444) merged at
 `dbbffb5f659c0c33ddcc35aa07aa4557cca37eb2` through the normal routine boundary
@@ -229,6 +240,19 @@ cross-platform determinism are not qualified.
 LEARN's rootless custody source merged through [#4215](https://github.com/FS-GG/.github/pull/4215).
 Its source and static helper compile passed; native execution still needs a qualified
 namespace/cgroup environment. Source delivery does not close native acceptance.
+
+**2026-10-06: SVG 0.32.1 release-route source window delivered; candidate and publication pending.**
+[Rendering #1390](https://github.com/FS-GG/FS.GG.Rendering/pull/1390) merged at
+`6c9f766fdd91483c2de6f061e75589e94852a265` after required hosted and coherent validation passed
+for exact head `4c146e1de3b4e1916fd59b03c88ce56cc3357f00`. The ten qualified release-route
+inputs remain byte-identical to the accepted local F# source window. A separate
+21.647-second guard reproduction confirmed the retained stale-report failure, the
+corrected structural verdict, zero observed feed requests without opt-in and
+missing-input refusal, with clean custody and no resource failure. The
+[owning SVG plan](roadmaps/svg-coherence-and-instancing-01.md) keeps the genuine
+19-package candidate, installed Templates receiver and publication pending.
+Original failures remain retained; .3/.4, consumer adoption and the late GPU batch
+remain open.
 
 **2026-10-06: SVG-COHERENCE-01 export-prefix source window delivered; publication pending.**
 [Rendering #1389](https://github.com/FS-GG/FS.GG.Rendering/pull/1389) merged at
