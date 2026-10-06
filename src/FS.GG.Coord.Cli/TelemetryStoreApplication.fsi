@@ -73,6 +73,9 @@ module TelemetryStoreApplication =
             EnvelopeDigest: string
         }
 
+    /// Exact schema accepted by current read-only store operations.
+    val currentSchemaVersion: int
+
     val databaseFileName: string
     /// Export current efficiency records joined to the exact compact base in one read transaction.
     val efficiencyExport:

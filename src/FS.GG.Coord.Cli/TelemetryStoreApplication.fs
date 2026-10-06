@@ -88,7 +88,7 @@ module TelemetryStoreApplication =
     let private maxDrainBatches = 128
     let private maxDrainBytes = 8L * 1024L * 1024L
     let private maxPendingPerProducer = 128
-    let private currentSchemaVersion = 14
+    let currentSchemaVersion = 14
 
     let private gzip (bytes: byte array) =
         use output = new MemoryStream()
