@@ -44,6 +44,18 @@ All 17 browser controls and native CI passed. Its compiled candidate completed
 and animation-frame cadence was unchanged. These are software-browser diagnostics,
 not a universal performance or GPU claim; the rest of .4 remains open.
 
+The next bounded .4 source window, [export-prefix factoring](https://github.com/FS-GG/FS.GG.Rendering/pull/1389),
+merged at `f133cb9f979cb4d5053e67c72ac7a6041524fc31` with exact-head coherent
+validation passed. It computes the mount/document prefix once per export and retains
+curated Fable package content without changing the public API. The
+[software qualification report](https://github.com/FS-GG/FS.GG.Rendering/blob/f133cb9f979cb4d5053e67c72ac7a6041524fc31/docs/reports/svg-export-prefix-20261005.md)
+records three pairs and a median CPU reduction of 25.70%, with individual maximum
+regressions and original failures preserved. GPU-disabled Chromium used the SVG
+8GiB development allowance and peaked at 2,583,908,352 bytes; no 2GiB fit or GPU
+acceptance is claimed. The coherent 0.32.1 package candidate, genuine installed
+receiver qualification and publication remain pending. This closes only that source
+window; .3/.4, consumer adoption and the late host GPU batch remain open.
+
 A separate 30-record diversity/churn window completed all 3,000 measured updates.
 Twelve lifetime records completed 6,000 updates and 60 exact ownership-fault
 controls. Four subsequent teardown cases completed 2,000 updates: residual DOM
