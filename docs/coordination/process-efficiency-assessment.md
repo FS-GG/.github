@@ -138,7 +138,10 @@ private journal, source merge or model response alone never establishes canonica
 
 Successful completed-root drains and later terminal-root observation/usage drains call the enrolled
 `telemetry efficiency analysis reconcile` route with the configured store, repository and item.
-The adapter gives this advisory subprocess five seconds and an 8 KiB output allowance. A successful
+A canonical host configuration without a repository uses the existing bounded environment/origin
+repository discovery (up to five seconds and 4 KiB); this supplies identity, never enrollment or
+completion authority. The adapter gives the advisory reconciliation subprocess five seconds and an
+8 KiB output allowance. A successful
 exit reports only that reconciliation returned; it does not claim enqueue, analysis or completion.
 The store derives authority and current outcome membership and idempotently retains its selected
 request. This hook launches no model. Missing enrollment or endpoint leaves an explicit advisory

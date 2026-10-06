@@ -820,9 +820,13 @@ module SkillTelemetryAdapter =
         // This path never invokes an analyst or treats reconciliation as completion.
         let failed reason = jsonObject [ "status", node "advisory-failure"; "reason", node reason ]
         try
-            match config.Repository with
-            | None -> failed "analysis-reconciliation-repository-unavailable"
-            | Some repository ->
+            let repository =
+                match config.Repository with
+                | Some value -> Ok value
+                | None -> Configuration.discoverRepository Environment.CurrentDirectory
+            match repository with
+            | Error _ -> failed "analysis-reconciliation-repository-unavailable"
+            | Ok repository ->
                 let command =
                     [ config.Engine; "telemetry"; "efficiency"; "analysis"; "reconcile"
                       "--store-root"; config.StoreRoot; "--config"; config.Path
