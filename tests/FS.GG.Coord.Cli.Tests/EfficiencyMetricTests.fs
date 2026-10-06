@@ -33,7 +33,7 @@ module EfficiencyMetricTests =
         use compact = JsonDocument.Parse(TelemetryStoreApplication.compactDashboardSnapshot path approved None |> unwrap)
         TelemetryStoreApplication.efficiencyExport path approved (compact.RootElement.GetProperty("revision").GetString()) 200 1000 |> unwrap |> JsonDocument.Parse
     let private metric (document:JsonDocument) (name: string) (scope: string) =
-        document.RootElement.GetProperty("items")[0].GetProperty("metrics").EnumerateArray()
+        (document.RootElement.GetProperty("items")).[0].GetProperty("metrics").EnumerateArray()
         |> Seq.find (fun metric -> metric.GetProperty("metric").GetString()=name && metric.GetProperty("population").GetProperty("acceptanceScope").GetString()=scope)
     let private ratio (expectedNumerator:int64) (expectedDenominator:int64) (metric:JsonElement) =
         let value = metric.GetProperty "value"
@@ -107,7 +107,7 @@ module EfficiencyMetricTests =
         ingest path "group" [population "A";population "B";binding "A";binding "B";coverage "B" "complete";run "A" 1;run "B" 2;coverage "A" "complete";job "A" 1 11 first next ended;job "B" 2 21 first next ended]
         use result = export path
         Assert.Equal(1,result.RootElement.GetProperty("items").GetArrayLength())
-        Assert.Equal("GROUP",result.RootElement.GetProperty("items")[0].GetProperty("itemId").GetString())
+        Assert.Equal("GROUP",(result.RootElement.GetProperty("items")).[0].GetProperty("itemId").GetString())
         ratio 1L 2L (metric result "retry-burden" "ci-observed")
 
     [<Fact>]
@@ -145,7 +145,7 @@ module EfficiencyMetricTests =
         Assert.Contains("already-applied",TelemetryStoreApplication.ciCorrect path approved plan |> unwrap)
         use after = export path
         Assert.Equal(1,after.RootElement.GetProperty("items").GetArrayLength())
-        Assert.Equal("B",after.RootElement.GetProperty("items")[0].GetProperty("itemId").GetString())
+        Assert.Equal("B",(after.RootElement.GetProperty("items")).[0].GetProperty("itemId").GetString())
         ratio 1L 2L (metric after "retry-burden" "ci-observed")
         ratio 2L 1L (metric after "observed-resource" "ci-observed")
         Assert.NotEqual(before.RootElement.GetProperty("sourceFingerprint").GetString(),after.RootElement.GetProperty("sourceFingerprint").GetString())
