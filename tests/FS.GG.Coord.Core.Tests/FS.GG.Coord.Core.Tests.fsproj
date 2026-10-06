@@ -44,6 +44,7 @@
     <Compile Include="ProcessEfficiencyTests.fs" />
     <Compile Include="EfficiencyInputTests.fs" />
     <Compile Include="EfficiencyEvidenceTests.fs" />
+    <Compile Include="NativeExecJsonlTests.fs" />
     <Compile Include="QualificationTests.fs" />
     <Compile Include="RoadmapWorkUnitTests.fs" />
     <Compile Include="DeliveryTests.fs" />
