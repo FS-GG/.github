@@ -445,7 +445,11 @@ test("analysis status filters current requests, retains the filter on refresh an
   const summary=page.locator("#efficiency-native-example-toggle");await summary.focus();await page.keyboard.press("Enter");
   await expect(page.locator("#efficiency-native-example")).toContainText("Request: failed · accepted assessment: ready");
   await expect(page.locator("#efficiency-analysis-counts")).toContainText("failed: 1");
-  await page.setViewportSize({width:390,height:844});await expectMobileContainment(page);
+  await page.setViewportSize({width:390,height:844});
+  await expect(page.locator("#efficiency-health")).toContainText(`sha256:${"b".repeat(64)}`);
+  const provenanceWidth=await page.locator("#efficiency-health").evaluate((element)=>({width:element.clientWidth,scrollWidth:element.scrollWidth}));
+  expect(provenanceWidth.scrollWidth).toBeLessThanOrEqual(provenanceWidth.width);
+  await expectMobileContainment(page);
   await page.clock.runFor(60000);await expect.poll(()=>requests).toBe(3);
   await expect(page.locator("#efficiency-analysis-counts")).toHaveText("Analysis population unavailable; missing evidence does not establish zero work.");
   await expect(page.locator("#efficiency-items details")).toHaveCount(0);

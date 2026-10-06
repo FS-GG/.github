@@ -241,10 +241,13 @@ state, and an Analysis status filter makes pending, running and failed rows disc
 opening every card. State counts use only approved rows matching the item/scope filters, with
 unmapped, withheld and source-omitted populations explicitly excluded. A prior ready assessment
 does not make a queued request ready. Unavailable exports clear the counts instead of reporting
-zero analysis work. All 137 dashboard Python checks pass; the added browser regression for
-queue precedence, retained filters, unknown population, keyboard interaction and mobile containment
-is authored but has not been executed. This source change is not installed or deployed and does
-not extend the earlier browser qualification to these changed UI bytes.
+zero analysis work. All 137 dashboard Python checks pass. The first parent-selected 20-case browser
+attempt refused an unproved live-worker memory observation and retired cleanly; a separately selected
+fresh attempt passed the resource guard and recorded 19 passes with one mobile-containment failure
+in the new regression. The canonical provenance line now wraps its complete revision/fingerprint
+strings, with a targeted width assertion beside the whole-page check. Qualification of this repair
+remains pending. This source change is not installed or deployed and does not extend the earlier
+browser qualification to these changed UI bytes.
 
 Depends on .1 for fixture-driven work; live projection acceptance requires .2 and .3. Touch-set:
 dashboard collector/projection, static UI/assets and focused projection/UI tests. Coordinate ownership
