@@ -29,8 +29,8 @@ from typing import Any
 MAX_JSON = 1_048_576
 MAX_CANONICAL_SNAPSHOT = 4 * MAX_JSON
 MAX_API_JSON = 4 * 1_048_576
-HOST_SCHEMA = "fsgg.telemetry.dashboard-host/3"
-LEGACY_HOST_SCHEMAS = {"fsgg.telemetry.dashboard-host/1","fsgg.telemetry.dashboard-host/2"}
+HOST_SCHEMA = "fsgg.telemetry.dashboard-host/4"
+LEGACY_HOST_SCHEMAS = {"fsgg.telemetry.dashboard-host/1","fsgg.telemetry.dashboard-host/2","fsgg.telemetry.dashboard-host/3"}
 DASH_SCHEMA = "fsgg.telemetry.dashboard/2"
 DELIVERIES_SCHEMA = "fsgg.telemetry.public-deliveries/1"
 ITEMS_SCHEMA = "fsgg.telemetry.completed-items/2"
@@ -544,6 +544,49 @@ def project_completed_items(snapshot: dict[str,Any], status: dict[str,Any], labe
     return {"schema":ITEMS_SCHEMA,"coverage":{"eligible":eligible,"published":len(result),"unmapped":unmapped,"dirty":dirty_count,"incompatible":incompatible},"items":result}
 
 
+def project_source_deliveries(snapshot: dict[str,Any], labels: dict[str,Any], completed: dict[str,Any]) -> dict[str,Any]:
+    """Expose approved latest source delivery without asserting operational completion."""
+    dirty={r.get("item_id") for r in snapshot_rows(snapshot,"dirtyItems")}
+    populations={}; ambiguous=set(); outcomes={}; groups={}
+    for row in snapshot_rows(snapshot,"populations"):
+        item=row["item_id"]; rank=(not str(row.get("source_ref","")).startswith("derived:"),-int(row.get("fact_revision",0)))
+        previous=populations.get(item)
+        if previous is None or rank<previous[0]: populations[item]=(rank,row); ambiguous.discard(item)
+        elif rank==previous[0] and (row.get("original_item_id"),row.get("state"))!=(previous[1].get("original_item_id"),previous[1].get("state")): ambiguous.add(item)
+    for item,(_,row) in populations.items(): groups.setdefault(row["original_item_id"],[]).append(item)
+    for row in snapshot_rows(snapshot,"outcomes"):
+        item=row.get("item_id"); previous=outcomes.get(item)
+        # Canonical snapshot order is latest first. Equal current evidence must agree.
+        if previous is None: outcomes[item]=row
+        elif (row.get("observed_at"),row.get("fact_revision"))==(previous.get("observed_at"),previous.get("fact_revision")) and any(row.get(k)!=previous.get(k) for k in ("repository","pr_number","head","merge_commit","outcome","code_delivery","occurred_at")): ambiguous.add(item)
+    completed_keys={r["key"] for r in completed["items"]}; result=[]
+    coverage={"eligible":0,"published":0,"unmapped":0,"dirty":0,"incompatible":0}
+    for original,members in sorted(groups.items()):
+        latest=[outcomes.get(m) for m in members]
+        delivered=[r for r in latest if r and r.get("outcome") in {"delivered","delivered-after-readback"} and r.get("code_delivery")=="delivered"]
+        if not delivered: continue
+        approval=labels["items"].get(original)
+        if approval and approval["key"] in completed_keys: continue
+        if any(m in dirty for m in members): coverage["dirty"]+=1; continue
+        if any(m in ambiguous for m in members): coverage["incompatible"]+=1; continue
+        coverage["eligible"]+=1
+        if approval is None: coverage["unmapped"]+=1; continue
+        try:
+            links={}
+            for row in delivered:
+                repo=row.get("repository"); number=row.get("pr_number"); instant=row.get("occurred_at")
+                if repo not in approval["repositories"] or not isinstance(repo,str) or not re.fullmatch(r"FS-GG/[A-Za-z0-9_.-]+",repo) or checked_int(number,"PR number")==0 or parse_time(instant) is None: raise ValueError("invalid source delivery")
+                link={"repository":repo,"number":number,"url":f"https://github.com/{repo}/pull/{number}","mergedAt":instant}
+                key=(repo,number)
+                if key not in links or parse_time(instant)>parse_time(links[key]["mergedAt"]): links[key]=link
+            if not 1<=len(links)<=32: raise ValueError("source delivery bound")
+            rows=[links[k] for k in sorted(links)]
+            result.append({"key":approval["key"],"label":approval["label"],"url":approval["url"],"state":"source-delivered","operationalCompletion":"unestablished","deliveredAt":max((r["mergedAt"] for r in rows),key=parse_time),"deliveries":rows})
+        except (ValueError,KeyError,TypeError): coverage["incompatible"]+=1
+    coverage["published"]=len(result)
+    return {"schema":"fsgg.telemetry.source-deliveries/1","coverage":coverage,"items":result}
+
+
 def project_one_item(snapshot: dict[str,Any], original: str, members: list[str], outcomes: list[dict[str,Any]], approval: dict[str,Any], labels: dict[str,Any], ci_by_item: dict[str,dict[str,Any]], budgets_by_item: dict[str,dict[str,Any]], epoch: Any) -> dict[str,Any]:
     member_set=set(members); terminals=snapshot_rows(snapshot,"terminals",member_set)
     if len(terminals)>4096: raise ValueError("item projection exceeds runtime bound")
@@ -693,7 +736,7 @@ def project_one_item(snapshot: dict[str,Any], original: str, members: list[str],
     return item
 
 
-def aggregate_host(public: dict[str, Any], ci: list[dict[str, Any]], budgets: list[dict[str, Any]], status: dict[str, Any], observed: str, reconciliations: list[dict[str,Any]] | None = None, budget_health: list[dict[str,Any]] | None = None, store_status: dict[str,Any] | None = None, completed_items: dict[str,Any] | None = None, source_kind: str = "configured-local-store") -> dict[str, Any]:
+def aggregate_host(public: dict[str, Any], ci: list[dict[str, Any]], budgets: list[dict[str, Any]], status: dict[str, Any], observed: str, reconciliations: list[dict[str,Any]] | None = None, budget_health: list[dict[str,Any]] | None = None, store_status: dict[str,Any] | None = None, completed_items: dict[str,Any] | None = None, source_kind: str = "configured-local-store", source_deliveries: dict[str,Any] | None = None) -> dict[str, Any]:
     if not isinstance(public, dict) or public.get("schema") != "fsgg.telemetry.public-export/1" or not isinstance(public.get("items"), list): raise ValueError("invalid public export")
     totals = {k:0 for k in ("factCount","usageObservations","deliveryObservations")}
     usage = {k:0 for k in ("input","cachedInput","cacheWriteInput","output","total")}; reasoning: int | None = 0
@@ -754,6 +797,7 @@ def aggregate_host(public: dict[str, Any], ci: list[dict[str, Any]], budgets: li
         "localCi":{"counts":ci_totals,"seconds":seconds,"coverage":ci_coverage,"attribution":"repository-owned item attribution only; time values are summed per-item projections"},
         "budget":{"scope":"current-canonical-epoch","dimensions":dims,"assessments":assessments,"health":budget_health_counts,"severeItems":severe_items,"distinctBreaches":checked_int(status.get("distinctBreaches"),"distinctBreaches"),"dirtyItems":checked_int(status.get("dirtyItems")," in dirtyItems"),"intervention":enum(status.get("intervention"), {"none","open","verified"}, "intervention")},
         "completedItems":completed_items or {"schema":ITEMS_SCHEMA,"coverage":{"eligible":0,"published":0,"unmapped":0,"dirty":0,"incompatible":0},"items":[]}}
+    result["sourceDeliveries"]=source_deliveries or {"schema":"fsgg.telemetry.source-deliveries/1","coverage":{"eligible":0,"published":0,"unmapped":0,"dirty":0,"incompatible":0},"items":[]}
     result["revision"]=hashlib.sha256(json.dumps(result,sort_keys=True,separators=(",",":"),ensure_ascii=True).encode()).hexdigest()
     return result
 
@@ -900,7 +944,7 @@ def build_host(labels_path: pathlib.Path | None = None, config_path: pathlib.Pat
     labels=load_labels(labels_path)
     completed=project_completed_items(snapshot,status,labels,ci_by_item,budgets_by_item)
     kind="configured-local-stores" if len(sources)==2 else "configured-local-store"
-    return aggregate_host(public,ci,budgets,status,envelope["observedAt"],[],health,store_status,completed,kind)
+    return aggregate_host(public,ci,budgets,status,envelope["observedAt"],[],health,store_status,completed,kind,project_source_deliveries(snapshot,labels,completed))
 
 
 def publish(repo: str, branch: str, path: str, token: str, snapshot: dict[str, Any]) -> str:
@@ -1719,10 +1763,11 @@ def validate_deliveries(value: Any) -> None:
 def validate_host(value: Any) -> None:
     schema=value.get("schema") if isinstance(value,dict) else None
     aggregate_only=schema=="fsgg.telemetry.dashboard-host/1"
-    current=schema==HOST_SCHEMA
+    current=schema in {HOST_SCHEMA,"fsgg.telemetry.dashboard-host/3"}
     fields={"schema","observedAt","source","scope","totals","usage","launcherPopulation","quality","operational","store","localCi","budget"}
     if not aggregate_only: fields.add("completedItems")
     if current: fields.add("revision")
+    if schema==HOST_SCHEMA: fields.add("sourceDeliveries")
     exact(value,fields,"host feed")
     if schema not in {HOST_SCHEMA,*LEGACY_HOST_SCHEMAS} or parse_time(value["observedAt"]) is None: raise ValueError("invalid host identity")
     if current:
@@ -1769,11 +1814,38 @@ def validate_host(value: Any) -> None:
         for key in ("numerator","denominator"):
             if assessment[key] is not None: checked_int(assessment[key],key)
     if not aggregate_only: validate_completed_items(value["completedItems"])
+    if schema==HOST_SCHEMA:
+        validate_source_deliveries(value["sourceDeliveries"])
+        if {r["key"] for r in value["completedItems"]["items"]}&{r["key"] for r in value["sourceDeliveries"]["items"]}: raise ValueError("duplicate completed/source item")
 
 
 def public_text(value: Any, maximum: int, name: str) -> str:
     if not isinstance(value,str) or not 1<=len(value)<=maximum: raise ValueError(f"invalid {name}")
     return value
+
+
+def validate_source_deliveries(value: Any) -> None:
+    exact(value,{"schema","coverage","items"},"source deliveries")
+    if value["schema"]!="fsgg.telemetry.source-deliveries/1": raise ValueError("invalid source deliveries schema")
+    exact(value["coverage"],{"eligible","published","unmapped","dirty","incompatible"},"source delivery coverage")
+    for key,count in value["coverage"].items(): checked_int(count,key)
+    if not isinstance(value["items"],list) or len(value["items"])>200 or value["coverage"]["published"]!=len(value["items"]) or value["coverage"]["eligible"]<value["coverage"]["published"]+value["coverage"]["unmapped"]: raise ValueError("invalid source delivery population")
+    keys=set()
+    for row in value["items"]:
+        exact(row,{"key","label","url","state","operationalCompletion","deliveredAt","deliveries"},"source delivery item")
+        public_text(row["key"],64,"source key"); public_text(row["label"],120,"source label")
+        if not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,63}",row["key"]): raise ValueError("invalid source key")
+        if row["key"] in keys or row["state"]!="source-delivered" or row["operationalCompletion"]!="unestablished" or parse_time(row["deliveredAt"]) is None: raise ValueError("invalid source item")
+        keys.add(row["key"])
+        if not isinstance(row["url"],str) or not re.fullmatch(r"https://github\.com/FS-GG/[A-Za-z0-9_.-]+(?:/(?:issues|pull)/[1-9][0-9]*)?",row["url"]): raise ValueError("invalid source item URL")
+        if not isinstance(row["deliveries"],list) or not 1<=len(row["deliveries"])<=32: raise ValueError("invalid source links")
+        links=set()
+        for link in row["deliveries"]:
+            exact(link,{"repository","number","url","mergedAt"},"source PR")
+            repo=link["repository"]; number=checked_int(link["number"],"PR number")
+            if not isinstance(repo,str) or not re.fullmatch(r"FS-GG/[A-Za-z0-9_.-]+",repo) or number==0 or link["url"]!=f"https://github.com/{repo}/pull/{number}" or parse_time(link["mergedAt"]) is None or (repo,number) in links: raise ValueError("invalid source PR")
+            links.add((repo,number))
+        if parse_time(row["deliveredAt"])!=max(parse_time(r["mergedAt"]) for r in row["deliveries"]): raise ValueError("source delivery time mismatch")
 
 
 def validate_completed_items(value: Any) -> None:

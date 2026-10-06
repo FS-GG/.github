@@ -401,7 +401,7 @@
   function renderLocal(host) {
     const content = $("local-content");
     content.replaceChildren();
-    if (!["fsgg.telemetry.dashboard-host/1","fsgg.telemetry.dashboard-host/2","fsgg.telemetry.dashboard-host/3"].includes(host.schema)) {
+    if (!["fsgg.telemetry.dashboard-host/1","fsgg.telemetry.dashboard-host/2","fsgg.telemetry.dashboard-host/3","fsgg.telemetry.dashboard-host/4"].includes(host.schema)) {
       text(
         "local-state",
         host.status === "unconfigured"
@@ -576,18 +576,48 @@
     !entry || typeof entry !== "object" || (object(entry) && Object.values(entry).every((nested) => !nested || typeof nested !== "object")),
   );
   const malformed = () => { throw new Error("The published data does not match the dashboard contract."); };
+  function renderSourceDeliveries(host) {
+    const body=$("source-deliveries"); body.replaceChildren();
+    const source=host.schema==="fsgg.telemetry.dashboard-host/4"?host.sourceDeliveries:null;
+    text("source-deliveries-note",source?`${source.coverage.published} published · operational completion unestablished`:"Source-delivery coverage is unavailable in this older host snapshot.");
+    (source?.items || []).forEach((item)=>{
+      const article=document.createElement("article"), heading=document.createElement("h4"), link=document.createElement("a"), note=document.createElement("p");
+      link.href=item.url; link.textContent=item.label; link.target="_blank"; link.rel="noopener"; heading.append(link);
+      note.textContent=`Source delivered ${date(item.deliveredAt)} · operational completion unestablished. Runtime and cost coverage are not asserted.`;
+      article.append(heading,note);
+      item.deliveries.forEach((delivery)=>{const pr=document.createElement("a");pr.href=delivery.url;pr.textContent=`${delivery.repository}#${delivery.number} ↗`;pr.target="_blank";pr.rel="noopener";article.append(pr,document.createTextNode(" "));});
+      body.append(article);
+    });
+  }
+  const exactKeys=(value,keys)=>object(value)&&Object.keys(value).length===keys.length&&keys.every((key)=>Object.hasOwn(value,key));
+  function validateSourceDeliveries(source,completed) {
+    if (!exactKeys(source,["schema","coverage","items"]) || source.schema!=="fsgg.telemetry.source-deliveries/1" || !exactKeys(source.coverage,["eligible","published","unmapped","dirty","incompatible"]) || !Object.values(source.coverage).every((v)=>Number.isSafeInteger(v)&&v>=0) || !Array.isArray(source.items) || source.items.length>200 || source.coverage.published!==source.items.length || source.coverage.eligible<source.coverage.published+source.coverage.unmapped) malformed();
+    const keys=new Set(completed.map((item)=>item.key));
+    source.items.forEach((item)=>{
+      if (!exactKeys(item,["key","label","url","state","operationalCompletion","deliveredAt","deliveries"]) || typeof item.key!=="string" || !/^[a-z0-9][a-z0-9-]{0,63}$/.test(item.key) || keys.has(item.key) || typeof item.label!=="string" || !item.label.length || item.label.length>120 || !/^https:\/\/github\.com\/FS-GG\/[A-Za-z0-9_.-]+(?:\/(?:issues|pull)\/[1-9][0-9]*)?$/.test(item.url) || item.state!=="source-delivered" || item.operationalCompletion!=="unestablished" || !timestamp(item.deliveredAt) || !Array.isArray(item.deliveries) || !item.deliveries.length || item.deliveries.length>32) malformed();
+      keys.add(item.key);const links=new Set();
+      item.deliveries.forEach((pr)=>{
+        const identity=`${pr.repository}#${pr.number}`;
+        if (!exactKeys(pr,["repository","number","url","mergedAt"]) || typeof pr.repository!=="string" || !/^FS-GG\/[A-Za-z0-9_.-]+$/.test(pr.repository) || !Number.isSafeInteger(pr.number) || pr.number<=0 || pr.url!==`https://github.com/${pr.repository}/pull/${pr.number}` || !timestamp(pr.mergedAt) || links.has(identity)) malformed();
+        links.add(identity);
+      });
+      if (Date.parse(item.deliveredAt)!==Math.max(...item.deliveries.map((pr)=>Date.parse(pr.mergedAt)))) malformed();
+    });
+  }
   function validateHost(host) {
     if (!object(host) || typeof host.schema !== "string") malformed();
     if (host.schema === "fsgg.telemetry.dashboard-host-unavailable/1") {
       if (typeof host.status !== "string") malformed();
       return;
     }
-    if (!["fsgg.telemetry.dashboard-host/1","fsgg.telemetry.dashboard-host/2","fsgg.telemetry.dashboard-host/3"].includes(host.schema)) malformed();
+    if (!["fsgg.telemetry.dashboard-host/1","fsgg.telemetry.dashboard-host/2","fsgg.telemetry.dashboard-host/3","fsgg.telemetry.dashboard-host/4"].includes(host.schema)) malformed();
+    if (host.schema === "fsgg.telemetry.dashboard-host/4" && (typeof host.revision!=="string" || !/^[0-9a-f]{64}$/.test(host.revision))) malformed();
     if (!timestamp(host.observedAt) || !object(host.totals) || !finite(host.totals.usageObservations) || !object(host.usage) || !finite(host.usage.input) || !finite(host.usage.cachedInput) || !finite(host.usage.cacheWriteInput) || !finite(host.usage.output) || (host.usage.reasoning != null && !finite(host.usage.reasoning)) || !finite(host.usage.total) || !numericValues(host.launcherPopulation) || !object(host.budget) || !Array.isArray(host.budget.assessments) || !flattenable(host.budget.health) || !flattenable(host.budget.dimensions) || !object(host.localCi) || !numericValues(host.localCi.counts) || !object(host.localCi.seconds) || !flattenable(host.localCi.coverage) || !object(host.store) || !flattenable(host.quality) || !object(host.operational) || !flattenable(host.operational.lineage) || !flattenable(host.operational.timing)) malformed();
     Object.values(host.localCi.seconds).forEach((value) => { if (!object(value) || !finite(value.knownItems) || !finite(value.unknownItems) || !finite(value.totalItemSeconds)) malformed(); });
     host.budget.assessments.forEach((value) => { if (!object(value) || typeof value.dimension !== "string" || typeof value.verdict !== "string" || (value.numerator != null && !finite(value.numerator)) || (value.denominator != null && !finite(value.denominator))) malformed(); });
     if (host.schema === "fsgg.telemetry.dashboard-host/1") return;
     if (!object(host.completedItems) || !numericValues(host.completedItems.coverage) || !Array.isArray(host.completedItems.items)) malformed();
+    if (host.schema === "fsgg.telemetry.dashboard-host/4") validateSourceDeliveries(host.sourceDeliveries,host.completedItems.items);
     host.completedItems.items.forEach((item) => {
       if (!object(item) || typeof item.key !== "string" || typeof item.label !== "string" || !safeUrl(item.url,"https://github.com/FS-GG/") || (item.deliveredAt != null && !timestamp(item.deliveredAt)) || !Array.isArray(item.deliveries) || !object(item.runtime) || !finite(item.runtime.invocations) || !object(item.runtime.duration) || !Array.isArray(item.runtime.duration.rows) || !object(item.runtime.tokens) || !object(item.runtime.tokens.coverage) || !Array.isArray(item.runtime.tokens.rows) || !object(item.ci) || !numericValues(item.ci.counts) || !object(item.ci.seconds) || !object(item.budget) || !Array.isArray(item.budget.assessments) || !object(item.complications) || !numericValues(item.complications.observed) || !Array.isArray(item.complications.notes)) malformed();
       item.deliveries.forEach((delivery) => { if (!object(delivery) || typeof delivery.repository !== "string" || !finite(delivery.number) || !safeUrl(delivery.url,"https://github.com/FS-GG/")) malformed(); });
@@ -657,11 +687,12 @@
     const view=initial?null:captureView();
     state.restoring=Boolean(view);
     state.runs=data.actions.runs;
-    const itemCapable=["fsgg.telemetry.dashboard-host/2","fsgg.telemetry.dashboard-host/3"].includes(data.host.schema);
+    const itemCapable=["fsgg.telemetry.dashboard-host/2","fsgg.telemetry.dashboard-host/3","fsgg.telemetry.dashboard-host/4"].includes(data.host.schema);
     state.items=itemCapable?data.host.completedItems.items:[];
     state.itemStatus=itemCapable?(data.host.completedItems.coverage.incompatible?"Some completed-item details were rejected as incompatible":data.host.completedItems.coverage.unmapped?"Completed items await approved public labels":data.host.completedItems.coverage.dirty?"Item completion is pending canonical reduction":"No completed item is present in the observed host snapshot"):data.host.schema==="fsgg.telemetry.dashboard-host/1"?"This older host snapshot has aggregate telemetry only":"Item details await a configured host";
     renderItems(view?.openItems || null, initial);
     renderDeliveries(data.deliveries);
+    renderSourceDeliveries(data.host);
     const itemCoverage=data.host.completedItems?.coverage;
     text("items-note",itemCoverage?`${itemCoverage.published} published · ${itemCoverage.unmapped} awaiting an approved label · ${itemCoverage.dirty} pending canonical reduction · ${itemCoverage.incompatible} incompatible.`:"Host item projection unavailable. Showing independent public merged deliveries.");
     const counts=renderOutcomes(state.runs);
@@ -700,7 +731,7 @@
       text("health-label",state.runs.length?(live?"Public Actions live":"Public Actions stale"):"Public Actions sample empty");
       $("pulse-dot").classList.toggle("live",live);
       const host=state.data.host;
-      if (["fsgg.telemetry.dashboard-host/1","fsgg.telemetry.dashboard-host/2","fsgg.telemetry.dashboard-host/3"].includes(host.schema)) {
+      if (["fsgg.telemetry.dashboard-host/1","fsgg.telemetry.dashboard-host/2","fsgg.telemetry.dashboard-host/3","fsgg.telemetry.dashboard-host/4"].includes(host.schema)) {
         const hostAge=Date.now()-Date.parse(host.observedAt);
         text("local-state",`${hostAge>60*60*1000?"Stale · ":""}Observed ${date(host.observedAt)}`);
       }
