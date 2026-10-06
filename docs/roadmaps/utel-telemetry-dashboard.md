@@ -21,8 +21,10 @@ selectors describe eligible delivered work without changing canonical completion
 coverage gates. All 83 pure dashboard tests, six actual two-UID privacy checks and the hosted
 dashboard/path-coherence checks passed. Milestone projections now trigger the existing Pages refresh.
 
-The earlier manual Pages refresh restored recent merged-delivery entries while preserving the
-four historical completed cards. The active publisher remains `main-legacy`; the current store
+The earlier manual Pages refresh restored recent merged-delivery entries. The merge-triggered
+[Pages run 37419167012](https://github.com/FS-GG/.github/actions/runs/37419167012) then passed;
+HTTP 200 readback bound the deployed source to `da4c66c` and retained the same four completed
+cards and host revision. The active publisher remains `main-legacy`; the current store
 has not replaced its feed. The genuine legacy canonical source and publisher access are still
 unresolved, so a supported aggregate and newly published completed rows remain pending.
 Partial or unknown runtime usage stays explicit; source delivery does not establish live feed

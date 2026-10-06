@@ -61,8 +61,9 @@ reviewed public aggregate releases on GitHub.
 `da4c66c76b9a5e9cc7caf6041001cafefd95a138` after coherent qualification. The
 [owning roadmap](roadmaps/utel-telemetry-dashboard.md#delivered-source-repair--2026-10-06)
 records schema 11–13 compatibility, five scoped public selectors, 83 pure tests and six actual
-two-UID privacy checks. The manual Pages refresh restored recent merged-delivery entries;
-the four historical completed cards remain intact. The publisher is still `main-legacy`:
+two-UID privacy checks. The manual refresh restored recent merged-delivery entries; the
+merge-triggered Pages run 37419167012 passed, and HTTP 200 readback confirmed deployed source
+`da4c66c` with the same four historical completed cards. The publisher is still `main-legacy`:
 genuine legacy-source access and supported aggregation with the current store are pending,
 so source delivery does not close the live completed-feed gap or infer feature completion.
 
