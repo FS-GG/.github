@@ -135,7 +135,7 @@ authored `Version` cells of the Versioned contracts table (#748).*
 |---|---|---|---|
 | `fsquint-replay` | FsQuint | `0.1.0` | `0.1.0` |
 | `scaffold-provider` | FS.GG.SDD | `1.1.0` | — |
-| `fsgg-contracts` | FS.GG.SDD | `7.6.0` | `7.5.2` |
+| `fsgg-contracts` | FS.GG.SDD | `7.6.0` | `7.6.0` |
 | `scaffold-provenance` | FS.GG.SDD | `1.1.0` | — |
 | `governance-handoff` | FS.GG.SDD | `2.0.0` | — |
 | `governance-policy` | FS.GG.Governance | `1` | — |
