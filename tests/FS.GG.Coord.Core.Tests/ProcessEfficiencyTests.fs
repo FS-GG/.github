@@ -156,9 +156,9 @@ module ProcessEfficiencyTests =
         let b = source "b" 2L "digest2" "old"
         let hash rows = sourceFingerprint "efficiency-calculation/1" rows |> value
         Assert.Equal(hash [a; b], hash [b; a; a])
-        Assert.NotEqual(hash [a; b], hash [{a with EffectiveItemId = "correct"}; b])
-        Assert.NotEqual(hash [a; b], hash [{a with ContentDigest = "new"}; b])
-        Assert.NotEqual(hash [a; b], sourceFingerprint "efficiency-calculation/2" [a; b] |> value)
+        Assert.NotEqual<string>(hash [a; b], hash [{a with EffectiveItemId = "correct"}; b])
+        Assert.NotEqual<string>(hash [a; b], hash [{a with ContentDigest = "new"}; b])
+        Assert.NotEqual<string>(hash [a; b], sourceFingerprint "efficiency-calculation/2" [a; b] |> value)
 
     [<Fact>]
     let ``first pass excludes missing and open populations while retaining abandoned exposure`` () =
@@ -188,7 +188,7 @@ module ProcessEfficiencyTests =
 
     [<Fact>]
     let ``freshness preserves fractional offset timestamps and refuses future witnesses`` () =
-        let parse text = DateTimeOffset.Parse(text, Globalization.CultureInfo.InvariantCulture)
+        let parse (text: string) = DateTimeOffset.Parse(text, Globalization.CultureInfo.InvariantCulture)
         let cutoff = parse "2026-10-06T00:00:01.125Z"
         let earlier = parse "2026-10-06T02:00:00.625+02:00"
         let result = freshness cutoff (Some earlier) None None None Set.empty |> value
