@@ -535,3 +535,25 @@ test("provider-response costs retain exact nullable observations, pagination and
   await page.clock.runFor(60000);await expect.poll(()=>requests).toBe(2);await expect(page.locator("#refresh-status")).toContainText("showing last good data");await expect(panel).toContainText("Approved response item 10");await expect(page.locator("body")).not.toContainText("PRIVATE PROVIDER ID");
   await page.clock.runFor(60000);await expect.poll(()=>requests).toBe(3);await expect(panel).toContainText("Provider-response population unavailable");await expect(panel.locator("article")).toHaveCount(0);
 });
+
+test("nullable canonical aggregates retain exact Int64 values and refuse unsafe refresh",async({page})=>{
+  await page.clock.install();let requests=0;
+  await page.route("**/data/dashboard.json",route=>{
+    const host=efficiencyHost();host.store.schemaVersion=14;
+    host.usage={input:100,cachedInput:null,cacheWriteInput:null,output:null,reasoning:null,total:"9223372036854775807"};
+    if(++requests>1)host.usage.total=9007199254740992;
+    return route.fulfill({json:payload(host)});
+  });
+  await page.goto("/#local");await expect(page.locator("#refresh-status")).toContainText("checking every minute");
+  const content=page.locator("#local-content");
+  const output=content.locator(".local-card").filter({has:page.getByRole("heading",{name:"Output tokens",exact:true})});
+  const total=content.locator(".local-card").filter({has:page.getByRole("heading",{name:"Observed tokens",exact:true})});
+  await expect(output.locator("strong")).toHaveText("Unknown");
+  await expect(total.locator("strong")).toHaveText("9,223,372,036,854,775,807");
+  await expect(content.getByText("cached input",{exact:true}).locator("..")).toContainText("Unknown");
+  await page.setViewportSize({width:390,height:844});await expectMobileContainment(page);
+  await page.clock.runFor(60000);await expect.poll(()=>requests).toBe(2);
+  await expect(page.locator("#refresh-status")).toContainText("showing last good data");
+  await expect(total.locator("strong")).toHaveText("9,223,372,036,854,775,807");
+  await expect(output.locator("strong")).toHaveText("Unknown");
+});
