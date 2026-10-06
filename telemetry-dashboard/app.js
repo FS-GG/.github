@@ -389,6 +389,39 @@
       if (target) requestAnimationFrame(()=>target.scrollIntoView({block:"start"}));
     }
   }
+  function validateProviderResponses(value) {
+    if (!exactKeys(value,["schema","status","snapshotRevision","coverage","items"]) || value.schema!=="fsgg.telemetry.provider-response-costs/1" || !["available","partial","unavailable"].includes(value.status) || !exactKeys(value.coverage,["eligible","published","unmapped","withheld","incompatible"]) || !Object.values(value.coverage).every(n=>Number.isSafeInteger(n)&&n>=0&&n<=10000) || value.coverage.eligible!==value.coverage.published+value.coverage.unmapped+value.coverage.withheld+value.coverage.incompatible || !Array.isArray(value.items) || value.items.length>200) malformed();
+    if (value.status==="unavailable") { if(value.snapshotRevision!==null || value.items.length || Object.values(value.coverage).some(Boolean))malformed(); }
+    else if(typeof value.snapshotRevision!=="string" || !/^[0-9a-f]{64}$/.test(value.snapshotRevision))malformed();
+    const fields=["input","cachedInput","cacheWriteInput","output","reasoning","total"], quantity=n=>n===null || (typeof n==="string" && /^(0|[1-9][0-9]{0,18})$/.test(n) && BigInt(n)<=9223372036854775807n);
+    let published=0;const keys=new Set();
+    value.items.forEach(item=>{
+      if(!exactKeys(item,["key","label","url","rows","withheld"]) || typeof item.key!=="string" || !/^[a-z0-9][a-z0-9-]{0,63}$/.test(item.key) || keys.has(item.key) || typeof item.label!=="string" || item.label.length>160 || !safeUrl(item.url,"https://github.com/FS-GG/") || !Number.isSafeInteger(item.withheld) || item.withheld<0 || !Array.isArray(item.rows) || !item.rows.length || item.rows.length>32)malformed();keys.add(item.key);
+      item.rows.forEach((row,index)=>{
+        if(!exactKeys(row,["key","revision","coverage","requestedModel","observedModel","requestedEffort","observedEffort","counters"]) || row.key!==`r${index+1}` || row.revision===null || !quantity(row.revision) || !["requestedModel","observedModel","requestedEffort","observedEffort"].every(k=>typeof row[k]==="string"&&row[k].length<=100) || !exactKeys(row.counters,fields) || !Object.values(row.counters).every(quantity) || Object.values(row.counters).every(n=>n===null) || row.coverage!==(["input","output","total"].every(k=>row.counters[k]!==null)?"complete":"partial"))malformed();published++;
+      });
+    });
+    if(published!==value.coverage.published || published>1000)malformed();
+  }
+  let providerPage=0;
+  function renderProviderResponses(host) {
+    let section=$("provider-responses");
+    if(!section) { section=document.createElement("section");section.id="provider-responses";section.className="panel";section.setAttribute("aria-labelledby","provider-responses-title");$("efficiency").before(section); }
+    section.replaceChildren();const title=document.createElement("h2"),note=document.createElement("p");title.id="provider-responses-title";title.textContent="Provider-response costs";note.setAttribute("role","status");section.append(title,note);
+    const population=host.providerResponses;
+    if(!population || population.status==="unavailable") { note.textContent="Provider-response population unavailable. Missing observations do not establish zero cost.";providerPage=0;return; }
+    const coverage=population.coverage;
+    note.textContent=`${coverage.published}/${coverage.eligible} observed response cost records shown · ${coverage.unmapped} await approved labels · ${coverage.withheld} omitted by bounds · ${coverage.incompatible} incompatible. These are provider responses, separate from native-turn totals. Recorded costs do not prove a successful assessment or item completion.`;
+    const reference=document.createElement("p");reference.className="item-method";reference.style.overflowWrap="anywhere";reference.textContent=`Current snapshot ${population.snapshotRevision}. Response references apply within this snapshot and approved item only. Complete primary counters means input, output and inclusive total are observed. Optional breakouts may remain unknown; cached input and reasoning are inclusive.`;section.append(reference);
+    const size=10,pages=Math.max(1,Math.ceil(population.items.length/size));providerPage=Math.min(providerPage,pages-1);
+    population.items.slice(providerPage*size,(providerPage+1)*size).forEach(item=>{
+      const article=document.createElement("article"),heading=document.createElement("h3"),link=document.createElement("a");link.href=item.url;link.textContent=item.label;link.target="_blank";link.rel="noopener";heading.append(link);article.append(heading);
+      article.append(metricTable(["Current response / revision","Primary counters","Observed model / effort","Input","Cached input","Cache write","Output","Reasoning","Inclusive total"],item.rows.map(row=>[`${row.key} / ${row.revision}`,row.coverage,`${row.observedModel} / ${row.observedEffort}`,...["input","cachedInput","cacheWriteInput","output","reasoning","total"].map(k=>row.counters[k]??"Unknown")]),`Exact provider-response token observations for ${item.label}`));
+      if(item.withheld) { const omitted=document.createElement("p");omitted.textContent=`${item.withheld} additional response records omitted for this item.`;article.append(omitted); }section.append(article);
+    });
+    if(!population.items.length) { const empty=document.createElement("p");empty.textContent=coverage.eligible?"No observed cost record has a publishable approved projection.":"No provider-response usage record is present at this cutoff. Requests without a cost observation remain unknown.";section.append(empty); }
+    const controls=document.createElement("div");controls.className="filters";const previous=document.createElement("button"),next=document.createElement("button"),page=document.createElement("p");previous.type=next.type="button";previous.textContent="Previous response items";next.textContent="Next response items";previous.disabled=providerPage===0;next.disabled=providerPage===pages-1;page.setAttribute("role","status");page.textContent=`Response items ${providerPage+1}/${pages}`;previous.addEventListener("click",()=>{providerPage--;renderProviderResponses(host);});next.addEventListener("click",()=>{providerPage++;renderProviderResponses(host);});controls.append(previous,page,next);section.append(controls);
+  }
   function renderDeliveries(feed) {
     state.deliveryFeed=feed; const query=$("item-search").value.trim().toLowerCase(), order=$("item-sort").value;
     state.deliveries=feed.deliveries.filter((delivery)=>!query || `${delivery.title} ${delivery.number}`.toLowerCase().includes(query));
@@ -610,6 +643,7 @@
       if (typeof host.status !== "string") malformed();
       return;
     }
+    if (host.providerResponses!==undefined)validateProviderResponses(host.providerResponses);
     if (host.schema !== "fsgg.telemetry.dashboard-host/5") throw new Error("Host schema 5 is required; host data awaits the matching published feed.");
     if (host.source?.kind === "independent-local-stores") {
       if (Object.keys(host).sort().join()!==["schema","observedAt","revision","source","contexts"].sort().join() || !timestamp(host.observedAt) || typeof host.revision!=="string" || !/^[0-9a-f]{64}$/.test(host.revision) || Object.keys(host.source).join()!=="kind" || !Array.isArray(host.contexts) || host.contexts.length!==2) malformed();
@@ -729,6 +763,7 @@
     renderItems(view?.openItems || null, initial);
     renderDeliveries(data.deliveries);
     renderSourceDeliveries(host);
+    renderProviderResponses(host);
     window.ProcessEfficiency.render(host.schema === "fsgg.telemetry.dashboard-host/5" ? host.processEfficiency : null);
     const itemCoverage=host.completedItems?.coverage;
     text("items-note",itemCoverage?`${itemCoverage.published} published · ${itemCoverage.unmapped} awaiting an approved label · ${itemCoverage.dirty} pending canonical reduction · ${itemCoverage.incompatible} incompatible.`:"Host item projection unavailable. Showing independent public merged deliveries.");

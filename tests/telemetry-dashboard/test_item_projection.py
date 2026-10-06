@@ -225,4 +225,37 @@ class ItemProjectionTests(unittest.TestCase):
         with self.assertRaises(D.HostSourceError): D.snapshot_rows({"usage":"not-a-list"},"usage")
         with self.assertRaises(D.HostSourceError): D.snapshot_rows({"usage":[{}]*10001},"usage")
 
+
+class ProviderResponseCostsTests(unittest.TestCase):
+    def source(self, counters=None):
+        private=snapshot();private["store"]={"schemaVersion":14}
+        canonical={"itemId":"child","invocationId":"SECRET-INVOCATION","provider":"openai","sourceVariant":"openai-responses/1","responseId":"SECRET-RESPONSE","responseSha256":"b"*64,"requestedModel":"model-r","observedModel":"model-o","requestedEffort":"medium","observedEffort":None,"scope":"provider-response","provenance":"openai-responses","input":100,"cachedInput":None,"cacheWriteInput":None,"output":20,"reasoning":None,"total":120}
+        if counters: canonical.update(counters)
+        private["responseUsage"]=[{"identity":"SECRET-IDENTITY","item_id":"child","revision":2,"content_digest":"sha256:"+"a"*64,"canonical":json.dumps(canonical)}]
+        return private
+    def test_actual_nullable_costs_are_separate_from_native_turns_and_private_ids(self):
+        private=self.source();before=json.dumps(private["usage"],sort_keys=True)
+        value=D.project_provider_responses(private,labels(),"c"*64);D.validate_provider_responses(value)
+        self.assertEqual(value["coverage"],{"eligible":1,"published":1,"unmapped":0,"withheld":0,"incompatible":0})
+        row=value["items"][0]["rows"][0];self.assertEqual(row["counters"]["total"],"120");self.assertIsNone(row["counters"]["reasoning"]);self.assertEqual(row["observedEffort"],"unknown")
+        self.assertNotIn("SECRET",json.dumps(value));self.assertNotIn("responseSha256",json.dumps(value));self.assertEqual(json.dumps(private["usage"],sort_keys=True),before)
+    def test_bigint_and_provider_policy_breach_are_exact_measured_facts(self):
+        n=9007199254740993;private=self.source({"input":n,"output":1501,"total":n+1501})
+        value=D.project_provider_responses(private,labels(),"c"*64);self.assertEqual(value["items"][0]["rows"][0]["counters"]["input"],str(n));self.assertEqual(value["items"][0]["rows"][0]["counters"]["output"],"1501")
+    def test_pending_item_cost_does_not_require_or_imply_completion(self):
+        private=self.source({"output":None,"total":None});private["populations"][0]["state"]="pending";private["outcomes"]=[]
+        value=D.project_provider_responses(private,labels(),"c"*64);self.assertEqual(value["items"][0]["rows"][0]["coverage"],"partial");self.assertNotIn("completed",json.dumps(value))
+    def test_missing_source_is_unavailable_not_empty_success(self):
+        private=self.source();private.pop("responseUsage");value=D.project_provider_responses(private,labels(),"c"*64);self.assertEqual(value["status"],"unavailable");self.assertIsNone(value["snapshotRevision"])
+        private=self.source();private["responseUsage"]=[];self.assertEqual(D.project_provider_responses(private,labels(),"c"*64)["status"],"available")
+    def test_bounds_and_unmapped_or_malformed_costs_are_explicit(self):
+        private=self.source();first=private["responseUsage"][0];private["responseUsage"]=[dict(first,identity=f"response-{i:03}") for i in range(35)]
+        private["responseUsage"].append(dict(first,identity="outside",item_id="UNAPPROVED"));private["responseUsage"].append(dict(first,identity="bad",canonical='{}'))
+        value=D.project_provider_responses(private,labels(),"c"*64);self.assertEqual(value["status"],"partial");self.assertEqual(value["coverage"],{"eligible":37,"published":32,"unmapped":1,"withheld":3,"incompatible":1});D.validate_provider_responses(value)
+    def test_forged_public_fields_and_lossy_numbers_are_refused(self):
+        value=D.project_provider_responses(self.source(),labels(),"c"*64);value["items"][0]["rows"][0]["counters"]["total"]=120
+        with self.assertRaises(ValueError):D.validate_provider_responses(value)
+        value=D.project_provider_responses(self.source(),labels(),"c"*64);value["items"][0]["rows"][0]["responseId"]="SECRET"
+        with self.assertRaises(ValueError):D.validate_provider_responses(value)
+
 if __name__=="__main__": unittest.main()
