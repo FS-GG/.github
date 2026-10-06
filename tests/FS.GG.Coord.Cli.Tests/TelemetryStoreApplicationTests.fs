@@ -3521,7 +3521,7 @@ INSERT INTO budget_epochs VALUES('frozen-epoch',999,'verified');
 INSERT INTO budget_assessment_revisions VALUES('{old}','frozen-scope','github','whole-item',1,'frozen-epoch','breach',30,100,1,'frozen-derived','frozen-digest');
 INSERT INTO budget_breaches VALUES('frozen-epoch','{old}','frozen-scope','github','whole-item',1,1);
 SELECT 1;
-""" |> ignore
+        """ |> ignore
         let frozen = correctionSql path "SELECT group_concat(epoch_id || item_id || assessment_revision,'|') FROM budget_breaches WHERE epoch_id='frozen-epoch';"
         let plan = TelemetryStoreApplication.ciCorrectionPlan path approved request |> unwrap |> Encoding.UTF8.GetBytes
         TelemetryStoreApplication.ciCorrect path approved plan |> unwrap |> ignore
