@@ -191,6 +191,15 @@ Source delivery and native qualification are separate gates:
   executor run. The rebased current head awaits hosted qualification and remains unmerged, so P2 source
   delivery is pending; P3 publication, P4 adoption and P5
   closure remain future gates.
+  **P4 diagnostic helper source — 2026-10-06.**
+  [Coordination PR #951](https://github.com/FS-GG/FS.GG.Coordination/pull/951) source-delivered
+  the bounded Podman version/provenance collector at protected
+  `45f2d920dcb3fd2784d215780bd3253e9a89bf11` after47 passing checks and8 skips.
+  The separate Sandbox adapter/workflow pin successor remains undelivered. This advances a diagnostic
+  source boundary only: the original facts attempt2 failed Podman info and container census,
+  runtime cleanup remains unaccepted, and the owned admission secret was retired. No capability facts,
+  capsule, provider grant, canonical0.2.1 publication or installed adoption is accepted by this delivery.
+  A future facts attempt requires separate admission; V2-LANG-01.2 remains open.
 - [x] **V2-LANG-01.3 — Qualify the AG-UI projection.**
   [Coordination PR #894](https://github.com/FS-GG/FS.GG.Coordination/pull/894) merged the optional
   read-only projection at protected `5d86daf3898be683bd6720bdd36da479a29a0260` after exact-head
