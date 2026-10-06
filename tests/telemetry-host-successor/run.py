@@ -9,6 +9,7 @@ import json
 import pathlib
 import sys
 import tempfile
+from types import SimpleNamespace
 import unittest
 import zipfile
 from unittest.mock import patch
@@ -24,9 +25,60 @@ from telemetry_host_successor_provider import HostProvider, NotFound
 def manifest():
     return {
         "schema": "fsgg.telemetry.host-release/1", "packageId": "FS.GG.Telemetry.Host",
-        "version": "0.4.0", "tag": "telemetry-host/v0.4.0", "sourceSha": "a" * 40,
+        "version": "0.5.0", "tag": "telemetry-host/v0.5.0", "sourceSha": "a" * 40,
         "archiveSha256": "b" * 64, "producerPayloadSha256": "sha256:" + "c" * 64,
     }
+
+
+class StoreProfileTests(unittest.TestCase):
+    def test_prepared_current_package_manifest_uses_only_schema14(self):
+        spec = importlib.util.spec_from_file_location("host_release_prepare", ROOT / "scripts/telemetry-host-release.py")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary)
+            package = root / "fixture.nupkg"
+            with zipfile.ZipFile(package, "w") as archive:
+                archive.writestr("FS.GG.Telemetry.Host.nuspec",
+                                 "<package><metadata><id>FS.GG.Telemetry.Host</id><version>0.5.0</version></metadata></package>")
+                archive.writestr("tools/net10.0/linux-x64/FS.GG.Telemetry.Host.dll", b"fixture")
+            lock = root / "lock.json"
+            lock.write_text("{}")
+            assets = root / "assets"
+            assets.mkdir()
+            (assets / "app.js").write_text("fixture")
+            prepared = module.build_manifest(SimpleNamespace(package=package, lock=lock, assets=assets,
+                                             version="0.5.0", tag="telemetry-host/v0.5.0", source_sha="a" * 40))
+            self.assertEqual((prepared["supportedStoreSchemaMin"], prepared["supportedStoreSchemaMax"]), (14, 14))
+            self.assertEqual(prepared["version"], "0.5.0")
+
+    def test_current_profile_is_schema14_only_and_legacy_artifact_stays_unchanged(self):
+        spec = importlib.util.spec_from_file_location("host_release_profile", ROOT / "scripts/telemetry-host-release.py")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        self.assertEqual(module.store_schema_profile("0.5.0"), (14, 14))
+        self.assertEqual(module.store_schema_profile("0.4.0"), (10, 12))
+        with tempfile.TemporaryDirectory() as temporary:
+            path = pathlib.Path(temporary) / "manifest.json"
+            value = {**manifest(), "framework": "net10.0", "target": "linux-x64",
+                     "dependencyLockSha256": "d" * 64, "uiAssetTreeSha256": "e" * 64,
+                     "supportedStoreSchemaMin": 14, "supportedStoreSchemaMax": 14,
+                     "runtimePrerequisites": ["Microsoft.AspNetCore.App 10.0", "Microsoft.NETCore.App 10.0"],
+                     "createdAt": "2026-10-06T00:00:00Z"}
+            path.write_text(json.dumps(value))
+            self.assertEqual(module.load_manifest(path), value)
+            for minimum, maximum in ((10, 14), (13, 14), (14, 15), (10, 12)):
+                with self.subTest(minimum=minimum, maximum=maximum):
+                    path.write_text(json.dumps({**value, "supportedStoreSchemaMin": minimum,
+                                                "supportedStoreSchemaMax": maximum}))
+                    with self.assertRaisesRegex(ValueError, "store schema range"):
+                        module.load_manifest(path)
+            old = {**value, "version": "0.4.0", "tag": "telemetry-host/v0.4.0",
+                   "supportedStoreSchemaMin": 10, "supportedStoreSchemaMax": 12}
+            path.write_text(json.dumps(old))
+            self.assertEqual(module.load_manifest(path), old)
+            with self.assertRaisesRegex(Refused, "exact Host 0.5.0"):
+                effects(old)
 
 
 class Journal:
@@ -85,10 +137,11 @@ class HostReleaseTests(unittest.TestCase):
         self.assertEqual(self.ordered[0].target_digest, "a" * 40)
         publisher = (ROOT / "scripts" / "telemetry-host-successor-publish.py").read_text()
         candidate = (ROOT / ".github" / "workflows" / "release-telemetry-host-successor-candidate.yml").read_text()
-        self.assertIn('REF = "refs/heads/fsgg/v2/journal/release/utel-host-rel-10"', publisher)
-        self.assertIn('"version": "0.4.0"', publisher)
-        self.assertIn("--version 0.4.0 --tag telemetry-host/v0.4.0", candidate)
-        self.assertIn("FS.GG.Telemetry.Host.0.4.0.nupkg", candidate)
+        self.assertIn('REF = "refs/heads/fsgg/v2/journal/release/utel-host-rel-11"', publisher)
+        self.assertNotIn("utel-host-rel-10", publisher)
+        self.assertIn('"version": "0.5.0"', publisher)
+        self.assertIn("--version 0.5.0 --tag telemetry-host/v0.5.0", candidate)
+        self.assertIn("FS.GG.Telemetry.Host.0.5.0.nupkg", candidate)
 
     def test_every_effect_is_admitted_and_read_back_once(self):
         self.assertEqual(len(self.ordered), 8)
@@ -126,7 +179,7 @@ class HostReleaseTests(unittest.TestCase):
             with zipfile.ZipFile(archive, "w") as zipped:
                 zipped.writestr("manifest.json", json.dumps(manifest()))
                 zipped.writestr("package-evidence.json", "{}")
-                zipped.writestr("FS.GG.Telemetry.Host.0.4.0.nupkg", "fixture")
+                zipped.writestr("FS.GG.Telemetry.Host.0.5.0.nupkg", "fixture")
             digest = hashlib.sha256(archive.read_bytes()).hexdigest()
             run = {"id": 123, "path": verifier.WORKFLOW, "head_sha": source,
                    "head_branch": "main", "event": "workflow_dispatch", "conclusion": "success",
@@ -137,7 +190,7 @@ class HostReleaseTests(unittest.TestCase):
                                          "repository_id": verifier.REPOSITORY_ID,
                                          "head_repository_id": verifier.REPOSITORY_ID}}
             with patch.object(verifier.subprocess, "run"):
-                self.assertEqual(verifier.verify(artifact, run, archive, root / "good", source)["version"], "0.4.0")
+                self.assertEqual(verifier.verify(artifact, run, archive, root / "good", source)["version"], "0.5.0")
             altered = {**run, "run_attempt": 2}
             with self.assertRaisesRegex(ValueError, "first-attempt"):
                 verifier.verify(artifact, altered, archive, root / "rerun", source)
@@ -163,9 +216,9 @@ class HostReleaseTests(unittest.TestCase):
                 self.assets = {}
                 self.writes = []
             def get(self, path):
-                if path.endswith("/git/ref/tags/telemetry-host/v0.4.0") and self.tag:
+                if path.endswith("/git/ref/tags/telemetry-host/v0.5.0") and self.tag:
                     return {"object": {"sha": self.tag}}
-                if path.endswith("/releases/tags/telemetry-host/v0.4.0") and self.release and not self.release["draft"]:
+                if path.endswith("/releases/tags/telemetry-host/v0.5.0") and self.release and not self.release["draft"]:
                     return self.release
                 if path.endswith("/releases?per_page=100&page=1"):
                     return [self.release] if self.release else []
@@ -189,7 +242,7 @@ class HostReleaseTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = pathlib.Path(temporary)
             row = manifest()
-            package = root / "FS.GG.Telemetry.Host.0.4.0.nupkg"
+            package = root / "FS.GG.Telemetry.Host.0.5.0.nupkg"
             package.write_bytes(b"exact original Host archive")
             row["archiveSha256"] = hashlib.sha256(package.read_bytes()).hexdigest()
             manifest_path = root / "manifest.json"
@@ -217,10 +270,10 @@ class HostReleaseTests(unittest.TestCase):
             def __init__(self, raw):
                 self.raw = raw
             def get(self, path):
-                if path.endswith("/releases/tags/telemetry-host/v0.4.0"):
+                if path.endswith("/releases/tags/telemetry-host/v0.5.0"):
                     raise NotFound(path)
                 if path.endswith("/releases?per_page=100&page=1"):
-                    return [{"id": 1, "tag_name": "telemetry-host/v0.4.0", "draft": True}]
+                    return [{"id": 1, "tag_name": "telemetry-host/v0.5.0", "draft": True}]
                 if path.endswith("/releases/1/assets?per_page=100"):
                     return [{"id": 1, "name": "publication-journal.json"}]
                 raise AssertionError(path)
