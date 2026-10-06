@@ -788,7 +788,7 @@ def _read_host_snapshot(store: str, engine: str) -> tuple[dict[str,Any],dict[str
     if hashlib.sha256(selected).hexdigest()!=envelope["revision"]: raise HostSourceError("HOST_ENGINE_SNAPSHOT_REVISION_MISMATCH")
     if not isinstance(snapshot,dict) or not isinstance(snapshot.get("selection"),dict) or snapshot["selection"].get("mode")!="all" or snapshot["selection"].get("complete") is not True: raise HostSourceError("HOST_ENGINE_SNAPSHOT_INCOMPLETE")
     store_projection=snapshot.get("store")
-    if not isinstance(store_projection,dict) or store_projection.get("schemaVersion") not in (8,9,10) or store_projection.get("journalMode")!="wal": raise HostSourceError("HOST_STORE_INCOMPATIBLE")
+    if not isinstance(store_projection,dict) or store_projection.get("schemaVersion") not in (8,9,10,11,12,13) or store_projection.get("journalMode")!="wal": raise HostSourceError("HOST_STORE_INCOMPATIBLE")
     operational=envelope.get("operational")
     if not isinstance(operational,dict) or operational.get("consistency")!="observed-outside-database-transaction": raise HostSourceError("HOST_ENGINE_SNAPSHOT_MALFORMED")
     checked_int(operational.get("pendingBatches"),"pending batches")
@@ -797,7 +797,9 @@ def _read_host_snapshot(store: str, engine: str) -> tuple[dict[str,Any],dict[str
 
 
 def _join_host_snapshots(sources: list[tuple[dict[str,Any],dict[str,Any]]]) -> tuple[dict[str,Any],dict[str,Any]]:
-    if len(sources)!=2 or any(source[0]["store"]["schemaVersion"]!=10 for source in sources): raise HostSourceError("HOST_STORE_INCOMPATIBLE")
+    if len(sources)!=2: raise HostSourceError("HOST_STORE_INCOMPATIBLE")
+    versions=[source[0]["store"]["schemaVersion"] for source in sources]
+    if versions[0] not in (10,11,12,13) or versions[0]!=versions[1]: raise HostSourceError("HOST_STORE_INCOMPATIBLE")
     left,right=(source[0] for source in sources)
     if set(left)!=set(right): raise HostSourceError("HOST_ENGINE_SNAPSHOT_INCOMPATIBLE")
     combined={}
