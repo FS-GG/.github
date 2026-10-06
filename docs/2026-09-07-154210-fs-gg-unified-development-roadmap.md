@@ -56,6 +56,23 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-06: Standalone host-5 dashboard installed and live; efficiency remains unavailable.**
+[PR #4273](https://github.com/FS-GG/.github/pull/4273) merged at
+`ba5e8e0a627a6c24a8c82fecfd3b6eb9216ea8fd`. The installed standalone dashboard script uses the
+unchanged 0.98.0 engine and schema-13 compact source. One actual snapshot conserved all five
+completed groups and their exact cost, runtime, CI and shared base fields. Eight approved labels
+retain the prior six. The live source-only rows show Governance #444, Rendering's latest Templates
+#673 and Typed Protocol's latest `.github` #4274, with operational completion unestablished.
+[Pages run 37482126123](https://github.com/FS-GG/.github/actions/runs/37482126123) deployed protected
+source `0cecd74eff6a3d44d5a4cbfb248b658e195bde1c` with verified activation host commit
+`a636a625d1aa70265f466b3bf26c5e6691d0a3c0`. HTTP 200 readback at 14:56:23 UTC matched the
+complete immutable host-5 payload: five completed groups, three source deliveries and unavailable
+efficiency. Event publication is active. User units are installed, but timer recurrence is unavailable
+without a user service manager. Historical follow-up usage remains unknown. The
+[owning .4 plan](roadmaps/process-efficiency-telemetry.md#v2-eff-014--publish-useful-dashboard-explanations)
+keeps full efficiency acceptance and .6/schema-14 release/adoption open; current-only dashboard
+migration does not establish installed analysis or whole-item completion.
+
 **2026-10-06: P4 private Sandbox helper-binding source delivered; native successor remains unqualified.**
 [Sandbox #58](https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/pull/58) merged head
 `93cd981bc64b5eaba0edc01e60375a14eb5fb441` as
