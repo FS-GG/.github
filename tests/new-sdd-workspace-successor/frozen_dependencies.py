@@ -3,6 +3,7 @@ import hashlib
 import json
 import pathlib
 import runpy
+import subprocess
 import tempfile
 import unittest
 import zipfile
@@ -89,7 +90,33 @@ class FrozenDependencyControls(unittest.TestCase):
         pin = json.loads((ROOT / "scripts/creator-frozen-coord-dependencies.json").read_text())
         self.assertEqual(pin["version"], "0.97.1")
         self.assertEqual(pin["sourceSha"], "99ea75286f5c3cea2a261fef4e5b45cd70378185")
-        self.assertEqual(len(HELPER["source_projects"](ROOT, pin)), 11)
+        # Dependency bytes belong to the published revision, not the current
+        # feature branch. The Creator's own copy contract remains current.
+        historical = self.root / "published-dependency-source"
+        creator_path = "scripts/NewSddWorkspace/NewSddWorkspace.fsproj"
+        inputs = {row["path"] for row in pin["sourceLeaves"]} | set(pin["projects"])
+        for name in sorted(inputs):
+            destination = historical / name
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            body = ((ROOT / name).read_bytes() if name == creator_path else
+                    subprocess.check_output(["git", "show", pin["sourceSha"] + ":" + name], cwd=ROOT))
+            destination.write_bytes(body)
+        for row in pin["sourceLeaves"]:
+            self.assertEqual(self.hash((historical / row["path"]).read_bytes()), row["sha256"])
+        self.assertEqual(len(HELPER["source_projects"](historical, pin)), 11)
+        drift = [row["path"] for row in pin["sourceLeaves"]
+                 if self.hash((ROOT / row["path"]).read_bytes()) != row["sha256"]]
+        if drift:
+            with self.assertRaises(ValueError) as refusal:
+                HELPER["source_projects"](ROOT, pin)
+            self.assertEqual(str(refusal.exception), "published dependency source changed: " + drift[0])
+        else:
+            self.assertEqual(len(HELPER["source_projects"](ROOT, pin)), 11)
+        changed = historical / pin["sourceLeaves"][0]["path"]
+        changed.write_bytes(changed.read_bytes() + b"\n// deliberate unpublished source drift\n")
+        with self.assertRaisesRegex(ValueError, "published dependency source changed"):
+            HELPER["source_projects"](historical, pin)
+        self.assertFalse((historical / "frozen").exists())
         workflow = (ROOT / ".github/workflows/release-new-sdd-workspace-successor-candidate.yml").read_text()
         self.assertIn(pin["downloadUrl"], workflow)
         self.assertNotIn("FS.GG.Coord.Cli.0.97.0.nupkg", workflow)
