@@ -5291,7 +5291,144 @@ WHERE n.source_ref=$source;
     // schema.  Every database value below is selected on this one connection while
     // one explicit transaction is open.  Keeping the table vocabulary here makes
     // the engine the sole owner of SQLite and migration knowledge.
+    let private ciSummaryInSnapshot (connection: SqliteConnection) (transaction: SqliteTransaction) (itemId: string) =
+        let scalar sql =
+            use command = connection.CreateCommand()
+            command.Transaction <- transaction
+            command.CommandText <- sql
+            parameter command "$item" itemId
+            Convert.ToInt64(command.ExecuteScalar())
+
+        let intervals sql =
+            use command = connection.CreateCommand()
+            command.Transaction <- transaction
+            command.CommandText <- sql
+            parameter command "$item" itemId
+            use reader = command.ExecuteReader()
+            let values = ResizeArray<TelemetryCi.Interval>()
+
+            while reader.Read() do
+                let startAt = if reader.IsDBNull 0 then None else Some(reader.GetString 0)
+                let endAt = if reader.IsDBNull 1 then None else Some(reader.GetString 1)
+                TelemetryCi.interval startAt endAt |> Option.iter values.Add
+
+            values |> Seq.toList
+
+        let coverage column =
+            use command = connection.CreateCommand()
+            command.Transaction <- transaction
+
+            command.CommandText <-
+                $"SELECT %s{column} FROM ci_coverage WHERE item_id=$item ORDER BY rowid DESC LIMIT 1;"
+
+            parameter command "$item" itemId
+            let value = command.ExecuteScalar()
+
+            if isNull value || value = box DBNull.Value then
+                "unknown"
+            else
+                string value
+
+        let population column fallback =
+            use command = connection.CreateCommand()
+            command.Transaction <- transaction
+
+            command.CommandText <-
+                $"SELECT %s{column} FROM ci_population_coverage WHERE item_id=$item ORDER BY fact_revision DESC LIMIT 1;"
+
+            parameter command "$item" itemId
+            let value = command.ExecuteScalar()
+
+            if isNull value || value = box DBNull.Value then
+                fallback
+            else
+                string value
+
+        let jobs =
+            intervals "SELECT started_at,completed_at FROM ci_jobs WHERE item_id=$item;"
+
+        let queues =
+            intervals "SELECT created_at,started_at FROM ci_jobs WHERE item_id=$item;"
+
+        let runner =
+            if jobs.IsEmpty then
+                None
+            else
+                jobs
+                |> List.sumBy (fun value -> int64 (value.EndUtc - value.StartUtc).TotalSeconds)
+                |> Some
+
+        let wall = TelemetryCi.unionSeconds jobs
+
+        let classified classification =
+            use command = connection.CreateCommand()
+            command.Transaction <- transaction
+
+            command.CommandText <-
+                "SELECT started_at,completed_at FROM ci_steps WHERE item_id=$item AND classification=$classification;"
+
+            parameter command "$item" itemId
+            parameter command "$classification" classification
+            use reader = command.ExecuteReader()
+            let values = ResizeArray<TelemetryCi.Interval>()
+
+            while reader.Read() do
+                TelemetryCi.interval
+                    (if reader.IsDBNull 0 then None else Some(reader.GetString 0))
+                    (if reader.IsDBNull 1 then None else Some(reader.GetString 1))
+                |> Option.iter values.Add
+
+            values |> Seq.toList |> TelemetryCi.unionSeconds
+
+        let effectiveAssignments =
+            use command = connection.CreateCommand()
+            command.Transaction <- transaction
+            command.CommandText <- "SELECT c.effective_feature,c.effective_attempt,c.correction_id,CASE WHEN EXISTS(SELECT 1 FROM ci_correction_evidence x WHERE x.correction_id=c.correction_id AND x.table_name='ci_bindings') THEN 'retained-binding' ELSE 'operator-evidence-only' END FROM native_item_outcomes n JOIN ci_effective_attribution e ON e.identity=n.identity JOIN ci_attribution_corrections c ON c.correction_id=e.correction_id WHERE n.item_id=$item ORDER BY n.identity;"
+            parameter command "$item" itemId
+            use reader = command.ExecuteReader()
+            [ while reader.Read() do yield {| featureId = reader.GetString 0; attemptId = reader.GetString 1; correctionId = reader.GetString 2; assignmentProvenance = reader.GetString 3 |} ]
+
+        JsonSerializer.Serialize
+            {|
+                schema = "fsgg.telemetry.ci-summary/1"
+                item = itemId
+                deliveries = scalar "SELECT count(*) FROM native_item_outcomes WHERE item_id=$item AND code_delivery='delivered';"
+                effectiveAssignments = effectiveAssignments
+                runs =
+                    scalar
+                        "SELECT count(*) FROM (SELECT repository,run_id FROM ci_runs WHERE item_id=$item UNION SELECT repository,run_id FROM ci_jobs WHERE item_id=$item);"
+                attempts =
+                    scalar
+                        "SELECT count(*) FROM (SELECT repository,run_id,attempt FROM ci_runs WHERE item_id=$item UNION SELECT repository,run_id,attempt FROM ci_jobs WHERE item_id=$item);"
+                jobs = scalar "SELECT count(*) FROM ci_jobs WHERE item_id=$item;"
+                steps = scalar "SELECT count(*) FROM ci_steps WHERE item_id=$item;"
+                runnerSeconds = runner
+                wallSeconds = wall
+                queueSeconds = TelemetryCi.unionSeconds queues
+                usefulValidationSeconds = classified "useful-validation"
+                administrativeSeconds = classified "admin"
+                necessarySetupSeconds = classified "necessary-setup"
+                mixedSeconds = classified "mixed"
+                unclassifiedSeconds = classified "unclassified"
+                monetary = "unknown"
+                avoidableRerun = "unknown"
+                inventoryCoverage = population "actions" (coverage "inventory")
+                checkCoverage = population "checks" "unknown"
+                attemptCoverage = population "attempts" (coverage "attempts")
+                jobPageCoverage = population "jobs" (coverage "job_pages")
+                terminalCoverage = population "terminal" (coverage "terminal")
+                timestampCoverage = population "timestamps" (coverage "timestamps")
+                continuation = population "continuation" "none"
+                externalChecks = Int64.Parse(population "external_checks" "0")
+                populationGaps = population "gaps" "[]"
+                lineageCoverage = coverage "lineage"
+                classificationCoverage = coverage "classification"
+                criticalPathCoverage = coverage "critical_path"
+            |}
+        + "\n"
+
     let private dashboardSnapshotBound
+        compactCi
         path
         assessment
         (workspaceId: (string * (unit -> unit)) option)
@@ -5413,7 +5550,7 @@ WHERE n.source_ref=$source;
                                 $"SELECT count(*) FROM ingest_facts WHERE kind IN ('learn-task-snapshot','learn-context-manifest','learn-experiment-assignment','learn-accounting-inventory/1','runtime-native-inventory/1','runtime-native-inventory-source/1','learn-shared-cost/1','learn-shared-cost-allocation/1','learn-shared-cost-authority/1','learn-native-delivery-source/1','learn-installed-origin/1')%s{learningItemFilter};"
                             itemId |> Option.iter (parameter learningCount "$selected")
 
-                            if Convert.ToInt64(learningCount.ExecuteScalar()) > 10000L then
+                            if not compactCi && Convert.ToInt64(learningCount.ExecuteScalar()) > 10000L then
                                 raise (InvalidOperationException("learning observation snapshot row bound exceeded"))
 
                             let summaries = JsonArray()
@@ -5459,6 +5596,13 @@ WHERE n.source_ref=$source;
                             content["items"] <- arrayOfStrings selectedItems
                             content["summaries"] <- summaries
 
+                            let learningRows =
+                                if compactCi then
+                                    JsonArray()
+                                else
+                                    rows
+                                        ($"SELECT o.sequence AS ingest_order,a.producer AS receipt_producer,a.stream AS receipt_stream,a.authority_role AS receipt_role,a.grant_id AS receipt_grant_id,a.grant_generation AS receipt_grant_generation,a.receipt_key,a.envelope_digest AS receipt_envelope_digest,f.identity,f.kind,f.item_id,f.revision,f.content_digest,f.canonical FROM ingest_facts f LEFT JOIN learning_fact_order o ON o.identity=f.identity LEFT JOIN fact_admissions a ON a.identity=f.identity WHERE f.kind IN ('learn-task-snapshot','learn-context-manifest','learn-experiment-assignment','learn-accounting-inventory/1','runtime-native-inventory/1','runtime-native-inventory-source/1','learn-shared-cost/1','learn-shared-cost-allocation/1','learn-shared-cost-authority/1','learn-native-delivery-source/1','learn-installed-origin/1')%s{learningFactItemFilter} ORDER BY f.item_id,f.kind,f.identity LIMIT 10001;")
+
                             [
                                 "populations",
                                 table "budget_population_facts" "item_id,fact_revision DESC,identity DESC"
@@ -5477,10 +5621,10 @@ WHERE n.source_ref=$source;
                                 "usage", table "runtime_turn_usage" "item_id,identity"
                                 "runtimeGaps", table "runtime_gaps" "item_id,identity"
                                 "ciRuns", table "ci_runs" "item_id,repository,run_id,attempt"
-                                "ciJobs", table "ci_jobs" "item_id,repository,run_id,attempt,job_id"
-                                "ciSteps", table "ci_steps" "item_id,repository,run_id,attempt,job_id,number"
-                                "ciCoverage", table "ci_coverage" "item_id,rowid"
-                                "ciPopulationCoverage", table "ci_population_coverage" "item_id,fact_revision"
+                                "ciJobs", (if compactCi then JsonArray() else table "ci_jobs" "item_id,repository,run_id,attempt,job_id")
+                                "ciSteps", (if compactCi then JsonArray() else table "ci_steps" "item_id,repository,run_id,attempt,job_id,number")
+                                "ciCoverage", (if compactCi then JsonArray() else table "ci_coverage" "item_id,rowid")
+                                "ciPopulationCoverage", (if compactCi then JsonArray() else table "ci_population_coverage" "item_id,fact_revision")
                                 "budgetAssessments",
                                 table
                                     "budget_assessment_revisions"
@@ -5496,11 +5640,19 @@ WHERE n.source_ref=$source;
                                 table "activity_usage_attributions" "item_id,usage_identity"
                                 "complications", table "complication_events" "item_id,occurred_at,identity"
                                 "reviews", table "process_reviews" "item_id,scope,attempt_id,fact_revision"
-                                "learningObservations",
-                                rows
-                                    ($"SELECT o.sequence AS ingest_order,a.producer AS receipt_producer,a.stream AS receipt_stream,a.authority_role AS receipt_role,a.grant_id AS receipt_grant_id,a.grant_generation AS receipt_grant_generation,a.receipt_key,a.envelope_digest AS receipt_envelope_digest,f.identity,f.kind,f.item_id,f.revision,f.content_digest,f.canonical FROM ingest_facts f LEFT JOIN learning_fact_order o ON o.identity=f.identity LEFT JOIN fact_admissions a ON a.identity=f.identity WHERE f.kind IN ('learn-task-snapshot','learn-context-manifest','learn-experiment-assignment','learn-accounting-inventory/1','runtime-native-inventory/1','runtime-native-inventory-source/1','learn-shared-cost/1','learn-shared-cost-allocation/1','learn-shared-cost-authority/1','learn-native-delivery-source/1','learn-installed-origin/1')%s{learningFactItemFilter} ORDER BY f.item_id,f.kind,f.identity LIMIT 10001;")
+                                "learningObservations", learningRows
                             ]
-                            |> List.iter (fun (name, value) -> content[name] <- value)
+                            |> List.iter (fun (name, value) ->
+                                if not compactCi || not (Set.contains name (set [ "ciJobs"; "ciSteps"; "ciCoverage"; "ciPopulationCoverage"; "learningObservations" ])) then
+                                    content[name] <- value)
+
+                            if compactCi then
+                                let ciSummaries = JsonArray()
+                                for selected in selectedItems do
+                                    ciSummaries.Add(JsonNode.Parse(ciSummaryInSnapshot connection transaction selected))
+                                content["ciSummaries"] <- ciSummaries
+                                content["ciProjection"] <- JsonValue.Create("fsgg.telemetry.ci-summary/1")
+                                content.Remove("learningSnapshotSchema") |> ignore
 
                             let canonical =
                                 CanonicalJson.canonicalize (Encoding.UTF8.GetBytes(content.ToJsonString()))
@@ -5513,7 +5665,7 @@ WHERE n.source_ref=$source;
 
                             let revision = CanonicalJson.sha256 canonicalBytes
                             let envelope = JsonObject()
-                            envelope["schema"] <- JsonValue.Create("fsgg.telemetry.item-detail/2")
+                            envelope["schema"] <- JsonValue.Create(if compactCi then "fsgg.telemetry.item-detail/3" else "fsgg.telemetry.item-detail/2")
                             envelope["workspaceId"] <- JsonValue.Create(snapshotWorkspace)
                             envelope["observedAt"] <- JsonValue.Create(DateTimeOffset.UtcNow.ToString("O"))
                             envelope["revision"] <- JsonValue.Create(revision)
@@ -5561,13 +5713,19 @@ WHERE n.source_ref=$source;
                 Error [ error.Message ]
 
     let dashboardSnapshotWithHooks path assessment (hooks: DashboardSnapshotHooks) itemId =
-        dashboardSnapshotBound path assessment None hooks.AfterFirstRead itemId
+        dashboardSnapshotBound false path assessment None hooks.AfterFirstRead itemId
 
     let dashboardSnapshot path assessment itemId =
         dashboardSnapshotWithHooks path assessment ({ AfterFirstRead = ignore }: DashboardSnapshotHooks) itemId
 
+    let compactDashboardSnapshotWithHooks path assessment (hooks: DashboardSnapshotHooks) itemId =
+        dashboardSnapshotBound true path assessment None hooks.AfterFirstRead itemId
+
+    let compactDashboardSnapshot path assessment itemId =
+        compactDashboardSnapshotWithHooks path assessment ({ AfterFirstRead = ignore }: DashboardSnapshotHooks) itemId
+
     let scopedDashboardSnapshotWithHooks path assessment workspaceId (hooks: ScopedDashboardSnapshotHooks) itemId =
-        dashboardSnapshotBound path assessment (Some(workspaceId, hooks.ReceiptKeyComputed)) hooks.AfterFirstRead itemId
+        dashboardSnapshotBound false path assessment (Some(workspaceId, hooks.ReceiptKeyComputed)) hooks.AfterFirstRead itemId
 
     let scopedDashboardSnapshot path assessment workspaceId itemId =
         scopedDashboardSnapshotWithHooks
@@ -6194,149 +6352,15 @@ WHERE n.source_ref=$source;
                 with error -> Error [ error.Message ]
 
     let ciSummary path assessment (itemId: string) =
-        match
-            validateRoot path assessment
-            |> Result.bind (fun root -> connect root SqliteOpenMode.ReadOnly)
-        with
+        match validateRoot path assessment |> Result.bind (fun root -> connect root SqliteOpenMode.ReadOnly) with
         | Error errors -> Error errors
         | Ok(connection, _) ->
             use connection = connection
-
             try
-                use snapshot = connection.BeginTransaction()
+                use transaction = connection.BeginTransaction()
                 if scalarText connection "PRAGMA user_version;" <> string currentSchemaVersion then
                     invalidOp "unsupported-version"
-                let scalar sql =
-                    use command = connection.CreateCommand()
-                    command.CommandText <- sql
-                    parameter command "$item" itemId
-                    Convert.ToInt64(command.ExecuteScalar())
-
-                let intervals sql =
-                    use command = connection.CreateCommand()
-                    command.CommandText <- sql
-                    parameter command "$item" itemId
-                    use reader = command.ExecuteReader()
-                    let values = ResizeArray<TelemetryCi.Interval>()
-
-                    while reader.Read() do
-                        let startAt = if reader.IsDBNull 0 then None else Some(reader.GetString 0)
-                        let endAt = if reader.IsDBNull 1 then None else Some(reader.GetString 1)
-                        TelemetryCi.interval startAt endAt |> Option.iter values.Add
-
-                    values |> Seq.toList
-
-                let coverage column =
-                    use command = connection.CreateCommand()
-
-                    command.CommandText <-
-                        $"SELECT %s{column} FROM ci_coverage WHERE item_id=$item ORDER BY rowid DESC LIMIT 1;"
-
-                    parameter command "$item" itemId
-                    let value = command.ExecuteScalar()
-
-                    if isNull value || value = box DBNull.Value then
-                        "unknown"
-                    else
-                        string value
-
-                let population column fallback =
-                    use command = connection.CreateCommand()
-
-                    command.CommandText <-
-                        $"SELECT %s{column} FROM ci_population_coverage WHERE item_id=$item ORDER BY fact_revision DESC LIMIT 1;"
-
-                    parameter command "$item" itemId
-                    let value = command.ExecuteScalar()
-
-                    if isNull value || value = box DBNull.Value then
-                        fallback
-                    else
-                        string value
-
-                let jobs =
-                    intervals "SELECT started_at,completed_at FROM ci_jobs WHERE item_id=$item;"
-
-                let queues =
-                    intervals "SELECT created_at,started_at FROM ci_jobs WHERE item_id=$item;"
-
-                let runner =
-                    if jobs.IsEmpty then
-                        None
-                    else
-                        jobs
-                        |> List.sumBy (fun value -> int64 (value.EndUtc - value.StartUtc).TotalSeconds)
-                        |> Some
-
-                let wall = TelemetryCi.unionSeconds jobs
-
-                let classified classification =
-                    use command = connection.CreateCommand()
-
-                    command.CommandText <-
-                        "SELECT started_at,completed_at FROM ci_steps WHERE item_id=$item AND classification=$classification;"
-
-                    parameter command "$item" itemId
-                    parameter command "$classification" classification
-                    use reader = command.ExecuteReader()
-                    let values = ResizeArray<TelemetryCi.Interval>()
-
-                    while reader.Read() do
-                        TelemetryCi.interval
-                            (if reader.IsDBNull 0 then None else Some(reader.GetString 0))
-                            (if reader.IsDBNull 1 then None else Some(reader.GetString 1))
-                        |> Option.iter values.Add
-
-                    values |> Seq.toList |> TelemetryCi.unionSeconds
-
-                let effectiveAssignments =
-                    use command = connection.CreateCommand()
-                    command.CommandText <- "SELECT c.effective_feature,c.effective_attempt,c.correction_id,CASE WHEN EXISTS(SELECT 1 FROM ci_correction_evidence x WHERE x.correction_id=c.correction_id AND x.table_name='ci_bindings') THEN 'retained-binding' ELSE 'operator-evidence-only' END FROM native_item_outcomes n JOIN ci_effective_attribution e ON e.identity=n.identity JOIN ci_attribution_corrections c ON c.correction_id=e.correction_id WHERE n.item_id=$item ORDER BY n.identity;"
-                    parameter command "$item" itemId
-                    use reader = command.ExecuteReader()
-                    [ while reader.Read() do yield {| featureId = reader.GetString 0; attemptId = reader.GetString 1; correctionId = reader.GetString 2; assignmentProvenance = reader.GetString 3 |} ]
-
-                Ok(
-                    JsonSerializer.Serialize
-                        {|
-                            schema = "fsgg.telemetry.ci-summary/1"
-                            item = itemId
-                            deliveries = scalar "SELECT count(*) FROM native_item_outcomes WHERE item_id=$item AND code_delivery='delivered';"
-                            effectiveAssignments = effectiveAssignments
-                            runs =
-                                scalar
-                                    "SELECT count(*) FROM (SELECT repository,run_id FROM ci_runs WHERE item_id=$item UNION SELECT repository,run_id FROM ci_jobs WHERE item_id=$item);"
-                            attempts =
-                                scalar
-                                    "SELECT count(*) FROM (SELECT repository,run_id,attempt FROM ci_runs WHERE item_id=$item UNION SELECT repository,run_id,attempt FROM ci_jobs WHERE item_id=$item);"
-                            jobs = scalar "SELECT count(*) FROM ci_jobs WHERE item_id=$item;"
-                            steps = scalar "SELECT count(*) FROM ci_steps WHERE item_id=$item;"
-                            runnerSeconds = runner
-                            wallSeconds = wall
-                            queueSeconds = TelemetryCi.unionSeconds queues
-                            usefulValidationSeconds = classified "useful-validation"
-                            administrativeSeconds = classified "admin"
-                            necessarySetupSeconds = classified "necessary-setup"
-                            mixedSeconds = classified "mixed"
-                            unclassifiedSeconds = classified "unclassified"
-                            monetary = "unknown"
-                            avoidableRerun = "unknown"
-                            inventoryCoverage = population "actions" (coverage "inventory")
-                            checkCoverage = population "checks" "unknown"
-                            attemptCoverage = population "attempts" (coverage "attempts")
-                            jobPageCoverage = population "jobs" (coverage "job_pages")
-                            terminalCoverage = population "terminal" (coverage "terminal")
-                            timestampCoverage = population "timestamps" (coverage "timestamps")
-                            continuation = population "continuation" "none"
-                            externalChecks = Int64.Parse(population "external_checks" "0")
-                            populationGaps = population "gaps" "[]"
-                            lineageCoverage = coverage "lineage"
-                            classificationCoverage = coverage "classification"
-                            criticalPathCoverage = coverage "critical_path"
-                        |}
-                    + "\n"
-                )
-
+                Ok(ciSummaryInSnapshot connection transaction itemId)
             with error -> Error [ error.Message ]
 
     let ciPopulationAdmissionExists
@@ -6771,7 +6795,9 @@ WHERE n.source_ref=$source;
             | Some "1", false, Some item -> itemDetail path (assessProductionRoot path) item |> output
             | Some "2", false, Some item -> dashboardSnapshot path (assessProductionRoot path) (Some item) |> output
             | Some "2", true, None -> dashboardSnapshot path (assessProductionRoot path) None |> output
-            | Some version, _, _ when version <> "1" && version <> "2" ->
+            | Some "3", false, Some item -> compactDashboardSnapshot path (assessProductionRoot path) (Some item) |> output
+            | Some "3", true, None -> compactDashboardSnapshot path (assessProductionRoot path) None |> output
+            | Some version, _, _ when version <> "1" && version <> "2" && version <> "3" ->
                 output (Error [ "unsupported item detail format version" ])
             | _, true, Some _ -> output (Error [ "--all and --item are mutually exclusive" ])
             | _ -> output (Error [ "--item is required (or use --format-version 2 --all)" ])

@@ -333,6 +333,23 @@ def snapshot_rows(snapshot: dict[str, Any], name: str, members: set[str] | None 
 
 
 def snapshot_ci(snapshot: dict[str,Any], item: str) -> dict[str,Any]:
+    if snapshot.get("ciProjection")=="fsgg.telemetry.ci-summary/1":
+        rows=snapshot.get("ciSummaries")
+        if not isinstance(rows,list) or len(rows)>400 or any(not isinstance(row,dict) for row in rows): raise HostSourceError("HOST_ENGINE_SNAPSHOT_MALFORMED")
+        selected=[row for row in rows if row.get("item")==item]
+        if len(selected)!=1: raise HostSourceError("HOST_ENGINE_SNAPSHOT_MALFORMED")
+        row=selected[0]
+        if row.get("schema")!="fsgg.telemetry.ci-summary/1": raise HostSourceError("HOST_ENGINE_SNAPSHOT_MALFORMED")
+        counts=("runs","attempts","jobs","steps")
+        seconds=("runnerSeconds","wallSeconds","queueSeconds","usefulValidationSeconds","administrativeSeconds","necessarySetupSeconds","mixedSeconds","unclassifiedSeconds")
+        coverage=("inventoryCoverage","checkCoverage","attemptCoverage","jobPageCoverage","terminalCoverage","timestampCoverage","lineageCoverage","classificationCoverage","criticalPathCoverage")
+        if not set(counts+seconds+coverage).issubset(row): raise HostSourceError("HOST_ENGINE_SNAPSHOT_MALFORMED")
+        result={key:checked_int(row.get(key),key) for key in counts}
+        for key in seconds: result[key]=None if row.get(key) is None else checked_int(row[key],key)
+        for key in coverage:
+            if not isinstance(row.get(key),str): raise HostSourceError("HOST_ENGINE_SNAPSHOT_MALFORMED")
+            result[key]=row[key]
+        return result
     members={item}; runs=snapshot_rows(snapshot,"ciRuns",members); jobs=snapshot_rows(snapshot,"ciJobs",members); steps=snapshot_rows(snapshot,"ciSteps",members)
     def seconds(rows: list[dict[str,Any]], start: str, end: str) -> int | None:
         spans=[]
@@ -776,8 +793,9 @@ def _explicit_producer_config(path: pathlib.Path) -> tuple[pathlib.Path, dict[st
 
 
 def _read_host_snapshot(store: str, engine: str) -> tuple[dict[str,Any],dict[str,Any]]:
-    envelope=engine_json(engine,["telemetry","item-detail","--format-version","2","--all","--store-root",store])
-    if not isinstance(envelope,dict) or set(envelope)!={"schema","observedAt","revision","canonicalSnapshotGzip","operational"} or envelope.get("schema")!="fsgg.telemetry.item-detail/2" or not re.fullmatch(r"[0-9a-f]{64}",str(envelope.get("revision"))): raise HostSourceError("HOST_ENGINE_SNAPSHOT_INCOMPATIBLE")
+    envelope=engine_json(engine,["telemetry","item-detail","--format-version","3","--all","--store-root",store])
+    envelope_fields={"schema","observedAt","revision","canonicalSnapshotGzip","operational"}
+    if not isinstance(envelope,dict) or set(envelope) not in (envelope_fields,envelope_fields|{"workspaceId"}) or envelope.get("schema") not in {"fsgg.telemetry.item-detail/2","fsgg.telemetry.item-detail/3"} or not re.fullmatch(r"[0-9a-f]{64}",str(envelope.get("revision"))): raise HostSourceError("HOST_ENGINE_SNAPSHOT_INCOMPATIBLE")
     compressed=bounded_base64(envelope["canonicalSnapshotGzip"],MAX_JSON,"HOST_ENGINE_SNAPSHOT_REVISION_MISMATCH")
     try:
         with gzip.GzipFile(fileobj=io.BytesIO(compressed)) as stream: selected=stream.read(MAX_CANONICAL_SNAPSHOT+1)
@@ -787,6 +805,20 @@ def _read_host_snapshot(store: str, engine: str) -> tuple[dict[str,Any],dict[str
     except (UnicodeDecodeError,json.JSONDecodeError) as error: raise HostSourceError("HOST_ENGINE_SNAPSHOT_REVISION_MISMATCH") from error
     if hashlib.sha256(selected).hexdigest()!=envelope["revision"]: raise HostSourceError("HOST_ENGINE_SNAPSHOT_REVISION_MISMATCH")
     if not isinstance(snapshot,dict) or not isinstance(snapshot.get("selection"),dict) or snapshot["selection"].get("mode")!="all" or snapshot["selection"].get("complete") is not True: raise HostSourceError("HOST_ENGINE_SNAPSHOT_INCOMPLETE")
+    if "workspaceId" in envelope and (not isinstance(envelope["workspaceId"],str) or envelope["workspaceId"]!=snapshot.get("workspaceId")): raise HostSourceError("HOST_ENGINE_SNAPSHOT_MALFORMED")
+    if envelope["schema"]=="fsgg.telemetry.item-detail/3":
+        if set(envelope)!=envelope_fields|{"workspaceId"}: raise HostSourceError("HOST_ENGINE_SNAPSHOT_INCOMPATIBLE")
+        omitted={"ciJobs","ciSteps","ciCoverage","ciPopulationCoverage","learningObservations","learningSnapshotSchema"}
+        rows=snapshot.get("ciSummaries"); items=snapshot.get("items")
+        if (snapshot.get("ciProjection")!="fsgg.telemetry.ci-summary/1" or omitted.intersection(snapshot)
+            or not isinstance(rows,list) or not isinstance(items,list) or len(items)>200
+            or any(not isinstance(item,str) for item in items)
+            or any(not isinstance(row,dict) or not isinstance(row.get("item"),str) for row in rows)
+            or len(rows)!=len(items) or len(set(items))!=len(items)
+            or {row.get("item") for row in rows}!=set(items)):
+            raise HostSourceError("HOST_ENGINE_SNAPSHOT_MALFORMED")
+        for item in items: snapshot_ci(snapshot,item)
+    elif "ciProjection" in snapshot or "ciSummaries" in snapshot: raise HostSourceError("HOST_ENGINE_SNAPSHOT_MALFORMED")
     store_projection=snapshot.get("store")
     if not isinstance(store_projection,dict) or store_projection.get("schemaVersion") not in (8,9,10,11,12,13) or store_projection.get("journalMode")!="wal": raise HostSourceError("HOST_STORE_INCOMPATIBLE")
     operational=envelope.get("operational")

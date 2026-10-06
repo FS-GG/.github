@@ -56,6 +56,31 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-06: Protected P4 diagnostic source passed its 93-case runtime qualification.**
+Sandbox `d22ff4df` passed all 93 selected cases under the original 120-second work and
+128-second total limits. Root observed clean settlement, at most two task CLR processes and
+no sampled resource-limit failure. This qualifies the diagnostic fixture and caller behavior;
+the earlier provider facts attempt remains failed with cleanup unproved. A fresh candidate and
+valid operation admission are still required before another provider attempt.
+
+**2026-10-06: Compact telemetry export qualified; coherent 0.98 release prepared.**
+The native compact `/3` snapshot preserves one database transaction and bounded CI summaries,
+allowing the current dashboard store to exceed the old raw CI-step row limit. It passed 171
+focused native tests; the Python exporter passed 91 tests and six actual two-UID privacy checks.
+The [release plan](roadmaps/utel-release-successor.md#utel-rel-15--0980-correction-and-native-compact-successor)
+selects coherent 0.98.0 after promoted 0.97.1, using the distinct `utel-rel-15` journal.
+Publication, installed schema migration, Governance attribution correction and the actual current-feed
+export remain pending. The Pages selector stays on its existing feed until the new feed is verified.
+
+**2026-10-06: Rendering candidate receiver qualified across three browser families.**
+[Run 37428584026](https://github.com/FS-GG/FS.GG.Rendering/actions/runs/37428584026)
+qualified protected Templates `4eff52b2` through Rendering caller `67091200` using the original
+0.32.1 Stage C packages. Root verified the original evidence archive: all four cases passed in each
+of Chromium, Firefox and WebKit, with zero failures, skips or flaky cases; 180 provider checks passed.
+Candidate installation and source-package identity are accepted. Publication and adoption of the
+published packages remain open in the [owning roadmap](roadmaps/svg-coherence-and-instancing-01.md).
+Actual screen-reader use was not observed; this result covers DOM automation.
+
 **2026-10-06: Supported local CI attribution correction source delivered.**
 [PR #4262](https://github.com/FS-GG/.github/pull/4262) adds an audited schema-13 correction
 ledger, sealed plan/apply/history commands and effective attribution in current reports. Original

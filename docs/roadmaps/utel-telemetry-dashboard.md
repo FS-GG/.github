@@ -123,3 +123,19 @@ Recreation copies or restores the immutable release and private inputs into the 
 ## Verification
 
 `tests/telemetry-dashboard` covers the closed nested schemas, identity/free-text sentinels, numeric/time/enum/byte refusal, unknown versus zero, canonical budget boundary consumption, epoch handling, completion revision and dirty-state gates, grouped deliveries, mixed-runtime population and usage coverage, role/time/token boundaries, event receipt safety and binding, semantic no-op suppression, bounded contention, concurrent ref conflict, wrapped base64 transport, page drift deduplication and browser populated/empty/malformed/XSS/keyboard/mobile/chart-equivalent behavior. Deterministic browser-clock fixtures cover repeated changed and unchanged snapshots, nested rejection with last-good retention, timeout and recovery, visible/hidden lifecycle, non-overlap and interaction-state preservation. Source checks and synthetic browser fixtures are separate from real-data evidence. The public collectors supply current live Actions and merged-delivery observations. Exact-host adoption, recurring publication, event receipt activation, a real terminal-triggered verified publication and the matching deployed-page readback supply UTEL-DASH-04's operational evidence.
+
+
+## Current publisher migration — 2026-10-06
+
+The installed producer's raw snapshot exceeded its 10,000-row CI-step bound on the current
+canonical store. The compact `/3` successor retains the existing 4 MiB canonical and 1 MiB
+envelope bounds while deriving CI summaries in the same read transaction. Raw CI runs remain
+available for complication counts; `/2` remains unchanged. Native qualification passed all
+171 tests, including transaction consistency and row/byte limits. The Python consumer passed
+91 tests, and its exact source passed six genuine producer/publisher UID-isolation checks.
+
+The selected destination is `telemetry-data-current/host.json`. The legacy store is not a
+migration dependency. The source exporter is ready, but coherent publication, verified installed
+adoption, backed-up schema migration and the actual canonical export remain required. Publish
+and read back the new feed before landing the separate Pages selector. These source tests do
+not establish fresh completed-item counts, recurring publication or a live dashboard update.

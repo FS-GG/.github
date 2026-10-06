@@ -1,17 +1,1 @@
-{
-  "candidateToolDigest": "8731a52a5a9c91ef4e1758479d3be71e6705e398120c61724f3b0dbcd3ac518f",
-  "checks": [
-    "publisher-read-handoff",
-    "publisher-write-handoff-denied",
-    "publisher-read-store-denied",
-    "publisher-read-labels-denied",
-    "producer-read-publisher-state-denied",
-    "producer-read-credential-denied"
-  ],
-  "handoffGid": 61003,
-  "producerUid": 61001,
-  "proofScriptDigest": "64e525730c8201106f45554af3fbdb9767629eab3a5e001a0b7b8ef11f01efaa",
-  "publisherUid": 61002,
-  "schema": "fsgg.telemetry.two-uid-handoff-proof/1",
-  "status": "pass"
-}
+{"candidateToolDigest":"7b5692aa12b80cc8ae0ea5ef726ea80784796a96629b32ba80c5ea9fcfd0f5a2","checks":["publisher-read-handoff","publisher-write-handoff-denied","publisher-read-store-denied","publisher-read-labels-denied","producer-read-publisher-state-denied","producer-read-credential-denied"],"handoffGid":61003,"producerUid":61001,"proofScriptDigest":"64e525730c8201106f45554af3fbdb9767629eab3a5e001a0b7b8ef11f01efaa","publisherUid":61002,"schema":"fsgg.telemetry.two-uid-handoff-proof/1","status":"pass"}

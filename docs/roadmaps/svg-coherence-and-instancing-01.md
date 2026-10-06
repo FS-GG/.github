@@ -469,3 +469,19 @@ prepare the Templates reference, and select further producer changes only from
 demonstrated gaps. Preserve the
 immutable baseline and software-browser profile. Actual host capability discovery
 and all GPU browser cases remain deferred to the late .7 batch.
+
+
+## Candidate receiver acceptance — 2026-10-06
+
+[Rendering run 37428584026/1](https://github.com/FS-GG/FS.GG.Rendering/actions/runs/37428584026)
+uses caller `67091200bc7bbcbb8189b2cf84244b2af919ecd1` and protected Templates
+`4eff52b27933c69a9ab4e276b3a29032d279b7e0`. Its original evidence archive is
+30,941 bytes, SHA256 `90d6693543e21fe98649a3efca3f64a0bfcca64450967a095a75bbd9bbd0edb3`.
+Root verified the native terminal jobs, original Stage C custody, the three consumed package
+hashes and five delivered Fable entries. Chromium, Firefox and WebKit each passed four cases
+with zero unexpected, skipped or flaky results; the successful native provider command recorded
+180 passing checks. The generated candidate receiver is accepted in this scope.
+
+This retains the original 0.32.1 candidate archive from run 37419955679/1. No package was
+regenerated. DOM automation does not establish actual screen-reader use. Stage D publication,
+both-feed readback and adoption of published packages remain separate outstanding obligations.

@@ -609,7 +609,7 @@
        telemetry CI legacy-default selection repair. Publication and installed
        consumer adoption remain separate from this source version. -->
   <PropertyGroup>
-    <FsggCoherentSetVersion>0.97.1</FsggCoherentSetVersion>
+    <FsggCoherentSetVersion>0.98.0</FsggCoherentSetVersion>
   </PropertyGroup>
 
 </Project>

@@ -230,3 +230,12 @@ controls, preserving the accepted cleanup fixture, first cause and refusal behav
 when classification or reporting fails. Hosted PR checks are absent. This is a
 source-only diagnostic improvement: a fresh admitted attempt, provider acceptance,
 publication and installed adoption remain open. Historical attempts are not reset.
+
+
+The protected Sandbox diagnostic source subsequently passed all 93 selected source/runtime
+cases with zero failures, errors or skips. The root-owned 120/128-second operation completed
+with clean settlement, no sampled resource failure, a 436,776,960-byte observed owned RSS peak,
+four owned processes and at most two task CLR processes. These are sampled observations, not
+instantaneous hard limits. The original failed provider attempt and its unknown cleanup remain
+unchanged. This accepts fixture/caller behavior only; fresh provider admission and qualification
+are still required.
