@@ -414,6 +414,47 @@ test("canonical efficiency export shows queued analysis, omitted populations and
   await expect(page.locator("#efficiency-items")).not.toContainText("PRIVATE");
 });
 
+test("analysis status filters current requests, retains the filter on refresh and clears unavailable counts",async({page})=>{
+  await page.clock.install();let requests=0;
+  await page.route("**/data/dashboard.json",route=>{
+    const host=efficiencyHost();
+    host.processEfficiency=JSON.parse(JSON.stringify(require("./fixtures/process-efficiency-canonical-public-v1.json")));
+    requests++;
+    if(requests===2){
+      const item=host.processEfficiency.items.find((row)=>row.key==="native-example");
+      item.analysisState="failed";item.exportHealth.requestState="failed";item.exportHealth.failureCode="timeout";
+    }
+    if(requests>2)host.processEfficiency={schema:"fsgg.telemetry.process-efficiency/1",policyVersion:"efficiency-public-projection/1",source:"unavailable",status:"unavailable",coverage:{published:0,unmapped:0,withheld:0,unsupported:0},exports:[],items:[]};
+    return route.fulfill({json:payload(host)});
+  });
+  await page.goto("/#efficiency");
+  await expect(page.locator("#refresh-status")).toContainText("checking every minute");
+  await expect(page.locator("#efficiency-analysis-counts")).toContainText("2 approved rows");
+  await expect(page.locator("#efficiency-analysis-counts")).toContainText("pending: 2");
+  await expect(page.locator("#efficiency-analysis-counts")).toContainText("ready: 0");
+  await expect(page.locator("#efficiency-analysis-counts")).toContainText("exclude unmapped, withheld and source-omitted");
+  await expect(page.locator("#efficiency-native-example-toggle")).toContainText("analysis pending");
+  await page.selectOption("#efficiency-scope","native-item");
+  await expect(page.locator("#efficiency-analysis-counts")).toContainText("1 approved row");
+  await page.selectOption("#efficiency-scope","all");
+  await page.selectOption("#efficiency-analysis-state","failed");
+  await expect(page.locator("#efficiency-items")).toContainText("No approved items match");
+  await page.clock.runFor(60000);await expect.poll(()=>requests).toBe(2);
+  await expect(page.locator("#efficiency-analysis-state")).toHaveValue("failed");
+  await expect(page.locator("#efficiency-items details")).toHaveCount(1);
+  const summary=page.locator("#efficiency-native-example-toggle");await summary.focus();await page.keyboard.press("Enter");
+  await expect(page.locator("#efficiency-native-example")).toContainText("Request: failed · accepted assessment: ready");
+  await expect(page.locator("#efficiency-analysis-counts")).toContainText("failed: 1");
+  await page.setViewportSize({width:390,height:844});
+  await expect(page.locator("#efficiency-health")).toContainText(`sha256:${"b".repeat(64)}`);
+  const provenanceWidth=await page.locator("#efficiency-health").evaluate((element)=>({width:element.clientWidth,scrollWidth:element.scrollWidth}));
+  expect(provenanceWidth.scrollWidth).toBeLessThanOrEqual(provenanceWidth.width);
+  await expectMobileContainment(page);
+  await page.clock.runFor(60000);await expect.poll(()=>requests).toBe(3);
+  await expect(page.locator("#efficiency-analysis-counts")).toHaveText("Analysis population unavailable; missing evidence does not establish zero work.");
+  await expect(page.locator("#efficiency-items details")).toHaveCount(0);
+});
+
 function contextHost(historical,current) {
   historical.source={kind:"configured-local-store",publicExportSchema:"fsgg.telemetry.public-export/1"};
   if(current)current.source={kind:"configured-local-store",publicExportSchema:"fsgg.telemetry.public-export/1"};

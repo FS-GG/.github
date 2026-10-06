@@ -787,6 +787,7 @@ footer {
 }
 
 #efficiency { margin: 3rem 0; }
+#efficiency-health { overflow-wrap: anywhere; }
 #efficiency details { margin: 1rem 0; padding: 1rem; border: 1px solid var(--line, currentColor); }
 #efficiency summary { cursor: pointer; font-weight: 700; }
 #efficiency .table-scroll { overflow-x: auto; margin: 1rem 0; }

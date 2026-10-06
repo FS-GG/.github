@@ -226,9 +226,11 @@
         <p class="eyebrow">PROCESS EFFICIENCY / COVERAGE FIRST</p>
         <h2 id="efficiency-title">Work, retries and explanations</h2>
         <p id="efficiency-health" role="status">Process efficiency unavailable; runtime and cost remain unknown.</p>
+        <p id="efficiency-analysis-counts" role="status">Analysis population unavailable; missing evidence does not establish zero work.</p>
         <div class="filters">
           <label>Find item <input id="efficiency-search" type="search" maxlength="120" /></label>
           <label>Scope <select id="efficiency-scope"><option value="all">All scopes</option><option value="native-item">Native item</option><option value="provisional-delivery">Provisional delivery</option><option value="unestablished">Accounting only</option></select></label>
+          <label>Analysis status <select id="efficiency-analysis-state"><option value="all">All states</option><option value="pending">Pending</option><option value="running">Running</option><option value="partial">Partial</option><option value="ready">Ready</option><option value="failed">Failed</option><option value="unavailable">Unavailable</option></select></label>
           <label>Measurements <select id="efficiency-view"><option value="all">All measurements</option><option value="work">Work mix and analysis burden</option><option value="retry">Retries and churn</option><option value="health">Data health</option></select></label>
         </div>
         <div id="efficiency-items"></div>
