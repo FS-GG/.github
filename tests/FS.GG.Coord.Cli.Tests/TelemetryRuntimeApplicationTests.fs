@@ -121,6 +121,7 @@ module TelemetryRuntimeApplicationTests =
             Assert.Equal(14L, usage.Total)
             Assert.True usage.TurnId.IsNone
             Assert.True usage.ObservedModel.IsNone
+            Assert.True usage.Reasoning.IsNone
         | value -> failwithf "unexpected projection %A" value
 
         match
@@ -135,6 +136,27 @@ module TelemetryRuntimeApplicationTests =
             Assert.Equal(Some "observed", usage.ObservedModel)
             Assert.Equal(Some 1L, usage.Reasoning)
         | value -> failwithf "unexpected second projection %A" value
+
+        // Present reasoning counters must be exact nonnegative Int64 subsets of output.
+        for reasoning in [ "-1"; "5"; "1.5"; "9223372036854775808"; "null"; "\"1\""; "true" ] do
+            let frame =
+                "{\"type\":\"turn.completed\",\"usage\":{\"input_tokens\":10,\"cached_input_tokens\":3,\"output_tokens\":4,\"reasoning_output_tokens\":"
+                + reasoning
+                + "}}"
+            Assert.Equal(
+                Some(TelemetryRuntime.Gap "malformed-turn-usage"),
+                TelemetryRuntime.projectLine (Some "thread-1") 1L frame
+            )
+
+        for reasoning in [ 0L; 4L ] do
+            let frame =
+                $"""{{"type":"turn.completed","usage":{{"input_tokens":10,"cached_input_tokens":3,"output_tokens":4,"reasoning_output_tokens":{reasoning}}}}}"""
+            match TelemetryRuntime.projectLine (Some "thread-1") 1L frame with
+            | Some(TelemetryRuntime.TurnUsageCompleted usage) ->
+                Assert.Equal(Some reasoning, usage.Reasoning)
+                Assert.Equal(14L, usage.Total)
+                Assert.True usage.TurnId.IsNone
+            | value -> failwithf "unexpected reasoning projection %A" value
 
         Assert.Equal(Some(TelemetryRuntime.Gap "malformed-json-frame"), TelemetryRuntime.projectLine None 1L "{")
 

@@ -228,3 +228,12 @@ credential wrapper. Remote destinations still require their explicit credential 
 owner-controlled loader. The receiver independently resolves actual enrollment and canonical review
 membership. Reader/adapter fixture controls cover local selection, store/config/destination mismatch
 and remote credential refusal; source controls do not qualify a live activation.
+
+The observed Codex process runner lives in the existing nonpackable
+`FS.GG.Telemetry.Client.ObservedCodexProcess` module. It owns context generation,
+prospective and terminal events, the single process launch and stdout frame pump.
+`TelemetryRuntimeApplication` keeps CLI configuration, the canonical prelaunch claim
+and its existing forwarding entry points. The Host references this client assembly
+without enabling a collector execution route. Ordinary observations do not establish
+NativeCollector authority, process isolation or complete child-tree closure. A protected
+collector launch still requires a selected and qualified installed capability.

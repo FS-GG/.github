@@ -106,6 +106,14 @@ module TelemetryRuntime =
             | _ -> None
         | _ -> None
 
+    let private optionalNumber (root: JsonElement) (name: string) =
+        match root.TryGetProperty name with
+        | false, _ -> Ok None
+        | true, _ ->
+            match number root name with
+            | Some count -> Ok(Some count)
+            | None -> Error()
+
     let private checkedTotal input output =
         try
             Some(Checked.(+) input output)
@@ -298,9 +306,14 @@ module TelemetryRuntime =
                 match root.TryGetProperty "usage", (text root "thread_id" |> Option.orElse currentThreadId) with
                 | (true, usage), Some thread when usage.ValueKind = JsonValueKind.Object ->
                     match
-                        number usage "input_tokens", number usage "cached_input_tokens", number usage "output_tokens"
+                        number usage "input_tokens",
+                        number usage "cached_input_tokens",
+                        number usage "output_tokens",
+                        optionalNumber usage "reasoning_output_tokens"
                     with
-                    | Some input, Some cached, Some output when cached <= input ->
+                    | Some input, Some cached, Some output, Ok reasoning when
+                        cached <= input && (reasoning |> Option.forall (fun count -> count <= output))
+                        ->
                         match checkedTotal input output with
                         | Some total ->
                             Some(
@@ -316,7 +329,7 @@ module TelemetryRuntime =
                                         Input = input
                                         CachedInput = cached
                                         Output = output
-                                        Reasoning = number usage "reasoning_output_tokens"
+                                        Reasoning = reasoning
                                         Total = total
                                     }
                             )
