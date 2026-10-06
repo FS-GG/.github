@@ -2925,7 +2925,7 @@ WHERE a.identity=$identity AND (($native=1 AND a.authority_role='native-collecto
         |> List.iter (fun (name, value) -> parameter command name value)
         if Convert.ToInt64(command.ExecuteScalar()) <> 1L then
             invalidOp "efficiency-authenticated-authority-unavailable"
-        let requireOptional name sql =
+        let requireOptional (name: string) (sql: string) =
             let value = provenance.GetProperty name
             if value.ValueKind = JsonValueKind.String then
                 use lookup = connection.CreateCommand()
@@ -2977,7 +2977,7 @@ WHERE a.identity=$identity AND (($native=1 AND a.authority_role='native-collecto
                 invalidOp "efficiency-resource-scope-mismatch"
         | _ -> invalidOp "efficiency-resource-counter-unavailable"
 
-    let private validateEfficiencyFact connection admission sourceIdentity (fact: TelemetryStore.Fact) =
+    let private validateEfficiencyFact connection (admission: TelemetryReceipt.Admission option) sourceIdentity (fact: TelemetryStore.Fact) =
         match fact.Payload with
         | TelemetryStore.EfficiencyRecord record ->
             let admission = admission |> Option.defaultWith (fun () -> invalidOp "efficiency-authenticated-receipt-required")
@@ -3232,7 +3232,7 @@ ORDER BY f.identity;
                         [ "$outcome", box outcomeId; "$outcomeRevision",box outcomeRevision; "$sequence", box (max receiverSequence outcomeSequence); "$refs", box (refs.ToJsonString()); "$original", box original; "$epoch", box epoch ]
                 | _ -> ()
 
-    let private recordEfficiencyAcceptance connection admission (allFacts: TelemetryStore.Fact list) (facts: TelemetryStore.Fact list) =
+    let private recordEfficiencyAcceptance (connection: SqliteConnection) admission (allFacts: TelemetryStore.Fact list) (facts: TelemetryStore.Fact list) =
         match admission with
         | None -> () // Historical/anonymous ingestion does not acquire an invented receiver clock.
         | Some (admission: TelemetryReceipt.Admission) ->
@@ -4286,13 +4286,17 @@ ORDER BY f.identity;
                                                 // Unknown-epoch reservations remain chargeable when an epoch is later witnessed.
                                                 let epochNode = subject["outcomeEpoch"]
                                                 let epochKey = if isNull epochNode then "unknown" else epochNode.GetValue<int64>().ToString(Globalization.CultureInfo.InvariantCulture)
-                                                let outcomeRevision = receiptScalar connection "SELECT fact_revision FROM native_item_outcomes WHERE identity=$id;" [ "$id",box outcome ] |> Convert.ToInt64
-                                                let unknownKey = "unknown:"+outcomeRevision.ToString(Globalization.CultureInfo.InvariantCulture)
-                                                let epochKey = if isNull epochNode then unknownKey else epochKey
-                                                let budgetValues = [ "$outcome",box outcome; "$policy",box policy; "$epoch",box epochKey; "$unknown",box unknownKey ]
-                                                let active = receiptScalar connection "SELECT count(*) FROM efficiency_analysis_reservations WHERE stable_outcome_identity=$outcome AND policy_version=$policy AND (epoch_key=$epoch OR epoch_key=$unknown) AND state IN ('reserved','started');" budgetValues |> Convert.ToInt64
+                                                // A raw outcome revision is not a witnessed epoch boundary.
+                                                // Unknown/initial requests retain all stable-outcome history.
+                                                // Only a receiver-closed reopen can delimit prior reservations.
+                                                let beginSequence =
+                                                    if not (isNull epochNode) && epochNode.GetValue<int64>()>1L then
+                                                        receiptScalar connection "SELECT begin_sequence FROM efficiency_outcome_epochs e JOIN native_item_outcomes o ON o.identity=e.outcome_identity AND o.fact_revision=e.outcome_revision WHERE e.outcome_identity=$outcome AND e.epoch=$epoch AND e.state='closed';" [ "$outcome",box outcome; "$epoch",box (epochNode.GetValue<int64>()) ] |> Convert.ToInt64
+                                                    else 0L
+                                                let budgetValues = [ "$outcome",box outcome; "$policy",box policy; "$epoch",box epochKey; "$begin",box beginSequence ]
+                                                let active = receiptScalar connection "SELECT count(*) FROM efficiency_analysis_reservations WHERE stable_outcome_identity=$outcome AND policy_version=$policy AND state IN ('reserved','started');" budgetValues |> Convert.ToInt64
                                                 if active<>0L then invalidOp "efficiency-analysis-concurrent-claim"
-                                                let used = receiptScalar connection "SELECT count(*) FROM efficiency_analysis_reservations WHERE stable_outcome_identity=$outcome AND policy_version=$policy AND (epoch_key=$epoch OR epoch_key=$unknown);" budgetValues |> Convert.ToInt64
+                                                let used = receiptScalar connection "SELECT count(*) FROM efficiency_analysis_reservations r JOIN efficiency_analysis_requests q ON q.request_id=r.request_id WHERE r.stable_outcome_identity=$outcome AND r.policy_version=$policy AND ($begin=0 OR r.epoch_key=$epoch OR json_type(q.canonical,'$.claimedReceiverOrder') IS NULL OR json_extract(q.canonical,'$.claimedReceiverOrder')>=$begin);" budgetValues |> Convert.ToInt64
                                                 if used >= 3L then invalidOp "analysis-budget-exhausted"
                                                 let claim = input.GetProperty("claimId").GetString()
                                                 let generation = used + 1L
@@ -4304,6 +4308,7 @@ ORDER BY f.identity;
                                                 record["claimId"] <- JsonValue.Create claim
                                                 record["claimGeneration"] <- JsonValue.Create generation
                                                 record["claimedAt"] <- JsonValue.Create now
+                                                record["claimedReceiverOrder"] <- JsonValue.Create(Convert.ToInt64(receiptScalar connection "SELECT coalesce(max(sequence),0) FROM efficiency_receiver_order;" []))
                                                 record["dispatchRef"] <- JsonNode.Parse(dispatch.GetRawText())
                                                 record["modelAlias"] <- JsonValue.Create(input.GetProperty("modelAlias").GetString())
                                                 record["limitSupport"] <- JsonNode.Parse(input.GetProperty("limitSupport").GetRawText())
@@ -6720,9 +6725,10 @@ WHERE n.source_ref=$source;
                     let scope = if kind = "runtime-turn-usage" then source.GetProperty("scope").GetString() else "legacy-usage"
                     for property, unit in [ "input", "tokens-input"; "output", "tokens-output"; "total", "tokens-total" ] do
                         let amount = bigint (source.GetProperty(property).GetInt64())
-                        let allocation = query
-                            "SELECT a.canonical,a.classification_current FROM efficiency_current_allocations a JOIN efficiency_allocation_context c ON c.identity=a.identity WHERE c.resource_identity=$resource AND c.provider=$provider AND c.accounting_scope=$scope AND c.unit=$unit;"
-                            [ "$resource", box identity; "$dimension", box property; "$provider", box provider; "$scope", box scope; "$unit", box unit ]
+                        let allocation =
+                            query
+                                "SELECT a.canonical,a.classification_current FROM efficiency_current_allocations a JOIN efficiency_allocation_context c ON c.identity=a.identity WHERE c.resource_identity=$resource AND c.provider=$provider AND c.accounting_scope=$scope AND c.unit=$unit;"
+                                [ "$resource", box identity; "$dimension", box property; "$provider", box provider; "$scope", box scope; "$unit", box unit ]
                         let shares =
                             match allocation with
                             | [ [ Some body; Some "1" ] ] ->
@@ -6778,9 +6784,9 @@ WHERE n.source_ref=$source;
                                |> List.filter (function [ _;_;Some id;_ ] -> Set.contains id epochDispatches | _ -> false)
             let expected = expectedRows |> List.map (fun row -> row |> List.take 2)
             let expectedSet = expected |> List.choose (function [ Some _;Some id ] -> Some id | _ -> None) |> Set.ofList
-            let closedMembers = query "SELECT DISTINCT o.item_id FROM efficiency_outcome_epochs e JOIN native_item_outcomes o ON o.identity=e.outcome_identity WHERE o.item_id=$item AND e.outcome_revision=o.fact_revision AND e.state='closed';" values |> List.choose (function [ Some member ] -> Some member | _ -> None) |> Set.ofList
+            let closedMembers = query "SELECT DISTINCT o.item_id FROM efficiency_outcome_epochs e JOIN native_item_outcomes o ON o.identity=e.outcome_identity WHERE o.item_id=$item AND e.outcome_revision=o.fact_revision AND e.state='closed';" values |> List.choose (function [ Some memberItem ] -> Some memberItem | _ -> None) |> Set.ofList
             let nativeWitnessComplete = closedMembers=Set.ofList members && not expectedRows.IsEmpty && (expectedRows |> List.forall (function
-                | [ _;Some invocation;_;Some member ] -> efficiencyNativeUsageComplete connection member invocation
+                | [ _;Some invocation;_;Some memberItem ] -> efficiencyNativeUsageComplete connection memberItem invocation
                 | _ -> false))
             let nativeUsage =
                 facts |> List.filter (fun row -> row[1]=Some "runtime-turn-usage")
