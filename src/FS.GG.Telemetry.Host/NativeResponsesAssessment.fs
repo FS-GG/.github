@@ -50,6 +50,9 @@ module internal NativeResponsesAssessment =
             require (text "schema" packet="fsgg.telemetry.efficiency-evidence-packet/1") "assessment-packet-schema"
             let digest = "sha256:" + CanonicalJson.sha256 input.PacketBytes
             require (text "evidenceDigest" request=digest && text "evidenceDigest" model=digest) "assessment-raw-evidence-mismatch"
+            match EfficiencyEvidence.validate input.PacketBytes with
+            | Error reason -> invalidOp("assessment-packet-refused:" + reason)
+            | Ok _ -> ()
             require (text "requestId" request=input.RequestId) "assessment-request-id-mismatch"
             require (text "analysisPolicyVersion" request="efficiency-analysis-policy/1") "assessment-analysis-policy-mismatch"
             let keyParts = JsonArray()

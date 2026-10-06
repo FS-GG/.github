@@ -26,7 +26,7 @@ module NativeResponsesAssessmentTests =
             row.["canonicalRef"] <- canonicalRef
             row.["itemId"] <- JsonValue.Create "A"
             row.["payload"] <- JsonObject()
-            row.["priority"] <- JsonValue.Create 1
+            row.["priority"] <- JsonValue.Create "success"
             row.["analysisGenerated"] <- JsonValue.Create false
             records.Add row
         let result = JsonObject()
@@ -37,7 +37,8 @@ module NativeResponsesAssessmentTests =
         result.["records"] <- records
         result
     let private fixture (assessment: JsonNode) (evidence: JsonNode) : NativeResponsesAssessment.Input =
-        let bytes = canonical evidence
+        use packetDocument = System.Text.Json.JsonDocument.Parse(evidence.ToJsonString())
+        let bytes = EfficiencyEvidence.encode packetDocument.RootElement |> unwrap
         let digest = "sha256:" + CanonicalJson.sha256 bytes
         assessment.["evidenceDigest"] <- JsonValue.Create digest
         let keys = JsonArray()
@@ -102,6 +103,9 @@ module NativeResponsesAssessmentTests =
     [<InlineData("duplicate-model-field")>]
     [<InlineData("unknown-output-property")>]
     [<InlineData("unknown-taxonomy")>]
+    [<InlineData("packet-kind-mapping")>]
+    [<InlineData("packet-digest-syntax")>]
+    [<InlineData("packet-extra-property")>]
     let ``unsupported model claims and altered immutable joins are refused`` (scenario: string) =
         let assessment = model()
         let evidence = packet assessment
@@ -123,6 +127,9 @@ module NativeResponsesAssessmentTests =
         | "supported-no-evidence" -> claim.["evidenceRefs"] <- JsonArray()
         | "hypothesis-primary-cause" -> claim.["epistemicStatus"] <- JsonValue.Create "hypothesis";claim.["primaryCause"] <- JsonValue.Create "infrastructure"
         | "avoidable-no-witness" -> claim.["necessity"] <- JsonValue.Create "avoidable";claim.["alternative"] <- JsonValue.Create "A model asserted permitted route."
+        | "packet-kind-mapping" -> evidence.["records"].[0].["canonicalRef"].["kind"] <- JsonValue.Create "source"
+        | "packet-digest-syntax" -> evidence.["records"].[0].["canonicalRef"].["contentDigest"] <- JsonValue.Create "invalid"
+        | "packet-extra-property" -> evidence.["extra"] <- JsonValue.Create "unknown"
         | "unknown-output-property" -> assessment.["extra"] <- JsonValue.Create "unknown"
         | "unknown-taxonomy" -> claim.["activity"] <- JsonValue.Create "unknown-new-activity"
         | "unresolved-metric" -> assessment.["metricRefs"].AsArray().Add(JsonValue.Create "invented")
@@ -175,4 +182,7 @@ module NativeResponsesAssessmentTests =
             | _ -> "assessment-schema-refused"
         match NativeResponsesAssessment.prepare input with
         | Ok _ -> failwith "unsupported fixture became prepared assessment"
-        | Error errors -> Assert.Contains(expected, errors)
+        | Error errors ->
+            if scenario.StartsWith("packet-kind",StringComparison.Ordinal) || scenario="packet-digest-syntax" || scenario="packet-extra-property" then
+                Assert.True(errors |> List.exists (fun error -> error.StartsWith("assessment-packet-refused:",StringComparison.Ordinal)))
+            else Assert.Contains(expected, errors)
