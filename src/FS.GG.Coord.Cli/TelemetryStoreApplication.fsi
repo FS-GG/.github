@@ -132,6 +132,13 @@ module TelemetryStoreApplication =
         principal: TelemetryReceipt.Principal ->
             Result<string, string list>
 
+    /// Read-only current grant check; installed Responses transport proof is separate.
+    val validateResponsesCollectorPrincipal:
+        path: string ->
+        assessment: TelemetryStore.DurabilityAssessment ->
+        principal: TelemetryReceipt.Principal ->
+            Result<unit, string list>
+
     val submitReceiptWithHook:
         path: string ->
         assessment: TelemetryStore.DurabilityAssessment ->
@@ -187,6 +194,14 @@ module TelemetryStoreApplication =
         assessment: TelemetryStore.DurabilityAssessment ->
         workspace: string ->
             Result<string, string list>
+
+    /// Resolves authenticated prospective Responses dispatch facts without inventing a process start.
+    val resolveResponsesCollectorDispatch:
+        path: string ->
+        assessment: TelemetryStore.DurabilityAssessment ->
+        runtimePrincipal: TelemetryReceipt.Principal ->
+        dispatchIdentity: string ->
+            Result<NativeCollectorDispatch, string list>
 
     val resolveNativeCollectorDispatch:
         path: string ->

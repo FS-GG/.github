@@ -212,15 +212,32 @@ module NativeResponses =
             match input,output,total with
             | Some i,Some o,Some t when i > Int64.MaxValue-o || t <> i+o -> issues.Add "inclusive-total-mismatch"
             | _ -> ()
-            match input,cached,written with
-            | Some i,Some c,_ when c > i -> issues.Add "cached-input-exceeds-input"
-            | _ -> ()
-            match input,written with
-            | Some i,Some w when w > i -> issues.Add "cache-write-exceeds-input"
-            | _ -> ()
-            match output,reasoning with
-            | Some o,Some r when r > o -> issues.Add "reasoning-exceeds-inclusive-output"
-            | _ -> ()
+            let contain (value: int64 option) (bound: int64 option) (code: string) =
+                match value,bound with
+                | Some n,Some maximum when n > maximum -> issues.Add code
+                | _ -> ()
+            contain input total "input-exceeds-total"
+            contain output total "output-exceeds-total"
+            match input with
+            | Some _ ->
+                contain cached input "cached-input-exceeds-input"
+                contain written input "cache-write-exceeds-input"
+            | None ->
+                contain cached total "cached-input-exceeds-total"
+                contain written total "cache-write-exceeds-total"
+            match output with
+            | Some _ -> contain reasoning output "reasoning-exceeds-inclusive-output"
+            | None -> contain reasoning total "reasoning-exceeds-total"
+            // Breakouts overlap within each population; only the two population lower bounds add.
+            let lowerBound (values: int64 option list) = values |> List.choose id |> List.fold max 0L
+            let minimumInput = lowerBound [input; cached; written]
+            let minimumOutput = lowerBound [output; reasoning]
+            if minimumInput > Int64.MaxValue - minimumOutput then
+                issues.Add "inclusive-lower-bound-overflow"
+            else
+                match total with
+                | Some maximum when minimumInput + minimumOutput > maximum -> issues.Add "inclusive-lower-bound-exceeds-total"
+                | _ -> ()
             { State = if issues.Count = 0 then Complete else Partial
               InputTokens = input; OutputTokens = output; TotalTokens = total
               CachedInputTokens = cached; CacheWriteInputTokens = written; ReasoningOutputTokens = reasoning

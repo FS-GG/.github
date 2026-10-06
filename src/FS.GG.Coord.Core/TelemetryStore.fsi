@@ -87,6 +87,37 @@ module TelemetryStore =
           StartFrameOrdinal: int64
           TurnSequence: int64 }
 
+    /// Actual provider response identity; no process, thread or native turn identity is implied.
+    type ResponseResource =
+        { ResponseId: string
+          ResponseSha256: string }
+
+    /// Counters actually observed in one provider response; absent values remain unknown.
+    type ResponseUsage =
+        { InvocationId: string
+          Resource: ResponseResource
+          RequestedModel: string
+          ObservedModel: string option
+          RequestedEffort: string
+          ObservedEffort: string option
+          Input: int64 option
+          CachedInput: int64 option
+          CacheWriteInput: int64 option
+          Output: int64 option
+          Reasoning: int64 option
+          Total: int64 option }
+
+    /// A retained provider response, not proof that a local process or remote computation started.
+    type ProviderObservation =
+        { InvocationId: string
+          Resource: ResponseResource
+          GenerationRequestSha256: string
+          CountRequestSha256: string
+          CountResponseSha256: string
+          ObservedAt: string
+          ProviderCreatedAt: string option
+          Status: string }
+
     type Payload =
         | Item of featureId: string option
         | Feature of name: string
@@ -132,6 +163,8 @@ module TelemetryStore =
             turnSequence: int64 option *
             processId: int64 *
             phase: string
+        | RuntimeProviderObservation of observation: ProviderObservation
+        | RuntimeResponseUsage of usage: ResponseUsage
         | RuntimeTurnUsage of
             invocationId: string *
             threadId: string *
@@ -328,6 +361,10 @@ module TelemetryStore =
             inventoryId: string * originalItemId: string * invocationId: string *
             expectedTurn: ExecLocalTurn * expectedProvider: string * requestedModel: string * requestedEffort: string *
             followupBaseline: int64 * capturedAt: string * sourceDigest: string
+        | RuntimeResponseNativeInventory of
+            inventoryId: string * originalItemId: string * invocationId: string *
+            expectedResponse: ResponseResource * requestedModel: string * requestedEffort: string *
+            followupBaseline: int64 * capturedAt: string * sourceDigest: string
         | RuntimeNativeInventorySource of
             inventoryId: string * originalItemId: string * invocationId: string * sourceDigest: string * sourceBinding: string
         | LearnSharedCost of
@@ -374,6 +411,7 @@ module TelemetryStore =
         {
             ItemId: string
             FactCount: int64
+            UnknownUsageCounters: string list
             UsageObservations: int64
             DeliveryObservations: int64
             Input: int64

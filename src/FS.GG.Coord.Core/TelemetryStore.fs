@@ -95,6 +95,37 @@ module TelemetryStore =
           StartFrameOrdinal: int64
           TurnSequence: int64 }
 
+    /// Actual provider response identity; no process, thread or native turn identity is implied.
+    type ResponseResource =
+        { ResponseId: string
+          ResponseSha256: string }
+
+    /// Counters actually observed in one provider response; absent values remain unknown.
+    type ResponseUsage =
+        { InvocationId: string
+          Resource: ResponseResource
+          RequestedModel: string
+          ObservedModel: string option
+          RequestedEffort: string
+          ObservedEffort: string option
+          Input: int64 option
+          CachedInput: int64 option
+          CacheWriteInput: int64 option
+          Output: int64 option
+          Reasoning: int64 option
+          Total: int64 option }
+
+    /// A retained provider response, not proof that a local process or remote computation started.
+    type ProviderObservation =
+        { InvocationId: string
+          Resource: ResponseResource
+          GenerationRequestSha256: string
+          CountRequestSha256: string
+          CountResponseSha256: string
+          ObservedAt: string
+          ProviderCreatedAt: string option
+          Status: string }
+
     type Payload =
         | Item of featureId: string option
         | Feature of name: string
@@ -140,6 +171,8 @@ module TelemetryStore =
             turnSequence: int64 option *
             processId: int64 *
             phase: string
+        | RuntimeProviderObservation of observation: ProviderObservation
+        | RuntimeResponseUsage of usage: ResponseUsage
         | RuntimeTurnUsage of
             invocationId: string *
             threadId: string *
@@ -336,6 +369,10 @@ module TelemetryStore =
             inventoryId: string * originalItemId: string * invocationId: string *
             expectedTurn: ExecLocalTurn * expectedProvider: string * requestedModel: string * requestedEffort: string *
             followupBaseline: int64 * capturedAt: string * sourceDigest: string
+        | RuntimeResponseNativeInventory of
+            inventoryId: string * originalItemId: string * invocationId: string *
+            expectedResponse: ResponseResource * requestedModel: string * requestedEffort: string *
+            followupBaseline: int64 * capturedAt: string * sourceDigest: string
         | RuntimeNativeInventorySource of
             inventoryId: string * originalItemId: string * invocationId: string * sourceDigest: string * sourceBinding: string
         | LearnSharedCost of
@@ -382,6 +419,7 @@ module TelemetryStore =
         {
             ItemId: string
             FactCount: int64
+            UnknownUsageCounters: string list
             UsageObservations: int64
             DeliveryObservations: int64
             Input: int64
@@ -706,6 +744,53 @@ module TelemetryStore =
         if turn.CaptureSha256 <> text "captureSha256" || turn.ThreadId.ToString("D") <> text "threadId" then
             invalidOp "exec roster capture mismatch"
 
+    let private responseResource (node: JsonElement) : ResponseResource =
+        let id = requiredText "response resource" node "responseId" |> execGet
+        let digest = requiredText "response resource" node "responseSha256" |> execGet
+        if id.Length > 256 || not (Regex.IsMatch(id, "^[!-~]+$"))
+           || not (execDigest digest) then invalidOp "response resource invalid"
+        { ResponseId=id; ResponseSha256=digest }
+
+    let private responseRoster (node: JsonElement) =
+        let roster = node.GetProperty "expectedResponses"
+        if roster.ValueKind <> JsonValueKind.Array || roster.GetArrayLength() <> 1 then
+            invalidOp "single response resource required"
+        let row = roster.[0]
+        closed "response resource" (set ["responseId";"responseSha256"]) row |> execGet
+        responseResource row
+
+    let private validateResponseBinding (binding: JsonElement) (schema: string) (producer: string)
+                                        (invocation: string) (revision: int64) =
+        closed "response binding" (set ["schema";"producerIdentity";"capturedAt";"sourceVariant";
+            "originalItemId";"invocationId";"revision";"dispatchRef";"providerObservationRef";"usageRef";
+            "installedOriginRef";"claimRef";"responseId";"generationRequestSha256";"countRequestSha256";
+            "countResponseSha256";"responseSha256";"responseBytes";"operationBindingSha256";"expectedResponses"]) binding |> execGet
+        let text name = requiredText "response binding" binding name |> execGet
+        if text "schema"<>schema || text "producerIdentity"<>producer
+           || text "sourceVariant"<>"openai-responses/1" || text "invocationId"<>invocation
+           || execInteger binding "revision"<>revision then invalidOp "response binding unbound"
+        text "originalItemId" |> ignore
+        requiredTimestamp "response binding" binding "capturedAt" |> execGet |> ignore
+        for name in ["generationRequestSha256";"countRequestSha256";"countResponseSha256";
+                     "responseSha256";"operationBindingSha256"] do
+            if not (execDigest(text name)) then invalidOp "response binding digest invalid"
+        let bytes = execInteger binding "responseBytes"
+        if bytes=0L || bytes>262144L then invalidOp "response body bound"
+        for name,kind in ["dispatchRef","expected-dispatch";"providerObservationRef","runtime-provider-observation/1";
+                          "usageRef","runtime-response-usage/1";"installedOriginRef","learn-installed-origin/1"] do
+            execReference (binding.GetProperty name) kind
+        let claim = binding.GetProperty "claimRef"
+        closed "response claim" (set ["requestId";"claimId";"revision";"contentDigest";"owner";"generation"]) claim |> execGet
+        for name in ["requestId";"claimId"] do requiredText "response claim" claim name |> execGet |> ignore
+        execInteger claim "revision" |> ignore
+        if execInteger claim "generation"=0L then invalidOp "response claim generation"
+        let digest = requiredText "response claim" claim "contentDigest" |> execGet
+        if not (digest.StartsWith("sha256:",StringComparison.Ordinal) && execDigest(digest.Substring 7)) then invalidOp "response claim digest"
+        let owner=claim.GetProperty "owner"
+        closed "response claim owner" (set ["producer";"stream"]) owner |> execGet
+        for name in ["producer";"stream"] do requiredText "response owner" owner name |> execGet |> ignore
+        if responseRoster binding <> responseResource binding then invalidOp "response resource roster mismatch"
+
     let private requiredNativeSourceBinding
         (label: string)
         (node: JsonElement)
@@ -725,9 +810,10 @@ module TelemetryStore =
             with
             | Ok(), Ok schema, Ok producer, Ok digest, Ok encoded when
                 (schema = "fsgg.telemetry.native-inventory-source-binding/1"
-                 || schema = "fsgg.telemetry.native-inventory-source-binding/2")
+                 || schema = "fsgg.telemetry.native-inventory-source-binding/2"
+                 || schema = "fsgg.telemetry.native-inventory-source-binding/3")
                 && producer = "fsgg-work-roadmap-native-collector/1"
-                && (if schema = "fsgg.telemetry.native-inventory-source-binding/2" then execDigest digest
+                && (if schema <> "fsgg.telemetry.native-inventory-source-binding/1" then execDigest digest
                     else Regex.IsMatch(digest, "^[0-9a-f]{64}$"))
                 ->
                 try
@@ -737,8 +823,11 @@ module TelemetryStore =
                     else
                         use document = JsonDocument.Parse bytes
                         let binding = document.RootElement
-                        if schema = "fsgg.telemetry.native-inventory-source-binding/2" then
-                            validateExecBinding binding schema producer invocation revision
+                        if schema <> "fsgg.telemetry.native-inventory-source-binding/1" then
+                            if schema = "fsgg.telemetry.native-inventory-source-binding/2" then
+                                validateExecBinding binding schema producer invocation revision
+                            else
+                                validateResponseBinding binding schema producer invocation revision
                             match CanonicalJson.canonicalize bytes with
                             | Ok canonical when canonical = Encoding.UTF8.GetString bytes ->
                                 CanonicalJson.canonicalize (Encoding.UTF8.GetBytes(envelope.GetRawText()))
@@ -1059,6 +1148,70 @@ module TelemetryStore =
                 | Ok _, Ok _, Ok _, Ok _, Ok _, Ok _ ->
                     Error $"%s{label}.phase must be process, thread, or a qualified turn"
                 | values -> Error(sprintf "%A" values)
+            | "runtime-provider-observation/1" ->
+                try
+                    let text name = requiredText label node name |> execGet
+                    let fields=["invocationId";"provider";"sourceVariant";"responseId";"responseSha256";
+                                "generationRequestSha256";"countRequestSha256";"countResponseSha256";
+                                "observedAt";"providerCreatedAt";"status"]
+                    if itemId.IsNone || text "provider"<>"openai" || text "sourceVariant"<>"openai-responses/1"
+                       || not (Set.contains (text "status") (set ["completed";"incomplete";"failed";"cancelled"])) then
+                        invalidOp "response observation variant invalid"
+                    for name in ["generationRequestSha256";"countRequestSha256";"countResponseSha256"] do
+                        if not (execDigest(text name)) then invalidOp "response observation digest invalid"
+                    let created=optionalTimestamp label node "providerCreatedAt" |> execGet
+                    make fields (RuntimeProviderObservation {
+                        InvocationId=text "invocationId";Resource=responseResource node;
+                        GenerationRequestSha256=text "generationRequestSha256";
+                        CountRequestSha256=text "countRequestSha256";CountResponseSha256=text "countResponseSha256";
+                        ObservedAt=requiredTimestamp label node "observedAt" |> execGet;ProviderCreatedAt=created;Status=text "status" })
+                with
+                | :? InvalidOperationException
+                | :? System.Collections.Generic.KeyNotFoundException -> Error $"%s{label} provider observation malformed"
+            | "runtime-response-usage/1" ->
+                try
+                    let text name = requiredText label node name |> execGet
+                    let counter name =
+                        let value=node.GetProperty name
+                        if value.ValueKind=JsonValueKind.Null then None else Some(execInteger node name)
+                    let input,output,total=counter "input",counter "output",counter "total"
+                    let cached,write,reasoning=counter "cachedInput",counter "cacheWriteInput",counter "reasoning"
+                    if itemId.IsNone || text "provider"<>"openai" || text "sourceVariant"<>"openai-responses/1"
+                       || text "scope"<>"provider-response" || text "provenance"<>"openai-responses" then
+                        invalidOp "response usage variant invalid"
+                    match input,output,total with
+                    | Some i,Some o,Some t ->
+                        if (checkedAdd "response total" i o |> execGet) <> t then invalidOp "response total mismatch"
+                    | _ -> ()
+                    // Missing dimensions remain unknown, but every known subset must
+                    // fit its observed inclusive whole. No breakout disjointness is inferred.
+                    let inputBound = input |> Option.orElse total
+                    let outputBound = output |> Option.orElse total
+                    for part,whole in [input,total;output,total;cached,inputBound;write,inputBound;reasoning,outputBound] do
+                        match part,whole with
+                        | Some p,Some w when p>w -> invalidOp "response breakout exceeds inclusive counter"
+                        | _ -> ()
+                    // Nonnegative unknowns supply no observed value. Their mathematical
+                    // lower bound is zero; overlapping breakouts use max, never a sum.
+                    let lowerBound values = 0L :: (values |> List.choose id) |> List.max
+                    let inputMinimum = lowerBound [input;cached;write]
+                    let outputMinimum = lowerBound [output;reasoning]
+                    let minimumTotal = checkedAdd "response minimum total" inputMinimum outputMinimum |> execGet
+                    if total |> Option.exists (fun observed -> minimumTotal > observed) then
+                        invalidOp "response known subsets exceed inclusive total"
+                    if [input;output;total;cached;write;reasoning] |> List.forall Option.isNone then
+                        invalidOp "empty response usage observation"
+                    make ["invocationId";"provider";"sourceVariant";"responseId";"responseSha256";
+                          "requestedModel";"observedModel";"requestedEffort";"observedEffort";
+                          "scope";"provenance";"input";"cachedInput";"cacheWriteInput";"output";"reasoning";"total"]
+                        (RuntimeResponseUsage {
+                            InvocationId=text "invocationId";Resource=responseResource node;
+                            RequestedModel=text "requestedModel";ObservedModel=optionalText label node "observedModel" |> execGet;
+                            RequestedEffort=text "requestedEffort";ObservedEffort=optionalText label node "observedEffort" |> execGet;
+                            Input=input;CachedInput=cached;CacheWriteInput=write;Output=output;Reasoning=reasoning;Total=total })
+                with
+                | :? InvalidOperationException
+                | :? System.Collections.Generic.KeyNotFoundException -> Error $"%s{label} response usage malformed"
             | "runtime-turn-usage" ->
                 match
                     requiredText label node "invocationId",
@@ -2196,6 +2349,23 @@ module TelemetryStore =
                 | Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _ ->
                     Error $"%s{label} has unsupported scope, CI applicability, source kind, or digest"
                 | values -> Error(sprintf "%A" values)
+            | "runtime-native-inventory/1" when (node.TryGetProperty "sourceVariant" |> fst) ->
+                try
+                    let text name = requiredText label node name |> execGet
+                    let fields=["inventoryId";"originalItemId";"invocationId";"page";"pages";"sourceVariant";
+                                "expectedResponses";"expectedProvider";"requestedModel";"requestedEffort";"support";
+                                "followupBaseline";"capturedAt";"sourceKind";"sourceDigest"]
+                    if itemId.IsNone || text "sourceVariant"<>"openai-responses/1" || text "expectedProvider"<>"openai"
+                       || execInteger node "page"<>1L || execInteger node "pages"<>1L
+                       || text "support"<>"response-native-final-counters"
+                       || text "sourceKind"<>"provider-capability-and-dispatch-roster"
+                       || not (execDigest(text "sourceDigest")) then invalidOp "response inventory invalid"
+                    make fields (RuntimeResponseNativeInventory(text "inventoryId",text "originalItemId",text "invocationId",
+                        responseRoster node,text "requestedModel",text "requestedEffort",execInteger node "followupBaseline",
+                        requiredTimestamp label node "capturedAt" |> execGet,text "sourceDigest"))
+                with
+                | :? InvalidOperationException
+                | :? System.Collections.Generic.KeyNotFoundException -> Error $"%s{label} response inventory malformed"
             | "runtime-native-inventory/1" when (node.TryGetProperty "turnNamespace" |> fst) ->
                 try
                     let text name = requiredText label node name |> execGet
@@ -2393,7 +2563,7 @@ module TelemetryStore =
                   Ok managerReceipt, Ok profile, Ok result, Ok capture, Ok verification,
                   Ok observed, Ok expires, Ok installation
                     when itemId.IsNone && role = "native-collector" && generation > 0L
-                        && (variant = Ok None || variant = Ok(Some "codex-exec-jsonl/1"))
+                        && (variant = Ok None || variant = Ok(Some "codex-exec-jsonl/1") || variant = Ok(Some "openai-responses/1"))
                         && ([ managerReceipt; profile; result; capture; verification; installation ] |> List.forall digest)
                         && DateTimeOffset.Parse(expires, CultureInfo.InvariantCulture) > DateTimeOffset.Parse(observed, CultureInfo.InvariantCulture) ->
                     make
@@ -2508,18 +2678,26 @@ module TelemetryStore =
             selected
             |> List.choose (fun fact ->
                 match fact.Payload with
-                | Usage(_, _, _, i, c, w, o, r, t, _, _, _) -> Some(i, c, w, o, r, t)
+                | Usage(_, _, _, i, c, w, o, r, t, _, _, _) -> Some(Some i, Some c, Some w, Some o, r, Some t)
+                | RuntimeResponseUsage value -> Some(value.Input,value.CachedInput,value.CacheWriteInput,value.Output,value.Reasoning,value.Total)
                 | _ -> None)
+
+        let duplicateResponses =
+            selected
+            |> List.choose (fun fact ->
+                match fact.Payload with RuntimeResponseUsage value -> Some value.Resource.ResponseId | _ -> None)
+            |> List.countBy id
+            |> List.exists (fun (_,count) -> count > 1)
 
         let add label selector =
             usage
-            |> List.map selector
+            |> List.choose selector
             |> List.fold
                 (fun state value -> state |> Result.bind (fun current -> checkedAdd label current value))
                 (Ok 0L)
 
         match
-            add "input" (fun (v, _, _, _, _, _) -> v),
+            (if duplicateResponses then Error "duplicate Responses resource" else add "input" (fun (v, _, _, _, _, _) -> v)),
             add "cachedInput" (fun (_, v, _, _, _, _) -> v),
             add "cacheWriteInput" (fun (_, _, v, _, _, _) -> v),
             add "output" (fun (_, _, _, v, _, _) -> v),
@@ -2554,6 +2732,12 @@ module TelemetryStore =
                 {
                     ItemId = itemId
                     FactCount = int64 selected.Length
+                    UnknownUsageCounters =
+                        [ "input",(fun (v,_,_,_,_,_) -> v); "cachedInput",(fun (_,v,_,_,_,_) -> v);
+                          "cacheWriteInput",(fun (_,_,v,_,_,_) -> v); "output",(fun (_,_,_,v,_,_) -> v);
+                          "total",(fun (_,_,_,_,_,v) -> v) ]
+                        |> List.choose (fun (name,select) ->
+                            if usage |> List.exists (select >> Option.isNone) then Some name else None)
                     UsageObservations = int64 usage.Length
                     DeliveryObservations =
                         selected
@@ -2585,6 +2769,8 @@ module TelemetryStore =
         | values -> Error [ sprintf "%A" values ]
 
     let publicJson aggregate =
+        let counter name amount =
+            if List.contains name aggregate.UnknownUsageCounters then Nullable<int64>() else Nullable<int64>(amount)
         JsonSerializer.Serialize
             {|
                 schema = "fsgg.telemetry.public-summary/1"
@@ -2594,12 +2780,12 @@ module TelemetryStore =
                 deliveryObservations = aggregate.DeliveryObservations
                 usage =
                     {|
-                        input = aggregate.Input
-                        cachedInput = aggregate.CachedInput
-                        cacheWriteInput = aggregate.CacheWriteInput
-                        output = aggregate.Output
+                        input = counter "input" aggregate.Input
+                        cachedInput = counter "cachedInput" aggregate.CachedInput
+                        cacheWriteInput = counter "cacheWriteInput" aggregate.CacheWriteInput
+                        output = counter "output" aggregate.Output
                         reasoning = aggregate.Reasoning
-                        total = aggregate.Total
+                        total = counter "total" aggregate.Total
                     |}
                 launcherPopulation =
                     {|

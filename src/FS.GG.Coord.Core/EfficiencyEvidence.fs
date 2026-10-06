@@ -8,12 +8,12 @@ open System.Text.Json
 module EfficiencyEvidence =
     let semanticKind (kind: string) =
         match kind with
-        | "usage" | "runtime-turn-usage" -> Some "usage"
+        | "usage" | "runtime-turn-usage" | "runtime-response-usage/1" -> Some "usage"
         | "native-item-outcome" -> Some "outcome"
         | "attempt" -> Some "attempt"
         | "runtime-admission" | "runtime-start" | "runtime-terminal" | "runtime-gap"
         | "expected-dispatch" | "invocation-lineage" | "operational-activation"
-        | "runtime-native-inventory/1" | "runtime-native-inventory-source/1" -> Some "invocation"
+        | "runtime-native-inventory/1" | "runtime-native-inventory-source/1" | "runtime-provider-observation/1" -> Some "invocation"
         | "learn-installed-origin/1" -> Some "adoption"
         | "ci-run" -> Some "ci-run"
         | "ci-job" -> Some "ci-job"

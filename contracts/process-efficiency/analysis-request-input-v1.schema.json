@@ -192,7 +192,9 @@
             "runtime-gap",
             "runtime-native-inventory/1",
             "runtime-native-inventory-source/1",
-            "learn-installed-origin/1"
+            "learn-installed-origin/1",
+            "runtime-provider-observation/1",
+            "runtime-response-usage/1"
           ]
         },
         "revision": {

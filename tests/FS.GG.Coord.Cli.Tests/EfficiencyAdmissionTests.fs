@@ -444,3 +444,227 @@ module EfficiencyAdmissionTests =
         let duplicate = usageEvent.Replace("exec-usage","duplicate-exec-usage")
         Assert.Contains("\"rejected\":1",submit path "duplicate-exec-turn" [duplicate])
         Assert.Equal("1",scalar path "SELECT count(*) FROM runtime_turn_usage WHERE invocation_id='analyst-invocation';")
+
+    // Authenticated synthetic receipts exercise receiver joins only, not HTTP or installed enforcement.
+    let private responseFixtureWithCounters (status: string) (cached: string) (output: string) (total: string) =
+        let cleanup,path,pending = pendingFixture()
+        let populationKey = CanonicalJson.sha256(Encoding.UTF8.GetBytes("A\u001fA")).Substring(0,32)
+        let population = $"""{{"kind":"budget-population","identity":"budget-population-{populationKey}","itemId":"A","revision":0,"originalItemId":"A","state":"open","sourceKind":"native-item","sourceRef":"roadmap-dispatch:{populationKey}"}}"""
+        let activation = """{"kind":"operational-activation","identity":"response-activation","itemId":"A","revision":0,"activationId":"activation-A","scope":"explicit-future-dispatches","runtime":"openai-responses","activatedAt":"2026-10-06T00:20:02Z","clockProvenance":"host-wall","lateAfterSeconds":60}"""
+        let dispatchEvent = analystDispatch.Replace("codex-exec","openai-responses")
+        Assert.Contains("\"rejected\":0",submit path "response-dispatch" [population;activation;dispatchEvent])
+        let claimed = TelemetryStoreApplication.efficiencyAnalysisClaimProspective path approved principal "analyst-dispatch" "A" (claimTemplate pending "response-claim") |> unwrap |> JsonNode.Parse
+        let admissionEvent = admission.Replace("admission-a","analyst-admission").Replace("invoke-a","analyst-invocation").Replace("codex-collaboration","openai-responses")
+        let lineageEvent = """{"kind":"invocation-lineage","identity":"analyst-lineage","itemId":"A","revision":0,"dispatchId":"analyst","invocationId":"analyst-invocation","relation":"root","parentInvocationId":null,"rootInvocationId":"analyst-invocation","runtime":"openai-responses"}"""
+        Assert.Contains("\"rejected\":0",submit path "response-admitted" [admissionEvent;lineageEvent])
+        let now = DateTimeOffset.UtcNow
+        let observationEvent = $"""{{"kind":"runtime-provider-observation/1","identity":"response-observation","itemId":"A","revision":0,"invocationId":"analyst-invocation","provider":"openai","sourceVariant":"openai-responses/1","responseId":"resp_actual_opaque","responseSha256":"{execDigest}","generationRequestSha256":"{execDigest}","countRequestSha256":"{execDigest}","countResponseSha256":"{execDigest}","observedAt":"{now.ToString("O")}","providerCreatedAt":null,"status":"{status}"}}"""
+        let usageEvent = $"""{{"kind":"runtime-response-usage/1","identity":"response-usage","itemId":"A","revision":0,"invocationId":"analyst-invocation","provider":"openai","sourceVariant":"openai-responses/1","responseId":"resp_actual_opaque","responseSha256":"{execDigest}","requestedModel":"sol","observedModel":"sol","requestedEffort":"medium","observedEffort":null,"scope":"provider-response","provenance":"openai-responses","input":99,"cachedInput":{cached},"cacheWriteInput":null,"output":{output},"reasoning":null,"total":{total}}}"""
+        let nativeScope = { scope with Producer="native-producer";Stream="native-stream" }
+        let native : TelemetryReceipt.Principal = { Scope=nativeScope;Role=TelemetryReceipt.NativeCollector;GrantId=Some "responses-grant";GrantGeneration=Some 7L }
+        TelemetryStoreApplication.enrollReceiptPrincipal path approved native |> unwrap |> ignore
+        let origin = JsonNode.Parse($"""{{"kind":"learn-installed-origin/1","identity":"response-origin","revision":0,"workspaceId":"{scope.Workspace}","producerId":"{nativeScope.Producer}","streamId":"{nativeScope.Stream}","role":"native-collector","grantId":"responses-grant","grantGeneration":7,"managerReceiptSha256":"{execDigest}","capabilityProfileSha256":"{execDigest}","capabilityResultSha256":"{execDigest}","nativeCaptureSha256":"{execDigest}","nativeVerificationSha256":"{execDigest}","capabilityObservedAt":"{now.AddMinutes(-1.).ToString("O")}","capabilityExpiresAt":"{now.AddHours(1.).ToString("O")}","installationSha256":"{execDigest}"}}""")
+        origin.["nativeSourceVariant"] <- JsonValue.Create "openai-responses/1"
+        Assert.Contains("\"rejected\":0",submitAs native path "response-captured" [origin.ToJsonString();observationEvent;usageEvent])
+        let attach = JsonNode.Parse("""{"schema":"fsgg.telemetry.efficiency-analysis-attach-invocation-input/1","cas":null,"claimId":"response-claim","dispatchRef":null,"invocationRef":"analyst-invocation","lineageRefs":[],"authority":null,"attachedAt":"2026-10-06T00:22:00Z"}""")
+        attach.["cas"] <- JsonSerializer.SerializeToNode {| requestId=claimed.["requestId"].GetValue<string>(); expectedRevision=claimed.["revision"].GetValue<int64>(); expectedContentDigest=claimed.["contentDigest"].GetValue<string>() |}
+        attach.["dispatchRef"] <- claimed.["dispatchRef"].DeepClone()
+        attach.["authority"] <- pending.["canonicalRequest"].["authority"].DeepClone()
+        for event in [admissionEvent;lineageEvent;observationEvent] do attach.["lineageRefs"].AsArray().Add(sourceRef event)
+        TelemetryStoreApplication.efficiencyAnalysis path approved principal "attach-invocation" (Encoding.UTF8.GetBytes(attach.ToJsonString())) None |> unwrap |> ignore
+        let inventory = JsonNode.Parse($"""{{"kind":"runtime-native-inventory/1","identity":"response-inventory","itemId":"A","revision":0,"inventoryId":"response-inventory","originalItemId":"A","invocationId":"analyst-invocation","page":1,"pages":1,"sourceVariant":"openai-responses/1","expectedResponses":[{{"responseId":"resp_actual_opaque","responseSha256":"{execDigest}"}}],"expectedProvider":"openai","requestedModel":"sol","requestedEffort":"medium","support":"response-native-final-counters","followupBaseline":0,"capturedAt":"{now.ToString("O")}","sourceKind":"provider-capability-and-dispatch-roster","sourceDigest":"{execDigest}"}}""")
+        let binding = JsonNode.Parse($"""{{"schema":"fsgg.telemetry.native-inventory-source-binding/3","producerIdentity":"fsgg-work-roadmap-native-collector/1","capturedAt":"{now.ToString("O")}","sourceVariant":"openai-responses/1","originalItemId":"A","invocationId":"analyst-invocation","revision":0,"responseId":"resp_actual_opaque","generationRequestSha256":"{execDigest}","countRequestSha256":"{execDigest}","countResponseSha256":"{execDigest}","responseSha256":"{execDigest}","responseBytes":123,"operationBindingSha256":"{execDigest}","claimRef":null,"expectedResponses":[{{"responseId":"resp_actual_opaque","responseSha256":"{execDigest}"}}]}}""")
+        binding.["dispatchRef"] <- sourceRef dispatchEvent
+        binding.["providerObservationRef"] <- sourceRef observationEvent
+        binding.["usageRef"] <- sourceRef usageEvent
+        binding.["installedOriginRef"] <- sourceRef (origin.ToJsonString())
+        binding.["claimRef"] <- JsonSerializer.SerializeToNode {| requestId=claimed.["requestId"].GetValue<string>();claimId="response-claim";revision=claimed.["revision"].GetValue<int64>();contentDigest=claimed.["contentDigest"].GetValue<string>();owner={|producer=scope.Producer;stream=scope.Stream|};generation=1 |}
+        cleanup,path,native,inventory,binding,usageEvent
+
+    let private responseFixture (status: string) = responseFixtureWithCounters status "0" "1" "100"
+
+    let private responseSource (binding: JsonNode) =
+        let bytes = CanonicalJson.canonicalize(Encoding.UTF8.GetBytes(binding.ToJsonString())) |> Result.defaultWith failwith |> Encoding.UTF8.GetBytes
+        let source = JsonNode.Parse($"""{{"kind":"runtime-native-inventory-source/1","identity":"response-source","itemId":"A","revision":0,"inventoryId":"response-inventory","originalItemId":"A","invocationId":"analyst-invocation","sourceDigest":"{execDigest}","sourceBinding":{{"schema":"fsgg.telemetry.native-inventory-source-binding/3","producerIdentity":"fsgg-work-roadmap-native-collector/1","sha256":"{CanonicalJson.sha256 bytes}","bytesBase64":"{Convert.ToBase64String bytes}"}}}}""")
+        source.ToJsonString()
+
+
+    let private responseAllocation (source: string) (usageEvent: string) =
+        let node = JsonNode.Parse(execAllocation source usageEvent)
+        node.["identity"] <- JsonValue.Create "response-allocation"
+        node.["resource"].["accountingScope"] <- JsonValue.Create "provider-response"
+        node.ToJsonString()
+
+    [<Fact>]
+    let ``synthetic response capture joins claim and native origin without fabricated runtime turn`` () =
+        let cleanup,path,native,inventory,binding,usageEvent = responseFixture "completed"
+        use cleanup = cleanup
+        let source = responseSource binding
+        Assert.Contains("\"rejected\":0",submitAs native path "response-witnesses" [inventory.ToJsonString();source])
+        let allocation = responseAllocation source usageEvent
+        Assert.Contains("\"rejected\":0",submit path "response-allocation" [allocation])
+        Assert.Contains("\"rejected\":0",submitAs native path "response-usage-replay" [usageEvent])
+        Assert.Equal("0",scalar path "SELECT count(*) FROM runtime_turn_usage WHERE invocation_id='analyst-invocation';")
+        Assert.Equal("1",scalar path "SELECT count(*) FROM current_ingest_facts WHERE kind='runtime-response-usage/1';")
+        Assert.Equal("1",scalar path "SELECT count(*) FROM efficiency_records WHERE identity='response-allocation';")
+
+    [<Theory>]
+    [<InlineData("owner")>]
+    [<InlineData("generation")>]
+    [<InlineData("digest")>]
+    [<InlineData("observation")>]
+    [<InlineData("usage")>]
+    [<InlineData("capture")>]
+    [<InlineData("roster")>]
+    let ``response classification refuses detached capture grant or claimed history`` (failure: string) =
+        let cleanup,path,native,inventory,binding,usageEvent = responseFixture "completed"
+        use cleanup = cleanup
+        match failure with
+        | "owner" -> binding.["claimRef"].["owner"].["producer"] <- JsonValue.Create "foreign"
+        | "generation" -> binding.["claimRef"].["generation"] <- JsonValue.Create 2
+        | "digest" -> binding.["claimRef"].["contentDigest"] <- JsonValue.Create("sha256:"+String.replicate 64 "b")
+        | "observation" -> binding.["providerObservationRef"].["id"] <- JsonValue.Create "missing"
+        | "usage" -> binding.["usageRef"].["id"] <- JsonValue.Create "missing"
+        | "capture" -> binding.["operationBindingSha256"] <- JsonValue.Create(String.replicate 64 "b")
+        | "roster" -> inventory.["expectedResponses"].[0].["responseSha256"] <- JsonValue.Create(String.replicate 64 "b")
+        | _ -> failwith "unknown fixture"
+        let source = responseSource binding
+        Assert.Contains("\"rejected\":0",submitAs native path "response-witnesses" [inventory.ToJsonString();source])
+        assertRejected path "response-classification" (JsonNode.Parse(responseAllocation source usageEvent))
+
+    [<Fact>]
+    let ``incomplete response actual costs cannot establish complete native population`` () =
+        let cleanup,path,native,inventory,binding,usageEvent = responseFixture "incomplete"
+        use cleanup = cleanup
+        let source = responseSource binding
+        Assert.Contains("\"rejected\":0",submitAs native path "response-witnesses" [inventory.ToJsonString();source])
+        // A failed/incomplete operation still has genuine classifiable cost.
+        Assert.Contains("\"rejected\":0",submit path "incomplete-response-classification" [responseAllocation source usageEvent])
+        use compact = JsonDocument.Parse(TelemetryStoreApplication.compactDashboardSnapshot path approved None |> unwrap)
+        use exported = JsonDocument.Parse(TelemetryStoreApplication.efficiencyExport path approved (compact.RootElement.GetProperty("revision").GetString()) 200 1000 |> unwrap)
+        let cost = (exported.RootElement.GetProperty("items")).[0].GetProperty("metrics").EnumerateArray()
+                   |> Seq.find (fun metric -> metric.GetProperty("metric").GetString()="cost-per-accepted")
+        Assert.Equal(JsonValueKind.Null,cost.GetProperty("value").ValueKind)
+        Assert.Equal("100",scalar path "SELECT json_extract(canonical,'$.total') FROM current_ingest_facts WHERE identity='response-usage';")
+
+    [<Fact>]
+    let ``response resource cannot acquire duplicate usage identity or generic runtime row`` () =
+        let cleanup,path,native,_,_,usageEvent = responseFixture "completed"
+        use cleanup = cleanup
+        Assert.Contains("\"rejected\":1",submitAs native path "response-duplicate" [usageEvent.Replace("response-usage","duplicate-response")])
+        let genericUsage = (usage 0).Replace("usage-a","foreign-response-turn").Replace("invoke-a","analyst-invocation")
+        Assert.Contains("\"rejected\":1",submit path "response-cross-namespace" [genericUsage])
+        Assert.Equal("1",scalar path "SELECT count(*) FROM current_ingest_facts WHERE kind='runtime-response-usage/1';")
+
+    [<Fact>]
+    let ``Responses preclaim grant validation is read only and never upgrades generic principal`` () =
+        let cleanup,path,native,_,_,_ = responseFixture "completed"
+        use cleanup = cleanup
+        let before = scalar path "SELECT count(*) FROM transport_receipts;"
+        TelemetryStoreApplication.validateResponsesCollectorPrincipal path approved native |> unwrap
+        Assert.True(TelemetryStoreApplication.validateResponsesCollectorPrincipal path approved principal |> Result.isError)
+        Assert.True(TelemetryStoreApplication.validateResponsesCollectorPrincipal path approved {native with GrantGeneration=Some 8L} |> Result.isError)
+        Assert.Equal(before,scalar path "SELECT count(*) FROM transport_receipts;")
+
+    [<Fact>]
+    let ``existing exec grant cannot be promoted to Responses preclaim capability`` () =
+        let cleanup,path,native,_,_,_ = execFixture (Some "codex-exec-jsonl/1")
+        use cleanup = cleanup
+        Assert.True(TelemetryStoreApplication.validateResponsesCollectorPrincipal path approved native |> Result.isError)
+
+    [<Fact>]
+    let ``generic receipt cannot introduce response cost despite declared native source variant`` () =
+        let cleanup,path,_,_,_,usageEvent = responseFixture "completed"
+        use cleanup = cleanup
+        Assert.Contains("\"rejected\":1",submit path "generic-response-cost" [usageEvent.Replace("response-usage","generic-response")])
+        Assert.Equal("1",scalar path "SELECT count(*) FROM current_ingest_facts WHERE kind='runtime-response-usage/1';")
+
+    [<Fact>]
+    let ``partial response public summary preserves unknown counters instead of reporting zero`` () =
+        let cleanup,path,_,_,_,_ = responseFixtureWithCounters "incomplete" "null" "null" "null"
+        use cleanup = cleanup
+        use summary = JsonDocument.Parse(TelemetryStoreApplication.summary path approved "A" |> unwrap)
+        let counters = summary.RootElement.GetProperty "usage"
+        Assert.Equal(198L,counters.GetProperty("input").GetInt64())
+        for name in ["output";"total";"cachedInput";"cacheWriteInput";"reasoning"] do
+            Assert.Equal(JsonValueKind.Null,counters.GetProperty(name).ValueKind)
+        use detail = JsonDocument.Parse(TelemetryStoreApplication.itemDetail path approved "A" |> unwrap)
+        Assert.Equal(JsonValueKind.Null,detail.RootElement.GetProperty("accounting").GetProperty("nativeTotal").ValueKind)
+
+    [<Fact>]
+    let ``response budget reader counts one resource through nested aggregate callers`` () =
+        let cleanup,path,_,_,_,_ = responseFixture "completed"
+        use cleanup = cleanup
+        // Existing sources have 100 tokens, response has 100; double projection would yield 300.
+        use summary = JsonDocument.Parse(TelemetryStoreApplication.summary path approved "A" |> unwrap)
+        Assert.Equal(200L,summary.RootElement.GetProperty("usage").GetProperty("total").GetInt64())
+        Assert.Equal("200",scalar path "SELECT denominator FROM budget_attribution_facts WHERE item_id='A' AND dimension='model-usage' AND provider='openai' AND source_kind='runtime';")
+
+    [<Fact>]
+    let ``complete response usage has honest missing attribution until matched once`` () =
+        let cleanup,path,_,_,_,_ = responseFixture "completed"
+        use cleanup = cleanup
+        use before = JsonDocument.Parse(TelemetryStoreApplication.itemDetail path approved "A" |> unwrap)
+        Assert.Equal(2L,before.RootElement.GetProperty("accounting").GetProperty("missingAttribution").GetInt64())
+        let attribution = """{"kind":"activity-usage-attribution","identity":"response-attribution","itemId":"A","revision":0,"usageIdentity":"response-usage","activityId":null,"classification":"unclassified","input":99,"cachedInput":0,"output":1,"reasoning":null,"total":100}"""
+        Assert.Contains("\"rejected\":0",submit path "response-attribution" [attribution])
+        Assert.Equal("100",scalar path "SELECT total FROM activity_usage_attributions WHERE usage_identity='response-usage';")
+        Assert.Contains("\"rejected\":0",submit path "response-attribution-replay" [attribution])
+        Assert.Equal("1",scalar path "SELECT count(*) FROM activity_usage_attributions WHERE usage_identity='response-usage';")
+        use after = JsonDocument.Parse(TelemetryStoreApplication.itemDetail path approved "A" |> unwrap)
+        Assert.Equal(1L,after.RootElement.GetProperty("accounting").GetProperty("missingAttribution").GetInt64())
+        Assert.Equal(200L,after.RootElement.GetProperty("accounting").GetProperty("nativeTotal").GetInt64())
+
+    [<Fact>]
+    let ``genuine response completion closes receiver epoch with actual provider reference`` () =
+        let cleanup,path,native,inventory,binding,_ = responseFixture "completed"
+        use cleanup = cleanup
+        Assert.Contains("\"rejected\":0",submitAs native path "response-witnesses" [inventory.ToJsonString();responseSource binding])
+        let outcome = sourceOutcome.Replace("outcome-a","outcome-response")
+        Assert.Contains("\"rejected\":0",submit path "response-delivered" [outcome])
+        Assert.Equal("1",scalar path "SELECT count(*) FROM efficiency_outcome_epochs WHERE state='closed' AND outcome_identity='outcome-response';")
+        Assert.Equal("0",scalar path "SELECT count(*) FROM runtime_terminals WHERE invocation_id='analyst-invocation';")
+        let closing = scalar path "SELECT close_refs FROM efficiency_outcome_epochs WHERE outcome_identity='outcome-response';"
+        Assert.Contains("runtime-provider-observation/1",closing)
+        Assert.Contains("response-observation",closing)
+
+    [<Fact>]
+    let ``Responses prospective resolver uses actual owner dispatch and no fabricated start`` () =
+        let cleanup,path,native,_,_,_ = responseFixture "completed"
+        use cleanup = cleanup
+        let actual = TelemetryStoreApplication.resolveResponsesCollectorDispatch path approved principal "analyst-dispatch" |> unwrap
+        Assert.Equal("A",actual.OriginalItemId)
+        Assert.Equal("analyst-invocation",actual.InvocationId)
+        Assert.Equal("0",scalar path "SELECT count(*) FROM runtime_starts WHERE invocation_id='analyst-invocation';")
+        Assert.True(TelemetryStoreApplication.resolveResponsesCollectorDispatch path approved native "analyst-dispatch" |> Result.isError)
+        Assert.True(TelemetryStoreApplication.resolveResponsesCollectorDispatch path approved principal "missing" |> Result.isError)
+
+    [<Fact>]
+    let ``incomplete response witness cannot close a prospective native epoch`` () =
+        let cleanup,path,native,inventory,binding,_ = responseFixture "incomplete"
+        use cleanup = cleanup
+        Assert.Contains("\"rejected\":0",submitAs native path "incomplete-witnesses" [inventory.ToJsonString();responseSource binding])
+        Assert.Contains("\"rejected\":0",submit path "incomplete-delivered" [sourceOutcome.Replace("outcome-a","outcome-incomplete")])
+        Assert.Equal("1",scalar path "SELECT count(*) FROM efficiency_outcome_epochs WHERE state='open';")
+        Assert.Equal("0",scalar path "SELECT count(*) FROM efficiency_outcome_epochs WHERE state='closed';")
+
+    [<Fact>]
+    let ``partial response attribution refuses invented zero counters and preserves real input`` () =
+        let cleanup,path,_,_,_,_ = responseFixtureWithCounters "incomplete" "null" "null" "null"
+        use cleanup = cleanup
+        let invented = """{"kind":"activity-usage-attribution","identity":"invented-response-attribution","itemId":"A","revision":0,"usageIdentity":"response-usage","activityId":null,"classification":"unclassified","input":99,"cachedInput":0,"output":0,"reasoning":null,"total":0}"""
+        Assert.Contains("\"rejected\":1",submit path "invented-response-attribution" [invented])
+        Assert.Equal("0",scalar path "SELECT count(*) FROM activity_usage_attributions WHERE usage_identity='response-usage';")
+        Assert.Equal("99",scalar path "SELECT json_extract(canonical,'$.input') FROM current_ingest_facts WHERE identity='response-usage';")
+
+    [<Fact>]
+    let ``authentic over policy response cost stays visible but cannot close native epoch`` () =
+        let cleanup,path,native,inventory,binding,_ = responseFixtureWithCounters "completed" "0" "1501" "1600"
+        use cleanup = cleanup
+        Assert.Contains("\"rejected\":0",submitAs native path "over-policy-witnesses" [inventory.ToJsonString();responseSource binding])
+        Assert.Contains("\"rejected\":0",submit path "over-policy-delivered" [sourceOutcome.Replace("outcome-a","outcome-over-policy")])
+        Assert.Equal("1",scalar path "SELECT count(*) FROM efficiency_outcome_epochs WHERE state='open';")
+        Assert.Equal("0",scalar path "SELECT count(*) FROM efficiency_outcome_epochs WHERE state='closed';")
+        Assert.Equal("1600",scalar path "SELECT json_extract(canonical,'$.total') FROM current_ingest_facts WHERE identity='response-usage';")
+        use summary = JsonDocument.Parse(TelemetryStoreApplication.summary path approved "A" |> unwrap)
+        Assert.Equal(1700L,summary.RootElement.GetProperty("usage").GetProperty("total").GetInt64())

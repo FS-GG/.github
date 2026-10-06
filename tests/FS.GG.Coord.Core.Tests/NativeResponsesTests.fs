@@ -204,3 +204,67 @@ module NativeResponsesTests =
         let observed = NativeResponses.decodeResponse (bytes(raw.Replace("\"object\":\"response\"","\"object\":\"response\",\"created_at\":"+value))) |> unwrap
         Assert.Equal<DateTimeOffset option>(None,observed.ProviderCreatedAt)
         Assert.Contains("provider-created-at-invalid",observed.Issues)
+
+    [<Theory>]
+    [<InlineData("input", "input-exceeds-total")>]
+    [<InlineData("output", "output-exceeds-total")>]
+    [<InlineData("cached", "cached-input-exceeds-total")>]
+    [<InlineData("written", "cache-write-exceeds-total")>]
+    [<InlineData("reasoning", "reasoning-exceeds-total")>]
+    let ``partial usage preserves counters while refusing known total containment contradictions`` (counter: string) (issue: string) =
+        let counters =
+            match counter with
+            | "input" -> "{\"input_tokens\":100,\"output_tokens\":null,\"total_tokens\":1}"
+            | "output" -> "{\"input_tokens\":null,\"output_tokens\":100,\"total_tokens\":1}"
+            | "cached" -> "{\"input_tokens\":null,\"output_tokens\":null,\"total_tokens\":1,\"input_tokens_details\":{\"cached_tokens\":100}}"
+            | "written" -> "{\"input_tokens\":null,\"output_tokens\":null,\"total_tokens\":1,\"input_tokens_details\":{\"cache_write_tokens\":100}}"
+            | "reasoning" -> "{\"input_tokens\":null,\"output_tokens\":null,\"total_tokens\":1,\"output_tokens_details\":{\"reasoning_tokens\":100}}"
+            | _ -> failwith "unselected fixture"
+        let observed = NativeResponses.decodeResponse (response "incomplete" counters) |> unwrap
+        Assert.Contains(issue,observed.Usage.Issues)
+        Assert.Equal<int64 option>(Some 1L,observed.Usage.TotalTokens)
+        let retained =
+            match counter with
+            | "input" -> observed.Usage.InputTokens
+            | "output" -> observed.Usage.OutputTokens
+            | "cached" -> observed.Usage.CachedInputTokens
+            | "written" -> observed.Usage.CacheWriteInputTokens
+            | _ -> observed.Usage.ReasoningOutputTokens
+        Assert.Equal<int64 option>(Some 100L,retained)
+
+    [<Fact>]
+    let ``unknown parent counters use known total bounds without defaulting or deriving populations`` () =
+        let counters = "{\"input_tokens\":null,\"output_tokens\":null,\"total_tokens\":10,\"input_tokens_details\":{\"cached_tokens\":7,\"cache_write_tokens\":7},\"output_tokens_details\":{\"reasoning_tokens\":3}}"
+        let observed = NativeResponses.decodeResponse (response "incomplete" counters) |> unwrap
+        Assert.Equal<int64 option>(None,observed.Usage.InputTokens)
+        Assert.Equal<int64 option>(None,observed.Usage.OutputTokens)
+        Assert.Equal<int64 option>(Some 7L,observed.Usage.CachedInputTokens)
+        Assert.Equal<int64 option>(Some 7L,observed.Usage.CacheWriteInputTokens)
+        Assert.Equal<int64 option>(Some 3L,observed.Usage.ReasoningOutputTokens)
+        Assert.Equal<string list>(["input_tokens-unavailable";"output_tokens-unavailable"],observed.Usage.Issues)
+
+    [<Theory>]
+    [<InlineData(8001L, 1L, 8002L)>]
+    [<InlineData(17L, 1501L, 1518L)>]
+    [<InlineData(8001L, 1501L, 9502L)>]
+    [<InlineData(101L, 1L, 102L)>]
+    let ``consistent measured costs survive policy and count refusal`` (input: int64) (output: int64) (total: int64) =
+        let counters = $"""{{"input_tokens":{input},"output_tokens":{output},"total_tokens":{total}}}"""
+        let observed = NativeResponses.decodeResponse (response "completed" counters) |> unwrap
+        Assert.Equal(NativeResponses.Complete, observed.Usage.State)
+        Assert.Equal<int64 option>(Some input, observed.Usage.InputTokens)
+        Assert.Equal<int64 option>(Some output, observed.Usage.OutputTokens)
+        Assert.Equal<int64 option>(Some total, observed.Usage.TotalTokens)
+        Assert.True(NativeResponses.validateCompletion (count "17" |> unwrap) observed |> Result.isError)
+
+    [<Theory>]
+    [<InlineData(10L, 1L, 10L, "inclusive-lower-bound-exceeds-total")>]
+    [<InlineData(9223372036854775807L, 1L, 9223372036854775807L, "inclusive-lower-bound-overflow")>]
+    let ``nullable populations jointly bound inclusive totals while retaining raw breakouts`` (cached: int64) (reasoning: int64) (total: int64) (issue: string) =
+        let counters = $"""{{"input_tokens":null,"output_tokens":null,"total_tokens":{total},"input_tokens_details":{{"cached_tokens":{cached}}},"output_tokens_details":{{"reasoning_tokens":{reasoning}}}}}"""
+        let observed = NativeResponses.decodeResponse (response "incomplete" counters) |> unwrap
+        Assert.Contains(issue, observed.Usage.Issues)
+        Assert.Equal<int64 option>(None, observed.Usage.InputTokens)
+        Assert.Equal<int64 option>(None, observed.Usage.OutputTokens)
+        Assert.Equal<int64 option>(Some cached, observed.Usage.CachedInputTokens)
+        Assert.Equal<int64 option>(Some reasoning, observed.Usage.ReasoningOutputTokens)
