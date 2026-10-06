@@ -130,14 +130,15 @@ bytes under 0.52.0 would make the same version identify different artifacts. Ado
 coherent set cut from corrected source. All three partial sets are recorded in
 `registry/dependencies.yml`.</FsggStandingAdvisories>
 
-    <PackageReleaseNotes>0.98.0 — additive telemetry attribution correction and native compact reports.
+    <PackageReleaseNotes>0.99.0 — process efficiency telemetry and current-store assessment preparation.
 
-Schema13 supports explicit audited local CI attribution correction while preserving original
-observations. Native compact/3 provides bounded source-bound report facts for the selected
-local dashboard migration. CLI, Kit and Drivers advance together; source merge, exact packaged
-qualification, publication and installed migration are separate acceptance boundaries.
-Historical unknown usage and independent remote Host gaps remain unknown. No old completed
-telemetry cycle or consumed release journal is replayed.
+Schema14 adds canonical original-group efficiency exports, bounded prospective assessment
+claims and optional runtime prelaunch publication. Drivers carry the assessment helper and
+closed schema inputs. The dashboard keeps Historical and Current stores independent.
+CLI, Kit and Drivers advance together; the independent Host0.5 bundles Store14 for native
+collection. Current source preparation does not establish packaged qualification, publication,
+installed migration, Python runtime availability or an accepted model-backed pilot.
+Unknown historical usage stays unknown; consumed0.98 and Host0.4 releases remain immutable.
 
 $(FsggStandingAdvisories)
 

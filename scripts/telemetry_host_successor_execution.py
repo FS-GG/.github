@@ -9,8 +9,8 @@ import re
 from release_successor_execution import Effect, Refused
 
 PACKAGE = "FS.GG.Telemetry.Host"
-VERSION = "0.4.0"
-TAG = "telemetry-host/v0.4.0"
+VERSION = "0.5.0"
+TAG = "telemetry-host/v0.5.0"
 
 
 def effects(manifest: dict) -> tuple[str, tuple[Effect, ...]]:
@@ -23,7 +23,7 @@ def effects(manifest: dict) -> tuple[str, tuple[Effect, ...]]:
         or not re.fullmatch(r"[0-9a-f]{64}", manifest.get("archiveSha256", ""))
         or not re.fullmatch(r"sha256:[0-9a-f]{64}", manifest.get("producerPayloadSha256", ""))
     ):
-        raise Refused("not an exact Host 0.4.0 release manifest")
+        raise Refused("not an exact Host 0.5.0 release manifest")
     canonical = json.dumps(manifest, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
     manifest_digest = hashlib.sha256(canonical).hexdigest()
     manifest_archive_digest = hashlib.sha256(canonical + b"\n").hexdigest()
