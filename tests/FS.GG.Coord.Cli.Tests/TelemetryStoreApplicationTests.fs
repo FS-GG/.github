@@ -3295,9 +3295,14 @@ COMMIT;
         command.CommandText <- sql
         string (command.ExecuteScalar())
 
-    let private correctionSnapshot (json: string) =
+    let private correctionSnapshot expectedFormat (json: string) =
+        let expectedSchema =
+            match expectedFormat with
+            | 2 -> "fsgg.telemetry.item-detail/2"
+            | 3 -> "fsgg.telemetry.item-detail/3"
+            | _ -> invalidArg "expectedFormat" "Only the two explicit dashboard contracts are supported"
         use envelope = JsonDocument.Parse json
-        Assert.Equal("fsgg.telemetry.item-detail/2", envelope.RootElement.GetProperty("schema").GetString())
+        Assert.Equal(expectedSchema, envelope.RootElement.GetProperty("schema").GetString())
         use compressed = new MemoryStream(Convert.FromBase64String(envelope.RootElement.GetProperty("canonicalSnapshotGzip").GetString()))
         use decompressor = new GZipStream(compressed, CompressionMode.Decompress)
         use decoded = new MemoryStream()
@@ -3366,7 +3371,7 @@ COMMIT;
         Assert.Contains("\"active\":true", history)
         Assert.Equal(Error [ "corrected-native-delivery-source-unsupported" ], TelemetryStoreApplication.resolveNativeDeliveryCandidate path approved ("routine-delivery:" + request.Prior.ItemId))
         Assert.Contains(request.Effective.ItemId, TelemetryStoreApplication.itemDetail path approved request.Effective.ItemId |> unwrap)
-        use snapshot = TelemetryStoreApplication.dashboardSnapshot path approved None |> unwrap |> correctionSnapshot
+        use snapshot = TelemetryStoreApplication.dashboardSnapshot path approved None |> unwrap |> correctionSnapshot 2
         let items = snapshot.RootElement.GetProperty("items").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList
         Assert.Contains(request.Effective.ItemId, items)
         Assert.DoesNotContain(request.Prior.ItemId, items)
@@ -3403,7 +3408,7 @@ COMMIT;
         Assert.Equal("0", correctionSql path $"SELECT count(*) FROM current_ingest_facts WHERE item_id='{request.Effective.ItemId}';")
         Assert.Equal("10", correctionSql path $"SELECT count(*) FROM ingest_facts WHERE item_id='{request.Prior.ItemId}';")
         Assert.Contains("\"factCount\":0", TelemetryStoreApplication.summary path approved request.Effective.ItemId |> unwrap)
-        use currentSnapshot = TelemetryStoreApplication.dashboardSnapshot path approved None |> unwrap |> correctionSnapshot
+        use currentSnapshot = TelemetryStoreApplication.dashboardSnapshot path approved None |> unwrap |> correctionSnapshot 2
         let currentItems = currentSnapshot.RootElement.GetProperty("items").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList
         Assert.Contains(chainedRequest.Effective.ItemId, currentItems)
         Assert.DoesNotContain(request.Prior.ItemId, currentItems)
@@ -3599,7 +3604,7 @@ SELECT 1;
         command.ExecuteNonQuery() |> ignore
 
     let private compactCiSnapshot path =
-        TelemetryStoreApplication.compactDashboardSnapshot path approved None |> unwrap |> correctionSnapshot
+        TelemetryStoreApplication.compactDashboardSnapshot path approved None |> unwrap |> correctionSnapshot 3
 
     [<Fact>]
     let ``compact dashboard CI preserves empty summary and version two`` () =
@@ -3615,7 +3620,7 @@ SELECT 1;
         Assert.Equal(JsonValueKind.Null, summary.GetProperty("runnerSeconds").ValueKind)
         let mutable omitted = Unchecked.defaultof<JsonElement>
         Assert.False(compact.RootElement.TryGetProperty("ciSteps", &omitted))
-        use original = TelemetryStoreApplication.dashboardSnapshot path approved None |> unwrap |> correctionSnapshot
+        use original = TelemetryStoreApplication.dashboardSnapshot path approved None |> unwrap |> correctionSnapshot 2
         Assert.Equal(JsonValueKind.Array, original.RootElement.GetProperty("ciSteps").ValueKind)
 
     [<Fact>]
@@ -3654,7 +3659,7 @@ SELECT 1;
         compactCiSql path "INSERT INTO budget_population_facts VALUES('p','item','item','open','test','test:p',0);"
         let hooks: TelemetryStoreApplication.DashboardSnapshotHooks =
             { AfterFirstRead = fun () -> compactCiSql path "INSERT INTO ci_steps VALUES('late','item','FS-GG/.github',1,1,1,1,'step','completed','success',NULL,NULL,'admin','test');" }
-        use compact = TelemetryStoreApplication.compactDashboardSnapshotWithHooks path approved hooks None |> unwrap |> correctionSnapshot
+        use compact = TelemetryStoreApplication.compactDashboardSnapshotWithHooks path approved hooks None |> unwrap |> correctionSnapshot 3
         let observedSummary = compact.RootElement.GetProperty("ciSummaries")[0]
         Assert.Equal(0L, observedSummary.GetProperty("steps").GetInt64())
         use after = JsonDocument.Parse(TelemetryStoreApplication.ciSummary path approved "item" |> unwrap)
@@ -3667,7 +3672,7 @@ SELECT 1;
         TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
         compactCiSql path "WITH RECURSIVE n(x) AS (SELECT 1 UNION ALL SELECT x+1 FROM n WHERE x<201) INSERT INTO budget_population_facts SELECT 'p'||x,'item'||x,'item'||x,'open','test','test:'||x,0 FROM n;"
         Assert.True(TelemetryStoreApplication.compactDashboardSnapshot path approved None |> Result.isError)
-        compactCiSql path "DELETE FROM budget_population_facts; WITH RECURSIVE n(x) AS (SELECT 1 UNION ALL SELECT x+1 FROM n WHERE x<10001) INSERT INTO budget_epochs SELECT 'epoch'||x,x,'verified' FROM n;"
+        compactCiSql path "DELETE FROM budget_population_facts; WITH RECURSIVE n(x) AS (SELECT 1 UNION ALL SELECT x+1 FROM n WHERE x<10001) INSERT INTO budget_epochs SELECT 'bound-epoch'||x,x+1,'verified' FROM n;"
         Assert.True(TelemetryStoreApplication.compactDashboardSnapshot path approved None |> Result.isError)
 
 
@@ -3676,7 +3681,7 @@ SELECT 1;
         let cleanup, path = root ()
         use cleanup = cleanup
         TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
-        compactCiSql path "INSERT INTO budget_population_facts VALUES('p','item','item','open','test','test:p',0); INSERT INTO budget_epochs VALUES('epoch',1,'verified'); WITH RECURSIVE n(x) AS (SELECT 1 UNION ALL SELECT x+1 FROM n WHERE x<40) INSERT INTO budget_epochs SELECT hex(randomblob(65536)),x+1,'verified' FROM n;"
+        compactCiSql path "INSERT INTO budget_population_facts VALUES('p','item','item','open','test','test:p',0); WITH RECURSIVE n(x) AS (SELECT 1 UNION ALL SELECT x+1 FROM n WHERE x<40) INSERT INTO budget_epochs SELECT hex(randomblob(65536)),x+1,'verified' FROM n;"
         Assert.True(TelemetryStoreApplication.compactDashboardSnapshot path approved None |> Result.isError)
 
 
