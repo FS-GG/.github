@@ -89,6 +89,16 @@ def archive_members(package, pin):
         names = archive.namelist()
         require(len(names) == len(set(names)), "duplicate dependency archive member")
         require(sum(x.file_size for x in archive.infolist()) <= 134217728, "dependency expansion bound")
+        require("FS.GG.Coord.Cli.nuspec" in names, "published dependency package metadata missing")
+        metadata = ElementTree.fromstring(archive.read("FS.GG.Coord.Cli.nuspec"))
+        def values(name):
+            return [node for node in metadata.iter() if node.tag.rsplit("}", 1)[-1] == name]
+        package_ids, versions, repositories = values("id"), values("version"), values("repository")
+        require(len(package_ids) == len(versions) == len(repositories) == 1
+                and package_ids[0].text == "FS.GG.Coord.Cli"
+                and versions[0].text == pin["version"]
+                and repositories[0].get("commit") == pin["sourceSha"],
+                "published dependency package/version/source identity changed")
         for entry in archive.infolist():
             name = entry.filename
             path = pathlib.PurePosixPath(name)
@@ -121,7 +131,7 @@ def layout(root, dependencies, pin):
             name = assembly + suffix
             require(digest(regular(output / name)) == pin["members"][name], "staged project dependency changed")
     return {"sourceSha": pin["sourceSha"], "archiveSha256": pin["archiveSha256"],
-            "coherentVersion": "0.97.0", "dependencyMembers": len(pin["members"])}
+            "coherentVersion": "0.97.1", "dependencyMembers": len(pin["members"])}
 
 
 def stage(root, dependencies, package, pin):

@@ -56,10 +56,10 @@ jobs:
           set -euo pipefail
           mkdir -p artifacts/dependency-input
           curl --fail --silent --show-error --location --max-time 120 --max-filesize 67108864 \
-            https://github.com/FS-GG/.github/releases/download/coherent-set/v0.97.0/FS.GG.Coord.Cli.0.97.0.nupkg \
-            --output artifacts/dependency-input/FS.GG.Coord.Cli.0.97.0.nupkg
+            https://github.com/FS-GG/.github/releases/download/coherent-set/v0.97.1/FS.GG.Coord.Cli.0.97.1.nupkg \
+            --output artifacts/dependency-input/FS.GG.Coord.Cli.0.97.1.nupkg
           python3 scripts/creator-frozen-coord-dependencies.py stage \
-            --package artifacts/dependency-input/FS.GG.Coord.Cli.0.97.0.nupkg \
+            --package artifacts/dependency-input/FS.GG.Coord.Cli.0.97.1.nupkg \
             --dependencies "${FsggFrozenCoordDependencies:?job frozen dependency path required}"
       - name: Qualify wizard source
         run: bash tests/new-sdd-workspace/run.sh
