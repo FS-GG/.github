@@ -350,6 +350,43 @@ mkdir -p "$r/tests/pyred"; printf 'print("87 passed, 0 failed")\nraise SystemExi
 mkdir -p "$r/src"; echo x > "$r/src/a.fs"; seal "$r"; touchf "$r" src/a.fs
 expect "a python suite is run BY python3 and its exit code is reported" 1 "exit 7" "$r" --base HEAD
 
+# Directory discovery preserves cases without unittest.main(), rather than inventing
+# direct file invocations that silently execute no assertions.
+r="$(root vocab-unittest)"
+cat > "$r/.github/workflows/w.yml" <<'EOF'
+name: w
+on: { pull_request: { paths: ["src/**"] } }
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - run: python3 -m unittest discover -s tests/discovered -p 'test_*.py'
+EOF
+mkdir -p "$r/tests/discovered" "$r/src"
+cat > "$r/tests/discovered/test_case.py" <<'EOF'
+import unittest
+class Discovered(unittest.TestCase):
+    def test_real_refusal_without_main(self):
+        self.fail('actual discovery assertion')
+EOF
+echo x > "$r/src/a.fs"; seal "$r"; touchf "$r" src/a.fs
+selects "exact unittest discovery is derived with the original pattern" "$r" yes "python3 -m unittest discover -p test_*.py -s tests/discovered"
+expect "discovery wires its directory without an exemption" 0 "0 unexplained" "$r" --assert-wired
+expect "discovery executes a real case without unittest.main and propagates failure" 1 "actual discovery assertion" "$r" --base HEAD
+cat > "$r/.github/workflows/w.yml" <<'EOF'
+name: w
+on: { pull_request: { paths: ["src/**"] } }
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - run: bash tests/real/run.sh
+      - run: python3 -m unittest discover -s tests/discovered -p 'other_*.py'
+      - run: python3 -m unittest discover -s tests/discovered -p 'test_*.py' -t elsewhere
+EOF
+suite "$r" tests/real/run.sh
+selects "unsupported discovery patterns and trailing options are not guessed" "$r" no "-s tests/discovered"
+
 # NARROWNESS, in the safe direction. The patterns anchor tests/ immediately after the runner word, so
 # an indirect invocation is NOT invented as a suite — it surfaces as an UNWIRED report somebody must
 # answer for, whereas a greedy pattern would manufacture suites out of ordinary shell and then fail the
