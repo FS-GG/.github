@@ -139,6 +139,10 @@
     <Compile Include="CycleLedger.fs" />
     <Compile Include="Telemetry.fsi" />
     <Compile Include="Telemetry.fs" />
+    <Compile Include="EfficiencyInput.fsi" />
+    <Compile Include="EfficiencyInput.fs" />
+    <Compile Include="EfficiencyEvidence.fsi" />
+    <Compile Include="EfficiencyEvidence.fs" />
     <Compile Include="TelemetryStore.fsi" />
     <Compile Include="TelemetryStore.fs" />
     <Compile Include="TelemetryReceipt.fsi" />

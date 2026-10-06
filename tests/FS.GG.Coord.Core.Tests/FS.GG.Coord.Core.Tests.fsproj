@@ -42,6 +42,8 @@
     <Compile Include="TelemetryCiTests.fs" />
     <Compile Include="TelemetryBudgetTests.fs" />
     <Compile Include="ProcessEfficiencyTests.fs" />
+    <Compile Include="EfficiencyInputTests.fs" />
+    <Compile Include="EfficiencyEvidenceTests.fs" />
     <Compile Include="QualificationTests.fs" />
     <Compile Include="RoadmapWorkUnitTests.fs" />
     <Compile Include="DeliveryTests.fs" />

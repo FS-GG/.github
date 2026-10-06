@@ -307,6 +307,7 @@ module TelemetryStore =
             occurredClockProvenance: string option *
             observedAt: string option *
             observedClockProvenance: string option
+        | EfficiencyRecord of EfficiencyInput.Record
         | ProcessReview of ProcessReview
         | ActivitySpan of ActivitySpan
         | ActivityUsageAttribution of ActivityUsageAttribution
@@ -748,6 +749,14 @@ module TelemetryStore =
                     })
 
             match kind with
+            | "efficiency-resource-allocation/1"
+            | "efficiency-problem-episode/1"
+            | "efficiency-assessment/1" ->
+                EfficiencyInput.parseEvent node
+                |> Result.bind (fun record ->
+                    make [ "resource"; "shares"; "coverage"; "provenance"; "occurredAt"; "observedAt"
+                           "subject"; "finding"; "evidenceRefs"; "allocationRefs"; "assessment" ]
+                         (EfficiencyRecord record))
             | "item" ->
                 optionalText label node "featureId"
                 |> Result.bind (Item >> make [ "featureId" ])
