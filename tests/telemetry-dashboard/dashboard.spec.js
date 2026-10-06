@@ -294,3 +294,47 @@ test("hidden pages pause checks, resume overdue, and requests never overlap", as
   await expect(page.locator("#error")).toContainText("timed out");
   expect(await page.evaluate(()=>window.__refreshProbe.peak)).toBe(1);
 });
+
+function sourceDeliveredHost() {
+  const host=completedHost(["one","two","three","four","five"]);
+  host.schema="fsgg.telemetry.dashboard-host/4";
+  host.revision="a".repeat(64);
+  host.sourceDeliveries={schema:"fsgg.telemetry.source-deliveries/1",coverage:{eligible:1,published:1,unmapped:0,dirty:0,incompatible:0},items:[{
+    key:"governance-ci",label:"Governance CI",url:"https://github.com/FS-GG/governance_config/pull/444",state:"source-delivered",operationalCompletion:"unestablished",deliveredAt:"2026-10-05T19:00:00Z",
+    deliveries:[{repository:"FS-GG/governance_config",number:444,url:"https://github.com/FS-GG/governance_config/pull/444",mergedAt:"2026-10-05T19:00:00Z"}]
+  }]};
+  return host;
+}
+
+test("host4 source delivery is separate from five completed items and exposes no cost",async({page})=>{
+  await page.route("**/data/dashboard.json",route=>route.fulfill({json:payload(sourceDeliveredHost())}));
+  await page.goto("/");
+  await expect(page.locator(".item-card")).toHaveCount(5);
+  await expect(page.locator("#source-deliveries article")).toHaveCount(1);
+  await expect(page.locator("#source-deliveries")).toContainText("operational completion unestablished");
+  await expect(page.locator("#source-deliveries a").last()).toHaveAttribute("href","https://github.com/FS-GG/governance_config/pull/444");
+  await expect(page.locator("#source-deliveries")).not.toContainText("0 tokens");
+  await expect(page.locator("#provenance")).toContainText("a".repeat(64));
+});
+
+test("malformed host4 private fields and revision keep last good source delivery; host3 recovers",async({page})=>{
+  await page.clock.install(); let requests=0;
+  await page.route("**/data/dashboard.json",route=>{
+    requests++;const host=sourceDeliveredHost();
+    if(requests===2) host.sourceDeliveries.items[0].privateNotes="PRIVATE SENTINEL";
+    if(requests===3) host.revision="bad";
+    if(requests>=4){host.schema="fsgg.telemetry.dashboard-host/3";delete host.sourceDeliveries;}
+    return route.fulfill({json:payload(host)});
+  });
+  await page.goto("/");
+  for(let i=0;i<2;i++){
+    await page.clock.runFor(60000);await expect.poll(()=>requests).toBeGreaterThanOrEqual(i+2);
+    await expect(page.locator("#error")).toContainText("showing last good data");
+    await expect(page.locator("#source-deliveries article")).toHaveCount(1);
+    await expect(page.locator("body")).not.toContainText("PRIVATE SENTINEL");
+  }
+  await page.clock.runFor(60000);await expect.poll(()=>requests).toBeGreaterThanOrEqual(4);
+  await expect(page.locator("#error")).toBeHidden();
+  await expect(page.locator("#source-deliveries")).toBeEmpty();
+  await expect(page.locator(".item-card")).toHaveCount(5);
+});

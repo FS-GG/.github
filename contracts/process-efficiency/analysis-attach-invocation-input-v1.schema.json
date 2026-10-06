@@ -1,0 +1,163 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:fsgg:telemetry:analysis-attach-invocation-input-v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "cas",
+    "claimId",
+    "dispatchRef",
+    "invocationRef",
+    "lineageRefs",
+    "authority",
+    "attachedAt"
+  ],
+  "properties": {
+    "schema": {
+      "const": "fsgg.telemetry.efficiency-analysis-attach-invocation-input/1"
+    },
+    "cas": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "requestId",
+        "expectedRevision",
+        "expectedContentDigest"
+      ],
+      "properties": {
+        "requestId": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "expectedContentDigest": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        }
+      }
+    },
+    "claimId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "dispatchRef": {
+      "$ref": "#/$defs/sourceRef"
+    },
+    "invocationRef": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "lineageRefs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/sourceRef"
+      },
+      "maxItems": 16
+    },
+    "authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sourceIdentity",
+        "authorityRole",
+        "authorityRef",
+        "rootDispatchRef",
+        "invocationRef"
+      ],
+      "properties": {
+        "sourceIdentity": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "authorityRole": {
+          "enum": [
+            "runtime-observer",
+            "ci-observer",
+            "root-reviewer",
+            "completion-analyst"
+          ]
+        },
+        "authorityRef": {
+          "$ref": "#/$defs/sourceRef"
+        },
+        "rootDispatchRef": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 256
+        },
+        "invocationRef": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 256
+        }
+      }
+    },
+    "attachedAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "$defs": {
+    "sourceRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "kind",
+        "revision",
+        "contentDigest"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "kind": {
+          "enum": [
+            "runtime-turn-usage",
+            "usage",
+            "ci-run",
+            "ci-job",
+            "ci-step",
+            "activity-span",
+            "complication",
+            "process-review",
+            "native-item-outcome",
+            "expected-dispatch",
+            "invocation-lineage",
+            "runtime-admission",
+            "operational-activation",
+            "efficiency-resource-allocation/1",
+            "efficiency-problem-episode/1",
+            "efficiency-assessment/1",
+            "evidence",
+            "pull-request-head",
+            "source"
+          ]
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9223372036854775807
+        },
+        "contentDigest": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        }
+      }
+    }
+  },
+  "$comment": "Inactive CAS attach action, no new invocation authorization or budget. Actual lineage/runtime admission must match current claim dispatched witness, owner and generation."
+}

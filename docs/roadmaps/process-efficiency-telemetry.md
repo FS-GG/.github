@@ -1,6 +1,6 @@
 # Process efficiency telemetry delivery roadmap
 
-Identity: **V2-EFF-01**. Authored: **2026-10-06**. Status: **planned; all implementation milestones open**.
+Identity: **V2-EFF-01**. Authored: **2026-10-06**. Status: **active; measurement contract and synthetic examples accepted, producer and consumer implementation in progress**.
 Parent: [V2 roadmap](../github-substrate-v2-roadmap.md#v2-eff-01--process-efficiency-telemetry--2026-10-06).
 Design: [process efficiency telemetry and dashboard](../designs/process-efficiency-telemetry.md).
 Evidence: [22-source prior-art review](../research/2026-10-06-process-efficiency-telemetry-prior-art.md).
@@ -38,14 +38,14 @@ then-current protected contracts, not inferred from this proposal's examples.
 
 ### V2-EFF-01.1 — Freeze the measurement contract and labeled examples
 
-- [ ] Owner: telemetry contract maintainer, with dashboard and programme maintainers supplying consumers.
-- [ ] Define the activity/purpose/cause/necessity axes, evidence statuses, metrics and population rules.
+- [x] Owner: telemetry contract maintainer, with dashboard and programme maintainers supplying consumers.
+- [x] Define the activity/purpose/cause/necessity axes, evidence statuses, metrics and population rules.
   Map them explicitly to current records and economics profiles. Resolve overlap, shared allocations,
   incomplete accounting, provisional delivery assessments and supported corrections.
-- [ ] Produce the labeled corpus and hand-calculated metric fixtures described in the design. Include
+- [x] Produce the labeled corpus and hand-calculated metric fixtures described in the design. Include
   clean work, useful failed validation, avoidable replay, changed-input reruns, infrastructure/context
   problems, incorrect lineage and delivered-but-missing-runtime cases.
-- [ ] Select versioned extensions and migration against current protected schemas. Keep existing
+- [x] Select versioned extensions and migration against current protected schemas. Keep existing
   consumers valid. Pin any external trace convention used by an adapter.
 
 Dependencies: none beyond current contract inspection. Touch-set: canonical contract/design declarations
@@ -54,6 +54,16 @@ Acceptance: maintainers can classify the examples consistently, reproduce totals
 fact from inference and identify every unknown denominator. A synthetic cross-item correction selects
 one current outcome and conserves cost. The milestone is complete when these contracts are concrete,
 not when another general planning document is written.
+
+Contract acceptance: [versioned declarations](../../contracts/process-efficiency/README.md)
+freeze the vocabulary, canonical joins, existing economics-profile aliases, additive producer inputs
+and atomic assessment-request lifecycle. Thirteen focused Python tests and 23 hand-calculated cases
+passed; all nine Draft 2020-12 schemas and 20 samples passed full schema validation. The synthetic
+corpus contains 30 development and 30 reserved held-out episodes. Historical source pins were
+verified locally; shallow CI explicitly skips only that historical-object check, without fetching
+repository history. The existing dashboard test job runs the semantic fixtures with unchanged job
+dependencies and time limits. No native store migration or analysis is activated by these contracts;
+calibration, savings, coherent publication and installed adoption remain open.
 
 ### V2-EFF-01.2 — Add canonical measurement and correction support
 
