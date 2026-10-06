@@ -485,3 +485,13 @@ with zero unexpected, skipped or flaky results; the successful native provider c
 This retains the original 0.32.1 candidate archive from run 37419955679/1. No package was
 regenerated. DOM automation does not establish actual screen-reader use. Stage D publication,
 both-feed readback and adoption of published packages remain separate outstanding obligations.
+
+## Stage D boundary source delivery — 2026-10-06
+
+[Rendering #1392](https://github.com/FS-GG/FS.GG.Rendering/pull/1392) merged at
+`01bc86518f3ab0c9c842a1ddc660c4d5326bc6f8` with required and coherent validation passed
+for exact head `ceee5447779f62936b486421e5ed4be99c4e7023`. Retained native qualification
+accepted five outcomes and fifteen boundary cases; the reporter's exit 2 remains separate
+from those accepted cases. The route retains `attemptReady=false`: Stage D publication and
+readiness, both-feed readback and adoption remain pending. No candidate archive is regenerated
+and no publication effect is authorized by this source closure.
