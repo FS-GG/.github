@@ -59,7 +59,9 @@ module internal NativeResponsesAssessment =
             for name in ["itemId";"outcomeId";"outcomeEpoch";"scope"] do keyParts.Add(if isNull packet.["subject"].[name] then null else packet.["subject"].[name].DeepClone())
             keyParts.Add(JsonValue.Create digest)
             keyParts.Add(JsonValue.Create "efficiency-analysis-policy/1")
-            require (CanonicalJson.sha256(utf8.GetBytes(canonical keyParts))=input.RequestId) "assessment-idempotency-key-mismatch"
+            use keyDocument = JsonDocument.Parse(keyParts.ToJsonString())
+            let keyBytes = EfficiencyEvidence.encode keyDocument.RootElement |> Result.defaultWith invalidOp
+            require (CanonicalJson.sha256 keyBytes=input.RequestId) "assessment-idempotency-key-mismatch"
             require (JsonNode.DeepEquals(model.["subject"],packet.["subject"])
                      && JsonNode.DeepEquals(model.["subject"],request.["subject"])) "assessment-subject-mismatch"
             require (JsonNode.DeepEquals(model.["coverage"],packet.["coverage"])

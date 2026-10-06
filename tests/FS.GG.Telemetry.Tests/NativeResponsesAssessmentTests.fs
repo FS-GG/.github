@@ -24,7 +24,7 @@ module NativeResponsesAssessmentTests =
             canonicalRef.["kind"] <- JsonValue.Create(if reference.["kind"].GetValue<string>()="outcome" then "native-item-outcome" else "process-review")
             canonicalRef.["contentDigest"] <- JsonValue.Create("sha256:" + String.replicate 64 "a")
             row.["canonicalRef"] <- canonicalRef
-            row.["itemId"] <- JsonValue.Create "A"
+            row.["itemId"] <- assessment.["subject"].["itemId"].DeepClone()
             row.["payload"] <- JsonObject()
             row.["priority"] <- JsonValue.Create "success"
             row.["analysisGenerated"] <- JsonValue.Create false
@@ -47,7 +47,8 @@ module NativeResponsesAssessmentTests =
             keys.Add(if isNull value then null else value.DeepClone())
         keys.Add(JsonValue.Create digest)
         keys.Add(JsonValue.Create "efficiency-analysis-policy/1")
-        let requestId = CanonicalJson.sha256(canonical keys)
+        use keyDocument = System.Text.Json.JsonDocument.Parse(keys.ToJsonString())
+        let requestId = CanonicalJson.sha256(EfficiencyEvidence.encode keyDocument.RootElement |> unwrap)
         let request = JsonObject()
         request.["requestId"] <- JsonValue.Create requestId
         request.["analysisPolicyVersion"] <- JsonValue.Create "efficiency-analysis-policy/1"
@@ -62,13 +63,21 @@ module NativeResponsesAssessmentTests =
     [<InlineData("native-partial")>]
     [<InlineData("provisional-unknown-epoch")>]
     [<InlineData("supported-evidence")>]
+    [<InlineData("retained-text-codec")>]
+    [<InlineData("retained-subject-codec")>]
     let ``valid declarations remain private partial without completion authority`` (scenario: string) =
         let assessment = model()
         if scenario="provisional-unknown-epoch" then
             assessment.["subject"].["scope"] <- JsonValue.Create "provisional-delivery"
             assessment.["subject"].["outcomeEpoch"] <- null
+        if scenario="retained-subject-codec" then assessment.["subject"].["itemId"] <- JsonValue.Create "A&BÅ"
         if scenario="supported-evidence" then assessment.["findings"].AsArray().Add(finding())
-        let input = fixture assessment (packet assessment)
+        let evidence = packet assessment
+        if scenario="retained-text-codec" then
+            evidence.["records"].[0].["payload"].["text"] <- JsonValue.Create "Observed's <scope> with Å and 💡."
+        let input = fixture assessment evidence
+        if scenario="retained-text-codec" then
+            Assert.False(input.PacketBytes = canonical evidence)
         let prepared = NativeResponsesAssessment.prepare input |> unwrap
         let actual = JsonNode.Parse(utf8.GetString prepared)
         Assert.Equal("partial",actual.["lifecycle"].["state"].GetValue<string>())
