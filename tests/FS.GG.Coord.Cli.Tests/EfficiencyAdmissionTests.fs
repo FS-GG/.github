@@ -310,3 +310,137 @@ module EfficiencyAdmissionTests =
         Assert.Equal(Error ["analysis-budget-exhausted"],TelemetryStoreApplication.efficiencyAnalysisClaimProspective path approved principal "analyst-dispatch-4" "A" (Encoding.UTF8.GetBytes(fourth.ToJsonString())))
         Assert.Equal("3",scalar path "SELECT count(*) FROM efficiency_analysis_reservations;")
         Assert.Equal("3",scalar path "SELECT count(*) FROM efficiency_analysis_reservations WHERE state='unknown';")
+
+    // Every positive below is an explicitly synthetic authenticated receiver fixture.
+    // It proves joins, not real exec isolation, installed capability or native baseline.
+    let private execThread = "11111111-1111-4111-8111-111111111111"
+    let private execDigest = String.replicate 64 "a"
+    let private execTurn completed =
+        let node = JsonNode.Parse($"""{{"localTurnKey":{{"captureSha256":"{execDigest}","threadId":"{execThread}","startFrameOrdinal":1}},"turnSequence":1,"nativeTurnId":null}}""")
+        if completed then
+            node["status"] <- JsonValue.Create "completed"
+            node["usageAvailable"] <- JsonValue.Create true
+        node
+
+    let private execFixture (originVariant: string option) =
+        let cleanup,path,pending = pendingFixture()
+        Assert.Contains("\"rejected\":0",submit path "exec-dispatch" [analystDispatch])
+        let claimed = TelemetryStoreApplication.efficiencyAnalysisClaimProspective path approved principal "analyst-dispatch" "A" (claimTemplate pending "exec-claim") |> unwrap |> JsonNode.Parse
+        let admissionEvent = admission.Replace("admission-a","analyst-admission").Replace("invoke-a","analyst-invocation")
+        let lineageEvent = """{"kind":"invocation-lineage","identity":"analyst-lineage","itemId":"A","revision":0,"dispatchId":"analyst","invocationId":"analyst-invocation","relation":"root","parentInvocationId":null,"rootInvocationId":"analyst-invocation","runtime":"codex-exec"}"""
+        let startEvent = """{"kind":"runtime-start","identity":"exec-start","itemId":"A","revision":0,"invocationId":"analyst-invocation","threadId":null,"turnId":null,"turnSequence":null,"processId":42,"phase":"process"}"""
+        let usageEvent = (usage 0).Replace("usage-a","exec-usage").Replace("invoke-a","analyst-invocation").Replace("thread-a",execThread).Replace("\"turnId\":\"turn-a\"","\"turnId\":null")
+        Assert.Contains("\"rejected\":0",submit path "exec-started" [admissionEvent;lineageEvent;startEvent;usageEvent])
+        let attach = JsonNode.Parse("""{"schema":"fsgg.telemetry.efficiency-analysis-attach-invocation-input/1","cas":null,"claimId":"exec-claim","dispatchRef":null,"invocationRef":"analyst-invocation","lineageRefs":[],"authority":null,"attachedAt":"2026-10-06T00:22:00Z"}""")
+        attach["cas"] <- JsonSerializer.SerializeToNode {| requestId=claimed["requestId"].GetValue<string>(); expectedRevision=claimed["revision"].GetValue<int64>(); expectedContentDigest=claimed["contentDigest"].GetValue<string>() |}
+        attach["dispatchRef"] <- claimed["dispatchRef"].DeepClone()
+        attach["authority"] <- pending.["canonicalRequest"].["authority"].DeepClone()
+        for event in [admissionEvent;lineageEvent;startEvent] do attach["lineageRefs"].AsArray().Add(sourceRef event)
+        TelemetryStoreApplication.efficiencyAnalysis path approved principal "attach-invocation" (Encoding.UTF8.GetBytes(attach.ToJsonString())) None |> unwrap |> ignore
+        let nativeScope = { scope with Producer="native-producer";Stream="native-stream" }
+        let native : TelemetryReceipt.Principal = { Scope=nativeScope;Role=TelemetryReceipt.NativeCollector;GrantId=Some "exec-grant";GrantGeneration=Some 7L }
+        TelemetryStoreApplication.enrollReceiptPrincipal path approved native |> unwrap |> ignore
+        let now = DateTimeOffset.UtcNow
+        let origin = JsonNode.Parse($"""{{"kind":"learn-installed-origin/1","identity":"exec-origin","revision":0,"workspaceId":"{scope.Workspace}","producerId":"{nativeScope.Producer}","streamId":"{nativeScope.Stream}","role":"native-collector","grantId":"exec-grant","grantGeneration":7,"managerReceiptSha256":"{execDigest}","capabilityProfileSha256":"{execDigest}","capabilityResultSha256":"{execDigest}","nativeCaptureSha256":"{execDigest}","nativeVerificationSha256":"{execDigest}","capabilityObservedAt":"{now.AddMinutes(-1.).ToString("O")}","capabilityExpiresAt":"{now.AddHours(1.).ToString("O")}","installationSha256":"{execDigest}"}}""")
+        originVariant |> Option.iter(fun variant -> origin["nativeSourceVariant"] <- JsonValue.Create variant)
+        Assert.Contains("\"rejected\":0",submitAs native path "exec-origin" [origin.ToJsonString()])
+        let inventory = JsonNode.Parse($"""{{"kind":"runtime-native-inventory/1","identity":"exec-inventory","itemId":"A","revision":0,"inventoryId":"exec-inventory","originalItemId":"A","invocationId":"analyst-invocation","page":1,"pages":1,"turnNamespace":"codex-exec-jsonl/1","expectedTurns":[],"expectedProvider":"openai","requestedModel":"sol","requestedEffort":"medium","support":"provider-native-final-turn-counters","followupBaseline":0,"capturedAt":"{now.ToString("O")}","sourceKind":"provider-capability-and-dispatch-roster","sourceDigest":"{execDigest}"}}""")
+        inventory["expectedTurns"].AsArray().Add(execTurn false)
+        let binding = JsonNode.Parse($"""{{"schema":"fsgg.telemetry.native-inventory-source-binding/2","producerIdentity":"fsgg-work-roadmap-native-collector/1","capturedAt":"{now.ToString("O")}","hostSource":"codex-exec-jsonl","rootInvocationId":"analyst-invocation","invocationId":"analyst-invocation","revision":0,"threadId":"{execThread}","captureSha256":"{execDigest}","captureBytes":123,"commandBindingSha256":"{execDigest}","custodyReceiptSha256":"{execDigest}","claimRef":null,"turnRoster":[]}}""")
+        binding["dispatchRef"] <- sourceRef analystDispatch
+        binding["runtimeStartRef"] <- sourceRef startEvent
+        binding["installedOriginRef"] <- sourceRef (origin.ToJsonString())
+        binding["claimRef"] <- JsonSerializer.SerializeToNode {| requestId=claimed["requestId"].GetValue<string>();claimId="exec-claim";revision=claimed["revision"].GetValue<int64>();contentDigest=claimed["contentDigest"].GetValue<string>();owner={|producer=scope.Producer;stream=scope.Stream|};generation=1 |}
+        binding["turnRoster"].AsArray().Add(execTurn true)
+        cleanup,path,native,inventory,binding,usageEvent
+
+    let private execSource (binding: JsonNode) =
+        let bytes = CanonicalJson.canonicalize(Encoding.UTF8.GetBytes(binding.ToJsonString())) |> Result.defaultWith failwith |> Encoding.UTF8.GetBytes
+        let source = JsonNode.Parse($"""{{"kind":"runtime-native-inventory-source/1","identity":"exec-source","itemId":"A","revision":0,"inventoryId":"exec-inventory","originalItemId":"A","invocationId":"analyst-invocation","sourceDigest":"{execDigest}","sourceBinding":{{"schema":"fsgg.telemetry.native-inventory-source-binding/2","producerIdentity":"fsgg-work-roadmap-native-collector/1","sha256":"{CanonicalJson.sha256 bytes}","bytesBase64":"{Convert.ToBase64String bytes}"}}}}""")
+        source.ToJsonString()
+
+    let private execAllocation source usageEvent =
+        let node = allocation()
+        node["identity"] <- JsonValue.Create "exec-allocation"
+        node["resource"]["sourceRef"] <- sourceRef usageEvent
+        node["provenance"]["authorityRole"] <- JsonValue.Create "runtime-observer"
+        node["provenance"]["authorityRef"] <- sourceRef source
+        node["provenance"]["invocationRef"] <- JsonValue.Create "analyst-invocation"
+        node["shares"][0]["evidenceRefs"].AsArray().Clear()
+        node["shares"][0]["evidenceRefs"].AsArray().Add(sourceRef usageEvent)
+        node.ToJsonString()
+
+    [<Fact>]
+    let ``synthetic exec source joins exact claimed history and existing nullable usage once`` () =
+        let cleanup,path,native,inventory,binding,usageEvent = execFixture (Some "codex-exec-jsonl/1")
+        use cleanup = cleanup
+        let source = execSource binding
+        Assert.Contains("\"rejected\":0",submitAs native path "exec-witnesses" [inventory.ToJsonString();source])
+        let event = execAllocation source usageEvent
+        Assert.Contains("\"rejected\":0",submit path "exec-classification" [event])
+        Assert.Contains("\"rejected\":0",submit path "exec-classification-replay" [event])
+        Assert.Equal("1",scalar path "SELECT count(*) FROM runtime_turn_usage WHERE invocation_id='analyst-invocation';")
+        Assert.Equal("1",scalar path "SELECT count(*) FROM efficiency_records WHERE identity='exec-allocation';")
+        Assert.Equal("1",scalar path "SELECT count(*) FROM runtime_turn_usage WHERE identity='exec-usage' AND turn_id IS NULL AND reasoning IS NULL AND turn_sequence=1 AND total=100;")
+
+    [<Theory>]
+    [<InlineData("owner")>]
+    [<InlineData("generation")>]
+    [<InlineData("digest")>]
+    [<InlineData("attached-revision")>]
+    [<InlineData("dispatch")>]
+    [<InlineData("start")>]
+    [<InlineData("origin")>]
+    [<InlineData("roster")>]
+    let ``synthetic exec receiver refuses mismatched history lineage or local roster`` (failure: string) =
+        let cleanup,path,native,inventory,binding,usageEvent = execFixture (Some "codex-exec-jsonl/1")
+        use cleanup = cleanup
+        match failure with
+        | "owner" -> binding["claimRef"]["owner"]["producer"] <- JsonValue.Create "foreign"
+        | "generation" -> binding["claimRef"]["generation"] <- JsonValue.Create 2
+        | "digest" -> binding["claimRef"]["contentDigest"] <- JsonValue.Create("sha256:"+String.replicate 64 "b")
+        | "attached-revision" ->
+            let attached = JsonNode.Parse(scalar path "SELECT canonical FROM efficiency_analysis_requests;")
+            binding["claimRef"]["revision"] <- attached["revision"].DeepClone()
+            binding["claimRef"]["contentDigest"] <- attached["contentDigest"].DeepClone()
+        | "dispatch" -> binding["dispatchRef"]["id"] <- JsonValue.Create "missing-dispatch"
+        | "start" -> binding["runtimeStartRef"]["id"] <- JsonValue.Create "missing-start"
+        | "origin" -> binding["installedOriginRef"]["id"] <- JsonValue.Create "missing-origin"
+        | "roster" -> inventory["expectedTurns"][0]["localTurnKey"]["startFrameOrdinal"] <- JsonValue.Create 2
+        | _ -> failwith "unknown fixture"
+        let source = execSource binding
+        Assert.Contains("\"rejected\":0",submitAs native path "exec-witnesses" [inventory.ToJsonString();source])
+        assertRejected path "exec-classification" (JsonNode.Parse(execAllocation source usageEvent))
+
+    [<Fact>]
+    let ``old AppServer origin never upgrades an exec inventory grant`` () =
+        let cleanup,path,native,inventory,binding,usageEvent = execFixture None
+        use cleanup = cleanup
+        let source = execSource binding
+        Assert.Contains("\"rejected\":0",submitAs native path "exec-witnesses" [inventory.ToJsonString();source])
+        assertRejected path "exec-classification" (JsonNode.Parse(execAllocation source usageEvent))
+
+    [<Theory>]
+    [<InlineData(false)>]
+    [<InlineData(true)>]
+    let ``exec source without applied NativeCollector receipt remains unavailable`` (unapplied: bool) =
+        let cleanup,path,native,inventory,binding,usageEvent = execFixture (Some "codex-exec-jsonl/1")
+        use cleanup = cleanup
+        let source = execSource binding
+        if unapplied then
+            let payload = Encoding.UTF8.GetString(batch "unapplied-exec" [inventory.ToJsonString();source])
+            let ns = native.Scope
+            let envelope = Encoding.UTF8.GetBytes($"""{{"schema":"{TelemetryReceipt.Schema}","workspaceId":"{ns.Workspace}","producerId":"{ns.Producer}","streamId":"{ns.Stream}","batchId":"unapplied-exec","payload":{payload}}}""")
+            TelemetryStoreApplication.submitReceiptPrincipal path approved native envelope |> unwrap |> ignore
+            Assert.Equal("0",scalar path "SELECT count(*) FROM ingest_facts WHERE identity='exec-source';")
+        else
+            Assert.Contains("\"rejected\":0",submit path "generic-exec-witnesses" [inventory.ToJsonString();source])
+        assertRejected path "exec-classification" (JsonNode.Parse(execAllocation source usageEvent))
+
+    [<Fact>]
+    let ``second runtime identity for one exec local turn cannot duplicate its resource`` () =
+        let cleanup,path,_,_,_,usageEvent = execFixture (Some "codex-exec-jsonl/1")
+        use cleanup = cleanup
+        let duplicate = usageEvent.Replace("exec-usage","duplicate-exec-usage")
+        Assert.Contains("\"rejected\":1",submit path "duplicate-exec-turn" [duplicate])
+        Assert.Equal("1",scalar path "SELECT count(*) FROM runtime_turn_usage WHERE invocation_id='analyst-invocation';")

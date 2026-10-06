@@ -1882,6 +1882,7 @@ WHERE f.identity=$resource AND f.revision=$sourceRevision AND f.content_digest=$
                 if assigned <> 0L then
                     invalidOp $"shared allocation for %s{rosterItem} must be persisted before assignment"
         | TelemetryStore.RuntimeNativeInventory _
+        | TelemetryStore.RuntimeExecNativeInventory _
         | TelemetryStore.RuntimeNativeInventorySource _
         | TelemetryStore.LearnSharedCost _
         | TelemetryStore.LearnSharedCostAuthority _
@@ -2781,6 +2782,70 @@ AND NOT EXISTS(SELECT 1 FROM budget_attribution_facts f WHERE f.item_id=budget_b
         }
         collect node |> Seq.toList
 
+    // A queue claim is a receiver history/CAS reference, not an ingest fact.
+    // Recheck its original revision and the later attachment in this same read transaction.
+    let private efficiencyExecClaimJoined (connection: SqliteConnection) (item: string)
+                                          (invocation: string) (binding: JsonElement) =
+        let claim = binding.GetProperty "claimRef"
+        let owner = claim.GetProperty "owner"
+        let dispatch = binding.GetProperty "dispatchRef"
+        let started = binding.GetProperty "runtimeStartRef"
+        use command = connection.CreateCommand()
+        command.CommandText <- """
+SELECT count(*) FROM efficiency_analysis_history h
+JOIN efficiency_analysis_requests q ON q.request_id=h.request_id
+JOIN efficiency_analysis_reservations r ON r.request_id=q.request_id
+JOIN current_ingest_facts df ON df.identity=r.dispatch_ref
+JOIN expected_dispatches d ON d.identity=df.identity
+JOIN invocation_lineage l ON l.dispatch_id=d.dispatch_id AND l.item_id=d.item_id
+JOIN runtime_admissions ra ON ra.invocation_id=l.invocation_id AND ra.item_id=l.item_id
+JOIN runtime_starts st ON st.item_id=l.item_id AND st.invocation_id=l.invocation_id
+JOIN current_ingest_facts sf ON sf.identity=st.identity
+JOIN fact_admissions da ON da.identity=df.identity
+JOIN fact_admissions sa ON sa.identity=sf.identity
+JOIN receipt_producers dp ON dp.producer=da.producer AND dp.stream=da.stream AND dp.authority_role=da.authority_role AND dp.grant_id IS da.grant_id AND dp.grant_generation IS da.grant_generation
+JOIN receipt_producers sp ON sp.producer=sa.producer AND sp.stream=sa.stream AND sp.authority_role=sa.authority_role AND sp.grant_id IS sa.grant_id AND sp.grant_generation IS sa.grant_generation
+JOIN receipt_admissions dr ON dr.receipt_key=da.receipt_key AND dr.envelope_digest=da.envelope_digest AND dr.producer=da.producer AND dr.stream=da.stream
+JOIN transport_receipts dt ON dt.producer=dr.producer AND dt.batch=dr.batch AND dt.state='applied'
+JOIN receipt_admissions sr ON sr.receipt_key=sa.receipt_key AND sr.envelope_digest=sa.envelope_digest AND sr.producer=sa.producer AND sr.stream=sa.stream
+JOIN transport_receipts srt ON srt.producer=sr.producer AND srt.batch=sr.batch AND srt.state='applied'
+JOIN fact_acceptance_times ft ON ft.identity=sf.identity AND ft.fact_revision=sf.revision AND ft.content_digest=sf.content_digest
+JOIN efficiency_receiver_order ro ON ro.receipt_key=ft.receipt_key
+WHERE h.request_id=$request AND h.revision=$revision AND h.content_digest=$digest
+ AND json_extract(h.canonical,'$.state')='claimed'
+ AND json_type(h.canonical,'$.invocationRef')='null'
+ AND json_extract(h.canonical,'$.claimId')=$claim AND json_extract(h.canonical,'$.claimGeneration')=$generation
+ AND r.claim_id=$claim AND r.generation=$generation AND r.producer=$producer AND r.stream=$stream
+ AND q.owner_producer=$producer AND q.owner_stream=$stream AND q.claim_id=$claim AND q.claim_generation=$generation
+ AND q.invocation_ref=$invocation AND r.state IN ('started','settled','failed','unknown')
+ AND json_extract(h.canonical,'$.dispatchRef.id')=df.identity
+ AND json_extract(h.canonical,'$.dispatchRef.kind')=df.kind
+ AND json_extract(h.canonical,'$.dispatchRef.revision')=df.revision
+ AND json_extract(h.canonical,'$.dispatchRef.contentDigest')='sha256:'||df.content_digest
+ AND df.identity=$dispatch AND df.kind='expected-dispatch' AND df.revision=$dispatchRevision AND df.content_digest=$dispatchDigest
+ AND sf.identity=$start AND sf.kind='runtime-start' AND sf.revision=$startRevision AND sf.content_digest=$startDigest
+ AND da.producer=$producer AND da.stream=$stream AND sa.producer=$producer AND sa.stream=$stream
+ AND d.item_id=$item AND l.invocation_id=$invocation AND l.root_invocation_id=$root
+ AND ((st.phase='process' AND st.process_id>0) OR (st.phase='thread' AND st.thread_id=$thread))
+ AND julianday(ft.accepted_at)>=julianday(json_extract(h.canonical,'$.claimedAt'))
+ AND ro.sequence>json_extract(h.canonical,'$.claimedReceiverOrder')
+ AND EXISTS (SELECT 1 FROM json_each(q.canonical,'$.lineageRefs') refs
+  WHERE json_extract(refs.value,'$.id')=sf.identity AND json_extract(refs.value,'$.kind')=sf.kind
+   AND json_extract(refs.value,'$.revision')=sf.revision AND json_extract(refs.value,'$.contentDigest')='sha256:'||sf.content_digest);
+"""
+        let text (node: JsonElement) (name: string) = node.GetProperty(name).GetString()
+        [ "$request",box (text claim "requestId"); "$revision",box (claim.GetProperty("revision").GetInt64())
+          "$digest",box (text claim "contentDigest"); "$claim",box (text claim "claimId")
+          "$generation",box (claim.GetProperty("generation").GetInt64()); "$producer",box (text owner "producer")
+          "$stream",box (text owner "stream"); "$item",box item; "$invocation",box invocation
+          "$root",box (text binding "rootInvocationId"); "$thread",box (text binding "threadId")
+          "$dispatch",box (text dispatch "id"); "$dispatchRevision",box (dispatch.GetProperty("revision").GetInt64())
+          "$dispatchDigest",box ((text dispatch "contentDigest").Substring 7)
+          "$start",box (text started "id"); "$startRevision",box (started.GetProperty("revision").GetInt64())
+          "$startDigest",box ((text started "contentDigest").Substring 7) ]
+        |> List.iter (fun (name,value) -> parameter command name value)
+        Convert.ToInt64(command.ExecuteScalar())=1L
+
     // Native authority is a collector grant and its applied inventory/origin receipts,
     // not the role text on an ordinary classifier or informational runtime row.
     let private efficiencyNativeWitnesses (connection: SqliteConnection) (item: string) (invocation: string) =
@@ -2817,6 +2882,7 @@ ORDER BY f.identity LIMIT 65;
             let bytes = Convert.FromBase64String(sourceBinding.GetProperty("bytesBase64").GetString())
             use bindingDocument = JsonDocument.Parse bytes
             let binding = bindingDocument.RootElement
+            let exec = binding.GetProperty("schema").GetString()="fsgg.telemetry.native-inventory-source-binding/2"
             let rootInvocation = binding.GetProperty("rootInvocationId").GetString()
             use lineage = connection.CreateCommand()
             lineage.CommandText <- "SELECT count(*) FROM invocation_lineage l JOIN runtime_admissions a ON a.invocation_id=l.invocation_id AND a.item_id=l.item_id JOIN expected_dispatches d ON d.dispatch_id=l.dispatch_id AND d.item_id=l.item_id JOIN invocation_lineage rl ON rl.item_id=l.item_id AND rl.invocation_id=l.root_invocation_id AND rl.relation='root' AND rl.root_invocation_id=rl.invocation_id JOIN expected_dispatches rd ON rd.dispatch_id=rl.dispatch_id AND rd.item_id=rl.item_id AND rd.relation='root' WHERE l.item_id=$item AND l.invocation_id=$invocation AND l.root_invocation_id=$root;"
@@ -2829,7 +2895,14 @@ ORDER BY f.identity LIMIT 65;
                 use document = JsonDocument.Parse canonical
                 let node = document.RootElement
                 sameGrant row && node.GetProperty("inventoryId").GetString()=sourceNode.GetProperty("inventoryId").GetString()
-                && node.GetProperty("sourceDigest").GetString()=sourceNode.GetProperty("sourceDigest").GetString())
+                && node.GetProperty("sourceDigest").GetString()=sourceNode.GetProperty("sourceDigest").GetString()
+                && node.GetProperty("originalItemId").GetString()=sourceNode.GetProperty("originalItemId").GetString()
+                && (if exec then
+                        let present, ns = node.TryGetProperty "turnNamespace"
+                        present && ns.GetString()="codex-exec-jsonl/1"
+                        && node.GetProperty("expectedTurns")[0].GetProperty("localTurnKey").GetRawText() = binding.GetProperty("turnRoster")[0].GetProperty("localTurnKey").GetRawText()
+                        && node.GetProperty("expectedTurns")[0].GetProperty("turnSequence").GetInt64()=1L
+                    else not (node.TryGetProperty "turnNamespace" |> fst)))
             let origins = byKind "learn-installed-origin/1" |> List.filter (fun row ->
                 let _,_,_,_,canonical,_,_,_,_ = row
                 use document = JsonDocument.Parse canonical
@@ -2841,9 +2914,19 @@ ORDER BY f.identity LIMIT 65;
                 && node.GetProperty("producerId").GetString()=producer && node.GetProperty("streamId").GetString()=stream
                 && node.GetProperty("role").GetString()="native-collector" && node.GetProperty("grantId").GetString()=grant
                 && node.GetProperty("grantGeneration").GetInt64()=generation
-                && DateTimeOffset.Parse(node.GetProperty("capabilityExpiresAt").GetString(),Globalization.CultureInfo.InvariantCulture)>DateTimeOffset.UtcNow)
+                && DateTimeOffset.Parse(node.GetProperty("capabilityExpiresAt").GetString(),Globalization.CultureInfo.InvariantCulture)>DateTimeOffset.UtcNow
+                && (if exec then
+                        let present, variant = node.TryGetProperty "nativeSourceVariant"
+                        let reference = binding.GetProperty "installedOriginRef"
+                        let id,kind,revision,digest,_,_,_,_,_ = row
+                        present && variant.GetString()="codex-exec-jsonl/1"
+                        && reference.GetProperty("id").GetString()=id && reference.GetProperty("kind").GetString()=kind
+                        && reference.GetProperty("revision").GetInt64()=revision
+                        && reference.GetProperty("contentDigest").GetString()="sha256:"+digest
+                    else not (node.TryGetProperty "nativeSourceVariant" |> fst)))
             match inventories,origins with
-            | [ inventory ],[ origin ] when Convert.ToInt64(lineage.ExecuteScalar())=1L ->
+            | [ inventory ],[ origin ] when Convert.ToInt64(lineage.ExecuteScalar())=1L
+                                            && (not exec || efficiencyExecClaimJoined connection item invocation binding) ->
                 valid.Add([ source;inventory;origin ])
             | _ -> ()
         match Seq.toList valid with
@@ -2862,24 +2945,56 @@ ORDER BY f.identity LIMIT 65;
             parameter inventory "$digest" digest
             use document = JsonDocument.Parse(string(inventory.ExecuteScalar()))
             let node = document.RootElement
-            let expected = node.GetProperty("expectedTurnIds").EnumerateArray() |> Seq.map _.GetString() |> Set.ofSeq
-            use usage = connection.CreateCommand()
-            usage.CommandText <- "SELECT u.turn_id,u.provider,u.requested_model,u.requested_effort,u.accounting_scope FROM runtime_turn_usage u JOIN fact_admissions a ON a.identity=u.identity WHERE u.item_id=$item AND u.invocation_id=$invocation ORDER BY u.turn_id;"
-            parameter usage "$item" item
-            parameter usage "$invocation" invocation
-            let rows =
-                use reader = usage.ExecuteReader()
-                [ while reader.Read() do yield [ for column in 0..4 -> if reader.IsDBNull column then None else Some(reader.GetString column) ] ]
-            // A partial inventory page never establishes a complete native population.
-            node.GetProperty("page").GetInt64()=1L && node.GetProperty("pages").GetInt64()=1L
-            && not expected.IsEmpty && rows.Length=expected.Count
-            && (rows |> List.choose List.head |> Set.ofList)=expected
-            && (rows |> List.forall (function
-                | [ Some _;Some provider;Some model;Some effort;Some scope ] ->
-                    provider=node.GetProperty("expectedProvider").GetString()
-                    && model=node.GetProperty("requestedModel").GetString()
-                    && effort=node.GetProperty("requestedEffort").GetString() && scope="completed-turn"
-                | _ -> false))
+            if node.TryGetProperty "turnNamespace" |> fst then
+                // Authenticate correspondence to the existing runtime-produced row; never insert another usage.
+                let expected = node.GetProperty("expectedTurns")[0]
+                let key = expected.GetProperty "localTurnKey"
+                let sourceId,_,sourceRevision,sourceDigest = witnesses |> List.find (fun (_,kind,_,_) -> kind="runtime-native-inventory-source/1")
+                use source = connection.CreateCommand()
+                source.CommandText <- "SELECT canonical FROM current_ingest_facts WHERE identity=$id AND revision=$revision AND content_digest=$digest;"
+                [ "$id",box sourceId; "$revision",box sourceRevision; "$digest",box sourceDigest ]
+                |> List.iter (fun (name,value) -> parameter source name value)
+                use sourceDocument = JsonDocument.Parse(string(source.ExecuteScalar()))
+                use bindingDocument = JsonDocument.Parse(Convert.FromBase64String(sourceDocument.RootElement.GetProperty("sourceBinding").GetProperty("bytesBase64").GetString()))
+                let owner = bindingDocument.RootElement.GetProperty("claimRef").GetProperty "owner"
+                use usage = connection.CreateCommand()
+                usage.CommandText <- """
+SELECT count(*) FROM runtime_turn_usage u
+JOIN fact_admissions a ON a.identity=u.identity
+JOIN receipt_producers p ON p.producer=a.producer AND p.stream=a.stream AND p.authority_role=a.authority_role AND p.grant_id IS a.grant_id AND p.grant_generation IS a.grant_generation
+JOIN receipt_admissions ra ON ra.receipt_key=a.receipt_key AND ra.envelope_digest=a.envelope_digest AND ra.producer=a.producer AND ra.stream=a.stream
+JOIN transport_receipts t ON t.producer=ra.producer AND t.batch=ra.batch AND t.state='applied'
+WHERE u.item_id=$item AND u.invocation_id=$invocation AND u.thread_id=$thread AND u.turn_sequence=1
+ AND u.input_count>0 AND u.output_count>0 AND u.turn_id IS NULL AND u.provider=$provider AND u.requested_model=$model AND u.requested_effort=$effort
+ AND u.accounting_scope='completed-turn' AND u.provenance='codex-exec-jsonl'
+ AND a.producer=$producer AND a.stream=$stream
+ AND (SELECT count(*) FROM runtime_turn_usage WHERE item_id=$item AND invocation_id=$invocation)=1;
+"""
+                [ "$item",box item; "$invocation",box invocation; "$thread",box (key.GetProperty("threadId").GetString())
+                  "$provider",box (node.GetProperty("expectedProvider").GetString()); "$model",box (node.GetProperty("requestedModel").GetString())
+                  "$effort",box (node.GetProperty("requestedEffort").GetString()); "$producer",box (owner.GetProperty("producer").GetString())
+                  "$stream",box (owner.GetProperty("stream").GetString()) ]
+                |> List.iter (fun (name,value) -> parameter usage name value)
+                Convert.ToInt64(usage.ExecuteScalar())=1L
+            else
+                let expected = node.GetProperty("expectedTurnIds").EnumerateArray() |> Seq.map _.GetString() |> Set.ofSeq
+                use usage = connection.CreateCommand()
+                usage.CommandText <- "SELECT u.turn_id,u.provider,u.requested_model,u.requested_effort,u.accounting_scope FROM runtime_turn_usage u JOIN fact_admissions a ON a.identity=u.identity WHERE u.item_id=$item AND u.invocation_id=$invocation ORDER BY u.turn_id;"
+                parameter usage "$item" item
+                parameter usage "$invocation" invocation
+                let rows =
+                    use reader = usage.ExecuteReader()
+                    [ while reader.Read() do yield [ for column in 0..4 -> if reader.IsDBNull column then None else Some(reader.GetString column) ] ]
+                // A partial inventory page never establishes a complete native population.
+                node.GetProperty("page").GetInt64()=1L && node.GetProperty("pages").GetInt64()=1L
+                && not expected.IsEmpty && rows.Length=expected.Count
+                && (rows |> List.choose List.head |> Set.ofList)=expected
+                && (rows |> List.forall (function
+                    | [ Some _;Some provider;Some model;Some effort;Some scope ] ->
+                        provider=node.GetProperty("expectedProvider").GetString()
+                        && model=node.GetProperty("requestedModel").GetString()
+                        && effort=node.GetProperty("requestedEffort").GetString() && scope="completed-turn"
+                    | _ -> false))
 
     let private efficiencyAuthority connection (principal: TelemetryReceipt.Principal) (sourceIdentity: string) (provenance: JsonElement) =
         if provenance.GetProperty("sourceIdentity").GetString() <> sourceIdentity then

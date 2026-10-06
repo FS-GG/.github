@@ -80,6 +80,13 @@ module TelemetryStore =
             Evidence: string
         }
 
+    /// Capture-local identity; never an AppServer provider turn ID or authority receipt.
+    type ExecLocalTurn =
+        { CaptureSha256: string
+          ThreadId: Guid
+          StartFrameOrdinal: int64
+          TurnSequence: int64 }
+
     type Payload =
         | Item of featureId: string option
         | Feature of name: string
@@ -316,6 +323,10 @@ module TelemetryStore =
         | RuntimeNativeInventory of
             inventoryId: string * originalItemId: string * invocationId: string * page: int64 * pages: int64 *
             expectedTurnIds: string * expectedProvider: string * requestedModel: string * requestedEffort: string *
+            followupBaseline: int64 * capturedAt: string * sourceDigest: string
+        | RuntimeExecNativeInventory of
+            inventoryId: string * originalItemId: string * invocationId: string *
+            expectedTurn: ExecLocalTurn * expectedProvider: string * requestedModel: string * requestedEffort: string *
             followupBaseline: int64 * capturedAt: string * sourceDigest: string
         | RuntimeNativeInventorySource of
             inventoryId: string * originalItemId: string * invocationId: string * sourceDigest: string * sourceBinding: string

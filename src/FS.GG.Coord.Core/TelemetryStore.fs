@@ -88,6 +88,13 @@ module TelemetryStore =
             Evidence: string
         }
 
+    /// Capture-local identity; never an AppServer provider turn ID or authority receipt.
+    type ExecLocalTurn =
+        { CaptureSha256: string
+          ThreadId: Guid
+          StartFrameOrdinal: int64
+          TurnSequence: int64 }
+
     type Payload =
         | Item of featureId: string option
         | Feature of name: string
@@ -324,6 +331,10 @@ module TelemetryStore =
         | RuntimeNativeInventory of
             inventoryId: string * originalItemId: string * invocationId: string * page: int64 * pages: int64 *
             expectedTurnIds: string * expectedProvider: string * requestedModel: string * requestedEffort: string *
+            followupBaseline: int64 * capturedAt: string * sourceDigest: string
+        | RuntimeExecNativeInventory of
+            inventoryId: string * originalItemId: string * invocationId: string *
+            expectedTurn: ExecLocalTurn * expectedProvider: string * requestedModel: string * requestedEffort: string *
             followupBaseline: int64 * capturedAt: string * sourceDigest: string
         | RuntimeNativeInventorySource of
             inventoryId: string * originalItemId: string * invocationId: string * sourceDigest: string * sourceBinding: string
@@ -616,6 +627,85 @@ module TelemetryStore =
             Error $"%s{label}.%s{name} must contain between 1 and 64 entries"
         | _ -> Error $"%s{label}.%s{name} must be an array"
 
+    let private execDigest (value: string) =
+        Regex.IsMatch(value, "^[0-9a-f]{64}$") && value <> String('0', 64)
+
+    let private execGet (result: Result<'a,string>) = result |> Result.defaultWith invalidOp
+
+    let private execInteger (node: JsonElement) (name: string) =
+        let value = node.GetProperty name
+        if value.ValueKind <> JsonValueKind.Number
+           || not (Regex.IsMatch(value.GetRawText(), "^[0-9]+$")) then invalidOp "exec integer required"
+        match value.TryGetInt64() with
+        | true, number -> number
+        | _ -> invalidOp "exec integer outside Int64"
+
+    let private execReference (node: JsonElement) (kind: string) =
+        closed "exec reference" (set ["id";"kind";"revision";"contentDigest"]) node |> execGet
+        requiredText "exec reference" node "id" |> execGet |> ignore
+        if (requiredText "exec reference" node "kind" |> execGet) <> kind then invalidOp "exec reference kind"
+        execInteger node "revision" |> ignore
+        let digest = requiredText "exec reference" node "contentDigest" |> execGet
+        if not (digest.StartsWith("sha256:", StringComparison.Ordinal) && execDigest(digest.Substring 7)) then
+            invalidOp "exec reference digest"
+
+    let private execTurn (node: JsonElement) (completed: bool) : ExecLocalTurn =
+        let fields = set ["localTurnKey";"turnSequence";"nativeTurnId"]
+        closed "exec turn" (if completed then Set.union fields (set ["status";"usageAvailable"]) else fields) node |> execGet
+        if node.GetProperty("nativeTurnId").ValueKind <> JsonValueKind.Null then invalidOp "exec native turn ID forbidden"
+        if execInteger node "turnSequence" <> 1L then invalidOp "exec single turn sequence"
+        if completed && ((requiredText "exec turn" node "status" |> execGet) <> "completed"
+                         || node.GetProperty("usageAvailable").ValueKind <> JsonValueKind.True) then
+            invalidOp "exec completed usage required"
+        let key = node.GetProperty "localTurnKey"
+        closed "exec key" (set ["captureSha256";"threadId";"startFrameOrdinal"]) key |> execGet
+        let digest = requiredText "exec key" key "captureSha256" |> execGet
+        let thread = requiredText "exec key" key "threadId" |> execGet
+        let ordinal = execInteger key "startFrameOrdinal"
+        let parsed, threadId = Guid.TryParseExact(thread, "D")
+        if not (execDigest digest) || not parsed || threadId=Guid.Empty
+           || thread <> threadId.ToString("D") || ordinal >= 4096L then invalidOp "exec local key invalid"
+        { CaptureSha256=digest; ThreadId=threadId; StartFrameOrdinal=ordinal; TurnSequence=1L }
+
+    let private execRoster (node: JsonElement) (name: string) (completed: bool) =
+        let roster = node.GetProperty name
+        if roster.ValueKind <> JsonValueKind.Array || roster.GetArrayLength() <> 1 then
+            invalidOp "exec single turn roster required"
+        execTurn roster[0] completed
+
+    let private validateExecBinding (binding: JsonElement) (schema: string) (producer: string)
+                                    (invocation: string) (revision: int64) =
+        closed "exec binding" (set ["schema";"producerIdentity";"capturedAt";"hostSource";"rootInvocationId";
+                                   "invocationId";"revision";"dispatchRef";"runtimeStartRef";"installedOriginRef";
+                                   "claimRef";"threadId";"captureSha256";"captureBytes";"commandBindingSha256";
+                                   "custodyReceiptSha256";"turnRoster"]) binding |> execGet
+        let text name = requiredText "exec binding" binding name |> execGet
+        if text "schema" <> schema || text "producerIdentity" <> producer
+           || text "hostSource" <> "codex-exec-jsonl" || text "invocationId" <> invocation
+           || execInteger binding "revision" <> revision then invalidOp "exec binding unbound"
+        text "rootInvocationId" |> ignore
+        requiredTimestamp "exec binding" binding "capturedAt" |> execGet |> ignore
+        for name in ["captureSha256";"commandBindingSha256";"custodyReceiptSha256"] do
+            if not (execDigest(text name)) then invalidOp "exec capture digest invalid"
+        let count = execInteger binding "captureBytes"
+        if count=0L || count>262144L then invalidOp "exec capture bound"
+        for name,kind in ["dispatchRef","expected-dispatch";"runtimeStartRef","runtime-start";"installedOriginRef","learn-installed-origin/1"] do
+            execReference (binding.GetProperty name) kind
+        let claim = binding.GetProperty "claimRef"
+        closed "exec claim" (set ["requestId";"claimId";"revision";"contentDigest";"owner";"generation"]) claim |> execGet
+        for name in ["requestId";"claimId"] do requiredText "exec claim" claim name |> execGet |> ignore
+        execInteger claim "revision" |> ignore
+        if execInteger claim "generation"=0L then invalidOp "exec claim generation"
+        let digest = requiredText "exec claim" claim "contentDigest" |> execGet
+        if not (digest.StartsWith("sha256:",StringComparison.Ordinal) && execDigest(digest.Substring 7)) then
+            invalidOp "exec claim digest"
+        let owner = claim.GetProperty "owner"
+        closed "exec claim owner" (set ["producer";"stream"]) owner |> execGet
+        for name in ["producer";"stream"] do requiredText "exec owner" owner name |> execGet |> ignore
+        let turn = execRoster binding "turnRoster" true
+        if turn.CaptureSha256 <> text "captureSha256" || turn.ThreadId.ToString("D") <> text "threadId" then
+            invalidOp "exec roster capture mismatch"
+
     let private requiredNativeSourceBinding
         (label: string)
         (node: JsonElement)
@@ -634,9 +724,11 @@ module TelemetryStore =
                 requiredText envelopeLabel envelope "bytesBase64"
             with
             | Ok(), Ok schema, Ok producer, Ok digest, Ok encoded when
-                schema = "fsgg.telemetry.native-inventory-source-binding/1"
+                (schema = "fsgg.telemetry.native-inventory-source-binding/1"
+                 || schema = "fsgg.telemetry.native-inventory-source-binding/2")
                 && producer = "fsgg-work-roadmap-native-collector/1"
-                && Regex.IsMatch(digest, "^[0-9a-f]{64}$")
+                && (if schema = "fsgg.telemetry.native-inventory-source-binding/2" then execDigest digest
+                    else Regex.IsMatch(digest, "^[0-9a-f]{64}$"))
                 ->
                 try
                     let bytes = Convert.FromBase64String encoded
@@ -645,37 +737,47 @@ module TelemetryStore =
                     else
                         use document = JsonDocument.Parse bytes
                         let binding = document.RootElement
-                        let fields =
-                            Set [ "schema"; "producerIdentity"; "capturedAt"; "hostSource"; "rootInvocationId";
-                                  "invocationId"; "parentThreadId"; "threadId"; "orderedTurnIds"; "revision" ]
-                        match
-                            closed $"%s{envelopeLabel}.bytes" fields binding,
-                            requiredText envelopeLabel binding "schema",
-                            requiredText envelopeLabel binding "producerIdentity",
-                            requiredTimestamp envelopeLabel binding "capturedAt",
-                            requiredText envelopeLabel binding "hostSource",
-                            requiredText envelopeLabel binding "rootInvocationId",
-                            requiredText envelopeLabel binding "invocationId",
-                            requiredText envelopeLabel binding "parentThreadId",
-                            requiredText envelopeLabel binding "threadId",
-                            requiredUniqueTextRoster envelopeLabel binding "orderedTurnIds",
-                            requiredInt envelopeLabel binding "revision",
-                            CanonicalJson.canonicalize bytes
-                        with
-                        | Ok(), Ok bindingSchema, Ok bindingProducer, Ok _, Ok hostSource, Ok _, Ok bindingInvocation,
-                          Ok parentThread, Ok thread, Ok _, Ok bindingRevision, Ok canonical when
-                            canonical = Encoding.UTF8.GetString bytes
-                            && bindingSchema = schema
-                            && bindingProducer = producer
-                            && hostSource = "codex-app-server:thread/turns/list"
-                            && bindingInvocation = invocation
-                            && bindingRevision = revision
-                            && Regex.IsMatch(parentThread, "^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$")
-                            && Regex.IsMatch(thread, "^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$")
-                            -> CanonicalJson.canonicalize (Encoding.UTF8.GetBytes(envelope.GetRawText()))
-                        | _ -> Error $"%s{envelopeLabel} canonical bytes are malformed or unbound"
+                        if schema = "fsgg.telemetry.native-inventory-source-binding/2" then
+                            validateExecBinding binding schema producer invocation revision
+                            match CanonicalJson.canonicalize bytes with
+                            | Ok canonical when canonical = Encoding.UTF8.GetString bytes ->
+                                CanonicalJson.canonicalize (Encoding.UTF8.GetBytes(envelope.GetRawText()))
+                            | _ -> Error $"%s{envelopeLabel} bytes are not canonical"
+                        else
+                            let fields =
+                                Set [ "schema"; "producerIdentity"; "capturedAt"; "hostSource"; "rootInvocationId";
+                                      "invocationId"; "parentThreadId"; "threadId"; "orderedTurnIds"; "revision" ]
+                            match
+                                closed $"%s{envelopeLabel}.bytes" fields binding,
+                                requiredText envelopeLabel binding "schema",
+                                requiredText envelopeLabel binding "producerIdentity",
+                                requiredTimestamp envelopeLabel binding "capturedAt",
+                                requiredText envelopeLabel binding "hostSource",
+                                requiredText envelopeLabel binding "rootInvocationId",
+                                requiredText envelopeLabel binding "invocationId",
+                                requiredText envelopeLabel binding "parentThreadId",
+                                requiredText envelopeLabel binding "threadId",
+                                requiredUniqueTextRoster envelopeLabel binding "orderedTurnIds",
+                                requiredInt envelopeLabel binding "revision",
+                                CanonicalJson.canonicalize bytes
+                            with
+                            | Ok(), Ok bindingSchema, Ok bindingProducer, Ok _, Ok hostSource, Ok _, Ok bindingInvocation,
+                              Ok parentThread, Ok thread, Ok _, Ok bindingRevision, Ok canonical when
+                                canonical = Encoding.UTF8.GetString bytes
+                                && bindingSchema = schema
+                                && bindingProducer = producer
+                                && hostSource = "codex-app-server:thread/turns/list"
+                                && bindingInvocation = invocation
+                                && bindingRevision = revision
+                                && Regex.IsMatch(parentThread, "^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$")
+                                && Regex.IsMatch(thread, "^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$")
+                                -> CanonicalJson.canonicalize (Encoding.UTF8.GetBytes(envelope.GetRawText()))
+                            | _ -> Error $"%s{envelopeLabel} canonical bytes are malformed or unbound"
                 with
                 | :? FormatException
+                | :? InvalidOperationException
+                | :? System.Collections.Generic.KeyNotFoundException
+                | :? ArgumentException
                 | :? JsonException -> Error $"%s{envelopeLabel} bytes are malformed"
             | _ -> Error $"%s{envelopeLabel} is malformed"
         | _ -> Error $"%s{label}.%s{name} must be an object"
@@ -2094,6 +2196,25 @@ module TelemetryStore =
                 | Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _ ->
                     Error $"%s{label} has unsupported scope, CI applicability, source kind, or digest"
                 | values -> Error(sprintf "%A" values)
+            | "runtime-native-inventory/1" when (node.TryGetProperty "turnNamespace" |> fst) ->
+                try
+                    let text name = requiredText label node name |> execGet
+                    let timestamp = requiredTimestamp label node "capturedAt" |> execGet
+                    let turn = execRoster node "expectedTurns" false
+                    let fields = ["inventoryId";"originalItemId";"invocationId";"page";"pages";"turnNamespace";
+                                  "expectedTurns";"expectedProvider";"requestedModel";"requestedEffort";"support";
+                                  "followupBaseline";"capturedAt";"sourceKind";"sourceDigest"]
+                    if itemId.IsNone || text "turnNamespace" <> "codex-exec-jsonl/1"
+                       || execInteger node "page" <> 1L || execInteger node "pages" <> 1L
+                       || text "support" <> "provider-native-final-turn-counters"
+                       || text "sourceKind" <> "provider-capability-and-dispatch-roster"
+                       || not (execDigest(text "sourceDigest")) then invalidOp "exec inventory invalid"
+                    make fields (RuntimeExecNativeInventory(text "inventoryId",text "originalItemId",text "invocationId",turn,
+                        text "expectedProvider",text "requestedModel",text "requestedEffort",execInteger node "followupBaseline",
+                        timestamp,text "sourceDigest"))
+                with
+                | :? InvalidOperationException
+                | :? System.Collections.Generic.KeyNotFoundException -> Error $"%s{label} exec inventory is malformed"
             | "runtime-native-inventory/1" ->
                 match
                     requiredText label node "inventoryId",
@@ -2248,6 +2369,10 @@ module TelemetryStore =
             | "learn-installed-origin/1" ->
                 let digest (value: string) =
                     Regex.IsMatch(value, "^[0-9a-f]{64}$") && value <> String('0', 64)
+                let variant =
+                    match node.TryGetProperty "nativeSourceVariant" with
+                    | false, _ -> Ok None
+                    | true, _ -> requiredText label node "nativeSourceVariant" |> Result.map Some
                 match
                     requiredText label node "workspaceId",
                     requiredText label node "producerId",
@@ -2268,13 +2393,14 @@ module TelemetryStore =
                   Ok managerReceipt, Ok profile, Ok result, Ok capture, Ok verification,
                   Ok observed, Ok expires, Ok installation
                     when itemId.IsNone && role = "native-collector" && generation > 0L
+                        && (variant = Ok None || variant = Ok(Some "codex-exec-jsonl/1"))
                         && ([ managerReceipt; profile; result; capture; verification; installation ] |> List.forall digest)
                         && DateTimeOffset.Parse(expires, CultureInfo.InvariantCulture) > DateTimeOffset.Parse(observed, CultureInfo.InvariantCulture) ->
                     make
                         [ "workspaceId"; "producerId"; "streamId"; "role"; "grantId"; "grantGeneration";
                           "managerReceiptSha256"; "capabilityProfileSha256"; "capabilityResultSha256";
                           "nativeCaptureSha256"; "nativeVerificationSha256"; "capabilityObservedAt";
-                          "capabilityExpiresAt"; "installationSha256" ]
+                          "capabilityExpiresAt"; "installationSha256"; "nativeSourceVariant" ]
                         (LearnInstalledOrigin(workspace, producer, stream, role, grant, generation,
                                               managerReceipt, profile, result, capture, verification,
                                               observed, expires, installation))
