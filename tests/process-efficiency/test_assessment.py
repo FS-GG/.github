@@ -37,6 +37,16 @@ def check(output, packet):
 
 
 class AssessmentTests(unittest.TestCase):
+    def test_all_contract_schemas_with_full_draft_validator(self):
+        for path in sorted((CONTRACT_ROOT / 'contracts/process-efficiency').glob('*.schema.json')):
+            schema = json.loads(path.read_text())
+            samples = [sample for group, values in FIXTURES.items() if group.endswith('Samples')
+                       for sample in values if sample['schema'] == schema['properties']['schema']['const']]
+            with self.subTest(schema=path.name):
+                self.assertTrue(samples, 'each declared schema needs a representative sample')
+                for sample in samples:
+                    a.schema_validate(sample, schema)
+
     def test_full_schema_and_resolved_native_review(self):
         output, packet = fixture()
         self.assertEqual(check(output, packet), output)
