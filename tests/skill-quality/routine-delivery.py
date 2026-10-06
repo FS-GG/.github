@@ -955,6 +955,40 @@ class DashboardEventTests(unittest.TestCase):
                              "--telemetry-publisher-event"]),2)
             event.assert_not_called()
 
+    def test_projection_config_never_replaces_workspace_observation_authority(self):
+        cases = [
+            (None, None, "/private/workspace"),
+            (None, "/private/dashboard-env", "/private/dashboard-env"),
+            ("/private/dashboard-cli", "/private/dashboard-env", "/private/dashboard-cli"),
+            ("relative.json", "/private/dashboard-env", None),
+            (None, "relative.json", None),
+            ("", None, None),
+        ]
+        for explicit, environment, expected in cases:
+            with self.subTest(explicit=explicit, environment=environment):
+                env = {} if environment is None else {"FSGG_TELEMETRY_DASHBOARD_CONFIG": environment}
+                with mock.patch.dict(MODULE.os.environ, env, clear=True), \
+                     mock.patch.object(MODULE, "GhApi", return_value=FakeApi([opened(), merged()], [{"merged": True, "sha": MERGE}])), \
+                     mock.patch.object(MODULE, "observe_candidate", return_value="complete") as observer, \
+                     mock.patch.object(MODULE, "observe_dashboard_event", return_value="published") as event, \
+                     mock.patch("sys.stdout", new_callable=io.StringIO) as output:
+                    args = ["--repo", "FS-GG/.github", "--pr", "7", "--head", HEAD, "--apply",
+                            "--telemetry-assignment", "assignment", "--telemetry-config", "/private/workspace",
+                            "--telemetry-publisher-event", "--telemetry-advisory-deadline-monotonic", "80"]
+                    if explicit is not None:
+                        args += ["--telemetry-publisher-config", explicit]
+                    self.assertEqual(MODULE.main(args), 0)
+                    self.assertTrue(observer.call_args_list)
+                    self.assertTrue(all(call.kwargs["config"] == "/private/workspace" for call in observer.call_args_list))
+                    result = json.loads(output.getvalue())
+                    self.assertEqual((result["codeDelivery"], result["telemetryHealth"]), ("delivered", "complete"))
+                    if expected is None:
+                        event.assert_not_called()
+                        self.assertEqual(result["dashboardPublicationHealth"], "not-run-config-invalid")
+                    else:
+                        event.assert_called_once_with(engine="fsgg-coord-engine", config=expected, deadline=80)
+                        self.assertEqual(result["dashboardPublicationHealth"], "published")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -966,6 +966,8 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--telemetry-engine", help="installed telemetry-capable coordination engine; overrides host configuration")
     result.add_argument("--telemetry-publisher-event", action="store_true",
                         help="one advisory dashboard refresh after completed final CI observation")
+    result.add_argument("--telemetry-publisher-config",
+                        help="absolute dashboard projection config; defaults to FSGG_TELEMETRY_DASHBOARD_CONFIG or the telemetry config")
     result.add_argument("--telemetry-advisory-deadline-monotonic", type=float,
                         help="caller-owned absolute monotonic deadline including direct-child cleanup; no default")
     result.add_argument("--watch-checks", action="store_true", help="read-only bounded native-check watch; never grants apply")
@@ -985,7 +987,7 @@ def main(argv: list[str]) -> int:
     deadline = args.telemetry_advisory_deadline_monotonic
     if deadline is not None and (not math.isfinite(deadline) or deadline <= 0):
         parser().error("--telemetry-advisory-deadline-monotonic must be finite and positive")
-    if args.watch_checks and (args.telemetry_publisher_event or deadline is not None):
+    if args.watch_checks and (args.telemetry_publisher_event or args.telemetry_publisher_config is not None or deadline is not None):
         parser().error("advisory event/deadline options are incompatible with --watch-checks")
     if args.watch_checks:
         if len(args.repo) > 255:
@@ -1057,7 +1059,16 @@ def main(argv: list[str]) -> int:
     if observer is not None and result.outcome != "ready":
         observer(result)
         if args.telemetry_publisher_event and observation_health[-1] != "unavailable":
-            dashboard_health = observe_dashboard_event(engine=engine, config=config_path, deadline=deadline)
+            projection_config = args.telemetry_publisher_config
+            if projection_config is None:
+                projection_config = os.environ.get("FSGG_TELEMETRY_DASHBOARD_CONFIG")
+            if projection_config is not None and not os.path.isabs(projection_config):
+                dashboard_health = "not-run-config-invalid"
+            else:
+                dashboard_health = observe_dashboard_event(
+                    engine=engine, config=config_path if projection_config is None else projection_config,
+                    deadline=deadline,
+                )
     if observer is not None or observation_health:
         result = replace(result, telemetryHealth=observation_health[-1] if observation_health else "unavailable")
     output = asdict(result)
