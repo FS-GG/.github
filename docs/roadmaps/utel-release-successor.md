@@ -224,5 +224,8 @@ targets to GOV-423-C3, preserved the original raw-fact hash and all 144 native o
 verified one audit entry plus an idempotent retry. The correction operation completed in 8.026
 seconds with clean custody and no resource or storage failure. The supported drain accepted both
 pending batches with no replay or quarantine and verified zero remaining in 2.857 seconds;
-current-store sanitized export, public-feed verification, Pages selection and event adoption
-still require their own genuine receipts.
+the subsequent empty drain also verified zero remaining with no replay or quarantine.
+The settled schema 13 sanitized export publishes five eligible approved completed groups at
+[feed commit `279f195…`](https://github.com/FS-GG/.github/commit/279f19561559238b49bed73f5956cd9881296f59),
+with immutable bytes, public revision and current-branch readback verified. Pages selection and
+event adoption remain pending; unknown Governance runtime coverage is not promoted to completion.

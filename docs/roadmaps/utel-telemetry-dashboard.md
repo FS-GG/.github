@@ -144,7 +144,12 @@ receipts, not public dashboard adoption.
 
 The supported drain accepted both pending spool batches, with no replay or quarantine, and
 verified zero remaining in 2.857 seconds with clean custody and no resource or storage failure.
-The publisher is inactive; the actual sanitized canonical
-export, verified new feed, separate Pages selector and event activation remain required. Publish
-and read back the new feed before landing the selector. No fresh public completed-item count,
-recurring publication or live dashboard update follows from the local receipts.
+A subsequent empty drain verified zero accepted, replayed, quarantined and remaining batches.
+The settled schema 13 sanitized export has five eligible approved completed groups, zero pending
+batches and no dirty items. [Feed commit `279f195…`](https://github.com/FS-GG/.github/commit/279f19561559238b49bed73f5956cd9881296f59)
+verified immutable bytes, payload revision and the current `telemetry-data-current` branch.
+The 35,759-byte payload has SHA256 `7b92ceaac1ae997307116533a45ce73bf10d2e8c80cb944c653ec5bfa5f797de`
+and public revision `4b2708f0ec95012121da3b77304682a225d15f5fa9bbc448f8a48985fe2b015a`.
+Governance runtime coverage remains unknown, so the corrected CI attribution does not itself
+establish an eligible completed group. Pages selector delivery/deployment and event activation
+remain pending; feed publication does not establish a live page update or recurring publication.
