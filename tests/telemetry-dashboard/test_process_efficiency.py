@@ -153,6 +153,7 @@ class EfficiencyTests(unittest.TestCase):
         self.assertIn('node("caption",title)', script)
         self.assertNotIn('innerHTML', script)
         self.assertIn('validateHost(data.host)', app)
+        self.assertIn('data.host.schema === "fsgg.telemetry.dashboard-host/5" ? data.host.processEfficiency : null', app)
         self.assertIn('showing last good data', app)
 
 

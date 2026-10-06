@@ -694,7 +694,7 @@
     renderItems(view?.openItems || null, initial);
     renderDeliveries(data.deliveries);
     renderSourceDeliveries(data.host);
-    window.ProcessEfficiency.render(data.host.processEfficiency || null);
+    window.ProcessEfficiency.render(data.host.schema === "fsgg.telemetry.dashboard-host/5" ? data.host.processEfficiency : null);
     const itemCoverage=data.host.completedItems?.coverage;
     text("items-note",itemCoverage?`${itemCoverage.published} published · ${itemCoverage.unmapped} awaiting an approved label · ${itemCoverage.dirty} pending canonical reduction · ${itemCoverage.incompatible} incompatible.`:"Host item projection unavailable. Showing independent public merged deliveries.");
     const counts=renderOutcomes(state.runs);
