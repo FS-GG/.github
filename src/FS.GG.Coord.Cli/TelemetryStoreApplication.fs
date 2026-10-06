@@ -5651,7 +5651,7 @@ WHERE f.kind='learn-installed-origin/1' AND a.producer=$producer AND a.stream=$s
     let drainReceipts path assessment workspace =
         drainReceiptsWithHook path assessment workspace ignore
 
-    let resolveResponsesCollectorDispatch path assessment (runtimePrincipal: TelemetryReceipt.Principal) dispatchIdentity =
+    let resolveResponsesCollectorDispatch path assessment (runtimePrincipal: TelemetryReceipt.Principal) (dispatchIdentity: string) =
         match validateRoot path assessment |> Result.bind (fun root -> connect root SqliteOpenMode.ReadOnly) with
         | Error errors -> Error errors
         | Ok(connection, _) ->
