@@ -53,7 +53,7 @@ def inspect(root: Path, package: Path | None = None) -> dict:
     sources = {}
     for name in PROJECTS:
         graph[name], sources[name] = project(root, name)
-    expected = {HOST, CORE, CONTRACTS, STORE, DASHBOARD}
+    expected = {HOST, CORE, CONTRACTS, STORE, DASHBOARD, CLIENT}
     closure = set()
     pending = [HOST]
     while pending:
@@ -68,7 +68,7 @@ def inspect(root: Path, package: Path | None = None) -> dict:
         issues.append("Host project closure includes Coord.Cli assembly")
     if CORE not in graph[CONTRACTS] or CORE not in graph[STORE]:
         issues.append("Contracts and Store must each reference Core")
-    if {CONTRACTS, STORE, DASHBOARD} - graph[HOST]:
+    if {CONTRACTS, STORE, DASHBOARD, CLIENT} - graph[HOST]:
         issues.append("Host direct telemetry project references changed")
     store_links = {path for path in sources[STORE] if "TelemetryStoreApplication" in path}
     if store_links != EXPECTED_STORE_LINKS:
@@ -132,10 +132,11 @@ def inspect(root: Path, package: Path | None = None) -> dict:
                         issues.append("built Host dependency manifest has no active runtime target")
                     else:
                         package_deps_targets = sorted(active_target)
-                        if not any(name.startswith(f"{CORE}/") for name in libraries):
-                            issues.append("built Host dependency libraries miss Core")
-                        if not any(name.startswith(f"{CORE}/") for name in active_target):
-                            issues.append("built Host dependency runtime target misses Core")
+                        for required, label in ((CORE, "Core"), (CLIENT, "Client")):
+                            if not any(name.startswith(f"{required}/") for name in libraries):
+                                issues.append(f"built Host dependency libraries miss {label}")
+                            if not any(name.startswith(f"{required}/") for name in active_target):
+                                issues.append(f"built Host dependency runtime target misses {label}")
                     if any(name.startswith("FS.GG.Coord.Cli") for target in targets.values()
                            if isinstance(target, dict) for name in target):
                         issues.append("built Host dependency runtime targets include Coord.Cli")

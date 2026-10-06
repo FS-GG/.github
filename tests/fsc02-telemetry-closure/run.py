@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Independent source and package-boundary refusal controls for FSC-02."""
 
+import ast
 import importlib.util
 import json
 import shutil
@@ -45,6 +46,25 @@ with tempfile.TemporaryDirectory() as folder:
     assert any("Coord.Cli assembly" in issue for issue in module.inspect(fixture)["issues"])
     host_project.write_text(original)
 
+    client_reference = '<ProjectReference Include="../FS.GG.Telemetry.Client/FS.GG.Telemetry.Client.fsproj" />'
+    assert client_reference in original
+    host_project.write_text(original.replace(client_reference, ""))
+    assert any("Host project closure missing" in issue and "Client" in issue
+               for issue in module.inspect(fixture)["issues"])
+    host_project.write_text(original)
+
+    original_allow = allow.read_text()
+    client_member = "tools/net10.0/linux-x64/FS.GG.Telemetry.Client.dll"
+    allow.write_text(original_allow.replace(client_member, "content/FS.GG.Telemetry.Client.dll"))
+    assert any("allowlist misses runtime members" in issue and "Client" in issue
+               for issue in module.inspect(fixture)["issues"])
+    allow.write_text(original_allow)
+    for suffix in ("dll", "pdb", "xml"):
+        assert f"tools/net10.0/linux-x64/FS.GG.Telemetry.Client.{suffix}" in original_allow.splitlines()
+    package_fixture = (root / "tests/standalone-telemetry-host-package/run.sh").read_text()
+    required_line = next(line for line in package_fixture.splitlines() if line.startswith("required="))
+    assert "FS.GG.Telemetry.Client.dll" in ast.literal_eval(required_line.split("=", 1)[1])
+
     host_source = fixture / "src/FS.GG.Telemetry.Host/HostRuntime.fs"
     original = host_source.read_text()
     host_source.write_text(original + "\nopen FS.GG.Coord.LifecycleTelemetry\n")
@@ -83,7 +103,7 @@ with tempfile.TemporaryDirectory() as folder:
 
     package = fixture / "test.nupkg"
     required = {f"{name}.dll" for name in (module.HOST, module.CORE,
-                module.CONTRACTS, module.STORE, module.DASHBOARD)}
+                module.CONTRACTS, module.STORE, module.DASHBOARD, module.CLIENT)}
     def deps(libraries):
         return json.dumps({
             "runtimeTarget": {"name": ".NETCoreApp,Version=v10.0/linux-x64"},
@@ -95,13 +115,35 @@ with tempfile.TemporaryDirectory() as folder:
         for name in required:
             archive.writestr(f"tools/net10.0/linux-x64/{name}", b"fixture")
         archive.writestr("tools/net10.0/linux-x64/FS.GG.Telemetry.Host.deps.json",
-                         deps(["FS.GG.Coord.Core/0.0.0"]))
+                         deps(["FS.GG.Coord.Core/0.0.0", "FS.GG.Telemetry.Client/0.0.0"]))
     assert module.inspect(fixture, package)["issues"] == []
+    # Client absence must be refused independently in the runtime members and both deps joins.
+    for missing in ("runtime", "libraries", "target"):
+        document = json.loads(deps(["FS.GG.Coord.Core/0.0.0", "FS.GG.Telemetry.Client/0.0.0"]))
+        members = required.copy()
+        if missing == "runtime":
+            members.remove("FS.GG.Telemetry.Client.dll")
+            expected_issue = "runtime package misses"
+        elif missing == "libraries":
+            del document["libraries"]["FS.GG.Telemetry.Client/0.0.0"]
+            expected_issue = "dependency libraries miss Client"
+        else:
+            del document["targets"][module.TOOL_RUNTIME_TARGET]["FS.GG.Telemetry.Client/0.0.0"]
+            expected_issue = "dependency runtime target misses Client"
+        with zipfile.ZipFile(package, "w") as archive:
+            for name in members:
+                archive.writestr(f"tools/net10.0/linux-x64/{name}", b"fixture")
+            if missing == "runtime":
+                archive.writestr("content/FS.GG.Telemetry.Client.dll", b"inert decoy")
+            archive.writestr("tools/net10.0/linux-x64/FS.GG.Telemetry.Host.deps.json", json.dumps(document))
+        assert any(expected_issue in issue and "Client" in issue
+                   for issue in module.inspect(fixture, package)["issues"]), missing
+
     with zipfile.ZipFile(package, "w") as archive:
         for name in required - {"FS.GG.Coord.Core.dll"}:
             archive.writestr(f"tools/net10.0/linux-x64/{name}", b"fixture")
         archive.writestr("tools/net10.0/linux-x64/FS.GG.Telemetry.Host.deps.json",
-                         deps(["FS.GG.Coord.Core/0.0.0"]))
+                         deps(["FS.GG.Coord.Core/0.0.0", "FS.GG.Telemetry.Client/0.0.0"]))
     assert any("runtime package misses" in issue for issue in module.inspect(fixture, package)["issues"])
     with zipfile.ZipFile(package, "w") as archive:
         for name in required:
@@ -116,7 +158,7 @@ with tempfile.TemporaryDirectory() as folder:
             archive.writestr(f"tools/net10.0/linux-x64/{name}", b"fixture")
         archive.writestr("content/FS.GG.Coord.Core.dll", b"decoy")
         archive.writestr("tools/net10.0/linux-x64/FS.GG.Telemetry.Host.deps.json",
-                         deps(["FS.GG.Coord.Core/0.0.0"]))
+                         deps(["FS.GG.Coord.Core/0.0.0", "FS.GG.Telemetry.Client/0.0.0"]))
     assert any("runtime package misses" in issue for issue in module.inspect(fixture, package)["issues"])
 
     # A dependency document elsewhere in the archive cannot speak for the tool.
@@ -124,7 +166,7 @@ with tempfile.TemporaryDirectory() as folder:
         for name in required:
             archive.writestr(f"tools/net10.0/linux-x64/{name}", b"fixture")
         archive.writestr("content/FS.GG.Telemetry.Host.deps.json",
-                         deps(["FS.GG.Coord.Core/0.0.0"]))
+                         deps(["FS.GG.Coord.Core/0.0.0", "FS.GG.Telemetry.Client/0.0.0"]))
     assert any("no unique runtime Host .deps.json" in issue for issue in module.inspect(fixture, package)["issues"])
 
     # Runtime-target entries can name a loaded legacy assembly independently of libraries.
@@ -143,7 +185,7 @@ with tempfile.TemporaryDirectory() as folder:
             archive.writestr(f"tools/net10.0/linux-x64/{name}", b"fixture")
         archive.writestr("content/FS.GG.Coord.Core.dll", b"extra")
         archive.writestr("tools/net10.0/linux-x64/FS.GG.Telemetry.Host.deps.json",
-                         deps(["FS.GG.Coord.Core/0.0.0"]))
+                         deps(["FS.GG.Coord.Core/0.0.0", "FS.GG.Telemetry.Client/0.0.0"]))
     assert any("extra Core assembly path" in issue for issue in module.inspect(fixture, package)["issues"])
 
     with warnings.catch_warnings():
@@ -153,7 +195,7 @@ with tempfile.TemporaryDirectory() as folder:
                 archive.writestr(f"tools/net10.0/linux-x64/{name}", b"fixture")
             archive.writestr("tools/net10.0/linux-x64/FS.GG.Coord.Core.dll", b"shadow")
             archive.writestr("tools/net10.0/linux-x64/FS.GG.Telemetry.Host.deps.json",
-                             deps(["FS.GG.Coord.Core/0.0.0"]))
+                             deps(["FS.GG.Coord.Core/0.0.0", "FS.GG.Telemetry.Client/0.0.0"]))
     assert any("duplicate archive members" in issue for issue in module.inspect(fixture, package)["issues"])
 
     with zipfile.ZipFile(package, "w") as archive:
@@ -166,7 +208,7 @@ with tempfile.TemporaryDirectory() as folder:
         for name in required:
             archive.writestr(f"tools/net10.0/linux-x64/{name}", b"fixture")
         archive.writestr("tools/net10.0/linux-x64/FS.GG.Telemetry.Host.deps.json",
-                         deps(["FS.GG.Coord.Core/0.0.0"]).replace("v10.0/linux-x64", "v10.0/win-x64"))
+                         deps(["FS.GG.Coord.Core/0.0.0", "FS.GG.Telemetry.Client/0.0.0"]).replace("v10.0/linux-x64", "v10.0/win-x64"))
     assert any("runtime target differs" in issue for issue in module.inspect(fixture, package)["issues"])
 
     original_allow = allow.read_text()
@@ -176,4 +218,4 @@ with tempfile.TemporaryDirectory() as folder:
     assert any("allowlist misses runtime members" in issue for issue in module.inspect(fixture)["issues"])
     allow.write_text(original_allow)
 
-print("fsc02 telemetry closure: 23 independent assertions passed")
+print("fsc02 telemetry closure: source and synthetic package refusal controls passed")
