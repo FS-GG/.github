@@ -1171,7 +1171,7 @@ module TelemetryStore =
             | "runtime-response-usage/1" ->
                 try
                     let text name = requiredText label node name |> execGet
-                    let counter name =
+                    let counter (name: string) =
                         let value=node.GetProperty name
                         if value.ValueKind=JsonValueKind.Null then None else Some(execInteger node name)
                     let input,output,total=counter "input",counter "output",counter "total"
