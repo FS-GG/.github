@@ -20,7 +20,10 @@ module internal NativeResponsesFacts =
     let private counter (value: int64 option) = value |> Option.map number |> Option.defaultValue null
     let private objectOf (fields: (string * JsonNode) list) =
         let node = JsonObject()
-        for key,value in fields do node.[key] <- value
+        // Shared declaration fields are reused across facts; each JSON tree owns
+        // its own child nodes, including nested references and arrays.
+        for key,value in fields do
+            node.[key] <- if isNull value then null else value.DeepClone()
         node
     let private canonical (node: JsonNode) =
         match CanonicalJson.canonicalize (Encoding.UTF8.GetBytes(node.ToJsonString())) with

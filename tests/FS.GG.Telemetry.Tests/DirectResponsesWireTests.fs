@@ -24,7 +24,7 @@ module DirectResponsesWireTests =
                                  SchemaJson=Encoding.UTF8.GetBytes "{\"type\":\"object\",\"properties\":{},\"additionalProperties\":false}" }
         |> unwrap
     let private generation =
-        $"""{{"object":"response","id":"resp_wire","model":"{NativeResponses.Model}","status":"completed","usage":{{"input_tokens":17,"output_tokens":1,"total_tokens":18}},"output":[{{"type":"message","content":[{{"type":"output_text","text":"{{}}"}}]}}]}}"""
+        $"""{{"object":"response","id":"resp_wire","model":"{NativeResponses.Model}","status":"completed","usage":{{"input_tokens":17,"output_tokens":1,"total_tokens":18}},"output":[{{"type":"message","role":"assistant","status":"completed","content":[{{"type":"output_text","text":"{{}}"}}]}}]}}"""
     let private count = "{\"object\":\"response.input_tokens\",\"input_tokens\":17}"
     let private reply (status: string) (extra: string) (body: string) (declared: int option) =
         let bytes = Encoding.UTF8.GetBytes body
