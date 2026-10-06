@@ -214,6 +214,20 @@ LEARN's rootless custody source merged through [#4215](https://github.com/FS-GG/
 Its source and static helper compile passed; native execution still needs a qualified
 namespace/cgroup environment. Source delivery does not close native acceptance.
 
+**2026-10-06: SVG-COHERENCE-01 export-prefix source window delivered; publication pending.**
+[Rendering #1389](https://github.com/FS-GG/FS.GG.Rendering/pull/1389) merged at
+`f133cb9f979cb4d5053e67c72ac7a6041524fc31` with exact-head coherent validation
+passed. It computes the document export prefix once and preserves curated Fable
+package content and the public API. The
+[qualified software comparison](https://github.com/FS-GG/FS.GG.Rendering/blob/f133cb9f979cb4d5053e67c72ac7a6041524fc31/docs/reports/svg-export-prefix-20261005.md)
+retains three pairs, a median CPU reduction of 25.70%, individual maximum regressions
+and prior failed attempts. This used GPU-disabled Chromium and the SVG development
+8GiB allowance; peak summed RSS was 2,583,908,352 bytes, so it establishes neither
+2GiB fit nor host GPU acceptance. The [owning plan](roadmaps/svg-coherence-and-instancing-01.md)
+keeps .3/.4 open. The coherent 0.32.1 successor still needs package custody, installed
+receiver qualification and publication; this source milestone does not close adoption
+or the late host GPU batch.
+
 **2026-10-05: SVG-COHERENCE-01 first shared guard and reference preparation delivered.**
 The [owning SVG plan](roadmaps/svg-coherence-and-instancing-01.md) retains completed
 inventory/harness milestones .1/.2 and joins the first bounded .4 change:
