@@ -41,3 +41,35 @@ module NativeResponsesCollectionTests =
             Assert.True failure.ClaimAttemptId.IsNone
             Assert.NotEmpty failure.Errors
     }
+
+    let private evidenceInput () =
+        use document = System.Text.Json.JsonDocument.Parse("""{"schema":"fsgg.telemetry.efficiency-evidence-packet/1","subject":{"itemId":"A&BÅ","outcomeId":"source-a","outcomeEpoch":1,"scope":"native-item"},"coverage":{"population":"unknown","usage":"unknown","classification":"unknown","lineage":"unknown","dependency":"unknown"},"omissions":[],"records":[]}""")
+        let raw = EfficiencyEvidence.encode document.RootElement |> Result.defaultWith failwith
+        Encoding.UTF8.GetString raw
+
+    [<Fact>]
+    let ``preclaim packet gate returns exact retained evidence codec bytes`` () =
+        let input = evidenceInput()
+        match NativeResponsesCollection.validateInputPacket input with
+        | Error errors -> failwithf "%A" errors
+        | Ok bytes -> Assert.True(bytes = Encoding.UTF8.GetBytes input)
+
+    [<Theory>]
+    [<InlineData("whitespace")>]
+    [<InlineData("property-order")>]
+    [<InlineData("other-json-codec")>]
+    let ``preclaim packet gate refuses altered representation without rewriting`` (scenario: string) =
+        let input = evidenceInput()
+        let altered =
+            if scenario = "whitespace" then " " + input
+            elif scenario = "other-json-codec" then
+                CanonicalJson.canonicalize(Encoding.UTF8.GetBytes input) |> Result.defaultWith failwith
+            else
+                let original = System.Text.Json.Nodes.JsonNode.Parse(input).AsObject()
+                let reordered = System.Text.Json.Nodes.JsonObject()
+                for pair in original |> Seq.rev do reordered.[pair.Key] <- pair.Value.DeepClone()
+                reordered.ToJsonString()
+        Assert.NotEqual(input, altered)
+        match NativeResponsesCollection.validateInputPacket altered with
+        | Ok _ -> failwith "noncanonical request would reach claim"
+        | Error errors -> Assert.Contains("responses-evidence-packet-not-canonical", errors)

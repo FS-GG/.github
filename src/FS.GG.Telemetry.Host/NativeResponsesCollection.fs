@@ -46,6 +46,19 @@ module internal NativeResponsesCollection =
     let private remaining (phase: DirectResponses.Phase) =
         require (phase.RemainingMilliseconds > 0) "responses-original-whole-deadline"
 
+    let validateInputPacket (inputText: string) : Result<byte array, string list> =
+        try
+            let bytes = utf8.GetBytes inputText
+            require (bytes.Length > 0 && bytes.Length <= 24576) "responses-evidence-packet-byte-bound"
+            use parsed = document bytes
+            let canonical = EfficiencyEvidence.encode parsed.RootElement |> Result.defaultWith (fun _ -> invalidOp "responses-evidence-packet-codec")
+            require (bytes = canonical) "responses-evidence-packet-not-canonical"
+            EfficiencyEvidence.validate bytes |> Result.defaultWith (fun _ -> invalidOp "responses-evidence-packet-invalid") |> ignore
+            Ok bytes
+        with
+        | :? InvalidOperationException as error when error.Message.StartsWith("responses-", StringComparison.Ordinal) -> Error [error.Message]
+        | _ -> Error ["responses-evidence-packet-invalid"]
+
     type Installed =
         { Config: ResponsesCollectorInstallationConfig
           Principal: TelemetryReceipt.Principal
@@ -259,6 +272,7 @@ module internal NativeResponsesCollection =
             require (TelemetryReceipt.validId itemId && TelemetryReceipt.validId invocationId
                      && TelemetryReceipt.validId dispatchIdentity) "responses-operation-identities"
             require (not cancellationToken.IsCancellationRequested) "responses-cancelled-before-claim"
+            let packetBytes = validateInputPacket request.InputText |> unwrap
             let frozen = NativeResponses.freeze request |> unwrap
             use generationDoc = document frozen.GenerationBody
             let format = generationDoc.RootElement.GetProperty("text").GetProperty("format")
@@ -286,8 +300,7 @@ module internal NativeResponsesCollection =
             let claim = claimDoc.RootElement
             require (text "state" claim = "claimed" && text "claimId" claim = operationId
                      && claim.GetProperty("invocationRef").ValueKind = JsonValueKind.Null) "responses-claimed-receipt-join"
-            let packet = CanonicalJson.canonicalize(utf8.GetBytes request.InputText) |> Result.defaultWith (fun _ -> invalidOp "responses-evidence-packet-json")
-            require (text "evidenceDigest" (claim.GetProperty "canonicalRequest") = "sha256:" + sha(utf8.GetBytes packet))
+            require (text "evidenceDigest" (claim.GetProperty "canonicalRequest") = "sha256:" + sha packetBytes)
                 "responses-claimed-evidence-mismatch"
             let claimRef = JsonSerializer.SerializeToNode
                                {| requestId = text "requestId" claim; claimId = operationId; revision = number "revision" claim

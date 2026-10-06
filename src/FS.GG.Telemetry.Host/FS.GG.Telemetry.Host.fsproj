@@ -43,6 +43,8 @@
     <Compile Include="NativeResponsesCollection.fs" />
     <Compile Include="NativeResponsesFacts.fsi" />
     <Compile Include="NativeResponsesFacts.fs" />
+    <Compile Include="NativeResponsesAssessment.fsi" />
+    <Compile Include="NativeResponsesAssessment.fs" />
     <Compile Include="NativeResponsesEntry.fsi" />
     <Compile Include="NativeResponsesEntry.fs" />
     <Compile Include="BrowserEndpoints.fsi" />

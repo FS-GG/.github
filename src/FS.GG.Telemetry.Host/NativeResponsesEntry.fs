@@ -13,7 +13,6 @@ module internal NativeResponsesEntry =
     let private require condition reason = if not condition then invalidOp reason
     let private bytes (node: JsonNode) = JsonSerializer.SerializeToUtf8Bytes node
     let private node (raw: byte array) = JsonNode.Parse raw
-    let private canonical (value: JsonNode) = CanonicalJson.canonicalize(bytes value) |> Result.defaultWith invalidOp
     let private text (name: string) (value: JsonNode) = value.[name].GetValue<string>()
     let private remaining (capture: NativeResponsesCollection.Capture) =
         require (capture.Phase.RemainingMilliseconds > 0) "responses-original-whole-deadline"
@@ -71,51 +70,46 @@ module internal NativeResponsesEntry =
         remaining capture
         result
 
+    let renderAssessmentFact (itemId: string) (operationId: string) (observedAt: string)
+                             (canonicalRequestBytes: byte array) (assessmentBytes: byte array) : Result<byte array, string list> =
+        try
+            let request = node canonicalRequestBytes
+            let fact = JsonObject()
+            fact.["kind"] <- JsonValue.Create "efficiency-assessment/1"
+            fact.["identity"] <- JsonValue.Create("responses-assessment-" + operationId)
+            fact.["itemId"] <- JsonValue.Create itemId
+            fact.["revision"] <- JsonValue.Create 1
+            fact.["assessment"] <- node assessmentBytes
+            fact.["provenance"] <- request.["authority"].DeepClone()
+            fact.["observedAt"] <- JsonValue.Create observedAt
+            Ok(bytes fact)
+        with _ -> Error ["responses-assessment-fact-declaration-invalid"]
+
     let private assessmentFact (capture: NativeResponsesCollection.Capture) (verified: NativeResponsesCollection.VerifiedCapture)
                                (packet: NativeResponsesFacts.Packet) (claim: JsonNode) =
         require verified.CompletionAccepted "responses-assessment-not-completed"
         let output = verified.Observation.OutputText |> Option.defaultWith (fun () -> invalidOp "responses-assessment-output-absent")
         require (Encoding.UTF8.GetByteCount output <= 16384) "responses-assessment-byte-bound"
-        let model = JsonNode.Parse(output).AsObject()
         let request = claim.["canonicalRequest"]
-        // Provider content cannot choose the receiver-owned identity, authority or lifecycle.
         let identity = "responses-assessment-" + verified.Operation.OperationId
-        model.["assessmentId"] <- JsonValue.Create identity
-        model.["revision"] <- JsonValue.Create 1
-        model.["supersedes"] <- null
-        require (JsonNode.DeepEquals(model.["subject"], request.["subject"])) "responses-assessment-subject-mismatch"
-        require (text "evidenceDigest" model = text "evidenceDigest" request) "responses-assessment-evidence-mismatch"
         use captureDocument = JsonDocument.Parse(ReadOnlyMemory<byte> capture.Bytes)
         let generationBytes = Convert.FromBase64String(captureDocument.RootElement.GetProperty("generationRequestBase64").GetString())
         use generation = JsonDocument.Parse(ReadOnlyMemory<byte> generationBytes)
-        let input = generation.RootElement.GetProperty("input").[0].GetProperty("content").GetString() |> JsonNode.Parse
-        let allowed = input.["records"].AsArray() |> Seq.map (fun row -> canonical (row.["ref"])) |> Set.ofSeq
-        for reference in model.["evidenceRefs"].AsArray() do
-            require (Set.contains (canonical reference) allowed) "responses-assessment-invented-reference"
-        for name in [ "population"; "usage"; "classification"; "lineage"; "dependency" ] do
-            if text name (model.["coverage"]) = "complete" then
-                require (text name (input.["coverage"]) = "complete") "responses-assessment-coverage-promotion"
+        let inputText = generation.RootElement.GetProperty("input").[0].GetProperty("content").GetString()
+        // These are the exact frozen request bytes; the preclaim gate already requires
+        // the retained evidence codec. Do not canonicalize or rewrite them after capture.
+        let packetBytes = NativeResponsesCollection.validateInputPacket inputText |> unwrap
         let usage = packet.UsageRef |> Option.defaultWith (fun () -> invalidOp "responses-assessment-usage-absent") |> node
-        model.["provenance"] <-
-            JsonSerializer.SerializeToNode
-                {| producer = verified.Origin.Principal.Scope.Producer; modelAlias = "sol"
-                   promptVersion = "responses-installed-instructions/1"; rubricVersion = "efficiency-rubric/1"
-                   taxonomyVersion = "efficiency-taxonomy/1"; analysisPolicyVersion = "efficiency-analysis-policy/1"
-                   usageRefs = [| text "id" usage |]; startedAt = text "claimedAt" claim
-                   finishedAt = verified.Operation.ObservedAt; validationResult = "accepted" |}
-        model.["lifecycle"] <-
-            JsonSerializer.SerializeToNode
-                {| state = "partial"; idempotencyKey = text "requestId" claim; failureReason = (null: string)
-                   itemReviewRef = (null: string); generatedAt = verified.Operation.ObservedAt |}
-        model.["publication"] <- JsonSerializer.SerializeToNode {| visibility = "private"; policyVersion = (null: string) |}
-        let fact = JsonObject()
-        fact.["kind"] <- JsonValue.Create "efficiency-assessment/1"
-        fact.["identity"] <- JsonValue.Create identity
-        fact.["itemId"] <- JsonValue.Create verified.Operation.ItemId
-        fact.["revision"] <- JsonValue.Create 1
-        fact.["assessment"] <- model
-        fact.["provenance"] <- request.["authority"].DeepClone()
-        fact.["observedAt"] <- JsonValue.Create verified.Operation.ObservedAt
+        let prepared =
+            NativeResponsesAssessment.prepare
+                { OutputText = output; PacketBytes = packetBytes; CanonicalRequestBytes = bytes request
+                  RequestId = text "requestId" claim; AnalysisUsageRef = text "id" usage
+                  ClaimedAt = text "claimedAt" claim; ObservedAt = verified.Operation.ObservedAt
+                  OperationId = verified.Operation.OperationId; Producer = verified.Origin.Principal.Scope.Producer }
+            |> unwrap
+        let fact =
+            renderAssessmentFact verified.Operation.ItemId verified.Operation.OperationId verified.Operation.ObservedAt
+                (bytes request) prepared |> unwrap |> node
         identity, fact
 
     let run configPath (config: HostConfig) runtimeCredentialReference dispatchIdentity itemId requestPath =

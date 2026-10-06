@@ -32,6 +32,10 @@ module internal NativeResponsesCollection =
 
     type Failure = { Errors: string list; ClaimAttemptId: string option; ClaimReceipt: string option }
 
+    /// Pure preclaim byte gate. Returns the exact input only when it is a valid
+    /// retained evidence packet in the existing codec; never grants authority.
+    val validateInputPacket: inputText: string -> Result<byte array, string list>
+
     [<Class>]
     type Capture =
         member Phase: FS.GG.Telemetry.DirectResponses.Phase

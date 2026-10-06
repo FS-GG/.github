@@ -195,3 +195,28 @@ module NativeResponsesAssessmentTests =
             if scenario.StartsWith("packet-kind",StringComparison.Ordinal) || scenario="packet-digest-syntax" || scenario="packet-extra-property" then
                 Assert.True(errors |> List.exists (fun error -> error.StartsWith("assessment-packet-refused:",StringComparison.Ordinal)))
             else Assert.Contains(expected, errors)
+
+    [<Fact>]
+    let ``prepared assessment uses actual Entry outer declaration and canonical Store decoder`` () =
+        let assessment = model()
+        let input = fixture assessment (packet assessment)
+        let prepared = NativeResponsesAssessment.prepare input |> unwrap
+        let raw = NativeResponsesEntry.renderAssessmentFact "A" input.OperationId input.ObservedAt input.CanonicalRequestBytes prepared |> unwrap
+        let fact = JsonNode.Parse(utf8.GetString raw)
+        let request = JsonNode.Parse(utf8.GetString input.CanonicalRequestBytes)
+        Assert.Equal("responses-assessment-operation-a", fact.["identity"].GetValue<string>())
+        Assert.Equal("A", fact.["itemId"].GetValue<string>())
+        Assert.Equal(input.ObservedAt, fact.["observedAt"].GetValue<string>())
+        Assert.True(JsonNode.DeepEquals(request.["authority"], fact.["provenance"]))
+        Assert.Equal(input.AnalysisUsageRef, fact.["assessment"].["provenance"].["usageRefs"].[0].GetValue<string>())
+        Assert.Equal(input.ClaimedAt, fact.["assessment"].["provenance"].["startedAt"].GetValue<string>())
+        Assert.Equal(input.ObservedAt, fact.["assessment"].["provenance"].["finishedAt"].GetValue<string>())
+        let batch = JsonObject()
+        batch.["schema"] <- JsonValue.Create TelemetryStore.BatchSchema
+        batch.["ingestId"] <- JsonValue.Create "assessment-projection"
+        batch.["sourceIdentity"] <- JsonValue.Create "fixture"
+        batch.["generation"] <- JsonValue.Create "g1"
+        batch.["cursor"] <- JsonValue.Create "assessment-projection"
+        batch.["eventCount"] <- JsonValue.Create 1
+        batch.["events"] <- JsonArray(fact)
+        TelemetryStore.parseBatch (utf8.GetBytes(batch.ToJsonString())) |> unwrap |> ignore
