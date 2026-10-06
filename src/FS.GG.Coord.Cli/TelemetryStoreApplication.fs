@@ -6138,7 +6138,7 @@ WHERE n.source_ref=$source;
                                 Error [ error.Message ]
                     with error -> Error [ error.Message ]
 
-    let ciCorrect path assessment bytes = ciCorrectWithHook path assessment bytes ignore
+    let ciCorrect path assessment planBytes = ciCorrectWithHook path assessment planBytes ignore
 
     let ciCorrectionHistory path assessment correctionId =
         if not (TelemetryReceipt.validId correctionId) then Error [ "invalid-request" ]
