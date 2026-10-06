@@ -9,6 +9,7 @@
     />
     <title>FS—GG / Signal</title>
     <link rel="stylesheet" href="styles.css" />
+    <script defer src="efficiency.js"></script>
     <script defer src="app.js"></script>
   </head>
   <body>
@@ -19,7 +20,7 @@
       >
       <nav aria-label="Dashboard views">
         <a href="#overview">Overview</a><a href="#items">Items</a><a href="#actions">Actions</a
-        ><a href="#local">Local</a><a href="#method">Method</a>
+        ><a href="#local">Local</a><a href="#efficiency">Efficiency</a><a href="#method">Method</a>
       </nav>
       <button
         class="icon-button"
@@ -58,6 +59,11 @@
         <div>
           <strong id="m-workflows">—</strong><span>workflows sampled</span>
         </div>
+      </section>
+
+      <section class="panel controls" id="source-context" aria-label="Independent telemetry source" hidden>
+        <label><span>Work source</span><select id="source-context-select"><option value="current">Current work</option><option value="historical">Historical</option></select></label>
+        <p class="context" id="source-context-note" role="status"></p>
       </section>
 
       <section class="panel items-panel" id="items" aria-labelledby="items-title">
@@ -214,6 +220,19 @@
             </p>
           </div>
         </div>
+      </section>
+
+      <section id="efficiency" aria-labelledby="efficiency-title">
+        <p class="eyebrow">PROCESS EFFICIENCY / COVERAGE FIRST</p>
+        <h2 id="efficiency-title">Work, retries and explanations</h2>
+        <p id="efficiency-health" role="status">Process efficiency unavailable; runtime and cost remain unknown.</p>
+        <div class="filters">
+          <label>Find item <input id="efficiency-search" type="search" maxlength="120" /></label>
+          <label>Scope <select id="efficiency-scope"><option value="all">All scopes</option><option value="native-item">Native item</option><option value="provisional-delivery">Provisional delivery</option><option value="unestablished">Accounting only</option></select></label>
+          <label>Measurements <select id="efficiency-view"><option value="all">All measurements</option><option value="work">Work mix and analysis burden</option><option value="retry">Retries and churn</option><option value="health">Data health</option></select></label>
+        </div>
+        <div id="efficiency-items"></div>
+        <div class="filters"><button id="efficiency-prev" type="button" disabled>Previous items</button><p id="efficiency-page" role="status">No efficiency population available</p><button id="efficiency-next" type="button" disabled>Next items</button></div>
       </section>
 
       <section class="method" id="method" aria-labelledby="method-title">

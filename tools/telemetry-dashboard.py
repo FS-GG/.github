@@ -10,6 +10,7 @@ import gzip
 import hashlib
 import io
 import json
+import math
 import os
 import pathlib
 import re
@@ -25,12 +26,337 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from typing import Any
+from types import SimpleNamespace
+
+EFF_SCHEMA = 'fsgg.telemetry.process-efficiency/1'
+EFF_POLICY = 'efficiency-public-projection/1'
+EFF_COVERAGE = {'complete', 'partial', 'unknown', 'not-applicable'}
+EFF_AXES = ('population', 'usage', 'classification', 'lineage', 'dependency')
+EFF_METRICS = {'delivered-outcomes', 'observed-resource', 'work-mix', 'avoidable-share', 'retry-incidence', 'retry-burden', 'first-pass-delivery', 'churn', 'lead-time', 'touch-time', 'wait-time', 'flow-ratio', 'critical-path-delay', 'cost-per-accepted', 'analysis-burden', 'data-health'}
+EFF_UNITS = {'tokens-input', 'tokens-output', 'tokens-total', 'tokens-cached-input', 'tokens-cache-write-input', 'tokens-reasoning', 'runner-seconds', 'observed-span-seconds', 'human-seconds', 'seconds', 'estimated-currency', 'billed-currency', 'outcomes', 'events', 'records', 'ratio', 'tokens-per-accepted', 'currency-per-accepted'}
+EFF_CAUSES = {'product-defect', 'requirements', 'dependency-drift', 'test-nondeterminism', 'infrastructure', 'authorization', 'capacity-custody', 'orchestration-handoff', 'context-loss', 'duplicate-process', 'bookkeeping-lineage', 'telemetry-loss', 'other', 'unknown'}
+EFF_PURPOSES = {'direct-product', 'useful-assurance', 'necessary-coordination', 'process-improvement', 'avoidable-process', 'unknown'}
+EFF_REF_KINDS = {'outcome', 'attempt', 'invocation', 'operation', 'pr', 'ci-run', 'ci-job', 'release', 'adoption', 'usage', 'activity', 'complication', 'process-review', 'correction', 'assessment'}
+EFF_HEALTH_DIMENSIONS = {'source-age', 'ingestion-age', 'publication-age', 'producer-population', 'unresolved-lineage', 'pending-analysis'}
+EFF_STATES = {'pending', 'running', 'partial', 'ready', 'failed', 'unavailable'}
+EFF_ITEM_URL = re.compile(r'https://github\.com/FS-GG/[A-Za-z0-9_.-]+(?:/(?:issues|pull)/[1-9][0-9]*)?')
+EFF_URL = re.compile(r'https://github\.com/FS-GG/[A-Za-z0-9_.-]+/(?:issues|pull|actions/runs)/[1-9][0-9]*')
+
+
+def unavailable_process_efficiency():
+    return {'schema': EFF_SCHEMA, 'policyVersion': EFF_POLICY, 'source': 'unavailable', 'status': 'unavailable', 'coverage': {'published': 0, 'unmapped': 0, 'withheld': 0, 'unsupported': 0}, 'exports': [], 'items': []}
+
+
+def _eff_exact(value, keys):
+    if not isinstance(value, dict) or set(value) != set(keys):
+        raise ValueError('invalid efficiency projection fields')
+
+
+def _eff_integer(value):
+    if type(value) is not int or not 0 <= value <= 9007199254740991:
+        raise ValueError('invalid efficiency quantity')
+
+
+def _eff_coverage(value):
+    _eff_exact(value, EFF_AXES)
+    if any(v not in EFF_COVERAGE for v in value.values()):
+        raise ValueError('invalid efficiency coverage')
+
+
+def _eff_stamp(value):
+    from datetime import datetime
+    if not isinstance(value, str) or len(value) > 40 or not re.search(r'(Z|[+-]\d\d:\d\d)$', value):
+        raise ValueError('invalid efficiency time')
+    datetime.fromisoformat(value.replace('Z', '+00:00'))
+
+
+def validate_process_efficiency(value):
+    _eff_exact(value, ('schema', 'policyVersion', 'source', 'status', 'coverage', 'exports', 'items'))
+    if value['schema'] != EFF_SCHEMA or value['policyVersion'] != EFF_POLICY or value['source'] not in {'fixtures', 'canonical-export', 'unavailable'} or value['status'] not in {'partial', 'unavailable'}:
+        raise ValueError('invalid efficiency identity')
+    _eff_exact(value['coverage'], ('published', 'unmapped', 'withheld', 'unsupported'))
+    for count in value['coverage'].values(): _eff_integer(count)
+    if not isinstance(value['items'], list) or len(value['items']) > 200 or value['coverage']['published'] != len(value['items']):
+        raise ValueError('invalid efficiency population')
+    if value['coverage']['unsupported'] > value['coverage']['withheld']: raise ValueError('invalid unsupported population')
+    if value['source'] == 'unavailable' and (value['status'] != 'unavailable' or value['items']):
+        raise ValueError('unavailable efficiency contains data')
+    if not isinstance(value['exports'], list) or len(value['exports']) > 2: raise ValueError('efficiency source bound')
+    export_keys = set()
+    for source in value['exports']:
+        _eff_exact(source, ('key', 'baseSnapshotRevision', 'sourceFingerprint', 'cutoff', 'observedAt', 'selection', 'metricSelection'))
+        if source['key'] not in {'s0', 's1'} or source['key'] in export_keys or not isinstance(source['baseSnapshotRevision'], str) or not re.fullmatch(r'[a-f0-9]{64}', source['baseSnapshotRevision']) or not isinstance(source['sourceFingerprint'], str) or not re.fullmatch(r'sha256:[a-f0-9]{64}', source['sourceFingerprint']): raise ValueError('invalid public source binding')
+        export_keys.add(source['key'])
+        for field in ('cutoff', 'observedAt'): _eff_stamp(source[field])
+        _eff_selection(source['selection'], 200, source['selection'].get('returned') if isinstance(source['selection'], dict) else None)
+        _eff_selection(source['metricSelection'], 1000, source['metricSelection'].get('returned') if isinstance(source['metricSelection'], dict) else None)
+    if (value['source'] == 'canonical-export') != bool(value['exports']): raise ValueError('efficiency source mismatch')
+    keys = set()
+    for item in value['items']:
+        _eff_exact(item, ('key', 'label', 'url', 'summary', 'analysisState', 'scope', 'metrics', 'problems', 'timeline', 'improvements', 'exportHealth'))
+        if not isinstance(item['key'], str) or not re.fullmatch(r'[a-z0-9][a-z0-9-]{0,63}', item['key']) or item['key'] in keys: raise ValueError('invalid public item key')
+        keys.add(item['key'])
+        if not isinstance(item['label'], str) or not 1 <= len(item['label']) <= 120 or not isinstance(item['url'], str) or not EFF_ITEM_URL.fullmatch(item['url']): raise ValueError('invalid approved item')
+        if item['scope'] not in {'native-item', 'provisional-delivery', 'unestablished'} or item['analysisState'] not in EFF_STATES or item['summary'] not in {'native-observation', 'delivery-accounting-incomplete', 'accounting-unestablished'}: raise ValueError('invalid efficiency summary')
+        if item['summary'] != ({'native-item': 'native-observation', 'provisional-delivery': 'delivery-accounting-incomplete', 'unestablished': 'accounting-unestablished'}[item['scope']]): raise ValueError('summary scope mismatch')
+        health = item['exportHealth']
+        if value['source'] == 'canonical-export':
+            _eff_exact(health, ('sourceKey', 'requestState', 'assessmentState', 'pendingSince', 'lastAttemptAt', 'failureCode', 'sourceObservedAt', 'ingestedAt', 'metricSelection'))
+            if health['sourceKey'] not in export_keys: raise ValueError('missing public source binding')
+            _eff_analysis_health({'state': item['analysisState'], **{field: health[field] for field in ('requestState', 'assessmentState', 'pendingSince', 'lastAttemptAt', 'failureCode')}})
+            for field in ('sourceObservedAt', 'ingestedAt'):
+                if health[field] is not None: _eff_stamp(health[field])
+            _eff_selection(health['metricSelection'], 32, len(item['metrics']))
+        elif health is not None: raise ValueError('fixture contains canonical health')
+        if item['scope'] == 'provisional-delivery' and item['analysisState'] == 'ready': raise ValueError('provisional final analysis')
+        if not isinstance(item['metrics'], list) or len(item['metrics']) > 32: raise ValueError('efficiency metric bound')
+        ids = set()
+        for metric in item['metrics']:
+            _eff_exact(metric, ('key', 'metric', 'unit', 'calculationVersion', 'value', 'coverage', 'policyProfile', 'windowStart', 'windowEnd', 'cutoff', 'observedAt', 'eventTime', 'openItems', 'abandonedItems', 'excludedItems', 'populationItems', 'unmappedPopulationItems', 'purpose', 'healthDimension', 'sourceEvidence', 'unmappedEvidenceRefs', 'evidenceUrls'))
+            if not re.fullmatch(r'm[0-9]+', metric['key']) or metric['key'] in ids: raise ValueError('invalid public metric key')
+            ids.add(metric['key'])
+            if metric['metric'] not in EFF_METRICS or metric['unit'] not in EFF_UNITS or metric['calculationVersion'] != 'efficiency-calculation/1': raise ValueError('invalid metric contract')
+            if metric['policyProfile'] not in {None, 'v2-model-overhead/2026-09-29', 'utel-narrow-bureaucracy/1'}: raise ValueError('invalid profile alias')
+            _eff_exact(metric['value'], ('status', 'numerator', 'denominator', 'unknownAmount'))
+            v = metric['value']
+            if v['status'] not in {'known', 'partial', 'unknown', 'not-applicable'}: raise ValueError('invalid quantity status')
+            for field in ('numerator', 'denominator', 'unknownAmount'):
+                if v[field] is not None: _eff_integer(v[field])
+            if v['status'] in {'unknown', 'not-applicable'} and (v['numerator'] is not None or v['denominator'] is not None): raise ValueError('unknown quantity has value')
+            if v['status'] in {'known', 'partial'} and v['numerator'] is None: raise ValueError('known quantity missing')
+            if v['denominator'] == 0: raise ValueError('zero metric denominator')
+            if metric['metric'] == 'work-mix':
+                if metric['purpose'] not in EFF_PURPOSES: raise ValueError('work mix requires purpose')
+            elif metric['purpose'] is not None: raise ValueError('non-work-mix purpose')
+            if metric['metric'] == 'data-health':
+                if metric['healthDimension'] not in EFF_HEALTH_DIMENSIONS: raise ValueError('data health requires dimension')
+            elif metric['healthDimension'] is not None: raise ValueError('non-health dimension')
+            if metric['unit'] == 'ratio' and metric['value']['status'] in {'known', 'partial'} and metric['value']['denominator'] is None: raise ValueError('ratio denominator required')
+            _eff_integer(metric['unmappedEvidenceRefs'])
+            if not isinstance(metric['sourceEvidence'], list) or len(metric['sourceEvidence']) > 16: raise ValueError('source evidence bound')
+            for ref in metric['sourceEvidence']:
+                _eff_exact(ref, ('url', 'kind', 'revision')); _eff_links([ref['url']]); _eff_integer(ref['revision'])
+                if ref['kind'] not in EFF_REF_KINDS: raise ValueError('invalid public source kind')
+            _eff_coverage(metric['coverage'])
+            for field in ('windowStart', 'windowEnd', 'cutoff', 'observedAt'): _eff_stamp(metric[field])
+            if metric['eventTime'] is not None: _eff_stamp(metric['eventTime'])
+            for field in ('openItems', 'abandonedItems', 'excludedItems'): _eff_integer(metric[field])
+            _eff_integer(metric['unmappedPopulationItems'])
+            if not isinstance(metric['populationItems'], list) or len(metric['populationItems']) > 200 or any(not isinstance(k, str) or not re.fullmatch(r'[a-z0-9][a-z0-9-]{0,63}', k) for k in metric['populationItems']): raise ValueError('invalid public metric population')
+            _eff_links(metric['evidenceUrls'])
+        for field, bound in (('problems', 16), ('timeline', 32), ('improvements', 3)):
+            if not isinstance(item[field], list) or len(item[field]) > bound: raise ValueError('efficiency detail bound')
+        for problem in item['problems']:
+            _eff_exact(problem, ('primaryCause', 'necessity', 'epistemicStatus', 'evidenceUrls'))
+            if problem['primaryCause'] not in EFF_CAUSES or problem['necessity'] not in {'required', 'avoidable', 'uncertain'} or problem['epistemicStatus'] not in {'observed', 'supported-inference', 'hypothesis', 'unknown'}: raise ValueError('invalid problem label')
+            _eff_links(problem['evidenceUrls'])
+        for event in item['timeline']:
+            _eff_exact(event, ('kind', 'at', 'evidenceUrls'))
+            if event['kind'] not in {'source-delivered', 'native-completed', 'analysis-generated', 'metric-observed'}: raise ValueError('invalid timeline event')
+            _eff_stamp(event['at']); _eff_links(event['evidenceUrls'])
+        if item['improvements'] not in ([], ['collect-missing-evidence']): raise ValueError('unapproved improvement template')
+
+
+def _eff_links(value):
+    if not isinstance(value, list) or len(value) > 16 or any(not isinstance(v, str) or not EFF_URL.fullmatch(v) for v in value): raise ValueError('invalid public evidence links')
+
+
+def project_process_efficiency(metrics, assessments, labels, evidence_links=None, selected_subjects=None):
+    """Closed adapter over canonical records; defaults to fixture qualification.
+
+    Existing labels approve item identity only. POLICY separately approves typed
+    metric facts, taxonomy labels and fixed summary/improvement templates. The
+    evidence map is an explicit additional approval, never an arbitrary source URL.
+    Revision selection and reference existence belong to the canonical caller.
+    """
+    if len(metrics) > 1000 or len(assessments) > 200: raise ValueError('efficiency input bound')
+    evidence_links = evidence_links or {}
+    for url in evidence_links.values(): _eff_links([url])
+    def evidence(refs):
+        return sorted({evidence_links[r] for r in refs if r in evidence_links})[:16]
+    result = unavailable_process_efficiency(); result.update(source='fixtures', status='partial')
+    groups = {}
+    for metric in metrics:
+        if metric['schema'] != 'fsgg.telemetry.efficiency-metric/1': raise ValueError('invalid canonical metric schema')
+        for subject in metric['population']['itemIds']: groups.setdefault(subject, {'metrics': [], 'assessments': []})['metrics'].append(metric)
+    for assessment in assessments:
+        if assessment['schema'] != 'fsgg.telemetry.efficiency-assessment/1': raise ValueError('invalid assessment schema')
+        groups.setdefault(assessment['subject']['itemId'], {'metrics': [], 'assessments': []})['assessments'].append(assessment)
+    for subject, group in sorted(groups.items()):
+        if selected_subjects is not None and subject not in selected_subjects: continue
+        approved = labels['items'].get(subject)
+        if approved is None: result['coverage']['unmapped'] += 1; continue
+        if len(group['metrics']) > 32 or len(group['assessments']) > 1 or len({m['metricId'] for m in group['metrics']}) != len(group['metrics']): result['coverage']['withheld'] += 1; continue
+        if any(type(m['value'][field]) is int and m['value'][field] > 9007199254740991 for m in group['metrics'] for field in ('numerator', 'denominator', 'unknownAmount')):
+            result['coverage']['withheld'] += 1; result['coverage']['unsupported'] += 1; continue
+        assessment = group['assessments'][0] if group['assessments'] else None
+        scope = assessment['subject']['scope'] if assessment else 'unestablished'
+        state = assessment['lifecycle']['state'] if assessment else 'unavailable'
+        if assessment and assessment['provenance']['validationResult'] == 'rejected': state = 'failed'
+        elif assessment and assessment['provenance']['validationResult'] != 'accepted' and state == 'ready': state = 'partial'
+        if assessment and (assessment['subject']['outcomeEpoch'] is None or scope == 'provisional-delivery') and state == 'ready': state = 'partial'
+        row = {k: approved[k] for k in ('key', 'label', 'url')}
+        row.update(summary={'native-item': 'native-observation', 'provisional-delivery': 'delivery-accounting-incomplete', 'unestablished': 'accounting-unestablished'}[scope], analysisState=state, scope=scope, metrics=[], problems=[], timeline=[], improvements=[], exportHealth=None)
+        if assessment and any(ref not in {m['metricId'] for m in group['metrics']} for ref in assessment['metricRefs']):
+            result['coverage']['withheld'] += 1; continue
+        for index, metric in enumerate(group['metrics']):
+            population = metric['population']
+            public = {k: metric[k] for k in ('metric', 'unit', 'calculationVersion', 'coverage', 'policyProfile', 'observedAt', 'eventTime', 'purpose', 'healthDimension')}
+            public['coverage'] = dict(public['coverage'])
+            public.update(key=f'm{index}', value={k: metric['value'][k] for k in ('status', 'numerator', 'denominator', 'unknownAmount')}, **{k: population[k] for k in ('windowStart', 'windowEnd', 'cutoff', 'openItems', 'abandonedItems')}, excludedItems=len(population['excludedItems']), populationItems=sorted({labels['items'][subject]['key'] for subject in population['itemIds'] if subject in labels['items']}), unmappedPopulationItems=sum(subject not in labels['items'] for subject in population['itemIds']), evidenceUrls=evidence([r['id'] for r in metric['sourceRefs']]))
+            approved_refs = [{'url': evidence_links[r['id']], 'kind': r['kind'], 'revision': r['revision']} for r in metric['sourceRefs'] if r['id'] in evidence_links]
+            public.update(sourceEvidence=approved_refs[:16], unmappedEvidenceRefs=len(metric['sourceRefs'])-len(approved_refs[:16]))
+            row['metrics'].append(public)
+            if len(row['timeline']) < 31: row['timeline'].append({'kind': 'metric-observed', 'at': metric['observedAt'], 'evidenceUrls': public['evidenceUrls']})
+        if assessment:
+            for finding in (assessment['findings'] if assessment['provenance']['validationResult'] == 'accepted' else []):
+                row['problems'].append({**{k: finding[k] for k in ('primaryCause', 'necessity', 'epistemicStatus')}, 'evidenceUrls': evidence(finding['evidenceRefs'])})
+            row['timeline'].append({'kind': 'analysis-generated', 'at': assessment['lifecycle']['generatedAt'], 'evidenceUrls': evidence([r['id'] for r in assessment['evidenceRefs']])})
+        if scope == 'provisional-delivery': row['improvements'] = ['collect-missing-evidence']
+        result['items'].append(row)
+    result['coverage']['published'] = len(result['items'])
+    validate_process_efficiency(result)
+    return result
+
+EFF_EXPORT_SCHEMA = 'fsgg.telemetry.efficiency-export/1'
+EFF_FAILURE_CODES = {'missing-token', 'missing-authority', 'model-unavailable', 'export-unavailable', 'timeout', 'malformed-output', 'analysis-budget-exhausted', 'interrupted-analysis-outcome-unknown', 'unknown'}
+
+
+def _eff_selection(value, limit, returned):
+    _eff_exact(value, ('limit', 'returned', 'omitted', 'complete'))
+    for field in ('limit', 'returned', 'omitted'): _eff_integer(value[field])
+    if value['limit'] != limit or value['returned'] != returned or returned > limit or type(value['complete']) is not bool or value['complete'] != (value['omitted'] == 0):
+        raise ValueError('invalid efficiency export selection')
+
+
+def _eff_analysis_health(health):
+    _eff_exact(health, ('state', 'requestState', 'assessmentState', 'pendingSince', 'lastAttemptAt', 'failureCode'))
+    if health['state'] not in EFF_STATES or (health['failureCode'] is not None and health['failureCode'] not in EFF_FAILURE_CODES): raise ValueError('invalid analysis export health')
+    if health['requestState'] is not None and health['requestState'] not in {'pending', 'claimed', 'settled', 'failed', 'unavailable'}: raise ValueError('invalid canonical request state')
+    if health['assessmentState'] is not None and health['assessmentState'] not in EFF_STATES: raise ValueError('invalid assessment state')
+    if health['requestState'] in {'pending', 'claimed'} and health['state'] != {'pending': 'pending', 'claimed': 'running'}[health['requestState']]: raise ValueError('pending request hidden by assessment')
+    for field in ('pendingSince', 'lastAttemptAt'):
+        if health[field] is not None: _eff_stamp(health[field])
+
+
+def validate_efficiency_export(value, expected_snapshot_revision):
+    """Validate the read-only source consumer seam, never canonical calculations.
+
+    The trusted exporter selects current revisions in one WAL snapshot. Its compact
+    snapshotRevision binds the existing item-detail/3 base; sourceFingerprint binds
+    all relevant source tables, including corrections, efficiency and queue state.
+    A fingerprint here is not a caller-authored grant or a whole-store signature.
+    """
+    _eff_exact(value, ('schema', 'snapshotRevision', 'sourceFingerprint', 'cutoff', 'observedAt', 'selection', 'metricSelection', 'items'))
+    if value['schema'] != EFF_EXPORT_SCHEMA or not isinstance(expected_snapshot_revision, str) or not re.fullmatch(r'[a-f0-9]{64}', expected_snapshot_revision) or value['snapshotRevision'] != expected_snapshot_revision or not isinstance(value['sourceFingerprint'], str) or not re.fullmatch(r'sha256:[a-f0-9]{64}', value['sourceFingerprint']):
+        raise ValueError('efficiency export revision mismatch')
+    if len(json.dumps(value, ensure_ascii=True, separators=(',', ':'), allow_nan=False).encode()) > 4 * 1_048_576:
+        raise ValueError('efficiency export byte bound')
+    _eff_stamp(value['cutoff']); _eff_stamp(value['observedAt'])
+    if not isinstance(value['items'], list) or len(value['items']) > 200: raise ValueError('efficiency export item bound')
+    _eff_selection(value['selection'], 200, len(value['items']))
+    keys = set(); total_metrics = 0
+    for item in value['items']:
+        _eff_exact(item, ('itemId', 'originalItemId', 'metrics', 'metricSelection', 'assessment', 'analysisHealth', 'freshness'))
+        for field in ('itemId', 'originalItemId'):
+            if not isinstance(item[field], str) or not 1 <= len(item[field]) <= 256: raise ValueError('invalid private export subject')
+        if item['itemId'] in keys: raise ValueError('duplicate export subject')
+        keys.add(item['itemId'])
+        if not isinstance(item['metrics'], list) or len(item['metrics']) > 32: raise ValueError('efficiency export metric bound')
+        _eff_selection(item['metricSelection'], 32, len(item['metrics']))
+        total_metrics += len(item['metrics'])
+        metric_ids = set()
+        for metric in item['metrics']:
+            if not isinstance(metric, dict) or metric.get('schema') != 'fsgg.telemetry.efficiency-metric/1' or not isinstance(metric.get('metricId'), str) or metric['metricId'] in metric_ids or not isinstance(metric.get('population'), dict) or item['itemId'] not in metric['population'].get('itemIds', []):
+                raise ValueError('efficiency export metric subject mismatch')
+            metric_ids.add(metric['metricId'])
+        assessment = item['assessment']
+        if assessment is not None and (not isinstance(assessment, dict) or assessment.get('schema') != 'fsgg.telemetry.efficiency-assessment/1' or not isinstance(assessment.get('subject'), dict) or assessment['subject'].get('itemId') != item['itemId']):
+            raise ValueError('efficiency export assessment subject mismatch')
+        _eff_analysis_health(item['analysisHealth'])
+        _eff_exact(item['freshness'], ('sourceObservedAt', 'ingestedAt'))
+        for instant in item['freshness'].values():
+            if instant is not None: _eff_stamp(instant)
+    _eff_selection(value['metricSelection'], 1000, total_metrics)
+    if value['metricSelection']['omitted'] < sum(item['metricSelection']['omitted'] for item in value['items']):
+        raise ValueError('efficiency export omitted metrics mismatch')
+
+
+def project_efficiency_exports(exports, labels, evidence_links=None, max_bytes=768 * 1024):
+    """Pure bounded consumer join; exporters own revisions and all calculations.
+
+    Each (envelope, exact base revision) pair was read by one canonical transaction.
+    Original identities resolve only through approved labels. Ambiguous public
+    identities are withheld across stores; hashes are source bindings, not grants.
+    """
+    if type(max_bytes) is not int or not 1024 <= max_bytes <= 1_048_576: raise ValueError('efficiency public byte bound')
+    if not isinstance(exports, list) or not 1 <= len(exports) <= 2: raise ValueError('efficiency source bound')
+    result = unavailable_process_efficiency(); result.update(source='canonical-export', status='partial')
+    rows = {}; duplicates = set()
+    for index, (value, revision) in enumerate(exports):
+        validate_efficiency_export(value, revision)
+        source_key = f's{index}'
+        result['exports'].append({'key': source_key, 'baseSnapshotRevision': revision, **{field: value[field] for field in ('sourceFingerprint', 'cutoff', 'observedAt', 'selection', 'metricSelection')}})
+        result['exports'][-1]['selection'] = dict(value['selection'])
+        result['exports'][-1]['metricSelection'] = dict(value['metricSelection'])
+        for item in value['items']:
+            approved = labels['items'].get(item['originalItemId'])
+            if approved is None:
+                result['coverage']['unmapped'] += 1; continue
+            aliases = {'items': {**labels['items'], item['itemId']: approved}}
+            projected = project_process_efficiency(item['metrics'], [item['assessment']] if item['assessment'] is not None else [], aliases, evidence_links, {item['itemId']})
+            if projected['coverage']['withheld']:
+                result['coverage']['withheld'] += 1
+                result['coverage']['unsupported'] += projected['coverage']['unsupported']; continue
+            if projected['items']:
+                row = projected['items'][0]
+            else:
+                row = {field: approved[field] for field in ('key', 'label', 'url')}
+                row.update(summary='accounting-unestablished', analysisState='unavailable', scope='unestablished', metrics=[], problems=[], timeline=[], improvements=[], exportHealth=None)
+            row['analysisState'] = item['analysisHealth']['state']
+            if row['scope'] == 'provisional-delivery' and row['analysisState'] == 'ready': row['analysisState'] = 'partial'
+            row['exportHealth'] = {'sourceKey': source_key, **{field: item['analysisHealth'][field] for field in ('requestState', 'assessmentState', 'pendingSince', 'lastAttemptAt', 'failureCode')}, **item['freshness'], 'metricSelection': dict(item['metricSelection'])}
+            key = row['key']
+            if key in rows or key in duplicates:
+                if key in rows: del rows[key]; result['coverage']['withheld'] += 1
+                duplicates.add(key); result['coverage']['withheld'] += 1; continue
+            rows[key] = row
+    ordered = [rows[key] for key in sorted(rows)]
+    result['coverage']['withheld'] += max(0, len(ordered)-200)
+    result['items'] = ordered[:200]
+    result['coverage']['published'] = len(result['items'])
+    # Bound the whole public DTO before it can enter a 1MiB host feed.
+    while len(json.dumps(result, ensure_ascii=True, separators=(',', ':'), allow_nan=False).encode()) > max_bytes and result['items']:
+        result['items'].pop(); result['coverage']['published'] -= 1; result['coverage']['withheld'] += 1
+    if len(json.dumps(result, ensure_ascii=True, separators=(',', ':'), allow_nan=False).encode()) > max_bytes: raise ValueError('efficiency public metadata byte bound')
+    validate_process_efficiency(result)
+    return result
+
+
+def read_efficiency_export(store, engine, snapshot_revision, deadline, config_path=None, repository=None):
+    """Source collector seam; native endpoint qualification remains separate.
+
+    One batch per store shares the caller's absolute monotonic deadline. Never
+    retry here or spend a fresh timeout for each item. Base source delivery is
+    independent from any unavailable or unsupported efficiency result.
+    """
+    if isinstance(deadline, bool) or not isinstance(deadline, (int, float)) or not math.isfinite(deadline): raise HostSourceError('HOST_EFFICIENCY_DEADLINE')
+    remaining = deadline - time.monotonic()
+    if remaining <= 0: raise HostSourceError('HOST_EFFICIENCY_DEADLINE')
+    args = ['telemetry', 'efficiency-export', '--snapshot-revision', snapshot_revision, '--store-root', store, '--max-items', '200', '--max-metrics', '1000']
+    if config_path is not None: args += ['--config', str(config_path)]
+    if repository is not None: args += ['--repository', repository]
+    value = engine_json(engine, args, max_bytes=MAX_CANONICAL_SNAPSHOT, timeout_seconds=min(45, remaining))
+    validate_efficiency_export(value, snapshot_revision)
+    return value
+
+
+EFF = SimpleNamespace(project=project_process_efficiency, validate=validate_process_efficiency, unavailable=unavailable_process_efficiency, AXES=EFF_AXES)
 
 MAX_JSON = 1_048_576
 MAX_CANONICAL_SNAPSHOT = 4 * MAX_JSON
 MAX_API_JSON = 4 * 1_048_576
-HOST_SCHEMA = "fsgg.telemetry.dashboard-host/4"
-LEGACY_HOST_SCHEMAS = {"fsgg.telemetry.dashboard-host/1","fsgg.telemetry.dashboard-host/2","fsgg.telemetry.dashboard-host/3"}
+HOST_SCHEMA = "fsgg.telemetry.dashboard-host/5"
 DASH_SCHEMA = "fsgg.telemetry.dashboard/2"
 DELIVERIES_SCHEMA = "fsgg.telemetry.public-deliveries/1"
 ITEMS_SCHEMA = "fsgg.telemetry.completed-items/2"
@@ -237,6 +563,12 @@ def collect_deliveries(repo: str, token: str, cap: int) -> dict[str, Any]:
 
 
 def config(explicit: pathlib.Path | None = None) -> tuple[pathlib.Path, dict[str, str]]:
+    if explicit is not None:
+        raw=read_private_bytes(explicit,65536,"HOST_CONFIG_UNSAFE")
+        try: supplied=json.loads(raw)
+        except (UnicodeError,json.JSONDecodeError): supplied=None
+        if isinstance(supplied,dict) and str(supplied.get("schema","")).startswith("fsgg.telemetry.host-config/"):
+            return _explicit_producer_config(explicit)
     command = ["fsgg-coord-engine", "skill", "telemetry-config", "discover"]
     if explicit is not None: command.extend(["--config", str(explicit)])
     try:
@@ -261,11 +593,12 @@ def config(explicit: pathlib.Path | None = None) -> tuple[pathlib.Path, dict[str
     return pathlib.Path(found["configPath"]), {"storeRoot":found["storeRoot"],"engine":found["engine"]}
 
 
-def engine_json(engine: str, args: list[str]) -> Any:
-    try: done = subprocess.run([engine, *args], capture_output=True, text=True, timeout=45, check=False)
+def engine_json(engine: str, args: list[str], max_bytes: int = MAX_JSON, timeout_seconds: float = 45) -> Any:
+    if type(max_bytes) is not int or not 1 <= max_bytes <= MAX_CANONICAL_SNAPSHOT or not 0 < timeout_seconds <= 45: raise HostSourceError("HOST_ENGINE_OUTPUT_TOO_LARGE")
+    try: done = subprocess.run([engine, *args], capture_output=True, text=True, timeout=timeout_seconds, check=False)
     except (OSError, subprocess.SubprocessError) as error: raise HostSourceError("HOST_ENGINE_UNAVAILABLE") from error
     if done.returncode: raise HostSourceError("HOST_ENGINE_PROJECTION_FAILED")
-    if len(done.stdout.encode("utf-8")) > MAX_JSON: raise HostSourceError("HOST_ENGINE_OUTPUT_TOO_LARGE")
+    if len(done.stdout.encode("utf-8")) > max_bytes: raise HostSourceError("HOST_ENGINE_OUTPUT_TOO_LARGE")
     try: return json.loads(done.stdout)
     except json.JSONDecodeError as error: raise HostSourceError("HOST_ENGINE_INVALID_JSON") from error
 
@@ -797,6 +1130,7 @@ def aggregate_host(public: dict[str, Any], ci: list[dict[str, Any]], budgets: li
         "localCi":{"counts":ci_totals,"seconds":seconds,"coverage":ci_coverage,"attribution":"repository-owned item attribution only; time values are summed per-item projections"},
         "budget":{"scope":"current-canonical-epoch","dimensions":dims,"assessments":assessments,"health":budget_health_counts,"severeItems":severe_items,"distinctBreaches":checked_int(status.get("distinctBreaches"),"distinctBreaches"),"dirtyItems":checked_int(status.get("dirtyItems")," in dirtyItems"),"intervention":enum(status.get("intervention"), {"none","open","verified"}, "intervention")},
         "completedItems":completed_items or {"schema":ITEMS_SCHEMA,"coverage":{"eligible":0,"published":0,"unmapped":0,"dirty":0,"incompatible":0},"items":[]}}
+    result["processEfficiency"]=EFF.unavailable()
     result["sourceDeliveries"]=source_deliveries or {"schema":"fsgg.telemetry.source-deliveries/1","coverage":{"eligible":0,"published":0,"unmapped":0,"dirty":0,"incompatible":0},"items":[]}
     result["revision"]=hashlib.sha256(json.dumps(result,sort_keys=True,separators=(",",":"),ensure_ascii=True).encode()).hexdigest()
     return result
@@ -824,20 +1158,28 @@ def _explicit_producer_config(path: pathlib.Path) -> tuple[pathlib.Path, dict[st
     engine=value.get("engine")
     if not isinstance(engine,str) or not engine or os.path.sep in engine:
         raise HostSourceError("HANDOFF_CONFIG_INVALID")
-    if list(value)==["schema","storeRoot","engine"] and value.get("schema")=="fsgg.telemetry.host-config/1":
+    if set(value)=={"schema","storeRoot","engine"} and value.get("schema")=="fsgg.telemetry.host-config/1":
         store=pathlib.Path(value["storeRoot"]) if isinstance(value.get("storeRoot"),str) else pathlib.Path()
         if not store.is_absolute(): raise HostSourceError("HANDOFF_CONFIG_INVALID")
         return path.resolve(strict=True),{"storeRoot":str(store),"engine":engine}
-    if list(value)==["schema","storeRoots","engine"] and value.get("schema")=="fsgg.telemetry.host-config/2":
+    if set(value)=={"schema","storeRoots","engine"} and value.get("schema")=="fsgg.telemetry.host-config/2":
         roots=value["storeRoots"]
         if (not isinstance(roots,list) or len(roots)!=2 or any(not isinstance(root,str) or not pathlib.Path(root).is_absolute() for root in roots)
             or len({os.path.realpath(root) for root in roots})!=2): raise HostSourceError("HANDOFF_CONFIG_INVALID")
         return path.resolve(strict=True),{"storeRoots":roots,"engine":engine}
+    if set(value)=={"schema","sources","engine"} and value.get("schema")=="fsgg.telemetry.host-config/3":
+        sources=value["sources"]
+        if (not isinstance(sources,list) or len(sources)!=2
+            or any(not isinstance(row,dict) or set(row)!={"key","storeRoot"} for row in sources)
+            or [row["key"] for row in sources]!=["historical","current"]
+            or any(not isinstance(row["storeRoot"],str) or not pathlib.Path(row["storeRoot"]).is_absolute() for row in sources)
+            or len({os.path.realpath(row["storeRoot"]) for row in sources})!=2): raise HostSourceError("HANDOFF_CONFIG_INVALID")
+        return path.resolve(strict=True),{"sources":sources,"engine":engine}
     raise HostSourceError("HANDOFF_CONFIG_INVALID")
 
 
-def _read_host_snapshot(store: str, engine: str) -> tuple[dict[str,Any],dict[str,Any]]:
-    envelope=engine_json(engine,["telemetry","item-detail","--format-version","3","--all","--store-root",store])
+def _read_host_snapshot(store: str, engine: str, timeout_seconds: float = 45) -> tuple[dict[str,Any],dict[str,Any]]:
+    envelope=engine_json(engine,["telemetry","item-detail","--format-version","3","--all","--store-root",store],timeout_seconds=timeout_seconds)
     envelope_fields={"schema","observedAt","revision","canonicalSnapshotGzip","operational"}
     if not isinstance(envelope,dict) or set(envelope) not in (envelope_fields,envelope_fields|{"workspaceId"}) or envelope.get("schema") not in {"fsgg.telemetry.item-detail/2","fsgg.telemetry.item-detail/3"} or not re.fullmatch(r"[0-9a-f]{64}",str(envelope.get("revision"))): raise HostSourceError("HOST_ENGINE_SNAPSHOT_INCOMPATIBLE")
     compressed=bounded_base64(envelope["canonicalSnapshotGzip"],MAX_JSON,"HOST_ENGINE_SNAPSHOT_REVISION_MISMATCH")
@@ -864,7 +1206,7 @@ def _read_host_snapshot(store: str, engine: str) -> tuple[dict[str,Any],dict[str
         for item in items: snapshot_ci(snapshot,item)
     elif "ciProjection" in snapshot or "ciSummaries" in snapshot: raise HostSourceError("HOST_ENGINE_SNAPSHOT_MALFORMED")
     store_projection=snapshot.get("store")
-    if not isinstance(store_projection,dict) or store_projection.get("schemaVersion") not in (8,9,10,11,12,13) or store_projection.get("journalMode")!="wal": raise HostSourceError("HOST_STORE_INCOMPATIBLE")
+    if not isinstance(store_projection,dict) or store_projection.get("schemaVersion") not in (8,9,10,11,12,13,14) or store_projection.get("journalMode")!="wal": raise HostSourceError("HOST_STORE_INCOMPATIBLE")
     operational=envelope.get("operational")
     if not isinstance(operational,dict) or operational.get("consistency")!="observed-outside-database-transaction": raise HostSourceError("HOST_ENGINE_SNAPSHOT_MALFORMED")
     checked_int(operational.get("pendingBatches"),"pending batches")
@@ -875,7 +1217,7 @@ def _read_host_snapshot(store: str, engine: str) -> tuple[dict[str,Any],dict[str
 def _join_host_snapshots(sources: list[tuple[dict[str,Any],dict[str,Any]]]) -> tuple[dict[str,Any],dict[str,Any]]:
     if len(sources)!=2: raise HostSourceError("HOST_STORE_INCOMPATIBLE")
     versions=[source[0]["store"]["schemaVersion"] for source in sources]
-    if versions[0] not in (10,11,12,13) or versions[0]!=versions[1]: raise HostSourceError("HOST_STORE_INCOMPATIBLE")
+    if versions[0] not in (10,11,12,13,14) or versions[0]!=versions[1]: raise HostSourceError("HOST_STORE_INCOMPATIBLE")
     left,right=(source[0] for source in sources)
     if set(left)!=set(right): raise HostSourceError("HOST_ENGINE_SNAPSHOT_INCOMPATIBLE")
     combined={}
@@ -918,10 +1260,75 @@ def _join_host_snapshots(sources: list[tuple[dict[str,Any],dict[str,Any]]]) -> t
 def build_host(labels_path: pathlib.Path | None = None, config_path: pathlib.Path | None = None, engine_path: str | None = None, resolved_config: dict[str,Any] | None = None) -> dict[str, Any]:
     cfg=resolved_config or config(config_path)[1]
     engine=engine_path or cfg["engine"]
+    deadline=time.monotonic()+45
+    def read_source(store: str) -> tuple[dict[str,Any],dict[str,Any]]:
+        remaining=deadline-time.monotonic()
+        if remaining<=0: raise HostSourceError("HOST_ENGINE_UNAVAILABLE")
+        return _read_host_snapshot(store,engine,min(45,remaining))
+    if "sources" in cfg:
+        contexts=[]
+        for selected in cfg["sources"]:
+            try:
+                snapshot,envelope=read_source(selected["storeRoot"])
+                host=_project_host_snapshot(snapshot,envelope,labels_path)
+                if host["store"]["schemaVersion"]==14:
+                    host=_attach_efficiency(host,selected["storeRoot"],engine,envelope["revision"],deadline,labels_path)
+            except (HostSourceError,ValueError,OSError):
+                host=None
+            contexts.append({"key":selected["key"],"label":CONTEXT_LABELS[selected["key"]],"status":"ready" if host is not None else "unavailable","reason":None if host is not None else "source-unavailable","host":host})
+        return project_host_contexts(contexts)
     stores=cfg.get("storeRoots") or [cfg["storeRoot"]]
     if len(stores) not in (1,2): raise HostSourceError("HOST_CONFIG_INVALID")
-    sources=[_read_host_snapshot(store,engine) for store in stores]
+    sources=[read_source(store) for store in stores]
     snapshot,envelope=sources[0] if len(sources)==1 else _join_host_snapshots(sources)
+    host=_project_host_snapshot(snapshot,envelope,labels_path,"configured-local-stores" if len(sources)==2 else "configured-local-store")
+    return _attach_efficiency(host,stores[0],engine,envelope["revision"],deadline,labels_path) if len(sources)==1 and host["store"]["schemaVersion"]==14 else host
+
+
+def _attach_efficiency(host: dict[str,Any], store: str, engine: str, revision: str, deadline: float, labels_path: pathlib.Path | None) -> dict[str,Any]:
+    """Source-only collector join; actual endpoint/exporter qualification is separate.
+
+    One schema14 export follows the exact compact read. Any failure preserves the
+    complete base source-delivery/completed-work view. No native call occurs until
+    an operator executes the collector; source or mocked fixtures grant no live status.
+    Dashboard host-config files are never passed as native engine --config inputs.
+    """
+    if host["store"]["schemaVersion"] != 14: return host
+    try:
+        value=read_efficiency_export(store,engine,revision,deadline)
+        remaining_bytes=MAX_JSON-len(dump(host))+len(dump(host["processEfficiency"]))-256
+        if remaining_bytes<1024: return host
+        projected=project_efficiency_exports([(value,revision)],load_labels(labels_path),max_bytes=remaining_bytes)
+        candidate=dict(host); candidate["processEfficiency"]=projected; candidate.pop("revision")
+        candidate["revision"]=hashlib.sha256(json.dumps(candidate,sort_keys=True,separators=(",",":"),ensure_ascii=True).encode()).hexdigest()
+        validate_host(candidate); dump(candidate)
+        return candidate
+    except (HostSourceError,ValueError,OSError):
+        return host
+
+
+CONTEXT_LABELS={"historical":"Historical","current":"Current work"}
+
+
+def project_host_contexts(contexts: list[dict[str,Any]], max_bytes: int = MAX_JSON) -> dict[str,Any]:
+    # Preserve complete single-authority projections; never partially trim a measured population.
+    if type(max_bytes) is not int or not 1024 <= max_bytes <= MAX_JSON: raise ValueError("invalid context byte budget")
+    value={"schema":HOST_SCHEMA,"observedAt":now(),"source":{"kind":"independent-local-stores"},"contexts":contexts}
+    def seal() -> bytes:
+        value.pop("revision",None)
+        raw=json.dumps(value,sort_keys=True,separators=(",",":"),ensure_ascii=True).encode()
+        value["revision"]=hashlib.sha256(raw).hexdigest()
+        return json.dumps(value,sort_keys=True,separators=(",",":"),ensure_ascii=True).encode()+b"\n"
+    while len(seal())>max_bytes:
+        candidates=[row for row in contexts if row["host"] is not None]
+        if not candidates: raise ValueError("context metadata exceeds byte budget")
+        largest=max(candidates,key=lambda row:len(json.dumps(row["host"])))
+        largest.update(host=None,status="unavailable",reason="public-budget-exceeded")
+    validate_host(value)
+    return value
+
+
+def _project_host_snapshot(snapshot: dict[str,Any], envelope: dict[str,Any], labels_path: pathlib.Path | None, kind: str = "configured-local-store") -> dict[str,Any]:
     store_projection=snapshot["store"]
     public={"schema":"fsgg.telemetry.public-export/1","items":snapshot.get("summaries")}
     if not isinstance(public["items"],list): raise HostSourceError("HOST_ENGINE_SNAPSHOT_MALFORMED")
@@ -943,7 +1350,6 @@ def build_host(labels_path: pathlib.Path | None = None, config_path: pathlib.Pat
     store_status={"status":"ready","schemaVersion":store_projection["schemaVersion"],"journalMode":"wal","pendingBatches":checked_int(operational.get("pendingBatches"),"pending batches")}
     labels=load_labels(labels_path)
     completed=project_completed_items(snapshot,status,labels,ci_by_item,budgets_by_item)
-    kind="configured-local-stores" if len(sources)==2 else "configured-local-store"
     return aggregate_host(public,ci,budgets,status,envelope["observedAt"],[],health,store_status,completed,kind,project_source_deliveries(snapshot,labels,completed))
 
 
@@ -1061,7 +1467,12 @@ def publisher_setup(args: argparse.Namespace) -> dict[str,Any]:
         if load_event_receipt(receipt_path)!=receipt: raise HostSourceError("EVENT_ACTIVATION_CHANGE_REFUSED")
     if read_private_bytes(config_path,8192,"HOST_CONFIG_CHANGED_DURING_PREVIEW")!=config_bytes: raise HostSourceError("HOST_CONFIG_CHANGED_DURING_PREVIEW")
     units=publisher_units(engine,config_path,labels_path,args.repo,args.branch,args.path,args.output)
-    report={"schema":"fsgg.telemetry.publisher-setup/1","mode":"preview","engine":resolved_engine,"config":str(config_path),"labelsDigest":label_digest,"counts":{"approved":len(labels["items"]),"eligible":snapshot["completedItems"]["coverage"]["eligible"],"published":snapshot["completedItems"]["coverage"]["published"]},"revision":snapshot["revision"],"destination":{"repository":args.repo,"branch":args.branch,"path":args.path},"actions":["validate-config","resolve-engine","validate-labels","build-preview"],"effects":[]}
+    counts={"approved":len(labels["items"])}
+    if snapshot.get("source",{}).get("kind")=="independent-local-stores":
+        counts["contexts"]=[{"key":row["key"],"status":row["status"],"eligible":row["host"]["completedItems"]["coverage"]["eligible"] if row["host"] is not None else None,"published":row["host"]["completedItems"]["coverage"]["published"] if row["host"] is not None else None} for row in snapshot["contexts"]]
+    else:
+        counts.update(eligible=snapshot["completedItems"]["coverage"]["eligible"],published=snapshot["completedItems"]["coverage"]["published"])
+    report={"schema":"fsgg.telemetry.publisher-setup/1","mode":"preview","engine":resolved_engine,"config":str(config_path),"labelsDigest":label_digest,"counts":counts,"revision":snapshot["revision"],"destination":{"repository":args.repo,"branch":args.branch,"path":args.path},"actions":["validate-config","resolve-engine","validate-labels","build-preview"],"effects":[]}
     if args.activate and (args.approve_labels!=label_digest or not args.authorize_recurring_publication):
         raise HostSourceError("PUBLISHER_ACTIVATION_NOT_AUTHORIZED")
     if args.install_only or args.activate:
@@ -1762,21 +2173,32 @@ def validate_deliveries(value: Any) -> None:
 
 def validate_host(value: Any) -> None:
     schema=value.get("schema") if isinstance(value,dict) else None
-    aggregate_only=schema=="fsgg.telemetry.dashboard-host/1"
-    current=schema in {HOST_SCHEMA,"fsgg.telemetry.dashboard-host/3"}
-    fields={"schema","observedAt","source","scope","totals","usage","launcherPopulation","quality","operational","store","localCi","budget"}
-    if not aggregate_only: fields.add("completedItems")
-    if current: fields.add("revision")
-    if schema==HOST_SCHEMA: fields.add("sourceDeliveries")
-    exact(value,fields,"host feed")
-    if schema not in {HOST_SCHEMA,*LEGACY_HOST_SCHEMAS} or parse_time(value["observedAt"]) is None: raise ValueError("invalid host identity")
-    if current:
-        revision=value["revision"]
-        if not isinstance(revision,str) or not re.fullmatch(r"[0-9a-f]{64}",revision): raise ValueError("invalid public payload revision")
+    if schema != HOST_SCHEMA: raise ValueError("host schema 5 required")
+    if isinstance(value.get("source"),dict) and value["source"].get("kind")=="independent-local-stores":
+        exact(value,{"schema","observedAt","revision","source","contexts"},"host contexts")
+        exact(value["source"],{"kind"},"context source")
+        if parse_time(value["observedAt"]) is None: raise ValueError("invalid context observation")
         projected=dict(value); projected.pop("revision")
-        if hashlib.sha256(json.dumps(projected,sort_keys=True,separators=(",",":"),ensure_ascii=True).encode()).hexdigest()!=revision: raise ValueError("public payload revision mismatch")
+        if hashlib.sha256(json.dumps(projected,sort_keys=True,separators=(",",":"),ensure_ascii=True).encode()).hexdigest()!=value["revision"]: raise ValueError("context revision mismatch")
+        rows=value["contexts"]
+        if not isinstance(rows,list) or len(rows)!=2 or [row.get("key") for row in rows if isinstance(row,dict)]!=["historical","current"]: raise ValueError("invalid context selection")
+        for row in rows:
+            exact(row,{"key","label","status","reason","host"},"context")
+            if row["label"]!=CONTEXT_LABELS[row["key"]]: raise ValueError("unapproved context label")
+            if row["status"]=="ready":
+                if row["reason"] is not None or not isinstance(row["host"],dict) or row["host"].get("source",{}).get("kind")!="configured-local-store": raise ValueError("invalid ready context")
+                validate_host(row["host"])
+            elif row["status"]!="unavailable" or row["host"] is not None or row["reason"] not in {"source-unavailable","public-budget-exceeded"}: raise ValueError("invalid unavailable context")
+        return
+    fields={"schema","observedAt","source","scope","totals","usage","launcherPopulation","quality","operational","store","localCi","budget","completedItems","revision","sourceDeliveries","processEfficiency"}
+    exact(value,fields,"host feed")
+    if parse_time(value["observedAt"]) is None: raise ValueError("invalid host identity")
+    revision=value["revision"]
+    if not isinstance(revision,str) or not re.fullmatch(r"[0-9a-f]{64}",revision): raise ValueError("invalid public payload revision")
+    projected=dict(value); projected.pop("revision")
+    if hashlib.sha256(json.dumps(projected,sort_keys=True,separators=(",",":"),ensure_ascii=True).encode()).hexdigest()!=revision: raise ValueError("public payload revision mismatch")
     exact(value["source"],{"kind","publicExportSchema"},"host source"); exact(value["scope"],{"items","identities","freeText"},"host scope")
-    identity="aggregated-and-removed" if aggregate_only else "aggregated-or-explicitly-aliased"; free="removed" if aggregate_only else "removed-except-approved-notes"
+    identity="aggregated-or-explicitly-aliased"; free="removed-except-approved-notes"
     if value["source"].get("kind") not in {"configured-local-store","configured-local-stores"} or value["source"].get("publicExportSchema")!="fsgg.telemetry.public-export/1" or value["scope"]["identities"]!=identity or value["scope"]["freeText"]!=free: raise ValueError("invalid host safety declaration")
     checked_int(value["scope"]["items"],"items"); validate_count_map(value["totals"],{"factCount","usageObservations","deliveryObservations"},"totals")
     exact(value["usage"],{"input","cachedInput","cacheWriteInput","output","total","reasoning"},"usage")
@@ -1813,10 +2235,10 @@ def validate_host(value: Any) -> None:
         if not isinstance(assessment["severe"],bool): raise ValueError("invalid severe")
         for key in ("numerator","denominator"):
             if assessment[key] is not None: checked_int(assessment[key],key)
-    if not aggregate_only: validate_completed_items(value["completedItems"])
-    if schema==HOST_SCHEMA:
-        validate_source_deliveries(value["sourceDeliveries"])
-        if {r["key"] for r in value["completedItems"]["items"]}&{r["key"] for r in value["sourceDeliveries"]["items"]}: raise ValueError("duplicate completed/source item")
+    validate_completed_items(value["completedItems"])
+    EFF.validate(value["processEfficiency"])
+    validate_source_deliveries(value["sourceDeliveries"])
+    if {r["key"] for r in value["completedItems"]["items"]}&{r["key"] for r in value["sourceDeliveries"]["items"]}: raise ValueError("duplicate completed/source item")
 
 
 def public_text(value: Any, maximum: int, name: str) -> str:
