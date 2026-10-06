@@ -56,6 +56,15 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-06: SVG candidate custody and Templates source binding delivered.**
+[Templates #672](https://github.com/FS-GG/FS.GG.Templates/pull/672) merged at
+`4eff52b27933c69a9ab4e276b3a29032d279b7e0` after required checks and coherent validation passed.
+It binds the receiver to Rendering's genuine 0.32.1 candidate from successful
+[run 37419955679](https://github.com/FS-GG/FS.GG.Rendering/actions/runs/37419955679).
+Root verified the downloaded archive and all 19 package hashes against its retained custody manifest.
+The [owning roadmap](roadmaps/svg-coherence-and-instancing-01.md) keeps the installed receiver,
+publication, adoption and .3/.4 closure open.
+
 **2026-10-06: Public dashboard source repair delivered; completed-feed refresh pending.**
 [PR4259](https://github.com/FS-GG/.github/pull/4259) merged at
 `da4c66c76b9a5e9cc7caf6041001cafefd95a138` after coherent qualification. The

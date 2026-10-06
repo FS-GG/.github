@@ -68,12 +68,20 @@ report failures; its genuine fixed render equals the delivered report. Both wind
 retained clean custody, core limits `[0,0]` and no resource failure. Failed attempts
 remain retained and receive no successful credit.
 
-This closes only the Stage A/B source-delivery window. Stage C must produce the
-genuine 19-package archive and qualify the existing Templates receiver against its
-exact bytes through reviewed source. Stage D still needs that installed result and
-fresh feed, tag and authority joins before publication. No browser measurement was
-repeated; .3/.4, package publication, consumer adoption and the late GPU batch remain
-open.
+Stage C candidate production passed in [run 37419955679](https://github.com/FS-GG/FS.GG.Rendering/actions/runs/37419955679)
+from `6c9f766fdd91483c2de6f061e75589e94852a265`; both publication jobs were skipped.
+Root verified artifact `11392773621` (14,912,688 bytes, SHA256
+`486182db3efd8442c007f66322a7bfb27caf0cb8e3c87bc2521e66dd90a7adee`),
+its retained source-bound custody manifest and all 19 package hashes.
+[Templates #672](https://github.com/FS-GG/FS.GG.Templates/pull/672) merged the exact
+receiver input bindings at `4eff52b27933c69a9ab4e276b3a29032d279b7e0` after required
+composition, static controls and coherent checks passed.
+
+The installed receiver still needs to qualify those package bytes through the
+Rendering caller bound to the protected Templates revision. Stage D requires that
+result and fresh feed, tag and authority joins before publication. Candidate custody
+and source delivery do not close .3/.4, package publication, consumer adoption or the
+late GPU batch.
 
 A separate 30-record diversity/churn window completed all 3,000 measured updates.
 Twelve lifetime records completed 6,000 updates and 60 exact ownership-fault
