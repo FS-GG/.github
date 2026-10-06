@@ -56,6 +56,17 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-06: V2-DIAG-01 aggregate preparation and selected pilots qualified; adoption pending.**
+The [owning roadmap](roadmaps/diagnostic-execution.md) records .1–.3 complete for the selected scope.
+Ordinary runner PR4252 and Coordination preparation PR943 are merged; the actual ordinary entry
+passed locally and hosted, and the local packaged native entry passed 21 observation records,
+including two independent prerequisite defects in one attempt with first cause and cleanup retained.
+Separately qualified source selections passed 103 tests. Unknown prerequisites, custody, authority
+or accounting uncertainty cannot qualify affected work; earlier failures remain preserved.
+Canonical `0.2.1`/P4, coherent publication, installed receivers and broader adoption remain open
+under .4. The later Drivers PR4254 remains blocked by genuine Contracts source/feed coherence.
+Observed pilot timing is retained; comparative overhead and savings remain unknown.
+
 **2026-10-05: Wizard post-completion readback source qualified; execution pending.**
 The [owning Wizard plan](roadmaps/tsdd-knowledge-wizard.md#post-completion-h4-reader-source--2026-10-05)
 adds an isolated read-only observer for the original public assets, both package feeds and settled
