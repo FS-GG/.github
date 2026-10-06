@@ -369,8 +369,16 @@ their original unknown causes; this source does not itself activate C2/P4. Rende
 route; tags, package publication and downstream notification remain separate pending operations.
 SDD [#1088](https://github.com/FS-GG/FS.GG.SDD/pull/1088) merged at
 `cf2f046a10497a336d6243c9a314c3f91fb15771`: Drivers 0.98.0, seven genuinely regenerated
-locks and three verified embedded-skill digest goldens passed hosted checks. Installed receiver
-and fresh-scaffold adoption remain open under V2-DIAG-01.4.
+locks and three verified embedded-skill digest goldens passed hosted checks. Contracts 7.6.0 and coherent SDD CLI, Artifacts and Knowledge 2.2.0 subsequently passed
+[promotion 37538040787/2](https://github.com/FS-GG/FS.GG.SDD/actions/runs/37538040787/attempts/2)
+from the original four archives retained by preparation 37536203179/1. Independent receipt
+`11448064295` intake matched all eight feed archives to those candidates and verified the exact
+58 Q2/Q3 cases; public Knowledge and clean installation gates passed. The first promotion attempt's
+public CLI discovery failure remains retained. This publishes the SDD guidance carrier; selected
+installed diagnostic-guidance use, fresh-scaffold adoption and bounded evaluation remain open
+under [V2-DIAG-01.4](roadmaps/diagnostic-execution.md#sdd-guidance-carrier-publication--2026-10-06).
+Kit #1090 and tool #1087 remain separate; publication does not establish unavailable baseline usage
+or measured savings.
 
 **2026-10-06: Coherent telemetry 0.98.0 published and local attribution corrected; current dashboard feed deployed and verified.**
 [Publisher 37434982959/1](https://github.com/FS-GG/.github/actions/runs/37434982959)
