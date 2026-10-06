@@ -6873,7 +6873,13 @@ WHERE n.source_ref=$source;
                 | Some first,Some last ->
                     let mutable startAt = DateTimeOffset.MinValue
                     let mutable endAt = DateTimeOffset.MinValue
-                    if DateTimeOffset.TryParse(first,Globalization.CultureInfo.InvariantCulture,Globalization.DateTimeStyles.None,&startAt)
+                    let representable (timestamp: string) =
+                        let fraction = System.Text.RegularExpressions.Regex.Match(timestamp, @"\.(\d+)(?:Z|[+-]\d{2}:\d{2})$")
+                        not fraction.Success || fraction.Groups[1].Value.Length<=7
+                        || (fraction.Groups[1].Value |> Seq.skip 7 |> Seq.forall ((=) '0'))
+                    // DateTimeOffset has 100 ns precision. Never silently round finer source clocks.
+                    if representable first && representable last
+                       && DateTimeOffset.TryParse(first,Globalization.CultureInfo.InvariantCulture,Globalization.DateTimeStyles.None,&startAt)
                        && DateTimeOffset.TryParse(last,Globalization.CultureInfo.InvariantCulture,Globalization.DateTimeStyles.None,&endAt)
                        && endAt>=startAt then Some(startAt.UtcTicks,endAt.UtcTicks) else None
                 | _ -> None
@@ -6894,11 +6900,11 @@ WHERE n.source_ref=$source;
                 metric name unit "ci-observed" "github-actions" None status reason (null:string) (null:string)
                 let node = metrics[metrics.Count-1]
                 node["sourceRefs"] <- ciRefs.DeepClone()
-                node["coverage"]["population"] <- JsonValue.Create(if fullCi then "complete" else "partial")
+                node.["coverage"].["population"] <- JsonValue.Create(if fullCi then "complete" else "partial")
                 match amount with
                 | Some (value: ProcessEfficiency.Fraction) ->
-                    node["value"]["numerator"] <- exactValue value.Numerator
-                    node["value"]["denominator"] <- exactValue value.Denominator
+                    node.["value"].["numerator"] <- exactValue value.Numerator
+                    node.["value"].["denominator"] <- exactValue value.Denominator
                 | None -> ()
             let exactRatio numerator denominator = ProcessEfficiency.fraction numerator denominator |> Result.defaultWith invalidOp
             let operationRows = runs |> List.groupBy (fun (key,_,_) -> key)
@@ -6991,7 +6997,7 @@ WHERE n.source_ref=$source;
                 | "data-health" -> 0
                 | "observed-resource" | "analysis-burden" | "delivered-outcomes" | "cost-per-accepted" -> 1
                 | "work-mix" | "avoidable-share" -> 2
-                | _ -> if node["value"]["status"].GetValue<string>()="unknown" then 3 else 2
+                | _ -> if node.["value"].["status"].GetValue<string>()="unknown" then 3 else 2
             let selected = metrics |> Seq.sortBy (fun node -> priority node,node["metricId"].GetValue<string>()) |> Seq.truncate available |> Seq.toArray
             returned <- returned + selected.Length
             let omittedHere = metrics.Count - selected.Length

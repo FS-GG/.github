@@ -20,19 +20,19 @@ module EfficiencyMetricTests =
     let private ingest path name events =
         let payload = $"""{{"schema":"{TelemetryStore.BatchSchema}","ingestId":"{name}","sourceIdentity":"ci-worker","generation":"g1","cursor":"{name}","eventCount":{List.length events},"events":[{String.concat "," events}]}}"""
         TelemetryStoreApplication.ingest path approved (Encoding.UTF8.GetBytes payload) |> unwrap |> ignore
-    let private run item attempt =
+    let private run (item: string) (attempt: int) =
         $"""{{"kind":"ci-run","identity":"run-{attempt}-{item}","itemId":"{item}","revision":0,"repository":"o/r","runId":10,"attempt":{attempt},"workflow":"ci.yml","event":"pull_request","head":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","status":"completed","conclusion":"success","createdAt":"2026-10-06T00:00:00Z","startedAt":"2026-10-06T00:00:01Z","updatedAt":"2026-10-06T00:00:10Z"}}"""
-    let private job item attempt id created started completed =
+    let private job (item: string) (attempt: int) (id: int64) (created: string) (started: string) (completed: string) =
         $"""{{"kind":"ci-job","identity":"job-{id}-{item}","itemId":"{item}","revision":0,"repository":"o/r","runId":10,"attempt":{attempt},"jobId":{id},"name":"build","status":"completed","conclusion":"success","createdAt":{created},"startedAt":{started},"completedAt":{completed}}}"""
     let private timestamp value = JsonSerializer.Serialize(value:string)
-    let private binding item =
+    let private binding (item: string) =
         $"""{{"kind":"ci-binding","identity":"binding-{item}","itemId":"{item}","revision":0,"collectionId":"collection-{item}","repository":"o/r","head":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","prNumber":7,"workflow":"ci.yml","featureId":"EFF","attemptId":"test","parentAttemptId":null,"producerStream":"ci-worker","binding":"exact"}}"""
-    let private coverage item state =
+    let private coverage (item: string) (state: string) =
         $"""{{"kind":"ci-coverage","identity":"coverage-{item}","itemId":"{item}","revision":0,"collectionId":"collection-{item}","inventory":"{state}","attempts":"{state}","jobPages":"{state}","terminal":"{state}","timestamps":"{state}","lineage":"{state}","classification":"unknown","criticalPath":"unknown"}}"""
     let private export path =
         use compact = JsonDocument.Parse(TelemetryStoreApplication.compactDashboardSnapshot path approved None |> unwrap)
         TelemetryStoreApplication.efficiencyExport path approved (compact.RootElement.GetProperty("revision").GetString()) 200 1000 |> unwrap |> JsonDocument.Parse
-    let private metric (document:JsonDocument) name scope =
+    let private metric (document:JsonDocument) (name: string) (scope: string) =
         document.RootElement.GetProperty("items")[0].GetProperty("metrics").EnumerateArray()
         |> Seq.find (fun metric -> metric.GetProperty("metric").GetString()=name && metric.GetProperty("population").GetProperty("acceptanceScope").GetString()=scope)
     let private ratio (expectedNumerator:int64) (expectedDenominator:int64) (metric:JsonElement) =
@@ -149,3 +149,14 @@ module EfficiencyMetricTests =
         ratio 1L 2L (metric after "retry-burden" "ci-observed")
         ratio 2L 1L (metric after "observed-resource" "ci-observed")
         Assert.NotEqual(before.RootElement.GetProperty("sourceFingerprint").GetString(),after.RootElement.GetProperty("sourceFingerprint").GetString())
+
+    [<Fact>]
+    let ``finer than supported clock precision is unavailable instead of rounded into a false zero`` () =
+        let cleanup,path = create ()
+        use cleanup = cleanup
+        let first = timestamp "2026-10-06T00:00:00.000000001Z"
+        let next = timestamp "2026-10-06T00:00:00.000000002Z"
+        ingest path "precision" [binding "A";run "A" 1;coverage "A" "complete";job "A" 1 11 first next next]
+        use result = export path
+        Assert.Equal("unknown",(metric result "wait-time" "ci-observed").GetProperty("value").GetProperty("status").GetString())
+        Assert.Equal("unknown",(metric result "observed-resource" "ci-observed").GetProperty("value").GetProperty("status").GetString())
