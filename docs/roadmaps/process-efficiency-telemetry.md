@@ -89,6 +89,12 @@ with missing runtime gets a clearly provisional explanation or explicit unavaila
 notifications do not duplicate analysis. Facts, permissions and required checks are unchanged.
 Analysis cost is visible; additional evidence revisions remain within a declared per-item budget.
 
+Source preparation is described in [bounded assessment preparation](../coordination/process-efficiency-assessment.md).
+The offline helper and synthetic checks cover evidence selection, full-schema/semantic output validation
+and private execution-state recovery. They do not activate a completion trigger, provider or store
+integration. Canonical exporter/admission joins and actual native/provisional review acceptance remain
+pending; this milestone stays unchecked.
+
 ### V2-EFF-01.4 — Publish useful dashboard explanations
 
 - [ ] Owner: `.github` dashboard maintainer.
