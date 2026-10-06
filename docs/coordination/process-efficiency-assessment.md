@@ -162,7 +162,8 @@ and actual usage events but no output-token cap. A small visible prompt or schem
 Automatic execution remains unavailable wherever those hard token bounds cannot be enforced.
 
 Before root execution, retain one genuine pending request, exact inspect bytes, generated prompt and
-full output schema privately. Select and record the actual model/effort and limit support, then claim
+full output schema privately. `pilot_input` supplies separate stdin and `--output-schema` bytes
+so the schema is not duplicated in the prompt; both still contribute to actual input context. Select and record the actual model/effort and limit support, then claim
 with exact revision/digest and prospective dispatch custody. Bind actual invocation only after the
 existing observer publishes the genuine start. Use one invocation and no automatic retry. Do not
 retrofit an earlier worker or fill unknown epochs, observations or usage from metadata.

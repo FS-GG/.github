@@ -469,6 +469,18 @@ def automatic_launch_disposition(limit_support):
     return 'requires-runtime-qualification' if all(value == 'enforced' for value in limit_support.values()) else 'unavailable'
 
 
+def pilot_input(packet, assessment_schema):
+    """Prepare stdin and separate --output-schema bytes without duplicate schema context."""
+    prepared = prompt(packet, assessment_schema)
+    schema_bytes = encode(prepared.pop('outputSchema'))
+    stdin_bytes = encode(prepared)
+    if len(stdin_bytes) > 131072 or len(schema_bytes) > 65536:
+        raise ValueError('pilot prompt or output schema byte bound exceeded')
+    return dict(stdin=stdin_bytes, outputSchema=schema_bytes,
+                evidenceDigest=packet['evidenceDigest'], promptVersion=prepared['promptVersion'],
+                budget=BUDGET.copy(), tokenLimitSupport='observed-only')
+
+
 def run_selected_caller(command, *, cwd, input_bytes, deadline, max_output_bytes=262144):
     """Bound one root-selected existing launcher; no provider, store or retry authority.
 

@@ -90,6 +90,11 @@ class AssessmentTests(unittest.TestCase):
         output['lifecycle']['idempotencyKey'] = a.key(output['subject'], digest)
         check(output, restored)
         self.assertNotIn('_retainedEvidenceBase64', a.prompt(restored, SCHEMA)['untrustedEvidence'])
+        pilot = a.pilot_input(restored, SCHEMA)
+        self.assertNotIn('outputSchema', json.loads(pilot['stdin']))
+        self.assertEqual(json.loads(pilot['outputSchema']), SCHEMA)
+        self.assertEqual(pilot['evidenceDigest'], digest)
+        self.assertEqual(pilot['tokenLimitSupport'], 'observed-only')
         with self.assertRaises(ValueError):
             a.restore_packet(base64.b64encode(raw + b' ').decode(), digest, packet['metrics'])
         mismatched = copy.deepcopy(raw_packet)
