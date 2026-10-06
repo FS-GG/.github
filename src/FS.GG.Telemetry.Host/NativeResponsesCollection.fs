@@ -12,7 +12,7 @@ open FS.GG.Coord
 open FS.GG.Coord.Cli
 open FS.GG.Telemetry
 
-module internal NativeResponsesCollection =
+module NativeResponsesCollection =
     let private policySha256 = "7a0e6970101b8cc9343c23ebe5d273e183cf4535b4dc09fca4d48a0bee7ae071"
     // Replaced only with the root-selected, independently qualified Responses verifier
     // source digest. AppServer/exec or caller-supplied module declarations cannot activate.
@@ -46,7 +46,7 @@ module internal NativeResponsesCollection =
     let private remaining (phase: DirectResponses.Phase) =
         require (phase.RemainingMilliseconds > 0) "responses-original-whole-deadline"
 
-    let validateInputPacket (inputText: string) : Result<byte array, string list> =
+    let internal validateInputPacket (inputText: string) : Result<byte array, string list> =
         try
             let bytes = utf8.GetBytes inputText
             require (bytes.Length > 0 && bytes.Length <= 24576) "responses-evidence-packet-byte-bound"
@@ -59,7 +59,7 @@ module internal NativeResponsesCollection =
         | :? InvalidOperationException as error when error.Message.StartsWith("responses-", StringComparison.Ordinal) -> Error [error.Message]
         | _ -> Error ["responses-evidence-packet-invalid"]
 
-    type Installed =
+    type internal Installed =
         { Config: ResponsesCollectorInstallationConfig
           Principal: TelemetryReceipt.Principal
           Profile: byte array
@@ -211,7 +211,7 @@ module internal NativeResponsesCollection =
           InstallationSha256 = sha(JsonSerializer.SerializeToUtf8Bytes [| sha hostBytes; sha sidecarBytes; sha profileBytes; sha resultBytes; filesDigest; config.NativeVerifier.RuntimeManifestSha256; verifierSha256 |])
           ObservedAt = DateTimeOffset.UtcNow.ToString("O") }
 
-    type OriginEvidence =
+    type internal OriginEvidence =
         { Principal: TelemetryReceipt.Principal
           ManagerReceiptSha256: string
           CapabilityProfileSha256: string
@@ -219,7 +219,7 @@ module internal NativeResponsesCollection =
           InstallationSha256: string
           ObservedAt: string
           ExpiresAt: string }
-    type OperationEvidence =
+    type internal OperationEvidence =
         { OperationId: string
           ItemId: string
           OriginalItemId: string
@@ -235,24 +235,24 @@ module internal NativeResponsesCollection =
           VerificationSha256: string
           ObservedAt: string }
 
-    type Failure = { Errors: string list; ClaimAttemptId: string option; ClaimReceipt: string option }
+    type internal Failure = { Errors: string list; ClaimAttemptId: string option; ClaimReceipt: string option }
 
     type Capture private (phase: DirectResponses.Phase, bytes: byte array, snapshot: byte array, observed: NativeResponses.ResponseObservation option,
                           failures: string list, claimReceipt: string, selected: Installed, operation: OperationEvidence, expiresAt: string) =
-        member _.Phase = phase
-        member _.Bytes = Array.copy bytes
-        member _.Sha256 = sha bytes
-        member _.SnapshotBytes = Array.copy snapshot
-        member _.Response = observed
-        member _.Failure = failures
-        member _.ClaimReceipt = claimReceipt
+        member internal _.Phase = phase
+        member internal _.Bytes = Array.copy bytes
+        member internal _.Sha256 = sha bytes
+        member internal _.SnapshotBytes = Array.copy snapshot
+        member internal _.Response = observed
+        member internal _.Failure = failures
+        member internal _.ClaimReceipt = claimReceipt
         member internal _.Selected = selected
         member internal _.Operation = operation
         member internal _.ExpiresAt = expiresAt
         static member internal Create(phase, bytes, snapshot, observed, failures, claimReceipt, selected, operation, expiresAt) =
             Capture(phase, Array.copy bytes, Array.copy snapshot, observed, failures, claimReceipt, selected, operation, expiresAt)
 
-    let collect (hostConfigPath: string) (hostConfig: HostConfig) (storeRoot: string) (runtimePrincipal: TelemetryReceipt.Principal)
+    let internal collect (hostConfigPath: string) (hostConfig: HostConfig) (storeRoot: string) (runtimePrincipal: TelemetryReceipt.Principal)
                 (dispatchIdentity: string) (itemId: string) (claimTemplate: byte array) (request: NativeResponses.Request)
                 (cancellationToken: CancellationToken) = task {
         let phaseStartedAt = DateTimeOffset.UtcNow
@@ -373,10 +373,10 @@ module internal NativeResponsesCollection =
 
     type VerifiedCapture private (origin: OriginEvidence, operation: OperationEvidence,
                                   observation: NativeResponses.ResponseObservation, accepted: bool) =
-        member _.Origin = origin
-        member _.Operation = { operation with DispatchRef = Array.copy operation.DispatchRef; ClaimRef = Array.copy operation.ClaimRef }
-        member _.Observation = observation
-        member _.CompletionAccepted = accepted
+        member internal _.Origin = origin
+        member internal _.Operation = { operation with DispatchRef = Array.copy operation.DispatchRef; ClaimRef = Array.copy operation.ClaimRef }
+        member internal _.Observation = observation
+        member internal _.CompletionAccepted = accepted
         static member internal Create(origin, operation, observation, accepted) = VerifiedCapture(origin, operation, observation, accepted)
 
     let private retain (phase: DirectResponses.Phase) (root: string) (operationId: string) (name: string) (bytes: byte array) =
@@ -397,7 +397,7 @@ module internal NativeResponsesCollection =
 
     /// This operation accepts only the opaque capture created by the actual HTTP owner.
     /// Raw files, supplied flags and verifier exit status cannot construct VerifiedCapture.
-    let verify (hostConfigPath: string) (hostConfig: HostConfig) (storeRoot: string) (capture: Capture) =
+    let internal verify (hostConfigPath: string) (hostConfig: HostConfig) (storeRoot: string) (capture: Capture) =
         let mutable retained = false
         let failure reason =
             if obj.ReferenceEquals(capture, null) then

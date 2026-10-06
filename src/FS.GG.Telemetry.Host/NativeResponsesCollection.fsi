@@ -5,8 +5,8 @@ open System.Threading.Tasks
 open FS.GG.Coord
 
 /// Host-owned direct provider composition. No process/thread custody is implied.
-module internal NativeResponsesCollection =
-    type OriginEvidence =
+module NativeResponsesCollection =
+    type internal OriginEvidence =
         { Principal: TelemetryReceipt.Principal
           ManagerReceiptSha256: string
           CapabilityProfileSha256: string
@@ -14,7 +14,7 @@ module internal NativeResponsesCollection =
           InstallationSha256: string
           ObservedAt: string
           ExpiresAt: string }
-    type OperationEvidence =
+    type internal OperationEvidence =
         { OperationId: string
           ItemId: string
           OriginalItemId: string
@@ -30,11 +30,11 @@ module internal NativeResponsesCollection =
           VerificationSha256: string
           ObservedAt: string }
 
-    type Failure = { Errors: string list; ClaimAttemptId: string option; ClaimReceipt: string option }
+    type internal Failure = { Errors: string list; ClaimAttemptId: string option; ClaimReceipt: string option }
 
     /// Pure preclaim byte gate. Returns the exact input only when it is a valid
     /// retained evidence packet in the existing codec; never grants authority.
-    val validateInputPacket: inputText: string -> Result<byte array, string list>
+    val internal validateInputPacket: inputText: string -> Result<byte array, string list>
 
     /// Opaque installed state used only by the Host-owned capture constructor.
     type internal Installed
@@ -45,18 +45,18 @@ module internal NativeResponsesCollection =
             phase: FS.GG.Telemetry.DirectResponses.Phase * bytes: byte array * snapshot: byte array *
             observed: NativeResponses.ResponseObservation option * failures: string list * claimReceipt: string *
             selected: Installed * operation: OperationEvidence * expiresAt: string -> Capture
-        member Phase: FS.GG.Telemetry.DirectResponses.Phase
-        member Bytes: byte array
-        member Sha256: string
-        member SnapshotBytes: byte array
-        member Response: NativeResponses.ResponseObservation option
-        member Failure: string list
-        member ClaimReceipt: string
+        member internal Phase: FS.GG.Telemetry.DirectResponses.Phase
+        member internal Bytes: byte array
+        member internal Sha256: string
+        member internal SnapshotBytes: byte array
+        member internal Response: NativeResponses.ResponseObservation option
+        member internal Failure: string list
+        member internal ClaimReceipt: string
 
     /// Static installed proof and current collector eligibility precede the exact queue CAS.
     /// The returned capture is observation only: independent verification and atomic
     /// native receipt/attachment/settlement must still succeed under the original phase.
-    val collect:
+    val internal collect:
         hostConfigPath: string -> hostConfig: HostConfig -> storeRoot: string ->
         runtimePrincipal: TelemetryReceipt.Principal -> dispatchIdentity: string -> itemId: string ->
         claimTemplate: byte array -> request: NativeResponses.Request ->
@@ -67,11 +67,11 @@ module internal NativeResponsesCollection =
         private new:
             origin: OriginEvidence * operation: OperationEvidence *
             observation: NativeResponses.ResponseObservation * accepted: bool -> VerifiedCapture
-        member Origin: OriginEvidence
-        member Operation: OperationEvidence
-        member Observation: NativeResponses.ResponseObservation
-        member CompletionAccepted: bool
+        member internal Origin: OriginEvidence
+        member internal Operation: OperationEvidence
+        member internal Observation: NativeResponses.ResponseObservation
+        member internal CompletionAccepted: bool
 
-    val verify:
+    val internal verify:
         hostConfigPath: string -> hostConfig: HostConfig -> storeRoot: string ->
         capture: Capture -> Result<VerifiedCapture, Failure>
