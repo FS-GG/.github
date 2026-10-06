@@ -48,6 +48,19 @@ def trx(cases):
  summary=ET.SubElement(root,tag('ResultSummary'));ET.SubElement(summary,tag('Counters'),total=str(len(cases)),executed=str(len(cases)),passed=str(len(cases)),failed='0')
  return ET.tostring(root)
 
+def metadata(profile_raw,files_raw,scenario="current-installed-closure"):
+ profile=json.loads(profile_raw)
+ checks=("physicalInventoryExact","immutableFilesVerified","assemblyNamesVerified","loadedLocationsVerified") if scenario=="current-installed-closure" else ("distinctReferences","providerNotIngestionFile","positiveRoles","aliasRefused")
+ return m.encode({'schema':'fsgg.telemetry.responses-static-metadata-evidence/1','attemptId':'synthetic_static_attempt','scenario':scenario,'profileSha256':m.sha(profile_raw),'installedFilesSha256':m.sha(files_raw),'loadedComponents':{role:row['path']for row in profile['installedFiles']for role in row['components']},'managedInstalledFilesBase64':b64(files_raw),'checks':{key:True for key in checks}})
+
+def full_inventory():
+ profile=json.loads(fixture()[0]);prefix='/installed/static-qualification/prospective-product/h'
+ files=[{**row,'path':row['path'].replace('/installed',prefix)}for row in profile['installedFiles']]
+ files += [{'path':prefix+('/dependency-%03d-ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.dll'%i),'bytes':1,'sha256':'a'*64,'components':[]}for i in range(281)]
+ files.sort(key=lambda row:row['path']);fragment=m.encode(files)
+ raw=m.build_profile('b'*64,'c'*64,'fixture',m.VERIFIER,'e'*64,[prefix],fragment)
+ return raw,fragment
+
 class PureProducerTests(unittest.TestCase):
  def run_fixture(self,parts):
   p,f,s,t,r=parts;return m.assemble(p,f,m.encode(s),m.encode(t),r)
@@ -119,6 +132,28 @@ class PureProducerTests(unittest.TestCase):
   with self.assertRaises(m.Refusal):m.validate_profile(m.encode(profile))
   profile=json.loads(p);profile['installedFiles'][0]['bytes']=201*1024*1024
   with self.assertRaises(m.Refusal):m.validate_profile(m.encode(profile))
+ def test_full_285_inventory_metadata_expansion_is_admitted(self):
+  profile,files=full_inventory();self.assertEqual(len(json.loads(files)),285);self.assertLessEqual(len(profile),65536)
+  for scenario in ('current-installed-closure','credential-role-separation'):
+   raw=metadata(profile,files,scenario);self.assertGreater(len(raw),65536);self.assertLessEqual(len(raw),131072)
+   m.metadata_evidence(raw,profile,'synthetic_static_attempt',scenario)
+ def test_metadata_inclusive_boundary_and_profile_bound_stay_distinct(self):
+  profile,files=full_inventory();raw=metadata(profile,files);at_bound=raw+b' '*(131072-len(raw))
+  m.metadata_evidence(at_bound,profile,'synthetic_static_attempt','current-installed-closure')
+  with self.assertRaises(m.Refusal):m.metadata_evidence(at_bound+b' ',profile,'synthetic_static_attempt','current-installed-closure')
+  profile_at_bound=profile+b' '*(65536-len(profile));m.validate_profile(profile_at_bound)
+  with self.assertRaises(m.Refusal):m.validate_profile(profile_at_bound+b' ')
+  m.parse(b'{}'+b' '*(65536-2))
+  with self.assertRaises(m.Refusal):m.parse(b'{}'+b' '*(65536-1))
+ def test_full_inventory_metadata_mutations_still_refuse(self):
+  profile,files=full_inventory();row=json.loads(metadata(profile,files))
+  for field,value in [('installedFilesSha256','b'*64),('loadedComponents',{}),('checks',{}),('profileSha256','c'*64)]:
+   bad=copy.deepcopy(row);bad[field]=value
+   with self.subTest(field=field),self.assertRaises(m.Refusal):m.metadata_evidence(m.encode(bad),profile,'synthetic_static_attempt','current-installed-closure')
+  changed=json.loads(files);changed[-1]['sha256']='b'*64;bad=copy.deepcopy(row);bad['managedInstalledFilesBase64']=b64(m.encode(changed));bad['installedFilesSha256']=m.sha(m.encode(changed))
+  with self.assertRaises(m.Refusal):m.metadata_evidence(m.encode(bad),profile,'synthetic_static_attempt','current-installed-closure')
+  changed=json.loads(files);changed[-1]['bytes']=2;bad=copy.deepcopy(row);bad['managedInstalledFilesBase64']=b64(m.encode(changed))
+  with self.assertRaises(m.Refusal):m.metadata_evidence(m.encode(bad),profile,'synthetic_static_attempt','current-installed-closure')
  def test_xml_entities_and_duplicate_json_refuse(self):
   with self.assertRaises(m.Refusal):m.trx_cases(b'<!DOCTYPE x []><x/>')
   with self.assertRaises(m.Refusal):m.parse(b'{"a":1,"a":2}')

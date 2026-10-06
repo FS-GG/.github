@@ -153,7 +153,7 @@ def trx_cases(raw):
     return result
 
 def metadata_evidence(raw, profile_raw, attempt_id, scenario):
-    value=exact(parse(raw), ("schema","attemptId","scenario","profileSha256","installedFilesSha256","loadedComponents","managedInstalledFilesBase64","checks"))
+    value=exact(parse(raw,131072), ("schema","attemptId","scenario","profileSha256","installedFilesSha256","loadedComponents","managedInstalledFilesBase64","checks"))
     require(value["schema"]=="fsgg.telemetry.responses-static-metadata-evidence/1" and value["attemptId"]==attempt_id and value["scenario"]==scenario and value["profileSha256"]==sha(profile_raw),"metadata-binding")
     try: files=base64.b64decode(value["managedInstalledFilesBase64"],validate=True)
     except (ValueError,TypeError) as error: raise Refusal("metadata-codec") from error

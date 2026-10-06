@@ -85,7 +85,10 @@ module NativeResponsesStaticQualificationTests =
             let profileBytes = Configuration.readResponsesPrivateBytes path profilePath 65536 |> Result.defaultWith (String.concat ";" >> failwith)
             Some(path,root.GetProperty("attemptId").GetString(),profileBytes)
 
-    let private evidence (path: string) (attempt: string) (profileBytes: byte array) (scenario: string) (checks: string list) =
+    let private requireMetadataBound (bytes: byte array) =
+        require (bytes.Length<=131072) "static-evidence-bound"
+
+    let private metadataBytes (attempt: string) (profileBytes: byte array) (scenario: string) (checks: string list) =
         use document = JsonDocument.Parse(ReadOnlyMemory<byte> profileBytes)
         let files = JsonSerializer.SerializeToUtf8Bytes<JsonElement>(document.RootElement.GetProperty "installedFiles")
         let node = JsonObject()
@@ -101,6 +104,12 @@ module NativeResponsesStaticQualificationTests =
         let completed = JsonObject()
         for name in checks do completed.[name] <- JsonValue.Create true
         node.["checks"] <- completed
+        let bytes = JsonSerializer.SerializeToUtf8Bytes<JsonObject> node
+        requireMetadataBound bytes
+        bytes
+
+    let private evidence (path: string) (attempt: string) (profileBytes: byte array) (scenario: string) (checks: string list) =
+        let bytes = metadataBytes attempt profileBytes scenario checks
         let output = Path.Combine(Path.GetDirectoryName path,scenario+".json")
         let options = FileStreamOptions()
         options.Mode <- FileMode.CreateNew
@@ -108,8 +117,6 @@ module NativeResponsesStaticQualificationTests =
         options.Share <- FileShare.None
         options.UnixCreateMode <- Nullable(UnixFileMode.UserRead ||| UnixFileMode.UserWrite)
         use stream = new FileStream(output,options)
-        let bytes = JsonSerializer.SerializeToUtf8Bytes<JsonObject> node
-        require (bytes.Length<=65536) "static-evidence-bound"
         stream.Write(bytes,0,bytes.Length)
         stream.Flush true
 
@@ -125,6 +132,36 @@ module NativeResponsesStaticQualificationTests =
         let direct = JsonSerializer.SerializeToUtf8Bytes<JsonNode> files
         Assert.Equal<byte>(direct,viaElement)
         Assert.Equal(sha direct,sha viaElement)
+
+        // A full inventory expands when embedded as base64. Exercise the actual
+        // metadata serializer without claiming physical/canonical admission.
+        let inventory = JsonArray()
+        for index in 0..284 do
+            let row = JsonObject()
+            row.["path"] <- JsonValue.Create(sprintf "/installed/static-qualification/prospective-product/h/dependency-%03d-ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.dll" index)
+            row.["bytes"] <- JsonValue.Create 1L
+            row.["sha256"] <- JsonValue.Create(String('a',64))
+            row.["components"] <- JsonArray()
+            inventory.Add row
+        let fullProfile = JsonObject()
+        fullProfile.["installedFiles"] <- inventory
+        let fullBytes = JsonSerializer.SerializeToUtf8Bytes<JsonObject> fullProfile
+        use fullDocument = JsonDocument.Parse(ReadOnlyMemory<byte> fullBytes)
+        let fullFiles = JsonSerializer.SerializeToUtf8Bytes<JsonElement>(fullDocument.RootElement.GetProperty "installedFiles")
+        let directFullFiles = JsonSerializer.SerializeToUtf8Bytes<JsonArray> inventory
+        Assert.Equal<byte>(directFullFiles,fullFiles)
+        Assert.Equal(285,fullDocument.RootElement.GetProperty("installedFiles").GetArrayLength())
+        let metadata = metadataBytes "synthetic-static-boundary" fullBytes "current-installed-closure"
+                            ["physicalInventoryExact";"immutableFilesVerified";"assemblyNamesVerified";"loadedLocationsVerified"]
+        Assert.True(metadata.Length>65536 && metadata.Length<=131072)
+        use metadataDocument = JsonDocument.Parse(ReadOnlyMemory<byte> metadata)
+        let roundtrip = Convert.FromBase64String(metadataDocument.RootElement.GetProperty("managedInstalledFilesBase64").GetString())
+        Assert.Equal<byte>(fullFiles,roundtrip)
+        Assert.Equal(sha fullFiles,metadataDocument.RootElement.GetProperty("installedFilesSha256").GetString())
+        let atBound = Array.create<byte> 131072 32uy
+        Array.Copy(metadata,atBound,metadata.Length)
+        requireMetadataBound atBound
+        Assert.Throws<InvalidOperationException>(fun () -> requireMetadataBound (Array.append atBound [|32uy|])) |> ignore
 
     [<Fact>]
     let ``installed static qualification binds the actual loaded product closure`` () =
