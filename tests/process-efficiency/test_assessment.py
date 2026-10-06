@@ -47,6 +47,27 @@ class AssessmentTests(unittest.TestCase):
                 for sample in samples:
                     a.schema_validate(sample, schema)
 
+    def test_claim_preparation_uses_exact_current_cas_and_limits(self):
+        output, packet = fixture(1)
+        schema = json.loads((CONTRACT_ROOT / 'contracts/process-efficiency/analysis-claim-input-v1.schema.json').read_text())
+        sample = FIXTURES['analysisClaimInputSamples'][0]
+        request = copy.deepcopy(FIXTURES['analysisRequestInputSamples'][0])
+        request.update(requestId=a.key(packet['subject'], packet['evidenceDigest']),
+                       subject=packet['subject'], evidenceDigest=packet['evidenceDigest'])
+        inspected = dict(requestId=request['requestId'], revision=0, contentDigest=sample['cas']['expectedContentDigest'],
+                         state='pending', claimId=None, invocationRef=None, canonicalRequest=request)
+        claim = a.prepare_claim(inspected, packet, sample['claimId'], sample['modelAlias'], sample['dispatchRef'],
+                                sample['authority'], sample['limitSupport'], sample['claimedAt'], schema)
+        self.assertEqual(claim['cas']['expectedRevision'], inspected['revision'])
+        self.assertEqual(claim['cas']['expectedContentDigest'], inspected['contentDigest'])
+        self.assertIsNone(claim['invocationRef'])
+        self.assertEqual(a.automatic_launch_disposition(sample['limitSupport']), 'unavailable')
+        self.assertEqual(a.automatic_launch_disposition(dict(inputTokens='enforced', outputTokens='enforced', seconds='enforced')), 'requires-runtime-qualification')
+        inspected['state'] = 'running'
+        with self.assertRaises(ValueError):
+            a.prepare_claim(inspected, packet, sample['claimId'], sample['modelAlias'], sample['dispatchRef'],
+                            sample['authority'], sample['limitSupport'], sample['claimedAt'], schema)
+
     def test_full_schema_and_resolved_native_review(self):
         output, packet = fixture()
         self.assertEqual(check(output, packet), output)

@@ -310,3 +310,31 @@ class Journal:
             return state
         finally:
             os.close(lock)
+
+
+def prepare_claim(inspected, packet, claim_id, model_alias, dispatch_ref, authority, limit_support, claimed_at, schema):
+    """Prepare only; the canonical store owns principal resolution and CAS admission."""
+    request = inspected['canonicalRequest']
+    expected = key(packet['subject'], packet['evidenceDigest'])
+    if (inspected['requestId'] != expected or request['requestId'] != expected
+            or request['subject'] != packet['subject'] or request['evidenceDigest'] != packet['evidenceDigest']):
+        raise ValueError('canonical request does not match retained evidence')
+    if inspected['state'] != 'pending' or inspected['claimId'] is not None or inspected['invocationRef'] is not None:
+        raise ValueError('request is not claimable pending state')
+    value = dict(schema='fsgg.telemetry.efficiency-analysis-claim-input/1',
+                 cas=dict(requestId=expected, expectedRevision=inspected['revision'],
+                          expectedContentDigest=inspected['contentDigest']),
+                 claimId=claim_id, modelAlias=model_alias, invocationRef=None,
+                 authority=copy.deepcopy(authority), claimedAt=claimed_at,
+                 dispatchRef=copy.deepcopy(dispatch_ref), limitSupport=copy.deepcopy(limit_support))
+    schema_validate(value, schema)
+    return value
+
+
+def automatic_launch_disposition(limit_support):
+    """Requested or retrospectively observed bounds do not authorize automatic launch."""
+    if set(limit_support) != {'inputTokens', 'outputTokens', 'seconds'}:
+        raise ValueError('complete selected runtime limit support required')
+    if any(value not in ('enforced', 'observed-only', 'unavailable') for value in limit_support.values()):
+        raise ValueError('unknown runtime limit support')
+    return 'requires-runtime-qualification' if all(value == 'enforced' for value in limit_support.values()) else 'unavailable'
