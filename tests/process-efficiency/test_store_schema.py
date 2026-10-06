@@ -1,5 +1,6 @@
 """In-memory SQL controls for the actual additive schema; no canonical store access."""
 import re
+import json
 import sqlite3
 import unittest
 from pathlib import Path
@@ -74,17 +75,23 @@ class SchemaControls(unittest.TestCase):
 
     def test_new_queue_and_export_sql_resolves_actual_schema(self):
         text = SOURCE.read_text()
-        regions = [text[text.index('    let private efficiencyJson '):text.index('    let provisionReceiptWorkspace ')],
-                   text[text.index('    let private efficiencySourceFingerprint '):text.index('    let private dashboardSnapshotBound\n')]]
+        regions = [text[text.index('    let private efficiencyNativeWitnesses '):text.index('    let private recordEfficiencyAcceptance ')],
+                   text[text.index('    let private efficiencyJson '):text.index('    let provisionReceiptWorkspace ')],
+                   text[text.index('    let private efficiencySourceFingerprint '):text.index('    let private dashboardSnapshotBound\n')],
+                   text[text.index('    let efficiencyAnalysisInspect '):text.index('    let dashboardSnapshotWithHooks ')]]
         checked = 0
         for region in regions:
-            for literal in re.findall(r'"([^"\\]*(?:\\.[^"\\]*)*)"', region):
-                if not re.match(r'^(SELECT|UPDATE|INSERT|DELETE) ', literal):
+            triple = re.findall(r'"""(.*?)"""',region,re.S)
+            without_triple = re.sub(r'""".*?"""','',region,flags=re.S)
+            literals = triple + re.findall(r'"([^"\\]*(?:\\.[^"\\]*)*)"', without_triple)
+            for literal in literals:
+                sql = literal.strip()
+                if not re.match(r'^(SELECT|UPDATE|INSERT|DELETE|WITH) ', sql):
                     continue
-                parameters = {name: None for name in re.findall(r'\$([A-Za-z][A-Za-z0-9_]*)', literal)}
-                self.db.execute('EXPLAIN ' + literal, parameters).fetchall()
+                parameters = {name: None for name in re.findall(r'\$([A-Za-z][A-Za-z0-9_]*)', sql)}
+                self.db.execute('EXPLAIN ' + sql, parameters).fetchall()
                 checked += 1
-        self.assertGreater(checked, 20)
+        self.assertGreater(checked, 60)
 
     def test_native_witness_queries_resolve_real_tables_without_widening_native_ingest(self):
         text = SOURCE.read_text()
@@ -109,6 +116,18 @@ class SchemaControls(unittest.TestCase):
         self.db.execute("UPDATE efficiency_outcome_epochs SET state='closed',outcome_identity='outcome',close_sequence=1,close_refs='[]'")
         self.db.execute("INSERT INTO efficiency_outcome_epochs VALUES('original',2,'new-dispatch','NEW','begin',1,'open','[]',NULL,NULL,NULL)")
         self.assertEqual([1,2], [row[0] for row in self.db.execute('SELECT epoch FROM efficiency_outcome_epochs ORDER BY epoch')])
+
+    def test_action_replay_returns_original_receipt_after_later_queue_revision(self):
+        first = {'revision':1,'lastAction':'claim','lastInputDigest':'original-input','claimedAt':'receiver-first'}
+        later = {'revision':2,'lastAction':'attach-invocation','lastInputDigest':'later-input','claimedAt':'receiver-first'}
+        for record in [first,later]:
+            self.db.execute('INSERT INTO efficiency_analysis_history VALUES(?,?,?,?,?)',('request',record['revision'],'digest',json.dumps(record),'receiver'))
+        text = SOURCE.read_text()
+        query = re.search(r'replayLookup.CommandText <- "([^"]+)"',text)[1]
+        receipt = self.db.execute(query,{'id':'request','action':'claim','input':'original-input'}).fetchone()[0]
+        self.assertEqual(first,json.loads(receipt))
+        self.assertIsNone(self.db.execute(query,{'id':'request','action':'claim','input':'changed-input'}).fetchone())
+        self.assertEqual(2,self.db.execute('SELECT count(*) FROM efficiency_analysis_history').fetchone()[0])
 
     def test_historical_records_cannot_overwrite_same_revision(self):
         self.db.execute("INSERT INTO efficiency_record_history VALUES('a',0,'first','{}','real-receiver-time','receipt')")
