@@ -4428,7 +4428,7 @@ ORDER BY f.identity;
 
     /// Resolve only an already applied dispatch owned by this association; the claim
     /// transaction rechecks its exact revision/digest and existing CAS/budget guards.
-    let efficiencyAnalysisClaimProspective path assessment (principal: TelemetryReceipt.Principal) dispatchIdentity itemId (templateBytes: byte array) =
+    let efficiencyAnalysisClaimProspective path assessment (principal: TelemetryReceipt.Principal) (dispatchIdentity: string) (itemId: string) (templateBytes: byte array) =
         if isNull templateBytes || templateBytes.Length=0 || templateBytes.Length>16384 then Error [ "efficiency-command-byte-bound" ]
         else
             try
@@ -4464,7 +4464,7 @@ ORDER BY f.identity;
             | :? JsonException as error -> Error [ error.Message ]
             | :? InvalidOperationException as error -> Error [ error.Message ]
 
-    let efficiencyAnalysisReconcile path assessment (principal: TelemetryReceipt.Principal) selectedItem =
+    let efficiencyAnalysisReconcile path assessment (principal: TelemetryReceipt.Principal) (selectedItem: string option) =
         receiptLocked path assessment (fun _ connection ->
             if not (principalAuthorized connection principal) then Error [ "efficiency-authenticated-producer-required" ]
             else
