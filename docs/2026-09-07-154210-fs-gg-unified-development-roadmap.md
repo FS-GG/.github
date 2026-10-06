@@ -230,6 +230,19 @@ LEARN's rootless custody source merged through [#4215](https://github.com/FS-GG/
 Its source and static helper compile passed; native execution still needs a qualified
 namespace/cgroup environment. Source delivery does not close native acceptance.
 
+**2026-10-06: SVG 0.32.1 release-route source window delivered; candidate and publication pending.**
+[Rendering #1390](https://github.com/FS-GG/FS.GG.Rendering/pull/1390) merged at
+`6c9f766fdd91483c2de6f061e75589e94852a265` after required hosted and coherent validation passed
+for exact head `4c146e1de3b4e1916fd59b03c88ce56cc3357f00`. The ten qualified release-route
+inputs remain byte-identical to the accepted local F# source window. A separate
+21.647-second guard reproduction confirmed the retained stale-report failure, the
+corrected structural verdict, zero observed feed requests without opt-in and
+missing-input refusal, with clean custody and no resource failure. The
+[owning SVG plan](roadmaps/svg-coherence-and-instancing-01.md) keeps the genuine
+19-package candidate, installed Templates receiver and publication pending.
+Original failures remain retained; .3/.4, consumer adoption and the late GPU batch
+remain open.
+
 **2026-10-06: SVG-COHERENCE-01 export-prefix source window delivered; publication pending.**
 [Rendering #1389](https://github.com/FS-GG/FS.GG.Rendering/pull/1389) merged at
 `f133cb9f979cb4d5053e67c72ac7a6041524fc31` with exact-head coherent validation

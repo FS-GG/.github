@@ -56,6 +56,25 @@ acceptance is claimed. The coherent 0.32.1 package candidate, genuine installed
 receiver qualification and publication remain pending. This closes only that source
 window; .3/.4, consumer adoption and the late host GPU batch remain open.
 
+The 0.32.1 release-route source window delivered through
+[Rendering #1390](https://github.com/FS-GG/FS.GG.Rendering/pull/1390) at
+`6c9f766fdd91483c2de6f061e75589e94852a265` after required hosted and coherent validation passed
+for exact head `4c146e1de3b4e1916fd59b03c88ce56cc3357f00`. The ten inputs qualified from
+`b4326e3a6dca9c372beb4d9f7a6be807538a4212` retain their exact bytes. The original
+10.469-second F# window passed five selected outcomes, including an assertion
+negative control and both pre-transport wrapper refusals. A separate 21.647-second
+guard reproduction passed five selected outcomes after the hosted stale-ledger and
+report failures; its genuine fixed render equals the delivered report. Both windows
+retained clean custody, core limits `[0,0]` and no resource failure. Failed attempts
+remain retained and receive no successful credit.
+
+This closes only the Stage A/B source-delivery window. Stage C must produce the
+genuine 19-package archive and qualify the existing Templates receiver against its
+exact bytes through reviewed source. Stage D still needs that installed result and
+fresh feed, tag and authority joins before publication. No browser measurement was
+repeated; .3/.4, package publication, consumer adoption and the late GPU batch remain
+open.
+
 A separate 30-record diversity/churn window completed all 3,000 measured updates.
 Twelve lifetime records completed 6,000 updates and 60 exact ownership-fault
 controls. Four subsequent teardown cases completed 2,000 updates: residual DOM
