@@ -59,6 +59,16 @@ class SchemaControls(unittest.TestCase):
         with self.assertRaises(sqlite3.IntegrityError):
             reserve('new','claim-new')
 
+    def test_only_one_active_claim_across_scopes_and_corrected_aliases(self):
+        for identity,item,scope in [('first','OLD','native-item'),('second','NEW','provisional-delivery')]:
+            self.db.execute("INSERT INTO efficiency_analysis_requests(request_id,stable_outcome_identity,effective_item_id,scope,evidence_digest,policy_version,state,revision,content_digest,canonical,evidence_packet,owner_producer,owner_stream,requested_at,updated_at) VALUES(?, 'outcome', ?, ?, 'digest','policy','pending',0,'content','{}',?,'p','s','now','now')",(identity,item,scope,b'{}'))
+        self.db.execute("INSERT INTO efficiency_analysis_reservations VALUES('outcome','unknown','policy',1,'first','claim1','p','s','dispatch1',1,'reserved')")
+        with self.assertRaises(sqlite3.IntegrityError):
+            self.db.execute("INSERT INTO efficiency_analysis_reservations VALUES('outcome','1','policy',2,'second','claim2','p','s','dispatch2',2,'reserved')")
+        self.db.execute("UPDATE efficiency_analysis_reservations SET state='unknown' WHERE claim_id='claim1'")
+        self.db.execute("INSERT INTO efficiency_analysis_reservations VALUES('outcome','1','policy',2,'second','claim2','p','s','dispatch2',2,'reserved')")
+        self.assertEqual(2,self.db.execute('SELECT count(*) FROM efficiency_analysis_reservations').fetchone()[0])
+
     def test_queue_refuses_running_vocabulary_and_fourth_reservation(self):
         self.db.execute("INSERT INTO efficiency_analysis_requests(request_id,stable_outcome_identity,effective_item_id,scope,evidence_digest,policy_version,state,revision,content_digest,canonical,evidence_packet,owner_producer,owner_stream,requested_at,updated_at) VALUES('r','outcome','I','native-item','digest','policy','pending',0,'content','{}',?,'p','s','now','now')", (b'{}',))
         with self.assertRaises(sqlite3.IntegrityError):
