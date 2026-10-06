@@ -106,7 +106,7 @@ contracts:
           derived value fills namespace/module/open positions; nameParameter keeps the raw name in
           string/path/.fsproj/.slnx. See coherence id `scaffold-provider-identifier`.
   - id: fsgg-contracts
-    version: "7.5.2"
+    version: "7.6.0" # SOURCE ONLY: SDD PR1099 merge3297d3298fdd35579d9bcb09c65fdb7ad423a568; published package-version remains7.5.2 pending its separate coherent publication.
     # → 7.5.0 (2026-07-29, SemVer MINOR/additive; FS.GG.SDD#760 / PR SDD#795, merge
     # bc93f94ddf6e036a9bd4580556a799927a25d8db): SkillMirror gains the new
     # `UnobservedSkillFiles` record and the additive `verifyObservedFiles` /

@@ -87,6 +87,23 @@ GOOD_REG="$(mkreg good '"2.0.1"')"
 
 must_pass "green: registry version == source version" "$GOOD_REG" "$GOOD_SRC"
 
+# Source and published frontier are separate facts: a source-only reconciliation must not
+# require an unpublished package or let the old package scalar satisfy a stale source column.
+SPLIT_FRONTIER_SRC="$(mksrc source-frontier 7.6.0 7.6.0)"
+SPLIT_FRONTIER_REG="$WORK/source-frontier.yml"
+cat > "$SPLIT_FRONTIER_REG" <<'YAML'
+contracts:
+  - { id: fsgg-contracts, version: "7.6.0", package-version: "7.5.2" }
+YAML
+must_pass "green: source7.6 and published7.5.2 are distinct frontiers" "$SPLIT_FRONTIER_REG" "$SPLIT_FRONTIER_SRC"
+STALE_FRONTIER_REG="$WORK/stale-source-frontier.yml"
+cat > "$STALE_FRONTIER_REG" <<'YAML'
+contracts:
+  - { id: fsgg-contracts, version: "7.5.2", package-version: "7.5.2" }
+YAML
+must_fail "red: matching published7.5.2 cannot excuse stale source7.5.2" \
+  "is '7\.5\.2' but.*'7\.6\.0'" "$STALE_FRONTIER_REG" "$SPLIT_FRONTIER_SRC"
+
 # ---- the assertion itself ---------------------------------------------------------------------
 
 # The real .github#741 / FS.GG.SDD#432 scenario: SDD bumped its source, the registry has not been

@@ -30,6 +30,8 @@ advances the pin to that CLI.
 
 ## Entries
 
+- **2026-10-06** — Reconcile the operator publishing-and-deployment digest after source-only Contracts7.6.0 projection (github; PR #4264). Generated inventory preserves published7.5.2 independently; mirrored roots, manifest and registry row agree. No delivered Kit/Drivers skill or materialization predicate change.
+
 - **2026-10-06** — Reconcile the operator publishing-and-deployment manifest and registry digest after coherent0.98 source preparation (github; UTEL-01/UTEL-REL-15). Exact unchanged registry renderer and pure manifest emitter derive both skill roots; published frontier stays0.97.1. No materialized Kit/Drivers roster change or receiver acceptance follows.
 
 - **2026-10-06** — Reconcile the operator `publishing-and-deployment` digest from the current generated Drivers manifest and byte-identical authored skill roots (github; PR #4232, ADR-0017). Materialization predicate and delivered skill bodies remain unchanged.
