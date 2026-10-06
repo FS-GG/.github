@@ -401,7 +401,7 @@
   function renderLocal(host) {
     const content = $("local-content");
     content.replaceChildren();
-    if (!["fsgg.telemetry.dashboard-host/1","fsgg.telemetry.dashboard-host/2","fsgg.telemetry.dashboard-host/3","fsgg.telemetry.dashboard-host/4","fsgg.telemetry.dashboard-host/5"].includes(host.schema)) {
+    if (host.schema !== "fsgg.telemetry.dashboard-host/5") {
       text(
         "local-state",
         host.status === "unconfigured"
@@ -578,8 +578,8 @@
   const malformed = () => { throw new Error("The published data does not match the dashboard contract."); };
   function renderSourceDeliveries(host) {
     const body=$("source-deliveries"); body.replaceChildren();
-    const source=["fsgg.telemetry.dashboard-host/4","fsgg.telemetry.dashboard-host/5"].includes(host.schema)?host.sourceDeliveries:null;
-    text("source-deliveries-note",source?`${source.coverage.published} published · operational completion unestablished`:"Source-delivery coverage is unavailable in this older host snapshot.");
+    const source=host.schema === "fsgg.telemetry.dashboard-host/5" ? host.sourceDeliveries : null;
+    text("source-deliveries-note",source?`${source.coverage.published} published · operational completion unestablished`:"Source-delivery coverage awaits a current host-5 snapshot.");
     (source?.items || []).forEach((item)=>{
       const article=document.createElement("article"), heading=document.createElement("h4"), link=document.createElement("a"), note=document.createElement("p");
       link.href=item.url; link.textContent=item.label; link.target="_blank"; link.rel="noopener"; heading.append(link);
@@ -610,15 +610,14 @@
       if (typeof host.status !== "string") malformed();
       return;
     }
-    if (!["fsgg.telemetry.dashboard-host/1","fsgg.telemetry.dashboard-host/2","fsgg.telemetry.dashboard-host/3","fsgg.telemetry.dashboard-host/4","fsgg.telemetry.dashboard-host/5"].includes(host.schema)) malformed();
-    if (["fsgg.telemetry.dashboard-host/4","fsgg.telemetry.dashboard-host/5"].includes(host.schema) && (typeof host.revision!=="string" || !/^[0-9a-f]{64}$/.test(host.revision))) malformed();
+    if (host.schema !== "fsgg.telemetry.dashboard-host/5") throw new Error("Host schema 5 is required; host data awaits the matching published feed.");
+    if (typeof host.revision!=="string" || !/^[0-9a-f]{64}$/.test(host.revision)) malformed();
     if (!timestamp(host.observedAt) || !object(host.totals) || !finite(host.totals.usageObservations) || !object(host.usage) || !finite(host.usage.input) || !finite(host.usage.cachedInput) || !finite(host.usage.cacheWriteInput) || !finite(host.usage.output) || (host.usage.reasoning != null && !finite(host.usage.reasoning)) || !finite(host.usage.total) || !numericValues(host.launcherPopulation) || !object(host.budget) || !Array.isArray(host.budget.assessments) || !flattenable(host.budget.health) || !flattenable(host.budget.dimensions) || !object(host.localCi) || !numericValues(host.localCi.counts) || !object(host.localCi.seconds) || !flattenable(host.localCi.coverage) || !object(host.store) || !flattenable(host.quality) || !object(host.operational) || !flattenable(host.operational.lineage) || !flattenable(host.operational.timing)) malformed();
     Object.values(host.localCi.seconds).forEach((value) => { if (!object(value) || !finite(value.knownItems) || !finite(value.unknownItems) || !finite(value.totalItemSeconds)) malformed(); });
     host.budget.assessments.forEach((value) => { if (!object(value) || typeof value.dimension !== "string" || typeof value.verdict !== "string" || (value.numerator != null && !finite(value.numerator)) || (value.denominator != null && !finite(value.denominator))) malformed(); });
-    if (host.schema === "fsgg.telemetry.dashboard-host/1") return;
     if (!object(host.completedItems) || !numericValues(host.completedItems.coverage) || !Array.isArray(host.completedItems.items)) malformed();
-    if (["fsgg.telemetry.dashboard-host/4","fsgg.telemetry.dashboard-host/5"].includes(host.schema)) validateSourceDeliveries(host.sourceDeliveries,host.completedItems.items);
-    if (host.schema === "fsgg.telemetry.dashboard-host/5") window.ProcessEfficiency.validate(host.processEfficiency);
+    validateSourceDeliveries(host.sourceDeliveries,host.completedItems.items);
+    window.ProcessEfficiency.validate(host.processEfficiency);
     host.completedItems.items.forEach((item) => {
       if (!object(item) || typeof item.key !== "string" || typeof item.label !== "string" || !safeUrl(item.url,"https://github.com/FS-GG/") || (item.deliveredAt != null && !timestamp(item.deliveredAt)) || !Array.isArray(item.deliveries) || !object(item.runtime) || !finite(item.runtime.invocations) || !object(item.runtime.duration) || !Array.isArray(item.runtime.duration.rows) || !object(item.runtime.tokens) || !object(item.runtime.tokens.coverage) || !Array.isArray(item.runtime.tokens.rows) || !object(item.ci) || !numericValues(item.ci.counts) || !object(item.ci.seconds) || !object(item.budget) || !Array.isArray(item.budget.assessments) || !object(item.complications) || !numericValues(item.complications.observed) || !Array.isArray(item.complications.notes)) malformed();
       item.deliveries.forEach((delivery) => { if (!object(delivery) || typeof delivery.repository !== "string" || !finite(delivery.number) || !safeUrl(delivery.url,"https://github.com/FS-GG/")) malformed(); });
@@ -688,9 +687,9 @@
     const view=initial?null:captureView();
     state.restoring=Boolean(view);
     state.runs=data.actions.runs;
-    const itemCapable=["fsgg.telemetry.dashboard-host/2","fsgg.telemetry.dashboard-host/3","fsgg.telemetry.dashboard-host/4","fsgg.telemetry.dashboard-host/5"].includes(data.host.schema);
+    const itemCapable=data.host.schema === "fsgg.telemetry.dashboard-host/5";
     state.items=itemCapable?data.host.completedItems.items:[];
-    state.itemStatus=itemCapable?(data.host.completedItems.coverage.incompatible?"Some completed-item details were rejected as incompatible":data.host.completedItems.coverage.unmapped?"Completed items await approved public labels":data.host.completedItems.coverage.dirty?"Item completion is pending canonical reduction":"No completed item is present in the observed host snapshot"):data.host.schema==="fsgg.telemetry.dashboard-host/1"?"This older host snapshot has aggregate telemetry only":"Item details await a configured host";
+    state.itemStatus=itemCapable?(data.host.completedItems.coverage.incompatible?"Some completed-item details were rejected as incompatible":data.host.completedItems.coverage.unmapped?"Completed items await approved public labels":data.host.completedItems.coverage.dirty?"Item completion is pending canonical reduction":"No completed item is present in the observed host snapshot"):"Item details await a current host-5 snapshot";
     renderItems(view?.openItems || null, initial);
     renderDeliveries(data.deliveries);
     renderSourceDeliveries(data.host);
@@ -733,7 +732,7 @@
       text("health-label",state.runs.length?(live?"Public Actions live":"Public Actions stale"):"Public Actions sample empty");
       $("pulse-dot").classList.toggle("live",live);
       const host=state.data.host;
-      if (["fsgg.telemetry.dashboard-host/1","fsgg.telemetry.dashboard-host/2","fsgg.telemetry.dashboard-host/3","fsgg.telemetry.dashboard-host/4","fsgg.telemetry.dashboard-host/5"].includes(host.schema)) {
+      if (host.schema === "fsgg.telemetry.dashboard-host/5") {
         const hostAge=Date.now()-Date.parse(host.observedAt);
         text("local-state",`${hostAge>60*60*1000?"Stale · ":""}Observed ${date(host.observedAt)}`);
       }

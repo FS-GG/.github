@@ -280,7 +280,6 @@ MAX_JSON = 1_048_576
 MAX_CANONICAL_SNAPSHOT = 4 * MAX_JSON
 MAX_API_JSON = 4 * 1_048_576
 HOST_SCHEMA = "fsgg.telemetry.dashboard-host/5"
-LEGACY_HOST_SCHEMAS = {"fsgg.telemetry.dashboard-host/1","fsgg.telemetry.dashboard-host/2","fsgg.telemetry.dashboard-host/3","fsgg.telemetry.dashboard-host/4"}
 DASH_SCHEMA = "fsgg.telemetry.dashboard/2"
 DELIVERIES_SCHEMA = "fsgg.telemetry.public-deliveries/1"
 ITEMS_SCHEMA = "fsgg.telemetry.completed-items/2"
@@ -2014,22 +2013,16 @@ def validate_deliveries(value: Any) -> None:
 
 def validate_host(value: Any) -> None:
     schema=value.get("schema") if isinstance(value,dict) else None
-    aggregate_only=schema=="fsgg.telemetry.dashboard-host/1"
-    current=schema in {HOST_SCHEMA,"fsgg.telemetry.dashboard-host/3","fsgg.telemetry.dashboard-host/4"}
-    fields={"schema","observedAt","source","scope","totals","usage","launcherPopulation","quality","operational","store","localCi","budget"}
-    if not aggregate_only: fields.add("completedItems")
-    if current: fields.add("revision")
-    if schema in {HOST_SCHEMA,"fsgg.telemetry.dashboard-host/4"}: fields.add("sourceDeliveries")
-    if schema==HOST_SCHEMA: fields.add("processEfficiency")
+    if schema != HOST_SCHEMA: raise ValueError("host schema 5 required")
+    fields={"schema","observedAt","source","scope","totals","usage","launcherPopulation","quality","operational","store","localCi","budget","completedItems","revision","sourceDeliveries","processEfficiency"}
     exact(value,fields,"host feed")
-    if schema not in {HOST_SCHEMA,*LEGACY_HOST_SCHEMAS} or parse_time(value["observedAt"]) is None: raise ValueError("invalid host identity")
-    if current:
-        revision=value["revision"]
-        if not isinstance(revision,str) or not re.fullmatch(r"[0-9a-f]{64}",revision): raise ValueError("invalid public payload revision")
-        projected=dict(value); projected.pop("revision")
-        if hashlib.sha256(json.dumps(projected,sort_keys=True,separators=(",",":"),ensure_ascii=True).encode()).hexdigest()!=revision: raise ValueError("public payload revision mismatch")
+    if parse_time(value["observedAt"]) is None: raise ValueError("invalid host identity")
+    revision=value["revision"]
+    if not isinstance(revision,str) or not re.fullmatch(r"[0-9a-f]{64}",revision): raise ValueError("invalid public payload revision")
+    projected=dict(value); projected.pop("revision")
+    if hashlib.sha256(json.dumps(projected,sort_keys=True,separators=(",",":"),ensure_ascii=True).encode()).hexdigest()!=revision: raise ValueError("public payload revision mismatch")
     exact(value["source"],{"kind","publicExportSchema"},"host source"); exact(value["scope"],{"items","identities","freeText"},"host scope")
-    identity="aggregated-and-removed" if aggregate_only else "aggregated-or-explicitly-aliased"; free="removed" if aggregate_only else "removed-except-approved-notes"
+    identity="aggregated-or-explicitly-aliased"; free="removed-except-approved-notes"
     if value["source"].get("kind") not in {"configured-local-store","configured-local-stores"} or value["source"].get("publicExportSchema")!="fsgg.telemetry.public-export/1" or value["scope"]["identities"]!=identity or value["scope"]["freeText"]!=free: raise ValueError("invalid host safety declaration")
     checked_int(value["scope"]["items"],"items"); validate_count_map(value["totals"],{"factCount","usageObservations","deliveryObservations"},"totals")
     exact(value["usage"],{"input","cachedInput","cacheWriteInput","output","total","reasoning"},"usage")
@@ -2066,11 +2059,10 @@ def validate_host(value: Any) -> None:
         if not isinstance(assessment["severe"],bool): raise ValueError("invalid severe")
         for key in ("numerator","denominator"):
             if assessment[key] is not None: checked_int(assessment[key],key)
-    if not aggregate_only: validate_completed_items(value["completedItems"])
-    if schema==HOST_SCHEMA: EFF.validate(value["processEfficiency"])
-    if schema in {HOST_SCHEMA,"fsgg.telemetry.dashboard-host/4"}:
-        validate_source_deliveries(value["sourceDeliveries"])
-        if {r["key"] for r in value["completedItems"]["items"]}&{r["key"] for r in value["sourceDeliveries"]["items"]}: raise ValueError("duplicate completed/source item")
+    validate_completed_items(value["completedItems"])
+    EFF.validate(value["processEfficiency"])
+    validate_source_deliveries(value["sourceDeliveries"])
+    if {r["key"] for r in value["completedItems"]["items"]}&{r["key"] for r in value["sourceDeliveries"]["items"]}: raise ValueError("duplicate completed/source item")
 
 
 def public_text(value: Any, maximum: int, name: str) -> str:

@@ -137,13 +137,13 @@ class EfficiencyTests(unittest.TestCase):
         self.assertEqual(E.project([metric() for _ in range(33)], [], labels())['coverage']['withheld'], 1)
         with self.assertRaises(ValueError): E.project([metric()] * 1001, [], labels())
 
-    def test_host5_unavailable_default_and_host4_backwards_read(self):
+    def test_host5_unavailable_default_and_prior_versions_refuse(self):
         value = host_fixture(); D.validate_host(value)
         self.assertEqual(value['schema'], 'fsgg.telemetry.dashboard-host/5')
         self.assertEqual(value['processEfficiency'], E.unavailable())
-        old = copy.deepcopy(value); old['schema'] = 'fsgg.telemetry.dashboard-host/4'; old.pop('processEfficiency'); old.pop('revision')
-        old['revision'] = hashlib.sha256(json.dumps(old, sort_keys=True, separators=(',', ':'), ensure_ascii=True).encode()).hexdigest()
-        D.validate_host(old)
+        for version in range(1, 5):
+            old = copy.deepcopy(value); old['schema'] = f'fsgg.telemetry.dashboard-host/{version}'
+            with self.assertRaisesRegex(ValueError, 'host schema 5 required'): D.validate_host(old)
 
     def test_committed_browser_fixture_matches_projection(self):
         path = pathlib.Path(__file__).with_name('fixtures')/'process-efficiency-public-v1.json'

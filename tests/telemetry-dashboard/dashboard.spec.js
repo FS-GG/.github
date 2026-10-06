@@ -63,7 +63,10 @@ function completedHost(keys = ["one", "two"]) {
     complications: { observed: {}, notes: [] },
   }));
   return {
-    schema: "fsgg.telemetry.dashboard-host/2",
+    schema: "fsgg.telemetry.dashboard-host/5",
+    revision: "a".repeat(64),
+    sourceDeliveries: {schema:"fsgg.telemetry.source-deliveries/1",coverage:{eligible:0,published:0,unmapped:0,dirty:0,incompatible:0},items:[]},
+    processEfficiency: {schema:"fsgg.telemetry.process-efficiency/1",policyVersion:"efficiency-public-projection/1",source:"unavailable",status:"unavailable",coverage:{published:0,unmapped:0,withheld:0,unsupported:0},items:[]},
     observedAt: "2026-09-09T08:00:00Z",
     totals: { usageObservations: 0 },
     usage: { input: 0, cachedInput: 0, cacheWriteInput: 0, output: 0, reasoning: null, total: 0 },
@@ -252,16 +255,18 @@ test("malformed refresh retains last good data and a later success recovers", as
   await expect(page.getByRole("link", { name: "Recovered workflow" })).toBeVisible();
 });
 
-test("first successful retry honors the original item deep link", async ({ page }) => {
+test("initial older feed stays unavailable; matching host5 honors the original deep link", async ({ page }) => {
   await page.clock.install();
   let requests=0;
   await page.route("**/data/dashboard.json",(route)=>{
     requests+=1;
-    if(requests===1) return route.fulfill({json:{schema:"bad"}});
+    if(requests===1){const old=completedHost(["recovered"]);old.schema="fsgg.telemetry.dashboard-host/3";return route.fulfill({json:payload(old)});}
     return route.fulfill({json:payload(completedHost(["recovered"]))});
   });
   await page.goto("/#item-recovered");
   await expect(page.locator("#health-label")).toHaveText("Data unavailable");
+  await expect(page.locator("#error")).toContainText("Host schema 5 is required");
+  await expect(page.locator(".item-card")).toHaveCount(0);
   await page.clock.runFor(60000);
   await expect(page.locator("#item-recovered")).toHaveAttribute("open","");
 });
@@ -297,7 +302,7 @@ test("hidden pages pause checks, resume overdue, and requests never overlap", as
 
 function sourceDeliveredHost() {
   const host=completedHost(["one","two","three","four","five"]);
-  host.schema="fsgg.telemetry.dashboard-host/4";
+  host.schema="fsgg.telemetry.dashboard-host/5";
   host.revision="a".repeat(64);
   host.sourceDeliveries={schema:"fsgg.telemetry.source-deliveries/1",coverage:{eligible:1,published:1,unmapped:0,dirty:0,incompatible:0},items:[{
     key:"governance-ci",label:"Governance CI",url:"https://github.com/FS-GG/governance_config/pull/444",state:"source-delivered",operationalCompletion:"unestablished",deliveredAt:"2026-10-05T19:00:00Z",
@@ -306,7 +311,7 @@ function sourceDeliveredHost() {
   return host;
 }
 
-test("host4 source delivery is separate from five completed items and exposes no cost",async({page})=>{
+test("host5 source delivery is separate from five completed items and exposes no cost",async({page})=>{
   await page.route("**/data/dashboard.json",route=>route.fulfill({json:payload(sourceDeliveredHost())}));
   await page.goto("/");
   await expect(page.locator(".item-card")).toHaveCount(5);
@@ -317,25 +322,25 @@ test("host4 source delivery is separate from five completed items and exposes no
   await expect(page.locator("#provenance")).toContainText("a".repeat(64));
 });
 
-test("malformed host4 private fields and revision keep last good source delivery; host3 recovers",async({page})=>{
+test("malformed fields and prior host schema keep last valid host5; matching host5 recovers",async({page})=>{
   await page.clock.install(); let requests=0;
   await page.route("**/data/dashboard.json",route=>{
     requests++;const host=sourceDeliveredHost();
     if(requests===2) host.sourceDeliveries.items[0].privateNotes="PRIVATE SENTINEL";
     if(requests===3) host.revision="bad";
-    if(requests>=4){host.schema="fsgg.telemetry.dashboard-host/3";delete host.sourceDeliveries;}
+    if(requests===4) host.schema="fsgg.telemetry.dashboard-host/3";
     return route.fulfill({json:payload(host)});
   });
   await page.goto("/");
-  for(let i=0;i<2;i++){
+  for(let i=0;i<3;i++){
     await page.clock.runFor(60000);await expect.poll(()=>requests).toBeGreaterThanOrEqual(i+2);
     await expect(page.locator("#error")).toContainText("showing last good data");
     await expect(page.locator("#source-deliveries article")).toHaveCount(1);
     await expect(page.locator("body")).not.toContainText("PRIVATE SENTINEL");
   }
-  await page.clock.runFor(60000);await expect.poll(()=>requests).toBeGreaterThanOrEqual(4);
+  await page.clock.runFor(60000);await expect.poll(()=>requests).toBeGreaterThanOrEqual(5);
   await expect(page.locator("#error")).toBeHidden();
-  await expect(page.locator("#source-deliveries")).toBeEmpty();
+  await expect(page.locator("#source-deliveries article")).toHaveCount(1);
   await expect(page.locator(".item-card")).toHaveCount(5);
 });
 

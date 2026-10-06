@@ -111,7 +111,8 @@ Analysis cost is visible; additional evidence revisions remain within a declared
 
 Source checkpoint (2026-10-06): the local fixture slice extends the Source Deliveries
 foundation ([PR #4269](https://github.com/FS-GG/.github/pull/4269), `428ef7f6`) with
-host schema 5 and a closed `process-efficiency/1` projection. Readers retain host schemas 1–4.
+host schema 5 and a closed `process-efficiency/1` projection. Public collection and presentation
+require host schema 5 under the user-selected current-only migration.
 The collector currently emits `unavailable`; canonical measurement/assessment export integration,
 installed behavior and live acceptance remain pending. This checkpoint does not close .4.
 
@@ -131,6 +132,11 @@ age dimensions. Purpose amounts and different resource units are not combined. P
 labels retain their epistemic status. Fixed missing-evidence guidance is marked hypothetical;
 private analyst improvement prose stays unavailable. Repository/work-type/acceptance dimensions
 and producer freshness remain unavailable without approved canonical exports.
+
+An older installed host feed is rejected with a host-schema-5 requirement. Refresh failure retains
+the last valid host-5 data; an initial mismatch shows unavailable/error state, never empty success.
+The parent owns sequencing of matching feed publication and Pages deployment; source delivery
+does not establish live acceptance during a version mismatch.
 
 The source includes native keyboard controls, search/scope/measurement filters, ten-item pages,
 accessible table captions/headings and the existing last-valid-feed fallback. Fourteen focused
