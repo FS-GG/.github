@@ -6,7 +6,8 @@
   "coverage": {
     "published": 2,
     "unmapped": 0,
-    "withheld": 0
+    "withheld": 0,
+    "unsupported": 0
   },
   "items": [
     {

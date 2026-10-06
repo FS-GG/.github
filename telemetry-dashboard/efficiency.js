@@ -18,7 +18,8 @@
   const links=(v)=>Array.isArray(v)&&v.length<=16&&v.every(url);
   const fail=()=>{throw new Error("The published process efficiency data does not match its contract.");};
   function validate(feed) {
-    if(!exact(feed,["schema","policyVersion","source","status","coverage","items"])||feed.schema!==schema||feed.policyVersion!==policy||!["fixtures","unavailable"].includes(feed.source)||!["partial","unavailable"].includes(feed.status)||!exact(feed.coverage,["published","unmapped","withheld"])||!Object.values(feed.coverage).every(number)||!Array.isArray(feed.items)||feed.items.length>200||feed.coverage.published!==feed.items.length)fail();
+    if(!exact(feed,["schema","policyVersion","source","status","coverage","items"])||feed.schema!==schema||feed.policyVersion!==policy||!["fixtures","unavailable"].includes(feed.source)||!["partial","unavailable"].includes(feed.status)||!exact(feed.coverage,["published","unmapped","withheld","unsupported"])||!Object.values(feed.coverage).every(number)||!Array.isArray(feed.items)||feed.items.length>200||feed.coverage.published!==feed.items.length)fail();
+    if(feed.coverage.unsupported>feed.coverage.withheld)fail();
     if(feed.source==="unavailable"&&(feed.status!=="unavailable"||feed.items.length))fail();
     const keys=new Set();
     feed.items.forEach((item)=>{
@@ -48,7 +49,7 @@
     current=feed;
     const body=$("efficiency-items"),open=new Set([...body.querySelectorAll("details[open]")].map((d)=>d.id));body.replaceChildren();
     if(!feed||feed.status==="unavailable"){$("efficiency-health").textContent="Process efficiency unavailable: canonical measurement and assessment exports are not admitted. Runtime, cost and analysis remain unknown.";$("efficiency-page").textContent="No efficiency population available";$("efficiency-prev").disabled=true;$("efficiency-next").disabled=true;return;}
-    $("efficiency-health").textContent=`Fixture preview · ${feed.coverage.published} approved items · ${feed.coverage.unmapped} unmapped · ${feed.coverage.withheld} withheld. This is source qualification, with no installed or live acceptance. Producer/ingestion freshness remains unavailable.`;
+    $("efficiency-health").textContent=`Fixture preview · ${feed.coverage.published} approved items · ${feed.coverage.unmapped} unmapped · ${feed.coverage.withheld} withheld (${feed.coverage.unsupported} unsupported exact-quantity items). This is source qualification, with no installed or live acceptance. Producer/ingestion freshness remains unavailable.`;
     const search=$("efficiency-search").value.toLowerCase(),scope=$("efficiency-scope").value,view=$("efficiency-view").value;
     const filtered=feed.items.filter((item)=>item.label.toLowerCase().includes(search)&&(scope==="all"||item.scope===scope));
     const pages=Math.max(1,Math.ceil(filtered.length/10));page=Math.min(page,pages-1);

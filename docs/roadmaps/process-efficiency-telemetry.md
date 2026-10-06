@@ -133,11 +133,32 @@ private analyst improvement prose stays unavailable. Repository/work-type/accept
 and producer freshness remain unavailable without approved canonical exports.
 
 The source includes native keyboard controls, search/scope/measurement filters, ten-item pages,
-accessible table captions/headings and the existing last-valid-feed fallback. Thirteen focused
-projection checks pass. The full Python roster has 111 passes and one expected stale two-UID proof
-digest failure (112 tests); a new actual proof must qualify final exporter bytes. Two browser tests
+accessible table captions/headings and the existing last-valid-feed fallback. Fourteen focused
+projection checks and five export-consumer checks pass. The full Python roster has 117 passes and
+one expected stale two-UID proof digest failure (118 tests); a new actual proof must qualify final exporter bytes. Two browser tests
 are authored but have not run at this checkpoint. No publication, installation or native/store
 qualification is claimed from source fixtures.
+
+The .2/.3 owners agreed a separate read-only `telemetry efficiency-export` batch interface.
+Its inactive consumer seam binds `snapshotRevision` to the exact compact `item-detail/3` base and
+keeps a distinct `sourceFingerprint` over current facts, usage, corrected attribution, efficiency
+records, queue health and receiver clocks. The exporter owns selection in one WAL snapshot; an
+analysis update cannot pretend that an unchanged compact-base digest covers changed efficiency
+sources. The consumer performs no canonical reductions or revision selection.
+
+The closed `efficiency-export/1` response has cutoff/observation times, item selection, global metric
+selection and item rows. Selection declares limit, returned, omitted and complete; limits are 200
+items, 1,000 serialized metrics globally and 32 per item. Each row retains private item/original-group
+identities, canonical metrics, one selected assessment or null, typed analysis health and nullable
+witnessed source/ingestion clocks. Private analysis packets are excluded. Analysis health exposes
+pending/last-attempt times and only fixed failure codes; other reasons become unknown. Explicit
+original groups preserve the existing public-label boundary.
+
+The reader makes one batch call per store using the caller's remaining monotonic deadline, bounded
+by the existing 45-second call cap. Private input is bounded to 4 MiB and public output remains
+bounded to 1 MiB. It is not called by `build_host` yet: schema 14 and actual endpoint acceptance remain
+pending. Integers beyond JavaScript's exact safe range are withheld as unsupported items (a subset
+of withheld coverage), preserving Source Deliveries independently and never rounding measured facts.
 
 Depends on .1 for fixture-driven work; live projection acceptance requires .2 and .3. Touch-set:
 dashboard collector/projection, static UI/assets and focused projection/UI tests. Coordinate ownership

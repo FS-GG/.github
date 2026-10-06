@@ -42,7 +42,7 @@ EFF_URL = re.compile(r'https://github\.com/FS-GG/[A-Za-z0-9_.-]+/(?:issues|pull|
 
 
 def unavailable_process_efficiency():
-    return {'schema': EFF_SCHEMA, 'policyVersion': EFF_POLICY, 'source': 'unavailable', 'status': 'unavailable', 'coverage': {'published': 0, 'unmapped': 0, 'withheld': 0}, 'items': []}
+    return {'schema': EFF_SCHEMA, 'policyVersion': EFF_POLICY, 'source': 'unavailable', 'status': 'unavailable', 'coverage': {'published': 0, 'unmapped': 0, 'withheld': 0, 'unsupported': 0}, 'items': []}
 
 
 def _eff_exact(value, keys):
@@ -72,10 +72,11 @@ def validate_process_efficiency(value):
     _eff_exact(value, ('schema', 'policyVersion', 'source', 'status', 'coverage', 'items'))
     if value['schema'] != EFF_SCHEMA or value['policyVersion'] != EFF_POLICY or value['source'] not in {'fixtures', 'unavailable'} or value['status'] not in {'partial', 'unavailable'}:
         raise ValueError('invalid efficiency identity')
-    _eff_exact(value['coverage'], ('published', 'unmapped', 'withheld'))
+    _eff_exact(value['coverage'], ('published', 'unmapped', 'withheld', 'unsupported'))
     for count in value['coverage'].values(): _eff_integer(count)
     if not isinstance(value['items'], list) or len(value['items']) > 200 or value['coverage']['published'] != len(value['items']):
         raise ValueError('invalid efficiency population')
+    if value['coverage']['unsupported'] > value['coverage']['withheld']: raise ValueError('invalid unsupported population')
     if value['source'] == 'unavailable' and (value['status'] != 'unavailable' or value['items']):
         raise ValueError('unavailable efficiency contains data')
     keys = set()
@@ -164,6 +165,8 @@ def project_process_efficiency(metrics, assessments, labels, evidence_links=None
         approved = labels['items'].get(subject)
         if approved is None: result['coverage']['unmapped'] += 1; continue
         if len(group['metrics']) > 32 or len(group['assessments']) > 1 or len({m['metricId'] for m in group['metrics']}) != len(group['metrics']): result['coverage']['withheld'] += 1; continue
+        if any(type(m['value'][field]) is int and m['value'][field] > 9007199254740991 for m in group['metrics'] for field in ('numerator', 'denominator', 'unknownAmount')):
+            result['coverage']['withheld'] += 1; result['coverage']['unsupported'] += 1; continue
         assessment = group['assessments'][0] if group['assessments'] else None
         scope = assessment['subject']['scope'] if assessment else 'unestablished'
         state = assessment['lifecycle']['state'] if assessment else 'unavailable'
@@ -191,6 +194,80 @@ def project_process_efficiency(metrics, assessments, labels, evidence_links=None
     result['coverage']['published'] = len(result['items'])
     validate_process_efficiency(result)
     return result
+
+EFF_EXPORT_SCHEMA = 'fsgg.telemetry.efficiency-export/1'
+EFF_FAILURE_CODES = {'missing-token', 'missing-authority', 'model-unavailable', 'export-unavailable', 'timeout', 'malformed-output', 'analysis-budget-exhausted', 'interrupted-analysis-outcome-unknown', 'unknown'}
+
+
+def _eff_selection(value, limit, returned):
+    _eff_exact(value, ('limit', 'returned', 'omitted', 'complete'))
+    for field in ('limit', 'returned', 'omitted'): _eff_integer(value[field])
+    if value['limit'] != limit or value['returned'] != returned or returned > limit or type(value['complete']) is not bool or value['complete'] != (value['omitted'] == 0):
+        raise ValueError('invalid efficiency export selection')
+
+
+def validate_efficiency_export(value, expected_snapshot_revision):
+    """Validate an inactive read-only consumer seam, never canonical calculations.
+
+    The trusted exporter selects current revisions in one WAL snapshot. Its compact
+    snapshotRevision binds the existing item-detail/3 base; sourceFingerprint binds
+    all relevant source tables, including corrections, efficiency and queue state.
+    A fingerprint here is not a caller-authored grant or a whole-store signature.
+    """
+    _eff_exact(value, ('schema', 'snapshotRevision', 'sourceFingerprint', 'cutoff', 'observedAt', 'selection', 'metricSelection', 'items'))
+    if value['schema'] != EFF_EXPORT_SCHEMA or not isinstance(expected_snapshot_revision, str) or not re.fullmatch(r'[a-f0-9]{64}', expected_snapshot_revision) or value['snapshotRevision'] != expected_snapshot_revision or not isinstance(value['sourceFingerprint'], str) or not re.fullmatch(r'sha256:[a-f0-9]{64}', value['sourceFingerprint']):
+        raise ValueError('efficiency export revision mismatch')
+    if len(json.dumps(value, ensure_ascii=True, separators=(',', ':'), allow_nan=False).encode()) > 4 * 1_048_576:
+        raise ValueError('efficiency export byte bound')
+    _eff_stamp(value['cutoff']); _eff_stamp(value['observedAt'])
+    if not isinstance(value['items'], list) or len(value['items']) > 200: raise ValueError('efficiency export item bound')
+    _eff_selection(value['selection'], 200, len(value['items']))
+    keys = set(); total_metrics = 0
+    for item in value['items']:
+        _eff_exact(item, ('itemId', 'originalItemId', 'metrics', 'metricSelection', 'assessment', 'analysisHealth', 'freshness'))
+        for field in ('itemId', 'originalItemId'):
+            if not isinstance(item[field], str) or not 1 <= len(item[field]) <= 256: raise ValueError('invalid private export subject')
+        if item['itemId'] in keys: raise ValueError('duplicate export subject')
+        keys.add(item['itemId'])
+        if not isinstance(item['metrics'], list) or len(item['metrics']) > 32: raise ValueError('efficiency export metric bound')
+        _eff_selection(item['metricSelection'], 32, len(item['metrics']))
+        total_metrics += len(item['metrics'])
+        metric_ids = set()
+        for metric in item['metrics']:
+            if not isinstance(metric, dict) or metric.get('schema') != 'fsgg.telemetry.efficiency-metric/1' or not isinstance(metric.get('metricId'), str) or metric['metricId'] in metric_ids or not isinstance(metric.get('population'), dict) or item['itemId'] not in metric['population'].get('itemIds', []):
+                raise ValueError('efficiency export metric subject mismatch')
+            metric_ids.add(metric['metricId'])
+        assessment = item['assessment']
+        if assessment is not None and (not isinstance(assessment, dict) or assessment.get('schema') != 'fsgg.telemetry.efficiency-assessment/1' or not isinstance(assessment.get('subject'), dict) or assessment['subject'].get('itemId') != item['itemId']):
+            raise ValueError('efficiency export assessment subject mismatch')
+        health = item['analysisHealth']; _eff_exact(health, ('state', 'pendingSince', 'lastAttemptAt', 'failureCode'))
+        if health['state'] not in EFF_STATES or (health['failureCode'] is not None and health['failureCode'] not in EFF_FAILURE_CODES): raise ValueError('invalid analysis export health')
+        for field in ('pendingSince', 'lastAttemptAt'):
+            if health[field] is not None: _eff_stamp(health[field])
+        _eff_exact(item['freshness'], ('sourceObservedAt', 'ingestedAt'))
+        for instant in item['freshness'].values():
+            if instant is not None: _eff_stamp(instant)
+    _eff_selection(value['metricSelection'], 1000, total_metrics)
+    if value['metricSelection']['omitted'] < sum(item['metricSelection']['omitted'] for item in value['items']):
+        raise ValueError('efficiency export omitted metrics mismatch')
+
+
+def read_efficiency_export(store, engine, snapshot_revision, deadline, config_path=None, repository=None):
+    """Inactive until the canonical schema14 endpoint is admitted.
+
+    One batch per store shares the caller's absolute monotonic deadline. Never
+    retry here or spend a fresh timeout for each item. Base source delivery is
+    independent from any unavailable or unsupported efficiency result.
+    """
+    remaining = deadline - time.monotonic()
+    if remaining <= 0: raise HostSourceError('HOST_EFFICIENCY_DEADLINE')
+    args = ['telemetry', 'efficiency-export', '--snapshot-revision', snapshot_revision, '--store-root', store, '--max-items', '200', '--max-metrics', '1000']
+    if config_path is not None: args += ['--config', str(config_path)]
+    if repository is not None: args += ['--repository', repository]
+    value = engine_json(engine, args, max_bytes=MAX_CANONICAL_SNAPSHOT, timeout_seconds=min(45, remaining))
+    validate_efficiency_export(value, snapshot_revision)
+    return value
+
 
 EFF = SimpleNamespace(project=project_process_efficiency, validate=validate_process_efficiency, unavailable=unavailable_process_efficiency, AXES=EFF_AXES)
 
@@ -429,11 +506,12 @@ def config(explicit: pathlib.Path | None = None) -> tuple[pathlib.Path, dict[str
     return pathlib.Path(found["configPath"]), {"storeRoot":found["storeRoot"],"engine":found["engine"]}
 
 
-def engine_json(engine: str, args: list[str]) -> Any:
-    try: done = subprocess.run([engine, *args], capture_output=True, text=True, timeout=45, check=False)
+def engine_json(engine: str, args: list[str], max_bytes: int = MAX_JSON, timeout_seconds: float = 45) -> Any:
+    if type(max_bytes) is not int or not 1 <= max_bytes <= MAX_CANONICAL_SNAPSHOT or not 0 < timeout_seconds <= 45: raise HostSourceError("HOST_ENGINE_OUTPUT_TOO_LARGE")
+    try: done = subprocess.run([engine, *args], capture_output=True, text=True, timeout=timeout_seconds, check=False)
     except (OSError, subprocess.SubprocessError) as error: raise HostSourceError("HOST_ENGINE_UNAVAILABLE") from error
     if done.returncode: raise HostSourceError("HOST_ENGINE_PROJECTION_FAILED")
-    if len(done.stdout.encode("utf-8")) > MAX_JSON: raise HostSourceError("HOST_ENGINE_OUTPUT_TOO_LARGE")
+    if len(done.stdout.encode("utf-8")) > max_bytes: raise HostSourceError("HOST_ENGINE_OUTPUT_TOO_LARGE")
     try: return json.loads(done.stdout)
     except json.JSONDecodeError as error: raise HostSourceError("HOST_ENGINE_INVALID_JSON") from error
 

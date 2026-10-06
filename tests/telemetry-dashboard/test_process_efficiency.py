@@ -88,6 +88,15 @@ class EfficiencyTests(unittest.TestCase):
         self.assertEqual([(m['healthDimension'], m['value']['numerator']) for m in result['items'][0]['metrics']], [('source-age', 100), ('ingestion-age', 10), ('publication-age', 2)])
         with self.assertRaises(ValueError): E.project([metric(name='data-health')], [], labels())
 
+    def test_large_canonical_integers_are_explicitly_withheld_without_rounding(self):
+        record = metric(numerator=9007199254740992)
+        result = E.project([record], [], labels())
+        self.assertEqual(result['items'], [])
+        self.assertEqual(result['coverage']['unsupported'], 1)
+        self.assertEqual(result['coverage']['withheld'], 1)
+        record = metric(numerator=9007199254740991)
+        self.assertEqual(E.project([record], [], labels())['items'][0]['metrics'][0]['value']['numerator'], 9007199254740991)
+
     def test_no_labels_no_public_identity_or_metrics(self):
         result = E.project([metric()], [assessment()], {'items': {}})
         self.assertEqual(result['items'], [])
