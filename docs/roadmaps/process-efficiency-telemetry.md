@@ -150,7 +150,9 @@ unavailable context with unknown work counts. A shared 1 MiB public limit can wi
 context with `public-budget-exceeded`; it does not produce a false complete empty population.
 The accessible source selector updates completed items, source deliveries, efficiency and local
 host panels together and retains selection across valid refreshes. These source controls remain
-uninstalled, and the two new browser cases require actual parent-owned qualification.
+uninstalled. Parent-owned browser root03 passed all 18 cases with clean custody; a subsequent
+scoped selector-visibility correction adds one regression and requires its own exact qualification.
+Neither browser fixture result establishes canonical collection or live acceptance.
 
 
 The source includes native keyboard controls, search/scope/measurement filters, ten-item pages,

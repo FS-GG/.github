@@ -453,3 +453,19 @@ test("malformed source context refresh retains validated selected source",async(
   await expect(page.locator("#source-context-note")).toContainText("Historical: one independent source");
   await expect(page.locator("#source-context")).not.toContainText("PRIVATE WORKSPACE");
 });
+
+test("source selector is hidden for single and unavailable feeds and visible for independent contexts",async({page})=>{
+  await page.clock.install();let requests=0;
+  await page.route("**/data/dashboard.json",route=>{
+    const host=++requests===1?efficiencyHost():requests===2?{schema:"fsgg.telemetry.dashboard-host-unavailable/1",status:"unconfigured"}:contextHost(efficiencyHost(),efficiencyHost());
+    return route.fulfill({json:payload(host)});
+  });
+  await page.goto("/#efficiency");await expect(page.locator("#source-context")).toBeHidden();
+  await page.clock.runFor(60000);await expect.poll(()=>requests).toBe(2);
+  await expect(page.locator("#source-context")).toBeHidden();
+  await expect(page.locator("#local-state")).toHaveText("Host unconfigured");
+  await page.clock.runFor(60000);await expect.poll(()=>requests).toBe(3);
+  await expect(page.locator("#source-context")).toBeVisible();
+  await expect(page.locator("#source-context-select")).toHaveValue("current");
+  await expect(page.locator("#source-context-note")).toContainText("Current work: one independent source");
+});
