@@ -22,6 +22,25 @@ workload does not retroactively invalidate historical acceptance for other workl
 
 ## Current progress
 
+**2026-10-06: Published Rendering inputs qualified in the source-built receiver.**
+Root accepted [full run 37506865594/a1](https://github.com/FS-GG/FS.GG.Rendering/actions/runs/37506865594)
+at 18:05:43 UTC: Rendering caller `998f4e41ec0f2822e927d311ff534238d12785b1`
+used protected Templates `208e5bffe99153375f7d3e2e1c84653104883cd3` and
+published Rendering 0.32.1 inputs. Authenticated artifact `11432751407` is 45,058
+bytes, SHA256 `531101019f8cbee9ef70b3bf963edddc20611e5c8965d2af804da5952cc2f961`.
+It binds original producer/custody, three matched public archive readbacks,
+180 ProviderComposition passes, five locked project restores, CLR/Fable codec,
+Studio/Tactical/player checks, and 12 browser passes (four per Chromium, Firefox
+and WebKit, zero skips, flaky or unexpected results) with verified report hashes.
+The authenticated cache-check control passed; cache metadata was not archived.
+The receiver job completed in 337 seconds within its existing 35-minute bound.
+This closes the selected public Rendering input qualification within
+SVG-COHERENCE-01.8. Templates remained source-built: Workspace Template publication
+is still 0.18.0, and publication of its successor plus fresh installed/default/
+Wizard acceptance remain open. Physical screenreader use was not observed;
+broader adoption and host GPU qualification remain open. Earlier failed requests
+and their partial evidence remain historical; native usage remains unknown.
+
 **2026-10-06: Repaired public receiver caller source delivered.**
 [Rendering #1397](https://github.com/FS-GG/FS.GG.Rendering/pull/1397) merged exact
 `bc9161f015cc91a0dc805d8e006362d9728543d8` as
@@ -32,8 +51,8 @@ contains the admitted codec reference repair. The explicit public Rendering
 0.32.1 mode, read-only permissions, original producer custody joins, forced PR
 preflight and existing 35-minute receiver bound remain unchanged; 12 negative
 wrapper controls passed. This closes the repaired caller source step within
-SVG-COHERENCE-01.8. A new full request can now name this protected caller through
-an exact branch/readback, but has not been dispatched or accepted. The first
+SVG-COHERENCE-01.8. At that source checkpoint, a new full request could name this protected caller
+through an exact branch/readback, but had not been dispatched or accepted. The first
 failed full run and its partial proofs remain retained below. Full public-input
 qualification, Templates successor publication and final installed/default/wizard
 acceptance remain open, alongside broader adoption and host GPU qualification.
