@@ -2232,7 +2232,7 @@ exec /usr/bin/python3 "{patchedFixture}" "$@"
         Assert.False(Capacity.admitsNewIdentity 0L 0L (64L * 1024L * 1024L) 1L)
 
     [<Fact>]
-    let ``Host restores a 0.1.2 schema 9 backup into separate schema 14 state`` () =
+    let ``Host refuses schema 9 backup without creating target or changing source`` () =
         let root = Path.Combine(Path.GetTempPath(), "host-schema-restore-" + Guid.NewGuid().ToString("N"))
         Directory.CreateDirectory root |> ignore
 
@@ -2271,33 +2271,16 @@ exec /usr/bin/python3 "{patchedFixture}" "$@"
                 File.SetUnixFileMode(path, UnixFileMode.UserRead ||| UnixFileMode.UserWrite)
 
             Assert.Equal(
-                0,
+                3,
                 Operations.runWithAssessment
                     [| "restore"; "--config"; config; "--input"; backup; "--state-root"; restored |]
                     (fun _ -> TelemetryStore.ApprovedLocalDurable)
             )
 
-            Assert.Equal(14, version target)
+            Assert.False(Directory.Exists restored)
+            Assert.False(File.Exists target)
             Assert.Equal(9, version source)
             Assert.Equal<byte>(sourceDigest, SHA256.HashData(File.ReadAllBytes source))
-            let receiptScope: TelemetryReceipt.Scope =
-                { Workspace = workspace; Producer = "proof-producer"; Stream = "runtime" }
-
-            let restoredReceipt =
-                TelemetryStoreApplication.lookupReceipt
-                    (Path.Combine(restored, workspace))
-                    TelemetryStore.ApprovedLocalDurable
-                    receiptScope
-                    "proof-applied"
-                |> Result.defaultWith (fun errors -> failwithf "%A" errors)
-
-            Assert.Contains("\"status\":\"applied\"", restoredReceipt)
-            Assert.True(
-                TelemetryStoreApplication.status
-                    (Path.Combine(restored, workspace))
-                    TelemetryStore.ApprovedLocalDurable
-                |> Result.isOk
-            )
         finally
             if Directory.Exists root then
                 Directory.Delete(root, true)
