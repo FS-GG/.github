@@ -38,7 +38,7 @@ module internal NativeResponsesEntry =
         result.["payload"] <- payload
         bytes result
 
-    let private apply storeRoot assessment (capture: NativeResponsesCollection.Capture) principal raw =
+    let private apply storeRoot assessment (capture: NativeResponsesCollection.Capture) (principal: TelemetryReceipt.Principal) raw =
         remaining capture
         let parsed = TelemetryReceipt.parse raw |> unwrap
         require (parsed.Scope = principal.Scope) "responses-receipt-owner-mismatch"
