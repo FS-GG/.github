@@ -617,8 +617,8 @@ module DashboardProjectionTests =
     let ``UTEL-06.8 effective store snapshot accepts retained and correction schema without exposing audit`` version =
         let value = snapshot "item-a"
         value["store"]["schemaVersion"] <- version
-        let result = DashboardProjection.project "workspace-a" (Encoding.UTF8.GetBytes(envelope value)) |> unwrap
+        let result = DashboardProjection.project "workspace-a" (envelope value) |> unwrap
         Assert.Contains("item-a", Encoding.UTF8.GetString result)
         Assert.DoesNotContain("ci_attribution_corrections", Encoding.UTF8.GetString result)
         value["store"]["schemaVersion"] <- 14
-        Assert.True(DashboardProjection.project "workspace-a" (Encoding.UTF8.GetBytes(envelope value)) |> Result.isError)
+        Assert.True(DashboardProjection.project "workspace-a" (envelope value) |> Result.isError)

@@ -5033,6 +5033,7 @@ WHERE n.source_ref=$source;
         | Error errors -> Error errors
         | Ok(connection, _) ->
             use connection = connection
+            use snapshot = connection.BeginTransaction()
             Ok(TelemetryStore.publicJson (readSummary connection itemId))
 
     let private readReviews (connection: SqliteConnection) (itemId: string) limit =
@@ -6379,6 +6380,7 @@ WHERE n.source_ref=$source;
             use connection = connection
 
             try
+                use snapshot = connection.BeginTransaction()
                 let version = Int32.Parse(scalarText connection "PRAGMA user_version;")
 
                 if version <> currentSchemaVersion then
@@ -6443,6 +6445,7 @@ WHERE n.source_ref=$source;
             use connection = connection
 
             try
+                use snapshot = connection.BeginTransaction()
                 let version = Int32.Parse(scalarText connection "PRAGMA user_version;")
 
                 if version <> currentSchemaVersion then
