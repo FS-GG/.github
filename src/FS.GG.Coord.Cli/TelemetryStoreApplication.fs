@@ -2818,7 +2818,7 @@ ORDER BY f.identity LIMIT 65;
             let binding = bindingDocument.RootElement
             let rootInvocation = binding.GetProperty("rootInvocationId").GetString()
             use lineage = connection.CreateCommand()
-            lineage.CommandText <- "SELECT count(*) FROM invocation_lineage l JOIN runtime_admissions a ON a.invocation_id=l.invocation_id AND a.item_id=l.item_id JOIN expected_dispatches d ON d.dispatch_id=l.dispatch_id AND d.item_id=l.item_id WHERE l.item_id=$item AND l.invocation_id=$invocation AND l.root_invocation_id=$root;"
+            lineage.CommandText <- "SELECT count(*) FROM invocation_lineage l JOIN runtime_admissions a ON a.invocation_id=l.invocation_id AND a.item_id=l.item_id JOIN expected_dispatches d ON d.dispatch_id=l.dispatch_id AND d.item_id=l.item_id JOIN invocation_lineage rl ON rl.item_id=l.item_id AND rl.invocation_id=l.root_invocation_id AND rl.relation='root' AND rl.root_invocation_id=rl.invocation_id JOIN expected_dispatches rd ON rd.dispatch_id=rl.dispatch_id AND rd.item_id=rl.item_id AND rd.relation='root' WHERE l.item_id=$item AND l.invocation_id=$invocation AND l.root_invocation_id=$root;"
             parameter lineage "$item" item
             parameter lineage "$invocation" invocation
             parameter lineage "$root" rootInvocation
