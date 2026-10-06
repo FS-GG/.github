@@ -195,8 +195,10 @@ Source delivery and native qualification are separate gates:
   [Coordination PR #951](https://github.com/FS-GG/FS.GG.Coordination/pull/951) source-delivered
   the bounded Podman version/provenance collector at protected
   `45f2d920dcb3fd2784d215780bd3253e9a89bf11` after 47 passing checks and 8 skips.
-  The separate Sandbox adapter/workflow pin successor remains undelivered. This advances a diagnostic
-  source boundary only: the original facts attempt 2 failed Podman info and container census,
+  [Sandbox PR #59](https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/pull/59) source-delivered
+  its adapter/workflow successor at `654a0fe3ba871e8820263a78b2032c8b1720dfcb` after seventeen
+  trapped diagnostic controls passed; the repository reports no hosted PR checks. Both deliveries
+  advance diagnostic source boundaries only: the original facts attempt 2 failed Podman info and container census,
   runtime cleanup remains unaccepted, and the owned admission secret was retired. No capability facts,
   capsule, provider grant, canonical `0.2.1` publication or installed adoption is accepted by this delivery.
   A future facts attempt requires separate admission; V2-LANG-01.2 remains open.

@@ -62,8 +62,11 @@ reviewed public aggregate releases on GitHub.
 The [protected collector](https://github.com/FS-GG/FS.GG.Coordination/blob/45f2d920dcb3fd2784d215780bd3253e9a89bf11/tests/portable-workspace/trusted-provider/collect_provider_capability.py)
 adds one bounded, read-only numeric-version observation and closed command/environment provenance
 before Podman info. Original first-failure reporting and authoritative tool custody remain unchanged;
-unknown errors and container census cannot qualify cleanup. The Sandbox adapter/workflow successor
-is prepared against this actual protected helper SHA and whole tree, but is not source-delivered.
+unknown errors and container census cannot qualify cleanup.
+[Sandbox PR #59](https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/pull/59) merged at
+`654a0fe3ba871e8820263a78b2032c8b1720dfcb` at 20:59:03 UTC, binding its adapter/workflow to this
+actual protected helper SHA and whole tree. Seventeen trapped adapter controls passed; the repository
+reports no hosted PR checks, and canonical source delivery does not qualify native runtime behavior.
 The [original facts attempt 2](https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/actions/runs/37508221944)
 failed at Podman info (exit125) and separately failed container census. Its sanitized failed result
 is accepted; runtime cleanup, capability facts, capsule and provider qualification remain unaccepted.
