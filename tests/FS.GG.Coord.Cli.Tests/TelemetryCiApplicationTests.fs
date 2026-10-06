@@ -333,3 +333,28 @@ module TelemetryCiApplicationTests =
             let code, error = targetDecision action [ "--store-root"; "/private/selected-store" ]
             Assert.Equal(1, code)
             Assert.Contains("workspace config and legacy store root cannot both be selected", error))
+
+    [<Fact>]
+    let ``UTEL-06.8 explicit remote correction refuses with zero local fallback publication or drain`` () =
+        let priorOut, priorError = Console.Out, Console.Error
+        use stdout = new StringWriter()
+        use stderr = new StringWriter()
+        let mutable effects = 0
+        try
+            Console.SetOut stdout
+            Console.SetError stderr
+            let code =
+                TelemetryCiApplication.runWithWorkspaceForTesting
+                    (fun _ _ -> Ok "remote")
+                    (fun _ _ -> effects <- effects + 1; Ok "published")
+                    (fun _ -> effects <- effects + 1; Ok "drained")
+                    (fun _ -> Ok None)
+                    "correct"
+                    [ "--config"; "/private/selected-remote.json"; "--repository"; "o/r"; "--plan"; "/private/never-read-plan.json" ]
+            Assert.Equal(1, code)
+            Assert.Contains("ci-attribution-correction-remote-unsupported", stderr.ToString())
+            Assert.Equal("", stdout.ToString())
+            Assert.Equal(0, effects)
+        finally
+            Console.SetOut priorOut
+            Console.SetError priorError

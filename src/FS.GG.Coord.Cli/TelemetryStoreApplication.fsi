@@ -224,6 +224,25 @@ module TelemetryStoreApplication =
     val reconcile:
         path: string -> assessment: TelemetryStore.DurabilityAssessment -> itemId: string -> Result<string, string list>
 
+    /// Read-only, bounded exact candidate and CI closure discovery in one snapshot.
+    val ciCorrectionPlan:
+        path: string -> assessment: TelemetryStore.DurabilityAssessment ->
+        request: TelemetryCi.CorrectionRequest -> Result<string, string list>
+
+    /// Expected-predecessor atomic supersession; byte-identical retries have no effect.
+    val ciCorrectWithHook:
+        path: string -> assessment: TelemetryStore.DurabilityAssessment ->
+        planBytes: byte array -> beforeCommit: (unit -> unit) -> Result<string, string list>
+
+    val ciCorrect:
+        path: string -> assessment: TelemetryStore.DurabilityAssessment ->
+        planBytes: byte array -> Result<string, string list>
+
+    /// Private, non-counting original/effective assignment and immutable evidence chain.
+    val ciCorrectionHistory:
+        path: string -> assessment: TelemetryStore.DurabilityAssessment ->
+        correctionId: string -> Result<string, string list>
+
     val ciSummary:
         path: string -> assessment: TelemetryStore.DurabilityAssessment -> itemId: string -> Result<string, string list>
 

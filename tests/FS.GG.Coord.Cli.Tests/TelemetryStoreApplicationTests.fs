@@ -55,8 +55,11 @@ module TelemetryStoreApplicationTests =
     let private dropCiPopulationSchema =
         "DROP TABLE ci_population_coverage; DROP TABLE ci_check_runs; DROP TABLE ci_population_admissions; DELETE FROM schema_migrations WHERE version=6;"
 
+    let private dropCorrectionSchema =
+        "DROP VIEW current_ingest_facts; DROP TABLE ci_effective_attribution; DROP TABLE ci_correction_evidence; DROP TABLE ci_attribution_corrections; DELETE FROM schema_migrations WHERE version=13; DELETE FROM store_metadata WHERE key='ciCorrectionStoreId';"
+
     let private dropReviewSchema =
-        "DROP TABLE fact_admissions; DROP TABLE receipt_admissions; ALTER TABLE receipt_producers DROP COLUMN grant_generation; ALTER TABLE receipt_producers DROP COLUMN grant_id; ALTER TABLE receipt_producers DROP COLUMN authority_role; DELETE FROM schema_migrations WHERE version=12; DROP TABLE learning_fact_order; DELETE FROM schema_migrations WHERE version=11; DELETE FROM schema_migrations WHERE version=10; DROP INDEX transport_pending; DROP TABLE transport_receipts; DROP TABLE receipt_producers; DELETE FROM schema_migrations WHERE version=9; DROP INDEX process_review_attempt_subject; DROP INDEX process_review_item_subject; DROP INDEX activity_spans_item_attempt; DROP INDEX activity_usage_item; DROP INDEX complication_events_item; DROP TABLE complication_events; DROP TABLE activity_usage_attributions; DROP TABLE activity_spans; DROP TABLE process_reviews; DELETE FROM schema_migrations WHERE version=8;"
+        dropCorrectionSchema + "DROP TABLE fact_admissions; DROP TABLE receipt_admissions; ALTER TABLE receipt_producers DROP COLUMN grant_generation; ALTER TABLE receipt_producers DROP COLUMN grant_id; ALTER TABLE receipt_producers DROP COLUMN authority_role; DELETE FROM schema_migrations WHERE version=12; DROP TABLE learning_fact_order; DELETE FROM schema_migrations WHERE version=11; DELETE FROM schema_migrations WHERE version=10; DROP INDEX transport_pending; DROP TABLE transport_receipts; DROP TABLE receipt_producers; DELETE FROM schema_migrations WHERE version=9; DROP INDEX process_review_attempt_subject; DROP INDEX process_review_item_subject; DROP INDEX activity_spans_item_attempt; DROP INDEX activity_usage_item; DROP INDEX complication_events_item; DROP TABLE complication_events; DROP TABLE activity_usage_attributions; DROP TABLE activity_spans; DROP TABLE process_reviews; DELETE FROM schema_migrations WHERE version=8;"
 
     let private dropNativeOutcomeSchema =
         dropReviewSchema
@@ -278,6 +281,11 @@ module TelemetryStoreApplicationTests =
         downgrade.CommandText <-
             """
 BEGIN IMMEDIATE;
+DROP VIEW current_ingest_facts; DROP TABLE ci_effective_attribution;
+DROP TABLE ci_correction_evidence;
+DROP TABLE ci_attribution_corrections;
+DELETE FROM schema_migrations WHERE version=13;
+DELETE FROM store_metadata WHERE key='ciCorrectionStoreId';
 DROP TABLE fact_admissions;
 DROP TABLE receipt_admissions;
 ALTER TABLE receipt_producers DROP COLUMN grant_generation;
@@ -298,7 +306,7 @@ COMMIT;
         downgrade.ExecuteNonQuery() |> ignore
         connection.Close()
 
-        Assert.Contains("\"schemaVersion\":12", TelemetryStoreApplication.initialize path approved |> unwrap)
+        Assert.Contains("\"schemaVersion\":13", TelemetryStoreApplication.initialize path approved |> unwrap)
         use reopened = new SqliteConnection($"Data Source=%s{Path.Combine(path, TelemetryStoreApplication.databaseFileName)};Pooling=False")
         reopened.Open()
         use command = reopened.CreateCommand()
@@ -795,13 +803,13 @@ COMMIT;
         TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
         let payload = batch "batch-1" "usage-1" 0L "c1" 10L
         TelemetryStoreApplication.publish path approved payload |> unwrap |> ignore
-        pragma path 13
+        pragma path 14
         Assert.Contains("newer than supported", sprintf "%A" (TelemetryStoreApplication.drain path approved))
 
         Assert.Single(Directory.GetFiles(Path.Combine(path, "inbox", "worker-a"), "*.ready"))
         |> ignore
 
-        pragma path 12
+        pragma path 13
         TelemetryStoreApplication.drain path approved |> unwrap |> ignore
 
         let output =
@@ -933,14 +941,14 @@ COMMIT;
         command.ExecuteNonQuery() |> ignore
         connection.Close()
         let initialized = TelemetryStoreApplication.initialize path approved |> unwrap
-        Assert.Contains("\"schemaVersion\":12", initialized)
+        Assert.Contains("\"schemaVersion\":13", initialized)
         Assert.Contains("\"status\":\"ready\"", TelemetryStoreApplication.status path approved |> unwrap)
 
     [<Fact>]
     let ``UTEL-04A CI observations migrate ingest and summarize without private fields`` () =
         let cleanup, path = root ()
         use cleanup = cleanup
-        Assert.Contains("\"schemaVersion\":12", TelemetryStoreApplication.initialize path approved |> unwrap)
+        Assert.Contains("\"schemaVersion\":13", TelemetryStoreApplication.initialize path approved |> unwrap)
 
         let ci =
             Encoding.UTF8.GetBytes
@@ -1081,7 +1089,7 @@ COMMIT;
 
         command.ExecuteNonQuery() |> ignore
         connection.Close()
-        Assert.Contains("\"schemaVersion\":12", TelemetryStoreApplication.initialize path approved |> unwrap)
+        Assert.Contains("\"schemaVersion\":13", TelemetryStoreApplication.initialize path approved |> unwrap)
         let summary = TelemetryStoreApplication.summary path approved "UTEL-04A" |> unwrap
         Assert.Contains("\"admitted\":1", summary)
 
@@ -1497,7 +1505,7 @@ COMMIT;
 
         command.ExecuteNonQuery() |> ignore
         connection.Close()
-        Assert.Contains("\"schemaVersion\":12", TelemetryStoreApplication.initialize path approved |> unwrap)
+        Assert.Contains("\"schemaVersion\":13", TelemetryStoreApplication.initialize path approved |> unwrap)
 
         use verify =
             new SqliteConnection(
@@ -2135,7 +2143,7 @@ COMMIT;
 
         command.ExecuteNonQuery() |> ignore
         connection.Close()
-        Assert.Contains("\"schemaVersion\":12", TelemetryStoreApplication.initialize path approved |> unwrap)
+        Assert.Contains("\"schemaVersion\":13", TelemetryStoreApplication.initialize path approved |> unwrap)
 
         use verify =
             new SqliteConnection(
@@ -2233,7 +2241,7 @@ COMMIT;
 
         command.ExecuteNonQuery() |> ignore
         connection.Close()
-        Assert.Contains("\"schemaVersion\":12", TelemetryStoreApplication.initialize path approved |> unwrap)
+        Assert.Contains("\"schemaVersion\":13", TelemetryStoreApplication.initialize path approved |> unwrap)
 
         Assert.False(
             TelemetryStoreApplication.ciPopulationAdmissionExists
@@ -3015,7 +3023,7 @@ COMMIT;
         downgrade.CommandText <- dropNativeOutcomeSchema + " PRAGMA user_version=6;"
         downgrade.ExecuteNonQuery() |> ignore
         connection.Close()
-        Assert.Contains("\"schemaVersion\":12", TelemetryStoreApplication.initialize path approved |> unwrap)
+        Assert.Contains("\"schemaVersion\":13", TelemetryStoreApplication.initialize path approved |> unwrap)
 
         use verify =
             new SqliteConnection(
@@ -3033,7 +3041,7 @@ COMMIT;
     let ``UTEL-08 terminal reviews activities exact attribution and complications produce private item detail`` () =
         let cleanup, path = root ()
         use cleanup = cleanup
-        Assert.Contains("\"schemaVersion\":12", TelemetryStoreApplication.initialize path approved |> unwrap)
+        Assert.Contains("\"schemaVersion\":13", TelemetryStoreApplication.initialize path approved |> unwrap)
         let item = "UTEL-08-detail"
         let digest = String.replicate 64 "a"
 
@@ -3122,7 +3130,7 @@ COMMIT;
         decompressor.CopyTo canonicalStream
         let canonical = canonicalStream.ToArray()
         use canonicalDocument = JsonDocument.Parse canonical
-        Assert.Equal(12, canonicalDocument.RootElement.GetProperty("store").GetProperty("schemaVersion").GetInt32())
+        Assert.Equal(13, canonicalDocument.RootElement.GetProperty("store").GetProperty("schemaVersion").GetInt32())
         Assert.Equal(snapshotDocument1.RootElement.GetProperty("revision").GetString(), CanonicalJson.sha256 canonical)
 
         Assert.Equal(
@@ -3256,7 +3264,7 @@ COMMIT;
         downgrade.CommandText <- dropReviewSchema + " PRAGMA user_version=7;"
         downgrade.ExecuteNonQuery() |> ignore
         connection.Close()
-        Assert.Contains("\"schemaVersion\":12", TelemetryStoreApplication.initialize path approved |> unwrap)
+        Assert.Contains("\"schemaVersion\":13", TelemetryStoreApplication.initialize path approved |> unwrap)
 
         use verify =
             new SqliteConnection(
@@ -3269,3 +3277,244 @@ COMMIT;
         corrupt.ExecuteNonQuery() |> ignore
         verify.Close()
         Assert.Contains("migration checksum mismatch", sprintf "%A" (TelemetryStoreApplication.status path approved))
+
+    let private correctionRequest () : TelemetryCi.CorrectionRequest =
+        let assignment feature item attempt : TelemetryCi.Assignment =
+            { FeatureId = feature; ItemId = item; AttemptId = attempt; ParentAttemptId = None; ProducerStream = "routine-delivery" }
+        { CorrectionId = "correction-one"; ExpectedPredecessor = None; Repository = "o/r"; PullRequest = 7L
+          BaseRef = "main"; BaseSha = String.replicate 40 "d"; Head = String.replicate 40 "a"; MergeCommit = String.replicate 40 "b"
+          Prior = assignment "V2-LANG-01" "V2-LANG-01.2" "wrong-attempt"
+          Effective = assignment "GOV-423" "GOV-423-C3" "genuine-attempt"
+          EvidenceSha256 = String.replicate 64 "e"; Reason = "Recovered exact source assignment"
+          OperatorSource = "private-source02"; ObservedAt = "2026-10-06T12:00:00Z" }
+
+    let private correctionSql path sql =
+        use connection = new SqliteConnection($"Data Source={Path.Combine(path, TelemetryStoreApplication.databaseFileName)};Pooling=False")
+        connection.Open()
+        use command = connection.CreateCommand()
+        command.CommandText <- sql
+        string (command.ExecuteScalar())
+
+    let private correctionFixture fullPopulation =
+        let cleanup, path = root ()
+        TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
+        let request = correctionRequest ()
+        let item = request.Prior.ItemId
+        let population =
+            if not fullPopulation then []
+            else
+                [ $"""{{"kind":"ci-population-admission","identity":"correction-admission","itemId":"{item}","revision":1,"collectionId":"correction-collection","repository":"o/r","prNumber":7,"baseRef":"main","baseSha":"{request.BaseSha}","head":"{request.Head}","witness":"native-pr-head"}}"""
+                  $"""{{"kind":"ci-binding","identity":"correction-binding","itemId":"{item}","revision":1,"collectionId":"correction-collection","repository":"o/r","head":"{request.Head}","prNumber":7,"workflow":"*","featureId":"{request.Prior.FeatureId}","attemptId":"{request.Prior.AttemptId}","parentAttemptId":null,"producerStream":"routine-delivery","binding":"exact"}}"""
+                  $"""{{"kind":"ci-page","identity":"correction-page","itemId":"{item}","revision":1,"collectionId":"correction-collection","resource":"runs","page":1,"count":1,"total":1}}"""
+                  $"""{{"kind":"ci-run","identity":"correction-run","itemId":"{item}","revision":1,"repository":"o/r","runId":10,"attempt":1,"workflow":"ci.yml","event":"pull_request","head":"{request.Head}","status":"completed","conclusion":"success","createdAt":"2026-09-08T10:00:00Z","startedAt":"2026-09-08T10:00:10Z","updatedAt":"2026-09-08T10:01:00Z"}}"""
+                  $"""{{"kind":"ci-job","identity":"correction-job","itemId":"{item}","revision":1,"repository":"o/r","runId":10,"attempt":1,"jobId":101,"name":"build","status":"completed","conclusion":"success","createdAt":"2026-09-08T10:00:00Z","startedAt":"2026-09-08T10:00:10Z","completedAt":"2026-09-08T10:01:00Z"}}"""
+                  $"""{{"kind":"ci-step","identity":"correction-step","itemId":"{item}","revision":1,"repository":"o/r","runId":10,"attempt":1,"jobId":101,"number":1,"name":"test","status":"completed","conclusion":"success","startedAt":"2026-09-08T10:00:10Z","completedAt":"2026-09-08T10:01:00Z","classification":"useful-validation","rationale":"fixture exact"}}"""
+                  $"""{{"kind":"ci-check","identity":"correction-check","itemId":"{item}","revision":1,"repository":"o/r","checkId":1001,"name":"build","appSlug":"github-actions","status":"completed","conclusion":"success","startedAt":"2026-09-08T10:00:10Z","completedAt":"2026-09-08T10:01:00Z"}}"""
+                  $"""{{"kind":"ci-coverage","identity":"correction-coverage","itemId":"{item}","revision":1,"collectionId":"correction-collection","inventory":"complete","attempts":"complete","jobPages":"complete","terminal":"complete","timestamps":"complete","lineage":"complete","classification":"complete","criticalPath":"unknown"}}"""
+                  $"""{{"kind":"ci-population-coverage","identity":"correction-population-coverage","itemId":"{item}","revision":1,"collectionId":"correction-collection","actions":"complete","checks":"complete","attempts":"complete","jobs":"complete","terminal":"complete","timestamps":"complete","continuation":"none","externalChecks":0,"gaps":"[]"}}""" ]
+        TelemetryStoreApplication.ingest path approved
+            (operationalBatch "correction-fixture" item ((nativeOutcome item 1L "delivered" "delivered" "2026-09-08T10:04:01Z") :: population))
+        |> unwrap |> ignore
+        cleanup, path, request
+
+    [<Theory>]
+    [<InlineData(true)>]
+    [<InlineData(false)>]
+    let ``UTEL-06.8 correction moves one effective delivery and CI while immutable bytes survive replay and restart`` fullPopulation =
+        let cleanup, path, request = correctionFixture fullPopulation
+        use cleanup = cleanup
+        let original = correctionSql path "SELECT group_concat(content_digest || canonical,'|') FROM (SELECT content_digest,canonical FROM ingest_facts ORDER BY identity);"
+        let plan = TelemetryStoreApplication.ciCorrectionPlan path approved request |> unwrap |> Encoding.UTF8.GetBytes
+        let parsed = TelemetryCi.parseCorrectionPlan plan |> unwrap
+        Assert.Equal((if fullPopulation then 10 else 1), parsed.Targets.Length)
+        let before = TelemetryStoreApplication.ciSummary path approved request.Prior.ItemId |> unwrap
+        Assert.Contains("\"deliveries\":1", before)
+        Assert.Contains("\"status\":\"applied\"", TelemetryStoreApplication.ciCorrect path approved plan |> unwrap)
+        // Reopen/migration readback and lost-acknowledgement exact retry use new connections.
+        TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
+        Assert.Contains("already-applied", TelemetryStoreApplication.ciCorrect path approved plan |> unwrap)
+        Assert.Equal(original, correctionSql path "SELECT group_concat(content_digest || canonical,'|') FROM (SELECT content_digest,canonical FROM ingest_facts ORDER BY identity);")
+        Assert.Equal("1", correctionSql path "SELECT count(*) FROM ci_attribution_corrections;")
+        Assert.Equal("1", correctionSql path "SELECT count(*) FROM native_item_outcomes;")
+        let oldReport = TelemetryStoreApplication.ciSummary path approved request.Prior.ItemId |> unwrap
+        let newReport = TelemetryStoreApplication.ciSummary path approved request.Effective.ItemId |> unwrap
+        Assert.Contains("\"deliveries\":0", oldReport)
+        Assert.Contains("\"deliveries\":1", newReport)
+        Assert.Contains("GOV-423", newReport)
+        Assert.Contains("genuine-attempt", newReport)
+        if fullPopulation then
+            Assert.Contains("\"runnerSeconds\":50", newReport)
+            Assert.Contains("\"jobs\":0", oldReport)
+        else Assert.Contains("\"inventoryCoverage\":\"unknown\"", newReport)
+        Assert.Equal("0", correctionSql path $"SELECT count(*) FROM budget_population_facts WHERE item_id='{request.Prior.ItemId}' AND source_ref LIKE 'derived:%';")
+        Assert.Equal("0", correctionSql path "SELECT count(*) FROM budget_interventions;")
+        let history = TelemetryStoreApplication.ciCorrectionHistory path approved request.CorrectionId |> unwrap
+        Assert.Contains("\"counting\":false", history)
+        Assert.Contains("wrong-attempt", history)
+        Assert.Contains("genuine-attempt", history)
+        Assert.Contains("\"active\":true", history)
+        Assert.Equal(Error [ "corrected-native-delivery-source-unsupported" ], TelemetryStoreApplication.resolveNativeDeliveryCandidate path approved ("routine-delivery:" + request.Prior.ItemId))
+        Assert.Contains(request.Effective.ItemId, TelemetryStoreApplication.itemDetail path approved request.Effective.ItemId |> unwrap)
+        Assert.Contains(request.Effective.ItemId, TelemetryStoreApplication.dashboardSnapshot path approved None |> unwrap)
+
+    [<Fact>]
+    let ``UTEL-06.8 rollback stale concurrent predecessor cross-store and content conflicts have zero partial writes`` () =
+        let cleanup, path, request = correctionFixture true
+        use cleanup = cleanup
+        let plan = TelemetryStoreApplication.ciCorrectionPlan path approved request |> unwrap |> Encoding.UTF8.GetBytes
+        let competing = TelemetryStoreApplication.ciCorrectionPlan path approved { request with CorrectionId = "competing" } |> unwrap |> Encoding.UTF8.GetBytes
+        Assert.Equal(Error [ "fixture-before-commit" ], TelemetryStoreApplication.ciCorrectWithHook path approved plan (fun () -> invalidOp "fixture-before-commit"))
+        Assert.Equal("0", correctionSql path "SELECT count(*) FROM ci_attribution_corrections;")
+        Assert.Equal(request.Prior.ItemId, correctionSql path "SELECT item_id FROM native_item_outcomes;")
+        TelemetryStoreApplication.ciCorrect path approved plan |> unwrap |> ignore
+        Assert.Equal(Error [ "ci-correction-target-unavailable" ], TelemetryStoreApplication.ciCorrect path approved competing)
+        let changed = Encoding.UTF8.GetString(plan).Replace("Recovered exact source assignment", "Changed content") |> Encoding.UTF8.GetBytes
+        Assert.Equal(Error [ "ci-correction-identity-content-conflict" ], TelemetryStoreApplication.ciCorrect path approved changed)
+        let otherCleanup, otherPath, _ = correctionFixture false
+        use otherCleanup = otherCleanup
+        Assert.Equal(Error [ "ci-correction-cross-store-conflict" ], TelemetryStoreApplication.ciCorrect otherPath approved plan)
+        let chainedRequest = { request with CorrectionId = "correction-two"; ExpectedPredecessor = Some request.CorrectionId; Prior = request.Effective; Effective = { request.Effective with ItemId = "GOV-423-C3-corrected"; AttemptId = "genuine-attempt-two" } }
+        let chained = TelemetryStoreApplication.ciCorrectionPlan path approved chainedRequest |> unwrap |> Encoding.UTF8.GetBytes
+        TelemetryStoreApplication.ciCorrect path approved chained |> unwrap |> ignore
+        Assert.Equal("2", correctionSql path "SELECT count(*) FROM ci_attribution_corrections;")
+        Assert.Equal("1", correctionSql path "SELECT count(*) FROM native_item_outcomes;")
+        Assert.Contains("genuine-attempt-two", TelemetryStoreApplication.ciSummary path approved chainedRequest.Effective.ItemId |> unwrap)
+        Assert.Equal("0", correctionSql path $"SELECT count(*) FROM current_ingest_facts WHERE item_id='{request.Effective.ItemId}';")
+        Assert.Equal("10", correctionSql path $"SELECT count(*) FROM ingest_facts WHERE item_id='{request.Prior.ItemId}';")
+        Assert.Contains("\"factCount\":0", TelemetryStoreApplication.summary path approved request.Effective.ItemId |> unwrap)
+        let currentSnapshot = TelemetryStoreApplication.dashboardSnapshot path approved None |> unwrap
+        Assert.Contains(chainedRequest.Effective.ItemId, currentSnapshot)
+        Assert.Equal(Error [ "ci-correction-predecessor-conflict" ], TelemetryStoreApplication.ciCorrectionPlan path approved { chainedRequest with CorrectionId = "stale" })
+
+    [<Fact>]
+    let ``UTEL-06.8 source replay cannot resurrect wrong assignment or duplicate a corrected reconcile candidate`` () =
+        let cleanup, path, request = correctionFixture false
+        use cleanup = cleanup
+        let plan = TelemetryStoreApplication.ciCorrectionPlan path approved request |> unwrap |> Encoding.UTF8.GetBytes
+        TelemetryStoreApplication.ciCorrect path approved plan |> unwrap |> ignore
+        let original = nativeOutcome request.Prior.ItemId 2L "delivered" "delivered" "2026-09-08T10:04:02Z"
+        Assert.True(TelemetryStoreApplication.ingest path approved (operationalBatch "late-original" request.Prior.ItemId [ original ]) |> Result.isError)
+        let corrected = nativeOutcome request.Effective.ItemId 2L "delivered" "delivered" "2026-09-08T10:04:02Z"
+        Assert.True(TelemetryStoreApplication.ingest path approved (operationalBatch "late-corrected" request.Effective.ItemId [ corrected ]) |> Result.isError)
+        Assert.Equal("1", correctionSql path "SELECT count(*) FROM native_item_outcomes;")
+        let independent = corrected.Replace(request.Head, String.replicate 40 "c")
+        TelemetryStoreApplication.ingest path approved (operationalBatch "distinct-head" request.Effective.ItemId [ independent ]) |> unwrap |> ignore
+        Assert.Equal("2", correctionSql path "SELECT count(*) FROM native_item_outcomes;")
+
+    [<Fact>]
+    let ``UTEL-06.8 schema12 migration and stale digest refuse before mutation`` () =
+        let cleanup, path, request = correctionFixture false
+        use cleanup = cleanup
+        correctionSql path (dropCorrectionSchema + " PRAGMA user_version=12;") |> ignore
+        Assert.Equal(Error [ "unsupported-version" ], TelemetryStoreApplication.ciCorrectionPlan path approved request)
+        Assert.Contains("\"schemaVersion\":13", TelemetryStoreApplication.initialize path approved |> unwrap)
+        let plan = TelemetryStoreApplication.ciCorrectionPlan path approved request |> unwrap |> Encoding.UTF8.GetBytes
+        let changed = nativeOutcome request.Prior.ItemId 2L "delivered" "delivered" "2026-09-08T10:04:02Z"
+        TelemetryStoreApplication.ingest path approved (operationalBatch "pre-apply-change" request.Prior.ItemId [ changed ]) |> unwrap |> ignore
+        Assert.Equal(Error [ "ci-correction-stale-plan" ], TelemetryStoreApplication.ciCorrect path approved plan)
+        Assert.Equal("0", correctionSql path "SELECT count(*) FROM ci_attribution_corrections;")
+
+    [<Fact>]
+    let ``UTEL-06.8 writer contention refuses and unrelated delivery runtime explicit population survive`` () =
+        let cleanup, path, request = correctionFixture true
+        use cleanup = cleanup
+        let unrelated =
+            (nativeOutcome request.Prior.ItemId 1L "delivered" "delivered" "2026-09-08T10:05:00Z")
+                .Replace("native-outcome-" + request.Prior.ItemId, "unrelated-native-outcome")
+                .Replace("o/r", "other/repo").Replace("routine-delivery:" + request.Prior.ItemId, "routine-delivery:unrelated")
+        let terminal = runtimeTerminal request.Prior.ItemId "unrelated-terminal" "unrelated-invocation" "complete" 0
+        let explicitPopulation = population request.Prior.ItemId 1L "open" "explicit-unrelated"
+        TelemetryStoreApplication.ingest path approved (operationalBatch "unrelated-facts" request.Prior.ItemId [ unrelated; terminal; explicitPopulation ]) |> unwrap |> ignore
+        let unrelatedBytes = correctionSql path "SELECT group_concat(canonical,'|') FROM (SELECT canonical FROM ingest_facts WHERE identity IN ('unrelated-native-outcome','unrelated-terminal') ORDER BY identity);"
+        let plan = TelemetryStoreApplication.ciCorrectionPlan path approved request |> unwrap |> Encoding.UTF8.GetBytes
+        let mutable contention = None
+        TelemetryStoreApplication.ciCorrectWithHook path approved plan (fun () -> contention <- Some(TelemetryStoreApplication.ciCorrect path approved plan)) |> unwrap |> ignore
+        Assert.Equal(Some(Error [ "writer-busy" ]), contention)
+        Assert.Equal(unrelatedBytes, correctionSql path "SELECT group_concat(canonical,'|') FROM (SELECT canonical FROM ingest_facts WHERE identity IN ('unrelated-native-outcome','unrelated-terminal') ORDER BY identity);")
+        Assert.Equal(request.Prior.ItemId, correctionSql path "SELECT item_id FROM native_item_outcomes WHERE identity='unrelated-native-outcome';")
+        Assert.Equal(request.Prior.ItemId, correctionSql path "SELECT item_id FROM runtime_terminals WHERE identity='unrelated-terminal';")
+        Assert.Equal("1", correctionSql path "SELECT count(*) FROM budget_population_facts WHERE source_ref='explicit-unrelated';")
+        Assert.Equal("1", correctionSql path $"SELECT count(*) FROM native_item_outcomes WHERE item_id='{request.Prior.ItemId}';")
+        Assert.Equal("1", correctionSql path $"SELECT count(*) FROM native_item_outcomes WHERE item_id='{request.Effective.ItemId}';")
+
+    [<Fact>]
+    let ``UTEL-06.8 ambiguous check ownership refuses without moving any effective rows`` () =
+        let cleanup, path, request = correctionFixture true
+        use cleanup = cleanup
+        let another =
+            (nativeOutcome request.Prior.ItemId 1L "delivered" "delivered" "2026-09-08T10:05:00Z")
+                .Replace("native-outcome-" + request.Prior.ItemId, "another-candidate")
+                .Replace(request.Head, String.replicate 40 "c").Replace("routine-delivery:" + request.Prior.ItemId, "routine-delivery:another")
+        TelemetryStoreApplication.ingest path approved (operationalBatch "another-candidate" request.Prior.ItemId [ another ]) |> unwrap |> ignore
+        Assert.Equal(Error [ "ci-correction-check-ownership-ambiguous" ], TelemetryStoreApplication.ciCorrectionPlan path approved request)
+        Assert.Equal("0", correctionSql path "SELECT count(*) FROM ci_attribution_corrections;")
+        Assert.Equal(request.Prior.ItemId, correctionSql path "SELECT item_id FROM ci_bindings;")
+
+    [<Fact>]
+    let ``UTEL-06.8 real CLI plans applies retries and reads history and coherent reports after restart`` () =
+        let cleanup, path, request = correctionFixture true
+        use cleanup = cleanup
+        let input = Path.Combine(path, "request.json")
+        let output = Path.Combine(path, "plan.json")
+        let proposed = TelemetryStoreApplication.ciCorrectionPlan path approved request |> unwrap
+        use document = JsonDocument.Parse proposed
+        File.WriteAllText(input, document.RootElement.GetProperty("request").GetRawText())
+        File.SetUnixFileMode(input, UnixFileMode.UserRead ||| UnixFileMode.UserWrite)
+        let invoke action arguments =
+            let priorOut, priorError = Console.Out, Console.Error
+            use stdout = new StringWriter()
+            use stderr = new StringWriter()
+            try
+                Console.SetOut stdout
+                Console.SetError stderr
+                let code = TelemetryCiApplication.runWithAssessment approved action ([ "--store-root"; path ] @ arguments)
+                code, stdout.ToString(), stderr.ToString()
+            finally
+                Console.SetOut priorOut
+                Console.SetError priorError
+        let code, planned, error = invoke "correction-plan" [ "--input"; input; "--output"; output ]
+        Assert.Equal(0, code)
+        Assert.Equal("", error)
+        Assert.Contains("planned", planned)
+        Assert.Equal(UnixFileMode.UserRead ||| UnixFileMode.UserWrite, File.GetUnixFileMode output)
+        let code, applied, error = invoke "correct" [ "--plan"; output ]
+        Assert.Equal(0, code)
+        Assert.Equal("", error)
+        Assert.Contains("\"status\":\"applied\"", applied)
+        TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
+        let code, retried, _ = invoke "correct" [ "--plan"; output ]
+        Assert.Equal(0, code)
+        Assert.Contains("already-applied", retried)
+        let code, history, _ = invoke "correction-history" [ "--correction-id"; request.CorrectionId ]
+        Assert.Equal(0, code)
+        Assert.Contains("\"counting\":false", history)
+        let code, oldReport, _ = invoke "summary" [ "--item"; request.Prior.ItemId ]
+        Assert.Equal(0, code)
+        Assert.Contains("\"deliveries\":0", oldReport)
+        let code, newReport, _ = invoke "summary" [ "--item"; request.Effective.ItemId ]
+        Assert.Equal(0, code)
+        Assert.Contains("\"deliveries\":1", newReport)
+        Assert.Contains("\"runnerSeconds\":50", newReport)
+
+    [<Fact>]
+    let ``UTEL-06.8 correction removes stale derived current breach inputs while frozen epochs and history survive`` () =
+        let cleanup, path, request = correctionFixture false
+        use cleanup = cleanup
+        let old = request.Prior.ItemId
+        correctionSql path $"""
+INSERT INTO budget_epoch_membership VALUES('epoch-1','{old}','{old}');
+INSERT INTO budget_assessment_revisions VALUES('{old}','ci-wall','github','whole-item',1,'epoch-1','breach',30,100,1,'old-derived','old-digest');
+INSERT INTO budget_breaches VALUES('epoch-1','{old}','ci-wall','github','whole-item',1,1);
+INSERT INTO budget_epochs VALUES('frozen-epoch',999,'verified');
+INSERT INTO budget_assessment_revisions VALUES('{old}','frozen-scope','github','whole-item',1,'frozen-epoch','breach',30,100,1,'frozen-derived','frozen-digest');
+INSERT INTO budget_breaches VALUES('frozen-epoch','{old}','frozen-scope','github','whole-item',1,1);
+SELECT 1;
+""" |> ignore
+        let frozen = correctionSql path "SELECT group_concat(epoch_id || item_id || assessment_revision,'|') FROM budget_breaches WHERE epoch_id='frozen-epoch';"
+        let plan = TelemetryStoreApplication.ciCorrectionPlan path approved request |> unwrap |> Encoding.UTF8.GetBytes
+        TelemetryStoreApplication.ciCorrect path approved plan |> unwrap |> ignore
+        Assert.Contains("\"verdict\":\"unknown\"", TelemetryStoreApplication.budgetSummary path approved old |> unwrap)
+        Assert.Contains("\"distinctBreaches\":0", TelemetryStoreApplication.budgetStatus path approved |> unwrap)
+        Assert.Equal(frozen, correctionSql path "SELECT group_concat(epoch_id || item_id || assessment_revision,'|') FROM budget_breaches WHERE epoch_id='frozen-epoch';")
+        Assert.Equal("2", correctionSql path "SELECT count(*) FROM budget_assessment_revisions WHERE assessment_revision=1;")
+        Assert.Equal("0", correctionSql path "SELECT count(*) FROM budget_interventions;")

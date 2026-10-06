@@ -88,7 +88,7 @@ module TelemetryStoreApplication =
     let private maxDrainBatches = 128
     let private maxDrainBytes = 8L * 1024L * 1024L
     let private maxPendingPerProducer = 128
-    let private currentSchemaVersion = 12
+    let private currentSchemaVersion = 13
 
     let private gzip (bytes: byte array) =
         use output = new MemoryStream()
@@ -293,6 +293,22 @@ PRAGMA user_version=12;
 """
 
     let private migration12Digest = CanonicalJson.sha256 (Encoding.UTF8.GetBytes migration12Sql)
+
+    let private migration13Sql =
+        """
+CREATE TABLE ci_attribution_corrections(correction_id TEXT PRIMARY KEY, plan_digest TEXT NOT NULL, plan TEXT NOT NULL, outcome_identity TEXT NOT NULL, predecessor TEXT REFERENCES ci_attribution_corrections(correction_id), repository TEXT NOT NULL, pr_number INTEGER NOT NULL, base_ref TEXT NOT NULL, base_sha TEXT NOT NULL, head TEXT NOT NULL, merge_commit TEXT NOT NULL, prior_item TEXT NOT NULL, effective_item TEXT NOT NULL, effective_feature TEXT NOT NULL, effective_attempt TEXT NOT NULL, observed_at TEXT NOT NULL, applied_at TEXT NOT NULL) STRICT;
+CREATE TABLE ci_correction_evidence(correction_id TEXT NOT NULL REFERENCES ci_attribution_corrections(correction_id), identity TEXT NOT NULL, table_name TEXT NOT NULL, revision INTEGER NOT NULL, digest TEXT NOT NULL, canonical TEXT NOT NULL, PRIMARY KEY(correction_id,identity)) STRICT;
+CREATE TABLE ci_effective_attribution(identity TEXT PRIMARY KEY REFERENCES ingest_facts(identity), correction_id TEXT NOT NULL REFERENCES ci_attribution_corrections(correction_id)) STRICT;
+CREATE VIEW current_ingest_facts AS SELECT f.identity,f.kind,coalesce(c.effective_item,f.item_id) AS item_id,f.revision,f.content_digest,f.canonical FROM ingest_facts f LEFT JOIN ci_effective_attribution e ON e.identity=f.identity LEFT JOIN ci_attribution_corrections c ON c.correction_id=e.correction_id;
+CREATE TRIGGER ci_correction_immutable_update BEFORE UPDATE ON ci_attribution_corrections BEGIN SELECT RAISE(ABORT,'correction ledger is immutable'); END;
+CREATE TRIGGER ci_correction_immutable_delete BEFORE DELETE ON ci_attribution_corrections BEGIN SELECT RAISE(ABORT,'correction ledger is immutable'); END;
+CREATE TRIGGER ci_correction_evidence_immutable_update BEFORE UPDATE ON ci_correction_evidence BEGIN SELECT RAISE(ABORT,'correction evidence is immutable'); END;
+CREATE TRIGGER ci_correction_evidence_immutable_delete BEFORE DELETE ON ci_correction_evidence BEGIN SELECT RAISE(ABORT,'correction evidence is immutable'); END;
+INSERT INTO store_metadata(key,value) VALUES('ciCorrectionStoreId',lower(hex(randomblob(16))));
+PRAGMA user_version=13;
+"""
+
+    let private migration13Digest = CanonicalJson.sha256 (Encoding.UTF8.GetBytes migration13Sql)
 
     let private roleName = function
         | TelemetryReceipt.Generic -> "generic"
@@ -898,6 +914,21 @@ PRAGMA user_version=12;
                                                                             if scalarText connection "SELECT digest FROM schema_migrations WHERE version=12;" <> migration12Digest then
                                                                                 Error [ "migration checksum mismatch" ]
                                                                             else
+                                                                                if Int32.Parse(scalarText connection "PRAGMA user_version;") = 12 then
+                                                                                    beginImmediate connection
+                                                                                    try
+                                                                                        execute connection migration13Sql
+                                                                                        use migration = connection.CreateCommand()
+                                                                                        migration.CommandText <- "INSERT INTO schema_migrations(version,digest,applied_utc) VALUES(13,$digest,$utc);"
+                                                                                        parameter migration "$digest" migration13Digest
+                                                                                        parameter migration "$utc" (DateTimeOffset.UtcNow.ToString("O"))
+                                                                                        migration.ExecuteNonQuery() |> ignore
+                                                                                        execute connection "COMMIT;"
+                                                                                    with error ->
+                                                                                        rollback connection
+                                                                                        raise error
+                                                                                if scalarText connection "SELECT digest FROM schema_migrations WHERE version=13;" <> migration13Digest then
+                                                                                    invalidOp "migration checksum mismatch"
                                                                                 fsyncDirectory root
                                                                                 fsyncDirectory (Path.GetDirectoryName root)
 
@@ -1004,6 +1035,8 @@ PRAGMA user_version=12;
                         scalarText connection "SELECT digest FROM schema_migrations WHERE version=12;"
                         <> migration12Digest
                     then
+                        Error [ "migration checksum mismatch" ]
+                    elif scalarText connection "SELECT digest FROM schema_migrations WHERE version=13;" <> migration13Digest then
                         Error [ "migration checksum mismatch" ]
                     else
                         let inbox = Path.Combine(root, "inbox")
@@ -1807,7 +1840,7 @@ PRAGMA user_version=12;
         let optional value =
             value |> Option.map box |> Option.defaultValue DBNull.Value
 
-        let revision = scalarInt64 "SELECT count(*) FROM ingest_facts WHERE item_id=$item;"
+        let revision = scalarInt64 "SELECT count(*) FROM current_ingest_facts WHERE item_id=$item;"
 
         let latestOutcome =
             use command =
@@ -1825,6 +1858,14 @@ PRAGMA user_version=12;
                 )
             else
                 None
+
+        use purge =
+            parameterized
+                """DELETE FROM budget_shared_cost_refs WHERE item_id=$item AND source_ref LIKE 'derived:%';
+DELETE FROM budget_interval_facts WHERE item_id=$item AND source_ref LIKE 'derived:%';
+DELETE FROM budget_attribution_facts WHERE item_id=$item AND source_ref LIKE 'derived:%';
+DELETE FROM budget_population_facts WHERE item_id=$item AND source_ref LIKE 'derived:%';"""
+        purge.ExecuteNonQuery() |> ignore
 
         match latestOutcome with
         | None -> ()
@@ -1930,15 +1971,6 @@ AND EXISTS(
                     "open"
 
             let prefix = "derived:" + stable "projection"
-
-            use purge =
-                parameterized
-                    """DELETE FROM budget_shared_cost_refs WHERE item_id=$item AND source_ref LIKE 'derived:%';
-DELETE FROM budget_interval_facts WHERE item_id=$item AND source_ref LIKE 'derived:%';
-DELETE FROM budget_attribution_facts WHERE item_id=$item AND source_ref LIKE 'derived:%';
-DELETE FROM budget_population_facts WHERE item_id=$item AND source_ref LIKE 'derived:%';"""
-
-            purge.ExecuteNonQuery() |> ignore
 
             use population =
                 parameterized
@@ -2173,7 +2205,7 @@ DELETE FROM budget_population_facts WHERE item_id=$item AND source_ref LIKE 'der
                 "ci"
                 "ci-runner-diagnostic"
 
-    let private budgetReevaluate (connection: SqliteConnection) =
+    let private budgetReevaluateFor (connection: SqliteConnection) selectedItems allowIntervention =
         let scalarInt sql parameters =
             use command = connection.CreateCommand()
             command.CommandText <- sql
@@ -2219,7 +2251,7 @@ ON CONFLICT(key) DO UPDATE SET value=excluded.value;"""
 
             List.ofSeq values
 
-        for item in dirtyItems do
+        for item in (selectedItems |> Option.defaultValue dirtyItems) do
             deriveBudgetInputs connection item
             let itemParameter = [ "$item", box item ]
 
@@ -2524,7 +2556,23 @@ ON CONFLICT(key) DO UPDATE SET value=excluded.value;"""
                     parameter breach "$dimension" dimension
                     parameter breach "$provider" provider
                     parameter breach "$scope" scope
-                    breach.ExecuteNonQuery() |> ignore
+                    if allowIntervention || scalarInt "SELECT count(*) FROM budget_epochs WHERE epoch_id=$epoch AND state='open';" [ "$epoch", box epochId ] = 1L then
+                        breach.ExecuteNonQuery() |> ignore
+
+            if not allowIntervention then
+                use invalidate = connection.CreateCommand()
+                invalidate.CommandText <-
+                    """INSERT INTO budget_assessment_revisions
+SELECT a.item_id,a.dimension,a.provider,a.accounting_scope,a.assessment_revision+1,a.epoch_id,'unknown',NULL,NULL,0,'CI attribution superseded; current input unavailable',$digest
+FROM budget_assessment_revisions a
+WHERE a.item_id=$item AND a.verdict<>'unknown'
+AND a.assessment_revision=(SELECT max(b.assessment_revision) FROM budget_assessment_revisions b WHERE b.item_id=a.item_id AND b.dimension=a.dimension AND b.provider=a.provider AND b.accounting_scope=a.accounting_scope)
+AND NOT EXISTS(SELECT 1 FROM budget_attribution_facts f WHERE f.item_id=a.item_id AND f.dimension=a.dimension AND f.provider=a.provider AND f.accounting_scope=a.accounting_scope);
+DELETE FROM budget_breaches WHERE item_id=$item AND epoch_id IN (SELECT epoch_id FROM budget_epochs WHERE state='open')
+AND NOT EXISTS(SELECT 1 FROM budget_attribution_facts f WHERE f.item_id=budget_breaches.item_id AND f.dimension=budget_breaches.dimension AND f.provider=budget_breaches.provider AND f.accounting_scope=budget_breaches.accounting_scope);"""
+                parameter invalidate "$item" item
+                parameter invalidate "$digest" (CanonicalJson.sha256(Encoding.UTF8.GetBytes("ci-correction-unavailable:" + item)))
+                invalidate.ExecuteNonQuery() |> ignore
 
             use clean = connection.CreateCommand()
             clean.CommandText <- "DELETE FROM budget_dirty_items WHERE item_id=$item;"
@@ -2547,7 +2595,7 @@ ON CONFLICT(key) DO UPDATE SET value=excluded.value;"""
 
         let intervention = $"%s{epochId}-intervention"
 
-        if TelemetryBudget.interventionDue (int breachCount) hasSevere then
+        if allowIntervention && TelemetryBudget.interventionDue (int breachCount) hasSevere then
             let trigger =
                 scalarText
                     connection
@@ -2573,6 +2621,7 @@ ON CONFLICT(key) DO UPDATE SET value=excluded.value;"""
                 [ "$epoch", box epochId ]
         with
         | None -> ()
+        | Some _ when not allowIntervention -> ()
         | Some openIntervention ->
             use evidence = connection.CreateCommand()
 
@@ -2623,6 +2672,8 @@ ON CONFLICT(key) DO UPDATE SET value=excluded.value;"""
                 parameter close "$epoch" epochId
                 close.ExecuteNonQuery() |> ignore
             | _ -> ()
+
+    let private budgetReevaluate connection = budgetReevaluateFor connection None true
 
     let private ingestBatchWithReceiptLocked
         root
@@ -2680,6 +2731,44 @@ ON CONFLICT(key) DO UPDATE SET value=excluded.value;"""
                             let mutable replayed = 0L
 
                             for fact in batch.Facts do
+                                use fenced = connection.CreateCommand()
+                                fenced.CommandText <- "SELECT count(*) FROM ci_effective_attribution WHERE identity=$identity;"
+                                parameter fenced "$identity" fact.Identity
+                                if Convert.ToInt64(fenced.ExecuteScalar()) > 0L then
+                                    use retained = connection.CreateCommand()
+                                    retained.CommandText <- "SELECT content_digest FROM ingest_facts WHERE identity=$identity;"
+                                    parameter retained "$identity" fact.Identity
+                                    if string (retained.ExecuteScalar()) <> fact.ContentDigest then
+                                        invalidOp "ci-attribution-corrected-fact-is-immutable"
+                                else
+                                    use candidate = connection.CreateCommand()
+                                    let values =
+                                        match fact.Payload with
+                                        | TelemetryStore.NativeItemOutcome(repository, pr, baseRef, baseSha, head, _, _, _, _, _, _, _) ->
+                                            candidate.CommandText <- "SELECT count(*) FROM ci_attribution_corrections WHERE repository=$repository AND pr_number=$pr AND base_ref=$baseRef AND base_sha=$baseSha AND head=$head;"
+                                            [ "$repository", box repository; "$pr", box pr; "$baseRef", box baseRef; "$baseSha", box baseSha; "$head", box head ]
+                                        | TelemetryStore.CiBinding(_, repository, head, pr, _, _, _, _, _, _)
+                                        | TelemetryStore.CiPopulationAdmission(_, repository, pr, _, _, head, _) ->
+                                            candidate.CommandText <- "SELECT count(*) FROM ci_attribution_corrections WHERE repository=$repository AND pr_number=$pr AND head=$head;"
+                                            [ "$repository", box repository; "$pr", box pr; "$head", box head ]
+                                        | TelemetryStore.CiRun(repository, _, _, _, _, head, _, _, _, _, _) ->
+                                            candidate.CommandText <- "SELECT count(*) FROM ci_attribution_corrections WHERE repository=$repository AND head=$head;"
+                                            [ "$repository", box repository; "$head", box head ]
+                                        | TelemetryStore.CiPage(collection, _, _, _, _)
+                                        | TelemetryStore.CiCoverage(collection, _, _, _, _, _, _, _, _)
+                                        | TelemetryStore.CiPopulationCoverage(collection, _, _, _, _, _, _, _, _, _) ->
+                                            candidate.CommandText <- "SELECT count(*) FROM ci_effective_attribution e JOIN ci_bindings b ON b.identity=e.identity WHERE b.collection_id=$collection;"
+                                            [ "$collection", box collection ]
+                                        | TelemetryStore.CiJob(repository, runId, attempt, _, _, _, _, _, _, _)
+                                        | TelemetryStore.CiStep(repository, runId, attempt, _, _, _, _, _, _, _, _, _) ->
+                                            candidate.CommandText <- "SELECT count(*) FROM ci_effective_attribution e JOIN ci_runs r ON r.identity=e.identity WHERE r.repository=$repository AND r.run_id=$run AND r.attempt=$attempt;"
+                                            [ "$repository", box repository; "$run", box runId; "$attempt", box attempt ]
+                                        | _ -> []
+                                    if not values.IsEmpty then
+                                        values |> List.iter (fun (name, value) -> parameter candidate name value)
+                                        if Convert.ToInt64(candidate.ExecuteScalar()) > 0L then
+                                            invalidOp "ci-attribution-corrected-candidate-reconcile-refused"
+
                                 use existing = connection.CreateCommand()
 
                                 existing.CommandText <-
@@ -4400,6 +4489,11 @@ WHERE n.source_ref=$source;
                                 let envelopeDigest = optionalText 12
                                 if reader.Read() then
                                     Error [ "native delivery candidate is ambiguous" ]
+                                elif (use corrected = connection.CreateCommand()
+                                      corrected.CommandText <- "SELECT count(*) FROM ci_effective_attribution WHERE identity=$identity;"
+                                      parameter corrected "$identity" identity
+                                      Convert.ToInt64(corrected.ExecuteScalar()) > 0L) then
+                                    Error [ "corrected-native-delivery-source-unsupported" ]
                                 elif CanonicalJson.sha256(Encoding.UTF8.GetBytes canonicalFact) <> factDigest then
                                     Error [ "native delivery candidate fact digest differs" ]
                                 else
@@ -4616,7 +4710,7 @@ WHERE n.source_ref=$source;
                                       "workspaceId"
                                       "files"]
                             || top.GetProperty("schema").GetString() <> "fsgg.telemetry.host-backup/1"
-                            || not ((set [ 9; currentSchemaVersion ]).Contains(top.GetProperty("storeSchemaVersion").GetInt32()))
+                            || not ((set [ 9; 12; currentSchemaVersion ]).Contains(top.GetProperty("storeSchemaVersion").GetInt32()))
                             || top.GetProperty("workspaceId").GetString() <> workspace
                         then
                             Error [ "backup-incompatible" ]
@@ -4897,7 +4991,7 @@ WHERE n.source_ref=$source;
             ItemId = itemId
             FactCount =
                 runtimeScalar
-                                    "SELECT count(*) FROM ingest_facts WHERE item_id=$item AND kind NOT IN ('learn-task-snapshot','learn-context-manifest','learn-experiment-assignment','learn-accounting-inventory/1','runtime-native-inventory/1','runtime-native-inventory-source/1','learn-shared-cost/1','learn-shared-cost-allocation/1','learn-shared-cost-authority/1','learn-native-delivery-source/1','learn-installed-origin/1');"
+                                    "SELECT count(*) FROM current_ingest_facts WHERE item_id=$item AND kind NOT IN ('learn-task-snapshot','learn-context-manifest','learn-experiment-assignment','learn-accounting-inventory/1','runtime-native-inventory/1','runtime-native-inventory-source/1','learn-shared-cost/1','learn-shared-cost-allocation/1','learn-shared-cost-authority/1','learn-native-delivery-source/1','learn-installed-origin/1');"
             UsageObservations = usageCount
             DeliveryObservations = count "delivery_observations"
             Input = sum "input_count" + runtimeSum "input_count"
@@ -5229,9 +5323,9 @@ WHERE n.source_ref=$source;
                             command.CommandText <-
                                 match itemId with
                                 | None ->
-                                    "SELECT item_id FROM (SELECT item_id FROM ingest_facts WHERE item_id IS NOT NULL UNION SELECT item_id FROM budget_population_facts UNION SELECT item_id FROM native_item_outcomes) ORDER BY item_id LIMIT 202;"
+                                    "SELECT item_id FROM (SELECT item_id FROM current_ingest_facts WHERE item_id IS NOT NULL UNION SELECT item_id FROM budget_population_facts UNION SELECT item_id FROM native_item_outcomes) ORDER BY item_id LIMIT 202;"
                                 | Some _ ->
-                                    "SELECT item_id FROM (SELECT item_id,original_item_id FROM budget_population_facts WHERE item_id=$item OR original_item_id=$item UNION SELECT item_id,item_id AS original_item_id FROM ingest_facts WHERE item_id=$item) ORDER BY item_id LIMIT 202;"
+                                    "SELECT item_id FROM (SELECT item_id,original_item_id FROM budget_population_facts WHERE item_id=$item OR original_item_id=$item UNION SELECT item_id,item_id AS original_item_id FROM current_ingest_facts WHERE item_id=$item) ORDER BY item_id LIMIT 202;"
 
                             itemId |> Option.iter (parameter command "$item")
                             use reader = command.ExecuteReader()
@@ -5847,6 +5941,248 @@ WHERE n.source_ref=$source;
             with error ->
                 Error [ error.Message ]
 
+    // All discovery and apply validation share this exact closure; callers cannot
+    // add a target or broaden ownership merely by editing a private plan.
+    let private discoverCiCorrection (connection: SqliteConnection) (request: TelemetryCi.CorrectionRequest) =
+        let query sql values =
+            let command = connection.CreateCommand()
+            command.CommandText <- sql
+            values |> List.iter (fun (name, value) -> parameter command name value)
+            command
+        let deliveryValues =
+            [ "$item", box request.Prior.ItemId; "$repo", box request.Repository; "$pr", box request.PullRequest
+              "$baseRef", box request.BaseRef; "$baseSha", box request.BaseSha; "$head", box request.Head; "$merge", box request.MergeCommit ]
+        let identities sql values =
+            use command = query sql values
+            use reader = command.ExecuteReader()
+            let found = [ while reader.Read() do yield reader.GetString 0 ]
+            if found.Length > 4096 then invalidOp "ci-correction-closure-exceeds-bound"
+            found
+        let count sql values =
+            use command = query sql values
+            Convert.ToInt64(command.ExecuteScalar())
+        let outcomes =
+            identities "SELECT identity FROM native_item_outcomes WHERE item_id=$item AND repository=$repo AND pr_number=$pr AND base_ref=$baseRef AND base_sha=$baseSha AND head=$head AND merge_commit=$merge AND code_delivery='delivered' ORDER BY identity LIMIT 4097;" deliveryValues
+        if count "SELECT count(*) FROM native_item_outcomes WHERE repository=$repo AND pr_number=$pr AND base_ref=$baseRef AND base_sha=$baseSha AND head=$head;" deliveryValues <> 1L then
+            invalidOp "ci-correction-candidate-ambiguous"
+        let outcome =
+            match outcomes with
+            | [ identity ] -> identity
+            | [] -> invalidOp "ci-correction-target-unavailable"
+            | _ -> invalidOp "ci-correction-target-ambiguous"
+        use predecessor = query "SELECT correction_id FROM ci_effective_attribution WHERE identity=$identity;" [ "$identity", box outcome ]
+        let retained = predecessor.ExecuteScalar()
+        let active = if isNull retained || retained = box DBNull.Value then None else Some(string retained)
+        if active <> request.ExpectedPredecessor then invalidOp "ci-correction-predecessor-conflict"
+        match active with
+        | Some correction ->
+            use prior = query "SELECT plan FROM ci_attribution_corrections WHERE correction_id=$id;" [ "$id", box correction ]
+            let plan = Encoding.UTF8.GetBytes(string (prior.ExecuteScalar())) |> TelemetryCi.parseCorrectionPlan
+            match plan with
+            | Ok priorPlan when priorPlan.Request.Effective = request.Prior -> ()
+            | _ -> invalidOp "ci-correction-prior-assignment-conflict"
+        | None -> ()
+        let admissions =
+            identities "SELECT identity FROM ci_population_admissions WHERE item_id=$item AND repository=$repo AND pr_number=$pr AND base_ref=$baseRef AND base_sha=$baseSha AND head=$head ORDER BY identity LIMIT 4097;" deliveryValues
+        let bindings =
+            identities "SELECT identity FROM ci_bindings WHERE item_id=$item AND repository=$repo AND pr_number=$pr AND head=$head ORDER BY identity LIMIT 4097;" deliveryValues
+        let targets = ResizeArray<string * string>()
+        targets.Add("native_item_outcomes", outcome)
+        match admissions, bindings with
+        | [], [] ->
+            // No population is invented; feature/attempt provenance remains the
+            // explicit operator evidence in the correction request.
+            if count "SELECT count(*) FROM ci_runs WHERE item_id=$item AND repository=$repo AND head=$head;" deliveryValues <> 0L then
+                invalidOp "ci-correction-unbound-population"
+        | [ admission ], [ binding ] ->
+            use assignment = query "SELECT collection_id,feature_id,attempt_id,parent_attempt_id,producer_stream FROM ci_bindings WHERE identity=$identity;" [ "$identity", box binding ]
+            use reader = assignment.ExecuteReader()
+            if not (reader.Read()) then invalidOp "ci-correction-binding-unavailable"
+            let collection = reader.GetString 0
+            let parent = if reader.IsDBNull 3 then None else Some(reader.GetString 3)
+            if reader.GetString 1 <> request.Prior.FeatureId || reader.GetString 2 <> request.Prior.AttemptId
+               || parent <> request.Prior.ParentAttemptId || reader.GetString 4 <> request.Prior.ProducerStream then
+                invalidOp "ci-correction-prior-assignment-conflict"
+            reader.Close()
+            let collectionValues = [ "$collection", box collection; "$item", box request.Prior.ItemId; "$repo", box request.Repository; "$head", box request.Head ]
+            if count "SELECT count(*) FROM ci_population_admissions WHERE identity=$identity AND collection_id=$collection;" [ "$identity", box admission; "$collection", box collection ] <> 1L then
+                invalidOp "ci-correction-collection-mismatch"
+            // Runs are shared native identities. Multiple delivery candidates or
+            // collections for this head make ownership unknowable and refuse.
+            if count "SELECT count(*) FROM ci_bindings WHERE repository=$repo AND head=$head;" collectionValues <> 1L
+               || count "SELECT count(*) FROM native_item_outcomes WHERE repository=$repo AND head=$head;" collectionValues <> 1L then
+                invalidOp "ci-correction-shared-population"
+            targets.Add("ci_bindings", binding)
+            targets.Add("ci_population_admissions", admission)
+            for table in [ "ci_pages"; "ci_coverage"; "ci_population_coverage" ] do
+                for identity in identities ($"SELECT identity FROM %s{table} WHERE collection_id=$collection ORDER BY identity LIMIT 4097;") collectionValues do
+                    targets.Add(table, identity)
+            for identity in identities "SELECT identity FROM ci_runs WHERE repository=$repo AND head=$head ORDER BY identity LIMIT 4097;" collectionValues do
+                targets.Add("ci_runs", identity)
+            for table in [ "ci_jobs"; "ci_steps" ] do
+                for identity in identities ($"SELECT j.identity FROM %s{table} j JOIN ci_runs r ON r.repository=j.repository AND r.run_id=j.run_id AND r.attempt=j.attempt WHERE r.repository=$repo AND r.head=$head ORDER BY j.identity LIMIT 4097;") collectionValues do
+                    targets.Add(table, identity)
+            let checks = identities "SELECT identity FROM ci_check_runs WHERE item_id=$item AND repository=$repo ORDER BY identity LIMIT 4097;" collectionValues
+            if not checks.IsEmpty &&
+               (count "SELECT count(*) FROM ci_bindings WHERE item_id=$item AND repository=$repo;" collectionValues <> 1L
+                || count "SELECT count(*) FROM native_item_outcomes WHERE item_id=$item AND repository=$repo;" collectionValues <> 1L) then
+                invalidOp "ci-correction-check-ownership-ambiguous"
+            for identity in checks do targets.Add("ci_check_runs", identity)
+        | _ -> invalidOp "ci-correction-population-ambiguous"
+        if targets.Count > 4096 then invalidOp "ci-correction-closure-exceeds-bound"
+        let bound =
+            [ for table, identity in targets do
+                use fact = query ($"SELECT f.revision,f.content_digest,f.canonical,t.item_id FROM ingest_facts f JOIN %s{table} t ON t.identity=f.identity WHERE f.identity=$identity;") [ "$identity", box identity ]
+                use reader = fact.ExecuteReader()
+                if not (reader.Read()) then invalidOp "ci-correction-evidence-unavailable"
+                let revision, digest, canonical, item = reader.GetInt64 0, reader.GetString 1, reader.GetString 2, reader.GetString 3
+                if item <> request.Prior.ItemId || CanonicalJson.sha256(Encoding.UTF8.GetBytes canonical) <> digest then
+                    invalidOp "ci-correction-evidence-conflict"
+                if table = "native_item_outcomes" then
+                    use original = JsonDocument.Parse canonical
+                    let fact = original.RootElement
+                    if fact.GetProperty("repository").GetString() <> request.Repository
+                       || fact.GetProperty("prNumber").GetInt64() <> request.PullRequest
+                       || fact.GetProperty("baseRef").GetString() <> request.BaseRef
+                       || fact.GetProperty("baseSha").GetString() <> request.BaseSha
+                       || fact.GetProperty("head").GetString() <> request.Head
+                       || fact.GetProperty("mergeCommit").GetString() <> request.MergeCommit
+                       || fact.GetProperty("codeDelivery").GetString() <> "delivered" then
+                        invalidOp "ci-correction-immutable-delivery-conflict"
+                yield { TelemetryCi.CorrectionTarget.Table = table; Identity = identity; Revision = revision; Digest = digest } ]
+            |> List.sortBy (fun target -> target.Table, target.Identity)
+        { TelemetryCi.CorrectionPlan.StoreId = scalarText connection "SELECT value FROM store_metadata WHERE key='ciCorrectionStoreId';"
+          Request = request; Targets = bound }
+
+    let ciCorrectionPlan path assessment request =
+        match validateRoot path assessment |> Result.bind (fun root -> connect root SqliteOpenMode.ReadOnly) with
+        | Error errors -> Error errors
+        | Ok(connection, _) ->
+            use connection = connection
+            try
+                use snapshot = connection.BeginTransaction()
+                if scalarText connection "PRAGMA user_version;" <> string currentSchemaVersion then
+                    Error [ "unsupported-version" ]
+                else
+                    let plan = discoverCiCorrection connection request
+                    Ok(TelemetryCi.correctionPlanJson plan + "\n")
+            with error -> Error [ error.Message ]
+
+    let ciCorrectWithHook path assessment planBytes beforeCommit =
+        match validateRoot path assessment, TelemetryCi.parseCorrectionPlan planBytes with
+        | Error errors, _ | _, Error errors -> Error errors
+        | Ok root, Ok plan ->
+            match tryWriterLock root with
+            | Error errors -> Error errors
+            | Ok writer ->
+                use writer = writer
+                match connect root SqliteOpenMode.ReadWrite with
+                | Error errors -> Error errors
+                | Ok(connection, _) ->
+                    use connection = connection
+                    try
+                        if scalarText connection "PRAGMA user_version;" <> string currentSchemaVersion then
+                            Error [ "unsupported-version" ]
+                        else
+                            beginImmediate connection
+                            try
+                                let request = plan.Request
+                                let digest = CanonicalJson.sha256 planBytes
+                                if scalarText connection "SELECT value FROM store_metadata WHERE key='ciCorrectionStoreId';" <> plan.StoreId then
+                                    invalidOp "ci-correction-cross-store-conflict"
+                                use replay = connection.CreateCommand()
+                                replay.CommandText <- "SELECT plan_digest FROM ci_attribution_corrections WHERE correction_id=$id;"
+                                parameter replay "$id" request.CorrectionId
+                                let existing = replay.ExecuteScalar()
+                                let already = not (isNull existing) && existing <> box DBNull.Value
+                                if already && string existing <> digest then invalidOp "ci-correction-identity-content-conflict"
+                                if not already then
+                                    let actual = discoverCiCorrection connection request
+                                    if actual <> plan then invalidOp "ci-correction-stale-plan"
+                                    let outcome = plan.Targets |> List.find (fun target -> target.Table = "native_item_outcomes")
+                                    use ledger = connection.CreateCommand()
+                                    ledger.CommandText <- "INSERT INTO ci_attribution_corrections VALUES($id,$digest,$plan,$outcome,$predecessor,$repo,$pr,$baseRef,$baseSha,$head,$merge,$prior,$effective,$feature,$attempt,$observed,$applied);"
+                                    [ "$id", box request.CorrectionId; "$digest", box digest; "$plan", box (Encoding.UTF8.GetString planBytes)
+                                      "$outcome", box outcome.Identity; "$predecessor", request.ExpectedPredecessor |> Option.map box |> Option.defaultValue DBNull.Value
+                                      "$repo", box request.Repository; "$pr", box request.PullRequest; "$baseRef", box request.BaseRef; "$baseSha", box request.BaseSha
+                                      "$head", box request.Head; "$merge", box request.MergeCommit; "$prior", box request.Prior.ItemId
+                                      "$effective", box request.Effective.ItemId; "$feature", box request.Effective.FeatureId; "$attempt", box request.Effective.AttemptId
+                                      "$observed", box request.ObservedAt; "$applied", box (DateTimeOffset.UtcNow.ToString("O")) ]
+                                    |> List.iter (fun (name, value) -> parameter ledger name value)
+                                    ledger.ExecuteNonQuery() |> ignore
+                                    for target in plan.Targets do
+                                        use evidence = connection.CreateCommand()
+                                        evidence.CommandText <- "INSERT INTO ci_correction_evidence SELECT $id,identity,$table,revision,content_digest,canonical FROM ingest_facts WHERE identity=$identity; INSERT INTO ci_effective_attribution(identity,correction_id) VALUES($identity,$id) ON CONFLICT(identity) DO UPDATE SET correction_id=excluded.correction_id;"
+                                        [ "$id", box request.CorrectionId; "$table", box target.Table; "$identity", box target.Identity ]
+                                        |> List.iter (fun (name, value) -> parameter evidence name value)
+                                        evidence.ExecuteNonQuery() |> ignore
+                                        use effective = connection.CreateCommand()
+                                        effective.CommandText <-
+                                            if target.Table = "ci_bindings" then
+                                                "UPDATE ci_bindings SET item_id=$item,feature_id=$feature,attempt_id=$attempt,parent_attempt_id=$parent,producer_stream=$producer WHERE identity=$identity;"
+                                            else $"UPDATE %s{target.Table} SET item_id=$item WHERE identity=$identity;"
+                                        [ "$item", box request.Effective.ItemId; "$identity", box target.Identity
+                                          "$feature", box request.Effective.FeatureId; "$attempt", box request.Effective.AttemptId
+                                          "$parent", request.Effective.ParentAttemptId |> Option.map box |> Option.defaultValue DBNull.Value
+                                          "$producer", box request.Effective.ProducerStream ]
+                                        |> List.iter (fun (name, value) -> parameter effective name value)
+                                        if effective.ExecuteNonQuery() <> 1 then invalidOp "ci-correction-effective-target-conflict"
+                                    let items = [ request.Prior.ItemId; request.Effective.ItemId ] |> List.distinct
+                                    budgetReevaluateFor connection (Some items) false
+                                    beforeCommit()
+                                execute connection "COMMIT;"
+                                Ok(JsonSerializer.Serialize {| schema = "fsgg.telemetry.ci-correction-result/1"; correctionId = request.CorrectionId; status = if already then "already-applied" else "applied"; targets = plan.Targets.Length |} + "\n")
+                            with error ->
+                                rollback connection
+                                Error [ error.Message ]
+                    with error -> Error [ error.Message ]
+
+    let ciCorrect path assessment bytes = ciCorrectWithHook path assessment bytes ignore
+
+    let ciCorrectionHistory path assessment correctionId =
+        if not (TelemetryReceipt.validId correctionId) then Error [ "invalid-request" ]
+        else
+            match validateRoot path assessment |> Result.bind (fun root -> connect root SqliteOpenMode.ReadOnly) with
+            | Error errors -> Error errors
+            | Ok(connection, _) ->
+                use connection = connection
+                try
+                    use snapshot = connection.BeginTransaction()
+                    if scalarText connection "PRAGMA user_version;" <> string currentSchemaVersion then Error [ "unsupported-version" ]
+                    else
+                        use command = connection.CreateCommand()
+                        command.CommandText <- "SELECT plan,plan_digest,outcome_identity FROM ci_attribution_corrections WHERE correction_id=$id;"
+                        parameter command "$id" correctionId
+                        use reader = command.ExecuteReader()
+                        if not (reader.Read()) then Error [ "ci-correction-history-unavailable" ]
+                        else
+                            let plan, digest, outcome = reader.GetString 0, reader.GetString 1, reader.GetString 2
+                            reader.Close()
+                            use chain = connection.CreateCommand()
+                            chain.CommandText <- "SELECT plan,plan_digest,applied_at,correction_id=(SELECT correction_id FROM ci_effective_attribution WHERE identity=$outcome) FROM ci_attribution_corrections WHERE outcome_identity=$outcome ORDER BY rowid LIMIT 65;"
+                            parameter chain "$outcome" outcome
+                            use rows = chain.ExecuteReader()
+                            let history =
+                                [ while rows.Read() do
+                                    yield {| plan = JsonSerializer.Deserialize<JsonElement>(rows.GetString 0); planSha256 = rows.GetString 1; appliedAt = rows.GetString 2; active = rows.GetInt64 3 = 1L |} ]
+                            if history.Length > 64 then Error [ "ci-correction-history-exceeds-bound" ]
+                            else
+                                rows.Close()
+                                use evidence = connection.CreateCommand()
+                                evidence.CommandText <- "SELECT identity,table_name,revision,digest,canonical FROM ci_correction_evidence WHERE correction_id=$id ORDER BY table_name,identity LIMIT 4097;"
+                                parameter evidence "$id" correctionId
+                                use targets = evidence.ExecuteReader()
+                                let mutable evidenceBytes = Encoding.UTF8.GetByteCount plan
+                                let originals =
+                                    [ while targets.Read() do
+                                        evidenceBytes <- evidenceBytes + Encoding.UTF8.GetByteCount(targets.GetString 4)
+                                        if evidenceBytes > 1048576 then invalidOp "ci-correction-history-exceeds-bound"
+                                        yield {| identity = targets.GetString 0; table = targets.GetString 1; revision = targets.GetInt64 2; digest = targets.GetString 3; canonical = JsonSerializer.Deserialize<JsonElement>(targets.GetString 4) |} ]
+                                let result = JsonSerializer.Serialize {| schema = "fsgg.telemetry.ci-correction-history/1"; counting = false; requestedPlan = JsonSerializer.Deserialize<JsonElement> plan; planSha256 = digest; chain = history; originalEvidence = originals |} + "\n"
+                                if originals.Length > 4096 || Encoding.UTF8.GetByteCount result > 1048576 then Error [ "ci-correction-history-exceeds-bound" ]
+                                else Ok result
+                with error -> Error [ error.Message ]
+
     let ciSummary path assessment (itemId: string) =
         match
             validateRoot path assessment
@@ -5856,127 +6192,142 @@ WHERE n.source_ref=$source;
         | Ok(connection, _) ->
             use connection = connection
 
-            let scalar sql =
-                use command = connection.CreateCommand()
-                command.CommandText <- sql
-                parameter command "$item" itemId
-                Convert.ToInt64(command.ExecuteScalar())
+            try
+                use snapshot = connection.BeginTransaction()
+                if scalarText connection "PRAGMA user_version;" <> string currentSchemaVersion then
+                    invalidOp "unsupported-version"
+                let scalar sql =
+                    use command = connection.CreateCommand()
+                    command.CommandText <- sql
+                    parameter command "$item" itemId
+                    Convert.ToInt64(command.ExecuteScalar())
 
-            let intervals sql =
-                use command = connection.CreateCommand()
-                command.CommandText <- sql
-                parameter command "$item" itemId
-                use reader = command.ExecuteReader()
-                let values = ResizeArray<TelemetryCi.Interval>()
+                let intervals sql =
+                    use command = connection.CreateCommand()
+                    command.CommandText <- sql
+                    parameter command "$item" itemId
+                    use reader = command.ExecuteReader()
+                    let values = ResizeArray<TelemetryCi.Interval>()
 
-                while reader.Read() do
-                    let startAt = if reader.IsDBNull 0 then None else Some(reader.GetString 0)
-                    let endAt = if reader.IsDBNull 1 then None else Some(reader.GetString 1)
-                    TelemetryCi.interval startAt endAt |> Option.iter values.Add
+                    while reader.Read() do
+                        let startAt = if reader.IsDBNull 0 then None else Some(reader.GetString 0)
+                        let endAt = if reader.IsDBNull 1 then None else Some(reader.GetString 1)
+                        TelemetryCi.interval startAt endAt |> Option.iter values.Add
 
-                values |> Seq.toList
+                    values |> Seq.toList
 
-            let coverage column =
-                use command = connection.CreateCommand()
+                let coverage column =
+                    use command = connection.CreateCommand()
 
-                command.CommandText <-
-                    $"SELECT %s{column} FROM ci_coverage WHERE item_id=$item ORDER BY rowid DESC LIMIT 1;"
+                    command.CommandText <-
+                        $"SELECT %s{column} FROM ci_coverage WHERE item_id=$item ORDER BY rowid DESC LIMIT 1;"
 
-                parameter command "$item" itemId
-                let value = command.ExecuteScalar()
+                    parameter command "$item" itemId
+                    let value = command.ExecuteScalar()
 
-                if isNull value || value = box DBNull.Value then
-                    "unknown"
-                else
-                    string value
+                    if isNull value || value = box DBNull.Value then
+                        "unknown"
+                    else
+                        string value
 
-            let population column fallback =
-                use command = connection.CreateCommand()
+                let population column fallback =
+                    use command = connection.CreateCommand()
 
-                command.CommandText <-
-                    $"SELECT %s{column} FROM ci_population_coverage WHERE item_id=$item ORDER BY fact_revision DESC LIMIT 1;"
+                    command.CommandText <-
+                        $"SELECT %s{column} FROM ci_population_coverage WHERE item_id=$item ORDER BY fact_revision DESC LIMIT 1;"
 
-                parameter command "$item" itemId
-                let value = command.ExecuteScalar()
+                    parameter command "$item" itemId
+                    let value = command.ExecuteScalar()
 
-                if isNull value || value = box DBNull.Value then
-                    fallback
-                else
-                    string value
+                    if isNull value || value = box DBNull.Value then
+                        fallback
+                    else
+                        string value
 
-            let jobs =
-                intervals "SELECT started_at,completed_at FROM ci_jobs WHERE item_id=$item;"
+                let jobs =
+                    intervals "SELECT started_at,completed_at FROM ci_jobs WHERE item_id=$item;"
 
-            let queues =
-                intervals "SELECT created_at,started_at FROM ci_jobs WHERE item_id=$item;"
+                let queues =
+                    intervals "SELECT created_at,started_at FROM ci_jobs WHERE item_id=$item;"
 
-            let runner =
-                if jobs.IsEmpty then
-                    None
-                else
-                    jobs
-                    |> List.sumBy (fun value -> int64 (value.EndUtc - value.StartUtc).TotalSeconds)
-                    |> Some
+                let runner =
+                    if jobs.IsEmpty then
+                        None
+                    else
+                        jobs
+                        |> List.sumBy (fun value -> int64 (value.EndUtc - value.StartUtc).TotalSeconds)
+                        |> Some
 
-            let wall = TelemetryCi.unionSeconds jobs
+                let wall = TelemetryCi.unionSeconds jobs
 
-            let classified classification =
-                use command = connection.CreateCommand()
+                let classified classification =
+                    use command = connection.CreateCommand()
 
-                command.CommandText <-
-                    "SELECT started_at,completed_at FROM ci_steps WHERE item_id=$item AND classification=$classification;"
+                    command.CommandText <-
+                        "SELECT started_at,completed_at FROM ci_steps WHERE item_id=$item AND classification=$classification;"
 
-                parameter command "$item" itemId
-                parameter command "$classification" classification
-                use reader = command.ExecuteReader()
-                let values = ResizeArray<TelemetryCi.Interval>()
+                    parameter command "$item" itemId
+                    parameter command "$classification" classification
+                    use reader = command.ExecuteReader()
+                    let values = ResizeArray<TelemetryCi.Interval>()
 
-                while reader.Read() do
-                    TelemetryCi.interval
-                        (if reader.IsDBNull 0 then None else Some(reader.GetString 0))
-                        (if reader.IsDBNull 1 then None else Some(reader.GetString 1))
-                    |> Option.iter values.Add
+                    while reader.Read() do
+                        TelemetryCi.interval
+                            (if reader.IsDBNull 0 then None else Some(reader.GetString 0))
+                            (if reader.IsDBNull 1 then None else Some(reader.GetString 1))
+                        |> Option.iter values.Add
 
-                values |> Seq.toList |> TelemetryCi.unionSeconds
+                    values |> Seq.toList |> TelemetryCi.unionSeconds
 
-            Ok(
-                JsonSerializer.Serialize
-                    {|
-                        schema = "fsgg.telemetry.ci-summary/1"
-                        item = itemId
-                        runs =
-                            scalar
-                                "SELECT count(*) FROM (SELECT repository,run_id FROM ci_runs WHERE item_id=$item UNION SELECT repository,run_id FROM ci_jobs WHERE item_id=$item);"
-                        attempts =
-                            scalar
-                                "SELECT count(*) FROM (SELECT repository,run_id,attempt FROM ci_runs WHERE item_id=$item UNION SELECT repository,run_id,attempt FROM ci_jobs WHERE item_id=$item);"
-                        jobs = scalar "SELECT count(*) FROM ci_jobs WHERE item_id=$item;"
-                        steps = scalar "SELECT count(*) FROM ci_steps WHERE item_id=$item;"
-                        runnerSeconds = runner
-                        wallSeconds = wall
-                        queueSeconds = TelemetryCi.unionSeconds queues
-                        usefulValidationSeconds = classified "useful-validation"
-                        administrativeSeconds = classified "admin"
-                        necessarySetupSeconds = classified "necessary-setup"
-                        mixedSeconds = classified "mixed"
-                        unclassifiedSeconds = classified "unclassified"
-                        monetary = "unknown"
-                        avoidableRerun = "unknown"
-                        inventoryCoverage = population "actions" (coverage "inventory")
-                        checkCoverage = population "checks" "unknown"
-                        attemptCoverage = population "attempts" (coverage "attempts")
-                        jobPageCoverage = population "jobs" (coverage "job_pages")
-                        terminalCoverage = population "terminal" (coverage "terminal")
-                        timestampCoverage = population "timestamps" (coverage "timestamps")
-                        continuation = population "continuation" "none"
-                        externalChecks = Int64.Parse(population "external_checks" "0")
-                        populationGaps = population "gaps" "[]"
-                        lineageCoverage = coverage "lineage"
-                        classificationCoverage = coverage "classification"
-                        criticalPathCoverage = coverage "critical_path"
-                    |}
-                + "\n"
-            )
+                let effectiveAssignments =
+                    use command = connection.CreateCommand()
+                    command.CommandText <- "SELECT c.effective_feature,c.effective_attempt,c.correction_id,CASE WHEN EXISTS(SELECT 1 FROM ci_correction_evidence x WHERE x.correction_id=c.correction_id AND x.table_name='ci_bindings') THEN 'retained-binding' ELSE 'operator-evidence-only' END FROM native_item_outcomes n JOIN ci_effective_attribution e ON e.identity=n.identity JOIN ci_attribution_corrections c ON c.correction_id=e.correction_id WHERE n.item_id=$item ORDER BY n.identity;"
+                    parameter command "$item" itemId
+                    use reader = command.ExecuteReader()
+                    [ while reader.Read() do yield {| featureId = reader.GetString 0; attemptId = reader.GetString 1; correctionId = reader.GetString 2; assignmentProvenance = reader.GetString 3 |} ]
+
+                Ok(
+                    JsonSerializer.Serialize
+                        {|
+                            schema = "fsgg.telemetry.ci-summary/1"
+                            item = itemId
+                            deliveries = scalar "SELECT count(*) FROM native_item_outcomes WHERE item_id=$item AND code_delivery='delivered';"
+                            effectiveAssignments = effectiveAssignments
+                            runs =
+                                scalar
+                                    "SELECT count(*) FROM (SELECT repository,run_id FROM ci_runs WHERE item_id=$item UNION SELECT repository,run_id FROM ci_jobs WHERE item_id=$item);"
+                            attempts =
+                                scalar
+                                    "SELECT count(*) FROM (SELECT repository,run_id,attempt FROM ci_runs WHERE item_id=$item UNION SELECT repository,run_id,attempt FROM ci_jobs WHERE item_id=$item);"
+                            jobs = scalar "SELECT count(*) FROM ci_jobs WHERE item_id=$item;"
+                            steps = scalar "SELECT count(*) FROM ci_steps WHERE item_id=$item;"
+                            runnerSeconds = runner
+                            wallSeconds = wall
+                            queueSeconds = TelemetryCi.unionSeconds queues
+                            usefulValidationSeconds = classified "useful-validation"
+                            administrativeSeconds = classified "admin"
+                            necessarySetupSeconds = classified "necessary-setup"
+                            mixedSeconds = classified "mixed"
+                            unclassifiedSeconds = classified "unclassified"
+                            monetary = "unknown"
+                            avoidableRerun = "unknown"
+                            inventoryCoverage = population "actions" (coverage "inventory")
+                            checkCoverage = population "checks" "unknown"
+                            attemptCoverage = population "attempts" (coverage "attempts")
+                            jobPageCoverage = population "jobs" (coverage "job_pages")
+                            terminalCoverage = population "terminal" (coverage "terminal")
+                            timestampCoverage = population "timestamps" (coverage "timestamps")
+                            continuation = population "continuation" "none"
+                            externalChecks = Int64.Parse(population "external_checks" "0")
+                            populationGaps = population "gaps" "[]"
+                            lineageCoverage = coverage "lineage"
+                            classificationCoverage = coverage "classification"
+                            criticalPathCoverage = coverage "critical_path"
+                        |}
+                    + "\n"
+                )
+
+            with error -> Error [ error.Message ]
 
     let ciPopulationAdmissionExists
         path
@@ -6217,7 +6568,7 @@ WHERE n.source_ref=$source;
                         use command = connection.CreateCommand()
 
                         command.CommandText <-
-                            "SELECT DISTINCT item_id FROM ingest_facts WHERE item_id IS NOT NULL AND kind NOT IN ('learn-task-snapshot','learn-context-manifest','learn-experiment-assignment','learn-accounting-inventory/1','runtime-native-inventory/1','runtime-native-inventory-source/1','learn-shared-cost/1','learn-shared-cost-allocation/1','learn-shared-cost-authority/1','learn-native-delivery-source/1','learn-installed-origin/1') ORDER BY item_id;"
+                            "SELECT DISTINCT item_id FROM current_ingest_facts WHERE item_id IS NOT NULL AND kind NOT IN ('learn-task-snapshot','learn-context-manifest','learn-experiment-assignment','learn-accounting-inventory/1','runtime-native-inventory/1','runtime-native-inventory-source/1','learn-shared-cost/1','learn-shared-cost-allocation/1','learn-shared-cost-authority/1','learn-native-delivery-source/1','learn-installed-origin/1') ORDER BY item_id;"
 
                         use reader = command.ExecuteReader()
                         let items = ResizeArray<string>()

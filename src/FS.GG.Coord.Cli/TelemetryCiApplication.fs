@@ -922,8 +922,87 @@ module TelemetryCiApplication =
         | Workspace(_, None) -> true
         | _ -> Result.isError drainResult
 
+    let private correctionPrivatePath (path: string) =
+        if not (Path.IsPathFullyQualified path) then invalidOp "correction path must be absolute"
+        let full = Path.GetFullPath path
+        let mutable parent = DirectoryInfo(Path.GetDirectoryName full)
+        while not (isNull parent) do
+            if not parent.Exists || not (isNull parent.LinkTarget) then
+                invalidOp "correction path requires existing non-symlink parents"
+            parent <- parent.Parent
+        full
+
+    let private readCorrectionFile path =
+        try
+            let full = correctionPrivatePath path
+            let file = FileInfo full
+            if not file.Exists || not (isNull file.LinkTarget) then invalidOp "correction input must be a regular non-symlink file"
+            if file.Length > 1048576L then invalidOp "correction input exceeds 1 MiB"
+            if not (OperatingSystem.IsWindows()) && File.GetUnixFileMode(full) <> (UnixFileMode.UserRead ||| UnixFileMode.UserWrite) then
+                invalidOp "correction input permissions must be 0600"
+            use stream = new FileStream(full, FileMode.Open, FileAccess.Read, FileShare.Read)
+            if stream.Length > 1048576L then invalidOp "correction input exceeds 1 MiB"
+            let bytes = Array.zeroCreate<byte> (int stream.Length)
+            stream.ReadExactly bytes
+            Ok bytes
+        with error -> Error [ error.Message ]
+
+    let private writeCorrectionFile path (json: string) =
+        try
+            let full = correctionPrivatePath path
+            let bytes = Encoding.UTF8.GetBytes json
+            if bytes.Length > 1048576 then invalidOp "correction plan exceeds 1 MiB"
+            let options = FileStreamOptions(Mode = FileMode.CreateNew, Access = FileAccess.Write, Share = FileShare.None, Options = FileOptions.WriteThrough)
+            if not (OperatingSystem.IsWindows()) then options.UnixCreateMode <- Nullable(UnixFileMode.UserRead ||| UnixFileMode.UserWrite)
+            use stream = new FileStream(full, options)
+            stream.Write bytes
+            stream.Flush true
+            Ok "{\"schema\":\"fsgg.telemetry.ci-correction-planned/1\",\"status\":\"planned\"}\n"
+        with error -> Error [ error.Message ]
+
+    let private runCorrection assess resolve localStoreRoot action args =
+        let selected =
+            target assess resolve localStoreRoot args
+            |> Result.bind (function
+                | Legacy(root, assessment) -> Ok(root, assessment)
+                | Workspace(_, Some root) when option "--repository" args |> Option.isSome -> Ok(root, assess root)
+                | Workspace(_, Some _) -> Error [ "correction workspace selection requires --repository" ]
+                | Workspace(_, None) -> Error [ "ci-attribution-correction-remote-unsupported" ])
+        let result =
+            selected |> Result.bind (fun (root, assessment) ->
+                match action with
+                | "correction-plan" ->
+                    match option "--input" args, option "--output" args with
+                    | Some input, Some output ->
+                        readCorrectionFile input
+                        |> Result.bind TelemetryCi.parseCorrectionRequest
+                        |> Result.bind (fun request ->
+                            if option "--repository" args |> Option.exists ((<>) request.Repository) then
+                                Error [ "ci-correction-repository-selection-conflict" ]
+                            else TelemetryStoreApplication.ciCorrectionPlan root assessment request)
+                        |> Result.bind (writeCorrectionFile output)
+                    | _ -> Error [ "correction-plan requires --input and --output" ]
+                | "correct" ->
+                    match option "--plan" args with
+                    | None -> Error [ "correct requires --plan" ]
+                    | Some path ->
+                        readCorrectionFile path |> Result.bind (fun bytes ->
+                            TelemetryCi.parseCorrectionPlan bytes |> Result.bind (fun plan ->
+                                if option "--repository" args |> Option.exists ((<>) plan.Request.Repository) then
+                                    Error [ "ci-correction-repository-selection-conflict" ]
+                                else TelemetryStoreApplication.ciCorrect root assessment bytes))
+                | _ ->
+                    match option "--correction-id" args with
+                    | None -> Error [ "correction-history requires --correction-id" ]
+                    | Some identity -> TelemetryStoreApplication.ciCorrectionHistory root assessment identity)
+        match result with
+        | Ok json -> Console.Out.Write json; 0
+        | Error errors -> fail errors
+
     let private runUsing assess resolve publishWorkspace drainWorkspace localStoreRoot action args =
         match action with
+        | "correction-plan" | "correct" | "correction-history" ->
+            runCorrection assess resolve localStoreRoot action args
         | "summary" ->
             match legacyRoot args, option "--item" args with
             | Some path, Some item ->
@@ -1306,7 +1385,7 @@ module TelemetryCiApplication =
                     [
                         "reconcile requires --assignment, --delivery, and an explicitly selected telemetry destination"
                     ]
-        | _ -> fail [ "action must be collect, reconcile, or summary" ]
+        | _ -> fail [ "action must be collect, reconcile, summary, correction-plan, correct, or correction-history" ]
 
     let runWithAssessment assessment action args =
         runUsing
