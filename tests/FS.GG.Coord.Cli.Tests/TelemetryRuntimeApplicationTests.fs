@@ -876,3 +876,98 @@ module TelemetryRuntimeApplicationTests =
             finally
                 Environment.SetEnvironmentVariable("PATH", originalPath)
                 Environment.SetEnvironmentVariable(TelemetryRuntime.InvocationContextEnvironment, originalContext)
+
+    let private prelaunchEvents (published: ResizeArray<byte array>) =
+        published
+        |> Seq.collect (fun bytes ->
+            use document = JsonDocument.Parse(ReadOnlyMemory<byte>(bytes))
+            document.RootElement.GetProperty("events").EnumerateArray()
+            |> Seq.map (fun value -> value.Clone())
+            |> Seq.toArray)
+        |> Seq.toArray
+
+    [<Fact>]
+    let ``efficiency prelaunch admits the generated dispatch once before the child starts`` () =
+        if OperatingSystem.IsLinux() then
+            let cleanup, root = temp ()
+            use cleanup = cleanup
+            let claimMarker = Path.Combine(root, "claimed")
+            let childMarker = Path.Combine(root, "launched")
+            let executable = Path.Combine(root, "ordered-child")
+            File.WriteAllText(executable, $"#!/bin/sh\ntest -f '{claimMarker}' || exit 19\nprintf launched > '{childMarker}'\nprintf '%%s\n' '{{\"type\":\"thread.started\",\"thread_id\":\"selected-thread\"}}'\nexit 0\n")
+            File.SetUnixFileMode(executable, UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute)
+            let published = ResizeArray<byte array>()
+            let mutable calls = 0
+            let admit (context: TelemetryRuntime.InvocationContext) =
+                calls <- calls + 1
+                Assert.False(File.Exists childMarker)
+                let events = prelaunchEvents published
+                let dispatch = events |> Array.filter (fun event -> event.GetProperty("kind").GetString() = "expected-dispatch")
+                Assert.Single dispatch |> ignore
+                Assert.Equal($"expected-dispatch-%s{context.DispatchId}", dispatch[0].GetProperty("identity").GetString())
+                Assert.Equal(context.Assignment.ItemId, dispatch[0].GetProperty("itemId").GetString())
+                let lineage = events |> Array.find (fun event -> event.GetProperty("kind").GetString() = "invocation-lineage")
+                Assert.Equal(context.DispatchId, lineage.GetProperty("dispatchId").GetString())
+                Assert.Equal(context.InvocationId, lineage.GetProperty("invocationId").GetString())
+                Assert.DoesNotContain(events, fun event -> event.GetProperty("kind").GetString() = "runtime-start")
+                File.WriteAllText(claimMarker, context.DispatchId)
+                Ok ()
+            let code =
+                TelemetryRuntimeApplication.runObservedCodexExecWithPrelaunch
+                    executable (assignment "selected-pilot") None TelemetryRuntime.Root None 60L None
+                    [ "--json"; "--ephemeral"; "--model"; "gpt-test" ]
+                    (fun bytes -> published.Add bytes; Ok "queued") (Some admit)
+            Assert.Equal(0, code)
+            Assert.Equal(1, calls)
+            Assert.True(File.Exists childMarker)
+            Assert.Contains(prelaunchEvents published, fun event -> event.GetProperty("kind").GetString() = "runtime-start")
+
+    [<Fact>]
+    let ``refused or unavailable efficiency prelaunch never starts the child or emits usage`` () =
+        if OperatingSystem.IsLinux() then
+            let cleanup, root = temp ()
+            use cleanup = cleanup
+            let childMarker = Path.Combine(root, "launched")
+            let executable = Path.Combine(root, "refused-child")
+            File.WriteAllText(executable, $"#!/bin/sh\nprintf launched > '{childMarker}'\nexit 0\n")
+            File.SetUnixFileMode(executable, UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute)
+            for raises in [ false; true ] do
+                let published = ResizeArray<byte array>()
+                let mutable calls = 0
+                let admit (_: TelemetryRuntime.InvocationContext) =
+                    calls <- calls + 1
+                    if raises then failwith "synthetic private unavailable effect"
+                    else Error [ "synthetic stale CAS" ]
+                let code =
+                    TelemetryRuntimeApplication.runObservedCodexExecWithPrelaunch
+                        executable (assignment "refused-pilot") None TelemetryRuntime.Root None 60L None
+                        [ "--json"; "--ephemeral"; "--model"; "gpt-test" ]
+                        (fun bytes -> published.Add bytes; Ok "queued") (Some admit)
+                Assert.Equal(2, code)
+                Assert.Equal(1, calls)
+                Assert.False(File.Exists childMarker)
+                let events = prelaunchEvents published
+                Assert.DoesNotContain(events, fun event ->
+                    let kind = event.GetProperty("kind").GetString()
+                    kind = "runtime-start" || kind = "runtime-turn-usage")
+                Assert.Contains(events, fun event -> event.GetProperty("kind").GetString() = "runtime-terminal")
+
+    [<Fact>]
+    let ``efficiency prelaunch publication failure cannot claim or launch`` () =
+        if OperatingSystem.IsLinux() then
+            let cleanup, root = temp ()
+            use cleanup = cleanup
+            let childMarker = Path.Combine(root, "launched")
+            let executable = Path.Combine(root, "unadmitted-child")
+            File.WriteAllText(executable, $"#!/bin/sh\nprintf launched > '{childMarker}'\nexit 0\n")
+            File.SetUnixFileMode(executable, UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute)
+            let mutable calls = 0
+            let code =
+                TelemetryRuntimeApplication.runObservedCodexExecWithPrelaunch
+                    executable (assignment "unadmitted-pilot") None TelemetryRuntime.Root None 60L None
+                    [ "--json"; "--ephemeral"; "--model"; "gpt-test" ]
+                    (fun _ -> Error [ "offline" ])
+                    (Some(fun _ -> calls <- calls + 1; Ok ()))
+            Assert.Equal(2, code)
+            Assert.Equal(0, calls)
+            Assert.False(File.Exists childMarker)

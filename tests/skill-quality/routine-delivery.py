@@ -872,5 +872,123 @@ class BoundedQueryTests(unittest.TestCase):
         popen.assert_not_called()
 
 
+
+class DashboardEventTests(unittest.TestCase):
+    def event(self, **kwargs):
+        return MODULE.observe_dashboard_event(engine="selected-engine", config="/private/config",
+                                             clock=lambda: 10, **kwargs)
+
+    def test_no_budget_or_exhausted_never_launches(self):
+        query=mock.Mock()
+        self.assertEqual(self.event(deadline=None,query=query),"not-run-budget-unavailable")
+        self.assertEqual(self.event(deadline=10.5,query=query),"not-run-budget-exhausted")
+        query.assert_not_called()
+
+    def test_absent_config_never_activates(self):
+        query=mock.Mock()
+        self.assertEqual(MODULE.observe_dashboard_event(engine="engine",config=None,deadline=20,
+                         clock=lambda:10,query=query),"not-run-config-unavailable")
+        query.assert_not_called()
+
+    def test_exact_event_and_original_boundary(self):
+        def query(command, deadline, **kwargs):
+            self.assertEqual(command,["selected-engine","telemetry","dashboard","publisher-event",
+                                      "--config","/private/config"])
+            self.assertEqual((deadline,kwargs["max_seconds"],kwargs["max_bytes"]),(80,60,8192))
+            return 0,json.dumps(dict(schema="fsgg.telemetry.dashboard-event-health/1",status="published",
+                 reason="PUBLICATION_VERIFIED",publicRevision="a"*64,commit=MERGE)).encode()
+        self.assertEqual(self.event(deadline=80,query=query),"published")
+
+    def test_nonzero_malformed_and_unverified_never_green(self):
+        for code,raw in [(1,b"{}"),(0,b"garbled"),(0,b'[]'), (0,b'{"status":[],"reason":{}}'),
+                         (0,b'{"status":"published","reason":"PUBLICATION_VERIFIED"}')]:
+            self.assertEqual(self.event(deadline=80,query=lambda *a,**k:(code,raw)),"unavailable")
+
+    def test_timeout_failure_and_skip_do_not_retry(self):
+        query=mock.Mock(side_effect=subprocess.TimeoutExpired("private-not-reported",60))
+        self.assertEqual(self.event(deadline=80,query=query),"unavailable")
+        self.assertEqual(query.call_count,1)
+        self.assertEqual(self.event(deadline=80,query=lambda *a,**k:(0,b'{"status":"skipped","reason":"NO_CHANGE"}')),"skipped")
+
+    def test_late_positive_result_is_not_accepted(self):
+        clock=iter([10,81])
+        self.assertEqual(MODULE.observe_dashboard_event(engine="engine",config="config",deadline=80,
+                         clock=lambda:next(clock),query=lambda *a,**k:(0,b'{}')),"unavailable")
+
+    def test_clipped_ci_uses_existing_boundary(self):
+        summary=MODULE.Summary("fsgg.routine-delivery/v1","FS-GG/.github",7,HEAD,HEAD,
+                              "delivered","delivered","not-required",MERGE,1,None,"current","unobserved")
+        with mock.patch.object(MODULE,"bounded_watch_query",return_value=(0,b'{"driverHealth":"complete"}')) as query:
+            self.assertEqual(MODULE.observe_candidate(summary,assignment="private",store_root="store",
+                             engine="engine",deadline=80),"complete")
+            self.assertEqual(query.call_args.args[1],80)
+            self.assertEqual(query.call_args.kwargs["max_seconds"],35)
+
+    def test_main_refreshes_once_after_final_ci_without_changing_merge(self):
+        observations=[]
+        def observe(summary,**kwargs):
+            observations.append(summary.outcome)
+            self.assertEqual(kwargs["deadline"],80)
+            return "complete"
+        with mock.patch.object(MODULE,"GhApi",return_value=FakeApi([opened(),merged()],[{"merged":True,"sha":MERGE}])), \
+             mock.patch.object(MODULE,"observe_candidate",side_effect=observe), \
+             mock.patch.object(MODULE,"observe_dashboard_event",return_value="unavailable") as event, \
+             mock.patch("sys.stdout",new_callable=io.StringIO) as output:
+            code=MODULE.main(["--repo","FS-GG/.github","--pr","7","--head",HEAD,"--apply",
+                              "--telemetry-assignment","assignment","--telemetry-store-root","store",
+                              "--telemetry-config","config","--telemetry-publisher-event",
+                              "--telemetry-advisory-deadline-monotonic","80"])
+            self.assertEqual((code,observations),(0,["ready","delivered"]))
+            self.assertEqual(event.call_count,1)
+            self.assertEqual(event.call_args.kwargs["config"],"config")
+            result=json.loads(output.getvalue())
+            self.assertEqual((result["codeDelivery"],result["telemetryHealth"],result["dashboardPublicationHealth"]),
+                             ("delivered","complete","unavailable"))
+
+    def test_failed_final_ci_blocks_event(self):
+        with mock.patch.object(MODULE,"GhApi",return_value=FakeApi([opened("c"*40)])), \
+             mock.patch.object(MODULE,"observe_candidate",return_value="unavailable"), \
+             mock.patch.object(MODULE,"observe_dashboard_event") as event, \
+             mock.patch("sys.stdout",new_callable=io.StringIO):
+            self.assertEqual(MODULE.main(["--repo","FS-GG/.github","--pr","7","--head",HEAD,
+                             "--telemetry-assignment","assignment","--telemetry-store-root","store",
+                             "--telemetry-publisher-event"]),2)
+            event.assert_not_called()
+
+    def test_projection_config_never_replaces_workspace_observation_authority(self):
+        cases = [
+            (None, None, "/private/workspace"),
+            (None, "/private/dashboard-env", "/private/dashboard-env"),
+            ("/private/dashboard-cli", "/private/dashboard-env", "/private/dashboard-cli"),
+            ("relative.json", "/private/dashboard-env", None),
+            (None, "relative.json", None),
+            ("", None, None),
+        ]
+        for explicit, environment, expected in cases:
+            with self.subTest(explicit=explicit, environment=environment):
+                env = {} if environment is None else {"FSGG_TELEMETRY_DASHBOARD_CONFIG": environment}
+                with mock.patch.dict(MODULE.os.environ, env, clear=True), \
+                     mock.patch.object(MODULE, "GhApi", return_value=FakeApi([opened(), merged()], [{"merged": True, "sha": MERGE}])), \
+                     mock.patch.object(MODULE, "observe_candidate", return_value="complete") as observer, \
+                     mock.patch.object(MODULE, "observe_dashboard_event", return_value="published") as event, \
+                     mock.patch("sys.stdout", new_callable=io.StringIO) as output:
+                    args = ["--repo", "FS-GG/.github", "--pr", "7", "--head", HEAD, "--apply",
+                            "--telemetry-assignment", "assignment", "--telemetry-config", "/private/workspace",
+                            "--telemetry-publisher-event", "--telemetry-advisory-deadline-monotonic", "80"]
+                    if explicit is not None:
+                        args += ["--telemetry-publisher-config", explicit]
+                    self.assertEqual(MODULE.main(args), 0)
+                    self.assertTrue(observer.call_args_list)
+                    self.assertTrue(all(call.kwargs["config"] == "/private/workspace" for call in observer.call_args_list))
+                    result = json.loads(output.getvalue())
+                    self.assertEqual((result["codeDelivery"], result["telemetryHealth"]), ("delivered", "complete"))
+                    if expected is None:
+                        event.assert_not_called()
+                        self.assertEqual(result["dashboardPublicationHealth"], "not-run-config-invalid")
+                    else:
+                        event.assert_called_once_with(engine="fsgg-coord-engine", config=expected, deadline=80)
+                        self.assertEqual(result["dashboardPublicationHealth"], "published")
+
+
 if __name__ == "__main__":
     unittest.main()

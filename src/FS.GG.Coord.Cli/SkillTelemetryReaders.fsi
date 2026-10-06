@@ -16,6 +16,8 @@ module SkillTelemetryReaders =
     type RepositoryIdentity = private RepositoryIdentity of string
     type CredentialReference = private CredentialReference of string
 
+    type WorkspaceDestination = private LocalWorkspace of storeRoot: string | RemoteWorkspace
+
     type HostConfig =
         {
             Path: string
@@ -26,6 +28,7 @@ module SkillTelemetryReaders =
             Producer: string option
             BindingDigest: string option
             CredentialReference: CredentialReference option
+            Destination: WorkspaceDestination option
         }
 
     type Assignment =

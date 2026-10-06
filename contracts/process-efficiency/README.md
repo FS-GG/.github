@@ -8,7 +8,7 @@ The [allocation input](allocation-input-v1.schema.json), [episode input](episode
 and [assessment input](assessment-input-v1.schema.json) freeze the concrete additive producer shapes.
 These declarations do not activate an ingest kind, storage migration, analyst, public feed or receiver.
 
-## Canonical joins and compatibility
+## Canonical joins and migration
 
 The inspection is pinned to `8a60856075aaff7614b1286ddc41ef204fe605cc`, with file SHA-256 digests
 in the contract. At that revision the store is schema **13**, ingest is `/1`, item detail is `/2`,
@@ -70,8 +70,9 @@ admitted result; stale/conflicting results refuse. Claim separately discloses ea
 unavailable or observed-only; an observed bounded call cannot establish universal hard token caps.
 
 The selected .2 store extension is additive **schema 14**, with receiver-owned acceptance clocks;
-no migration or write is activated by this milestone. Existing readers and supported CI correction
-remain valid. The contract's `producerAdmission` specifies exact new-versus-existing joins.
+no migration or write is activated by this milestone. The producer, store, collector and dashboard
+may migrate together without backward compatibility. Historical facts, audit history and supported
+CI correction remain preserved. The contract's `producerAdmission` specifies exact new-versus-existing joins.
 
 An allocation is resource-global (`itemId: null`), with one identity per native resource/unit/scope;
 its rational shares name effective canonical items and exclusive purposes. The original resource

@@ -13,11 +13,11 @@ def main():
         repository = args[args.index("--repository") + 1]
         print(json.dumps({
             "schema": "fsgg.telemetry.workspace-binding/1",
-            "configPath": config,
+            "configPath": os.environ.get("SKILL_FS_01_BINDING_CONFIG", config),
             "repository": repository,
             "producerId": "fixture-producer",
             "bindingDigest": "fixture-binding-digest",
-            "destination": "fixture-destination",
+            "destination": os.environ.get("SKILL_FS_01_DESTINATION", "remote"),
             "privateStateRoot": os.environ["SKILL_FS_01_STATE_ROOT"],
         }, separators=(",", ":")))
         return 0
