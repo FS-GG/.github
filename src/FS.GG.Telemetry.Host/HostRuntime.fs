@@ -711,6 +711,18 @@ module Configuration =
             && (File.GetUnixFileMode path &&& (UnixFileMode.GroupWrite ||| UnixFileMode.OtherWrite)) = enum 0
         with _ -> false
 
+    // Pure role metadata only: no file read, principal construction or authority.
+    let internal validateResponsesCredentialRoles (hostConfig: HostConfig) (credentialReference: string)
+                                                  (providerReference: string) (providerFile: string) =
+        let credentials = hostConfig.Credentials |> Array.filter (fun credential ->
+            credential.Reference = credentialReference && credential.Role = "native-collector"
+            && not credential.Revoked && credential.GrantGeneration > 0L)
+        [ if credentials.Length <> 1 || not (TelemetryReceipt.validId credentialReference)
+             || not (TelemetryReceipt.validId providerReference) || providerReference = credentialReference then
+              yield "responses-installation-role"
+          if hostConfig.Credentials |> Array.exists (fun credential -> credential.SecretFile = providerFile) then
+              yield "responses-installation-private-anchor" ]
+
     let loadResponsesCollectorInstallation (hostConfigPath: string) (hostConfig: HostConfig) =
         try
             let path = hostConfigPath + ".native-collector.json"
@@ -778,14 +790,13 @@ module Configuration =
                    || value.GenerationEndpoint <> "https://api.openai.com/v1/responses"
                    || value.InputTokenLimit <> 8000L || value.OutputTokenLimit <> 1500L
                    || value.WholeMilliseconds <> 60000 then errors.Add "responses-installation-profile"
-                if credentials.Length <> 1 || not (TelemetryReceipt.validId value.CredentialReference)
-                   || not (TelemetryReceipt.validId value.ProviderCredentialReference)
-                   || value.ProviderCredentialReference = value.CredentialReference then errors.Add "responses-installation-role"
+                errors.AddRange(validateResponsesCredentialRoles hostConfig value.CredentialReference
+                                    value.ProviderCredentialReference value.ProviderCredentialFile)
                 if not (privatePath hostConfigPath) || not (privatePath value.ProviderCredentialFile)
-                   || (hostConfig.Credentials |> Array.exists (fun credential -> credential.SecretFile = value.ProviderCredentialFile))
                    || not (privateDirectory value.EvidenceRoot)
                    || not (value.EvidenceRoot.StartsWith(anchor + string Path.DirectorySeparatorChar, StringComparison.Ordinal)) then
-                    errors.Add "responses-installation-private-anchor"
+                    if not (errors.Contains "responses-installation-private-anchor") then
+                        errors.Add "responses-installation-private-anchor"
                 if verifier.ValueKind <> JsonValueKind.Object
                    || (verifier.EnumerateObject() |> Seq.map _.Name |> Set.ofSeq) <> verifierFields then
                     errors.Add "responses-installation-verifier-shape"

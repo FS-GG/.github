@@ -107,6 +107,9 @@ module Configuration =
     val internal responsesOwnerUid: unit -> uint32
     val internal readResponsesPrivateBytes: hostConfigPath: string -> file: string -> maximum: int -> Result<byte array, string list>
     val internal responsesImmutableFile: path: string -> bool
+    /// Declaration-only role checks shared by installation and static pre-install tests.
+    val internal validateResponsesCredentialRoles:
+        hostConfig: HostConfig -> credentialReference: string -> providerReference: string -> providerFile: string -> string list
     val validate: HostConfig -> Result<HostConfig, string list>
     val load: string -> Result<HostConfig, string list>
     val credentials: HostConfig -> Map<string, AuthEntry>
