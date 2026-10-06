@@ -387,7 +387,7 @@ skills:
   # publishing-and-deployment — homed beside its owner+predicate siblings and reconciled verbatim from
   # .github's producer manifest by `--write` (.github#299/.github#1200). The position
   # and this annotation are generated; the row's bytes are the manifest's.
-  - { id: publishing-and-deployment,scope: operator,owner: .github,         source: .github/.claude/skills/publishing-and-deployment/SKILL.md, sha256: 3244ab76eeb138f1e631544180398c8237470ba01cde3a337bab28962d3a769e, materializes-when: "false" }
+  - { id: publishing-and-deployment,scope: operator,owner: .github,         source: .github/.claude/skills/publishing-and-deployment/SKILL.md, sha256: 89c2035cdeaa5d1dc3b691d09cc9c78147bd7861191dd7d6052b0fa897478962, materializes-when: "false" }
   # drive-board-best — homed beside its owner+predicate siblings and reconciled verbatim from
   # .github's producer manifest by `--write` (.github#299/.github#1200). The position
   # and this annotation are generated; the row's bytes are the manifest's.

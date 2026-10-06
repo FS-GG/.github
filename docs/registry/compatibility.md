@@ -30,14 +30,15 @@ FS.GG.Rendering ──(depends on no FS-GG component; never depends on Governanc
 
 ## Versioned contracts
 
-Current Rendering producer inventory (2026-10-03): `fs-gg-ui-template` source/package
-**0.32.0** and `fs-gg-ui-template/v0.32.0` bind original producer
-`730923fe9d27174e879566f21dab14a1b03d761a`. Protected
-[publisher 37106323610](https://github.com/FS-GG/FS.GG.Rendering/actions/runs/37106323610)
-verified all nineteen original archives on both feeds; all three release tags bind
-that source. This is publish-before-flip inventory reconciliation. Templates retains
-its actual Rendering **0.31.0** dependency; Workspace **0.15.0**, Wizard **0.12.0**,
-lifecycle defaults and incomplete receiver coherence are unchanged.
+Current Rendering producer inventory (2026-10-06): `fs-gg-ui-template` source/package
+**0.32.1** and `fs-gg-ui-template/v0.32.1` bind original producer
+`6c9f766fdd91483c2de6f061e75589e94852a265`. Root accepted
+[publisher 37461402933/a1](https://github.com/FS-GG/FS.GG.Rendering/actions/runs/37461402933)
+at executor `6ea40861d15b581735655fbe7253673bf1cee907`: all nineteen original
+packages were acknowledged on both feeds, with GitHub exact archive and nuget.org
+custody-payload readbacks matched. All three release tags bind the original producer.
+Templates' selected registry dependency remains **0.32.0**; notification, receiver
+adoption and installed use remain open. Publication does not establish host GPU acceptance.
 
 Current release amendments (2026-07-26): `governance-reference-gate-set` is source/package
 **1.5.0**, published from Governance PR #325 (merge `9243c07`, release run `30215484433`);
@@ -129,7 +130,7 @@ authored `Version` cells of the Versioned contracts table (#748).*
 | `governance-tooling` | FS.GG.Governance | `1` | — |
 | `governance-descriptor` | FS.GG.Governance | `1` | — |
 | `governance-reference-gate-set` | FS.GG.Governance | `1.7.0` | `1.7.0` |
-| `fs-gg-ui-template` | FS.GG.Rendering | `0.32.0` | `0.32.0` |
+| `fs-gg-ui-template` | FS.GG.Rendering | `0.32.1` | `0.32.1` |
 | `shared-build-config` | FS-GG/.github | `1.1.0` | — |
 | `registry-schema` | FS.GG.SDD | `2` | — |
 | `skill-registry` | FS-GG/.github | `3` | — |

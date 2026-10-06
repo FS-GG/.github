@@ -553,9 +553,9 @@ if len(rows) != 1:
     raise SystemExit(f"expected exactly one fs-gg-ui-template row, found {len(rows)}")
 row = rows[0]
 expected = {
-    "version": "0.32.0",
-    "package-version": "0.32.0",
-    "package-tag": "fs-gg-ui-template/v0.32.0",
+    "version": "0.32.1",
+    "package-version": "0.32.1",
+    "package-tag": "fs-gg-ui-template/v0.32.1",
 }
 for key, value in expected.items():
     if str(row.get(key)) != value:
