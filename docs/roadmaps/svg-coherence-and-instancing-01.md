@@ -22,6 +22,25 @@ workload does not retroactively invalidate historical acceptance for other workl
 
 ## Current progress
 
+**2026-10-06: Public receiver codec reference repair delivered.**
+The first full public-input [run 37498421148/a1](https://github.com/FS-GG/FS.GG.Rendering/actions/runs/37498421148)
+failed before locked restore because the validator rejected the codec probes’
+shipped local Protocol/Domain project references. Its authenticated artifact
+retains 180 ProviderComposition PASS lines and three matched public Rendering
+0.32.1 archive/source/custody readbacks; restore, codec and browser qualification
+were not completed. The preceding raw-SHA dispatch request was refused with HTTP
+422 before run creation; neither failed request receives full qualification credit.
+[Templates #675](https://github.com/FS-GG/FS.GG.Templates/pull/675) merged exact
+`ee6899b23ad921506fbd74bc75b064e923ab12fd` as
+`208e5bffe99153375f7d3e2e1c84653104883cd3` at 17:20:13 UTC, with 11 checks
+passed and four skipped. Its validator admits only the probes’ exact existing
+local edges and rejects conditional ancestors or alternative project references;
+25 focused pure controls and ordinary source CI passed. This closes the repair
+source step within SVG-COHERENCE-01.8. The Rendering caller must select this
+protected receiver before a new full request. Full public-input qualification,
+Templates successor publication and final installed/default/wizard acceptance
+remain open, alongside broader adoption and host GPU qualification.
+
 **2026-10-06: Rendering public-input receiver caller source delivered.**
 [Rendering #1396](https://github.com/FS-GG/FS.GG.Rendering/pull/1396) merged head
 `c7dbc9bdb90bbce4ba46d63063dc1d6d6c92c991` as
@@ -31,8 +50,8 @@ passed and one skipped. The existing caller selects protected Templates
 explicitly selects the public Rendering 0.32.1 input mode. Its source checks
 preserve read-only permissions, exact custody joins and forced PR preflight;
 the receiver keeps its existing 35-minute qualification bound.
-The full public-mode workflow request is prepared against that actual caller
-revision but has not been dispatched or accepted. This closes the caller source
+At that source checkpoint, the full public-mode workflow request was prepared against that caller
+revision but had not been dispatched or accepted. This closes the caller source
 step within SVG-COHERENCE-01.8; native public-input qualification, publication of
 the Templates successor and its final installed/default/wizard acceptance remain
 open, alongside broader adoption and host GPU qualification.
