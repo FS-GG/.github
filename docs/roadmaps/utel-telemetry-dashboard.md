@@ -135,7 +135,14 @@ available for complication counts; `/2` remains unchanged. Native qualification 
 91 tests, and its exact source passed six genuine producer/publisher UID-isolation checks.
 
 The selected destination is `telemetry-data-current/host.json`. The legacy store is not a
-migration dependency. The source exporter is ready, but coherent publication, verified installed
-adoption, backed-up schema migration and the actual canonical export remain required. Publish
-and read back the new feed before landing the separate Pages selector. These source tests do
-not establish fresh completed-item counts, recurring publication or a live dashboard update.
+migration dependency. Coherent 0.98.0 publication is verified, and the existing installation's
+payload and runtime closure are accepted without a global switch. The backed-up canonical
+store now uses schema 13 with all 55 tables preserved. Supported Governance #444 correction
+joins 204 targets to GOV-423-C3, preserves the original raw facts and all 144 native outcomes,
+and verifies one audit entry and an idempotent retry. These are local migration and correction
+receipts, not public dashboard adoption.
+
+Two spool batches remain pending. The publisher is inactive; the actual sanitized canonical
+export, verified new feed, separate Pages selector and event activation remain required. Publish
+and read back the new feed before landing the selector. No fresh public completed-item count,
+recurring publication or live dashboard update follows from the local receipts.
