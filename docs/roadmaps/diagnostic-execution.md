@@ -1,6 +1,6 @@
 # V2-DIAG-01: Collect independent failures within bounded execution
 
-Date: 2026-10-06. Status: guidance and ordinary runner landed; local ordinary and packaged native pilots qualified; canonical release and receiver adoption pending.
+Date: 2026-10-06. Status: guidance and ordinary runner landed; local ordinary and packaged native pilots qualified; SDD guidance carrier published; canonical Coordination release and installed receiver adoption pending.
 Design: [diagnostic execution](../designs/diagnostic-execution.md).
 Parent: [V2 roadmap](../github-substrate-v2-roadmap.md#v2-diag-01--diagnostic-execution--2026-10-05).
 
@@ -239,3 +239,23 @@ four owned processes and at most two task CLR processes. These are sampled obser
 instantaneous hard limits. The original failed provider attempt and its unknown cleanup remain
 unchanged. This accepts fixture/caller behavior only; fresh provider admission and qualification
 are still required.
+
+## SDD guidance carrier publication — 2026-10-06
+
+[SDD #1088](https://github.com/FS-GG/FS.GG.SDD/pull/1088) merged at
+`cf2f046a10497a336d6243c9a314c3f91fb15771`, carrying Drivers 0.98.0 diagnostic guidance.
+Contracts 7.6.0 and coherent CLI, Artifacts and Knowledge 2.2.0 were published from the original
+four archives retained by [preparation 37536203179/1](https://github.com/FS-GG/FS.GG.SDD/actions/runs/37536203179).
+[Promotion 37538040787/2](https://github.com/FS-GG/FS.GG.SDD/actions/runs/37538040787/attempts/2)
+passed literal dual-feed payload readback, public Knowledge and clean installation gates, and
+58 Q2/Q3 receiver cases. Independent intake of receipt `11448064295`, archive SHA256
+`e255c688a2d4a33771578563cda6a720ef669c0061c32a3f1fbcfe11d657bf55`, matched all eight
+feed archives to the original candidates. The first attempt's public CLI discovery failure remains
+historical; the receipt harness's placeholder-name refusal was corrected using the official script's
+exact public-package substitution and reverified against the same retained archive.
+
+The earlier source-local 26 tests and 16-member, two-root scaffold acceptance remain scoped evidence.
+Selected installed diagnostic-guidance use and bounded evaluation remain open under .4; public package
+installation gates do not establish that adoption. Kit #1090 and tool #1087 remain separate receivers.
+Canonical Coordination publication, pilot adoption and unavailable baseline usage remain open;
+no measured savings, automatic guidance reload or `.claude` execution is inferred.
