@@ -11,6 +11,7 @@
   const coverage=new Set("complete partial unknown not-applicable".split(" "));
   const axes="population usage classification lineage dependency".split(" ");
   const url=(v)=>typeof v==="string"&&/^https:\/\/github\.com\/FS-GG\/[A-Za-z0-9_.-]+\/(?:issues|pull|actions\/runs)\/[1-9][0-9]*$/.test(v);
+  const itemUrl=(v)=>typeof v==="string"&&/^https:\/\/github\.com\/FS-GG\/[A-Za-z0-9_.-]+(?:\/(?:issues|pull)\/[1-9][0-9]*)?$/.test(v);
   const object=(v)=>v!==null&&typeof v==="object"&&!Array.isArray(v);
   const exact=(v,keys)=>object(v)&&Object.keys(v).length===keys.length&&keys.every((k)=>Object.hasOwn(v,k));
   const number=(v)=>Number.isSafeInteger(v)&&v>=0;
@@ -30,7 +31,7 @@
     });
     const keys=new Set();
     feed.items.forEach((item)=>{
-      if(!exact(item,["key","label","url","summary","analysisState","scope","metrics","problems","timeline","improvements","exportHealth"])||typeof item.key!=="string"||!/^[a-z0-9][a-z0-9-]{0,63}$/.test(item.key)||keys.has(item.key)||typeof item.label!=="string"||!item.label.length||item.label.length>120||!url(item.url)||!["native-observation","delivery-accounting-incomplete","accounting-unestablished"].includes(item.summary)||!states.has(item.analysisState)||!["native-item","provisional-delivery","unestablished"].includes(item.scope)||(item.scope==="provisional-delivery"&&item.analysisState==="ready")||!Array.isArray(item.metrics)||item.metrics.length>32)fail();
+      if(!exact(item,["key","label","url","summary","analysisState","scope","metrics","problems","timeline","improvements","exportHealth"])||typeof item.key!=="string"||!/^[a-z0-9][a-z0-9-]{0,63}$/.test(item.key)||keys.has(item.key)||typeof item.label!=="string"||!item.label.length||item.label.length>120||!itemUrl(item.url)||!["native-observation","delivery-accounting-incomplete","accounting-unestablished"].includes(item.summary)||!states.has(item.analysisState)||!["native-item","provisional-delivery","unestablished"].includes(item.scope)||(item.scope==="provisional-delivery"&&item.analysisState==="ready")||!Array.isArray(item.metrics)||item.metrics.length>32)fail();
       if(item.summary!==({"native-item":"native-observation","provisional-delivery":"delivery-accounting-incomplete","unestablished":"accounting-unestablished"}[item.scope]))fail();
       const h=item.exportHealth;
       if(feed.source==="canonical-export"){

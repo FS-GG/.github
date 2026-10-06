@@ -120,7 +120,8 @@ The projection policy `efficiency-public-projection/1` explicitly expands the ex
 approval for structured metric values, coverage, purpose/health dimensions, taxonomy enums and
 fixed summary templates, closed queue/assessment states, fixed failure codes, witnessed clocks,
 source hashes and bounded selection counts. This is an explicit structured-field publication policy;
-it does not approve private analysis prose. Item identity still requires the approved label registry; public evidence
+it does not approve private analysis prose. Item identity still requires the approved label registry, including its repository-root item URLs;
+public evidence
 needs a separate explicit GitHub URL map. Private synopsis, findings, rationale, improvements,
 identifiers, metric reasons and arbitrary URLs are excluded. Policy profile names are contract
 aliases, not claims that those profiles were already installed. Numeric facts come from canonical
@@ -142,7 +143,7 @@ does not establish live acceptance during a version mismatch.
 
 The source includes native keyboard controls, search/scope/measurement filters, ten-item pages,
 accessible table captions/headings and the existing last-valid-feed fallback. Fourteen focused
-projection checks and eleven export-consumer checks pass. The latest full Python run had 122 passes and
+projection checks and twelve export-consumer checks pass. The latest full Python run had 122 passes and
 one expected stale two-UID proof digest failure (123 tests); a new actual proof must qualify final exporter bytes. Three additional browser tests
 are authored but have not run at this checkpoint. No publication, installation or native/store
 qualification is claimed from source fixtures.

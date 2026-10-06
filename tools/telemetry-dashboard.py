@@ -39,6 +39,7 @@ EFF_PURPOSES = {'direct-product', 'useful-assurance', 'necessary-coordination', 
 EFF_REF_KINDS = {'outcome', 'attempt', 'invocation', 'operation', 'pr', 'ci-run', 'ci-job', 'release', 'adoption', 'usage', 'activity', 'complication', 'process-review', 'correction', 'assessment'}
 EFF_HEALTH_DIMENSIONS = {'source-age', 'ingestion-age', 'publication-age', 'producer-population', 'unresolved-lineage', 'pending-analysis'}
 EFF_STATES = {'pending', 'running', 'partial', 'ready', 'failed', 'unavailable'}
+EFF_ITEM_URL = re.compile(r'https://github\.com/FS-GG/[A-Za-z0-9_.-]+(?:/(?:issues|pull)/[1-9][0-9]*)?')
 EFF_URL = re.compile(r'https://github\.com/FS-GG/[A-Za-z0-9_.-]+/(?:issues|pull|actions/runs)/[1-9][0-9]*')
 
 
@@ -95,7 +96,7 @@ def validate_process_efficiency(value):
         _eff_exact(item, ('key', 'label', 'url', 'summary', 'analysisState', 'scope', 'metrics', 'problems', 'timeline', 'improvements', 'exportHealth'))
         if not isinstance(item['key'], str) or not re.fullmatch(r'[a-z0-9][a-z0-9-]{0,63}', item['key']) or item['key'] in keys: raise ValueError('invalid public item key')
         keys.add(item['key'])
-        if not isinstance(item['label'], str) or not 1 <= len(item['label']) <= 120 or not isinstance(item['url'], str) or not EFF_URL.fullmatch(item['url']): raise ValueError('invalid approved item')
+        if not isinstance(item['label'], str) or not 1 <= len(item['label']) <= 120 or not isinstance(item['url'], str) or not EFF_ITEM_URL.fullmatch(item['url']): raise ValueError('invalid approved item')
         if item['scope'] not in {'native-item', 'provisional-delivery', 'unestablished'} or item['analysisState'] not in EFF_STATES or item['summary'] not in {'native-observation', 'delivery-accounting-incomplete', 'accounting-unestablished'}: raise ValueError('invalid efficiency summary')
         if item['summary'] != ({'native-item': 'native-observation', 'provisional-delivery': 'delivery-accounting-incomplete', 'unestablished': 'accounting-unestablished'}[item['scope']]): raise ValueError('summary scope mismatch')
         health = item['exportHealth']

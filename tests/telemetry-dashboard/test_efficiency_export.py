@@ -125,6 +125,14 @@ class ExportTests(unittest.TestCase):
         for budget in (0, True, 1_048_577):
             with self.assertRaises(ValueError): D.project_efficiency_exports([(value, 'a'*64)], labels(), max_bytes=budget)
 
+    def test_existing_approved_repository_item_url_does_not_approve_metric_links(self):
+        value = export(); value['items'][0]['originalItemId'] = 'PRIVATE-NATIVE'
+        approved = labels(); approved['items']['PRIVATE-NATIVE']['url'] = 'https://github.com/FS-GG/.github'
+        result = D.project_efficiency_exports([(value, 'a'*64)], approved)
+        self.assertEqual(result['items'][0]['url'], 'https://github.com/FS-GG/.github')
+        self.assertEqual(result['items'][0]['metrics'][0]['sourceEvidence'], [])
+        with self.assertRaises(ValueError): D.project_efficiency_exports([(value, 'a'*64)], approved, {'PRIVATE-EVIDENCE': 'https://github.com/FS-GG/.github'})
+
     def test_reader_is_inactive_and_never_replaces_source_deliveries(self):
         self.assertEqual(D.EFF.unavailable()['status'], 'unavailable')
         import inspect
