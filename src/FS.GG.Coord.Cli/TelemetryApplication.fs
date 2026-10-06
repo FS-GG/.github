@@ -183,6 +183,12 @@ module TelemetryApplication =
                     []
                     args[.. delimiter - 1]
                 |> Some
+        | "telemetry" :: "ci" :: "correction-plan" :: args ->
+            shape [ "--input"; "--output"; "--store-root"; "--config"; "--repository" ] [] args
+        | "telemetry" :: "ci" :: "correct" :: args ->
+            shape [ "--plan"; "--store-root"; "--config"; "--repository" ] [] args
+        | "telemetry" :: "ci" :: "correction-history" :: args ->
+            shape [ "--correction-id"; "--store-root"; "--config"; "--repository" ] [] args
         | "telemetry" :: "ci" :: "collect" :: args ->
             shape [ "--assignment"; "--repo"; "--pr"; "--head"; "--workflow"; "--store-root" ] [] args
         | "telemetry" :: "ci" :: "reconcile" :: args ->

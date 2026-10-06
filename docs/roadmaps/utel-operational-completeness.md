@@ -101,6 +101,28 @@ changes native output, exit or delivery.
   supported repository-owned scope qualified while platform-native population remains incomplete until an actual
   adapter exists and passes a fresh equivalent journey.
 
+## UTEL-06.8 — Supported CI attribution correction
+
+- [x] **UTEL-06.8a — Preserve and supersede CI assignment in the Store — routine.** Add a schema-13
+  append-only correction/evidence ledger, exact predecessor/revision/digest closure, one effective attribution,
+  atomic old/new derived reconciliation and immutable native-source integrity. Source preparation does not repair
+  an installed Store. Historical UTEL-06.1–06.7 completion and accepted releases remain evidence.
+- [x] **UTEL-06.8b — Supported local operator correction and coherent reports — routine.** Land with .8a:
+  bounded read-only `ci correction-plan`, explicit `ci correct`, separate non-counting `ci correction-history`,
+  local destination selection and producer replay fencing. Qualify real SQLite rollback/restart/chain/content/
+  stale/concurrent controls, exact CI closure, unrelated work preservation, outcome-only coverage and CLI-to-report
+  consistency. Remote correction is explicitly unsupported without local fallback. [Source delivery](https://github.com/FS-GG/.github/pull/4262) retains the normal required checks and
+  coherent validation; publication and installed correction remain the following obligations.
+- [ ] **UTEL-06.8c — Publish the coherent corrected producer.** After .8a–b delivery, use the existing release
+  successor route for a fresh unused coherent CLI/Kit/Drivers version and journal; verify both feeds and promotion.
+- [ ] **UTEL-06.8d — Adopt and qualify installed local correction.** Verify published bytes side by side,
+  disposable misattributed fixtures, retained schema-12 copy migration, backup/recovery and older-client refusal.
+- [ ] **UTEL-06.8e — Correct the retained Governance PR 444 observation and verify reports.** After installed
+  qualification, discover the actual retained identity and apply the sealed supported plan for GOV-423-C3,
+  preserving its original wrong V2-LANG-01.2 assignment as audit evidence. Verify one effective delivery and its
+  provable CI population in GOV/V2-LANG CI, item, budget and dashboard reports. Unknown historical parent usage
+  remains unknown. Missing targets, remote destination or ambiguous closure fence only that dependent effect.
+
 ## Operational evidence record
 
 The producer was published as [coherent set

@@ -56,6 +56,14 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-06: Supported local CI attribution correction source delivered.**
+[PR #4262](https://github.com/FS-GG/.github/pull/4262) adds an audited schema-13 correction
+ledger, sealed plan/apply/history commands and effective attribution in current reports. Original
+facts and audit history remain intact; a corrected delivery counts once. Focused offline source
+qualification passed 163 tests. The [owning roadmap](roadmaps/utel-operational-completeness.md#utel-068--supported-ci-attribution-correction)
+keeps coherent publication, installed migration qualification and the actual Governance #444 repair
+open. This source closure does not claim that the live telemetry store has been corrected.
+
 **2026-10-06: Rendering receiver caller now binds the protected Templates candidate route.**
 [Rendering #1391](https://github.com/FS-GG/FS.GG.Rendering/pull/1391) merged at
 `67091200bc7bbcbb8189b2cf84244b2af919ecd1` after required checks and coherent validation passed.

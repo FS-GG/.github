@@ -676,7 +676,7 @@ module DashboardProjection =
                                         ->
                                         match number "schemaVersion" store, text "journalMode" store with
                                         | Some version, Some "wal" when
-                                            version = 8L || version = 9L || version = 10L || version = 11L || version = 12L ->
+                                            version = 8L || version = 9L || version = 10L || version = 11L || version = 12L || version = 13L ->
                                             let arrayNames =
                                                 [
                                                     "items"

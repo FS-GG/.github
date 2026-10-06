@@ -298,13 +298,24 @@ module RemoteTelemetryTests =
             database.Close()
             Assert.Equal<Map<string, int64>>(beforeVacuum, orders ())
 
+            // Test-only legacy reconstruction removes additive correction objects;
+            // relabeling a current database alone does not create an old schema.
+            let removeCorrectionSchema =
+                "DROP VIEW current_ingest_facts; DROP TABLE ci_effective_attribution; DROP TABLE ci_correction_evidence; DROP TABLE ci_attribution_corrections; DELETE FROM schema_migrations WHERE version=13; DELETE FROM store_metadata WHERE key='ciCorrectionStoreId';"
+            let correctionObjects =
+                "SELECT (SELECT count(*) FROM sqlite_master WHERE name IN ('current_ingest_facts','ci_effective_attribution','ci_correction_evidence','ci_attribution_corrections','ci_correction_immutable_update','ci_correction_immutable_delete','ci_correction_evidence_immutable_update','ci_correction_evidence_immutable_delete')) + (SELECT count(*) FROM schema_migrations WHERE version=13) + (SELECT count(*) FROM store_metadata WHERE key='ciCorrectionStoreId');"
+
             // A schema-11 store keeps its durable order, but migration cannot invent receipt provenance.
             use downgrade11 = new SqliteConnection($"Data Source={databasePath};Pooling=False")
             downgrade11.Open()
             use downgrade11Command = downgrade11.CreateCommand()
             downgrade11Command.CommandText <-
-                "DROP TABLE fact_admissions; DROP TABLE receipt_admissions; ALTER TABLE receipt_producers DROP COLUMN grant_generation; ALTER TABLE receipt_producers DROP COLUMN grant_id; ALTER TABLE receipt_producers DROP COLUMN authority_role; DELETE FROM schema_migrations WHERE version=12; PRAGMA user_version=11;"
+                removeCorrectionSchema + "DROP TABLE fact_admissions; DROP TABLE receipt_admissions; ALTER TABLE receipt_producers DROP COLUMN grant_generation; ALTER TABLE receipt_producers DROP COLUMN grant_id; ALTER TABLE receipt_producers DROP COLUMN authority_role; DELETE FROM schema_migrations WHERE version=12; PRAGMA user_version=11;"
             downgrade11Command.ExecuteNonQuery() |> ignore
+            downgrade11Command.CommandText <- correctionObjects
+            Assert.Equal(0L, Convert.ToInt64(downgrade11Command.ExecuteScalar()))
+            downgrade11Command.CommandText <- "PRAGMA user_version;"
+            Assert.Equal(11L, Convert.ToInt64(downgrade11Command.ExecuteScalar()))
             downgrade11.Close()
             TelemetryStoreApplication.initialize root TelemetryStore.ApprovedLocalDurable
             |> Result.defaultWith (String.concat "; " >> failwith) |> ignore
@@ -324,8 +335,12 @@ module RemoteTelemetryTests =
             downgrade.Open()
             use downgradeCommand = downgrade.CreateCommand()
             downgradeCommand.CommandText <-
-                "DROP TABLE fact_admissions; DROP TABLE receipt_admissions; ALTER TABLE receipt_producers DROP COLUMN grant_generation; ALTER TABLE receipt_producers DROP COLUMN grant_id; ALTER TABLE receipt_producers DROP COLUMN authority_role; DELETE FROM schema_migrations WHERE version=12; DROP TABLE learning_fact_order; DELETE FROM schema_migrations WHERE version=11; PRAGMA user_version=10;"
+                removeCorrectionSchema + "DROP TABLE fact_admissions; DROP TABLE receipt_admissions; ALTER TABLE receipt_producers DROP COLUMN grant_generation; ALTER TABLE receipt_producers DROP COLUMN grant_id; ALTER TABLE receipt_producers DROP COLUMN authority_role; DELETE FROM schema_migrations WHERE version=12; DROP TABLE learning_fact_order; DELETE FROM schema_migrations WHERE version=11; PRAGMA user_version=10;"
             downgradeCommand.ExecuteNonQuery() |> ignore
+            downgradeCommand.CommandText <- correctionObjects
+            Assert.Equal(0L, Convert.ToInt64(downgradeCommand.ExecuteScalar()))
+            downgradeCommand.CommandText <- "PRAGMA user_version;"
+            Assert.Equal(10L, Convert.ToInt64(downgradeCommand.ExecuteScalar()))
             downgrade.Close()
             TelemetryStoreApplication.initialize root TelemetryStore.ApprovedLocalDurable
             |> Result.defaultWith (String.concat "; " >> failwith) |> ignore
@@ -2202,7 +2217,7 @@ exec /usr/bin/python3 "{patchedFixture}" "$@"
         Assert.False(Capacity.admitsNewIdentity 0L 0L (64L * 1024L * 1024L) 1L)
 
     [<Fact>]
-    let ``Host restores a 0.1.2 schema 9 backup into separate schema 12 state`` () =
+    let ``Host restores a 0.1.2 schema 9 backup into separate schema 13 state`` () =
         let root = Path.Combine(Path.GetTempPath(), "host-schema-restore-" + Guid.NewGuid().ToString("N"))
         Directory.CreateDirectory root |> ignore
 
@@ -2247,7 +2262,7 @@ exec /usr/bin/python3 "{patchedFixture}" "$@"
                     (fun _ -> TelemetryStore.ApprovedLocalDurable)
             )
 
-            Assert.Equal(12, version target)
+            Assert.Equal(13, version target)
             Assert.Equal(9, version source)
             Assert.Equal<byte>(sourceDigest, SHA256.HashData(File.ReadAllBytes source))
             let receiptScope: TelemetryReceipt.Scope =
