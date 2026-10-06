@@ -102,8 +102,8 @@ Analysis cost is visible; additional evidence revisions remain within a declared
 ### V2-EFF-01.4 — Publish useful dashboard explanations
 
 - [ ] Owner: `.github` dashboard maintainer.
-- [ ] Implement the versioned sanitized projection, public-summary publication rules and compatibility
-  behavior. Keep private findings private unless the approved projection allows their content.
+- [ ] Implement the versioned sanitized projection, public-summary publication rules and matched
+  current-only dashboard/feed migration. Keep private findings private unless the approved projection allows their content.
 - [ ] Build the work-mix, retry, problem, item-summary/timeline, improvement and data-health views from
   the design. Include open/abandoned items and known deliveries with incomplete accounting.
 - [ ] Add accessible tables, keyboard interaction, coverage/denominator labels, stable filters,
@@ -172,6 +172,14 @@ SHA `718b260bb7bbfa3eaea878e5dfcf27bd4529d5695dc94134b39aed8cfcba6c54` retains t
 result. The old proof was preserved privately before updating the checked-in proof from that genuine
 fixture result. This qualifies handoff permissions for the exact source exporter, not schema-14
 endpoint behavior, native measurements, publication, installation or live feed acceptance.
+
+The standalone dashboard upgrade can adopt this qualified exporter/UI against the installed
+schema-13 compact source while process efficiency remains explicitly unavailable. It does not
+change or republish the immutable 0.98 engine release. Adoption must preserve the approved completed
+items and show approved source deliveries from a genuine current readback; checkout and fixture
+evidence do not grant installed acceptance. The matching host-5 public feed and Pages artifact
+must use the same selected source revision. Schema-14 export activation and the .6 coherent
+producer/release/pilot work remain separately owed.
 
 The .2/.3 owners agreed a separate read-only `telemetry efficiency-export` batch interface.
 Its source consumer seam binds `snapshotRevision` to the exact compact `item-detail/3` base and
