@@ -45,9 +45,13 @@ module Program =
         elif Array.contains "efficiency" args && Array.contains "analysis" args && Array.contains "reconcile" args then
             require (option "--repository" args = Some "FS-GG/.github") "canonical reconcile lost discovered repository"
             require (option "--config" args |> Option.isSome) "canonical reconcile lost config custody"
+            let expected = Environment.GetEnvironmentVariable "FSGG_ADAPTER_TEST_RECONCILE_CONFIG"
+            if not (isNull expected) then require (option "--config" args = Some expected) "dashboard override changed reconciliation config"
             Console.Out.WriteLine "{}"
             0
         elif Array.contains "publisher-event" args then
+            let expected = Environment.GetEnvironmentVariable "FSGG_ADAPTER_TEST_PUBLISHER_CONFIG"
+            if not (isNull expected) then require (option "--config" args = Some expected) "dashboard publisher lost explicit projection config"
             match Environment.GetEnvironmentVariable "FSGG_ADAPTER_TEST_DASHBOARD_MODE" with
             | "failure" -> Console.Error.WriteLine "synthetic advisory failure"; 1
             | "invalid" -> Console.Out.WriteLine "{}"; 0
@@ -94,13 +98,20 @@ module Program =
         let startedResult = run (Some host) (Started(token, "native-agent-a"))
         require (startedResult.ExitCode = 0) (text startedResult.Stderr)
         require host.Repository.IsNone "canonical fixture unexpectedly has a repository"
-        let previousRepository = Environment.GetEnvironmentVariable "FSGG_TELEMETRY_REPOSITORY"
+        let projectionPath = Path.Combine(root, "dashboard-projection.json")
+        let selectedEnvironment =
+            [ "FSGG_TELEMETRY_REPOSITORY", "FS-GG/.github"
+              "FSGG_TELEMETRY_DASHBOARD_CONFIG", projectionPath
+              "FSGG_ADAPTER_TEST_PUBLISHER_CONFIG", projectionPath
+              "FSGG_ADAPTER_TEST_RECONCILE_CONFIG", host.Path ]
+        let previous = selectedEnvironment |> List.map (fun (key, _) -> key, Environment.GetEnvironmentVariable key)
         let finishResult =
-            Environment.SetEnvironmentVariable("FSGG_TELEMETRY_REPOSITORY", "FS-GG/.github")
+            selectedEnvironment |> List.iter (fun (key, value) -> Environment.SetEnvironmentVariable(key, value))
             try run (Some host) (Finish(token, "completed", None))
-            finally Environment.SetEnvironmentVariable("FSGG_TELEMETRY_REPOSITORY", previousRepository)
+            finally previous |> List.iter (fun (key, value) -> Environment.SetEnvironmentVariable(key, value))
         require (finishResult.ExitCode = 0) (text finishResult.Stderr)
         require ((resultJson finishResult).GetProperty("assessmentReconciliation").GetProperty("status").GetString() = "requested") "canonical repository None refused reconciliation"
+        require ((resultJson finishResult).GetProperty("dashboardPublication").GetProperty("status").GetString() = "observed") "explicit projection config prevented dashboard publication"
         let terminal = resultJson finishResult
         require (terminal.GetProperty("status").GetString() = "terminal") "finish did not become terminal"
         require (terminal.GetProperty("coverage").GetString() = "native-collaboration-usage-unsupported") "missing usage became measured"
@@ -149,9 +160,25 @@ module Program =
         File.WriteAllText(review, "{\"schema\":\"fsgg.telemetry.process-review-input/1\",\"revision\":0,\"outcomeSynopsis\":\"fixture\",\"wentWell\":[],\"problems\":[],\"avoidableDelayOrRework\":[],\"processObservations\":[],\"remainingRisks\":[],\"concreteImprovements\":[],\"evidence\":[],\"evidenceCoverage\":\"fixture\",\"populationCoverage\":\"unknown\",\"confidence\":\"high\",\"reviewerModel\":\"fixture\",\"reviewerEffort\":\"fixture\",\"reviewedAt\":\"2026-09-27T00:00:01Z\",\"durationSeconds\":1}")
         for path in [ activity; complication; usage; review ] do
             if not (OperatingSystem.IsWindows()) then File.SetUnixFileMode(path, enum<UnixFileMode> 0o600)
-        let observed = run (Some host) (Activity(token, FileInfo activity))
+        let previousProjection = Environment.GetEnvironmentVariable "FSGG_TELEMETRY_DASHBOARD_CONFIG"
+        let previousExpectedPublisher = Environment.GetEnvironmentVariable "FSGG_ADAPTER_TEST_PUBLISHER_CONFIG"
+        let observed =
+            Environment.SetEnvironmentVariable("FSGG_TELEMETRY_DASHBOARD_CONFIG", null)
+            Environment.SetEnvironmentVariable("FSGG_ADAPTER_TEST_PUBLISHER_CONFIG", host.Path)
+            try run (Some host) (Activity(token, FileInfo activity))
+            finally
+                Environment.SetEnvironmentVariable("FSGG_TELEMETRY_DASHBOARD_CONFIG", previousProjection)
+                Environment.SetEnvironmentVariable("FSGG_ADAPTER_TEST_PUBLISHER_CONFIG", previousExpectedPublisher)
         require (observed.ExitCode = 0 &&
                  (resultJson observed).GetProperty("dashboardPublication").GetProperty("status").GetString() = "observed") "dashboard publication hook was not observed"
+        let previousDashboardConfig = Environment.GetEnvironmentVariable "FSGG_TELEMETRY_DASHBOARD_CONFIG"
+        for invalidPath in [ " "; "relative-projection.json" ] do
+            Environment.SetEnvironmentVariable("FSGG_TELEMETRY_DASHBOARD_CONFIG", invalidPath)
+            try
+                let invalidConfig = run (Some host) (Activity(token, FileInfo activity))
+                require (invalidConfig.ExitCode = 0 &&
+                         (resultJson invalidConfig).GetProperty("dashboardPublication").GetProperty("reason").GetString() = "publisher-event-config-invalid") "invalid projection path changed telemetry result or reached publisher"
+            finally Environment.SetEnvironmentVariable("FSGG_TELEMETRY_DASHBOARD_CONFIG", previousDashboardConfig)
         Environment.SetEnvironmentVariable("FSGG_ADAPTER_TEST_DASHBOARD_MODE", "invalid")
         let invalidDashboard = run (Some host) (Activity(token, FileInfo activity))
         require (invalidDashboard.ExitCode = 0 &&

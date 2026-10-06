@@ -798,16 +798,22 @@ module SkillTelemetryAdapter =
     let private dashboard config =
         let failed reason = jsonObject [ "status", node "advisory-failure"; "reason", node reason ]
         try
-            let completed = execute 60 8192 [ config.Engine; "telemetry"; "dashboard"; "publisher-event"; "--config"; config.Path ]
-            if completed.Code <> 0 then failed "publisher-event-subprocess-failed"
+            let configuredPath = Environment.GetEnvironmentVariable "FSGG_TELEMETRY_DASHBOARD_CONFIG"
+            if not (isNull configuredPath) &&
+               (String.IsNullOrWhiteSpace configuredPath || not (Path.IsPathFullyQualified configuredPath)) then
+                failed "publisher-event-config-invalid"
             else
-                let health = JsonNode.Parse completed.Stdout
-                let expected = Set [ "schema"; "status"; "reason"; "observedAt"; "publicRevision"; "commit" ]
-                match health with
-                | :? JsonObject as value when (value |> Seq.map (fun field -> field.Key) |> Set.ofSeq) = expected &&
-                                              optionalString "schema" value = Some "fsgg.telemetry.dashboard-event-health/1" ->
-                    jsonObject [ "status", node "observed"; "health", health ]
-                | _ -> failed "publisher-event-result-invalid"
+                let dashboardPath = if isNull configuredPath then config.Path else configuredPath
+                let completed = execute 60 8192 [ config.Engine; "telemetry"; "dashboard"; "publisher-event"; "--config"; dashboardPath ]
+                if completed.Code <> 0 then failed "publisher-event-subprocess-failed"
+                else
+                    let health = JsonNode.Parse completed.Stdout
+                    let expected = Set [ "schema"; "status"; "reason"; "observedAt"; "publicRevision"; "commit" ]
+                    match health with
+                    | :? JsonObject as value when (value |> Seq.map (fun field -> field.Key) |> Set.ofSeq) = expected &&
+                                                  optionalString "schema" value = Some "fsgg.telemetry.dashboard-event-health/1" ->
+                        jsonObject [ "status", node "observed"; "health", health ]
+                    | _ -> failed "publisher-event-result-invalid"
         with
         | AdapterError _ -> failed "publisher-event-subprocess-failed"
         | :? IOException -> failed "publisher-event-subprocess-failed"
