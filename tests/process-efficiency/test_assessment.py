@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Synthetic preparation/recovery checks; no provider, store or native authority."""
 import copy
+import base64
 from concurrent.futures import ThreadPoolExecutor
 import importlib.util
 import json
@@ -10,6 +11,7 @@ import tempfile
 import time
 import fcntl
 import unittest
+import sys
 
 ROOT = Path(__file__).resolve().parents[2]
 CONTRACT_ROOT = Path(os.environ.get('EFF_CONTRACT_ROOT', ROOT))
@@ -75,6 +77,56 @@ class AssessmentTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             a.prepare_claim(inspected, packet, sample['claimId'], sample['modelAlias'], sample['dispatchRef'],
                             sample['authority'], sample['limitSupport'], sample['claimedAt'], schema)
+
+    def test_authoritative_packet_restore_binds_raw_bytes_and_canonical_refs(self):
+        output, packet = fixture()
+        raw_packet = a.substantive(packet)
+        for row in raw_packet['records']:
+            row['canonicalRef'] = dict(row['ref'], kind=next(k for k, v in a.SEMANTIC_KINDS.items() if v == row['ref']['kind']), contentDigest=a.digest(row['payload']))
+        raw = a.encode(raw_packet)
+        digest = 'sha256:' + a.hashlib.sha256(raw).hexdigest()
+        restored = a.restore_packet(base64.b64encode(raw).decode(), digest, packet['metrics'])
+        output.update(evidenceDigest=digest)
+        output['lifecycle']['idempotencyKey'] = a.key(output['subject'], digest)
+        check(output, restored)
+        self.assertNotIn('_retainedEvidenceBase64', a.prompt(restored, SCHEMA)['untrustedEvidence'])
+        with self.assertRaises(ValueError):
+            a.restore_packet(base64.b64encode(raw + b' ').decode(), digest, packet['metrics'])
+        mismatched = copy.deepcopy(raw_packet)
+        mismatched['records'][0]['canonicalRef']['kind'] = 'efficiency-assessment/1'
+        changed = a.encode(mismatched)
+        with self.assertRaises(ValueError):
+            a.restore_packet(base64.b64encode(changed).decode(), a.digest(mismatched), packet['metrics'])
+        restored['records'][0]['payload']['tampered'] = True
+        with self.assertRaises(ValueError): check(output, restored)
+
+    def test_selected_caller_deadline_output_and_no_automatic_retry(self):
+        with tempfile.TemporaryDirectory() as cwd:
+            result = a.run_selected_caller([sys.executable, '-c', 'import time; time.sleep(5)'],
+                                          cwd=cwd, input_bytes=b'', deadline=time.monotonic() + 0.3)
+            self.assertEqual(result['reason'], 'timeout')
+            self.assertTrue(result['localClosure'])
+            self.assertLess(result['elapsedSeconds'], 0.5)
+            self.assertFalse(result['usageKnown'])
+            held = 'import subprocess, sys; subprocess.Popen([sys.executable, "-c", "import time; time.sleep(5)"])'
+            result = a.run_selected_caller([sys.executable, '-c', held], cwd=cwd, input_bytes=b'',
+                                          deadline=time.monotonic() + 0.3)
+            self.assertEqual(result['reason'], 'timeout')
+            self.assertEqual(result['state'], 'unavailable')
+            self.assertLess(result['elapsedSeconds'], 0.5)
+            result = a.run_selected_caller([sys.executable, '-c', 'print("x" * 50000)'], cwd=cwd,
+                                          input_bytes=b'', deadline=time.monotonic() + 1,
+                                          max_output_bytes=1024)
+            self.assertEqual(result['reason'], 'output-bound-exceeded')
+            self.assertLessEqual(len(result['stdout']) + len(result['stderr']), 1024)
+            result = a.run_selected_caller(['/does/not/exist'], cwd=cwd, input_bytes=b'',
+                                          deadline=time.monotonic() - 1)
+            self.assertFalse(result['launched'])
+            result = a.run_selected_caller([sys.executable, '-c', 'import sys; print(sys.stdin.read())'],
+                                          cwd=cwd, input_bytes=b'exact prompt', deadline=time.monotonic() + 1)
+            self.assertEqual(result['state'], 'returned')
+            self.assertEqual(result['stdout'], b'exact prompt\n')
+            self.assertFalse(result['usageKnown'])
 
     def test_full_schema_and_resolved_native_review(self):
         output, packet = fixture()
@@ -165,6 +217,7 @@ class AssessmentTests(unittest.TestCase):
         bounded = a.assemble(output['subject'], rows, [], output['coverage'], max_bytes=3000)
         self.assertEqual(bounded['records'][0]['ref']['id'], '39')
         self.assertTrue(bounded['omissions'])
+        self.assertEqual(bounded['coverage']['population'], 'partial')
         self.assertLessEqual(len(a.encode(bounded)), 3000)
         self.assertIn('untrusted', a.prompt(bounded, SCHEMA)['instructions'])
 

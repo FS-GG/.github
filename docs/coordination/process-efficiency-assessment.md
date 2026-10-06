@@ -2,7 +2,7 @@
 
 V2-EFF-01.3 source preparation uses [the offline helper](../../tools/process-efficiency-assessment.py)
 and the V2-EFF-01.1 sidecar contracts. It performs no model call, native observation, store mutation,
-completion scheduling or public publication. The owning milestone remains incomplete until an actual
+model execution or public publication. The completion adapter separately sends a bounded advisory reconciliation request to the existing canonical store. The owning milestone remains incomplete until an actual
 admitted completion traverses the existing review route, with recorded analyst usage and a qualified
 producer/export join. These synthetic checks establish preparation behavior, not calibration,
 savings, installation or native acceptance.
@@ -105,12 +105,12 @@ an assessment output: before caller selection it has no model execution provenan
    input/output/deadline limits before claiming execution. Unsupported limits, missing root token or
    unavailable provider/exporter become an explicit unavailable disposition. The engine does not
    unconditionally launch a provider and no permanent consumer service is introduced.
-3. A supported canonical compare-and-set or equivalent serialized append commits running state and
+3. The canonical compare-and-set claim commits claimed state and
    the selected attempt/dispatch custody before a single invocation. The private journal retains the
    exact packet. For native collaboration the parent uses the existing prospective
    `begin -> spawn_agent -> started` observation route. An existing explicitly selected `codex-exec`
    route instead uses its inherited invocation context and owns its observation. Never use both.
-4. The analyst returns bounded private structured output plus a draft legacy item review when native
+4. The analyst returns bounded private structured output plus a draft existing item review when native
    admission is possible. The parent observes actual termination, records `finish` and reconciles
    completed native usage. Requested model metadata and messages do not prove token totals. The
    parent validates the output before publishing a review through the existing root-token route.
@@ -123,7 +123,7 @@ an assessment output: before caller selection it has no model execution provenan
 6. Submit the exact validated assessment bytes through the existing enrolled producer ingestion and
    outbox/retry route, preserving the request identity and receiver disposition. Canonical accepted
    state requires supported readback; a durable submission or lost response is not applied. Restart
-   reconciles running custody and uncertain submission effects before any further invocation. Failed,
+   reconciles claimed custody and uncertain submission effects before any further invocation. Failed,
    interrupted and malformed analysis retains its usage and an explicit disposition with no automatic
    model retry. Late substantive evidence may request the remaining budgeted revision; analyst-only
    arrivals update deterministic cost and admission joins without recursively scheduling analysis.
@@ -132,3 +132,48 @@ The inspected native collaboration tool itself exposes no usage hook, and the in
 launcher does not establish enforcement of this analyst policy's three numerical limits. Runtime
 selection must therefore qualify those bounds rather than assume the prompt enforces them. A request,
 private journal, source merge or model response alone never establishes canonical completion or cost.
+
+
+## Canonical notification and retained input
+
+Successful completed-root drains and later terminal-root observation/usage drains call the enrolled
+`telemetry efficiency analysis reconcile` route with the configured store, repository and item.
+The adapter gives this advisory subprocess five seconds and an 8 KiB output allowance. A successful
+exit reports only that reconciliation returned; it does not claim enqueue, analysis or completion.
+The store derives authority and current outcome membership and idempotently retains its selected
+request. This hook launches no model. Missing enrollment or endpoint leaves an explicit advisory
+failure, with no raw private error or packet copied into adapter output.
+
+The consumer reads `inspect --request-id` and restores `packetBase64` against `rawDigest` before
+claiming. Those exact private bytes contain the evidence-packet subject, coverage, omissions and
+records; they are never rebuilt from public dashboard data. Each record carries the canonical
+reference with its content digest as well as the normalized evidence reference. The store validates
+these joins in the snapshot transaction. Local restoration detects byte or reference disagreement
+but does not establish admission. Explicit enrolled enqueue supplies the packet through a separate
+`--packet` file; regular completion notifications use reconciliation instead.
+
+## Single-invocation pilot qualification
+
+The selected pilot is measured, with input and output token support marked `observed-only` and a
+caller-owned wall deadline. The thresholds remain 8,000 total input tokens, 1,500 total output tokens
+and 60 seconds, including required context and non-visible reasoning. Native collaboration exposes
+no token-limit or hard termination knob; the inspected Codex exec route exposes structured output
+and actual usage events but no output-token cap. A small visible prompt or schema is not a token cap.
+Automatic execution remains unavailable wherever those hard token bounds cannot be enforced.
+
+Before root execution, retain one genuine pending request, exact inspect bytes, generated prompt and
+full output schema privately. Select and record the actual model/effort and limit support, then claim
+with exact revision/digest and prospective dispatch custody. Bind actual invocation only after the
+existing observer publishes the genuine start. Use one invocation and no automatic retry. Do not
+retrofit an earlier worker or fill unknown epochs, observations or usage from metadata.
+
+The existing runtime launcher waits without a deadline. A pilot therefore requires a qualified
+supervisor that uses the same caller deadline for launch, observation and shutdown, records actual
+process termination, and can stop the complete local child tree. Sending cancellation alone does not
+prove termination. A timeout or lost start remains an unknown effect, consumes budget and cannot
+be retried automatically. The helper supplies `run_selected_caller` for one root-selected launcher, with an owned POSIX
+process group, finite input/output capture and closure reserve inside the original deadline. Its
+synthetic held-child controls qualify local custody only; escaped processes and remote provider
+effects remain unknown. Native usage must still be joined separately before settlement. Root reviews the concrete request and supervision route before
+execution. Actual complete usage is checked against the unchanged thresholds before result settlement,
+and admitted review plus receiver readback remains necessary for any canonical native result.

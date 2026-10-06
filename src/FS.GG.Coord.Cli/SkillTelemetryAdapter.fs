@@ -815,6 +815,29 @@ module SkillTelemetryAdapter =
         | :? JsonException -> failed "publisher-event-result-invalid"
         | _ -> failed "publisher-event-subprocess-failed"
 
+    let private reconcileAssessment (config: HostConfig) item =
+        // Advisory notification only: the canonical store owns authority, enqueue and CAS.
+        // This path never invokes an analyst or treats reconciliation as completion.
+        let failed reason = jsonObject [ "status", node "advisory-failure"; "reason", node reason ]
+        try
+            match config.Repository with
+            | None -> failed "analysis-reconciliation-repository-unavailable"
+            | Some repository ->
+                let command =
+                    [ config.Engine; "telemetry"; "efficiency"; "analysis"; "reconcile"
+                      "--store-root"; config.StoreRoot; "--config"; config.Path
+                      "--repository"; Configuration.repositoryValue repository; "--item"; item ]
+                match Configuration.mutationCommand config command with
+                | Error _ -> failed "analysis-reconciliation-authority-unavailable"
+                | Ok selected ->
+                    let completed = execute 5 8192 selected
+                    if completed.Code <> 0 then failed "analysis-reconciliation-subprocess-failed"
+                    else
+                        // Do not copy private packets, findings, IDs or raw errors into adapter output.
+                        // Exit zero proves only that this bounded reconciliation request returned.
+                        jsonObject [ "status", node "requested" ]
+        with _ -> failed "analysis-reconciliation-subprocess-failed"
+
     let private finish config token outcome explicitExitCode =
         if not (Set [ "completed"; "failed"; "cancelled"; "blocked" ] |> Set.contains outcome) then fail "outcome is invalid"
         let state = readState config token
@@ -838,7 +861,9 @@ module SkillTelemetryAdapter =
         let usageCoverage = try reconcileUsage config state with AdapterError _ -> "native-collaboration-usage-unknown"
         let drain = execute 30 131072 (drainCommand config)
         let value = jsonObject [ "schema", node "fsgg.telemetry.roadmap-dispatch/1"; "status", node "terminal"; "token", node token; "outcome", node outcome; "coverage", node usageCoverage; "drain", node (if drain.Code = 0 then "complete" else "pending") ]
-        if drain.Code = 0 && outcome = "completed" && requiredString "relation" state = "root" then value["dashboardPublication"] <- dashboard config
+        if drain.Code = 0 && outcome = "completed" && requiredString "relation" state = "root" then
+            value["assessmentReconciliation"] <- reconcileAssessment config (requiredString "itemId" state)
+            value["dashboardPublication"] <- dashboard config
         value
 
     let private readContract (input: FileInfo) (schema: string) (fields: Set<string>) =
@@ -860,7 +885,9 @@ module SkillTelemetryAdapter =
         let drain = execute 30 131072 (drainCommand config)
         if drain.Code <> 0 then fail (if String.IsNullOrWhiteSpace drain.Stderr then "telemetry observation drain failed" else drain.Stderr.Trim())
         let result = jsonObject [ "schema", node "fsgg.telemetry.roadmap-observation/1"; "status", node "recorded"; "kind", value["kind"].DeepClone() ]
-        if requiredString "phase" state = "terminal" && requiredString "relation" state = "root" then result["dashboardPublication"] <- dashboard config
+        if requiredString "phase" state = "terminal" && requiredString "relation" state = "root" then
+            result["assessmentReconciliation"] <- reconcileAssessment config (requiredString "itemId" state)
+            result["dashboardPublication"] <- dashboard config
         result
 
     let private observation config token input kind =
@@ -933,7 +960,10 @@ module SkillTelemetryAdapter =
             let state = readState config token
             let usageCoverage = reconcileUsage config state
             let drain = execute 30 131072 (drainCommand config)
-            jsonObject [ "schema", node "fsgg.telemetry.roadmap-usage/1"; "status", node "reconciled"; "token", node token; "coverage", node usageCoverage; "drain", node (if drain.Code = 0 then "complete" else "pending") ]
+            let result = jsonObject [ "schema", node "fsgg.telemetry.roadmap-usage/1"; "status", node "reconciled"; "token", node token; "coverage", node usageCoverage; "drain", node (if drain.Code = 0 then "complete" else "pending") ]
+            if drain.Code = 0 && requiredString "phase" state = "terminal" && requiredString "relation" state = "root" then
+                result["assessmentReconciliation"] <- reconcileAssessment config (requiredString "itemId" state)
+            result
         | CiAssignment(feature, item, attempt, parent, producer) ->
             match Configuration.createCiAssignment config feature item attempt parent producer with
             | Ok path -> jsonObject [ "schema", node "fsgg.telemetry.assignment-result/1"; "status", node "ready"; "assignment", node path ]
