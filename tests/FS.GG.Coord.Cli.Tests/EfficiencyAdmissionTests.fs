@@ -286,20 +286,24 @@ module EfficiencyAdmissionTests =
             use response = JsonDocument.Parse(TelemetryStoreApplication.efficiencyAnalysisReconcile path approved principal (Some "A") |> unwrap)
             let id = response.RootElement.GetProperty("requestIds")[0].GetString()
             pending.Add(JsonNode.Parse(scalar path ($"SELECT canonical FROM efficiency_analysis_requests WHERE request_id='{id}';")))
-        Assert.Contains("\"rejected\":0",submit path "analyst-dispatch" [analystDispatch])
         let latestAuthority = (pending[3]["canonicalRequest"]["authority"]).DeepClone()
         for index in 0 .. 2 do
+            let dispatchIdentity = $"analyst-dispatch-{index}"
+            let event = analystDispatch.Replace("analyst-dispatch",dispatchIdentity).Replace("\"dispatchId\":\"analyst\"",$"\"dispatchId\":\"analyst-{index}\"")
+            Assert.Contains("\"rejected\":0",submit path ($"dispatch-{index}") [event])
             let bytes = claimTemplate pending[index] ($"budget-{index}")
             let template = JsonNode.Parse bytes
             template["authority"] <- latestAuthority.DeepClone()
-            let claimed = TelemetryStoreApplication.efficiencyAnalysisClaimProspective path approved principal "analyst-dispatch" "A" (Encoding.UTF8.GetBytes(template.ToJsonString())) |> unwrap |> JsonNode.Parse
+            let claimed = TelemetryStoreApplication.efficiencyAnalysisClaimProspective path approved principal dispatchIdentity "A" (Encoding.UTF8.GetBytes(template.ToJsonString())) |> unwrap |> JsonNode.Parse
             let settle = JsonNode.Parse("""{"schema":"fsgg.telemetry.efficiency-analysis-settle-input/1","cas":null,"claimId":"unset","state":"failed","resultAssessmentRef":null,"reason":"interrupted-analysis-outcome-unknown","usageRefs":[],"invocationOutcome":"unknown","reconciliationRefs":[],"authority":null,"settledAt":"2026-10-06T00:22:00Z","invocationRef":null}""")
             settle["cas"] <- JsonSerializer.SerializeToNode {| requestId=claimed["requestId"].GetValue<string>();expectedRevision=claimed["revision"].GetValue<int64>();expectedContentDigest=claimed["contentDigest"].GetValue<string>() |}
             settle["claimId"] <- JsonValue.Create($"budget-{index}")
             settle["authority"] <- latestAuthority.DeepClone()
             TelemetryStoreApplication.efficiencyAnalysis path approved principal "settle" (Encoding.UTF8.GetBytes(settle.ToJsonString())) None |> unwrap |> ignore
+        let fourthDispatch = analystDispatch.Replace("analyst-dispatch","analyst-dispatch-4").Replace("\"dispatchId\":\"analyst\"","\"dispatchId\":\"analyst-4\"")
+        Assert.Contains("\"rejected\":0",submit path "dispatch-4" [fourthDispatch])
         let fourth = JsonNode.Parse(claimTemplate pending[3] "fourth")
         fourth["authority"] <- latestAuthority.DeepClone()
-        Assert.Equal(Error ["analysis-budget-exhausted"],TelemetryStoreApplication.efficiencyAnalysisClaimProspective path approved principal "analyst-dispatch" "A" (Encoding.UTF8.GetBytes(fourth.ToJsonString())))
+        Assert.Equal(Error ["analysis-budget-exhausted"],TelemetryStoreApplication.efficiencyAnalysisClaimProspective path approved principal "analyst-dispatch-4" "A" (Encoding.UTF8.GetBytes(fourth.ToJsonString())))
         Assert.Equal("3",scalar path "SELECT count(*) FROM efficiency_analysis_reservations;")
         Assert.Equal("3",scalar path "SELECT count(*) FROM efficiency_analysis_reservations WHERE state='unknown';")

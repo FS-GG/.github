@@ -150,6 +150,21 @@ class SchemaControls(unittest.TestCase):
             self.db.execute("INSERT INTO efficiency_outcome_epochs VALUES('original',3,'dispatch3','NEW','reopen',2,'closed','[]','same-outcome',1,2,'[]')")
         self.assertEqual([(1,0),(2,1)],self.db.execute('SELECT epoch,outcome_revision FROM efficiency_outcome_epochs ORDER BY epoch').fetchall())
 
+    def test_raw_revision_never_resets_budget_but_closed_reopen_delimits_receiver_history(self):
+        for index,order in [(1,2),(2,3),(3,10)]:
+            body=json.dumps({'claimedReceiverOrder':order})
+            self.db.execute("INSERT INTO efficiency_analysis_requests(request_id,stable_outcome_identity,effective_item_id,scope,evidence_digest,policy_version,state,revision,content_digest,canonical,evidence_packet,owner_producer,owner_stream,requested_at,updated_at) VALUES(?,'outcome',?,'provisional-delivery','digest','policy','failed',0,'content',?,?,'p','s','now','now')",(str(index),'OLD' if index<3 else 'CORRECTED',body,b'{}'))
+            self.db.execute("INSERT INTO efficiency_analysis_reservations VALUES('outcome','unknown','policy',?,?,?,'p','s',?,?,'unknown')",(index,str(index),'claim'+str(index),'dispatch'+str(index),index))
+        text=SOURCE.read_text()
+        sql=re.search(r'let used = receiptScalar connection "([^"\n]+)" budgetValues',text)[1]
+        def count(begin,epoch):
+            return self.db.execute(sql,{'outcome':'outcome','policy':'policy','begin':begin,'epoch':epoch}).fetchone()[0]
+        self.assertEqual(3,count(0,'unknown'))
+        self.assertEqual(3,count(0,'1'))
+        self.assertEqual(1,count(8,'2'))
+        self.db.execute("UPDATE efficiency_analysis_requests SET canonical='{}' WHERE request_id='1'")
+        self.assertEqual(2,count(8,'2')) # Missing historical receiver order stays charged.
+
     def test_action_replay_returns_original_receipt_after_later_queue_revision(self):
         first = {'revision':1,'lastAction':'claim','lastInputDigest':'original-input','claimedAt':'receiver-first'}
         later = {'revision':2,'lastAction':'attach-invocation','lastInputDigest':'later-input','claimedAt':'receiver-first'}
