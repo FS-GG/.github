@@ -3346,7 +3346,7 @@ COMMIT;
             Assert.Contains("\"runnerSeconds\":50", newReport)
             Assert.Contains("\"jobs\":0", oldReport)
         else Assert.Contains("\"inventoryCoverage\":\"unknown\"", newReport)
-        Assert.Equal("0", correctionSql path $"SELECT count(*) FROM budget_population_facts WHERE item_id='{request.Prior.ItemId}' AND source_ref LIKE 'derived:%';")
+        Assert.Equal("0", correctionSql path $"SELECT count(*) FROM budget_population_facts WHERE item_id='{request.Prior.ItemId}' AND source_ref LIKE 'derived:%%';")
         Assert.Equal("0", correctionSql path "SELECT count(*) FROM budget_interventions;")
         let history = TelemetryStoreApplication.ciCorrectionHistory path approved request.CorrectionId |> unwrap
         Assert.Contains("\"counting\":false", history)

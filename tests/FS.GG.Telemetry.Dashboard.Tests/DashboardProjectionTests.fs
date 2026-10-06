@@ -614,7 +614,7 @@ module DashboardProjectionTests =
     [<Theory>]
     [<InlineData(12)>]
     [<InlineData(13)>]
-    let ``UTEL-06.8 effective store snapshot accepts retained and correction schema without exposing audit`` version =
+    let ``UTEL-06.8 effective store snapshot accepts retained and correction schema without exposing audit`` (version: int) =
         let value = snapshot "item-a"
         value["store"]["schemaVersion"] <- version
         let result = DashboardProjection.project "workspace-a" (envelope value) |> unwrap
