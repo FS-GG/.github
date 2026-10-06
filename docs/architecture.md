@@ -627,7 +627,7 @@ product's `FS.GG.UI.*` pin), which is a different axis from the template package
 | Contract | Owner | `version` | `package-version` |
 |---|---|---|---|
 | `fsquint-replay` | FsQuint | `0.1.0` | `0.1.0` |
-| `fsgg-contracts` | FS.GG.SDD | `7.6.0` | `7.5.2` |
+| `fsgg-contracts` | FS.GG.SDD | `7.6.0` | `7.6.0` |
 | `governance-reference-gate-set` | FS.GG.Governance | `1.7.0` | `1.7.0` |
 | `fs-gg-ui-template` | FS.GG.Rendering | `0.32.1` | `0.32.1` |
 | `game-sim-core` | FS.GG.Game | `0.17.0` | `0.17.0` |
