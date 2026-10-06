@@ -99,6 +99,24 @@ with missing runtime gets a clearly provisional explanation or explicit unavaila
 notifications do not duplicate analysis. Facts, permissions and required checks are unchanged.
 Analysis cost is visible; additional evidence revisions remain within a declared per-item budget.
 
+Canonical custody dependency delivered (2026-10-06): Coordination
+[PR #949](https://github.com/FS-GG/FS.GG.Coordination/pull/949) merged qualified head
+`f2022662684e9f9ff064c44a5b3daf7c24369846` as
+`daeab80bca717942602278c96ad1d07d6b64623d`. It extracts the existing managed process lease,
+pins its two-file source manifest and delivers the fixed fake collector bootstrap with coherent
+regenerated artifacts. Retained local C/artifact qualification, four bounded stdio cases and
+four nonlaunch plus five ordinary managed cases establish those producer scopes. The original
+managed reporting failure remains retained with its strict bounded supplemental acceptance;
+no native replay was needed.
+
+The exact-head hosted check set finished with 45 passed and six skipped checks. One routine
+delivery attempt reported current validation and coherent validation not required; the hosted
+coherent execution checks are included in that passed set. All three prospective feature/item/attempt
+telemetry fields were supplied. Returned telemetry health remains `open`; historical model usage
+and complete observation coverage remain unknown. This closes the canonical producer dependency
+only. Native helper installation, receiver integration, provider execution and actual bounded
+assessment acceptance remain pending; .3 and .6 stay open.
+
 ### V2-EFF-01.4 — Publish useful dashboard explanations
 
 - [ ] Owner: `.github` dashboard maintainer.

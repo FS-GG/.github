@@ -56,6 +56,17 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-06: Efficiency canonical custody producer dependency landed.**
+Coordination [PR #949](https://github.com/FS-GG/FS.GG.Coordination/pull/949) merged exact
+head `f2022662684e9f9ff064c44a5b3daf7c24369846` as
+`daeab80bca717942602278c96ad1d07d6b64623d`, after 45 hosted checks passed and six skipped.
+Retained local qualification covers the extracted managed lease, coherent fake bootstrap
+artifacts, bounded stdio and nine managed cases. One routine delivery reported current validation
+and coherent validation not required, with telemetry health `open`; earlier failed reporting and
+unknown historical usage remain retained. The [owning .3 checkpoint](roadmaps/process-efficiency-telemetry.md#v2-eff-013--generate-bounded-assessments-on-completion)
+records this dependency scope. Installed native helper, receiver/provider operation and actual
+assessment acceptance remain pending; V2-EFF-01.3/.6 are not complete.
+
 **2026-10-06: Efficiency analysis-status UI source landed and browser fixtures qualified.**
 [PR #4279](https://github.com/FS-GG/.github/pull/4279) merged exact head
 `2a0798522bde096d4df438deec25d49075ff9d3a` as
