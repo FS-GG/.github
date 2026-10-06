@@ -36,8 +36,15 @@ module internal NativeResponsesCollection =
     /// retained evidence packet in the existing codec; never grants authority.
     val validateInputPacket: inputText: string -> Result<byte array, string list>
 
+    /// Opaque installed state used only by the Host-owned capture constructor.
+    type internal Installed
+
     [<Class>]
     type Capture =
+        private new:
+            phase: FS.GG.Telemetry.DirectResponses.Phase * bytes: byte array * snapshot: byte array *
+            observed: NativeResponses.ResponseObservation option * failures: string list * claimReceipt: string *
+            selected: Installed * operation: OperationEvidence * expiresAt: string -> Capture
         member Phase: FS.GG.Telemetry.DirectResponses.Phase
         member Bytes: byte array
         member Sha256: string
@@ -57,6 +64,9 @@ module internal NativeResponsesCollection =
 
     [<Class>]
     type VerifiedCapture =
+        private new:
+            origin: OriginEvidence * operation: OperationEvidence *
+            observation: NativeResponses.ResponseObservation * accepted: bool -> VerifiedCapture
         member Origin: OriginEvidence
         member Operation: OperationEvidence
         member Observation: NativeResponses.ResponseObservation
