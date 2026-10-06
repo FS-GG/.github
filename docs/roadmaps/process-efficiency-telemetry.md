@@ -117,6 +117,23 @@ and complete observation coverage remain unknown. This closes the canonical prod
 only. Native helper installation, receiver integration, provider execution and actual bounded
 assessment acceptance remain pending; .3 and .6 stay open.
 
+Closed Responses installation source delivered (2026-10-06): Coordination
+[PR #950](https://github.com/FS-GG/FS.GG.Coordination/pull/950) merged qualified head
+`d177ec403dab1dd04b0f555c57ed0cc769424bdd` as
+`3d74e69be05cbd5253e901e40e36f5a1186253fa`. The Manager validates the closed installation
+arguments and pinned profile, result, verifier and physical runtime closure before producing a
+Responses receipt. Twelve refusal cases passed in the retained local restore/build window and
+again through the existing grouped collector CI route. Canonical custody documentation now sits
+with its owning signature; execution tokens are unchanged and the two-file source manifest was
+regenerated. Consumer projection must bind this protected producer through the existing sync route.
+
+The exact-head hosted set finished with 47 passed and six skipped checks. One routine delivery
+attempt supplied all three feature/item/attempt fields and reported current validation, coherent
+validation not required and telemetry health `open`. Earlier CI and behind-base refusals remain
+retained. This qualifies source delivery and the twelve refusal cases; positive installation,
+installed 0.99/Host 0.5 adoption, provider/model execution and bounded assessment acceptance remain
+separate gates. Historical model usage remains unknown; .3 and .6 stay open.
+
 ### V2-EFF-01.4 — Publish useful dashboard explanations
 
 - [ ] Owner: `.github` dashboard maintainer.
