@@ -6662,11 +6662,12 @@ WHERE n.source_ref=$source;
                         counters.Add(provider, scope, property, unit, bigint (source.GetProperty(property).GetInt64()))
             let metrics = JsonArray()
             let original = item
+            let mutable groupOpenItems = 1
             let metric (metricName: string) (unit: string) (scope: string) (provider: string) (amount: bigint option) (status: string) (reason: string) (purpose: string) (health: string) =
                 let population =
                     {| itemIds = List.toArray members; repository = "unknown"; workType = "observed-population-at-cutoff"
                        acceptanceScope = scope; windowStart = cutoff; windowEnd = cutoff; cutoff = cutoff
-                       excludedItems = ([||] : obj array); openItems = 0; abandonedItems = 0 |}
+                       excludedItems = ([||] : obj array); openItems = groupOpenItems; abandonedItems = 0 |}
                 let node =
                     JsonSerializer.SerializeToNode
                         {| schema = "fsgg.telemetry.efficiency-metric/1"
@@ -6807,8 +6808,8 @@ WHERE n.source_ref=$source;
                                   UsageInvocations = Set.intersect usageInvocations expectedSet
                                   NativeEligible = delivered > 0I && nativeWitnessComplete && not epochDispatches.IsEmpty }
                              |> Result.defaultWith invalidOp
-            let openItems = if population.NativeCompletions > 0 then 0 else 1
-            for node in metrics do node.["population"].["openItems"] <- JsonValue.Create openItems
+            groupOpenItems <- if population.NativeCompletions > 0 then 0 else 1
+            for node in metrics do node.["population"].["openItems"] <- JsonValue.Create groupOpenItems
             let compatibleNativeCounters =
                 facts |> List.filter (fun row -> row[1]=Some "runtime-turn-usage")
                 |> List.map (fun row ->

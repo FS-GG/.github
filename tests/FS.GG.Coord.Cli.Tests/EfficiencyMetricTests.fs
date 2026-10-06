@@ -160,3 +160,16 @@ module EfficiencyMetricTests =
         use result = export path
         Assert.Equal("unknown",(metric result "wait-time" "ci-observed").GetProperty("value").GetProperty("status").GetString())
         Assert.Equal("unknown",(metric result "observed-resource" "ci-observed").GetProperty("value").GetProperty("status").GetString())
+
+    [<Fact>]
+    let ``late CI native time and health rows preserve the original group's open population`` () =
+        let cleanup,path = create ()
+        use cleanup = cleanup
+        let first = timestamp "2026-10-06T00:00:00Z"
+        let next = timestamp "2026-10-06T00:00:01Z"
+        ingest path "open-group" [binding "A";run "A" 1;coverage "A" "complete";job "A" 1 11 first next next]
+        use result = export path
+        for name,scope in ["wait-time","ci-observed";"lead-time","native-item";"first-pass-delivery","native-item";"data-health","receiver-observed"] do
+            let row = metric result name scope
+            Assert.Equal(1,row.GetProperty("population").GetProperty("openItems").GetInt32())
+        Assert.Equal("unknown",(metric result "lead-time" "native-item").GetProperty("value").GetProperty("status").GetString())
