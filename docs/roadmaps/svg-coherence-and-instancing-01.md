@@ -22,6 +22,26 @@ workload does not retroactively invalidate historical acceptance for other workl
 
 ## Current progress
 
+**2026-10-06: Published-template receiver harness repaired and delivered.**
+[Templates #677](https://github.com/FS-GG/FS.GG.Templates/pull/677) merged exact head
+`196a843cf4af0c97300e8ea66a9ad0e7badec03f` as
+`c56541c6dbadbc753b500ac5ffc941e8af083854` at 22:58:52 UTC, with eleven checks passed
+and four skipped. [Composition 37541790067/a1](https://github.com/FS-GG/FS.GG.Templates/actions/runs/37541790067)
+passed all 119 checks and all 15 owner-skill causal controls. The focused provider suite
+passed 186 assertions. The receiver now checks the exact descriptor template ID in
+scaffold provenance; package source, archive, descriptor and lifecycle checks remain separate.
+Owner-skill provenance binds the exact installed Artifacts assembly version rather than a
+hardcoded SDK version; ordinary composition used SDK 2.2.0.
+
+The original [published receiver 37537943991/a1](https://github.com/FS-GG/FS.GG.Templates/actions/runs/37537943991)
+failed at the provenance guard before builds or browser checks; the first source attempt's
+118-pass/one-failure composition result remains retained separately. This repair changes
+only the harness and its controls. Published 0.18.1 bytes and tag still bind `d9fe65ea`;
+a successor receiver must pin the fixed harness separately while retaining the original
+package, descriptor and SDK 2.1.0 inputs. Fresh published-package installed acceptance,
+effective defaults and full Wizard adoption remain open. No successor dispatch is selected
+by this source closure.
+
 **2026-10-06: Workspace Template 0.18.1 published on both feeds.**
 Root accepted [publisher 37521553159/a1](https://github.com/FS-GG/FS.GG.Templates/actions/runs/37521553159)
 at 20:26:36 UTC from protected `d9fe65ea8a456f59d663f20c647a38a195e13c2c`; the existing
