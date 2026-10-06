@@ -240,7 +240,7 @@ def _eff_analysis_health(health):
 
 
 def validate_efficiency_export(value, expected_snapshot_revision):
-    """Validate an inactive read-only consumer seam, never canonical calculations.
+    """Validate the read-only source consumer seam, never canonical calculations.
 
     The trusted exporter selects current revisions in one WAL snapshot. Its compact
     snapshotRevision binds the existing item-detail/3 base; sourceFingerprint binds
@@ -334,7 +334,7 @@ def project_efficiency_exports(exports, labels, evidence_links=None, max_bytes=7
 
 
 def read_efficiency_export(store, engine, snapshot_revision, deadline, config_path=None, repository=None):
-    """Inactive until the canonical schema14 endpoint is admitted.
+    """Source collector seam; native endpoint qualification remains separate.
 
     One batch per store shares the caller's absolute monotonic deadline. Never
     retry here or spend a fresh timeout for each item. Base source delivery is
@@ -1206,7 +1206,7 @@ def _read_host_snapshot(store: str, engine: str, timeout_seconds: float = 45) ->
         for item in items: snapshot_ci(snapshot,item)
     elif "ciProjection" in snapshot or "ciSummaries" in snapshot: raise HostSourceError("HOST_ENGINE_SNAPSHOT_MALFORMED")
     store_projection=snapshot.get("store")
-    if not isinstance(store_projection,dict) or store_projection.get("schemaVersion") not in (8,9,10,11,12,13) or store_projection.get("journalMode")!="wal": raise HostSourceError("HOST_STORE_INCOMPATIBLE")
+    if not isinstance(store_projection,dict) or store_projection.get("schemaVersion") not in (8,9,10,11,12,13,14) or store_projection.get("journalMode")!="wal": raise HostSourceError("HOST_STORE_INCOMPATIBLE")
     operational=envelope.get("operational")
     if not isinstance(operational,dict) or operational.get("consistency")!="observed-outside-database-transaction": raise HostSourceError("HOST_ENGINE_SNAPSHOT_MALFORMED")
     checked_int(operational.get("pendingBatches"),"pending batches")
@@ -1217,7 +1217,7 @@ def _read_host_snapshot(store: str, engine: str, timeout_seconds: float = 45) ->
 def _join_host_snapshots(sources: list[tuple[dict[str,Any],dict[str,Any]]]) -> tuple[dict[str,Any],dict[str,Any]]:
     if len(sources)!=2: raise HostSourceError("HOST_STORE_INCOMPATIBLE")
     versions=[source[0]["store"]["schemaVersion"] for source in sources]
-    if versions[0] not in (10,11,12,13) or versions[0]!=versions[1]: raise HostSourceError("HOST_STORE_INCOMPATIBLE")
+    if versions[0] not in (10,11,12,13,14) or versions[0]!=versions[1]: raise HostSourceError("HOST_STORE_INCOMPATIBLE")
     left,right=(source[0] for source in sources)
     if set(left)!=set(right): raise HostSourceError("HOST_ENGINE_SNAPSHOT_INCOMPATIBLE")
     combined={}
@@ -1271,6 +1271,8 @@ def build_host(labels_path: pathlib.Path | None = None, config_path: pathlib.Pat
             try:
                 snapshot,envelope=read_source(selected["storeRoot"])
                 host=_project_host_snapshot(snapshot,envelope,labels_path)
+                if host["store"]["schemaVersion"]==14:
+                    host=_attach_efficiency(host,selected["storeRoot"],engine,envelope["revision"],deadline,labels_path)
             except (HostSourceError,ValueError,OSError):
                 host=None
             contexts.append({"key":selected["key"],"label":CONTEXT_LABELS[selected["key"]],"status":"ready" if host is not None else "unavailable","reason":None if host is not None else "source-unavailable","host":host})
@@ -1279,7 +1281,30 @@ def build_host(labels_path: pathlib.Path | None = None, config_path: pathlib.Pat
     if len(stores) not in (1,2): raise HostSourceError("HOST_CONFIG_INVALID")
     sources=[read_source(store) for store in stores]
     snapshot,envelope=sources[0] if len(sources)==1 else _join_host_snapshots(sources)
-    return _project_host_snapshot(snapshot,envelope,labels_path,"configured-local-stores" if len(sources)==2 else "configured-local-store")
+    host=_project_host_snapshot(snapshot,envelope,labels_path,"configured-local-stores" if len(sources)==2 else "configured-local-store")
+    return _attach_efficiency(host,stores[0],engine,envelope["revision"],deadline,labels_path) if len(sources)==1 and host["store"]["schemaVersion"]==14 else host
+
+
+def _attach_efficiency(host: dict[str,Any], store: str, engine: str, revision: str, deadline: float, labels_path: pathlib.Path | None) -> dict[str,Any]:
+    """Source-only collector join; actual endpoint/exporter qualification is separate.
+
+    One schema14 export follows the exact compact read. Any failure preserves the
+    complete base source-delivery/completed-work view. No native call occurs until
+    an operator executes the collector; source or mocked fixtures grant no live status.
+    Dashboard host-config files are never passed as native engine --config inputs.
+    """
+    if host["store"]["schemaVersion"] != 14: return host
+    try:
+        value=read_efficiency_export(store,engine,revision,deadline)
+        remaining_bytes=MAX_JSON-len(dump(host))+len(dump(host["processEfficiency"]))-256
+        if remaining_bytes<1024: return host
+        projected=project_efficiency_exports([(value,revision)],load_labels(labels_path),max_bytes=remaining_bytes)
+        candidate=dict(host); candidate["processEfficiency"]=projected; candidate.pop("revision")
+        candidate["revision"]=hashlib.sha256(json.dumps(candidate,sort_keys=True,separators=(",",":"),ensure_ascii=True).encode()).hexdigest()
+        validate_host(candidate); dump(candidate)
+        return candidate
+    except (HostSourceError,ValueError,OSError):
+        return host
 
 
 CONTEXT_LABELS={"historical":"Historical","current":"Current work"}

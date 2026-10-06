@@ -1,4 +1,4 @@
-"""Offline tests for the agreed inactive canonical consumer seam."""
+"""Offline tests for the agreed canonical consumer seam."""
 import copy
 import unittest
 from unittest import mock

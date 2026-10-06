@@ -113,8 +113,10 @@ Source checkpoint (2026-10-06): the local fixture slice extends the Source Deliv
 foundation ([PR #4269](https://github.com/FS-GG/.github/pull/4269), `428ef7f6`) with
 host schema 5 and a closed `process-efficiency/1` projection. Public collection and presentation
 require host schema 5 under the user-selected current-only migration.
-The collector currently emits `unavailable`; canonical measurement/assessment export integration,
-installed behavior and live acceptance remain pending. This checkpoint does not close .4.
+The source collector now joins the bounded schema-14 canonical measurement/assessment export
+to its exact compact snapshot revision. Endpoint/exporter native qualification, installed behavior
+and live acceptance remain pending; unavailable or invalid exports retain the base completed-work
+and source-delivery view with efficiency unavailable. This checkpoint does not close .4.
 
 The projection policy `efficiency-public-projection/1` explicitly expands the existing item-label
 approval for structured metric values, coverage, purpose/health dimensions, taxonomy enums and
@@ -150,9 +152,11 @@ unavailable context with unknown work counts. A shared 1 MiB public limit can wi
 context with `public-budget-exceeded`; it does not produce a false complete empty population.
 The accessible source selector updates completed items, source deliveries, efficiency and local
 host panels together and retains selection across valid refreshes. These source controls remain
-uninstalled. Parent-owned browser root03 passed all 18 cases with clean custody; a subsequent
-scoped selector-visibility correction adds one regression and requires its own exact qualification.
-Neither browser fixture result establishes canonical collection or live acceptance.
+uninstalled. Parent-owned browser root03 passed all 18 cases with clean custody; root04 passed
+all 19 cases after the scoped selector-visibility regression. Neither browser fixture result
+establishes canonical collection or live acceptance. Collector-only source integration preserves
+those exact frontend bytes and shares one absolute 45-second budget across compact/export reads;
+public projection receives only the remaining host byte budget. No metrics are recalculated here.
 
 
 The source includes native keyboard controls, search/scope/measurement filters, ten-item pages,
