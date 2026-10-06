@@ -451,7 +451,7 @@
     const grid = document.createElement("div");
     grid.className = "local-grid";
     const measured = host.totals.usageObservations > 0;
-    const known = (value) => (measured ? fmt.format(value) : "Unknown");
+    const known = (value) => (measured && value!==null ? typeof value==="string"?new Intl.NumberFormat("en").format(BigInt(value)):fmt.format(value) : "Unknown");
     const cards = [
       [
         "Input tokens",
@@ -466,7 +466,7 @@
       [
         "Observed tokens",
         known(host.usage.total),
-        "All-time observed native usage; coverage gaps can make this a partial total, and dashboard date filters do not apply.",
+        "All-time canonical observed usage across retained accounting scopes. Population tables are related and must not be added; coverage gaps can make this a partial total, missing counters remain unknown, and dashboard date filters do not apply.",
       ],
       [
         "Admitted / terminal",
@@ -491,6 +491,7 @@
       h.textContent = title;
       const strong = document.createElement("strong");
       strong.textContent = value;
+      strong.style.overflowWrap="anywhere";
       const p = document.createElement("p");
       p.textContent = note;
       article.append(h, strong, p);
@@ -528,17 +529,15 @@
     add("Token details", [
       [
         "cached input",
-        measured ? fmt.format(host.usage.cachedInput) : "unknown",
+        known(host.usage.cachedInput),
       ],
       [
         "cache-write input",
-        measured ? fmt.format(host.usage.cacheWriteInput) : "unknown",
+        known(host.usage.cacheWriteInput),
       ],
       [
         "reasoning",
-        measured && host.usage.reasoning != null
-          ? fmt.format(host.usage.reasoning)
-          : "unknown",
+        known(host.usage.reasoning),
       ],
       ["observations", String(host.totals.usageObservations)],
     ]);
@@ -602,6 +601,7 @@
 
   const object = (value) => value && typeof value === "object" && !Array.isArray(value);
   const finite = (value) => typeof value === "number" && Number.isFinite(value);
+  const usageQuantity = (value) => value===null || (typeof value==="number" && Number.isSafeInteger(value) && value>=0) || (typeof value==="string" && /^(0|[1-9][0-9]{0,18})$/.test(value) && BigInt(value)<=9223372036854775807n);
   const timestamp = (value) => typeof value === "string" && /(?:Z|[+-]\d\d:\d\d)$/.test(value) && !Number.isNaN(Date.parse(value));
   const safeUrl = (value, prefix) => typeof value === "string" && value.startsWith(prefix);
   const numericValues = (value) => object(value) && Object.values(value).every(finite);
@@ -658,7 +658,7 @@
       return;
     }
     if (typeof host.revision!=="string" || !/^[0-9a-f]{64}$/.test(host.revision)) malformed();
-    if (!timestamp(host.observedAt) || !object(host.totals) || !finite(host.totals.usageObservations) || !object(host.usage) || !finite(host.usage.input) || !finite(host.usage.cachedInput) || !finite(host.usage.cacheWriteInput) || !finite(host.usage.output) || (host.usage.reasoning != null && !finite(host.usage.reasoning)) || !finite(host.usage.total) || !numericValues(host.launcherPopulation) || !object(host.budget) || !Array.isArray(host.budget.assessments) || !flattenable(host.budget.health) || !flattenable(host.budget.dimensions) || !object(host.localCi) || !numericValues(host.localCi.counts) || !object(host.localCi.seconds) || !flattenable(host.localCi.coverage) || !object(host.store) || !flattenable(host.quality) || !object(host.operational) || !flattenable(host.operational.lineage) || !flattenable(host.operational.timing)) malformed();
+    if (!timestamp(host.observedAt) || !object(host.totals) || !finite(host.totals.usageObservations) || !exactKeys(host.usage,["input","cachedInput","cacheWriteInput","output","reasoning","total"]) || !Object.values(host.usage).every(usageQuantity) || !numericValues(host.launcherPopulation) || !object(host.budget) || !Array.isArray(host.budget.assessments) || !flattenable(host.budget.health) || !flattenable(host.budget.dimensions) || !object(host.localCi) || !numericValues(host.localCi.counts) || !object(host.localCi.seconds) || !flattenable(host.localCi.coverage) || !object(host.store) || !flattenable(host.quality) || !object(host.operational) || !flattenable(host.operational.lineage) || !flattenable(host.operational.timing)) malformed();
     Object.values(host.localCi.seconds).forEach((value) => { if (!object(value) || !finite(value.knownItems) || !finite(value.unknownItems) || !finite(value.totalItemSeconds)) malformed(); });
     host.budget.assessments.forEach((value) => { if (!object(value) || typeof value.dimension !== "string" || typeof value.verdict !== "string" || (value.numerator != null && !finite(value.numerator)) || (value.denominator != null && !finite(value.denominator))) malformed(); });
     if (!object(host.completedItems) || !numericValues(host.completedItems.coverage) || !Array.isArray(host.completedItems.items)) malformed();

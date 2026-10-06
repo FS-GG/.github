@@ -1177,14 +1177,23 @@ def aggregate_host(public: dict[str, Any], ci: list[dict[str, Any]], budgets: li
         for key in totals: totals[key] += checked_int(item.get(key), key)
         u = item.get("usage"); lp = item.get("launcherPopulation")
         if not isinstance(u, dict) or not isinstance(lp, dict): raise ValueError("invalid public aggregate")
-        for key in usage: usage[key] += checked_int(u.get(key), key)
+        exact(u,{"input","cachedInput","cacheWriteInput","output","total","reasoning"},"public usage")
+        for key in usage:
+            amount=u.get(key)
+            if amount is None: usage[key]=None
+            else:
+                amount=checked_int(amount,key)
+                if usage[key] is not None: usage[key]=checked_int(usage[key]+amount,key)
         rv = u.get("reasoning")
         if rv is None: reasoning = None
-        elif reasoning is not None: reasoning += checked_int(rv, "reasoning")
+        else:
+            rv=checked_int(rv,"reasoning")
+            if reasoning is not None: reasoning=checked_int(reasoning+rv,"reasoning")
         for key in launcher: launcher[key] += checked_int(lp.get(key), key)
         for key in quality:
             raw=item.get(key); label = raw if raw in quality_allowed[key] else "unknown"; quality[key][label] = quality[key].get(label, 0) + 1
     usage["reasoning"] = reasoning
+    usage={key:public_usage_counter(amount) for key,amount in usage.items()}
     ci_totals = {k:0 for k in ("runs","attempts","jobs","steps")}; seconds = {k:0 for k in ("runnerSeconds","wallSeconds","queueSeconds","usefulValidationSeconds","administrativeSeconds","necessarySetupSeconds","mixedSeconds","unclassifiedSeconds")}
     ci_coverage={k:{} for k in ("inventoryCoverage","checkCoverage","attemptCoverage","jobPageCoverage","terminalCoverage","timestampCoverage","lineageCoverage","classificationCoverage","criticalPathCoverage")}
     for item in ci:
@@ -1235,6 +1244,20 @@ def aggregate_host(public: dict[str, Any], ci: list[dict[str, Any]], budgets: li
 def checked_int(value: Any, name: str) -> int:
     if isinstance(value, bool) or not isinstance(value, int) or value < 0 or value > 2**63-1: raise ValueError(f"invalid {name}")
     return value
+
+
+def public_usage_counter(value: int | None) -> int | str | None:
+    if value is None: return None
+    checked_int(value,"usage counter")
+    return value if value<=2**53-1 else str(value)
+
+
+def validate_usage_counter(value: Any, name: str) -> None:
+    if value is None: return
+    if isinstance(value,str):
+        if not re.fullmatch(r"0|[1-9][0-9]{0,18}",value): raise ValueError(f"invalid {name}")
+        checked_int(int(value),name)
+    elif checked_int(value,name)>2**53-1: raise ValueError(f"unsafe numeric {name}")
 
 
 def enum(value: Any, values: set[str], name: str) -> str:
@@ -2304,7 +2327,7 @@ def validate_host(value: Any) -> None:
     checked_int(value["scope"]["items"],"items"); validate_count_map(value["totals"],{"factCount","usageObservations","deliveryObservations"},"totals")
     exact(value["usage"],{"input","cachedInput","cacheWriteInput","output","total","reasoning"},"usage")
     for key,count in value["usage"].items():
-        if count is not None: checked_int(count,key)
+        validate_usage_counter(count,key)
     validate_count_map(value["launcherPopulation"],{"admitted","started","terminal","usage","missingAdmission","missingStart","missingTerminal","missingUsage"},"launcher")
     quality=exact(value["quality"],{"recordValidity","joinIntegrity","populationCoverage","qualification"},"quality")
     quality_values={"valid","invalid","matched","mismatch","conflict","unknown","partial","complete","not-evaluated","qualified","not-qualified"}

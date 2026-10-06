@@ -288,6 +288,24 @@ All 143 pure dashboard tests pass with that genuine proof. Earlier proof and fai
 retained. Current installed 0.98/schema-13 live feed remains unchanged; actual 0.99/Host 0.5/schema-14
 collection, authenticated provider observations and full .4/.6 acceptance remain pending.
 
+Schema-14 nullable summary integration source (2026-10-06): canonical compact summaries may
+contain unknown provider-response counter dimensions. Aggregate usage preserves null whenever
+any selected summary lacks that dimension; it never substitutes zero or a known-subset sum.
+The host-5 aggregate quantity contract retains its closed fields and permits a nonnegative safe
+integer (0 through 9007199254740991), a canonical decimal Int64 string (0 through
+9223372036854775807, without leading zeroes), or null. The producer emits strings above the safe
+integer ceiling; the UI validates and renders them with BigInt without Number conversion or
+compact rounding. Aggregate Int64 overflow and malformed operands refuse publication. Separate
+provider-response rows retain their exact counters and do not establish successful completion.
+Focused pure controls cover the exact nullable compact-summary shape, mixed known/unknown
+summaries, available response rows and integer boundaries. Parent-selected browser root10
+qualified all 22 cases with no skips or retries, including unknown rendering, exact Int64 text,
+mobile containment and last-valid unsafe-feed refusal. The corrected two-UID root04 qualified all
+six permission checks for the exact collector bytes; its genuine fixture result replaces the prior
+proof. The earlier browser 20-pass/two-failure window and pre-fixture staging refusal remain
+separate historical evidence. Current installed 0.98/schema-13 feed remains unchanged; installed
+0.99/schema-14 qualification and full .4/.6 remain open.
+
 Depends on .1 for fixture-driven work; live projection acceptance requires .2 and .3. Touch-set:
 dashboard collector/projection, static UI/assets and focused projection/UI tests. Coordinate ownership
 of shared DTOs with .2; the UI does not edit canonical completion logic.
