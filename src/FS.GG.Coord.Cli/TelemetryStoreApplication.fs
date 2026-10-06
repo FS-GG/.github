@@ -5613,7 +5613,7 @@ WHERE n.source_ref=$source;
                                     "item_id,invocation_id,event,fact_revision DESC,identity DESC"
                                 "usage", table "runtime_turn_usage" "item_id,identity"
                                 "runtimeGaps", table "runtime_gaps" "item_id,identity"
-                                "ciRuns", (if compactCi then JsonArray() else table "ci_runs" "item_id,repository,run_id,attempt")
+                                "ciRuns", table "ci_runs" "item_id,repository,run_id,attempt"
                                 "ciJobs", (if compactCi then JsonArray() else table "ci_jobs" "item_id,repository,run_id,attempt,job_id")
                                 "ciSteps", (if compactCi then JsonArray() else table "ci_steps" "item_id,repository,run_id,attempt,job_id,number")
                                 "ciCoverage", (if compactCi then JsonArray() else table "ci_coverage" "item_id,rowid")
@@ -5638,7 +5638,7 @@ WHERE n.source_ref=$source;
                                     ($"SELECT o.sequence AS ingest_order,a.producer AS receipt_producer,a.stream AS receipt_stream,a.authority_role AS receipt_role,a.grant_id AS receipt_grant_id,a.grant_generation AS receipt_grant_generation,a.receipt_key,a.envelope_digest AS receipt_envelope_digest,f.identity,f.kind,f.item_id,f.revision,f.content_digest,f.canonical FROM ingest_facts f LEFT JOIN learning_fact_order o ON o.identity=f.identity LEFT JOIN fact_admissions a ON a.identity=f.identity WHERE f.kind IN ('learn-task-snapshot','learn-context-manifest','learn-experiment-assignment','learn-accounting-inventory/1','runtime-native-inventory/1','runtime-native-inventory-source/1','learn-shared-cost/1','learn-shared-cost-allocation/1','learn-shared-cost-authority/1','learn-native-delivery-source/1','learn-installed-origin/1')%s{learningFactItemFilter} ORDER BY f.item_id,f.kind,f.identity LIMIT 10001;"))
                             ]
                             |> List.iter (fun (name, value) ->
-                                if not compactCi || not (Set.contains name (set [ "ciRuns"; "ciJobs"; "ciSteps"; "ciCoverage"; "ciPopulationCoverage"; "learningObservations" ])) then
+                                if not compactCi || not (Set.contains name (set [ "ciJobs"; "ciSteps"; "ciCoverage"; "ciPopulationCoverage"; "learningObservations" ])) then
                                     content[name] <- value)
 
                             if compactCi then

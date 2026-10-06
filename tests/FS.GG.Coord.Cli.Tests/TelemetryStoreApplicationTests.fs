@@ -3677,3 +3677,19 @@ SELECT 1;
         TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
         compactCiSql path "INSERT INTO budget_population_facts VALUES('p','item','item','open','test','test:p',0); INSERT INTO budget_epochs VALUES('epoch',1,'verified'); WITH RECURSIVE n(x) AS (SELECT 1 UNION ALL SELECT x+1 FROM n WHERE x<40) INSERT INTO budget_epochs SELECT hex(randomblob(65536)),x+1,'verified' FROM n;"
         Assert.True(TelemetryStoreApplication.compactDashboardSnapshot path approved None |> Result.isError)
+
+
+    [<Fact>]
+    let ``compact dashboard CI preserves fractional offset and disjoint unions`` () =
+        let cleanup, path = root ()
+        use cleanup = cleanup
+        TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
+        compactCiSql path "INSERT INTO budget_population_facts VALUES('p','item','item','open','test','test:p',0); INSERT INTO ci_jobs VALUES('j1','item','FS-GG/.github',1,1,1,'job','completed','success','2026-10-06T00:00:00Z','2026-10-06T00:00:00.100Z','2026-10-06T00:00:01.900Z'),('j2','item','FS-GG/.github',1,1,2,'job','completed','success','2026-10-06T01:00:00.500+01:00','2026-10-06T01:00:01.200+01:00','2026-10-06T01:00:03.800+01:00'); INSERT INTO ci_steps VALUES('s1','item','FS-GG/.github',1,1,1,1,'step','completed','success','2026-10-06T00:00:00.100Z','2026-10-06T00:00:01.900Z','useful-validation','test'),('s2','item','FS-GG/.github',1,1,1,2,'step','completed','success','2026-10-06T01:00:01.200+01:00','2026-10-06T01:00:03.800+01:00','useful-validation','test'),('s3','item','FS-GG/.github',1,1,1,3,'step','completed','success','2026-10-06T00:00:10.100Z','2026-10-06T00:00:10.900Z','useful-validation','test');"
+        use compact = compactCiSnapshot path
+        let summary = compact.RootElement.GetProperty("ciSummaries")[0]
+        use expected = JsonDocument.Parse(TelemetryStoreApplication.ciSummary path approved "item" |> unwrap)
+        Assert.Equal(CanonicalJson.canonicalize (Encoding.UTF8.GetBytes(expected.RootElement.GetRawText())) |> unwrap, CanonicalJson.canonicalize (Encoding.UTF8.GetBytes(summary.GetRawText())) |> unwrap)
+        Assert.Equal(3L, summary.GetProperty("runnerSeconds").GetInt64())
+        Assert.Equal(3L, summary.GetProperty("wallSeconds").GetInt64())
+        Assert.Equal(0L, summary.GetProperty("queueSeconds").GetInt64())
+        Assert.Equal(3L, summary.GetProperty("usefulValidationSeconds").GetInt64())
