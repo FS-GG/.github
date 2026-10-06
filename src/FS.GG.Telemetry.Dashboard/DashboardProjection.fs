@@ -322,7 +322,7 @@ module DashboardProjection =
 
                 let usageValues =
                     [ "input"; "cachedInput"; "cacheWriteInput"; "output"; "total" ]
-                    |> List.map (fun n -> number n usage)
+                    |> List.map (fun n -> nullableNumber n usage)
 
                 let launcherValues =
                     [
@@ -402,7 +402,10 @@ module DashboardProjection =
                     let usageNode = JsonObject()
 
                     for name in [ "input"; "cachedInput"; "cacheWriteInput"; "output"; "total" ] do
-                        usageNode[name] <- number name usage |> Option.get
+                        usageNode[name] <-
+                            match nullableNumber name usage |> Option.get with
+                            | Some n -> JsonValue.Create n
+                            | None -> null
 
                     usageNode["reasoning"] <-
                         match nullableNumber "reasoning" usage |> Option.get with
@@ -660,12 +663,20 @@ module DashboardProjection =
                                         |> Set.remove "learningSnapshotSchema"
                                         |> Set.remove "learningObservations"
 
+                                    let responseSnapshot = exactNames snapshot (Set.add "responseUsage" expected)
                                     let learningSnapshot = exactNames snapshot expected
+                                    let version = property "store" snapshot |> Option.bind (number "schemaVersion")
+                                    let supportedShape =
+                                        if version = Some 14L then
+                                            responseSnapshot
+                                            && text "learningSnapshotSchema" snapshot = Some "fsgg.telemetry.learn-item-detail/4"
+                                        else
+                                            learningSnapshot || exactNames snapshot legacyExpected
 
                                     match property "selection" snapshot, property "store" snapshot with
                                     | Some selection, Some store when
-                                        (learningSnapshot || exactNames snapshot legacyExpected)
-                                        && (not learningSnapshot
+                                        supportedShape
+                                        && (not (learningSnapshot || responseSnapshot)
                                             || ((text "learningSnapshotSchema" snapshot = Some "fsgg.telemetry.learn-item-detail/3"
                                                  || text "learningSnapshotSchema" snapshot = Some "fsgg.telemetry.learn-item-detail/4")
                                                 && text "workspaceId" snapshot = text "workspaceId" envelope))
@@ -709,7 +720,9 @@ module DashboardProjection =
                                                 ]
 
                                             let arrayNames =
-                                                if learningSnapshot then
+                                                if responseSnapshot then
+                                                    "responseUsage" :: "learningObservations" :: arrayNames
+                                                elif learningSnapshot then
                                                     "learningObservations" :: arrayNames
                                                 else
                                                     arrayNames
