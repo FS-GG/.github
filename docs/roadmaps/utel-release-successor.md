@@ -209,3 +209,14 @@ correction and compact/3 before selecting dashboard migration or a fresh prospec
 cycle; preserve original erroneous attribution and unknown historical populations.
 No Home/Main service, remote Host adoption, credential expansion or whole-programme
 coverage is implied. Old0.97.1 adoption and completed cycles must not be replayed.
+
+### Accepted 0.98 coherent publication — 2026-10-06
+
+Verified publisher `37434982959` promotes CLI, Kit and Drivers 0.98.0 from
+`3d4f7e9c6337fb020e269e632653de0faeef6d72` using the original candidate `37433117226`, artifact
+`11397568554` and raw archive SHA256 `ac322752d09cfdbc7c9fc209448dba0b9d95c56af979bedd876fa3d97c2cd650`. Protected journal
+`utel-rel-15` and both-feed byte verification bind content `sha256:15a3bc4c133216cde77d1fef5b639d1842588a5754802eaa11b098e7b62c2a06`.
+Candidate and publisher source, hashes and readbacks are joined without repacking or journal reset.
+The prior release and consumed cycles remain unchanged. Installed schema 13 backup/migration,
+actual Governance attribution correction and current-store sanitized export/Pages/event adoption
+remain pending until their own genuine receipts.
