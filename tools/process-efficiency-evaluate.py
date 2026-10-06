@@ -84,9 +84,12 @@ def compiled_validator(schema_bytes):
         from jsonschema import Draft202012Validator, FormatChecker
     except ImportError as error:
         raise ValueError('Selected jsonschema dependency unavailable; use the qualified .3/CI Python environment.') from error
+    checker=FormatChecker()
+    if 'date-time' not in checker.checkers:
+        raise ValueError('Required date-time format checker unavailable; use the qualified .3/CI Python environment.')
     schema=json.loads(schema_bytes)
     Draft202012Validator.check_schema(schema)
-    return Draft202012Validator(schema,format_checker=FormatChecker())
+    return Draft202012Validator(schema,format_checker=checker)
 
 
 def check_shape(value, schema):

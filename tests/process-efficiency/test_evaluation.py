@@ -8,6 +8,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 sys.dont_write_bytecode=True
 
@@ -155,6 +156,23 @@ class EvaluationTests(unittest.TestCase):
         evidence['records'][0]['sourceRef']['contentDigest']=evidence['records'][0]['contentDigest']
         evidence['bindings'][0]['sourceRef']['contentDigest']=evidence['bindings'][0]['contentDigest']
         self.assertEqual(report(predictions,evidence,numeric)['references']['validity']['value'],1)
+
+    def test_date_time_checker_rejects_malformed_and_invalid_calendar_values(self):
+        schema={'type':'string','format':'date-time'}
+        E.check_shape('2026-10-06T12:00:00Z',schema)
+        for value in ['not-a-date','2026-02-30T12:00:00Z']:
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                E.check_shape(value,schema)
+
+    def test_missing_required_date_time_checker_refuses_validation(self):
+        from jsonschema import FormatChecker
+        E.compiled_validator.cache_clear()
+        try:
+            with patch.dict(FormatChecker.checkers,clear=True):
+                with self.assertRaisesRegex(ValueError,'Required date-time format checker unavailable'):
+                    E.check_shape('2026-10-06T12:00:00Z',{'type':'string','format':'date-time'})
+        finally:
+            E.compiled_validator.cache_clear()
 
     def test_full_draft_validator_enforces_composed_schema_keywords(self):
         # A future schema keyword must be enforced rather than ignored by a fixture subset.
