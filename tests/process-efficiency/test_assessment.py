@@ -147,6 +147,23 @@ class AssessmentTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             check(output, packet)
 
+    def test_same_call_review_revision_keeps_preclaim_evidence(self):
+        output, packet = fixture()
+        previous = next(r for r in packet['records'] if r['ref']['kind'] == 'process-review')
+        published = copy.deepcopy(previous)
+        published['ref']['revision'] += 1
+        published['payload']['receipt'] = 'same-call authenticated publication'
+        published['analysisGenerated'] = True
+        packet['analysisRecords'] = [published]
+        output['evidenceRefs'].append(published['ref'])
+        self.assertEqual(a.validate(output, packet, SCHEMA, admitted_review=published,
+                                    metric_schema=METRIC_SCHEMA), output)
+        self.assertIn(previous, packet['records'])
+        output['evidenceRefs'].remove(published['ref'])
+        with self.assertRaises(ValueError):
+            a.validate(output, packet, SCHEMA, admitted_review=published, metric_schema=METRIC_SCHEMA)
+        self.assertEqual(check(output, packet), output)  # Old admitted review is still legitimate.
+
     def test_missing_observer_remains_unknown(self):
         output, packet = fixture(2)
         packet = a.assemble(output['subject'], packet['records'], packet['metrics'],

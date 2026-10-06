@@ -157,7 +157,11 @@ but does not establish admission. Explicit enrolled enqueue supplies the packet 
 The existing process-review payload does not name an analyst claim or invocation. Reconciliation
 therefore defers new analysis while the current request is claimed or unresolved, including when
 the root publishes the analyst's draft review. Successful settlement binds the accepted assessment's
-exact item-review reference to the genuine claim and runtime invocation. Subsequent reconciliation
+exact item-review reference to the genuine claim and runtime invocation. Finalization resolves the
+separately published review revision through actual receipt/readback and adds its exact reference;
+the retained preclaim review stays legitimate evidence. ID-only finding references spanning multiple
+review revisions are refused as ambiguous. A result pointing to a preclaim review does not establish
+that the analyst generated it. Subsequent reconciliation
 uses that canonical association to exclude the generated review from substantive evidence. Newer
 review time, item identity or requested reviewer metadata alone does not establish authorship. Failed
 output without an accepted association remains unknown/provisional and cannot cause automatic retry.

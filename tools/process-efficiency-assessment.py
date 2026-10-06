@@ -222,7 +222,8 @@ def validate(assessment, packet, schema, admitted_review=None, usage_refs=(), al
     all_records = packet['records'] + packet['analysisRecords']
     refs = {(r['ref']['id'], r['ref']['kind'], r['ref']['revision']) for r in all_records}
     ids = {r[0] for r in refs}
-    if len(ids) != len(refs):
+    ambiguous_ids = {name for name in ids if sum(ref[0] == name for ref in refs) > 1}
+    if any(any(ref[0] == name and ref[1] != 'process-review' for ref in refs) for name in ambiguous_ids):
         raise ValueError('ambiguous evidence id')
     for ref in assessment['evidenceRefs'] + [o for f in assessment['findings'] for o in f['affectedObjects']]:
         if (ref['id'], ref['kind'], ref['revision']) not in refs:
@@ -251,8 +252,9 @@ def validate(assessment, packet, schema, admitted_review=None, usage_refs=(), al
     if set(assessment['provenance']['usageRefs']) - set(usage_refs):
         raise ValueError('unresolved analyst usage')
     for finding in assessment['findings']:
-        if set(finding['evidenceRefs'] + finding['recoveryRefs']) - ids:
-            raise ValueError('unresolved finding reference')
+        finding_ids = set(finding['evidenceRefs'] + finding['recoveryRefs'])
+        if finding_ids - ids or finding_ids & ambiguous_ids:
+            raise ValueError('unresolved or ambiguous finding reference')
         supported = finding['epistemicStatus'] in ('observed', 'supported-inference')
         if supported and not finding['evidenceRefs']:
             raise ValueError('supported claim needs evidence')
@@ -273,7 +275,10 @@ def validate(assessment, packet, schema, admitted_review=None, usage_refs=(), al
         raise ValueError('unresolved outcome')
     if review is not None:
         # The trusted exporter must resolve this actual existing admitted record.
-        matches = [r for r in all_records if r['ref']['kind'] == 'process-review' and r['ref']['id'] == review]
+        if not isinstance(admitted_review, dict) or admitted_review.get('ref') not in assessment['evidenceRefs']:
+            raise ValueError('exact admitted item review revision required')
+        matches = [r for r in all_records if r['ref']['kind'] == 'process-review' and r['ref']['id'] == review
+                   and r['ref'] == admitted_review['ref']]
         if len(matches) != 1 or admitted_review != matches[0] or matches[0]['payload'].get('scope') != 'item':
             raise ValueError('existing admitted item review required')
     if state == 'ready':
