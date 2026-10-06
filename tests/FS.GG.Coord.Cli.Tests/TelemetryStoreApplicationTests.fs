@@ -3412,7 +3412,20 @@ COMMIT;
         Assert.Equal(chainedRequest.Effective.ItemId, currentOutcome.GetProperty("item_id").GetString())
         Assert.Contains("\"deliveries\":0", TelemetryStoreApplication.ciSummary path approved request.Effective.ItemId |> unwrap)
         Assert.Contains("\"deliveries\":1", TelemetryStoreApplication.ciSummary path approved chainedRequest.Effective.ItemId |> unwrap)
-        Assert.Equal(Error [ "ci-correction-predecessor-conflict" ], TelemetryStoreApplication.ciCorrectionPlan path approved { chainedRequest with CorrectionId = "stale" })
+        // Target the current outcome so this isolates the obsolete predecessor,
+        // rather than refusing the now-unavailable first effective assignment.
+        let stale =
+            { chainedRequest with
+                CorrectionId = "stale"
+                Prior = chainedRequest.Effective
+                Effective = { chainedRequest.Effective with ItemId = "GOV-423-C3-next"; AttemptId = "genuine-attempt-next" } }
+        let unchangedSql =
+            "SELECT (SELECT group_concat(content_digest || canonical) FROM ingest_facts) || (SELECT group_concat(identity || item_id) FROM current_ingest_facts) || (SELECT group_concat(plan_digest || plan) FROM ci_attribution_corrections) || (SELECT group_concat(digest || canonical) FROM ci_correction_evidence);"
+        let beforeStale = correctionSql path unchangedSql
+        Assert.Equal(Error [ "ci-correction-predecessor-conflict" ], TelemetryStoreApplication.ciCorrectionPlan path approved stale)
+        Assert.Equal(beforeStale, correctionSql path unchangedSql)
+        Assert.Equal("2", correctionSql path "SELECT count(*) FROM ci_attribution_corrections;")
+        Assert.Equal(chainedRequest.Effective.ItemId, correctionSql path "SELECT item_id FROM native_item_outcomes;")
 
     [<Fact>]
     let ``UTEL-06.8 source replay cannot resurrect wrong assignment or duplicate a corrected reconcile candidate`` () =
