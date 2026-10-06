@@ -124,6 +124,20 @@ class CustodyProjectionTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'compilation order'):
             module.synchronize(self.root, check=True)
 
+    def test_responses_signature_order_and_uniqueness_refuse(self):
+        path = self.root / module.CLIENT / 'FS.GG.Telemetry.Client.fsproj'
+        original = path.read_text()
+        signature = '<Compile Include="DirectResponses.fsi" />'
+        implementation = '<Compile Include="DirectResponses.fs" />'
+        for changed in (original.replace(signature, ''),
+                        original.replace(signature, '__SIGNATURE__').replace(implementation, signature).replace('__SIGNATURE__', implementation),
+                        original.replace(signature, signature + signature)):
+            with self.subTest(project=changed):
+                path.write_text(changed)
+                with self.assertRaisesRegex(ValueError, 'compilation order'):
+                    self.project()
+                self.assertFalse((self.root / module.PROJECTION).exists())
+
     def test_coordinate_clr_dependency_refuses(self):
         path = self.root / module.CLIENT / 'FS.GG.Telemetry.Client.fsproj'
         path.write_text(path.read_text().replace('</Project>', '<ItemGroup><PackageReference Include="Akka" /></ItemGroup></Project>'))

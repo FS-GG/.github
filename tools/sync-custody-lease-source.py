@@ -145,8 +145,9 @@ def check_project(root):
     if project.findtext('.//TargetFramework') != 'net10.0' or project.findtext('.//IsPackable') != 'false':
         raise ValueError('Client target or package')
     includes = [node.attrib.get('Include') for node in project.findall('.//Compile')]
-    expected = ['CustodyProjection/CustodyProcessLease.fsi', 'CustodyProjection/CustodyProcessLease.fs', 'ObservedCodexProcess.fsi']
-    if any(includes.count(name) != 1 for name in expected) or includes[:3] != expected:
+    expected = ['CustodyProjection/CustodyProcessLease.fsi', 'CustodyProjection/CustodyProcessLease.fs',
+                'DirectResponses.fsi', 'DirectResponses.fs', 'ObservedCodexProcess.fsi']
+    if any(includes.count(name) != 1 for name in expected) or includes[:len(expected)] != expected:
         raise ValueError('Client compilation order')
     for node in project.findall('.//ProjectReference') + project.findall('.//PackageReference'):
         if 'Coordination' in node.attrib.get('Include', '') or 'Akka' in node.attrib.get('Include', ''):
