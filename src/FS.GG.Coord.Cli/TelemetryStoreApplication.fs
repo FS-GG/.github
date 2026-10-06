@@ -1938,7 +1938,7 @@ WHERE f.identity=$resource AND f.revision=$sourceRevision AND f.content_digest=$
         | _ -> ()
 
     let private deriveBudgetInputs (connection: SqliteConnection) item =
-        let parameterized sql =
+        let parameterized (sql: string) =
             let command = connection.CreateCommand()
             command.CommandText <- if sql.TrimStart().StartsWith("SELECT",StringComparison.Ordinal) then withResponseUsage sql else sql
             parameter command "$item" item
