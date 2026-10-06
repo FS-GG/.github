@@ -937,6 +937,7 @@ module TelemetryCiApplication =
             let full = correctionPrivatePath path
             let file = FileInfo full
             if not file.Exists || not (isNull file.LinkTarget) then invalidOp "correction input must be a regular non-symlink file"
+            if file.Length <= 0L then invalidOp "correction input must contain JSON bytes"
             if file.Length > 1048576L then invalidOp "correction input exceeds 1 MiB"
             if not (OperatingSystem.IsWindows()) && File.GetUnixFileMode(full) <> (UnixFileMode.UserRead ||| UnixFileMode.UserWrite) then
                 invalidOp "correction input permissions must be 0600"
