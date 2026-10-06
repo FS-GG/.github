@@ -56,6 +56,22 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-06: Coordination C2 byte-contract and observation-only admission source delivered.**
+[Coordination #948](https://github.com/FS-GG/FS.GG.Coordination/pull/948) merged exact head
+`4f805d207b5a2072a2bf99277dad43b56b700c0e` at protected source
+`718f7311047a7a5584b24db78bbae26fbd707b52`, with 47 passing checks and eight skips.
+The bounded canonical scaffold/compiler request and result APIs, supplied-declaration checks,
+literal execute/recover options and observation-only admission reader retain opaque
+producer-owned capabilities and refuse missing current image proof. All 65 selected local
+cases passed; a separately admitted read-only recovery verified the retained results and
+complete source/toolchain closure without replaying tests. Earlier failed windows remain retained.
+This closes the C2 source checkpoint in
+[V2-LANG-01.2](https://github.com/FS-GG/FS.GG.Coordination/blob/main/docs/roadmaps/v2-lang-portable-integration.md).
+Program/RuntimeExecutor wiring, workload launch, Podman/journal integration, protected enrollment,
+current loaded-image proof, positive admission and retired output handoff remain open.
+Python P4's provider grant, installed runtime-only qualification, publication and fresh adoption
+remain separate; the source projection permits dependent preparation and does not close V2-LANG-01.
+
 **2026-10-06: V2-EFF-01 selected as the priority; source-delivery dashboard consumers landed.**
 The [process efficiency roadmap](roadmaps/process-efficiency-telemetry.md) is now active:
 shared measurement contracts and examples lead parallel canonical metrics, bounded assessment
