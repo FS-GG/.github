@@ -58,7 +58,7 @@ class ItemProjectionTests(unittest.TestCase):
 
         # Additive stores keep the same canonical snapshot contract. Retain
         # the incumbent item exactly; mixed or unknown schemas still refuse.
-        for version in (11,12,13):
+        for version in (11,12,13,14):
             current_left=json.loads(json.dumps(left)); current_right=json.loads(json.dumps(right))
             current_left["store"]["schemaVersion"]=version
             current_right["store"]["schemaVersion"]=version
@@ -71,7 +71,7 @@ class ItemProjectionTests(unittest.TestCase):
             current_right["store"]["schemaVersion"]=10
             with self.assertRaisesRegex(D.HostSourceError,"HOST_STORE_INCOMPATIBLE"):
                 D._join_host_snapshots([(current_left,envelope(current_left)),(current_right,envelope(current_right))])
-        future=json.loads(json.dumps(left)); future["store"]["schemaVersion"]=14
+        future=json.loads(json.dumps(left)); future["store"]["schemaVersion"]=15
         with self.assertRaisesRegex(D.HostSourceError,"HOST_STORE_INCOMPATIBLE"):
             D._join_host_snapshots([(future,envelope(future)),(future,envelope(future))])
 
