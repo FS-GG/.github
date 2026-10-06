@@ -558,7 +558,7 @@ def project_source_deliveries(snapshot: dict[str,Any], labels: dict[str,Any], co
         item=row.get("item_id"); previous=outcomes.get(item)
         # Canonical snapshot order is latest first. Equal current evidence must agree.
         if previous is None: outcomes[item]=row
-        elif (row.get("observed_at"),row.get("fact_revision"))==(previous.get("observed_at"),previous.get("fact_revision")) and any(row.get(k)!=previous.get(k) for k in ("repository","pr_number","outcome","code_delivery","occurred_at")): ambiguous.add(item)
+        elif (row.get("observed_at"),row.get("fact_revision"))==(previous.get("observed_at"),previous.get("fact_revision")) and any(row.get(k)!=previous.get(k) for k in ("repository","pr_number","head","merge_commit","outcome","code_delivery","occurred_at")): ambiguous.add(item)
     completed_keys={r["key"] for r in completed["items"]}; result=[]
     coverage={"eligible":0,"published":0,"unmapped":0,"dirty":0,"incompatible":0}
     for original,members in sorted(groups.items()):
@@ -569,13 +569,6 @@ def project_source_deliveries(snapshot: dict[str,Any], labels: dict[str,Any], co
         if approval and approval["key"] in completed_keys: continue
         if any(m in dirty for m in members): coverage["dirty"]+=1; continue
         if any(m in ambiguous for m in members): coverage["incompatible"]+=1; continue
-        if all(populations[m][1].get("state")=="completed" for m in members) and len(delivered)==len(members):
-            member_set=set(members)
-            terminals={r.get("invocation_id") for r in snapshot_rows(snapshot,"terminals",member_set)}
-            admitted={r.get("invocation_id") for r in snapshot_rows(snapshot,"admissions",member_set)}
-            lineage={r.get("dispatch_id"):r.get("invocation_id") for r in snapshot_rows(snapshot,"lineage",member_set)}
-            expected={r.get("dispatch_id") for r in snapshot_rows(snapshot,"expectedDispatches",member_set)}
-            if admitted.issubset(terminals) and all(lineage.get(d) in terminals for d in expected): continue
         coverage["eligible"]+=1
         if approval is None: coverage["unmapped"]+=1; continue
         try:

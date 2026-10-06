@@ -57,10 +57,18 @@ class SourceDeliveryTests(unittest.TestCase):
         self.assertEqual(self.project(value,approved)['items'],[])
 
     def test_conflicting_original_or_latest_evidence_is_withheld(self):
-        for relation,field,new in [('populations','original_item_id','PRIVATE-CONFLICT'),('outcomes','pr_number',445),('outcomes','occurred_at','2026-10-05T18:00:00Z')]:
+        for relation,field,new in [('populations','original_item_id','PRIVATE-CONFLICT'),('outcomes','pr_number',445),('outcomes','head','f'*40),('outcomes','merge_commit','a'*40),('outcomes','occurred_at','2026-10-05T18:00:00Z')]:
             value,approved=gov(); conflict=copy.deepcopy(value[relation][0]); conflict[field]=new; value[relation].append(conflict)
             result=self.project(value,approved)
             self.assertEqual(result['items'],[]); self.assertEqual(result['coverage']['incompatible'],1)
+
+    def test_delivered_source_remains_visible_when_completed_projection_is_unavailable(self):
+        value,approved=gov()
+        value['populations'][0]['state']='completed'
+        completed={'items':[], 'coverage':{'incompatible':1}}
+        result=D.project_source_deliveries(value,approved,completed)
+        self.assertEqual(result['coverage']['published'],1)
+        self.assertEqual(result['items'][0]['operationalCompletion'],'unestablished')
 
     def test_dirty_unapproved_and_repo_mismatch_are_private(self):
         for mode in ('dirty','unapproved','repository'):
