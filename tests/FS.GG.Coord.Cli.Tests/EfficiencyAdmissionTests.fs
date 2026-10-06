@@ -692,3 +692,19 @@ module EfficiencyAdmissionTests =
         Assert.Equal("1600",scalar path "SELECT json_extract(canonical,'$.total') FROM current_ingest_facts WHERE identity='response-usage';")
         use summary = JsonDocument.Parse(TelemetryStoreApplication.summary path approved "A" |> unwrap)
         Assert.Equal(1700L,summary.RootElement.GetProperty("usage").GetProperty("total").GetInt64())
+
+    [<Fact>]
+    let ``response snapshot preserves nested membership predicate in full and compact scopes`` () =
+        let cleanup,path,_,_,_,_ = responseFixture "completed"
+        use cleanup = cleanup
+        for selected in [ None; Some "A" ] do
+            for snapshot in [ TelemetryStoreApplication.dashboardSnapshot; TelemetryStoreApplication.compactDashboardSnapshot ] do
+                use envelope = JsonDocument.Parse(snapshot path approved selected |> unwrap)
+                use input = new MemoryStream(Convert.FromBase64String(envelope.RootElement.GetProperty("canonicalSnapshotGzip").GetString()))
+                use gzip = new System.IO.Compression.GZipStream(input, System.IO.Compression.CompressionMode.Decompress)
+                use canonical = JsonDocument.Parse gzip
+                let responses = canonical.RootElement.GetProperty("responseUsage").EnumerateArray() |> Seq.toArray
+                Assert.Single(responses) |> ignore
+                Assert.Equal("A",responses.[0].GetProperty("item_id").GetString())
+                Assert.Equal("response-usage",responses.[0].GetProperty("identity").GetString())
+                Assert.Equal(0L,responses.[0].GetProperty("revision").GetInt64())

@@ -7637,8 +7637,13 @@ WHERE n.source_ref=$source;
                             if not compactCi && Convert.ToInt64(learningCount.ExecuteScalar()) > 10000L then
                                 raise (InvalidOperationException("learning observation snapshot row bound exceeded"))
 
+                            let responseItemFilter =
+                                if itemFilter = "" then ""
+                                elif itemFilter.StartsWith(" WHERE ", StringComparison.Ordinal) then
+                                    " AND " + itemFilter.Substring(" WHERE ".Length)
+                                else invalidOp "unexpected dashboard item filter prefix"
                             let responseRows =
-                                rows ("SELECT identity,item_id,revision,content_digest,canonical FROM current_ingest_facts WHERE kind='runtime-response-usage/1'" + itemFilter.Replace(" WHERE "," AND ",StringComparison.Ordinal) + " ORDER BY item_id,identity;")
+                                rows ("SELECT identity,item_id,revision,content_digest,canonical FROM current_ingest_facts WHERE kind='runtime-response-usage/1'" + responseItemFilter + " ORDER BY item_id,identity;")
                             let summaries = JsonArray()
 
                             for selected in selectedItems do
