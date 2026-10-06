@@ -44,7 +44,7 @@ class SourceDeliveryTests(unittest.TestCase):
         with mock.patch.object(D,'engine_json',return_value=envelope(value)),mock.patch.object(D,'load_labels',return_value=approved):
             host=D.build_host(resolved_config={'storeRoot':'/private/store','engine':'engine'})
         D.validate_host(host)
-        self.assertEqual(host['schema'],'fsgg.telemetry.dashboard-host/4')
+        self.assertEqual(host['schema'],D.HOST_SCHEMA)
         self.assertEqual(host['completedItems']['coverage']['published'],0)
         self.assertEqual(host['sourceDeliveries']['coverage']['published'],1)
         self.assertNotIn('PRIVATE SENTINEL',json.dumps(host))
@@ -111,7 +111,7 @@ class SourceDeliveryTests(unittest.TestCase):
         def seal():
             host.pop('revision',None); host['revision']=hashlib.sha256(json.dumps(host,sort_keys=True,separators=(',',':'),ensure_ascii=True).encode()).hexdigest()
         seal(); D.validate_host(host)
-        old=copy.deepcopy(host); old['schema']='fsgg.telemetry.dashboard-host/3'; old.pop('sourceDeliveries'); old.pop('revision'); old['revision']=hashlib.sha256(json.dumps(old,sort_keys=True,separators=(',',':'),ensure_ascii=True).encode()).hexdigest(); D.validate_host(old)
+        old=copy.deepcopy(host); old['schema']='fsgg.telemetry.dashboard-host/3'; old.pop('sourceDeliveries'); old.pop('processEfficiency'); old.pop('revision'); old['revision']=hashlib.sha256(json.dumps(old,sort_keys=True,separators=(',',':'),ensure_ascii=True).encode()).hexdigest(); D.validate_host(old)
         old['revision']='0'*64
         with self.assertRaisesRegex(ValueError,'revision mismatch'): D.validate_host(old)
         for mutate in (lambda r:r.update(privateNotes='PRIVATE SENTINEL'),lambda r:r.update(operationalCompletion='completed'),lambda r:r['deliveries'][0].update(url='https://evil.example/')):

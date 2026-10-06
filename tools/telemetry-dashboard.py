@@ -25,12 +25,180 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from typing import Any
+from types import SimpleNamespace
+
+EFF_SCHEMA = 'fsgg.telemetry.process-efficiency/1'
+EFF_POLICY = 'efficiency-public-projection/1'
+EFF_COVERAGE = {'complete', 'partial', 'unknown', 'not-applicable'}
+EFF_AXES = ('population', 'usage', 'classification', 'lineage', 'dependency')
+EFF_METRICS = {'delivered-outcomes', 'observed-resource', 'work-mix', 'avoidable-share', 'retry-incidence', 'retry-burden', 'first-pass-delivery', 'churn', 'lead-time', 'touch-time', 'wait-time', 'flow-ratio', 'critical-path-delay', 'cost-per-accepted', 'analysis-burden', 'data-health'}
+EFF_UNITS = {'tokens-input', 'tokens-output', 'tokens-total', 'tokens-cached-input', 'tokens-cache-write-input', 'tokens-reasoning', 'runner-seconds', 'observed-span-seconds', 'human-seconds', 'seconds', 'estimated-currency', 'billed-currency', 'outcomes', 'events', 'records', 'ratio', 'tokens-per-accepted', 'currency-per-accepted'}
+EFF_CAUSES = {'product-defect', 'requirements', 'dependency-drift', 'test-nondeterminism', 'infrastructure', 'authorization', 'capacity-custody', 'orchestration-handoff', 'context-loss', 'duplicate-process', 'bookkeeping-lineage', 'telemetry-loss', 'other', 'unknown'}
+EFF_PURPOSES = {'direct-product', 'useful-assurance', 'necessary-coordination', 'process-improvement', 'avoidable-process', 'unknown'}
+EFF_REF_KINDS = {'outcome', 'attempt', 'invocation', 'operation', 'pr', 'ci-run', 'ci-job', 'release', 'adoption', 'usage', 'activity', 'complication', 'process-review', 'correction', 'assessment'}
+EFF_HEALTH_DIMENSIONS = {'source-age', 'ingestion-age', 'publication-age', 'producer-population', 'unresolved-lineage', 'pending-analysis'}
+EFF_STATES = {'pending', 'running', 'partial', 'ready', 'failed', 'unavailable'}
+EFF_URL = re.compile(r'https://github\.com/FS-GG/[A-Za-z0-9_.-]+/(?:issues|pull|actions/runs)/[1-9][0-9]*')
+
+
+def unavailable_process_efficiency():
+    return {'schema': EFF_SCHEMA, 'policyVersion': EFF_POLICY, 'source': 'unavailable', 'status': 'unavailable', 'coverage': {'published': 0, 'unmapped': 0, 'withheld': 0}, 'items': []}
+
+
+def _eff_exact(value, keys):
+    if not isinstance(value, dict) or set(value) != set(keys):
+        raise ValueError('invalid efficiency projection fields')
+
+
+def _eff_integer(value):
+    if type(value) is not int or not 0 <= value <= 9007199254740991:
+        raise ValueError('invalid efficiency quantity')
+
+
+def _eff_coverage(value):
+    _eff_exact(value, EFF_AXES)
+    if any(v not in EFF_COVERAGE for v in value.values()):
+        raise ValueError('invalid efficiency coverage')
+
+
+def _eff_stamp(value):
+    from datetime import datetime
+    if not isinstance(value, str) or len(value) > 40 or not re.search(r'(Z|[+-]\d\d:\d\d)$', value):
+        raise ValueError('invalid efficiency time')
+    datetime.fromisoformat(value.replace('Z', '+00:00'))
+
+
+def validate_process_efficiency(value):
+    _eff_exact(value, ('schema', 'policyVersion', 'source', 'status', 'coverage', 'items'))
+    if value['schema'] != EFF_SCHEMA or value['policyVersion'] != EFF_POLICY or value['source'] not in {'fixtures', 'unavailable'} or value['status'] not in {'partial', 'unavailable'}:
+        raise ValueError('invalid efficiency identity')
+    _eff_exact(value['coverage'], ('published', 'unmapped', 'withheld'))
+    for count in value['coverage'].values(): _eff_integer(count)
+    if not isinstance(value['items'], list) or len(value['items']) > 200 or value['coverage']['published'] != len(value['items']):
+        raise ValueError('invalid efficiency population')
+    if value['source'] == 'unavailable' and (value['status'] != 'unavailable' or value['items']):
+        raise ValueError('unavailable efficiency contains data')
+    keys = set()
+    for item in value['items']:
+        _eff_exact(item, ('key', 'label', 'url', 'summary', 'analysisState', 'scope', 'metrics', 'problems', 'timeline', 'improvements'))
+        if not isinstance(item['key'], str) or not re.fullmatch(r'[a-z0-9][a-z0-9-]{0,63}', item['key']) or item['key'] in keys: raise ValueError('invalid public item key')
+        keys.add(item['key'])
+        if not isinstance(item['label'], str) or not 1 <= len(item['label']) <= 120 or not isinstance(item['url'], str) or not EFF_URL.fullmatch(item['url']): raise ValueError('invalid approved item')
+        if item['scope'] not in {'native-item', 'provisional-delivery'} or item['analysisState'] not in EFF_STATES or item['summary'] not in {'native-observation', 'delivery-accounting-incomplete'}: raise ValueError('invalid efficiency summary')
+        if item['summary'] != ('native-observation' if item['scope'] == 'native-item' else 'delivery-accounting-incomplete'): raise ValueError('summary scope mismatch')
+        if item['scope'] == 'provisional-delivery' and item['analysisState'] == 'ready': raise ValueError('provisional final analysis')
+        if not isinstance(item['metrics'], list) or len(item['metrics']) > 32: raise ValueError('efficiency metric bound')
+        ids = set()
+        for metric in item['metrics']:
+            _eff_exact(metric, ('key', 'metric', 'unit', 'calculationVersion', 'value', 'coverage', 'policyProfile', 'windowStart', 'windowEnd', 'cutoff', 'observedAt', 'eventTime', 'openItems', 'abandonedItems', 'excludedItems', 'populationItems', 'unmappedPopulationItems', 'purpose', 'healthDimension', 'sourceEvidence', 'unmappedEvidenceRefs', 'evidenceUrls'))
+            if not re.fullmatch(r'm[0-9]+', metric['key']) or metric['key'] in ids: raise ValueError('invalid public metric key')
+            ids.add(metric['key'])
+            if metric['metric'] not in EFF_METRICS or metric['unit'] not in EFF_UNITS or metric['calculationVersion'] != 'efficiency-calculation/1': raise ValueError('invalid metric contract')
+            if metric['policyProfile'] not in {None, 'v2-model-overhead/2026-09-29', 'utel-narrow-bureaucracy/1'}: raise ValueError('invalid profile alias')
+            _eff_exact(metric['value'], ('status', 'numerator', 'denominator', 'unknownAmount'))
+            v = metric['value']
+            if v['status'] not in {'known', 'partial', 'unknown', 'not-applicable'}: raise ValueError('invalid quantity status')
+            for field in ('numerator', 'denominator', 'unknownAmount'):
+                if v[field] is not None: _eff_integer(v[field])
+            if v['status'] in {'unknown', 'not-applicable'} and (v['numerator'] is not None or v['denominator'] is not None): raise ValueError('unknown quantity has value')
+            if v['status'] in {'known', 'partial'} and v['numerator'] is None: raise ValueError('known quantity missing')
+            if v['denominator'] == 0: raise ValueError('zero metric denominator')
+            if metric['metric'] == 'work-mix':
+                if metric['purpose'] not in EFF_PURPOSES: raise ValueError('work mix requires purpose')
+            elif metric['purpose'] is not None: raise ValueError('non-work-mix purpose')
+            if metric['metric'] == 'data-health':
+                if metric['healthDimension'] not in EFF_HEALTH_DIMENSIONS: raise ValueError('data health requires dimension')
+            elif metric['healthDimension'] is not None: raise ValueError('non-health dimension')
+            if metric['unit'] == 'ratio' and metric['value']['status'] in {'known', 'partial'} and metric['value']['denominator'] is None: raise ValueError('ratio denominator required')
+            _eff_integer(metric['unmappedEvidenceRefs'])
+            if not isinstance(metric['sourceEvidence'], list) or len(metric['sourceEvidence']) > 16: raise ValueError('source evidence bound')
+            for ref in metric['sourceEvidence']:
+                _eff_exact(ref, ('url', 'kind', 'revision')); _eff_links([ref['url']]); _eff_integer(ref['revision'])
+                if ref['kind'] not in EFF_REF_KINDS: raise ValueError('invalid public source kind')
+            _eff_coverage(metric['coverage'])
+            for field in ('windowStart', 'windowEnd', 'cutoff', 'observedAt'): _eff_stamp(metric[field])
+            if metric['eventTime'] is not None: _eff_stamp(metric['eventTime'])
+            for field in ('openItems', 'abandonedItems', 'excludedItems'): _eff_integer(metric[field])
+            _eff_integer(metric['unmappedPopulationItems'])
+            if not isinstance(metric['populationItems'], list) or len(metric['populationItems']) > 200 or any(not isinstance(k, str) or not re.fullmatch(r'[a-z0-9][a-z0-9-]{0,63}', k) for k in metric['populationItems']): raise ValueError('invalid public metric population')
+            _eff_links(metric['evidenceUrls'])
+        for field, bound in (('problems', 16), ('timeline', 32), ('improvements', 3)):
+            if not isinstance(item[field], list) or len(item[field]) > bound: raise ValueError('efficiency detail bound')
+        for problem in item['problems']:
+            _eff_exact(problem, ('primaryCause', 'necessity', 'epistemicStatus', 'evidenceUrls'))
+            if problem['primaryCause'] not in EFF_CAUSES or problem['necessity'] not in {'required', 'avoidable', 'uncertain'} or problem['epistemicStatus'] not in {'observed', 'supported-inference', 'hypothesis', 'unknown'}: raise ValueError('invalid problem label')
+            _eff_links(problem['evidenceUrls'])
+        for event in item['timeline']:
+            _eff_exact(event, ('kind', 'at', 'evidenceUrls'))
+            if event['kind'] not in {'source-delivered', 'native-completed', 'analysis-generated', 'metric-observed'}: raise ValueError('invalid timeline event')
+            _eff_stamp(event['at']); _eff_links(event['evidenceUrls'])
+        if item['improvements'] not in ([], ['collect-missing-evidence']): raise ValueError('unapproved improvement template')
+
+
+def _eff_links(value):
+    if not isinstance(value, list) or len(value) > 16 or any(not isinstance(v, str) or not EFF_URL.fullmatch(v) for v in value): raise ValueError('invalid public evidence links')
+
+
+def project_process_efficiency(metrics, assessments, labels, evidence_links=None):
+    """Fixture-only adapter over admitted canonical records; never compute metrics.
+
+    Existing labels approve item identity only. POLICY separately approves typed
+    metric facts, taxonomy labels and fixed summary/improvement templates. The
+    evidence map is an explicit additional approval, never an arbitrary source URL.
+    Revision selection and reference existence belong to the canonical caller.
+    """
+    if len(metrics) > 1000 or len(assessments) > 200: raise ValueError('efficiency input bound')
+    evidence_links = evidence_links or {}
+    for url in evidence_links.values(): _eff_links([url])
+    def evidence(refs):
+        return sorted({evidence_links[r] for r in refs if r in evidence_links})[:16]
+    result = unavailable_process_efficiency(); result.update(source='fixtures', status='partial')
+    groups = {}
+    for metric in metrics:
+        if metric['schema'] != 'fsgg.telemetry.efficiency-metric/1': raise ValueError('invalid canonical metric schema')
+        for subject in metric['population']['itemIds']: groups.setdefault(subject, {'metrics': [], 'assessments': []})['metrics'].append(metric)
+    for assessment in assessments:
+        if assessment['schema'] != 'fsgg.telemetry.efficiency-assessment/1': raise ValueError('invalid assessment schema')
+        groups.setdefault(assessment['subject']['itemId'], {'metrics': [], 'assessments': []})['assessments'].append(assessment)
+    for subject, group in sorted(groups.items()):
+        approved = labels['items'].get(subject)
+        if approved is None: result['coverage']['unmapped'] += 1; continue
+        if len(group['metrics']) > 32 or len(group['assessments']) > 1 or len({m['metricId'] for m in group['metrics']}) != len(group['metrics']): result['coverage']['withheld'] += 1; continue
+        assessment = group['assessments'][0] if group['assessments'] else None
+        scope = assessment['subject']['scope'] if assessment else 'provisional-delivery'
+        state = assessment['lifecycle']['state'] if assessment else 'unavailable'
+        if assessment and assessment['provenance']['validationResult'] == 'rejected': state = 'failed'
+        elif assessment and assessment['provenance']['validationResult'] != 'accepted' and state == 'ready': state = 'partial'
+        if assessment and (assessment['subject']['outcomeEpoch'] is None or scope == 'provisional-delivery') and state == 'ready': state = 'partial'
+        row = {k: approved[k] for k in ('key', 'label', 'url')}
+        row.update(summary='native-observation' if scope == 'native-item' else 'delivery-accounting-incomplete', analysisState=state, scope=scope, metrics=[], problems=[], timeline=[], improvements=[])
+        if assessment and any(ref not in {m['metricId'] for m in group['metrics']} for ref in assessment['metricRefs']):
+            result['coverage']['withheld'] += 1; continue
+        for index, metric in enumerate(group['metrics']):
+            population = metric['population']
+            public = {k: metric[k] for k in ('metric', 'unit', 'calculationVersion', 'coverage', 'policyProfile', 'observedAt', 'eventTime', 'purpose', 'healthDimension')}
+            public.update(key=f'm{index}', value={k: metric['value'][k] for k in ('status', 'numerator', 'denominator', 'unknownAmount')}, **{k: population[k] for k in ('windowStart', 'windowEnd', 'cutoff', 'openItems', 'abandonedItems')}, excludedItems=len(population['excludedItems']), populationItems=sorted({labels['items'][subject]['key'] for subject in population['itemIds'] if subject in labels['items']}), unmappedPopulationItems=sum(subject not in labels['items'] for subject in population['itemIds']), evidenceUrls=evidence([r['id'] for r in metric['sourceRefs']]))
+            approved_refs = [{'url': evidence_links[r['id']], 'kind': r['kind'], 'revision': r['revision']} for r in metric['sourceRefs'] if r['id'] in evidence_links]
+            public.update(sourceEvidence=approved_refs[:16], unmappedEvidenceRefs=len(metric['sourceRefs'])-len(approved_refs[:16]))
+            row['metrics'].append(public)
+            if len(row['timeline']) < 31: row['timeline'].append({'kind': 'metric-observed', 'at': metric['observedAt'], 'evidenceUrls': public['evidenceUrls']})
+        if assessment:
+            for finding in (assessment['findings'] if assessment['provenance']['validationResult'] == 'accepted' else []):
+                row['problems'].append({**{k: finding[k] for k in ('primaryCause', 'necessity', 'epistemicStatus')}, 'evidenceUrls': evidence(finding['evidenceRefs'])})
+            row['timeline'].append({'kind': 'analysis-generated', 'at': assessment['lifecycle']['generatedAt'], 'evidenceUrls': evidence([r['id'] for r in assessment['evidenceRefs']])})
+        if scope == 'provisional-delivery': row['improvements'] = ['collect-missing-evidence']
+        result['items'].append(row)
+    result['coverage']['published'] = len(result['items'])
+    validate_process_efficiency(result)
+    return result
+
+EFF = SimpleNamespace(project=project_process_efficiency, validate=validate_process_efficiency, unavailable=unavailable_process_efficiency, AXES=EFF_AXES)
 
 MAX_JSON = 1_048_576
 MAX_CANONICAL_SNAPSHOT = 4 * MAX_JSON
 MAX_API_JSON = 4 * 1_048_576
-HOST_SCHEMA = "fsgg.telemetry.dashboard-host/4"
-LEGACY_HOST_SCHEMAS = {"fsgg.telemetry.dashboard-host/1","fsgg.telemetry.dashboard-host/2","fsgg.telemetry.dashboard-host/3"}
+HOST_SCHEMA = "fsgg.telemetry.dashboard-host/5"
+LEGACY_HOST_SCHEMAS = {"fsgg.telemetry.dashboard-host/1","fsgg.telemetry.dashboard-host/2","fsgg.telemetry.dashboard-host/3","fsgg.telemetry.dashboard-host/4"}
 DASH_SCHEMA = "fsgg.telemetry.dashboard/2"
 DELIVERIES_SCHEMA = "fsgg.telemetry.public-deliveries/1"
 ITEMS_SCHEMA = "fsgg.telemetry.completed-items/2"
@@ -797,6 +965,7 @@ def aggregate_host(public: dict[str, Any], ci: list[dict[str, Any]], budgets: li
         "localCi":{"counts":ci_totals,"seconds":seconds,"coverage":ci_coverage,"attribution":"repository-owned item attribution only; time values are summed per-item projections"},
         "budget":{"scope":"current-canonical-epoch","dimensions":dims,"assessments":assessments,"health":budget_health_counts,"severeItems":severe_items,"distinctBreaches":checked_int(status.get("distinctBreaches"),"distinctBreaches"),"dirtyItems":checked_int(status.get("dirtyItems")," in dirtyItems"),"intervention":enum(status.get("intervention"), {"none","open","verified"}, "intervention")},
         "completedItems":completed_items or {"schema":ITEMS_SCHEMA,"coverage":{"eligible":0,"published":0,"unmapped":0,"dirty":0,"incompatible":0},"items":[]}}
+    result["processEfficiency"]=EFF.unavailable()
     result["sourceDeliveries"]=source_deliveries or {"schema":"fsgg.telemetry.source-deliveries/1","coverage":{"eligible":0,"published":0,"unmapped":0,"dirty":0,"incompatible":0},"items":[]}
     result["revision"]=hashlib.sha256(json.dumps(result,sort_keys=True,separators=(",",":"),ensure_ascii=True).encode()).hexdigest()
     return result
@@ -1763,11 +1932,12 @@ def validate_deliveries(value: Any) -> None:
 def validate_host(value: Any) -> None:
     schema=value.get("schema") if isinstance(value,dict) else None
     aggregate_only=schema=="fsgg.telemetry.dashboard-host/1"
-    current=schema in {HOST_SCHEMA,"fsgg.telemetry.dashboard-host/3"}
+    current=schema in {HOST_SCHEMA,"fsgg.telemetry.dashboard-host/3","fsgg.telemetry.dashboard-host/4"}
     fields={"schema","observedAt","source","scope","totals","usage","launcherPopulation","quality","operational","store","localCi","budget"}
     if not aggregate_only: fields.add("completedItems")
     if current: fields.add("revision")
-    if schema==HOST_SCHEMA: fields.add("sourceDeliveries")
+    if schema in {HOST_SCHEMA,"fsgg.telemetry.dashboard-host/4"}: fields.add("sourceDeliveries")
+    if schema==HOST_SCHEMA: fields.add("processEfficiency")
     exact(value,fields,"host feed")
     if schema not in {HOST_SCHEMA,*LEGACY_HOST_SCHEMAS} or parse_time(value["observedAt"]) is None: raise ValueError("invalid host identity")
     if current:
@@ -1814,7 +1984,8 @@ def validate_host(value: Any) -> None:
         for key in ("numerator","denominator"):
             if assessment[key] is not None: checked_int(assessment[key],key)
     if not aggregate_only: validate_completed_items(value["completedItems"])
-    if schema==HOST_SCHEMA:
+    if schema==HOST_SCHEMA: EFF.validate(value["processEfficiency"])
+    if schema in {HOST_SCHEMA,"fsgg.telemetry.dashboard-host/4"}:
         validate_source_deliveries(value["sourceDeliveries"])
         if {r["key"] for r in value["completedItems"]["items"]}&{r["key"] for r in value["sourceDeliveries"]["items"]}: raise ValueError("duplicate completed/source item")
 

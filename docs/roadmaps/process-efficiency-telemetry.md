@@ -109,6 +109,36 @@ Analysis cost is visible; additional evidence revisions remain within a declared
 - [ ] Add accessible tables, keyboard interaction, coverage/denominator labels, stable filters,
   bounded pagination and last-valid-feed fallback.
 
+Source checkpoint (2026-10-06): the local fixture slice extends the Source Deliveries
+foundation ([PR #4269](https://github.com/FS-GG/.github/pull/4269), `428ef7f6`) with
+host schema 5 and a closed `process-efficiency/1` projection. Readers retain host schemas 1–4.
+The collector currently emits `unavailable`; canonical measurement/assessment export integration,
+installed behavior and live acceptance remain pending. This checkpoint does not close .4.
+
+The projection policy `efficiency-public-projection/1` explicitly expands the existing item-label
+approval for structured metric values, coverage, purpose/health dimensions, taxonomy enums and
+fixed summary templates. Item identity still requires the approved label registry; public evidence
+needs a separate explicit GitHub URL map. Private synopsis, findings, rationale, improvements,
+identifiers, metric reasons and arbitrary URLs are excluded. Policy profile names are contract
+aliases, not claims that those profiles were already installed. Numeric facts come from canonical
+records; projection neither computes metrics nor chooses current canonical revisions.
+
+The synthetic vertical slice shows native-item observations and a provisional missing-runtime
+explanation. Tables retain exact numerator/denominator, unknown quantity, coverage, public cohort,
+open/abandoned/excluded population, cutoff, observation/event times and mapped source revisions.
+Work mix uses the .1 purpose dimension; data health uses independent source/ingestion/publication
+age dimensions. Purpose amounts and different resource units are not combined. Public problem
+labels retain their epistemic status. Fixed missing-evidence guidance is marked hypothetical;
+private analyst improvement prose stays unavailable. Repository/work-type/acceptance dimensions
+and producer freshness remain unavailable without approved canonical exports.
+
+The source includes native keyboard controls, search/scope/measurement filters, ten-item pages,
+accessible table captions/headings and the existing last-valid-feed fallback. Thirteen focused
+projection checks pass. The full Python roster has 111 passes and one expected stale two-UID proof
+digest failure (112 tests); a new actual proof must qualify final exporter bytes. Two browser tests
+are authored but have not run at this checkpoint. No publication, installation or native/store
+qualification is claimed from source fixtures.
+
 Depends on .1 for fixture-driven work; live projection acceptance requires .2 and .3. Touch-set:
 dashboard collector/projection, static UI/assets and focused projection/UI tests. Coordinate ownership
 of shared DTOs with .2; the UI does not edit canonical completion logic.

@@ -779,3 +779,12 @@ footer {
     transition: none !important;
   }
 }
+
+#efficiency { margin: 3rem 0; }
+#efficiency details { margin: 1rem 0; padding: 1rem; border: 1px solid var(--line, currentColor); }
+#efficiency summary { cursor: pointer; font-weight: 700; }
+#efficiency .table-scroll { overflow-x: auto; margin: 1rem 0; }
+#efficiency caption { text-align: left; font-weight: 600; padding: .5rem; }
+#efficiency td { vertical-align: top; white-space: normal; min-width: 9rem; }
+#efficiency .filters { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; }
+#efficiency :focus-visible { outline: 3px solid var(--acid, currentColor); outline-offset: 4px; }

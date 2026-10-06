@@ -338,3 +338,42 @@ test("malformed host4 private fields and revision keep last good source delivery
   await expect(page.locator("#source-deliveries")).toBeEmpty();
   await expect(page.locator(".item-card")).toHaveCount(5);
 });
+
+function efficiencyHost() {
+  const host=completedHost([]);
+  host.schema="fsgg.telemetry.dashboard-host/5";host.revision="a".repeat(64);
+  host.sourceDeliveries={schema:"fsgg.telemetry.source-deliveries/1",coverage:{eligible:0,published:0,unmapped:0,dirty:0,incompatible:0},items:[]};
+  host.processEfficiency=JSON.parse(JSON.stringify(require("./fixtures/process-efficiency-public-v1.json")));
+  return host;
+}
+
+test("host5 efficiency fixture tables, unknown accounting, keyboard and bounded filters",async({page})=>{
+  const host=efficiencyHost(),feed=host.processEfficiency;
+  for(let i=0;i<11;i++){const item=JSON.parse(JSON.stringify(feed.items[0]));item.key=`page-${i}`;item.label=`Synthetic page ${i}`;feed.items.push(item);}
+  feed.coverage.published=feed.items.length;
+  await page.route("**/data/dashboard.json",route=>route.fulfill({json:payload(host)}));
+  await page.goto("/#efficiency");
+  await expect(page.locator("#efficiency-health")).toContainText("Fixture preview");
+  await expect(page.locator("#efficiency-items details")).toHaveCount(10);
+  const summary=page.locator("#efficiency-missing-example-toggle");await summary.focus();await page.keyboard.press("Enter");
+  const incomplete=page.locator("#efficiency-missing-example");
+  await expect(incomplete).toContainText("runtime accounting is incomplete");
+  await expect(incomplete).toContainText("unknown: Unknown");
+  await expect(incomplete.locator("caption").first()).toContainText("Canonical measurements");
+  await expect(incomplete.locator("th[scope=col]").first()).toBeVisible();
+  await page.locator("#efficiency-next").click();await expect(page.locator("#efficiency-items details")).toHaveCount(3);
+  await page.selectOption("#efficiency-scope","provisional-delivery");await expect(page.locator("#efficiency-items details")).toHaveCount(1);
+  await expect(page.locator("#efficiency-page")).toContainText("Page 1 of 1");
+  await page.locator("#efficiency-search").fill("absent");await expect(page.locator("#efficiency-items")).toContainText("No approved items match");
+});
+
+test("host5 malformed efficiency refresh preserves the last valid explanation",async({page})=>{
+  await page.clock.install();let requests=0;
+  await page.route("**/data/dashboard.json",route=>{const host=efficiencyHost();if(++requests>1)host.processEfficiency.items[0].privateNotes="PRIVATE SENTINEL";return route.fulfill({json:payload(host)});});
+  await page.goto("/#efficiency");
+  await page.locator("#efficiency-missing-example-toggle").click();
+  await page.clock.runFor(60000);await expect.poll(()=>requests).toBeGreaterThanOrEqual(2);
+  await expect(page.locator("#error")).toContainText("showing last good data");
+  await expect(page.locator("#efficiency-missing-example")).toHaveAttribute("open","");
+  await expect(page.locator("#efficiency-items")).not.toContainText("PRIVATE SENTINEL");
+});
