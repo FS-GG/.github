@@ -5,11 +5,17 @@ import datetime as dt
 import fcntl
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import re
 import stat
 import tempfile
+import time
+
+MAX_RECORD_BYTES = 65536
+MAX_JOURNAL_RECORDS = 128
+MAX_JOURNAL_BYTES = 4 * 1024 * 1024
 
 POLICY = 'efficiency-analysis-policy/1'
 BUDGET = dict(inputTokens=8000, outputTokens=1500, seconds=60,
@@ -225,15 +231,18 @@ class Journal:
         fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
         with os.fdopen(fd) as stream:
             info = os.fstat(stream.fileno())
-            if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) != 0o600 or info.st_size > 65536:
+            if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) != 0o600 or info.st_size > MAX_RECORD_BYTES:
                 raise ValueError('invalid journal record')
             return json.load(stream)
 
     def _write(self, path, value):
+        data = encode(value)
+        if len(data) > MAX_RECORD_BYTES:
+            raise ValueError('journal record exceeds retention bound')
         fd, temporary = tempfile.mkstemp(dir=self.directory)
         try:
             with os.fdopen(fd, 'wb') as stream:
-                stream.write(encode(value)); stream.flush(); os.fsync(stream.fileno())
+                stream.write(data); stream.flush(); os.fsync(stream.fileno())
             os.replace(temporary, path)
             directory_fd = os.open(self.directory, os.O_DIRECTORY)
             try:
@@ -249,14 +258,47 @@ class Journal:
             raise ValueError('invalid snapshot identity')
         return self._read(self.directory / (identity + '.packet'))
 
-    def transact(self, packet, action, now, result=None):
+    def _inventory(self, deadline):
+        records, total_bytes, entries = [], 0, 0
+        with os.scandir(self.directory) as listing:
+            for entry in listing:
+                if time.monotonic() >= deadline:
+                    raise ValueError('journal caller deadline exhausted')
+                entries += 1
+                if entries > MAX_JOURNAL_RECORDS * 2 + 1:
+                    raise ValueError('journal directory entry bound exhausted')
+                info = entry.stat(follow_symlinks=False)
+                if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) != 0o600:
+                    raise ValueError('invalid journal inventory entry')
+                if info.st_size > MAX_RECORD_BYTES:
+                    raise ValueError('journal inventory record too large')
+                total_bytes += info.st_size
+                if total_bytes > MAX_JOURNAL_BYTES:
+                    raise ValueError('journal byte bound exhausted')
+                if entry.name.endswith('.json'):
+                    records.append(Path(entry.path))
+                    if len(records) > MAX_JOURNAL_RECORDS:
+                        raise ValueError('journal record bound exhausted')
+        return records, total_bytes
+
+    def transact(self, packet, action, now, result=None, *, deadline):
+        if type(deadline) not in (int, float) or not math.isfinite(deadline) or time.monotonic() >= deadline:
+            raise ValueError('journal caller deadline exhausted')
         identity = key(packet['subject'], packet['evidenceDigest'])
         lock = os.open(self.directory / '.lock', os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
         try:
             info = os.fstat(lock)
             if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) != 0o600:
                 raise ValueError('invalid journal lock')
-            fcntl.flock(lock, fcntl.LOCK_EX)
+            while True:
+                if time.monotonic() >= deadline:
+                    raise ValueError('journal lock caller deadline exhausted')
+                try:
+                    fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    break
+                except BlockingIOError:
+                    time.sleep(min(0.01, max(0, deadline - time.monotonic())))
+            inventory, journal_bytes = self._inventory(deadline)
             path = self.directory / (identity + '.json')
             state = None
             if path.exists() or path.is_symlink():
@@ -266,17 +308,23 @@ class Journal:
             if state is None:
                 if action != 'schedule':
                     raise ValueError('schedule before execution')
+                if len(inventory) >= MAX_JOURNAL_RECORDS:
+                    raise ValueError('journal record bound exhausted')
                 epoch = [packet['subject'][n] for n in ('itemId', 'outcomeId', 'outcomeEpoch')]
                 count = 0
-                for candidate in self.directory.glob('*.json'):
+                for candidate in inventory:
                     if candidate.is_symlink():
                         raise ValueError('symlink journal record')
+                    if time.monotonic() >= deadline:
+                        raise ValueError('journal caller deadline exhausted')
                     other = self._read(candidate)
                     if [other['subject'][n] for n in ('itemId', 'outcomeId', 'outcomeEpoch')] == epoch:
                         count += 1
                 state = dict(key=identity, subject=packet['subject'], evidenceDigest=packet['evidenceDigest'],
                              state='pending' if count < 1 + BUDGET['automaticRevisionsPerEpoch'] else 'partial', reason=None if count < 1 + BUDGET['automaticRevisionsPerEpoch'] else 'revision-budget-exhausted',
                              invocations=0, startedAt=None, updatedAt=now, usageRefs=[], result=None)
+                if count >= 1 + BUDGET['automaticRevisionsPerEpoch']:
+                    return dict(state, retained=False)
             elif action == 'start' and state['state'] == 'pending':
                 state.update(state='running', invocations=1, startedAt=now)
             elif action == 'defer' and state['state'] == 'pending':
@@ -298,6 +346,12 @@ class Journal:
                 state.update(state=result['state'], reason=result['reason'], usageRefs=result['usageRefs'], result=result)
             elif action not in ('schedule', 'start', 'recover', 'settle', 'defer'):
                 raise ValueError('unknown journal action')
+            if time.monotonic() >= deadline:
+                raise ValueError('journal caller deadline exhausted')
+            if any(len(encode(value)) > MAX_RECORD_BYTES for value in (packet, state)):
+                raise ValueError('journal record exceeds retention bound')
+            if journal_bytes + len(encode(packet)) + len(encode(state)) > MAX_JOURNAL_BYTES:
+                raise ValueError('journal byte bound exhausted')
             snapshot_path = self.directory / (identity + '.packet')
             if snapshot_path.exists() or snapshot_path.is_symlink():
                 saved = self._read(snapshot_path)

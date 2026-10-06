@@ -59,9 +59,13 @@ Finalizing a provisional explanation preserves history and does not add an outco
 `Journal` stores only private local execution state. Use one owned directory with mode `0700` outside
 all checkouts; records and advisory locks are `0600`, regular, owner-matched and symlink-refusing.
 The exact analysis input is retained in a separate immutable packet file before the execution state.
-An exclusive lock, fsynced atomic replacement and directory fsync serialize transitions. Duplicate
+A nonblocking exclusive lock polls only until the caller-supplied monotonic deadline; no new
+execution budget is created. Inventory is bounded to 128 state records, 257 directory entries and
+4 MiB; each write and read is bounded to 64 KiB. Fsynced atomic replacement and directory fsync
+serialize transitions. Capacity or deadline exhaustion refuses the affected operation. Duplicate
 schedule/start notifications retain one invocation. One initial snapshot plus two automatic evidence revisions per explicit
-subject/epoch are admitted, sharing the budget across native and provisional scopes; further snapshots remain partial with budget exhaustion. This does not
+subject/epoch are admitted, sharing the budget across native and provisional scopes; further snapshots return an explicit partial refusal without allocating another journal file.
+The canonical queue remains the durable authority for that disposition. This does not
 mint an outcome epoch or grant execution authority.
 
 Missing token, authority, exporter or provider may defer pending analysis to explicit unavailable

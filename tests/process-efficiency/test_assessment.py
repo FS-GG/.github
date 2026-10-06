@@ -7,6 +7,8 @@ import json
 import os
 from pathlib import Path
 import tempfile
+import time
+import fcntl
 import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -34,6 +36,12 @@ def fixture(index=0):
 def check(output, packet):
     review = next((r for r in packet['records'] if r['ref']['kind'] == 'process-review'), None)
     return a.validate(output, packet, SCHEMA, admitted_review=review, metric_schema=METRIC_SCHEMA)
+
+
+class TestJournal(a.Journal):
+    def transact(self, *args, **kwargs):
+        kwargs.setdefault('deadline', time.monotonic() + 2)
+        return super().transact(*args, **kwargs)
 
 
 class AssessmentTests(unittest.TestCase):
@@ -157,13 +165,13 @@ class AssessmentTests(unittest.TestCase):
     def test_journal_duplicate_restart_and_revision_budget(self):
         output, packet = fixture()
         with tempfile.TemporaryDirectory() as parent:
-            journal = a.Journal(Path(parent) / 'private')
+            journal = TestJournal(Path(parent) / 'private')
             first = journal.transact(packet, 'schedule', 'start')
             self.assertEqual(first['state'], 'pending')
             self.assertEqual(journal.snapshot(first['key']), packet)
             self.assertEqual(journal.transact(packet, 'start', 'now')['invocations'], 1)
             self.assertEqual(journal.transact(packet, 'start', 'again')['invocations'], 1)
-            recovered = a.Journal(Path(parent) / 'private').transact(packet, 'recover', 'later')
+            recovered = TestJournal(Path(parent) / 'private').transact(packet, 'recover', 'later')
             self.assertEqual(recovered['reason'], 'interrupted-analysis-outcome-unknown')
             self.assertEqual(journal.transact(packet, 'start', 'retry')['invocations'], 1)
             for revision in (2, 3, 4):
@@ -175,11 +183,13 @@ class AssessmentTests(unittest.TestCase):
                 if revision == 3:
                     self.assertEqual(state['state'], 'pending')
             self.assertEqual(state['reason'], 'revision-budget-exhausted')
+            self.assertFalse(state['retained'])
+            self.assertEqual(len(list(journal.directory.glob('*.json'))), 3)
 
     def test_concurrent_notifications_and_timeout(self):
         output, packet = fixture()
         with tempfile.TemporaryDirectory() as parent:
-            journal = a.Journal(Path(parent) / 'private')
+            journal = TestJournal(Path(parent) / 'private')
             with ThreadPoolExecutor(max_workers=8) as workers:
                 states = list(workers.map(lambda _: journal.transact(packet, 'schedule', 'now'), range(16)))
             self.assertTrue(all(state['state'] == 'pending' for state in states))
@@ -195,16 +205,62 @@ class AssessmentTests(unittest.TestCase):
     def test_dependency_unavailable_without_invocation(self):
         output, packet = fixture(2)
         with tempfile.TemporaryDirectory() as parent:
-            journal = a.Journal(Path(parent) / 'private')
+            journal = TestJournal(Path(parent) / 'private')
             journal.transact(packet, 'schedule', 'now')
             state = journal.transact(packet, 'defer', 'later', dict(reason='missing-token'))
             self.assertEqual(state['state'], 'unavailable')
             self.assertEqual(state['invocations'], 0)
 
+    def test_held_lock_respects_existing_caller_deadline(self):
+        output, packet = fixture()
+        with tempfile.TemporaryDirectory() as parent:
+            journal = TestJournal(Path(parent) / 'private')
+            lock = os.open(journal.directory / '.lock', os.O_CREAT | os.O_RDWR, 0o600)
+            try:
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                started = time.monotonic()
+                with self.assertRaisesRegex(ValueError, 'deadline'):
+                    journal.transact(packet, 'schedule', 'now', deadline=started + 0.04)
+                self.assertLess(time.monotonic() - started, 0.5)
+            finally:
+                os.close(lock)
+
+    def test_full_journal_and_oversized_record_refuse_before_write(self):
+        output, packet = fixture()
+        with tempfile.TemporaryDirectory() as parent:
+            journal = TestJournal(Path(parent) / 'private')
+            for index in range(a.MAX_JOURNAL_RECORDS):
+                path = journal.directory / (str(index) + '.json')
+                path.write_text('{}')
+                path.chmod(0o600)
+            with self.assertRaisesRegex(ValueError, 'record bound'):
+                journal.transact(packet, 'schedule', 'now')
+            self.assertFalse((journal.directory / (a.key(packet['subject'], packet['evidenceDigest']) + '.json')).exists())
+        with tempfile.TemporaryDirectory() as parent:
+            journal = TestJournal(Path(parent) / 'private')
+            oversized = dict(packet, unexpected='x' * a.MAX_RECORD_BYTES)
+            with self.assertRaisesRegex(ValueError, 'retention bound'):
+                journal.transact(oversized, 'schedule', 'now')
+            self.assertEqual(list(journal.directory.glob('*.json')), [])
+            self.assertEqual(list(journal.directory.glob('*.packet')), [])
+
+    def test_journal_byte_inventory_and_finite_deadline(self):
+        output, packet = fixture()
+        with tempfile.TemporaryDirectory() as parent:
+            journal = TestJournal(Path(parent) / 'private')
+            for index in range(a.MAX_JOURNAL_BYTES // a.MAX_RECORD_BYTES + 1):
+                path = journal.directory / (str(index) + '.json')
+                path.write_bytes(b' ' * a.MAX_RECORD_BYTES)
+                path.chmod(0o600)
+            with self.assertRaisesRegex(ValueError, 'byte bound'):
+                journal.transact(packet, 'schedule', 'now')
+            with self.assertRaisesRegex(ValueError, 'deadline'):
+                journal.transact(packet, 'schedule', 'now', deadline=float('inf'))
+
     def test_failure_budget_and_symlink(self):
         output, packet = fixture()
         with tempfile.TemporaryDirectory() as parent:
-            journal = a.Journal(Path(parent) / 'private')
+            journal = TestJournal(Path(parent) / 'private')
             journal.transact(packet, 'schedule', 'now')
             journal.transact(packet, 'start', 'now')
             state = journal.transact(packet, 'settle', 'now', dict(state='failed', reason='malformed-output',
@@ -217,7 +273,7 @@ class AssessmentTests(unittest.TestCase):
             private_record = journal.directory / (state['key'] + '.json')
             private_record.unlink()
             private_record.symlink_to(Path(parent) / 'other')
-            with self.assertRaises(OSError): journal.transact(packet, 'schedule', 'retry')
+            with self.assertRaises((OSError, ValueError)): journal.transact(packet, 'schedule', 'retry')
 
 
 if __name__ == '__main__':
