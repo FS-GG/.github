@@ -25,6 +25,8 @@ module EfficiencyAdmissionTests =
     let private principal = TelemetryReceipt.genericPrincipal scope
     let private submitAs (principal: TelemetryReceipt.Principal) path name events =
         let scope = principal.Scope
+        // Fixture events must satisfy the decoder before receipt authority is exercised.
+        TelemetryStore.parseBatch(batch name events) |> unwrap |> ignore
         let payload = Encoding.UTF8.GetString(batch name events)
         let bytes = Encoding.UTF8.GetBytes($"""{{"schema":"{TelemetryReceipt.Schema}","workspaceId":"{scope.Workspace}","producerId":"{scope.Producer}","streamId":"{scope.Stream}","batchId":"{name}","payload":{payload}}}""")
         TelemetryStoreApplication.submitReceiptPrincipal path approved principal bytes |> unwrap |> ignore
@@ -41,7 +43,8 @@ module EfficiencyAdmissionTests =
     let private terminal =
         """{"kind":"runtime-terminal","identity":"terminal-a","itemId":"A","revision":0,"invocationId":"invoke-a","threadId":"thread-a","outcome":"success","exitCode":0}"""
     let private review =
-        """{"kind":"process-review","identity":"review-a","itemId":"A","revision":0,"scope":"attempt","attemptId":"attempt-a","outcomeSynopsis":"Observed source work","wentWell":[],"problems":[],"avoidableDelayOrRework":[],"processObservations":[],"remainingRisks":[],"concreteImprovements":[],"evidence":[],"evidenceCoverage":"partial","populationCoverage":"unknown","confidence":"low","reviewerModel":"sol","reviewerEffort":"medium","reviewedAt":"2026-10-06T00:20:00Z","durationSeconds":1}"""
+        // The existing process-review contract starts revisions at one.
+        """{"kind":"process-review","identity":"review-a","itemId":"A","revision":1,"scope":"attempt","attemptId":"attempt-a","outcomeSynopsis":"Observed source work","wentWell":[],"problems":[],"avoidableDelayOrRework":[],"processObservations":[],"remainingRisks":[],"concreteImprovements":[],"evidence":[],"evidenceCoverage":"partial","populationCoverage":"unknown","confidence":"low","reviewerModel":"sol","reviewerEffort":"medium","reviewedAt":"2026-10-06T00:20:00Z","durationSeconds":1}"""
     let private usage revision =
         $"""{{"kind":"runtime-turn-usage","identity":"usage-a","itemId":"A","revision":{revision},"invocationId":"invoke-a","threadId":"thread-a","turnId":"turn-a","turnSequence":1,"provider":"openai","requestedModel":"sol","observedModel":"sol","requestedEffort":"medium","observedEffort":"medium","backend":"codex-collaboration","scope":"completed-turn","provenance":"codex-exec-jsonl","input":99,"cachedInput":0,"output":1,"reasoning":null,"total":100}}"""
     let private sourceRef event =
@@ -215,7 +218,7 @@ module EfficiencyAdmissionTests =
         use cleanup = cleanup
         Assert.Contains("\"rejected\":0",submit path "analyst-dispatch" [analystDispatch])
         TelemetryStoreApplication.efficiencyAnalysisClaimProspective path approved principal "analyst-dispatch" "A" (claimTemplate pending "active") |> unwrap |> ignore
-        Assert.Contains("\"rejected\":0",submit path "new-review" [review.Replace("\"revision\":0","\"revision\":1")])
+        Assert.Contains("\"rejected\":0",submit path "new-review" [review.Replace("\"revision\":1","\"revision\":2")])
         let result = TelemetryStoreApplication.efficiencyAnalysisReconcile path approved principal (Some "A") |> unwrap
         Assert.Contains("analysis-pending-unresolved-claim",result)
         Assert.Equal("1",scalar path "SELECT count(*) FROM efficiency_analysis_requests;")
@@ -280,8 +283,8 @@ module EfficiencyAdmissionTests =
         use cleanup = cleanup
         let pending = ResizeArray<JsonNode>()
         pending.Add first
-        for revision in 1 .. 3 do
-            let successor = review.Replace("\"revision\":0",$"\"revision\":{revision}")
+        for revision in 2 .. 4 do
+            let successor = review.Replace("\"revision\":1",$"\"revision\":{revision}")
             Assert.Contains("\"rejected\":0",submit path ($"review-{revision}") [successor])
             use response = JsonDocument.Parse(TelemetryStoreApplication.efficiencyAnalysisReconcile path approved principal (Some "A") |> unwrap)
             let id = (response.RootElement.GetProperty("requestIds")).[0].GetString()
