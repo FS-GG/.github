@@ -42,6 +42,11 @@ module Program =
             let repository = option "--repository" args |> Option.defaultValue ""
             Console.Out.WriteLine("{\"schema\":\"fsgg.telemetry.workspace-binding/1\",\"configPath\":\"" + configPath.Replace("\\", "\\\\") + "\",\"repository\":\"" + repository + "\",\"producerId\":\"fixture-association\",\"bindingDigest\":\"" + String.replicate 64 "a" + "\",\"destination\":\"remote\",\"privateStateRoot\":\"" + stateRoot.Replace("\\", "\\\\") + "\"}")
             0
+        elif Array.contains "efficiency" args && Array.contains "analysis" args && Array.contains "reconcile" args then
+            require (option "--repository" args = Some "FS-GG/.github") "canonical reconcile lost discovered repository"
+            require (option "--config" args |> Option.isSome) "canonical reconcile lost config custody"
+            Console.Out.WriteLine "{}"
+            0
         elif Array.contains "publisher-event" args then
             match Environment.GetEnvironmentVariable "FSGG_ADAPTER_TEST_DASHBOARD_MODE" with
             | "failure" -> Console.Error.WriteLine "synthetic advisory failure"; 1
@@ -87,8 +92,14 @@ module Program =
         require (token.Length = 32) "begin did not return a durable token"
         let startedResult = run (Some host) (Started(token, "native-agent-a"))
         require (startedResult.ExitCode = 0) (text startedResult.Stderr)
-        let finishResult = run (Some host) (Finish(token, "completed", None))
+        require host.Repository.IsNone "canonical fixture unexpectedly has a repository"
+        let previousRepository = Environment.GetEnvironmentVariable "FSGG_TELEMETRY_REPOSITORY"
+        let finishResult =
+            Environment.SetEnvironmentVariable("FSGG_TELEMETRY_REPOSITORY", "FS-GG/.github")
+            try run (Some host) (Finish(token, "completed", None))
+            finally Environment.SetEnvironmentVariable("FSGG_TELEMETRY_REPOSITORY", previousRepository)
         require (finishResult.ExitCode = 0) (text finishResult.Stderr)
+        require ((resultJson finishResult).GetProperty("assessmentReconciliation").GetProperty("status").GetString() = "requested") "canonical repository None refused reconciliation"
         let terminal = resultJson finishResult
         require (terminal.GetProperty("status").GetString() = "terminal") "finish did not become terminal"
         require (terminal.GetProperty("coverage").GetString() = "native-collaboration-usage-unsupported") "missing usage became measured"

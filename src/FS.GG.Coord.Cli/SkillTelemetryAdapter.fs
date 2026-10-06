@@ -820,6 +820,7 @@ module SkillTelemetryAdapter =
         // This path never invokes an analyst or treats reconciliation as completion.
         let failed reason = jsonObject [ "status", node "advisory-failure"; "reason", node reason ]
         try
+            let budget = Stopwatch.StartNew()
             let repository =
                 match config.Repository with
                 | Some value -> Ok value
@@ -834,12 +835,16 @@ module SkillTelemetryAdapter =
                 match Configuration.mutationCommand config command with
                 | Error _ -> failed "analysis-reconciliation-authority-unavailable"
                 | Ok selected ->
-                    let completed = execute 5 8192 selected
-                    if completed.Code <> 0 then failed "analysis-reconciliation-subprocess-failed"
+                    // Discovery and launch consume one original budget; never renew it after discovery.
+                    let remainingSeconds = int (Math.Floor(5.0 - budget.Elapsed.TotalSeconds))
+                    if remainingSeconds <= 0 then failed "analysis-reconciliation-deadline-exhausted"
                     else
-                        // Do not copy private packets, findings, IDs or raw errors into adapter output.
-                        // Exit zero proves only that this bounded reconciliation request returned.
-                        jsonObject [ "status", node "requested" ]
+                        let completed = execute remainingSeconds 8192 selected
+                        if completed.Code <> 0 then failed "analysis-reconciliation-subprocess-failed"
+                        else
+                            // Do not copy private packets, findings, IDs or raw errors into adapter output.
+                            // Exit zero proves only that this bounded reconciliation request returned.
+                            jsonObject [ "status", node "requested" ]
         with _ -> failed "analysis-reconciliation-subprocess-failed"
 
     let private finish config token outcome explicitExitCode =
