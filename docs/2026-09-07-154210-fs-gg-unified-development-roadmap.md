@@ -69,8 +69,11 @@ qualified product and browser input byte. Earlier failed/refused attempts remain
 supported delivery reported current validation, coherent validation not required and telemetry
 health `open`. The installed 0.98/schema-13 feed remains separate: provider-response costs and
 Efficiency stay unavailable until coherent 0.99/Host 0.5/schema-14 installed gates and actual
-canonical joins qualify. Matched Pages UI deployment and public readback are separate gates;
-full [V2-EFF-01.4/.6](roadmaps/process-efficiency-telemetry.md#v2-eff-014--publish-useful-dashboard-explanations)
+canonical joins qualify. [Pages run 37524226508](https://github.com/FS-GG/.github/actions/runs/37524226508)
+deployed source `18ad4183`; HTTP 200 readback matched all four qualified UI assets and the entire
+immutable 13-label host `e5f16db2`: five completed groups, eight published source-delivery groups
+and unavailable Efficiency. No installed collector was replaced. Full
+[V2-EFF-01.4/.6](roadmaps/process-efficiency-telemetry.md#v2-eff-014--publish-useful-dashboard-explanations)
 acceptance remains open.
 
 **2026-10-06: Efficiency canonical custody producer dependency landed.**
