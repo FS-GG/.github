@@ -83,6 +83,27 @@ type NativeCollectorInstallationConfig =
         NativeVerifier: NativeVerifierConfig option
     }
 
+type ResponsesCollectorInstallationConfig =
+    { Schema: string
+      SourceVariant: string
+      CredentialReference: string
+      ProviderCredentialReference: string
+      ProviderCredentialFile: string
+      EvidenceRoot: string
+      Provider: string
+      Model: string
+      Effort: string
+      CountEndpoint: string
+      GenerationEndpoint: string
+      InputTokenLimit: int64
+      OutputTokenLimit: int64
+      WholeMilliseconds: int
+      CapabilityProfilePath: string
+      CapabilityProfileSha256: string
+      CapabilityResultPath: string
+      CapabilityResultSha256: string
+      NativeVerifier: NativeVerifierConfig }
+
 type NativeDeliverySourceInstallationConfig =
     {
         Schema: string
@@ -645,6 +666,161 @@ module Configuration =
                             Ok(installation, principal)
         with _ ->
             Error [ "native collector installation is invalid" ]
+
+    let internal responsesOwnerUid () = NativeOwner.geteuid()
+
+    let private responsesRegular path =
+        let mutable state = Unchecked.defaultof<NativeOwner.Stat>
+        NativeOwner.statPath(path, &state) = 0 && (state.Mode &&& 0xF000u) = 0x8000u
+
+    let internal readResponsesPrivateBytes (hostConfigPath: string) (file: string) maximum =
+        try
+            let anchor = Path.GetDirectoryName(Path.GetFullPath hostConfigPath)
+            let rec parents (directory: DirectoryInfo) =
+                not (isNull directory) && directory.Exists && isNull directory.LinkTarget
+                && ownedByHost false directory.FullName
+                && (File.GetUnixFileMode directory.FullName &&&
+                    (UnixFileMode.GroupRead ||| UnixFileMode.GroupWrite ||| UnixFileMode.GroupExecute
+                     ||| UnixFileMode.OtherRead ||| UnixFileMode.OtherWrite ||| UnixFileMode.OtherExecute)) = enum 0
+                && (directory.FullName = anchor
+                    || (directory.FullName.StartsWith(anchor + string Path.DirectorySeparatorChar, StringComparison.Ordinal)
+                        && parents directory.Parent))
+            if not (Path.IsPathFullyQualified file) || Path.GetFullPath file <> file
+               || not (parents (DirectoryInfo(Path.GetDirectoryName file)))
+               || not (ownedByHost false file) || not (responsesRegular file) || privateRegularFile file <> Ok() then
+                Error [ "responses-private-file-custody" ]
+            else
+                use stream = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.Read)
+                if stream.Length <= 0L || stream.Length > int64 maximum then Error [ "responses-private-file-bound" ]
+                else
+                    let bytes = Array.zeroCreate<byte> (int stream.Length)
+                    stream.ReadExactly bytes
+                    if stream.ReadByte() <> -1 then Error [ "responses-private-file-changed" ] else Ok bytes
+        with _ -> Error [ "responses-private-file-unavailable" ]
+
+    let internal responsesImmutableFile (path: string) =
+        try
+            let rec parents (directory: DirectoryInfo) =
+                isNull directory
+                || (directory.Exists && isNull directory.LinkTarget && ownedByHost true directory.FullName
+                    && (File.GetUnixFileMode directory.FullName &&& (UnixFileMode.GroupWrite ||| UnixFileMode.OtherWrite)) = enum 0
+                    && parents directory.Parent)
+            let file = FileInfo path
+            Path.IsPathFullyQualified path && Path.GetFullPath path = path
+            && file.Exists && isNull file.LinkTarget && parents file.Directory && ownedByHost true path && responsesRegular path
+            && (File.GetUnixFileMode path &&& (UnixFileMode.GroupWrite ||| UnixFileMode.OtherWrite)) = enum 0
+        with _ -> false
+
+    // Pure role metadata only: no file read, principal construction or authority.
+    let internal validateResponsesCredentialRoles (hostConfig: HostConfig) (credentialReference: string)
+                                                  (providerReference: string) (providerFile: string) =
+        let credentials = hostConfig.Credentials |> Array.filter (fun credential ->
+            credential.Reference = credentialReference && credential.Role = "native-collector"
+            && not credential.Revoked && credential.GrantGeneration > 0L)
+        [ if credentials.Length <> 1 || not (TelemetryReceipt.validId credentialReference)
+             || not (TelemetryReceipt.validId providerReference) || providerReference = credentialReference then
+              yield "responses-installation-role"
+          if hostConfig.Credentials |> Array.exists (fun credential -> credential.SecretFile = providerFile) then
+              yield "responses-installation-private-anchor" ]
+
+    let loadResponsesCollectorInstallation (hostConfigPath: string) (hostConfig: HostConfig) =
+        try
+            let path = hostConfigPath + ".native-collector.json"
+            let anchor = Path.GetDirectoryName(Path.GetFullPath hostConfigPath)
+            let privateDirectory (directory: string) =
+                let info = DirectoryInfo directory
+                info.Exists && isNull info.LinkTarget && ownedByHost false directory
+                && (File.GetUnixFileMode directory &&&
+                    (UnixFileMode.GroupRead ||| UnixFileMode.GroupWrite ||| UnixFileMode.GroupExecute
+                     ||| UnixFileMode.OtherRead ||| UnixFileMode.OtherWrite ||| UnixFileMode.OtherExecute)) = enum 0
+            let privatePath (file: string) =
+                let rec parents (directory: string) =
+                    directory = anchor && privateDirectory directory
+                    || (directory.StartsWith(anchor + string Path.DirectorySeparatorChar, StringComparison.Ordinal)
+                        && privateDirectory directory && parents (Path.GetDirectoryName directory))
+                not (isNull file) && Path.IsPathFullyQualified file && Path.GetFullPath file = file
+                && parents (Path.GetDirectoryName file) && ownedByHost false file
+                && responsesRegular file && privateRegularFile file = Ok()
+            let digest (value: string) =
+                not (isNull value) && System.Text.RegularExpressions.Regex.IsMatch(value, "^[0-9a-f]{64}$")
+                && value <> String('0', 64)
+            let readBounded maximum file =
+                if not (privatePath file) then invalidOp "responses-installation-custody"
+                use stream = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.Read)
+                if stream.Length <= 0L || stream.Length > int64 maximum then invalidOp "responses-installation-bound"
+                let bytes = Array.zeroCreate<byte> (int stream.Length)
+                stream.ReadExactly bytes
+                if stream.ReadByte() <> -1 then invalidOp "responses-installation-changed"
+                bytes
+            let bytes = readBounded 16384 path
+            use document = JsonDocument.Parse bytes
+            let rec distinct (element: JsonElement) =
+                match element.ValueKind with
+                | JsonValueKind.Object ->
+                    let rows = element.EnumerateObject() |> Seq.toArray
+                    (rows |> Array.map _.Name |> Array.distinct |> Array.length) = rows.Length
+                    && (rows |> Array.forall (fun row -> distinct row.Value))
+                | JsonValueKind.Array -> element.EnumerateArray() |> Seq.forall distinct
+                | _ -> true
+            let root = document.RootElement
+            let fields = set [ "Schema"; "SourceVariant"; "CredentialReference"; "ProviderCredentialReference"
+                               "ProviderCredentialFile"; "EvidenceRoot"; "Provider"; "Model"; "Effort"
+                               "CountEndpoint"; "GenerationEndpoint"; "InputTokenLimit"; "OutputTokenLimit"
+                               "WholeMilliseconds"; "CapabilityProfilePath"; "CapabilityProfileSha256"
+                               "CapabilityResultPath"; "CapabilityResultSha256"; "NativeVerifier" ]
+            if root.ValueKind <> JsonValueKind.Object || not (distinct root)
+               || (root.EnumerateObject() |> Seq.map _.Name |> Set.ofSeq) <> fields then
+                Error [ "responses-installation-shape" ]
+            else
+                let options = JsonSerializerOptions(PropertyNameCaseInsensitive = false,
+                                                    UnmappedMemberHandling = Serialization.JsonUnmappedMemberHandling.Disallow)
+                let value = JsonSerializer.Deserialize<ResponsesCollectorInstallationConfig>(bytes, options)
+                let verifierFields = set [ "RuntimeExecutablePath"; "RuntimeExecutableSha256"; "ModulePath"
+                                           "ModuleSha256"; "RuntimeManifestPath"; "RuntimeManifestSha256" ]
+                let verifier = root.GetProperty "NativeVerifier"
+                let credentials = hostConfig.Credentials |> Array.filter (fun credential ->
+                    credential.Reference = value.CredentialReference && credential.Role = "native-collector"
+                    && not credential.Revoked && credential.GrantGeneration > 0L)
+                let errors = ResizeArray<string>()
+                if hostConfig.Schema <> "fsgg.telemetry.host-config/2"
+                   || value.Schema <> "fsgg.telemetry.native-collector-installation/4"
+                   || value.SourceVariant <> "openai-responses/1" then errors.Add "responses-installation-schema"
+                if value.Provider <> "openai" || value.Model <> NativeResponses.Model || value.Effort <> NativeResponses.Effort
+                   || value.CountEndpoint <> "https://api.openai.com/v1/responses/input_tokens"
+                   || value.GenerationEndpoint <> "https://api.openai.com/v1/responses"
+                   || value.InputTokenLimit <> 8000L || value.OutputTokenLimit <> 1500L
+                   || value.WholeMilliseconds <> 60000 then errors.Add "responses-installation-profile"
+                errors.AddRange(validateResponsesCredentialRoles hostConfig value.CredentialReference
+                                    value.ProviderCredentialReference value.ProviderCredentialFile)
+                if not (privatePath hostConfigPath) || not (privatePath value.ProviderCredentialFile)
+                   || not (privateDirectory value.EvidenceRoot)
+                   || not (value.EvidenceRoot.StartsWith(anchor + string Path.DirectorySeparatorChar, StringComparison.Ordinal)) then
+                    if not (errors.Contains "responses-installation-private-anchor") then
+                        errors.Add "responses-installation-private-anchor"
+                if verifier.ValueKind <> JsonValueKind.Object
+                   || (verifier.EnumerateObject() |> Seq.map _.Name |> Set.ofSeq) <> verifierFields then
+                    errors.Add "responses-installation-verifier-shape"
+                elif not (digest value.NativeVerifier.RuntimeExecutableSha256 && digest value.NativeVerifier.ModuleSha256
+                          && digest value.NativeVerifier.RuntimeManifestSha256) then
+                    errors.Add "responses-installation-verifier-digest"
+                for (file, expected) in [ value.CapabilityProfilePath, value.CapabilityProfileSha256
+                                          value.CapabilityResultPath, value.CapabilityResultSha256 ] do
+                    if not (digest expected) then errors.Add "responses-installation-capability-digest"
+                    else
+                        try
+                            if Convert.ToHexString(SHA256.HashData(readBounded 65536 file)).ToLowerInvariant() <> expected then
+                                errors.Add "responses-installation-capability-changed"
+                        with _ -> errors.Add "responses-installation-capability-custody"
+                if errors.Count <> 0 then Error(List.ofSeq errors)
+                else
+                    let credential = credentials[0]
+                    let principal: TelemetryReceipt.Principal =
+                        { Scope = { Workspace = credential.WorkspaceId; Producer = credential.ProducerId; Stream = credential.StreamId }
+                          Role = TelemetryReceipt.NativeCollector; GrantId = Some credential.GrantId
+                          GrantGeneration = Some credential.GrantGeneration }
+                    if not (TelemetryReceipt.validPrincipal principal) then Error [ "responses-installation-principal" ]
+                    else Ok(value, principal)
+        with _ -> Error [ "responses-installation-invalid" ]
 
     let loadNativeDeliverySourceInstallation (hostConfigPath: string) (hostConfig: HostConfig) =
         let sourcePath = hostConfigPath + ".native-delivery-source.json"

@@ -24,6 +24,6 @@ print(json.dumps({
     "repository": repository,
     "producerId": "fixture-producer",
     "bindingDigest": "fixture-binding-digest",
-    "destination": {},
+    "destination": "remote",
     "privateStateRoot": os.environ["CONFIG_DISCOVERY_STATE_ROOT"],
 }, separators=(",", ":")))

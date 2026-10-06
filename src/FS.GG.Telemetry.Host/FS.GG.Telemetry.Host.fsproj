@@ -8,10 +8,11 @@
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <DeterministicSourcePaths>true</DeterministicSourcePaths>
+    <RealSig>true</RealSig>
     <!-- Independent one-package release line. This literal deliberately does not resolve from
          FsggCoherentSetVersion, which belongs only to Kit, Drivers and Coord.Cli. -->
     <FsggCoherentSetVersion />
-    <Version>0.4.0</Version>
+    <Version>0.5.0</Version>
     <PackageId>FS.GG.Telemetry.Host</PackageId>
     <AssemblyName>FS.GG.Telemetry.Host</AssemblyName>
     <IsPackable>true</IsPackable>
@@ -26,7 +27,7 @@
     <RepositoryUrl>https://github.com/FS-GG/.github</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageProjectUrl>https://github.com/FS-GG/.github/tree/main/src/FS.GG.Telemetry.Host</PackageProjectUrl>
-    <PackageReleaseNotes>0.4.0 — Add the read-only inactive preparation reader for served Manager-to-Host qualification. Preserve the installed-origin reader, schema 10 through 12 compatibility and existing defaults.</PackageReleaseNotes>
+    <PackageReleaseNotes>0.5.0 — Bundle current Store14 for native collector enrollment and collection. The release profile selects schema14 only; no schema10-through14 migration compatibility is asserted. Exact packaged collector qualification, publication and installed adoption remain separate from source preparation. Published Host0.4 and its schema10-through12 artifact profile remain immutable.</PackageReleaseNotes>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../FS.GG.Coord.Cli/SkillTelemetryReaders.fsi" Link="SkillTelemetryReaders.fsi" />
@@ -39,6 +40,14 @@
     <Compile Include="NativeDeliverySource.fs" />
     <Compile Include="NativeSourceVerification.fsi" />
     <Compile Include="NativeSourceVerification.fs" />
+    <Compile Include="NativeResponsesCollection.fsi" />
+    <Compile Include="NativeResponsesCollection.fs" />
+    <Compile Include="NativeResponsesFacts.fsi" />
+    <Compile Include="NativeResponsesFacts.fs" />
+    <Compile Include="NativeResponsesAssessment.fsi" />
+    <Compile Include="NativeResponsesAssessment.fs" />
+    <Compile Include="NativeResponsesEntry.fsi" />
+    <Compile Include="NativeResponsesEntry.fs" />
     <Compile Include="BrowserEndpoints.fsi" />
     <Compile Include="BrowserEndpoints.fs" />
     <Compile Include="InactivePreparation.fsi" />
@@ -48,7 +57,11 @@
     <None Include="README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
   <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute"><_Parameter1>FS.GG.Telemetry.Tests</_Parameter1></AssemblyAttribute>
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="../FS.GG.Telemetry.Contracts/FS.GG.Telemetry.Contracts.fsproj" />
+    <ProjectReference Include="../FS.GG.Telemetry.Client/FS.GG.Telemetry.Client.fsproj" />
     <ProjectReference Include="../FS.GG.Telemetry.Dashboard/FS.GG.Telemetry.Dashboard.fsproj" />
     <ProjectReference Include="../FS.GG.Telemetry.Store/FS.GG.Telemetry.Store.fsproj" />
     <ProjectReference Include="../FS.GG.Coord.GitHub/FS.GG.Coord.GitHub.fsproj" />

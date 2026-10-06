@@ -80,6 +80,44 @@ module TelemetryStore =
             Evidence: string
         }
 
+    /// Capture-local identity; never an AppServer provider turn ID or authority receipt.
+    type ExecLocalTurn =
+        { CaptureSha256: string
+          ThreadId: System.Guid
+          StartFrameOrdinal: int64
+          TurnSequence: int64 }
+
+    /// Actual provider response identity; no process, thread or native turn identity is implied.
+    type ResponseResource =
+        { ResponseId: string
+          ResponseSha256: string }
+
+    /// Counters actually observed in one provider response; absent values remain unknown.
+    type ResponseUsage =
+        { InvocationId: string
+          Resource: ResponseResource
+          RequestedModel: string
+          ObservedModel: string option
+          RequestedEffort: string
+          ObservedEffort: string option
+          Input: int64 option
+          CachedInput: int64 option
+          CacheWriteInput: int64 option
+          Output: int64 option
+          Reasoning: int64 option
+          Total: int64 option }
+
+    /// A retained provider response, not proof that a local process or remote computation started.
+    type ProviderObservation =
+        { InvocationId: string
+          Resource: ResponseResource
+          GenerationRequestSha256: string
+          CountRequestSha256: string
+          CountResponseSha256: string
+          ObservedAt: string
+          ProviderCreatedAt: string option
+          Status: string }
+
     type Payload =
         | Item of featureId: string option
         | Feature of name: string
@@ -125,6 +163,8 @@ module TelemetryStore =
             turnSequence: int64 option *
             processId: int64 *
             phase: string
+        | RuntimeProviderObservation of observation: ProviderObservation
+        | RuntimeResponseUsage of usage: ResponseUsage
         | RuntimeTurnUsage of
             invocationId: string *
             threadId: string *
@@ -299,6 +339,7 @@ module TelemetryStore =
             occurredClockProvenance: string option *
             observedAt: string option *
             observedClockProvenance: string option
+        | EfficiencyRecord of EfficiencyInput.Record
         | ProcessReview of ProcessReview
         | ActivitySpan of ActivitySpan
         | ActivityUsageAttribution of ActivityUsageAttribution
@@ -315,6 +356,14 @@ module TelemetryStore =
         | RuntimeNativeInventory of
             inventoryId: string * originalItemId: string * invocationId: string * page: int64 * pages: int64 *
             expectedTurnIds: string * expectedProvider: string * requestedModel: string * requestedEffort: string *
+            followupBaseline: int64 * capturedAt: string * sourceDigest: string
+        | RuntimeExecNativeInventory of
+            inventoryId: string * originalItemId: string * invocationId: string *
+            expectedTurn: ExecLocalTurn * expectedProvider: string * requestedModel: string * requestedEffort: string *
+            followupBaseline: int64 * capturedAt: string * sourceDigest: string
+        | RuntimeResponseNativeInventory of
+            inventoryId: string * originalItemId: string * invocationId: string *
+            expectedResponse: ResponseResource * requestedModel: string * requestedEffort: string *
             followupBaseline: int64 * capturedAt: string * sourceDigest: string
         | RuntimeNativeInventorySource of
             inventoryId: string * originalItemId: string * invocationId: string * sourceDigest: string * sourceBinding: string
@@ -362,6 +411,7 @@ module TelemetryStore =
         {
             ItemId: string
             FactCount: int64
+            UnknownUsageCounters: string list
             UsageObservations: int64
             DeliveryObservations: int64
             Input: int64

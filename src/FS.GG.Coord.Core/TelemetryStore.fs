@@ -88,6 +88,44 @@ module TelemetryStore =
             Evidence: string
         }
 
+    /// Capture-local identity; never an AppServer provider turn ID or authority receipt.
+    type ExecLocalTurn =
+        { CaptureSha256: string
+          ThreadId: Guid
+          StartFrameOrdinal: int64
+          TurnSequence: int64 }
+
+    /// Actual provider response identity; no process, thread or native turn identity is implied.
+    type ResponseResource =
+        { ResponseId: string
+          ResponseSha256: string }
+
+    /// Counters actually observed in one provider response; absent values remain unknown.
+    type ResponseUsage =
+        { InvocationId: string
+          Resource: ResponseResource
+          RequestedModel: string
+          ObservedModel: string option
+          RequestedEffort: string
+          ObservedEffort: string option
+          Input: int64 option
+          CachedInput: int64 option
+          CacheWriteInput: int64 option
+          Output: int64 option
+          Reasoning: int64 option
+          Total: int64 option }
+
+    /// A retained provider response, not proof that a local process or remote computation started.
+    type ProviderObservation =
+        { InvocationId: string
+          Resource: ResponseResource
+          GenerationRequestSha256: string
+          CountRequestSha256: string
+          CountResponseSha256: string
+          ObservedAt: string
+          ProviderCreatedAt: string option
+          Status: string }
+
     type Payload =
         | Item of featureId: string option
         | Feature of name: string
@@ -133,6 +171,8 @@ module TelemetryStore =
             turnSequence: int64 option *
             processId: int64 *
             phase: string
+        | RuntimeProviderObservation of observation: ProviderObservation
+        | RuntimeResponseUsage of usage: ResponseUsage
         | RuntimeTurnUsage of
             invocationId: string *
             threadId: string *
@@ -307,6 +347,7 @@ module TelemetryStore =
             occurredClockProvenance: string option *
             observedAt: string option *
             observedClockProvenance: string option
+        | EfficiencyRecord of EfficiencyInput.Record
         | ProcessReview of ProcessReview
         | ActivitySpan of ActivitySpan
         | ActivityUsageAttribution of ActivityUsageAttribution
@@ -323,6 +364,14 @@ module TelemetryStore =
         | RuntimeNativeInventory of
             inventoryId: string * originalItemId: string * invocationId: string * page: int64 * pages: int64 *
             expectedTurnIds: string * expectedProvider: string * requestedModel: string * requestedEffort: string *
+            followupBaseline: int64 * capturedAt: string * sourceDigest: string
+        | RuntimeExecNativeInventory of
+            inventoryId: string * originalItemId: string * invocationId: string *
+            expectedTurn: ExecLocalTurn * expectedProvider: string * requestedModel: string * requestedEffort: string *
+            followupBaseline: int64 * capturedAt: string * sourceDigest: string
+        | RuntimeResponseNativeInventory of
+            inventoryId: string * originalItemId: string * invocationId: string *
+            expectedResponse: ResponseResource * requestedModel: string * requestedEffort: string *
             followupBaseline: int64 * capturedAt: string * sourceDigest: string
         | RuntimeNativeInventorySource of
             inventoryId: string * originalItemId: string * invocationId: string * sourceDigest: string * sourceBinding: string
@@ -370,6 +419,7 @@ module TelemetryStore =
         {
             ItemId: string
             FactCount: int64
+            UnknownUsageCounters: string list
             UsageObservations: int64
             DeliveryObservations: int64
             Input: int64
@@ -615,6 +665,132 @@ module TelemetryStore =
             Error $"%s{label}.%s{name} must contain between 1 and 64 entries"
         | _ -> Error $"%s{label}.%s{name} must be an array"
 
+    let private execDigest (value: string) =
+        Regex.IsMatch(value, "^[0-9a-f]{64}$") && value <> String('0', 64)
+
+    let private execGet (result: Result<'a,string>) = result |> Result.defaultWith invalidOp
+
+    let private execInteger (node: JsonElement) (name: string) =
+        let value = node.GetProperty name
+        if value.ValueKind <> JsonValueKind.Number
+           || not (Regex.IsMatch(value.GetRawText(), "^[0-9]+$")) then invalidOp "exec integer required"
+        match value.TryGetInt64() with
+        | true, number -> number
+        | _ -> invalidOp "exec integer outside Int64"
+
+    let private execReference (node: JsonElement) (kind: string) =
+        closed "exec reference" (set ["id";"kind";"revision";"contentDigest"]) node |> execGet
+        requiredText "exec reference" node "id" |> execGet |> ignore
+        if (requiredText "exec reference" node "kind" |> execGet) <> kind then invalidOp "exec reference kind"
+        execInteger node "revision" |> ignore
+        let digest = requiredText "exec reference" node "contentDigest" |> execGet
+        if not (digest.StartsWith("sha256:", StringComparison.Ordinal) && execDigest(digest.Substring 7)) then
+            invalidOp "exec reference digest"
+
+    let private execTurn (node: JsonElement) (completed: bool) : ExecLocalTurn =
+        let fields = set ["localTurnKey";"turnSequence";"nativeTurnId"]
+        closed "exec turn" (if completed then Set.union fields (set ["status";"usageAvailable"]) else fields) node |> execGet
+        if node.GetProperty("nativeTurnId").ValueKind <> JsonValueKind.Null then invalidOp "exec native turn ID forbidden"
+        if execInteger node "turnSequence" <> 1L then invalidOp "exec single turn sequence"
+        if completed && ((requiredText "exec turn" node "status" |> execGet) <> "completed"
+                         || node.GetProperty("usageAvailable").ValueKind <> JsonValueKind.True) then
+            invalidOp "exec completed usage required"
+        let key = node.GetProperty "localTurnKey"
+        closed "exec key" (set ["captureSha256";"threadId";"startFrameOrdinal"]) key |> execGet
+        let digest = requiredText "exec key" key "captureSha256" |> execGet
+        let thread = requiredText "exec key" key "threadId" |> execGet
+        let ordinal = execInteger key "startFrameOrdinal"
+        let parsed, threadId = Guid.TryParseExact(thread, "D")
+        if not (execDigest digest) || not parsed || threadId=Guid.Empty
+           || thread <> threadId.ToString("D") || ordinal >= 4096L then invalidOp "exec local key invalid"
+        { CaptureSha256=digest; ThreadId=threadId; StartFrameOrdinal=ordinal; TurnSequence=1L }
+
+    let private execRoster (node: JsonElement) (name: string) (completed: bool) =
+        let roster = node.GetProperty name
+        if roster.ValueKind <> JsonValueKind.Array || roster.GetArrayLength() <> 1 then
+            invalidOp "exec single turn roster required"
+        execTurn roster[0] completed
+
+    let private validateExecBinding (binding: JsonElement) (schema: string) (producer: string)
+                                    (invocation: string) (revision: int64) =
+        closed "exec binding" (set ["schema";"producerIdentity";"capturedAt";"hostSource";"rootInvocationId";
+                                   "invocationId";"revision";"dispatchRef";"runtimeStartRef";"installedOriginRef";
+                                   "claimRef";"threadId";"captureSha256";"captureBytes";"commandBindingSha256";
+                                   "custodyReceiptSha256";"turnRoster"]) binding |> execGet
+        let text name = requiredText "exec binding" binding name |> execGet
+        if text "schema" <> schema || text "producerIdentity" <> producer
+           || text "hostSource" <> "codex-exec-jsonl" || text "invocationId" <> invocation
+           || execInteger binding "revision" <> revision then invalidOp "exec binding unbound"
+        text "rootInvocationId" |> ignore
+        requiredTimestamp "exec binding" binding "capturedAt" |> execGet |> ignore
+        for name in ["captureSha256";"commandBindingSha256";"custodyReceiptSha256"] do
+            if not (execDigest(text name)) then invalidOp "exec capture digest invalid"
+        let count = execInteger binding "captureBytes"
+        if count=0L || count>262144L then invalidOp "exec capture bound"
+        for name,kind in ["dispatchRef","expected-dispatch";"runtimeStartRef","runtime-start";"installedOriginRef","learn-installed-origin/1"] do
+            execReference (binding.GetProperty name) kind
+        let claim = binding.GetProperty "claimRef"
+        closed "exec claim" (set ["requestId";"claimId";"revision";"contentDigest";"owner";"generation"]) claim |> execGet
+        for name in ["requestId";"claimId"] do requiredText "exec claim" claim name |> execGet |> ignore
+        execInteger claim "revision" |> ignore
+        if execInteger claim "generation"=0L then invalidOp "exec claim generation"
+        let digest = requiredText "exec claim" claim "contentDigest" |> execGet
+        if not (digest.StartsWith("sha256:",StringComparison.Ordinal) && execDigest(digest.Substring 7)) then
+            invalidOp "exec claim digest"
+        let owner = claim.GetProperty "owner"
+        closed "exec claim owner" (set ["producer";"stream"]) owner |> execGet
+        for name in ["producer";"stream"] do requiredText "exec owner" owner name |> execGet |> ignore
+        let turn = execRoster binding "turnRoster" true
+        if turn.CaptureSha256 <> text "captureSha256" || turn.ThreadId.ToString("D") <> text "threadId" then
+            invalidOp "exec roster capture mismatch"
+
+    let private responseResource (node: JsonElement) : ResponseResource =
+        let id = requiredText "response resource" node "responseId" |> execGet
+        let digest = requiredText "response resource" node "responseSha256" |> execGet
+        if id.Length > 256 || not (Regex.IsMatch(id, "^[!-~]+$"))
+           || not (execDigest digest) then invalidOp "response resource invalid"
+        { ResponseId=id; ResponseSha256=digest }
+
+    let private responseRoster (node: JsonElement) =
+        let roster = node.GetProperty "expectedResponses"
+        if roster.ValueKind <> JsonValueKind.Array || roster.GetArrayLength() <> 1 then
+            invalidOp "single response resource required"
+        let row = roster.[0]
+        closed "response resource" (set ["responseId";"responseSha256"]) row |> execGet
+        responseResource row
+
+    let private validateResponseBinding (binding: JsonElement) (schema: string) (producer: string)
+                                        (invocation: string) (revision: int64) =
+        closed "response binding" (set ["schema";"producerIdentity";"capturedAt";"sourceVariant";
+            "originalItemId";"invocationId";"revision";"dispatchRef";"providerObservationRef";"usageRef";
+            "installedOriginRef";"claimRef";"responseId";"generationRequestSha256";"countRequestSha256";
+            "countResponseSha256";"responseSha256";"responseBytes";"operationBindingSha256";"expectedResponses"]) binding |> execGet
+        let text name = requiredText "response binding" binding name |> execGet
+        if text "schema"<>schema || text "producerIdentity"<>producer
+           || text "sourceVariant"<>"openai-responses/1" || text "invocationId"<>invocation
+           || execInteger binding "revision"<>revision then invalidOp "response binding unbound"
+        text "originalItemId" |> ignore
+        requiredTimestamp "response binding" binding "capturedAt" |> execGet |> ignore
+        for name in ["generationRequestSha256";"countRequestSha256";"countResponseSha256";
+                     "responseSha256";"operationBindingSha256"] do
+            if not (execDigest(text name)) then invalidOp "response binding digest invalid"
+        let bytes = execInteger binding "responseBytes"
+        if bytes=0L || bytes>262144L then invalidOp "response body bound"
+        for name,kind in ["dispatchRef","expected-dispatch";"providerObservationRef","runtime-provider-observation/1";
+                          "usageRef","runtime-response-usage/1";"installedOriginRef","learn-installed-origin/1"] do
+            execReference (binding.GetProperty name) kind
+        let claim = binding.GetProperty "claimRef"
+        closed "response claim" (set ["requestId";"claimId";"revision";"contentDigest";"owner";"generation"]) claim |> execGet
+        for name in ["requestId";"claimId"] do requiredText "response claim" claim name |> execGet |> ignore
+        execInteger claim "revision" |> ignore
+        if execInteger claim "generation"=0L then invalidOp "response claim generation"
+        let digest = requiredText "response claim" claim "contentDigest" |> execGet
+        if not (digest.StartsWith("sha256:",StringComparison.Ordinal) && execDigest(digest.Substring 7)) then invalidOp "response claim digest"
+        let owner=claim.GetProperty "owner"
+        closed "response claim owner" (set ["producer";"stream"]) owner |> execGet
+        for name in ["producer";"stream"] do requiredText "response owner" owner name |> execGet |> ignore
+        if responseRoster binding <> responseResource binding then invalidOp "response resource roster mismatch"
+
     let private requiredNativeSourceBinding
         (label: string)
         (node: JsonElement)
@@ -633,9 +809,12 @@ module TelemetryStore =
                 requiredText envelopeLabel envelope "bytesBase64"
             with
             | Ok(), Ok schema, Ok producer, Ok digest, Ok encoded when
-                schema = "fsgg.telemetry.native-inventory-source-binding/1"
+                (schema = "fsgg.telemetry.native-inventory-source-binding/1"
+                 || schema = "fsgg.telemetry.native-inventory-source-binding/2"
+                 || schema = "fsgg.telemetry.native-inventory-source-binding/3")
                 && producer = "fsgg-work-roadmap-native-collector/1"
-                && Regex.IsMatch(digest, "^[0-9a-f]{64}$")
+                && (if schema <> "fsgg.telemetry.native-inventory-source-binding/1" then execDigest digest
+                    else Regex.IsMatch(digest, "^[0-9a-f]{64}$"))
                 ->
                 try
                     let bytes = Convert.FromBase64String encoded
@@ -644,37 +823,50 @@ module TelemetryStore =
                     else
                         use document = JsonDocument.Parse bytes
                         let binding = document.RootElement
-                        let fields =
-                            Set [ "schema"; "producerIdentity"; "capturedAt"; "hostSource"; "rootInvocationId";
-                                  "invocationId"; "parentThreadId"; "threadId"; "orderedTurnIds"; "revision" ]
-                        match
-                            closed $"%s{envelopeLabel}.bytes" fields binding,
-                            requiredText envelopeLabel binding "schema",
-                            requiredText envelopeLabel binding "producerIdentity",
-                            requiredTimestamp envelopeLabel binding "capturedAt",
-                            requiredText envelopeLabel binding "hostSource",
-                            requiredText envelopeLabel binding "rootInvocationId",
-                            requiredText envelopeLabel binding "invocationId",
-                            requiredText envelopeLabel binding "parentThreadId",
-                            requiredText envelopeLabel binding "threadId",
-                            requiredUniqueTextRoster envelopeLabel binding "orderedTurnIds",
-                            requiredInt envelopeLabel binding "revision",
-                            CanonicalJson.canonicalize bytes
-                        with
-                        | Ok(), Ok bindingSchema, Ok bindingProducer, Ok _, Ok hostSource, Ok _, Ok bindingInvocation,
-                          Ok parentThread, Ok thread, Ok _, Ok bindingRevision, Ok canonical when
-                            canonical = Encoding.UTF8.GetString bytes
-                            && bindingSchema = schema
-                            && bindingProducer = producer
-                            && hostSource = "codex-app-server:thread/turns/list"
-                            && bindingInvocation = invocation
-                            && bindingRevision = revision
-                            && Regex.IsMatch(parentThread, "^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$")
-                            && Regex.IsMatch(thread, "^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$")
-                            -> CanonicalJson.canonicalize (Encoding.UTF8.GetBytes(envelope.GetRawText()))
-                        | _ -> Error $"%s{envelopeLabel} canonical bytes are malformed or unbound"
+                        if schema <> "fsgg.telemetry.native-inventory-source-binding/1" then
+                            if schema = "fsgg.telemetry.native-inventory-source-binding/2" then
+                                validateExecBinding binding schema producer invocation revision
+                            else
+                                validateResponseBinding binding schema producer invocation revision
+                            match CanonicalJson.canonicalize bytes with
+                            | Ok canonical when canonical = Encoding.UTF8.GetString bytes ->
+                                CanonicalJson.canonicalize (Encoding.UTF8.GetBytes(envelope.GetRawText()))
+                            | _ -> Error $"%s{envelopeLabel} bytes are not canonical"
+                        else
+                            let fields =
+                                Set [ "schema"; "producerIdentity"; "capturedAt"; "hostSource"; "rootInvocationId";
+                                      "invocationId"; "parentThreadId"; "threadId"; "orderedTurnIds"; "revision" ]
+                            match
+                                closed $"%s{envelopeLabel}.bytes" fields binding,
+                                requiredText envelopeLabel binding "schema",
+                                requiredText envelopeLabel binding "producerIdentity",
+                                requiredTimestamp envelopeLabel binding "capturedAt",
+                                requiredText envelopeLabel binding "hostSource",
+                                requiredText envelopeLabel binding "rootInvocationId",
+                                requiredText envelopeLabel binding "invocationId",
+                                requiredText envelopeLabel binding "parentThreadId",
+                                requiredText envelopeLabel binding "threadId",
+                                requiredUniqueTextRoster envelopeLabel binding "orderedTurnIds",
+                                requiredInt envelopeLabel binding "revision",
+                                CanonicalJson.canonicalize bytes
+                            with
+                            | Ok(), Ok bindingSchema, Ok bindingProducer, Ok _, Ok hostSource, Ok _, Ok bindingInvocation,
+                              Ok parentThread, Ok thread, Ok _, Ok bindingRevision, Ok canonical when
+                                canonical = Encoding.UTF8.GetString bytes
+                                && bindingSchema = schema
+                                && bindingProducer = producer
+                                && hostSource = "codex-app-server:thread/turns/list"
+                                && bindingInvocation = invocation
+                                && bindingRevision = revision
+                                && Regex.IsMatch(parentThread, "^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$")
+                                && Regex.IsMatch(thread, "^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$")
+                                -> CanonicalJson.canonicalize (Encoding.UTF8.GetBytes(envelope.GetRawText()))
+                            | _ -> Error $"%s{envelopeLabel} canonical bytes are malformed or unbound"
                 with
                 | :? FormatException
+                | :? InvalidOperationException
+                | :? System.Collections.Generic.KeyNotFoundException
+                | :? ArgumentException
                 | :? JsonException -> Error $"%s{envelopeLabel} bytes are malformed"
             | _ -> Error $"%s{envelopeLabel} is malformed"
         | _ -> Error $"%s{label}.%s{name} must be an object"
@@ -748,6 +940,14 @@ module TelemetryStore =
                     })
 
             match kind with
+            | "efficiency-resource-allocation/1"
+            | "efficiency-problem-episode/1"
+            | "efficiency-assessment/1" ->
+                EfficiencyInput.parseEvent node
+                |> Result.bind (fun record ->
+                    make [ "resource"; "shares"; "coverage"; "provenance"; "occurredAt"; "observedAt"
+                           "subject"; "finding"; "evidenceRefs"; "allocationRefs"; "assessment" ]
+                         (EfficiencyRecord record))
             | "item" ->
                 optionalText label node "featureId"
                 |> Result.bind (Item >> make [ "featureId" ])
@@ -948,6 +1148,70 @@ module TelemetryStore =
                 | Ok _, Ok _, Ok _, Ok _, Ok _, Ok _ ->
                     Error $"%s{label}.phase must be process, thread, or a qualified turn"
                 | values -> Error(sprintf "%A" values)
+            | "runtime-provider-observation/1" ->
+                try
+                    let text name = requiredText label node name |> execGet
+                    let fields=["invocationId";"provider";"sourceVariant";"responseId";"responseSha256";
+                                "generationRequestSha256";"countRequestSha256";"countResponseSha256";
+                                "observedAt";"providerCreatedAt";"status"]
+                    if itemId.IsNone || text "provider"<>"openai" || text "sourceVariant"<>"openai-responses/1"
+                       || not (Set.contains (text "status") (set ["completed";"incomplete";"failed";"cancelled"])) then
+                        invalidOp "response observation variant invalid"
+                    for name in ["generationRequestSha256";"countRequestSha256";"countResponseSha256"] do
+                        if not (execDigest(text name)) then invalidOp "response observation digest invalid"
+                    let created=optionalTimestamp label node "providerCreatedAt" |> execGet
+                    make fields (RuntimeProviderObservation {
+                        InvocationId=text "invocationId";Resource=responseResource node;
+                        GenerationRequestSha256=text "generationRequestSha256";
+                        CountRequestSha256=text "countRequestSha256";CountResponseSha256=text "countResponseSha256";
+                        ObservedAt=requiredTimestamp label node "observedAt" |> execGet;ProviderCreatedAt=created;Status=text "status" })
+                with
+                | :? InvalidOperationException
+                | :? System.Collections.Generic.KeyNotFoundException -> Error $"%s{label} provider observation malformed"
+            | "runtime-response-usage/1" ->
+                try
+                    let text name = requiredText label node name |> execGet
+                    let counter (name: string) =
+                        let value=node.GetProperty name
+                        if value.ValueKind=JsonValueKind.Null then None else Some(execInteger node name)
+                    let input,output,total=counter "input",counter "output",counter "total"
+                    let cached,write,reasoning=counter "cachedInput",counter "cacheWriteInput",counter "reasoning"
+                    if itemId.IsNone || text "provider"<>"openai" || text "sourceVariant"<>"openai-responses/1"
+                       || text "scope"<>"provider-response" || text "provenance"<>"openai-responses" then
+                        invalidOp "response usage variant invalid"
+                    match input,output,total with
+                    | Some i,Some o,Some t ->
+                        if (checkedAdd "response total" i o |> execGet) <> t then invalidOp "response total mismatch"
+                    | _ -> ()
+                    // Missing dimensions remain unknown, but every known subset must
+                    // fit its observed inclusive whole. No breakout disjointness is inferred.
+                    let inputBound = input |> Option.orElse total
+                    let outputBound = output |> Option.orElse total
+                    for part,whole in [input,total;output,total;cached,inputBound;write,inputBound;reasoning,outputBound] do
+                        match part,whole with
+                        | Some p,Some w when p>w -> invalidOp "response breakout exceeds inclusive counter"
+                        | _ -> ()
+                    // Nonnegative unknowns supply no observed value. Their mathematical
+                    // lower bound is zero; overlapping breakouts use max, never a sum.
+                    let lowerBound values = 0L :: (values |> List.choose id) |> List.max
+                    let inputMinimum = lowerBound [input;cached;write]
+                    let outputMinimum = lowerBound [output;reasoning]
+                    let minimumTotal = checkedAdd "response minimum total" inputMinimum outputMinimum |> execGet
+                    if total |> Option.exists (fun observed -> minimumTotal > observed) then
+                        invalidOp "response known subsets exceed inclusive total"
+                    if [input;output;total;cached;write;reasoning] |> List.forall Option.isNone then
+                        invalidOp "empty response usage observation"
+                    make ["invocationId";"provider";"sourceVariant";"responseId";"responseSha256";
+                          "requestedModel";"observedModel";"requestedEffort";"observedEffort";
+                          "scope";"provenance";"input";"cachedInput";"cacheWriteInput";"output";"reasoning";"total"]
+                        (RuntimeResponseUsage {
+                            InvocationId=text "invocationId";Resource=responseResource node;
+                            RequestedModel=text "requestedModel";ObservedModel=optionalText label node "observedModel" |> execGet;
+                            RequestedEffort=text "requestedEffort";ObservedEffort=optionalText label node "observedEffort" |> execGet;
+                            Input=input;CachedInput=cached;CacheWriteInput=write;Output=output;Reasoning=reasoning;Total=total })
+                with
+                | :? InvalidOperationException
+                | :? System.Collections.Generic.KeyNotFoundException -> Error $"%s{label} response usage malformed"
             | "runtime-turn-usage" ->
                 match
                     requiredText label node "invocationId",
@@ -2085,6 +2349,42 @@ module TelemetryStore =
                 | Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _ ->
                     Error $"%s{label} has unsupported scope, CI applicability, source kind, or digest"
                 | values -> Error(sprintf "%A" values)
+            | "runtime-native-inventory/1" when (node.TryGetProperty "sourceVariant" |> fst) ->
+                try
+                    let text name = requiredText label node name |> execGet
+                    let fields=["inventoryId";"originalItemId";"invocationId";"page";"pages";"sourceVariant";
+                                "expectedResponses";"expectedProvider";"requestedModel";"requestedEffort";"support";
+                                "followupBaseline";"capturedAt";"sourceKind";"sourceDigest"]
+                    if itemId.IsNone || text "sourceVariant"<>"openai-responses/1" || text "expectedProvider"<>"openai"
+                       || execInteger node "page"<>1L || execInteger node "pages"<>1L
+                       || text "support"<>"response-native-final-counters"
+                       || text "sourceKind"<>"provider-capability-and-dispatch-roster"
+                       || not (execDigest(text "sourceDigest")) then invalidOp "response inventory invalid"
+                    make fields (RuntimeResponseNativeInventory(text "inventoryId",text "originalItemId",text "invocationId",
+                        responseRoster node,text "requestedModel",text "requestedEffort",execInteger node "followupBaseline",
+                        requiredTimestamp label node "capturedAt" |> execGet,text "sourceDigest"))
+                with
+                | :? InvalidOperationException
+                | :? System.Collections.Generic.KeyNotFoundException -> Error $"%s{label} response inventory malformed"
+            | "runtime-native-inventory/1" when (node.TryGetProperty "turnNamespace" |> fst) ->
+                try
+                    let text name = requiredText label node name |> execGet
+                    let timestamp = requiredTimestamp label node "capturedAt" |> execGet
+                    let turn = execRoster node "expectedTurns" false
+                    let fields = ["inventoryId";"originalItemId";"invocationId";"page";"pages";"turnNamespace";
+                                  "expectedTurns";"expectedProvider";"requestedModel";"requestedEffort";"support";
+                                  "followupBaseline";"capturedAt";"sourceKind";"sourceDigest"]
+                    if itemId.IsNone || text "turnNamespace" <> "codex-exec-jsonl/1"
+                       || execInteger node "page" <> 1L || execInteger node "pages" <> 1L
+                       || text "support" <> "provider-native-final-turn-counters"
+                       || text "sourceKind" <> "provider-capability-and-dispatch-roster"
+                       || not (execDigest(text "sourceDigest")) then invalidOp "exec inventory invalid"
+                    make fields (RuntimeExecNativeInventory(text "inventoryId",text "originalItemId",text "invocationId",turn,
+                        text "expectedProvider",text "requestedModel",text "requestedEffort",execInteger node "followupBaseline",
+                        timestamp,text "sourceDigest"))
+                with
+                | :? InvalidOperationException
+                | :? System.Collections.Generic.KeyNotFoundException -> Error $"%s{label} exec inventory is malformed"
             | "runtime-native-inventory/1" ->
                 match
                     requiredText label node "inventoryId",
@@ -2239,6 +2539,10 @@ module TelemetryStore =
             | "learn-installed-origin/1" ->
                 let digest (value: string) =
                     Regex.IsMatch(value, "^[0-9a-f]{64}$") && value <> String('0', 64)
+                let variant =
+                    match node.TryGetProperty "nativeSourceVariant" with
+                    | false, _ -> Ok None
+                    | true, _ -> requiredText label node "nativeSourceVariant" |> Result.map Some
                 match
                     requiredText label node "workspaceId",
                     requiredText label node "producerId",
@@ -2259,13 +2563,14 @@ module TelemetryStore =
                   Ok managerReceipt, Ok profile, Ok result, Ok capture, Ok verification,
                   Ok observed, Ok expires, Ok installation
                     when itemId.IsNone && role = "native-collector" && generation > 0L
+                        && (variant = Ok None || variant = Ok(Some "codex-exec-jsonl/1") || variant = Ok(Some "openai-responses/1"))
                         && ([ managerReceipt; profile; result; capture; verification; installation ] |> List.forall digest)
                         && DateTimeOffset.Parse(expires, CultureInfo.InvariantCulture) > DateTimeOffset.Parse(observed, CultureInfo.InvariantCulture) ->
                     make
                         [ "workspaceId"; "producerId"; "streamId"; "role"; "grantId"; "grantGeneration";
                           "managerReceiptSha256"; "capabilityProfileSha256"; "capabilityResultSha256";
                           "nativeCaptureSha256"; "nativeVerificationSha256"; "capabilityObservedAt";
-                          "capabilityExpiresAt"; "installationSha256" ]
+                          "capabilityExpiresAt"; "installationSha256"; "nativeSourceVariant" ]
                         (LearnInstalledOrigin(workspace, producer, stream, role, grant, generation,
                                               managerReceipt, profile, result, capture, verification,
                                               observed, expires, installation))
@@ -2373,18 +2678,26 @@ module TelemetryStore =
             selected
             |> List.choose (fun fact ->
                 match fact.Payload with
-                | Usage(_, _, _, i, c, w, o, r, t, _, _, _) -> Some(i, c, w, o, r, t)
+                | Usage(_, _, _, i, c, w, o, r, t, _, _, _) -> Some(Some i, Some c, Some w, Some o, r, Some t)
+                | RuntimeResponseUsage value -> Some(value.Input,value.CachedInput,value.CacheWriteInput,value.Output,value.Reasoning,value.Total)
                 | _ -> None)
+
+        let duplicateResponses =
+            selected
+            |> List.choose (fun fact ->
+                match fact.Payload with RuntimeResponseUsage value -> Some value.Resource.ResponseId | _ -> None)
+            |> List.countBy id
+            |> List.exists (fun (_,count) -> count > 1)
 
         let add label selector =
             usage
-            |> List.map selector
+            |> List.choose selector
             |> List.fold
                 (fun state value -> state |> Result.bind (fun current -> checkedAdd label current value))
                 (Ok 0L)
 
         match
-            add "input" (fun (v, _, _, _, _, _) -> v),
+            (if duplicateResponses then Error "duplicate Responses resource" else add "input" (fun (v, _, _, _, _, _) -> v)),
             add "cachedInput" (fun (_, v, _, _, _, _) -> v),
             add "cacheWriteInput" (fun (_, _, v, _, _, _) -> v),
             add "output" (fun (_, _, _, v, _, _) -> v),
@@ -2419,6 +2732,12 @@ module TelemetryStore =
                 {
                     ItemId = itemId
                     FactCount = int64 selected.Length
+                    UnknownUsageCounters =
+                        [ "input",(fun (v,_,_,_,_,_) -> v); "cachedInput",(fun (_,v,_,_,_,_) -> v);
+                          "cacheWriteInput",(fun (_,_,v,_,_,_) -> v); "output",(fun (_,_,_,v,_,_) -> v);
+                          "total",(fun (_,_,_,_,_,v) -> v) ]
+                        |> List.choose (fun (name,select) ->
+                            if usage |> List.exists (select >> Option.isNone) then Some name else None)
                     UsageObservations = int64 usage.Length
                     DeliveryObservations =
                         selected
@@ -2450,6 +2769,8 @@ module TelemetryStore =
         | values -> Error [ sprintf "%A" values ]
 
     let publicJson aggregate =
+        let counter name amount =
+            if List.contains name aggregate.UnknownUsageCounters then Nullable<int64>() else Nullable<int64>(amount)
         JsonSerializer.Serialize
             {|
                 schema = "fsgg.telemetry.public-summary/1"
@@ -2459,12 +2780,12 @@ module TelemetryStore =
                 deliveryObservations = aggregate.DeliveryObservations
                 usage =
                     {|
-                        input = aggregate.Input
-                        cachedInput = aggregate.CachedInput
-                        cacheWriteInput = aggregate.CacheWriteInput
-                        output = aggregate.Output
+                        input = counter "input" aggregate.Input
+                        cachedInput = counter "cachedInput" aggregate.CachedInput
+                        cacheWriteInput = counter "cacheWriteInput" aggregate.CacheWriteInput
+                        output = counter "output" aggregate.Output
                         reasoning = aggregate.Reasoning
-                        total = aggregate.Total
+                        total = counter "total" aggregate.Total
                     |}
                 launcherPopulation =
                     {|

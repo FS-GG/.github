@@ -5,6 +5,9 @@ Parent: [V2 roadmap](../github-substrate-v2-roadmap.md#v2-eff-01--process-effici
 Design: [process efficiency telemetry and dashboard](../designs/process-efficiency-telemetry.md).
 Evidence: [22-source prior-art review](../research/2026-10-06-process-efficiency-telemetry-prior-art.md).
 
+User-selected migration scope (2026-10-06): backward compatibility is not required. Prioritize the
+new telemetry route while preserving historical facts, correction lineage and auditability.
+
 ## Delivery objective
 
 Each completed item receives a bounded, evidence-linked agent assessment explaining useful work,
@@ -45,8 +48,8 @@ then-current protected contracts, not inferred from this proposal's examples.
 - [x] Produce the labeled corpus and hand-calculated metric fixtures described in the design. Include
   clean work, useful failed validation, avoidable replay, changed-input reruns, infrastructure/context
   problems, incorrect lineage and delivered-but-missing-runtime cases.
-- [x] Select versioned extensions and migration against current protected schemas. Keep existing
-  consumers valid. Pin any external trace convention used by an adapter.
+- [x] Select versioned extensions and migration against current protected schemas. Target the new producer, store, collector and dashboard as one coherent migration.
+  Backward compatibility with old binaries, readers and wire formats is not required. Pin any external trace convention used by an adapter.
 
 Dependencies: none beyond current contract inspection. Touch-set: canonical contract/design declarations
 and shared fixtures only; do not mix producer, UI and release implementation into this milestone.
@@ -80,7 +83,8 @@ Depends on .1. Touch-set: canonical telemetry schema/store, reducer and CLI/adap
 their focused tests. Acceptance: fixtures cover duplicates, late/out-of-order revisions, overlapping
 activity, shared CI, unknown usage, cancellations and reopens. Cross-item correction changes
 attribution without changing delivered total or total cost. Unsupported legacy correction fails
-explicitly; no out-of-band database repair. Existing readers and records retain supported behavior.
+explicitly; no out-of-band database repair. Preserve historical records, audit history and correction conservation through migration;
+old readers and binaries need not remain compatible.
 
 ### V2-EFF-01.3 — Generate bounded assessments on completion
 
@@ -116,6 +120,12 @@ telemetry fields were supplied. Returned telemetry health remains `open`; histor
 and complete observation coverage remain unknown. This closes the canonical producer dependency
 only. Native helper installation, receiver integration, provider execution and actual bounded
 assessment acceptance remain pending; .3 and .6 stay open.
+
+Source preparation is described in [bounded assessment preparation](../coordination/process-efficiency-assessment.md).
+The offline helper and synthetic checks cover evidence selection, full-schema/semantic output validation
+and private execution-state recovery. They do not activate a completion trigger, provider or store
+integration. Installed exporter/admission joins and actual native/provisional review acceptance remain
+pending; this milestone stays unchecked.
 
 ### V2-EFF-01.4 — Publish useful dashboard explanations
 
@@ -321,7 +331,7 @@ checks intact; recommendations alone do not count as completed process improveme
 - [ ] Owner: relevant package/release maintainer and selected receiver owners, with Pages maintainer.
 - [ ] Publish the coherent producer/CLI/adapter set where package changes require it. Verify installed
   versions and their emitted contracts independently from source merges.
-- [ ] Deploy the compatible dashboard/feed through the established Pages route. Demonstrate a newly
+- [ ] Deploy the matching new dashboard/feed through the established Pages route. Demonstrate a newly
   completed real item passing through installed collection, assessment, projection and browser view.
 - [ ] Adopt the verified assessment behavior for the selected completion paths. Record coverage,
   health/freshness expectations, bounded backfill and tested rollback. Expand only after pilot evidence.
