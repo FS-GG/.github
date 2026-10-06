@@ -101,6 +101,14 @@ module NativeResponsesTests =
         Assert.True(NativeResponses.validateCompletion (count "17" |> unwrap) observed |> Result.isOk)
 
     [<Fact>]
+    let ``null provider error and incomplete details preserve completed response`` () =
+        let raw = response "completed" usage |> stringOf
+        let raw = raw.Replace("\"object\":\"response\"", "\"object\":\"response\",\"error\":null,\"incomplete_details\":null")
+        let observed = NativeResponses.decodeResponse (bytes raw) |> unwrap
+        Assert.Empty(observed.Issues)
+        Assert.True(NativeResponses.validateCompletion (count "17" |> unwrap) observed |> Result.isOk)
+
+    [<Fact>]
     let ``reasoning is breakout of inclusive output and never summed twice`` () =
         let raw = usage.Replace("}",",\"input_tokens_details\":{\"cached_tokens\":3,\"cache_write_tokens\":2},\"output_tokens_details\":{\"reasoning_tokens\":4}}")
         let observed = NativeResponses.decodeResponse (response "completed" raw) |> unwrap

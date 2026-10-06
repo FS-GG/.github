@@ -143,6 +143,8 @@
     <Compile Include="EfficiencyInput.fs" />
     <Compile Include="EfficiencyEvidence.fsi" />
     <Compile Include="EfficiencyEvidence.fs" />
+    <Compile Include="NativeResponses.fsi" />
+    <Compile Include="NativeResponses.fs" />
     <Compile Include="TelemetryStore.fsi" />
     <Compile Include="TelemetryStore.fs" />
     <Compile Include="TelemetryReceipt.fsi" />
