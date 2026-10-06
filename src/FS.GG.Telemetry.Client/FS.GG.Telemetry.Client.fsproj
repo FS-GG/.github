@@ -7,6 +7,8 @@
     <IsPackable>false</IsPackable>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="CustodyProjection/CustodyProcessLease.fsi" />
+    <Compile Include="CustodyProjection/CustodyProcessLease.fs" />
     <Compile Include="ObservedCodexProcess.fsi" />
     <Compile Include="ObservedCodexProcess.fs" />
     <Compile Include="RemoteClient.fsi" />
