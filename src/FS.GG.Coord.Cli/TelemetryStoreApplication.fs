@@ -6830,12 +6830,15 @@ WHERE n.source_ref=$source;
             // CI ordinals and provider queue intervals are a separate witnessed cohort.
             // They do not establish native item attempts, provider input equivalence or a DAG.
             let ciFacts =
-                query "SELECT identity,kind,revision,canonical FROM current_ingest_facts WHERE item_id=$item AND kind IN ('ci-run','ci-job','ci-coverage') ORDER BY identity LIMIT 4097;" values
+                query "SELECT identity,kind,revision,canonical FROM current_ingest_facts WHERE item_id=$item AND kind IN ('ci-run','ci-job','ci-coverage','ci-binding') ORDER BY identity LIMIT 4097;" values
             if ciFacts.Length > 4096 then invalidOp "efficiency-ci-source-selection-bound"
             let ciRefs = JsonArray()
             let ciRuns = ResizeArray<string * int * bool>()
             let ciJobs = ResizeArray<string * int * string * string option * string option * string option>()
-            let ciCoverage = ResizeArray<bool>()
+            let ciCoverage = ResizeArray<string * bool>()
+            let ciBindings = ResizeArray<string * string * string * string>()
+            let ciRunContexts = ResizeArray<string * int * string * string * string>()
+            let ciJobTerminals = ResizeArray<bool>()
             for row in ciFacts do
                 use document = JsonDocument.Parse row[3].Value
                 let source = document.RootElement
@@ -6846,18 +6849,23 @@ WHERE n.source_ref=$source;
                     if value.ValueKind = JsonValueKind.String then Some(value.GetString()) else None
                 if ciRefs.Count < 1000 then
                     // A collection coverage receipt is an operation witness, not another run.
-                    let semantic = if kind="ci-coverage" then "operation" else kind
+                    let semantic = if kind="ci-coverage" || kind="ci-binding" then "operation" else kind
                     ciRefs.Add(JsonSerializer.SerializeToNode({| id=row[0].Value; kind=semantic; revision=Int64.Parse row[2].Value |}))
                 if kind="ci-run" then
                     let key = text "repository" + "\n" + string(source.GetProperty("runId").GetInt64())
-                    ciRuns.Add(key,source.GetProperty("attempt").GetInt32(),text "status"="completed")
+                    let ordinal = source.GetProperty("attempt").GetInt32()
+                    ciRuns.Add(key,ordinal,text "status"="completed")
+                    ciRunContexts.Add(key,ordinal,text "repository",text "head",text "workflow")
                 elif kind="ci-job" then
+                    ciJobTerminals.Add(text "status"="completed")
                     let key = text "repository" + "\n" + string(source.GetProperty("runId").GetInt64())
                     ciJobs.Add(key,source.GetProperty("attempt").GetInt32(),string(source.GetProperty("jobId").GetInt64()),optionalText "createdAt",optionalText "startedAt",optionalText "completedAt")
+                elif kind="ci-binding" then
+                    if text "binding"="exact" then ciBindings.Add(text "repository",text "head",text "workflow",text "collectionId")
                 else
                     // Conflicting or partial collection witnesses do not prove completeness.
                     let complete = ["inventory";"attempts";"jobPages";"terminal";"timestamps";"lineage"] |> List.forall (fun name -> text name="complete")
-                    ciCoverage.Add complete
+                    ciCoverage.Add(text "collectionId",complete)
             let parseInterval (first: string option) (last: string option) =
                 match first,last with
                 | Some first,Some last ->
@@ -6873,7 +6881,13 @@ WHERE n.source_ref=$source;
             let runConflicts = runs |> List.groupBy (fun (key,attempt,_) -> key,attempt) |> List.exists (fun (_,rows) -> rows.Length<>1)
             let executionIntervals = jobs |> List.choose (fun (_,_,_,_,first,last) -> parseInterval first last)
             let queueIntervals = jobs |> List.choose (fun (_,_,_,first,last,_) -> parseInterval first last)
-            let fullCi = ciCoverage.Count>0 && (ciCoverage |> Seq.forall id) && not jobConflicts && not runConflicts && ciFacts.Length<=1000
+            let contexts = ciRunContexts |> Seq.distinct |> Seq.toList
+            let contextConflicts = contexts |> List.groupBy (fun (key,attempt,_,_,_) -> key,attempt) |> List.exists (fun (_,rows) -> rows.Length<>1)
+            let contextCovered (_,_,repository,head,workflow) =
+                ciBindings |> Seq.exists (fun (boundRepository,boundHead,boundWorkflow,collection) ->
+                    boundRepository=repository && boundHead=head && (boundWorkflow=workflow || boundWorkflow="*")
+                    && (ciCoverage |> Seq.filter (fun (identity,_) -> identity=collection) |> Seq.map snd |> Seq.toList)= [true])
+            let fullCi = not contexts.IsEmpty && (contexts |> List.forall contextCovered) && not contextConflicts && not jobConflicts && not runConflicts && ciFacts.Length<=1000
             let ciMetric (name: string) (unit: string) (amount: ProcessEfficiency.Fraction option) (status: string) (reason: string) =
                 metric name unit "ci-observed" "github-actions" None status reason (null:string) (null:string)
                 let node = metrics[metrics.Count-1]
@@ -6896,7 +6910,7 @@ WHERE n.source_ref=$source;
                 else Some(exactRatio (bigint(completeOperations |> List.filter (fun (_,ordinals) -> ordinals.Length>1) |> List.length)) (bigint completeOperations.Length))
             let runKeys = runs |> List.map (fun (key,attempt,_) -> key,attempt) |> Set.ofList
             let jobKeys = jobs |> List.map (fun (key,attempt,_,_,_,_) -> key,attempt) |> Set.ofList
-            let allAttemptsKnown = fullCi && not runs.IsEmpty && completeOperations.Length=operationRows.Length && not jobs.IsEmpty && executionIntervals.Length=jobs.Length && runKeys=jobKeys
+            let allAttemptsKnown = fullCi && not runs.IsEmpty && completeOperations.Length=operationRows.Length && not jobs.IsEmpty && executionIntervals.Length=jobs.Length && runKeys=jobKeys && (ciJobTerminals |> Seq.forall id)
             let observedTicks = executionIntervals |> List.sumBy (fun (first,last) -> bigint(last-first))
             let retryTicks = jobs |> List.sumBy (fun (_,attempt,_,_,first,last) -> if attempt>1 then parseInterval first last |> Option.map (fun (first,last) -> bigint(last-first)) |> Option.defaultValue 0I else 0I)
             let burden = if allAttemptsKnown && observedTicks>0I then Some(exactRatio retryTicks observedTicks) else None

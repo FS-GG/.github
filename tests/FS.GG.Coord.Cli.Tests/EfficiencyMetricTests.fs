@@ -25,8 +25,10 @@ module EfficiencyMetricTests =
     let private job item attempt id created started completed =
         $"""{{"kind":"ci-job","identity":"job-{id}-{item}","itemId":"{item}","revision":0,"repository":"o/r","runId":10,"attempt":{attempt},"jobId":{id},"name":"build","status":"completed","conclusion":"success","createdAt":{created},"startedAt":{started},"completedAt":{completed}}}"""
     let private timestamp value = JsonSerializer.Serialize(value:string)
+    let private binding item =
+        $"""{{"kind":"ci-binding","identity":"binding-{item}","itemId":"{item}","revision":0,"collectionId":"collection-{item}","repository":"o/r","head":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","prNumber":7,"workflow":"ci.yml","featureId":"EFF","attemptId":"test","parentAttemptId":null,"producerStream":"ci-worker","binding":"exact"}}"""
     let private coverage item state =
-        $"""{{"kind":"ci-coverage","identity":"coverage-{item}","itemId":"{item}","revision":0,"collectionId":"collection","inventory":"{state}","attempts":"{state}","jobPages":"{state}","terminal":"{state}","timestamps":"{state}","lineage":"{state}","classification":"unknown","criticalPath":"unknown"}}"""
+        $"""{{"kind":"ci-coverage","identity":"coverage-{item}","itemId":"{item}","revision":0,"collectionId":"collection-{item}","inventory":"{state}","attempts":"{state}","jobPages":"{state}","terminal":"{state}","timestamps":"{state}","lineage":"{state}","classification":"unknown","criticalPath":"unknown"}}"""
     let private export path =
         use compact = JsonDocument.Parse(TelemetryStoreApplication.compactDashboardSnapshot path approved None |> unwrap)
         TelemetryStoreApplication.efficiencyExport path approved (compact.RootElement.GetProperty("revision").GetString()) 200 1000 |> unwrap |> JsonDocument.Parse
@@ -45,7 +47,7 @@ module EfficiencyMetricTests =
         let created = timestamp "2026-10-06T00:00:00.250Z"
         let started = timestamp "2026-10-06T02:00:01.500+02:00"
         let ended = timestamp "2026-10-06T00:00:02.000Z"
-        ingest path "known" [run "A" 1;run "A" 2;coverage "A" "complete";job "A" 1 11 created started ended;job "A" 1 12 created started ended;job "A" 2 21 created started ended]
+        ingest path "known" [binding "A";run "A" 1;run "A" 2;coverage "A" "complete";job "A" 1 11 created started ended;job "A" 1 12 created started ended;job "A" 2 21 created started ended]
         use result = export path
         let incidence = metric result "retry-incidence" "ci-observed"
         let burden = metric result "retry-burden" "ci-observed"
@@ -63,7 +65,7 @@ module EfficiencyMetricTests =
         use cleanup = cleanup
         let first = timestamp "2026-10-06T00:00:00Z"
         let next = timestamp "2026-10-06T00:00:01Z"
-        ingest path "partial" [run "A" 1;run "A" 2;coverage "A" "partial";job "A" 1 11 first next next;job "A" 2 21 "null" next "null"]
+        ingest path "partial" [binding "A";run "A" 1;run "A" 2;coverage "A" "partial";job "A" 1 11 first next next;job "A" 2 21 "null" next "null"]
         use result = export path
         Assert.Equal("unknown",(metric result "retry-burden" "ci-observed").GetProperty("value").GetProperty("status").GetString())
         let wait = metric result "wait-time" "ci-observed"
@@ -76,7 +78,7 @@ module EfficiencyMetricTests =
         use cleanup = cleanup
         let first = timestamp "2026-10-06T00:00:00Z"
         let next = timestamp "2026-10-06T00:00:01Z"
-        let events = [run "A" 1;coverage "A" "complete";job "A" 1 11 first next next]
+        let events = [binding "A";run "A" 1;coverage "A" "complete";job "A" 1 11 first next next]
         ingest path "initial" events
         ingest path "replay" events
         use result = export path
@@ -89,7 +91,7 @@ module EfficiencyMetricTests =
         let cleanup,path = create ()
         use cleanup = cleanup
         let stamp = timestamp "2026-10-06T00:00:00Z"
-        ingest path "missing" [run "A" 2;coverage "A" "complete";job "A" 2 21 stamp stamp stamp]
+        ingest path "missing" [binding "A";run "A" 2;coverage "A" "complete";job "A" 2 21 stamp stamp stamp]
         use result = export path
         Assert.Equal("unknown",(metric result "retry-incidence" "ci-observed").GetProperty("value").GetProperty("status").GetString())
         Assert.Equal("unknown",(metric result "first-pass-delivery" "native-item").GetProperty("value").GetProperty("status").GetString())
@@ -102,8 +104,19 @@ module EfficiencyMetricTests =
         let first = timestamp "2026-10-06T00:00:00Z"
         let next = timestamp "2026-10-06T00:00:01Z"
         let ended = timestamp "2026-10-06T00:00:02Z"
-        ingest path "group" [population "A";population "B";run "A" 1;run "B" 2;coverage "A" "complete";job "A" 1 11 first next ended;job "B" 2 21 first next ended]
+        ingest path "group" [population "A";population "B";binding "A";binding "B";coverage "B" "complete";run "A" 1;run "B" 2;coverage "A" "complete";job "A" 1 11 first next ended;job "B" 2 21 first next ended]
         use result = export path
         Assert.Equal(1,result.RootElement.GetProperty("items").GetArrayLength())
         Assert.Equal("GROUP",result.RootElement.GetProperty("items")[0].GetProperty("itemId").GetString())
         ratio 1L 2L (metric result "retry-burden" "ci-observed")
+
+    [<Fact>]
+    let ``unbound collection completeness cannot establish the selected run population`` () =
+        let cleanup,path = create ()
+        use cleanup = cleanup
+        let first = timestamp "2026-10-06T00:00:00Z"
+        let next = timestamp "2026-10-06T00:00:01Z"
+        ingest path "unbound" [run "A" 1;coverage "A" "complete";job "A" 1 11 first next next]
+        use result = export path
+        Assert.Equal("unknown",(metric result "retry-incidence" "ci-observed").GetProperty("value").GetProperty("status").GetString())
+        Assert.Equal("partial",(metric result "wait-time" "ci-observed").GetProperty("value").GetProperty("status").GetString())
