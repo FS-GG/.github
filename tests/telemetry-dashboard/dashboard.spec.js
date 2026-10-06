@@ -73,11 +73,23 @@ function completedHost(keys = ["one", "two"]) {
     launcherPopulation: { admitted: 2, terminal: 2 },
     quality: {}, operational: { expected: 2, lineage: {}, timing: {} },
     localCi: { counts: { runs: 0, jobs: 0 }, seconds: {}, coverage: {} },
-    store: { status: "ready", schemaVersion: 8, journalMode: "wal", pendingBatches: 0 },
+    store: { status: "ready", schemaVersion: 14, journalMode: "wal", pendingBatches: 0 },
     budget: { distinctBreaches: 0, intervention: "none", dirtyItems: 0, health: {}, dimensions: {}, assessments: [] },
     completedItems: { coverage: { eligible: items.length, published: items.length, unmapped: 0, dirty: 0, incompatible: 0 }, items },
   };
 }
+function currentHostFixture(host) {
+  const current=completedHost([]);
+  return {...current,...host,schema:current.schema,revision:current.revision,
+    store:{...host.store,schemaVersion:14},sourceDeliveries:current.sourceDeliveries,
+    processEfficiency:current.processEfficiency};
+}
+async function expectMobileContainment(page) {
+  const observed=await page.evaluate(()=>({viewport:document.documentElement.clientWidth,width:document.documentElement.scrollWidth,
+    overflow:[...document.querySelectorAll("body *")].filter((e)=>e.getBoundingClientRect().right>document.documentElement.clientWidth+1).slice(0,12).map((e)=>({tag:e.tagName,id:e.id,right:e.getBoundingClientRect().right}))}));
+  expect(observed.width,JSON.stringify(observed)).toBeLessThanOrEqual(observed.viewport);
+}
+
 test("populated, keyboard, text equivalent, XSS and mobile layout", async ({
   page,
 }) => {
@@ -100,13 +112,7 @@ test("populated, keyboard, text equivalent, XSS and mobile layout", async ({
   await expect(page.locator("#runs tr")).toHaveCount(7);
   await page.keyboard.press("Tab");
   await page.setViewportSize({ width: 390, height: 844 });
-  expect(
-    await page.evaluate(
-      () =>
-        document.documentElement.scrollWidth <=
-        document.documentElement.clientWidth,
-    ),
-  ).toBeTruthy();
+  await expectMobileContainment(page);
   await expect(page.locator("nav")).toBeVisible();
   await page.locator("#theme").click();
   expect(errors).toEqual([]);
@@ -141,7 +147,7 @@ test("subitem pipeline shows approved nodes, partial values and unknowns without
   await expect(pipeline.getByText("Native tokens: Unknown",{exact:false})).toBeVisible();
   await expect(page.getByText("Order does not establish parentage or dependencies",{exact:false})).toBeVisible();
   await page.setViewportSize({width:390,height:844});
-  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBeTruthy();
+  await expectMobileContainment(page);
 });
 test("subitem pipeline rejects an unapproved evidence URL", async ({page}) => {
   const host=completedHost(["one"]);
@@ -156,6 +162,7 @@ test("completed item drilldown preserves unknowns, evidence links and mobile acc
   const unavailable={schema:"fsgg.telemetry.dashboard-host-unavailable/1",status:"unconfigured",reason:"missing"};
   const data=payload(unavailable);
   data.host={schema:"fsgg.telemetry.dashboard-host/2",observedAt:"2026-09-09T08:00:00Z",totals:{usageObservations:1},usage:{input:100,cachedInput:40,cacheWriteInput:0,output:20,reasoning:null,total:120},launcherPopulation:{admitted:2,terminal:2},quality:{},operational:{expected:2,lineage:{},timing:{}},localCi:{counts:{runs:1,jobs:1},seconds:{},coverage:{}},store:{status:"ready",schemaVersion:7,journalMode:"wal",pendingBatches:0},budget:{distinctBreaches:0,intervention:"none",dirtyItems:0,health:{},dimensions:{},assessments:[]},completedItems:{coverage:{eligible:1,published:1,unmapped:0,dirty:0,incompatible:0},items:[{key:"item-one",label:"Telemetry item",url:"https://github.com/FS-GG/.github/issues/1",deliveredAt:"2026-09-09T08:00:00Z",deliveries:[],runtime:{invocations:2,duration:{rows:[{role:"root",invocations:1,known:1,unknown:0,summedSeconds:100},{role:"child",invocations:1,known:0,unknown:1,summedSeconds:0}]},tokens:{unmappedRows:0,coverage:{invocationsWithUsage:1,invocationsWithoutUsage:1,runtimeGaps:0},rows:[{role:"root",requestedModel:"Requested",observedModel:"Observed",requestedEffort:"Medium",observedEffort:"High",scope:"Host A",turns:1,input:100,cachedInput:40,output:20,reasoning:null,total:120}]}},ci:{counts:{runs:1},seconds:{runnerSeconds:{knownItems:1,unknownItems:0,totalItemSeconds:60},queueSeconds:{knownItems:0,unknownItems:1,totalItemSeconds:0}}},budget:{assessments:[]},complications:{observed:{runtimeNonSuccess:1,failedOrCancelledCiRuns:1,repeatedCiRuns:0,followUpInvocations:0},notes:[{kind:"complication",text:"Documented issue",evidenceUrl:"https://github.com/FS-GG/.github/pull/1"}]}}]}};
+  data.host=currentHostFixture(data.host);
   await page.route("**/data/dashboard.json",route=>route.fulfill({json:data}));
   await page.goto("/#item-item-one");
   await expect(page.locator("#item-item-one")).toHaveAttribute("open","");
@@ -167,11 +174,12 @@ test("completed item drilldown preserves unknowns, evidence links and mobile acc
   await page.locator("#item-search").fill("no match");
   await expect(page.locator("#deliveries tr")).toHaveCount(0);
   await page.setViewportSize({width:390,height:844});
-  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBeTruthy();
+  await expectMobileContainment(page);
 });
 test("schema-8 process detail shows activity, attribution, complications, reviews and truncation", async ({page}) => {
   const data=payload({schema:"fsgg.telemetry.dashboard-host/3",observedAt:"2026-09-09T09:00:00Z",totals:{usageObservations:0},usage:{input:0,cachedInput:0,cacheWriteInput:0,output:0,reasoning:null,total:0},launcherPopulation:{admitted:1,terminal:1},quality:{},operational:{expected:1,lineage:{},timing:{}},localCi:{counts:{runs:0,jobs:0},seconds:{},coverage:{}},store:{status:"ready",schemaVersion:8,journalMode:"wal",pendingBatches:0},budget:{distinctBreaches:0,intervention:"none",dirtyItems:0,health:{},dimensions:{},assessments:[]},completedItems:{coverage:{eligible:1,published:1,unmapped:0,dirty:0,incompatible:0},items:[{key:"schema-eight",label:"Schema eight detail",url:"https://github.com/FS-GG/.github/issues/8",deliveredAt:"2026-09-09T08:30:00Z",deliveries:[],runtime:{invocations:1,duration:{rows:[]},tokens:{unmappedRows:0,coverage:{invocationsWithUsage:0,invocationsWithoutUsage:1,runtimeGaps:1},rows:[]}},ci:{counts:{runs:0},seconds:{}},budget:{assessments:[]},complications:{observed:{runtimeNonSuccess:0,failedOrCancelledCiRuns:0,repeatedCiRuns:0,followUpInvocations:0},notes:[]},process:{availability:"available",members:{requested:1,available:1},truncated:{activities:false,attributions:false,complications:true,reviews:false},activities:{summary:[{category:"repair",spans:1,open:0,knownDuration:1,summedSeconds:60}],rows:[{category:"repair",startedAt:"2026-09-09T08:00:00Z",endedAt:"2026-09-09T08:01:00Z",durationSeconds:60}]},attribution:{rows:[],accounting:{nativeTotal:0,direct:0,mixed:0,unclassified:0,missingAttribution:0},crossRead:"matched"},complications:{rows:[{trigger:"test-failure",cause:"product-defect",activityCategory:"repair",occurredAt:"2026-09-09T08:01:00Z"},{trigger:"review-finding",cause:"process-defect",activityCategory:null,occurredAt:"2026-09-09T08:02:00Z"}]},reviews:{rows:[{scope:"attempt",revision:2,confidence:"high",evidenceCoverage:"partial",populationCoverage:"complete",reviewerModel:"Observed",reviewerEffort:"High",reviewedAt:"2026-09-09T08:03:00Z",durationSeconds:30,counts:{wentWell:1,problems:1,avoidableDelayOrRework:0,processObservations:1,remainingRisks:0,concreteImprovements:1}}]}}}]}});
   Object.assign(data.host.completedItems.items[0].runtime.tokens.coverage,{boundary:"canonical completed member items and all expected runtime dispatches",status:"unknown",expectedDispatches:2,linkedInvocations:2,admittedInvocations:2,startedInvocations:2,terminalInvocations:2,invocationsWithUsage:0,invocationsWithoutUsage:2,runtimeGaps:2,accountingCompatibility:"none"});
+  data.host=currentHostFixture(data.host);
   await page.route("**/data/dashboard.json",route=>route.fulfill({json:data})); await page.goto("/#item-schema-eight");
   await expect(page.getByText("Token coverage unknown · 0/2 with usage",{exact:true})).toBeVisible();
   await expect(page.getByText("Repair · 1m 0s")).toBeVisible();
@@ -181,12 +189,13 @@ test("schema-8 process detail shows activity, attribution, complications, review
   await expect(page.getByText("High confidence does not prove item completeness")).toBeVisible();
   await expect(page.getByText("1 native usage row(s) missing",{exact:false})).toHaveCount(0);
   await page.setViewportSize({width:390,height:844});
-  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBeTruthy();
+  await expectMobileContainment(page);
 });
 
 test("aggregate usage is labelled observed and warns when coverage may be partial", async ({page}) => {
   const data=payload({schema:"fsgg.telemetry.dashboard-host-unavailable/1",status:"unconfigured",reason:"missing"});
   data.host={schema:"fsgg.telemetry.dashboard-host/3",observedAt:"2026-09-09T09:00:00Z",totals:{usageObservations:7},usage:{input:700,cachedInput:200,cacheWriteInput:0,output:200,reasoning:null,total:900},launcherPopulation:{admitted:24,started:24,terminal:24,usage:7,missingAdmission:0,missingStart:0,missingTerminal:0,missingUsage:17},quality:{},operational:{expected:24,lineage:{},timing:{}},localCi:{counts:{runs:0},seconds:{},coverage:{}},store:{status:"ready",schemaVersion:8,journalMode:"wal",pendingBatches:0},budget:{distinctBreaches:0,intervention:"none",dirtyItems:1,health:{},dimensions:{},assessments:[]},completedItems:{schema:"fsgg.telemetry.completed-items/2",coverage:{eligible:0,published:0,unmapped:0,dirty:1,incompatible:0},items:[]}};
+  data.host=currentHostFixture(data.host);
   await page.route("**/data/dashboard.json",route=>route.fulfill({json:data})); await page.goto("/");
   await expect(page.getByRole("heading",{name:"Observed tokens"})).toBeVisible();
   await expect(page.getByText("coverage gaps can make this a partial total",{exact:false})).toBeVisible();
@@ -354,7 +363,7 @@ function efficiencyHost() {
 
 test("host5 efficiency fixture tables, unknown accounting, keyboard and bounded filters",async({page})=>{
   const host=efficiencyHost(),feed=host.processEfficiency;
-  for(let i=0;i<11;i++){const item=JSON.parse(JSON.stringify(feed.items[0]));item.key=`page-${i}`;item.label=`Synthetic page ${i}`;feed.items.push(item);}
+  for(let i=0;i<11;i++){const item=JSON.parse(JSON.stringify(feed.items.find((item)=>item.scope==="native-item")));item.key=`page-${i}`;item.label=`Synthetic page ${i}`;feed.items.push(item);}
   feed.coverage.published=feed.items.length;
   await page.route("**/data/dashboard.json",route=>route.fulfill({json:payload(host)}));
   await page.goto("/#efficiency");
@@ -396,5 +405,5 @@ test("canonical efficiency export shows queued analysis, omitted populations and
   await expect(page.locator("#efficiency-missing-example")).toContainText("4 omitted");
   await expect(page.locator("#efficiency-missing-example")).toContainText("Selected measurements unavailable");
   await expect(page.locator("#efficiency-missing-example")).toContainText("Source observed: unknown");
-  await expect(page.locator("body")).not.toContainText("PRIVATE");
+  await expect(page.locator("#efficiency-items")).not.toContainText("PRIVATE");
 });

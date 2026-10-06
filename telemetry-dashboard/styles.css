@@ -708,6 +708,9 @@ footer {
     padding-top: 0.55rem;
     border-top: 1px solid var(--line);
     justify-content: space-around;
+    flex-wrap: wrap;
+    gap: .55rem .8rem;
+    min-width: 0;
   }
   .icon-button {
     margin-left: auto;

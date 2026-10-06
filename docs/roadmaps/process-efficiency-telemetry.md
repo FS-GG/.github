@@ -144,8 +144,10 @@ does not establish live acceptance during a version mismatch.
 The source includes native keyboard controls, search/scope/measurement filters, ten-item pages,
 accessible table captions/headings and the existing last-valid-feed fallback. Fourteen focused
 projection checks and twelve export-consumer checks pass. The latest full Python run had 122 passes and
-one expected stale two-UID proof digest failure (123 tests); a new actual proof must qualify final exporter bytes. Three additional browser tests
-are authored but have not run at this checkpoint. No publication, installation or native/store
+one expected stale two-UID proof digest failure (123 tests); a new actual proof must qualify final exporter bytes. Sixteen browser cases reached genuine bounded execution: nine passed and seven failed.
+The failed window remains failed; fixes address mobile navigation wrapping, three obsolete positive
+host fixtures and two incorrect test expectations. A prior observer failure is retained separately.
+No passing browser qualification is claimed until the corrected exact bytes complete a fresh run. No publication, installation or native/store
 qualification is claimed from source fixtures.
 
 The .2/.3 owners agreed a separate read-only `telemetry efficiency-export` batch interface.
