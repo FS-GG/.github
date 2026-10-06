@@ -52,7 +52,10 @@ def assemble(subject, records, metrics, coverage, omissions=(), max_bytes=24000)
         raise ValueError('packet bound invalid')
     if len(metrics) > 32 or len(omissions) > 31:
         raise ValueError('packet collection bound exceeded')
+    if len(records) > 4096:
+        raise ValueError('source record population exceeds preparation bound')
     selected = {}
+    seen = {}
     analysis_usage = []
     for row in records:
         if row['itemId'] != subject['itemId']:
@@ -64,6 +67,10 @@ def assemble(subject, records, metrics, coverage, omissions=(), max_bytes=24000)
         if row['analysisGenerated']:
             analysis_usage.append(ref)
             continue
+        versioned = (*identity, ref['revision'])
+        if versioned in seen and seen[versioned] != encode(row):
+            raise ValueError('conflicting canonical revision')
+        seen[versioned] = encode(row)
         previous = selected.get(identity)
         if previous and previous['ref']['revision'] == ref['revision'] and encode(previous) != encode(row):
             raise ValueError('conflicting canonical revision')

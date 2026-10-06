@@ -88,6 +88,10 @@ class AssessmentTests(unittest.TestCase):
         conflict['payload']['stage'] = 'conflict'
         with self.assertRaises(ValueError):
             a.assemble(output['subject'], [newer, conflict], [], output['coverage'])
+        old_conflict = copy.deepcopy(base)
+        old_conflict['payload']['stage'] = 'old-conflict'
+        with self.assertRaises(ValueError):
+            a.assemble(output['subject'], [newer, base, old_conflict], [], output['coverage'])
         analyst = dict(ref=dict(id='analyst', kind='usage', revision=1), itemId='A', payload={}, priority='other', analysisGenerated=True)
         with_analyst = a.assemble(output['subject'], packet['records'] + [analyst], [], output['coverage'])
         without = a.assemble(output['subject'], packet['records'], [], output['coverage'])
