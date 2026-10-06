@@ -5596,6 +5596,13 @@ WHERE n.source_ref=$source;
                             content["items"] <- arrayOfStrings selectedItems
                             content["summaries"] <- summaries
 
+                            let learningRows =
+                                if compactCi then
+                                    JsonArray()
+                                else
+                                    rows
+                                        ($"SELECT o.sequence AS ingest_order,a.producer AS receipt_producer,a.stream AS receipt_stream,a.authority_role AS receipt_role,a.grant_id AS receipt_grant_id,a.grant_generation AS receipt_grant_generation,a.receipt_key,a.envelope_digest AS receipt_envelope_digest,f.identity,f.kind,f.item_id,f.revision,f.content_digest,f.canonical FROM ingest_facts f LEFT JOIN learning_fact_order o ON o.identity=f.identity LEFT JOIN fact_admissions a ON a.identity=f.identity WHERE f.kind IN ('learn-task-snapshot','learn-context-manifest','learn-experiment-assignment','learn-accounting-inventory/1','runtime-native-inventory/1','runtime-native-inventory-source/1','learn-shared-cost/1','learn-shared-cost-allocation/1','learn-shared-cost-authority/1','learn-native-delivery-source/1','learn-installed-origin/1')%s{learningFactItemFilter} ORDER BY f.item_id,f.kind,f.identity LIMIT 10001;")
+
                             [
                                 "populations",
                                 table "budget_population_facts" "item_id,fact_revision DESC,identity DESC"
@@ -5633,9 +5640,7 @@ WHERE n.source_ref=$source;
                                 table "activity_usage_attributions" "item_id,usage_identity"
                                 "complications", table "complication_events" "item_id,occurred_at,identity"
                                 "reviews", table "process_reviews" "item_id,scope,attempt_id,fact_revision"
-                                "learningObservations",
-                                (if compactCi then JsonArray() else rows
-                                    ($"SELECT o.sequence AS ingest_order,a.producer AS receipt_producer,a.stream AS receipt_stream,a.authority_role AS receipt_role,a.grant_id AS receipt_grant_id,a.grant_generation AS receipt_grant_generation,a.receipt_key,a.envelope_digest AS receipt_envelope_digest,f.identity,f.kind,f.item_id,f.revision,f.content_digest,f.canonical FROM ingest_facts f LEFT JOIN learning_fact_order o ON o.identity=f.identity LEFT JOIN fact_admissions a ON a.identity=f.identity WHERE f.kind IN ('learn-task-snapshot','learn-context-manifest','learn-experiment-assignment','learn-accounting-inventory/1','runtime-native-inventory/1','runtime-native-inventory-source/1','learn-shared-cost/1','learn-shared-cost-allocation/1','learn-shared-cost-authority/1','learn-native-delivery-source/1','learn-installed-origin/1')%s{learningFactItemFilter} ORDER BY f.item_id,f.kind,f.identity LIMIT 10001;"))
+                                "learningObservations", learningRows
                             ]
                             |> List.iter (fun (name, value) ->
                                 if not compactCi || not (Set.contains name (set [ "ciJobs"; "ciSteps"; "ciCoverage"; "ciPopulationCoverage"; "learningObservations" ])) then
