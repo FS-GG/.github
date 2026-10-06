@@ -194,8 +194,8 @@ This dispatch-only repository has no PR/push coherent workflow; its source quali
 not substitute for the later hosted provider control.
 
 Fresh [provider staging 37410297466](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/37410297466)
-passed at the protected helper source. Artifact intake and exact member comparisons are still
-required before assigning its provenance to the private input roles. The original failed P4
+passed at the protected helper source. Intake verified the complete artifact archive and all nine
+members; the three provider staging roles exactly matched their prepared inputs. The original failed P4
 facts attempt and consumed effects remain unchanged. Fresh candidate facts, private facts/grants,
 canonical publication, installed receivers and Drivers distribution remain pending under .4.
 

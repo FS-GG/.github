@@ -56,6 +56,21 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-06: Governance Config consumer repair delivered; publication pending.**
+[Governance PR444](https://github.com/FS-GG/FS.GG.Governance/pull/444) merged at
+`dbbffb5f659c0c33ddcc35aa07aa4557cca37eb2` through the normal routine boundary
+after coherent qualification. Its exact source `ea59bf66a72d960ece30e5cca7adf120db41c639`
+fixes duplicate NuGet aliases for a selected nuget.org dependency feed while preserving
+Config archive isolation and distinct-endpoint mappings. The selected hosted reruns
+passed; original runner-acquisition failures remain historical. The real package-only
+consumer passed all eight commands against the original Config0.3.0 archive
+`01766c48ecc9653011ddeff3f63528b13171bd1a6248ff348877dd39086f5d31`, packed once from
+`734752039a7d1bab53d0faab0db2da5b661a67f2` after cold locked restore and83 tests.
+No Config repack or publication occurred. The separate unmerged C2 observer/MVU
+candidate is not part of this source closure. Final C2 execution, changed SDD package
+compatibility, coherent producer publication and independent installed/readback gates
+remain open; C1-only SDD publication is not selected.
+
 **2026-10-06: V2-DIAG-01 canonical candidate and provider diagnostic source delivered.**
 [Coordination #945](https://github.com/FS-GG/FS.GG.Coordination/pull/945) delivered the
 protected helper and dormant publisher binding. The genuine canonical `0.2.1` preparation
