@@ -56,6 +56,21 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-06: Efficiency analysis-status UI source landed and browser fixtures qualified.**
+[PR #4279](https://github.com/FS-GG/.github/pull/4279) merged exact head
+`2a0798522bde096d4df438deec25d49075ff9d3a` as
+`349a390695d51563c9a204460f442e0fde4f3c6d` at 17:42:23 UTC. Collapsed cards show the current
+analysis state, with status filtering and counts limited to approved rows matching item/scope
+filters. Queued requests remain distinct from prior ready assessments; unavailable exports clear
+counts. Canonical provenance wraps without truncating revision or fingerprint text. Parent-selected
+qualification of UI/test source `e6076710986784db112415e3d464a1828c2be665` passed all 20 browser
+cases in 13.136 seconds, with no skips, retries or unexpected results, clean custody and no resource
+failure; the final head adds only that owning-plan readback. Earlier refused/failed attempts remain
+retained. This source closure does not establish schema-14 collection, installed 0.99/Host 0.5 or
+live Efficiency. Completed items and source deliveries retain their separate semantics, and full
+[V2-EFF-01.4/.6](roadmaps/process-efficiency-telemetry.md#v2-eff-014--publish-useful-dashboard-explanations)
+acceptance remains open. Matched Pages/feed deployment and public readback are separate gates.
+
 **2026-10-06: Standalone host-5 dashboard installed and live; efficiency remains unavailable.**
 [PR #4273](https://github.com/FS-GG/.github/pull/4273) merged at
 `ba5e8e0a627a6c24a8c82fecfd3b6eb9216ea8fd`. The installed standalone dashboard script uses the
