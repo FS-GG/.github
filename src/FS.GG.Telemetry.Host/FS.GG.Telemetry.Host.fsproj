@@ -49,6 +49,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../FS.GG.Telemetry.Contracts/FS.GG.Telemetry.Contracts.fsproj" />
+    <ProjectReference Include="../FS.GG.Telemetry.Client/FS.GG.Telemetry.Client.fsproj" />
     <ProjectReference Include="../FS.GG.Telemetry.Dashboard/FS.GG.Telemetry.Dashboard.fsproj" />
     <ProjectReference Include="../FS.GG.Telemetry.Store/FS.GG.Telemetry.Store.fsproj" />
     <ProjectReference Include="../FS.GG.Coord.GitHub/FS.GG.Coord.GitHub.fsproj" />

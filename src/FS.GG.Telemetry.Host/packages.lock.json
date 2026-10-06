@@ -147,6 +147,13 @@
           "FSharp.Core": "[10.1.401, )"
         }
       },
+      "fs.gg.telemetry.client": {
+        "type": "Project",
+        "dependencies": {
+          "FS.GG.Telemetry.Contracts": "[1.0.0, )",
+          "FSharp.Core": "[10.1.401, )"
+        }
+      },
       "fs.gg.telemetry.contracts": {
         "type": "Project",
         "dependencies": {
