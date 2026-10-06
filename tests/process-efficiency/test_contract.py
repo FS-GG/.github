@@ -75,7 +75,7 @@ def calculate(fixture):
         touch, wait = clip(fixture['touch']), clip(fixture['wait'])
         overlap = [(max(a, c), min(b, d)) for a, b in touch for c, d in wait if min(b, d) > max(a, c)]
         touched = union(touch)
-        return encode(dict(elapsed=end-start, observedSpan=sum(b-a for a,b in fixture['touch']), touchUnion=touched, waitUnion=union(wait), touchWaitOverlap=union(overlap) if touch and wait else None, flowRatio=Fraction(touched, end-start) if touched is not None and end > start else None))
+        return encode(dict(elapsed=end-start, observedSpan=sum(b-a for a,b in fixture['touch']), touchUnion=touched, waitUnion=union(wait), touchWaitOverlap=(union(overlap) or 0) if touch and wait else None, flowRatio=Fraction(touched, end-start) if touched is not None and end > start else None))
     if kind == 'attempts':
         total = retried = count = additional = same = changed = 0
         complete = True
@@ -213,7 +213,7 @@ def assessment_check(value, metric_ids):
     key=hashlib.sha256(json.dumps([lookup(path) for path in fields],separators=(',',':'),ensure_ascii=True).encode()).hexdigest()
     if key != value['lifecycle']['idempotencyKey']:
         raise ValueError('wrong idempotency join')
-    if value['subject']['outcomeEpoch'] is None and value['lifecycle']['state']=='ready':
+    if value['subject']['outcomeEpoch'] is None and value['lifecycle']['state'] not in {'pending','partial'}:
         raise ValueError('unknown outcome epoch cannot qualify ready')
     if value['subject']['scope']=='provisional-delivery':
         if value['lifecycle']['itemReviewRef'] is not None or value['lifecycle']['state']=='ready':
@@ -337,7 +337,7 @@ class ContractTests(unittest.TestCase):
             with self.assertRaises(ValueError):assessment_check(bad,{'metric-observed-a'})
 
     def test_declared_producer_shapes_and_conservation(self):
-        for group,file in [('allocationInputSamples','allocation-input-v1.schema.json'),('episodeInputSamples','episode-input-v1.schema.json'),('assessmentInputSamples','assessment-input-v1.schema.json')]:
+        for group,file in [('allocationInputSamples','allocation-input-v1.schema.json'),('episodeInputSamples','episode-input-v1.schema.json'),('assessmentInputSamples','assessment-input-v1.schema.json'),('analysisRequestInputSamples','analysis-request-input-v1.schema.json'),('analysisClaimInputSamples','analysis-claim-input-v1.schema.json'),('analysisSettleInputSamples','analysis-settle-input-v1.schema.json')]:
             schema=json.loads((ROOT/'contracts/process-efficiency'/file).read_text())
             for sample in FIXTURES[group]:schema_check(sample,schema)
         sample=copy.deepcopy(FIXTURES['allocationInputSamples'][0])
@@ -355,6 +355,40 @@ class ContractTests(unittest.TestCase):
             with self.assertRaises(ValueError):metric_check(bad)
         clocks=[row for row in FIXTURES['metricSamples'] if row['metric']=='data-health']
         self.assertEqual({row['healthDimension']:row['value']['numerator'] for row in clocks},{'source-age':100,'ingestion-age':10,'publication-age':2})
+
+    def test_queue_preselection_and_cas_budget_contract(self):
+        request=FIXTURES['analysisRequestInputSamples'][0]
+        schema=json.loads((ROOT/'contracts/process-efficiency/analysis-request-input-v1.schema.json').read_text())
+        schema_check(request,schema)
+        for name in ['modelAlias','claimant','invocationRef']:
+            self.assertIsNone(request[name])
+            bad=copy.deepcopy(request);bad[name]='invented'
+            with self.assertRaises(ValueError):schema_check(bad,schema)
+        claim=FIXTURES['analysisClaimInputSamples'][0]
+        self.assertIsNone(claim['invocationRef'])
+        self.assertEqual(claim['dispatchRef']['kind'],'expected-dispatch')
+        # Pure CAS oracle: revision+digest admission, single claimant, cross-scope original budget.
+        current={'revision':0,'digest':'pending-digest','state':'pending','claim':None}
+        used=0
+        def claim_once(revision,digest,claimant):
+            nonlocal used
+            if revision!=current['revision'] or digest!=current['digest'] or current['state']!='pending':
+                raise ValueError('stale or concurrent claim')
+            if used>=3:raise ValueError('original epoch budget exhausted')
+            used+=1;current.update(revision=revision+1,digest='claim-digest',state='claimed',claim=claimant)
+        claim_once(0,'pending-digest','claim-a')
+        for args in [(0,'pending-digest','claim-b'),(1,'claim-digest','claim-b')]:
+            with self.assertRaises(ValueError):claim_once(*args)
+        # Unknown invocation consumes reservation and cannot become a retryable pending request.
+        current.update(revision=2,digest='unknown-digest',state='failed')
+        with self.assertRaises(ValueError):claim_once(2,'unknown-digest','retry-a')
+        self.assertEqual(used,1)
+        for scope in ['provisional-delivery','native-item']:
+            current.update(revision=0,digest='pending-digest',state='pending')
+            claim_once(0,'pending-digest',scope)
+        current.update(revision=0,digest='pending-digest',state='pending')
+        with self.assertRaises(ValueError):claim_once(0,'pending-digest','extra-snapshot')
+        self.assertEqual(used,3)
 
     def test_metric_unknown_denominators_and_pricing(self):
         sample=copy.deepcopy(FIXTURES['metricSamples'][0])

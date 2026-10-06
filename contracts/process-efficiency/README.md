@@ -56,6 +56,16 @@ The new event kinds are exactly `efficiency-resource-allocation/1`,
 `efficiency-problem-episode/1` and `efficiency-assessment/1`. Their `/1` suffix versions the
 payload; the existing batch schema remains `fsgg.telemetry.ingest/1`. The adapter drops only the
 standalone input's `schema` key before embedding its exact event into existing `events[]`.
+The [request](analysis-request-input-v1.schema.json), [claim](analysis-claim-input-v1.schema.json)
+and [settle](analysis-settle-input-v1.schema.json) shapes select a finite canonical analysis queue
+under `efficiency-analysis-request/1`. Only engine-owned authenticated `telemetry efficiency analysis
+enqueue|claim|settle|inspect` commands may change its lifecycle; generic revision batches cannot claim
+or settle it. Claim CAS checks expected revision/content digest and reserves original per-item epoch
+budget across scopes before dispatch. Pending model/claim/invocation fields remain null. Claim binds
+a witnessed expected dispatch; actual invocation admission arrives through the existing started
+route after spawn. An unknown started effect consumes budget and cannot automatically retry.
+Settlement binds that actual invocation and admitted result; stale/conflicting results refuse.
+
 The selected .2 store extension is additive **schema 14**, with receiver-owned acceptance clocks;
 no migration or write is activated by this milestone. Existing readers and supported CI correction
 remain valid. The contract's `producerAdmission` specifies exact new-versus-existing joins.
@@ -136,7 +146,7 @@ Run the source-only checks, with no .NET, store, provider or browser dependency:
 python3 tests/process-efficiency/test_contract.py
 ```
 
-[Metric fixtures](../../tests/process-efficiency/metric-fixtures-v1.json) include twenty-two independently
+[Metric fixtures](../../tests/process-efficiency/metric-fixtures-v1.json) include twenty-three independently
 hand-calculated cases, final/provisional schema samples, exact allocation fractions, overlapping
 spans/waits, cancellations, same/changed-input retries, observation replay, zero acceptance, analyst
 cost, incomplete/late usage, reopen history, equal-revision conflict and supported correction.

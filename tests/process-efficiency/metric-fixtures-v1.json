@@ -700,6 +700,38 @@
         ]
       },
       "handCalculation": "At120: source120-20=100; ingestion10; publication2. Fresh publication cannot hide missing1of4producer."
+    },
+    {
+      "id": "disjoint-witnessed-touch-wait",
+      "kind": "time",
+      "window": [
+        0,
+        20
+      ],
+      "touch": [
+        [
+          0,
+          10
+        ]
+      ],
+      "wait": [
+        [
+          10,
+          20
+        ]
+      ],
+      "expected": {
+        "elapsed": 20,
+        "observedSpan": 10,
+        "touchUnion": 10,
+        "waitUnion": 10,
+        "touchWaitOverlap": 0,
+        "flowRatio": [
+          1,
+          2
+        ]
+      },
+      "handCalculation": "Both populations witnessed; touch[0,10] and wait[10,20] have known0overlap, not unknown.10/20=1/2."
     }
   ],
   "metricSamples": [
@@ -1649,6 +1681,110 @@
         "invocationRef": "invocation-a"
       },
       "observedAt": "2026-10-06T00:24:00Z"
+    }
+  ],
+  "analysisRequestInputSamples": [
+    {
+      "schema": "fsgg.telemetry.efficiency-analysis-request-input/1",
+      "kind": "efficiency-analysis-request/1",
+      "requestId": "484f80759365f4dc10c2af1113c69e00b4cdf789285e79675f757819adcaa0cc",
+      "subject": {
+        "itemId": "A",
+        "outcomeId": "source-a",
+        "outcomeEpoch": 1,
+        "scope": "provisional-delivery"
+      },
+      "evidenceDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "analysisPolicyVersion": "efficiency-analysis-policy/1",
+      "evidenceRefs": [
+        {
+          "id": "source-a",
+          "kind": "native-item-outcome",
+          "revision": 0,
+          "contentDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ],
+      "authority": {
+        "sourceIdentity": "synthetic-fixture",
+        "authorityRole": "completion-analyst",
+        "authorityRef": {
+          "id": "source-a",
+          "kind": "native-item-outcome",
+          "revision": 0,
+          "contentDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "rootDispatchRef": null,
+        "invocationRef": null
+      },
+      "nativeReviewRef": null,
+      "populationWitnessRefs": [],
+      "requestedAt": "2026-10-06T00:21:00Z",
+      "modelAlias": null,
+      "claimant": null,
+      "invocationRef": null
+    }
+  ],
+  "analysisClaimInputSamples": [
+    {
+      "schema": "fsgg.telemetry.efficiency-analysis-claim-input/1",
+      "cas": {
+        "requestId": "484f80759365f4dc10c2af1113c69e00b4cdf789285e79675f757819adcaa0cc",
+        "expectedRevision": 0,
+        "expectedContentDigest": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+      },
+      "claimId": "claim-a",
+      "modelAlias": "fixture-model",
+      "invocationRef": null,
+      "authority": {
+        "sourceIdentity": "synthetic-fixture",
+        "authorityRole": "completion-analyst",
+        "authorityRef": {
+          "id": "source-a",
+          "kind": "native-item-outcome",
+          "revision": 0,
+          "contentDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "rootDispatchRef": null,
+        "invocationRef": null
+      },
+      "claimedAt": "2026-10-06T00:22:00Z",
+      "dispatchRef": {
+        "id": "analyst-dispatch-a",
+        "kind": "expected-dispatch",
+        "revision": 0,
+        "contentDigest": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+      }
+    }
+  ],
+  "analysisSettleInputSamples": [
+    {
+      "schema": "fsgg.telemetry.efficiency-analysis-settle-input/1",
+      "cas": {
+        "requestId": "484f80759365f4dc10c2af1113c69e00b4cdf789285e79675f757819adcaa0cc",
+        "expectedRevision": 1,
+        "expectedContentDigest": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+      },
+      "claimId": "claim-a",
+      "state": "settled",
+      "resultAssessmentRef": "assessment-provisional-delivery",
+      "reason": null,
+      "usageRefs": [],
+      "invocationOutcome": "completed",
+      "reconciliationRefs": [],
+      "authority": {
+        "sourceIdentity": "synthetic-fixture",
+        "authorityRole": "completion-analyst",
+        "authorityRef": {
+          "id": "source-a",
+          "kind": "native-item-outcome",
+          "revision": 0,
+          "contentDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "rootDispatchRef": null,
+        "invocationRef": null
+      },
+      "settledAt": "2026-10-06T00:23:00Z",
+      "invocationRef": "analyst-invocation-a"
     }
   ]
 }

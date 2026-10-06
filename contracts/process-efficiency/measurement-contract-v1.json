@@ -36,7 +36,10 @@
     "metric": "fsgg.telemetry.efficiency-metric/1",
     "allocationInput": "fsgg.telemetry.efficiency-resource-allocation-input/1",
     "episodeInput": "fsgg.telemetry.efficiency-problem-episode-input/1",
-    "assessmentInput": "fsgg.telemetry.efficiency-assessment-input/1"
+    "assessmentInput": "fsgg.telemetry.efficiency-assessment-input/1",
+    "analysisRequestInput": "fsgg.telemetry.efficiency-analysis-request-input/1",
+    "analysisClaimInput": "fsgg.telemetry.efficiency-analysis-claim-input/1",
+    "analysisSettleInput": "fsgg.telemetry.efficiency-analysis-settle-input/1"
   },
   "axes": {
     "activity": [
@@ -392,6 +395,13 @@
         "inputSchema": "assessment-input-v1.schema.json",
         "wire": "existing fact identity=assessmentId; itemId=subject.itemId; revision=assessment.revision; assessment=exact frozen object; provenance=admitted producer context; no standalone schema key inside event",
         "scope": "native-item or provisional-delivery retained as distinct scopes; not a legacy ProcessReview kind"
+      },
+      "efficiency-analysis-request/1": {
+        "inputSchema": "analysis-request-input-v1.schema.json",
+        "writer": "existing authenticated canonical lifecycle commands only, engine-owned state journal; generic ingest events cannot enqueue/claim/settle or overwrite queue state",
+        "identity": "requestId equals existing subject/scope/snapshot/policy idempotency key",
+        "itemId": "subject.itemId",
+        "revision": "receiver-owned nonnegative monotonic CAS revision, not arbitrary producer event revision"
       }
     },
     "revision": "Canonical fact revision is nonnegative (legacy starts0); assessment revision positive. Current selection uses effective source revision/content digest at cutoff, not arrival time; equal revision conflicts refuse.",
@@ -432,5 +442,65 @@
       ],
       "packet": "Immutable private key.packet; state key.json. Idempotency binds declared subject/digest/policy; preserve invocation/budget failure state on restart. Missing authenticated canonical evidence cannot be replaced by the journal."
     }
+  },
+  "analysisLifecycle": {
+    "activation": "Inactive command/schema declarations; .2 implements canonical engine/store lifecycle in selected schema14. No permanent service.",
+    "commands": {
+      "enqueue": {
+        "route": "telemetry efficiency analysis enqueue --input <request.json> --config <private-host-config> --repository <owner/repo>",
+        "schema": "analysis-request-input-v1.schema.json",
+        "effect": "Atomic insert-or-readback of same stable request key and exact evidence/subject/policy. Same key/different bytes conflicts; existing current request returns without resetting state/budget."
+      },
+      "claim": {
+        "route": "telemetry efficiency analysis claim --input <claim.json> --config <private-host-config> --repository <owner/repo>",
+        "schema": "analysis-claim-input-v1.schema.json",
+        "effect": "Atomic pending\u2192claimed compare-and-swap over current revision+contentDigest under authenticated eligible producer. Reserve cross-scope item-epoch invocation budget and bind actually witnessed expected-dispatch custody in same transaction before model call. Actual invocationRef may be null until spawn/start observation; reserved dispatch is not native admission. Identical claim retry reads same receipt; alternate/stale claim refuses."
+      },
+      "settle": {
+        "route": "telemetry efficiency analysis settle --input <settle.json> --config <private-host-config> --repository <owner/repo>",
+        "schema": "analysis-settle-input-v1.schema.json",
+        "effect": "Atomic claimed\u2192settled/failed/unavailable CAS with current claimId/authenticated producer. Resolve actual invocationRef through existing expected-dispatch\u2192invocation-lineage/runtime-admission once started; completed/failed requires that actual join. Unknown missing invocation remains explicit with no retry. Result binds same admitted assessment subject/digest/policy; stale result cannot replace newer state."
+      },
+      "inspect": {
+        "route": "telemetry efficiency analysis inspect --request-id <key> --config <private-host-config> --repository <owner/repo>",
+        "effect": "Read canonical state+revision+contentDigest, nullable model/claim/invocation, applied receipt/acceptedAt, result and budget; missing key explicitly unavailable, not empty success."
+      }
+    },
+    "authority": "Enqueue requires current effective item/outcome, immutable snapshot and enrolled authenticated producer. Native scope additionally resolves existing root-admitted item review plus expected lineage, terminal and qualified usage witness refs. Provisional scope resolves source delivery without fabricated root review/terminal evidence. Claim/settle reuse this authority and actual existing producer association; supplied strings are not grants.",
+    "currentStateFields": [
+      "requestId",
+      "subject",
+      "evidenceDigest",
+      "analysisPolicyVersion",
+      "revision",
+      "contentDigest",
+      "state",
+      "modelAlias",
+      "claimant",
+      "claimId",
+      "invocationRef",
+      "requestedAt",
+      "claimedAt",
+      "settledAt",
+      "acceptedAt",
+      "usageRefs",
+      "resultAssessmentRef",
+      "reason",
+      "budgetUsed",
+      "dispatchRef"
+    ],
+    "states": [
+      "pending",
+      "claimed",
+      "settled",
+      "failed",
+      "unavailable"
+    ],
+    "unselectedModel": "Pending request modelAlias/claimant/invocation/claimId are null, never fabricated model provenance. Output assessment with selected analyst remains a separate record.",
+    "budget": "Existing one invocation per snapshot; one initial plus at most two automatic evidence revision invocation reservations per item/outcome epoch across native/provisional scopes, not per request. Null epoch pools by item/outcome identity until witnessed resolution; joining known epoch carries consumed reservations, never resets them.",
+    "budgetCharge": "Claim atomically reserves before dispatch. Failed and unknown invoked calls consume original budget; no automatic retry after an unknown started effect. Restart reconciles original invocation/receipt first. Only authenticated exact original invocation evidence proving no effect can release/reassign unused reservation under CAS; it is not a new retry allowance.",
+    "finalization": "Settlement result must be the admitted assessment for same subject/snapshot/policy/claim. Late usage updates deterministic metrics without triggering analyst loops or adding outcomes. Invalid/missing result remains explicit failed/partial without altering delivery.",
+    "rollback": "Disable further enqueue/claim while retaining pending state, failures, usage, source facts and prior results; existing delivery and correction authority continue.",
+    "nativeStartBoundary": "Existing begin publishes expected-dispatch before spawn; actual started publishes invocation-lineage/runtime-admission afterwards. Claim binds witnessed dispatch/prospective custody before call, not fabricated native admission. Lost claim-to-start is unknown until native reconciliation; cannot automatically relaunch."
   }
 }
