@@ -56,6 +56,14 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-06: Rendering receiver caller now binds the protected Templates candidate route.**
+[Rendering #1391](https://github.com/FS-GG/FS.GG.Rendering/pull/1391) merged at
+`67091200bc7bbcbb8189b2cf84244b2af919ecd1` after required checks and coherent validation passed.
+Its caller pins Templates `4eff52b27933c69a9ab4e276b3a29032d279b7e0`; static preflight
+rejects a mismatched Templates source. The original Stage C candidate archive is retained and verified.
+Full qualification across three browser families and four cases per family, publication and installed
+receiver acceptance remain open; the PR preflight does not establish those outcomes.
+
 **2026-10-06: SDD candidate Contracts custody source delivered; publication remains pending.**
 [SDD #1099](https://github.com/FS-GG/FS.GG.SDD/pull/1099) merged at
 `3297d3298fdd35579d9bcb09c65fdb7ad423a568` after required checks and coherent validation passed.
