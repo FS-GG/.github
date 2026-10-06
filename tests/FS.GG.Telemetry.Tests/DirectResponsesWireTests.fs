@@ -66,11 +66,19 @@ module DirectResponsesWireTests =
         let certificateRequest = CertificateRequest("CN=api.openai.com",key,HashAlgorithmName.SHA256)
         use certificate = certificateRequest.CreateSelfSigned(DateTimeOffset.UtcNow.AddMinutes(-1.),DateTimeOffset.UtcNow.AddMinutes(1.))
         let fingerprint = Convert.ToHexString(SHA256.HashData certificate.RawData).ToLowerInvariant()
-        let listener = TcpListener(IPAddress.Loopback,0)
+        let listener = new TcpListener(IPAddress.Loopback,0)
         listener.Start(4)
         let port = (listener.LocalEndpoint :?> IPEndPoint).Port
         use timeout = new CancellationTokenSource(TimeSpan.FromSeconds 10.)
         use stop = CancellationTokenSource.CreateLinkedTokenSource(timeout.Token)
+        use caller = CancellationTokenSource.CreateLinkedTokenSource(timeout.Token)
+        let received = TaskCompletionSource<unit>(TaskCreationOptions.RunContinuationsAsynchronously)
+        let retired = TaskCompletionSource<unit>(TaskCreationOptions.RunContinuationsAsynchronously)
+        let cancellation = task {
+            if scenario="cancel-after-count" then
+                do! received.Task.WaitAsync(timeout.Token)
+                caller.Cancel()
+        }
         let requests = ResizeArray<Request>()
         let mutable connections = 0
         let server = task {
@@ -84,37 +92,77 @@ module DirectResponsesWireTests =
                     do! stream.AuthenticateAsServerAsync(options,stop.Token)
                     let! request = readRequest stream stop.Token
                     requests.Add request
-                    let response =
-                        match scenario,request.Path with
-                        | "redirect",_ -> Some(reply "302 Found" "Location: https://api.openai.com/v1/replayed\r\n" "{}" None)
-                        | "authentication",_ -> Some(reply "401 Unauthorized" "WWW-Authenticate: Basic realm=fixture\r\n" "{}" None)
-                        | "count-reset",_ -> None
-                        | _,"/v1/responses/input_tokens" -> Some(reply "200 OK" "" count None)
-                        | "generation-reset",_ -> None
-                        | "generation-truncated",_ -> Some(reply "200 OK" "" "{" (Some 100))
-                        | _,"/v1/responses" -> Some(reply "200 OK" "" generation None)
-                        | _ -> invalidOp "unexpected fixed endpoint"
-                    match response with
-                    | Some bytes ->
-                        do! stream.WriteAsync(bytes.AsMemory(),stop.Token)
-                        do! stream.FlushAsync(stop.Token)
-                    | None -> socket.Client.LingerState <- LingerOption(true,0)
+                    if scenario="cancel-after-count" then
+                        // The complete count body is observed before cancellation. We do
+                        // not infer whether a real remote service would have computed it.
+                        received.TrySetResult(()) |> ignore
+                        let one = Array.zeroCreate<byte> 1
+                        let mutable closed = false
+                        try
+                            let! size = stream.ReadAsync(one.AsMemory(),stop.Token)
+                            if size<>0 then invalidOp "cancelled connection carried another application byte"
+                            closed <- true
+                        with
+                        | :? IOException as error ->
+                            match error.InnerException with
+                            | :? SocketException as socketError when
+                                socketError.SocketErrorCode=SocketError.ConnectionReset
+                                || socketError.SocketErrorCode=SocketError.ConnectionAborted -> closed <- true
+                            | _ -> raise error
+                        if closed then retired.TrySetResult(()) |> ignore
+                    else
+                        let response =
+                            match scenario,request.Path with
+                            | "redirect",_ -> Some(reply "302 Found" "Location: https://api.openai.com/v1/replayed\r\n" "{}" None)
+                            | "authentication",_ -> Some(reply "401 Unauthorized" "WWW-Authenticate: Basic realm=fixture\r\n" "{}" None)
+                            | "count-reset",_ -> None
+                            | _,"/v1/responses/input_tokens" -> Some(reply "200 OK" "" count None)
+                            | "generation-reset",_ -> None
+                            | "generation-truncated",_ -> Some(reply "200 OK" "" "{" (Some 100))
+                            | _,"/v1/responses" -> Some(reply "200 OK" "" generation None)
+                            | _ -> invalidOp "unexpected fixed endpoint"
+                        match response with
+                        | Some bytes ->
+                            do! stream.WriteAsync(bytes.AsMemory(),stop.Token)
+                            do! stream.FlushAsync(stop.Token)
+                        | None -> socket.Client.LingerState <- LingerOption(true,0)
             with
             | :? OperationCanceledException when stop.IsCancellationRequested -> ()
             | :? ObjectDisposedException when stop.IsCancellationRequested -> ()
             | :? SocketException when stop.IsCancellationRequested -> ()
         }
         let request = frozen()
+        let phase = DirectResponses.beginPhase()
         let mutable outcome : DirectResponses.Outcome option = None
+        let mutable executionFailure : exn option = None
         try
-            let! observed = DirectResponses.executeForTest (fun () -> DirectResponses.createLoopbackClientForTest port fingerprint)
-                                (DirectResponses.beginPhase()) request "fixture-key" timeout.Token
-            outcome <- Some observed
+            try
+                let! observed = DirectResponses.executeForTest (fun () -> DirectResponses.createLoopbackClientForTest port fingerprint)
+                                    phase request "fixture-key" caller.Token
+                outcome <- Some observed
+                if scenario="cancel-after-count" then
+                    do! cancellation.WaitAsync(timeout.Token)
+                    do! retired.Task.WaitAsync(timeout.Token)
+                    // The same original phase cannot be retried, even with a fresh token.
+                    let! replay = DirectResponses.executeForTest (fun () -> DirectResponses.createLoopbackClientForTest port fingerprint)
+                                      phase request "fixture-key" CancellationToken.None
+                    Assert.Contains("responses-phase-already-consumed",replay.Failure)
+            with error -> executionFailure <- Some error
         finally
             stop.Cancel()
             listener.Stop()
-        // Observes every accepted connection/task; no detached fixture work survives.
-        do! server
+        // Observe both tasks even if execution or the fixture fails; no detached work.
+        let mutable serverFailure : exn option = None
+        try
+            do! server
+        with error -> serverFailure <- Some error
+        let mutable cancellationFailure : exn option = None
+        try
+            do! cancellation
+        with error -> cancellationFailure <- Some error
+        match serverFailure,cancellationFailure,executionFailure with
+        | Some error,_,_ | _,Some error,_ | _,_,Some error -> raise error
+        | _ -> ()
         Assert.False(timeout.IsCancellationRequested,"wire fixture original10s deadline exhausted")
         let observed = Option.get outcome
         let expected = if List.contains scenario ["success";"generation-reset";"generation-truncated"] then 2 else 1
@@ -131,6 +179,15 @@ module DirectResponsesWireTests =
             Assert.DoesNotContain("Expect: 100-continue",actual.Header,StringComparison.OrdinalIgnoreCase)
         match scenario with
         | "success" -> Assert.Empty observed.Failure; Assert.Equal(DirectResponses.ResponseCaptured,observed.Stage)
+        | "cancel-after-count" ->
+            Assert.True(received.Task.IsCompletedSuccessfully)
+            Assert.True(retired.Task.IsCompletedSuccessfully)
+            Assert.True(caller.IsCancellationRequested)
+            Assert.Equal(DirectResponses.CountSent,observed.Stage)
+            Assert.True(observed.CountStatus.IsNone)
+            Assert.True(observed.GenerationStatus.IsNone)
+            Assert.True(observed.Response.IsNone)
+            Assert.Contains("responses-cancelled-or-original-deadline",observed.Failure)
         | "count-reset" -> Assert.Equal(DirectResponses.CountSent,observed.Stage);Assert.NotEmpty observed.Failure
         | "generation-reset" | "generation-truncated" -> Assert.Equal(DirectResponses.GenerationSent,observed.Stage);Assert.NotEmpty observed.Failure
         | _ -> Assert.Equal(DirectResponses.CountSent,observed.Stage);Assert.NotEmpty observed.Failure
@@ -145,3 +202,6 @@ module DirectResponsesWireTests =
     [<InlineData("generation-reset")>]
     [<InlineData("generation-truncated")>]
     let ``actual sockets wire sends no redirect authentication or ambiguous retry`` (scenario: string) = exercise scenario
+
+    [<Fact>]
+    let ``cancellation after actual count receipt retires owned wire without generation or retry`` () = exercise "cancel-after-count"
