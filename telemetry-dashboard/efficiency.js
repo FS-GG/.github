@@ -60,17 +60,19 @@
   function render(feed=current){
     current=feed;
     const body=$("efficiency-items"),open=new Set([...body.querySelectorAll("details[open]")].map((d)=>d.id));body.replaceChildren();
-    if(!feed||feed.status==="unavailable"){$("efficiency-health").textContent="Process efficiency unavailable: canonical measurement and assessment exports are not admitted. Runtime, cost and analysis remain unknown.";$("efficiency-page").textContent="No efficiency population available";$("efficiency-prev").disabled=true;$("efficiency-next").disabled=true;return;}
+    if(!feed||feed.status==="unavailable"){$("efficiency-health").textContent="Process efficiency unavailable: canonical measurement and assessment exports are not admitted. Runtime, cost and analysis remain unknown.";$("efficiency-analysis-counts").textContent="Analysis population unavailable; missing evidence does not establish zero work.";$("efficiency-page").textContent="No efficiency population available";$("efficiency-prev").disabled=true;$("efficiency-next").disabled=true;return;}
     $("efficiency-health").textContent=`Fixture preview · ${feed.coverage.published} approved items · ${feed.coverage.unmapped} unmapped · ${feed.coverage.withheld} withheld (${feed.coverage.unsupported} unsupported exact-quantity items). This is source qualification, with no installed or live acceptance. Producer/ingestion freshness remains unavailable.`;
     if(feed.source==="canonical-export")$("efficiency-health").textContent=`Canonical export · ${feed.coverage.published} approved items · ${feed.coverage.unmapped} unmapped · ${feed.coverage.withheld} withheld (${feed.coverage.unsupported} unsupported exact-quantity items). ${feed.exports.map((s)=>`${s.key}: ${s.selection.returned} source items / ${s.selection.omitted} omitted; ${s.metricSelection.returned} metrics / ${s.metricSelection.omitted} omitted; cutoff ${s.cutoff}; observed ${s.observedAt}; base ${s.baseSnapshotRevision}; source ${s.sourceFingerprint}`).join(" · ")}. Partial coverage does not establish zero work.`;
-    const search=$("efficiency-search").value.toLowerCase(),scope=$("efficiency-scope").value,view=$("efficiency-view").value;
-    const filtered=feed.items.filter((item)=>item.label.toLowerCase().includes(search)&&(scope==="all"||item.scope===scope));
+    const search=$("efficiency-search").value.toLowerCase(),scope=$("efficiency-scope").value,view=$("efficiency-view").value,analysisState=$("efficiency-analysis-state").value;
+    const population=feed.items.filter((item)=>item.label.toLowerCase().includes(search)&&(scope==="all"||item.scope===scope));
+    $("efficiency-analysis-counts").textContent=`Analysis states in ${population.length} approved ${population.length===1?"row":"rows"} matching item and scope: ${[...states].map((state)=>`${state}: ${population.filter((item)=>item.analysisState===state).length}`).join(" · ")}. Counts exclude unmapped, withheld and source-omitted items; the full source population may be larger. Pending or running requests take precedence over an earlier accepted assessment.`;
+    const filtered=population.filter((item)=>analysisState==="all"||item.analysisState===analysisState);
     const pages=Math.max(1,Math.ceil(filtered.length/10));page=Math.min(page,pages-1);
     $("efficiency-page").textContent=`Page ${page+1} of ${pages} · ${filtered.length} matching items · at most 10 per page`;
     $("efficiency-prev").disabled=page===0;$("efficiency-next").disabled=page>=pages-1;
     if(!filtered.length)body.append(node("p","No approved items match these filters. Missing evidence does not establish zero work."));
     filtered.slice(page*10,page*10+10).forEach((item)=>{
-      const card=node("details"),summary=node("summary",item.label);card.id=`efficiency-${item.key}`;card.open=open.has(card.id);summary.id=`efficiency-${item.key}-toggle`;card.append(summary);
+      const card=node("details"),summary=node("summary",`${item.label} · analysis ${item.analysisState}`);card.id=`efficiency-${item.key}`;card.open=open.has(card.id);summary.id=`efficiency-${item.key}-toggle`;card.append(summary);
       const link=node("a","Public item evidence ↗");link.href=item.url;link.target="_blank";link.rel="noopener";card.append(link);
       card.append(node("p",`${item.summary==="native-observation"?"Native item observations; completion remains governed by the canonical item feed.":item.summary==="delivery-accounting-incomplete"?"Source delivery explanation is provisional; runtime accounting is incomplete.":"Accounting observations; delivery and native completion remain unestablished."} Analysis: ${item.analysisState}.`));
       if(item.exportHealth){const h=item.exportHealth;card.append(table("Analysis request, accepted assessment and freshness",["Request / assessment","Pending / last attempt","Source / ingestion observation","Selection / failure"],[[`Request: ${h.requestState||"unavailable"} · accepted assessment: ${h.assessmentState||"unavailable"}`,`Pending since: ${h.pendingSince||"unknown"} · last attempt: ${h.lastAttemptAt||"unknown"}`,`Source observed: ${h.sourceObservedAt||"unknown"} · ingested: ${h.ingestedAt||"unknown"}`,`${h.sourceKey}: ${h.metricSelection.returned} metrics / ${h.metricSelection.omitted} omitted · failure: ${h.failureCode?human(h.failureCode):"none reported"}`]]));}
@@ -91,7 +93,7 @@
       body.append(card);
     });
   }
-  ["efficiency-search","efficiency-scope","efficiency-view"].forEach((id)=>$(id).addEventListener(id==="efficiency-search"?"input":"change",()=>{page=0;render();}));
+  ["efficiency-search","efficiency-scope","efficiency-view","efficiency-analysis-state"].forEach((id)=>$(id).addEventListener(id==="efficiency-search"?"input":"change",()=>{page=0;render();}));
   $("efficiency-prev").addEventListener("click",()=>{page--;render();});$("efficiency-next").addEventListener("click",()=>{page++;render();});
   window.ProcessEfficiency={validate,render};
 })();

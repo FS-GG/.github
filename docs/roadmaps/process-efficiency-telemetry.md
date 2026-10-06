@@ -236,13 +236,24 @@ by the existing 45-second call cap. Private input is bounded to 4 MiB and public
 bounded to 1 MiB. Schema-14 `build_host` calls this source seam; actual endpoint acceptance remains pending. Integers beyond JavaScript's exact safe range are withheld as unsupported items (a subset
 of withheld coverage), preserving Source Deliveries independently and never rounding measured facts.
 
+Further source checkpoint (2026-10-06): collapsed efficiency cards expose the current analysis
+state, and an Analysis status filter makes pending, running and failed rows discoverable without
+opening every card. State counts use only approved rows matching the item/scope filters, with
+unmapped, withheld and source-omitted populations explicitly excluded. A prior ready assessment
+does not make a queued request ready. Unavailable exports clear the counts instead of reporting
+zero analysis work. All 137 dashboard Python checks pass; the added browser regression for
+queue precedence, retained filters, unknown population, keyboard interaction and mobile containment
+is authored but has not been executed. This source change is not installed or deployed and does
+not extend the earlier browser qualification to these changed UI bytes.
+
 Depends on .1 for fixture-driven work; live projection acceptance requires .2 and .3. Touch-set:
 dashboard collector/projection, static UI/assets and focused projection/UI tests. Coordinate ownership
 of shared DTOs with .2; the UI does not edit canonical completion logic.
 Acceptance: the vertical slice shows one actual native completion and one incomplete-accounting
 delivery, with truthful summaries and reconcilable identities. No private identifiers, raw transcripts,
 unapproved URLs or executable markup escape. Feed errors and pending analysis cannot look like zero
-cost or no delivered work. Existing feed readers remain supported through the chosen migration.
+cost or no delivered work. The matched dashboard/feed migration is current-only; previous reader
+compatibility is not required.
 
 ### V2-EFF-01.5 — Calibrate explanations and measure net value
 
