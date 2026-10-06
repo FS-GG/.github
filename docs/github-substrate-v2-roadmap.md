@@ -354,6 +354,29 @@ publication and installed receiver adoption remain open under .4; the later Driv
 Contracts source/feed blocker does not erase the original ordinary acceptance. These milestones
 grant no product execution authority or fleet-wide adoption.
 
+### V2-EFF-01 — Process efficiency telemetry — 2026-10-06
+
+Owner: Coordination telemetry maintainers for canonical facts, classifications and review integration;
+`.github` telemetry/dashboard maintainers for public projection and presentation. Status: planned;
+research and design are recorded, with implementation, calibration and installed adoption still open.
+
+The [prior-art review](research/2026-10-06-process-efficiency-telemetry-prior-art.md),
+[design](designs/process-efficiency-telemetry.md) and
+[owning roadmap](roadmaps/process-efficiency-telemetry.md) extend existing UTEL activities, complications,
+usage attribution and process reviews. Each completed item should receive a bounded agent assessment
+of what shipped, useful work, problems, retries, avoidable process and concrete improvements, linked
+to evidence and deterministic metrics. The dashboard should expose these explanations, work mix,
+waiting, quality and coverage. Known source delivery stays visible when runtime data is incomplete;
+partial visibility does not grant native completion or justify a zero-cost efficiency claim.
+
+The six milestones cover contracts and labeled examples (.1), canonical measurement and supported
+attribution correction (.2), completion analysis (.3), public dashboard explanations (.4), calibration
+and economics (.5), and publication/installed adoption (.6). After shared contracts, .2–.4 can progress
+with disjoint touch-sets and common fixtures; actual end-to-end acceptance precedes rollout. Preserve
+existing scoped economics profiles, required checks, privacy boundaries and one current outcome per
+canonical identity. This planning entry changes no active schema, policy, execution authority or
+default and does not claim the redesigned telemetry is implemented.
+
 ### Language-independent product workspaces — 2026-09-29
 
 The settled [polyglot provider decision](adr/0092-descriptor-driven-polyglot-workspace-providers.md) and
