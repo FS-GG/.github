@@ -56,6 +56,23 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-06: Provider-response cost dashboard source landed; installed activation pending.**
+[PR #4284](https://github.com/FS-GG/.github/pull/4284) merged exact head
+`eb7292b990382f4bd71d71cc8f34784e2e075fe6` as
+`18ad4183f5f1a6cfe809e0e5aa4e2d00c0b872e2` at 20:08:47 UTC, after 39 hosted checks passed
+and four skipped. A separate bounded population covers approved pending, source-delivered and
+completed items, preserving exact provider-response counters, unknown breakouts, coverage and
+pagination without implying successful assessment or operational completion. Actual qualification
+passed all 21 browser fixtures and six two-UID handoff checks; all 143 dashboard pure checks passed
+after the genuine proof update. The final safety-gate and stale-fixture repairs preserve every
+qualified product and browser input byte. Earlier failed/refused attempts remain retained. The
+supported delivery reported current validation, coherent validation not required and telemetry
+health `open`. The installed 0.98/schema-13 feed remains separate: provider-response costs and
+Efficiency stay unavailable until coherent 0.99/Host 0.5/schema-14 installed gates and actual
+canonical joins qualify. Matched Pages UI deployment and public readback are separate gates;
+full [V2-EFF-01.4/.6](roadmaps/process-efficiency-telemetry.md#v2-eff-014--publish-useful-dashboard-explanations)
+acceptance remains open.
+
 **2026-10-06: Efficiency canonical custody producer dependency landed.**
 Coordination [PR #949](https://github.com/FS-GG/FS.GG.Coordination/pull/949) merged exact
 head `f2022662684e9f9ff064c44a5b3daf7c24369846` as
