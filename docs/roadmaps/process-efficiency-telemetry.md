@@ -160,16 +160,21 @@ public projection receives only the remaining host byte budget. No metrics are r
 
 
 The source includes native keyboard controls, search/scope/measurement filters, ten-item pages,
-accessible table captions/headings and the existing last-valid-feed fallback. Fourteen focused
-projection checks and twelve export-consumer checks pass. The latest full Python run had 122 passes and
-one expected stale two-UID proof digest failure (123 tests); a new actual proof must qualify final exporter bytes. Sixteen browser cases reached genuine bounded execution: nine passed and seven failed.
-The failed window remains failed; fixes address mobile navigation wrapping, three obsolete positive
-host fixtures and two incorrect test expectations. A prior observer failure is retained separately.
-No passing browser qualification is claimed until the corrected exact bytes complete a fresh run. No publication, installation or native/store
-qualification is claimed from source fixtures.
+accessible table captions/headings and the existing last-valid-feed fallback. All 137 existing
+Python source tests pass, including the current two-UID proof digest binding. Parent-owned browser
+root04 genuinely passed all 19 fixture cases with clean custody. Earlier root01 observer failure
+and root02 nine-pass/seven-fail test window remain failed and retained separately.
+
+The parent-owned two-UID root01 genuinely passed six handoff permission checks with both original
+process groups retired and empty before/after disposable UID/temp scopes. Its fixture result binds
+exporter SHA `184723284a4205914811c4d2c78c89d338b3da75a372068a8647bdf7b8ee0a5f`; terminal
+SHA `718b260bb7bbfa3eaea878e5dfcf27bd4529d5695dc94134b39aed8cfcba6c54` retains the actual
+result. The old proof was preserved privately before updating the checked-in proof from that genuine
+fixture result. This qualifies handoff permissions for the exact source exporter, not schema-14
+endpoint behavior, native measurements, publication, installation or live feed acceptance.
 
 The .2/.3 owners agreed a separate read-only `telemetry efficiency-export` batch interface.
-Its inactive consumer seam binds `snapshotRevision` to the exact compact `item-detail/3` base and
+Its source consumer seam binds `snapshotRevision` to the exact compact `item-detail/3` base and
 keeps a distinct `sourceFingerprint` over current facts, usage, corrected attribution, efficiency
 records, queue health and receiver clocks. The exporter owns selection in one WAL snapshot; an
 analysis update cannot pretend that an unchanged compact-base digest covers changed efficiency
@@ -188,16 +193,15 @@ original groups preserve the existing public-label boundary.
 The pure canonical projection retains up to two public-local source bindings, each with its exact
 compact base revision, full source fingerprint and verbatim omitted counts. Health-only items remain
 visible with unavailable measurements and unknown clocks. Queue and accepted-assessment states
-remain separate. Ambiguous approved identities across stores are withheld; metrics are never
+remain separate. Ambiguous approved identities within a selected export are withheld; metrics are never
 aggregated in Python. Output is bounded before entering the host feed; its caller can supply the remaining public byte
 budget, while source counts remain intact when public rows are withheld. Unsupported exact quantities
-and omitted public rows remain explicit. The collector reader is still inactive pending actual
-endpoint admission, so these source tests do not establish installed or live efficiency.
+and omitted public rows remain explicit. The source collector reader is connected; actual endpoint qualification and operator execution
+remain pending, so these source tests do not establish installed or live efficiency.
 
 The reader makes one batch call per store using the caller's remaining monotonic deadline, bounded
 by the existing 45-second call cap. Private input is bounded to 4 MiB and public output remains
-bounded to 1 MiB. It is not called by `build_host` yet: schema 14 and actual endpoint acceptance remain
-pending. Integers beyond JavaScript's exact safe range are withheld as unsupported items (a subset
+bounded to 1 MiB. Schema-14 `build_host` calls this source seam; actual endpoint acceptance remains pending. Integers beyond JavaScript's exact safe range are withheld as unsupported items (a subset
 of withheld coverage), preserving Source Deliveries independently and never rounding measured facts.
 
 Depends on .1 for fixture-driven work; live projection acceptance requires .2 and .3. Touch-set:
