@@ -217,6 +217,18 @@ Verified publisher `37434982959` promotes CLI, Kit and Drivers 0.98.0 from
 `11397568554` and raw archive SHA256 `ac322752d09cfdbc7c9fc209448dba0b9d95c56af979bedd876fa3d97c2cd650`. Protected journal
 `utel-rel-15` and both-feed byte verification bind content `sha256:15a3bc4c133216cde77d1fef5b639d1842588a5754802eaa11b098e7b62c2a06`.
 Candidate and publisher source, hashes and readbacks are joined without repacking or journal reset.
-The prior release and consumed cycles remain unchanged. Installed schema 13 backup/migration,
-actual Governance attribution correction and current-store sanitized export/Pages/event adoption
-remain pending until their own genuine receipts.
+The prior release and consumed cycles remain unchanged. The existing global installation passed
+payload and runtime-closure verification without a global switch. Backed-up canonical migration
+to schema 13 preserved all 55 tables. The supported Governance #444 correction joined 204
+targets to GOV-423-C3, preserved the original raw-fact hash and all 144 native outcomes, and
+verified one audit entry plus an idempotent retry. The correction operation completed in 8.026
+seconds with clean custody and no resource or storage failure. The supported drain accepted both
+pending batches with no replay or quarantine and verified zero remaining in 2.857 seconds;
+the subsequent empty drain also verified zero remaining with no replay or quarantine.
+The settled schema 13 sanitized export publishes five eligible approved completed groups at
+[feed commit `279f195…`](https://github.com/FS-GG/.github/commit/279f19561559238b49bed73f5956cd9881296f59),
+with immutable bytes, public revision and current-branch readback verified. Activation then verified
+[feed commit `7a4f81d…`](https://github.com/FS-GG/.github/commit/7a4f81d15a5d1cbb765ce78d8a8e5f4bfc13c2a5)
+and authorized event publication. User units are installed inert; timer recurrence is unavailable
+without a user bus. Pages selection/deployed readback remains pending, and unknown Governance
+runtime coverage is not promoted to completion.
