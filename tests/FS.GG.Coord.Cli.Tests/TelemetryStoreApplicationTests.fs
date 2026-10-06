@@ -3655,7 +3655,8 @@ SELECT 1;
         let hooks: TelemetryStoreApplication.DashboardSnapshotHooks =
             { AfterFirstRead = fun () -> compactCiSql path "INSERT INTO ci_steps VALUES('late','item','FS-GG/.github',1,1,1,1,'step','completed','success',NULL,NULL,'admin','test');" }
         use compact = TelemetryStoreApplication.compactDashboardSnapshotWithHooks path approved hooks None |> unwrap |> correctionSnapshot
-        Assert.Equal(0L, compact.RootElement.GetProperty("ciSummaries")[0].GetProperty("steps").GetInt64())
+        let observedSummary = compact.RootElement.GetProperty("ciSummaries")[0]
+        Assert.Equal(0L, observedSummary.GetProperty("steps").GetInt64())
         use after = JsonDocument.Parse(TelemetryStoreApplication.ciSummary path approved "item" |> unwrap)
         Assert.Equal(1L, after.RootElement.GetProperty("steps").GetInt64())
 
