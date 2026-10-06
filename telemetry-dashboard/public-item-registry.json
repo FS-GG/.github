@@ -1,5 +1,19 @@
 {
   "items": {
+    "published-package-inventory-reconciliation": {
+      "deliveries": [
+        {
+          "pullRequest": 4194,
+          "repository": "FS-GG/.github"
+        }
+      ],
+      "label": "Published package inventory reconciliation",
+      "notes": [],
+      "repositories": [
+        "FS-GG/.github"
+      ],
+      "url": "https://github.com/FS-GG/.github/pull/4194"
+    },
     "standalone-telemetry-pilot": {
       "deliveries": [
         {
@@ -13,6 +27,20 @@
         "FS-GG/.github"
       ],
       "url": "https://github.com/FS-GG/.github/issues/3596"
+    },
+    "telemetry-0971-publication-local-adoption": {
+      "deliveries": [
+        {
+          "pullRequest": 4253,
+          "repository": "FS-GG/.github"
+        }
+      ],
+      "label": "Telemetry 0.97.1 publication and local adoption",
+      "notes": [],
+      "repositories": [
+        "FS-GG/.github"
+      ],
+      "url": "https://github.com/FS-GG/.github/pull/4253"
     },
     "telemetry-dashboard-operations-note": {
       "deliveries": [
@@ -41,6 +69,48 @@
         "FS-GG/.github"
       ],
       "url": "https://github.com/FS-GG/.github/issues/3607"
+    },
+    "unified-roadmap-paused-handoff": {
+      "deliveries": [
+        {
+          "pullRequest": 4244,
+          "repository": "FS-GG/.github"
+        }
+      ],
+      "label": "Paused Unified Roadmap handoff",
+      "notes": [],
+      "repositories": [
+        "FS-GG/.github"
+      ],
+      "url": "https://github.com/FS-GG/.github/pull/4244"
+    },
+    "wasm-03-native-inspection": {
+      "deliveries": [
+        {
+          "pullRequest": 4188,
+          "repository": "FS-GG/.github"
+        }
+      ],
+      "label": "WASM 0.3 native inspection",
+      "notes": [],
+      "repositories": [
+        "FS-GG/.github"
+      ],
+      "url": "https://github.com/FS-GG/.github/pull/4188"
+    },
+    "wizard-selected-sdk-recovery-source": {
+      "deliveries": [
+        {
+          "pullRequest": 4191,
+          "repository": "FS-GG/.github"
+        }
+      ],
+      "label": "Wizard selected-SDK recovery source repair",
+      "notes": [],
+      "repositories": [
+        "FS-GG/.github"
+      ],
+      "url": "https://github.com/FS-GG/.github/pull/4191"
     }
   },
   "schema": "fsgg.telemetry.public-item-registry/1"

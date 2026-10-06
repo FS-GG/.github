@@ -3,6 +3,8 @@ name: telemetry-dashboard
 on:
   pull_request:
     paths:
+      - "docs/2026-09-07-154210-fs-gg-unified-development-roadmap.md"
+      - "docs/roadmaps/**"
       - "telemetry-dashboard/**"
       - "tools/telemetry-dashboard.py"
       - "scripts/telemetry-dashboard-refresh.py"
@@ -12,6 +14,8 @@ on:
   push:
     branches: [main]
     paths:
+      - "docs/2026-09-07-154210-fs-gg-unified-development-roadmap.md"
+      - "docs/roadmaps/**"
       - "telemetry-dashboard/**"
       - "tools/telemetry-dashboard.py"
       - "scripts/telemetry-dashboard-refresh.py"

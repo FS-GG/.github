@@ -56,6 +56,25 @@ class ItemProjectionTests(unittest.TestCase):
         joined,_=D._join_host_snapshots([(left,envelope(left)),(right,envelope(right))])
         self.assertEqual(joined["budgetEpochs"],left["budgetEpochs"])
 
+        # Additive stores keep the same canonical snapshot contract. Retain
+        # the incumbent item exactly; mixed or unknown schemas still refuse.
+        for version in (11,12,13):
+            current_left=json.loads(json.dumps(left)); current_right=json.loads(json.dumps(right))
+            current_left["store"]["schemaVersion"]=version
+            current_right["store"]["schemaVersion"]=version
+            with mock.patch.object(D,"engine_json",side_effect=[envelope(current_left),envelope(current_right)]),mock.patch.object(D,"load_labels",return_value=approved):
+                current=D.build_host(resolved_config=cfg)
+            D.validate_host(current)
+            self.assertEqual(current["store"]["schemaVersion"],version)
+            self.assertEqual(next(row for row in current["completedItems"]["items"] if row["key"]=="public-item"),incumbent["completedItems"]["items"][0])
+            self.assertEqual(current["completedItems"]["coverage"]["published"],2)
+            current_right["store"]["schemaVersion"]=10
+            with self.assertRaisesRegex(D.HostSourceError,"HOST_STORE_INCOMPATIBLE"):
+                D._join_host_snapshots([(current_left,envelope(current_left)),(current_right,envelope(current_right))])
+        future=json.loads(json.dumps(left)); future["store"]["schemaVersion"]=14
+        with self.assertRaisesRegex(D.HostSourceError,"HOST_STORE_INCOMPATIBLE"):
+            D._join_host_snapshots([(future,envelope(future)),(future,envelope(future))])
+
         conflict=json.loads(json.dumps(right)); conflict["budgetEpochs"][0]["ordinal"]=2
         with self.assertRaisesRegex(D.HostSourceError,"HOST_ENGINE_SCOPE_OVERLAP"):
             D._join_host_snapshots([(left,envelope(left)),(conflict,envelope(conflict))])
