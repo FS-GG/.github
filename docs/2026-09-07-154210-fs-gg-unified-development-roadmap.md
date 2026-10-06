@@ -56,6 +56,17 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-06: Nullable schema-14 dashboard summary correction qualified in source.**
+The collector requires all six canonical usage fields and preserves explicit null as unknown;
+known aggregates retain exact Int64 values and refuse overflow. Matching host-5 UI validation
+renders decimal strings without Number rounding and retains last-valid data on unsafe refresh.
+Actual qualification passed 22 browser cases and six fresh two-UID permission checks; 147
+dashboard pure tests and 13 measurement-contract tests passed. Earlier browser assertion and
+pre-fixture staging failures remain separate evidence. The current installed 0.98/schema-13 feed
+is unchanged; coherent 0.99/Host 0.5/schema-14 activation and full
+[V2-EFF-01.4/.6](roadmaps/process-efficiency-telemetry.md#v2-eff-014--publish-useful-dashboard-explanations)
+acceptance remain open.
+
 **2026-10-06: P4 Podman diagnostic helper source CLOSED; runtime facts and cleanup remain unaccepted.**
 [Coordination PR #951](https://github.com/FS-GG/FS.GG.Coordination/pull/951) merged at
 `45f2d920dcb3fd2784d215780bd3253e9a89bf11` after 47 passing checks and 8 skips.
