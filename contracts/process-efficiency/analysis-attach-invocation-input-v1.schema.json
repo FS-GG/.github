@@ -1,20 +1,21 @@
 {
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:fsgg:telemetry:analysis-attach-invocation-input-v1",
   "type": "object",
   "additionalProperties": false,
   "required": [
     "schema",
     "cas",
     "claimId",
-    "modelAlias",
-    "invocationRef",
-    "authority",
-    "claimedAt",
     "dispatchRef",
-    "limitSupport"
+    "invocationRef",
+    "lineageRefs",
+    "authority",
+    "attachedAt"
   ],
   "properties": {
     "schema": {
-      "const": "fsgg.telemetry.efficiency-analysis-claim-input/1"
+      "const": "fsgg.telemetry.efficiency-analysis-attach-invocation-input/1"
     },
     "cas": {
       "type": "object",
@@ -44,17 +45,20 @@
       "minLength": 1,
       "maxLength": 256
     },
-    "modelAlias": {
+    "dispatchRef": {
+      "$ref": "#/$defs/sourceRef"
+    },
+    "invocationRef": {
       "type": "string",
       "minLength": 1,
       "maxLength": 256
     },
-    "invocationRef": {
-      "type": [
-        "string",
-        "null"
-      ],
-      "maxLength": 256
+    "lineageRefs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/sourceRef"
+      },
+      "maxItems": 16
     },
     "authority": {
       "type": "object",
@@ -99,48 +103,11 @@
         }
       }
     },
-    "claimedAt": {
+    "attachedAt": {
       "type": "string",
       "format": "date-time"
-    },
-    "dispatchRef": {
-      "$ref": "#/$defs/sourceRef"
-    },
-    "limitSupport": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "inputTokens",
-        "outputTokens",
-        "seconds"
-      ],
-      "properties": {
-        "inputTokens": {
-          "enum": [
-            "enforced",
-            "unavailable",
-            "observed-only"
-          ]
-        },
-        "outputTokens": {
-          "enum": [
-            "enforced",
-            "unavailable",
-            "observed-only"
-          ]
-        },
-        "seconds": {
-          "enum": [
-            "enforced",
-            "unavailable",
-            "observed-only"
-          ]
-        }
-      }
     }
   },
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:fsgg:telemetry:analysis-claim-input-v1",
   "$defs": {
     "sourceRef": {
       "type": "object",
@@ -191,5 +158,6 @@
         }
       }
     }
-  }
+  },
+  "$comment": "Inactive CAS attach action, no new invocation authorization or budget. Actual lineage/runtime admission must match current claim dispatched witness, owner and generation."
 }

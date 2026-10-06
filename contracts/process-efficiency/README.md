@@ -59,12 +59,15 @@ standalone input's `schema` key before embedding its exact event into existing `
 The [request](analysis-request-input-v1.schema.json), [claim](analysis-claim-input-v1.schema.json)
 and [settle](analysis-settle-input-v1.schema.json) shapes select a finite canonical analysis queue
 under `efficiency-analysis-request/1`. Only engine-owned authenticated `telemetry efficiency analysis
-enqueue|claim|settle|inspect` commands may change its lifecycle; generic revision batches cannot claim
+enqueue|claim|attach-invocation|settle|inspect` commands may change its lifecycle; generic revision batches cannot claim
 or settle it. Claim CAS checks expected revision/content digest and reserves original per-item epoch
 budget across scopes before dispatch. Pending model/claim/invocation fields remain null. Claim binds
 a witnessed expected dispatch; actual invocation admission arrives through the existing started
 route after spawn. An unknown started effect consumes budget and cannot automatically retry.
-Settlement binds that actual invocation and admitted result; stale/conflicting results refuse.
+The [attach action](analysis-attach-invocation-input-v1.schema.json) CAS binds that actual native
+invocation with the same claim/owner/generation and consumes no new budget. Settlement binds the
+admitted result; stale/conflicting results refuse. Claim separately discloses each limit as enforced,
+unavailable or observed-only; an observed bounded call cannot establish universal hard token caps.
 
 The selected .2 store extension is additive **schema 14**, with receiver-owned acceptance clocks;
 no migration or write is activated by this milestone. Existing readers and supported CI correction

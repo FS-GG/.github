@@ -39,7 +39,8 @@
     "assessmentInput": "fsgg.telemetry.efficiency-assessment-input/1",
     "analysisRequestInput": "fsgg.telemetry.efficiency-analysis-request-input/1",
     "analysisClaimInput": "fsgg.telemetry.efficiency-analysis-claim-input/1",
-    "analysisSettleInput": "fsgg.telemetry.efficiency-analysis-settle-input/1"
+    "analysisSettleInput": "fsgg.telemetry.efficiency-analysis-settle-input/1",
+    "analysisAttachInvocationInput": "fsgg.telemetry.efficiency-analysis-attach-invocation-input/1"
   },
   "axes": {
     "activity": [
@@ -464,6 +465,11 @@
       "inspect": {
         "route": "telemetry efficiency analysis inspect --request-id <key> --config <private-host-config> --repository <owner/repo>",
         "effect": "Read canonical state+revision+contentDigest, nullable model/claim/invocation, applied receipt/acceptedAt, result and budget; missing key explicitly unavailable, not empty success."
+      },
+      "attach-invocation": {
+        "route": "telemetry efficiency analysis attach-invocation --input <attach.json> --config <private-host-config> --repository <owner/repo>",
+        "schema": "analysis-attach-invocation-input-v1.schema.json",
+        "effect": "CAS over same current claim/revision/digest and authenticated producer/owner/generation; resolve exact expected-dispatch\u2192invocation-lineage/runtime-admission matching actual invocation. Atomically bind existing invocation without a new call, new budget or revision epoch. Conflicting/stale attachment refuses; identical retry reads same receipt."
       }
     },
     "authority": "Enqueue requires current effective item/outcome, immutable snapshot and enrolled authenticated producer. Native scope additionally resolves existing root-admitted item review plus expected lineage, terminal and qualified usage witness refs. Provisional scope resolves source delivery without fabricated root review/terminal evidence. Claim/settle reuse this authority and actual existing producer association; supplied strings are not grants.",
@@ -487,7 +493,8 @@
       "resultAssessmentRef",
       "reason",
       "budgetUsed",
-      "dispatchRef"
+      "dispatchRef",
+      "limitSupport"
     ],
     "states": [
       "pending",
@@ -501,6 +508,7 @@
     "budgetCharge": "Claim atomically reserves before dispatch. Failed and unknown invoked calls consume original budget; no automatic retry after an unknown started effect. Restart reconciles original invocation/receipt first. Only authenticated exact original invocation evidence proving no effect can release/reassign unused reservation under CAS; it is not a new retry allowance.",
     "finalization": "Settlement result must be the admitted assessment for same subject/snapshot/policy/claim. Late usage updates deterministic metrics without triggering analyst loops or adding outcomes. Invalid/missing result remains explicit failed/partial without altering delivery.",
     "rollback": "Disable further enqueue/claim while retaining pending state, failures, usage, source facts and prior results; existing delivery and correction authority continue.",
-    "nativeStartBoundary": "Existing begin publishes expected-dispatch before spawn; actual started publishes invocation-lineage/runtime-admission afterwards. Claim binds witnessed dispatch/prospective custody before call, not fabricated native admission. Lost claim-to-start is unknown until native reconciliation; cannot automatically relaunch."
+    "nativeStartBoundary": "Existing begin publishes expected-dispatch before spawn; actual started publishes invocation-lineage/runtime-admission afterwards. Claim binds witnessed dispatch/prospective custody before call, not fabricated native admission. Lost claim-to-start is unknown until native reconciliation; cannot automatically relaunch.",
+    "limitSupport": "Claim discloses inputTokens/outputTokens/seconds support per limit as enforced, unavailable or observed-only against selected existing provider route. Missing enforcement never appears as a hard cap. Settled actual usage/timing can qualify that specific bounded invocation, not a universal token guarantee. Required unavailable limits fence dependent execution under existing authority; do not silently substitute providers."
   }
 }

@@ -337,7 +337,7 @@ class ContractTests(unittest.TestCase):
             with self.assertRaises(ValueError):assessment_check(bad,{'metric-observed-a'})
 
     def test_declared_producer_shapes_and_conservation(self):
-        for group,file in [('allocationInputSamples','allocation-input-v1.schema.json'),('episodeInputSamples','episode-input-v1.schema.json'),('assessmentInputSamples','assessment-input-v1.schema.json'),('analysisRequestInputSamples','analysis-request-input-v1.schema.json'),('analysisClaimInputSamples','analysis-claim-input-v1.schema.json'),('analysisSettleInputSamples','analysis-settle-input-v1.schema.json')]:
+        for group,file in [('allocationInputSamples','allocation-input-v1.schema.json'),('episodeInputSamples','episode-input-v1.schema.json'),('assessmentInputSamples','assessment-input-v1.schema.json'),('analysisRequestInputSamples','analysis-request-input-v1.schema.json'),('analysisClaimInputSamples','analysis-claim-input-v1.schema.json'),('analysisSettleInputSamples','analysis-settle-input-v1.schema.json'),('analysisAttachInvocationInputSamples','analysis-attach-invocation-input-v1.schema.json')]:
             schema=json.loads((ROOT/'contracts/process-efficiency'/file).read_text())
             for sample in FIXTURES[group]:schema_check(sample,schema)
         sample=copy.deepcopy(FIXTURES['allocationInputSamples'][0])

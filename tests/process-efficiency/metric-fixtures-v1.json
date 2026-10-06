@@ -1753,6 +1753,11 @@
         "kind": "expected-dispatch",
         "revision": 0,
         "contentDigest": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+      },
+      "limitSupport": {
+        "inputTokens": "observed-only",
+        "outputTokens": "unavailable",
+        "seconds": "enforced"
       }
     }
   ],
@@ -1761,7 +1766,7 @@
       "schema": "fsgg.telemetry.efficiency-analysis-settle-input/1",
       "cas": {
         "requestId": "484f80759365f4dc10c2af1113c69e00b4cdf789285e79675f757819adcaa0cc",
-        "expectedRevision": 1,
+        "expectedRevision": 2,
         "expectedContentDigest": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
       },
       "claimId": "claim-a",
@@ -1785,6 +1790,51 @@
       },
       "settledAt": "2026-10-06T00:23:00Z",
       "invocationRef": "analyst-invocation-a"
+    }
+  ],
+  "analysisAttachInvocationInputSamples": [
+    {
+      "schema": "fsgg.telemetry.efficiency-analysis-attach-invocation-input/1",
+      "cas": {
+        "requestId": "484f80759365f4dc10c2af1113c69e00b4cdf789285e79675f757819adcaa0cc",
+        "expectedRevision": 1,
+        "expectedContentDigest": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+      },
+      "claimId": "claim-a",
+      "dispatchRef": {
+        "id": "analyst-dispatch-a",
+        "kind": "expected-dispatch",
+        "revision": 0,
+        "contentDigest": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+      },
+      "invocationRef": "analyst-invocation-a",
+      "lineageRefs": [
+        {
+          "id": "lineage-analyst-a",
+          "kind": "invocation-lineage",
+          "revision": 0,
+          "contentDigest": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+        },
+        {
+          "id": "admission-analyst-a",
+          "kind": "runtime-admission",
+          "revision": 0,
+          "contentDigest": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+        }
+      ],
+      "authority": {
+        "sourceIdentity": "synthetic-fixture",
+        "authorityRole": "completion-analyst",
+        "authorityRef": {
+          "id": "source-a",
+          "kind": "native-item-outcome",
+          "revision": 0,
+          "contentDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "rootDispatchRef": null,
+        "invocationRef": null
+      },
+      "attachedAt": "2026-10-06T00:22:01Z"
     }
   ]
 }
