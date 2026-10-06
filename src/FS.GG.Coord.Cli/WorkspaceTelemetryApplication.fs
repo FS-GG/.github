@@ -197,8 +197,6 @@ module WorkspaceTelemetryApplication =
         else
             Ok()
 
-    /// Read a bounded private descriptor without following a final symlink or
-    /// accepting a device/FIFO. Both descriptor and named identity must stay fixed.
     let readEfficiencyClaimTemplate (path: string) =
         let unsafeFile () = Error [ "efficiency-claim-template-unsafe" ]
         if not (OperatingSystem.IsLinux()) then Error [ "efficiency-claim-template-platform-unavailable" ]

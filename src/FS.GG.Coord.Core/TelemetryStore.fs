@@ -88,19 +88,16 @@ module TelemetryStore =
             Evidence: string
         }
 
-    /// Capture-local identity; never an AppServer provider turn ID or authority receipt.
     type ExecLocalTurn =
         { CaptureSha256: string
           ThreadId: Guid
           StartFrameOrdinal: int64
           TurnSequence: int64 }
 
-    /// Actual provider response identity; no process, thread or native turn identity is implied.
     type ResponseResource =
         { ResponseId: string
           ResponseSha256: string }
 
-    /// Counters actually observed in one provider response; absent values remain unknown.
     type ResponseUsage =
         { InvocationId: string
           Resource: ResponseResource
@@ -115,7 +112,6 @@ module TelemetryStore =
           Reasoning: int64 option
           Total: int64 option }
 
-    /// A retained provider response, not proof that a local process or remote computation started.
     type ProviderObservation =
         { InvocationId: string
           Resource: ResponseResource

@@ -2,7 +2,8 @@ namespace FS.GG.Coord
 
 open System.Text.Json
 
-/// Shape validation is separate from canonical admission and native measured resources.
+/// Generated closed shape validators. Producer authority, resource counters, reference
+/// freshness and native eligibility are checked separately in the canonical store.
 module EfficiencyInput =
     type Record
     val parseEvent: JsonElement -> Result<Record, string>

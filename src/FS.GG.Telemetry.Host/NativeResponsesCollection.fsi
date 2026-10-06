@@ -72,6 +72,8 @@ module NativeResponsesCollection =
         member internal Observation: NativeResponses.ResponseObservation
         member internal CompletionAccepted: bool
 
+    /// This operation accepts only the opaque capture created by the actual HTTP owner.
+    /// Raw files, supplied flags and verifier exit status cannot construct VerifiedCapture.
     val internal verify:
         hostConfigPath: string -> hostConfig: HostConfig -> storeRoot: string ->
         capture: Capture -> Result<VerifiedCapture, Failure>

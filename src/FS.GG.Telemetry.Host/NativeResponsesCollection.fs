@@ -395,8 +395,6 @@ module NativeResponsesCollection =
         stream.Flush(true)
         remaining phase
 
-    /// This operation accepts only the opaque capture created by the actual HTTP owner.
-    /// Raw files, supplied flags and verifier exit status cannot construct VerifiedCapture.
     let internal verify (hostConfigPath: string) (hostConfig: HostConfig) (storeRoot: string) (capture: Capture) =
         let mutable retained = false
         let failure reason =

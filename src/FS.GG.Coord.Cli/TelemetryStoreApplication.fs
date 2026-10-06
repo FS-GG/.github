@@ -4391,7 +4391,6 @@ UNION ALL SELECT count(*) FROM runtime_turn_usage WHERE invocation_id=$invocatio
                   "$grant", principal.GrantId |> Option.map box |> Option.defaultValue DBNull.Value
                   "$generation", principal.GrantGeneration |> Option.map box |> Option.defaultValue DBNull.Value ]) = 1L
 
-    /// Checks a current enrolled grant without granting installed transport capability.
     let validateResponsesCollectorPrincipal path assessment (principal: TelemetryReceipt.Principal) =
         match validateRoot path assessment |> Result.bind (fun root -> connect root SqliteOpenMode.ReadOnly) with
         | Error errors -> Error errors
@@ -4605,8 +4604,6 @@ WHERE f.kind='learn-installed-origin/1' AND a.producer=$producer AND a.stream=$s
             efficiencySaveQueue connection record now
             record, false
 
-    /// Named queue mutations use the enrolled producer, an immediate transaction and exact CAS.
-    /// Generic ingestion never executes these transitions or launches a model.
     let efficiencyAnalysis path assessment (principal: TelemetryReceipt.Principal) action (bytes: byte array) (packet: byte array option) =
         if isNull bytes || bytes.Length = 0 || bytes.Length > 16384 then Error [ "efficiency-command-byte-bound" ]
         else
@@ -4832,8 +4829,6 @@ WHERE f.kind='learn-installed-origin/1' AND a.producer=$producer AND a.stream=$s
             | :? JsonException as error -> Error [ error.Message ]
             | :? InvalidOperationException as error -> Error [ error.Message ]
 
-    /// Resolve only an already applied dispatch owned by this association; the claim
-    /// transaction rechecks its exact revision/digest and existing CAS/budget guards.
     let efficiencyAnalysisClaimProspective path assessment (principal: TelemetryReceipt.Principal) (dispatchIdentity: string) (itemId: string) (templateBytes: byte array) =
         if isNull templateBytes || templateBytes.Length=0 || templateBytes.Length>16384 then Error [ "efficiency-command-byte-bound" ]
         else

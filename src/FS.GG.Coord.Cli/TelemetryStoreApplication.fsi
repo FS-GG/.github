@@ -81,10 +81,13 @@ module TelemetryStoreApplication =
     val efficiencyExport:
         path: string -> assessment: TelemetryStore.DurabilityAssessment ->
         expectedRevision: string -> maxItems: int -> maxMetrics: int -> Result<string, string list>
-    /// Named authenticated lifecycle mutations; no model invocation is performed.
+    /// Named authenticated lifecycle mutations use an immediate transaction and exact CAS.
+    /// Generic ingestion never executes these transitions or launches a model.
     val efficiencyAnalysis:
         path: string -> assessment: TelemetryStore.DurabilityAssessment -> principal: TelemetryReceipt.Principal ->
         action: string -> bytes: byte array -> packet: byte array option -> Result<string, string list>
+    /// Resolve only an already applied dispatch owned by this association; the claim
+    /// transaction rechecks its exact revision/digest and existing CAS/budget guards.
     val efficiencyAnalysisClaimProspective:
         path: string -> assessment: TelemetryStore.DurabilityAssessment -> principal: TelemetryReceipt.Principal ->
         dispatchIdentity: string -> itemId: string -> templateBytes: byte array -> Result<string, string list>

@@ -26,8 +26,6 @@ open System.Text
 open System.Text.Json
 open System.Text.RegularExpressions
 
-/// Generated closed shape validators. Producer authority, resource counters, reference
-/// freshness and native eligibility are checked separately in the canonical store.
 module EfficiencyInput =
     type Record = private Record of JsonElement
 

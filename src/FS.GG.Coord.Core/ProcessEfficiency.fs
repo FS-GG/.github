@@ -1,7 +1,5 @@
 namespace FS.GG.Coord
 
-/// Exact, pure metric primitives. Callers supply admitted canonical selections; this module
-/// cannot admit records, classify prose, change attribution or establish completion eligibility.
 module ProcessEfficiency =
     type Fraction = { Numerator: bigint; Denominator: bigint }
     type Purpose =

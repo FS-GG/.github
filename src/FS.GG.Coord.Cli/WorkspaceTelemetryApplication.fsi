@@ -13,6 +13,8 @@ module WorkspaceTelemetryApplication =
         }
 
     /// Read the exact bounded, caller-owned private prelaunch claim descriptor.
+    /// Read a bounded private descriptor without following a final symlink or
+    /// accepting a device/FIFO. Both descriptor and named identity must stay fixed.
     val readEfficiencyClaimTemplate: path: string -> Result<byte array, string list>
 
     val resolveBinding: configArg: string option -> repositoryArg: string option -> Result<Binding, string list>
