@@ -140,8 +140,8 @@ module internal NativeResponsesCollection =
             use stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read)
             require (stream.Length = size && Convert.ToHexString(SHA256.HashData stream).ToLowerInvariant() = expectedDigest)
                 "responses-installed-file-changed"
-            for component in row.GetProperty("components").EnumerateArray() do
-                let name = component.GetString()
+            for componentValue in row.GetProperty("components").EnumerateArray() do
+                let name = componentValue.GetString()
                 require (List.contains name [ "host"; "client"; "core"; "store" ] && components.TryAdd(name,path)) "responses-installed-component"
         require (Set.ofSeq expected = Set.ofSeq actual) "responses-installed-inventory-mismatch"
         for name, assembly in [ "host", typeof<HostConfig>.Assembly; "client", typeof<DirectResponses.Phase>.Assembly
@@ -239,15 +239,15 @@ module internal NativeResponsesCollection =
         static member internal Create(phase, bytes, snapshot, observed, failures, claimReceipt, selected, operation, expiresAt) =
             Capture(phase, Array.copy bytes, Array.copy snapshot, observed, failures, claimReceipt, selected, operation, expiresAt)
 
-    let collect configPath hostConfig storeRoot (runtimePrincipal: TelemetryReceipt.Principal)
-                dispatchIdentity itemId (claimTemplate: byte array) (request: NativeResponses.Request)
+    let collect (hostConfigPath: string) (hostConfig: HostConfig) (storeRoot: string) (runtimePrincipal: TelemetryReceipt.Principal)
+                (dispatchIdentity: string) (itemId: string) (claimTemplate: byte array) (request: NativeResponses.Request)
                 (cancellationToken: CancellationToken) = task {
         let phaseStartedAt = DateTimeOffset.UtcNow
         let phase = DirectResponses.beginPhase()
         let mutable claimReceipt = None
         let mutable claimAttemptId = None
         try
-            let selected = installed phase configPath hostConfig storeRoot
+            let selected = installed phase hostConfigPath hostConfig storeRoot
             require (runtimePrincipal.Role = TelemetryReceipt.Generic
                      && runtimePrincipal.Scope.Workspace = selected.Principal.Scope.Workspace
                      && (hostConfig.Stores |> Array.exists (fun store -> store.WorkspaceId = runtimePrincipal.Scope.Workspace && store.Root = storeRoot)))
@@ -297,7 +297,7 @@ module internal NativeResponsesCollection =
             let dispatchRef = JsonNode.Parse(claim.GetProperty("dispatchRef").GetRawText())
             remaining phase
             // Exact private provider secret is read only after actual installed/grant/claim joins.
-            let keyBytes = boundedPrivate configPath selected.Config.ProviderCredentialFile 4096
+            let keyBytes = boundedPrivate hostConfigPath selected.Config.ProviderCredentialFile 4096
             let providerKey = try utf8.GetString keyBytes finally Array.Clear keyBytes
             let! outcome = DirectResponses.execute phase frozen providerKey cancellationToken
             let capture = JsonObject()
@@ -316,10 +316,14 @@ module internal NativeResponsesCollection =
             capture.["generationStatus"] <- outcome.GenerationStatus |> Option.map (fun value -> JsonValue.Create value :> JsonNode) |> Option.defaultValue null
             capture.["countBodyComplete"] <- JsonValue.Create outcome.CountBodyComplete
             capture.["generationBodyComplete"] <- JsonValue.Create outcome.GenerationBodyComplete
-            capture.["stage"] <- JsonValue.Create(match outcome.Stage with
-                | DirectResponses.NotSent -> "not-sent" | DirectResponses.CountSent -> "count-sent"
-                | DirectResponses.CountAccepted -> "count-accepted" | DirectResponses.GenerationSent -> "generation-sent"
-                | DirectResponses.ResponseCaptured -> "response-captured")
+            let stage =
+                match outcome.Stage with
+                | DirectResponses.NotSent -> "not-sent"
+                | DirectResponses.CountSent -> "count-sent"
+                | DirectResponses.CountAccepted -> "count-accepted"
+                | DirectResponses.GenerationSent -> "generation-sent"
+                | DirectResponses.ResponseCaptured -> "response-captured"
+            capture.["stage"] <- JsonValue.Create stage
             capture.["elapsedMilliseconds"] <- JsonValue.Create phase.ElapsedMilliseconds
             capture.["wholeMilliseconds"] <- JsonValue.Create 60000
             capture.["networkMilliseconds"] <- JsonValue.Create 55000
@@ -380,7 +384,7 @@ module internal NativeResponsesCollection =
 
     /// This operation accepts only the opaque capture created by the actual HTTP owner.
     /// Raw files, supplied flags and verifier exit status cannot construct VerifiedCapture.
-    let verify configPath hostConfig storeRoot (capture: Capture) =
+    let verify (hostConfigPath: string) (hostConfig: HostConfig) (storeRoot: string) (capture: Capture) =
         let mutable retained = false
         let failure reason =
             if obj.ReferenceEquals(capture, null) then
@@ -397,7 +401,7 @@ module internal NativeResponsesCollection =
             retain phase original.Config.EvidenceRoot capture.Operation.OperationId "capture.json" capture.Bytes
             retain phase original.Config.EvidenceRoot capture.Operation.OperationId "snapshot.json" capture.SnapshotBytes
             retained <- true
-            let current = installed phase configPath hostConfig storeRoot
+            let current = installed phase hostConfigPath hostConfig storeRoot
             require (current.Principal = original.Principal && current.InstallationSha256 = original.InstallationSha256
                      && current.ManagerSha256 = original.ManagerSha256) "responses-installed-authority-changed"
             let actual = NativeSourceVerification.verifyResponses phase original.Config.NativeVerifier original.Config.EvidenceRoot
