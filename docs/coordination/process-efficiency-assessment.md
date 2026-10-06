@@ -154,6 +154,14 @@ Metric quantities remain separate. Local restoration detects byte or reference d
 but does not establish admission. Explicit enrolled enqueue supplies the packet through a separate
 `--packet` file; regular completion notifications use reconciliation instead.
 
+The existing process-review payload does not name an analyst claim or invocation. Reconciliation
+therefore defers new analysis while the current request is claimed or unresolved, including when
+the root publishes the analyst's draft review. Successful settlement binds the accepted assessment's
+exact item-review reference to the genuine claim and runtime invocation. Subsequent reconciliation
+uses that canonical association to exclude the generated review from substantive evidence. Newer
+review time, item identity or requested reviewer metadata alone does not establish authorship. Failed
+output without an accepted association remains unknown/provisional and cannot cause automatic retry.
+
 ## Single-invocation pilot qualification
 
 The selected pilot is measured, with input and output token support marked `observed-only` and a
