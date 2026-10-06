@@ -17,7 +17,7 @@ import zipfile
 
 REPOSITORY_ID = 1269292704
 WORKFLOW = ".github/workflows/release-new-sdd-workspace-successor-candidate.yml"
-VERSION = "0.15.0"
+VERSION = "0.16.0"
 PACKAGE = f"FS.GG.NewSddWorkspace.{VERSION}.nupkg"
 MEMBERS = {PACKAGE, "manifest.json", "package-evidence.json"}
 

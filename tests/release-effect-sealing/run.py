@@ -89,8 +89,8 @@ route = next(row for row in report["routes"] if row["path"] == WIZARD_SUCCESSOR)
 assert route["sha256"] == digest(ROOT / WIZARD_SUCCESSOR)
 assert route["disposition"] == "exact-source-protected-journal-successor-only"
 amendment = route["successorAmendment"]
-assert amendment["unit"] == "COORD-BOARD-V2-01.5" and amendment["version"] == "0.15.0"
-assert amendment["operationAcceptance"] == "candidate, journal initialization, protected preflight and 0.15 publication not performed"
+assert amendment["unit"] == "COORD-BOARD-V2-01.5" and amendment["version"] == "0.16.0"
+assert amendment["operationAcceptance"] == "candidate, journal initialization, protected preflight and 0.16 publication not performed"
 history = next(row for row in report["historicalRouteAttestations"]
                if row["acceptedSource"] == amendment["previousAcceptedSource"])
 assert history["status"] == "non-current-history"
@@ -300,13 +300,14 @@ for function, keyword, count in (("effects", "binding", 3), ("WizardAdmission", 
     assert len(selected) == count
     assert all(any(arg.arg == keyword and isinstance(arg.value, ast.Name) and arg.value.id == "HISTORICAL_013"
                    for arg in call.keywords) for call in selected)
-assert "self.release_binding is not CURRENT_015" in admission
+assert "self.release_binding is not CURRENT_016" in admission
 assert "self.release_binding is not HISTORICAL_013" in admission
 execution = (ROOT / "scripts/new_sdd_workspace_successor_execution.py").read_text()
 assert 'CURRENT_014 = ReleaseBinding("FS.GG.NewSddWorkspace", "0.14.0", "new-sdd-workspace/v0.14.0")' in execution
 assert 'CURRENT_015 = ReleaseBinding("FS.GG.NewSddWorkspace", "0.15.0", "new-sdd-workspace/v0.15.0")' in execution
+assert 'CURRENT_016 = ReleaseBinding("FS.GG.NewSddWorkspace", "0.16.0", "new-sdd-workspace/v0.16.0")' in execution
 assert 'HISTORICAL_013 = ReleaseBinding("FS.GG.NewSddWorkspace", "0.13.0", "new-sdd-workspace/v0.13.0")' in execution
-assert "binding is not CURRENT_015 and binding is not HISTORICAL_013" in execution
+assert "binding is not CURRENT_016 and binding is not HISTORICAL_013" in execution
 
 with tempfile.TemporaryDirectory(prefix="gs2-08-9-release-seal.") as temporary:
     work = pathlib.Path(temporary)

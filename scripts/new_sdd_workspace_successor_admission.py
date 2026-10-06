@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from release_successor_provider import GitHubAPI
-from new_sdd_workspace_successor_execution import effects, CURRENT_015, HISTORICAL_013
+from new_sdd_workspace_successor_execution import effects, CURRENT_016, HISTORICAL_013
 
 REPOSITORY = "FS-GG/.github"
 REPOSITORY_ID = 1269292704
@@ -17,7 +17,7 @@ class Refused(RuntimeError):
 
 class WizardAdmission:
     def __init__(self, api: GitHubAPI, manifest: dict, publisher_sha: str, run_id: int, actor: str, ref: str,
-                 *, release_binding=CURRENT_015):
+                 *, release_binding=CURRENT_016):
         self.api = api
         self.publisher_sha = publisher_sha
         self.run_id = run_id
@@ -30,7 +30,7 @@ class WizardAdmission:
 
     def authorize(self, content_id: str, effect: str, action: str, request_digest: str) -> bool:
         if (
-            self.release_binding is not CURRENT_015
+            self.release_binding is not CURRENT_016
             or content_id != self.content_id
             or self.requests.get(effect) != request_digest
             or action not in {"intent", "dispatch", "settle"}

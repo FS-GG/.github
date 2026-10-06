@@ -33,7 +33,7 @@ class FrozenDependencyControls(unittest.TestCase):
         self.members["runtimes/linux-x64/native/engine.so"] = b"synthetic native input"
         self.package = self.root / "accepted.nupkg"
         self.write_archive(self.members)
-        self.pin = {"projects": {"scripts/NewSddWorkspace/NewSddWorkspace.fsproj": "new-sdd-workspace",
+        self.pin = {"version": "0.97.1", "projects": {"scripts/NewSddWorkspace/NewSddWorkspace.fsproj": "new-sdd-workspace",
                                  "src/Engine/Engine.fsproj": "fsgg-coord-engine"},
                     "sourceLeaves": [{"path": "src/Engine/Engine.fsproj", "sha256": self.hash(self.project.read_bytes())}],
                     "archiveSha256": self.hash(self.package.read_bytes()), "sourceSha": "a" * 40,
@@ -46,6 +46,7 @@ class FrozenDependencyControls(unittest.TestCase):
 
     def write_archive(self, members):
         with zipfile.ZipFile(self.package, "w") as archive:
+            archive.writestr("FS.GG.Coord.Cli.nuspec", '<package><metadata><id>FS.GG.Coord.Cli</id><version>0.97.1</version><repository commit="' + 'a' * 40 + '"/></metadata></package>')
             for name, body in members.items():
                 archive.writestr(PREFIX + name, body)
 
@@ -73,6 +74,25 @@ class FrozenDependencyControls(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "source changed"):
             self.stage()
         self.assertFalse(self.dependencies.exists())
+
+    def test_metadata_identity_mutants_refuse_before_output(self):
+        for key, value in (("version", "0.97.0"), ("sourceSha", "b" * 40)):
+            with self.subTest(field=key):
+                original = self.pin[key]
+                self.pin[key] = value
+                with self.assertRaisesRegex(ValueError, "package/version/source identity changed"):
+                    self.stage()
+                self.assertFalse(self.dependencies.exists())
+                self.pin[key] = original
+
+    def test_actual_pin_matches_selected_source_and_candidate_download(self):
+        pin = json.loads((ROOT / "scripts/creator-frozen-coord-dependencies.json").read_text())
+        self.assertEqual(pin["version"], "0.97.1")
+        self.assertEqual(pin["sourceSha"], "99ea75286f5c3cea2a261fef4e5b45cd70378185")
+        self.assertEqual(len(HELPER["source_projects"](ROOT, pin)), 11)
+        workflow = (ROOT / ".github/workflows/release-new-sdd-workspace-successor-candidate.yml").read_text()
+        self.assertIn(pin["downloadUrl"], workflow)
+        self.assertNotIn("FS.GG.Coord.Cli.0.97.0.nupkg", workflow)
 
     def test_linked_destination_refuses_before_write(self):
         target = self.root / "other"

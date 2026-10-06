@@ -82,6 +82,18 @@ the earlier adapter-pin and report-framing failures remain retained.
 The [owning roadmap](roadmaps/diagnostic-execution.md) keeps .4 open: genuine provider artifact
 intake, private facts/grants, publication and installed receiver adoption remain separate gates.
 
+**2026-10-06: Creator016 integrated source/private package qualified; delivery and adoption pending.**
+The [owning board plan](coordination/2026-09-29-coordination-v2-board-design.md) records
+PR4232's local successor `ddd79655` and genuine `260bfe`/`7e8` integration ancestry.
+Fresh canonical generation passed four commands; separate Creator qualification passed
+all six phases and verified **59 built files / 11 projects / 81 authentic published0971
+bodies**. Source/cache/runtime checks and owned cleanup passed; the earlier frozen0970
+stage refusal and all original attempts remain preserved. Exact-head hosted/coherent CI
+and protected merge are pending, with the separate Contracts7.6source/7.5.2public C4/GOV-C3
+publication fence unchanged. Creator016 publication, fresh/retained installed journeys and
+whole .5/.6 adoption remain open. Published015 stays accepted history; local package proof
+and this projection do not establish installed support or whole-programme completion.
+
 **2026-10-06: V2-DIAG-01 aggregate preparation and selected pilots qualified; adoption pending.**
 The [owning roadmap](roadmaps/diagnostic-execution.md) records .1–.3 complete for the selected scope.
 Ordinary runner PR4252 and Coordination preparation PR943 are merged; the actual ordinary entry

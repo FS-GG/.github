@@ -59,6 +59,50 @@ module ProductBoard =
     /// Authority is captured before scaffold effects, never inferred from provider-created Git.
     type OriginAuthority = RetainedGit | FreshTarget
 
+    /// Opaque invocation authority: an existing directory without Git is still owner-authored.
+    type FreshScaffoldTarget = private FreshScaffoldTarget of string
+    type GeneratedToolManifest = private GeneratedToolManifest of string * byte array * UnixFileMode option
+
+    let captureFreshScaffoldTarget (target: string) =
+        let absent =
+            try File.GetAttributes target |> ignore; false
+            with
+            | :? FileNotFoundException | :? DirectoryNotFoundException -> true
+            | _ -> false
+        if absent then Some(FreshScaffoldTarget(Path.GetFullPath target)) else None
+
+    let private generatedManifestPreimage target =
+        let path = Path.Combine(target, ".config", "dotnet-tools.json")
+        for entry in [ target; Path.Combine(target, ".config"); path ] do
+            if (File.GetAttributes entry &&& FileAttributes.ReparsePoint) <> enum<FileAttributes> 0 then
+                invalidOp "generated tool manifest path must not contain symbolic links"
+        let before = File.ReadAllBytes path
+        let mode = if OperatingSystem.IsWindows() then None else Some(File.GetUnixFileMode path)
+        before, mode
+
+    /// Capture immediately after the successful SDD call, before any subsequent creator phase.
+    let captureGeneratedToolManifest (FreshScaffoldTarget originalTarget) target scaffoldSucceeded =
+        try
+            if not scaffoldSucceeded || Path.GetFullPath target <> originalTarget then
+                invalidOp "generated tool authority requires this successful fresh scaffold"
+            let provenance = jsonObject (Path.Combine(target, ".fsgg", "scaffold-provenance.json"))
+            if provenance.["schemaVersion"].GetValue<int>() <> 1
+               || provenance.["generator"].["id"].GetValue<string>() <> "FS.GG.SDD.Artifacts" then
+                invalidOp "generated tool manifest lacks SDD scaffold provenance"
+            let owned = provenance.["sddOwnedPaths"].AsArray()
+            let owners = owned |> Seq.filter (fun row -> row.["path"].GetValue<string>() = ".config/dotnet-tools.json") |> Seq.toList
+            if owners.Length <> 1 || owners.Head.["owner"].GetValue<string>() <> "sdd" then
+                invalidOp "generated tool manifest is not uniquely SDD-owned"
+            let before, mode = generatedManifestPreimage target
+            let root = JsonNode.Parse(Text.Encoding.UTF8.GetString before).AsObject()
+            if root.["version"].GetValue<int>() <> 1 || not (root.["isRoot"].GetValue<bool>()) then
+                invalidOp "generated tool manifest must be a root manifest"
+            let tool = root.["tools"].["fs.gg.coord.cli"].AsObject()
+            if String.IsNullOrWhiteSpace(tool.["version"].GetValue<string>()) || tool.["commands"].AsArray().Count = 0 then
+                invalidOp "generated coordination default is malformed"
+            Ok(GeneratedToolManifest(originalTarget, before, mode))
+        with error -> Error("generated tool manifest capture refused: " + error.Message)
+
     let captureOriginAuthority target =
         if Directory.Exists(Path.Combine(target, ".git")) || File.Exists(Path.Combine(target, ".git")) then RetainedGit
         else FreshTarget
@@ -87,8 +131,14 @@ module ProductBoard =
 
     /// Stage reviewed producer bytes and preserving JSON merges. Fetch is injected for offline controls.
     /// The immutable kit revision identifies both manifest projections, shim and exact local tool pin.
-    let prepare (target: string) (repository: string) (kitRevision: string) (bindingJson: string) (fetch: string -> Result<string, string>) =
+    let private prepareWithGeneratedManifest generatedManifest (target: string) (repository: string) (kitRevision: string) (bindingJson: string) (fetch: string -> Result<string, string>) =
         try
+            match generatedManifest with
+            | Some(GeneratedToolManifest(originalTarget, before, beforeMode)) ->
+                let actual, mode = generatedManifestPreimage target
+                if Path.GetFullPath target <> originalTarget || actual <> before || mode <> beforeMode then
+                    invalidOp "generated tool manifest changed after the successful scaffold"
+            | None -> ()
             if not (immutableRevision kitRevision) then invalidOp "--board-kit-ref requires an immutable 40 hexadecimal revision"
             let adapterBytes = File.ReadAllBytes typeof<Binding>.Assembly.Location
             let binding = validate repository (digest adapterBytes) bindingJson |> function Ok value -> value | Error error -> invalidOp error
@@ -127,7 +177,10 @@ module ProductBoard =
                 |> Array.map (fun value -> (value :?> Reflection.AssemblyInformationalVersionAttribute).InformationalVersion.Split('+').[0])
                 |> Array.tryExactlyOne
             if actualVersion <> Some version then invalidOp "published tool pin differs from the creator's coherent adapter version"
-            let toolsRoot = jsonObject (Path.Combine(target, ".config", "dotnet-tools.json"))
+            let toolsRoot =
+                match generatedManifest with
+                | Some(GeneratedToolManifest(_, before, _)) -> JsonNode.Parse(Text.Encoding.UTF8.GetString before).AsObject()
+                | None -> jsonObject (Path.Combine(target, ".config", "dotnet-tools.json"))
             match toolsRoot.["isRoot"] with
             | null -> toolsRoot.["isRoot"] <- JsonValue.Create true
             | node when node.GetValue<bool>() -> ()
@@ -137,6 +190,7 @@ module ProductBoard =
             match tools.["fs.gg.coord.cli"] with
             | null -> tools.["fs.gg.coord.cli"] <- selectedTool.DeepClone()
             | node when JsonNode.DeepEquals(node, selectedTool) -> ()
+            | _ when generatedManifest.IsSome -> tools.["fs.gg.coord.cli"] <- selectedTool.DeepClone()
             | _ -> invalidOp "owner-authored adapter pin conflicts with selected publication"
             staged.Add(".config/dotnet-tools.json", encode toolsRoot, false, true)
             staged.Add(".fsgg/board-v2-binding.json", bytes bindingJson, false, false)
@@ -165,6 +219,12 @@ module ProductBoard =
                     let path = Path.Combine(target, rel)
                     let before = if File.Exists path then Some(File.ReadAllBytes path) else None
                     let mode = if before.IsSome && not (OperatingSystem.IsWindows()) then Some(File.GetUnixFileMode path) else None
+                    match generatedManifest with
+                    | Some(GeneratedToolManifest(_, captured, capturedMode)) when rel = ".config/dotnet-tools.json" ->
+                        generatedManifestPreimage target |> ignore
+                        if before <> Some captured || mode <> capturedMode then
+                            invalidOp "generated tool manifest changed during preparation"
+                    | _ -> ()
                     if executable && (mode |> Option.exists (fun value -> (value &&& UnixFileMode.UserExecute) = enum<UnixFileMode> 0)) then
                         invalidOp ("selected executable has conflicting mode: " + rel)
                     match before with
@@ -174,6 +234,14 @@ module ProductBoard =
                     | _ -> Some { Path = rel; Before = before; After = after; Executable = executable; BeforeMode = mode }) |> Seq.toList
             Ok { Repository = repository; ProjectId = binding.ProjectId; Changes = changes }
         with error -> Error("product V2 preparation refused: " + error.Message)
+
+    /// Existing targets and retrofit always preserve conflicting owner pins.
+    let prepare target repository kitRevision bindingJson fetch =
+        prepareWithGeneratedManifest None target repository kitRevision bindingJson fetch
+
+    /// Only the opaque, same-invocation successful fresh scaffold snapshot grants replacement.
+    let prepareGenerated snapshot target repository kitRevision bindingJson fetch =
+        prepareWithGeneratedManifest (Some snapshot) target repository kitRevision bindingJson fetch
 
     /// Recheck every staged preimage immediately before the first write; restore original bytes on
     /// failure. This local installation never runs an adapter, accesses GitHub or changes a board.

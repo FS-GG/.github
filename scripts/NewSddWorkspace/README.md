@@ -278,3 +278,10 @@ dotnet run --project scripts/NewSddWorkspace -- ./Pong Pong
 ```
 
 Output degrades to plain (ANSI-free) when piped, under `NO_COLOR`, or on a non-TTY.
+
+For a target that was absent when this invocation began, successful SDD scaffold provenance
+and an immediate tool-manifest byte/mode snapshot identify its generated coordination default.
+Creator0.16 can replace only that unchanged generated Coord entry with the exact selected Kit pin,
+preserving SDD and other tools. An existing directory without Git, retained repository or retrofit
+receives no such allowance. Missing ownership evidence or edits after the snapshot refuse; preview
+and atomic apply continue to protect all owner preimages. Published0.15 remains immutable.

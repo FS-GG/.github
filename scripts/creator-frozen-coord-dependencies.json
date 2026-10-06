@@ -1,11 +1,11 @@
 {
   "schema": "fsgg.creator-frozen-coord-dependencies/1",
-  "sourceSha": "2ab0c0ff9f37bdec9a11ba3604ebdc230711934f",
-  "version": "0.97.0",
-  "archiveSha256": "3e620f112676f76c5f247343f7cffde2f00d31c5e82dec1342ab94f30400a08d",
-  "releaseId": 403211100,
-  "assetId": 610712479,
-  "downloadUrl": "https://github.com/FS-GG/.github/releases/download/coherent-set/v0.97.0/FS.GG.Coord.Cli.0.97.0.nupkg",
+  "sourceSha": "99ea75286f5c3cea2a261fef4e5b45cd70378185",
+  "version": "0.97.1",
+  "archiveSha256": "00c61ecba2e7973c1202f5abcf13a9c788c48c561090fd8dd8e4b58387666ea0",
+  "releaseId": 403934888,
+  "assetId": 613172271,
+  "downloadUrl": "https://github.com/FS-GG/.github/releases/download/coherent-set/v0.97.1/FS.GG.Coord.Cli.0.97.1.nupkg",
   "projects": {
     "scripts/NewSddWorkspace/NewSddWorkspace.fsproj": "new-sdd-workspace",
     "src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj": "fsgg-coord-engine",
@@ -66,7 +66,7 @@
     },
     {
       "path": "src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj",
-      "sha256": "b84249f3c60e007003e204aeb0f13d51408874f37b82ea3d516646cbc5b92d70"
+      "sha256": "a738b85f1645614362f4916e92874e8f148ce2ab9748c30021263c0bd210a5be"
     },
     {
       "path": "src/FS.GG.Coord.Cli/IntakeApplication.fs",
@@ -150,7 +150,7 @@
     },
     {
       "path": "src/FS.GG.Coord.Cli/SkillTelemetryAdapter.fs",
-      "sha256": "34241058e93fb85687edabb402f10ace121b7a134078b08001da0a35b3cc776a"
+      "sha256": "7ccb5fda0e18a60de631875a7da9d698ed9e1cf1a3017d476527489875933656"
     },
     {
       "path": "src/FS.GG.Coord.Cli/SkillTelemetryAdapter.fsi",
@@ -1074,7 +1074,7 @@
     },
     {
       "path": "Directory.Build.props",
-      "sha256": "a780f4641904ac81e31e164dbdf0ca4c4ac3c7824aaa352c44c5a9563a969150"
+      "sha256": "cb34193c5ffc7ad3f5065a22d1bc724cfec21453dcd9caea076035382cde42aa"
     },
     {
       "path": "Directory.Packages.props",
@@ -1090,32 +1090,32 @@
     }
   ],
   "members": {
-    "FS.GG.Coord.Cli.BoardOps.dll": "49d6eacc11405f5e751473afd9c1c4a7455c4807eb16e0176d01812e0b0e2ac3",
-    "FS.GG.Coord.Cli.BoardOps.pdb": "1ed2211c489f6d58f40c6cf09da129613dec8d19be7fbd8e450d5f31488ae9df",
+    "FS.GG.Coord.Cli.BoardOps.dll": "2076900f50e0985476f062f1b4503e721653524ee5adf7ec5de3bd59d332f485",
+    "FS.GG.Coord.Cli.BoardOps.pdb": "1c973dba71222feda6979d461cde70f2cf9843a6330e3b17e844f5874810e5c9",
     "FS.GG.Coord.Cli.BoardOps.xml": "e84b0c28377b28e27e1d511e107d9589ca5af6c633cea5ec895555442211a9ce",
-    "FS.GG.Coord.Cli.Kernel.dll": "6f1c88324814f2f3a0ca63acd1b98107d76b4f67fff20a1a5063607f9958f367",
-    "FS.GG.Coord.Cli.Kernel.pdb": "070917bb7577a317b582152ed9d706de10c4ef5e0975e7ea945f62c067c4cf9f",
+    "FS.GG.Coord.Cli.Kernel.dll": "2bfaf82749d95336c01ae497f356123f768506836fc13aac5246c55ffda0af64",
+    "FS.GG.Coord.Cli.Kernel.pdb": "dd249ca3bfdfae0da84aa8c1abb7fcda01988a2f0ed1eb658a362ed940f02c83",
     "FS.GG.Coord.Cli.Kernel.xml": "4fe566b90ecc174be73e6df1294a3121bda5b9be1fea476353bf9d56a976d2d1",
-    "FS.GG.Coord.Cli.Lifecycle.dll": "1d0d3b1981c007e3910927b79966d754434e8916b0f7ebffa7ca61e32fc8d7ef",
-    "FS.GG.Coord.Cli.Lifecycle.pdb": "fa9abd9fe665a94c52307825b610e011bf818b2d4d56889e2ee418a048561c43",
+    "FS.GG.Coord.Cli.Lifecycle.dll": "8cddfacd1944e9fa33a783f3a7f274ddeeb76a4415ccbaa9ab5ccdc798fb5671",
+    "FS.GG.Coord.Cli.Lifecycle.pdb": "e1049f2cba68396938a00a8e9b8f0759961c784e88e005d135a40d3ae302e84e",
     "FS.GG.Coord.Cli.Lifecycle.xml": "358b1c3a14eae371470d44274744064a54b9dd3cfb683ae163e68c8fe0e4736b",
-    "FS.GG.Coord.Core.dll": "3a1f53202566d63a57685f768ad8ff12383eb03604b11e5cc5a02559da0a2d12",
-    "FS.GG.Coord.Core.pdb": "b3ddc65570156227942fa734e083a7c931bf7e1e782c1cb02f7ee7330bd5b73b",
+    "FS.GG.Coord.Core.dll": "96129b91fa1db119e3d6d71cfddbb2d3d91152eba1ed9b32d38781b4767f4813",
+    "FS.GG.Coord.Core.pdb": "da16819d154a97bf02005a5e11853efc682456cbdfe5588d23d18308f5f509dd",
     "FS.GG.Coord.Core.xml": "623e481279318c1a77e5dfa54d4d9ea14da8c3b353ea53bd7ba0867ca3e5944f",
-    "FS.GG.Coord.GitHub.dll": "063c0365122b7ce63cdbbf0b33f88b63cb59894102997466d410f56aee04048f",
-    "FS.GG.Coord.GitHub.pdb": "d40c72674e5271b9464f90288da32c0d8d0a041d179af12821f0a0bf648ce022",
+    "FS.GG.Coord.GitHub.dll": "a1779ca6a8d4be1bbfe7a58beba820dfec4a19cb5df4a0b3cb193547c00ae2d5",
+    "FS.GG.Coord.GitHub.pdb": "3d404c31f1f39498b996f7a4f5ecb3208d1b4cef43f53db8e07e69ce92bae53e",
     "FS.GG.Coord.GitHub.xml": "c67fad64f5621d4a136e19332dbacf406ddc25a2f7751c8aaf3dfb7299d498de",
-    "FS.GG.Telemetry.Client.dll": "9039d3f1f960187a9f60b9d09f26d3e416f8c0419a9894fd445732b7403639cb",
-    "FS.GG.Telemetry.Client.pdb": "4446ac7fa6611ef3c192613120806f4b39470d233021561ee9d2c63e22096936",
+    "FS.GG.Telemetry.Client.dll": "c35b9ef6d1d8178a20203c78b5a9d523cc9b1bb4b0b4efe89bc645cdab8a99e6",
+    "FS.GG.Telemetry.Client.pdb": "e607ace51d3a3d26ca114d34abe01ee1ba3f4d27042d758f413c2d2f4347b723",
     "FS.GG.Telemetry.Client.xml": "0e27fa484c1e4204ec3129fe89940c331473e9bfcde0715b91e4a936a423aebb",
-    "FS.GG.Telemetry.Contracts.dll": "123def36817190b32ec936cd7d939c463cdb1d8e51b59ebc26590f4c903d46ac",
-    "FS.GG.Telemetry.Contracts.pdb": "ccef1f189cad89706aa640b9bd26cd8a363aeac496889352b1d2eefc54deda1c",
+    "FS.GG.Telemetry.Contracts.dll": "43486e12de50a184a2a2797fe91b35b6edd64f54203218ee1fd34208e2923857",
+    "FS.GG.Telemetry.Contracts.pdb": "909724e21e0e4b8174e9a64391d7e4abf4bb406d6282ca68810bb44cc2a14e2f",
     "FS.GG.Telemetry.Contracts.xml": "1577f8605671efabeae4e6a49e338a21537b1bced924552db83f320ce5a9d6ce",
-    "FS.GG.Telemetry.Dashboard.dll": "02afa12cf20c27eb088b2fd554e9d1355deedad1fcc068c9ca08aee442fecc68",
-    "FS.GG.Telemetry.Dashboard.pdb": "f36f4870d346a67b36ea2bd2e8751941b20978676f5279a306923b6129069c43",
+    "FS.GG.Telemetry.Dashboard.dll": "1bd74e18d4c0f8ebb6706748d8a50cfc26599d9ac5bceeddc8f0bce9d7d4b7d9",
+    "FS.GG.Telemetry.Dashboard.pdb": "31cccfbf911c50f3340d3b81572151a4311ea7f9ca8277d7cf83bc65dc958fe0",
     "FS.GG.Telemetry.Dashboard.xml": "7c2002ea25217b58b4eb73522d8c9878ac53fbcea803bd5eddebfc5a0a69786b",
-    "FS.GG.Telemetry.Store.dll": "72a58ba715761e924a24c3661f5825e11b9fc7cf57379a7150fdbdd8d2ea70fd",
-    "FS.GG.Telemetry.Store.pdb": "125df9c8c28b7bef9194bd6723e34a70e980e54f75c4af85ebfe34491135c1a1",
+    "FS.GG.Telemetry.Store.dll": "6760c062da1e062d863788b962b96192160f1f0efcee0db6531091f00bfe5651",
+    "FS.GG.Telemetry.Store.pdb": "74c1c8d0d97fe1861179e98cfa8ae64c497cb6830049abc0e2c8796be49cd034",
     "FS.GG.Telemetry.Store.xml": "69f55c649af98694db955f20e4b705668ce968a9e9d0b0fbb37ae3a890ca522f",
     "FSharp.Core.dll": "39b0b7f06c11bedd93f94b6f101fffd645f1c4437a5a6d3ee79259f855aeb11a",
     "Microsoft.Data.Sqlite.dll": "b98d957462be432895b00dccca012d3c127e118d3d4262418014b92c7bbd66cf",
@@ -1127,9 +1127,9 @@
     "de/FSharp.Core.resources.dll": "9f1195204de5486e502b08530499a3b47ae74d0802e97f9f5769a91a2f24340f",
     "es/FSharp.Core.resources.dll": "cb1b86d6ece9335ac72891d764052385dcf84c17a784a763a4041e6c6a2538a5",
     "fr/FSharp.Core.resources.dll": "6b1b09397595fea3dc159a78e5a4f28316d4a7b45d0017ededa43d9c8ea8e3af",
-    "fsgg-coord-engine.deps.json": "f5551b231e6461c421a49402a28adc1ca93b85c7be1c73729f2fe271ce19a51c",
-    "fsgg-coord-engine.dll": "cb318977a143085680b27ba4c86fffd6fb3f5a91dc6a7e07cf79ef7c67825615",
-    "fsgg-coord-engine.pdb": "08be6f4848bbe16df8a9667c9e7d81c03e61229c66bf199d306b82b6b84e2fbc",
+    "fsgg-coord-engine.deps.json": "7579eb1bc55dcc1d4569307666f753558f704caa509b42ccaa1d76cec78ff487",
+    "fsgg-coord-engine.dll": "c7187f8f6b7053ea4c5b3acd66545d7e81d82a62ca3e54dc441499e9d1eb5591",
+    "fsgg-coord-engine.pdb": "deb86f387afdcf6d7ee2ec448a062ddd9bd09820a13fca0f750a91ac826713ae",
     "fsgg-coord-engine.runtimeconfig.json": "e4b3a5d18f436095616519e1c99f954e4b0a8952d2dc6681915a69bbae0c5f30",
     "fsgg-coord-engine.xml": "cbe65f9761eec5fd0ed845f8db1c4d6ff93e8e670b46901ba5a2e2f2cde15ef0",
     "it/FSharp.Core.resources.dll": "d666d34802d2e6518b70f259ae25578f97d4b54e1c4bc514e4283d6271624af5",

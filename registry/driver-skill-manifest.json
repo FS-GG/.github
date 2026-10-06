@@ -329,12 +329,12 @@
     {
       "id": "publishing-and-deployment",
       "scope": "operator",
-      "sha256": "7925ef891f1c4cb4b69625689f53054cc72083fabfb43bda5d6a4ccc63c51033",
-      "tree-sha256": "54ecd28857dd2791d5d4205f996c5028cd2da0b099706163994c47615d210dc6",
+      "sha256": "ba1e9d065cf3d73eb92ae9cb065fff9cd438f4ae404576fbd7a39325ed239aed",
+      "tree-sha256": "b2b1f6cca7ed3016eefa7133d1f456230f3460ba811407b543d0047cfbf5e6ac",
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "7925ef891f1c4cb4b69625689f53054cc72083fabfb43bda5d6a4ccc63c51033",
+          "sha256": "ba1e9d065cf3d73eb92ae9cb065fff9cd438f4ae404576fbd7a39325ed239aed",
           "executable": false
         },
         {
