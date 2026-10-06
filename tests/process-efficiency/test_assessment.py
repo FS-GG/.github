@@ -149,6 +149,12 @@ class AssessmentTests(unittest.TestCase):
         output['lifecycle']['idempotencyKey'] = a.key(output['subject'], after['evidenceDigest'])
         self.assertEqual(a.validate(output, after, SCHEMA, admitted_review=review, metric_schema=METRIC_SCHEMA), output)
 
+    def test_oversized_source_record_refuses_before_retention(self):
+        output, packet = fixture()
+        row = dict(packet['records'][0], payload={'oversized': 'x' * 16384})
+        with self.assertRaisesRegex(ValueError, 'canonical input bytes'):
+            a.assemble(output['subject'], [row], [], output['coverage'])
+
     def test_bound_priority_and_untrusted_prompt(self):
         output, packet = fixture()
         rows = []

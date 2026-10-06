@@ -64,7 +64,12 @@ def assemble(subject, records, metrics, coverage, omissions=(), max_bytes=24000)
     seen = {}
     analysis_usage = []
     analysis_selected = {}
+    source_bytes = 0
     for row in records:
+        row_bytes = encode(row)
+        source_bytes += len(row_bytes)
+        if len(row_bytes) > 16384 or source_bytes > 4 * 1024 * 1024:
+            raise ValueError('canonical input bytes exceed preparation bound')
         if row['itemId'] != subject['itemId']:
             raise ValueError('cross-item evidence refused')
         ref = row['ref']
@@ -72,9 +77,9 @@ def assemble(subject, records, metrics, coverage, omissions=(), max_bytes=24000)
         if type(ref['revision']) is not int or ref['revision'] < 0:
             raise ValueError('canonical revision required')
         versioned = (*identity, ref['revision'])
-        if versioned in seen and seen[versioned] != encode(row):
+        if versioned in seen and seen[versioned] != row_bytes:
             raise ValueError('conflicting canonical revision')
-        seen[versioned] = encode(row)
+        seen[versioned] = row_bytes
         if row['analysisGenerated']:
             previous = analysis_selected.get(identity)
             if previous is None or previous['ref']['revision'] < ref['revision']:
