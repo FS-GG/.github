@@ -159,7 +159,7 @@ module TelemetryCi =
             let text = requiredText name root
             if not (safe text) then invalidOp ("unsafe correction identifier: " + name)
             text
-        let assignment name =
+        let assignment (name: string) =
             let element = root.GetProperty name
             closed [ "schema"; "featureId"; "itemId"; "attemptId"; "parentAttemptId"; "producerStream" ] element
             match parseAssignment (System.Text.Encoding.UTF8.GetBytes(element.GetRawText())) with

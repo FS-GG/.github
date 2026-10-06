@@ -3407,7 +3407,19 @@ COMMIT;
         use cleanup = cleanup
         correctionSql path (dropCorrectionSchema + " PRAGMA user_version=12;") |> ignore
         Assert.Equal(Error [ "unsupported-version" ], TelemetryStoreApplication.ciCorrectionPlan path approved request)
+        let rawBeforeMigration = correctionSql path "SELECT group_concat(content_digest || canonical,'|') FROM (SELECT content_digest,canonical FROM ingest_facts ORDER BY identity);"
+        let receiptsBeforeMigration = correctionSql path "SELECT group_concat(version || ':' || digest,'|') FROM (SELECT version,digest FROM schema_migrations ORDER BY version);"
+        correctionSql path "CREATE TRIGGER fixture_migration_abort BEFORE INSERT ON store_metadata WHEN NEW.key='ciCorrectionStoreId' BEGIN SELECT RAISE(ABORT,'fixture-schema13-rollback'); END; SELECT 1;" |> ignore
+        Assert.True(TelemetryStoreApplication.initialize path approved |> Result.isError)
+        Assert.Equal("12", correctionSql path "PRAGMA user_version;")
+        Assert.Equal("0", correctionSql path "SELECT count(*) FROM sqlite_master WHERE name IN ('ci_attribution_corrections','ci_correction_evidence','ci_effective_attribution','current_ingest_facts');")
+        Assert.Equal(receiptsBeforeMigration, correctionSql path "SELECT group_concat(version || ':' || digest,'|') FROM (SELECT version,digest FROM schema_migrations ORDER BY version);")
+        Assert.Equal(rawBeforeMigration, correctionSql path "SELECT group_concat(content_digest || canonical,'|') FROM (SELECT content_digest,canonical FROM ingest_facts ORDER BY identity);")
+        correctionSql path "DROP TRIGGER fixture_migration_abort; SELECT 1;" |> ignore
         Assert.Contains("\"schemaVersion\":13", TelemetryStoreApplication.initialize path approved |> unwrap)
+        Assert.Contains("\"schemaVersion\":13", TelemetryStoreApplication.initialize path approved |> unwrap)
+        Assert.Equal(rawBeforeMigration, correctionSql path "SELECT group_concat(content_digest || canonical,'|') FROM (SELECT content_digest,canonical FROM ingest_facts ORDER BY identity);")
+        Assert.Equal(receiptsBeforeMigration, correctionSql path "SELECT group_concat(version || ':' || digest,'|') FROM (SELECT version,digest FROM schema_migrations WHERE version<=12 ORDER BY version);")
         let plan = TelemetryStoreApplication.ciCorrectionPlan path approved request |> unwrap |> Encoding.UTF8.GetBytes
         let changed = nativeOutcome request.Prior.ItemId 2L "delivered" "delivered" "2026-09-08T10:04:02Z"
         TelemetryStoreApplication.ingest path approved (operationalBatch "pre-apply-change" request.Prior.ItemId [ changed ]) |> unwrap |> ignore
