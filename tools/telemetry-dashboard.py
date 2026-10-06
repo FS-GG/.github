@@ -1177,6 +1177,7 @@ def aggregate_host(public: dict[str, Any], ci: list[dict[str, Any]], budgets: li
         for key in totals: totals[key] += checked_int(item.get(key), key)
         u = item.get("usage"); lp = item.get("launcherPopulation")
         if not isinstance(u, dict) or not isinstance(lp, dict): raise ValueError("invalid public aggregate")
+        exact(u,{"input","cachedInput","cacheWriteInput","output","total","reasoning"},"public usage")
         for key in usage:
             amount=u.get(key)
             if amount is None: usage[key]=None

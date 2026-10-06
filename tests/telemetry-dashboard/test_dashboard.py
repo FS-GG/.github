@@ -68,6 +68,13 @@ class DashboardTests(unittest.TestCase):
         for n in (2**53,"01","9223372036854775808",True,-1,1.5):
             with self.assertRaises(ValueError):D.validate_usage_counter(n,"fixture")
 
+    def test_absent_compact_counter_is_malformed_not_explicit_unknown(self):
+        for key in public_item()["usage"]:
+            missing=public_item();del missing["usage"][key]
+            with self.assertRaises(ValueError):self.aggregate([missing])
+            unknown=public_item();unknown["usage"][key]=None
+            self.assertIsNone(self.aggregate([unknown])["usage"][key])
+
     def test_closed_host_aggregate_removes_private_identity_and_free_text(self):
         value=host_fixture(); raw=json.dumps(value)
         self.assertNotIn("PRIVATE-ITEM",raw); self.assertNotIn("secret free text",raw)
