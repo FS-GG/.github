@@ -105,7 +105,7 @@ module ProcessEfficiency =
                 intervals |> List.choose (fun (i: TelemetryBudget.Interval) ->
                     let first = max window.StartNanoseconds i.StartNanoseconds
                     let last = min window.EndNanoseconds i.EndNanoseconds
-                    if last > first then Some { TelemetryBudget.StartNanoseconds = first; EndNanoseconds = last } else None)
+                    if last > first then Some { TelemetryBudget.StartNanoseconds = first; TelemetryBudget.EndNanoseconds = last } else None)
             let union original clipped =
                 if List.isEmpty original then None
                 elif List.isEmpty clipped then Some 0L
@@ -117,7 +117,7 @@ module ProcessEfficiency =
                     for b in w do
                         let first = max a.StartNanoseconds b.StartNanoseconds
                         let last = min a.EndNanoseconds b.EndNanoseconds
-                        if last > first then yield { TelemetryBudget.StartNanoseconds = first; EndNanoseconds = last } ]
+                        if last > first then yield { TelemetryBudget.StartNanoseconds = first; TelemetryBudget.EndNanoseconds = last } ]
             let overlap =
                 if List.isEmpty touch || List.isEmpty wait then None
                 elif List.isEmpty intersections then Some 0L
