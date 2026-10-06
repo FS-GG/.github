@@ -174,6 +174,31 @@ earlier raw-exit/accounting proof refusals remain unqualified. Uncertainty never
 or a successful qualification. Canonical release, distribution and installed receiver adoption
 belong to .4, which remains open. BAR, SC2 and LEARN are not admitted by these local results.
 
+## Canonical candidate and provider diagnostic source — 2026-10-06
+
+[Coordination #945](https://github.com/FS-GG/FS.GG.Coordination/pull/945) merged the
+protected helper and dormant publisher binding at `fab17697d8eddfebc890cb05d8f6c768604c6e5f`.
+The canonical candidate remains producer `bc55a3d1cc887d653c1bb1198e4823b24f47aaa8`:
+[preparation 37403093489](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/37403093489)
+passed with two independent package preparations agreeing. Its genuine installed diagnostic
+entry passed 21 observation records in 5.226 seconds with clean custody and no sampled resource
+failure. This qualifies that canonical candidate, not publication or product adoption.
+
+[Sandbox #56](https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/pull/56) merged at
+`b1186d37c23a2fe9502a5725c47d9776a377fc8f`. Bounded diagnostics now retain provider collection
+failure and cleanup observations without replacing the original outcome or relaxing writer
+settlement. The exact candidate passed 59 pure controls and 87 offline compiler/caller tests;
+the accepted wrapper completed in 17.492 seconds with owned processes settled. The earlier
+adapter-pin refusal and diagnostic-output report-framing failure remain separate evidence.
+This dispatch-only repository has no PR/push coherent workflow; its source qualification does
+not substitute for the later hosted provider control.
+
+Fresh [provider staging 37410297466](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/37410297466)
+passed at the protected helper source. Artifact intake and exact member comparisons are still
+required before assigning its provenance to the private input roles. The original failed P4
+facts attempt and consumed effects remain unchanged. Fresh candidate facts, private facts/grants,
+canonical publication, installed receivers and Drivers distribution remain pending under .4.
+
 ## Completion and rollout limits
 
 Completion requires shared guidance plus implemented, qualified and adopted behavior in both selected

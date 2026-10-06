@@ -56,6 +56,17 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-06: V2-DIAG-01 canonical candidate and provider diagnostic source delivered.**
+[Coordination #945](https://github.com/FS-GG/FS.GG.Coordination/pull/945) delivered the
+protected helper and dormant publisher binding. The genuine canonical `0.2.1` preparation
+and its installed 21-record diagnostic qualification passed without repacking the candidate.
+[Sandbox #56](https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/pull/56) delivered
+bounded provider failure and cleanup diagnostics at `b1186d37c23a2fe9502a5725c47d9776a377fc8f`.
+Its exact candidate passed 59 pure controls and the offline 87-test compiler/caller qualification;
+the earlier adapter-pin and report-framing failures remain retained.
+The [owning roadmap](roadmaps/diagnostic-execution.md) keeps .4 open: genuine provider artifact
+intake, private facts/grants, publication and installed receiver adoption remain separate gates.
+
 **2026-10-06: V2-DIAG-01 aggregate preparation and selected pilots qualified; adoption pending.**
 The [owning roadmap](roadmaps/diagnostic-execution.md) records .1–.3 complete for the selected scope.
 Ordinary runner PR4252 and Coordination preparation PR943 are merged; the actual ordinary entry
