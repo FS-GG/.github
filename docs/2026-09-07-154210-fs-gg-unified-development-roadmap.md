@@ -56,6 +56,37 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-06: P4 private Sandbox helper-binding source delivered; native successor remains unqualified.**
+[Sandbox #58](https://github.com/FS-GG/FS.GG.Sandbox/pull/58) merged head
+`93cd981bc64b5eaba0edc01e60375a14eb5fb441` as
+`7166d7b833ebb6e5e742e631a5463354b7bd30e1` at 13:59:34 UTC, with canonical
+routine delivery accepted and no hosted checks configured. The five-file
+V2-LANG-01.2 checkpoint binds the existing private route to protected Coordination
+helper `0a4076139203eeac9f10467049d2f57d865b2b0f` and selects fresh source2 inputs;
+canonical CLI/image producer `bc55a3d1cc887d653c1bb1198e4823b24f47aaa8` is unchanged.
+Retained 57 pure controls passed; previous runtime acceptance belongs to the prior
+Sandbox source and is not inherited. Exact-helper producer routing, fresh input
+custody, private facts and installed/runtime qualification remain separately
+selected gates in the [owning plan](https://github.com/FS-GG/FS.GG.Coordination/blob/718f7311047a7a5584b24db78bbae26fbd707b52/docs/roadmaps/v2-lang-portable-integration.md).
+Historical source1 failures and unknown cleanup remain preserved; this is bounded
+source closure, not whole V2-LANG completion.
+
+**2026-10-06: Templates Rendering 0.32.1 provider source adoption delivered.**
+[Templates #673](https://github.com/FS-GG/FS.GG.Templates/pull/673) merged head
+`e3ec11993b1f17ac9cc88afcac89df67f49c9309` as
+`784c4af52c4f0d426268e554ca58fa97125c2710` at 13:59:20 UTC, with 11 checks
+passed and three skipped. The two-file descriptor/README change selects published
+`FS.GG.UI.Template::0.32.1` and its immutable provider tag for new Rendering
+workspaces; the deterministic effective-provider fixture passed five cases and
+generator checks passed. The [registry consumption projection](../registry/dependencies.yml)
+now records this protected source adoption. Workspace Template source/package
+version remains 0.18.0 and its existing publication remains unchanged. Separate
+Fable SvgFoundation pins remain Rendering 0.31.0. Original 0.32.1 publication and
+source-bound candidate receiver proof remain established, while published-feed
+installed receiver qualification and host GPU acceptance remain open. Historical
+notification failed credential preflight before either POST and is not credited
+as adoption.
+
 **2026-10-06: Coordination C2 byte-contract and observation-only admission source delivered.**
 [Coordination #948](https://github.com/FS-GG/FS.GG.Coordination/pull/948) merged exact head
 `4f805d207b5a2072a2bf99277dad43b56b700c0e` at protected source

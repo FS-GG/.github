@@ -1020,7 +1020,7 @@ contracts:
     # The remaining P4 provider implementation ships in FS.GG.Workspace.Template; this wizard identity
     # is published and selectable, not a pending rollout phase.
   - id: fs-gg-workspace-template
-    version: "0.18.0"   # CURRENT SOURCE: Typed SDD contract2 provider composition from protected 9161a9d91b3fdd7a80cae7776fdff179e712b32e/tree bd5fd90dac3c73cb754c73512578d4c6f6f48f16. PRIOR 0.15.0 SOURCE: SVG-RELEASE-D.5 omitted provider lifecycle selects typed-sdd/quint-specification-v1; explicit tokens and bundle choices retained. Immutable source b86c841a1c4c4bf7f157a3ae4dc61b0356d6576d.
+    version: "0.18.0"   # CURRENT SOURCE: Templates PR673 merge 784c4af52c4f0d426268e554ca58fa97125c2710 selects published Rendering provider 0.32.1; source version stays 0.18.0. Typed SDD contract2 composition and existing 0.18.0 publication from 9161a9d91b3fdd7a80cae7776fdff179e712b32e/tree bd5fd90dac3c73cb754c73512578d4c6f6f48f16 remain distinct. PRIOR 0.15.0 SOURCE: SVG-RELEASE-D.5 omitted provider lifecycle selects typed-sdd/quint-specification-v1; explicit tokens and bundle choices retained. Immutable source b86c841a1c4c4bf7f157a3ae4dc61b0356d6576d.
     package-version: "0.18.0"   # CURRENT FEED: protected release 37138971862 completed 2026-10-03T17:24:48Z; both native feed readbacks verify all 440 payload entries exact. Original/release/GitHub archive de6a2fdc887d7a595ca6d9d59f465bc762b1a27fdf5518592f304d7c1b3053d1; signed nuget.org archive 27eb96234c9b993fbd01a1f724a3d5b7864ecfae66ca9118a244f391afe6005c. Readback artifact 11280380721; fresh installed adoption remains pending. PRIOR 0.15.0 FEED: protected release 36465599265 verified 403 equal normalized payload entries on both feeds. Original/release/org archive SHA-256 6ebd2b19fd972c3d2dddaf9074e1f31e1f495ebe0e1070d6e5daea416bafcdc6; nuget.org signed archive b822e77d4046a81c453d983a78cc6f319c67a2d3cbd3ec354d7038687416ec3e. Public D.5 receiver run 36472328832 passed before this activation.
     package-tag: "fs-gg-templates/v0.18.0"   # Annotated tag a079a528d1c0752c639c568a1477078a152fa121 peels to protected source 9161a9d91b3fdd7a80cae7776fdff179e712b32e. Prior fs-gg-templates/v0.15.0 remains historical.
     owner: templates
@@ -1096,10 +1096,11 @@ dependencies:
   # SINCE (2026-07-11, coordinated full-platform release): FS.GG.Templates 0.4.0 re-pinned its provider
   # descriptor (providers/rendering.providers.yml → FS.GG.UI.Template) to fs-gg-ui-template 0.8.0, so the
   # edge now reads @0.8.0; the 0.3.1-preview.1 pin above is HISTORICAL.
-  # SELECTED @0.32.0 for TSDD-KNOWLEDGE-01.4's Rendering provider adoption; Templates local source
-  # 534d51899ccd4fbb231c1ca3e9d3bc538ee9bcce is prepared, not merged. Descriptor/native/installed joins
-  # remain pending. Packed Fable SVG pins stay 0.31.0; provider lifecycle defaults remain unchanged.
-  - { from: templates, to: rendering,  via: "fs-gg-ui-template@0.32.0 composed via scaffold-provider (lifecycle=sdd); SVG preview directly pins UI.Scene/SvgBrowser/KeyboardInput 0.31.0" }
+  # SELECTED @0.32.1: Templates PR673 merge 784c4af52c4f0d426268e554ca58fa97125c2710
+  # adopts the published Rendering provider through reviewed source (TSDD-KNOWLEDGE-01.4).
+  # Published-feed installed receiver qualification remains open. Packed Fable SVG pins stay
+  # 0.31.0; provider lifecycle defaults and Workspace Template 0.18.0 publication are unchanged.
+  - { from: templates, to: rendering,  via: "fs-gg-ui-template@0.32.1 composed via scaffold-provider (lifecycle=sdd); SVG preview directly pins UI.Scene/SvgBrowser/KeyboardInput 0.31.0" }
   # ADR-0022 P5 (Rendering#155): Rendering's template game/sample-pack profiles + Canvas.Tests consume the
   # extracted bottom layer. Rendering (upstream) reaching further UP to the new sibling bottom layer is
   # allowed — Game.Core reaches up to nothing; this is the template's game-sim primitive source.
@@ -1323,20 +1324,21 @@ coherence:
       to stable public 2.1.0 after coherent Artifacts/CLI/Knowledge publication from
       source 518517f6b90330a6e99f90bbce68faa0a891287f and both-feed installed readback.
       This is producer capability authority for provider contract 2 and effective
-      Typed SDD project knowledge, not receiver package adoption. UI producer inventory is 0.32.0 after verified
-      original-archive publication; the Templates registry Rendering edge selects 0.32.0,
-      while its prepared descriptor source still requires native acceptance and merge.
+      Typed SDD project knowledge, not receiver package adoption. UI producer inventory is 0.32.1 after verified
+      original-archive publication; Templates PR673 merge 784c4af52c4f0d426268e554ca58fa97125c2710
+      delivers the descriptor source adoption and registry Rendering edge at 0.32.1.
+      Separate packed Fable SVG pins remain 0.31.0.
       Workspace 0.18.0 is published on both feeds after protected release 37138971862
       and native 440-entry payload readbacks; Wizard package inventory remains 0.12.0.
       Templates PR 667 merged all six matching descriptor floors with complete native
       source qualification. Fresh installed Workspace adoption, Wizard 0.13.0 installed
-      adoption and deliberate Rendering 0.32.0 receiver adoption remain outstanding joins.
+      adoption and published-feed installed Rendering 0.32.1 receiver qualification remain outstanding joins.
       The axis stays incomplete until protected mirrors and actual installed
       receivers establish its current scope. Lifecycle defaults are unchanged;
       prior 0.3.0, 0.4.0, 0.6.0 and 1.4.0-preview.1 closure remains historical.
-    resolved_by: "Historical 1.4.0-preview.1 closure: SDD#916, .github#2928 and Templates#432. Current 2.1.0 producer publication: protected promotion 37114843541 and .github#4146; Templates 0.18.0 producer publication: protected release 37138971862 from 9161a9d91b3fdd7a80cae7776fdff179e712b32e; receiver coherence remains pending."
-    impact: "The declared capable producer floor is 2.1.0. Live Templates equality must match both floors; older descriptor heads are expected to fail during the bounded receiver transition. Templates 0.18.0 publication is established separately by protected feed readbacks. Descriptor source-pin adoption, installed Wizard acceptance and complete coherence remain pending."
-    tracking: "https://github.com/FS-GG/FS.GG.Templates/pull/667; TSDD-KNOWLEDGE-01; ADR-0008; historical .github#2928, SDD#916, Templates#432 and original .github#85/#87"
+    resolved_by: "Historical 1.4.0-preview.1 closure: SDD#916, .github#2928 and Templates#432. Current 2.1.0 producer publication: protected promotion 37114843541 and .github#4146; Templates 0.18.0 producer publication: protected release 37138971862 from 9161a9d91b3fdd7a80cae7776fdff179e712b32e; Templates PR673 establishes Rendering 0.32.1 descriptor source adoption; receiver coherence remains pending."
+    impact: "The declared capable producer floor is 2.1.0. Live Templates equality must match both floors; older descriptor heads are expected to fail during the bounded receiver transition. Templates 0.18.0 publication is established separately by protected feed readbacks. Rendering descriptor source-pin adoption is delivered by Templates PR673; installed Wizard and published-feed Rendering receiver acceptance and complete coherence remain pending."
+    tracking: "https://github.com/FS-GG/FS.GG.Templates/pull/667; https://github.com/FS-GG/FS.GG.Templates/pull/673; TSDD-KNOWLEDGE-01; ADR-0008; historical .github#2928, SDD#916, Templates#432 and original .github#85/#87"
 
   - id: governance-overlay-populated
     coherent: true
