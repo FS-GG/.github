@@ -114,8 +114,8 @@ foundation ([PR #4269](https://github.com/FS-GG/.github/pull/4269), `428ef7f6`) 
 host schema 5 and a closed `process-efficiency/1` projection. Public collection and presentation
 require host schema 5 under the user-selected current-only migration.
 The source collector now joins the bounded schema-14 canonical measurement/assessment export
-to its exact compact snapshot revision. Endpoint/exporter native qualification, installed behavior
-and live acceptance remain pending; unavailable or invalid exports retain the base completed-work
+to its exact compact snapshot revision. Schema-14 endpoint/exporter native qualification, installed
+efficiency behavior and live efficiency acceptance remain pending; unavailable or invalid exports retain the base completed-work
 and source-delivery view with efficiency unavailable. This checkpoint does not close .4.
 
 The projection policy `efficiency-public-projection/1` explicitly expands the existing item-label
@@ -151,9 +151,9 @@ IDs, raw item IDs, costs and totals are never joined across sources. Source fail
 unavailable context with unknown work counts. A shared 1 MiB public limit can withhold a whole
 context with `public-budget-exceeded`; it does not produce a false complete empty population.
 The accessible source selector updates completed items, source deliveries, efficiency and local
-host panels together and retains selection across valid refreshes. These source controls remain
-uninstalled. Parent-owned browser root03 passed all 18 cases with clean custody; root04 passed
-all 19 cases after the scoped selector-visibility regression. Neither browser fixture result
+host panels together and retains selection across valid refreshes. Independent two-store selection
+remains source-qualified; the installed standalone route currently selects one schema-13 store.
+Parent-owned browser root03 passed all 18 cases with clean custody; root04 passed all 19 cases after the scoped selector-visibility regression. Neither browser fixture result
 establishes canonical collection or live acceptance. Collector-only source integration preserves
 those exact frontend bytes and shares one absolute 45-second budget across compact/export reads;
 public projection receives only the remaining host byte budget. No metrics are recalculated here.
@@ -173,13 +173,37 @@ result. The old proof was preserved privately before updating the checked-in pro
 fixture result. This qualifies handoff permissions for the exact source exporter, not schema-14
 endpoint behavior, native measurements, publication, installation or live feed acceptance.
 
-The standalone dashboard upgrade can adopt this qualified exporter/UI against the installed
-schema-13 compact source while process efficiency remains explicitly unavailable. It does not
-change or republish the immutable 0.98 engine release. Adoption must preserve the approved completed
-items and show approved source deliveries from a genuine current readback; checkout and fixture
-evidence do not grant installed acceptance. The matching host-5 public feed and Pages artifact
-must use the same selected source revision. Schema-14 export activation and the .6 coherent
-producer/release/pilot work remain separately owed.
+Standalone installed adoption (2026-10-06): [PR #4273](https://github.com/FS-GG/.github/pull/4273)
+merged at `ba5e8e0a627a6c24a8c82fecfd3b6eb9216ea8fd`; the installed dashboard script now binds
+SHA `184723284a4205914811c4d2c78c89d338b3da75a372068a8647bdf7b8ee0a5f` against the
+unchanged immutable 0.98.0 engine and schema-13 compact source. One genuine read-only snapshot
+preserved all five completed groups and their exact cost, runtime, CI and shared base fields.
+Eight approved labels preserve the prior six and disclose three source-only rows: Governance
+[#444](https://github.com/FS-GG/FS.GG.Governance/pull/444), Rendering's latest Templates
+[#673](https://github.com/FS-GG/FS.GG.Templates/pull/673), and Typed Protocol's latest `.github`
+[#4274](https://github.com/FS-GG/.github/pull/4274). Each retains
+`operationalCompletion=unestablished`; broad item labels do not imply whole-item completion or
+reconstruct earlier deliveries. Historical script, labels, receipt and original preview remain retained.
+
+The first host-5 publication at `9a426e05c8bf602a2b63589b69634c03ec5d058a` passed immutable-byte,
+payload-revision and current-branch verification. [Pages run 37481318971](https://github.com/FS-GG/.github/actions/runs/37481318971)
+succeeded from source `0cecd74eff6a3d44d5a4cbfb248b658e195bde1c`; HTTP 200 readback matched
+the entire embedded host-5 payload exactly, with five completed groups, three source deliveries
+and efficiency explicitly unavailable. The deployment is current-only; no older public feed reader
+or compatibility bridge is required.
+
+Supported activation separately published and verified `a636a625d1aa70265f466b3bf26c5e6691d0a3c0`
+with public revision `0a2f903bb9073bed26756b551a23e1605d4668f7233c01b86ad8d6e1d2ba517e`.
+Its actual native run retired cleanly after 10.26 seconds and observed the selected .NET 10.0.12
+runtime. Event publication is active and user units are installed. Timer recurrence is unavailable
+because the user service manager is absent; installed units are not a running timer.
+[Pages run 37482126123](https://github.com/FS-GG/.github/actions/runs/37482126123) then succeeded
+from protected source `0cecd74eff6a3d44d5a4cbfb248b658e195bde1c`. HTTP 200 readback at
+14:56:23 UTC matched the complete immutable activation payload: five completed groups and three
+source deliveries, with no dirty or incompatible rows and efficiency unavailable. Typed Protocol
+now shows its actual latest `.github` #4274 delivery at 14:40:46 UTC; Governance #444 and
+Rendering Templates #673 are unchanged. Historical follow-up usage remains unknown. Schema-14 export activation, installed analysis and the .6 coherent producer/release/pilot
+work remain owed, so the full .4 checklist stays open.
 
 The .2/.3 owners agreed a separate read-only `telemetry efficiency-export` batch interface.
 Its source consumer seam binds `snapshotRevision` to the exact compact `item-detail/3` base and
