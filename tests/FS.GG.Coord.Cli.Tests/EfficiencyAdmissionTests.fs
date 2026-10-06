@@ -483,6 +483,18 @@ module EfficiencyAdmissionTests =
 
     let private responseFixture (status: string) = responseFixtureWithCounters status "0" "1" "100"
 
+    let private responseIdentity (identity: string) (event: string) =
+        let node = JsonNode.Parse event
+        node.["identity"] <- JsonValue.Create identity
+        node.ToJsonString()
+
+    let private responseOutcome (identity: string) =
+        // A second delivery must retain its own source identity, not collide with pendingFixture.
+        let node = JsonNode.Parse sourceOutcome
+        node.["identity"] <- JsonValue.Create identity
+        node.["sourceRef"] <- JsonValue.Create("routine-delivery:" + identity)
+        node.ToJsonString()
+
     let private responseSource (binding: JsonNode) =
         let bytes = CanonicalJson.canonicalize(Encoding.UTF8.GetBytes(binding.ToJsonString())) |> Result.defaultWith failwith |> Encoding.UTF8.GetBytes
         let source = JsonNode.Parse($"""{{"kind":"runtime-native-inventory-source/1","identity":"response-source","itemId":"A","revision":0,"inventoryId":"response-inventory","originalItemId":"A","invocationId":"analyst-invocation","sourceDigest":"{execDigest}","sourceBinding":{{"schema":"fsgg.telemetry.native-inventory-source-binding/3","producerIdentity":"fsgg-work-roadmap-native-collector/1","sha256":"{CanonicalJson.sha256 bytes}","bytesBase64":"{Convert.ToBase64String bytes}"}}}}""")
@@ -544,14 +556,17 @@ module EfficiencyAdmissionTests =
         use exported = JsonDocument.Parse(TelemetryStoreApplication.efficiencyExport path approved (compact.RootElement.GetProperty("revision").GetString()) 200 1000 |> unwrap)
         let cost = (exported.RootElement.GetProperty("items")).[0].GetProperty("metrics").EnumerateArray()
                    |> Seq.find (fun metric -> metric.GetProperty("metric").GetString()="cost-per-accepted")
-        Assert.Equal(JsonValueKind.Null,cost.GetProperty("value").ValueKind)
+        let value = cost.GetProperty "value"
+        Assert.Equal("unknown",value.GetProperty("status").GetString())
+        Assert.Equal(JsonValueKind.Null,value.GetProperty("numerator").ValueKind)
+        Assert.Equal(JsonValueKind.Null,value.GetProperty("denominator").ValueKind)
         Assert.Equal("100",scalar path "SELECT json_extract(canonical,'$.total') FROM current_ingest_facts WHERE identity='response-usage';")
 
     [<Fact>]
     let ``response resource cannot acquire duplicate usage identity or generic runtime row`` () =
         let cleanup,path,native,_,_,usageEvent = responseFixture "completed"
         use cleanup = cleanup
-        Assert.Contains("\"rejected\":1",submitAs native path "response-duplicate" [usageEvent.Replace("response-usage","duplicate-response")])
+        Assert.Contains("\"rejected\":1",submitAs native path "response-duplicate" [responseIdentity "duplicate-response" usageEvent])
         let genericUsage = (usage 0).Replace("usage-a","foreign-response-turn").Replace("invoke-a","analyst-invocation")
         Assert.Contains("\"rejected\":1",submit path "response-cross-namespace" [genericUsage])
         Assert.Equal("1",scalar path "SELECT count(*) FROM current_ingest_facts WHERE kind='runtime-response-usage/1';")
@@ -576,7 +591,7 @@ module EfficiencyAdmissionTests =
     let ``generic receipt cannot introduce response cost despite declared native source variant`` () =
         let cleanup,path,_,_,_,usageEvent = responseFixture "completed"
         use cleanup = cleanup
-        Assert.Contains("\"rejected\":1",submit path "generic-response-cost" [usageEvent.Replace("response-usage","generic-response")])
+        Assert.Contains("\"rejected\":1",submit path "generic-response-cost" [responseIdentity "generic-response" usageEvent])
         Assert.Equal("1",scalar path "SELECT count(*) FROM current_ingest_facts WHERE kind='runtime-response-usage/1';")
 
     [<Fact>]
@@ -620,8 +635,9 @@ module EfficiencyAdmissionTests =
         let cleanup,path,native,inventory,binding,_ = responseFixture "completed"
         use cleanup = cleanup
         Assert.Contains("\"rejected\":0",submitAs native path "response-witnesses" [inventory.ToJsonString();responseSource binding])
-        let outcome = sourceOutcome.Replace("outcome-a","outcome-response")
+        let outcome = responseOutcome "outcome-response"
         Assert.Contains("\"rejected\":0",submit path "response-delivered" [outcome])
+        Assert.Equal("routine-delivery:outcome-response",scalar path "SELECT source_ref FROM native_item_outcomes WHERE identity='outcome-response';")
         Assert.Equal("1",scalar path "SELECT count(*) FROM efficiency_outcome_epochs WHERE state='closed' AND outcome_identity='outcome-response';")
         Assert.Equal("0",scalar path "SELECT count(*) FROM runtime_terminals WHERE invocation_id='analyst-invocation';")
         let closing = scalar path "SELECT close_refs FROM efficiency_outcome_epochs WHERE outcome_identity='outcome-response';"
@@ -644,7 +660,8 @@ module EfficiencyAdmissionTests =
         let cleanup,path,native,inventory,binding,_ = responseFixture "incomplete"
         use cleanup = cleanup
         Assert.Contains("\"rejected\":0",submitAs native path "incomplete-witnesses" [inventory.ToJsonString();responseSource binding])
-        Assert.Contains("\"rejected\":0",submit path "incomplete-delivered" [sourceOutcome.Replace("outcome-a","outcome-incomplete")])
+        Assert.Contains("\"rejected\":0",submit path "incomplete-delivered" [responseOutcome "outcome-incomplete"])
+        Assert.Equal("routine-delivery:outcome-incomplete",scalar path "SELECT source_ref FROM native_item_outcomes WHERE identity='outcome-incomplete';")
         Assert.Equal("1",scalar path "SELECT count(*) FROM efficiency_outcome_epochs WHERE state='open';")
         Assert.Equal("0",scalar path "SELECT count(*) FROM efficiency_outcome_epochs WHERE state='closed';")
 
@@ -652,7 +669,9 @@ module EfficiencyAdmissionTests =
     let ``partial response attribution refuses invented zero counters and preserves real input`` () =
         let cleanup,path,_,_,_,_ = responseFixtureWithCounters "incomplete" "null" "null" "null"
         use cleanup = cleanup
-        let invented = """{"kind":"activity-usage-attribution","identity":"invented-response-attribution","itemId":"A","revision":0,"usageIdentity":"response-usage","activityId":null,"classification":"unclassified","input":99,"cachedInput":0,"output":0,"reasoning":null,"total":0}"""
+        let invented = """{"kind":"activity-usage-attribution","identity":"invented-response-attribution","itemId":"A","revision":0,"usageIdentity":"response-usage","activityId":null,"classification":"unclassified","input":99,"cachedInput":0,"output":0,"reasoning":null,"total":99}"""
+        // Decoder-valid arithmetic reaches the receiver, which refuses unknown source counters.
+        TelemetryStore.parseBatch(batch "invented-counter-shape" [invented]) |> unwrap |> ignore
         Assert.Contains("\"rejected\":1",submit path "invented-response-attribution" [invented])
         Assert.Equal("0",scalar path "SELECT count(*) FROM activity_usage_attributions WHERE usage_identity='response-usage';")
         Assert.Equal("99",scalar path "SELECT json_extract(canonical,'$.input') FROM current_ingest_facts WHERE identity='response-usage';")
@@ -662,7 +681,8 @@ module EfficiencyAdmissionTests =
         let cleanup,path,native,inventory,binding,_ = responseFixtureWithCounters "completed" "0" "1501" "1600"
         use cleanup = cleanup
         Assert.Contains("\"rejected\":0",submitAs native path "over-policy-witnesses" [inventory.ToJsonString();responseSource binding])
-        Assert.Contains("\"rejected\":0",submit path "over-policy-delivered" [sourceOutcome.Replace("outcome-a","outcome-over-policy")])
+        Assert.Contains("\"rejected\":0",submit path "over-policy-delivered" [responseOutcome "outcome-over-policy"])
+        Assert.Equal("routine-delivery:outcome-over-policy",scalar path "SELECT source_ref FROM native_item_outcomes WHERE identity='outcome-over-policy';")
         Assert.Equal("1",scalar path "SELECT count(*) FROM efficiency_outcome_epochs WHERE state='open';")
         Assert.Equal("0",scalar path "SELECT count(*) FROM efficiency_outcome_epochs WHERE state='closed';")
         Assert.Equal("1600",scalar path "SELECT json_extract(canonical,'$.total') FROM current_ingest_facts WHERE identity='response-usage';")
