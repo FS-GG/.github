@@ -56,6 +56,13 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-06: Protected P4 diagnostic source passed its 93-case runtime qualification.**
+Sandbox `d22ff4df` passed all 93 selected cases under the original 120-second work and
+128-second total limits. Root observed clean settlement, at most two task CLR processes and
+no sampled resource-limit failure. This qualifies the diagnostic fixture and caller behavior;
+the earlier provider facts attempt remains failed with cleanup unproved. A fresh candidate and
+valid operation admission are still required before another provider attempt.
+
 **2026-10-06: Compact telemetry export qualified; coherent 0.98 release prepared.**
 The native compact `/3` snapshot preserves one database transaction and bounded CI summaries,
 allowing the current dashboard store to exceed the old raw CI-step row limit. It passed 171
