@@ -145,7 +145,9 @@ def _strict_json(raw):
         return result
     def invalid_constant(_):
         raise ValueError('non-finite retained packet number')
-    return json.loads(raw, object_pairs_hook=pairs, parse_constant=invalid_constant)
+    def invalid_fraction(_):
+        raise ValueError('fractional canonical packet number unavailable')
+    return json.loads(raw, object_pairs_hook=pairs, parse_constant=invalid_constant, parse_float=invalid_fraction)
 
 
 SEMANTIC_KINDS = {

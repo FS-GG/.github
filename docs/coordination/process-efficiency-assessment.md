@@ -148,7 +148,9 @@ The consumer reads `inspect --request-id` and restores `packetBase64` against `r
 claiming. Those exact private bytes contain the evidence-packet subject, coverage, omissions and
 records; they are never rebuilt from public dashboard data. Each record carries the canonical
 reference with its content digest as well as the normalized evidence reference. The store validates
-these joins in the snapshot transaction. Local restoration detects byte or reference disagreement
+these joins in the snapshot transaction. The current admitted packet codec accepts integer JSON
+numbers only; fractional source payloads produce explicit unavailable or omitted/partial coverage.
+Metric quantities remain separate. Local restoration detects byte or reference disagreement
 but does not establish admission. Explicit enrolled enqueue supplies the packet through a separate
 `--packet` file; regular completion notifications use reconciliation instead.
 

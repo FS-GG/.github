@@ -102,6 +102,11 @@ class AssessmentTests(unittest.TestCase):
         changed = a.encode(mismatched)
         with self.assertRaises(ValueError):
             a.restore_packet(base64.b64encode(changed).decode(), a.digest(mismatched), packet['metrics'])
+        fractional = copy.deepcopy(raw_packet)
+        fractional['records'][0]['payload']['durationSeconds'] = 0.25
+        changed = a.encode(fractional)
+        with self.assertRaises(ValueError):
+            a.restore_packet(base64.b64encode(changed).decode(), a.digest(fractional), packet['metrics'])
         restored['records'][0]['payload']['tampered'] = True
         with self.assertRaises(ValueError): check(output, restored)
 
