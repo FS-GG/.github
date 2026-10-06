@@ -34,7 +34,7 @@ input-token count. The admitted runtime must measure the complete prompt with it
 refuse execution above the policy's input bound. Required instructions and schema are part of that bound.
 
 Substantive evidence digest includes subject, facts, coverage and omissions. Analyst-generated facts
-are excluded from that digest; their usage references remain available and their cost remains in
+are retained in a separate bounded reference collection excluded from that digest; their usage references remain available and their cost remains in
 canonical metrics. Metrics do not directly retrigger analysis: late native usage or corrections must
 be accompanied by their underlying canonical fact revision. The packet's retained bytes are checked
 again before validation. Missing dispatch observations stay unknown, including a failed observer
@@ -85,3 +85,46 @@ record its commit separately. It is a test input location, never a canonical aut
 Tests cover synthetic final/provisional/unknown-epoch output, schema/metric/reference mutations,
 bounded untrusted evidence, conflicting/reordered revisions, analyst loop suppression, duplicate
 notification, interrupted execution, malformed output, revision budgets and private-path safety.
+
+## Proposed existing-caller protocol
+
+The canonical request kind and state transitions require the store owner's admitted contract; this
+protocol describes their necessary join and does not activate a new kind. A request is distinct from
+an assessment output: before caller selection it has no model execution provenance or model alias.
+
+1. The existing completion/delivery owner reconciles a missed notification from current outcome
+   identities in the existing store. It persists one request for the subject, substantive evidence
+   digest and analysis policy. Native scope requires the actual complete admitted population;
+   incomplete source delivery uses provisional scope. No observer state is forged to admit a review.
+2. The current parent Codex orchestrator reads one bounded canonical pending request and its immutable
+   exporter snapshot. It selects the existing runtime route, model/effort, tokenizer and enforceable
+   input/output/deadline limits before claiming execution. Unsupported limits, missing root token or
+   unavailable provider/exporter become an explicit unavailable disposition. The engine does not
+   unconditionally launch a provider and no permanent consumer service is introduced.
+3. A supported canonical compare-and-set or equivalent serialized append commits running state and
+   the selected attempt/dispatch custody before a single invocation. The private journal retains the
+   exact packet. For native collaboration the parent uses the existing prospective
+   `begin -> spawn_agent -> started` observation route. An existing explicitly selected `codex-exec`
+   route instead uses its inherited invocation context and owns its observation. Never use both.
+4. The analyst returns bounded private structured output plus a draft legacy item review when native
+   admission is possible. The parent observes actual termination, records `finish` and reconciles
+   completed native usage. Requested model metadata and messages do not prove token totals. The
+   parent validates the output before publishing a review through the existing root-token route.
+5. An applied receiver/store readback resolves the actual existing admitted item review. Deterministic
+   finalization may attach that reference and the observed analyst usage without another model turn.
+   Analyst-authored review/usage records are retained separately as bounded `analysisRecords`; they
+   resolve admission and accounting references while remaining excluded from the substantive trigger
+   digest. Native ready still requires a witnessed outcome epoch; null remains pending/partial.
+   A provisional assessment never invokes the native item-review route.
+6. Submit the exact validated assessment bytes through the existing enrolled producer ingestion and
+   outbox/retry route, preserving the request identity and receiver disposition. Canonical accepted
+   state requires supported readback; a durable submission or lost response is not applied. Restart
+   reconciles running custody and uncertain submission effects before any further invocation. Failed,
+   interrupted and malformed analysis retains its usage and an explicit disposition with no automatic
+   model retry. Late substantive evidence may request the remaining budgeted revision; analyst-only
+   arrivals update deterministic cost and admission joins without recursively scheduling analysis.
+
+The inspected native collaboration tool itself exposes no usage hook, and the inspected runtime
+launcher does not establish enforcement of this analyst policy's three numerical limits. Runtime
+selection must therefore qualify those bounds rather than assume the prompt enforces them. A request,
+private journal, source merge or model response alone never establishes canonical completion or cost.

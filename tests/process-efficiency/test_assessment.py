@@ -98,6 +98,18 @@ class AssessmentTests(unittest.TestCase):
         self.assertEqual(with_analyst['evidenceDigest'], without['evidenceDigest'])
         self.assertEqual(with_analyst['analysisUsageRefs'], [analyst['ref']])
 
+    def test_admitted_analyst_review_does_not_retrigger(self):
+        output, packet = fixture()
+        review = next(r for r in packet['records'] if r['ref']['kind'] == 'process-review')
+        facts = [r for r in packet['records'] if r is not review]
+        before = a.assemble(output['subject'], facts, packet['metrics'], output['coverage'])
+        review = dict(review, analysisGenerated=True)
+        after = a.assemble(output['subject'], facts + [review], packet['metrics'], output['coverage'])
+        self.assertEqual(before['evidenceDigest'], after['evidenceDigest'])
+        output['evidenceDigest'] = after['evidenceDigest']
+        output['lifecycle']['idempotencyKey'] = a.key(output['subject'], after['evidenceDigest'])
+        self.assertEqual(a.validate(output, after, SCHEMA, admitted_review=review, metric_schema=METRIC_SCHEMA), output)
+
     def test_bound_priority_and_untrusted_prompt(self):
         output, packet = fixture()
         rows = []

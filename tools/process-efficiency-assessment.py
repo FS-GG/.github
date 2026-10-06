@@ -57,6 +57,7 @@ def assemble(subject, records, metrics, coverage, omissions=(), max_bytes=24000)
     selected = {}
     seen = {}
     analysis_usage = []
+    analysis_selected = {}
     for row in records:
         if row['itemId'] != subject['itemId']:
             raise ValueError('cross-item evidence refused')
@@ -64,13 +65,15 @@ def assemble(subject, records, metrics, coverage, omissions=(), max_bytes=24000)
         identity = (ref['kind'], ref['id'])
         if type(ref['revision']) is not int or ref['revision'] < 0:
             raise ValueError('canonical revision required')
-        if row['analysisGenerated']:
-            analysis_usage.append(ref)
-            continue
         versioned = (*identity, ref['revision'])
         if versioned in seen and seen[versioned] != encode(row):
             raise ValueError('conflicting canonical revision')
         seen[versioned] = encode(row)
+        if row['analysisGenerated']:
+            previous = analysis_selected.get(identity)
+            if previous is None or previous['ref']['revision'] < ref['revision']:
+                analysis_selected[identity] = copy.deepcopy(row)
+            continue
         previous = selected.get(identity)
         if previous and previous['ref']['revision'] == ref['revision'] and encode(previous) != encode(row):
             raise ValueError('conflicting canonical revision')
@@ -97,6 +100,11 @@ def assemble(subject, records, metrics, coverage, omissions=(), max_bytes=24000)
     # Analyst cost remains available separately; it does not change substantive trigger.
     substantive = {k: v for k, v in packet.items() if k != 'metrics'}
     packet['evidenceDigest'] = digest(substantive)
+    analysis_records = list(analysis_selected.values())
+    analysis_usage = [r['ref'] for r in analysis_records if r['ref']['kind'] == 'usage']
+    if len(analysis_records) > 16:
+        raise ValueError('analyst evidence bound exceeded')
+    packet['analysisRecords'] = analysis_records
     packet['analysisUsageRefs'] = analysis_usage[:16]
     packet['analysisUsageOmitted'] = max(0, len(analysis_usage) - 16)
     if len(encode(packet)) > max_bytes:
@@ -119,7 +127,7 @@ def prompt(packet, assessment_schema):
 
 def validate(assessment, packet, schema, admitted_review=None, usage_refs=(), alternatives=(), metric_schema=None):
     schema_validate(assessment, schema)
-    substantive = {k: v for k, v in packet.items() if k not in ('metrics', 'evidenceDigest', 'analysisUsageRefs', 'analysisUsageOmitted')}
+    substantive = {k: v for k, v in packet.items() if k not in ('metrics', 'evidenceDigest', 'analysisUsageRefs', 'analysisUsageOmitted', 'analysisRecords')}
     if digest(substantive) != packet['evidenceDigest']:
         raise ValueError('immutable evidence bytes mismatch')
     if assessment['subject'] != packet['subject'] or assessment['evidenceDigest'] != packet['evidenceDigest']:
@@ -128,7 +136,8 @@ def validate(assessment, packet, schema, admitted_review=None, usage_refs=(), al
         raise ValueError('coverage or omissions altered')
     if assessment['lifecycle']['idempotencyKey'] != key(packet['subject'], packet['evidenceDigest']):
         raise ValueError('idempotency mismatch')
-    refs = {(r['ref']['id'], r['ref']['kind'], r['ref']['revision']) for r in packet['records']}
+    all_records = packet['records'] + packet['analysisRecords']
+    refs = {(r['ref']['id'], r['ref']['kind'], r['ref']['revision']) for r in all_records}
     ids = {r[0] for r in refs}
     if len(ids) != len(refs):
         raise ValueError('ambiguous evidence id')
@@ -181,7 +190,7 @@ def validate(assessment, packet, schema, admitted_review=None, usage_refs=(), al
         raise ValueError('unresolved outcome')
     if state == 'ready':
         # The exporter must resolve this actual existing admitted record and all populations.
-        matches = [r for r in packet['records'] if r['ref']['kind'] == 'process-review' and r['ref']['id'] == review]
+        matches = [r for r in all_records if r['ref']['kind'] == 'process-review' and r['ref']['id'] == review]
         if len(matches) != 1 or admitted_review != matches[0] or matches[0]['payload'].get('scope') != 'item':
             raise ValueError('existing admitted item review required')
         if any(packet['coverage'][n] != 'complete' for n in ('population', 'usage', 'lineage')):
