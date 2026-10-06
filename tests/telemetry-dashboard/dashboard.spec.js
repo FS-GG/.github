@@ -532,6 +532,6 @@ test("provider-response costs retain exact nullable observations, pagination and
   const panel=page.locator("#provider-responses");await expect(panel).toContainText("11/15 observed response cost records");await expect(panel).toContainText("separate from native-turn totals");await expect(panel).toContainText("9007199254740993");await expect(panel).toContainText("Unknown");await expect(panel.locator("article")).toHaveCount(10);
   await page.getByRole("button",{name:"Next response items"}).click();await expect(panel.locator("article")).toHaveCount(1);await expect(panel).toContainText("Approved response item 10");
   await page.setViewportSize({width:390,height:844});await expectMobileContainment(page);
-  await page.clock.runFor(60000);await expect.poll(()=>requests).toBe(2);await expect(panel).toContainText("Approved response item 10");await expect(page.locator("body")).not.toContainText("PRIVATE PROVIDER ID");
+  await page.clock.runFor(60000);await expect.poll(()=>requests).toBe(2);await expect(page.locator("#refresh-status")).toContainText("showing last good data");await expect(panel).toContainText("Approved response item 10");await expect(page.locator("body")).not.toContainText("PRIVATE PROVIDER ID");
   await page.clock.runFor(60000);await expect.poll(()=>requests).toBe(3);await expect(panel).toContainText("Provider-response population unavailable");await expect(panel.locator("article")).toHaveCount(0);
 });
