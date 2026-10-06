@@ -56,6 +56,34 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-06: Nullable schema-14 dashboard summary correction qualified in source.**
+The collector requires all six canonical usage fields and preserves explicit null as unknown;
+known aggregates retain exact Int64 values and refuse overflow. Matching host-5 UI validation
+renders decimal strings without Number rounding and retains last-valid data on unsafe refresh.
+Actual qualification passed 22 browser cases and six fresh two-UID permission checks; 147
+dashboard pure tests and 13 measurement-contract tests passed. Earlier browser assertion and
+pre-fixture staging failures remain separate evidence. The current installed 0.98/schema-13 feed
+is unchanged; coherent 0.99/Host 0.5/schema-14 activation and full
+[V2-EFF-01.4/.6](roadmaps/process-efficiency-telemetry.md#v2-eff-014--publish-useful-dashboard-explanations)
+acceptance remain open.
+
+**2026-10-06: P4 Podman diagnostic helper source CLOSED; runtime facts and cleanup remain unaccepted.**
+[Coordination PR #951](https://github.com/FS-GG/FS.GG.Coordination/pull/951) merged at
+`45f2d920dcb3fd2784d215780bd3253e9a89bf11` after 47 passing checks and 8 skips.
+The [protected collector](https://github.com/FS-GG/FS.GG.Coordination/blob/45f2d920dcb3fd2784d215780bd3253e9a89bf11/tests/portable-workspace/trusted-provider/collect_provider_capability.py)
+adds one bounded, read-only numeric-version observation and closed command/environment provenance
+before Podman info. Original first-failure reporting and authoritative tool custody remain unchanged;
+unknown errors and container census cannot qualify cleanup.
+[Sandbox PR #59](https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/pull/59) merged at
+`654a0fe3ba871e8820263a78b2032c8b1720dfcb` at 20:59:03 UTC, binding its adapter/workflow to this
+actual protected helper SHA and whole tree. Seventeen trapped adapter controls passed; the repository
+reports no hosted PR checks, and canonical source delivery does not qualify native runtime behavior.
+The [original facts attempt 2](https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/actions/runs/37508221944)
+failed at Podman info (exit125) and separately failed container census. Its sanitized failed result
+is accepted; runtime cleanup, capability facts, capsule and provider qualification remain unaccepted.
+The owned admission secret was retired. P4, canonical `0.2.1` publication and installed adoption stay open;
+this source closure selects no new reservation, secret, facts rerun or provider grant.
+
 **2026-10-06: Provider-response cost dashboard source landed; installed activation pending.**
 [PR #4284](https://github.com/FS-GG/.github/pull/4284) merged exact head
 `eb7292b990382f4bd71d71cc8f34784e2e075fe6` as
@@ -134,6 +162,27 @@ selected gates in the [owning plan](https://github.com/FS-GG/FS.GG.Coordination/
 Historical source1 failures and unknown cleanup remain preserved; this is bounded
 source closure, not whole V2-LANG completion.
 
+**2026-10-06: Workspace Template 0.18.1 published on both feeds.**
+Root accepted [publisher 37521553159/a1](https://github.com/FS-GG/FS.GG.Templates/actions/runs/37521553159)
+at 20:26:36 UTC from protected `d9fe65ea8a456f59d663f20c647a38a195e13c2c`; the existing
+composition gate passed 118 checks with zero failures against the original archive.
+Tag `fs-gg-templates/v0.18.1` binds that source. Original artifact `11440537746`
+contains the 887,368-byte package, SHA256
+`d57ae0f90f4b44cb0eee6fbcdf7c356384fcb6f8562025c52bd3caa8877d9bac`.
+Both authenticated feed readbacks match all 458 payload entries; GitHub retains
+the original archive, while nuget.org repository signing produces raw SHA256
+`0d9395b028f14b2c06afe1f1de019610217774f0cb8b6a9618f2aed7d51790fe`.
+Receipt artifact `11441584620` has SHA256
+`b306fcc9e7d7568d01879e8c3e85bbf61ec02fe5a0cf7f0a7982ab02d37c33bb`;
+the [release](https://github.com/FS-GG/FS.GG.Templates/releases/tag/fs-gg-templates/v0.18.1)
+was created at 20:24:13 UTC after both readbacks. The package has eight template
+configurations and seven selectors, including the existing project-knowledge
+and Python templates; this corrects the older inventory description without
+adding a template identity. Fresh installed Templates-only receiver acceptance,
+effective defaults and full Wizard adoption remain open. Full adoption waits for
+the coherent Wizard successor after genuine 0.99 publication; the frozen 0.97.1
+predecessor remains historical. Host GPU qualification and native usage remain unknown.
+
 **2026-10-06: Templates 0.18.1 publication source delivered.**
 [Templates #676](https://github.com/FS-GG/FS.GG.Templates/pull/676) merged exact
 `2e90e9312db1410f543bda099bc9db322118d858` as
@@ -144,8 +193,8 @@ public receiver admits a closed Templates-only mode and a separate full mode
 requiring genuinely published Wizard 0.16.0 inputs. Ten focused preflight controls
 and the hosted pack, composition, source and installed-receiver checks passed.
 This closes the successor source step within SVG-COHERENCE-01.8. Workspace Template
-publication remains 0.18.0: fresh 0.18.1 feed occupancy, tag/publication, both-feed
-readback and installed successor adoption remain open. Templates-only public
+At that source checkpoint, publication remained 0.18.0: fresh 0.18.1 feed occupancy,
+tag/publication, both-feed readback and installed successor adoption were open. Templates-only public
 qualification can proceed after genuine publication; full Wizard adoption waits
 for the coherent successor dependency after 0.99 is genuinely published. The
 original frozen 0.97.1 Wizard predecessor remains historical; no additional
@@ -165,9 +214,9 @@ and WebKit, zero skips, flaky or unexpected results) with verified report hashes
 The authenticated cache-check control passed; cache metadata was not archived.
 The receiver job completed in 337 seconds within its existing 35-minute bound.
 This closes the selected public Rendering input qualification within
-SVG-COHERENCE-01.8. Templates remained source-built: Workspace Template publication
-is still 0.18.0, and publication of its successor plus fresh installed/default/
-Wizard acceptance remain open. Physical screenreader use was not observed;
+SVG-COHERENCE-01.8. At that qualification checkpoint, Templates remained source-built
+and Workspace Template publication was still 0.18.0; successor publication and
+fresh installed/default/Wizard acceptance were open. Physical screenreader use was not observed;
 broader adoption and host GPU qualification remain open. Earlier failed requests
 and their partial evidence remain historical; native usage remains unknown.
 

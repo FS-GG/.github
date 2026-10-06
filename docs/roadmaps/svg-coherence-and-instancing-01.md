@@ -22,6 +22,27 @@ workload does not retroactively invalidate historical acceptance for other workl
 
 ## Current progress
 
+**2026-10-06: Workspace Template 0.18.1 published on both feeds.**
+Root accepted [publisher 37521553159/a1](https://github.com/FS-GG/FS.GG.Templates/actions/runs/37521553159)
+at 20:26:36 UTC from protected `d9fe65ea8a456f59d663f20c647a38a195e13c2c`; the existing
+composition gate passed 118 checks with zero failures against the original archive.
+Tag `fs-gg-templates/v0.18.1` binds that source. Original artifact `11440537746`
+contains the 887,368-byte package, SHA256
+`d57ae0f90f4b44cb0eee6fbcdf7c356384fcb6f8562025c52bd3caa8877d9bac`.
+Both authenticated feed readbacks match all 458 payload entries; GitHub retains
+the original archive, while nuget.org repository signing produces raw SHA256
+`0d9395b028f14b2c06afe1f1de019610217774f0cb8b6a9618f2aed7d51790fe`.
+Receipt artifact `11441584620` has SHA256
+`b306fcc9e7d7568d01879e8c3e85bbf61ec02fe5a0cf7f0a7982ab02d37c33bb`;
+the [release](https://github.com/FS-GG/FS.GG.Templates/releases/tag/fs-gg-templates/v0.18.1)
+was created at 20:24:13 UTC after both readbacks. The package has eight template
+configurations and seven selectors, including the existing project-knowledge
+and Python templates; this corrects the older inventory description without
+adding a template identity. Fresh installed Templates-only receiver acceptance,
+effective defaults and full Wizard adoption remain open. Full adoption waits for
+the coherent Wizard successor after genuine 0.99 publication; the frozen 0.97.1
+predecessor remains historical. Host GPU qualification and native usage remain unknown.
+
 **2026-10-06: Templates 0.18.1 publication source delivered.**
 [Templates #676](https://github.com/FS-GG/FS.GG.Templates/pull/676) merged exact
 `2e90e9312db1410f543bda099bc9db322118d858` as
@@ -32,8 +53,8 @@ public receiver admits a closed Templates-only mode and a separate full mode
 requiring genuinely published Wizard 0.16.0 inputs. Ten focused preflight controls
 and the hosted pack, composition, source and installed-receiver checks passed.
 This closes the successor source step within SVG-COHERENCE-01.8. Workspace Template
-publication remains 0.18.0: fresh 0.18.1 feed occupancy, tag/publication, both-feed
-readback and installed successor adoption remain open. Templates-only public
+At that source checkpoint, publication remained 0.18.0: fresh 0.18.1 feed occupancy,
+tag/publication, both-feed readback and installed successor adoption were open. Templates-only public
 qualification can proceed after genuine publication; full Wizard adoption waits
 for the coherent successor dependency after 0.99 is genuinely published. The
 original frozen 0.97.1 Wizard predecessor remains historical; no additional
@@ -53,9 +74,9 @@ and WebKit, zero skips, flaky or unexpected results) with verified report hashes
 The authenticated cache-check control passed; cache metadata was not archived.
 The receiver job completed in 337 seconds within its existing 35-minute bound.
 This closes the selected public Rendering input qualification within
-SVG-COHERENCE-01.8. Templates remained source-built: Workspace Template publication
-is still 0.18.0, and publication of its successor plus fresh installed/default/
-Wizard acceptance remain open. Physical screenreader use was not observed;
+SVG-COHERENCE-01.8. At that qualification checkpoint, Templates remained source-built
+and Workspace Template publication was still 0.18.0; successor publication and
+fresh installed/default/Wizard acceptance were open. Physical screenreader use was not observed;
 broader adoption and host GPU qualification remain open. Earlier failed requests
 and their partial evidence remain historical; native usage remains unknown.
 

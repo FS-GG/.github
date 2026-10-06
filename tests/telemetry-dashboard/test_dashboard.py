@@ -40,6 +40,41 @@ def deliveries_fixture():
 
 
 class DashboardTests(unittest.TestCase):
+    def aggregate(self, items):
+        return D.aggregate_host({"schema":"fsgg.telemetry.public-export/1","items":items},[],[],
+            {"epoch":None,"distinctBreaches":0,"dirtyItems":0,"intervention":"none"},
+            "2026-09-09T08:00:00Z",store_status={"status":"ready","schemaVersion":14,"journalMode":"wal","pendingBatches":0})
+
+    def test_schema14_nullable_summary_does_not_publish_known_subset_as_total(self):
+        # Exact compact publicJson shape: unknown response dimensions stay null.
+        partial=public_item(usage={"input":100,"cachedInput":None,"cacheWriteInput":None,"output":20,"reasoning":None,"total":120})
+        for items in ([partial,public_item()],[public_item(),partial]):
+            value=self.aggregate(items);D.validate_host(value)
+            self.assertEqual(value["usage"],{"input":200,"cachedInput":None,"cacheWriteInput":None,"output":60,"reasoning":None,"total":260})
+        partial["usage"]["input"]=None
+        self.assertIsNone(self.aggregate([partial,public_item()])["usage"]["input"])
+
+    def test_aggregate_int64_precision_and_overflow_are_explicit(self):
+        def item(n):
+            return public_item(usage={"input":n,"cachedInput":0,"cacheWriteInput":0,"output":0,"reasoning":0,"total":n})
+        for n in (2**53-1,2**53,2**63-1):
+            value=self.aggregate([item(n)]);D.validate_host(value)
+            self.assertEqual(value["usage"]["input"],n if n<=2**53-1 else str(n))
+        with self.assertRaises(ValueError):self.aggregate([item(2**63-1),item(1)])
+        for n in (True,-1,2**63,1.5):
+            with self.assertRaises(ValueError):self.aggregate([item(n)])
+        unknown=item(0);unknown["usage"]["input"]=None
+        with self.assertRaises(ValueError):self.aggregate([unknown,item(True)])
+        for n in (2**53,"01","9223372036854775808",True,-1,1.5):
+            with self.assertRaises(ValueError):D.validate_usage_counter(n,"fixture")
+
+    def test_absent_compact_counter_is_malformed_not_explicit_unknown(self):
+        for key in public_item()["usage"]:
+            missing=public_item();del missing["usage"][key]
+            with self.assertRaises(ValueError):self.aggregate([missing])
+            unknown=public_item();unknown["usage"][key]=None
+            self.assertIsNone(self.aggregate([unknown])["usage"][key])
+
     def test_closed_host_aggregate_removes_private_identity_and_free_text(self):
         value=host_fixture(); raw=json.dumps(value)
         self.assertNotIn("PRIVATE-ITEM",raw); self.assertNotIn("secret free text",raw)

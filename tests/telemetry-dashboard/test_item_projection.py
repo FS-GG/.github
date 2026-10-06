@@ -227,6 +227,21 @@ class ItemProjectionTests(unittest.TestCase):
 
 
 class ProviderResponseCostsTests(unittest.TestCase):
+    def test_nullable_compact_summary_preserves_available_response_population(self):
+        private=self.source()
+        private["store"]["journalMode"]="wal"
+        private["summaries"]=[{"schema":"fsgg.telemetry.public-summary/1","item":"child","factCount":1,"usageObservations":1,"deliveryObservations":0,
+            "usage":{"input":100,"cachedInput":None,"cacheWriteInput":None,"output":20,"reasoning":None,"total":120},
+            "launcherPopulation":{"admitted":0,"started":0,"terminal":0,"usage":1,"missingAdmission":1,"missingStart":1,"missingTerminal":1,"missingUsage":0},
+            "recordValidity":"unknown","joinIntegrity":"unknown","populationCoverage":"partial","qualification":"not-evaluated"}]
+        envelope={"observedAt":"2026-09-09T08:00:00Z","revision":"c"*64,"operational":{"pendingBatches":0,"consistency":"observed-outside-database-transaction"}}
+        with mock.patch.object(D,"load_labels",return_value=labels()):
+            value=D._project_host_snapshot(private,envelope,None)
+        D.validate_host(value)
+        self.assertIsNone(value["usage"]["cachedInput"])
+        self.assertEqual(value["providerResponses"]["coverage"]["published"],1)
+        self.assertEqual(value["providerResponses"]["items"][0]["rows"][0]["counters"]["total"],"120")
+
     def source(self, counters=None):
         private=snapshot();private["store"]={"schemaVersion":14}
         canonical={"itemId":"child","invocationId":"SECRET-INVOCATION","provider":"openai","sourceVariant":"openai-responses/1","responseId":"SECRET-RESPONSE","responseSha256":"b"*64,"requestedModel":"model-r","observedModel":"model-o","requestedEffort":"medium","observedEffort":None,"scope":"provider-response","provenance":"openai-responses","input":100,"cachedInput":None,"cacheWriteInput":None,"output":20,"reasoning":None,"total":120}
