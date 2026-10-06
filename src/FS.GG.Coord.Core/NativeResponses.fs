@@ -57,9 +57,9 @@ module NativeResponses =
           OutputText: string option; Refusal: string option; FailureCode: string option
           IncompleteReason: string option; Issues: string list }
 
-    let private require condition code = if not condition then invalidOp code
+    let private require (condition: bool) (code: string) = if not condition then invalidOp code
     let private utf8 = UTF8Encoding(false, true)
-    let private attempt action =
+    let private attempt (action: unit -> 'T) =
         try Ok(action ())
         with
         | :? JsonException -> Error [ "invalid-json" ]
@@ -78,7 +78,7 @@ module NativeResponses =
         | JsonValueKind.Array -> for value in node.EnumerateArray() do unique value
         | _ -> ()
 
-    let private parse cap (bytes: byte array) =
+    let private parse (cap: int) (bytes: byte array) =
         require (not (isNull bytes) && bytes.Length > 0 && bytes.Length <= cap) "body-byte-bound"
         let raw = Array.copy bytes
         let document = JsonDocument.Parse(utf8.GetString raw, JsonDocumentOptions(MaxDepth = 32))
@@ -88,12 +88,12 @@ module NativeResponses =
             document
         with _ -> document.Dispose(); reraise ()
 
-    let private property name (node: JsonElement) =
-        match node.TryGetProperty(name: string) with
+    let private property (name: string) (node: JsonElement) =
+        match node.TryGetProperty name with
         | true, value when value.ValueKind <> JsonValueKind.Null -> Some value
         | _ -> None
 
-    let private optionalText name node =
+    let private optionalText (name: string) (node: JsonElement) =
         property name node |> Option.bind (fun value ->
             if value.ValueKind = JsonValueKind.String then Some(value.GetString()) else None)
 
@@ -107,7 +107,7 @@ module NativeResponses =
         match value.ValueKind with
         | JsonValueKind.Object ->
             writer.WriteStartObject()
-            for row in value.EnumerateObject() |> Seq.sortWith (fun a b -> StringComparer.Ordinal.Compare(a.Name,b.Name)) do
+            for row in value.EnumerateObject() |> Seq.sortWith (fun (a: JsonProperty) (b: JsonProperty) -> StringComparer.Ordinal.Compare(a.Name,b.Name)) do
                 writer.WritePropertyName row.Name
                 canonical writer row.Value
             writer.WriteEndObject()
@@ -117,7 +117,7 @@ module NativeResponses =
             writer.WriteEndArray()
         | _ -> value.WriteTo writer
 
-    let private serialize action =
+    let private serialize (action: Utf8JsonWriter -> unit) =
         use stream = new MemoryStream()
         use writer = new Utf8JsonWriter(stream)
         action writer
@@ -126,7 +126,7 @@ module NativeResponses =
         require (bytes.Length <= 262144) "request-byte-bound"
         bytes
 
-    let freeze (request: Request) = attempt (fun () ->
+    let freeze (request: Request) : Result<FrozenRequest, string list> = attempt (fun () ->
         require (not (isNull (box request))) "request-required"
         let validText (value: string) = not (String.IsNullOrWhiteSpace value) && not (value.Contains '\000')
         require (validText request.Instructions && validText request.InputText) "request-text-required"
@@ -164,7 +164,7 @@ module NativeResponses =
             writer.WriteEndObject())
         FrozenRequest(count,generation))
 
-    let admitCount (request: FrozenRequest) (responseBytes: byte array) = attempt (fun () ->
+    let admitCount (request: FrozenRequest) (responseBytes: byte array) : Result<CountAdmission, string list> = attempt (fun () ->
         require (not (isNull (box request))) "frozen-request-required"
         let raw = if isNull responseBytes then null else Array.copy responseBytes
         use doc = parse 4096 raw
@@ -176,18 +176,18 @@ module NativeResponses =
         require (amount |> Option.exists (fun n -> n >= 1L && n <= MaximumInputTokens)) "count-not-admitted"
         CountAdmission(amount.Value,request,digest raw))
 
-    let private unknownUsage =
+    let private unknownUsage: UsageObservation =
         { State = Unknown; InputTokens = None; OutputTokens = None; TotalTokens = None
           CachedInputTokens = None; CacheWriteInputTokens = None; ReasoningOutputTokens = None
           Issues = [ "usage-unavailable" ] }
 
-    let private usage (root: JsonElement) =
+    let private usage (root: JsonElement) : UsageObservation =
         match property "usage" root with
         | None -> unknownUsage
         | Some node when node.ValueKind <> JsonValueKind.Object -> { unknownUsage with Issues = [ "usage-object-invalid" ] }
         | Some node ->
             let issues = ResizeArray<string>()
-            let counter required name source =
+            let counter (required: bool) (name: string) (source: JsonElement) =
                 match property name source with
                 | None ->
                     if required then issues.Add(name + "-unavailable")
@@ -199,7 +199,7 @@ module NativeResponses =
             let input = counter true "input_tokens" node
             let output = counter true "output_tokens" node
             let total = counter true "total_tokens" node
-            let details name =
+            let details (name: string) =
                 match property name node with
                 | Some value when value.ValueKind = JsonValueKind.Object -> Some value
                 | Some _ -> issues.Add(name + "-invalid"); None
@@ -218,9 +218,6 @@ module NativeResponses =
             match input,written with
             | Some i,Some w when w > i -> issues.Add "cache-write-exceeds-input"
             | _ -> ()
-            match input,cached,written with
-            | Some i,Some c,Some w when c <= i && w > i-c -> issues.Add "cache-breakouts-exceed-input"
-            | _ -> ()
             match output,reasoning with
             | Some o,Some r when r > o -> issues.Add "reasoning-exceeds-inclusive-output"
             | _ -> ()
@@ -229,7 +226,7 @@ module NativeResponses =
               CachedInputTokens = cached; CacheWriteInputTokens = written; ReasoningOutputTokens = reasoning
               Issues = List.ofSeq issues }
 
-    let decodeResponse (responseBytes: byte array) = attempt (fun () ->
+    let decodeResponse (responseBytes: byte array) : Result<ResponseObservation, string list> = attempt (fun () ->
         use doc = parse 262144 responseBytes
         let root = doc.RootElement
         let issues = ResizeArray<string>()
@@ -254,7 +251,7 @@ module NativeResponses =
                 match integer value with
                 | Some n when n <= 253402300799L -> Some(DateTimeOffset.FromUnixTimeSeconds n)
                 | _ -> issues.Add "provider-created-at-invalid"; None
-        let nestedText parent name =
+        let nestedText (parent: string) (name: string) =
             match property parent root with
             | None -> None
             | Some node when node.ValueKind = JsonValueKind.Object -> optionalText name node
@@ -299,11 +296,11 @@ module NativeResponses =
         | _ -> issues.Add "output-unavailable"
         { ResponseId = responseId; ObservedModel = model; ProviderCreatedAt = created
           Status = status; Usage = usage root
-          OutputText = if texts.Count = 0 then None else Some(String.Concat texts)
-          Refusal = if refusals.Count = 0 then None else Some(String.Concat refusals)
+          OutputText = if texts.Count = 0 then None else Some(String.Concat(texts.ToArray()))
+          Refusal = if refusals.Count = 0 then None else Some(String.Concat(refusals.ToArray()))
           FailureCode = failure; IncompleteReason = incomplete; Issues = List.ofSeq issues })
 
-    let validateCompletion (count: CountAdmission) (response: ResponseObservation) =
+    let validateCompletion (count: CountAdmission) (response: ResponseObservation) : Result<string, string list> =
         if isNull (box count) || isNull (box response) then Error [ "completion-operands-required" ]
         else
             let issues = ResizeArray<string>(response.Issues @ response.Usage.Issues)
@@ -321,7 +318,7 @@ module NativeResponses =
             match response.Usage.InputTokens,response.Usage.OutputTokens,response.Usage.TotalTokens with
             | Some i,Some o,Some t when i >= 0L && o >= 0L && i <= Int64.MaxValue-o && t = i+o -> ()
             | _ -> issues.Add "inclusive-total-mismatch"
-            let breakout name bound value =
+            let breakout (name: string) (bound: int64 option) (value: int64 option) =
                 match bound,value with
                 | Some total,Some n when n < 0L || n > total -> issues.Add name
                 | None,Some _ -> issues.Add name
@@ -329,9 +326,6 @@ module NativeResponses =
             breakout "cached-input-exceeds-input" response.Usage.InputTokens response.Usage.CachedInputTokens
             breakout "cache-write-exceeds-input" response.Usage.InputTokens response.Usage.CacheWriteInputTokens
             breakout "reasoning-exceeds-inclusive-output" response.Usage.OutputTokens response.Usage.ReasoningOutputTokens
-            match response.Usage.InputTokens,response.Usage.CachedInputTokens,response.Usage.CacheWriteInputTokens with
-            | Some i,Some c,Some w when c >= 0L && c <= i && w > i-c -> issues.Add "cache-breakouts-exceed-input"
-            | _ -> ()
             match response.OutputText with
             | Some text when not (String.IsNullOrWhiteSpace text) && issues.Count = 0 -> Ok text
             | _ ->

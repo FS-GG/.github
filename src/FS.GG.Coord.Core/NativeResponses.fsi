@@ -1,6 +1,5 @@
 namespace FS.GG.Coord
 
-open System
 
 /// Pure fixed Responses request/decoder contract. No transport or admission authority.
 module NativeResponses =
@@ -57,7 +56,7 @@ module NativeResponses =
     type ResponseObservation =
         { ResponseId: ProviderResponseId option
           ObservedModel: string option
-          ProviderCreatedAt: DateTimeOffset option
+          ProviderCreatedAt: System.DateTimeOffset option
           Status: ResponseStatus
           Usage: UsageObservation
           OutputText: string option
