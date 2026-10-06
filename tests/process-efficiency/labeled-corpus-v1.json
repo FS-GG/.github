@@ -1,0 +1,1635 @@
+{
+  "schema": "fsgg.telemetry.efficiency-corpus/1",
+  "taxonomyVersion": "efficiency-taxonomy/1",
+  "synthetic": true,
+  "calibrationStatus": "Authored labels, not independently adjudicated; held-out split reserved for .5, no accuracy claim.",
+  "episodes": [
+    {
+      "id": "clean-delivery-01",
+      "split": "development",
+      "family": "clean-delivery",
+      "facts": [
+        {
+          "id": "clean-delivery-01-e1",
+          "revision": 1,
+          "text": "One source merge and one admitted terminal invocation, exact usage present."
+        }
+      ],
+      "expected": {
+        "activity": "implementation",
+        "purpose": "direct-product",
+        "trigger": "other",
+        "primaryCause": "unknown",
+        "contributingCauses": [],
+        "necessity": "required",
+        "epistemicStatus": "observed",
+        "evidenceRefs": [
+          "clean-delivery-01-e1"
+        ],
+        "alternative": null,
+        "measuredAvoidable": false
+      },
+      "rationale": "One source merge and one admitted terminal invocation, exact usage present. Classification is confined to this evidence; no historical programme usage is asserted."
+    },
+    {
+      "id": "clean-delivery-02",
+      "split": "development",
+      "family": "clean-delivery",
+      "facts": [
+        {
+          "id": "clean-delivery-02-e1",
+          "revision": 1,
+          "text": "Clean documentation change, source outcome known; no production adoption claimed."
+        }
+      ],
+      "expected": {
+        "activity": "implementation",
+        "purpose": "direct-product",
+        "trigger": "other",
+        "primaryCause": "unknown",
+        "contributingCauses": [],
+        "necessity": "required",
+        "epistemicStatus": "observed",
+        "evidenceRefs": [
+          "clean-delivery-02-e1"
+        ],
+        "alternative": null,
+        "measuredAvoidable": false
+      },
+      "rationale": "Clean documentation change, source outcome known; no production adoption claimed. Classification is confined to this evidence; no historical programme usage is asserted."
+    },
+    {
+      "id": "clean-delivery-03",
+      "split": "development",
+      "family": "clean-delivery",
+      "facts": [
+        {
+          "id": "clean-delivery-03-e1",
+          "revision": 1,
+          "text": "Two concurrent implementation invocations, complete native accounting."
+        }
+      ],
+      "expected": {
+        "activity": "implementation",
+        "purpose": "direct-product",
+        "trigger": "other",
+        "primaryCause": "unknown",
+        "contributingCauses": [],
+        "necessity": "required",
+        "epistemicStatus": "observed",
+        "evidenceRefs": [
+          "clean-delivery-03-e1"
+        ],
+        "alternative": null,
+        "measuredAvoidable": false
+      },
+      "rationale": "Two concurrent implementation invocations, complete native accounting. Classification is confined to this evidence; no historical programme usage is asserted."
+    },
+    {
+      "id": "clean-delivery-04",
+      "split": "held-out",
+      "family": "clean-delivery",
+      "facts": [
+        {
+          "id": "clean-delivery-04-e1",
+          "revision": 1,
+          "text": "Successful source delivery with separate installed adoption evidence."
+        }
+      ],
+      "expected": {
+        "activity": "implementation",
+        "purpose": "direct-product",
+        "trigger": "other",
+        "primaryCause": "unknown",
+        "contributingCauses": [],
+        "necessity": "required",
+        "epistemicStatus": "observed",
+        "evidenceRefs": [
+          "clean-delivery-04-e1"
+        ],
+        "alternative": null,
+        "measuredAvoidable": false
+      },
+      "rationale": "Successful source delivery with separate installed adoption evidence. Classification is confined to this evidence; no historical programme usage is asserted."
+    },
+    {
+      "id": "clean-delivery-05",
+      "split": "held-out",
+      "family": "clean-delivery",
+      "facts": [
+        {
+          "id": "clean-delivery-05-e1",
+          "revision": 1,
+          "text": "Successful low-risk change with required review and validation."
+        }
+      ],
+      "expected": {
+        "activity": "implementation",
+        "purpose": "direct-product",
+        "trigger": "other",
+        "primaryCause": "unknown",
+        "contributingCauses": [],
+        "necessity": "required",
+        "epistemicStatus": "observed",
+        "evidenceRefs": [
+          "clean-delivery-05-e1"
+        ],
+        "alternative": null,
+        "measuredAvoidable": false
+      },
+      "rationale": "Successful low-risk change with required review and validation. Classification is confined to this evidence; no historical programme usage is asserted."
+    },
+    {
+      "id": "clean-delivery-06",
+      "split": "held-out",
+      "family": "clean-delivery",
+      "facts": [
+        {
+          "id": "clean-delivery-06-e1",
+          "revision": 1,
+          "text": "Clean delivery plus analyst usage; analyst belongs in full item cost."
+        }
+      ],
+      "expected": {
+        "activity": "implementation",
+        "purpose": "direct-product",
+        "trigger": "other",
+        "primaryCause": "unknown",
+        "contributingCauses": [],
+        "necessity": "required",
+        "epistemicStatus": "observed",
+        "evidenceRefs": [
+          "clean-delivery-06-e1"
+        ],
+        "alternative": null,
+        "measuredAvoidable": false
+      },
+      "rationale": "Clean delivery plus analyst usage; analyst belongs in full item cost. Classification is confined to this evidence; no historical programme usage is asserted."
+    },
+    {
+      "id": "useful-failure-01",
+      "split": "development",
+      "family": "useful-failure",
+      "facts": [
+        {
+          "id": "useful-failure-01-e1",
+          "revision": 1,
+          "text": "Assertion fails; captured wrong result reproduced and product fix passes."
+        }
+      ],
+      "expected": {
+        "activity": "validation",
+        "purpose": "useful-assurance",
+        "trigger": "check-failure",
+        "primaryCause": "product-defect",
+        "contributingCauses": [],
+        "necessity": "required",
+        "epistemicStatus": "supported-inference",
+        "evidenceRefs": [
+          "useful-failure-01-e1"
+        ],
+        "alternative": null,
+        "measuredAvoidable": false
+      },
+      "rationale": "Assertion fails; captured wrong result reproduced and product fix passes. Classification is confined to this evidence; no historical programme usage is asserted."
+    },
+    {
+      "id": "useful-failure-02",
+      "split": "development",
+      "family": "useful-failure",
+      "facts": [
+        {
+          "id": "useful-failure-02-e1",
+          "revision": 1,
+          "text": "Compiler error identifies a product type mismatch; corrected source compiles."
+        }
+      ],
+      "expected": {
+        "activity": "validation",
+        "purpose": "useful-assurance",
+        "trigger": "check-failure",
+        "primaryCause": "product-defect",
+        "contributingCauses": [],
+        "necessity": "required",
+        "epistemicStatus": "supported-inference",
+        "evidenceRefs": [
+          "useful-failure-02-e1"
+        ],
+        "alternative": null,
+        "measuredAvoidable": false
+      },
+      "rationale": "Compiler error identifies a product type mismatch; corrected source compiles. Classification is confined to this evidence; no historical programme usage is asserted."
+    },
+    {
+      "id": "useful-failure-03",
+      "split": "development",
+      "family": "useful-failure",
+      "facts": [
+        {
+          "id": "useful-failure-03-e1",
+          "revision": 1,
+          "text": "Integration check exposes contract drift in changed product; fix passes."
+        }
+      ],
+      "expected": {
+        "activity": "validation",
+        "purpose": "useful-assurance",
+        "trigger": "check-failure",
+        "primaryCause": "product-defect",
+        "contributingCauses": [],
+        "necessity": "required",
+        "epistemicStatus": "supported-inference",
+        "evidenceRefs": [
+          "useful-failure-03-e1"
+        ],
+        "alternative": null,
+        "measuredAvoidable": false
+      },
+      "rationale": "Integration check exposes contract drift in changed product; fix passes. Classification is confined to this evidence; no historical programme usage is asserted."
+    },
+    {
+      "id": "useful-failure-04",
+      "split": "held-out",
+      "family": "useful-failure",
+      "facts": [
+        {
+          "id": "useful-failure-04-e1",
+          "revision": 1,
+          "text": "A negative input test finds accepted malformed input; product rejects it after fix."
+        }
+      ],
+      "expected": {
+        "activity": "validation",
+        "purpose": "useful-assurance",
+        "trigger": "check-failure",
+        "primaryCause": "product-defect",
+        "contributingCauses": [],
+        "necessity": "required",
+        "epistemicStatus": "supported-inference",
+        "evidenceRefs": [
+          "useful-failure-04-e1"
+        ],
+        "alternative": null,
+        "measuredAvoidable": false
+      },
+      "rationale": "A negative input test finds accepted malformed input; product rejects it after fix. Classification is confined to this evidence; no historical programme usage is asserted."
+    },
+    {
+      "id": "useful-failure-05",
+      "split": "held-out",
+      "family": "useful-failure",
+      "facts": [
+        {
+          "id": "useful-failure-05-e1",
+          "revision": 1,
+          "text": "Failed formal check has a concrete counterexample; product transition repaired."
+        }
+      ],
+      "expected": {
+        "activity": "validation",
+        "purpose": "useful-assurance",
+        "trigger": "check-failure",
+        "primaryCause": "product-defect",
+        "contributingCauses": [],
+        "necessity": "required",
+        "epistemicStatus": "supported-inference",
+        "evidenceRefs": [
+          "useful-failure-05-e1"
+        ],
+        "alternative": null,
+        "measuredAvoidable": false
+      },
+      "rationale": "Failed formal check has a concrete counterexample; product transition repaired. Classification is confined to this evidence; no historical programme usage is asserted."
+    },
+    {
+      "id": "useful-failure-06",
+      "split": "held-out",
+      "family": "useful-failure",
+      "facts": [
+        {
+          "id": "useful-failure-06-e1",
+          "revision": 1,
+          "text": "First validation finds missing boundary handling; regression check passes after repair."
+        }
+      ],
+      "expected": {
+        "activity": "validation",
+        "purpose": "useful-assurance",
+        "trigger": "check-failure",
+        "primaryCause": "product-defect",
+        "contributingCauses": [],
+        "necessity": "required",
+        "epistemicStatus": "supported-inference",
+        "evidenceRefs": [
+          "useful-failure-06-e1"
+        ],
+        "alternative": null,
+        "measuredAvoidable": false
+      },
+      "rationale": "First validation finds missing boundary handling; regression check passes after repair. Classification is confined to this evidence; no historical programme usage is asserted."
+    },
+    {
+      "id": "avoidable-replay-01",
+      "split": "development",
+      "family": "avoidable-replay",
+      "facts": [
+        {
+          "id": "avoidable-replay-01-e1",
+          "revision": 1,
+          "text": "Same proof assembled twice; complete digest unchanged, valid evidence reusable under then-policy."
+        }
+      ],
+      "expected": {
+        "activity": "coordination",
+        "purpose": "avoidable-process",
+        "trigger": "retry",
+        "primaryCause": "duplicate-process",
+        "contributingCauses": [],
+        "necessity": "avoidable",
+        "epistemicStatus": "supported-inference",
+        "evidenceRefs": [
+          "avoidable-replay-01-e1"
+        ],
+        "alternative": "Reuse the already valid exact-input evidence reference through the then-permitted route.",
+        "measuredAvoidable": true
+      },
+      "rationale": "Same proof assembled twice; complete digest unchanged, valid evidence reusable under then-policy. Classification is confined to this evidence; no historical programme usage is asserted."
+    },
+    {
+      "id": "avoidable-replay-02",
+      "split": "development",
+      "family": "avoidable-replay",
+      "facts": [
+        {
+          "id": "avoidable-replay-02-e1",
+          "revision": 1,
+          "text": "Duplicate handoff summary rebuilt from identical packet; stable reference already available."
+        }
+      ],
+      "expected": {
+        "activity": "coordination",
+        "purpose": "avoidable-process",
+        "trigger": "retry",
+        "primaryCause": "duplicate-process",
+        "contributingCauses": [],
+        "necessity": "avoidable",
+        "epistemicStatus": "supported-inference",
+        "evidenceRefs": [
+          "avoidable-replay-02-e1"
+        ],
+        "alternative": "Reuse the already valid exact-input evidence reference through the then-permitted route.",
+        "measuredAvoidable": true
+      },
+      "rationale": "Duplicate handoff summary rebuilt from identical packet; stable reference already available. Classification is confined to this evidence; no historical programme usage is asserted."
+    },
+    {
+      "id": "avoidable-replay-03",
+      "split": "development",
+      "family": "avoidable-replay",
+      "facts": [
+        {
+          "id": "avoidable-replay-03-e1",
+          "revision": 1,
+          "text": "Repeated administrative inventory copy; no inputs changed, policy permits direct reuse."
+        }
+      ],
+      "expected": {
+        "activity": "coordination",
+        "purpose": "avoidable-process",
+        "trigger": "retry",
+        "primaryCause": "duplicate-process",
+        "contributingCauses": [],
+        "necessity": "avoidable",
+        "epistemicStatus": "supported-inference",
+        "evidenceRefs": [
+          "avoidable-replay-03-e1"
+        ],
+        "alternative": "Reuse the already valid exact-input evidence reference through the then-permitted route.",
+        "measuredAvoidable": true
+      },
+      "rationale": "Repeated administrative inventory copy; no inputs changed, policy permits direct reuse. Classification is confined to this evidence; no historical programme usage is asserted."
+    },
+    {
+      "id": "avoidable-replay-04",
+      "split": "held-out",
+      "family": "avoidable-replay",
+      "facts": [
+        {
+          "id": "avoidable-replay-04-e1",
+          "revision": 1,
+          "text": "Same allowlisted metadata check repeated; earlier exact-input proof remains valid and reusable."
+        }
+      ],
+      "expected": {
+        "activity": "coordination",
+        "purpose": "avoidable-process",
+        "trigger": "retry",
+        "primaryCause": "duplicate-process",
+        "contributingCauses": [],
+        "necessity": "avoidable",
+        "epistemicStatus": "supported-inference",
+        "evidenceRefs": [
+          "avoidable-replay-04-e1"
+        ],
+        "alternative": "Reuse the already valid exact-input evidence reference through the then-permitted route.",
+        "measuredAvoidable": true
+      },
+      "rationale": "Same allowlisted metadata check repeated; earlier exact-input proof remains valid and reusable. Classification is confined to this evidence; no historical programme usage is asserted."
+    },
+    {
+      "id": "avoidable-replay-05",
+      "split": "held-out",
+      "family": "avoidable-replay",
+      "facts": [
+        {
+          "id": "avoidable-replay-05-e1",
+          "revision": 1,
+          "text": "Second owner re-collects existing complete facts; typed return pointer was sufficient."
+        }
+      ],
+      "expected": {
+        "activity": "coordination",
+        "purpose": "avoidable-process",
+        "trigger": "retry",
+        "primaryCause": "duplicate-process",
+        "contributingCauses": [],
+        "necessity": "avoidable",
+        "epistemicStatus": "supported-inference",
+        "evidenceRefs": [
+          "avoidable-replay-05-e1"
+        ],
+        "alternative": "Reuse the already valid exact-input evidence reference through the then-permitted route.",
+        "measuredAvoidable": true
+      },
+      "rationale": "Second owner re-collects existing complete facts; typed return pointer was sufficient. Classification is confined to this evidence; no historical programme usage is asserted."
+    },
+    {
+      "id": "avoidable-replay-06",
+      "split": "held-out",
+      "family": "avoidable-replay",
+      "facts": [
+        {
+          "id": "avoidable-replay-06-e1",
+          "revision": 1,
+          "text": "Repeated approval-neutral bookkeeping, unchanged inputs and permitted existing reference."
+        }
+      ],
+      "expected": {
+        "activity": "coordination",
+        "purpose": "avoidable-process",
+        "trigger": "retry",
+        "primaryCause": "duplicate-process",
+        "contributingCauses": [],
+        "necessity": "avoidable",
+        "epistemicStatus": "supported-inference",
+        "evidenceRefs": [
+          "avoidable-replay-06-e1"
+        ],
+        "alternative": "Reuse the already valid exact-input evidence reference through the then-permitted route.",
+        "measuredAvoidable": true
+      },
+      "rationale": "Repeated approval-neutral bookkeeping, unchanged inputs and permitted existing reference. Classification is confined to this evidence; no historical programme usage is asserted."
+    },
+    {
+      "id": "changed-input-rerun-01",
+      "split": "development",
+      "family": "changed-input-rerun",
+      "facts": [
+        {
+          "id": "changed-input-rerun-01-e1",
+          "revision": 1,
+          "text": "Head changed between checks; new head must be validated."
+        }
+      ],
+      "expected": {
+        "activity": "validation",
+        "purpose": "useful-assurance",
+        "trigger": "retry",
+        "primaryCause": "unknown",
+        "contributingCauses": [],
+        "necessity": "required",
+        "epistemicStatus": "observed",
+        "evidenceRefs": [
+          "changed-input-rerun-01-e1"
+        ],
+        "alternative": null,
+        "measuredAvoidable": false,
+        "uncertainty": "Rerun/input or policy change is observed; these facts do not establish requirements, infrastructure, nondeterminism or avoidability as a cause."
+      },
+      "rationale": "Head changed between checks; new head must be validated. Classification is confined to this evidence; no historical programme usage is asserted. Input or policy differences establish the witnessed revalidation boundary, not the underlying problem cause."
+    },
+    {
+      "id": "changed-input-rerun-02",
+      "split": "development",
+      "family": "changed-input-rerun",
+      "facts": [
+        {
+          "id": "changed-input-rerun-02-e1",
+          "revision": 1,
+          "text": "Dependency lock changed before repeated validation."
+        }
+      ],
+      "expected": {
+        "activity": "validation",
+        "purpose": "useful-assurance",
+        "trigger": "retry",
+        "primaryCause": "unknown",
+        "contributingCauses": [],
+        "necessity": "required",
+        "epistemicStatus": "observed",
+        "evidenceRefs": [
+          "changed-input-rerun-02-e1"
+        ],
+        "alternative": null,
+        "measuredAvoidable": false,
+        "uncertainty": "Rerun/input or policy change is observed; these facts do not establish requirements, infrastructure, nondeterminism or avoidability as a cause."
+      },
+      "rationale": "Dependency lock changed before repeated validation. Classification is confined to this evidence; no historical programme usage is asserted. Input or policy differences establish the witnessed revalidation boundary, not the underlying problem cause."
+    },
+    {
+      "id": "changed-input-rerun-03",
+      "split": "development",
+      "family": "changed-input-rerun",
+      "facts": [
+        {
+          "id": "changed-input-rerun-03-e1",
+          "revision": 1,
+          "text": "Acceptance requirement changed; prior proof does not cover new scope."
+        }
+      ],
+      "expected": {
+        "activity": "validation",
+        "purpose": "useful-assurance",
+        "trigger": "retry",
+        "primaryCause": "requirements",
+        "contributingCauses": [],
+        "necessity": "required",
+        "epistemicStatus": "observed",
+        "evidenceRefs": [
+          "changed-input-rerun-03-e1"
+        ],
+        "alternative": null,
+        "measuredAvoidable": false
+      },
+      "rationale": "Acceptance requirement changed; prior proof does not cover new scope. Classification is confined to this evidence; no historical programme usage is asserted."
+    },
+    {
+      "id": "changed-input-rerun-04",
+      "split": "held-out",
+      "family": "changed-input-rerun",
+      "facts": [
+        {
+          "id": "changed-input-rerun-04-e1",
+          "revision": 1,
+          "text": "Toolchain digest changed; rerun provides required current evidence."
+        }
+      ],
+      "expected": {
+        "activity": "validation",
+        "purpose": "useful-assurance",
+        "trigger": "retry",
+        "primaryCause": "unknown",
+        "contributingCauses": [],
+        "necessity": "required",
+        "epistemicStatus": "observed",
+        "evidenceRefs": [
+          "changed-input-rerun-04-e1"
+        ],
+        "alternative": null,
+        "measuredAvoidable": false,
+        "uncertainty": "Rerun/input or policy change is observed; these facts do not establish requirements, infrastructure, nondeterminism or avoidability as a cause."
+      },
+      "rationale": "Toolchain digest changed; rerun provides required current evidence. Classification is confined to this evidence; no historical programme usage is asserted. Input or policy differences establish the witnessed revalidation boundary, not the underlying problem cause."
+    },
+    {
+      "id": "changed-input-rerun-05",
+      "split": "held-out",
+      "family": "changed-input-rerun",
+      "facts": [
+        {
+          "id": "changed-input-rerun-05-e1",
+          "revision": 1,
+          "text": "Policy requires coherent validation even with accepted semantic reuse."
+        }
+      ],
+      "expected": {
+        "activity": "validation",
+        "purpose": "useful-assurance",
+        "trigger": "retry",
+        "primaryCause": "unknown",
+        "contributingCauses": [],
+        "necessity": "required",
+        "epistemicStatus": "observed",
+        "evidenceRefs": [
+          "changed-input-rerun-05-e1"
+        ],
+        "alternative": null,
+        "measuredAvoidable": false,
+        "uncertainty": "Rerun/input or policy change is observed; these facts do not establish requirements, infrastructure, nondeterminism or avoidability as a cause."
+      },
+      "rationale": "Policy requires coherent validation even with accepted semantic reuse. Classification is confined to this evidence; no historical programme usage is asserted. Input or policy differences establish the witnessed revalidation boundary, not the underlying problem cause."
+    },
+    {
+      "id": "changed-input-rerun-06",
+      "split": "held-out",
+      "family": "changed-input-rerun",
+      "facts": [
+        {
+          "id": "changed-input-rerun-06-e1",
+          "revision": 1,
+          "text": "Same job name with changed environment digest; old result is not reusable."
+        }
+      ],
+      "expected": {
+        "activity": "validation",
+        "purpose": "useful-assurance",
+        "trigger": "retry",
+        "primaryCause": "unknown",
+        "contributingCauses": [],
+        "necessity": "required",
+        "epistemicStatus": "observed",
+        "evidenceRefs": [
+          "changed-input-rerun-06-e1"
+        ],
+        "alternative": null,
+        "measuredAvoidable": false,
+        "uncertainty": "Rerun/input or policy change is observed; these facts do not establish requirements, infrastructure, nondeterminism or avoidability as a cause."
+      },
+      "rationale": "Same job name with changed environment digest; old result is not reusable. Classification is confined to this evidence; no historical programme usage is asserted. Input or policy differences establish the witnessed revalidation boundary, not the underlying problem cause."
+    },
+    {
+      "id": "infrastructure-01",
+      "split": "development",
+      "family": "infrastructure",
+      "facts": [
+        {
+          "id": "infrastructure-01-e1",
+          "revision": 1,
+          "text": "Runner outage and service incident timestamp match the failed job."
+        }
+      ],
+      "expected": {
+        "activity": "operations",
+        "purpose": "necessary-coordination",
+        "trigger": "timeout",
+        "primaryCause": "infrastructure",
+        "contributingCauses": [],
+        "necessity": "uncertain",
+        "epistemicStatus": "supported-inference",
+        "evidenceRefs": [
+          "infrastructure-01-e1"
+        ],
+        "alternative": null,
+        "measuredAvoidable": false
+      },
+      "rationale": "Runner outage and service incident timestamp match the failed job. Classification is confined to this evidence; no historical programme usage is asserted."
+    },
+    {
+      "id": "infrastructure-02",
+      "split": "development",
+      "family": "infrastructure",
+      "facts": [
+        {
+          "id": "infrastructure-02-e1",
+          "revision": 1,
+          "text": "Disk exhaustion recorded by host; retry after capacity restored."
+        }
+      ],
+      "expected": {
+        "activity": "operations",
+        "purpose": "necessary-coordination",
+        "trigger": "timeout",
+        "primaryCause": "infrastructure",
+        "contributingCauses": [],
+        "necessity": "uncertain",
+        "epistemicStatus": "supported-inference",
+        "evidenceRefs": [
+          "infrastructure-02-e1"
+        ],
+        "alternative": null,
+        "measuredAvoidable": false
+      },
+      "rationale": "Disk exhaustion recorded by host; retry after capacity restored. Classification is confined to this evidence; no historical programme usage is asserted."
+    },
+    {
+      "id": "infrastructure-03",
+      "split": "development",
+      "family": "infrastructure",
+      "facts": [
+        {
+          "id": "infrastructure-03-e1",
+          "revision": 1,
+          "text": "DNS failure recorded during dependency acquisition; product inputs unchanged."
+        }
+      ],
+      "expected": {
+        "activity": "operations",
+        "purpose": "necessary-coordination",
+        "trigger": "timeout",
+        "primaryCause": "infrastructure",
+        "contributingCauses": [],
+        "necessity": "uncertain",
+        "epistemicStatus": "supported-inference",
+        "evidenceRefs": [
+          "infrastructure-03-e1"
+        ],
+        "alternative": null,
+        "measuredAvoidable": false
+      },
+      "rationale": "DNS failure recorded during dependency acquisition; product inputs unchanged. Classification is confined to this evidence; no historical programme usage is asserted."
+    },
+    {
+      "id": "infrastructure-04",
+      "split": "held-out",
+      "family": "infrastructure",
+      "facts": [
+        {
+          "id": "infrastructure-04-e1",
+          "revision": 1,
+          "text": "Runner process killed with host OOM event; no product cause asserted."
+        }
+      ],
+      "expected": {
+        "activity": "operations",
+        "purpose": "necessary-coordination",
+        "trigger": "timeout",
+        "primaryCause": "infrastructure",
+        "contributingCauses": [],
+        "necessity": "uncertain",
+        "epistemicStatus": "supported-inference",
+        "evidenceRefs": [
+          "infrastructure-04-e1"
+        ],
+        "alternative": null,
+        "measuredAvoidable": false
+      },
+      "rationale": "Runner process killed with host OOM event; no product cause asserted. Classification is confined to this evidence; no historical programme usage is asserted."
+    },
+    {
+      "id": "infrastructure-05",
+      "split": "held-out",
+      "family": "infrastructure",
+      "facts": [
+        {
+          "id": "infrastructure-05-e1",
+          "revision": 1,
+          "text": "Known network interruption; recovery has new transport success evidence."
+        }
+      ],
+      "expected": {
+        "activity": "operations",
+        "purpose": "necessary-coordination",
+        "trigger": "timeout",
+        "primaryCause": "infrastructure",
+        "contributingCauses": [],
+        "necessity": "uncertain",
+        "epistemicStatus": "supported-inference",
+        "evidenceRefs": [
+          "infrastructure-05-e1"
+        ],
+        "alternative": null,
+        "measuredAvoidable": false
+      },
+      "rationale": "Known network interruption; recovery has new transport success evidence. Classification is confined to this evidence; no historical programme usage is asserted."
+    },
+    {
+      "id": "infrastructure-06",
+      "split": "held-out",
+      "family": "infrastructure",
+      "facts": [
+        {
+          "id": "infrastructure-06-e1",
+          "revision": 1,
+          "text": "CI runner startup failure linked to provider incident; retry cost retained."
+        }
+      ],
+      "expected": {
+        "activity": "operations",
+        "purpose": "necessary-coordination",
+        "trigger": "timeout",
+        "primaryCause": "infrastructure",
+        "contributingCauses": [],
+        "necessity": "uncertain",
+        "epistemicStatus": "supported-inference",
+        "evidenceRefs": [
+          "infrastructure-06-e1"
+        ],
+        "alternative": null,
+        "measuredAvoidable": false
+      },
+      "rationale": "CI runner startup failure linked to provider incident; retry cost retained. Classification is confined to this evidence; no historical programme usage is asserted."
+    },
+    {
+      "id": "context-handoff-01",
+      "split": "development",
+      "family": "context-handoff",
+      "facts": [
+        {
+          "id": "context-handoff-01-e1",
+          "revision": 1,
+          "text": "Interrupted owner reloads context; interruption recorded, avoidable alternative unknown."
+        }
+      ],
+      "expected": {
+        "activity": "context-recovery",
+        "purpose": "necessary-coordination",
+        "trigger": "handoff-return",
+        "primaryCause": "context-loss",
+        "contributingCauses": [],
+        "necessity": "uncertain",
+        "epistemicStatus": "supported-inference",
+        "evidenceRefs": [
+          "context-handoff-01-e1"
+        ],
+        "alternative": null,
+        "measuredAvoidable": false
+      },
+      "rationale": "Interrupted owner reloads context; interruption recorded, avoidable alternative unknown. Classification is confined to this evidence; no historical programme usage is asserted."
+    },
+    {
+      "id": "context-handoff-02",
+      "split": "development",
+      "family": "context-handoff",
+      "facts": [
+        {
+          "id": "context-handoff-02-e1",
+          "revision": 1,
+          "text": "Typed packet omitted dependency evidence; downstream owner retrieves it."
+        }
+      ],
+      "expected": {
+        "activity": "context-recovery",
+        "purpose": "necessary-coordination",
+        "trigger": "handoff-return",
+        "primaryCause": "orchestration-handoff",
+        "contributingCauses": [],
+        "necessity": "uncertain",
+        "epistemicStatus": "supported-inference",
+        "evidenceRefs": [
+          "context-handoff-02-e1"
+        ],
+        "alternative": null,
+        "measuredAvoidable": false,
+        "uncertainty": "The missing handoff field is evidenced; context loss or avoidable recovery is not established."
+      },
+      "rationale": "Typed packet omitted dependency evidence; downstream owner retrieves it. Classification is confined to this evidence; no historical programme usage is asserted. The explicit packet/return omission supports the handoff classification; no context-loss claim is inferred."
+    },
+    {
+      "id": "context-handoff-03",
+      "split": "development",
+      "family": "context-handoff",
+      "facts": [
+        {
+          "id": "context-handoff-03-e1",
+          "revision": 1,
+          "text": "Restart loses transient source excerpt; reload joins retained canonical references."
+        }
+      ],
+      "expected": {
+        "activity": "context-recovery",
+        "purpose": "necessary-coordination",
+        "trigger": "handoff-return",
+        "primaryCause": "context-loss",
+        "contributingCauses": [],
+        "necessity": "uncertain",
+        "epistemicStatus": "supported-inference",
+        "evidenceRefs": [
+          "context-handoff-03-e1"
+        ],
+        "alternative": null,
+        "measuredAvoidable": false
+      },
+      "rationale": "Restart loses transient source excerpt; reload joins retained canonical references. Classification is confined to this evidence; no historical programme usage is asserted."
+    },
+    {
+      "id": "context-handoff-04",
+      "split": "held-out",
+      "family": "context-handoff",
+      "facts": [
+        {
+          "id": "context-handoff-04-e1",
+          "revision": 1,
+          "text": "Owner return omitted changed file list; parent independently recovers it."
+        }
+      ],
+      "expected": {
+        "activity": "context-recovery",
+        "purpose": "necessary-coordination",
+        "trigger": "handoff-return",
+        "primaryCause": "orchestration-handoff",
+        "contributingCauses": [],
+        "necessity": "uncertain",
+        "epistemicStatus": "supported-inference",
+        "evidenceRefs": [
+          "context-handoff-04-e1"
+        ],
+        "alternative": null,
+        "measuredAvoidable": false,
+        "uncertainty": "The missing handoff field is evidenced; context loss or avoidable recovery is not established."
+      },
+      "rationale": "Owner return omitted changed file list; parent independently recovers it. Classification is confined to this evidence; no historical programme usage is asserted. The explicit packet/return omission supports the handoff classification; no context-loss claim is inferred."
+    },
+    {
+      "id": "context-handoff-05",
+      "split": "held-out",
+      "family": "context-handoff",
+      "facts": [
+        {
+          "id": "context-handoff-05-e1",
+          "revision": 1,
+          "text": "Worker context truncation is explicitly observed; no token-saving estimate inferred."
+        }
+      ],
+      "expected": {
+        "activity": "context-recovery",
+        "purpose": "necessary-coordination",
+        "trigger": "handoff-return",
+        "primaryCause": "context-loss",
+        "contributingCauses": [],
+        "necessity": "uncertain",
+        "epistemicStatus": "supported-inference",
+        "evidenceRefs": [
+          "context-handoff-05-e1"
+        ],
+        "alternative": null,
+        "measuredAvoidable": false
+      },
+      "rationale": "Worker context truncation is explicitly observed; no token-saving estimate inferred. Classification is confined to this evidence; no historical programme usage is asserted."
+    },
+    {
+      "id": "context-handoff-06",
+      "split": "held-out",
+      "family": "context-handoff",
+      "facts": [
+        {
+          "id": "context-handoff-06-e1",
+          "revision": 1,
+          "text": "Handoff points to expired scratch file; next owner loads retained source instead."
+        }
+      ],
+      "expected": {
+        "activity": "context-recovery",
+        "purpose": "necessary-coordination",
+        "trigger": "handoff-return",
+        "primaryCause": "context-loss",
+        "contributingCauses": [],
+        "necessity": "uncertain",
+        "epistemicStatus": "supported-inference",
+        "evidenceRefs": [
+          "context-handoff-06-e1"
+        ],
+        "alternative": null,
+        "measuredAvoidable": false
+      },
+      "rationale": "Handoff points to expired scratch file; next owner loads retained source instead. Classification is confined to this evidence; no historical programme usage is asserted."
+    },
+    {
+      "id": "incorrect-lineage-01",
+      "split": "development",
+      "family": "incorrect-lineage",
+      "facts": [
+        {
+          "id": "incorrect-lineage-01-e1",
+          "revision": 1,
+          "text": "One CI run attributed to wrong item; supported correction moves attribution."
+        }
+      ],
+      "expected": {
+        "activity": "coordination",
+        "purpose": "necessary-coordination",
+        "trigger": "data-conflict",
+        "primaryCause": "bookkeeping-lineage",
+        "contributingCauses": [],
+        "necessity": "required",
+        "epistemicStatus": "observed",
+        "evidenceRefs": [
+          "incorrect-lineage-01-e1"
+        ],
+        "alternative": null,
+        "measuredAvoidable": false
+      },
+      "rationale": "One CI run attributed to wrong item; supported correction moves attribution. Classification is confined to this evidence; no historical programme usage is asserted."
+    },
+    {
+      "id": "incorrect-lineage-02",
+      "split": "development",
+      "family": "incorrect-lineage",
+      "facts": [
+        {
+          "id": "incorrect-lineage-02-e1",
+          "revision": 1,
+          "text": "Duplicate correction replay returns already-applied; one current contribution."
+        }
+      ],
+      "expected": {
+        "activity": "coordination",
+        "purpose": "necessary-coordination",
+        "trigger": "data-conflict",
+        "primaryCause": "bookkeeping-lineage",
+        "contributingCauses": [],
+        "necessity": "required",
+        "epistemicStatus": "observed",
+        "evidenceRefs": [
+          "incorrect-lineage-02-e1"
+        ],
+        "alternative": null,
+        "measuredAvoidable": false
+      },
+      "rationale": "Duplicate correction replay returns already-applied; one current contribution. Classification is confined to this evidence; no historical programme usage is asserted."
+    },
+    {
+      "id": "incorrect-lineage-03",
+      "split": "development",
+      "family": "incorrect-lineage",
+      "facts": [
+        {
+          "id": "incorrect-lineage-03-e1",
+          "revision": 1,
+          "text": "Old revision arrives late; current canonical revision remains selected."
+        }
+      ],
+      "expected": {
+        "activity": "coordination",
+        "purpose": "necessary-coordination",
+        "trigger": "data-conflict",
+        "primaryCause": "bookkeeping-lineage",
+        "contributingCauses": [],
+        "necessity": "required",
+        "epistemicStatus": "observed",
+        "evidenceRefs": [
+          "incorrect-lineage-03-e1"
+        ],
+        "alternative": null,
+        "measuredAvoidable": false
+      },
+      "rationale": "Old revision arrives late; current canonical revision remains selected. Classification is confined to this evidence; no historical programme usage is asserted."
+    },
+    {
+      "id": "incorrect-lineage-04",
+      "split": "held-out",
+      "family": "incorrect-lineage",
+      "facts": [
+        {
+          "id": "incorrect-lineage-04-e1",
+          "revision": 1,
+          "text": "Same identity/revision has conflicting bytes; unresolved join, totals cannot qualify."
+        }
+      ],
+      "expected": {
+        "activity": "coordination",
+        "purpose": "necessary-coordination",
+        "trigger": "data-conflict",
+        "primaryCause": "bookkeeping-lineage",
+        "contributingCauses": [],
+        "necessity": "required",
+        "epistemicStatus": "observed",
+        "evidenceRefs": [
+          "incorrect-lineage-04-e1"
+        ],
+        "alternative": null,
+        "measuredAvoidable": false
+      },
+      "rationale": "Same identity/revision has conflicting bytes; unresolved join, totals cannot qualify. Classification is confined to this evidence; no historical programme usage is asserted."
+    },
+    {
+      "id": "incorrect-lineage-05",
+      "split": "held-out",
+      "family": "incorrect-lineage",
+      "facts": [
+        {
+          "id": "incorrect-lineage-05-e1",
+          "revision": 1,
+          "text": "Wrong original item reference retained in audit; supported correction selects replacement."
+        }
+      ],
+      "expected": {
+        "activity": "coordination",
+        "purpose": "necessary-coordination",
+        "trigger": "data-conflict",
+        "primaryCause": "bookkeeping-lineage",
+        "contributingCauses": [],
+        "necessity": "required",
+        "epistemicStatus": "observed",
+        "evidenceRefs": [
+          "incorrect-lineage-05-e1"
+        ],
+        "alternative": null,
+        "measuredAvoidable": false
+      },
+      "rationale": "Wrong original item reference retained in audit; supported correction selects replacement. Classification is confined to this evidence; no historical programme usage is asserted."
+    },
+    {
+      "id": "incorrect-lineage-06",
+      "split": "held-out",
+      "family": "incorrect-lineage",
+      "facts": [
+        {
+          "id": "incorrect-lineage-06-e1",
+          "revision": 1,
+          "text": "Legacy host lacks correction API; unsupported state retained, no SQL repair."
+        }
+      ],
+      "expected": {
+        "activity": "coordination",
+        "purpose": "necessary-coordination",
+        "trigger": "data-conflict",
+        "primaryCause": "bookkeeping-lineage",
+        "contributingCauses": [],
+        "necessity": "required",
+        "epistemicStatus": "observed",
+        "evidenceRefs": [
+          "incorrect-lineage-06-e1"
+        ],
+        "alternative": null,
+        "measuredAvoidable": false
+      },
+      "rationale": "Legacy host lacks correction API; unsupported state retained, no SQL repair. Classification is confined to this evidence; no historical programme usage is asserted."
+    },
+    {
+      "id": "missing-runtime-01",
+      "split": "development",
+      "family": "missing-runtime",
+      "facts": [
+        {
+          "id": "missing-runtime-01-e1",
+          "revision": 1,
+          "text": "Source PR merged; zero runtime observations against one expected dispatch."
+        }
+      ],
+      "expected": {
+        "activity": "other",
+        "purpose": "unknown",
+        "trigger": "missing-observation",
+        "primaryCause": "telemetry-loss",
+        "contributingCauses": [],
+        "necessity": "uncertain",
+        "epistemicStatus": "observed",
+        "evidenceRefs": [
+          "missing-runtime-01-e1"
+        ],
+        "alternative": null,
+        "measuredAvoidable": false
+      },
+      "rationale": "Source PR merged; zero runtime observations against one expected dispatch. Classification is confined to this evidence; no historical programme usage is asserted."
+    },
+    {
+      "id": "missing-runtime-02",
+      "split": "development",
+      "family": "missing-runtime",
+      "facts": [
+        {
+          "id": "missing-runtime-02-e1",
+          "revision": 1,
+          "text": "Terminal record arrived but final usage missing; total item cost unknown."
+        }
+      ],
+      "expected": {
+        "activity": "other",
+        "purpose": "unknown",
+        "trigger": "missing-observation",
+        "primaryCause": "telemetry-loss",
+        "contributingCauses": [],
+        "necessity": "uncertain",
+        "epistemicStatus": "observed",
+        "evidenceRefs": [
+          "missing-runtime-02-e1"
+        ],
+        "alternative": null,
+        "measuredAvoidable": false
+      },
+      "rationale": "Terminal record arrived but final usage missing; total item cost unknown. Classification is confined to this evidence; no historical programme usage is asserted."
+    },
+    {
+      "id": "missing-runtime-03",
+      "split": "development",
+      "family": "missing-runtime",
+      "facts": [
+        {
+          "id": "missing-runtime-03-e1",
+          "revision": 1,
+          "text": "Child dispatch never joined to native invocation; root usage alone is partial."
+        }
+      ],
+      "expected": {
+        "activity": "other",
+        "purpose": "unknown",
+        "trigger": "missing-observation",
+        "primaryCause": "telemetry-loss",
+        "contributingCauses": [],
+        "necessity": "uncertain",
+        "epistemicStatus": "observed",
+        "evidenceRefs": [
+          "missing-runtime-03-e1"
+        ],
+        "alternative": null,
+        "measuredAvoidable": false
+      },
+      "rationale": "Child dispatch never joined to native invocation; root usage alone is partial. Classification is confined to this evidence; no historical programme usage is asserted."
+    },
+    {
+      "id": "missing-runtime-04",
+      "split": "held-out",
+      "family": "missing-runtime",
+      "facts": [
+        {
+          "id": "missing-runtime-04-e1",
+          "revision": 1,
+          "text": "Receiver receipt durable but not applied; batch remains pending."
+        }
+      ],
+      "expected": {
+        "activity": "other",
+        "purpose": "unknown",
+        "trigger": "missing-observation",
+        "primaryCause": "telemetry-loss",
+        "contributingCauses": [],
+        "necessity": "uncertain",
+        "epistemicStatus": "observed",
+        "evidenceRefs": [
+          "missing-runtime-04-e1"
+        ],
+        "alternative": null,
+        "measuredAvoidable": false
+      },
+      "rationale": "Receiver receipt durable but not applied; batch remains pending. Classification is confined to this evidence; no historical programme usage is asserted."
+    },
+    {
+      "id": "missing-runtime-05",
+      "split": "held-out",
+      "family": "missing-runtime",
+      "facts": [
+        {
+          "id": "missing-runtime-05-e1",
+          "revision": 1,
+          "text": "Usage observed but expected population unknown; no whole-item total asserted."
+        }
+      ],
+      "expected": {
+        "activity": "other",
+        "purpose": "unknown",
+        "trigger": "missing-observation",
+        "primaryCause": "telemetry-loss",
+        "contributingCauses": [],
+        "necessity": "uncertain",
+        "epistemicStatus": "observed",
+        "evidenceRefs": [
+          "missing-runtime-05-e1"
+        ],
+        "alternative": null,
+        "measuredAvoidable": false
+      },
+      "rationale": "Usage observed but expected population unknown; no whole-item total asserted. Classification is confined to this evidence; no historical programme usage is asserted."
+    },
+    {
+      "id": "missing-runtime-06",
+      "split": "held-out",
+      "family": "missing-runtime",
+      "facts": [
+        {
+          "id": "missing-runtime-06-e1",
+          "revision": 1,
+          "text": "Source known, accounting incomplete, provisional delivery explanation only."
+        }
+      ],
+      "expected": {
+        "activity": "other",
+        "purpose": "unknown",
+        "trigger": "missing-observation",
+        "primaryCause": "telemetry-loss",
+        "contributingCauses": [],
+        "necessity": "uncertain",
+        "epistemicStatus": "observed",
+        "evidenceRefs": [
+          "missing-runtime-06-e1"
+        ],
+        "alternative": null,
+        "measuredAvoidable": false
+      },
+      "rationale": "Source known, accounting incomplete, provisional delivery explanation only. Classification is confined to this evidence; no historical programme usage is asserted."
+    },
+    {
+      "id": "unknown-retry-01",
+      "split": "development",
+      "family": "unknown-retry",
+      "facts": [
+        {
+          "id": "unknown-retry-01-e1",
+          "revision": 1,
+          "text": "Failed then passed check; environment differences unavailable."
+        }
+      ],
+      "expected": {
+        "activity": "validation",
+        "purpose": "useful-assurance",
+        "trigger": "retry",
+        "primaryCause": "unknown",
+        "contributingCauses": [],
+        "necessity": "uncertain",
+        "epistemicStatus": "unknown",
+        "evidenceRefs": [
+          "unknown-retry-01-e1"
+        ],
+        "alternative": null,
+        "measuredAvoidable": false
+      },
+      "rationale": "Failed then passed check; environment differences unavailable. Classification is confined to this evidence; no historical programme usage is asserted."
+    },
+    {
+      "id": "unknown-retry-02",
+      "split": "development",
+      "family": "unknown-retry",
+      "facts": [
+        {
+          "id": "unknown-retry-02-e1",
+          "revision": 1,
+          "text": "Two identical job names without complete input closure; redundancy unproven."
+        }
+      ],
+      "expected": {
+        "activity": "validation",
+        "purpose": "useful-assurance",
+        "trigger": "retry",
+        "primaryCause": "unknown",
+        "contributingCauses": [],
+        "necessity": "uncertain",
+        "epistemicStatus": "unknown",
+        "evidenceRefs": [
+          "unknown-retry-02-e1"
+        ],
+        "alternative": null,
+        "measuredAvoidable": false
+      },
+      "rationale": "Two identical job names without complete input closure; redundancy unproven. Classification is confined to this evidence; no historical programme usage is asserted."
+    },
+    {
+      "id": "unknown-retry-03",
+      "split": "development",
+      "family": "unknown-retry",
+      "facts": [
+        {
+          "id": "unknown-retry-03-e1",
+          "revision": 1,
+          "text": "Check cancelled then succeeds; cancellation source is unknown."
+        }
+      ],
+      "expected": {
+        "activity": "validation",
+        "purpose": "useful-assurance",
+        "trigger": "retry",
+        "primaryCause": "unknown",
+        "contributingCauses": [],
+        "necessity": "uncertain",
+        "epistemicStatus": "unknown",
+        "evidenceRefs": [
+          "unknown-retry-03-e1"
+        ],
+        "alternative": null,
+        "measuredAvoidable": false
+      },
+      "rationale": "Check cancelled then succeeds; cancellation source is unknown. Classification is confined to this evidence; no historical programme usage is asserted."
+    },
+    {
+      "id": "unknown-retry-04",
+      "split": "held-out",
+      "family": "unknown-retry",
+      "facts": [
+        {
+          "id": "unknown-retry-04-e1",
+          "revision": 1,
+          "text": "Timeout then pass; infrastructure diagnosis unavailable."
+        }
+      ],
+      "expected": {
+        "activity": "validation",
+        "purpose": "useful-assurance",
+        "trigger": "retry",
+        "primaryCause": "unknown",
+        "contributingCauses": [],
+        "necessity": "uncertain",
+        "epistemicStatus": "unknown",
+        "evidenceRefs": [
+          "unknown-retry-04-e1"
+        ],
+        "alternative": null,
+        "measuredAvoidable": false
+      },
+      "rationale": "Timeout then pass; infrastructure diagnosis unavailable. Classification is confined to this evidence; no historical programme usage is asserted."
+    },
+    {
+      "id": "unknown-retry-05",
+      "split": "held-out",
+      "family": "unknown-retry",
+      "facts": [
+        {
+          "id": "unknown-retry-05-e1",
+          "revision": 1,
+          "text": "Repeated stage visit observed; no evidence supports avoidability."
+        }
+      ],
+      "expected": {
+        "activity": "validation",
+        "purpose": "useful-assurance",
+        "trigger": "retry",
+        "primaryCause": "unknown",
+        "contributingCauses": [],
+        "necessity": "uncertain",
+        "epistemicStatus": "unknown",
+        "evidenceRefs": [
+          "unknown-retry-05-e1"
+        ],
+        "alternative": null,
+        "measuredAvoidable": false
+      },
+      "rationale": "Repeated stage visit observed; no evidence supports avoidability. Classification is confined to this evidence; no historical programme usage is asserted."
+    },
+    {
+      "id": "unknown-retry-06",
+      "split": "held-out",
+      "family": "unknown-retry",
+      "facts": [
+        {
+          "id": "unknown-retry-06-e1",
+          "revision": 1,
+          "text": "Same apparent test failure disappears; no evidence proves nondeterminism."
+        }
+      ],
+      "expected": {
+        "activity": "validation",
+        "purpose": "useful-assurance",
+        "trigger": "retry",
+        "primaryCause": "unknown",
+        "contributingCauses": [],
+        "necessity": "uncertain",
+        "epistemicStatus": "unknown",
+        "evidenceRefs": [
+          "unknown-retry-06-e1"
+        ],
+        "alternative": null,
+        "measuredAvoidable": false
+      },
+      "rationale": "Same apparent test failure disappears; no evidence proves nondeterminism. Classification is confined to this evidence; no historical programme usage is asserted."
+    },
+    {
+      "id": "required-duplicate-01",
+      "split": "development",
+      "family": "required-duplicate",
+      "facts": [
+        {
+          "id": "required-duplicate-01-e1",
+          "revision": 1,
+          "text": "Then-policy mandates two independent checks despite matching inputs."
+        }
+      ],
+      "expected": {
+        "activity": "validation",
+        "purpose": "useful-assurance",
+        "trigger": "retry",
+        "primaryCause": "duplicate-process",
+        "contributingCauses": [],
+        "necessity": "required",
+        "epistemicStatus": "observed",
+        "evidenceRefs": [
+          "required-duplicate-01-e1"
+        ],
+        "alternative": null,
+        "measuredAvoidable": false
+      },
+      "rationale": "Then-policy mandates two independent checks despite matching inputs. Classification is confined to this evidence; no historical programme usage is asserted."
+    },
+    {
+      "id": "required-duplicate-02",
+      "split": "development",
+      "family": "required-duplicate",
+      "facts": [
+        {
+          "id": "required-duplicate-02-e1",
+          "revision": 1,
+          "text": "Full coherent validation mandatory after accepted semantic reuse."
+        }
+      ],
+      "expected": {
+        "activity": "validation",
+        "purpose": "useful-assurance",
+        "trigger": "retry",
+        "primaryCause": "duplicate-process",
+        "contributingCauses": [],
+        "necessity": "required",
+        "epistemicStatus": "observed",
+        "evidenceRefs": [
+          "required-duplicate-02-e1"
+        ],
+        "alternative": null,
+        "measuredAvoidable": false
+      },
+      "rationale": "Full coherent validation mandatory after accepted semantic reuse. Classification is confined to this evidence; no historical programme usage is asserted."
+    },
+    {
+      "id": "required-duplicate-03",
+      "split": "development",
+      "family": "required-duplicate",
+      "facts": [
+        {
+          "id": "required-duplicate-03-e1",
+          "revision": 1,
+          "text": "Operation authority requires fresh exact-head proof; prior proof expires."
+        }
+      ],
+      "expected": {
+        "activity": "validation",
+        "purpose": "useful-assurance",
+        "trigger": "retry",
+        "primaryCause": "duplicate-process",
+        "contributingCauses": [],
+        "necessity": "required",
+        "epistemicStatus": "observed",
+        "evidenceRefs": [
+          "required-duplicate-03-e1"
+        ],
+        "alternative": null,
+        "measuredAvoidable": false
+      },
+      "rationale": "Operation authority requires fresh exact-head proof; prior proof expires. Classification is confined to this evidence; no historical programme usage is asserted."
+    },
+    {
+      "id": "required-duplicate-04",
+      "split": "held-out",
+      "family": "required-duplicate",
+      "facts": [
+        {
+          "id": "required-duplicate-04-e1",
+          "revision": 1,
+          "text": "Security check requires independent current run despite previous success."
+        }
+      ],
+      "expected": {
+        "activity": "validation",
+        "purpose": "useful-assurance",
+        "trigger": "retry",
+        "primaryCause": "duplicate-process",
+        "contributingCauses": [],
+        "necessity": "required",
+        "epistemicStatus": "observed",
+        "evidenceRefs": [
+          "required-duplicate-04-e1"
+        ],
+        "alternative": null,
+        "measuredAvoidable": false
+      },
+      "rationale": "Security check requires independent current run despite previous success. Classification is confined to this evidence; no historical programme usage is asserted."
+    },
+    {
+      "id": "required-duplicate-05",
+      "split": "held-out",
+      "family": "required-duplicate",
+      "facts": [
+        {
+          "id": "required-duplicate-05-e1",
+          "revision": 1,
+          "text": "Receiver qualification requires clean and upgrade cases independently."
+        }
+      ],
+      "expected": {
+        "activity": "validation",
+        "purpose": "useful-assurance",
+        "trigger": "retry",
+        "primaryCause": "duplicate-process",
+        "contributingCauses": [],
+        "necessity": "required",
+        "epistemicStatus": "observed",
+        "evidenceRefs": [
+          "required-duplicate-05-e1"
+        ],
+        "alternative": null,
+        "measuredAvoidable": false
+      },
+      "rationale": "Receiver qualification requires clean and upgrade cases independently. Classification is confined to this evidence; no historical programme usage is asserted."
+    },
+    {
+      "id": "required-duplicate-06",
+      "split": "held-out",
+      "family": "required-duplicate",
+      "facts": [
+        {
+          "id": "required-duplicate-06-e1",
+          "revision": 1,
+          "text": "Required post-merge readback repeats pre-merge facts at a different authority boundary."
+        }
+      ],
+      "expected": {
+        "activity": "validation",
+        "purpose": "useful-assurance",
+        "trigger": "retry",
+        "primaryCause": "duplicate-process",
+        "contributingCauses": [],
+        "necessity": "required",
+        "epistemicStatus": "observed",
+        "evidenceRefs": [
+          "required-duplicate-06-e1"
+        ],
+        "alternative": null,
+        "measuredAvoidable": false
+      },
+      "rationale": "Required post-merge readback repeats pre-merge facts at a different authority boundary. Classification is confined to this evidence; no historical programme usage is asserted."
+    }
+  ]
+}

@@ -1,0 +1,384 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "kind",
+    "identity",
+    "itemId",
+    "revision",
+    "subject",
+    "finding",
+    "evidenceRefs",
+    "allocationRefs",
+    "provenance",
+    "occurredAt",
+    "observedAt"
+  ],
+  "properties": {
+    "schema": {
+      "const": "fsgg.telemetry.efficiency-problem-episode-input/1"
+    },
+    "kind": {
+      "const": "efficiency-problem-episode/1"
+    },
+    "identity": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "itemId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9223372036854775807
+    },
+    "subject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "outcomeRef",
+        "outcomeEpoch",
+        "attemptRef",
+        "activityRef",
+        "scope"
+      ],
+      "properties": {
+        "outcomeRef": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 256
+        },
+        "outcomeEpoch": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        },
+        "attemptRef": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 256
+        },
+        "activityRef": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 256
+        },
+        "scope": {
+          "enum": [
+            "attempt",
+            "native-item",
+            "provisional-delivery"
+          ]
+        }
+      }
+    },
+    "finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "activity",
+        "purpose",
+        "trigger",
+        "primaryCause",
+        "contributingCauses",
+        "necessity",
+        "epistemicStatus",
+        "severity",
+        "summary",
+        "evidenceRefs",
+        "affectedObjects",
+        "alternative",
+        "recoveryRefs",
+        "uncertainty"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "activity": {
+          "enum": [
+            "planning",
+            "implementation",
+            "review",
+            "validation",
+            "delivery",
+            "repair",
+            "operations",
+            "coordination",
+            "context-recovery",
+            "other",
+            "unknown"
+          ]
+        },
+        "purpose": {
+          "enum": [
+            "direct-product",
+            "useful-assurance",
+            "necessary-coordination",
+            "process-improvement",
+            "avoidable-process",
+            "unknown"
+          ]
+        },
+        "trigger": {
+          "enum": [
+            "check-failure",
+            "retry",
+            "timeout",
+            "cancellation",
+            "refusal",
+            "handoff-return",
+            "reopen",
+            "data-conflict",
+            "missing-observation",
+            "other",
+            "unknown"
+          ]
+        },
+        "primaryCause": {
+          "enum": [
+            "product-defect",
+            "requirements",
+            "dependency-drift",
+            "test-nondeterminism",
+            "infrastructure",
+            "authorization",
+            "capacity-custody",
+            "orchestration-handoff",
+            "context-loss",
+            "duplicate-process",
+            "bookkeeping-lineage",
+            "telemetry-loss",
+            "other",
+            "unknown"
+          ]
+        },
+        "contributingCauses": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "product-defect",
+              "requirements",
+              "dependency-drift",
+              "test-nondeterminism",
+              "infrastructure",
+              "authorization",
+              "capacity-custody",
+              "orchestration-handoff",
+              "context-loss",
+              "duplicate-process",
+              "bookkeeping-lineage",
+              "telemetry-loss",
+              "other",
+              "unknown"
+            ]
+          },
+          "maxItems": 6
+        },
+        "necessity": {
+          "enum": [
+            "required",
+            "avoidable",
+            "uncertain"
+          ]
+        },
+        "epistemicStatus": {
+          "enum": [
+            "observed",
+            "supported-inference",
+            "hypothesis",
+            "unknown"
+          ]
+        },
+        "severity": {
+          "enum": [
+            "info",
+            "minor",
+            "major",
+            "critical",
+            "unknown"
+          ]
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "evidenceRefs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "maxItems": 16
+        },
+        "affectedObjects": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/sourceRef"
+          },
+          "maxItems": 16
+        },
+        "alternative": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 1024
+        },
+        "recoveryRefs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "maxItems": 16
+        },
+        "uncertainty": {
+          "type": "string",
+          "maxLength": 1024
+        }
+      }
+    },
+    "evidenceRefs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/sourceRef"
+      },
+      "maxItems": 32
+    },
+    "allocationRefs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/sourceRef"
+      },
+      "maxItems": 16
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sourceIdentity",
+        "authorityRole",
+        "authorityRef",
+        "rootDispatchRef",
+        "invocationRef"
+      ],
+      "properties": {
+        "sourceIdentity": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "authorityRole": {
+          "enum": [
+            "runtime-observer",
+            "ci-observer",
+            "root-reviewer",
+            "completion-analyst"
+          ]
+        },
+        "authorityRef": {
+          "$ref": "#/$defs/sourceRef"
+        },
+        "rootDispatchRef": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 256
+        },
+        "invocationRef": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 256
+        }
+      }
+    },
+    "occurredAt": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time"
+    },
+    "observedAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:fsgg:telemetry:efficiency-problem-episode-input:1",
+  "$defs": {
+    "sourceRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "kind",
+        "revision",
+        "contentDigest"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "kind": {
+          "enum": [
+            "runtime-turn-usage",
+            "usage",
+            "ci-run",
+            "ci-job",
+            "ci-step",
+            "activity-span",
+            "complication",
+            "process-review",
+            "native-item-outcome",
+            "expected-dispatch",
+            "invocation-lineage",
+            "runtime-admission",
+            "operational-activation",
+            "efficiency-resource-allocation/1",
+            "efficiency-problem-episode/1",
+            "efficiency-assessment/1",
+            "evidence",
+            "pull-request-head",
+            "source"
+          ]
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9223372036854775807
+        },
+        "contentDigest": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        }
+      }
+    }
+  },
+  "$comment": "Inactive append-only evidenced episode; contains no measured cost or completion verdict. Wire event removes schema only, after .2 activation of kind under existing ingest/1."
+}
