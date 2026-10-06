@@ -8,6 +8,7 @@
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <DeterministicSourcePaths>true</DeterministicSourcePaths>
+    <RealSig>true</RealSig>
     <!-- Independent one-package release line. This literal deliberately does not resolve from
          FsggCoherentSetVersion, which belongs only to Kit, Drivers and Coord.Cli. -->
     <FsggCoherentSetVersion />
