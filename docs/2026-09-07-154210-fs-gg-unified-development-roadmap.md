@@ -379,7 +379,22 @@ LEARN's rootless custody source merged through [#4215](https://github.com/FS-GG/
 Its source and static helper compile passed; native execution still needs a qualified
 namespace/cgroup environment. Source delivery does not close native acceptance.
 
-**2026-10-06: SVG 0.32.1 release-route source window delivered; candidate and publication pending.**
+**2026-10-06: Rendering 0.32.1 publication accepted on both feeds.**
+Root accepted [publisher 37461402933/a1](https://github.com/FS-GG/FS.GG.Rendering/actions/runs/37461402933)
+executed at `6ea40861d15b581735655fbe7253673bf1cee907`, retaining the 19 original
+packages from producer `6c9f766fdd91483c2de6f061e75589e94852a265`. Each feed
+acknowledged all 19 packages; GitHub exact archive and nuget.org custody-payload
+readbacks matched. Retained archive `11414392696` has SHA256
+`85e134d2a510acb25d312f67284731cebcc1e5e5f9bb2678c791dbf8c55d2ca5`.
+Tags `fs-gg-ui/v0.32.1`, `fs-gg-ui-template/v0.32.1` and `v0.32.1` bind the
+original producer. The immutable source plan's `publicationReady=false` remains
+historical source evidence; readiness and acceptance of this selected publication
+attempt are separate observations. Notification, receiver adoption and installed
+use remain open. The [owning SVG plan](roadmaps/svg-coherence-and-instancing-01.md)
+closes publication only within .8; .3/.4, broader .8 adoption and the late host GPU
+batch remain open.
+
+**2026-10-06: SVG 0.32.1 release-route source window delivered (prior source checkpoint).**
 [Rendering #1390](https://github.com/FS-GG/FS.GG.Rendering/pull/1390) merged at
 `6c9f766fdd91483c2de6f061e75589e94852a265` after required hosted and coherent validation passed
 for exact head `4c146e1de3b4e1916fd59b03c88ce56cc3357f00`. The ten qualified release-route
@@ -387,12 +402,12 @@ inputs remain byte-identical to the accepted local F# source window. A separate
 21.647-second guard reproduction confirmed the retained stale-report failure, the
 corrected structural verdict, zero observed feed requests without opt-in and
 missing-input refusal, with clean custody and no resource failure. The
-[owning SVG plan](roadmaps/svg-coherence-and-instancing-01.md) keeps the genuine
-19-package candidate, installed Templates receiver and publication pending.
+[owning SVG plan](roadmaps/svg-coherence-and-instancing-01.md) records later accepted
+publication above; installed Templates receiver qualification remains pending.
 Original failures remain retained; .3/.4, consumer adoption and the late GPU batch
 remain open.
 
-**2026-10-06: SVG-COHERENCE-01 export-prefix source window delivered; publication pending.**
+**2026-10-06: SVG-COHERENCE-01 export-prefix source window delivered (prior source checkpoint).**
 [Rendering #1389](https://github.com/FS-GG/FS.GG.Rendering/pull/1389) merged at
 `f133cb9f979cb4d5053e67c72ac7a6041524fc31` with exact-head coherent validation
 passed. It computes the document export prefix once and preserves curated Fable
@@ -402,8 +417,8 @@ retains three pairs, a median CPU reduction of 25.70%, individual maximum regres
 and prior failed attempts. This used GPU-disabled Chromium and the SVG development
 8GiB allowance; peak summed RSS was 2,583,908,352 bytes, so it establishes neither
 2GiB fit nor host GPU acceptance. The [owning plan](roadmaps/svg-coherence-and-instancing-01.md)
-keeps .3/.4 open. The coherent 0.32.1 successor still needs package custody, installed
-receiver qualification and publication; this source milestone does not close adoption
+keeps .3/.4 open. The coherent 0.32.1 successor publication is accepted above; installed
+receiver qualification remains open. This source milestone does not close adoption
 or the late host GPU batch.
 
 **2026-10-05: SVG-COHERENCE-01 first shared guard and reference preparation delivered.**

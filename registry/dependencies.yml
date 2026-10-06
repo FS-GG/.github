@@ -531,9 +531,9 @@ contracts:
     # 5c74f2a and all 19 archives were read back from GitHub Packages and nuget.org. It adds the
     # source-complete authoring, input, runtime and presentation surfaces while preserving
     # omitted/default sdd, explicit none, typed-sdd and legacy spec-kit.
-    version: "0.32.0"   # SOURCE: original coherent Rendering archives from 730923fe9d27174e879566f21dab14a1b03d761a; all three 0.32.0 tags bind that source.
-    package-version: "0.32.0"   # FEED: protected original-byte publisher 37106323610 verified all 19 archives on both feeds. Templates registry edge selects 0.32.0; descriptor merge and new installed acceptance remain pending.
-    package-tag: "fs-gg-ui-template/v0.32.0"
+    version: "0.32.1"   # SOURCE: original producer 6c9f766fdd91483c2de6f061e75589e94852a265; all three 0.32.1 tags bind that source.
+    package-version: "0.32.1"   # FEED: accepted publisher 37461402933/a1 at executor 6ea40861d15b581735655fbe7253673bf1cee907; 19 original packages acknowledged and matched on both feeds. Notification, receiver adoption and installed use remain open.
+    package-tag: "fs-gg-ui-template/v0.32.1"
     # visibility: PUBLIC — Feature 218 (FS.GG.Rendering#26): the whole coherent set (template + 16 FS.GG.UI.* libs) flipped private→PUBLIC so consumer-CI tokens install+restore without exit-103 (internal unavailable — FS-GG is a free, non-enterprise org; public matches the FS.GG.*.Cli norm)
     owner: rendering
     surface: "dotnet new fs-gg-ui (template/base) + FS.GG.UI.* framework packages"

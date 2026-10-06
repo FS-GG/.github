@@ -1,7 +1,8 @@
 # SVG coherence, shared implementation and repeated-model performance
 
 Date: 2026-10-04. Status: active; milestones .1 and .2 delivered, .3 in progress.
-Shared implementation, deployment and host-browser acceptance remain open. Host GPU tests require
+Shared implementation, receiver adoption and host-browser acceptance remain open;
+Rendering 0.32.1 package publication is accepted. Host GPU tests require
 active human intervention and are batched at the latest practical qualification
 boundary, after autonomous preparation and container validation. Proposed identity:
 **SVG-COHERENCE-01**. Rendering owns the reusable implementation and performance
@@ -20,6 +21,20 @@ product-adoption sequence or mark its remaining outcomes complete. The new insta
 workload does not retroactively invalidate historical acceptance for other workloads.
 
 ## Current progress
+
+**2026-10-06: Rendering 0.32.1 publication accepted on both feeds.**
+Root accepted [publisher 37461402933/a1](https://github.com/FS-GG/FS.GG.Rendering/actions/runs/37461402933)
+executed at `6ea40861d15b581735655fbe7253673bf1cee907`, retaining the 19 original
+packages from producer `6c9f766fdd91483c2de6f061e75589e94852a265`. Each feed
+acknowledged all 19 packages; GitHub exact archive and nuget.org custody-payload
+readbacks matched. Retained archive `11414392696` has SHA256
+`85e134d2a510acb25d312f67284731cebcc1e5e5f9bb2678c791dbf8c55d2ca5`.
+Tags `fs-gg-ui/v0.32.1`, `fs-gg-ui-template/v0.32.1` and `v0.32.1` bind the
+original producer. The immutable source plan's `publicationReady=false` remains
+historical source evidence; readiness and acceptance of this selected publication
+attempt are separate observations. Notification, receiver adoption and installed
+use remain open. This closes publication only within .8; .3/.4, broader .8 adoption
+and the late host GPU batch remain open.
 
 The [consumer inventory](https://github.com/FS-GG/FS.GG.Rendering/pull/1380)
 merged at `da3f64bbbff205529c9845f779de335ead7af6c0`; the
@@ -52,8 +67,8 @@ curated Fable package content without changing the public API. The
 records three pairs and a median CPU reduction of 25.70%, with individual maximum
 regressions and original failures preserved. GPU-disabled Chromium used the SVG
 8GiB development allowance and peaked at 2,583,908,352 bytes; no 2GiB fit or GPU
-acceptance is claimed. The coherent 0.32.1 package candidate, genuine installed
-receiver qualification and publication remain pending. This closes only that source
+acceptance is claimed. The coherent 0.32.1 publication is now accepted as recorded
+above; genuine installed receiver qualification remains pending. This closes only that source
 window; .3/.4, consumer adoption and the late host GPU batch remain open.
 
 The 0.32.1 release-route source window delivered through
@@ -77,11 +92,11 @@ its retained source-bound custody manifest and all 19 package hashes.
 receiver input bindings at `4eff52b27933c69a9ab4e276b3a29032d279b7e0` after required
 composition, static controls and coherent checks passed.
 
-The installed receiver still needs to qualify those package bytes through the
-Rendering caller bound to the protected Templates revision. Stage D requires that
-result and fresh feed, tag and authority joins before publication. Candidate custody
-and source delivery do not close .3/.4, package publication, consumer adoption or the
-late GPU batch.
+The installed receiver still needs to qualify the selected package bytes through the
+Rendering caller bound to the protected Templates revision. The later selected
+publication attempt has its own accepted readiness, feed, tag and authority joins,
+recorded above; the original source plan remains immutable. Candidate custody and
+publication do not close .3/.4, consumer adoption or the late GPU batch.
 
 A separate 30-record diversity/churn window completed all 3,000 measured updates.
 Twelve lifetime records completed 6,000 updates and 60 exact ownership-fault

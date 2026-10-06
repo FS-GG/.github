@@ -30,6 +30,8 @@ advances the pin to that CLI.
 
 ## Entries
 
+- **2026-10-06** — Reconcile `publishing-and-deployment` operator digest from the exact current `.github` driver manifest after the Rendering 0.32.1 registry inventory projection (github; SVG-COHERENCE-01, Rendering #1390). Both authored roots remain byte-identical; scope stays `operator` with `materializes-when: false`. No package content or release obligation changes.
+
 - **2026-10-06** — Reconcile the operator-scoped `publishing-and-deployment` row from the local driver manifest after accepted coherent 0.98.0 publication (github; UTEL-REL-15, PR #4264). Both skill variants record the verified published inventory and preserved release/recovery boundaries. Refresh body/tree hashes only; no schema, materialization predicate or package release changes. Installed migration and dashboard activation remain separate.
 
 - **2026-10-06** — Reconcile the operator publishing-and-deployment digest after source-only Contracts7.6.0 projection (github; PR #4264). Generated inventory preserves published7.5.2 independently; mirrored roots, manifest and registry row agree. No delivered Kit/Drivers skill or materialization predicate change.
