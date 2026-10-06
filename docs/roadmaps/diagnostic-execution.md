@@ -211,3 +211,22 @@ better preparation, richer independent diagnostics, improved isolation and a jus
 Do not respond automatically by enlarging limits or suppressing the check that found the problem.
 Required coherent validation, protected operation admission and original deadline/cleanup contracts
 remain unchanged. Actual savings are an evaluation outcome, not a delivery prerequisite or promise.
+
+## P4 provider failure diagnosis — 2026-10-06
+
+The exact facts attempt `37420966628/2` failed during capability collection: Podman
+`info` exited 125 and the collector returned 2. Cleanup separately refused because
+container absence could not be established, although account processes settled.
+Root verified the original 697-byte result artifact `11394316361`, SHA256
+`b5e168aac0a36d7b800278d21ad43cc5a65e44990b40b39da82ce64579542baf`.
+It reports no accepted facts, sealed capsule or completed writer cleanup. The owned
+temporary admission was separately deleted and its absence read back; that does not
+establish provider cleanup. The underlying Podman cause remains unknown.
+
+[Sandbox #57](https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox/pull/57) delivers
+bounded classification of already captured stderr at
+`d22ff4dfefd21b64ce12b83915b4b2e74065b1a5`. Its four-file source change passed 53 local
+controls, preserving the accepted cleanup fixture, first cause and refusal behavior
+when classification or reporting fails. Hosted PR checks are absent. This is a
+source-only diagnostic improvement: a fresh admitted attempt, provider acceptance,
+publication and installed adoption remain open. Historical attempts are not reset.
