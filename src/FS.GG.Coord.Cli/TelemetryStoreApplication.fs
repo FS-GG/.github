@@ -5944,7 +5944,7 @@ WHERE n.source_ref=$source;
 
     // All discovery and apply validation share this exact closure; callers cannot
     // add a target or broaden ownership merely by editing a private plan.
-    let private discoverCiCorrection (connection: SqliteConnection) (request: TelemetryCi.CorrectionRequest) =
+    let private discoverCiCorrection (connection: SqliteConnection) (request: TelemetryCi.CorrectionRequest) : TelemetryCi.CorrectionPlan =
         let query sql values =
             let command = connection.CreateCommand()
             command.CommandText <- sql
@@ -6031,7 +6031,7 @@ WHERE n.source_ref=$source;
             for identity in checks do targets.Add("ci_check_runs", identity)
         | _ -> invalidOp "ci-correction-population-ambiguous"
         if targets.Count > 4096 then invalidOp "ci-correction-closure-exceeds-bound"
-        let bound =
+        let bound : TelemetryCi.CorrectionTarget list =
             [ for table, identity in targets do
                 use fact = query ($"SELECT f.revision,f.content_digest,f.canonical,t.item_id FROM ingest_facts f JOIN %s{table} t ON t.identity=f.identity WHERE f.identity=$identity;") [ "$identity", box identity ]
                 use reader = fact.ExecuteReader()
@@ -6050,9 +6050,9 @@ WHERE n.source_ref=$source;
                        || fact.GetProperty("mergeCommit").GetString() <> request.MergeCommit
                        || fact.GetProperty("codeDelivery").GetString() <> "delivered" then
                         invalidOp "ci-correction-immutable-delivery-conflict"
-                yield { TelemetryCi.CorrectionTarget.Table = table; Identity = identity; Revision = revision; Digest = digest } ]
+                yield ({ Table = table; Identity = identity; Revision = revision; Digest = digest } : TelemetryCi.CorrectionTarget) ]
             |> List.sortBy (fun target -> target.Table, target.Identity)
-        { TelemetryCi.CorrectionPlan.StoreId = scalarText connection "SELECT value FROM store_metadata WHERE key='ciCorrectionStoreId';"
+        { StoreId = scalarText connection "SELECT value FROM store_metadata WHERE key='ciCorrectionStoreId';"
           Request = request; Targets = bound }
 
     let ciCorrectionPlan path assessment request =
@@ -6132,7 +6132,7 @@ WHERE n.source_ref=$source;
                                     budgetReevaluateFor connection (Some items) false
                                     beforeCommit()
                                 execute connection "COMMIT;"
-                                Ok(JsonSerializer.Serialize {| schema = "fsgg.telemetry.ci-correction-result/1"; correctionId = request.CorrectionId; status = if already then "already-applied" else "applied"; targets = plan.Targets.Length |} + "\n")
+                                Ok(JsonSerializer.Serialize {| schema = "fsgg.telemetry.ci-correction-result/1"; correctionId = request.CorrectionId; status = (if already then "already-applied" else "applied"); targets = plan.Targets.Length |} + "\n")
                             with error ->
                                 rollback connection
                                 Error [ error.Message ]
