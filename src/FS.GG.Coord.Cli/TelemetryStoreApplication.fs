@@ -6662,11 +6662,12 @@ WHERE n.source_ref=$source;
                         counters.Add(provider, scope, property, unit, bigint (source.GetProperty(property).GetInt64()))
             let metrics = JsonArray()
             let original = item
+            let mutable groupOpenItems = 1
             let metric (metricName: string) (unit: string) (scope: string) (provider: string) (amount: bigint option) (status: string) (reason: string) (purpose: string) (health: string) =
                 let population =
                     {| itemIds = List.toArray members; repository = "unknown"; workType = "observed-population-at-cutoff"
                        acceptanceScope = scope; windowStart = cutoff; windowEnd = cutoff; cutoff = cutoff
-                       excludedItems = ([||] : obj array); openItems = 0; abandonedItems = 0 |}
+                       excludedItems = ([||] : obj array); openItems = groupOpenItems; abandonedItems = 0 |}
                 let node =
                     JsonSerializer.SerializeToNode
                         {| schema = "fsgg.telemetry.efficiency-metric/1"
@@ -6807,8 +6808,8 @@ WHERE n.source_ref=$source;
                                   UsageInvocations = Set.intersect usageInvocations expectedSet
                                   NativeEligible = delivered > 0I && nativeWitnessComplete && not epochDispatches.IsEmpty }
                              |> Result.defaultWith invalidOp
-            let openItems = if population.NativeCompletions > 0 then 0 else 1
-            for node in metrics do node.["population"].["openItems"] <- JsonValue.Create openItems
+            groupOpenItems <- if population.NativeCompletions > 0 then 0 else 1
+            for node in metrics do node.["population"].["openItems"] <- JsonValue.Create groupOpenItems
             let compatibleNativeCounters =
                 facts |> List.filter (fun row -> row[1]=Some "runtime-turn-usage")
                 |> List.map (fun row ->
@@ -6829,6 +6830,117 @@ WHERE n.source_ref=$source;
                 metrics.[metrics.Count - 1].["coverage"].["usage"] <- JsonValue.Create "partial"
                 metrics.[metrics.Count - 1].["coverage"].["lineage"] <- JsonValue.Create "complete"
             | None -> ()
+            // CI ordinals and provider queue intervals are a separate witnessed cohort.
+            // They do not establish native item attempts, provider input equivalence or a DAG.
+            let ciFacts =
+                query "SELECT identity,kind,revision,canonical FROM current_ingest_facts WHERE item_id=$item AND kind IN ('ci-run','ci-job','ci-coverage','ci-binding') ORDER BY identity LIMIT 4097;" values
+            if ciFacts.Length > 4096 then invalidOp "efficiency-ci-source-selection-bound"
+            let ciRefs = JsonArray()
+            let ciRuns = ResizeArray<string * int * bool>()
+            let ciJobs = ResizeArray<string * int * string * string option * string option * string option>()
+            let ciCoverage = ResizeArray<string * bool>()
+            let ciBindings = ResizeArray<string * string * string * string>()
+            let ciRunContexts = ResizeArray<string * int * string * string * string>()
+            let ciJobTerminals = ResizeArray<bool>()
+            for row in ciFacts do
+                use document = JsonDocument.Parse row[3].Value
+                let source = document.RootElement
+                let kind = row[1].Value
+                let text (name: string) = source.GetProperty(name).GetString()
+                let optionalText (name: string) =
+                    let value = source.GetProperty name
+                    if value.ValueKind = JsonValueKind.String then Some(value.GetString()) else None
+                if ciRefs.Count < 1000 then
+                    // A collection coverage receipt is an operation witness, not another run.
+                    let semantic = if kind="ci-coverage" || kind="ci-binding" then "operation" else kind
+                    ciRefs.Add(JsonSerializer.SerializeToNode({| id=row[0].Value; kind=semantic; revision=Int64.Parse row[2].Value |}))
+                if kind="ci-run" then
+                    let key = text "repository" + "\n" + string(source.GetProperty("runId").GetInt64())
+                    let ordinal = source.GetProperty("attempt").GetInt32()
+                    ciRuns.Add(key,ordinal,text "status"="completed")
+                    ciRunContexts.Add(key,ordinal,text "repository",text "head",text "workflow")
+                elif kind="ci-job" then
+                    ciJobTerminals.Add(text "status"="completed")
+                    let key = text "repository" + "\n" + string(source.GetProperty("runId").GetInt64())
+                    ciJobs.Add(key,source.GetProperty("attempt").GetInt32(),string(source.GetProperty("jobId").GetInt64()),optionalText "createdAt",optionalText "startedAt",optionalText "completedAt")
+                elif kind="ci-binding" then
+                    if text "binding"="exact" then ciBindings.Add(text "repository",text "head",text "workflow",text "collectionId")
+                else
+                    // Conflicting or partial collection witnesses do not prove completeness.
+                    let complete = ["inventory";"attempts";"jobPages";"terminal";"timestamps";"lineage"] |> List.forall (fun name -> text name="complete")
+                    ciCoverage.Add(text "collectionId",complete)
+            let parseInterval (first: string option) (last: string option) =
+                match first,last with
+                | Some first,Some last ->
+                    let mutable startAt = DateTimeOffset.MinValue
+                    let mutable endAt = DateTimeOffset.MinValue
+                    let representable (timestamp: string) =
+                        let fraction = System.Text.RegularExpressions.Regex.Match(timestamp, @"\.(\d+)(?:Z|[+-]\d{2}:\d{2})$")
+                        not fraction.Success || fraction.Groups[1].Value.Length<=7
+                        || (fraction.Groups[1].Value |> Seq.skip 7 |> Seq.forall ((=) '0'))
+                    // DateTimeOffset has 100 ns precision. Never silently round finer source clocks.
+                    if representable first && representable last
+                       && DateTimeOffset.TryParse(first,Globalization.CultureInfo.InvariantCulture,Globalization.DateTimeStyles.None,&startAt)
+                       && DateTimeOffset.TryParse(last,Globalization.CultureInfo.InvariantCulture,Globalization.DateTimeStyles.None,&endAt)
+                       && endAt>=startAt then Some(startAt.UtcTicks,endAt.UtcTicks) else None
+                | _ -> None
+            let jobs = ciJobs |> Seq.distinct |> Seq.toList
+            let runs = ciRuns |> Seq.distinct |> Seq.toList
+            let jobConflicts = jobs |> List.groupBy (fun (key,attempt,id,_,_,_) -> key,attempt,id) |> List.exists (fun (_,rows) -> rows.Length<>1)
+            let runConflicts = runs |> List.groupBy (fun (key,attempt,_) -> key,attempt) |> List.exists (fun (_,rows) -> rows.Length<>1)
+            let executionIntervals = jobs |> List.choose (fun (_,_,_,_,first,last) -> parseInterval first last)
+            let queueIntervals = jobs |> List.choose (fun (_,_,_,first,last,_) -> parseInterval first last)
+            let contexts = ciRunContexts |> Seq.distinct |> Seq.toList
+            let contextConflicts = contexts |> List.groupBy (fun (key,attempt,_,_,_) -> key,attempt) |> List.exists (fun (_,rows) -> rows.Length<>1)
+            let contextCovered (_,_,repository,head,workflow) =
+                ciBindings |> Seq.exists (fun (boundRepository,boundHead,boundWorkflow,collection) ->
+                    boundRepository=repository && boundHead=head && (boundWorkflow=workflow || boundWorkflow="*")
+                    && (ciCoverage |> Seq.filter (fun (identity,_) -> identity=collection) |> Seq.map snd |> Seq.toList)= [true])
+            let fullCi = not contexts.IsEmpty && (contexts |> List.forall contextCovered) && not contextConflicts && not jobConflicts && not runConflicts && ciFacts.Length<=1000
+            let ciMetric (name: string) (unit: string) (amount: ProcessEfficiency.Fraction option) (status: string) (reason: string) =
+                metric name unit "ci-observed" "github-actions" None status reason (null:string) (null:string)
+                let node = metrics[metrics.Count-1]
+                node["sourceRefs"] <- ciRefs.DeepClone()
+                node.["coverage"].["population"] <- JsonValue.Create(if fullCi then "complete" else "partial")
+                match amount with
+                | Some (value: ProcessEfficiency.Fraction) ->
+                    node.["value"].["numerator"] <- exactValue value.Numerator
+                    node.["value"].["denominator"] <- exactValue value.Denominator
+                | None -> ()
+            let exactRatio numerator denominator = ProcessEfficiency.fraction numerator denominator |> Result.defaultWith invalidOp
+            let operationRows = runs |> List.groupBy (fun (key,_,_) -> key)
+            let completeOperations =
+                operationRows |> List.choose (fun (key,attempts) ->
+                    let ordinals = attempts |> List.map (fun (_,ordinal,_) -> ordinal) |> List.sort
+                    let complete = fullCi && ordinals=[1..List.max ordinals] && (attempts |> List.forall (fun (_,_,terminal) -> terminal))
+                    if complete then Some(key,ordinals) else None)
+            let incidence =
+                if completeOperations.IsEmpty then None
+                else Some(exactRatio (bigint(completeOperations |> List.filter (fun (_,ordinals) -> ordinals.Length>1) |> List.length)) (bigint completeOperations.Length))
+            let runKeys = runs |> List.map (fun (key,attempt,_) -> key,attempt) |> Set.ofList
+            let jobKeys = jobs |> List.map (fun (key,attempt,_,_,_,_) -> key,attempt) |> Set.ofList
+            let allAttemptsKnown = fullCi && not runs.IsEmpty && completeOperations.Length=operationRows.Length && not jobs.IsEmpty && executionIntervals.Length=jobs.Length && runKeys=jobKeys && (ciJobTerminals |> Seq.forall id)
+            let observedTicks = executionIntervals |> List.sumBy (fun (first,last) -> bigint(last-first))
+            let retryTicks = jobs |> List.sumBy (fun (_,attempt,_,_,first,last) -> if attempt>1 then parseInterval first last |> Option.map (fun (first,last) -> bigint(last-first)) |> Option.defaultValue 0I else 0I)
+            let burden = if allAttemptsKnown && observedTicks>0I then Some(exactRatio retryTicks observedTicks) else None
+            ciMetric "observed-resource" "runner-seconds" (if executionIntervals.IsEmpty || jobConflicts then None else Some(exactRatio observedTicks (bigint TimeSpan.TicksPerSecond))) (if allAttemptsKnown then "known" elif executionIntervals.IsEmpty || jobConflicts then "unknown" else "partial") "Sum of actual CI job execution intervals, including parallel jobs and later attempts. Missing observations are not zero; provider queue union is a separate metric."
+            ciMetric "retry-incidence" "ratio" incidence (if incidence.IsSome then (if allAttemptsKnown then "known" else "partial") else "unknown") "Executed CI attempt ordinals only; incomplete operations are excluded, and same-input versus changed-input equivalence is not inferred from a Git head."
+            ciMetric "retry-burden" "ratio" burden (if burden.IsSome then "known" else "unknown") "Exact observed CI job resource in attempts after the first divided by the complete observed CI job resource; missing jobs or attempts preserve an unknown denominator."
+            let queueUnion =
+                if queueIntervals.IsEmpty || jobConflicts then None
+                else
+                    let ordered = queueIntervals |> List.sortBy fst
+                    let mutable first = fst ordered.Head
+                    let mutable last = snd ordered.Head
+                    let mutable ticks = 0I
+                    for startAt,endAt in ordered.Tail do
+                        if startAt<=last then last <- max last endAt
+                        else
+                            ticks <- ticks + bigint(last-first)
+                            first <- startAt
+                            last <- endAt
+                    Some(exactRatio (ticks+bigint(last-first)) (bigint TimeSpan.TicksPerSecond))
+            ciMetric "wait-time" "seconds" queueUnion (if queueUnion.IsSome then (if fullCi && queueIntervals.Length=jobs.Length then "known" else "partial") else "unknown") "Union of actual provider job created-to-started intervals, normalized to UTC with fractional ticks preserved. CI queue wait is not native item wait."
             // Full canonical acceptance and witnessed time are never derived from missing inputs.
             for name, unit in [ "retry-incidence", "ratio"; "retry-burden", "ratio"; "first-pass-delivery", "ratio"; "lead-time", "seconds"; "touch-time", "seconds"; "wait-time", "seconds"; "flow-ratio", "ratio"; "critical-path-delay", "seconds" ] do
                 metric name unit "native-item" "unknown-provider" None "unknown" "Required witnessed population, operation or acceptance joins are unavailable." (null: string) (null: string)
@@ -6886,7 +6998,7 @@ WHERE n.source_ref=$source;
                 | "data-health" -> 0
                 | "observed-resource" | "analysis-burden" | "delivered-outcomes" | "cost-per-accepted" -> 1
                 | "work-mix" | "avoidable-share" -> 2
-                | _ -> 3
+                | _ -> if node.["value"].["status"].GetValue<string>()="unknown" then 3 else 2
             let selected = metrics |> Seq.sortBy (fun node -> priority node,node["metricId"].GetValue<string>()) |> Seq.truncate available |> Seq.toArray
             returned <- returned + selected.Length
             let omittedHere = metrics.Count - selected.Length
