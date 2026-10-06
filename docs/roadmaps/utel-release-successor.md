@@ -230,5 +230,10 @@ The settled schema 13 sanitized export publishes five eligible approved complete
 with immutable bytes, public revision and current-branch readback verified. Activation then verified
 [feed commit `7a4f81d…`](https://github.com/FS-GG/.github/commit/7a4f81d15a5d1cbb765ce78d8a8e5f4bfc13c2a5)
 and authorized event publication. User units are installed inert; timer recurrence is unavailable
-without a user bus. Pages selection/deployed readback remains pending, and unknown Governance
-runtime coverage is not promoted to completion.
+without a user bus. [Selector PR #4266](https://github.com/FS-GG/.github/pull/4266) merged at
+`d97ad7eb485979afbc4fabfe8282971d8c4261c9`; [Pages run 37447862730](https://github.com/FS-GG/.github/actions/runs/37447862730)
+passed test, build and deployment. The HTTP 200 deployed readback joined source, feed commit,
+public revision and exact immutable payload with five eligible/published groups, zero dirty and
+zero unmapped. Current-feed migration is accepted. CI reconciliation does not trigger the existing
+completed-root event refresh; supported CI-only refresh, timer availability and unknown Governance
+runtime coverage remain separate open follow-ups.

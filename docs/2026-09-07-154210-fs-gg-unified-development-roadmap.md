@@ -56,7 +56,7 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
-**2026-10-06: Coherent telemetry 0.98.0 published and local attribution corrected; event publication active; Pages adoption remains pending.**
+**2026-10-06: Coherent telemetry 0.98.0 published and local attribution corrected; current dashboard feed deployed and verified.**
 [Publisher 37434982959/1](https://github.com/FS-GG/.github/actions/runs/37434982959)
 promoted CLI, Kit and Drivers 0.98.0 from protected source
 `3d4f7e9c6337fb020e269e632653de0faeef6d72`. Root accepted the retained final readback:
@@ -76,22 +76,32 @@ eligible approved completed groups, zero pending batches and no dirty items. Pub
 verified immutable bytes, payload revision and the current branch. Activation then verified
 [feed commit `7a4f81d…`](https://github.com/FS-GG/.github/commit/7a4f81d15a5d1cbb765ce78d8a8e5f4bfc13c2a5)
 and authorized event publication. User units are installed inert; timer recurrence is unavailable
-because the user bus is absent. Pages selection/deployment remains pending.
+because the user bus is absent. [Selector PR #4266](https://github.com/FS-GG/.github/pull/4266)
+merged at `d97ad7eb485979afbc4fabfe8282971d8c4261c9`; [Pages run 37447862730](https://github.com/FS-GG/.github/actions/runs/37447862730)
+passed test, build and deployment. The HTTP 200 deployed readback on 2026-10-06 at 10:15:51 UTC
+joined that source, feed commit `7a4f81d…`, public revision `3a65e4c…` and exact immutable
+host payload: five published/eligible groups, zero dirty or unmapped groups. The migration is
+accepted. Event refresh currently follows completed-root skill-finish/postterminal records;
+CI reconciliation does not trigger it. Supported CI-to-event refresh remains a follow-up.
 Governance runtime coverage remains unknown;
 the attribution correction alone does not make its group completion-eligible. UTEL remains open.
 
 **2026-10-06: Coordination source 2 helper dependency delivered; fresh P4 producers remain pending.**
 V2-LANG-01.2, as the DIAG/P4 dependency, delivered Coordination PR #946 at protected helper H `0a4076139203eeac9f10467049d2f57d865b2b0f` (tree `7a0602a249a4443c9bdc37fddc25660da3156b3c`). The source 2 closed input-generation successor passed the owning FSI manifest fixture and relevant native unit tests in exact-head source-contract run `37433898281`/job `112170903061`; normal bootstrap/coherent delivery also passed. Separately, diagnostic Sandbox source `d22ff4dfefd21b64ce12b83915b4b2e74065b1a5` passed all 93 root source/runtime fixtures with settled custody, no resource failure, sampled peak 436,776,960 bytes, four owned processes and two task CLR instances. A local five-path Sandbox successor now joins actual H/tree/helper bytes to source 2 and passes 57 pure controls; protected Sandbox integration and fresh H-bound stage/candidate producers remain pending. Canonical P `bc55a3d1cc887d653c1bb1198e4823b24f47aaa8` and its package/image bytes remain unchanged. Failed facts run `37420966628`/attempt 2, its retired admission secret and consumed source 1 release are preserved; provider capability and cleanup remain unqualified. No fresh placement, release, manifest, nonce, reservation, facts grant or publication is authorized by these source outcomes.
 
-**2026-10-06: Rendering Stage D boundary source delivered; publication remains blocked.**
-[Rendering #1392](https://github.com/FS-GG/FS.GG.Rendering/pull/1392) merged at
-`01bc86518f3ab0c9c842a1ddc660c4d5326bc6f8` after required and coherent checks passed
-for exact head `ceee5447779f62936b486421e5ed4be99c4e7023`. The retained native
-qualification accepted five outcomes and fifteen boundary cases; its reporter exit 2 remains
-recorded separately. The source still reports `attemptReady=false`. Stage D publication,
-feed/tag/authority joins and adoption remain pending in the
-[owning SVG plan](roadmaps/svg-coherence-and-instancing-01.md); this source delivery grants no
-publication or readiness authority.
+**2026-10-06: Rendering Stage D readiness source delivered; publication remains unselected.**
+[Rendering #1393](https://github.com/FS-GG/FS.GG.Rendering/pull/1393) merged at
+`7768f12c132d2a23e71bd92e9348479daf0b1330` after all 20 checks and coherent validation passed.
+The protected executor now reports `attemptReady=true`; immutable producer
+`6c9f766fdd91483c2de6f061e75589e94852a265`, its 0.32.1 package candidate and the accepted
+full Templates receiver remain unchanged. The preceding boundary source in
+[Rendering #1392](https://github.com/FS-GG/FS.GG.Rendering/pull/1392) retains five accepted
+native outcomes and fifteen boundary cases, with reporter exit 2 recorded separately.
+No tag or publisher operation is selected. Stage D publication, feed/tag/authority joins,
+installed adoption and GPU qualification remain open in the
+[Rendering owning plan](https://github.com/FS-GG/FS.GG.Rendering/blob/main/docs/roadmaps/svg-coherence-and-instancing-01.md)
+and the [SVG programme plan](roadmaps/svg-coherence-and-instancing-01.md); readiness source
+alone does not establish those outcomes.
 
 **2026-10-06: Protected P4 diagnostic source passed its 93-case runtime qualification.**
 Sandbox `d22ff4df` passed all 93 selected cases under the original 120-second work and

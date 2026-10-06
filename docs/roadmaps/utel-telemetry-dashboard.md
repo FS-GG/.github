@@ -155,6 +155,19 @@ establish an eligible completed group. Activation subsequently verified [feed co
 at public revision `3a65e4c90b6ed798ca43368f7dfb387ae3aaf3cbe646fa8e8ce23a490711a7d3`
 and authorized the event publisher, with six approved labels and five eligible published groups.
 It settled in 8.000 seconds with clean custody and no resource failure. User units are installed
-inert; timer recurrence is unavailable because the user bus is absent. Pages selector delivery
-and deployed readback remain pending. Neither feed receipt establishes a live page update,
-timer recurrence or complete runtime coverage.
+inert; timer recurrence is unavailable because the user bus is absent.
+
+[Selector PR #4266](https://github.com/FS-GG/.github/pull/4266) merged at
+`d97ad7eb485979afbc4fabfe8282971d8c4261c9`. [Pages run 37447862730](https://github.com/FS-GG/.github/actions/runs/37447862730)
+passed test, build and deployment. HTTP 200 deployed readback at 10:15:51 UTC on 2026-10-06
+joined the exact source, feed commit `7a4f81d…`, public revision `3a65e4c…` and immutable host
+payload, with five published/eligible groups and zero dirty or unmapped groups. The current
+canonical-feed migration and deployed page are accepted; the legacy cards are no longer the
+selected feed.
+
+The active event receipt refreshes publication after completed-root skill-finish/postterminal
+records. CI reconciliation does not emit those events, so CI-only updates are not automatically
+published through this path. The supported CI-to-event refresh proposal remains pending.
+The existing Pages schedule collects public sources on GitHub's best-effort cadence; it does not
+repair missing producer events. Timer recurrence without a user bus and complete Governance
+runtime coverage remain open. This migration does not close those limits or whole UTEL.
