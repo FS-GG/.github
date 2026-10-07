@@ -12,7 +12,9 @@ Start development only on requested advancement; inspection, maintenance and aud
 ## Default workflow
 
 Use the user-selected V2-CTX-01 default: pinned packets, typed returns, `delta` views, bounded `view`, declared
-mechanical `reuse` and existing check watchers. See the [context-efficiency plan](../../../docs/roadmaps/2026-10-05-programme-context-efficiency.md).
+mechanical `reuse` and existing check watchers. Use the dependency-free [context helper](references/context.md)
+for parent retrieval, safeguard reviews, pinned guard-command preparation and native context reports, including
+when CLR helper execution is held. See the [context-efficiency plan](../../../docs/roadmaps/2026-10-05-programme-context-efficiency.md).
 Delivered coordination behavior does not establish whole-family savings, remaining integration or effect authority.
 
 ## Delegate recovery before loading history
@@ -34,7 +36,9 @@ whole roadmaps or packet bodies. The protected [Unified Roadmap v3](../../../doc
 its named open outcomes and owning plans remain authoritative. The bootstrap worker resolves their relevant sections
 and organization-inspection obligations. Fresh-read native admission before parent-owned effects. Preserve
 campaign, feature, original/current item and attempt, owner, branch/PR and unknown operations through restart.
-An index, snapshot, return, package pin or checkbox cannot establish completion or authority.
+Pin the governing skill revision once per selected window; unchanged applicable instructions need no
+repeated exposure after an owner confirms receipt. Revalidate after source/scope changes. An index,
+snapshot, return, package pin or checkbox cannot establish completion or authority.
 
 Assemblers read [adapter](references/adapter.md); the parent reads it to construct or troubleshoot inputs.
 Use one private mode-0700 directory outside checkouts; count helper CLR resources and batch compatible reads.
@@ -51,7 +55,9 @@ owner per lane retains investigation, tests, failures and evidence in an isolate
 touch-set. Reuse that owner for ordinary milestones and repairs. Route failed checks using exact native
 references before reading logs in the parent. Owners diagnose, repair and qualify within their existing
 scope, authority and budgets, preserving the first failed attempt. Escalate scope/authority changes,
-cross-lane conflicts, unknown effects and root-owned safeguards.
+cross-lane conflicts, unknown effects and root-owned safeguards. For safeguards, the owner prepares a
+bounded `review` with changed code, explicit proof obligations and mechanically verified unchanged pins;
+the parent reads required logic and expands missing obligations rather than importing the entire bundle.
 
 Bootstrap or lane owners assemble `packet` directly from files. The parent receives path/digest, scope,
 instruction inventory and omissions, not the body. Deliver governing instructions whole and mandatory to
@@ -77,7 +83,16 @@ Consume decision deltas and the complete reservation inventory, retaining unknow
 exact evidence only for inconsistencies, architectural joins, user requests or root safeguards. Use bounded
 `view` and complete mechanical `reuse`; refusals require retrieval/recomputation. Before parent reads,
 select fields/ranges and an output bound; redirect raw logs/large responses privately. Truncation is incomplete
-evidence: retrieve the missing obligation or route it to the owner. Never read binaries as text.
+evidence: retrieve the missing obligation or route it to the owner. Default parent reads to4KiB of selected
+text and8KiB stdout; name the reason and increase the bound only for a concrete obligation. Whole applicable
+instructions remain mandatory. Use pinned command descriptors instead of rebuilding long qualification
+scripts in conversation; existing guards and fresh root admission retain execution authority. Never read
+binaries as text.
+
+At a completed milestone, consider owner-context rotation when native observations show repeated
+compaction or recovery rereads. Follow [context guidance](references/context.md): checkpoint current state,
+retain the accountable owner and every original identity/reservation, then use supported fresh-context
+continuation. If unsupported, keep the owner and report the gap; never restart an uncertain effect.
 
 ## Report progress every 30 minutes
 
@@ -128,9 +143,13 @@ installed adoption and native acceptance remain separate. Owners cannot admit pa
 
 Keep plans in owning repositories and retain v3 owning-plan links and workspace adoption boundaries.
 BAR/SC2/FourD product outcomes use the [games roadmap](../../../docs/roadmaps/2026-10-07-games-development-roadmap.md);
-shared producers and Game template consolidation remain in v3. After authoritative closure, remove or
-narrow the closed outcome in the relevant open index in its owning `.github` PR or immediate asynchronous
-cross-repository follow-up; retain durable completed evidence in owning plans/reports, not a v3 history log.
+shared producers and Game template consolidation remain in v3. When the selected item meets all required
+acceptance outcomes, close it in its owning plan with durable evidence and land that closure. Set the
+corresponding v3 row to **Done: Yes** only when its whole remaining outcome is accepted; link the closure
+evidence and retain the compact row, excluding it from scheduling and recovery. For partial completion,
+narrow the remaining outcome with **Done: No**. Land the index in the same `.github` PR or immediate
+asynchronous cross-repository follow-up; preparation, source delivery and a completed window alone do
+not close the item. Games closures follow their owning index; preserve detailed history in owning plans.
 Do not advance that chain before projection lands; independent lanes continue. CI ticks need no projection.
 [audit guidance](references/evidence-audit.md) applies to audits, which never dispatch development merely by
 editing navigation.
@@ -148,7 +167,9 @@ native dispatch/follow-up, including bootstrap. The parent reads [observation](r
 before dispatch; native IDs, stable lineage and advisory coverage are mandatory. Helper IO/duration never
 infer model tokens or compaction. Missing native collection remains an attributed gap, not zero.
 
-Run `report PRIVATE_ROOT` after a bounded window. Fix demonstrated refusals and context expansions on the
+Run `report PRIVATE_ROOT` after a bounded window and the [native context report](references/context.md)
+when session records are available. Supply explicit parent/worker sessions, report missing coverage, and
+keep session diagnostics separate from authenticated item/dispatch usage. Fix demonstrated refusals and context expansions on the
 existing skill branch/PR; charge bootstrap, children, retrieval and repairs to their existing lineage.
 Keep model/effort and acceptance stable when comparing context. Track startup/parent-read bytes, bytes per
 return and evidence expansions separately from helper IO and whole-family usage where observable. Unknown

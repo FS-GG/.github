@@ -251,3 +251,12 @@ keys/IDs, unknown JSON properties or bounds refuse. Input/output remain256KiB
 bounded. Run `tests/work-programme/context-evidence.fsx` for focused controls;
 `tests/work-programme/run.sh` includes it in the existing linear suite. No
 installed integration, live context savings or token usage is inferred.
+
+## Dependency-free parent context path
+
+The [context contract](context.md) supplies bounded JSON-field/line views, proof-obligation review bundles,
+native session diagnostics and pinned existing-guard command preparation without CLR execution. It keeps
+the F# schemas and packet/delta/reuse semantics unchanged. Use it for parent evidence exposure even when
+FSI qualification is held; it does not stand in for delta evaluation, semantic acceptance or native admission.
+`programme.fsx report` remains a helper-I/O report; pair it with native context observations instead of
+interpreting its `nativeTokens:unknown`/`compactions:not-observed` fields as a census of the host.

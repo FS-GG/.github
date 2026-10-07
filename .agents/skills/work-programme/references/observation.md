@@ -67,3 +67,14 @@ Where the private event-publication receipt has been explicitly activated, succe
 post-terminal root observation drains request a bounded dashboard refresh through the canonical roadmap adapter.
 Treat its health as advisory and report it without delaying delivery; a failed or unchanged refresh does not alter
 the recorded outcome. This event path makes no daemon or recurring-service assumption.
+
+## Native context diagnostics
+
+When native session JSONL is available, use `scripts/context.py report` under the
+[context contract](context.md). Select and pin only relevant parent/worker records and an explicit UTC
+window; keep raw records private. Native compaction events and token counters are session observations,
+not estimates from bytes. Expose missing baselines, counter resets, omitted sessions and incomplete tails.
+Cached input is still context; cumulative input counts repeated inference history. This read-only projection
+does not repair observation tokens, reconcile usage or establish authenticated item/dispatch attribution.
+Keep the original collector gap alongside these available diagnostics; do not label all native context
+observations unknown merely because the separate item-attribution path is unavailable.

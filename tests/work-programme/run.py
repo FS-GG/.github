@@ -36,6 +36,9 @@ def suites(root):
     ] + [dict(id='context-baseline', command=[sys.executable, 'tests/work-programme/context-baseline/test_collect.py'],
               inputs=['tests/work-programme/context-baseline/' + f for f in ['test_collect.py', 'collect.py', 'replay.json']],
               prerequisites=['python'], dependsOn=[], independent=True),
+         dict(id='context-controls', command=[sys.executable, 'tests/work-programme/test_context.py'],
+              inputs=['tests/work-programme/test_context.py', '.agents/skills/work-programme/scripts/context.py'],
+              prerequisites=['python'], dependsOn=[], independent=True),
          dict(id='runner-controls', command=[sys.executable, 'tests/work-programme/test_run.py'],
               inputs=['tests/work-programme/test_run.py', 'tests/work-programme/run.py', 'tests/work-programme/run.sh'],
               prerequisites=['python'], dependsOn=[], independent=True)]

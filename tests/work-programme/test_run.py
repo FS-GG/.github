@@ -181,7 +181,7 @@ class RunnerTests(unittest.TestCase):
         failed = subprocess.run(['bash', str(target / 'run.sh')], env=env, capture_output=True, text=True, timeout=10)
         report = json.loads(failed.stdout)
         self.assertEqual(failed.returncode, 1)
-        self.assertEqual([r['status'] for r in report['suites']], ['failed', 'failed', 'passed', 'passed', 'passed'])
+        self.assertEqual([r['status'] for r in report['suites']], ['failed', 'failed'] + ['passed'] * (len(runner.suites(self.root)) - 2))
 
 
 if __name__ == '__main__':
