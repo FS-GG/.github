@@ -10,6 +10,9 @@ import pathlib
 import re
 import subprocess
 import unittest
+import tempfile
+import shutil
+import time
 from unittest.mock import patch
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -116,7 +119,7 @@ class NativeObservationTests(unittest.TestCase):
             elif path.endswith("/branches/main"):
                 body = {"protected": True, "protection": {"required_status_checks": {"checks": self.live_checks}}}
             elif path.endswith(f"/compare/{self.parent}...{HEAD}"):
-                body = {"merge_base_commit": {"sha": self.merge_base}}
+                body = {"base_commit": {"sha": self.parent}, "merge_base_commit": {"sha": self.merge_base}}
             elif match := re.search(r"/actions/runs/(\d+)$", path):
                 check = next(x for x in self.checks["check_runs"] if 1000 + x["id"] == int(match.group(1)))
                 policy = MODULE.QUALIFICATION.read_json(str(MODULE.POLICY_PATH))
@@ -137,15 +140,103 @@ class NativeObservationTests(unittest.TestCase):
                         "check_run_url": (
                             f"https://api.github.com/repos/{self.env['GITHUB_REPOSITORY']}"
                             f"/check-runs/{check['id']}")}
-            elif path.endswith("/git/commits/" + HEAD) or path.endswith("/git/commits/" + SOURCE):
-                body = {"tree": {"sha": self.tree if path.endswith(SOURCE) else getattr(self, "head_tree", self.tree)}}
+            elif "/git/commits/" in path:
+                body = {"sha": path.rsplit("/", 1)[1], "tree": {"sha": self.tree if path.endswith(SOURCE) else getattr(self, "head_tree", self.tree)}}
                 if path.endswith(SOURCE):
                     body["parents"] = [{"sha": self.parent}]
             else:
                 raise AssertionError(path)
             return subprocess.CompletedProcess(args, 0, json.dumps(body), "")
-        with patch.object(MODULE.subprocess, "run", side_effect=fake_run):
+        def fake_graph(_repo, _head, _source, _parent, base, _trees):
+            if base != getattr(self, "expected_graph_base", self.pull["base"]["sha"]):
+                raise MODULE.QUALIFICATION.Refusal("native merge base disagrees")
+            if self.merge_status:
+                raise MODULE.QUALIFICATION.Refusal("does not merge cleanly")
+            if self.merged_tree != self.tree:
+                raise MODULE.QUALIFICATION.Refusal("qualified three-way merge differs")
+            return self.tree
+        with patch.object(MODULE.subprocess, "run", side_effect=fake_run), patch.object(MODULE, "prove_graph", side_effect=fake_graph):
             return MODULE.observe(self.env, rehearsal=rehearsal)
+
+    def test_native_commit_parent_fast_path_and_final_pr_movement_refuse(self):
+        original_api = MODULE.api
+        def invalid_parent(path):
+            body = original_api(path)
+            if path.endswith("/git/commits/" + SOURCE):
+                body["parents"] = []
+            return body
+        with patch.object(MODULE, "api", side_effect=invalid_parent):
+            with self.assertRaisesRegex(MODULE.QUALIFICATION.Refusal, "unique squash parent"):
+                self.run_observation()
+        calls = 0
+        def moving_pull(path):
+            nonlocal calls
+            body = original_api(path)
+            if path.endswith("/pulls/3662"):
+                calls += 1
+                if calls == 2:
+                    body = copy.deepcopy(body)
+                    body["base"]["sha"] = "f" * 40
+            return body
+        with patch.object(MODULE, "api", side_effect=moving_pull):
+            with self.assertRaisesRegex(MODULE.QUALIFICATION.Refusal, "during graph/check"):
+                self.run_observation()
+
+    def test_current_target_base_is_distinct_from_graph_base(self):
+        self.head_tree = "d" * 40
+        self.merged_tree = self.tree
+        self.expected_graph_base = self.merge_base
+        self.pull["base"]["sha"] = self.parent
+        receipt = self.run_observation()
+        self.assertEqual(self.parent, receipt["pullRequestBaseSha"])
+        self.assertEqual(HEAD, receipt["qualificationSha"])
+        self.assertEqual(self.tree, receipt["qualifiedTreeSha"])
+        self.pull["base"]["sha"] = "f" * 40
+        receipt = self.run_observation()
+        self.assertEqual("f" * 40, receipt["pullRequestBaseSha"])
+
+    def test_native_commit_and_compare_identity_contradictions_refuse(self):
+        self.head_tree = "d" * 40
+        original_api = MODULE.api
+        for kind in ("head-identity", "source-tree", "compare-parent", "compare-base"):
+            with self.subTest(kind=kind):
+                def corrupt(path):
+                    body = original_api(path)
+                    if kind == "head-identity" and path.endswith("/git/commits/" + HEAD):
+                        body["sha"] = "f" * 40
+                    if kind == "source-tree" and path.endswith("/git/commits/" + SOURCE):
+                        body["tree"]["sha"] = "invalid"
+                    if "/compare/" in path:
+                        if kind == "compare-parent":
+                            body["base_commit"]["sha"] = "f" * 40
+                        if kind == "compare-base":
+                            body["merge_base_commit"]["sha"] = "invalid"
+                    return body
+                with patch.object(MODULE, "api", side_effect=corrupt):
+                    with self.assertRaises(MODULE.QUALIFICATION.Refusal):
+                        self.run_observation()
+
+    def test_produce_verify_recomputes_exact_source_tree_receipt(self):
+        self.head_tree = "d" * 40
+        self.merged_tree = self.tree
+        receipt = self.run_observation()
+        with tempfile.TemporaryDirectory() as root:
+            target = pathlib.Path(root, "receipt.json")
+            with patch.object(MODULE, "observe", return_value=receipt):
+                with patch.object(MODULE.sys, "argv", ["observer", "produce", str(target)]):
+                    self.assertEqual(0, MODULE.main())
+                with patch.object(MODULE.sys, "argv", ["observer", "verify", str(target)]):
+                    self.assertEqual(0, MODULE.main())
+                for field in ("qualifiedTreeSha", "pullRequestBaseSha"):
+                    altered = dict(receipt, **{field: "f" * 40})
+                    target.write_text(json.dumps(altered))
+                    with patch.object(MODULE.sys, "argv", ["observer", "verify", str(target)]):
+                        self.assertEqual(3, MODULE.main())
+            target.unlink()
+            with patch.object(MODULE, "observe", side_effect=MODULE.QUALIFICATION.Refusal("unqualified")):
+                with patch.object(MODULE.sys, "argv", ["observer", "produce", str(target)]):
+                    self.assertEqual(3, MODULE.main())
+            self.assertFalse(target.exists())
 
     def test_native_success_is_run_and_pr_head_bound_and_active(self):
         receipt = self.run_observation()
@@ -272,7 +363,7 @@ class NativeObservationTests(unittest.TestCase):
         self.head_tree = "d" * 40
         self.merged_tree = self.tree
         receipt = self.run_observation()
-        self.assertEqual(self.head_tree, receipt["qualifiedTreeSha"])
+        self.assertEqual(self.tree, receipt["qualifiedTreeSha"])
         self.merged_tree = "e" * 40
         with self.assertRaisesRegex(MODULE.QUALIFICATION.Refusal, "qualified three-way merge"):
             self.run_observation()
@@ -373,6 +464,170 @@ class NativeObservationTests(unittest.TestCase):
             self.assertEqual(re.search(pattern, production, re.MULTILINE).group(1),
                              re.search(pattern, workflow, re.MULTILINE).group(1))
 
+
+
+class RealGraphTests(unittest.TestCase):
+    """Actual local object graphs; only the fixed fetch URL is replaced."""
+    def setUp(self):
+        self.directory = tempfile.TemporaryDirectory()
+        self.repo = pathlib.Path(self.directory.name, "source")
+        self.repo.mkdir()
+        self.run = subprocess.run
+        self.command("init", "--bare", "--quiet")
+        self.env = dict(MODULE.os.environ, GIT_AUTHOR_NAME="fixture", GIT_AUTHOR_EMAIL="a@example.invalid",
+                        GIT_COMMITTER_NAME="fixture", GIT_COMMITTER_EMAIL="a@example.invalid")
+        self.root = self.commit(self.tree({}), [])
+        self.base = self.commit(self.tree({"base": "base"}), [self.root])
+        self.parent = self.commit(self.tree({"base": "base", "p": "p"}), [self.base])
+        self.head = self.commit(self.tree({"base": "base", "h": "h"}), [self.base])
+        merged = self.command("merge-tree", "--write-tree", self.parent, self.head)
+        self.source = self.commit(merged, [self.parent])
+        self.depth = "256"
+        self.directories = []
+
+    def tearDown(self):
+        for path in self.directories:
+            self.assertFalse(pathlib.Path(path).exists(), "owned temporary graph survived")
+        self.directory.cleanup()
+
+    def command(self, *args, input=None):
+        r = self.run(["git", "-C", str(self.repo), *args], input=input, capture_output=True,
+                     text=True, env=getattr(self, "env", None), timeout=5)
+        if r.returncode:
+            raise AssertionError(r.stderr)
+        return r.stdout.strip()
+
+    def tree(self, contents):
+        lines = []
+        for name, body in sorted(contents.items()):
+            oid = self.command("hash-object", "-w", "--stdin", input=body)
+            lines.append(f"100644 blob {oid}\t{name}\n")
+        return self.command("mktree", input="".join(lines))
+
+    def commit(self, tree, parents):
+        return self.command("commit-tree", tree, *[x for p in parents for x in ("-p", p)], input="fixture\n")
+
+    def proof(self, base=None):
+        base = base or self.base
+        trees = {x: self.command("rev-parse", x + "^{tree}")
+                 for x in (self.parent, self.head, self.source, base)}
+        def transport(args, **kwargs):
+            args = list(args)
+            if "fetch" in args:
+                directory = pathlib.Path(args[args.index("-C") + 1])
+                self.directories.append(str(directory))
+                self.assertIn("https://github.com/FS-GG/.github.git", args)
+                self.assertIn("--depth=256", args)
+                shutil.copytree(self.repo / "objects", directory / "objects", dirs_exist_ok=True)
+                # Native shallow metadata on real objects, with the same finite
+                # ancestry cutoff a depth-limited transport supplies.
+                distances = {}
+                queue = [(oid, 0) for oid in (self.parent, self.head, base, self.source)]
+                while queue:
+                    oid, distance = queue.pop(0)
+                    if oid in distances and distances[oid] <= distance:
+                        continue
+                    distances[oid] = distance
+                    if distance < int(self.depth) - 1:
+                        queue.extend((parent, distance + 1) for parent in
+                                     self.command("show", "-s", "--format=%P", oid).split())
+                boundaries = [oid for oid, distance in distances.items()
+                              if distance == int(self.depth) - 1
+                              and self.command("show", "-s", "--format=%P", oid)]
+                if boundaries:
+                    (directory / "shallow").write_text("\n".join(boundaries) + "\n")
+                return subprocess.CompletedProcess(args, 0)
+            return native_graph_run(args, **kwargs)
+        native_graph_run = MODULE.graph_run
+        with patch.object(MODULE, "graph_run", side_effect=transport):
+            return MODULE.prove_graph("FS-GG/.github", self.head, self.source, self.parent, base, trees)
+
+    def test_real_concurrent_clean_squash_returns_source_tree(self):
+        self.assertEqual(self.command("rev-parse", self.source + "^{tree}"), self.proof())
+        self.assertNotEqual(self.command("rev-parse", self.head + "^{tree}"), self.proof())
+
+    def test_shallow_only_at_common_base_is_complete_enough(self):
+        self.depth = "1"
+        # Fetching B alone at depth1 does not prove P/H ancestry: must refuse.
+        with self.assertRaises(MODULE.QUALIFICATION.Refusal):
+            self.proof()
+        self.depth = "2"
+        self.assertEqual(self.command("rev-parse", self.source + "^{tree}"), self.proof())
+
+    def test_shallow_boundary_above_base_refuses(self):
+        self.parent = self.commit(self.command("rev-parse", self.parent + "^{tree}"), [self.parent])
+        self.parent = self.commit(self.command("rev-parse", self.parent + "^{tree}"), [self.parent])
+        self.source = self.commit(self.command("rev-parse", self.source + "^{tree}"), [self.parent])
+        self.depth = "2"
+        with self.assertRaises(MODULE.QUALIFICATION.Refusal):
+            self.proof()
+
+    def test_wrong_base_extra_source_and_conflict_refuse(self):
+        with self.assertRaisesRegex(MODULE.QUALIFICATION.Refusal, "bases differ"):
+            self.proof(self.root)
+        self.source = self.commit(self.tree({"extra": "unauthorized"}), [self.parent])
+        with self.assertRaisesRegex(MODULE.QUALIFICATION.Refusal, "three-way merge"):
+            self.proof()
+        self.head = self.commit(self.tree({"base": "changed"}), [self.base])
+        self.parent = self.commit(self.tree({"base": "conflict"}), [self.base])
+        self.source = self.commit(self.tree({}), [self.parent])
+        with self.assertRaises(MODULE.QUALIFICATION.Refusal):
+            self.proof()
+
+    def test_criss_cross_two_maximal_bases_refuse(self):
+        a, b = self.parent, self.head
+        self.parent = self.commit(self.tree({}), [a, b])
+        self.head = self.commit(self.tree({"later": "head"}), [b, a])
+        self.source = self.commit(self.tree({"later": "head", "extra": "source"}), [self.parent])
+        with self.assertRaisesRegex(MODULE.QUALIFICATION.Refusal, "not unique"):
+            self.proof(a)
+
+    def test_actual_owned_command_timeout_reaps_direct_child(self):
+        with tempfile.TemporaryFile() as output:
+            with self.assertRaises(subprocess.TimeoutExpired):
+                MODULE.graph_run(["python3", "-c", "import time;time.sleep(5)"],
+                                 stdout=output, stderr=output, timeout=0.02)
+
+    def test_zero_common_bases_and_native_object_disagreement_refuse(self):
+        self.head = self.commit(self.tree({"unrelated": "root"}), [])
+        with self.assertRaises(MODULE.QUALIFICATION.Refusal):
+            self.proof()
+        trees = {x: self.command("rev-parse", x + "^{tree}") for x in (self.parent, self.head, self.source, self.base)}
+        trees[self.source] = "f" * 40
+        def no_fetch(args, **kwargs):
+            if "fetch" in args:
+                directory = pathlib.Path(args[args.index("-C") + 1])
+                self.directories.append(str(directory))
+                shutil.copytree(self.repo / "objects", directory / "objects", dirs_exist_ok=True)
+                return subprocess.CompletedProcess(args, 0)
+            return native_run(args, **kwargs)
+        native_run = MODULE.graph_run
+        with patch.object(MODULE, "graph_run", side_effect=no_fetch):
+            with self.assertRaisesRegex(MODULE.QUALIFICATION.Refusal, "native tree differs"):
+                MODULE.prove_graph("FS-GG/.github", self.head, self.source, self.parent, self.base, trees)
+
+    def test_shared_graph_deadline_refuses_before_launch(self):
+        trees = {x: self.command("rev-parse", x + "^{tree}") for x in (self.parent, self.head, self.source, self.base)}
+        with patch.object(MODULE.time, "monotonic", side_effect=[0, 121]):
+            with patch.object(MODULE, "graph_run") as launch:
+                with self.assertRaisesRegex(MODULE.QUALIFICATION.Refusal, "deadline exhausted"):
+                    MODULE.prove_graph("FS-GG/.github", self.head, self.source, self.parent, self.base, trees)
+                launch.assert_not_called()
+
+    def test_timeout_and_overbound_output_refuse_with_cleanup(self):
+        def timeout(*args, **kwargs):
+            raise subprocess.TimeoutExpired(args[0], 1)
+        trees = {x: self.command("rev-parse", x + "^{tree}") for x in (self.parent, self.head, self.source, self.base)}
+        with patch.object(MODULE, "graph_run", side_effect=timeout):
+            with self.assertRaisesRegex(MODULE.QUALIFICATION.Refusal, "timed out"):
+                MODULE.prove_graph("FS-GG/.github", self.head, self.source, self.parent, self.base, trees)
+        def oversized(args, **kwargs):
+            kwargs["stdout"].write(b"x" * 65537)
+            return subprocess.CompletedProcess(args, 0)
+        trees = {x: self.command("rev-parse", x + "^{tree}") for x in (self.parent, self.head, self.source, self.base)}
+        with patch.object(MODULE, "graph_run", side_effect=oversized):
+            with self.assertRaisesRegex(MODULE.QUALIFICATION.Refusal, "output exceeds"):
+                MODULE.prove_graph("FS-GG/.github", self.head, self.source, self.parent, self.base, trees)
 
 if __name__ == "__main__":
     unittest.main()

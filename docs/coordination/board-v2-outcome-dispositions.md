@@ -130,3 +130,36 @@ generated V2 bindings remain .5–.6, with the next source window in the [owning
 Remaining approved carryover, exact native mappings/imports and consumer dispositions keep full .4
 open. Historical GS2/V1 rows retain their omit-superseded disposition; no unchecked historical gate
 is reopened by this reconciliation.
+
+
+## Three-active successor reconciliation — 2026-10-07
+
+Root selected a new reviewed active population: SDD#928, Templates#441 and .github#3010.
+Fresh authenticated four-issue reads and complete Project 3 schema/membership/all-planning-field
+connections retain five native memberships. All three active native dependency snapshots are
+complete and empty. Their human Blocked values and body/owning-plan producer publication and
+installed acceptance prerequisites remain. This source selection grants no binding or native effect.
+
+.github#3009 is closed completed at observed revision `2026-10-04T13:04:38Z`; [PR4192](https://github.com/FS-GG/.github/pull/4192),
+protected `4fc6edf6acce60760cea858ba15e4384c9ce0340`, delivered ADR-0092 and its linked design.
+The manifest retains its canonical identity as `omit-delivered`, closed, `pilot=false`,
+`remainingOutcome=null`, `adjudication=unknown`. The legacy adjudication enum records remaining-work
+admission; unknown here does not dispute the delivered architecture. Its Ready/Track/Roadmap seed
+values remain historical, with no fabricated Done or project-field write. Its membership and SDD#935's
+unapproved membership remain untouched. No other issue is selected.
+
+The historical four-target population remains [blob b8e99000](https://github.com/FS-GG/.github/blob/65c8d8ced152cea2634e44521cf25a572c26f79c/docs/coordination/board-v2-import-manifest.json),
+Git blob `b8e99000690ba0136290b40b6a33e3a43cbc7f02`. Original inventory, pilotOperation,
+operationProvenance, successorPreparation and accepted receipt identities are unchanged dated history.
+The original private binding SHA-256 `68375c1cd8efc64d5b04534a6baa5e6658daa257f14f33ca2e5f1e158cb5c320`
+remains NOT LOCATED in its recorded search scope; no reconstruction is permitted.
+
+After source delivery, root must independently authenticate the current protected blob, installed
+CLI/adapter closure, exact project/schema/native identity and genuinely qualified constructor provenance.
+It then separately admits a DISTINCT version-2 binding selecting exactly these three active nodes and
+one bounded actual installed `board-v2 inspect` invocation. Changing this manifest intentionally invalidates
+old current-blob correspondence: historical four-target and original-three receipts cannot qualify it.
+Acceptance needs selected/attempted three, all Current, complete dependency and plan coverage, no
+population/planning gaps, truthful health, zero mutations and root's exact consumer adoption decision.
+Human Blocked remains Blocked. Closed #3009 is authenticated retained history, not a fourth Current row.
+The OPEN/current-revision guard stays strict. Full .4, other consumers and product adoption remain open.

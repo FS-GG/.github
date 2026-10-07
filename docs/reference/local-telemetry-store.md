@@ -611,3 +611,37 @@ correction does not qualify a corrected source for LEARN acceptance.
 A queued local batch hitting either exact permanent correction fence retains its bytes and explicit refusal
 reason in the existing quarantine. That ingest call still reports an error, and the rejected ready file cannot
 poison later independent batches. Unknown or transient errors keep their existing retry behavior.
+
+### Operational collection and malformed-observation recovery
+
+Configuration readiness is not collection health. Before an admitted dispatch, record
+its real feature/item/attempt and selected model/effort with `begin`, bind the returned
+native identity with `started`, then record useful activities at their actual boundaries.
+Use an open activity followed by its closing revision; nested evidence is an array of
+`{"kind":"test","digest":"<64 lowercase hex characters>"}` objects, never strings.
+Missing prospective tokens or completed-turn baselines remain UNKNOWN; a root token
+cannot substitute for an owner's missing baseline.
+
+The prepared0.99.1 adapter validates every newly assembled wire batch with the canonical
+Store parser before changing durable sequence/pending intent or invoking the publisher.
+The64KiB batch limit and1MiB private-state limit are independent. Invalid nested fields,
+counts, categories and timestamps retain original bytes and invoke no publisher.
+
+A retained legacy malformed pending batch is not manually editable or disposable. Only
+an exact retry through the qualified local engine can return a closed parser rejection,
+bound to original bytes/ingest identity/destination and unchanged executable/entry-assembly
+hashes. Only that deterministic pre-publication-IO rejection permits the existing rollback
+transition. Bare errors, transport loss, workspace destinations, foreign or changing
+engine identities and mismatched payloads retain pending intent; retry exact bytes when
+appropriate and stop on ambiguity. Preserve rejected payload and original error evidence.
+Native use of this path requires separately qualified disposable receiver controls and
+root admission for the exact retained intent. Source preparation grants no recovery effect.
+
+After genuine terminal state, finish and reconcile the owner's exact completed-turn usage.
+An attempt review requires its admitted terminal invocation; an item review requires the
+settled full expected population. Attribute usage once by native identity/counters, without
+splitting tokens by elapsed time. Use the necessary exact-head delivery as the CI pilot;
+report pending/unavailable and page/lineage gaps without blocking native delivery.
+Each metric must name its population/window, source cutoff and observation/receipt clocks,
+report time and omissions. No helper exit, empty inbox or refreshed report proves collection
+or efficiency. Never backdate activities/reviews or reconstruct unavailable usage.

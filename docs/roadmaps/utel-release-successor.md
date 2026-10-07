@@ -267,3 +267,24 @@ acceptance; those remain in the [efficiency plan](process-efficiency-telemetry.m
 Retained state and historical unknown usage must remain intact through their separately
 admitted installed operations. These instructions select no new host, credential or
 service-control authority. Both candidate qualification and publication remain pending.
+
+### Accepted 0.99 publication and prepared compatible patch — 2026-10-07
+
+Root accepted publisher `37566865635/a1`, promoted release `405346080` and both-feed
+readbacks for coherent0.99.0 at source `64e95ebec1a8294e16edaafdb27e6aa96f32c6f7`.
+These immutable receipts supersede the earlier pending-publication checkpoint.
+
+UTEL-REL-17 prepares coherent **0.99.1**, genuine promoted predecessor **0.99.0**
+and prospective protected journal `refs/heads/fsgg/v2/journal/release/utel-rel-17`.
+The patch integrates qualified local telemetry3e8: one bounded1MiB private-state
+reader/writer contract including newline, with refusal preserving full originals.
+It changes no public signature, schema or cost counter. Keep the original incomplete
+130s window distinct from the passing candidate suite and standalone red control.
+
+Source preparation is not a candidate, publication, installed adoption or receiver
+acceptance. Retain all sixteen effect admissions, exact-main/first-attempt/source
+and original-byte recovery guards. Root separately admits qualification and any
+both-feed operation after fresh coordinate, predecessor/channel and journal checks.
+Canonical tool pin and frozen Wizard dependency remain published0.99; current frozen
+source guard must refuse the changed compiled leaf before acquisition. Host0.5,
+private stores, credentials, grants, defaults and unknown historical usage remain intact.

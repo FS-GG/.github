@@ -21,7 +21,7 @@ module Program =
         |> Array.tryFindIndex ((=) name)
         |> Option.bind (fun index -> Array.tryItem (index + 1) args)
 
-    let private fakeEngine (args: string array) =
+    let private fakeAcceptedEngine (args: string array) =
         match option "--input" args, Environment.GetEnvironmentVariable "FSGG_ADAPTER_TEST_LOG" with
         | Some input, log when not (String.IsNullOrEmpty log) ->
             // Synthetic receiver enforces the production parser's cross-kind identity rule.
@@ -64,6 +64,41 @@ module Program =
         else
             Console.Out.WriteLine "{}"
             0
+
+    let private fakeEngine (args: string array) =
+        let mode = Environment.GetEnvironmentVariable "FSGG_ADAPTER_TEST_REJECTION"
+        if Array.contains "submit" args && mode = "workspace-invalid-request" then
+            Console.Error.WriteLine "invalid-request: synthetic workspace rejection"
+            1
+        elif Array.contains "publish" args && not (String.IsNullOrEmpty mode) then
+            let bytes = File.ReadAllBytes(option "--input" args |> Option.get)
+            use input = JsonDocument.Parse bytes
+            let batch = input.RootElement
+            let get (name: string) = batch.GetProperty(name).GetString()
+            let executable = FileInfo(Environment.ProcessPath)
+            let target = executable.ResolveLinkTarget true
+            let enginePath = if isNull target then executable.FullName else target.FullName
+            let assemblyPath = Reflection.Assembly.GetEntryAssembly().Location |> Path.GetFullPath
+            let hashFile path =
+                use stream = File.OpenRead path
+                SHA256.HashData stream |> Convert.ToHexString |> _.ToLowerInvariant()
+            let errors =
+                match FS.GG.Coord.TelemetryStore.parseBatch bytes with
+                | Error errors -> errors
+                | Ok _ -> [ "synthetic forged rejection of valid payload" ]
+            let proof = JsonSerializer.Serialize
+                            {| schema = "fsgg.telemetry.local-parser-rejection/1"; code = "invalid-batch"
+                               boundary = "before-publication-io"
+                               inputSha256 = if mode = "wrong-batch" then String.replicate 64 "0" else SHA256.HashData bytes |> Convert.ToHexString |> _.ToLowerInvariant()
+                               enginePath = enginePath; engineSha256 = if mode = "wrong-engine" then String.replicate 64 "0" else hashFile enginePath
+                               assemblyPath = assemblyPath; assemblySha256 = hashFile assemblyPath
+                               storeRoot = if mode = "foreign-store" then "/foreign" else option "--store-root" args |> Option.get |> Path.GetFullPath
+                               ingestId = get "ingestId"; sourceIdentity = get "sourceIdentity"
+                               generation = get "generation"; cursor = get "cursor"; errors = errors |}
+            if mode = "unknown" then Console.Error.WriteLine "invalid-request: delivery outcome unknown"
+            else Console.Error.WriteLine("fsgg-coord-engine: telemetry store: " + proof)
+            1
+        else fakeAcceptedEngine args
 
     let private config root =
         let store = Path.Combine(root, "store")
@@ -151,13 +186,13 @@ module Program =
     let private observations root token =
         let host = config root
         let activity = Path.Combine(root, "activity.json")
-        File.WriteAllText(activity, "{\"schema\":\"fsgg.telemetry.activity-span-input/1\",\"revision\":0,\"activityId\":\"activity-a\",\"category\":\"validation\",\"startedAt\":\"2026-09-27T00:00:00Z\",\"endedAt\":\"2026-09-27T00:00:01Z\",\"clockProvenance\":\"fixture\",\"evidence\":[],\"summary\":\"fixture\"}")
+        File.WriteAllText(activity, "{\"schema\":\"fsgg.telemetry.activity-span-input/1\",\"revision\":0,\"activityId\":\"activity-a\",\"category\":\"validation\",\"startedAt\":\"2026-09-27T00:00:00Z\",\"endedAt\":\"2026-09-27T00:00:01Z\",\"clockProvenance\":\"host-wall\",\"evidence\":[],\"summary\":\"fixture\"}")
         let complication = Path.Combine(root, "complication.json")
         File.WriteAllText(complication, "{\"schema\":\"fsgg.telemetry.complication-input/1\",\"revision\":0,\"complicationId\":\"complication-a\",\"activityId\":\"activity-a\",\"trigger\":\"fixture\",\"cause\":\"fixture\",\"occurredAt\":\"2026-09-27T00:00:01Z\",\"synopsis\":\"fixture\",\"evidence\":[]}")
         let usage = Path.Combine(root, "usage.json")
-        File.WriteAllText(usage, "{\"schema\":\"fsgg.telemetry.activity-usage-attribution-input/1\",\"revision\":0,\"usageIdentity\":\"usage-a\",\"activityId\":\"activity-a\",\"classification\":\"unknown\",\"input\":0,\"cachedInput\":0,\"output\":0,\"reasoning\":0,\"total\":0}")
+        File.WriteAllText(usage, "{\"schema\":\"fsgg.telemetry.activity-usage-attribution-input/1\",\"revision\":0,\"usageIdentity\":\"usage-a\",\"activityId\":\"activity-a\",\"classification\":\"direct\",\"input\":0,\"cachedInput\":0,\"output\":0,\"reasoning\":0,\"total\":0}")
         let review = Path.Combine(root, "review.json")
-        File.WriteAllText(review, "{\"schema\":\"fsgg.telemetry.process-review-input/1\",\"revision\":0,\"outcomeSynopsis\":\"fixture\",\"wentWell\":[],\"problems\":[],\"avoidableDelayOrRework\":[],\"processObservations\":[],\"remainingRisks\":[],\"concreteImprovements\":[],\"evidence\":[],\"evidenceCoverage\":\"fixture\",\"populationCoverage\":\"unknown\",\"confidence\":\"high\",\"reviewerModel\":\"fixture\",\"reviewerEffort\":\"fixture\",\"reviewedAt\":\"2026-09-27T00:00:01Z\",\"durationSeconds\":1}")
+        File.WriteAllText(review, "{\"schema\":\"fsgg.telemetry.process-review-input/1\",\"revision\":1,\"outcomeSynopsis\":\"fixture\",\"wentWell\":[],\"problems\":[],\"avoidableDelayOrRework\":[],\"processObservations\":[],\"remainingRisks\":[],\"concreteImprovements\":[],\"evidence\":[],\"evidenceCoverage\":\"unknown\",\"populationCoverage\":\"unknown\",\"confidence\":\"high\",\"reviewerModel\":\"fixture\",\"reviewerEffort\":\"fixture\",\"reviewedAt\":\"2026-09-27T00:00:01Z\",\"durationSeconds\":1}")
         for path in [ activity; complication; usage; review ] do
             if not (OperatingSystem.IsWindows()) then File.SetUnixFileMode(path, enum<UnixFileMode> 0o600)
         let previousProjection = Environment.GetEnvironmentVariable "FSGG_TELEMETRY_DASHBOARD_CONFIG"
@@ -169,8 +204,8 @@ module Program =
             finally
                 Environment.SetEnvironmentVariable("FSGG_TELEMETRY_DASHBOARD_CONFIG", previousProjection)
                 Environment.SetEnvironmentVariable("FSGG_ADAPTER_TEST_PUBLISHER_CONFIG", previousExpectedPublisher)
-        require (observed.ExitCode = 0 &&
-                 (resultJson observed).GetProperty("dashboardPublication").GetProperty("status").GetString() = "observed") "dashboard publication hook was not observed"
+        require (observed.ExitCode = 0) (text observed.Stderr)
+        require ((resultJson observed).GetProperty("dashboardPublication").GetProperty("status").GetString() = "observed") "dashboard publication hook was not observed"
         let previousDashboardConfig = Environment.GetEnvironmentVariable "FSGG_TELEMETRY_DASHBOARD_CONFIG"
         for invalidPath in [ " "; "relative-projection.json" ] do
             Environment.SetEnvironmentVariable("FSGG_TELEMETRY_DASHBOARD_CONFIG", invalidPath)
@@ -489,6 +524,17 @@ module Program =
                 | Ok(Some value) -> value
                 | Ok None -> failwith "workspace config was not discovered"
                 | Error error -> failwith error.Message
+            // Workspace retains its existing discriminator; retainedParserRejection's
+            // local unknown-error control proves that substring cannot clear local intent.
+            Environment.SetEnvironmentVariable("FSGG_ADAPTER_TEST_REJECTION", "workspace-invalid-request")
+            try
+                let rejected = run (Some host) (Begin("WORKSPACE", "WORKSPACE", None, "workspace-rejection", None, None, "root", "fixture-producer", "fixture-model", "medium", 60))
+                require (rejected.ExitCode = 1 && (text rejected.Stderr).Contains "invalid-request") "workspace rejection was not reached"
+                let files = Directory.GetFiles(Path.Combine(host.StoreRoot, "orchestrator-dispatches"), "*.json")
+                require (files.Length = 1) "workspace fixture produced unexpected dispatch population"
+                let retained = JsonNode.Parse(File.ReadAllBytes files[0]) :?> JsonObject
+                require (retained["sequence"].GetValue<int>() = 0 && isNull retained["pendingPublication"]) "workspace legacy rejection no longer rolls back"
+            finally Environment.SetEnvironmentVariable("FSGG_ADAPTER_TEST_REJECTION", null)
             let command = PopulationOnly("F", "F.2", "F", "roadmap-orchestrator")
             let first = run (Some host) command
             require (first.ExitCode = 0 && (resultJson first).GetProperty("status").GetString() = "applied") (text first.Stderr)
@@ -499,6 +545,184 @@ module Program =
         finally
             Environment.SetEnvironmentVariable("PATH", previousPath)
             for name in [ "FSGG_TELEMETRY_REPOSITORY"; "FSGG_TELEMETRY_CREDENTIAL_FIXTURE_REF"; "SKILL_FS_01_STATE_ROOT" ] do Environment.SetEnvironmentVariable(name, null)
+
+    let private boundedPrivateState root =
+        let isolated = Path.Combine(root, "bounded-state")
+        let host = config isolated
+        let beginCommand attempt = Begin("STATE", "STATE.1", None, attempt, None, None, "root", "fixture", "fixture-model", "medium", 60)
+        let initial = run (Some host) (beginCommand "large")
+        require (initial.ExitCode = 0) (text initial.Stderr)
+        let token = (resultJson initial).GetProperty("token").GetString()
+        let path = Path.Combine(host.StoreRoot, "orchestrator-dispatches", token + ".json")
+        let state = JsonNode.Parse(File.ReadAllBytes path) :?> JsonObject
+        // Public synthetic metadata stands in for retained native inventory; no private state is copied.
+        state["retainedFixtureMetadata"] <- JsonValue.Create(String.replicate 294183 "x")
+        let compact = JsonSerializerOptions(Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping)
+        let writeFixture (value: JsonObject) =
+            File.WriteAllText(path, value.ToJsonString(compact) + "\n", UTF8Encoding(false))
+            if not (OperatingSystem.IsWindows()) then File.SetUnixFileMode(path, enum<UnixFileMode> 0o600)
+        writeFixture state
+        let largeBytes = File.ReadAllBytes path
+        require (largeBytes.Length > 294183 && largeBytes.Length < 1024 * 1024) "large-state fixture is outside the regression window"
+        let independent = run (Some host) (beginCommand "independent")
+        require (independent.ExitCode = 0) (text independent.Stderr)
+        require (File.ReadAllBytes path = largeBytes) "inventory matching changed another dispatch"
+        let started = run (Some host) (Started(token, "large-native"))
+        require (started.ExitCode = 0) (text started.Stderr)
+        let finished = run (Some host) (Finish(token, "completed", None))
+        require (finished.ExitCode = 0) (text finished.Stderr)
+        let terminal = JsonNode.Parse(File.ReadAllBytes path) :?> JsonObject
+        require (terminal["retainedFixtureMetadata"].GetValue<string>() = String.replicate 294183 "x") "large metadata was trimmed"
+        require (terminal["token"].GetValue<string>() = token && terminal["attemptId"].GetValue<string>() = "large") "large-state identity changed"
+        require ((resultJson finished).GetProperty("coverage").GetString() = "native-collaboration-usage-unsupported") "large state invented native usage"
+        let followup = run (Some host) (Begin("STATE", "STATE.1", None, "followup", Some "large", Some token,
+                                            "follow-up", "fixture", "fixture-model", "medium", 60))
+        require (followup.ExitCode = 0) (text followup.Stderr)
+        let followupToken = (resultJson followup).GetProperty("token").GetString()
+        let followupPath = Path.Combine(host.StoreRoot, "orchestrator-dispatches", followupToken + ".json")
+        let followupState = JsonNode.Parse(File.ReadAllBytes followupPath) :?> JsonObject
+        require (followupState["parentDispatchId"].GetValue<string>() = terminal["dispatchId"].GetValue<string>() &&
+                 followupState["parentAttemptId"].GetValue<string>() = "large" &&
+                 not (followupState["usageBaselineKnown"].GetValue<bool>())) "large-state follow-up lost lineage or invented baseline"
+
+        // A reader-valid exact-bound state must be preserved if a transition would exceed the writer bound.
+        let edge = JsonNode.Parse(File.ReadAllBytes followupPath) :?> JsonObject
+        edge["retainedFixtureMetadata"] <- JsonValue.Create ""
+        let fixedBytes = Encoding.UTF8.GetByteCount(edge.ToJsonString(compact)) + 1
+        edge["retainedFixtureMetadata"] <- JsonValue.Create(String.replicate (1024 * 1024 - fixedBytes) "x")
+        File.WriteAllText(followupPath, edge.ToJsonString(compact) + "\n", UTF8Encoding(false))
+        let before = File.ReadAllBytes followupPath
+        require (before.Length = 1024 * 1024) "writer-bound fixture length drifted"
+        let log = Environment.GetEnvironmentVariable "FSGG_ADAPTER_TEST_LOG"
+        let publications = File.ReadAllLines(log).Length
+        let rejectedWrite = run (Some host) (Started(followupToken, "would-exceed-bound"))
+        require (rejectedWrite.ExitCode = 1 && text rejectedWrite.Stderr = "fsgg roadmap telemetry: private telemetry state exceeds 1 MiB\n") "oversize writer did not refuse before publication"
+        require (File.ReadAllBytes followupPath = before && File.ReadAllLines(log).Length = publications) "oversize writer changed retained state or published"
+
+        let refusesForeignState label =
+            let rejected = run (Some host) (beginCommand label)
+            require (rejected.ExitCode = 1 && text rejected.Stderr = "fsgg roadmap telemetry: dispatch state is unavailable\n") (label + " foreign state was skipped or accepted")
+            require (File.ReadAllLines(log).Length = publications) (label + " published despite invalid inventory")
+        File.WriteAllBytes(followupPath, Array.append before [| byte ' ' |])
+        refusesForeignState "above-bound"
+        File.WriteAllText(followupPath, "{", UTF8Encoding(false))
+        refusesForeignState "malformed"
+        File.WriteAllBytes(followupPath, before)
+        if not (OperatingSystem.IsWindows()) then
+            File.SetUnixFileMode(followupPath, enum<UnixFileMode> 0o644)
+            refusesForeignState "permissions"
+            File.SetUnixFileMode(followupPath, enum<UnixFileMode> 0o600)
+        let target = Path.Combine(isolated, "symlink-target.json")
+        File.Move(followupPath, target)
+        File.CreateSymbolicLink(followupPath, target) |> ignore
+        refusesForeignState "symlink"
+        File.Delete followupPath
+        File.Move(target, followupPath)
+        require (Directory.GetFiles(Path.GetDirectoryName followupPath, "*.tmp").Length = 0) "state refusal left temporary files"
+
+    let private observationPrevalidation root =
+        let isolated = Path.Combine(root, "observation-prevalidation")
+        Directory.CreateDirectory isolated |> ignore
+        let host = config isolated
+        let log = Path.Combine(isolated, "publications.log")
+        Environment.SetEnvironmentVariable("FSGG_ADAPTER_TEST_LOG", log)
+        let started = run (Some host) (Begin("F", "VALIDATION", None, "validation-attempt", None, None, "root", "fixture-producer", "fixture-model", "medium", 60))
+        require (started.ExitCode = 0) (text started.Stderr)
+        let token = (resultJson started).GetProperty("token").GetString()
+        require ((run (Some host) (Started(token, "validation-native"))).ExitCode = 0) "fixture start failed"
+        let path = Path.Combine(host.StoreRoot, "orchestrator-dispatches", token + ".json")
+        let input = Path.Combine(isolated, "activity.json")
+        let activity = """{"schema":"fsgg.telemetry.activity-span-input/1","revision":0,"activityId":"activity-a","category":"validation","startedAt":"2026-09-27T00:00:00Z","endedAt":null,"clockProvenance":"host-wall","evidence":[],"summary":"fixture"}"""
+        let reject (value: string) command =
+            let before = File.ReadAllBytes path
+            let calls = File.ReadAllLines(log).Length
+            File.WriteAllText(input, value)
+            if not (OperatingSystem.IsWindows()) then File.SetUnixFileMode(input, enum<UnixFileMode> 0o600)
+            let result = run (Some host) (command (FileInfo input))
+            require (result.ExitCode = 1 && File.ReadAllBytes path = before) "semantic refusal changed durable original state"
+            require (File.ReadAllLines(log).Length = calls) "semantic refusal invoked the publisher"
+        reject (activity.Replace("\"evidence\":[]", "\"evidence\":[\"invalid\"]")) (fun file -> Activity(token, file))
+        reject (activity.Replace("validation", "invalid-category")) (fun file -> Activity(token, file))
+        reject (activity.Replace("2026-09-27T00:00:00Z", "not-a-time")) (fun file -> Activity(token, file))
+        // A valid retained state can carry a long attempt field; the wire batch has its own64KiB bound.
+        let retained = File.ReadAllBytes path
+        let large = JsonNode.Parse(retained) :?> JsonObject
+        large["attemptId"] <- JsonValue.Create(String.replicate 70000 "a")
+        File.WriteAllText(path, large.ToJsonString() + "\n")
+        reject activity (fun file -> Activity(token, file))
+        File.WriteAllBytes(path, retained)
+        File.WriteAllText(input, activity)
+        require ((run (Some host) (Activity(token, FileInfo input))).ExitCode = 0) "valid open activity refused"
+        File.WriteAllText(input, activity.Replace("\"revision\":0", "\"revision\":1").Replace("\"endedAt\":null", "\"endedAt\":\"2026-09-27T00:00:01Z\""))
+        require ((run (Some host) (Activity(token, FileInfo input))).ExitCode = 0) "valid closed activity refused"
+        require ((run (Some host) (Finish(token, "completed", Some 0))).ExitCode = 0) "fixture finish failed"
+        let usage = """{"schema":"fsgg.telemetry.activity-usage-attribution-input/1","revision":0,"usageIdentity":"turn-a","activityId":null,"classification":"unclassified","input":-1,"cachedInput":0,"output":0,"reasoning":0,"total":0}"""
+        reject usage (fun file -> UsageAttribution(token, file))
+
+    let private retainedParserRejection root =
+        let isolated = Path.Combine(root, "retained-parser-rejection")
+        Directory.CreateDirectory isolated |> ignore
+        let host = config isolated
+        let log = Path.Combine(isolated, "publications.log")
+        Environment.SetEnvironmentVariable("FSGG_ADAPTER_TEST_LOG", log)
+        let result = run (Some host) (Begin("F", "REJECTION", None, "rejection-attempt", None, None, "root", "fixture-producer", "fixture-model", "medium", 60))
+        require (result.ExitCode = 0) (text result.Stderr)
+        let token = (resultJson result).GetProperty("token").GetString()
+        require ((run (Some host) (Started(token, "rejection-native"))).ExitCode = 0) "fixture start failed"
+        let path = Path.Combine(host.StoreRoot, "orchestrator-dispatches", token + ".json")
+        let before = File.ReadAllBytes path
+        let state = JsonNode.Parse(before) :?> JsonObject
+        let sequence = state["sequence"].GetValue<int>() + 1
+        let activityId = "rejected-activity"
+        let identity =
+            "activity-span-" + (Encoding.UTF8.GetBytes("REJECTION\u001f" + activityId) |> SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant()).Substring(0,32)
+        let input = Path.Combine(isolated, "activity.json")
+        let activity = JsonNode.Parse("""{"schema":"fsgg.telemetry.activity-span-input/1","revision":0,"activityId":"rejected-activity","category":"validation","startedAt":"2026-09-27T00:00:00Z","endedAt":null,"clockProvenance":"host-wall","evidence":["invalid"],"summary":"fixture"}""") :?> JsonObject
+        File.WriteAllText(input, activity.ToJsonString())
+        if not (OperatingSystem.IsWindows()) then File.SetUnixFileMode(input, enum<UnixFileMode> 0o600)
+        // Construct an independent synthetic retained legacy intent in production field order.
+        let observation = JsonObject()
+        observation["kind"] <- JsonValue.Create "activity-span"
+        observation["identity"] <- JsonValue.Create identity
+        observation["itemId"] <- state["itemId"].DeepClone()
+        observation["invocationId"] <- state["invocationId"].DeepClone()
+        observation["attemptId"] <- state["attemptId"].DeepClone()
+        for name in [ "revision"; "activityId"; "category"; "startedAt"; "endedAt"; "clockProvenance"; "evidence"; "summary" ] |> List.sort do
+            observation[name] <- if isNull activity[name] then null else activity[name].DeepClone()
+        let events = JsonArray()
+        events.Add observation
+        let batch = JsonObject()
+        batch["schema"] <- JsonValue.Create "fsgg.telemetry.ingest/1"
+        batch["ingestId"] <- JsonValue.Create(state["invocationId"].GetValue<string>() + "-" + sequence.ToString("000000"))
+        batch["sourceIdentity"] <- state["producerStream"].DeepClone()
+        batch["generation"] <- state["invocationId"].DeepClone()
+        batch["cursor"] <- JsonValue.Create(string sequence)
+        batch["eventCount"] <- JsonValue.Create 1
+        batch["events"] <- events
+        let pending = JsonObject()
+        pending["operation"] <- JsonValue.Create("observation:activity-span:" + identity)
+        pending["nextPhase"] <- state["phase"].DeepClone()
+        pending["batch"] <- batch
+        state["sequence"] <- JsonValue.Create sequence
+        state["pendingPublication"] <- pending
+        File.WriteAllText(path, state.ToJsonString() + "\n")
+        let poisoned = File.ReadAllBytes path
+        let calls = File.ReadAllLines(log).Length
+        try
+            for mode in [ "unknown"; "wrong-batch"; "wrong-engine"; "foreign-store" ] do
+                Environment.SetEnvironmentVariable("FSGG_ADAPTER_TEST_REJECTION", mode)
+                let refused = run (Some host) (Activity(token, FileInfo input))
+                require (refused.ExitCode = 1 && File.ReadAllBytes path = poisoned) (mode + " incorrectly cleared retained intent")
+            Environment.SetEnvironmentVariable("FSGG_ADAPTER_TEST_REJECTION", "exact")
+            let rejected = run (Some host) (Activity(token, FileInfo input))
+            require (rejected.ExitCode = 1 && File.ReadAllBytes path = before) "exact pre-IO parser refusal did not restore original sequence/state"
+            require (File.ReadAllLines(log).Length = calls) "rejected parser payload was published"
+            Environment.SetEnvironmentVariable("FSGG_ADAPTER_TEST_REJECTION", null)
+            activity["evidence"] <- JsonArray()
+            File.WriteAllText(input, activity.ToJsonString())
+            require ((run (Some host) (Activity(token, FileInfo input))).ExitCode = 0) "corrected observation refused after classified rejection"
+            require (File.ReadAllLines(log).Length = calls + 1) "corrected observation was not published exactly once"
+        finally Environment.SetEnvironmentVariable("FSGG_ADAPTER_TEST_REJECTION", null)
 
     let private runHarness () =
         let absent = run None Status
@@ -518,6 +742,9 @@ module Program =
             ciAssignment root
             protectedOriginalRefusal root
             populationOnly root
+            boundedPrivateState root
+            observationPrevalidation root
+            retainedParserRejection root
             Console.WriteLine "adapter harness: PASS"
             0
         finally

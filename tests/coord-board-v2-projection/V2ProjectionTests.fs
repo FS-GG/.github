@@ -622,6 +622,38 @@ let ``inspection changed issue dependency and access denial remain zero effect``
         Assert.True(report.Items.Head.Evidence.Projection.IsNone)
 
 [<Fact>]
+let ``fresh three selected issues inspect Current while closed omitted history stays outside the exact map`` () =
+    let history = """,{"issue":"FS-GG/.github#3009","nodeId":"I_3009","observedUpdatedAt":"2026-10-04T13:04:38Z","observedState":"closed","decision":"omit-delivered","adjudication":"unknown","pilot":false,"remainingOutcome":null,"roadmap":"docs/github-substrate-v2-roadmap.md","dependencies":[]}"""
+    let manifest = canonicalManifest.Substring(0, canonicalManifest.Length - 2) + history + "]}"
+    let memberResponse number response =
+        response |> Result.map (fun value ->
+            { value with Body = value.Body.Replace("I_native", (if number = 2963 then "I_native" else $"I_{number}")).Replace("2963", string number) })
+    let reads number =
+        [ native number "2026-10-02T00:00:00Z"; ok "[]"; protectedBlob "canonical owning roadmap"
+          organization; target; memberResponse number membership; memberResponse number planningValues ]
+    let transport = scripted (protectedBlob manifest :: ([ 2963; 2964; 2965 ] |> List.collect reads))
+    let report = V2ProjectionSource.inspectFixed transport canonicalBinding None
+    Assert.Equal(Some 3, report.Evidence.Selected)
+    Assert.Equal(3, report.Evidence.Attempted)
+    Assert.True(report.Evidence.PopulationGap.IsNone)
+    Assert.All(report.Items, fun item ->
+        Assert.Equal("Current", item.SourceCurrentness)
+        Assert.True(item.Evidence.DependencyReadComplete)
+        Assert.True(item.Planning.IsSome)
+        Assert.Equal(0, item.Evidence.MutationAttempts))
+    Assert.DoesNotContain(report.Items, fun item -> item.Evidence.Issue.Number = 3009)
+    Assert.Empty transport.Mutations
+    // Neither the historical four-target map nor a missing selected member can match.
+    for wrong in [ { canonicalBinding with SelectedIssues = canonicalBinding.SelectedIssues.Add("I_3009", "FS-GG/.github#3009") }
+                   { canonicalBinding with SelectedIssues = canonicalBinding.SelectedIssues.Remove("I_2965") } ] do
+        let refused = scripted [ protectedBlob manifest ]
+        let result = V2ProjectionSource.inspectFixed refused wrong None
+        Assert.True(result.Evidence.PopulationGap.IsSome)
+        Assert.Equal(None, result.Evidence.Selected)
+        Assert.Equal(0, result.Evidence.Attempted)
+        Assert.Empty refused.Mutations
+
+[<Fact>]
 let ``inspection admits fourth issue only by exact selected population and rejects unbound child`` () =
     let fourthBinding = { canonicalBinding with SelectedIssues = canonicalBinding.SelectedIssues.Add("I_3009", "FS-GG/.github#3009") }
     let fourthRow = """,{"issue":"FS-GG/.github#3009","nodeId":"I_3009","observedUpdatedAt":"2026-10-02T00:00:00Z","observedState":"open","decision":"import","adjudication":"verified-remaining","pilot":true,"roadmap":"docs/github-substrate-v2-roadmap.md","dependencies":[]}"""
