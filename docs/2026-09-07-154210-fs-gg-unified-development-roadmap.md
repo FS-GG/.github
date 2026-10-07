@@ -141,8 +141,11 @@ assessment transitions, the Host-owned Responses path and independent source ver
 Coherent 0.99.0 and Host 0.5.0 publication is now closed as recorded above. Installation,
 schema migration, enrollment, provider execution and full V2-EFF-01 acceptance remain
 separate pending gates in the
-[owning plan](roadmaps/process-efficiency-telemetry.md). This host has no configured
-telemetry association; dispatch usage remains unknown.
+[owning plan](roadmaps/process-efficiency-telemetry.md). The host telemetry association
+was unconfigured at that source-window observation. Its existing qualified local
+association has since been restored; discovery and status report configured and ready.
+Native model usage remains unknown, and the later projection follow-up join refused
+with dispatch state unavailable; neither gap establishes zero usage.
 
 
 **2026-10-06: Published-template receiver harness source delivered; installed acceptance remains open.**
