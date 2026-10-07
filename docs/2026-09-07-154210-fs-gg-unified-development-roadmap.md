@@ -56,6 +56,31 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-07: Published Templates-only receiver acceptance passed.**
+The consumed [public receiver run 37549683984/a1](https://github.com/FS-GG/FS.GG.Templates/actions/runs/37549683984)
+succeeded against repaired harness `c56541c6dbadbc753b500ac5ffc941e8af083854`.
+Artifact `11452437787` reports `passed` in `templates` mode for public Workspace Template
+0.18.1 at original source/tag `d9fe65ea8a456f59d663f20c647a38a195e13c2c`, archive
+`0d9395b028f14b2c06afe1f1de019610217774f0cb8b6a9618f2aed7d51790fe` and SDK 2.1.0.
+Direct and provider Chromium FourD journeys each passed. Wizard qualification remains
+explicitly pending; this closes only the Templates-only installed receiver boundary.
+The original failed receiver and harness repairs remain historical evidence in the
+[owning SVG plan](roadmaps/svg-coherence-and-instancing-01.md).
+
+
+**2026-10-07: Schema-14 efficiency and Responses source delivered.**
+[PR #4292](https://github.com/FS-GG/.github/pull/4292) merged exact
+`7a484cdb2d059851cecbcd8de94c9f423ff1bda4` as
+`2556144c3eed06ef31a1b7e12a8f528ef4f40b27` at 01:29:26 UTC after 93 hosted
+checks passed and four skipped. Canonical routine delivery reported current validation
+and coherent validation not required. The source includes nullable usage, authenticated
+assessment transitions, the Host-owned Responses path and independent source verification.
+Coherent 0.99.0 and Host 0.5.0 publication, installation, schema migration, enrollment,
+provider execution and full V2-EFF-01 acceptance remain separate pending gates in the
+[owning plan](roadmaps/process-efficiency-telemetry.md). This host has no configured
+telemetry association; dispatch usage remains unknown.
+
+
 **2026-10-06: Published-template receiver harness source delivered; installed acceptance remains open.**
 [Templates #677](https://github.com/FS-GG/FS.GG.Templates/pull/677) merged exact
 `196a843cf4af0c97300e8ea66a9ad0e7badec03f` as
