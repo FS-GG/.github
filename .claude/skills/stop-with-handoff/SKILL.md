@@ -81,7 +81,10 @@ credentials, checks or infrastructure prevent landing, preserve the local
 file and any pushed branch, state the exact remaining boundary, and stop rather
 than resuming roadmap work. Do not call a pending PR merged.
 
-After merge, read back the saved file and full merged tree. The save itself is
+After merge, read back the saved file and full merged tree. Return the session
+checkout to updated main when safe; otherwise preserve its branch and dirty
+state and report why it was retained. Do not reset, clean, or overwrite unrelated
+work to return to main. The save itself is
 the only new work allowed after shutdown, apart from necessary cleanup and its
 native delivery checks. Do not select a next item or continue monitoring feature
 lanes. End with the saved path/link, PR and merge status, and any unresolved
