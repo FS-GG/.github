@@ -56,6 +56,21 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-07: Process evaluator observation-contract source delivered.**
+[Coordination #954](https://github.com/FS-GG/FS.GG.Coordination/pull/954) merged exact
+`9d2b06b2a88577c683d4f15f3eea0aca3eddecfa` as
+`a3aeb61ca6abf26c82c5286fe25926b397918209` at 04:46:26 UTC after 46 hosted
+checks passed and six skipped. The evaluator now separates caller byte-reader
+EOF, cancellation and faults from library task settlement and result errors,
+while preserving the first cause. Canonical delivery reported current validation,
+coherent validation not required and no publication obligation. The original #953
+partial observations and failure evidence remain retained. Candidate error-path
+exit and cleanup, ProcessKit tee EOF and complete descendant coverage remain
+unknown. V2-PROC-01.1, full backend selection, containment qualification and
+consumer acceptance remain open in the
+[owning process plan](roadmaps/2026-10-05-shared-process-supervision.md).
+
+
 **2026-10-07: Current Templates knowledge inventory assertions repaired.**
 [Templates #678](https://github.com/FS-GG/FS.GG.Templates/pull/678) merged exact
 `2b360225b4f23349cdd891bad7296b2980803f04` as
