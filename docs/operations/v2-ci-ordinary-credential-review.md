@@ -59,3 +59,43 @@ values.
 
 The reviewer can request source repair. The reviewer does not hold credentials, approve as another person,
 or authorize a protected effect.
+
+## Concurrent-main source composition repair — 2026-10-07
+
+The original protected-source predecessor `37589450783/a1` at `862a830c` refused before
+credential execution: PR4305's current target base moved to `a37a1b7f`, while its head
+`2c738455` and the squash parent have graph merge base `65c8d8ce`. That failed attempt
+remains failed. The selected repair distinguishes checked head H, triggering source S,
+S's sole parent P, unique graph merge base B, and stable current PR target base C.
+C is observed separately and is never called a check-time qualification base.
+
+The trusted native observer binds exact commit/tree identities and reproduces S's tree
+with a clean three-way merge of P/H at independently verified unique B. An isolated
+Git repository uses one depth-256 fetch and a shared 120-second graph budget; ancestry
+must be complete above B. Reachable shallow boundaries outside B's ancestry refuse;
+shallow history at/below already proven common B cannot hide another maximal base.
+Ambiguous bases, contradictory native/local objects, conflicts, extra source edits,
+output/deadline failures and changing PR or protected authority retain refusal.
+The unchanged receipt records C as `pullRequestBaseSha`, H as `qualificationSha`, and
+the proven **source S tree** as `qualifiedTreeSha`, matching the pinned receiver's
+source-tree interpretation. Complete exact-H native check/producer/attempt validation
+and independent same-run receipt recomputation remain mandatory.
+
+Preflight reuses static workflow boundaries and focused native Git controls; no custom
+model is selected because job topology/order and effect boundaries are unchanged.
+Local controls are serial, CPU0, within a 180-second/256-MiB light-helper envelope;
+real local graph fixtures cover clean concurrent squash, criss-cross bases, shallow
+frontiers and refusal/cleanup. Byte composition is separate from coherent validation
+under ADR-0084. Source qualification and later native predecessor/receiver outcomes
+remain separate; this repair authorizes no rerun, credential action, intake operation13
+reset, grant renewal, journal mutation or workspace/default adoption.
+
+Local source controls passed: 31 observer tests, including real Git graph/merge and
+receipt drift cases; 10 qualification tests; routine eligibility and operation-boundary
+fixtures. Both demonstrated regressions fail on protected `862a830c` and pass the
+repair. The expanded observer run used CPU0, peaked at 60,194,816 bytes of sampled
+owned process-tree RSS/two processes, and completed in 1.14 seconds; all directly
+owned children were terminal. Fixture transport copies local objects and constructs
+real shallow metadata, so no network/native credential path was executed. Hosted
+coherent qualification, source delivery and original-identity native readback remain
+pending; these controls establish no production settlement or receiver adoption.

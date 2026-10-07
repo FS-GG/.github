@@ -14,8 +14,11 @@ import json
 import os
 import pathlib
 import re
+import signal
 import subprocess
 import sys
+import tempfile
+import time
 from datetime import datetime
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -114,53 +117,132 @@ def required_checks(repository: str, selected_source: dict) -> list[str]:
     return names
 
 
-def equivalent_tree(repository: str, head: str, source: str, base: str) -> str:
-    """Prove that a squash contains exactly the qualified head applied to its parent.
+def graph_run(arguments: list[str], **kwargs) -> subprocess.CompletedProcess:
+    """Own each Git command's process group, including fetch descendants."""
+    timeout = kwargs.pop("timeout")
+    kwargs.pop("check", None)
+    process = subprocess.Popen(arguments, start_new_session=True, **kwargs)
+    deadline = time.monotonic() + timeout
+    try:
+        while process.poll() is None:
+            if any(kwargs[stream].tell() > 65536 for stream in ("stdout", "stderr")):
+                raise QUALIFICATION.Refusal("graph proof output exceeds bound")
+            remaining = deadline - time.monotonic() - 0.5
+            if remaining <= 0:
+                raise subprocess.TimeoutExpired(arguments, timeout)
+            try:
+                process.wait(timeout=min(0.01, remaining))
+            except subprocess.TimeoutExpired:
+                continue
+        code = process.returncode
+    except (subprocess.TimeoutExpired, QUALIFICATION.Refusal):
+        # A fetch may own transport/pack children outside the direct process.
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        process.wait(timeout=0.5)
+        raise
+    # A returned direct child cannot leave an owned transport running.
+    try:
+        os.killpg(process.pid, 0)
+    except ProcessLookupError:
+        return subprocess.CompletedProcess(arguments, code)
+    os.killpg(process.pid, signal.SIGKILL)
+    raise QUALIFICATION.Refusal("graph command left unresolved descendants")
 
-    Another PR may reach main after this PR was qualified. In that case the
-    source tree need not equal the head tree, but it must equal Git's clean
-    three-way merge of the qualified head and the squash commit's sole parent.
+
+def prove_graph(repository: str, head: str, source: str, parent: str,
+                base: str, trees: dict[str, str]) -> str:
+    """Reproduce S from a complete frontier above the unique common graph base.
+
+    B's ancestors cannot be additional maximal common ancestors after B is proven
+    common. Every P/H ancestry branch outside B's ancestry must be non-shallow.
     """
-    commits = []
+    deadline = time.monotonic() + 120
+    with tempfile.TemporaryDirectory(prefix="ordinary-v2-graph-") as directory:
+        env = {key: value for key, value in os.environ.items()
+               if not key.startswith("GIT_")}
+        env.update(GIT_CONFIG_NOSYSTEM="1", GIT_CONFIG_GLOBAL=os.devnull,
+                   GIT_NO_REPLACE_OBJECTS="1", GIT_TERMINAL_PROMPT="0")
+
+        def git(*arguments: str, maximum: float = 30, allowed=(0,)) -> str:
+            remaining = deadline - time.monotonic() - 0.5
+            if remaining <= 0:
+                raise QUALIFICATION.Refusal("graph proof deadline exhausted")
+            # File capture bounds memory even when a Git diagnostic is oversized.
+            with tempfile.TemporaryFile() as stdout, tempfile.TemporaryFile() as stderr:
+                try:
+                    result = graph_run(
+                        ["git", "-c", "credential.helper=", "-c", "core.hooksPath=/dev/null",
+                         "-C", directory, *arguments], env=env, stdout=stdout,
+                        stderr=stderr, check=False, timeout=min(maximum, remaining))
+                except subprocess.TimeoutExpired as error:
+                    raise QUALIFICATION.Refusal("graph proof command timed out") from error
+                if stdout.tell() > 65536 or stderr.tell() > 65536:
+                    raise QUALIFICATION.Refusal("graph proof output exceeds bound")
+                if result.returncode not in allowed:
+                    raise QUALIFICATION.Refusal("graph proof command refused")
+                stdout.seek(0)
+                return stdout.read().decode("utf-8", errors="strict").strip()
+
+        git("init", "--bare", "--quiet")
+        git("fetch", "--no-tags", "--depth=256",
+            f"https://github.com/{repository}.git", parent, head, base, source,
+            maximum=90)
+        for oid, tree in trees.items():
+            if git("rev-parse", "--verify", oid + "^{commit}") != oid:
+                raise QUALIFICATION.Refusal("fetched commit identity differs")
+            if git("rev-parse", oid + "^{tree}") != tree:
+                raise QUALIFICATION.Refusal("fetched native tree differs")
+        if git("show", "-s", "--format=%P", source) != parent:
+            raise QUALIFICATION.Refusal("fetched squash parent differs")
+        git("merge-base", "--is-ancestor", base, parent)
+        git("merge-base", "--is-ancestor", base, head)
+        frontier = set(git("rev-list", parent, head, "^" + base).splitlines())
+        shallow = pathlib.Path(directory, "shallow")
+        if shallow.exists() and frontier.intersection(shallow.read_text().splitlines()):
+            raise QUALIFICATION.Refusal("graph frontier has a shallow boundary")
+        if git("merge-base", "--all", parent, head).splitlines() != [base]:
+            raise QUALIFICATION.Refusal("native/local merge bases differ or are not unique")
+        candidate = git("merge-tree", "--write-tree", "--merge-base=" + base, parent, head)
+        if not QUALIFICATION.SHA.fullmatch(candidate) or candidate != trees[source]:
+            raise QUALIFICATION.Refusal("merged source tree differs from qualified three-way merge")
+        return trees[source]
+
+
+def equivalent_tree(repository: str, head: str, source: str) -> str:
+    """Bind exact native commit identities, then prove source byte composition."""
+    commits = {}
+    trees = {}
     for sha in (head, source):
         commit = api(f"repos/{repository}/git/commits/{sha}")
         tree = commit.get("tree", {}).get("sha") if isinstance(commit, dict) else None
-        if not isinstance(tree, str) or not QUALIFICATION.SHA.fullmatch(tree):
-            raise QUALIFICATION.Refusal("native commit tree is malformed")
-        commits.append((commit, tree))
-    source_commit, source_tree = commits[1]
-    head_tree = commits[0][1]
-    if source_tree == head_tree:
-        return head_tree
-
-    parents = source_commit.get("parents") if isinstance(source_commit, dict) else None
+        if (not isinstance(commit, dict) or commit.get("sha") != sha
+                or not isinstance(tree, str) or not QUALIFICATION.SHA.fullmatch(tree)):
+            raise QUALIFICATION.Refusal("native commit identity/tree is malformed")
+        commits[sha], trees[sha] = commit, tree
+    parents = commits[source].get("parents")
     if not isinstance(parents, list) or len(parents) != 1:
         raise QUALIFICATION.Refusal("merged source has no unique squash parent")
     parent = parents[0].get("sha") if isinstance(parents[0], dict) else None
-    if (not isinstance(parent, str) or not QUALIFICATION.SHA.fullmatch(parent)
-            or not isinstance(base, str) or not QUALIFICATION.SHA.fullmatch(base)):
-        raise QUALIFICATION.Refusal("merged source parent or qualified base is malformed")
+    if not isinstance(parent, str) or not QUALIFICATION.SHA.fullmatch(parent):
+        raise QUALIFICATION.Refusal("merged source parent is malformed")
+    if trees[source] == trees[head]:
+        return trees[source]
     comparison = api(f"repos/{repository}/compare/{parent}...{head}")
-    merge_base = comparison.get("merge_base_commit", {}).get("sha") if isinstance(comparison, dict) else None
-    if merge_base != base:
-        raise QUALIFICATION.Refusal("qualified base differs from native merge base")
-    fetched = subprocess.run(
-        ["git", "-c", "credential.helper=", "fetch", "--no-tags", "--depth=1",
-         f"https://github.com/{repository}.git", base, parent, head],
-        check=False, capture_output=True, text=True, timeout=90, cwd=ROOT,
-    )
-    if fetched.returncode:
-        raise QUALIFICATION.Refusal("qualified merge inputs are unavailable")
-    merged = subprocess.run(
-        ["git", "merge-tree", "--write-tree", f"--merge-base={base}", parent, head],
-        check=False, capture_output=True, text=True, timeout=30, cwd=ROOT,
-    )
-    candidate = merged.stdout.strip()
-    if merged.returncode or not QUALIFICATION.SHA.fullmatch(candidate):
-        raise QUALIFICATION.Refusal("qualified source does not merge cleanly")
-    if candidate != source_tree:
-        raise QUALIFICATION.Refusal("merged source tree differs from qualified three-way merge")
-    return head_tree
+    base = comparison.get("merge_base_commit", {}).get("sha") if isinstance(comparison, dict) else None
+    if (not isinstance(comparison, dict) or comparison.get("base_commit", {}).get("sha") != parent
+            or not isinstance(base, str) or not QUALIFICATION.SHA.fullmatch(base)):
+        raise QUALIFICATION.Refusal("native comparison identity/base is malformed")
+    for sha in (parent, base):
+        commit = api(f"repos/{repository}/git/commits/{sha}")
+        tree = commit.get("tree", {}).get("sha") if isinstance(commit, dict) else None
+        if (not isinstance(commit, dict) or commit.get("sha") != sha
+                or not isinstance(tree, str) or not QUALIFICATION.SHA.fullmatch(tree)):
+            raise QUALIFICATION.Refusal("native graph commit identity/tree is malformed")
+        trees[sha] = tree
+    return prove_graph(repository, head, source, parent, base, trees)
 
 
 def observe(environ: dict[str, str], rehearsal: bool = False) -> dict:
@@ -227,7 +309,7 @@ def observe(environ: dict[str, str], rehearsal: bool = False) -> dict:
     head = current_pull["head"]["sha"]
     if not QUALIFICATION.SHA.fullmatch(head):
         raise QUALIFICATION.Refusal("invalid associated PR head")
-    tree = equivalent_tree(repository, head, source, current_pull["base"]["sha"])
+    tree = equivalent_tree(repository, head, source)
     required_checks(repository, selected_source)
 
     checks_response = api(f"repos/{repository}/commits/{head}/check-runs?per_page=100")
@@ -333,6 +415,11 @@ def observe(environ: dict[str, str], rehearsal: bool = False) -> dict:
         "checks": selected,
         "gateChecks": gate_selected,
     }
+    final_pull = api(f"repos/{repository}/pulls/{number}")
+    for key in ("number", "node_id", "state", "merged_at", "merge_commit_sha", "head", "base"):
+        if final_pull.get(key) != current_pull.get(key):
+            raise QUALIFICATION.Refusal("associated PR changed during graph/check collection")
+    current_authority(policy["repository"], policy, policy_path)
     receipt = QUALIFICATION.qualify(
         policy, digest, runtime, [current_pull], evidence, selected_source["key"])
     receipt["runId"] = int(run_id)
