@@ -56,8 +56,10 @@ For routine delivery:
    for the exact head, merge through GitHub's native merge boundary and read back the PR's merged state
    and merge commit. Report code delivery separately from any protected publication still pending.
 5. Re-read the roadmap from default branch and continue. Keep projection asynchronous; do not launch a
-   model turn or PR merely to copy already-merged facts. The sole exception is the mandatory [Unified Roadmap v3](https://github.com/FS-GG/.github/blob/main/docs/roadmaps/2026-10-07-unified-development-roadmap-v3.md)
-   or [games roadmap](https://github.com/FS-GG/.github/blob/main/docs/roadmaps/2026-10-07-games-development-roadmap.md) open-index closure update after authoritative cross-repository readback: land its immediate
+   model turn or PR merely to copy already-merged facts. The sole exception is the mandatory Unified Roadmap v3
+   (<https://github.com/FS-GG/.github/blob/main/docs/roadmaps/2026-10-07-unified-development-roadmap-v3.md>)
+   or games roadmap
+   (<https://github.com/FS-GG/.github/blob/main/docs/roadmaps/2026-10-07-games-development-roadmap.md>) open-index closure update after authoritative cross-repository readback: land its immediate
    closure follow-up under `work-programme`, removing or narrowing the closed outcome and retaining
    completed evidence in its owning plan/report. Do not append a completed-work log to either open index. This exception does not apply to CI ticks, waits,
    intermediate checkpoints or any other status copy, and does not create a PR per checkpoint.
