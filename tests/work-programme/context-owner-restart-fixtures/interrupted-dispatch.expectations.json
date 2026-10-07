@@ -1,0 +1,17 @@
+{
+  "synthetic": true,
+  "canonicalExecution": "not-run-no-CLR-admission",
+  "expectedProperties": {
+    "resynchronize": true,
+    "changedCount": 0,
+    "reservationIds": [
+      "A",
+      "B"
+    ],
+    "noticeKinds": [
+      "missing-base-resynchronize"
+    ]
+  },
+  "existingContract": "contextDelta missingBase and snapshot inFlight inventory; frontier refresh/reconcile",
+  "realConsumerProofMissing": "Observe actual original dispatch and pending effects under same identity before retry; fixture proves no actual termination."
+}

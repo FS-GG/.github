@@ -1,0 +1,206 @@
+{
+  "schema": "fsgg.programme.delta-input/1",
+  "evaluationTime": "2026-10-05T04:56:05+00:00",
+  "evaluatorIdentity": "programme-delta-1",
+  "policyIdentity": "policy-1",
+  "userScopeRevision": "scope-1",
+  "baseRevision": "view-1",
+  "currentRevision": "view-2",
+  "baseEvaluatorIdentity": "programme-delta-1",
+  "basePolicyIdentity": "policy-1",
+  "baseUserScopeRevision": "scope-1",
+  "baseReturns": [
+    {
+      "schema": "fsgg.programme.lane-return/1",
+      "campaign": "synthetic-context-restart",
+      "lane": "A",
+      "feature": "FEATURE",
+      "item": "A",
+      "originalItem": "A",
+      "originalAttempt": "original-attempt",
+      "attempt": "attempt",
+      "candidate": "candidate",
+      "owner": "owner",
+      "revision": 1,
+      "supersedes": 0,
+      "sourceRevision": "candidate",
+      "inputPacketSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "observedAt": "2026-10-05T04:56:05+00:00",
+      "outcome": "window-reported",
+      "boundaries": {
+        "source": "local",
+        "validation": "pending",
+        "publication": "not-required",
+        "installed": "pending",
+        "native": "unknown",
+        "projection": "not-required"
+      },
+      "evidence": [
+        {
+          "kind": "source",
+          "reference": "artifact-reference",
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "scope": "source-only"
+        }
+      ],
+      "unknowns": [
+        "native usage unknown"
+      ],
+      "exception": "none",
+      "continuation": "retain owner; native boundary remains unknown",
+      "narrative": "SYNTHETIC fixture only; no actual dispatch or historical packet join."
+    }
+  ],
+  "currentReturns": [
+    {
+      "schema": "fsgg.programme.lane-return/1",
+      "campaign": "synthetic-context-restart",
+      "lane": "A",
+      "feature": "FEATURE",
+      "item": "A",
+      "originalItem": "A",
+      "originalAttempt": "original-attempt",
+      "attempt": "attempt",
+      "candidate": "candidate",
+      "owner": "synthetic-superseded-owner",
+      "revision": 99,
+      "supersedes": 98,
+      "sourceRevision": "candidate",
+      "inputPacketSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "observedAt": "2026-10-05T04:56:05+00:00",
+      "outcome": "window-reported",
+      "boundaries": {
+        "source": "local",
+        "validation": "pending",
+        "publication": "not-required",
+        "installed": "pending",
+        "native": "unknown",
+        "projection": "not-required"
+      },
+      "evidence": [
+        {
+          "kind": "source",
+          "reference": "artifact-reference",
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "scope": "source-only"
+        }
+      ],
+      "unknowns": [
+        "native usage unknown"
+      ],
+      "exception": "none",
+      "continuation": "retain owner; native boundary remains unknown",
+      "narrative": "SYNTHETIC fixture only; no actual dispatch or historical packet join."
+    },
+    {
+      "schema": "fsgg.programme.lane-return/1",
+      "campaign": "synthetic-context-restart",
+      "lane": "A",
+      "feature": "FEATURE",
+      "item": "A",
+      "originalItem": "A",
+      "originalAttempt": "original-attempt",
+      "attempt": "attempt",
+      "candidate": "candidate",
+      "owner": "owner",
+      "revision": 2,
+      "supersedes": 1,
+      "sourceRevision": "candidate",
+      "inputPacketSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "observedAt": "2026-10-05T04:56:05+00:00",
+      "outcome": "window-reported",
+      "boundaries": {
+        "source": "local",
+        "validation": "pending",
+        "publication": "not-required",
+        "installed": "pending",
+        "native": "unknown",
+        "projection": "not-required"
+      },
+      "evidence": [
+        {
+          "kind": "source",
+          "reference": "artifact-reference",
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "scope": "source-only"
+        }
+      ],
+      "unknowns": [
+        "native usage unknown"
+      ],
+      "exception": "none",
+      "continuation": "retain owner; native boundary remains unknown",
+      "narrative": "SYNTHETIC fixture only; no actual dispatch or historical packet join."
+    }
+  ],
+  "snapshot": {
+    "schema": "fsgg.programme.snapshot/1",
+    "campaign": "synthetic-context-restart",
+    "capacity": 2,
+    "capacityKnown": true,
+    "maxAgeSeconds": 300,
+    "lanes": [
+      {
+        "id": "A",
+        "feature": "FEATURE",
+        "item": "A",
+        "originalItem": "A",
+        "attempt": "attempt",
+        "repository": "FS-GG/Example",
+        "chain": "A",
+        "owner": "owner",
+        "worktree": "/synthetic/worktree",
+        "head": "candidate",
+        "priority": 1,
+        "readable": true,
+        "observedAt": "2026-10-05T04:56:05+00:00",
+        "evidence": [
+          "synthetic-native-reference"
+        ],
+        "state": "active",
+        "inFlight": true,
+        "touchSet": [
+          "src/A/**"
+        ],
+        "dependencies": [],
+        "source": "local",
+        "validation": "pending",
+        "publication": "not-required",
+        "installed": "pending",
+        "native": "unknown",
+        "projection": "not-required"
+      },
+      {
+        "id": "B",
+        "feature": "FEATURE",
+        "item": "B",
+        "originalItem": "B",
+        "attempt": "attempt",
+        "repository": "FS-GG/Example",
+        "chain": "B",
+        "owner": "owner",
+        "worktree": "/synthetic/worktree",
+        "head": "candidate",
+        "priority": 1,
+        "readable": true,
+        "observedAt": "2026-10-05T04:56:05+00:00",
+        "evidence": [
+          "synthetic-native-reference"
+        ],
+        "state": "active",
+        "inFlight": true,
+        "touchSet": [
+          "src/B/**"
+        ],
+        "dependencies": [],
+        "source": "local",
+        "validation": "pending",
+        "publication": "not-required",
+        "installed": "pending",
+        "native": "unknown",
+        "projection": "not-required"
+      }
+    ],
+    "openPulls": []
+  }
+}

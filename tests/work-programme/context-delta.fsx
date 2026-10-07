@@ -130,4 +130,52 @@ test "exact synthetic CLI input matches retained expected projection" (fun () ->
     let fixture,inputDigest=read<DeltaInput> input
     let expected,_=read<DeltaResult> expectedPath
     expect (encode(contextDelta inputDigest fixture)=encode expected))
+// These retained populations are explicitly SYNTHETIC. Placeholder packet/attempt
+// identities are replay inputs, never evidence of actual dispatch or economics.
+let restartFixture name =
+    let path=Path.Combine(__SOURCE_DIRECTORY__,"context-owner-restart-fixtures",name+".delta-input.json")
+    let input,inputDigest=read<DeltaInput> path
+    input,contextDelta inputDigest input,frontier input.EvaluationTime inputDigest input.Snapshot
+let reservations (input: DeltaInput) (result: DeltaResult) =
+    expect (result.ActiveReservations=(input.Snapshot.Lanes |> Array.filter _.InFlight |> Array.sortBy _.Id))
+    expect (result.EffectAuthority="none; external acceptance and current native admission required")
+let action name (result: Frontier) = result.Actions |> Array.find (fun row -> row.Lane=name)
+
+test "synthetic interrupted dispatch resynchronizes without releasing reservations" (fun () ->
+    let input,result,ready=restartFixture "interrupted-dispatch"
+    reservations input result
+    expect (result.Resynchronize && result.Changed.Length=0 && has "missing-base-resynchronize" result)
+    expect ((action "A" ready).Action="refresh" && (action "B" ready).Action="reconcile"))
+test "synthetic missed owner revision requests intact base" (fun () ->
+    let input,result,_=restartFixture "missed-owner-revision"
+    reservations input result
+    expect (result.Resynchronize && result.Changed.Length=0 && has "missing-return-base-resynchronize" result))
+test "synthetic absent unreadable owner retains original reservation" (fun () ->
+    let input,result,ready=restartFixture "absent-owner"
+    reservations input result
+    expect (not result.Resynchronize && result.Changed.Length=0)
+    expect ((action "B" ready).Action="refresh")
+    expect (result.ActiveReservations |> Array.exists (fun holder -> holder.Id="B" && not holder.Readable && holder.Owner="owner" && holder.Attempt="attempt")))
+test "synthetic full reservation inventory fences ready independent work" (fun () ->
+    let input,result,ready=restartFixture "full-reservation"
+    reservations input result
+    expect (result.ActiveReservations.Length=2 && input.Snapshot.Lanes.Length=3)
+    expect ((action "C" ready).Action="wait" && (action "C" ready).Reason="worker capacity full"))
+test "synthetic one integrator continues same owner repair" (fun () ->
+    let input,result,ready=restartFixture "one-integrator-same-owner-repair"
+    reservations input result
+    expect (input.Snapshot.Capacity=1 && input.Snapshot.Lanes[0].State="repair" && result.ActiveReservations.Length=1 && result.Changed.Length=1)
+    let previous=input.BaseReturns[0]
+    let current=result.Changed[0]
+    expect (current.Revision=2L && current.Supersedes=previous.Revision && current.Owner=previous.Owner &&
+            current.Attempt=previous.Attempt && current.OriginalAttempt=previous.OriginalAttempt &&
+            current.InputPacketSha256=previous.InputPacketSha256)
+    expect ((action "A" ready).Action="continue"))
+test "synthetic superseded owner cannot win by higher revision" (fun () ->
+    let input,result,_=restartFixture "superseded-owner-return"
+    reservations input result
+    expect (result.Changed.Length=1 && result.Changed[0].Owner="owner" && result.Changed[0].Revision=2L &&
+            has "superseded-or-incomparable-owner-candidate" result)
+    let reversed={input with CurrentReturns=Array.rev input.CurrentReturns}
+    expect ((contextDelta hash reversed).Changed=result.Changed && (contextDelta hash reversed).Notices=result.Notices))
 printfn "PASS %d context delta controls; no effects dispatched" passed

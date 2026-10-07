@@ -1,0 +1,17 @@
+{
+  "synthetic": true,
+  "canonicalExecution": "not-run-no-CLR-admission",
+  "expectedProperties": {
+    "changedRevisions": [
+      2
+    ],
+    "reservationIds": [
+      "A"
+    ],
+    "frontierAAction": "continue",
+    "owner": "owner",
+    "effectAuthority": "none"
+  },
+  "existingContract": "contextDelta matched owner/attempt/candidate; frontier inFlight continue",
+  "realConsumerProofMissing": "Exercise actual same-owner repair and parent-only integration under one slot; neither helper creates dispatch nor merges."
+}

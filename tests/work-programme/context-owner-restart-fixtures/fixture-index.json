@@ -1,0 +1,16 @@
+{
+  "schema": "private-fixture-index/1",
+  "synthetic": true,
+  "fixtures": [
+    "interrupted-dispatch",
+    "missed-owner-revision",
+    "absent-owner",
+    "full-reservation",
+    "one-integrator-same-owner-repair",
+    "superseded-owner-return"
+  ],
+  "sourceRevision": "5af807eac93b367ca46fc44f33c8e6bb0e374135",
+  "effectAuthority": "none",
+  "canonicalDeltaExecution": "not inferred from fixture data; run context-delta.fsx",
+  "economicConclusion": "none; native usage and whole-family baseline unknown"
+}
