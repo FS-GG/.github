@@ -87,7 +87,11 @@ Use the existing lane returns and native evidence to report:
 
 - **Completed:** every item completed during the window, its lane and verified outcome. Distinguish
   local preparation, validation, merged PRs, publication and native acceptance; say when none completed.
-- **Working on:** each active item, its lane, current stage and next action.
+- **Working on:** each active item, its lane, current stage and what is still needed to finish the
+  selected lane outcome. Include an approximate time remaining as a range, with the dependencies
+  and assumptions that affect it. If a blocker prevents a credible completion estimate, say so and
+  estimate the next useful milestone instead. Refresh estimates from actual progress; do not treat
+  an estimate as a deadline, admission or completion claim.
 - **Problems:** problems encountered during the window, whether resolved or still open, and any
   remaining blockers and their effect on progress.
 - **User intervention:** state whether intervention is necessary. If needed, name the exact decision,
