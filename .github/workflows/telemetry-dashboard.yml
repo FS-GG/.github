@@ -11,6 +11,13 @@ on:
       - "tests/telemetry-dashboard/**"
       - "contracts/process-efficiency/**"
       - "tests/process-efficiency/**"
+      - "tests/learn-01-responses-source/**"
+      - "tests/responses-static-producer/**"
+      - "tests/process-efficiency-requirements.txt"
+      - "tools/process-efficiency-assessment.py"
+      - "tools/process-efficiency-evaluate.py"
+      - "tools/learn_01_responses_source.py"
+      - "tools/process-efficiency-responses-static.py"
       - ".github/workflows/telemetry-dashboard.yml"
       - "docs/roadmaps/utel-telemetry-dashboard.md"
   push:
@@ -24,6 +31,13 @@ on:
       - "tests/telemetry-dashboard/**"
       - "contracts/process-efficiency/**"
       - "tests/process-efficiency/**"
+      - "tests/learn-01-responses-source/**"
+      - "tests/responses-static-producer/**"
+      - "tests/process-efficiency-requirements.txt"
+      - "tools/process-efficiency-assessment.py"
+      - "tools/process-efficiency-evaluate.py"
+      - "tools/learn_01_responses_source.py"
+      - "tools/process-efficiency-responses-static.py"
       - ".github/workflows/telemetry-dashboard.yml"
       - "docs/roadmaps/utel-telemetry-dashboard.md"
   schedule:
@@ -53,8 +67,14 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: "3.x"
-      - name: Verify process efficiency contract and metric examples
-        run: python3 tests/process-efficiency/test_contract.py
+      - name: Install pinned process efficiency validator
+        run: python3 -m pip install --disable-pip-version-check -r tests/process-efficiency-requirements.txt
+      - name: Verify process efficiency contracts, assessment and evaluation
+        run: python3 -m unittest discover -s tests/process-efficiency -p 'test_*.py'
+      - name: Verify Responses source and static artifact contracts
+        run: |
+          python3 tests/learn-01-responses-source/test_responses_source.py
+          python3 tests/responses-static-producer/test_static_producer.py
       - name: Verify feed and dashboard behavior
         env:
           FSGG_DASHBOARD_SKIP_BROWSER: ${{ github.event_name == 'schedule' }}

@@ -74,6 +74,12 @@ def tree_digest(root: pathlib.Path) -> str:
     return hashlib.sha256(canonical(rows)).hexdigest()
 
 
+def store_schema_profile(version: str) -> tuple[int, int]:
+    # The current release advertises only its selected operational schema. Legacy
+    # artifact inspection retains its original profile; this grants no migration.
+    return (14, 14) if version == "0.5.0" else (10, 12)
+
+
 def build_manifest(args: argparse.Namespace) -> dict:
     package = pathlib.Path(args.package).resolve()
     lock = pathlib.Path(args.lock).resolve()
@@ -94,8 +100,8 @@ def build_manifest(args: argparse.Namespace) -> dict:
         "sourceSha": args.source_sha,
         "framework": "net10.0",
         "target": "linux-x64",
-        "supportedStoreSchemaMin": 10,
-        "supportedStoreSchemaMax": 12,
+        "supportedStoreSchemaMin": store_schema_profile(args.version)[0],
+        "supportedStoreSchemaMax": store_schema_profile(args.version)[1],
         "runtimePrerequisites": ["Microsoft.AspNetCore.App 10.0", "Microsoft.NETCore.App 10.0"],
         "archiveSha256": sha256(package),
         "producerPayloadSha256": saga.payload_id(package),
@@ -124,7 +130,7 @@ def load_manifest(path: pathlib.Path) -> dict:
         raise ValueError("release manifest producer payload digest is invalid")
     if data["framework"] != "net10.0" or data["target"] != "linux-x64":
         raise ValueError("release manifest runtime profile is invalid")
-    if data["supportedStoreSchemaMin"] != 10 or data["supportedStoreSchemaMax"] != 12:
+    if (data["supportedStoreSchemaMin"], data["supportedStoreSchemaMax"]) != store_schema_profile(data["version"]):
         raise ValueError("release manifest store schema range is invalid")
     if data["runtimePrerequisites"] != ["Microsoft.AspNetCore.App 10.0", "Microsoft.NETCore.App 10.0"]:
         raise ValueError("release manifest runtime prerequisites are invalid")

@@ -66,6 +66,9 @@ module WorkspaceTelemetryApplication =
         [<DllImport("libc", EntryPoint = "stat", SetLastError = true)>]
         extern int statPath(string path, Stat& value)
 
+        [<DllImport("libc", SetLastError = true)>]
+        extern int fstat(int descriptor, Stat& value)
+
         [<DllImport("libc")>]
         extern uint32 geteuid()
 
@@ -193,6 +196,47 @@ module WorkspaceTelemetryApplication =
             Error [ "configuration-unsafe" ]
         else
             Ok()
+
+    let readEfficiencyClaimTemplate (path: string) =
+        let unsafeFile () = Error [ "efficiency-claim-template-unsafe" ]
+        if not (OperatingSystem.IsLinux()) then Error [ "efficiency-claim-template-platform-unavailable" ]
+        elif String.IsNullOrWhiteSpace path || not (Path.IsPathFullyQualified path) then unsafeFile ()
+        else
+            try
+                let info = FileInfo path
+                if not (safeAncestors info.DirectoryName) || not (isNull info.LinkTarget) then unsafeFile ()
+                else
+                    // O_RDONLY | O_NONBLOCK | O_NOFOLLOW | O_CLOEXEC.
+                    let descriptor = Native.openPrivateFile(path, 0x800 ||| 0x20000 ||| 0x80000, 0u)
+                    if descriptor<0 then unsafeFile ()
+                    else
+                        use handle = new Microsoft.Win32.SafeHandles.SafeFileHandle(nativeint descriptor,true)
+                        let mutable before = Unchecked.defaultof<Native.Stat>
+                        let valid (value: Native.Stat) =
+                            (value.Mode &&& 0xF000u)=0x8000u && (value.Mode &&& 0xFFFu)=0x180u
+                            && value.User=Native.geteuid() && value.Size>0L && value.Size<=16384L
+                        if Native.fstat(descriptor,&before)<>0 || not (valid before) then unsafeFile ()
+                        else
+                            use stream = new FileStream(handle,FileAccess.Read)
+                            let bytes = Array.zeroCreate<byte> (int before.Size)
+                            stream.ReadExactly bytes
+                            let extra = stream.ReadByte()
+                            let mutable after = Unchecked.defaultof<Native.Stat>
+                            let mutable named = Unchecked.defaultof<Native.Stat>
+                            let same (value: Native.Stat) =
+                                valid value && value.Device=before.Device && value.Inode=before.Inode
+                                && value.Size=before.Size && value.ModifySeconds=before.ModifySeconds
+                                && value.ModifyNanoseconds=before.ModifyNanoseconds
+                                && value.ChangeSeconds=before.ChangeSeconds && value.ChangeNanoseconds=before.ChangeNanoseconds
+                            info.Refresh()
+                            if extra<> -1 || Native.fstat(descriptor,&after)<>0 || Native.statPath(path,&named)<>0
+                               || not (same after && same named) || not (isNull info.LinkTarget)
+                               || not (safeAncestors info.DirectoryName) then unsafeFile ()
+                            else Ok bytes
+            with
+            | :? IOException -> unsafeFile ()
+            | :? UnauthorizedAccessException -> unsafeFile ()
+            | :? ArgumentException -> unsafeFile ()
 
     let private exactObject (node: JsonObject) names =
         node |> Seq.map _.Key |> Set.ofSeq = Set.ofList names
@@ -751,6 +795,22 @@ module WorkspaceTelemetryApplication =
                             StoreRoot = root
                             AssociationDigest = associationDigest association
                         }
+                | Remote _ -> Error [ "local-destination-required" ]
+            | Error errors, _ -> Error errors
+            | _ -> Error [ "repository-required" ]
+
+    let resolveEfficiencyProducer configArg repositoryArg =
+        match load configArg with
+        | Error errors -> Error errors
+        | Ok config ->
+            match select repositoryArg config, repository repositoryArg with
+            | Ok association, Some _ ->
+                match association.Destination with
+                | Local root ->
+                    let scope: TelemetryReceipt.Scope =
+                        { Workspace = association.Workspace; Producer = association.Producer; Stream = association.Stream }
+                    // This accessor does not infer a privileged collector grant from enrollment.
+                    Ok(root, TelemetryReceipt.genericPrincipal scope, associationDigest association)
                 | Remote _ -> Error [ "local-destination-required" ]
             | Error errors, _ -> Error errors
             | _ -> Error [ "repository-required" ]

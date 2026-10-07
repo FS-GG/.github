@@ -12,10 +12,20 @@ module WorkspaceTelemetryApplication =
             AssociationDigest: string
         }
 
+    /// Read the exact bounded, caller-owned private prelaunch claim descriptor.
+    /// Read a bounded private descriptor without following a final symlink or
+    /// accepting a device/FIFO. Both descriptor and named identity must stay fixed.
+    val readEfficiencyClaimTemplate: path: string -> Result<byte array, string list>
+
     val resolveBinding: configArg: string option -> repositoryArg: string option -> Result<Binding, string list>
 
     val resolveLocalDashboard:
         configArg: string option -> repositoryArg: string option -> Result<LocalDashboardBinding, string list>
+
+    /// Resolve the existing local producer association without granting or upgrading authority.
+    val resolveEfficiencyProducer:
+        configArg: string option -> repositoryArg: string option ->
+            Result<string * FS.GG.Coord.TelemetryReceipt.Principal * string, string list>
 
     val tryPublishBinding: binding: Binding -> payload: byte array -> Result<string, string list>
     val tryDrainBinding: binding: Binding -> Result<string, string list>

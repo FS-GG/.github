@@ -135,7 +135,7 @@ def test_workspace_credentials_and_assignment():
             "associations": [{
                 "producerId": "fixture-producer",
                 "repositories": ["FS-GG/.github"],
-                "destination": {"credentialReference": "fixture-ref"},
+                "destination": {"kind": "remote", "endpoint": "https://collector.invalid", "credentialReference": "fixture-ref", "spoolRoot": str(state)},
             }],
             "retiredAssociations": [],
         }))
@@ -228,6 +228,41 @@ def test_workspace_credentials_and_assignment():
         refused = probe("discover", config, environment=environment)
         require(not refused["ok"] and "missing or ambiguous" in refused["error"],
                 "ambiguous credential association did not refuse")
+
+
+def test_local_workspace_destination():
+    with tempfile.TemporaryDirectory() as directory:
+        root = Path(directory)
+        state = root / "canonical-store"
+        config = root / "workspace.json"
+        payload = {
+            "schema": "fsgg.telemetry.workspace-config/1", "engine": FAKE_ENGINE.name,
+            "associations": [{"workspaceId": "fixture-workspace", "producerId": "fixture-producer",
+                              "streamId": "fixture-stream", "repositories": ["FS-GG/.github"],
+                              "destination": {"kind": "local", "storeRoot": str(state)}}],
+            "retiredAssociations": [],
+        }
+        config.write_text(json.dumps(payload))
+        config.chmod(0o600)
+        environment = dict(os.environ, FSGG_TELEMETRY_REPOSITORY="FS-GG/.github",
+                           SKILL_FS_01_STATE_ROOT=str(state), SKILL_FS_01_DESTINATION="local",
+                           PATH=str(FAKE_ENGINE.parent) + os.pathsep + os.environ.get("PATH", ""))
+        environment.pop("FSGG_TELEMETRY_CREDENTIAL_FIXTURE_REF", None)
+        discovered = probe("discover", config, environment=environment)
+        require(discovered["ok"] and discovered["workspace"], "supported local binding was refused")
+        mutation = probe("mutation", config, environment=environment)
+        require(mutation == {"ok": True, "command": ["fixture-engine", "submit"]},
+                "validated local destination tried to load a remote credential")
+        require(not state.exists(), "read-only local discovery created a store")
+        for changed in (dict(environment, SKILL_FS_01_STATE_ROOT=str(root / "other-store")),
+                        dict(environment, SKILL_FS_01_DESTINATION="remote"),
+                        dict(environment, SKILL_FS_01_BINDING_CONFIG=str(root / "other-config.json"))):
+            refused = probe("discover", config, environment=changed)
+            require(not refused["ok"], "mismatched local binding was accepted")
+        payload["associations"][0]["destination"]["credentialReference"] = "fixture-ref"
+        config.write_text(json.dumps(payload))
+        refused = probe("discover", config, environment=environment)
+        require(not refused["ok"], "ambiguous local and remote destination shape was accepted")
 
 
 def test_native():
@@ -395,6 +430,7 @@ def main():
     test_repository_precedence()
     test_config_precedence()
     test_workspace_credentials_and_assignment()
+    test_local_workspace_destination()
     test_native()
     print("SKILL-FS-01.2 readers: PASS")
 

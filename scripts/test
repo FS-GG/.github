@@ -141,8 +141,9 @@ class Kind:
 
 # THE WHOLE SCRAPE VOCABULARY, as the workflows spell it: `bash tests/x/run.sh`,
 # `dotnet test tests/X.Tests/X.fsproj`, `node tests/x/run.mjs`, `python3 tests/x/run.py`.
+# Also the exact existing `python3 -m unittest discover -s tests/x -p 'test_*.py'`.
 #
-# Each pattern anchors on `tests/` IMMEDIATELY after the runner word, which is deliberately narrow: it
+# Direct patterns anchor on `tests/` IMMEDIATELY after the runner word, which is deliberately narrow: it
 # reads a direct invocation and nothing else. `python3 -m pytest tests/x/y.py` and
 # `node --experimental-vm-modules tests/x.mjs` do not match, and that is the safe direction — a missed
 # invocation surfaces as an UNWIRED report somebody must answer for (.github#2537), whereas a greedy
@@ -153,6 +154,13 @@ KINDS: tuple[Kind, ...] = (
     Kind("dotnet", re.compile(r"dotnet\s+test\s+(tests/[\w.@/-]+\.fsproj)"), ("dotnet", "test")),
     Kind("node", re.compile(r"\bnode\s+(tests/[\w.@/-]+\.(?:mjs|cjs|js))"), ("node",)),
     Kind("python", re.compile(r"\bpython3?\s+(tests/[\w.@/-]+\.py)"), ("python3",)),
+    # Preserve the existing unittest discovery entrypoint, including its exact pattern.
+    # Other module runners, discovery options and patterns remain unrecognized.
+    Kind(
+        "python-unittest",
+        re.compile(r"\bpython3?\s+-m\s+unittest\s+discover\s+-s\s+(tests/[\w.@/-]+)\s+-p\s+(?:'test_\*\.py'|\"test_\*\.py\"|test_\*\.py)(?=\s*(?:$|\n|&&|;))"),
+        ("python3", "-m", "unittest", "discover", "-p", "test_*.py", "-s"),
+    ),
 )
 KIND_CMD: dict[str, tuple[str, ...]] = {k.name: k.cmd for k in KINDS}
 

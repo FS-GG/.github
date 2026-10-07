@@ -43,6 +43,8 @@ module SkillTelemetryReaders =
     type RepositoryIdentity = private RepositoryIdentity of string
     type CredentialReference = private CredentialReference of string
 
+    type WorkspaceDestination = private LocalWorkspace of storeRoot: string | RemoteWorkspace
+
     type HostConfig =
         {
             Path: string
@@ -53,6 +55,7 @@ module SkillTelemetryReaders =
             Producer: string option
             BindingDigest: string option
             CredentialReference: CredentialReference option
+            Destination: WorkspaceDestination option
         }
 
     type Assignment =
@@ -384,7 +387,7 @@ module SkillTelemetryReaders =
         let private workspaceRepository () =
             discoverRepository Environment.CurrentDirectory
 
-        let private workspaceCredentialReference (config: JsonElement) producer repository =
+        let private workspaceDestination (config: JsonElement) producer repository bindingDestination stateRoot =
             let mutable associations = Unchecked.defaultof<JsonElement>
 
             if
@@ -411,10 +414,24 @@ module SkillTelemetryReaders =
                 if matches.Count = 1 then
                     let mutable destination = Unchecked.defaultof<JsonElement>
                     if matches[0].TryGetProperty("destination", &destination) && destination.ValueKind = JsonValueKind.Object then
-                        match Json.stringProperty "credentialReference" destination with
-                        | Some value when Regex.IsMatch(value, "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}\\z") ->
-                            Ok(CredentialReference value)
-                        | _ -> failure "telemetry workspace credential association is missing or ambiguous"
+                        let matchesRoot property =
+                            try
+                                match Json.stringProperty property destination with
+                                | Some root when Path.IsPathFullyQualified root -> Path.GetFullPath root = stateRoot
+                                | _ -> false
+                            with :? ArgumentException -> false
+                        match bindingDestination, Json.stringProperty "kind" destination with
+                        | "local", Some "local" when
+                            Json.exactProperties (Set [ "kind"; "storeRoot" ]) destination
+                            && matchesRoot "storeRoot" -> Ok(LocalWorkspace stateRoot, None)
+                        | "remote", Some "remote" when
+                            Json.exactProperties (Set [ "kind"; "endpoint"; "credentialReference"; "spoolRoot" ]) destination
+                            && matchesRoot "spoolRoot" ->
+                            match Json.stringProperty "credentialReference" destination with
+                            | Some value when Regex.IsMatch(value, "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}\\z") ->
+                                Ok(RemoteWorkspace, Some(CredentialReference value))
+                            | _ -> failure "telemetry workspace credential association is missing or ambiguous"
+                        | _ -> failure "telemetry workspace destination does not match its binding"
                     else
                         failure "telemetry workspace credential association is missing or ambiguous"
                 else
@@ -452,6 +469,7 @@ module SkillTelemetryReaders =
                                             Producer = None
                                             BindingDigest = None
                                             CredentialReference = None
+                                            Destination = None
                                         }
                                 )
                             | Some storeRoot, _ when not (Path.IsPathFullyQualified storeRoot) ->
@@ -528,11 +546,12 @@ module SkillTelemetryReaders =
                                           Some stateRoot when
                                             Json.exactProperties fields binding
                                             && returnedRepository = repositoryText
+                                            && Json.stringProperty "configPath" binding = Some(Path.GetFullPath path)
                                             && Path.IsPathFullyQualified stateRoot
                                             ->
-                                            match workspaceCredentialReference value producer repositoryText with
+                                            match workspaceDestination value producer repositoryText (Json.stringProperty "destination" binding |> Option.defaultValue "") stateRoot with
                                             | Error error -> Error error
-                                            | Ok credential ->
+                                            | Ok(destination, credential) ->
                                                 Ok(
                                                     Some
                                                         {
@@ -543,7 +562,8 @@ module SkillTelemetryReaders =
                                                             Workspace = true
                                                             Producer = Some producer
                                                             BindingDigest = Some digest
-                                                            CredentialReference = Some credential
+                                                            CredentialReference = credential
+                                                            Destination = Some destination
                                                         }
                                                 )
                                         | _ -> failure "telemetry workspace binding result is invalid"
@@ -628,9 +648,9 @@ module SkillTelemetryReaders =
             if not config.Workspace then
                 Ok command
             else
-                match config.CredentialReference with
-                | None -> failure "telemetry workspace credential association is unavailable"
-                | Some reference ->
+                match config.Destination, config.CredentialReference with
+                | Some(LocalWorkspace root), None when root = config.StoreRoot -> Ok command
+                | Some RemoteWorkspace, Some reference ->
                     let name = credentialValue reference
 
                     if
@@ -642,6 +662,7 @@ module SkillTelemetryReaders =
                         | Some path when ownerControlled path -> Ok(Path.GetFullPath path :: "exec" :: command)
                         | Some _ -> failure "telemetry credential client is not an owner-controlled executable"
                         | None -> failure "telemetry credential client is unavailable"
+                | _ -> failure "telemetry workspace credential association is unavailable"
 
         let assignment schema feature item attempt parentAttempt producer =
             if schema <> runtimeAssignmentSchema && schema <> ciAssignmentSchema then

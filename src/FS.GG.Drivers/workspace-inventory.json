@@ -24,6 +24,54 @@
     {
       "source": "tools/routine-delivery.py",
       "path": "tools/routine-delivery.py"
+    },
+    {
+      "source": "tools/process-efficiency-assessment.py",
+      "path": "tools/process-efficiency-assessment.py"
+    },
+    {
+      "source": "tests/process-efficiency-requirements.txt",
+      "path": "tests/process-efficiency-requirements.txt"
+    },
+    {
+      "source": "contracts/process-efficiency/allocation-input-v1.schema.json",
+      "path": "contracts/process-efficiency/allocation-input-v1.schema.json"
+    },
+    {
+      "source": "contracts/process-efficiency/analysis-attach-invocation-input-v1.schema.json",
+      "path": "contracts/process-efficiency/analysis-attach-invocation-input-v1.schema.json"
+    },
+    {
+      "source": "contracts/process-efficiency/analysis-claim-input-v1.schema.json",
+      "path": "contracts/process-efficiency/analysis-claim-input-v1.schema.json"
+    },
+    {
+      "source": "contracts/process-efficiency/analysis-request-input-v1.schema.json",
+      "path": "contracts/process-efficiency/analysis-request-input-v1.schema.json"
+    },
+    {
+      "source": "contracts/process-efficiency/analysis-settle-input-v1.schema.json",
+      "path": "contracts/process-efficiency/analysis-settle-input-v1.schema.json"
+    },
+    {
+      "source": "contracts/process-efficiency/assessment-input-v1.schema.json",
+      "path": "contracts/process-efficiency/assessment-input-v1.schema.json"
+    },
+    {
+      "source": "contracts/process-efficiency/assessment-v1.schema.json",
+      "path": "contracts/process-efficiency/assessment-v1.schema.json"
+    },
+    {
+      "source": "contracts/process-efficiency/episode-input-v1.schema.json",
+      "path": "contracts/process-efficiency/episode-input-v1.schema.json"
+    },
+    {
+      "source": "contracts/process-efficiency/metric-v1.schema.json",
+      "path": "contracts/process-efficiency/metric-v1.schema.json"
+    },
+    {
+      "source": "contracts/process-efficiency/measurement-contract-v1.json",
+      "path": "contracts/process-efficiency/measurement-contract-v1.json"
     }
   ]
 }

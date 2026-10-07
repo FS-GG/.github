@@ -7,8 +7,22 @@
     <IsPackable>false</IsPackable>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="CustodyProjection/CustodyProcessLease.fsi" />
+    <Compile Include="CustodyProjection/CustodyProcessLease.fs" />
+    <Compile Include="DirectResponses.fsi" />
+    <Compile Include="DirectResponses.fs" />
+    <Compile Include="ObservedCodexProcess.fsi" />
+    <Compile Include="ObservedCodexProcess.fs" />
     <Compile Include="RemoteClient.fsi" />
     <Compile Include="RemoteClient.fs" />
+  </ItemGroup>
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>FS.GG.Telemetry.Host</_Parameter1>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>FS.GG.Telemetry.Tests</_Parameter1>
+    </AssemblyAttribute>
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../FS.GG.Telemetry.Contracts/FS.GG.Telemetry.Contracts.fsproj" />

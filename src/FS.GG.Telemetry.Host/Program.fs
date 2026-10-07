@@ -195,6 +195,10 @@ module Endpoints =
         |> ignore
 
 module Operations =
+    // Host uses the bundled Store schema only; migration is a separate operator action.
+    let private storeSchemaVersion = TelemetryStoreApplication.currentSchemaVersion
+    let private hostVersion = typeof<HostConfig>.Assembly.GetName().Version.ToString(3)
+
     module private Native =
         [<DllImport("libc", EntryPoint = "open", SetLastError = true)>]
         extern int openDirectory(string path, int flags)
@@ -331,6 +335,17 @@ module Operations =
 
     let private storeFor (config: HostConfig) workspace =
         config.Stores |> Array.tryFind (fun store -> store.WorkspaceId = workspace)
+
+    let private restoreCurrentReceiptStore (inputPath: string) (path: string) assessment workspace =
+        let manifest = Path.Combine(inputPath, "manifest.json")
+        if not (File.Exists manifest) || FileInfo(manifest).Length > 1024L * 1024L then
+            Error [ "backup-integrity-failed" ]
+        else
+            use document = JsonDocument.Parse(File.ReadAllBytes manifest)
+            if document.RootElement.GetProperty("storeSchemaVersion").GetInt32() <> storeSchemaVersion then
+                Error [ "backup-incompatible" ]
+            else
+                TelemetryStoreApplication.restoreReceiptStore inputPath path assessment workspace
 
     let private readPrivateEvidence target =
         let info = FileInfo target
@@ -1203,8 +1218,8 @@ module Operations =
                                 status = "ready"
                                 stores = config.Stores.Length
                                 dashboardAuthentication = "ready"
-                                supportedStoreSchemaMin = 10
-                                supportedStoreSchemaMax = 12
+                                supportedStoreSchemaMin = storeSchemaVersion
+                                supportedStoreSchemaMax = storeSchemaVersion
                             |}
                         + "\n"
                     )
@@ -1263,8 +1278,8 @@ module Operations =
                     ``process`` = processState
                     recovery = "unknown"
                     dashboardAuthentication = dashboardState
-                    supportedStoreSchemaMin = 10
-                    supportedStoreSchemaMax = 12
+                    supportedStoreSchemaMin = storeSchemaVersion
+                    supportedStoreSchemaMax = storeSchemaVersion
                     stores = stores
                 |}
             + "\n"
@@ -1350,6 +1365,14 @@ module Operations =
                                 principal
                             |> resultExit "storage-unavailable"
                     | _ -> resultExit "invalid-configuration" (Error [ "enrollment is not declared by config" ]))
+        | [ "collect-responses"; "--config"; path; "--runtime-credential"; runtimeReference
+            "--dispatch"; dispatchIdentity; "--item"; itemId; "--request"; requestPath ] ->
+            match load path with
+            | Error errors -> resultExit "invalid-configuration" (Error errors)
+            | Ok config ->
+                withLock config (fun () ->
+                    NativeResponsesEntry.run path config runtimeReference dispatchIdentity itemId requestPath
+                    |> resultExit "responses-collector-refused")
         | [ "collect-native"
             "--config"
             path
@@ -1498,9 +1521,9 @@ module Operations =
                                         JsonSerializer.Serialize
                                             {|
                                                 schema = "fsgg.telemetry.host-backup-set/1"
-                                                hostVersion = "0.2.1"
-                                                supportedStoreSchemaMin = 10
-                                                supportedStoreSchemaMax = 12
+                                                hostVersion = hostVersion
+                                                supportedStoreSchemaMin = storeSchemaVersion
+                                                supportedStoreSchemaMax = storeSchemaVersion
                                                 configMetadataSha256 = configMetadataDigest config
                                                 createdAt = DateTimeOffset.UtcNow.ToString("O")
                                                 workspaces = workspaces
@@ -1648,11 +1671,7 @@ module Operations =
 
                                     if invalidManifest then
                                         resultExit "backup-integrity-failed" (Error [ "backup manifest invalid" ])
-                                    elif not (
-                                        (schemaMin = 9 && schemaMax = 9)
-                                        || (schemaMin = 10 && schemaMax = 10)
-                                        || (schemaMin = 10 && schemaMax = 12)
-                                    ) then
+                                    elif schemaMin <> storeSchemaVersion || schemaMax <> storeSchemaVersion then
                                         resultExit "restore-incompatible" (Error [ "backup schema is incompatible" ])
                                     else
                                         Directory.CreateDirectory temporary |> ignore
@@ -1670,7 +1689,7 @@ module Operations =
                                         for store in config.Stores do
                                             if failure.IsNone then
                                                 match
-                                                    TelemetryStoreApplication.restoreReceiptStore
+                                                    restoreCurrentReceiptStore
                                                         (Path.Combine(input, store.WorkspaceId))
                                                         (Path.Combine(temporary, store.WorkspaceId))
                                                         (assessmentFor stateRoot)

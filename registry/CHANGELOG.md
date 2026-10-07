@@ -19,6 +19,8 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-10-06** — Prepare `coord-engine` **0.99.0** and independent `telemetry-host` **0.5.0** source for schema 14 efficiency records, authenticated assessment transitions and Host-owned Responses collection ([PR #4292](https://github.com/FS-GG/.github/pull/4292), V2-EFF-01). Published package versions remain **0.98.0** and **0.4.0** respectively. Source qualification, scoped metadata tests and staged static checks do not establish package publication, installed adoption or a provider pilot. Regenerate source/published version projections without changing historical release frontiers.
+
 - **2026-10-06** — **Contracts 7.6.0 and coherent SDD 2.2.0 published** (owner `sdd`; [SDD #1088](https://github.com/FS-GG/FS.GG.SDD/pull/1088)). Protected source `cf2f046a10497a336d6243c9a314c3f91fb15771` retained the original four archives in [preparation 37536203179/1](https://github.com/FS-GG/FS.GG.SDD/actions/runs/37536203179). [Promotion 37538040787/2](https://github.com/FS-GG/FS.GG.SDD/actions/runs/37538040787/attempts/2) passed both-feed literal payload comparisons, public Knowledge and clean installation gates, and the 58 Q2/Q3 receiver cases. Independent intake of receipt `11448064295` verified all eight feed archives against the original Contracts 7.6.0, CLI, Artifacts and Knowledge 2.2.0 candidates. The first promotion attempt's public CLI discovery failure and the receipt harness's later placeholder-name refusal remain retained. Only `fsgg-contracts` published version advances; consumer pins and installed diagnostic-guidance adoption remain separate.
 
 

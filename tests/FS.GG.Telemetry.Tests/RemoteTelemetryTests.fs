@@ -300,10 +300,25 @@ module RemoteTelemetryTests =
 
             // Test-only legacy reconstruction removes additive correction objects;
             // relabeling a current database alone does not create an old schema.
+            let removeEfficiencySchema =
+                """
+DROP VIEW efficiency_current_allocations;
+DROP TABLE efficiency_epoch_gaps;
+DROP TABLE efficiency_outcome_epochs;
+DROP TABLE efficiency_receiver_order;
+DROP TABLE efficiency_analysis_reservations;
+DROP TABLE efficiency_analysis_history;
+DROP TABLE efficiency_analysis_requests;
+DROP TABLE fact_acceptance_times;
+DROP TABLE efficiency_allocation_context;
+DROP TABLE efficiency_record_history;
+DROP TABLE efficiency_records;
+DELETE FROM schema_migrations WHERE version=14;
+"""
             let removeCorrectionSchema =
-                "DROP VIEW current_ingest_facts; DROP TABLE ci_effective_attribution; DROP TABLE ci_correction_evidence; DROP TABLE ci_attribution_corrections; DELETE FROM schema_migrations WHERE version=13; DELETE FROM store_metadata WHERE key='ciCorrectionStoreId';"
+                removeEfficiencySchema + "DROP VIEW current_ingest_facts; DROP TABLE ci_effective_attribution; DROP TABLE ci_correction_evidence; DROP TABLE ci_attribution_corrections; DELETE FROM schema_migrations WHERE version=13; DELETE FROM store_metadata WHERE key='ciCorrectionStoreId';"
             let correctionObjects =
-                "SELECT (SELECT count(*) FROM sqlite_master WHERE name IN ('current_ingest_facts','ci_effective_attribution','ci_correction_evidence','ci_attribution_corrections','ci_correction_immutable_update','ci_correction_immutable_delete','ci_correction_evidence_immutable_update','ci_correction_evidence_immutable_delete')) + (SELECT count(*) FROM schema_migrations WHERE version=13) + (SELECT count(*) FROM store_metadata WHERE key='ciCorrectionStoreId');"
+                "SELECT (SELECT count(*) FROM sqlite_master WHERE name IN ('efficiency_current_allocations','efficiency_epoch_gaps','efficiency_outcome_epochs','efficiency_receiver_order','efficiency_analysis_reservations','efficiency_analysis_history','efficiency_analysis_requests','fact_acceptance_times','efficiency_allocation_context','efficiency_record_history','efficiency_records','current_ingest_facts','ci_effective_attribution','ci_correction_evidence','ci_attribution_corrections','ci_correction_immutable_update','ci_correction_immutable_delete','ci_correction_evidence_immutable_update','ci_correction_evidence_immutable_delete')) + (SELECT count(*) FROM schema_migrations WHERE version IN (13,14)) + (SELECT count(*) FROM store_metadata WHERE key='ciCorrectionStoreId');"
 
             // A schema-11 store keeps its durable order, but migration cannot invent receipt provenance.
             use downgrade11 = new SqliteConnection($"Data Source={databasePath};Pooling=False")
@@ -1356,7 +1371,7 @@ exec /usr/bin/python3 "{patchedFixture}" "$@"
                   CredentialReference = "collector"
                   ExecutablePath = reader; CodexHome = codexHome; EvidenceRoot = evidenceRoot
                   Provider = "openai"; Model = "fixture-model"; Effort = "medium"; NativeVerifier = None }
-            let installationJson value =
+            let installationJson (value: NativeCollectorInstallationConfig) =
                 let node = JsonSerializer.SerializeToNode(value).AsObject()
                 node.Remove "NativeVerifier" |> ignore
                 if qualified then
@@ -2217,7 +2232,7 @@ exec /usr/bin/python3 "{patchedFixture}" "$@"
         Assert.False(Capacity.admitsNewIdentity 0L 0L (64L * 1024L * 1024L) 1L)
 
     [<Fact>]
-    let ``Host restores a 0.1.2 schema 9 backup into separate schema 13 state`` () =
+    let ``Host refuses schema 9 backup without creating target or changing source`` () =
         let root = Path.Combine(Path.GetTempPath(), "host-schema-restore-" + Guid.NewGuid().ToString("N"))
         Directory.CreateDirectory root |> ignore
 
@@ -2256,33 +2271,16 @@ exec /usr/bin/python3 "{patchedFixture}" "$@"
                 File.SetUnixFileMode(path, UnixFileMode.UserRead ||| UnixFileMode.UserWrite)
 
             Assert.Equal(
-                0,
+                3,
                 Operations.runWithAssessment
                     [| "restore"; "--config"; config; "--input"; backup; "--state-root"; restored |]
                     (fun _ -> TelemetryStore.ApprovedLocalDurable)
             )
 
-            Assert.Equal(13, version target)
+            Assert.False(Directory.Exists restored)
+            Assert.False(File.Exists target)
             Assert.Equal(9, version source)
             Assert.Equal<byte>(sourceDigest, SHA256.HashData(File.ReadAllBytes source))
-            let receiptScope: TelemetryReceipt.Scope =
-                { Workspace = workspace; Producer = "proof-producer"; Stream = "runtime" }
-
-            let restoredReceipt =
-                TelemetryStoreApplication.lookupReceipt
-                    (Path.Combine(restored, workspace))
-                    TelemetryStore.ApprovedLocalDurable
-                    receiptScope
-                    "proof-applied"
-                |> Result.defaultWith (fun errors -> failwithf "%A" errors)
-
-            Assert.Contains("\"status\":\"applied\"", restoredReceipt)
-            Assert.True(
-                TelemetryStoreApplication.status
-                    (Path.Combine(restored, workspace))
-                    TelemetryStore.ApprovedLocalDurable
-                |> Result.isOk
-            )
         finally
             if Directory.Exists root then
                 Directory.Delete(root, true)

@@ -129,6 +129,9 @@ def main():
         shutil.copyfile(FIXTURES / "workspace-config.json", workspace)
         workspace.chmod(0o600)
         state_root = root / "private-state"
+        selected_workspace = json.loads(workspace.read_text())
+        selected_workspace["associations"][0]["destination"]["spoolRoot"] = str(state_root)
+        workspace.write_text(json.dumps(selected_workspace))
         marker = root / "wrapper-was-invoked"
         workspace_environment = dict(
             environment,

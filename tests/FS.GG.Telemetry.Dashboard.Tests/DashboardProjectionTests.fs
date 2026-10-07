@@ -123,6 +123,15 @@ module DashboardProjectionTests =
         root["workspaceId"] <- JsonValue.Create workspace
         JsonSerializer.SerializeToUtf8Bytes root
 
+    let private responseSnapshot () =
+        let value = snapshot "item-a"
+        value["workspaceId"] <- "workspace-a"
+        value["learningSnapshotSchema"] <- "fsgg.telemetry.learn-item-detail/4"
+        value["store"].["schemaVersion"] <- 14
+        value["learningObservations"] <- JsonArray()
+        value["responseUsage"] <- JsonArray()
+        value
+
     [<Theory>]
     [<InlineData(3)>]
     [<InlineData(4)>]
@@ -614,11 +623,119 @@ module DashboardProjectionTests =
     [<Theory>]
     [<InlineData(12)>]
     [<InlineData(13)>]
-    let ``UTEL-06.8 effective store snapshot accepts retained and correction schema without exposing audit`` (version: int) =
+    [<InlineData(14)>]
+    let ``UTEL-06.8 effective store snapshot accepts retained correction and efficiency schema without exposing audit`` (version: int) =
         let value = snapshot "item-a"
-        value["store"]["schemaVersion"] <- version
-        let result = DashboardProjection.project "workspace-a" (envelope value) |> unwrap
+        value["store"].["schemaVersion"] <- version
+        if version = 14 then
+            value["workspaceId"] <- "workspace-a"
+            value["learningSnapshotSchema"] <- "fsgg.telemetry.learn-item-detail/4"
+            value["learningObservations"] <- JsonArray()
+            value["responseUsage"] <- JsonArray()
+        let encoded = if version = 14 then scopedEnvelope "workspace-a" value else envelope value
+        let result = DashboardProjection.project "workspace-a" encoded |> unwrap
         Assert.Contains("item-a", Encoding.UTF8.GetString result)
         Assert.DoesNotContain("ci_attribution_corrections", Encoding.UTF8.GetString result)
-        value["store"]["schemaVersion"] <- 14
+        value["store"].["schemaVersion"] <- 15
         Assert.True(DashboardProjection.project "workspace-a" (envelope value) |> Result.isError)
+
+    [<Theory>]
+    [<InlineData(8, 0)>]
+    [<InlineData(8, 3)>]
+    [<InlineData(8, 4)>]
+    [<InlineData(9, 0)>]
+    [<InlineData(9, 3)>]
+    [<InlineData(9, 4)>]
+    [<InlineData(10, 0)>]
+    [<InlineData(10, 3)>]
+    [<InlineData(10, 4)>]
+    [<InlineData(11, 0)>]
+    [<InlineData(11, 3)>]
+    [<InlineData(11, 4)>]
+    [<InlineData(12, 0)>]
+    [<InlineData(12, 3)>]
+    [<InlineData(12, 4)>]
+    [<InlineData(13, 0)>]
+    [<InlineData(13, 3)>]
+    [<InlineData(13, 4)>]
+    let ``retained store shapes remain closed across historical versions`` (version: int) (marker: int) =
+        let value = snapshot "item-a"
+        value["store"].["schemaVersion"] <- version
+        if marker <> 0 then
+            value["workspaceId"] <- "workspace-a"
+            value["learningSnapshotSchema"] <- $"fsgg.telemetry.learn-item-detail/{marker}"
+            value["learningObservations"] <- JsonArray()
+        let encoded () = if marker = 0 then envelope value else scopedEnvelope "workspace-a" value
+        DashboardProjection.project "workspace-a" (encoded ()) |> unwrap |> ignore
+        value["responseUsage"] <- JsonArray()
+        Assert.Equal(Error IncompleteSnapshot, DashboardProjection.project "workspace-a" (encoded ()))
+
+    [<Theory>]
+    [<InlineData("input")>]
+    [<InlineData("cachedInput")>]
+    [<InlineData("cacheWriteInput")>]
+    [<InlineData("output")>]
+    [<InlineData("total")>]
+    let ``response aggregate unknown counters preserve known siblings`` (counter: string) =
+        let value = responseSnapshot ()
+        let usage = value["summaries"].[0].["usage"]
+        usage[counter] <- null
+        let projected = DashboardProjection.project "workspace-a" (scopedEnvelope "workspace-a" value) |> unwrap
+        use result = JsonDocument.Parse projected
+        let actual = result.RootElement.GetProperty("items").[0].GetProperty("usage")
+        Assert.Equal(JsonValueKind.Null, actual.GetProperty(counter).ValueKind)
+        for name, amount in [ "input", 4L; "cachedInput", 1L; "cacheWriteInput", 0L; "output", 2L; "total", 6L ] do
+            if name <> counter then Assert.Equal(amount, actual.GetProperty(name).GetInt64())
+
+    [<Theory>]
+    [<InlineData("-1")>]
+    [<InlineData("0.5")>]
+    [<InlineData("\"unknown\"")>]
+    let ``response aggregate malformed counters remain refused`` (raw: string) =
+        let value = responseSnapshot ()
+        value["summaries"].[0].["usage"].["input"] <- JsonNode.Parse raw
+        Assert.Equal(Error InvalidSnapshot, DashboardProjection.project "workspace-a" (scopedEnvelope "workspace-a" value))
+
+    [<Theory>]
+    [<InlineData("missing")>]
+    [<InlineData("null")>]
+    [<InlineData("object")>]
+    [<InlineData("unknown-root")>]
+    [<InlineData("old-marker")>]
+    [<InlineData("legacy")>]
+    let ``schema fourteen requires the closed response-aware shape`` (mutation: string) =
+        let value = responseSnapshot ()
+        match mutation with
+        | "missing" -> value.Remove("responseUsage") |> ignore
+        | "null" -> value["responseUsage"] <- null
+        | "object" -> value["responseUsage"] <- JsonObject()
+        | "unknown-root" -> value["privateUnknown"] <- JsonArray()
+        | "old-marker" -> value["learningSnapshotSchema"] <- "fsgg.telemetry.learn-item-detail/3"
+        | "legacy" ->
+            for name in [ "workspaceId"; "learningSnapshotSchema"; "learningObservations"; "responseUsage" ] do
+                value.Remove(name) |> ignore
+        | _ -> failwith "unexpected mutation"
+        let result = DashboardProjection.project "workspace-a" (scopedEnvelope "workspace-a" value)
+        let expected = if mutation = "null" || mutation = "object" then InvalidSnapshot else IncompleteSnapshot
+        Assert.Equal(Error expected, result)
+
+    [<Theory>]
+    [<InlineData(10000, true)>]
+    [<InlineData(10001, false)>]
+    let ``response relation cardinality remains bounded`` (count: int) (accepted: bool) =
+        let value = responseSnapshot ()
+        value["responseUsage"] <- JsonArray([| for index in 1..count -> JsonValue.Create(index) :> JsonNode |])
+        let result = DashboardProjection.project "workspace-a" (scopedEnvelope "workspace-a" value)
+        if accepted then result |> unwrap |> ignore
+        else Assert.Equal(Error InvalidSnapshot, result)
+
+    [<Fact>]
+    let ``response relation remains private without fabricated runtime steps`` () =
+        let value = responseSnapshot ()
+        value["responseUsage"] <- nodes [| row """{"item_id":"item-a","canonical":"PRIVATE-RESPONSE-PAYLOAD","identity":"PRIVATE-RESPONSE-ID","content_digest":"PRIVATE-RESPONSE-DIGEST","responseId":"PRIVATE-PROVIDER-ID"}""" |]
+        let projected = DashboardProjection.project "workspace-a" (scopedEnvelope "workspace-a" value) |> unwrap
+        Assert.DoesNotContain("PRIVATE-", Encoding.UTF8.GetString projected)
+        use result = JsonDocument.Parse projected
+        let steps = result.RootElement.GetProperty("items").[0].GetProperty("steps")
+        Assert.Equal(0L, steps.GetProperty("runtimeCount").GetInt64())
+        Assert.Equal(0, steps.GetProperty("rows").GetArrayLength())

@@ -214,15 +214,17 @@ module TelemetryReceiptTests =
 
             Assert.Equal("applied", status (TelemetryStoreApplication.lookupReceipt root approved scope "batch-a"))
             let rawBefore = scalar root "SELECT content_digest || canonical FROM ingest_facts;"
-            sql root "PRAGMA user_version=14;"
+            let currentVersion = TelemetryStoreApplication.currentSchemaVersion
+            let unsupportedVersion = currentVersion + 1
+            sql root $"PRAGMA user_version={unsupportedVersion};"
 
             Assert.Equal(
                 Error [ "unsupported-version" ],
                 TelemetryStoreApplication.lookupReceipt root approved scope "batch-a"
             )
-            Assert.Equal("14", scalar root "PRAGMA user_version;")
+            Assert.Equal(string unsupportedVersion, scalar root "PRAGMA user_version;")
             Assert.Equal(rawBefore, scalar root "SELECT content_digest || canonical FROM ingest_facts;")
-            sql root "PRAGMA user_version=13;"
+            sql root $"PRAGMA user_version={currentVersion};"
             Assert.Equal("applied", status (TelemetryStoreApplication.lookupReceipt root approved scope "batch-a")))
 
     [<Theory>]
@@ -498,13 +500,29 @@ module TelemetryReceiptTests =
             let rawBefore = scalar root "SELECT content_digest || canonical FROM ingest_facts;"
             sql
                 root
-                "DROP VIEW current_ingest_facts; DROP TABLE ci_effective_attribution; DROP TABLE ci_correction_evidence; DROP TABLE ci_attribution_corrections; DELETE FROM schema_migrations WHERE version=13; DELETE FROM store_metadata WHERE key='ciCorrectionStoreId'; DROP TABLE fact_admissions; DROP TABLE receipt_admissions; ALTER TABLE receipt_producers DROP COLUMN grant_generation; ALTER TABLE receipt_producers DROP COLUMN grant_id; ALTER TABLE receipt_producers DROP COLUMN authority_role; DELETE FROM schema_migrations WHERE version=12; DROP TABLE learning_fact_order; DELETE FROM schema_migrations WHERE version=11; DELETE FROM schema_migrations WHERE version=10; DROP INDEX transport_pending; DROP TABLE transport_receipts; DROP TABLE receipt_producers; DELETE FROM schema_migrations WHERE version=9; PRAGMA user_version=8;"
+                ("""
+DROP VIEW efficiency_current_allocations;
+DROP TABLE efficiency_epoch_gaps;
+DROP TABLE efficiency_outcome_epochs;
+DROP TABLE efficiency_receiver_order;
+DROP TABLE efficiency_analysis_reservations;
+DROP TABLE efficiency_analysis_history;
+DROP TABLE efficiency_analysis_requests;
+DROP TABLE fact_acceptance_times;
+DROP TABLE efficiency_allocation_context;
+DROP TABLE efficiency_record_history;
+DROP TABLE efficiency_records;
+DELETE FROM schema_migrations WHERE version=14;
+"""
+                + "DROP VIEW current_ingest_facts; DROP TABLE ci_effective_attribution; DROP TABLE ci_correction_evidence; DROP TABLE ci_attribution_corrections; DELETE FROM schema_migrations WHERE version=13; DELETE FROM store_metadata WHERE key='ciCorrectionStoreId'; DROP TABLE fact_admissions; DROP TABLE receipt_admissions; ALTER TABLE receipt_producers DROP COLUMN grant_generation; ALTER TABLE receipt_producers DROP COLUMN grant_id; ALTER TABLE receipt_producers DROP COLUMN authority_role; DELETE FROM schema_migrations WHERE version=12; DROP TABLE learning_fact_order; DELETE FROM schema_migrations WHERE version=11; DELETE FROM schema_migrations WHERE version=10; DROP INDEX transport_pending; DROP TABLE transport_receipts; DROP TABLE receipt_producers; DELETE FROM schema_migrations WHERE version=9; PRAGMA user_version=8;")
 
             Assert.Equal("8", scalar root "PRAGMA user_version;")
+            Assert.Equal("0", scalar root "SELECT (SELECT count(*) FROM sqlite_master WHERE name LIKE 'efficiency_%' OR name='fact_acceptance_times') + (SELECT count(*) FROM schema_migrations WHERE version=14);")
             Assert.Equal("0", scalar root "SELECT (SELECT count(*) FROM sqlite_master WHERE name IN ('current_ingest_facts','ci_effective_attribution','ci_correction_evidence','ci_attribution_corrections','ci_correction_immutable_update','ci_correction_immutable_delete','ci_correction_evidence_immutable_update','ci_correction_evidence_immutable_delete')) + (SELECT count(*) FROM schema_migrations WHERE version=13) + (SELECT count(*) FROM store_metadata WHERE key='ciCorrectionStoreId');")
             Assert.Equal(rawBefore, scalar root "SELECT content_digest || canonical FROM ingest_facts;")
             TelemetryStoreApplication.initialize root approved |> unwrap |> ignore
-            Assert.Equal("13", scalar root "PRAGMA user_version;")
+            Assert.Equal(string TelemetryStoreApplication.currentSchemaVersion, scalar root "PRAGMA user_version;")
+            Assert.Equal("0", scalar root "SELECT (SELECT count(*) FROM fact_admissions) + (SELECT count(*) FROM fact_acceptance_times) + (SELECT count(*) FROM efficiency_receiver_order);")
             Assert.Equal(rawBefore, scalar root "SELECT content_digest || canonical FROM ingest_facts;")
 
             Assert.Equal(

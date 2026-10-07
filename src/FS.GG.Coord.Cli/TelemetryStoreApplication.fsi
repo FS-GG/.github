@@ -73,7 +73,29 @@ module TelemetryStoreApplication =
             EnvelopeDigest: string
         }
 
+    /// Exact schema accepted by current read-only store operations.
+    val currentSchemaVersion: int
+
     val databaseFileName: string
+    /// Export current efficiency records joined to the exact compact base in one read transaction.
+    val efficiencyExport:
+        path: string -> assessment: TelemetryStore.DurabilityAssessment ->
+        expectedRevision: string -> maxItems: int -> maxMetrics: int -> Result<string, string list>
+    /// Named authenticated lifecycle mutations use an immediate transaction and exact CAS.
+    /// Generic ingestion never executes these transitions or launches a model.
+    val efficiencyAnalysis:
+        path: string -> assessment: TelemetryStore.DurabilityAssessment -> principal: TelemetryReceipt.Principal ->
+        action: string -> bytes: byte array -> packet: byte array option -> Result<string, string list>
+    /// Resolve only an already applied dispatch owned by this association; the claim
+    /// transaction rechecks its exact revision/digest and existing CAS/budget guards.
+    val efficiencyAnalysisClaimProspective:
+        path: string -> assessment: TelemetryStore.DurabilityAssessment -> principal: TelemetryReceipt.Principal ->
+        dispatchIdentity: string -> itemId: string -> templateBytes: byte array -> Result<string, string list>
+    val efficiencyAnalysisInspect:
+        path: string -> assessment: TelemetryStore.DurabilityAssessment -> requestId: string -> Result<string, string list>
+    val efficiencyAnalysisReconcile:
+        path: string -> assessment: TelemetryStore.DurabilityAssessment -> principal: TelemetryReceipt.Principal ->
+        selectedItem: string option -> Result<string, string list>
     val assessProductionRoot: path: string -> TelemetryStore.DurabilityAssessment
     val initialize: path: string -> assessment: TelemetryStore.DurabilityAssessment -> Result<string, string list>
     val status: path: string -> assessment: TelemetryStore.DurabilityAssessment -> Result<string, string list>
@@ -115,6 +137,13 @@ module TelemetryStoreApplication =
         assessment: TelemetryStore.DurabilityAssessment ->
         principal: TelemetryReceipt.Principal ->
             Result<string, string list>
+
+    /// Read-only current grant check; installed Responses transport proof is separate.
+    val validateResponsesCollectorPrincipal:
+        path: string ->
+        assessment: TelemetryStore.DurabilityAssessment ->
+        principal: TelemetryReceipt.Principal ->
+            Result<unit, string list>
 
     val submitReceiptWithHook:
         path: string ->
@@ -171,6 +200,14 @@ module TelemetryStoreApplication =
         assessment: TelemetryStore.DurabilityAssessment ->
         workspace: string ->
             Result<string, string list>
+
+    /// Resolves authenticated prospective Responses dispatch facts without inventing a process start.
+    val resolveResponsesCollectorDispatch:
+        path: string ->
+        assessment: TelemetryStore.DurabilityAssessment ->
+        runtimePrincipal: TelemetryReceipt.Principal ->
+        dispatchIdentity: string ->
+            Result<NativeCollectorDispatch, string list>
 
     val resolveNativeCollectorDispatch:
         path: string ->
