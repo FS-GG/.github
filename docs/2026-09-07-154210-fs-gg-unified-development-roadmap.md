@@ -56,6 +56,22 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-07: Wizard frozen dependency closure refreshed to published coherent 0.99.**
+[PR #4301](https://github.com/FS-GG/.github/pull/4301) merged exact
+`28caa52be69eb2b69462109eda3d5c5172f93c52` as
+`6419282331b9789666527621191b91310a5209bc` at 04:54:37 UTC after 55 hosted
+checks passed and five skipped. The source refresh binds the published CLI and
+expanded dependency-input closure, with controls for omitted inputs, changed source
+and compiled compatibility. Canonical delivery reported current validation,
+coherent validation not required and no publication obligation. This closes the
+bounded source window. The Wizard 0.16 feed probe remains refused with HTTP 403;
+its original journal and failed evidence remain retained. Wizard qualification,
+publication, installed/default receiver acceptance and retaining upgrades remain
+open in the [owning SVG plan](roadmaps/svg-coherence-and-instancing-01.md).
+The installed telemetry repair also remains pending; these source merges establish
+no receiver acceptance or efficiency benefit.
+
+
 **2026-10-07: Process evaluator observation-contract source delivered.**
 [Coordination #954](https://github.com/FS-GG/FS.GG.Coordination/pull/954) merged exact
 `9d2b06b2a88577c683d4f15f3eea0aca3eddecfa` as
