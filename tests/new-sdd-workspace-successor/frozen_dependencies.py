@@ -104,20 +104,48 @@ class FrozenDependencyControls(unittest.TestCase):
         for row in pin["sourceLeaves"]:
             self.assertEqual(self.hash((historical / row["path"]).read_bytes()), row["sha256"])
         self.assertEqual(len(HELPER["source_projects"](historical, pin)), 11)
+        # The candidate performs this pure source guard before SDK setup,
+        # occupancy requests, or downloading/staging dependency bytes.
+        helper_path = historical / "scripts/creator-frozen-coord-dependencies.py"
+        helper_path.write_bytes((ROOT / "scripts/creator-frozen-coord-dependencies.py").read_bytes())
+        (historical / "scripts/creator-frozen-coord-dependencies.json").write_text(json.dumps(pin))
+        before = {path.relative_to(historical): path.read_bytes()
+                  for path in historical.rglob("*") if path.is_file()}
+        passed = subprocess.run(["python3", str(helper_path), "verify-source"], capture_output=True, text=True)
+        self.assertEqual(passed.returncode, 0, passed.stderr)
+        self.assertEqual(json.loads(passed.stdout)["sourceProjects"], 11)
+        self.assertEqual(before, {path.relative_to(historical): path.read_bytes()
+                                  for path in historical.rglob("*") if path.is_file()})
+        staging_input = subprocess.run(["python3", str(helper_path), "verify-source",
+                                        "--dependencies", str(historical / "frozen")],
+                                       capture_output=True, text=True)
+        self.assertNotEqual(staging_input.returncode, 0)
+        self.assertIn("source verification refuses staging inputs", staging_input.stderr)
         drift = [row["path"] for row in pin["sourceLeaves"]
                  if self.hash((ROOT / row["path"]).read_bytes()) != row["sha256"]]
         if drift:
             with self.assertRaises(ValueError) as refusal:
                 HELPER["source_projects"](ROOT, pin)
             self.assertEqual(str(refusal.exception), "published dependency source changed: " + drift[0])
+            current = subprocess.run(["python3", str(ROOT / "scripts/creator-frozen-coord-dependencies.py"),
+                                      "verify-source"], capture_output=True, text=True)
+            self.assertNotEqual(current.returncode, 0)
+            self.assertIn("published dependency source changed: " + drift[0], current.stderr)
         else:
             self.assertEqual(len(HELPER["source_projects"](ROOT, pin)), 11)
         changed = historical / pin["sourceLeaves"][0]["path"]
         changed.write_bytes(changed.read_bytes() + b"\n// deliberate unpublished source drift\n")
+        refused = subprocess.run(["python3", str(helper_path), "verify-source"], capture_output=True, text=True)
+        self.assertNotEqual(refused.returncode, 0)
+        self.assertIn("published dependency source changed", refused.stderr)
         with self.assertRaisesRegex(ValueError, "published dependency source changed"):
             HELPER["source_projects"](historical, pin)
         self.assertFalse((historical / "frozen").exists())
         workflow = (ROOT / ".github/workflows/release-new-sdd-workspace-successor-candidate.yml").read_text()
+        guard = workflow.index("python3 scripts/creator-frozen-coord-dependencies.py verify-source")
+        self.assertLess(guard, workflow.index("actions/setup-dotnet"))
+        self.assertLess(guard, workflow.index("Bind exact protected source and unused version"))
+        self.assertLess(guard, workflow.index("Stage the exact accepted public coordination dependency bodies"))
         self.assertIn(pin["downloadUrl"], workflow)
         self.assertNotIn("FS.GG.Coord.Cli.0.97.0.nupkg", workflow)
 

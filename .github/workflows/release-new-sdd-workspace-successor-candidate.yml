@@ -27,6 +27,8 @@ jobs:
           ref: ${{ github.sha }}
           fetch-depth: 0
           persist-credentials: false
+      - name: Verify frozen dependency source before acquisition
+        run: python3 scripts/creator-frozen-coord-dependencies.py verify-source
       - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
