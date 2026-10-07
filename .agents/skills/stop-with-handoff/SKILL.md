@@ -42,7 +42,10 @@ obligations without copying stale claims.
 Write the smallest complete report containing:
 
 - Stop timestamp, original programme objective, latest user priorities and
-  authorization, paused/incomplete status, and canonical roadmap/skill links.
+  authorization, paused/incomplete status, and canonical
+  [v3 roadmap](../../../docs/roadmaps/2026-10-07-unified-development-roadmap-v3.md),
+  [games roadmap](../../../docs/roadmaps/2026-10-07-games-development-roadmap.md) and skill links.
+  Preserve older v2 references as archive lineage, not current scheduling authority.
 - Verified progress with exact source revisions, PRs, native runs, publication
   and receiver results; distinguish source delivery from installed behavior.
 - Each lane's owner, working/waiting/stopped state, next concrete action, and

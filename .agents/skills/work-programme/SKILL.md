@@ -5,7 +5,8 @@ description: "Advance the temporary FS-GG Unified Roadmap with delegated recover
 
 # Work Programme
 
-Temporary replacement for `work-unified-roadmap`. The existing roadmap and owner plans remain authoritative.
+Temporary replacement for `work-unified-roadmap`. The
+[Unified Roadmap v3](../../../docs/roadmaps/2026-10-07-unified-development-roadmap-v3.md) open index and existing owner plans remain authoritative.
 Start development only on requested advancement; inspection, maintenance and audits retain their own scope.
 
 ## Default workflow
@@ -29,8 +30,8 @@ owner artifacts instead when available. If delegation is unavailable, recover lo
 and report the limitation.
 
 The parent reads its own governing instructions and the decision view, rather than detailed handoffs,
-whole roadmaps or packet bodies. The protected [Unified Roadmap](../../../docs/2026-09-07-154210-fs-gg-unified-development-roadmap.md),
-§9.8 named parts and owning plans remain authoritative. The bootstrap worker resolves their relevant sections
+whole roadmaps or packet bodies. The protected [Unified Roadmap v3](../../../docs/roadmaps/2026-10-07-unified-development-roadmap-v3.md#2-open-work-and-owning-plans),
+its named open outcomes and owning plans remain authoritative. The bootstrap worker resolves their relevant sections
 and organization-inspection obligations. Fresh-read native admission before parent-owned effects. Preserve
 campaign, feature, original/current item and attempt, owner, branch/PR and unknown operations through restart.
 An index, snapshot, return, package pin or checkbox cannot establish completion or authority.
@@ -60,8 +61,8 @@ applicability before acting. Never shorten instructions to fit; plan excerpts/hi
 Resolve newest available Astra **high** for new major planning and Sol **medium** for implementation:
 currently `gpt-6-astra`/`gpt-6.1-sol`. Spawn with explicit model/effort and `fork_turns: "none"`; report
 unavailable routes rather than substitute. Valid plans skip planning; material scope/architecture/dependency
-changes need it, while restarts, head changes and failures do not. Respect §9.8; do not split coupled work
-or pre-plan unselected features. Assemblers/planners read [feature planning](references/feature-planning.md)
+changes need it, while restarts, head changes and failures do not. Respect the v3 open-outcome and
+parallelism boundaries; do not split coupled work or pre-plan unselected features. Assemblers/planners read [feature planning](references/feature-planning.md)
 when applicable. Implementation packets include [work-roadmap](../work-roadmap/SKILL.md), owner plan,
 ready window, branch/PR, authority, acceptance and stop. Reviewers are optional, with exact-source findings.
 
@@ -103,8 +104,11 @@ keep root review, custody, resources, deadlines and one-use requirements. Unknow
 identity observation before retry. Cancel requested is not termination observed. Source, publication,
 installed adoption and native acceptance remain separate. Owners cannot admit parent-owned effects by return.
 
-Keep plans in owning repositories and retain §9.8 links and §9.9 default/upgrade boundaries. After authoritative
-closure, land Unified §0 in its owning `.github` PR or immediate asynchronous cross-repository follow-up.
+Keep plans in owning repositories and retain v3 owning-plan links and workspace adoption boundaries.
+BAR/SC2/FourD product outcomes use the [games roadmap](../../../docs/roadmaps/2026-10-07-games-development-roadmap.md);
+shared producers and Game template consolidation remain in v3. After authoritative closure, remove or
+narrow the closed outcome in the relevant open index in its owning `.github` PR or immediate asynchronous
+cross-repository follow-up; retain durable completed evidence in owning plans/reports, not a v3 history log.
 Do not advance that chain before projection lands; independent lanes continue. CI ticks need no projection.
 [audit guidance](references/evidence-audit.md) applies to audits, which never dispatch development merely by
 editing navigation.

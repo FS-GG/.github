@@ -107,7 +107,7 @@
 # operator`. Removing the optional mirror projection does not change either active vocabulary, and
 # the pinned typed validator already accepts rows without that optional field.
 schemaVersion: 3
-updated: "2026-10-06"
+updated: "2026-10-07"
 
 # The scaffold parameters `materializes-when` predicates may reference, read at scaffold time from
 # scaffold-provenance.json → effectiveParameters, or DERIVED from another fact in that same document
@@ -345,7 +345,7 @@ skills:
   # it was built for. registry = manifest = bytes: sha256 is the canonical-body digest of the authored
   # SKILL.md, reconciled from the driver manifest (predicate flip + re-digest: .github#1247).
   # ------------------------------------------------------------------------------------------------
-  - { id: work-roadmap,            scope: driver,  owner: .github,        source: .github/.claude/skills/work-roadmap/SKILL.md, sha256: aab0c90516143063a200612cf0fb8a476aa083e7b345e5e1bc50101ea2a5ef92, materializes-when: "always" }
+  - { id: work-roadmap,            scope: driver,  owner: .github,        source: .github/.claude/skills/work-roadmap/SKILL.md, sha256: f09360c442158608f12081ce79a93e1ea0127aae8057578e5b6caad23ef78ed1, materializes-when: "always" }
   # work-board — homed beside its owner+predicate siblings and reconciled verbatim from
   # .github's producer manifest by `--write` (.github#299/.github#1200). The position
   # and this annotation are generated; the row's bytes are the manifest's.

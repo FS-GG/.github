@@ -9,7 +9,7 @@ Use the implementation route selected by the skill. Bootstrap is recovery, not f
 
 Read the existing private dispatch index first if available. It is a navigation cache, never authority.
 Resolve its source references and fresh-read the affected native facts. Use the latest handoff to fill
-missing references, then relevant protected Unified §9.8 sections and owning plans. Avoid reading the
+missing references, then relevant [protected v3 open outcomes](../../../../docs/roadmaps/2026-10-07-unified-development-roadmap-v3.md#2-open-work-and-owning-plans) and owning plans. Avoid reading the
 entire handoff or roadmap merely to select a known lane. Preserve prior delivered work and historical
 failed/unknown attempts; never infer completion from their summaries or recreate absent receipts.
 

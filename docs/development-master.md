@@ -18,8 +18,10 @@ owns the detailed snapshot and evidence qualifications; this document owns the s
 second source of completion receipts or dispatch state.
 
 For the proposed continuation after simplification, read
-[FS-GG Unified Development Roadmap](2026-09-07-154210-fs-gg-unified-development-roadmap.md)
-(short name: **Unified Roadmap**). Unqualified references to **“the roadmap”** in FS-GG development
+[FS-GG Unified Development Roadmap v3](roadmaps/2026-10-07-unified-development-roadmap-v3.md)
+(short name: **Unified Roadmap**). BAR/SC2/FourD product outcomes use the
+[separate games roadmap](roadmaps/2026-10-07-games-development-roadmap.md); the
+[v2 archive](2026-09-07-154210-fs-gg-unified-development-roadmap.md) retains completed history. Unqualified references to **“the roadmap”** in FS-GG development
 discussions mean this consolidated document unless another roadmap is explicitly named.
 It consolidates the remaining v2 work, process selection by work class and operating epoch, governance,
 receiver carryover and conditional PB/OR development. It changes no current execution contract or authority.

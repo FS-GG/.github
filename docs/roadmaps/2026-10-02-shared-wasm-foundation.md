@@ -7,9 +7,9 @@ versioned dependencies. Qualify a fresh importing consumer, migrate the two exis
 provide a FourD reaction-policy example. Future products should consume the same foundation.
 This product infrastructure track adds no gate to V2 platform acceptance.
 
-The [unified V2 roadmap](../2026-09-07-154210-fs-gg-unified-development-roadmap.md#98-feature-parts-and-subroadmap-index)
+The [unified roadmap v3](2026-10-07-unified-development-roadmap-v3.md#2-open-work-and-owning-plans)
 indexes this part as WASM-SHARED-01. Its
-[workspace boundary](../2026-09-07-154210-fs-gg-unified-development-roadmap.md#993-shared-wasm-execution-foundation)
+[workspace boundary](2026-10-07-unified-development-roadmap-v3.md#5-workspace-adoption-and-open-index-maintenance)
 separates source extraction, publication and installed adoption. The `.github` roadmap owner
 coordinates the programme; FS.GG.Game is the selected producer.
 
@@ -773,7 +773,7 @@ and unchanged journal `608859205`. Producer `16a40169`, preparation executor
 `8b92b7c4`, preparation `37163937340` and tuple `6ba4084f` remain immutable;
 the failed first publisher and failed inspections are retained, not relabeled.
 The [owning Game plan](https://github.com/FS-GG/FS.GG.Game/blob/8de4c2747d40e9993cc9a08cd50e1e2d599f69fb/docs/roadmaps/wasm-shared-01.md)
-and [Unified progress report](../2026-09-07-154210-fs-gg-unified-development-roadmap.md#0-current-progress-report)
+and [Unified progress report](2026-10-07-unified-development-roadmap-v3.md#5-workspace-adoption-and-open-index-maintenance)
 keep H4 independent publication/installed qualification separate from native
 recovery. This does not close the complete .5-P2 installed boundary, authorize a
 second recovery, move existing 0.2.0 consumers, or change product adoption and

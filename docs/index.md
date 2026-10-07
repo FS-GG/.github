@@ -8,6 +8,10 @@ description: Index for the FS.GG split-repository direction and the documents th
 
 # FS.GG project split
 
+Current development work is indexed by the [Unified Roadmap v3](roadmaps/2026-10-07-unified-development-roadmap-v3.md).
+BAR, SC2 and FourD use the [games roadmap](roadmaps/2026-10-07-games-development-roadmap.md).
+The [unified v2 archive](2026-09-07-154210-fs-gg-unified-development-roadmap.md) retains historical evidence.
+
 > **Building an app with FS-GG rather than developing FS-GG itself?** This
 > page and the documents below are the cross-repo *decision record* for people
 > developing the platform. If you just want to use FS-GG, start at the

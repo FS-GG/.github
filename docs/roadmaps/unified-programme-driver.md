@@ -1,5 +1,9 @@
 # Temporary Unified Roadmap driver
 
+Current open scope: [Unified Roadmap v3](2026-10-07-unified-development-roadmap-v3.md) and the separate
+[games roadmap](2026-10-07-games-development-roadmap.md). Older v2 links in retained packets and
+handoffs are archive lineage; recover surviving IDs against these indexes before selecting work.
+
 The repository-owned [work-programme](../../.agents/skills/work-programme/SKILL.md) skill replaces
 `work-unified-roadmap` for this programme. It keeps the parent focused on lane frontiers, integration
 and decisions; implementation owners retain detailed source investigations and evidence. It is temporary,

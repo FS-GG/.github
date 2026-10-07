@@ -33,7 +33,7 @@ For routine delivery:
    `tools/pr-lane-admission.py` helper for new PR creation.
 2. Do **not** create or require an issue, claim, SDD artifact family, phase lifecycle ledger,
    independent critic, feedback report, telemetry/receipt cycle, roadmap cycle envelope, receipt-only
-   or projection PR except the mandatory Unified section 0 closure follow-up in step 5, or metadata-`Done`
+   or projection PR except the mandatory current open-index closure follow-up in step 5, or metadata-`Done`
    write. Independent review is optional or sampled and never a
    second authority. Best-effort telemetry is asynchronous and cannot block valid delivery.
 3. Run the smallest relevant automated technical checks. Before opening the PR, run the routine
@@ -56,9 +56,10 @@ For routine delivery:
    for the exact head, merge through GitHub's native merge boundary and read back the PR's merged state
    and merge commit. Report code delivery separately from any protected publication still pending.
 5. Re-read the roadmap from default branch and continue. Keep projection asynchronous; do not launch a
-   model turn or PR merely to copy already-merged facts. The sole exception is the mandatory Unified
-   Roadmap section 0 closure projection after authoritative cross-repository readback: land its immediate
-   progress-only follow-up under `work-programme`. This exception does not apply to CI ticks, waits,
+   model turn or PR merely to copy already-merged facts. The sole exception is the mandatory [Unified Roadmap v3](https://github.com/FS-GG/.github/blob/main/docs/roadmaps/2026-10-07-unified-development-roadmap-v3.md)
+   or [games roadmap](https://github.com/FS-GG/.github/blob/main/docs/roadmaps/2026-10-07-games-development-roadmap.md) open-index closure update after authoritative cross-repository readback: land its immediate
+   closure follow-up under `work-programme`, removing or narrowing the closed outcome and retaining
+   completed evidence in its owning plan/report. Do not append a completed-work log to either open index. This exception does not apply to CI ticks, waits,
    intermediate checkpoints or any other status copy, and does not create a PR per checkpoint.
 
 Apply the permanent qualification-selection doctrine in

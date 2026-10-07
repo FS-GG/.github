@@ -30,6 +30,13 @@ advances the pin to that CLI.
 
 ## Entries
 
+### 2026-10-07 — Unified v3 roadmap references (.github; ADR-0054)
+
+Reconcile `work-roadmap` (driver scope) from the regenerated
+[`driver-skill-manifest.json`](driver-skill-manifest.json). The driver now updates the unified v3
+or games open index after verified closure; completed evidence stays in owning plans/reports.
+This is source guidance delivery, not a claim of a new package or installed receiver adoption.
+
 - **2026-10-06** — Reconcile the operator `publishing-and-deployment` inventory and digest after verified SDD 2.2.0 / Contracts 7.6.0 dual-feed publication. Both source mirrors, the official generated driver manifest and the registry row agree; materialization remains false. This changes no delivered Kit/Drivers payload or receiver predicate.
 
 - **2026-10-06** — Reconcile `publishing-and-deployment` operator digest from the exact current `.github` driver manifest after the Rendering 0.32.1 registry inventory projection (github; SVG-COHERENCE-01, Rendering #1390). Both authored roots remain byte-identical; scope stays `operator` with `materializes-when: false`. No package content or release obligation changes.
