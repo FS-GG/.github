@@ -79,6 +79,24 @@ exact evidence only for inconsistencies, architectural joins, user requests or r
 select fields/ranges and an output bound; redirect raw logs/large responses privately. Truncation is incomplete
 evidence: retrieve the missing obligation or route it to the owner. Never read binaries as text.
 
+## Report progress every 30 minutes
+
+While the programme is active, send a user-facing update every 30 minutes, starting at programme
+entry. State the reporting window and timezone; cover the interval since the previous update.
+Use the existing lane returns and native evidence to report:
+
+- **Completed:** every item completed during the window, its lane and verified outcome. Distinguish
+  local preparation, validation, merged PRs, publication and native acceptance; say when none completed.
+- **Working on:** each active item, its lane, current stage and next action.
+- **Problems:** problems encountered during the window, whether resolved or still open, and any
+  remaining blockers and their effect on progress.
+- **User intervention:** state whether intervention is necessary. If needed, name the exact decision,
+  information or action required and the affected item/lane; otherwise say none is needed.
+
+Keep updates concise without omitting completed items. Continue these updates during long-running
+work and check waits; use existing observations rather than launching reporting-only workers or
+interrupting qualification. These updates supplement material progress messages and the final report.
+
 ## Preserve integration and effect boundaries
 
 Routine is default. Only explicit recorded human instruction selects heavyweight process for named scope;
