@@ -3751,3 +3751,311 @@ SELECT 1;
         Assert.Equal(3L, summary.GetProperty("wallSeconds").GetInt64())
         Assert.Equal(0L, summary.GetProperty("queueSeconds").GetInt64())
         Assert.Equal(3L, summary.GetProperty("usefulValidationSeconds").GetInt64())
+
+    // Source-only proposed qualification. Genuine schema13 is constructed from the
+    // exact historical additive DDL1..13, never a schema14 database with altered pragma.
+    let private genuineSchema13 path =
+        Directory.CreateDirectory path |> ignore
+        use connection = new SqliteConnection($"Data Source={Path.Combine(path, TelemetryStoreApplication.databaseFileName)};Pooling=False")
+        connection.Open()
+        use command = connection.CreateCommand()
+        command.CommandText <- "PRAGMA foreign_keys=ON; PRAGMA journal_mode=DELETE; PRAGMA synchronous=FULL;"
+        command.ExecuteNonQuery() |> ignore
+        let migrations : string array = [|
+            """
+CREATE TABLE store_metadata(key TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT;
+CREATE TABLE schema_migrations(version INTEGER PRIMARY KEY, digest TEXT NOT NULL, applied_utc TEXT NOT NULL) STRICT;
+CREATE TABLE items(identity TEXT PRIMARY KEY, item_id TEXT, feature_id TEXT) STRICT;
+CREATE TABLE features(identity TEXT PRIMARY KEY, item_id TEXT, name TEXT NOT NULL) STRICT;
+CREATE TABLE attempts(identity TEXT PRIMARY KEY, item_id TEXT, parent_item_id TEXT NOT NULL, status TEXT NOT NULL) STRICT;
+CREATE TABLE parent_child(identity TEXT PRIMARY KEY, item_id TEXT, parent_id TEXT NOT NULL, child_id TEXT NOT NULL) STRICT;
+CREATE TABLE pr_heads(identity TEXT PRIMARY KEY, item_id TEXT, repository TEXT NOT NULL, pr_number INTEGER NOT NULL CHECK(pr_number >= 0), head TEXT NOT NULL) STRICT;
+CREATE TABLE source_cursors(source_identity TEXT NOT NULL, generation TEXT NOT NULL, cursor TEXT NOT NULL, batch_digest TEXT NOT NULL, PRIMARY KEY(source_identity,generation)) STRICT;
+CREATE TABLE usage_observations(identity TEXT PRIMARY KEY, item_id TEXT, provider TEXT NOT NULL, model TEXT NOT NULL, effort TEXT NOT NULL, input_count INTEGER NOT NULL CHECK(input_count >= 0), cached_input INTEGER NOT NULL CHECK(cached_input >= 0), cache_write_input INTEGER NOT NULL CHECK(cache_write_input >= 0), output_count INTEGER NOT NULL CHECK(output_count >= 0), reasoning INTEGER, total INTEGER NOT NULL CHECK(total >= 0), responses INTEGER NOT NULL CHECK(responses >= 0), sessions INTEGER NOT NULL CHECK(sessions >= 0), turns INTEGER NOT NULL CHECK(turns >= 0)) STRICT;
+CREATE TABLE delivery_observations(identity TEXT PRIMARY KEY, item_id TEXT, state TEXT NOT NULL, expected_head TEXT, observed_head TEXT, pr_number INTEGER) STRICT;
+CREATE TABLE evidence_observations(identity TEXT PRIMARY KEY, item_id TEXT, digest TEXT NOT NULL, availability TEXT NOT NULL) STRICT;
+CREATE TABLE coverage_observations(identity TEXT PRIMARY KEY, item_id TEXT, record_validity TEXT NOT NULL, join_integrity TEXT NOT NULL, population_coverage TEXT NOT NULL, qualification TEXT NOT NULL, eligible INTEGER, observed INTEGER) STRICT;
+CREATE TABLE health_diagnostics(identity TEXT PRIMARY KEY, item_id TEXT, code TEXT NOT NULL, severity TEXT NOT NULL) STRICT;
+CREATE TABLE ingest_batches(ingest_id TEXT PRIMARY KEY, content_digest TEXT NOT NULL, source_identity TEXT NOT NULL, generation TEXT NOT NULL, cursor TEXT NOT NULL, accepted_count INTEGER NOT NULL, replay_count INTEGER NOT NULL) STRICT;
+CREATE TABLE ingest_facts(identity TEXT PRIMARY KEY, kind TEXT NOT NULL, item_id TEXT, revision INTEGER NOT NULL CHECK(revision >= 0), content_digest TEXT NOT NULL, canonical TEXT NOT NULL) STRICT;
+CREATE TABLE corrections(sequence INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL, identity TEXT NOT NULL, old_revision INTEGER NOT NULL, new_revision INTEGER NOT NULL, old_digest TEXT NOT NULL, new_digest TEXT NOT NULL) STRICT;
+PRAGMA user_version=1;
+"""
+            """
+CREATE TABLE runtime_admissions(identity TEXT PRIMARY KEY, item_id TEXT NOT NULL, invocation_id TEXT NOT NULL UNIQUE, feature_id TEXT NOT NULL, attempt_id TEXT NOT NULL, parent_attempt_id TEXT, producer_stream TEXT NOT NULL, requested_model TEXT, requested_effort TEXT, backend TEXT) STRICT;
+CREATE TABLE runtime_starts(identity TEXT PRIMARY KEY, item_id TEXT NOT NULL, invocation_id TEXT NOT NULL, thread_id TEXT, turn_id TEXT, turn_sequence INTEGER CHECK(turn_sequence >= 0), process_id INTEGER NOT NULL CHECK(process_id >= 0), phase TEXT NOT NULL) STRICT;
+CREATE UNIQUE INDEX runtime_thread_start_identity ON runtime_starts(invocation_id,thread_id) WHERE phase='thread' AND thread_id IS NOT NULL;
+CREATE UNIQUE INDEX runtime_turn_start_identity ON runtime_starts(invocation_id,thread_id,turn_sequence) WHERE phase='turn';
+CREATE TABLE runtime_turn_usage(identity TEXT PRIMARY KEY, item_id TEXT NOT NULL, invocation_id TEXT NOT NULL, thread_id TEXT NOT NULL, turn_id TEXT, turn_sequence INTEGER NOT NULL CHECK(turn_sequence >= 0), provider TEXT, requested_model TEXT, observed_model TEXT, requested_effort TEXT, observed_effort TEXT, backend TEXT, accounting_scope TEXT NOT NULL, provenance TEXT NOT NULL, input_count INTEGER NOT NULL CHECK(input_count >= 0), cached_input INTEGER NOT NULL CHECK(cached_input >= 0), output_count INTEGER NOT NULL CHECK(output_count >= 0), reasoning INTEGER, total INTEGER NOT NULL CHECK(total >= 0), UNIQUE(invocation_id,thread_id,turn_sequence)) STRICT;
+CREATE UNIQUE INDEX runtime_turn_native_identity ON runtime_turn_usage(invocation_id,thread_id,turn_id) WHERE turn_id IS NOT NULL;
+CREATE TABLE runtime_terminals(identity TEXT PRIMARY KEY, item_id TEXT NOT NULL, invocation_id TEXT NOT NULL UNIQUE, thread_id TEXT, outcome TEXT NOT NULL, exit_code INTEGER NOT NULL CHECK(exit_code >= 0)) STRICT;
+CREATE TABLE runtime_gaps(identity TEXT PRIMARY KEY, item_id TEXT NOT NULL, invocation_id TEXT NOT NULL, code TEXT NOT NULL) STRICT;
+PRAGMA user_version=2;
+"""
+            """
+CREATE TABLE ci_bindings(identity TEXT PRIMARY KEY, item_id TEXT NOT NULL, collection_id TEXT NOT NULL UNIQUE, repository TEXT NOT NULL, head TEXT NOT NULL, pr_number INTEGER NOT NULL CHECK(pr_number > 0), workflow TEXT NOT NULL, feature_id TEXT NOT NULL, attempt_id TEXT NOT NULL, parent_attempt_id TEXT, producer_stream TEXT NOT NULL, binding TEXT NOT NULL) STRICT;
+CREATE TABLE ci_pages(identity TEXT PRIMARY KEY, item_id TEXT NOT NULL, collection_id TEXT NOT NULL REFERENCES ci_bindings(collection_id), resource TEXT NOT NULL, page INTEGER NOT NULL CHECK(page > 0), count INTEGER NOT NULL CHECK(count BETWEEN 0 AND 100), total INTEGER NOT NULL CHECK(total BETWEEN 0 AND 1000), UNIQUE(collection_id,resource,page)) STRICT;
+CREATE TABLE ci_runs(identity TEXT PRIMARY KEY, item_id TEXT NOT NULL, repository TEXT NOT NULL, run_id INTEGER NOT NULL, attempt INTEGER NOT NULL CHECK(attempt > 0), workflow TEXT NOT NULL, event TEXT NOT NULL, head TEXT NOT NULL, status TEXT NOT NULL, conclusion TEXT, created_at TEXT, started_at TEXT, updated_at TEXT, UNIQUE(repository,run_id,attempt)) STRICT;
+CREATE TABLE ci_jobs(identity TEXT PRIMARY KEY, item_id TEXT NOT NULL, repository TEXT NOT NULL, run_id INTEGER NOT NULL, attempt INTEGER NOT NULL CHECK(attempt > 0), job_id INTEGER NOT NULL, name TEXT NOT NULL, status TEXT NOT NULL, conclusion TEXT, created_at TEXT, started_at TEXT, completed_at TEXT, UNIQUE(repository,run_id,attempt,job_id)) STRICT;
+CREATE TABLE ci_steps(identity TEXT PRIMARY KEY, item_id TEXT NOT NULL, repository TEXT NOT NULL, run_id INTEGER NOT NULL, attempt INTEGER NOT NULL CHECK(attempt > 0), job_id INTEGER NOT NULL, number INTEGER NOT NULL CHECK(number >= 0), name TEXT NOT NULL, status TEXT NOT NULL, conclusion TEXT, started_at TEXT, completed_at TEXT, classification TEXT NOT NULL, rationale TEXT NOT NULL, UNIQUE(repository,run_id,attempt,job_id,number)) STRICT;
+CREATE TABLE ci_coverage(identity TEXT PRIMARY KEY, item_id TEXT NOT NULL, collection_id TEXT NOT NULL REFERENCES ci_bindings(collection_id), inventory TEXT NOT NULL, attempts TEXT NOT NULL, job_pages TEXT NOT NULL, terminal TEXT NOT NULL, timestamps TEXT NOT NULL, lineage TEXT NOT NULL, classification TEXT NOT NULL, critical_path TEXT NOT NULL) STRICT;
+PRAGMA user_version=3;
+"""
+            """
+CREATE TABLE budget_population_facts(identity TEXT PRIMARY KEY, item_id TEXT NOT NULL, original_item_id TEXT NOT NULL, state TEXT NOT NULL CHECK(state IN ('open','completed')), source_kind TEXT NOT NULL, source_ref TEXT NOT NULL UNIQUE, fact_revision INTEGER NOT NULL CHECK(fact_revision >= 0)) STRICT;
+CREATE TABLE budget_attribution_facts(identity TEXT PRIMARY KEY, item_id TEXT NOT NULL, dimension TEXT NOT NULL, provider TEXT NOT NULL, accounting_scope TEXT NOT NULL, numerator INTEGER CHECK(numerator >= 0), denominator INTEGER CHECK(denominator >= 0), coverage TEXT NOT NULL, attribution TEXT NOT NULL, source_kind TEXT NOT NULL, source_ref TEXT NOT NULL UNIQUE, fact_revision INTEGER NOT NULL CHECK(fact_revision >= 0)) STRICT;
+CREATE TABLE budget_interval_facts(identity TEXT PRIMARY KEY, item_id TEXT NOT NULL, dimension TEXT NOT NULL, classification TEXT NOT NULL CHECK(classification IN ('administrative','useful','productive')), start_ns INTEGER NOT NULL CHECK(start_ns >= 0), end_ns INTEGER NOT NULL CHECK(end_ns >= start_ns), witnessed INTEGER NOT NULL CHECK(witnessed IN (0,1)), source_kind TEXT NOT NULL, source_ref TEXT NOT NULL UNIQUE, fact_revision INTEGER NOT NULL CHECK(fact_revision >= 0)) STRICT;
+CREATE TABLE budget_intervention_facts(identity TEXT PRIMARY KEY, item_id TEXT NOT NULL, intervention_id TEXT NOT NULL, transition TEXT NOT NULL CHECK(transition IN ('deployed','verified')), sequence INTEGER NOT NULL CHECK(sequence >= 0), result TEXT NOT NULL, coverage TEXT NOT NULL, source_ref TEXT NOT NULL UNIQUE, fact_revision INTEGER NOT NULL CHECK(fact_revision >= 0)) STRICT;
+CREATE TABLE budget_shared_cost_refs(identity TEXT PRIMARY KEY, item_id TEXT NOT NULL, source_ref TEXT NOT NULL UNIQUE, dimension TEXT NOT NULL, provider TEXT NOT NULL, accounting_scope TEXT NOT NULL) STRICT;
+CREATE TABLE budget_dirty_items(item_id TEXT PRIMARY KEY) STRICT;
+CREATE TABLE budget_epochs(epoch_id TEXT PRIMARY KEY, ordinal INTEGER NOT NULL UNIQUE CHECK(ordinal > 0), state TEXT NOT NULL CHECK(state IN ('open','verified'))) STRICT;
+CREATE UNIQUE INDEX budget_one_open_epoch ON budget_epochs(state) WHERE state='open';
+CREATE TABLE budget_epoch_membership(epoch_id TEXT NOT NULL REFERENCES budget_epochs(epoch_id), item_id TEXT NOT NULL, original_item_id TEXT NOT NULL, PRIMARY KEY(epoch_id,item_id), UNIQUE(item_id)) STRICT;
+CREATE TABLE budget_assessment_revisions(item_id TEXT NOT NULL, dimension TEXT NOT NULL, provider TEXT NOT NULL, accounting_scope TEXT NOT NULL, assessment_revision INTEGER NOT NULL CHECK(assessment_revision > 0), epoch_id TEXT NOT NULL REFERENCES budget_epochs(epoch_id), verdict TEXT NOT NULL CHECK(verdict IN ('unknown','not-applicable','pass','breach')), numerator INTEGER, denominator INTEGER, severe INTEGER NOT NULL CHECK(severe IN (0,1)), reason TEXT NOT NULL, source_digest TEXT NOT NULL, PRIMARY KEY(item_id,dimension,provider,accounting_scope,assessment_revision)) STRICT;
+CREATE TABLE budget_breaches(epoch_id TEXT NOT NULL REFERENCES budget_epochs(epoch_id), item_id TEXT NOT NULL, dimension TEXT NOT NULL, provider TEXT NOT NULL, accounting_scope TEXT NOT NULL, assessment_revision INTEGER NOT NULL, severe INTEGER NOT NULL CHECK(severe IN (0,1)), PRIMARY KEY(epoch_id,item_id,dimension,provider,accounting_scope)) STRICT;
+CREATE TABLE budget_interventions(intervention_id TEXT PRIMARY KEY, epoch_id TEXT NOT NULL UNIQUE REFERENCES budget_epochs(epoch_id), state TEXT NOT NULL CHECK(state IN ('open','verified')), trigger_item_id TEXT NOT NULL, trigger_kind TEXT NOT NULL CHECK(trigger_kind IN ('fifteenth-distinct','severe')), deployed_ref TEXT, verified_ref TEXT) STRICT;
+INSERT INTO budget_epochs(epoch_id,ordinal,state) VALUES('epoch-1',1,'open');
+PRAGMA user_version=4;
+"""
+            """
+CREATE TABLE operational_activations(identity TEXT PRIMARY KEY, item_id TEXT NOT NULL, activation_id TEXT NOT NULL, scope TEXT NOT NULL CHECK(scope='explicit-future-dispatches'), runtime TEXT NOT NULL, activated_at TEXT NOT NULL, clock_provenance TEXT NOT NULL, late_after_seconds INTEGER NOT NULL CHECK(late_after_seconds >= 0), fact_revision INTEGER NOT NULL CHECK(fact_revision >= 0), UNIQUE(item_id,activation_id)) STRICT;
+CREATE TABLE expected_dispatches(identity TEXT PRIMARY KEY, item_id TEXT NOT NULL, dispatch_id TEXT NOT NULL, activation_id TEXT NOT NULL, relation TEXT NOT NULL CHECK(relation IN ('root','child','follow-up')), parent_dispatch_id TEXT, runtime TEXT NOT NULL, expected_at TEXT NOT NULL, clock_provenance TEXT NOT NULL, fact_revision INTEGER NOT NULL CHECK(fact_revision >= 0), UNIQUE(item_id,dispatch_id)) STRICT;
+CREATE TABLE invocation_lineage(identity TEXT PRIMARY KEY, item_id TEXT NOT NULL, dispatch_id TEXT NOT NULL, invocation_id TEXT NOT NULL, relation TEXT NOT NULL CHECK(relation IN ('root','child','follow-up')), parent_invocation_id TEXT, root_invocation_id TEXT NOT NULL, runtime TEXT NOT NULL, fact_revision INTEGER NOT NULL CHECK(fact_revision >= 0)) STRICT;
+CREATE INDEX invocation_lineage_dispatch ON invocation_lineage(dispatch_id);
+CREATE INDEX invocation_lineage_invocation ON invocation_lineage(invocation_id);
+CREATE TABLE operational_event_times(identity TEXT PRIMARY KEY, item_id TEXT NOT NULL, invocation_id TEXT NOT NULL, event TEXT NOT NULL CHECK(event IN ('admission','start','terminal')), occurred_at TEXT, occurred_clock_provenance TEXT, observed_at TEXT, observed_clock_provenance TEXT, fact_revision INTEGER NOT NULL CHECK(fact_revision >= 0), UNIQUE(item_id,invocation_id,event)) STRICT;
+CREATE INDEX operational_event_times_invocation ON operational_event_times(invocation_id);
+PRAGMA user_version=5;
+"""
+            """
+CREATE TABLE ci_population_admissions(identity TEXT PRIMARY KEY, item_id TEXT NOT NULL, collection_id TEXT NOT NULL UNIQUE, repository TEXT NOT NULL, pr_number INTEGER NOT NULL CHECK(pr_number > 0), base_ref TEXT NOT NULL, base_sha TEXT NOT NULL, head TEXT NOT NULL, witness TEXT NOT NULL CHECK(witness='native-pr-head'), fact_revision INTEGER NOT NULL CHECK(fact_revision >= 0), UNIQUE(item_id,repository,pr_number,base_ref,base_sha,head)) STRICT;
+CREATE TABLE ci_check_runs(identity TEXT PRIMARY KEY, item_id TEXT NOT NULL, repository TEXT NOT NULL, check_id INTEGER NOT NULL, name TEXT NOT NULL, app_slug TEXT, status TEXT NOT NULL, conclusion TEXT, started_at TEXT, completed_at TEXT, fact_revision INTEGER NOT NULL CHECK(fact_revision >= 0), UNIQUE(repository,check_id)) STRICT;
+CREATE TABLE ci_population_coverage(identity TEXT PRIMARY KEY, item_id TEXT NOT NULL, collection_id TEXT NOT NULL REFERENCES ci_population_admissions(collection_id), actions TEXT NOT NULL CHECK(actions IN ('complete','partial','unknown')), checks TEXT NOT NULL CHECK(checks IN ('complete','partial','unknown')), attempts TEXT NOT NULL CHECK(attempts IN ('complete','partial','unknown')), jobs TEXT NOT NULL CHECK(jobs IN ('complete','partial','unknown')), terminal TEXT NOT NULL CHECK(terminal IN ('complete','partial','unknown')), timestamps TEXT NOT NULL CHECK(timestamps IN ('complete','partial','unknown')), continuation TEXT NOT NULL CHECK(continuation IN ('none','pending')), external_checks INTEGER NOT NULL CHECK(external_checks >= 0), gaps TEXT NOT NULL, fact_revision INTEGER NOT NULL CHECK(fact_revision >= 0), UNIQUE(collection_id)) STRICT;
+PRAGMA user_version=6;
+"""
+            """
+CREATE TABLE native_item_outcomes(identity TEXT PRIMARY KEY, item_id TEXT NOT NULL, repository TEXT NOT NULL, pr_number INTEGER NOT NULL CHECK(pr_number > 0), base_ref TEXT NOT NULL, base_sha TEXT NOT NULL, head TEXT NOT NULL, outcome TEXT NOT NULL, code_delivery TEXT NOT NULL, merge_commit TEXT, occurred_at TEXT, observed_at TEXT NOT NULL, source_kind TEXT NOT NULL CHECK(source_kind='routine-delivery'), source_ref TEXT NOT NULL UNIQUE, fact_revision INTEGER NOT NULL CHECK(fact_revision >= 0)) STRICT;
+CREATE INDEX native_item_outcomes_item_observed ON native_item_outcomes(item_id,observed_at);
+PRAGMA user_version=7;
+"""
+            """
+CREATE TABLE process_reviews(identity TEXT PRIMARY KEY, item_id TEXT NOT NULL, scope TEXT NOT NULL CHECK(scope IN ('attempt','item')), attempt_id TEXT, outcome_synopsis TEXT NOT NULL, went_well TEXT NOT NULL, problems TEXT NOT NULL, avoidable_delay_rework TEXT NOT NULL, process_observations TEXT NOT NULL, remaining_risks TEXT NOT NULL, concrete_improvements TEXT NOT NULL, evidence TEXT NOT NULL, evidence_coverage TEXT NOT NULL CHECK(evidence_coverage IN ('complete','partial','unknown')), population_coverage TEXT NOT NULL CHECK(population_coverage IN ('complete','partial','unknown')), confidence TEXT NOT NULL CHECK(confidence IN ('low','medium','high')), reviewer_model TEXT NOT NULL, reviewer_effort TEXT NOT NULL, reviewed_at TEXT NOT NULL, duration_seconds INTEGER NOT NULL CHECK(duration_seconds BETWEEN 0 AND 86400), fact_revision INTEGER NOT NULL CHECK(fact_revision > 0), CHECK((scope='attempt' AND attempt_id IS NOT NULL) OR (scope='item' AND attempt_id IS NULL))) STRICT;
+CREATE UNIQUE INDEX process_review_attempt_subject ON process_reviews(item_id,attempt_id) WHERE scope='attempt';
+CREATE UNIQUE INDEX process_review_item_subject ON process_reviews(item_id) WHERE scope='item';
+CREATE TABLE activity_spans(identity TEXT PRIMARY KEY, item_id TEXT NOT NULL, activity_id TEXT NOT NULL, invocation_id TEXT NOT NULL, attempt_id TEXT NOT NULL, category TEXT NOT NULL CHECK(category IN ('planning','implementation','review','validation','delivery','repair','operations','other','unclassified')), started_at TEXT NOT NULL, ended_at TEXT, clock_provenance TEXT NOT NULL, evidence TEXT NOT NULL, summary TEXT, fact_revision INTEGER NOT NULL CHECK(fact_revision >= 0), UNIQUE(item_id,activity_id)) STRICT;
+CREATE INDEX activity_spans_item_attempt ON activity_spans(item_id,attempt_id);
+CREATE TABLE activity_usage_attributions(identity TEXT PRIMARY KEY, item_id TEXT NOT NULL, usage_identity TEXT NOT NULL UNIQUE, activity_id TEXT, classification TEXT NOT NULL CHECK(classification IN ('direct','mixed','unclassified')), input_count INTEGER NOT NULL CHECK(input_count >= 0), cached_input INTEGER NOT NULL CHECK(cached_input >= 0), output_count INTEGER NOT NULL CHECK(output_count >= 0), reasoning INTEGER, total INTEGER NOT NULL CHECK(total >= 0), fact_revision INTEGER NOT NULL CHECK(fact_revision >= 0), CHECK((classification='direct' AND activity_id IS NOT NULL) OR (classification IN ('mixed','unclassified') AND activity_id IS NULL))) STRICT;
+CREATE INDEX activity_usage_item ON activity_usage_attributions(item_id);
+CREATE TABLE complication_events(identity TEXT PRIMARY KEY, item_id TEXT NOT NULL, attempt_id TEXT, activity_id TEXT, trigger TEXT NOT NULL, cause TEXT NOT NULL, occurred_at TEXT NOT NULL, synopsis TEXT NOT NULL, evidence TEXT NOT NULL, fact_revision INTEGER NOT NULL CHECK(fact_revision >= 0)) STRICT;
+CREATE INDEX complication_events_item ON complication_events(item_id,occurred_at);
+PRAGMA user_version=8;
+"""
+            """
+CREATE TABLE receipt_producers(producer TEXT NOT NULL, stream TEXT NOT NULL, PRIMARY KEY(producer,stream)) STRICT;
+CREATE TABLE transport_receipts(producer TEXT NOT NULL, batch TEXT NOT NULL, stream TEXT NOT NULL, digest TEXT NOT NULL, payload_bytes INTEGER NOT NULL, state TEXT NOT NULL CHECK(state IN ('durably-received','applied','rejected')), code TEXT, terminal_utc TEXT, PRIMARY KEY(producer,batch)) STRICT;
+CREATE INDEX transport_pending ON transport_receipts(state,producer);
+PRAGMA user_version=9;
+"""
+            """
+CREATE TABLE native_item_outcomes_v10(identity TEXT PRIMARY KEY, item_id TEXT NOT NULL, repository TEXT NOT NULL, pr_number INTEGER NOT NULL CHECK(pr_number > 0), base_ref TEXT NOT NULL, base_sha TEXT NOT NULL, head TEXT NOT NULL, outcome TEXT NOT NULL, code_delivery TEXT NOT NULL, merge_commit TEXT, occurred_at TEXT, observed_at TEXT NOT NULL, source_kind TEXT NOT NULL CHECK(source_kind IN ('routine-delivery','orchestration-delivery')), source_ref TEXT NOT NULL UNIQUE, fact_revision INTEGER NOT NULL CHECK(fact_revision >= 0)) STRICT;
+INSERT INTO native_item_outcomes_v10 SELECT * FROM native_item_outcomes;
+DROP TABLE native_item_outcomes;
+ALTER TABLE native_item_outcomes_v10 RENAME TO native_item_outcomes;
+CREATE INDEX native_item_outcomes_item_observed ON native_item_outcomes(item_id,observed_at);
+PRAGMA user_version=10;
+"""
+            """
+CREATE TABLE learning_fact_order(sequence INTEGER PRIMARY KEY AUTOINCREMENT, identity TEXT NOT NULL UNIQUE REFERENCES ingest_facts(identity)) STRICT;
+PRAGMA user_version=11;
+"""
+            """
+ALTER TABLE receipt_producers ADD COLUMN authority_role TEXT NOT NULL DEFAULT 'generic' CHECK(authority_role IN ('generic','native-collector'));
+ALTER TABLE receipt_producers ADD COLUMN grant_id TEXT;
+ALTER TABLE receipt_producers ADD COLUMN grant_generation INTEGER;
+CREATE TABLE receipt_admissions(producer TEXT NOT NULL, batch TEXT NOT NULL, stream TEXT NOT NULL, authority_role TEXT NOT NULL CHECK(authority_role IN ('generic','native-collector')), grant_id TEXT, grant_generation INTEGER, receipt_key TEXT NOT NULL, envelope_digest TEXT NOT NULL, PRIMARY KEY(producer,batch), FOREIGN KEY(producer,batch) REFERENCES transport_receipts(producer,batch), CHECK((grant_id IS NULL AND grant_generation IS NULL) OR (grant_id IS NOT NULL AND grant_generation > 0))) STRICT;
+CREATE TABLE fact_admissions(identity TEXT PRIMARY KEY REFERENCES ingest_facts(identity), producer TEXT NOT NULL, stream TEXT NOT NULL, authority_role TEXT NOT NULL CHECK(authority_role IN ('generic','native-collector')), grant_id TEXT, grant_generation INTEGER, receipt_key TEXT NOT NULL, envelope_digest TEXT NOT NULL, CHECK((grant_id IS NULL AND grant_generation IS NULL) OR (grant_id IS NOT NULL AND grant_generation > 0))) STRICT;
+PRAGMA user_version=12;
+"""
+            """
+CREATE TABLE ci_attribution_corrections(correction_id TEXT PRIMARY KEY, plan_digest TEXT NOT NULL, plan TEXT NOT NULL, outcome_identity TEXT NOT NULL, predecessor TEXT REFERENCES ci_attribution_corrections(correction_id), repository TEXT NOT NULL, pr_number INTEGER NOT NULL, base_ref TEXT NOT NULL, base_sha TEXT NOT NULL, head TEXT NOT NULL, merge_commit TEXT NOT NULL, prior_item TEXT NOT NULL, effective_item TEXT NOT NULL, effective_feature TEXT NOT NULL, effective_attempt TEXT NOT NULL, observed_at TEXT NOT NULL, applied_at TEXT NOT NULL) STRICT;
+CREATE TABLE ci_correction_evidence(correction_id TEXT NOT NULL REFERENCES ci_attribution_corrections(correction_id), identity TEXT NOT NULL, table_name TEXT NOT NULL, revision INTEGER NOT NULL, digest TEXT NOT NULL, canonical TEXT NOT NULL, PRIMARY KEY(correction_id,identity)) STRICT;
+CREATE TABLE ci_effective_attribution(identity TEXT PRIMARY KEY REFERENCES ingest_facts(identity), correction_id TEXT NOT NULL REFERENCES ci_attribution_corrections(correction_id)) STRICT;
+CREATE VIEW current_ingest_facts AS SELECT f.identity,f.kind,coalesce(c.effective_item,f.item_id) AS item_id,f.revision,f.content_digest,f.canonical FROM ingest_facts f LEFT JOIN ci_effective_attribution e ON e.identity=f.identity LEFT JOIN ci_attribution_corrections c ON c.correction_id=e.correction_id;
+CREATE TRIGGER ci_correction_immutable_update BEFORE UPDATE ON ci_attribution_corrections BEGIN SELECT RAISE(ABORT,'correction ledger is immutable'); END;
+CREATE TRIGGER ci_correction_immutable_delete BEFORE DELETE ON ci_attribution_corrections BEGIN SELECT RAISE(ABORT,'correction ledger is immutable'); END;
+CREATE TRIGGER ci_correction_evidence_immutable_update BEFORE UPDATE ON ci_correction_evidence BEGIN SELECT RAISE(ABORT,'correction evidence is immutable'); END;
+CREATE TRIGGER ci_correction_evidence_immutable_delete BEFORE DELETE ON ci_correction_evidence BEGIN SELECT RAISE(ABORT,'correction evidence is immutable'); END;
+INSERT INTO store_metadata(key,value) VALUES('ciCorrectionStoreId',lower(hex(randomblob(16))));
+PRAGMA user_version=13;
+"""
+        |]
+        for index in 0..migrations.Length-1 do
+            command.CommandText <- migrations[index]
+            command.ExecuteNonQuery() |> ignore
+            command.CommandText <- "INSERT INTO schema_migrations(version,digest,applied_utc) VALUES($version,$digest,$utc);"
+            command.Parameters.Clear()
+            command.Parameters.AddWithValue("$version", index+1) |> ignore
+            command.Parameters.AddWithValue("$digest", CanonicalJson.sha256(Encoding.UTF8.GetBytes migrations[index])) |> ignore
+            command.Parameters.AddWithValue("$utc", "2026-10-01T00:00:00.0000000+00:00") |> ignore
+            command.ExecuteNonQuery() |> ignore
+            command.Parameters.Clear()
+        command.CommandText <- "INSERT INTO ingest_facts(identity,kind,item_id,revision,content_digest,canonical) VALUES('historical-item','item','MIGRATION-13',0,$digest,$canonical); INSERT INTO source_cursors VALUES('historical-source','historical-generation','cursor-before',$digest); INSERT INTO ingest_batches VALUES('historical-batch',$digest,'historical-source','historical-generation','cursor-before',1,0);"
+        let canonical = "{\"identity\":\"historical-item\",\"itemId\":\"MIGRATION-13\",\"kind\":\"item\",\"revision\":0}"
+        command.Parameters.AddWithValue("$digest", CanonicalJson.sha256(Encoding.UTF8.GetBytes canonical)) |> ignore
+        command.Parameters.AddWithValue("$canonical", canonical) |> ignore
+        command.ExecuteNonQuery() |> ignore
+        let inbox = Path.Combine(path,"inbox","historical-source")
+        Directory.CreateDirectory inbox |> ignore
+        File.WriteAllBytes(Path.Combine(inbox,"historical.ready"), Encoding.UTF8.GetBytes "preserved ready fixture\n")
+        File.WriteAllBytes(Path.Combine(inbox,".unfinished.tmp"), Encoding.UTF8.GetBytes "preserved partial fixture")
+
+    let private migration13Snapshot path =
+        [ "SELECT group_concat(version||':'||digest||':'||applied_utc,'|') FROM (SELECT * FROM schema_migrations ORDER BY version);"
+          "SELECT group_concat(content_digest||canonical,'|') FROM (SELECT content_digest,canonical FROM ingest_facts ORDER BY identity);"
+          "SELECT group_concat(source_identity||generation||cursor||batch_digest,'|') FROM source_cursors;"
+          "SELECT group_concat(ingest_id||content_digest||cursor||accepted_count||replay_count,'|') FROM ingest_batches;"
+          "SELECT value FROM store_metadata WHERE key='ciCorrectionStoreId';" ]
+        |> List.map (correctionSql path)
+
+    let private migration13Files path =
+        Directory.GetFiles(Path.Combine(path,"inbox"),"*",SearchOption.AllDirectories)
+        |> Array.sort
+        |> Array.map (fun file -> Path.GetRelativePath(path,file),Convert.ToHexString(SHA256.HashData(File.ReadAllBytes file)))
+
+    [<Fact>]
+    let ``schema13 direct migration preserves rows cursors files and historical unknown acceptance`` () =
+        let cleanup,path = root ()
+        use cleanup = cleanup
+        genuineSchema13 path
+        Assert.Equal("13",correctionSql path "PRAGMA user_version;")
+        let before = migration13Snapshot path
+        let files = migration13Files path
+        Assert.Contains("\"schemaVersion\":14",TelemetryStoreApplication.initialize path approved |> unwrap)
+        Assert.Equal("14",correctionSql path "PRAGMA user_version;")
+        // Old13 rows have no receiver acceptance witness; migration must not invent one.
+        Assert.Equal("0",correctionSql path "SELECT count(*) FROM fact_acceptance_times;")
+        Assert.Equal(before[1..],(migration13Snapshot path)[1..])
+        Assert.Equal(files,migration13Files path)
+        let journal = correctionSql path "SELECT group_concat(version||':'||digest||':'||applied_utc,'|') FROM (SELECT * FROM schema_migrations ORDER BY version);"
+        TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
+        Assert.Equal(journal,correctionSql path "SELECT group_concat(version||':'||digest||':'||applied_utc,'|') FROM (SELECT * FROM schema_migrations ORDER BY version);")
+        Assert.Equal("1",correctionSql path "SELECT count(*) FROM schema_migrations WHERE version=14;")
+        Assert.Equal(before[0],correctionSql path "SELECT group_concat(version||':'||digest||':'||applied_utc,'|') FROM (SELECT * FROM schema_migrations WHERE version<=13 ORDER BY version);")
+
+    [<Fact>]
+    let ``schema13 journal abort rolls back all14DDL and retry commits once`` () =
+        let cleanup,path = root ()
+        use cleanup = cleanup
+        genuineSchema13 path
+        let before = migration13Snapshot path
+        let files = migration13Files path
+        correctionSql path "CREATE TRIGGER fixture_abort14 BEFORE INSERT ON schema_migrations WHEN NEW.version=14 BEGIN SELECT RAISE(ABORT,'fixture-14-journal-abort'); END; SELECT 1;" |> ignore
+        let objects = correctionSql path "SELECT group_concat(type||':'||name||':'||coalesce(sql,''),'|') FROM (SELECT type,name,sql FROM sqlite_master ORDER BY type,name);"
+        Assert.True(TelemetryStoreApplication.initialize path approved |> Result.isError)
+        Assert.Equal("13",correctionSql path "PRAGMA user_version;")
+        Assert.Equal(before,migration13Snapshot path)
+        Assert.Equal(files,migration13Files path)
+        Assert.Equal(objects,correctionSql path "SELECT group_concat(type||':'||name||':'||coalesce(sql,''),'|') FROM (SELECT type,name,sql FROM sqlite_master ORDER BY type,name);")
+        Assert.Equal("0",correctionSql path "SELECT count(*) FROM schema_migrations WHERE version=14;")
+        correctionSql path "DROP TRIGGER fixture_abort14; SELECT 1;" |> ignore
+        TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
+        TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
+        Assert.Equal("14",correctionSql path "PRAGMA user_version;")
+        Assert.Equal("1",correctionSql path "SELECT count(*) FROM schema_migrations WHERE version=14;")
+        Assert.Equal(before[1..],(migration13Snapshot path)[1..])
+        Assert.Equal(files,migration13Files path)
+
+    [<Fact>]
+    let ``schema13 damaged receipt refuses before14DDL or file mutation`` () =
+        let cleanup,path = root ()
+        use cleanup = cleanup
+        genuineSchema13 path
+        correctionSql path "UPDATE schema_migrations SET digest='corrupt' WHERE version=13; SELECT 1;" |> ignore
+        let before = migration13Snapshot path
+        let files = migration13Files path
+        Assert.True(TelemetryStoreApplication.initialize path approved |> Result.isError)
+        Assert.Equal("13",correctionSql path "PRAGMA user_version;")
+        Assert.Equal(before,migration13Snapshot path)
+        Assert.Equal(files,migration13Files path)
+        Assert.Equal("0",correctionSql path "SELECT count(*) FROM sqlite_master WHERE name='efficiency_records';")
+
+    let private writeSchema13BackupFixture path schema =
+        let database = Path.Combine(path,TelemetryStoreApplication.databaseFileName)
+        let manifest = JsonSerializer.Serialize {| schema = "fsgg.telemetry.host-backup/1"; storeSchemaVersion = schema; workspaceId = "migration-workspace"; files = [| {| path = TelemetryStoreApplication.databaseFileName; sha256 = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes database)).ToLowerInvariant(); bytes = FileInfo(database).Length |} |] |}
+        File.WriteAllText(Path.Combine(path,"manifest.json"),manifest+"\n")
+
+    [<Fact>]
+    let ``schema13 authentic backup restores through migration into fresh root`` () =
+        let cleanup,path = root ()
+        use cleanup = cleanup
+        let restoredCleanup,restored = root ()
+        use restoredCleanup = restoredCleanup
+        genuineSchema13 path
+        // Empty receipt-population fixture: no claim about pending-receipt coverage.
+        correctionSql path "DELETE FROM ingest_batches; INSERT INTO store_metadata VALUES('receiptWorkspace','migration-workspace'); SELECT 1;" |> ignore
+        let facts = correctionSql path "SELECT content_digest||canonical FROM ingest_facts;"
+        let cursor = correctionSql path "SELECT cursor||batch_digest FROM source_cursors;"
+        Directory.Delete(Path.Combine(path,"inbox"),true)
+        writeSchema13BackupFixture path 13
+        let originalDatabase = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(Path.Combine(path,TelemetryStoreApplication.databaseFileName))))
+        TelemetryStoreApplication.restoreReceiptStore path restored approved "migration-workspace" |> unwrap |> ignore
+        Assert.Equal("14",correctionSql restored "PRAGMA user_version;")
+        Assert.Equal("13",correctionSql path "PRAGMA user_version;")
+        Assert.Equal(facts,correctionSql restored "SELECT content_digest||canonical FROM ingest_facts;")
+        Assert.Equal(cursor,correctionSql restored "SELECT cursor||batch_digest FROM source_cursors;")
+        Assert.Equal(originalDatabase,Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(Path.Combine(path,TelemetryStoreApplication.databaseFileName)))))
+        Assert.True(TelemetryStoreApplication.restoreReceiptStore path restored approved "migration-workspace" |> Result.isError)
+
+    [<Fact>]
+    let ``schema13 mislabeled14 database refuses before restore publication`` () =
+        let cleanup,path = root ()
+        use cleanup = cleanup
+        let restoredCleanup,restored = root ()
+        use restoredCleanup = restoredCleanup
+        genuineSchema13 path
+        TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
+        correctionSql path "DELETE FROM ingest_batches; INSERT INTO store_metadata VALUES('receiptWorkspace','migration-workspace'); SELECT 1;" |> ignore
+        Directory.Delete(Path.Combine(path,"inbox"),true)
+        // The known closed fixture initializer leaves writer.lock; a backup contains
+        // only its pinned database/manifest. Remove that fixture-only lock explicitly.
+        File.Delete(Path.Combine(path,"writer.lock"))
+        writeSchema13BackupFixture path 13
+        Assert.Equal<string array>([|"manifest.json";TelemetryStoreApplication.databaseFileName|],Directory.GetFileSystemEntries(path) |> Array.map Path.GetFileName |> Array.sort)
+        Assert.Equal("14",correctionSql path "PRAGMA user_version;")
+        Assert.Equal(Error ["backup-integrity-failed"],TelemetryStoreApplication.restoreReceiptStore path restored approved "migration-workspace")
+        Assert.False(Directory.Exists restored)
+        // Same eligible physical backup, truthful14manifest: proves the negative
+        // reached the new DBversion/manifest gate rather than an earlier census guard.
+        writeSchema13BackupFixture path 14
+        TelemetryStoreApplication.restoreReceiptStore path restored approved "migration-workspace" |> unwrap |> ignore
+        Assert.Equal("14",correctionSql restored "PRAGMA user_version;")
+
+    [<Fact>]
+    let ``schema13 representative dispatch survives actual adapter1MiB read framing`` () =
+        // Invoke the exact read-only private reader to isolate framing from association
+        // and active receipts. This proves no begin/finish or migration acceptance.
+        // Representative JSON reader fixture; no private row/hash/environment dependency.
+        let prefix = "{\"schema\":\"fsgg.telemetry.roadmap-dispatch-state/1\",\"token\":\"00000000000000000000000000000000\",\"padding\":\""
+        let suffix = "\"}\n"
+        let actual = Encoding.UTF8.GetBytes(prefix+String('x',300000-Encoding.UTF8.GetByteCount(prefix+suffix))+suffix)
+        Assert.Equal(300000,actual.Length)
+        Assert.Equal(byte '\n',actual[actual.Length-1])
+        let cleanup,path = root ()
+        use cleanup = cleanup
+        Directory.CreateDirectory path |> ignore
+        let copied = Path.Combine(path,"dispatch.json")
+        File.WriteAllBytes(copied,actual)
+        if not (OperatingSystem.IsWindows()) then File.SetUnixFileMode(copied,enum<UnixFileMode> 0o600)
+        let moduleType = typeof<SkillTelemetryAdapter.CommandResult>.DeclaringType
+        let reader = moduleType.GetMethod("readObject",System.Reflection.BindingFlags.Static ||| System.Reflection.BindingFlags.NonPublic)
+        Assert.NotNull reader
+        let parsed = reader.Invoke(null,[|box copied;box "fixture-unavailable"|]) :?> System.Text.Json.Nodes.JsonObject
+        Assert.Equal("fsgg.telemetry.roadmap-dispatch-state/1",parsed["schema"].GetValue<string>())
+        Assert.Equal(actual,File.ReadAllBytes copied)
+        // Closed JSON plus whitespace at exact persisted-byte bounds, including newline.
+        let boundary length = Encoding.UTF8.GetBytes("{}"+String(' ',length-3)+"\n")
+        File.WriteAllBytes(copied,boundary 1048576)
+        Assert.NotNull(reader.Invoke(null,[|box copied;box "fixture-unavailable"|]))
+        File.WriteAllBytes(copied,boundary 1048577)
+        let refused = Assert.Throws<System.Reflection.TargetInvocationException>(fun () -> reader.Invoke(null,[|box copied;box "fixture-unavailable"|]) |> ignore)
+        Assert.IsType<SkillTelemetryAdapter.AdapterError>(refused.InnerException) |> ignore

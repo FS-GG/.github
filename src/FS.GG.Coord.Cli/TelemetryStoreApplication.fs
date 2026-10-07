@@ -6343,7 +6343,7 @@ WHERE n.source_ref=$source;
                                       "workspaceId"
                                       "files"]
                             || top.GetProperty("schema").GetString() <> "fsgg.telemetry.host-backup/1"
-                            || not ((set [ 9; 12; currentSchemaVersion ]).Contains(top.GetProperty("storeSchemaVersion").GetInt32()))
+                            || not ((set [ 9; 12; 13; currentSchemaVersion ]).Contains(top.GetProperty("storeSchemaVersion").GetInt32()))
                             || top.GetProperty("workspaceId").GetString() <> workspace
                         then
                             Error [ "backup-incompatible" ]
@@ -6511,8 +6511,17 @@ WHERE n.source_ref=$source;
 
                                         let backupSchemaVersion = top.GetProperty("storeSchemaVersion").GetInt32()
 
+                                        let manifestVersionMatches =
+                                            match connect temporary SqliteOpenMode.ReadOnly with
+                                            | Error _ -> false
+                                            | Ok(database, _) ->
+                                                use database = database
+                                                scalarText database "PRAGMA user_version;" = string backupSchemaVersion
+
                                         let restoredStatus =
-                                            if backupSchemaVersion = 9 then
+                                            if not manifestVersionMatches then
+                                                Error [ "backup-integrity-failed" ]
+                                            elif backupSchemaVersion < currentSchemaVersion then
                                                 initialize temporary assessment
                                             else
                                                 status temporary assessment
