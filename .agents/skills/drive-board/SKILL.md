@@ -16,8 +16,10 @@ Its adoption gate remains pending: source preparation alone does not switch a co
 actual four-target qualification and selected adoption, use the bound inspection as the primary queue
 for that admitted scope. Combine its human Status/Track/Roadmap and distinct freshness/acceptance gaps
 with owning plans, actual open PRs, disjoint touch sets and current capacity. Only the current integrator
-makes a bounded selection. Keep the three blocked provider outcomes blocked on their owning plans;
-.github#3009 is a proposed remaining ADR/design outcome, not a request to repeat its settled decision.
+makes a bounded selection. Keep the three blocked provider outcomes blocked on their owning plans.
+[.github#3009](https://github.com/FS-GG/.github/issues/3009) is delivered and closed: [PR #4192](https://github.com/FS-GG/.github/pull/4192)
+merged the ADR/design at `4fc6edf6acce60760cea858ba15e4384c9ce0340`. Preserve its admitted cohort
+identity; its closure neither selects another outcome nor authorizes a planning-field mutation.
 SDD#935 and other unselected memberships never enter this queue.
 
 Run the existing intake batch below before dispatch. Routine ownership, PR admission, native delivery
