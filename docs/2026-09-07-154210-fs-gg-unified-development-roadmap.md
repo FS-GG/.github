@@ -63,11 +63,14 @@ reviewed public aggregate releases on GitHub.
 checks passed and four skipped. The canonical distribution manifest now pins the
 genuine published CLI 0.99.0. Canonical delivery reported current validation,
 coherent validation not required and no publication obligation. This closes the
-pin-repair source window. At the subsequent native readback, live engine-pin
-[37576013772](https://github.com/FS-GG/.github/actions/runs/37576013772) and main coherence
-[37576014070](https://github.com/FS-GG/.github/actions/runs/37576014070) were queued;
-neither establishes a pass. The future installed-telemetry window remains closed
-pending live pin validation and this owning closure projection. The original
+pin-repair source window. The first post-merge readback found live engine-pin
+[37576013772/a1](https://github.com/FS-GG/.github/actions/runs/37576013772) and main coherence
+[37576014070](https://github.com/FS-GG/.github/actions/runs/37576014070) queued.
+A later genuine readback observed live engine-pin success at exact source `907ed8df`;
+main coherence remained queued at its latest observation, with no pass established.
+The next telemetry source-preparation window opens after this owning closure
+projection lands. Publication and installed adoption remain separate boundaries;
+live pin success alone authorizes neither. The original
 engine-pin failure, retained-intake reservation fence and Wizard 0.16 HTTP 403
 remain retained below; no default receiver or full-feature acceptance is claimed.
 
