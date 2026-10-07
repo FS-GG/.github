@@ -67,7 +67,10 @@ module Program =
 
     let private fakeEngine (args: string array) =
         let mode = Environment.GetEnvironmentVariable "FSGG_ADAPTER_TEST_REJECTION"
-        if Array.contains "publish" args && not (String.IsNullOrEmpty mode) then
+        if Array.contains "submit" args && mode = "workspace-invalid-request" then
+            Console.Error.WriteLine "invalid-request: synthetic workspace rejection"
+            1
+        elif Array.contains "publish" args && not (String.IsNullOrEmpty mode) then
             let bytes = File.ReadAllBytes(option "--input" args |> Option.get)
             use input = JsonDocument.Parse bytes
             let batch = input.RootElement
@@ -521,6 +524,17 @@ module Program =
                 | Ok(Some value) -> value
                 | Ok None -> failwith "workspace config was not discovered"
                 | Error error -> failwith error.Message
+            // Workspace retains its existing discriminator; retainedParserRejection's
+            // local unknown-error control proves that substring cannot clear local intent.
+            Environment.SetEnvironmentVariable("FSGG_ADAPTER_TEST_REJECTION", "workspace-invalid-request")
+            try
+                let rejected = run (Some host) (Begin("WORKSPACE", "WORKSPACE", None, "workspace-rejection", None, None, "root", "fixture-producer", "fixture-model", "medium", 60))
+                require (rejected.ExitCode = 1 && (text rejected.Stderr).Contains "invalid-request") "workspace rejection was not reached"
+                let files = Directory.GetFiles(Path.Combine(host.StoreRoot, "orchestrator-dispatches"), "*.json")
+                require (files.Length = 1) "workspace fixture produced unexpected dispatch population"
+                let retained = JsonNode.Parse(File.ReadAllBytes files[0]) :?> JsonObject
+                require (retained["sequence"].GetValue<int>() = 0 && isNull retained["pendingPublication"]) "workspace legacy rejection no longer rolls back"
+            finally Environment.SetEnvironmentVariable("FSGG_ADAPTER_TEST_REJECTION", null)
             let command = PopulationOnly("F", "F.2", "F", "roadmap-orchestrator")
             let first = run (Some host) command
             require (first.ExitCode = 0 && (resultJson first).GetProperty("status").GetString() = "applied") (text first.Stderr)

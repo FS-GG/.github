@@ -342,7 +342,10 @@ module SkillTelemetryAdapter =
             finally File.Delete temporary
         if completed.Code <> 0 then
             let message = if String.IsNullOrWhiteSpace completed.Stderr then "telemetry batch publication failed" else completed.Stderr.Trim()
-            if exactLocalParserRejection config batchBytes batch engineBefore completed.Code completed.Stdout completed.Stderr then
+            let rejected =
+                if config.Workspace then message.Contains("invalid-request", StringComparison.Ordinal)
+                else exactLocalParserRejection config batchBytes batch engineBefore completed.Code completed.Stdout completed.Stderr
+            if rejected then
                 state["sequence"] <- node (sequence - 1)
                 state.Remove "pendingPublication" |> ignore
                 let operation = requiredString "operation" pending
