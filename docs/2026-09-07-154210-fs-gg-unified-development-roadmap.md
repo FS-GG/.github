@@ -56,6 +56,27 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-07: Coherent set 0.99.0 and Telemetry Host 0.5.0 publication closed.**
+Both releases bind protected source `64e95ebec1a8294e16edaafdb27e6aa96f32c6f7`.
+The authenticated coherent-set candidate [37565794335/a1](https://github.com/FS-GG/.github/actions/runs/37565794335)
+and publisher preflight [37566751190](https://github.com/FS-GG/.github/actions/runs/37566751190)
+succeeded. Publish [37566865635/a1](https://github.com/FS-GG/.github/actions/runs/37566865635)
+succeeded and promoted [coherent set 0.99.0](https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.99.0)
+at 03:54:17 UTC. The authenticated Host candidate [37567065492/a1](https://github.com/FS-GG/.github/actions/runs/37567065492)
+and preflight [37567392577](https://github.com/FS-GG/.github/actions/runs/37567392577)
+succeeded. Publish [37567512069/a1](https://github.com/FS-GG/.github/actions/runs/37567512069)
+succeeded and promoted [Telemetry Host 0.5.0](https://github.com/FS-GG/.github/releases/tag/telemetry-host/v0.5.0)
+at 03:45:11 UTC. Both protected publication journals report every effect verified;
+the selected source and publication windows are closed and the release source hold ends.
+Installation, schema migration, enrollment, provider execution and assessment,
+Wizard qualification, runtime adoption and cost evidence remain open. The earlier
+Templates-only receiver acceptance retains its own scope. No total efficiency
+benefit or full V2-EFF-01 acceptance follows from publication. Next boundaries remain in the
+[release successor plan](roadmaps/utel-release-successor.md#utel-rel-16--prepared-0990-schema-14-successor),
+[Host successor plan](roadmaps/utel-host-release-020.md) and
+[efficiency plan](roadmaps/process-efficiency-telemetry.md).
+
+
 **2026-10-07: Direct knowledge-store path refusal source delivered.**
 [SDD #1100](https://github.com/FS-GG/FS.GG.SDD/pull/1100) merged exact
 `45e451a0682fb477e04816f8a9d37f48880c12ad` as
@@ -93,7 +114,8 @@ The 146-test successor suite proves the frozen original source passes and change
 source refuses, with unchanged historical pins and receipts. Canonical delivery
 reported current validation. This improves preparation; it does not qualify a new
 Wizard archive or complete SVG-COHERENCE-01.8. Coherent 0.99 and Host 0.5 candidate
-qualification, publication and installed acceptance remain separate in the
+qualification and publication are now closed as recorded above; Wizard qualification
+and installed acceptance remain separate in the
 [release successor plan](roadmaps/utel-release-successor.md#utel-rel-16--prepared-0990-schema-14-successor).
 
 
@@ -116,8 +138,9 @@ The original failed receiver and harness repairs remain historical evidence in t
 checks passed and four skipped. Canonical routine delivery reported current validation
 and coherent validation not required. The source includes nullable usage, authenticated
 assessment transitions, the Host-owned Responses path and independent source verification.
-Coherent 0.99.0 and Host 0.5.0 publication, installation, schema migration, enrollment,
-provider execution and full V2-EFF-01 acceptance remain separate pending gates in the
+Coherent 0.99.0 and Host 0.5.0 publication is now closed as recorded above. Installation,
+schema migration, enrollment, provider execution and full V2-EFF-01 acceptance remain
+separate pending gates in the
 [owning plan](roadmaps/process-efficiency-telemetry.md). This host has no configured
 telemetry association; dispatch usage remains unknown.
 
