@@ -186,13 +186,13 @@ module Program =
     let private observations root token =
         let host = config root
         let activity = Path.Combine(root, "activity.json")
-        File.WriteAllText(activity, "{\"schema\":\"fsgg.telemetry.activity-span-input/1\",\"revision\":0,\"activityId\":\"activity-a\",\"category\":\"validation\",\"startedAt\":\"2026-09-27T00:00:00Z\",\"endedAt\":\"2026-09-27T00:00:01Z\",\"clockProvenance\":\"fixture\",\"evidence\":[],\"summary\":\"fixture\"}")
+        File.WriteAllText(activity, "{\"schema\":\"fsgg.telemetry.activity-span-input/1\",\"revision\":0,\"activityId\":\"activity-a\",\"category\":\"validation\",\"startedAt\":\"2026-09-27T00:00:00Z\",\"endedAt\":\"2026-09-27T00:00:01Z\",\"clockProvenance\":\"host-wall\",\"evidence\":[],\"summary\":\"fixture\"}")
         let complication = Path.Combine(root, "complication.json")
         File.WriteAllText(complication, "{\"schema\":\"fsgg.telemetry.complication-input/1\",\"revision\":0,\"complicationId\":\"complication-a\",\"activityId\":\"activity-a\",\"trigger\":\"fixture\",\"cause\":\"fixture\",\"occurredAt\":\"2026-09-27T00:00:01Z\",\"synopsis\":\"fixture\",\"evidence\":[]}")
         let usage = Path.Combine(root, "usage.json")
-        File.WriteAllText(usage, "{\"schema\":\"fsgg.telemetry.activity-usage-attribution-input/1\",\"revision\":0,\"usageIdentity\":\"usage-a\",\"activityId\":\"activity-a\",\"classification\":\"unknown\",\"input\":0,\"cachedInput\":0,\"output\":0,\"reasoning\":0,\"total\":0}")
+        File.WriteAllText(usage, "{\"schema\":\"fsgg.telemetry.activity-usage-attribution-input/1\",\"revision\":0,\"usageIdentity\":\"usage-a\",\"activityId\":\"activity-a\",\"classification\":\"direct\",\"input\":0,\"cachedInput\":0,\"output\":0,\"reasoning\":0,\"total\":0}")
         let review = Path.Combine(root, "review.json")
-        File.WriteAllText(review, "{\"schema\":\"fsgg.telemetry.process-review-input/1\",\"revision\":0,\"outcomeSynopsis\":\"fixture\",\"wentWell\":[],\"problems\":[],\"avoidableDelayOrRework\":[],\"processObservations\":[],\"remainingRisks\":[],\"concreteImprovements\":[],\"evidence\":[],\"evidenceCoverage\":\"fixture\",\"populationCoverage\":\"unknown\",\"confidence\":\"high\",\"reviewerModel\":\"fixture\",\"reviewerEffort\":\"fixture\",\"reviewedAt\":\"2026-09-27T00:00:01Z\",\"durationSeconds\":1}")
+        File.WriteAllText(review, "{\"schema\":\"fsgg.telemetry.process-review-input/1\",\"revision\":1,\"outcomeSynopsis\":\"fixture\",\"wentWell\":[],\"problems\":[],\"avoidableDelayOrRework\":[],\"processObservations\":[],\"remainingRisks\":[],\"concreteImprovements\":[],\"evidence\":[],\"evidenceCoverage\":\"unknown\",\"populationCoverage\":\"unknown\",\"confidence\":\"high\",\"reviewerModel\":\"fixture\",\"reviewerEffort\":\"fixture\",\"reviewedAt\":\"2026-09-27T00:00:01Z\",\"durationSeconds\":1}")
         for path in [ activity; complication; usage; review ] do
             if not (OperatingSystem.IsWindows()) then File.SetUnixFileMode(path, enum<UnixFileMode> 0o600)
         let previousProjection = Environment.GetEnvironmentVariable "FSGG_TELEMETRY_DASHBOARD_CONFIG"
@@ -204,8 +204,8 @@ module Program =
             finally
                 Environment.SetEnvironmentVariable("FSGG_TELEMETRY_DASHBOARD_CONFIG", previousProjection)
                 Environment.SetEnvironmentVariable("FSGG_ADAPTER_TEST_PUBLISHER_CONFIG", previousExpectedPublisher)
-        require (observed.ExitCode = 0 &&
-                 (resultJson observed).GetProperty("dashboardPublication").GetProperty("status").GetString() = "observed") "dashboard publication hook was not observed"
+        require (observed.ExitCode = 0) (text observed.Stderr)
+        require ((resultJson observed).GetProperty("dashboardPublication").GetProperty("status").GetString() = "observed") "dashboard publication hook was not observed"
         let previousDashboardConfig = Environment.GetEnvironmentVariable "FSGG_TELEMETRY_DASHBOARD_CONFIG"
         for invalidPath in [ " "; "relative-projection.json" ] do
             Environment.SetEnvironmentVariable("FSGG_TELEMETRY_DASHBOARD_CONFIG", invalidPath)
@@ -632,7 +632,7 @@ module Program =
         require ((run (Some host) (Started(token, "validation-native"))).ExitCode = 0) "fixture start failed"
         let path = Path.Combine(host.StoreRoot, "orchestrator-dispatches", token + ".json")
         let input = Path.Combine(isolated, "activity.json")
-        let activity = """{"schema":"fsgg.telemetry.activity-span-input/1","revision":0,"activityId":"activity-a","category":"validation","startedAt":"2026-09-27T00:00:00Z","endedAt":null,"clockProvenance":"fixture","evidence":[],"summary":"fixture"}"""
+        let activity = """{"schema":"fsgg.telemetry.activity-span-input/1","revision":0,"activityId":"activity-a","category":"validation","startedAt":"2026-09-27T00:00:00Z","endedAt":null,"clockProvenance":"host-wall","evidence":[],"summary":"fixture"}"""
         let reject (value: string) command =
             let before = File.ReadAllBytes path
             let calls = File.ReadAllLines(log).Length
@@ -677,7 +677,7 @@ module Program =
         let identity =
             "activity-span-" + (Encoding.UTF8.GetBytes("REJECTION\u001f" + activityId) |> SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant()).Substring(0,32)
         let input = Path.Combine(isolated, "activity.json")
-        let activity = JsonNode.Parse("""{"schema":"fsgg.telemetry.activity-span-input/1","revision":0,"activityId":"rejected-activity","category":"validation","startedAt":"2026-09-27T00:00:00Z","endedAt":null,"clockProvenance":"fixture","evidence":["invalid"],"summary":"fixture"}""") :?> JsonObject
+        let activity = JsonNode.Parse("""{"schema":"fsgg.telemetry.activity-span-input/1","revision":0,"activityId":"rejected-activity","category":"validation","startedAt":"2026-09-27T00:00:00Z","endedAt":null,"clockProvenance":"host-wall","evidence":["invalid"],"summary":"fixture"}""") :?> JsonObject
         File.WriteAllText(input, activity.ToJsonString())
         if not (OperatingSystem.IsWindows()) then File.SetUnixFileMode(input, enum<UnixFileMode> 0o600)
         // Construct an independent synthetic retained legacy intent in production field order.
