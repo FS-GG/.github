@@ -75,7 +75,7 @@ extraction (.5), and full TSDD-KNOWLEDGE-01 acceptance remain open in the
 `e368cffbf327d7f33f28499ddbcdfcc6b8350aa4` at 02:26:19 UTC. The fresh
 ordinary-v1 evaluator records pinned inputs and fifteen serial observations.
 Canonical routine delivery reported current validation and coherent validation
-not required; three residual nonrequired formal checks remain under the original
+not required. At pre-merge readback, three nonrequired formal checks were pending under the original
 [run 37559267398/a1](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/37559267398),
 with the late-failure fence retained. Historical evaluator evidence remains
 unavailable. V2-PROC-01.1 remains open: these partial observations establish no
