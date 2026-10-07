@@ -61,6 +61,11 @@ context refuse. Mandatory material is assembled before optional references. Opti
 for size stays named in the result. Maximum selected text is 256 KiB; start with a materially smaller
 lane-specific bound. Give the worker the packet path; do not import the packet body into parent context.
 
+The bootstrap worker or accountable lane owner assembles this input. It reads applicable instruction
+files whole and passes file paths/pins directly to the helper; the parent need not first read their
+contents unless they govern its own action. Return only packet path/digest, scope, mandatory instruction
+inventory and omissions. The receiving owner confirms applicability and reports missing obligations.
+
 ## verify input
 
 Schema `fsgg.programme.verification/1`: `claim`, nonempty `requiredPaths`, nonempty `artifacts`.
@@ -133,6 +138,14 @@ Use the packet's lane identity in `lane`; `owner` names its accountable worker.
 Validate the complete return against the installed helper before reporting it.
 A rejected return grants no outcome: retain its original bytes and have the same
 owner repair its shape without changing observed facts or inventing old revisions.
+
+Keep this complete machine artifact outside parent context. A normal delivery message projects identity,
+exact head, changes since the prior return, established/pending boundaries, evidence reference and requested
+parent action (or `none`); aim for at most100 words. Store substantive findings in the artifact and use
+longer messages for exceptions. This projection changes no JSON fields, revision joins or acceptance
+semantics. The parent consumes compact `delta` facts and the complete reservation inventory; it retrieves
+the full return only for an identified exception or required safeguard. Ordinary repair evidence and
+failure interpretation remain with the same owner.
 
 Campaign, item, feature and original-item mismatch refuse. Current owner,
 current attempt, candidate and source revision join the existing snapshot
