@@ -56,6 +56,34 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-07: Direct knowledge-store path refusal source delivered.**
+[SDD #1100](https://github.com/FS-GG/FS.GG.SDD/pull/1100) merged exact
+`45e451a0682fb477e04816f8a9d37f48880c12ad` as
+`47c112516fe4d7e63dbadd88a31bc75ccc58a4a4` at 02:04:14 UTC after ten hosted
+checks passed. Direct capture and restore now refuse dangling canonical paths
+and unsafe sibling writer locks. The original failed format attempt remains
+historical evidence; the focused local public-API qualification remains distinct
+from the passing exact-head hosted checks. This closes the bounded source repair.
+Provider CI/composition (.4), publication, installed qualification and retained
+extraction (.5), and full TSDD-KNOWLEDGE-01 acceptance remain open in the
+[owning SDD plan](https://github.com/FS-GG/FS.GG.SDD/blob/main/docs/roadmaps/tsdd-knowledge-01.md).
+
+
+**2026-10-07: Process-library evaluation source delivered; inventory/evaluation remains open.**
+[Coordination #953](https://github.com/FS-GG/FS.GG.Coordination/pull/953) merged exact
+`c49f249b87a6160b0c3a1e6bc95243d2f5401408` as
+`e368cffbf327d7f33f28499ddbcdfcc6b8350aa4` at 02:26:19 UTC. The fresh
+ordinary-v1 evaluator records pinned inputs and fifteen serial observations.
+Canonical routine delivery reported current validation and coherent validation
+not required. At pre-merge readback, three nonrequired formal checks were pending under the original
+[run 37559267398/a1](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/37559267398),
+with the late-failure fence retained. Historical evaluator evidence remains
+unavailable. V2-PROC-01.1 remains open: these partial observations establish no
+backend selection, containment qualification or installed adoption. Error-result,
+exit, EOF and cleanup adapters and existing-consumer controls remain pending in the
+[owning process plan](roadmaps/2026-10-05-shared-process-supervision.md).
+
+
 **2026-10-07: Wizard candidate preflight refuses stale dependencies before acquisition.**
 [PR #4295](https://github.com/FS-GG/.github/pull/4295) merged exact
 `f26ffa1e437a71ec2cd93246eddac9c6e797c811` as
