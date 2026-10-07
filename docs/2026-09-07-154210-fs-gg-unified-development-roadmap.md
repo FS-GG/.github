@@ -76,7 +76,12 @@ conflicts with this existing reservation, which remains preserved. Retained-inta
 activation stays fenced pending owning-contract reconciliation; the original intake
 owner is unavailable in the recovery inventory. No retry, grant or cleanup is
 admitted. Independent source validation retains its scope and establishes no
-Wizard runtime or receiver acceptance.
+Wizard runtime or receiver acceptance. Post-merge engine-pin-coherence
+[37573721971/a1](https://github.com/FS-GG/.github/actions/runs/37573721971),
+job `112637946362`, also failed: the canonical distribution CLI pin remains 0.97.0
+while the genuine public version is 0.99.0. The local pin repair to the published
+version awaits qualification and source delivery; no future version or default
+receiver acceptance is established.
 The Wizard 0.16 feed probe remains refused with HTTP 403;
 its original journal and failed evidence remain retained. Wizard qualification,
 publication, installed/default receiver acceptance and retaining upgrades remain
