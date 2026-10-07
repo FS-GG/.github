@@ -237,3 +237,33 @@ public revision and exact immutable payload with five eligible/published groups,
 zero unmapped. Current-feed migration is accepted. CI reconciliation does not trigger the existing
 completed-root event refresh; supported CI-only refresh, timer availability and unknown Governance
 runtime coverage remain separate open follow-ups.
+
+
+## UTEL-REL-16 — Prepared 0.99.0 schema-14 successor
+
+[Source PR #4292](https://github.com/FS-GG/.github/pull/4292) delivered schema-14
+facts, nullable usage and the Responses assessment path at
+`2556144c3eed06ef31a1b7e12a8f528ef4f40b27`. The existing candidate/publisher rail
+selects coherent version **0.99.0**, promoted predecessor **0.98.0** and distinct
+protected journal `refs/heads/fsgg/v2/journal/release/utel-rel-16`.
+The accepted 0.98 archives, `utel-rel-15` effects and installed observations stay
+immutable. Source preparation establishes no new candidate archive or publication.
+
+Hold the final main source through first-attempt read-only candidate qualification,
+original seven-file archive authentication, separate `publish=false` preflight and
+any first publication. The existing native admission rereads the exact current main,
+first-attempt Actions identity, sole operator `EHotwagner`, release environment,
+content and effect request before every mutation. Recheck all target feed coordinates,
+tag/release and fresh journal state. A refused or unknown effect fences its dependent
+work; observe the original identity before recovery. Publication requires all sixteen
+journal effects and both-feed readback of the preserved packages, without repacking.
+
+Host **0.5.0** is an independently versioned successor with its own read-only
+candidate workflow, three-file original archive, publisher and `utel-host-rel-11`
+journal. Its promoted predecessor is Host **0.4.0**. Coherent CLI publication does
+not publish or install Host. Neither publication establishes schema-14 migration,
+receiver enrollment, Manager installation, provider execution or assessment
+acceptance; those remain in the [efficiency plan](process-efficiency-telemetry.md).
+Retained state and historical unknown usage must remain intact through their separately
+admitted installed operations. These instructions select no new host, credential or
+service-control authority. Both candidate qualification and publication remain pending.

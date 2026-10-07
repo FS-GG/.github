@@ -56,6 +56,19 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-07: Wizard candidate preflight refuses stale dependencies before acquisition.**
+[PR #4295](https://github.com/FS-GG/.github/pull/4295) merged exact
+`f26ffa1e437a71ec2cd93246eddac9c6e797c811` as
+`5eb5a413f7152f52b755bd12f49e38170a46b58c`. The effect-free source guard runs
+immediately after checkout, before SDK setup, feed requests and archive staging.
+The 146-test successor suite proves the frozen original source passes and changed
+source refuses, with unchanged historical pins and receipts. Canonical delivery
+reported current validation. This improves preparation; it does not qualify a new
+Wizard archive or complete SVG-COHERENCE-01.8. Coherent 0.99 and Host 0.5 candidate
+qualification, publication and installed acceptance remain separate in the
+[release successor plan](roadmaps/utel-release-successor.md#utel-rel-16--prepared-0990-schema-14-successor).
+
+
 **2026-10-07: Published Templates-only receiver acceptance passed.**
 The consumed [public receiver run 37549683984/a1](https://github.com/FS-GG/FS.GG.Templates/actions/runs/37549683984)
 succeeded against repaired harness `c56541c6dbadbc753b500ac5ffc941e8af083854`.
