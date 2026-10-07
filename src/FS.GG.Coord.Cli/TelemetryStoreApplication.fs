@@ -3895,10 +3895,33 @@ UNION ALL SELECT count(*) FROM runtime_turn_usage WHERE invocation_id=$invocatio
     let private ingestBatchLocked root beforeCommit reevaluateBudget batch =
         ingestBatchWithReceiptLocked root beforeCommit reevaluateBudget ignore None batch
 
+    // Closed transient response only: this branch has parsed no accepted batch and performs
+    // no publication IO. Configuration/permission/storage/transport errors never use it.
+    let private localParserRejection root (bytes: byte array) errors =
+        try
+            use input = JsonDocument.Parse bytes
+            let value = input.RootElement
+            let get (name: string) = value.GetProperty(name).GetString()
+            let file = FileInfo(Environment.ProcessPath)
+            let target = file.ResolveLinkTarget true
+            let enginePath = if isNull target then file.FullName else target.FullName
+            let assemblyPath = Reflection.Assembly.GetEntryAssembly().Location |> Path.GetFullPath
+            let hash path =
+                use stream = File.OpenRead path
+                Convert.ToHexString(Security.Cryptography.SHA256.HashData stream).ToLowerInvariant()
+            [ JsonSerializer.Serialize
+                {| schema = "fsgg.telemetry.local-parser-rejection/1"; code = "invalid-batch"
+                   boundary = "before-publication-io"; inputSha256 = CanonicalJson.sha256 bytes
+                   enginePath = enginePath; engineSha256 = hash enginePath
+                   assemblyPath = assemblyPath; assemblySha256 = hash assemblyPath
+                   storeRoot = root; ingestId = get "ingestId"; sourceIdentity = get "sourceIdentity"
+                   generation = get "generation"; cursor = get "cursor"; errors = errors |} ]
+        with _ -> errors
+
     let publish path assessment bytes =
         match validateRoot path assessment, TelemetryStore.parseBatch bytes with
-        | Error errors, _
-        | _, Error errors -> Error errors
+        | Error errors, _ -> Error errors
+        | Ok root, Error errors -> Error(localParserRejection root bytes errors)
         | Ok root, Ok batch ->
             try
                 if not (File.Exists(Path.Combine(root, databaseFileName))) then

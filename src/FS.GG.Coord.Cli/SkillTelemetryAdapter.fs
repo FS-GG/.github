@@ -251,10 +251,69 @@ module SkillTelemetryAdapter =
                 "cursor", node (string sequence)
                 "eventCount", node events.Count
                 "events", events.DeepClone() ]
+            // Validate the fully assembled wire batch before any durable intent mutation.
+            // Existing retained intent retries remain byte-exact and receiver-classified below.
+            match FS.GG.Coord.TelemetryStore.parseBatch (utf8.GetBytes(batch.ToJsonString compact)) with
+            | Error errors -> fail (String.concat "\n" errors)
+            | Ok _ -> ()
             state["sequence"] <- node sequence
             state["pendingPublication"] <- jsonObject [ "operation", node operation; "nextPhase", node nextPhase; "batch", batch ]
             saveState config state
         | _ -> fail "telemetry publication intent is malformed"
+
+    // This is a local executable/entry-assembly custody check, not a transport receipt.
+    // Unsupported launch routes and unreadable/changing identities cannot authorize rollback.
+    let private localEngineIdentity (config: HostConfig) =
+        try
+            if config.Workspace then None else
+                let candidates =
+                    if Path.IsPathRooted config.Engine then [ config.Engine ]
+                    else
+                        let searchPath = Environment.GetEnvironmentVariable "PATH" |> Option.ofObj |> Option.defaultValue ""
+                        searchPath.Split(Path.PathSeparator)
+                        |> Array.map (fun directory -> Path.Combine(directory, config.Engine))
+                        |> Array.toList
+                let executable = candidates |> List.tryFind File.Exists |> Option.get |> FileInfo
+                let target = executable.ResolveLinkTarget true
+                let path = if isNull target then executable.FullName else target.FullName
+                let assembly = Path.ChangeExtension(path, ".dll")
+                let hash path =
+                    use stream = File.OpenRead path
+                    Convert.ToHexString(SHA256.HashData stream).ToLowerInvariant()
+                if not (File.Exists assembly) then None
+                else Some(path, hash path, assembly, hash assembly)
+        with _ -> None
+
+    let private exactLocalParserRejection config batchBytes (batch: JsonObject) engineBefore code stdout (stderr: string) =
+        // A bare error, substring, foreign receiver or ambiguous response never proves rejection.
+        let prefix = "fsgg-coord-engine: telemetry store: "
+        if config.Workspace || code <> 1 || not (String.IsNullOrWhiteSpace stdout) ||
+           not (stderr.StartsWith(prefix, StringComparison.Ordinal)) then false else
+        try
+            match engineBefore, localEngineIdentity config with
+            | Some before, Some after when before = after ->
+                use document = JsonDocument.Parse(stderr.Substring(prefix.Length).Trim())
+                let value = document.RootElement
+                let fields = value.EnumerateObject() |> Seq.map _.Name |> Seq.toArray
+                let expected = Set [ "schema"; "code"; "boundary"; "inputSha256"; "enginePath"; "engineSha256";
+                                     "assemblyPath"; "assemblySha256"; "storeRoot"; "ingestId"; "sourceIdentity";
+                                     "generation"; "cursor"; "errors" ]
+                let get (name: string) = value.GetProperty(name).GetString()
+                let path, engineDigest, assembly, assemblyDigest = before
+                fields.Length = expected.Count && Set.ofArray fields = expected &&
+                get "schema" = "fsgg.telemetry.local-parser-rejection/1" && get "code" = "invalid-batch" &&
+                get "boundary" = "before-publication-io" && get "inputSha256" = sha256 batchBytes &&
+                get "enginePath" = path && get "engineSha256" = engineDigest &&
+                get "assemblyPath" = assembly && get "assemblySha256" = assemblyDigest &&
+                get "storeRoot" = Path.GetFullPath(config.StoreRoot) &&
+                get "ingestId" = requiredString "ingestId" batch && get "sourceIdentity" = requiredString "sourceIdentity" batch &&
+                get "generation" = requiredString "generation" batch && get "cursor" = requiredString "cursor" batch &&
+                value.GetProperty("errors").ValueKind = JsonValueKind.Array &&
+                value.GetProperty("errors").GetArrayLength() > 0 &&
+                (value.GetProperty("errors").EnumerateArray() |> Seq.forall (fun error -> error.ValueKind = JsonValueKind.String)) &&
+                (FS.GG.Coord.TelemetryStore.parseBatch batchBytes |> Result.isError)
+            | _ -> false
+        with _ -> false
 
     let private publishPending (config: HostConfig) (state: JsonObject) =
         match Configuration.validateWorkspace config with
@@ -273,7 +332,9 @@ module SkillTelemetryAdapter =
         if requiredString "schema" batch <> batchSchema || requiredString "generation" batch <> invocation ||
            requiredString "cursor" batch <> string sequence then fail "telemetry publication intent is malformed"
         let directory = Path.Combine(config.StoreRoot, "orchestrator-publish")
-        let temporary = writePrivateBytes directory $"batch-{invocation}-{sequence}" (utf8.GetBytes(batch.ToJsonString compact))
+        let batchBytes = utf8.GetBytes(batch.ToJsonString compact)
+        let engineBefore = localEngineIdentity config
+        let temporary = writePrivateBytes directory $"batch-{invocation}-{sequence}" batchBytes
         let producer = optionalString "associationProducer" state |> Option.defaultValue ""
         let bindingDigest = optionalString "associationDigest" state |> Option.defaultValue ""
         let completed =
@@ -281,7 +342,7 @@ module SkillTelemetryAdapter =
             finally File.Delete temporary
         if completed.Code <> 0 then
             let message = if String.IsNullOrWhiteSpace completed.Stderr then "telemetry batch publication failed" else completed.Stderr.Trim()
-            if message.Contains("invalid-request", StringComparison.Ordinal) then
+            if exactLocalParserRejection config batchBytes batch engineBefore completed.Code completed.Stdout completed.Stderr then
                 state["sequence"] <- node (sequence - 1)
                 state.Remove "pendingPublication" |> ignore
                 let operation = requiredString "operation" pending
@@ -928,7 +989,7 @@ module SkillTelemetryAdapter =
         if not allowed then fail (if kind.StartsWith("review") then "process review requires a terminal attempt" elif kind = "usage" then "usage attribution requires a terminal attempt" elif kind = "activity" then "activity span requires a started attempt" else "complication requires a started attempt")
         if kind = "review:item" && requiredString "relation" state <> "root" then fail "item process review requires the root dispatch token"
         let value = readContract input schema fields
-        let get (name: string) = value[name].DeepClone()
+        let get (name: string) = if isNull value[name] then nullNode else value[name].DeepClone()
         let item = requiredString "itemId" state
         let identity, outputKind, extras =
             if kind.StartsWith("review") then

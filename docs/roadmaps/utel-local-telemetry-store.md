@@ -194,3 +194,13 @@ Synthetic adapter regressions cover metadata above the former limit, preserved i
 lineage, unknown usage baselines, exact-bound writer refusal and strict invalid-inventory handling.
 This is a source-only repair: retained private records and published binaries remain unchanged;
 qualification, publication and installed adoption are separate, and prior observation gaps remain unknown.
+
+### Operational observation validation preparation — 2026-10-07
+
+The prepared coherent0.99.1 source uses canonical full-batch parsing before new durable
+intent and a closed byte/destination/engine-bound local parser rejection for legacy intent.
+This adds no Store migration, persistent schema or counter change. Unknown receiver outcomes
+retain pending custody. See the [operational plan](utel-operational-completeness.md#2026-10-07-operational-recovery-source-window)
+and [reference recipe](../reference/local-telemetry-store.md#operational-collection-and-malformed-observation-recovery).
+Compiled qualification, publication, installed selection and retained-root recovery remain
+separately admitted; original rejected input/state and unavailable observation baseline persist.

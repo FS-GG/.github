@@ -108,6 +108,40 @@ DELETE FROM schema_migrations WHERE version=14;
             $"""{{"schema":"{TelemetryStore.BatchSchema}","ingestId":"{ingest}","sourceIdentity":"operational-observer","generation":"g1","cursor":"{ingest}","eventCount":{List.length events},"events":[{String.concat "," events}]}}"""
 
     [<Fact>]
+    let ``local parser rejection is byte bound and precedes inbox facts and cursors`` () =
+        let cleanup, path = root ()
+        use cleanup = cleanup
+        TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
+        let counts () =
+            use connection = new SqliteConnection($"Data Source={Path.Combine(path, TelemetryStoreApplication.databaseFileName)};Mode=ReadOnly;Pooling=False")
+            connection.Open()
+            use command = connection.CreateCommand()
+            command.CommandText <- "SELECT (SELECT count(*) FROM ingest_facts) + (SELECT count(*) FROM ingest_batches) + (SELECT count(*) FROM source_cursors);"
+            Convert.ToInt64(command.ExecuteScalar())
+        let before = counts ()
+        let activity = """{"kind":"activity-span","identity":"span-a","itemId":"item-a","revision":0,"activityId":"activity-a","invocationId":"invocation-a","attemptId":"attempt-a","category":"validation","startedAt":"2026-10-07T00:00:00Z","endedAt":null,"clockProvenance":"test","evidence":["invalid"],"summary":null}"""
+        let bytes = operationalBatch "parser-rejected" "item-a" [ activity ]
+        match TelemetryStoreApplication.publish path approved bytes with
+        | Ok _ -> failwith "malformed activity published"
+        | Error [ response ] ->
+            use proof = JsonDocument.Parse response
+            let value = proof.RootElement
+            Assert.Equal("fsgg.telemetry.local-parser-rejection/1", value.GetProperty("schema").GetString())
+            Assert.Equal("invalid-batch", value.GetProperty("code").GetString())
+            Assert.Equal("before-publication-io", value.GetProperty("boundary").GetString())
+            Assert.Equal(CanonicalJson.sha256 bytes, value.GetProperty("inputSha256").GetString())
+            Assert.Equal("parser-rejected", value.GetProperty("ingestId").GetString())
+            Assert.Equal(Path.GetFullPath path, value.GetProperty("storeRoot").GetString())
+            Assert.NotEmpty(value.GetProperty("errors").EnumerateArray())
+        | other -> failwithf "unexpected parser refusal %A" other
+        Assert.Equal(before, counts ())
+        Assert.False(Directory.Exists(Path.Combine(path, "inbox")))
+        let invalidRoot = "relative-store-root"
+        match TelemetryStoreApplication.publish invalidRoot TelemetryStore.ApprovedLocalDurable bytes with
+        | Error errors -> Assert.DoesNotContain("local-parser-rejection", String.concat "\n" errors)
+        | _ -> failwith "unsupported destination accepted"
+
+    [<Fact>]
     let ``installed origin resolves only through current native admission and exact retained selectors`` () =
         let cleanup, path = root ()
         use cleanup = cleanup

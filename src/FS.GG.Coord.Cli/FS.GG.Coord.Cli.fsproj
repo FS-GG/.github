@@ -135,7 +135,10 @@ coherent set cut from corrected source. All three partial sets are recorded in
 Private dispatch-state reads and writes share a finite 1 MiB contract including the
 persisted newline. Large valid metadata remains readable; writes beyond the bound
 refuse before replacing originals or publishing events. Malformed states, links,
-permissions, lineage and unknown usage remain strict. CLI, Kit and Drivers advance
+permissions, lineage and unknown usage remain strict. New observations undergo canonical
+full-batch validation before durable intent; exact local pre-IO parser rejections bind
+legacy rollback to original bytes, destination and unchanged engine identity. Unknown
+receiver outcomes retain pending custody. CLI, Kit and Drivers advance
 together without a public signature or wire-schema change. Published0.99 archives
 remain immutable; source preparation establishes no publication, installed adoption,
 telemetry activation or Wizard frozen-closure qualification. Host0.5 remains independent.

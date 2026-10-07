@@ -21,7 +21,7 @@ module Program =
         |> Array.tryFindIndex ((=) name)
         |> Option.bind (fun index -> Array.tryItem (index + 1) args)
 
-    let private fakeEngine (args: string array) =
+    let private fakeAcceptedEngine (args: string array) =
         match option "--input" args, Environment.GetEnvironmentVariable "FSGG_ADAPTER_TEST_LOG" with
         | Some input, log when not (String.IsNullOrEmpty log) ->
             // Synthetic receiver enforces the production parser's cross-kind identity rule.
@@ -64,6 +64,38 @@ module Program =
         else
             Console.Out.WriteLine "{}"
             0
+
+    let private fakeEngine (args: string array) =
+        let mode = Environment.GetEnvironmentVariable "FSGG_ADAPTER_TEST_REJECTION"
+        if Array.contains "publish" args && not (String.IsNullOrEmpty mode) then
+            let bytes = File.ReadAllBytes(option "--input" args |> Option.get)
+            use input = JsonDocument.Parse bytes
+            let batch = input.RootElement
+            let get (name: string) = batch.GetProperty(name).GetString()
+            let executable = FileInfo(Environment.ProcessPath)
+            let target = executable.ResolveLinkTarget true
+            let enginePath = if isNull target then executable.FullName else target.FullName
+            let assemblyPath = Reflection.Assembly.GetEntryAssembly().Location |> Path.GetFullPath
+            let hashFile path =
+                use stream = File.OpenRead path
+                SHA256.HashData stream |> Convert.ToHexString |> _.ToLowerInvariant()
+            let errors =
+                match FS.GG.Coord.TelemetryStore.parseBatch bytes with
+                | Error errors -> errors
+                | Ok _ -> [ "synthetic forged rejection of valid payload" ]
+            let proof = JsonSerializer.Serialize
+                            {| schema = "fsgg.telemetry.local-parser-rejection/1"; code = "invalid-batch"
+                               boundary = "before-publication-io"
+                               inputSha256 = if mode = "wrong-batch" then String.replicate 64 "0" else SHA256.HashData bytes |> Convert.ToHexString |> _.ToLowerInvariant()
+                               enginePath = enginePath; engineSha256 = if mode = "wrong-engine" then String.replicate 64 "0" else hashFile enginePath
+                               assemblyPath = assemblyPath; assemblySha256 = hashFile assemblyPath
+                               storeRoot = if mode = "foreign-store" then "/foreign" else option "--store-root" args |> Option.get |> Path.GetFullPath
+                               ingestId = get "ingestId"; sourceIdentity = get "sourceIdentity"
+                               generation = get "generation"; cursor = get "cursor"; errors = errors |}
+            if mode = "unknown" then Console.Error.WriteLine "invalid-request: delivery outcome unknown"
+            else Console.Error.WriteLine("fsgg-coord-engine: telemetry store: " + proof)
+            1
+        else fakeAcceptedEngine args
 
     let private config root =
         let store = Path.Combine(root, "store")
@@ -574,6 +606,110 @@ module Program =
         File.Move(target, followupPath)
         require (Directory.GetFiles(Path.GetDirectoryName followupPath, "*.tmp").Length = 0) "state refusal left temporary files"
 
+    let private observationPrevalidation root =
+        let isolated = Path.Combine(root, "observation-prevalidation")
+        Directory.CreateDirectory isolated |> ignore
+        let host = config isolated
+        let log = Path.Combine(isolated, "publications.log")
+        Environment.SetEnvironmentVariable("FSGG_ADAPTER_TEST_LOG", log)
+        let started = run (Some host) (Begin("F", "VALIDATION", None, "validation-attempt", None, None, "root", "fixture-producer", "fixture-model", "medium", 60))
+        require (started.ExitCode = 0) (text started.Stderr)
+        let token = (resultJson started).GetProperty("token").GetString()
+        require ((run (Some host) (Started(token, "validation-native"))).ExitCode = 0) "fixture start failed"
+        let path = Path.Combine(host.StoreRoot, "orchestrator-dispatches", token + ".json")
+        let input = Path.Combine(isolated, "activity.json")
+        let activity = """{"schema":"fsgg.telemetry.activity-span-input/1","revision":0,"activityId":"activity-a","category":"validation","startedAt":"2026-09-27T00:00:00Z","endedAt":null,"clockProvenance":"fixture","evidence":[],"summary":"fixture"}"""
+        let reject value command =
+            let before = File.ReadAllBytes path
+            let calls = File.ReadAllLines(log).Length
+            File.WriteAllText(input, value)
+            if not (OperatingSystem.IsWindows()) then File.SetUnixFileMode(input, enum<UnixFileMode> 0o600)
+            let result = run (Some host) (command (FileInfo input))
+            require (result.ExitCode = 1 && File.ReadAllBytes path = before) "semantic refusal changed durable original state"
+            require (File.ReadAllLines(log).Length = calls) "semantic refusal invoked the publisher"
+        reject (activity.Replace("\"evidence\":[]", "\"evidence\":[\"invalid\"]")) (fun file -> Activity(token, file))
+        reject (activity.Replace("validation", "invalid-category")) (fun file -> Activity(token, file))
+        reject (activity.Replace("2026-09-27T00:00:00Z", "not-a-time")) (fun file -> Activity(token, file))
+        // A valid retained state can carry a long attempt field; the wire batch has its own64KiB bound.
+        let retained = File.ReadAllBytes path
+        let large = JsonNode.Parse(retained) :?> JsonObject
+        large["attemptId"] <- JsonValue.Create(String.replicate 70000 "a")
+        File.WriteAllText(path, large.ToJsonString() + "\n")
+        reject activity (fun file -> Activity(token, file))
+        File.WriteAllBytes(path, retained)
+        File.WriteAllText(input, activity)
+        require ((run (Some host) (Activity(token, FileInfo input))).ExitCode = 0) "valid open activity refused"
+        File.WriteAllText(input, activity.Replace("\"revision\":0", "\"revision\":1").Replace("\"endedAt\":null", "\"endedAt\":\"2026-09-27T00:00:01Z\""))
+        require ((run (Some host) (Activity(token, FileInfo input))).ExitCode = 0) "valid closed activity refused"
+        require ((run (Some host) (Finish(token, "completed", Some 0))).ExitCode = 0) "fixture finish failed"
+        let usage = """{"schema":"fsgg.telemetry.activity-usage-attribution-input/1","revision":0,"usageIdentity":"turn-a","activityId":null,"classification":"unclassified","input":-1,"cachedInput":0,"output":0,"reasoning":0,"total":0}"""
+        reject usage (fun file -> UsageAttribution(token, file))
+
+    let private retainedParserRejection root =
+        let isolated = Path.Combine(root, "retained-parser-rejection")
+        Directory.CreateDirectory isolated |> ignore
+        let host = config isolated
+        let log = Path.Combine(isolated, "publications.log")
+        Environment.SetEnvironmentVariable("FSGG_ADAPTER_TEST_LOG", log)
+        let result = run (Some host) (Begin("F", "REJECTION", None, "rejection-attempt", None, None, "root", "fixture-producer", "fixture-model", "medium", 60))
+        require (result.ExitCode = 0) (text result.Stderr)
+        let token = (resultJson result).GetProperty("token").GetString()
+        require ((run (Some host) (Started(token, "rejection-native"))).ExitCode = 0) "fixture start failed"
+        let path = Path.Combine(host.StoreRoot, "orchestrator-dispatches", token + ".json")
+        let before = File.ReadAllBytes path
+        let state = JsonNode.Parse(before) :?> JsonObject
+        let sequence = state["sequence"].GetValue<int>() + 1
+        let activityId = "rejected-activity"
+        let identity =
+            "activity-span-" + (Encoding.UTF8.GetBytes("REJECTION\u001f" + activityId) |> SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant()).Substring(0,32)
+        let input = Path.Combine(isolated, "activity.json")
+        let activity = JsonNode.Parse("""{"schema":"fsgg.telemetry.activity-span-input/1","revision":0,"activityId":"rejected-activity","category":"validation","startedAt":"2026-09-27T00:00:00Z","endedAt":null,"clockProvenance":"fixture","evidence":["invalid"],"summary":"fixture"}""") :?> JsonObject
+        File.WriteAllText(input, activity.ToJsonString())
+        if not (OperatingSystem.IsWindows()) then File.SetUnixFileMode(input, enum<UnixFileMode> 0o600)
+        // Construct an independent synthetic retained legacy intent in production field order.
+        let observation = JsonObject()
+        observation["kind"] <- JsonValue.Create "activity-span"
+        observation["identity"] <- JsonValue.Create identity
+        observation["itemId"] <- state["itemId"].DeepClone()
+        observation["invocationId"] <- state["invocationId"].DeepClone()
+        observation["attemptId"] <- state["attemptId"].DeepClone()
+        for name in [ "revision"; "activityId"; "category"; "startedAt"; "endedAt"; "clockProvenance"; "evidence"; "summary" ] |> List.sort do
+            observation[name] <- if isNull activity[name] then null else activity[name].DeepClone()
+        let events = JsonArray()
+        events.Add observation
+        let batch = JsonObject()
+        batch["schema"] <- JsonValue.Create "fsgg.telemetry.ingest/1"
+        batch["ingestId"] <- JsonValue.Create(state["invocationId"].GetValue<string>() + "-" + sequence.ToString("000000"))
+        batch["sourceIdentity"] <- state["producerStream"].DeepClone()
+        batch["generation"] <- state["invocationId"].DeepClone()
+        batch["cursor"] <- JsonValue.Create(string sequence)
+        batch["eventCount"] <- JsonValue.Create 1
+        batch["events"] <- events
+        let pending = JsonObject()
+        pending["operation"] <- JsonValue.Create("observation:activity-span:" + identity)
+        pending["nextPhase"] <- state["phase"].DeepClone()
+        pending["batch"] <- batch
+        state["sequence"] <- JsonValue.Create sequence
+        state["pendingPublication"] <- pending
+        File.WriteAllText(path, state.ToJsonString() + "\n")
+        let poisoned = File.ReadAllBytes path
+        let calls = File.ReadAllLines(log).Length
+        try
+            for mode in [ "unknown"; "wrong-batch"; "wrong-engine"; "foreign-store" ] do
+                Environment.SetEnvironmentVariable("FSGG_ADAPTER_TEST_REJECTION", mode)
+                let refused = run (Some host) (Activity(token, FileInfo input))
+                require (refused.ExitCode = 1 && File.ReadAllBytes path = poisoned) (mode + " incorrectly cleared retained intent")
+            Environment.SetEnvironmentVariable("FSGG_ADAPTER_TEST_REJECTION", "exact")
+            let rejected = run (Some host) (Activity(token, FileInfo input))
+            require (rejected.ExitCode = 1 && File.ReadAllBytes path = before) "exact pre-IO parser refusal did not restore original sequence/state"
+            require (File.ReadAllLines(log).Length = calls) "rejected parser payload was published"
+            Environment.SetEnvironmentVariable("FSGG_ADAPTER_TEST_REJECTION", null)
+            activity["evidence"] <- JsonArray()
+            File.WriteAllText(input, activity.ToJsonString())
+            require ((run (Some host) (Activity(token, FileInfo input))).ExitCode = 0) "corrected observation refused after classified rejection"
+            require (File.ReadAllLines(log).Length = calls + 1) "corrected observation was not published exactly once"
+        finally Environment.SetEnvironmentVariable("FSGG_ADAPTER_TEST_REJECTION", null)
+
     let private runHarness () =
         let absent = run None Status
         require (absent.ExitCode = 2 && text absent.Stdout = "{\"schema\":\"fsgg.telemetry.host-status/1\",\"status\":\"not-configured\"}\n") "not-configured bytes drifted"
@@ -593,6 +729,8 @@ module Program =
             protectedOriginalRefusal root
             populationOnly root
             boundedPrivateState root
+            observationPrevalidation root
+            retainedParserRejection root
             Console.WriteLine "adapter harness: PASS"
             0
         finally
