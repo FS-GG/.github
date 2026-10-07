@@ -68,10 +68,15 @@ bounded source window. Post-merge protected-intake preflight
 [37573722079/a1](https://github.com/FS-GG/.github/actions/runs/37573722079)
 failed at source `64192823`, job `112637844761`, with exit 3:
 `operation/13 is not proven absent`. The failure prevents retained-intake authority
-qualification before the expected inert receipt; presence versus unreadability
-remains unknown. It establishes neither a successful expected fence nor a Wizard
-regression. Dependent intake acceptance and activation remain fenced pending the
-original-identity read-only reconciliation; no retry, grant or cleanup is admitted.
+qualification before the expected inert receipt; the original response remains
+unknown. Subsequent authenticated HTTP 200 readback found the exact `operation/13`
+ref at `cd616f2cc2a5118acd72b99d0b01be7d6fffe9ca`, an ordinary-v2 settlement
+shard. The fixed empty-genesis intent for `gs2-09-7-retained-intake-production-v1`
+conflicts with this existing reservation, which remains preserved. Retained-intake
+activation stays fenced pending owning-contract reconciliation; the original intake
+owner is unavailable in the recovery inventory. No retry, grant or cleanup is
+admitted. Independent source validation retains its scope and establishes no
+Wizard runtime or receiver acceptance.
 The Wizard 0.16 feed probe remains refused with HTTP 403;
 its original journal and failed evidence remain retained. Wizard qualification,
 publication, installed/default receiver acceptance and retaining upgrades remain
