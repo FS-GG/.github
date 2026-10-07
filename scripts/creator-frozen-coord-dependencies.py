@@ -176,11 +176,18 @@ def package_closure(package, dependencies, root=ROOT):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("command", choices=("stage", "verify-layout"))
-    parser.add_argument("--dependencies", type=pathlib.Path, required=True)
+    parser.add_argument("command", choices=("verify-source", "stage", "verify-layout"))
+    parser.add_argument("--dependencies", type=pathlib.Path)
     parser.add_argument("--package", type=pathlib.Path)
     args = parser.parse_args()
     pin = json.loads(regular(PIN))
+    if args.command == "verify-source":
+        require(args.dependencies is None and args.package is None, "source verification refuses staging inputs")
+        projects = source_projects(ROOT, pin)
+        print(json.dumps({"sourceSha": pin["sourceSha"], "coherentVersion": pin["version"],
+                          "sourceProjects": len(projects)}, sort_keys=True))
+        raise SystemExit(0)
+    require(args.dependencies is not None, "frozen dependency directory required")
     require(args.dependencies.is_absolute(), "frozen dependency directory must be absolute")
     # Preserve the final path component so a symlink cannot disappear through resolve().
     dependencies = args.dependencies
