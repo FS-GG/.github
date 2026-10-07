@@ -22,6 +22,18 @@ workload does not retroactively invalidate historical acceptance for other workl
 
 ## Current progress
 
+**2026-10-07: Public Templates-only receiver accepted.**
+[Run 37549683984/a1](https://github.com/FS-GG/FS.GG.Templates/actions/runs/37549683984)
+succeeded on repaired harness `c56541c6dbadbc753b500ac5ffc941e8af083854`.
+Artifact `11452437787` retains a passed `templates` qualification: public Template
+0.18.1 at original source/tag `d9fe65ea8a456f59d663f20c647a38a195e13c2c`, archive
+`0d9395b028f14b2c06afe1f1de019610217774f0cb8b6a9618f2aed7d51790fe`, descriptor
+`1e57e732230bb8e0b17d5a63efe218dcbc4ee49ad4983aa6db5ab43f4dc1e835` and SDK 2.1.0.
+Direct and provider Chromium FourD journeys each passed. No new operation was
+launched during this readback. Full-mode Wizard qualification remains pending;
+its frozen coherent dependencies and successor publication require separate gates.
+Earlier receiver failures remain retained. Full .8 acceptance is still open.
+
 **2026-10-06: Published-template receiver harness repaired and delivered.**
 [Templates #677](https://github.com/FS-GG/FS.GG.Templates/pull/677) merged exact head
 `196a843cf4af0c97300e8ea66a9ad0e7badec03f` as
