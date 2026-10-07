@@ -44,6 +44,8 @@ def board_package_closure(package: pathlib.Path, source_sha: str, *, source_root
     spec.loader.exec_module(checker)
     if checker.package_identity(package) != (CURRENT_016.package, CURRENT_016.version, source_sha):
         raise ValueError("current creator package/source identity differs")
+    dependency_pin = json.loads((source_root / "scripts/creator-frozen-coord-dependencies.json").read_text())
+    coherent_version = dependency_pin["version"]
     project = source_root / "scripts/NewSddWorkspace/NewSddWorkspace.fsproj"
     projects = {}
     def visit(path):
@@ -75,16 +77,16 @@ def board_package_closure(package: pathlib.Path, source_sha: str, *, source_root
             if archive.read(prefix + name) != built.read_bytes():
                 raise ValueError("creator package dependency differs from built source: " + name)
         deps = json.loads(archive.read(prefix + "new-sdd-workspace.deps.json"))
-        cli = "FS.GG.Coord.Cli/0.97.1"
+        cli = "FS.GG.Coord.Cli/" + coherent_version
         targets = deps.get("targets", {})
         if (deps.get("libraries", {}).get(cli, {}).get("type") != "project"
                 or not targets or any(
-                    target.get("new-sdd-workspace/0.16.0", {}).get("dependencies", {}).get("FS.GG.Coord.Cli") != "0.97.1"
+                    target.get("new-sdd-workspace/0.16.0", {}).get("dependencies", {}).get("FS.GG.Coord.Cli") != coherent_version
                     or "fsgg-coord-engine.dll" not in target.get(cli, {}).get("runtime", {})
                     for target in targets.values())):
             raise ValueError("creator package must carry current coherent CLI dependency metadata")
     result = {"schema": "fsgg.creator-board-package-closure/1", "version": CURRENT_016.version,
-            "sourceSha": source_sha, "coherentVersion": "0.97.1", "projectCount": len(projects),
+            "sourceSha": source_sha, "coherentVersion": coherent_version, "projectCount": len(projects),
             "builtFilesCompared": len(required), "archiveSha256": hashlib.sha256(package.read_bytes()).hexdigest(),
             "installedAdoptionAccepted": False}
     if frozen_dependencies is not None:
@@ -199,6 +201,7 @@ class WizardReleaseTests(unittest.TestCase):
                 for reference in ElementTree.parse(path).iter('ProjectReference'):
                     copy_project((path.parent / reference.attrib['Include']).resolve())
             copy_project(ROOT / 'scripts/NewSddWorkspace/NewSddWorkspace.fsproj')
+            files[pathlib.Path('scripts/creator-frozen-coord-dependencies.json')] = (ROOT / 'scripts/creator-frozen-coord-dependencies.json').read_bytes()
             files[pathlib.Path('scripts/new-sdd-workspace-release.py')] = (ROOT / 'scripts/new-sdd-workspace-release.py').read_bytes()
             for relative, body in files.items():
                 (root / relative).parent.mkdir(parents=True, exist_ok=True)
@@ -211,9 +214,9 @@ class WizardReleaseTests(unittest.TestCase):
                     xml = ElementTree.parse(root / relative)
                     name = next((e.text for e in xml.iter('AssemblyName') if e.text), relative.stem) + '.dll'
                     members[name] = ('synthetic, never executed: ' + name).encode()
-            deps = {'libraries': {'FS.GG.Coord.Cli/0.97.1': {'type': 'project'}}, 'targets': {
-                '.NETCoreApp,Version=v10.0': {'new-sdd-workspace/0.16.0': {'dependencies': {'FS.GG.Coord.Cli': '0.97.1'}},
-                                           'FS.GG.Coord.Cli/0.97.1': {'runtime': {'fsgg-coord-engine.dll': {}}}}}}
+            deps = {'libraries': {'FS.GG.Coord.Cli/0.99.0': {'type': 'project'}}, 'targets': {
+                '.NETCoreApp,Version=v10.0': {'new-sdd-workspace/0.16.0': {'dependencies': {'FS.GG.Coord.Cli': '0.99.0'}},
+                                           'FS.GG.Coord.Cli/0.99.0': {'runtime': {'fsgg-coord-engine.dll': {}}}}}}
             members['new-sdd-workspace.deps.json'] = json.dumps(deps).encode()
             members['new-sdd-workspace.runtimeconfig.json'] = b'{}'
             for name, body in members.items():
@@ -239,11 +242,12 @@ class WizardReleaseTests(unittest.TestCase):
             pack({**members, 'FS.GG.Coord.GitHub.dll': b'old assembly'})
             with self.assertRaisesRegex(ValueError, 'differs from built source'):
                 board_package_closure(package, 'a' * 40, source_root=root)
-            for mutant in ({'libraries': {'FS.GG.Coord.Cli/0.97.0': {'type': 'project'}}, 'targets': {'.NETCoreApp,Version=v10.0': {'new-sdd-workspace/0.16.0': {'dependencies': {'FS.GG.Coord.Cli': '0.97.0'}}, 'FS.GG.Coord.Cli/0.97.0': {'runtime': {'fsgg-coord-engine.dll': {}}}}}},
+            for mutant in ({'libraries': {'FS.GG.Coord.Cli/0.97.1': {'type': 'project'}}, 'targets': {'.NETCoreApp,Version=v10.0': {'new-sdd-workspace/0.16.0': {'dependencies': {'FS.GG.Coord.Cli': '0.97.1'}}, 'FS.GG.Coord.Cli/0.97.1': {'runtime': {'fsgg-coord-engine.dll': {}}}}}},
+                           {'libraries': {'FS.GG.Coord.Cli/0.97.0': {'type': 'project'}}, 'targets': {'.NETCoreApp,Version=v10.0': {'new-sdd-workspace/0.16.0': {'dependencies': {'FS.GG.Coord.Cli': '0.97.0'}}, 'FS.GG.Coord.Cli/0.97.0': {'runtime': {'fsgg-coord-engine.dll': {}}}}}},
                            {'libraries': {'FS.GG.Coord.Cli/0.96.0': {}}},
                            {**deps, 'targets': {}},
-                           {**deps, 'targets': {'.NETCoreApp,Version=v10.0': {'FS.GG.Coord.Cli/0.97.1': {'runtime': {'fsgg-coord-engine.dll': {}}}}}},
-                           {**deps, 'targets': {'.NETCoreApp,Version=v10.0': {'new-sdd-workspace/0.16.0': {'dependencies': {'FS.GG.Coord.Cli': '0.97.1'}}}}}):
+                           {**deps, 'targets': {'.NETCoreApp,Version=v10.0': {'FS.GG.Coord.Cli/0.99.0': {'runtime': {'fsgg-coord-engine.dll': {}}}}}},
+                           {**deps, 'targets': {'.NETCoreApp,Version=v10.0': {'new-sdd-workspace/0.16.0': {'dependencies': {'FS.GG.Coord.Cli': '0.99.0'}}}}}):
                 old_deps = json.dumps(mutant).encode()
                 (output / 'new-sdd-workspace.deps.json').write_bytes(old_deps)
                 pack({**members, 'new-sdd-workspace.deps.json': old_deps})

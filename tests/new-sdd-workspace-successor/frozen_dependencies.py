@@ -34,11 +34,15 @@ class FrozenDependencyControls(unittest.TestCase):
         self.members["runtimes/linux-x64/native/engine.so"] = b"synthetic native input"
         self.package = self.root / "accepted.nupkg"
         self.write_archive(self.members)
-        self.pin = {"version": "0.97.1", "projects": {"scripts/NewSddWorkspace/NewSddWorkspace.fsproj": "new-sdd-workspace",
+        self.pin = {"version": "0.99.0", "projects": {"scripts/NewSddWorkspace/NewSddWorkspace.fsproj": "new-sdd-workspace",
                                  "src/Engine/Engine.fsproj": "fsgg-coord-engine"},
                     "sourceLeaves": [{"path": "src/Engine/Engine.fsproj", "sha256": self.hash(self.project.read_bytes())}],
                     "archiveSha256": self.hash(self.package.read_bytes()), "sourceSha": "a" * 40,
                     "members": {name: self.hash(body) for name, body in self.members.items()}}
+        (self.root / "global.json").write_text("{}")
+        (self.project.parent / "packages.lock.json").write_text("{}")
+        self.pin["sourceLeaves"] = [{"path": name, "sha256": self.hash((self.root / name).read_bytes())}
+                                    for name in sorted(HELPER["dependency_source_paths"](self.root, self.pin["projects"]))]
         self.dependencies = self.root / "frozen"
 
     @staticmethod
@@ -47,7 +51,7 @@ class FrozenDependencyControls(unittest.TestCase):
 
     def write_archive(self, members):
         with zipfile.ZipFile(self.package, "w") as archive:
-            archive.writestr("FS.GG.Coord.Cli.nuspec", '<package><metadata><id>FS.GG.Coord.Cli</id><version>0.97.1</version><repository commit="' + 'a' * 40 + '"/></metadata></package>')
+            archive.writestr("FS.GG.Coord.Cli.nuspec", '<package><metadata><id>FS.GG.Coord.Cli</id><version>0.99.0</version><repository commit="' + 'a' * 40 + '"/></metadata></package>')
             for name, body in members.items():
                 archive.writestr(PREFIX + name, body)
 
@@ -77,7 +81,7 @@ class FrozenDependencyControls(unittest.TestCase):
         self.assertFalse(self.dependencies.exists())
 
     def test_metadata_identity_mutants_refuse_before_output(self):
-        for key, value in (("version", "0.97.0"), ("sourceSha", "b" * 40)):
+        for key, value in (("version", "0.97.1"), ("version", "0.97.0"), ("sourceSha", "b" * 40)):
             with self.subTest(field=key):
                 original = self.pin[key]
                 self.pin[key] = value
@@ -88,8 +92,16 @@ class FrozenDependencyControls(unittest.TestCase):
 
     def test_actual_pin_matches_selected_source_and_candidate_download(self):
         pin = json.loads((ROOT / "scripts/creator-frozen-coord-dependencies.json").read_text())
-        self.assertEqual(pin["version"], "0.97.1")
-        self.assertEqual(pin["sourceSha"], "99ea75286f5c3cea2a261fef4e5b45cd70378185")
+        self.assertEqual(pin["version"], "0.99.0")
+        self.assertEqual(pin["sourceSha"], "64e95ebec1a8294e16edaafdb27e6aa96f32c6f7")
+        expected = {"scripts/NewSddWorkspace/NewSddWorkspace.fsproj", *(
+            "src/" + name + "/" + name + ".fsproj" for name in (
+                "FS.GG.Coord.Cli", "FS.GG.Coord.Core", "FS.GG.Coord.GitHub",
+                "FS.GG.Coord.Cli.Kernel", "FS.GG.Coord.Cli.BoardOps", "FS.GG.Coord.Cli.Lifecycle",
+                "FS.GG.Telemetry.Store", "FS.GG.Telemetry.Client", "FS.GG.Telemetry.Contracts",
+                "FS.GG.Telemetry.Dashboard"))}
+        self.assertEqual(set(pin["projects"]), expected)
+        self.assertEqual(len(pin["members"]), 81)  # Observed original 0.99 archive census.
         # Dependency bytes belong to the published revision, not the current
         # feature branch. The Creator's own copy contract remains current.
         historical = self.root / "published-dependency-source"
@@ -133,7 +145,27 @@ class FrozenDependencyControls(unittest.TestCase):
             self.assertIn("published dependency source changed: " + drift[0], current.stderr)
         else:
             self.assertEqual(len(HELPER["source_projects"](ROOT, pin)), 11)
-        changed = historical / pin["sourceLeaves"][0]["path"]
+        # Missing actual compiler inputs must refuse before even opening an archive.
+        for missing in ("src/FS.GG.Telemetry.Client/CustodyProjection/CustodyProcessLease.fs",
+                        "src/FS.GG.Coord.Cli/TelemetryStoreApplication.fs"):
+            with self.subTest(missing=missing):
+                mutant = {**pin, "sourceLeaves": [row for row in pin["sourceLeaves"] if row["path"] != missing]}
+                self.assertEqual(len(mutant["sourceLeaves"]), len(pin["sourceLeaves"]) - 1)
+                with self.assertRaisesRegex(ValueError, "source coverage differs"):
+                    HELPER["stage"](historical, historical / "frozen", historical / "missing.nupkg", mutant)
+                self.assertFalse((historical / "frozen").exists())
+        for leaves in (pin["sourceLeaves"] + [pin["sourceLeaves"][0]],
+                       pin["sourceLeaves"] + [{"path": "foreign.fs", "sha256": "a" * 64}]):
+            with self.assertRaisesRegex(ValueError, "source coverage differs"):
+                HELPER["source_projects"](historical, {**pin, "sourceLeaves": leaves})
+        with self.assertRaisesRegex(ValueError, "project graph changed"):
+            HELPER["source_projects"](historical, {**pin, "projects": {}})
+        previous = json.loads(subprocess.check_output(
+            ["git", "show", "3bd43688bc0ff0b7fe17e1bc7eff2475bf5e0b80:scripts/creator-frozen-coord-dependencies.json"], cwd=ROOT))
+        self.assertEqual(previous["version"], "0.97.1")
+        with self.assertRaisesRegex(ValueError, "source coverage differs"):
+            HELPER["source_projects"](ROOT, previous)
+        changed = historical / "src/FS.GG.Telemetry.Client/CustodyProjection/CustodyProcessLease.fs"
         changed.write_bytes(changed.read_bytes() + b"\n// deliberate unpublished source drift\n")
         refused = subprocess.run(["python3", str(helper_path), "verify-source"], capture_output=True, text=True)
         self.assertNotEqual(refused.returncode, 0)

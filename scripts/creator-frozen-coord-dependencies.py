@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Reuse the exact published 0.97 implementation inputs without rebuilding them."""
+"""Reuse the selected published implementation inputs without rebuilding them."""
 from __future__ import annotations
 
 import argparse
@@ -49,10 +49,73 @@ def source_projects(root, pin):
             visit(child)
     visit(root / "scripts/NewSddWorkspace/NewSddWorkspace.fsproj")
     require(projects == pin["projects"], "frozen dependency project graph changed")
+    declared = [row["path"] for row in pin["sourceLeaves"]]
+    require(len(declared) == len(set(declared))
+            and set(declared) == dependency_source_paths(root, projects),
+            "frozen dependency source coverage differs")
     for row in pin["sourceLeaves"]:
         require(digest(regular(root / row["path"])) == row["sha256"],
                 "published dependency source changed: " + row["path"])
     return projects
+
+
+def dependency_source_paths(root, projects):
+    """Census actual declared inputs, including linked and nested compiler files.
+
+    Creator is built separately; its frozen-copy contract and project graph are
+    checked above. The dependency projects use literal includes and repository
+    imports. Unsupported expressions refuse rather than guess an MSBuild result.
+    """
+    inputs = set()
+
+    def local(parent, declaration):
+        require(declaration and not any(c in declaration for c in ("$", "*", "?", ";")),
+                "unsupported frozen source input: " + str(declaration))
+        path = parent / declaration
+        require(not path.is_symlink() and all(not p.is_symlink() for p in path.parents),
+                "linked frozen source input")
+        path = path.resolve()
+        require(path.is_relative_to(root), "foreign frozen source input")
+        regular(path)
+        return path
+
+    def add(path):
+        inputs.add(path.relative_to(root).as_posix())
+
+    def configuration(path):
+        relative = path.relative_to(root).as_posix()
+        if relative in inputs:
+            return
+        add(path)
+        xml = ElementTree.fromstring(regular(path))
+        for item in xml.iter("Import"):
+            declaration = item.get("Project", "").replace("$(MSBuildThisFileDirectory)", str(path.parent) + "/")
+            candidate = path.parent / declaration
+            if not candidate.exists() and item.get("Condition") == "Exists('$(MSBuildThisFileDirectory)" + item.get("Project", "") + "')":
+                continue
+            configuration(local(path.parent, declaration))
+
+    for name in projects:
+        path = root / name
+        if name == "scripts/NewSddWorkspace/NewSddWorkspace.fsproj":
+            continue
+        add(path)
+        xml = ElementTree.fromstring(regular(path))
+        for item in xml.iter():
+            if item.tag in ("Compile", "EmbeddedResource", "Content", "None") and "Include" in item.attrib:
+                add(local(path.parent, item.attrib["Include"]))
+            if item.tag == "Import":
+                configuration(local(path.parent, item.attrib["Project"]))
+        add(local(path.parent, "packages.lock.json"))
+        for parent in (path.parent, *path.parent.parents):
+            if not parent.is_relative_to(root):
+                break
+            for filename in ("Directory.Build.props", "Directory.Build.targets", "Directory.Packages.props"):
+                candidate = parent / filename
+                if candidate.exists():
+                    configuration(candidate)
+    add(local(root, "global.json"))
+    return inputs
 
 
 def frozen_copy_contract(xml):
@@ -131,7 +194,7 @@ def layout(root, dependencies, pin):
             name = assembly + suffix
             require(digest(regular(output / name)) == pin["members"][name], "staged project dependency changed")
     return {"sourceSha": pin["sourceSha"], "archiveSha256": pin["archiveSha256"],
-            "coherentVersion": "0.97.1", "dependencyMembers": len(pin["members"])}
+            "coherentVersion": pin["version"], "dependencyMembers": len(pin["members"])}
 
 
 def stage(root, dependencies, package, pin):
