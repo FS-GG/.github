@@ -633,7 +633,7 @@ module Program =
         let path = Path.Combine(host.StoreRoot, "orchestrator-dispatches", token + ".json")
         let input = Path.Combine(isolated, "activity.json")
         let activity = """{"schema":"fsgg.telemetry.activity-span-input/1","revision":0,"activityId":"activity-a","category":"validation","startedAt":"2026-09-27T00:00:00Z","endedAt":null,"clockProvenance":"fixture","evidence":[],"summary":"fixture"}"""
-        let reject value command =
+        let reject (value: string) command =
             let before = File.ReadAllBytes path
             let calls = File.ReadAllLines(log).Length
             File.WriteAllText(input, value)
