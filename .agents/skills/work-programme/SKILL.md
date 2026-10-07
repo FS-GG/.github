@@ -16,6 +16,10 @@ Delivered coordination behavior does not establish whole-family savings, remaini
 
 ## Delegate recovery before loading history
 
+First check available runtime capacity; a killed parent does not prove its children or operations ended.
+When no current handoff exists, bootstrap follows [crash recovery](references/crash-recovery.md) before
+selecting work. Missing handoff is a recovery mode, not a reason to wait for a report or start over.
+
 Use one temporary Sol-medium worker with `fork_turns: "none"` for bounded bootstrap. Give it user scope,
 known identities/references, actual resource constraints and this skill path. It reads
 [bootstrap](references/bootstrap.md), refreshes selected native facts, preserves every active reservation,

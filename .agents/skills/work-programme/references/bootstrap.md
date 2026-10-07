@@ -13,6 +13,11 @@ missing references, then relevant protected Unified §9.8 sections and owning pl
 entire handoff or roadmap merely to select a known lane. Preserve prior delivered work and historical
 failed/unknown attempts; never infer completion from their summaries or recreate absent receipts.
 
+If the session was killed before saving a handoff, or the latest report predates the interrupted work,
+use [crash recovery](crash-recovery.md). A missing index, packet or temporary artifact does not prevent
+recovery from the protected plans, surviving Git work and native authorities. Establish a complete
+reservation view and reconcile unknown effects before marking affected lanes ready.
+
 Retain the complete active-reservation population, including unreadable owners and pending operations,
 even when only a subset is ready. Distinguish original/current items and attempts, source/publication/
 installed/native/projection boundaries, exact source and PR heads, touch-sets and prerequisites. Unknown
