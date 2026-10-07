@@ -1,0 +1,14 @@
+{
+  "synthetic": true,
+  "canonicalExecution": "not-run-no-CLR-admission",
+  "expectedProperties": {
+    "reservationIds": [
+      "A",
+      "B"
+    ],
+    "frontierCAction": "wait",
+    "frontierCReason": "worker capacity full"
+  },
+  "existingContract": "frontier initial reserved population and capacity; contextDelta only inFlight reservations",
+  "realConsumerProofMissing": "Actual worker slots and separate CPU/CLR/CI admission required; snapshot completeness remains caller-declared."
+}

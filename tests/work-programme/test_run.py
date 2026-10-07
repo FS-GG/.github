@@ -2,6 +2,7 @@
 import importlib.util
 import json
 import os
+import re
 from pathlib import Path
 import shutil
 import subprocess
@@ -28,6 +29,37 @@ class RunnerTests(unittest.TestCase):
 
     def collect(self, selected, **kwargs):
         return runner.collect(self.root, selected, reporter=lambda _: None, **kwargs)
+
+    def restart_fixture_reads(self):
+        source = Path(__file__).with_name('context-delta.fsx').read_text()
+        names = set(re.findall(r'restartFixture "([^"]+)"', source))
+        return {'tests/work-programme/context-owner-restart-fixtures/' + name + '.delta-input.json'
+                for name in names}
+
+    def test_context_delta_inventory_covers_actual_restart_fixture_reads(self):
+        consumed = self.restart_fixture_reads()
+        selected = next(suite for suite in runner.suites(self.root) if suite['id'] == 'context-delta')
+        self.assertEqual(len(consumed), 6)
+        self.assertTrue(consumed <= set(selected['inputs']), consumed - set(selected['inputs']))
+
+    def test_restart_fixture_drift_blocks_next_consumer_without_process_launch(self):
+        selected = next(suite for suite in runner.suites(self.root) if suite['id'] == 'context-delta')
+        selected['prerequisites'] = ['python']
+        consumed = self.restart_fixture_reads()
+        for name in set(selected['inputs']) | consumed:
+            path = self.root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text('synthetic original input')
+        changed = self.root / sorted(consumed)[0]
+        def synthetic_child(*_args):
+            changed.write_text('synthetic drift')
+            return dict(exit=0, reason=None, cleanup='passed', output='', outputBytes=0)
+        with patch.object(runner, 'run_child', side_effect=synthetic_child) as child:
+            report, code = self.collect([selected, {**selected, 'id': 'next-consumer'}])
+        self.assertEqual(code, 1)
+        self.assertEqual([row['status'] for row in report['suites']], ['unknown', 'blocked'])
+        self.assertEqual(report['suites'][0]['reason'], 'shared-input-changed')
+        self.assertEqual(child.call_count, 1)
 
     def test_independent_assertions_and_success_retained(self):
         report, code = self.collect([self.suite('a', 'assert False, "first"'),

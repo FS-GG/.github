@@ -1,0 +1,18 @@
+{
+  "synthetic": true,
+  "canonicalExecution": "not-run-no-CLR-admission",
+  "expectedProperties": {
+    "changedRevisions": [
+      2
+    ],
+    "reservationIds": [
+      "A",
+      "B"
+    ],
+    "noticeKinds": [
+      "superseded-or-incomparable-owner-candidate"
+    ]
+  },
+  "existingContract": "contextDelta source/owner/current-attempt/candidate joins",
+  "realConsumerProofMissing": "Real ownership changes require parent reconciliation; high revision cannot grant superseded owner authority."
+}

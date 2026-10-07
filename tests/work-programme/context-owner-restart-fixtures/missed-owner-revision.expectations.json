@@ -1,0 +1,17 @@
+{
+  "synthetic": true,
+  "canonicalExecution": "not-run-no-CLR-admission",
+  "expectedProperties": {
+    "resynchronize": true,
+    "changedCount": 0,
+    "reservationIds": [
+      "A",
+      "B"
+    ],
+    "noticeKinds": [
+      "missing-return-base-resynchronize"
+    ]
+  },
+  "existingContract": "contextDelta prior revision continuity",
+  "realConsumerProofMissing": "Real consumer must request intact owner return/base without inventing revision2; watcher event revisions are a separate stream."
+}

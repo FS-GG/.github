@@ -25,7 +25,13 @@ def suites(root):
              inputs=shared + ['tests/work-programme/' + name + '.fsx'] + extra,
              prerequisites=['dotnet'], dependsOn=[], independent=True)
         for name, extra in [('acceptance', []), ('context-delta', [
-            'tests/work-programme/context-delta-input.json', 'tests/work-programme/context-delta-expected.json']),
+            'tests/work-programme/context-delta-input.json', 'tests/work-programme/context-delta-expected.json',
+            'tests/work-programme/context-owner-restart-fixtures/interrupted-dispatch.delta-input.json',
+            'tests/work-programme/context-owner-restart-fixtures/missed-owner-revision.delta-input.json',
+            'tests/work-programme/context-owner-restart-fixtures/absent-owner.delta-input.json',
+            'tests/work-programme/context-owner-restart-fixtures/full-reservation.delta-input.json',
+            'tests/work-programme/context-owner-restart-fixtures/one-integrator-same-owner-repair.delta-input.json',
+            'tests/work-programme/context-owner-restart-fixtures/superseded-owner-return.delta-input.json']),
             ('context-evidence', [])]
     ] + [dict(id='context-baseline', command=[sys.executable, 'tests/work-programme/context-baseline/test_collect.py'],
               inputs=['tests/work-programme/context-baseline/' + f for f in ['test_collect.py', 'collect.py', 'replay.json']],

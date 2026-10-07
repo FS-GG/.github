@@ -1,0 +1,14 @@
+{
+  "synthetic": true,
+  "canonicalExecution": "not-run-no-CLR-admission",
+  "expectedProperties": {
+    "resynchronize": false,
+    "changedCount": 0,
+    "reservationIds": [
+      "A",
+      "B"
+    ]
+  },
+  "existingContract": "contextDelta reservations independent of returns; frontier retains unreadable inFlight holders",
+  "realConsumerProofMissing": "A missing owner message cannot establish termination, transfer ownership, or release resources; actual complete reservation discovery still required."
+}

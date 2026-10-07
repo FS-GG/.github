@@ -1,0 +1,84 @@
+{
+  "schema": "fsgg.programme.delta-input/1",
+  "evaluationTime": "2026-10-05T04:56:05+00:00",
+  "evaluatorIdentity": "programme-delta-1",
+  "policyIdentity": "policy-1",
+  "userScopeRevision": "scope-1",
+  "baseRevision": "",
+  "currentRevision": "view-2",
+  "baseEvaluatorIdentity": "programme-delta-1",
+  "basePolicyIdentity": "policy-1",
+  "baseUserScopeRevision": "scope-1",
+  "baseReturns": [],
+  "currentReturns": [],
+  "snapshot": {
+    "schema": "fsgg.programme.snapshot/1",
+    "campaign": "synthetic-context-restart",
+    "capacity": 2,
+    "capacityKnown": true,
+    "maxAgeSeconds": 300,
+    "lanes": [
+      {
+        "id": "A",
+        "feature": "FEATURE",
+        "item": "A",
+        "originalItem": "A",
+        "attempt": "attempt",
+        "repository": "FS-GG/Example",
+        "chain": "A",
+        "owner": "owner",
+        "worktree": "/synthetic/worktree",
+        "head": "candidate",
+        "priority": 1,
+        "readable": false,
+        "observedAt": "2026-10-05T04:56:05+00:00",
+        "evidence": [
+          "synthetic-native-reference"
+        ],
+        "state": "unknown",
+        "inFlight": true,
+        "touchSet": [
+          "src/A/**"
+        ],
+        "dependencies": [],
+        "source": "local",
+        "validation": "pending",
+        "publication": "not-required",
+        "installed": "pending",
+        "native": "unknown",
+        "projection": "not-required"
+      },
+      {
+        "id": "B",
+        "feature": "FEATURE",
+        "item": "B",
+        "originalItem": "B",
+        "attempt": "attempt",
+        "repository": "FS-GG/Example",
+        "chain": "B",
+        "owner": "owner",
+        "worktree": "/synthetic/worktree",
+        "head": "candidate",
+        "priority": 1,
+        "readable": true,
+        "observedAt": "2026-10-05T04:56:05+00:00",
+        "evidence": [
+          "synthetic-native-reference"
+        ],
+        "state": "active",
+        "inFlight": true,
+        "touchSet": [
+          "src/B/**"
+        ],
+        "dependencies": [],
+        "source": "local",
+        "validation": "pending",
+        "publication": "not-required",
+        "installed": "pending",
+        "native": "unknown",
+        "projection": "not-required"
+      }
+    ],
+    "openPulls": []
+  }
+}
