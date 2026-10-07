@@ -78,10 +78,10 @@ owner is unavailable in the recovery inventory. No retry, grant or cleanup is
 admitted. Independent source validation retains its scope and establishes no
 Wizard runtime or receiver acceptance. Post-merge engine-pin-coherence
 [37573721971/a1](https://github.com/FS-GG/.github/actions/runs/37573721971),
-job `112637946362`, also failed: the canonical distribution CLI pin remains 0.97.0
-while the genuine public version is 0.99.0. The local pin repair to the published
-version awaits qualification and source delivery; no future version or default
-receiver acceptance is established.
+job `112637946362`, also failed: it observed canonical distribution CLI pin 0.97.0
+behind genuine public version 0.99.0. A local repair updates only that pin to the
+published version; twenty focused controls passed. This records repair preparation;
+hosted source delivery and default receiver acceptance remain separate boundaries.
 The Wizard 0.16 feed probe remains refused with HTTP 403;
 its original journal and failed evidence remain retained. Wizard qualification,
 publication, installed/default receiver acceptance and retaining upgrades remain
