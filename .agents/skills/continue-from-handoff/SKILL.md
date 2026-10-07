@@ -35,8 +35,10 @@ time. Accept existing `YYYY-MM-DD-HHMM` and new `YYYY-MM-DD-HHMMSS` filenames;
 use a document's explicit UTC timestamp for other names and the full path to
 break equal-time ties. Prefer the protected copy when the same report exists
 both locally and remotely. A genuinely newer local report can preserve unsaved
-work: identify it as unmerged and verify its claims. Read the selected report
-fully and report its path, timestamp, and source revision. If none exists,
+work: identify it as unmerged and verify its claims. The delegated recovery owner reads the selected
+report fully once and returns its path, timestamp, source revision and compact decision view; the parent
+expands only unresolved decisions or its own safeguards. When delegation is unavailable, the parent
+performs this recovery within the same bounds and reports that fallback. If none exists,
 record the missing handoff and recover from the canonical roadmap and live work
 rather than waiting for human input.
 

@@ -346,6 +346,21 @@ open: historical prose dispatches lack the original packet/revision bindings req
 returns, and interrupted dispatch, missed-event recovery and complete reservation reconstruction still
 need an actual integrated window. No missing identity is reconstructed as fact.
 
+### Bounded parent context path, 2026-10-07
+
+The dependency-free [context helper](../../.agents/skills/work-programme/scripts/context.py) projects
+pinned JSON fields/lines, proof-obligation review bundles and native session diagnostics when CLR helper
+execution is held. It also prepares fixed argument vectors for the existing guard without executing them
+or renewing windows. [Context guidance](../../.agents/skills/work-programme/references/context.md) defines
+bounded parent exposure, original-identity owner rotation and compact restart navigation. Handoff recovery
+has one full reader; missing delegation retains a bounded parent fallback.
+
+The existing [serial suite](../../tests/work-programme/run.py) includes behavioral controls for drift,
+whole instructions, obligation coverage, unknown counter baselines/resets, incomplete native records,
+private retention and command identity joins. Native session diagnostics remain separate from genuine
+dispatch/item attribution. These components do not close .4–.6 or establish whole-family savings;
+actual programme use and the controlled comparison retain their original acceptance boundaries.
+
 ## Validation, risks and rollback
 
 Extend the existing focused F# suite and adapter fixtures rather than inventing a broad new gate.

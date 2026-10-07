@@ -77,6 +77,10 @@ operations and unresolved parent decisions. Link the detailed handoff and qualif
 Keep timestamps tied to actual reads. This is a disposable navigation projection, not a new schema,
 ledger or source of completion authority; losing it must not release a reservation or restart an effect.
 
+Replace superseded current-state entries after material changes rather than appending a narrative log.
+Keep detailed failed attempts in their original artifacts, with current pointers and unresolved effects
+in the index. Aim for8KiB; larger reservation populations use bounded linked sections whose full population
+is consumed before scheduling. A size target never permits dropping reservations or unknowns.
 Update the index after material changes and at an authorized handoff, not every CI tick. Future recovery
 starts from these pointers and verifies native state. Preserve historical detail outside the restart
 message rather than copying it into a larger session summary. Do not claim control over automatic
