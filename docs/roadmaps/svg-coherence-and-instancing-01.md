@@ -679,3 +679,226 @@ accepted five outcomes and fifteen boundary cases; the reporter's exit 2 remains
 from those accepted cases. The route retains `attemptReady=false`: Stage D publication and
 readiness, both-feed readback and adoption remain pending. No candidate archive is regenerated
 and no publication effect is authorized by this source closure.
+
+## SVG-COHERENCE-01.8 — Wizard coherent 0.99 dependency window
+
+Planning observation: 2026-10-07. This is a bounded continuation of .8 under the
+[Unified §9.8 index](../2026-09-07-154210-fs-gg-unified-development-roadmap.md#98-feature-parts-and-subroadmap-index),
+owned by the `.github` Creator implementation owner with the programme root as
+publication and cross-repository integrator. The existing .8 row remains the
+completion ledger. The change in dependency source and payload, from frozen
+0.97.1 to prepared schema-14 0.99, warrants this replan. Session restart and prior
+failures do not create a new feature or renew an operation.
+
+### Reuse and exact gaps
+
+Protected source `ca1b668a31e878945026bcec8934065f6769d00e` and inspected local
+`1f63cd3dfd7cf85f099dbfbd0f2b7be5609cb1f1` have identical tree
+`5a5b25fdd3e10892d441c607cc4f4740ae4318c3`. Static traversal from
+`scripts/NewSddWorkspace/NewSddWorkspace.fsproj` still yields the same eleven
+projects as `scripts/creator-frozen-coord-dependencies.json`. Twenty-one of its
+267 pinned source leaves differ, and sixteen current compiled leaves are absent
+from the old pin: Core's EfficiencyEvidence, EfficiencyInput, NativeExecJsonl,
+NativeResponses and ProcessEfficiency pairs, plus Client's CustodyProcessLease,
+DirectResponses and ObservedCodexProcess pairs. Linked Store compilation inputs
+still resolve into the CLI source directory. Retaining eleven project names or
+changing the version scalar alone cannot qualify this closure.
+
+The actual Creator caller is `Program.prepareProductBoard` →
+`ProductBoard.validate/prepareGenerated/prepare` →
+`BoardV2Application.parseBinding` and `V2Projection.Binding`. The two producer
+modules, signatures and implementations are byte-identical to frozen
+`99ea75286f5c3cea2a261fef4e5b45cd70378185`. Creator's separately delivered
+fresh-scaffold manifest capture must remain intact: only a same-invocation,
+successful, unchanged SDD-owned manifest permits replacement; retained workspaces
+and retrofit retain strict conflict refusal. `ProductBoard` also compares the
+loaded adapter digest and CLI informational version against the immutable kit
+revision's tool manifest and verifies selected kit/driver leaf digests.
+
+This supports an authenticated closure refresh, subject to compiled compatibility
+proof. There is no demonstrated need for a Binding, publisher, journal or evidence
+schema change. The read-only candidate's existing three-file archive format and
+independent Wizard `0.16.0` release binding remain the selected source contracts;
+this statement is not proof that the coordinate is free. The artifact reader binds
+the genuine successful first-attempt run and original archive, while candidate
+package checks emit the dependency evidence. Preserve both boundaries.
+
+Fresh native [Creator #4232](https://github.com/FS-GG/.github/pull/4232) readback
+shows head `2968bbf9de67b49feb933ce19a0a14e32c84127b` merged as
+`09d779330c639b90303574f884e415ea1f5cf4b4` on 2026-10-06. This supersedes the
+October 5 handoff's open-PR statement, while its original exact-source 0.97.1
+local qualification stays scoped to that implementation. Original candidate
+[37268962676/a1](https://github.com/FS-GG/.github/actions/runs/37268962676)
+succeeded at `b1181b1afd6d0aa7da57e179c44bddcea50d8054`. Original artifact
+`11327780826` contains Wizard **0.15.0 with coherent 0.97.0**, not 0.16.0 or
+0.97.1. It is historical and cannot qualify this 0.99 window. The seven observed
+candidate runs contained no authenticated fresh 0.16 candidate; this is bounded
+observation, not global absence. [H4 37288088411/a1](https://github.com/FS-GG/.github/actions/runs/37288088411)
+succeeded at `49a5e93668d4647999cd7171a26d4ad4d151b66b`; recovery source identifies
+its `tsdd-knowledge-wizard-013` lineage. The retained final package readback 403
+and failed/unaccepted H4 acceptance remain distinct from Actions success. The
+observed 0.13 journal generation 17 has all eight effects verified; its consumed
+effects cannot be replayed. The selected Authority ref
+`board-v2-product-creator-016` returned 404 to this reader; its absence versus
+visibility is unresolved. The 0.16 journal/tag/release and NuGet GETs returned
+404, while the GitHub feed returned 403: visibility and original lineage remain
+unknown. No coordinate-free conclusion or fresh operation grant follows.
+
+The accepted Templates-only run 37549683984/a1 remains the .8 receipt above.
+Templates' actual full receiver additionally installs the public Wizard and runs
+fable-game complete creation with default and `none` lifecycle, both with
+`--no-coordination`. Therefore that full receiver does not replace the compiled
+Product V2 seam tests or establish native board acceptance.
+
+### Next implementation window — route: routine
+
+Assign one newest available Sol worker at medium effort after root supplies the
+accepted inputs below, using the exact installed work-roadmap skill. Preserve
+campaign `unified-roadmap-20261003`, item/original item `SVG-COHERENCE-01.8`, and
+planning attempt `wizard099-plan-20261007`; original-attempt provenance is missing
+and must remain an explicit gap. Root owns shared-main integration and admission;
+keep one local branch until its existing queue permits the coherent source PR.
+
+**Prerequisite at the point of consumption.** Root completes genuine coherent
+0.99 publication through UTEL-REL-16 and supplies its immutable source, original
+CLI archive, raw archive hash, release/asset identities, promoted manifest and
+both-feed readbacks. Root also retains the full original seven-file candidate
+identity; a source scalar, prepared manifest or successful test is insufficient.
+The implementation owner may inspect and draft controls before this boundary,
+but must not install guessed archive pins or substitute rebuilt dependency DLLs.
+Root must reconcile the exact Wizard candidate, release/feed coordinates and
+Authority journal lineage before selecting any fresh 0.16 operation. An occupied
+coordinate, initialized journal or unknown effect requires the existing exact-byte
+recovery decision, or a separately planned distinct successor; never reset or
+silently replace it.
+
+**Exact planned touch-set in `.github`:**
+
+- `scripts/creator-frozen-coord-dependencies.json` — authenticate the 0.99 source
+  and original public archive; enumerate the complete actual project, compiled,
+  linked, shared-property/package/SDK/lock input closure and archive runtime members.
+  Preserve historical 0.97.1 identity and receipts in existing evidence/history.
+- `scripts/creator-frozen-coord-dependencies.py` — bind emitted version to the
+  selected authenticated pin rather than literal 0.97.1; check declared source
+  coverage against the actual project inputs, including the new nested Client
+  pair and linked Store inputs. Keep archive, layout, destination, copy and
+  pre-acquisition source guards closed and fail before staging on a mismatch.
+- `.github/workflows/release-new-sdd-workspace-successor-candidate.yml` — select
+  the accepted 0.99 URL/path consistently with the pin while preserving the
+  source check before SDK setup/acquisition, read-only permissions, non-cancelling
+  concurrency, 45-minute ceiling and exact-main checks.
+- `tests/new-sdd-workspace-successor/run.py` and
+  `tests/new-sdd-workspace-successor/frozen_dependencies.py` — update the selected
+  coherent identity and closure expectations together; retain the old-version,
+  missing/rebuilt member, source drift and copy-route refusal controls. Derive
+  expected roster from the reviewed pin and separately check exact observed
+  eleven-project membership, rather than silently accepting arbitrary growth.
+- `tests/new-sdd-workspace/product-board.fsx` — add only missing causal controls
+  needed to prove the existing fresh/retained behavior against the loaded 0.99
+  adapter; retain all existing actual compiled caller checks.
+- This owning plan — add the exact source result and remaining operation boundary
+  in the implementation PR. Root can append this subsection without overwriting
+  newer progress entries.
+
+No producer Core/Client/Store/Responses implementation, Creator runtime defaults,
+`ProductBoard.fs/.fsi`, publisher/admission/journal protocol, registry publication
+state or Templates source change is selected. If the final published graph,
+package metadata or compiled seam contradicts these observations, stop that
+portion and return the concrete incompatibility to root before expanding scope.
+The existing Creator fsproj frozen-copy contract remains the implementation seam;
+no project edge removal or reference substitution is required by present evidence.
+
+**Acceptance and stopping point.** First run the pure successor controls and the
+source guard against the final selected checkout. Require missing newly compiled
+or linked leaves, wrong source/version, changed archive/member, absent/extra
+member and source graph mutants to refuse before dependency staging. Retain the
+old 0.97.1-current-source refusal as history. After root admits local qualification
+capacity, stage only authenticated 0.99 package bytes and run the existing Creator
+source suite, actual compiled ProductBoard probe, and one pack/package-closure
+check through the existing candidate sequence. Verify all staged dependency hashes
+remain equal before and after build/pack, each expected runtime body occurs, the
+Wizard deps metadata selects CLI 0.99, and the freshly built Creator alone differs.
+Do not assume the new archive still has 81 members. The loaded Binding digest,
+immutable kit tool pin, generated-manifest ownership/preimage/mode, retained-pin
+conflicts and rollback must be tested together. Wrong 0.97.1 metadata must refuse.
+No test may invoke a real Responses provider, telemetry migration or board write.
+
+Return focused evidence, exact source and the original archive joins for root's
+ordinary source review, required checks and guarded merge. Preserve failed
+attempts and independently discovered defects; failed prerequisites fence dependent
+checks. This window closes source preparation only. It ends before hosted candidate
+dispatch, package publication, installed receiver acceptance or .8 completion.
+
+### Later outcomes and generated-workspace impact
+
+After source landing and root's fresh lineage/coordinate decision, outline the
+existing Wizard candidate → authenticated original archive → independent preflight
+→ protected publication → both-feed readback sequence. Any partial effect retains
+its original archive and journal. Only then can Templates select full-mode public
+inputs and qualify default/none Fable-game creation, provenance, locked build and
+Chromium FourD journey. Keep the consumed Templates-only receipt and original
+Template 0.18.1 source/archive/descriptor/SDK 2.1.0 pins; pin the repaired harness
+separately. Product V2 fresh/retained acceptance stays with its owning board work.
+
+Under Unified §9.9, this source refresh alone changes no installed tool or lifecycle
+default. The first observable fresh-workspace change follows separately published
+Wizard adoption: an explicitly selected Fable-game complete workspace uses the
+accepted public Templates/Rendering composition, and an explicitly selected
+Product V2 path can carry the published coherent adapter while preserving the
+fresh-manifest authority restriction. Templates' `--no-coordination` proof cannot
+claim that Product V2 behavior. Existing workspaces need their separate preserving
+upgrade/conflict/interruption/rollback acceptance; no automatic retrofit, telemetry
+activation, Responses execution, Host installation or GPU acceptance follows.
+
+Keep the existing §9.8 SVG row/link; root may append this subsection anchor during
+implementation integration. No planning-only PR, second board ledger or new native
+operation is created. Observation here consists of local file/Git comparison and
+bounded native GET readbacks. Telemetry is not configured; token usage and the
+original attempt remain unknown. Compilation, new package behavior and installed
+0.99 adoption were not tested during planning.
+
+### 2026-10-07 source preparation against published 0.99
+
+The dependency prerequisite above is now established by coherent publisher
+[37566865635/a1](https://github.com/FS-GG/.github/actions/runs/37566865635)
+and the promoted [0.99 release](https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.99.0),
+release `405346080`, published at 03:54:17 UTC. Root accepted both-feed readbacks
+and delivered Unified closure through [#4300](https://github.com/FS-GG/.github/pull/4300),
+merge `3bd43688bc0ff0b7fe17e1bc7eff2475bf5e0b80`. Original producer
+[37565794335/a1](https://github.com/FS-GG/.github/actions/runs/37565794335)
+at `64e95ebec1a8294e16edaafdb27e6aa96f32c6f7` retained artifact `11458892057`: seven
+original members, ZIP SHA256
+`9283d4e59a759c58fa6aad2460ef4e665fdb48f9d7ede15690505d73200b163f`.
+The selected CLI is its original 32,224,239-byte archive, SHA256
+`d50b6de718c509e581984759dfc2547a6afa287488a829930bec391823ae9f5e`,
+public asset `617480948`. The prepared candidate manifest remains historical
+source evidence; accepted publication is a separate root readback.
+
+The local source refresh pins 281 actual dependency inputs and the observed 81
+runtime members, preserving the eleven-project roster and Creator frozen-copy
+contract. Actual Compile declarations include nested Client and linked Store
+files; shared imports, central packages, SDK and lock inputs are included. Missing,
+duplicate or extra source declarations refuse before archive access. Emitted
+coherent version and Creator dependency metadata now select the reviewed 0.99 pin.
+The pre-acquisition guard, read-only workflow permissions, exact-main checks,
+non-cancelling concurrency and 45-minute ceiling remain intact.
+
+The local source guard and all 146 pure successor controls passed in 2.313 seconds.
+Controls include omitted nested/linked files, source graph/leaf drift, missing or
+rebuilt runtime bodies, old 0.97.1 metadata and historical-pin refusal. The compiled
+ProductBoard probe adds loaded-0.99, immutable-kit mismatch and retained predecessor
+pin checks alongside its existing fresh ownership/preimage/mode/rollback controls.
+Those compiled checks, actual Creator source qualification and pack/closure proof
+remain pending root's resource admission. Static source/workflow controls are the
+selected preflight for this bounded linear dependency refresh; no custom pipeline
+model or measured CI-savings claim is made.
+
+This is local source preparation, not Wizard publication or runtime acceptance.
+Historical 0.97.1 receipts, original failed attempts and consumed Templates-only
+`37549683984/a1` remain scoped and unreplayed. The corrected 0.15 candidate pointer
+above does not change original native receipts. Root must still resolve 0.16
+visibility/lineage before any hosted candidate or publisher selection; no workflow
+dispatch, grant, tag, provider operation, installed adoption, effective-default
+activation or preserving upgrade is admitted by this source work. The original
+worker dispatch preceded restored observation configuration; this follow-up retains
+that attribution gap and unknown usage without substituting the root token.
