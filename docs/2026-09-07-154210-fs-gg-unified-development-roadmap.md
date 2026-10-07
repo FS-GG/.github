@@ -56,6 +56,26 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-07: Canonical distribution CLI pin repair source delivered.**
+[PR #4302](https://github.com/FS-GG/.github/pull/4302) merged exact
+`4202877ee98ceebf30edc96ba8d82168ff0b1eba` as
+`907ed8df39787a3618382c147bc2aae04e33131d` at 05:22:49 UTC after 41 hosted
+checks passed and four skipped. The canonical distribution manifest now pins the
+genuine published CLI 0.99.0. Canonical delivery reported current validation,
+coherent validation not required and no publication obligation. This closes the
+pin-repair source window. The first post-merge readback found live engine-pin
+[37576013772/a1](https://github.com/FS-GG/.github/actions/runs/37576013772) and main coherence
+[37576014070](https://github.com/FS-GG/.github/actions/runs/37576014070) queued.
+Later genuine readbacks observed both live engine-pin and main coherence success
+on attempt 1 at exact source `907ed8df39787a3618382c147bc2aae04e33131d`.
+The earlier queued observations remain historical evidence.
+The next telemetry source-preparation window opens after this owning closure
+projection lands. Publication and installed adoption remain separate boundaries;
+live pin success alone authorizes neither. The original
+engine-pin failure, retained-intake reservation fence and Wizard 0.16 HTTP 403
+remain retained below; no default receiver or full-feature acceptance is claimed.
+
+
 **2026-10-07: Wizard frozen dependency closure refreshed to published coherent 0.99.**
 [PR #4301](https://github.com/FS-GG/.github/pull/4301) merged exact
 `28caa52be69eb2b69462109eda3d5c5172f93c52` as
@@ -80,8 +100,9 @@ Wizard runtime or receiver acceptance. Post-merge engine-pin-coherence
 [37573721971/a1](https://github.com/FS-GG/.github/actions/runs/37573721971),
 job `112637946362`, also failed: it observed canonical distribution CLI pin 0.97.0
 behind genuine public version 0.99.0. A local repair updates only that pin to the
-published version; twenty focused controls passed. This records repair preparation;
-hosted source delivery and default receiver acceptance remain separate boundaries.
+published version; twenty focused controls passed. That recorded repair preparation;
+pin-repair source delivery is now closed through #4302 as recorded above. Default
+receiver acceptance remains a separate open boundary.
 The Wizard 0.16 feed probe remains refused with HTTP 403;
 its original journal and failed evidence remain retained. Wizard qualification,
 publication, installed/default receiver acceptance and retaining upgrades remain
