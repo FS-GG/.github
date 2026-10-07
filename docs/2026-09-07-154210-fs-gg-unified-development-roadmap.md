@@ -66,8 +66,9 @@ coherent validation not required and no publication obligation. This closes the
 pin-repair source window. The first post-merge readback found live engine-pin
 [37576013772/a1](https://github.com/FS-GG/.github/actions/runs/37576013772) and main coherence
 [37576014070](https://github.com/FS-GG/.github/actions/runs/37576014070) queued.
-A later genuine readback observed live engine-pin success at exact source `907ed8df`;
-main coherence remained queued at its latest observation, with no pass established.
+Later genuine readbacks observed both live engine-pin and main coherence success
+on attempt 1 at exact source `907ed8df39787a3618382c147bc2aae04e33131d`.
+The earlier queued observations remain historical evidence.
 The next telemetry source-preparation window opens after this owning closure
 projection lands. Publication and installed adoption remain separate boundaries;
 live pin success alone authorizes neither. The original
