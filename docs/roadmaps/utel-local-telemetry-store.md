@@ -182,3 +182,15 @@ and one feature replay. A prospective child completed and produced a native usag
 its verified short agent name was bound correctly. The observation guide now distinguishes that name
 from the thread UUID. This establishes the selected recovery and collection path; historical root
 usage, whole-programme coverage and deployed emitter adoption remain separate and unresolved.
+
+## Bounded native dispatch state repair
+
+The private dispatch writer could retain full native metadata above the reader's 256 KiB limit,
+causing strict inventory matching to reject later dispatches. Reader and writer now share a 1 MiB
+state-file bound, including the persisted newline. A transition exceeding it refuses before replacing
+the original state or publishing its intent. The reader remains bounded and rejects malformed JSON,
+symlinks and unsafe permissions; inventory matching still validates every token-named state.
+Synthetic adapter regressions cover metadata above the former limit, preserved identity and follow-up
+lineage, unknown usage baselines, exact-bound writer refusal and strict invalid-inventory handling.
+This is a source-only repair: retained private records and published binaries remain unchanged;
+qualification, publication and installed adoption are separate, and prior observation gaps remain unknown.

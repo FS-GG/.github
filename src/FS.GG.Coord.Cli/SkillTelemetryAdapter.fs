@@ -33,6 +33,9 @@ module SkillTelemetryAdapter =
         | Status
 
     let private stateSchema = "fsgg.telemetry.roadmap-dispatch-state/1"
+    // Native inventory and usage metadata can exceed the old 256 KiB read limit.
+    // Include the persisted newline in this shared producer/consumer bound.
+    let private maximumStateBytes = 1024 * 1024
     let private originalStateSchema = "fsgg.telemetry.original-binding-state/1"
     let private batchSchema = "fsgg.telemetry.ingest/1"
     let private runtime = "collaboration-spawn-agent"
@@ -185,12 +188,20 @@ module SkillTelemetryAdapter =
     let private saveState (config: HostConfig) (state: JsonObject) =
         let schema = requiredString "schema" state
         let token = requiredString "token" state
-        writePrivateBytes (stateDirectory config schema) token (utf8.GetBytes(state.ToJsonString compact)) |> ignore
+        let bytes = utf8.GetBytes(state.ToJsonString compact)
+        if bytes.Length >= maximumStateBytes then fail "private telemetry state exceeds 1 MiB"
+        writePrivateBytes (stateDirectory config schema) token bytes |> ignore
 
     let private readObject path unavailableMessage =
         try
-            if not (isRegular path 262144L) then fail unavailableMessage
-            match JsonNode.Parse(File.ReadAllBytes path) with
+            if not (isRegular path (int64 maximumStateBytes)) then fail unavailableMessage
+            use stream = File.OpenRead path
+            let length = stream.Length
+            if length > int64 maximumStateBytes then fail unavailableMessage
+            let bytes = Array.zeroCreate<byte> (int length)
+            stream.ReadExactly(bytes, 0, bytes.Length)
+            if stream.ReadByte() <> -1 then fail unavailableMessage
+            match JsonNode.Parse bytes with
             | :? JsonObject as value -> value
             | _ -> fail unavailableMessage
         with

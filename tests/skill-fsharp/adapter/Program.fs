@@ -500,6 +500,80 @@ module Program =
             Environment.SetEnvironmentVariable("PATH", previousPath)
             for name in [ "FSGG_TELEMETRY_REPOSITORY"; "FSGG_TELEMETRY_CREDENTIAL_FIXTURE_REF"; "SKILL_FS_01_STATE_ROOT" ] do Environment.SetEnvironmentVariable(name, null)
 
+    let private boundedPrivateState root =
+        let isolated = Path.Combine(root, "bounded-state")
+        let host = config isolated
+        let beginCommand attempt = Begin("STATE", "STATE.1", None, attempt, None, None, "root", "fixture", "fixture-model", "medium", 60)
+        let initial = run (Some host) (beginCommand "large")
+        require (initial.ExitCode = 0) (text initial.Stderr)
+        let token = (resultJson initial).GetProperty("token").GetString()
+        let path = Path.Combine(host.StoreRoot, "orchestrator-dispatches", token + ".json")
+        let state = JsonNode.Parse(File.ReadAllBytes path) :?> JsonObject
+        // Public synthetic metadata stands in for retained native inventory; no private state is copied.
+        state["retainedFixtureMetadata"] <- JsonValue.Create(String.replicate 294183 "x")
+        let compact = JsonSerializerOptions(Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping)
+        let writeFixture (value: JsonObject) =
+            File.WriteAllText(path, value.ToJsonString(compact) + "\n", UTF8Encoding(false))
+            if not (OperatingSystem.IsWindows()) then File.SetUnixFileMode(path, enum<UnixFileMode> 0o600)
+        writeFixture state
+        let largeBytes = File.ReadAllBytes path
+        require (largeBytes.Length > 294183 && largeBytes.Length < 1024 * 1024) "large-state fixture is outside the regression window"
+        let independent = run (Some host) (beginCommand "independent")
+        require (independent.ExitCode = 0) (text independent.Stderr)
+        require (File.ReadAllBytes path = largeBytes) "inventory matching changed another dispatch"
+        let started = run (Some host) (Started(token, "large-native"))
+        require (started.ExitCode = 0) (text started.Stderr)
+        let finished = run (Some host) (Finish(token, "completed", None))
+        require (finished.ExitCode = 0) (text finished.Stderr)
+        let terminal = JsonNode.Parse(File.ReadAllBytes path) :?> JsonObject
+        require (terminal["retainedFixtureMetadata"].GetValue<string>() = String.replicate 294183 "x") "large metadata was trimmed"
+        require (terminal["token"].GetValue<string>() = token && terminal["attemptId"].GetValue<string>() = "large") "large-state identity changed"
+        require ((resultJson finished).GetProperty("coverage").GetString() = "native-collaboration-usage-unsupported") "large state invented native usage"
+        let followup = run (Some host) (Begin("STATE", "STATE.1", None, "followup", Some "large", Some token,
+                                            "follow-up", "fixture", "fixture-model", "medium", 60))
+        require (followup.ExitCode = 0) (text followup.Stderr)
+        let followupToken = (resultJson followup).GetProperty("token").GetString()
+        let followupPath = Path.Combine(host.StoreRoot, "orchestrator-dispatches", followupToken + ".json")
+        let followupState = JsonNode.Parse(File.ReadAllBytes followupPath) :?> JsonObject
+        require (followupState["parentDispatchId"].GetValue<string>() = terminal["dispatchId"].GetValue<string>() &&
+                 followupState["parentAttemptId"].GetValue<string>() = "large" &&
+                 not (followupState["usageBaselineKnown"].GetValue<bool>())) "large-state follow-up lost lineage or invented baseline"
+
+        // A reader-valid exact-bound state must be preserved if a transition would exceed the writer bound.
+        let edge = JsonNode.Parse(File.ReadAllBytes followupPath) :?> JsonObject
+        edge["retainedFixtureMetadata"] <- JsonValue.Create ""
+        let fixedBytes = Encoding.UTF8.GetByteCount(edge.ToJsonString(compact)) + 1
+        edge["retainedFixtureMetadata"] <- JsonValue.Create(String.replicate (1024 * 1024 - fixedBytes) "x")
+        File.WriteAllText(followupPath, edge.ToJsonString(compact) + "\n", UTF8Encoding(false))
+        let before = File.ReadAllBytes followupPath
+        require (before.Length = 1024 * 1024) "writer-bound fixture length drifted"
+        let log = Environment.GetEnvironmentVariable "FSGG_ADAPTER_TEST_LOG"
+        let publications = File.ReadAllLines(log).Length
+        let rejectedWrite = run (Some host) (Started(followupToken, "would-exceed-bound"))
+        require (rejectedWrite.ExitCode = 1 && text rejectedWrite.Stderr = "fsgg roadmap telemetry: private telemetry state exceeds 1 MiB\n") "oversize writer did not refuse before publication"
+        require (File.ReadAllBytes followupPath = before && File.ReadAllLines(log).Length = publications) "oversize writer changed retained state or published"
+
+        let refusesForeignState label =
+            let rejected = run (Some host) (beginCommand label)
+            require (rejected.ExitCode = 1 && text rejected.Stderr = "fsgg roadmap telemetry: dispatch state is unavailable\n") (label + " foreign state was skipped or accepted")
+            require (File.ReadAllLines(log).Length = publications) (label + " published despite invalid inventory")
+        File.WriteAllBytes(followupPath, Array.append before [| byte ' ' |])
+        refusesForeignState "above-bound"
+        File.WriteAllText(followupPath, "{", UTF8Encoding(false))
+        refusesForeignState "malformed"
+        File.WriteAllBytes(followupPath, before)
+        if not (OperatingSystem.IsWindows()) then
+            File.SetUnixFileMode(followupPath, enum<UnixFileMode> 0o644)
+            refusesForeignState "permissions"
+            File.SetUnixFileMode(followupPath, enum<UnixFileMode> 0o600)
+        let target = Path.Combine(isolated, "symlink-target.json")
+        File.Move(followupPath, target)
+        File.CreateSymbolicLink(followupPath, target) |> ignore
+        refusesForeignState "symlink"
+        File.Delete followupPath
+        File.Move(target, followupPath)
+        require (Directory.GetFiles(Path.GetDirectoryName followupPath, "*.tmp").Length = 0) "state refusal left temporary files"
+
     let private runHarness () =
         let absent = run None Status
         require (absent.ExitCode = 2 && text absent.Stdout = "{\"schema\":\"fsgg.telemetry.host-status/1\",\"status\":\"not-configured\"}\n") "not-configured bytes drifted"
@@ -518,6 +592,7 @@ module Program =
             ciAssignment root
             protectedOriginalRefusal root
             populationOnly root
+            boundedPrivateState root
             Console.WriteLine "adapter harness: PASS"
             0
         finally
