@@ -130,15 +130,15 @@ bytes under 0.52.0 would make the same version identify different artifacts. Ado
 coherent set cut from corrected source. All three partial sets are recorded in
 `registry/dependencies.yml`.</FsggStandingAdvisories>
 
-    <PackageReleaseNotes>0.99.0 — process efficiency telemetry and current-store assessment preparation.
+    <PackageReleaseNotes>0.99.1 — bounded telemetry dispatch state IO repair.
 
-Schema14 adds canonical original-group efficiency exports, bounded prospective assessment
-claims and optional runtime prelaunch publication. Drivers carry the assessment helper and
-closed schema inputs. The dashboard keeps Historical and Current stores independent.
-CLI, Kit and Drivers advance together; the independent Host0.5 bundles Store14 for native
-collection. Current source preparation does not establish packaged qualification, publication,
-installed migration, Python runtime availability or an accepted model-backed pilot.
-Unknown historical usage stays unknown; consumed0.98 and Host0.4 releases remain immutable.
+Private dispatch-state reads and writes share a finite 1 MiB contract including the
+persisted newline. Large valid metadata remains readable; writes beyond the bound
+refuse before replacing originals or publishing events. Malformed states, links,
+permissions, lineage and unknown usage remain strict. CLI, Kit and Drivers advance
+together without a public signature or wire-schema change. Published0.99 archives
+remain immutable; source preparation establishes no publication, installed adoption,
+telemetry activation or Wizard frozen-closure qualification. Host0.5 remains independent.
 
 $(FsggStandingAdvisories)
 
