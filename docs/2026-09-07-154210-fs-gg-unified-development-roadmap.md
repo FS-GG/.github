@@ -56,6 +56,68 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-07: Wizard frozen dependency closure refreshed to published coherent 0.99.**
+[PR #4301](https://github.com/FS-GG/.github/pull/4301) merged exact
+`28caa52be69eb2b69462109eda3d5c5172f93c52` as
+`6419282331b9789666527621191b91310a5209bc` at 04:54:37 UTC after 55 hosted
+checks passed and five skipped. The source refresh binds the published CLI and
+expanded dependency-input closure, with controls for omitted inputs, changed source
+and compiled compatibility. Canonical delivery reported current validation,
+coherent validation not required and no publication obligation. This closes the
+bounded source window. Post-merge protected-intake preflight
+[37573722079/a1](https://github.com/FS-GG/.github/actions/runs/37573722079)
+failed at source `64192823`, job `112637844761`, with exit 3:
+`operation/13 is not proven absent`. The failure prevents retained-intake authority
+qualification before the expected inert receipt; the original response remains
+unknown. Subsequent authenticated HTTP 200 readback found the exact `operation/13`
+ref at `cd616f2cc2a5118acd72b99d0b01be7d6fffe9ca`, an ordinary-v2 settlement
+shard. The fixed empty-genesis intent for `gs2-09-7-retained-intake-production-v1`
+conflicts with this existing reservation, which remains preserved. Retained-intake
+activation stays fenced pending owning-contract reconciliation; the original intake
+owner is unavailable in the recovery inventory. No retry, grant or cleanup is
+admitted. Independent source validation retains its scope and establishes no
+Wizard runtime or receiver acceptance. Post-merge engine-pin-coherence
+[37573721971/a1](https://github.com/FS-GG/.github/actions/runs/37573721971),
+job `112637946362`, also failed: it observed canonical distribution CLI pin 0.97.0
+behind genuine public version 0.99.0. A local repair updates only that pin to the
+published version; twenty focused controls passed. This records repair preparation;
+hosted source delivery and default receiver acceptance remain separate boundaries.
+The Wizard 0.16 feed probe remains refused with HTTP 403;
+its original journal and failed evidence remain retained. Wizard qualification,
+publication, installed/default receiver acceptance and retaining upgrades remain
+open in the [owning SVG plan](roadmaps/svg-coherence-and-instancing-01.md).
+The installed telemetry repair also remains pending; these source merges establish
+no receiver acceptance or efficiency benefit.
+
+
+**2026-10-07: Process evaluator observation-contract source delivered.**
+[Coordination #954](https://github.com/FS-GG/FS.GG.Coordination/pull/954) merged exact
+`9d2b06b2a88577c683d4f15f3eea0aca3eddecfa` as
+`a3aeb61ca6abf26c82c5286fe25926b397918209` at 04:46:26 UTC after 46 hosted
+checks passed and six skipped. The evaluator now separates caller byte-reader
+EOF, cancellation and faults from library task settlement and result errors,
+while preserving the first cause. Canonical delivery reported current validation,
+coherent validation not required and no publication obligation. The original #953
+partial observations and failure evidence remain retained. Candidate error-path
+exit and cleanup, ProcessKit tee EOF and complete descendant coverage remain
+unknown. V2-PROC-01.1, full backend selection, containment qualification and
+consumer acceptance remain open in the
+[owning process plan](roadmaps/2026-10-05-shared-process-supervision.md).
+
+
+**2026-10-07: Current Templates knowledge inventory assertions repaired.**
+[Templates #678](https://github.com/FS-GG/FS.GG.Templates/pull/678) merged exact
+`2b360225b4f23349cdd891bad7296b2980803f04` as
+`69e950f08897d9bbb766357b6281dd1a4cf3ec95` at 04:05:48 UTC after seven
+hosted checks passed and one skipped. The source repair updates only the current
+Workspace 0.18.1 and Rendering 0.32.1 inventory assertions and a bounded owning-plan
+source note. Canonical delivery reported current validation, coherent validation
+not required and no publication obligation. The historical public 21-tuple and
+receipts remain intact. This closes only that source repair; whole
+TSDD-KNOWLEDGE-01.4/.5 acceptance remains open in the
+[owning knowledge plan](https://github.com/FS-GG/FS.GG.SDD/blob/main/docs/roadmaps/tsdd-knowledge-01.md).
+
+
 **2026-10-07: Coherent set 0.99.0 and Telemetry Host 0.5.0 publication closed.**
 Both releases bind protected source `64e95ebec1a8294e16edaafdb27e6aa96f32c6f7`.
 The authenticated coherent-set candidate [37565794335/a1](https://github.com/FS-GG/.github/actions/runs/37565794335)
