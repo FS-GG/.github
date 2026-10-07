@@ -56,6 +56,19 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-06: Published-template receiver harness source delivered; installed acceptance remains open.**
+[Templates #677](https://github.com/FS-GG/FS.GG.Templates/pull/677) merged exact
+`196a843cf4af0c97300e8ea66a9ad0e7badec03f` as
+`c56541c6dbadbc753b500ac5ffc941e8af083854` at 22:58:52 UTC after eleven checks passed
+and four skipped. Native composition passed 119 checks, including 15 owner-skill controls;
+the focused provider suite passed 186 assertions. Provenance now binds the descriptor's
+exact template ID and the genuine installed generator version, retaining separate package
+source, archive, descriptor and lifecycle checks. Original receiver 37537943991/a1 and the
+first source composition failure remain retained. The published 0.18.1 archive/tag remain
+at `d9fe65ea`; a successor request must pin the repaired harness separately and retain the
+original public package and SDK 2.1.0 inputs. Fresh installed/default/Wizard acceptance stays
+open in [SVG-COHERENCE-01.8](roadmaps/svg-coherence-and-instancing-01.md#current-progress).
+
 **2026-10-06: Closed Responses Manager and canonical custody source delivered.**
 Coordination [PR #950](https://github.com/FS-GG/FS.GG.Coordination/pull/950) merged exact
 `d177ec403dab1dd04b0f555c57ed0cc769424bdd` as
