@@ -118,7 +118,7 @@
       "observedUpdatedAt": "2026-09-25T04:58:08Z",
       "observedState": "open",
       "decision": "omit-delivered",
-      "reason": "Current selected full V2/clean-start acceptance is complete. Historical GS2-09\u201314 gates are superseded; board follow-on remains COORD-BOARD-V2-01.",
+      "reason": "Current selected full V2/clean-start acceptance is complete. Historical GS2-09–14 gates are superseded; board follow-on remains COORD-BOARD-V2-01.",
       "remainingOutcome": null,
       "roadmap": "docs/github-substrate-v2-roadmap.md",
       "status": "In progress",
@@ -423,7 +423,7 @@
         "pilotEligible": false
       },
       {
-        "id": "COORD-BOARD-V2-01.3\u2013.6",
+        "id": "COORD-BOARD-V2-01.3–.6",
         "issue": null,
         "owner": ".github / SDD / Templates / products",
         "nextAction": "Qualify restricted projection, then selected scheduling switch, publication and product adoption; .2 pilot passed.",
