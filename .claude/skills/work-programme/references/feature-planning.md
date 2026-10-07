@@ -75,9 +75,10 @@ For an existing registered unit such as GS2, reference its current owning roadma
 without creating a second mutable checkbox. A feature may combine new milestones with these references,
 but there must be one source of completion authority per unit.
 
-Return the proposed path, complete Markdown, the section 9.8 row/link update, first executable window,
-unresolved decisions and any reason the window cannot yet run. Persist it in the authorized workspace if the parent assigned a
-path; otherwise return the draft for the parent to place. Do not create issues, claims, planning-only PRs,
+Persist the complete Markdown and proposed section 9.8 row/link update in the assigned authorized path,
+or the session's private artifact directory when no checkout path was assigned. Return their paths/digests,
+the first executable window, unresolved decisions and any reason it cannot run. Keep the plan body outside
+parent context unless an architectural decision or required review needs it. Do not create issues, claims, planning-only PRs,
 new policy registries or a second orchestration service solely to produce the plan. Link an actual draft
 location while unmerged and its durable document after delivery; preserve previous plan links. The parent
 can apply a cross-repository index update asynchronously with existing work, without delaying valid delivery.

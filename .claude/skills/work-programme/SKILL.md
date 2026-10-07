@@ -1,151 +1,132 @@
 ---
 name: work-programme
-description: "Advance the temporary FS-GG Unified Roadmap with typed lane returns, compact delta views, bounded evidence and check watchers."
+description: "Advance the temporary FS-GG Unified Roadmap with delegated recovery, typed lane returns, compact decision views and bounded check watchers."
 ---
 
 # Work Programme
 
-Temporary repository-owned replacement for `work-unified-roadmap`. The existing roadmap and owner
-plans remain authoritative. This skill starts development only when the user requests advancement;
-inspection, skill maintenance and audits remain within their requested scope.
+Temporary replacement for `work-unified-roadmap`. The existing roadmap and owner plans remain authoritative.
+Start development only on requested advancement; inspection, maintenance and audits retain their own scope.
 
-## Default coordination workflow
+## Default workflow
 
-Use the delivered V2-CTX-01 workflow by default: pinned packets, typed owner returns, `delta`
-parent views, bounded `view` retrieval, declared mechanical `reuse` and the existing check watcher.
-The user selected this default on 2026-10-05. This selects delivered coordination behavior; remaining
-integration and whole-family cost measurements stay open. It changes no operation admission or
-resource limit. See the [context-efficiency plan](../../../docs/roadmaps/2026-10-05-programme-context-efficiency.md).
+Use the user-selected V2-CTX-01 default: pinned packets, typed returns, `delta` views, bounded `view`, declared
+mechanical `reuse` and existing check watchers. See the [context-efficiency plan](../../../docs/roadmaps/2026-10-05-programme-context-efficiency.md).
+Delivered coordination behavior does not establish whole-family savings, remaining integration or effect authority.
 
-## Enter and recover
+## Delegate recovery before loading history
 
-Use the current protected [Unified Roadmap](../../../docs/2026-09-07-154210-fs-gg-unified-development-roadmap.md),
-its §9.8 named parts and existing owner plans. Read relevant sections, not the whole progress history.
-Use the latest handoff for references; fresh-read affected native facts before acting. Preserve campaign,
-feature, original item, item, attempt, branch/PR and current owner identities through repairs and restart.
-Do not infer completion from checked boxes, a worker summary, a package pin or an old handoff.
-For explicitly selected organization V2 inspection, read the existing
-[organization contract](../check-board/references/organization-v2-inspection.md); preserve its exact
-population, executable and consumer admission. This new skill does not inherit native consumer acceptance
-merely from the retired skill's name. Do not require a full board census for an assigned roadmap lane.
+Use one temporary Sol-medium worker with `fork_turns: "none"` for bounded bootstrap. Give it user scope,
+known identities/references, actual resource constraints and this skill path. It reads
+[bootstrap](references/bootstrap.md), refreshes selected native facts, preserves every active reservation,
+and prepares the existing snapshot and packets. It returns a compact decision view and finishes; it makes
+no dispatch, ownership transfer or remote effect. Count its capacity and telemetry. Reuse fresh existing
+owner artifacts instead when available. If delegation is unavailable, recover locally within the same bounds
+and report the limitation.
 
-Read [adapter contract](references/adapter.md) once when assembling or recovering a session. Use one
-dedicated private directory outside every checkout, mode 0700. The F# helper uses the installed .NET SDK,
-no package restore or engine build; account for its CLR process in actual local capacity. Batch related
-checks in one input. Run sequentially when local qualification capacity is constrained.
+The parent reads its own governing instructions and the decision view, rather than detailed handoffs,
+whole roadmaps or packet bodies. The protected [Unified Roadmap](../../../docs/2026-09-07-154210-fs-gg-unified-development-roadmap.md),
+§9.8 named parts and owning plans remain authoritative. The bootstrap worker resolves their relevant sections
+and organization-inspection obligations. Fresh-read native admission before parent-owned effects. Preserve
+campaign, feature, original/current item and attempt, owner, branch/PR and unknown operations through restart.
+An index, snapshot, return, package pin or checkbox cannot establish completion or authority.
 
-```console
-dotnet fsi --exec .agents/skills/work-programme/scripts/programme.fsx frontier /private/snapshot.json /private/programme-session
-```
+Assemblers read [adapter](references/adapter.md); the parent reads it to construct or troubleshoot inputs.
+Use one private mode-0700 directory outside checkouts; count helper CLR resources and batch compatible reads.
+Recovery preserves original timestamps, unknown reservations and genuine packet/return joins.
 
-The snapshot is a derived observation cache, not a second roadmap or an authorization receipt. Record
-fresh source/PR/check/operation references, timestamps, unreadable observations, retained reservations,
-disjoint touch-sets and selected dependency boundaries. The helper returns advisory actions and the
-complete reserved active inventory. Read its compact output; retain raw histories outside parent context.
-Use `delta` with explicit evaluation time and policy/evaluator/user-scope identities for subsequent
-parent decisions. Keep the complete active-reservation inventory even when owner returns are missing.
-On a missing base, changed identity or revision gap, resynchronize from source observations; retain
-unknown reservations and original timestamps. Legacy prose remains historical evidence: never invent
-packet digests or return revisions to migrate it. Start typed returns with the next genuine packet.
-Native tools and governing contracts still independently admit every effect.
-Act on ready lanes up to actual capacity, then integrate or repair the active set before opening more
-PR lanes when that queue is limiting. Refresh this view after material native changes; use bounded machine
-watchers for waits, never a model turn solely to poll. Continue independent lanes while another is waiting.
+Dispatch ready lanes within actual capacity. Integrate or repair the active set before opening more PRs when
+the queue limits progress. Hosted admission follows the live runner queue independently of free agent slots;
+continue independent local work while hosted work drains. Refresh after material native changes.
 
-## Keep the parent small
+## Keep investigation with its owner
 
-The parent owns user scope, capacity, shared surfaces, integration and exceptional decisions. Lane owners
-retain source investigation, failures, tests and detailed evidence. Do not repeat a worker's investigation
-or routinely load all seals, successful hash rows, logs or diffs into the parent. Retrieve the exact
-artifact when a finding, dispute, architectural join or explicitly root-owned safeguard requires it.
-Use `view` for pinned bounded excerpts; transport governing instructions whole. Use `reuse` only for
-declared complete mechanical input closures. A refusal or incomplete closure requires retrieval or
-recomputation, never inferred acceptance.
+The parent owns scope, capacity, shared surfaces, integration and exceptional decisions. One accountable
+owner per lane retains investigation, tests, failures and evidence in an isolated worktree with an explicit
+touch-set. Reuse that owner for ordinary milestones and repairs. Route failed checks using exact native
+references before reading logs in the parent. Owners diagnose, repair and qualify within their existing
+scope, authority and budgets, preserving the first failed attempt. Escalate scope/authority changes,
+cross-lane conflicts, unknown effects and root-owned safeguards.
 
-For each ready lane, use one accountable owner and isolated worktree with an explicit touch-set. Reuse
-the same owner for ordinary milestones and repairs. Prepare a pinned packet with `packet`; read only the
-packet summary in the parent and give the worker its packet path. Every applicable instruction, scope,
-authority boundary, acceptance obligation and stopping rule is mandatory. Whole governing instructions
-cannot be excerpted or omitted to fit. Owner-validated excerpts and optional history remain retrievable.
+Bootstrap or lane owners assemble `packet` directly from files. The parent receives path/digest, scope,
+instruction inventory and omissions, not the body. Deliver governing instructions whole and mandatory to
+the responsible worker; the parent reads those governing its own actions. The receiving owner confirms
+applicability before acting. Never shorten instructions to fit; plan excerpts/history stay retrievable.
 
-Resolve newest available Astra **high** for a new major feature planner and newest available Sol
-**medium** for an implementation lane; current routes are `gpt-6-astra` and `gpt-6.1-sol`. Spawn explicitly
-with resolved `model`, `reasoning_effort`, `fork_turns: "none"`. Unavailable routes are capability gaps;
-never silently substitute. Existing valid work skips planning. Material scope/architecture/dependency
-changes need planning; test failure, head movement and CI waits do not. Follow §9.8 assignment boundaries;
-do not split tightly coupled changes or pre-plan unselected work.
+Resolve newest available Astra **high** for new major planning and Sol **medium** for implementation:
+currently `gpt-6-astra`/`gpt-6.1-sol`. Spawn with explicit model/effort and `fork_turns: "none"`; report
+unavailable routes rather than substitute. Valid plans skip planning; material scope/architecture/dependency
+changes need it, while restarts, head changes and failures do not. Respect §9.8; do not split coupled work
+or pre-plan unselected features. Assemblers/planners read [feature planning](references/feature-planning.md)
+when applicable. Implementation packets include [work-roadmap](../work-roadmap/SKILL.md), owner plan,
+ready window, branch/PR, authority, acceptance and stop. Reviewers are optional, with exact-source findings.
 
-Read [feature planning](references/feature-planning.md) only for new or materially changed features.
-Give each implementation worker the exact installed [work-roadmap](../work-roadmap/SKILL.md) path,
-owner subroadmap, ready window, current branch/PR, authority, acceptance and stop. Optional bounded
-reviewers or incident investigators return exact-source findings; routine work never requires a critic.
-All agents count toward available capacity; do not add another coordinator per lane.
+Packet-bound owners retain `fsgg.programme.lane-return/1` under the
+[adapter contract](references/adapter.md#additive-offline-delta-input). Normal messages provide its path,
+identity/exact head, changes since the prior return, boundary state, evidence reference and parent action
+(or `none`), aiming for at most100 words. Reserve 150–300 words for substantive exceptions. Material detail
+stays in the artifact; keep packet, original-attempt, source and return-revision joins truthful. The same owner
+repairs malformed returns. Neither a return nor an acknowledgment establishes acceptance.
 
-Require new packet-bound owners to retain a `fsgg.programme.lane-return/1` artifact using the
-[adapter contract](references/adapter.md#additive-offline-delta-input), and return its path with roughly
-150–300 words: stable identity,
-exact candidate/operation, established outcome, unknowns, artifact references and any concrete decision.
-This is a target, not permission to omit material findings. Keep packet digest, original attempt,
-source revision and return revision joins truthful. Have the same owner repair malformed returns;
-a return cannot itself establish completion. The parent expands exceptions, not every success.
+Consume decision deltas and the complete reservation inventory, retaining unknown/absent owners. Expand
+exact evidence only for inconsistencies, architectural joins, user requests or root safeguards. Use bounded
+`view` and complete mechanical `reuse`; refusals require retrieval/recomputation. Before parent reads,
+select fields/ranges and an output bound; redirect raw logs/large responses privately. Truncation is incomplete
+evidence: retrieve the missing obligation or route it to the owner. Never read binaries as text.
 
-## Integrate through existing boundaries
+## Preserve integration and effect boundaries
 
-Routine is the default. Only a recorded explicit human instruction selects heavyweight process for named
-scope. Labels, registration, modeled work and protected paths/effects never select that ceremony. Preserve
-technical checks and operation authority independently; a refusal fences the affected effect.
+Routine is default. Only explicit recorded human instruction selects heavyweight process for named scope;
+labels, registration, modeled work and protected paths/effects do not. Technical checks and effect authority
+remain independent; refusals fence affected effects.
 
-The named parent integrator admits remote PR creation using `tools/pr-lane-admission.py`: stable campaign
-and chain, exact pushed head, prepared title/body; one open PR per chain and at most two managed PRs per
-repository. Its lock is local and participating callers only. Read the live check queue too. Prepare
-locally when CI/integration is the bottleneck; repair the existing PR. Shared-file joins use one integrator.
-For pending hosted checks, default to `tools/routine-delivery.py --watch-checks --watch-seconds N`
-with the selected repo, PR and exact head (N 1–600). Consume material changes or terminal/deadline
-records; unchanged polls need no model turn. The watcher never applies delivery and owns only direct
-query children. Count its resources and defer it during incompatible qualification windows.
-Use `tools/routine-delivery.py` and [ADR-0084](../../../docs/adr/0084-semantic-reuse-never-cancels-coherent-validation.md)
-for exact-head checks, validated reuse, coherent validation, merge and native readback. Never reinterpret
-`pending` as `disputed`, cancel the coherent obligation, or accept dependent activation after a late failure.
+The parent integrator admits remote PRs through `tools/pr-lane-admission.py`: stable campaign/chain, exact
+pushed head and prepared title/body. Keep one open PR per chain and at most two managed PRs per repository,
+including other campaigns. The lock covers participating local callers only. Read the live check queue;
+prepare locally when CI limits progress and repair existing PRs. One integrator owns shared-file joins.
 
-Use `verify` for mechanical artifact checks. It proves declared byte equality only; it does not establish
-signature authenticity, evidence completeness, semantic acceptance, process cleanup or effect authority.
-Preserve original evidence and failed attempts. Reuse installed Execution contracts where actually
-qualified; retain existing root review, custody, resource, deadline and one-use requirements for operations.
-Unknown effects require observation under the original identity before retry. Cancel requested is not
-termination observed. Source, publication, installed adoption and native acceptance remain separate.
+For hosted waits use `tools/routine-delivery.py --watch-checks --watch-seconds N` with repo, PR and exact head
+(N 1–600). Retain raw records privately; consume material changes or terminal/deadline summaries. Unchanged
+polls need no model turn or polling agent. Watchers never deliver and own only direct query children;
+count their resources and defer incompatible local qualification. Parent integration uses the same delivery
+helper and [ADR-0084](../../../docs/adr/0084-semantic-reuse-never-cancels-coherent-validation.md) for exact-head
+checks, validated reuse, coherent validation, merge and native readback. Never reinterpret pending as disputed,
+cancel coherent obligations or accept dependent activation after late failure.
 
-Keep plans in their owning repositories; retain §9.8 links, §9.9 workspace/default and upgrade boundaries.
-After authoritative closure, land Unified §0 in the owning `.github` PR or its immediate asynchronous
-cross-repository follow-up. Do not advance that chain before projection lands; independent lanes continue.
-No CI tick or intermediate checkpoint needs a projection. Audit mode uses [evidence audit](references/evidence-audit.md)
-and does not dispatch development merely because it edits navigation.
+`verify` proves declared byte equality, not authenticity, complete evidence, semantic acceptance, cleanup or
+authority. Preserve originals and failed attempts. Reuse installed Execution contracts only where qualified;
+keep root review, custody, resources, deadlines and one-use requirements. Unknown effects require original-
+identity observation before retry. Cancel requested is not termination observed. Source, publication,
+installed adoption and native acceptance remain separate. Owners cannot admit parent-owned effects by return.
 
-## Collect independent failures within the attempt
+Keep plans in owning repositories and retain §9.8 links and §9.9 default/upgrade boundaries. After authoritative
+closure, land Unified §0 in its owning `.github` PR or immediate asynchronous cross-repository follow-up.
+Do not advance that chain before projection lands; independent lanes continue. CI ticks need no projection.
+[audit guidance](references/evidence-audit.md) applies to audits, which never dispatch development merely by
+editing navigation.
 
-Apply the permanent diagnostic execution policy at
-<https://github.com/FS-GG/.github/blob/main/docs/coordination/diagnostic-execution.md>.
-Collect independently checkable preparation defects against the actual candidate; failed or unknown
-prerequisites block dependent effects. Continue only known independent checks with valid shared state,
-ownership, custody and accounting within the original budgets. Stop affected execution on safeguard
-uncertainty and use existing cleanup. Preserve the first cause, additional findings, blocked/unknown/
-budget-limited coverage and separate exit, cleanup and reporting outcomes; partial failures cannot
-qualify. Diagnostic mode is optional. Repeated first-failure repairs require a bounded composition
-review in the existing work artifact, without additional mandatory runs, forms or approval ceremony. Guidance source
-changes do not establish runtime qualification or installed adoption.
+## Diagnose and measure within existing boundaries
 
-## Measure, debug and finish
+The executing owner reads and applies the full
+[diagnostic execution policy](https://github.com/FS-GG/.github/blob/main/docs/coordination/diagnostic-execution.md),
+including independent failure collection, original budgets, prerequisite fences, custody/cleanup, retained
+first cause and separate execution/reporting outcomes. Repeated first-failure repairs get bounded composition
+review in the existing artifact. No extra ceremony or runtime/adoption claim follows from guidance edits.
 
-Use existing `fsgg-coord-engine skill roadmap-telemetry` begin/started/finish and usage-reconcile commands
-for every native dispatch/follow-up. Read [observation](references/observation.md) when starting dispatch;
-native IDs, stable lineage and advisory coverage are mandatory. The helper's byte/duration logs supplement
-that observer; they never infer model tokens or claim to observe compaction.
+Use installed `fsgg-coord-engine skill roadmap-telemetry` begin/started/finish and usage-reconcile for every
+native dispatch/follow-up, including bootstrap. The parent reads [observation](references/observation.md)
+before dispatch; native IDs, stable lineage and advisory coverage are mandatory. Helper IO/duration never
+infer model tokens or compaction. Missing native collection remains an attributed gap, not zero.
 
-Run `report PRIVATE_ROOT` after a bounded window. Inspect refusals and expanded parent context; fix the
-demonstrated cause on this skill's existing branch/PR. Charge all children, retrieval and debugging to the
-same item. Keep model/effort and acceptance stable while comparing context. Do not create a separate
-rollout programme, per-checkpoint receipts, polling agent or permanent service.
+Run `report PRIVATE_ROOT` after a bounded window. Fix demonstrated refusals and context expansions on the
+existing skill branch/PR; charge bootstrap, children, retrieval and repairs to their existing lineage.
+Keep model/effort and acceptance stable when comparing context. Track startup/parent-read bytes, bytes per
+return and evidence expansions separately from helper IO and whole-family usage where observable. Unknown
+measurements remain unknown; a smaller parent or changed guidance alone proves no total savings.
+Do not create a separate rollout programme, checkpoint receipts or permanent service.
 
-Stop at user scope, feature exit or an unresolved boundary; distinguish window completed, feature
-delivered, publication pending and blocked. Retain the compact snapshot and exact artifact references for
-restart, refresh native facts next time, and close the driver's observation before returning. Retire this
-temporary skill and helper when the programme ends or a qualified successor covers its behavior.
+Stop at user scope, feature exit or unresolved boundary, distinguishing completed window, delivered feature,
+pending publication and blocked work. Retain snapshot/evidence pointers and the bounded dispatch index in
+[bootstrap](references/bootstrap.md); future recovery verifies native state rather than rehydrating history.
+Close the root observation before returning. Retire this temporary skill/helper when the programme ends or
+a qualified successor covers its behavior.
