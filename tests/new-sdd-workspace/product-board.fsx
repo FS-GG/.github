@@ -79,6 +79,7 @@ try
         (Reflection.Assembly.Load("fsgg-coord-engine").GetCustomAttributes(typeof<Reflection.AssemblyInformationalVersionAttribute>, false)
          |> Array.exactlyOne) :?> Reflection.AssemblyInformationalVersionAttribute
     let pin = version.InformationalVersion.Split('+').[0]
+    if pin <> "0.99.0" then failwith "compiled Creator loaded a different coherent CLI"
     let tool = sprintf "{\"tools\":{\"fs.gg.coord.cli\":{\"version\":\"%s\",\"commands\":[\"fsgg-coord-engine\"]}}}" pin
     let fetch = function
         | "registry/coordination-kit-skill-manifest.json" -> Ok(manifest kit)
@@ -88,6 +89,9 @@ try
         | path when path.StartsWith ".claude/skills/" -> Ok content
         | path -> Error("missing " + path)
     let prepare fetch = ProductBoard.prepare root "acme/app" (String.replicate 40 "a") binding fetch
+    prepare (fun path -> fetch path |> Result.map (fun value ->
+        if path = "dist/dotnet/.config/dotnet-tools.json" then value.Replace(pin, "0.97.1") else value))
+        |> refuse "immutable kit tool pin differs from loaded coherent CLI"
     let freshRoot = Path.Combine(root, "fresh-generated")
     let freshAuthority = ProductBoard.captureFreshScaffoldTarget freshRoot |> Option.get
     let ownerPath = Path.Combine(root, "existing-owner-file")
@@ -160,6 +164,11 @@ try
     ProductBoard.prepare root "acme/app" "main" binding fetch |> refuse "moving producer reference"
     ProductBoard.apply root plan |> pass
     if not ((prepare fetch |> pass).Changes.IsEmpty) then failwith "repeat must be a no-op"
+    let retainedTools = Path.Combine(root, ".config/dotnet-tools.json")
+    let retainedToolBytes = File.ReadAllBytes retainedTools
+    File.WriteAllText(retainedTools, File.ReadAllText(retainedTools).Replace(pin, "0.97.1"))
+    prepare fetch |> refuse "retained predecessor tool pin cannot be overwritten"
+    File.WriteAllBytes(retainedTools, retainedToolBytes)
     let settingsPath = Path.Combine(root, ".claude/settings.json")
     let settings = JsonNode.Parse(File.ReadAllText settingsPath).AsObject()
     settings.["ownerSetting"] <- JsonValue.Create "keep"

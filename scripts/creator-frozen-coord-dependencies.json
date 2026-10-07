@@ -1,11 +1,11 @@
 {
   "schema": "fsgg.creator-frozen-coord-dependencies/1",
-  "sourceSha": "99ea75286f5c3cea2a261fef4e5b45cd70378185",
-  "version": "0.97.1",
-  "archiveSha256": "00c61ecba2e7973c1202f5abcf13a9c788c48c561090fd8dd8e4b58387666ea0",
-  "releaseId": 403934888,
-  "assetId": 613172271,
-  "downloadUrl": "https://github.com/FS-GG/.github/releases/download/coherent-set/v0.97.1/FS.GG.Coord.Cli.0.97.1.nupkg",
+  "sourceSha": "64e95ebec1a8294e16edaafdb27e6aa96f32c6f7",
+  "version": "0.99.0",
+  "archiveSha256": "d50b6de718c509e581984759dfc2547a6afa287488a829930bec391823ae9f5e",
+  "releaseId": 405346080,
+  "assetId": 617480948,
+  "downloadUrl": "https://github.com/FS-GG/.github/releases/download/coherent-set/v0.99.0/FS.GG.Coord.Cli.0.99.0.nupkg",
   "projects": {
     "scripts/NewSddWorkspace/NewSddWorkspace.fsproj": "new-sdd-workspace",
     "src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj": "fsgg-coord-engine",
@@ -21,216 +21,20 @@
   },
   "sourceLeaves": [
     {
-      "path": "src/FS.GG.Coord.Cli/BoardFactsApplication.fs",
-      "sha256": "500a510e7460f8385a0974baf0d3afa103fb6ebe838fb27670f8260d275525a5"
+      "path": "Directory.Build.props",
+      "sha256": "390f99c26ac3467fad9e7faa92c5ce97e47932fca33317541e9cd17441cc29c1"
     },
     {
-      "path": "src/FS.GG.Coord.Cli/BoardFactsApplication.fsi",
-      "sha256": "a6b55e4118556c1d5ff2254419113327189d9d3b2a31040774aa1cb11e84e782"
+      "path": "Directory.Packages.props",
+      "sha256": "dfa4c30c237e1474f770012a5a21225836766ae4d8c1fdd59745ea01071ce3f5"
     },
     {
-      "path": "src/FS.GG.Coord.Cli/BoardV2Application.fs",
-      "sha256": "0f73892036cd1a6feb9bef9b69049d3c96bae43c5309a438cfd5abfb21e65fea"
+      "path": "dist/dotnet/Directory.Build.props",
+      "sha256": "f29e3b29afed4f93258003519c5af5676b0a9bfea7623350491f2d60ee082d0c"
     },
     {
-      "path": "src/FS.GG.Coord.Cli/BoardV2Application.fsi",
-      "sha256": "0bcaff479d3ef0e3f166bd4044267d9f53bf66b0e1144105c4e2d767839c852c"
-    },
-    {
-      "path": "src/FS.GG.Coord.Cli/CHANGELOG.md",
-      "sha256": "4a0a4a7454679649512fd18831691de3babce1ce9a1e92979f8fcd0ebabe6046"
-    },
-    {
-      "path": "src/FS.GG.Coord.Cli/Chores.fs",
-      "sha256": "f61e7c34f37d97766a374f8d0a2d0986355b7928cf415d13cead3cc0c9e69362"
-    },
-    {
-      "path": "src/FS.GG.Coord.Cli/Chores.fsi",
-      "sha256": "2e08cb826a1a2afb62ac633f10eeb115731bee11d307312cebc3cd3091548491"
-    },
-    {
-      "path": "src/FS.GG.Coord.Cli/Client.fs",
-      "sha256": "55888b87dcdf7d0d7adf538355f9904d9c6bf63ac6bb6465792cdbff2fcbd6c9"
-    },
-    {
-      "path": "src/FS.GG.Coord.Cli/Client.fsi",
-      "sha256": "7ea0d8f31d18d6c13dcbaa604c4c734bd1331dae8e24881c15aa354b3076f1fb"
-    },
-    {
-      "path": "src/FS.GG.Coord.Cli/CycleLedgerApplication.fs",
-      "sha256": "270e4d2d6fb3e86371826a79cd2e081a78a04887a3c3ee5e9f305e5960e36f57"
-    },
-    {
-      "path": "src/FS.GG.Coord.Cli/CycleLedgerApplication.fsi",
-      "sha256": "57db43b18565fe067842dbc0c2ef54bbeb42390223724507031efdf5ed5c5442"
-    },
-    {
-      "path": "src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj",
-      "sha256": "a738b85f1645614362f4916e92874e8f148ce2ab9748c30021263c0bd210a5be"
-    },
-    {
-      "path": "src/FS.GG.Coord.Cli/IntakeApplication.fs",
-      "sha256": "9022a8e28324627b4c925f99c58da89849caad284978f0ba9f3222237f710841"
-    },
-    {
-      "path": "src/FS.GG.Coord.Cli/IntakeApplication.fsi",
-      "sha256": "070281554a4b46a9963d69c1887a610b8bbd438588d569665a92b4f69f92df4b"
-    },
-    {
-      "path": "src/FS.GG.Coord.Cli/KitDigest.fs",
-      "sha256": "856266dc4865d13576d6587ab5a5fd566a9ebc256562d7a94c6a432b0252559a"
-    },
-    {
-      "path": "src/FS.GG.Coord.Cli/KitDigest.fsi",
-      "sha256": "3cc17b906aba50f0edba052bad194c600bff3bd8197d513ac8fd29eb77fdab67"
-    },
-    {
-      "path": "src/FS.GG.Coord.Cli/LintApplication.fs",
-      "sha256": "bb4878d0fe432ee68430c71350965fa225db70fc8a2da71868a6a19ddf6cb8e2"
-    },
-    {
-      "path": "src/FS.GG.Coord.Cli/LintApplication.fsi",
-      "sha256": "b77fdfe796a39240a25c087cabb4768800f9a16ea526b8b13ec9e77affebe1c5"
-    },
-    {
-      "path": "src/FS.GG.Coord.Cli/PacketApplication.fs",
-      "sha256": "a55a3261756a8ff11b06fdcdf742a3e553507246b6027af0fdad1472b9f8c12b"
-    },
-    {
-      "path": "src/FS.GG.Coord.Cli/PacketApplication.fsi",
-      "sha256": "8569e997b8ee8a00a03729430e175f33b6e468ee4d1920e33f2fad18928a8760"
-    },
-    {
-      "path": "src/FS.GG.Coord.Cli/Program.fs",
-      "sha256": "223cde1ad3c304542d0f7e641c8093eba5ec6ffee078c66c1498a2a39c6248fd"
-    },
-    {
-      "path": "src/FS.GG.Coord.Cli/QualificationApplication.fs",
-      "sha256": "0e9100d75958154cfd281435451e0d524644168150b2f5b6ac5d48c9b4263cc7"
-    },
-    {
-      "path": "src/FS.GG.Coord.Cli/QualificationApplication.fsi",
-      "sha256": "29df9b55e234064228aa4dd91ff6b22a0f0af3d5808d35f4dfe158dc7a30ac1a"
-    },
-    {
-      "path": "src/FS.GG.Coord.Cli/README.md",
-      "sha256": "826589234cd3894a30ffdeb358a186f4ad942f9f22d2dd20f29116acaee831db"
-    },
-    {
-      "path": "src/FS.GG.Coord.Cli/ReadyApplication.fs",
-      "sha256": "1f66f31ff4356f7ae8cddfada53da68b2a0e9c8c25459e0f8bbe345909279f3b"
-    },
-    {
-      "path": "src/FS.GG.Coord.Cli/ReadyApplication.fsi",
-      "sha256": "83bfc9ccdd853d48ff36c6e4fb40aa4ad11525d7a655574b3740076be15de881"
-    },
-    {
-      "path": "src/FS.GG.Coord.Cli/SemanticDiffApplication.fs",
-      "sha256": "87b45f54dda3743e790c187b4b7290e450c6eafaa383b6a634db52ba51248162"
-    },
-    {
-      "path": "src/FS.GG.Coord.Cli/SemanticDiffApplication.fsi",
-      "sha256": "be0328101e5eb371a218dc5ac52dcfe8b80cf3bf4c4fe3ad2be0c52ad91236f1"
-    },
-    {
-      "path": "src/FS.GG.Coord.Cli/SkillCommandApplication.fs",
-      "sha256": "7f11e4facac5b92c57dcee42b68493e01963b3372d9969d6fe0047364df2843c"
-    },
-    {
-      "path": "src/FS.GG.Coord.Cli/SkillCommandApplication.fsi",
-      "sha256": "94422d09c69c8207417c70ffe21e94fe457aebc814686e715855056c79534553"
-    },
-    {
-      "path": "src/FS.GG.Coord.Cli/SkillPreflight.fs",
-      "sha256": "53af92bcbcdfac738319217d3b6401c672785cfbb9a0d1ff52f7f852738c5279"
-    },
-    {
-      "path": "src/FS.GG.Coord.Cli/SkillPreflight.fsi",
-      "sha256": "c520e445ddb04baa45ae33961209e9ceb1988f5ed13f707a05d9f48c107a1a41"
-    },
-    {
-      "path": "src/FS.GG.Coord.Cli/SkillTelemetryAdapter.fs",
-      "sha256": "7ccb5fda0e18a60de631875a7da9d698ed9e1cf1a3017d476527489875933656"
-    },
-    {
-      "path": "src/FS.GG.Coord.Cli/SkillTelemetryAdapter.fsi",
-      "sha256": "8f47b9383063412d940f7da22970abc9caf44b4c7e637131d6a89dd93a556b54"
-    },
-    {
-      "path": "src/FS.GG.Coord.Cli/SkillTelemetryReaders.fs",
-      "sha256": "3a6a6f5d332238070746f862a835df32a08e30c6f581634bca94f0aa6e474fe2"
-    },
-    {
-      "path": "src/FS.GG.Coord.Cli/SkillTelemetryReaders.fsi",
-      "sha256": "57293af13d8d6b7d1723d5b8119844f4659b70978254f73feefae816fd127613"
-    },
-    {
-      "path": "src/FS.GG.Coord.Cli/Snapshot.fs",
-      "sha256": "2af982e9001aadacd91d6e900966c390441627f270168bd9079e322818730532"
-    },
-    {
-      "path": "src/FS.GG.Coord.Cli/Snapshot.fsi",
-      "sha256": "876535e762935846586f4f148be19e8f3ffbe425b00b65a504374b75825bd4f8"
-    },
-    {
-      "path": "src/FS.GG.Coord.Cli/TelemetryApplication.fs",
-      "sha256": "435feb0d765a3a319a70e3d61d55d305dbea56e1ab92f4d2a799cb4c671bf58c"
-    },
-    {
-      "path": "src/FS.GG.Coord.Cli/TelemetryApplication.fsi",
-      "sha256": "8b715c7e9eb399ded8b2fd3c7ba8a1726c9513eee711e1af237f57e79043be14"
-    },
-    {
-      "path": "src/FS.GG.Coord.Cli/TelemetryCiApplication.fs",
-      "sha256": "2c77827228c10c680b61797edeca32cd0265413b5485de99539e42e3a90e83f3"
-    },
-    {
-      "path": "src/FS.GG.Coord.Cli/TelemetryCiApplication.fsi",
-      "sha256": "68e459006163c8b7e10cd508cc2f36548c6f8964ff8358c943199bac241bf125"
-    },
-    {
-      "path": "src/FS.GG.Coord.Cli/TelemetryDashboardApplication.fs",
-      "sha256": "236fb001c1fbe53abcfb08a21ca419dc0de05921c37988d988d7a29f87367ccf"
-    },
-    {
-      "path": "src/FS.GG.Coord.Cli/TelemetryDashboardApplication.fsi",
-      "sha256": "b09b6f5ddde9482aafae9eca11484447a07fa6865311863c0614be8c7786c334"
-    },
-    {
-      "path": "src/FS.GG.Coord.Cli/TelemetryDashboardServer.fs",
-      "sha256": "75ea377e589a9bfe5edda1f7c20011aa4531bca6e787cd5cf606afcfec9d3b7e"
-    },
-    {
-      "path": "src/FS.GG.Coord.Cli/TelemetryDashboardServer.fsi",
-      "sha256": "c4d24d54a19c0b71774f987f7aa5a0bb702e7703ffab550a902c5d213f07b400"
-    },
-    {
-      "path": "src/FS.GG.Coord.Cli/TelemetryRuntimeApplication.fs",
-      "sha256": "a2d30e0cccb63a51ea3923b8084855c6dfdc46dbfeb800cb0b0e8329747f569c"
-    },
-    {
-      "path": "src/FS.GG.Coord.Cli/TelemetryRuntimeApplication.fsi",
-      "sha256": "5cbfb1f94ed60fefe2829a33956b137cb3e155a133b42fd921a0a81ecda952a4"
-    },
-    {
-      "path": "src/FS.GG.Coord.Cli/TelemetryStoreApplication.fs",
-      "sha256": "700a3376a10babfc4311ddaf82a8b87b49c108a9eda11d15f9631e18249dbd43"
-    },
-    {
-      "path": "src/FS.GG.Coord.Cli/TelemetryStoreApplication.fsi",
-      "sha256": "8c3f06a868f8ee027787cdd9b0c1695f9d890893ce2ba958a429bfa2d96c63ec"
-    },
-    {
-      "path": "src/FS.GG.Coord.Cli/WorkspaceTelemetryApplication.fs",
-      "sha256": "20cfa8756339660afe291c698e1b3f70d6869c0db53554f6426ab59451cbded7"
-    },
-    {
-      "path": "src/FS.GG.Coord.Cli/WorkspaceTelemetryApplication.fsi",
-      "sha256": "7f033b35c2f46c4db172f544ec9bbcd8b53a39c8263d82a320b0e6fe6b298087"
-    },
-    {
-      "path": "src/FS.GG.Coord.Cli/packages.lock.json",
-      "sha256": "ae0c80f7aeb813b41f3661a3bb93c04c8e4bde2c9594a14749dbaf9a26b2990b"
+      "path": "global.json",
+      "sha256": "884c3d68b436980197e5c5871b6be07dc75b894b2a9e210f70a73468e9f9bd8e"
     },
     {
       "path": "src/FS.GG.Coord.Cli.BoardOps/FS.GG.Coord.Cli.BoardOps.fsproj",
@@ -393,6 +197,214 @@
       "sha256": "e5a5679fe83a6b88c9674b5c175e048481ddb81331e648cca54fcf097ee0aa62"
     },
     {
+      "path": "src/FS.GG.Coord.Cli/BoardFactsApplication.fs",
+      "sha256": "500a510e7460f8385a0974baf0d3afa103fb6ebe838fb27670f8260d275525a5"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/BoardFactsApplication.fsi",
+      "sha256": "a6b55e4118556c1d5ff2254419113327189d9d3b2a31040774aa1cb11e84e782"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/BoardV2Application.fs",
+      "sha256": "0f73892036cd1a6feb9bef9b69049d3c96bae43c5309a438cfd5abfb21e65fea"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/BoardV2Application.fsi",
+      "sha256": "0bcaff479d3ef0e3f166bd4044267d9f53bf66b0e1144105c4e2d767839c852c"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/Chores.fs",
+      "sha256": "f61e7c34f37d97766a374f8d0a2d0986355b7928cf415d13cead3cc0c9e69362"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/Chores.fsi",
+      "sha256": "2e08cb826a1a2afb62ac633f10eeb115731bee11d307312cebc3cd3091548491"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/Client.fs",
+      "sha256": "55888b87dcdf7d0d7adf538355f9904d9c6bf63ac6bb6465792cdbff2fcbd6c9"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/Client.fsi",
+      "sha256": "7ea0d8f31d18d6c13dcbaa604c4c734bd1331dae8e24881c15aa354b3076f1fb"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/CycleLedgerApplication.fs",
+      "sha256": "270e4d2d6fb3e86371826a79cd2e081a78a04887a3c3ee5e9f305e5960e36f57"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/CycleLedgerApplication.fsi",
+      "sha256": "57db43b18565fe067842dbc0c2ef54bbeb42390223724507031efdf5ed5c5442"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj",
+      "sha256": "d09d1c1471074313cdc9115b29d00e7abd362d18234ba4c26b54208443044e8b"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/IntakeApplication.fs",
+      "sha256": "9022a8e28324627b4c925f99c58da89849caad284978f0ba9f3222237f710841"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/IntakeApplication.fsi",
+      "sha256": "070281554a4b46a9963d69c1887a610b8bbd438588d569665a92b4f69f92df4b"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/KitDigest.fs",
+      "sha256": "856266dc4865d13576d6587ab5a5fd566a9ebc256562d7a94c6a432b0252559a"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/KitDigest.fsi",
+      "sha256": "3cc17b906aba50f0edba052bad194c600bff3bd8197d513ac8fd29eb77fdab67"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/LintApplication.fs",
+      "sha256": "bb4878d0fe432ee68430c71350965fa225db70fc8a2da71868a6a19ddf6cb8e2"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/LintApplication.fsi",
+      "sha256": "b77fdfe796a39240a25c087cabb4768800f9a16ea526b8b13ec9e77affebe1c5"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/PacketApplication.fs",
+      "sha256": "a55a3261756a8ff11b06fdcdf742a3e553507246b6027af0fdad1472b9f8c12b"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/PacketApplication.fsi",
+      "sha256": "8569e997b8ee8a00a03729430e175f33b6e468ee4d1920e33f2fad18928a8760"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/Program.fs",
+      "sha256": "223cde1ad3c304542d0f7e641c8093eba5ec6ffee078c66c1498a2a39c6248fd"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/QualificationApplication.fs",
+      "sha256": "0e9100d75958154cfd281435451e0d524644168150b2f5b6ac5d48c9b4263cc7"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/QualificationApplication.fsi",
+      "sha256": "29df9b55e234064228aa4dd91ff6b22a0f0af3d5808d35f4dfe158dc7a30ac1a"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/README.md",
+      "sha256": "826589234cd3894a30ffdeb358a186f4ad942f9f22d2dd20f29116acaee831db"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/ReadyApplication.fs",
+      "sha256": "1f66f31ff4356f7ae8cddfada53da68b2a0e9c8c25459e0f8bbe345909279f3b"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/ReadyApplication.fsi",
+      "sha256": "83bfc9ccdd853d48ff36c6e4fb40aa4ad11525d7a655574b3740076be15de881"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/SemanticDiffApplication.fs",
+      "sha256": "87b45f54dda3743e790c187b4b7290e450c6eafaa383b6a634db52ba51248162"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/SemanticDiffApplication.fsi",
+      "sha256": "be0328101e5eb371a218dc5ac52dcfe8b80cf3bf4c4fe3ad2be0c52ad91236f1"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/SkillCommandApplication.fs",
+      "sha256": "7f11e4facac5b92c57dcee42b68493e01963b3372d9969d6fe0047364df2843c"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/SkillCommandApplication.fsi",
+      "sha256": "94422d09c69c8207417c70ffe21e94fe457aebc814686e715855056c79534553"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/SkillPreflight.fs",
+      "sha256": "53af92bcbcdfac738319217d3b6401c672785cfbb9a0d1ff52f7f852738c5279"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/SkillPreflight.fsi",
+      "sha256": "c520e445ddb04baa45ae33961209e9ceb1988f5ed13f707a05d9f48c107a1a41"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/SkillTelemetryAdapter.fs",
+      "sha256": "c12f7259155db4a47f56ad8fdc0526265a94c1c6fb59d6ee37e0469c87f7edf7"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/SkillTelemetryAdapter.fsi",
+      "sha256": "8f47b9383063412d940f7da22970abc9caf44b4c7e637131d6a89dd93a556b54"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/SkillTelemetryReaders.fs",
+      "sha256": "644858a7c81f96a978cf9566d92e2ad4f8cc7efcc152c7ff303cf0d7c755f6a0"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/SkillTelemetryReaders.fsi",
+      "sha256": "4cd3e55633bd593f1847a272c7b72c75f43e90d58f484fb8df46c0ebdf1146ee"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/Snapshot.fs",
+      "sha256": "2af982e9001aadacd91d6e900966c390441627f270168bd9079e322818730532"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/Snapshot.fsi",
+      "sha256": "876535e762935846586f4f148be19e8f3ffbe425b00b65a504374b75825bd4f8"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/TelemetryApplication.fs",
+      "sha256": "9a7564a511b4c241a7a3818f01f3199cd1de8a0115d88de3d1f1eb7a85db1b09"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/TelemetryApplication.fsi",
+      "sha256": "8b715c7e9eb399ded8b2fd3c7ba8a1726c9513eee711e1af237f57e79043be14"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/TelemetryCiApplication.fs",
+      "sha256": "3551bbbe4f681ad4c321f89665421f6c9d59c868b9f7f8e5e9c427d2e4340a7a"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/TelemetryCiApplication.fsi",
+      "sha256": "68e459006163c8b7e10cd508cc2f36548c6f8964ff8358c943199bac241bf125"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/TelemetryDashboardApplication.fs",
+      "sha256": "236fb001c1fbe53abcfb08a21ca419dc0de05921c37988d988d7a29f87367ccf"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/TelemetryDashboardApplication.fsi",
+      "sha256": "b09b6f5ddde9482aafae9eca11484447a07fa6865311863c0614be8c7786c334"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/TelemetryDashboardServer.fs",
+      "sha256": "75ea377e589a9bfe5edda1f7c20011aa4531bca6e787cd5cf606afcfec9d3b7e"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/TelemetryDashboardServer.fsi",
+      "sha256": "c4d24d54a19c0b71774f987f7aa5a0bb702e7703ffab550a902c5d213f07b400"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/TelemetryRuntimeApplication.fs",
+      "sha256": "dde16e740ccbc081c8442de66369f1766db71faaa7562fc9ddb8d0a631bc564c"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/TelemetryRuntimeApplication.fsi",
+      "sha256": "4ce302189506b262c3603b0fcb7d2f051c82af2945ab78d72e6c7d65ec31dd31"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/TelemetryStoreApplication.fs",
+      "sha256": "a7a0fb2d5b5c824c41f5bc142aef2c25699643000572eb12a22e52336a341360"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/TelemetryStoreApplication.fsi",
+      "sha256": "191a3bc19b0a158d0a56bd4322f9ea82e92daa71b313e26f2ff37409a29c3390"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/WorkspaceTelemetryApplication.fs",
+      "sha256": "ae0e98fefecd0654b8b98b52ee7ab4c5c5d182f4b087914885dca2fc394c37ec"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/WorkspaceTelemetryApplication.fsi",
+      "sha256": "2333bf46f1f048d763913813cb6f94015352f588a953147e7c85a6de47dd7e0d"
+    },
+    {
+      "path": "src/FS.GG.Coord.Cli/packages.lock.json",
+      "sha256": "ae0c80f7aeb813b41f3661a3bb93c04c8e4bde2c9594a14749dbaf9a26b2990b"
+    },
+    {
       "path": "src/FS.GG.Coord.Core/Batch.fs",
       "sha256": "33ffde93b1d90a4fa54df63ebd7411e3e61628718ae5b150b50f26434316eb11"
     },
@@ -473,6 +485,22 @@
       "sha256": "68f6429afc1a2f2926a669442214ec8315d1f3d0b92c87d878a4cf14cbb70f31"
     },
     {
+      "path": "src/FS.GG.Coord.Core/EfficiencyEvidence.fs",
+      "sha256": "80ae69887d4a2b2a1934fbb804b685698ecc451be317fd9c367af98eef9cedb6"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/EfficiencyEvidence.fsi",
+      "sha256": "ef61a5b6699191e5b59dd941f660685bbbd92a3fc7514320944e769ccbdbb472"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/EfficiencyInput.fs",
+      "sha256": "8e20a1a0d125228718a7d86da2369fb5c85578d44994bdc4b075a4692f0d9fdd"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/EfficiencyInput.fsi",
+      "sha256": "9a1d1e326cc3459c2d187f86f8f7ed0a3fb29b9910382170772cae0d362c5395"
+    },
+    {
       "path": "src/FS.GG.Coord.Core/EpicBody.fs",
       "sha256": "6e3238ed36159275cfbff3980f4ba8a339ad81c87c2d806c25af162b4fc9cd0e"
     },
@@ -490,7 +518,7 @@
     },
     {
       "path": "src/FS.GG.Coord.Core/FS.GG.Coord.Core.fsproj",
-      "sha256": "f7d44aa55107bc005c54b276e87755ead1760ecc28252441b8bf9e6fb10fca1b"
+      "sha256": "6329973bc8fc0f7a88856b98e3e36ad1834033dd086afacf60f4979b8e7287e2"
     },
     {
       "path": "src/FS.GG.Coord.Core/FindingPacket.fs",
@@ -589,12 +617,36 @@
       "sha256": "2a1feac5c7eb93c011d689e1a7053e506bd213d005d2f936171998602eb7d6cd"
     },
     {
+      "path": "src/FS.GG.Coord.Core/NativeExecJsonl.fs",
+      "sha256": "475d4cc8abfdb2c68500e5df4e4863db900660eee3d72b75d58d2dbb7fb23f6c"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/NativeExecJsonl.fsi",
+      "sha256": "3e13401ab47cd131e66484f754effe0e1448918beceb495ba9b1a394d02e94b3"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/NativeResponses.fs",
+      "sha256": "ff133ffb3065430dd355cafd5f641b13ea9288e52fde6de86f572e1629a720dd"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/NativeResponses.fsi",
+      "sha256": "5f0f847aa4f75b13f7f518f8ec7f0644e87c1d5b3972cd00a3e2c4e515ed6657"
+    },
+    {
       "path": "src/FS.GG.Coord.Core/Operation.fs",
       "sha256": "c0462e308664a0b1dd03d499ea510c23db9de9d5498a158f5017276c051075e3"
     },
     {
       "path": "src/FS.GG.Coord.Core/Operation.fsi",
       "sha256": "5df7dd6bb9e13b59b723af7eb0ae0511557e152c6101d357b93f6ffbf312da1b"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/ProcessEfficiency.fs",
+      "sha256": "491f30d68ba2ffef6e1d4ca11a5571c0a4ea6cec3c46c2fc86b9c332b2f6fc54"
+    },
+    {
+      "path": "src/FS.GG.Coord.Core/ProcessEfficiency.fsi",
+      "sha256": "ae59f265a8f585aac706cbd23206a74ebd04824962fda3e3d074aa5a8c3288d3"
     },
     {
       "path": "src/FS.GG.Coord.Core/Protocol.fs",
@@ -718,11 +770,11 @@
     },
     {
       "path": "src/FS.GG.Coord.Core/TelemetryCi.fs",
-      "sha256": "bb128f28e3ae1bf42ded665053f45ff439f77b4e47384d7fb54268e1d21ac447"
+      "sha256": "8896fb4ec2e1f70858d5f6d84cfae972d31d89950ab94000b287eff78558fced"
     },
     {
       "path": "src/FS.GG.Coord.Core/TelemetryCi.fsi",
-      "sha256": "e920e1fe23223510933c2aa239cf350518f29a4023d02dbf86d1ea28a7985309"
+      "sha256": "47c56ff387137a05ce05d3accb806a974619015f498a774336ba19c33d7c616a"
     },
     {
       "path": "src/FS.GG.Coord.Core/TelemetryReceipt.fs",
@@ -734,7 +786,7 @@
     },
     {
       "path": "src/FS.GG.Coord.Core/TelemetryRuntime.fs",
-      "sha256": "8d571378ae492eb5aadebf6a4917322a1dab8df5857e2a4830601526f7f14e2e"
+      "sha256": "7908a14a61f84b816dcc18b37dada98e635d5648bad6170b41cddae550d8ea73"
     },
     {
       "path": "src/FS.GG.Coord.Core/TelemetryRuntime.fsi",
@@ -742,11 +794,11 @@
     },
     {
       "path": "src/FS.GG.Coord.Core/TelemetryStore.fs",
-      "sha256": "e835ccba7feb6662acc4212d6ac2958f0e12fde33c81c3ce2911e933ac5dbfcf"
+      "sha256": "ab41d4d6a7c9147d35a7b0d34f05c6eb2605ed384c4b29a626e211ac6f67389a"
     },
     {
       "path": "src/FS.GG.Coord.Core/TelemetryStore.fsi",
-      "sha256": "15377bbc717870518bad542d4307644a39094e02548689e6d0c883925761c31c"
+      "sha256": "5566ac42916ba32d8083f01588f5fc8e11941a37c66ca7ba8519038a887e5da0"
     },
     {
       "path": "src/FS.GG.Coord.Core/TouchSet.fs",
@@ -859,10 +911,6 @@
     {
       "path": "src/FS.GG.Coord.GitHub/Generated/Coordination/V1EffectFenceAdapter.fsi",
       "sha256": "281c87ec29e69268ce8bacefe7167e814114c9b2a36f0f21564cbaf8df3d158a"
-    },
-    {
-      "path": "src/FS.GG.Coord.GitHub/Generated/Coordination/source-subset.json",
-      "sha256": "a8ab4885c75367742f6ef2e78ad07f836009b322053ddf2b2fe23e2dc15fc5b3"
     },
     {
       "path": "src/FS.GG.Coord.GitHub/GraphQl.fs",
@@ -1005,8 +1053,32 @@
       "sha256": "e53ae3a50cfc2b33eb759a7d3fb8c109ce1470c9da7b19aef7b584e6224a33f4"
     },
     {
+      "path": "src/FS.GG.Telemetry.Client/CustodyProjection/CustodyProcessLease.fs",
+      "sha256": "0b288c519c6bb5b6c316308e1ca6f93c0a2968531860b0e0ab438cf4bf9fdaa1"
+    },
+    {
+      "path": "src/FS.GG.Telemetry.Client/CustodyProjection/CustodyProcessLease.fsi",
+      "sha256": "2ce7abf8533f673c84e03e07be805d0d922d74db15d55f9ab2b41e8216dc0553"
+    },
+    {
+      "path": "src/FS.GG.Telemetry.Client/DirectResponses.fs",
+      "sha256": "7c4d5dcd6f5eca9e6033d8519bf8a2ab6d4b86c704b33ea43f09cabcdc9b4754"
+    },
+    {
+      "path": "src/FS.GG.Telemetry.Client/DirectResponses.fsi",
+      "sha256": "27ef5e09a682b6c0e0a00ba6dce15910b56a68308f9ec7862994427c29f658ce"
+    },
+    {
       "path": "src/FS.GG.Telemetry.Client/FS.GG.Telemetry.Client.fsproj",
-      "sha256": "62de6663533fd0038647e3ac7098232427629086fba7f9906c258794ddbe1654"
+      "sha256": "fd11731117e3870894c15f19eb9620e695ba3c85d9bad35615da724fc120e639"
+    },
+    {
+      "path": "src/FS.GG.Telemetry.Client/ObservedCodexProcess.fs",
+      "sha256": "29d6d1823fdebb8f3f2b9e94737003becd35ca80833e4cbb251edaa3d841284c"
+    },
+    {
+      "path": "src/FS.GG.Telemetry.Client/ObservedCodexProcess.fsi",
+      "sha256": "ec16805795150c1f2c1e25f2ee2a77e73d69a418c8a0dac82533f55c03eb5cb6"
     },
     {
       "path": "src/FS.GG.Telemetry.Client/RemoteClient.fs",
@@ -1050,7 +1122,7 @@
     },
     {
       "path": "src/FS.GG.Telemetry.Dashboard/DashboardProjection.fs",
-      "sha256": "035c70aa67998bb1cf11725c164c0aba6e2c734e0e76e8898e7ca7f107cbb56a"
+      "sha256": "cd07064f42cfe00a61371f6e3e775d65a266c5d483277cc51705a78a96c8ee60"
     },
     {
       "path": "src/FS.GG.Telemetry.Dashboard/DashboardProjection.fsi",
@@ -1071,52 +1143,36 @@
     {
       "path": "src/FS.GG.Telemetry.Store/packages.lock.json",
       "sha256": "d72a3ac77587f4586f97a8adc6f8cc052d9cccf13f445b6b4f9268665e4c836e"
-    },
-    {
-      "path": "Directory.Build.props",
-      "sha256": "cb34193c5ffc7ad3f5065a22d1bc724cfec21453dcd9caea076035382cde42aa"
-    },
-    {
-      "path": "Directory.Packages.props",
-      "sha256": "dfa4c30c237e1474f770012a5a21225836766ae4d8c1fdd59745ea01071ce3f5"
-    },
-    {
-      "path": "global.json",
-      "sha256": "884c3d68b436980197e5c5871b6be07dc75b894b2a9e210f70a73468e9f9bd8e"
-    },
-    {
-      "path": "dist/dotnet/Directory.Build.props",
-      "sha256": "f29e3b29afed4f93258003519c5af5676b0a9bfea7623350491f2d60ee082d0c"
     }
   ],
   "members": {
-    "FS.GG.Coord.Cli.BoardOps.dll": "2076900f50e0985476f062f1b4503e721653524ee5adf7ec5de3bd59d332f485",
-    "FS.GG.Coord.Cli.BoardOps.pdb": "1c973dba71222feda6979d461cde70f2cf9843a6330e3b17e844f5874810e5c9",
+    "FS.GG.Coord.Cli.BoardOps.dll": "eca89fa48e45dffb3f86d87ca97787fd0d893989821dde9cc28a47883d4f2814",
+    "FS.GG.Coord.Cli.BoardOps.pdb": "5d0105071a91edb5992609b4c26681b1a563db8deef2f69fc7246e1ca74165d6",
     "FS.GG.Coord.Cli.BoardOps.xml": "e84b0c28377b28e27e1d511e107d9589ca5af6c633cea5ec895555442211a9ce",
-    "FS.GG.Coord.Cli.Kernel.dll": "2bfaf82749d95336c01ae497f356123f768506836fc13aac5246c55ffda0af64",
-    "FS.GG.Coord.Cli.Kernel.pdb": "dd249ca3bfdfae0da84aa8c1abb7fcda01988a2f0ed1eb658a362ed940f02c83",
+    "FS.GG.Coord.Cli.Kernel.dll": "a6c85f5f788d486be24b570f9fb813a1c3ae80d3fa4ec91da522e9dd755c006b",
+    "FS.GG.Coord.Cli.Kernel.pdb": "7281dbc5b5b910a67045730a2d97ac25f14fa1caede17adddb41eb4d653d4894",
     "FS.GG.Coord.Cli.Kernel.xml": "4fe566b90ecc174be73e6df1294a3121bda5b9be1fea476353bf9d56a976d2d1",
-    "FS.GG.Coord.Cli.Lifecycle.dll": "8cddfacd1944e9fa33a783f3a7f274ddeeb76a4415ccbaa9ab5ccdc798fb5671",
-    "FS.GG.Coord.Cli.Lifecycle.pdb": "e1049f2cba68396938a00a8e9b8f0759961c784e88e005d135a40d3ae302e84e",
+    "FS.GG.Coord.Cli.Lifecycle.dll": "f50137d44e802718923f5376257e07c416ae3f268d5121dcbf3e850cbe521574",
+    "FS.GG.Coord.Cli.Lifecycle.pdb": "2619d9dc9ef33e57518fb3ccc0e25f708103baea6861305b09d1f1d857b4c69c",
     "FS.GG.Coord.Cli.Lifecycle.xml": "358b1c3a14eae371470d44274744064a54b9dd3cfb683ae163e68c8fe0e4736b",
-    "FS.GG.Coord.Core.dll": "96129b91fa1db119e3d6d71cfddbb2d3d91152eba1ed9b32d38781b4767f4813",
-    "FS.GG.Coord.Core.pdb": "da16819d154a97bf02005a5e11853efc682456cbdfe5588d23d18308f5f509dd",
-    "FS.GG.Coord.Core.xml": "623e481279318c1a77e5dfa54d4d9ea14da8c3b353ea53bd7ba0867ca3e5944f",
-    "FS.GG.Coord.GitHub.dll": "a1779ca6a8d4be1bbfe7a58beba820dfec4a19cb5df4a0b3cb193547c00ae2d5",
-    "FS.GG.Coord.GitHub.pdb": "3d404c31f1f39498b996f7a4f5ecb3208d1b4cef43f53db8e07e69ce92bae53e",
+    "FS.GG.Coord.Core.dll": "8fdc2885a7e7e9fbd213acb70356a167435ae451a73842f7911aa412f7472f10",
+    "FS.GG.Coord.Core.pdb": "fd43647ba25f1165a42e409380d45502930c13a50c1b8ba4c938221bd6906a5b",
+    "FS.GG.Coord.Core.xml": "f0193e01e9ead64dea1b7416396cd64dfbe51e2a3f571c9ec3448f40371a7a00",
+    "FS.GG.Coord.GitHub.dll": "c6fc21abdc7c9a8186eebab02b70ef6d3351a226f536b6d413a5dec432efde29",
+    "FS.GG.Coord.GitHub.pdb": "1bc4a86df9958faf8b1300461b9d737cb02ec9f09262c7d23b37dff355b3b0e8",
     "FS.GG.Coord.GitHub.xml": "c67fad64f5621d4a136e19332dbacf406ddc25a2f7751c8aaf3dfb7299d498de",
-    "FS.GG.Telemetry.Client.dll": "c35b9ef6d1d8178a20203c78b5a9d523cc9b1bb4b0b4efe89bc645cdab8a99e6",
-    "FS.GG.Telemetry.Client.pdb": "e607ace51d3a3d26ca114d34abe01ee1ba3f4d27042d758f413c2d2f4347b723",
-    "FS.GG.Telemetry.Client.xml": "0e27fa484c1e4204ec3129fe89940c331473e9bfcde0715b91e4a936a423aebb",
-    "FS.GG.Telemetry.Contracts.dll": "43486e12de50a184a2a2797fe91b35b6edd64f54203218ee1fd34208e2923857",
-    "FS.GG.Telemetry.Contracts.pdb": "909724e21e0e4b8174e9a64391d7e4abf4bb406d6282ca68810bb44cc2a14e2f",
+    "FS.GG.Telemetry.Client.dll": "0e14d82ddbb12c9244236e4cfeb788fd41c551d18345db458ad85dedf516f4d6",
+    "FS.GG.Telemetry.Client.pdb": "10e575277db327facfeff37d920c6d23a2df0d240b785af0b6e0ae6cefa086f0",
+    "FS.GG.Telemetry.Client.xml": "d40489b9a9ade81a807e191b048547f4793dc0ec419c12349b8d66552f4f1770",
+    "FS.GG.Telemetry.Contracts.dll": "58274ba0eb8e10e50610c89302765e83c4f4350b73a21dbb6ff6f788d87dac12",
+    "FS.GG.Telemetry.Contracts.pdb": "083ed9239ad3263a771dc2ad02d8e83eeed06af239e502354722c6ea8f9e9678",
     "FS.GG.Telemetry.Contracts.xml": "1577f8605671efabeae4e6a49e338a21537b1bced924552db83f320ce5a9d6ce",
-    "FS.GG.Telemetry.Dashboard.dll": "1bd74e18d4c0f8ebb6706748d8a50cfc26599d9ac5bceeddc8f0bce9d7d4b7d9",
-    "FS.GG.Telemetry.Dashboard.pdb": "31cccfbf911c50f3340d3b81572151a4311ea7f9ca8277d7cf83bc65dc958fe0",
+    "FS.GG.Telemetry.Dashboard.dll": "4515fa353cbff06e2515d31ae3a3c5e1e2f2eefe81d8a30d68233bae4047ecd7",
+    "FS.GG.Telemetry.Dashboard.pdb": "610ffb6b44f92b2c08abbca08e81e02a922c5d5b2c09c65991da7a8bb0594844",
     "FS.GG.Telemetry.Dashboard.xml": "7c2002ea25217b58b4eb73522d8c9878ac53fbcea803bd5eddebfc5a0a69786b",
-    "FS.GG.Telemetry.Store.dll": "6760c062da1e062d863788b962b96192160f1f0efcee0db6531091f00bfe5651",
-    "FS.GG.Telemetry.Store.pdb": "74c1c8d0d97fe1861179e98cfa8ae64c497cb6830049abc0e2c8796be49cd034",
-    "FS.GG.Telemetry.Store.xml": "69f55c649af98694db955f20e4b705668ce968a9e9d0b0fbb37ae3a890ca522f",
+    "FS.GG.Telemetry.Store.dll": "76a58f24ae061bb169c9b131eda11e238b95a74cc9e5a8c056bf8052447aefbb",
+    "FS.GG.Telemetry.Store.pdb": "635b9a52de25fc5a14fd1b727f486001ad0f4935dd066b4bda62759dc821ec42",
+    "FS.GG.Telemetry.Store.xml": "903e18a5adab5613a7bc0d06957fd549390b084873647dc90019b9077852da7f",
     "FSharp.Core.dll": "39b0b7f06c11bedd93f94b6f101fffd645f1c4437a5a6d3ee79259f855aeb11a",
     "Microsoft.Data.Sqlite.dll": "b98d957462be432895b00dccca012d3c127e118d3d4262418014b92c7bbd66cf",
     "SQLitePCLRaw.batteries_v2.dll": "1ee3c6ff4d39171690d6ff6f84b4d876ed038ca28e39bb6e74995f52d2aacf8b",
@@ -1127,11 +1183,11 @@
     "de/FSharp.Core.resources.dll": "9f1195204de5486e502b08530499a3b47ae74d0802e97f9f5769a91a2f24340f",
     "es/FSharp.Core.resources.dll": "cb1b86d6ece9335ac72891d764052385dcf84c17a784a763a4041e6c6a2538a5",
     "fr/FSharp.Core.resources.dll": "6b1b09397595fea3dc159a78e5a4f28316d4a7b45d0017ededa43d9c8ea8e3af",
-    "fsgg-coord-engine.deps.json": "7579eb1bc55dcc1d4569307666f753558f704caa509b42ccaa1d76cec78ff487",
-    "fsgg-coord-engine.dll": "c7187f8f6b7053ea4c5b3acd66545d7e81d82a62ca3e54dc441499e9d1eb5591",
-    "fsgg-coord-engine.pdb": "deb86f387afdcf6d7ee2ec448a062ddd9bd09820a13fca0f750a91ac826713ae",
+    "fsgg-coord-engine.deps.json": "743558242116bec0e5077339514aa9473b002f02529e8edb2da94ec2ac364f61",
+    "fsgg-coord-engine.dll": "c02a4b906d9603b1207a2236d54227f730381acb1150269bedae17a768bb16f8",
+    "fsgg-coord-engine.pdb": "9c719745c95c80ca3a93fb30442addfb595cf8c2cbf3f82746d74568d1cc5c41",
     "fsgg-coord-engine.runtimeconfig.json": "e4b3a5d18f436095616519e1c99f954e4b0a8952d2dc6681915a69bbae0c5f30",
-    "fsgg-coord-engine.xml": "cbe65f9761eec5fd0ed845f8db1c4d6ff93e8e670b46901ba5a2e2f2cde15ef0",
+    "fsgg-coord-engine.xml": "7716741d78bc5556ecf6c2eabcb9c9eacf98cbfec1d367671c0e390a30749962",
     "it/FSharp.Core.resources.dll": "d666d34802d2e6518b70f259ae25578f97d4b54e1c4bc514e4283d6271624af5",
     "ja/FSharp.Core.resources.dll": "a23e0b7b795fad83fbf7c7602229789ba78afa364e9a59c9cd2af94651e13195",
     "ko/FSharp.Core.resources.dll": "42a346e25767af235c02287a4632d32e74f17fbe8fb2607f52493398c49044c2",
