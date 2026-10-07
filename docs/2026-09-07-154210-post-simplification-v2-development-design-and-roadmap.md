@@ -5,8 +5,10 @@ categoryindex: 4
 description: "Forwarding reference to the renamed FS-GG Unified Development Roadmap."
 ---
 
-# Roadmap moved
+# Roadmap superseded
 
-The **[FS-GG Unified Development Roadmap](2026-09-07-154210-fs-gg-unified-development-roadmap.md)**
-now has a matching filename. Use that document for **“the roadmap”**, **“current roadmap”** and
-**“compacted roadmap”** in FS-GG development discussions. This page preserves earlier links.
+Use the **[Unified Development Roadmap v3](roadmaps/2026-10-07-unified-development-roadmap-v3.md)**
+for current open work and the [games roadmap](roadmaps/2026-10-07-games-development-roadmap.md)
+for BAR/SC2/FourD product work. The
+[renamed unified v2 roadmap](2026-09-07-154210-fs-gg-unified-development-roadmap.md)
+is retained as the archive. This page preserves earlier links.

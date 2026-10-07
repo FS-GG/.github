@@ -8,7 +8,7 @@ govern. Do not wait for a human to write a replacement handoff when independent 
 ## Find surviving references
 
 Resolve the owning `.github` repository and affected repositories from their existing remotes and workspace
-configuration. Read the current protected Unified §9.8 entries and their owner plans for the selected scope.
+configuration. Read the [current protected v3 open outcomes](../../../../docs/roadmaps/2026-10-07-unified-development-roadmap-v3.md#2-open-work-and-owning-plans) and their owner plans for the selected scope.
 List available local and protected handoff filenames/timestamps before declaring the handoff missing;
 an older report is a pointer, not evidence that newer work never happened. Record the protected revision
 and actual read time. Fetching refs never permits resetting or cleaning a checkout.

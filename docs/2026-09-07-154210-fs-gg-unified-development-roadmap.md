@@ -7,11 +7,16 @@ description: "A researched successor plan from the current v2 frontier: process 
 
 # FS-GG Unified Development Roadmap
 
-Short name: **Unified Roadmap**. In FS-GG development discussions, **“the roadmap”**, **“current roadmap”**
-and **“compacted roadmap”** refer to this document unless another roadmap is explicitly named.
+**Superseded by the [Unified Development Roadmap v3](roadmaps/2026-10-07-unified-development-roadmap-v3.md).**
+Use that successor for current open work and the separate
+[BAR/SC2/FourD games roadmap](roadmaps/2026-10-07-games-development-roadmap.md) for product work.
+This v2 document is retained as the archive of original designs, completed outcomes and historical
+observations. References to “the roadmap” now mean v3 unless another roadmap is explicitly named.
+The remaining text preserves the historical snapshot; its active/pending wording is not a current
+scheduling instruction. Existing accepted contracts and immutable evidence keep their identities.
 
 Authored: **2026-09-07 15:42:10 UTC**. Section 0 evidence reconciliation: **2026-09-30**.
-Status: **active programme; `.github` C0–C2 and selected C3 ordinary-V2 adoptions, including Rendering, are complete**.
+Historical status: **active programme; `.github` C0–C2 and selected C3 ordinary-V2 adoptions, including Rendering, are complete**.
 
 **Start from completed development simplification and the existing v2 implementation. Keep the proven
 `.github` settlement active, then add explicitly selected repositories through checked source, dedicated

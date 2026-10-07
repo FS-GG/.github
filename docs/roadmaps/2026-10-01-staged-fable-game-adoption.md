@@ -7,7 +7,7 @@ The [Stage .1 disposition](evidence/fable-adopt-01.1-inventory-disposition-20261
 the accepted source inventory and ownership decisions. Implementation, publication, installed
 qualification and adoption remain open.
 
-The [unified roadmap](../2026-09-07-154210-fs-gg-unified-development-roadmap.md#992-staged-fable-game-foundation-adoption)
+The [unified roadmap](2026-10-07-unified-development-roadmap-v3.md#5-workspace-adoption-and-open-index-maintenance)
 indexes this independent product track. It adds no gate to the already accepted V2 platform profile
 and does not change historical product qualification or R5 evidence.
 
@@ -231,7 +231,7 @@ qualification results and relevant supporting excerpts as revisioned project kno
 exact repositories, revisions, files and digests for implementation details. Full source snapshots
 and bulk symbol/search indexes belong in a separate disposable cache and are excluded from durable
 knowledge backups. This follows the roadmap's
-[knowledge retention constraint](../2026-09-07-154210-fs-gg-unified-development-roadmap.md#storage-and-capture-design).
+[knowledge retention constraint](2026-10-07-unified-development-roadmap-v3.md#5-workspace-adoption-and-open-index-maintenance).
 
 For BAR, migrate the existing combined store by preserving knowledge/chapter documents, immutable
 history, supersession/conflict relationships and required non-reconstructible evidence. Separate
@@ -239,3 +239,31 @@ source-derived material from curated knowledge without dropping architecture map
 Prove search, references and history after restore into a fresh environment before retiring the old
 store. Review the resulting knowledge export for its public/private boundary; publish no full source
 cache. This plan does not perform that live-store migration or claim a GitHub backup already exists.
+
+## Remaining Game template consolidation
+
+**GAME-TEMPLATE-01 is the remaining FABLE-ADOPT-01 reference outcome.** The
+[unified v3 coverage table](2026-10-07-unified-development-roadmap-v3.md#3-game-template-consolidation)
+extends the accepted inventory to all relevant completed BAR/SC2/FourD work and later fixes.
+Templates owns composition; shared behavior stays in Rendering/Game and product rules, receipts,
+native gateways, licensed assets and authority stay in their products. The
+[games roadmap](2026-10-07-games-development-roadmap.md) owns .5–.7 product pilots/adoption/removal.
+
+The next reference window must map each reusable finding to an existing published capability,
+a demonstrated producer gap, a template example/conformance case, or explicit product-only
+non-applicability. Reuse the accepted local and external-authority reference source; do not
+restart Stage .1 or treat historical package observations as current inventory.
+
+Complete remaining published WASM/guest examples and generated-workspace conformance for local
+save/replay extension points, external receipts/reconnect without automatic replay, transformed
+pointer/keyboard input, IME/editing/focus, held release, DOM islands, ordered commands versus
+projection coalescing, replacement and owned disposal. Add Box2D/portal examples only as explicit
+opt-ins with a qualified backend and traversal-safe interpolation. Preserve product ABI/wire,
+clock, rule/save and native-operation boundaries.
+
+Qualify the actual package-only Fable/Vite/Worker/ESM production graph from empty caches with
+no source fallback, publish the coherent template selection, and prove fresh creation plus every
+promised preserving upgrade. Stage .4's installed outcome remains separate from source delivery.
+The capability map and pure example streams can prepare in parallel; shared API edits and the
+Templates descriptor/package join have one integrator. Product presentation .5→.6 sequencing
+remains; independent WASM-only adoption does not acquire a FourD pilot gate.

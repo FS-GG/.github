@@ -1,12 +1,25 @@
 ---
 name: continue-from-handoff
-description: "Resume FS-GG work from the newest timestamped docs/handoffs report, reconcile live state, and finish the Unified Roadmap autonomously through work-programme when continuation is requested."
+description: "Resume FS-GG work from the newest timestamped docs/handoffs report, reconcile live state, and finish the Unified Roadmap v3 autonomously through work-programme when continuation is requested."
 ---
 
 # Continue From Handoff
 
 Resume the saved programme and work the roadmap to its actual acceptance outcomes.
 Creating, editing, or inspecting this skill does not start programme execution.
+
+## Select the current roadmap
+
+Use the protected [Unified Roadmap v3](../../../docs/roadmaps/2026-10-07-unified-development-roadmap-v3.md)
+for shared/platform open work and the [games roadmap](../../../docs/roadmaps/2026-10-07-games-development-roadmap.md)
+for BAR/SC2/FourD product outcomes within the recovered scope. An older handoff's v2/§9.8/§0 links
+are archive references: map surviving feature IDs to these current open indexes, preserve original
+attempts/reservations and verify native closure before omitting an inherited obligation. Do not
+restart completed or superseded v2 rows. Game template consolidation remains in v3.
+Verify these files and the governing skill on current protected main, including native readback of
+any successor PR/merge named by the handoff; a proposed or unmerged roadmap is not the protected version.
+If a recovered obligation is absent from the index and lacks closure evidence, retain it as unresolved
+and reconcile its owner rather than treating omission as cancellation.
 
 ## Recover the newest saved state
 
@@ -48,7 +61,7 @@ source integration, publication, receiver adoption, and progress projections.
 Do not duplicate its lifecycle here.
 
 Invocation authorizes autonomous decisions and completion of the recovered
-Unified Roadmap without human intervention, including its necessary source
+Unified Roadmap v3 and the in-scope games outcomes without human intervention, including its necessary source
 changes, PRs, merges, releases, and receiver work within the recorded programme
 scope. Choose implementation details and resolve routine tradeoffs directly;
 do not stop for preference questions or repeated confirmation. This does not
