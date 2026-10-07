@@ -64,7 +64,15 @@ checks passed and five skipped. The source refresh binds the published CLI and
 expanded dependency-input closure, with controls for omitted inputs, changed source
 and compiled compatibility. Canonical delivery reported current validation,
 coherent validation not required and no publication obligation. This closes the
-bounded source window. The Wizard 0.16 feed probe remains refused with HTTP 403;
+bounded source window. Post-merge protected-intake preflight
+[37573722079/a1](https://github.com/FS-GG/.github/actions/runs/37573722079)
+failed at source `64192823`, job `112637844761`, with exit 3:
+`operation/13 is not proven absent`. The failure prevents retained-intake authority
+qualification before the expected inert receipt; presence versus unreadability
+remains unknown. It establishes neither a successful expected fence nor a Wizard
+regression. Dependent intake acceptance and activation remain fenced pending the
+original-identity read-only reconciliation; no retry, grant or cleanup is admitted.
+The Wizard 0.16 feed probe remains refused with HTTP 403;
 its original journal and failed evidence remain retained. Wizard qualification,
 publication, installed/default receiver acceptance and retaining upgrades remain
 open in the [owning SVG plan](roadmaps/svg-coherence-and-instancing-01.md).
