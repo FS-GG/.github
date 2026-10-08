@@ -144,8 +144,15 @@ exact head, changes since the prior return, established/pending boundaries, evid
 parent action (or `none`); aim for at most100 words. Store substantive findings in the artifact and use
 longer messages for exceptions. This projection changes no JSON fields, revision joins or acceptance
 semantics. The parent consumes compact `delta` facts and the complete reservation inventory; it retrieves
-the full return only for an identified exception or required safeguard. Ordinary repair evidence and
-failure interpretation remain with the same owner.
+selected evidence for a named decision or required review obligation, expanding further only to resolve
+an identified gap. Ordinary repair evidence, mechanical checks and detailed reconciliation remain with
+the same owner; project discrepancies and unresolved decisions with evidence pointers.
+
+After repair/review milestones, update the existing decision view to the current source and established
+outcomes, unresolved findings/decisions, evidence pointers and next action. Replace superseded narrative
+there; retain original failures and revision history in linked artifacts. Carry forward unresolved
+obligations, conflicts, unknown effects and the complete reservation inventory. Consolidation changes no
+return schema, revision joins or acceptance semantics; it does not resolve a conflict by arrival order.
 
 Campaign, item, feature and original-item mismatch refuse. Current owner,
 current attempt, candidate and source revision join the existing snapshot

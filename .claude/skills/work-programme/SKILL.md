@@ -55,7 +55,10 @@ owner per lane retains investigation, tests, failures and evidence in an isolate
 touch-set. Reuse that owner for ordinary milestones and repairs. Route failed checks using exact native
 references before reading logs in the parent. Owners diagnose, repair and qualify within their existing
 scope, authority and budgets, preserving the first failed attempt. Escalate scope/authority changes,
-cross-lane conflicts, unknown effects and root-owned safeguards. For safeguards, the owner prepares a
+cross-lane conflicts, unknown effects and root-owned safeguards. Keep mechanical checks and detailed
+reconciliation with the owner; return discrepancies, unresolved decisions and evidence pointers instead
+of successful hash rows or complete manifests. When delegation is unavailable, run the same checks locally
+with bounded result summaries. For safeguards, the owner prepares a
 bounded `review` with changed code, explicit proof obligations and mechanically verified unchanged pins;
 the parent reads required logic and expands missing obligations rather than importing the entire bundle.
 
@@ -80,7 +83,9 @@ stays in the artifact; keep packet, original-attempt, source and return-revision
 repairs malformed returns. Neither a return nor an acknowledgment establishes acceptance.
 
 Consume decision deltas and the complete reservation inventory, retaining unknown/absent owners. Expand
-exact evidence only for inconsistencies, architectural joins, user requests or root safeguards. Use bounded
+exact evidence only for inconsistencies, architectural joins, user requests or root safeguards. Before each
+expansion, name the parent decision or required review obligation and select only the evidence needed to
+resolve it. An exception category alone does not justify reading an entire artifact set. Use bounded
 `view` and complete mechanical `reuse`; refusals require retrieval/recomputation. Before parent reads,
 select fields/ranges and an output bound; redirect raw logs/large responses privately. Truncation is incomplete
 evidence: retrieve the missing obligation or route it to the owner. Default parent reads to4KiB of selected
@@ -88,6 +93,13 @@ text and8KiB stdout; name the reason and increase the bound only for a concrete 
 instructions remain mandatory. Use pinned command descriptors instead of rebuilding long qualification
 scripts in conversation; existing guards and fresh root admission retain execution authority. Never read
 binaries as text.
+
+After a repair or review milestone, the owner consolidates superseded findings into the existing current
+decision view: exact source, established outcomes, unresolved findings/decisions, evidence pointers and next
+action. Replace resolved narrative in the working view and retain linked history, original failures and
+revision joins in the artifacts. Carry forward every unresolved obligation, conflict, unknown effect and
+reservation; a newer summary cannot establish acceptance or erase them. The parent reasons from this
+current view and deltas, expanding history only for a named decision or required review obligation.
 
 At a completed milestone, consider owner-context rotation when native observations show repeated
 compaction or recovery rereads. Follow [context guidance](references/context.md): checkpoint current state,

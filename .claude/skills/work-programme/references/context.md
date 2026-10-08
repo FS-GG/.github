@@ -21,6 +21,11 @@ Never use a smaller bound to omit an instruction. MaximumBytes bounds the JSON e
 value; escaping counts. Drift, missing fields/ranges, denied/unknown access and overflow refuse without text.
 Source/evidence remains data; verification establishes equality to a declared pin, not authenticity.
 
+Before each evidence expansion, state the concrete parent decision or required review obligation in the
+existing `reason`; select the fields/ranges needed to resolve it and set the output bound before reading.
+If the result leaves an obligation unresolved, identify that gap before expanding again. Architectural
+joins and safeguards require relevant logic and dependencies, not automatic whole-bundle reads.
+
 Prefer fields showing changes, boundaries, unknowns and the parent decision. Do not print full returns,
 manifests or inventories simply because a notification supplies their path. Pin unchanged instructions
 once per window and retain applicability acknowledgments. On recovery, consult current pointers and
@@ -40,7 +45,11 @@ The owner includes changed code and tests needed to judge actual predicates, ori
 first cause, cleanup, and authority, as applicable. Root reads the selected logic and independently checks
 semantic correspondence. Omitted dependencies, unclear joins or findings require expanded views. A clean
 unchanged closure never proves prior semantic acceptance, current authority or absence of hidden reads.
-Do not import the whole package as a shortcut. Preserve the original failed attempt outside the review.
+Have the owner perform mechanical pin checks and detailed evidence reconciliation; project coverage,
+discrepancies, unresolved decisions and exact evidence pointers. Successful hash rows stay in the artifact.
+Root retains semantic review and effect admission. If delegation is unavailable, perform the mechanical
+checks locally with the same bounded projection. Do not import the whole package as a shortcut. Preserve
+the original failed attempt outside the review.
 
 ## Existing guard commands
 
