@@ -5,12 +5,19 @@
 ## Current successor route
 
 The [successor roadmap](../roadmaps/utel-release-successor.md) owns the selected operating window.
-Current source and verified promoted set are **0.98.0**, from `3d4f7e9c6337fb020e269e632653de0faeef6d72`
-under protected Authority journal `utel-rel-15` and publisher `37434982959`.
-The predecessor 0.97.1 from `99ea75286f5c3cea2a261fef4e5b45cd70378185`, consumed
-`utel-rel-13`, completed 0.97.0 and deferred unpublished 0.97.2/`utel-rel-14` remain immutable.
-Installed schema 13 migration, supported attribution correction and current dashboard feed
-export/activation remain separate obligations; source qualification never substitutes for publication.
+Current verified promoted set is **0.100.0**, from `3ed8ad419a64253ca6f665e9779e5e4d110f50a5`
+under protected Authority journal `utel-rel-18` (generation 33). The
+[first-attempt publisher](https://github.com/FS-GG/.github/actions/runs/37774941181)
+completed successfully on 2026-10-08 at 12:44:52 UTC, with all sixteen effects verified.
+The [public release](https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.100.0)
+contains the original candidate archives and promoted manifest/channel. Independent public
+NuGet downloads match all three normalized candidate payloads; signing changes archive bytes.
+Both-feed verification belongs to the protected publisher; local authenticated feed reads remain unavailable.
+
+The predecessor 0.99.0 and earlier consumed journals remain immutable. The current-only telemetry
+contract passed 96 checks with four explicit skips before publication. User-level installation,
+retained-store migration, original pending-operation recovery and dashboard activation remain
+separate obligations; publication does not establish their acceptance.
 
 Dispatch `release-successor-candidate.yml` once on accepted current `main`. Authenticate the successful
 first-attempt run and the original raw Actions archive, including exactly three packages, release manifest,
