@@ -3759,7 +3759,7 @@ PRAGMA user_version=13;
         let adapterErrorType = moduleType.GetNestedType("AdapterError",System.Reflection.BindingFlags.Public ||| System.Reflection.BindingFlags.NonPublic)
         Assert.NotNull adapterErrorType
         Assert.Equal<Type>(adapterErrorType,refused.InnerException.GetType())
-        Assert.Equal<obj array>([|box "fixture-unavailable"|],Microsoft.FSharp.Reflection.FSharpValue.GetExceptionFields(refused.InnerException))
+        Assert.Equal<obj array>([|box "fixture-unavailable"|],Microsoft.FSharp.Reflection.FSharpValue.GetExceptionFields(refused.InnerException, bindingFlags = (System.Reflection.BindingFlags.Public ||| System.Reflection.BindingFlags.NonPublic)))
 
     [<Fact>]
     let ``current correction rejects a changed source after planning`` () =

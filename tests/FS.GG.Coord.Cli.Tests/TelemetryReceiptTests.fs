@@ -482,7 +482,7 @@ module TelemetryReceiptTests =
             ))
 
     [<Fact>]
-    let ``receipt migration preserves legacy history without assigning it`` () =
+    let ``normal init refuses legacy8 without changing its history or schema`` () =
         let root =
             Path.Combine(Path.GetTempPath(), "fsgg-receipt-legacy-" + Guid.NewGuid().ToString("N"))
 
@@ -520,22 +520,44 @@ DELETE FROM schema_migrations WHERE version=14;
             Assert.Equal("0", scalar root "SELECT (SELECT count(*) FROM sqlite_master WHERE name LIKE 'efficiency_%' OR name='fact_acceptance_times') + (SELECT count(*) FROM schema_migrations WHERE version=14);")
             Assert.Equal("0", scalar root "SELECT (SELECT count(*) FROM sqlite_master WHERE name IN ('current_ingest_facts','ci_effective_attribution','ci_correction_evidence','ci_attribution_corrections','ci_correction_immutable_update','ci_correction_immutable_delete','ci_correction_evidence_immutable_update','ci_correction_evidence_immutable_delete')) + (SELECT count(*) FROM schema_migrations WHERE version=13) + (SELECT count(*) FROM store_metadata WHERE key='ciCorrectionStoreId');")
             Assert.Equal(rawBefore, scalar root "SELECT content_digest || canonical FROM ingest_facts;")
-            TelemetryStoreApplication.initialize root approved |> unwrap |> ignore
-            Assert.Equal(string TelemetryStoreApplication.currentSchemaVersion, scalar root "PRAGMA user_version;")
-            Assert.Equal("0", scalar root "SELECT (SELECT count(*) FROM fact_admissions) + (SELECT count(*) FROM fact_acceptance_times) + (SELECT count(*) FROM efficiency_receiver_order);")
-            Assert.Equal(rawBefore, scalar root "SELECT content_digest || canonical FROM ingest_facts;")
+            let journalBefore = scalar root "SELECT group_concat(version||':'||digest||':'||applied_utc,'|') FROM (SELECT * FROM schema_migrations ORDER BY version);"
+            let schemaBefore = scalar root "SELECT group_concat(type||':'||name||':'||coalesce(sql,''),'|') FROM (SELECT type,name,sql FROM sqlite_schema ORDER BY type,name);"
+            let database = Path.Combine(root,TelemetryStoreApplication.databaseFileName)
+            let databaseBefore = File.ReadAllBytes database
+            let refusal = Error [ "unsupported store schema; current14 required; exact13 requires telemetry store migrate13" ]
+            Assert.Equal(refusal,TelemetryStoreApplication.initialize root approved)
+            Assert.Equal(refusal,TelemetryStoreApplication.migrate13ToCurrent root approved)
+            Assert.Equal("8",scalar root "PRAGMA user_version;")
+            Assert.Equal(rawBefore,scalar root "SELECT content_digest || canonical FROM ingest_facts;")
+            Assert.Equal(journalBefore,scalar root "SELECT group_concat(version||':'||digest||':'||applied_utc,'|') FROM (SELECT * FROM schema_migrations ORDER BY version);")
+            Assert.Equal(schemaBefore,scalar root "SELECT group_concat(type||':'||name||':'||coalesce(sql,''),'|') FROM (SELECT type,name,sql FROM sqlite_schema ORDER BY type,name);")
+            Assert.Equal<byte array>(databaseBefore,File.ReadAllBytes database)
+        finally
+            if Directory.Exists root then
+                Directory.Delete(root, true)
 
+    [<Fact>]
+    let ``current14 legacy history stays unassigned and damaged journal is refused`` () =
+        let root = Path.Combine(Path.GetTempPath(), "fsgg-receipt-unassigned-" + Guid.NewGuid().ToString("N"))
+        try
+            TelemetryStoreApplication.initialize root approved |> unwrap |> ignore
+            use document = JsonDocument.Parse(envelope scope "legacy" 0)
+            TelemetryStoreApplication.ingest root approved (Encoding.UTF8.GetBytes(document.RootElement.GetProperty("payload").GetRawText()))
+            |> unwrap
+            |> ignore
+            let rawBefore = scalar root "SELECT content_digest || canonical FROM ingest_facts;"
+            Assert.Equal(string TelemetryStoreApplication.currentSchemaVersion,scalar root "PRAGMA user_version;")
+            Assert.Equal("0",scalar root "SELECT (SELECT count(*) FROM fact_admissions) + (SELECT count(*) FROM fact_acceptance_times) + (SELECT count(*) FROM efficiency_receiver_order);")
             Assert.Equal(
                 Error [ "legacy-unassigned; select a new prospective store" ],
                 TelemetryStoreApplication.enrollReceiptProducer root approved scope
             )
-
             TelemetryStoreApplication.summary root approved "item-a" |> unwrap |> ignore
+            Assert.Equal(rawBefore,scalar root "SELECT content_digest || canonical FROM ingest_facts;")
             sql root "UPDATE schema_migrations SET digest='corrupt' WHERE version=9;"
             Assert.True(TelemetryStoreApplication.initialize root approved |> Result.isError)
         finally
-            if Directory.Exists root then
-                Directory.Delete(root, true)
+            if Directory.Exists root then Directory.Delete(root,true)
 
     [<Theory>]
     [<InlineData("before-file-sync", false)>]
