@@ -3630,8 +3630,8 @@ PRAGMA user_version=13;
         Assert.Equal("14",correctionSql path "PRAGMA user_version;")
         // Old13 rows have no receiver acceptance witness; migration must not invent one.
         Assert.Equal("0",correctionSql path "SELECT count(*) FROM fact_acceptance_times;")
-        Assert.Equal(before[1..],(migration13Snapshot path)[1..])
-        Assert.Equal(files,migration13Files path)
+        Assert.Equal<string list>(before[1..],(migration13Snapshot path)[1..])
+        Assert.Equal<(string * string) array>(files,migration13Files path)
         let journal = correctionSql path "SELECT group_concat(version||':'||digest||':'||applied_utc,'|') FROM (SELECT * FROM schema_migrations ORDER BY version);"
         TelemetryStoreApplication.migrate13ToCurrent path approved |> unwrap |> ignore
         Assert.Equal(journal,correctionSql path "SELECT group_concat(version||':'||digest||':'||applied_utc,'|') FROM (SELECT * FROM schema_migrations ORDER BY version);")
@@ -3649,8 +3649,8 @@ PRAGMA user_version=13;
         let objects = correctionSql path "SELECT group_concat(type||':'||name||':'||coalesce(sql,''),'|') FROM (SELECT type,name,sql FROM sqlite_master ORDER BY type,name);"
         Assert.True(TelemetryStoreApplication.migrate13ToCurrent path approved |> Result.isError)
         Assert.Equal("13",correctionSql path "PRAGMA user_version;")
-        Assert.Equal(before,migration13Snapshot path)
-        Assert.Equal(files,migration13Files path)
+        Assert.Equal<string list>(before,migration13Snapshot path)
+        Assert.Equal<(string * string) array>(files,migration13Files path)
         Assert.Equal(objects,correctionSql path "SELECT group_concat(type||':'||name||':'||coalesce(sql,''),'|') FROM (SELECT type,name,sql FROM sqlite_master ORDER BY type,name);")
         Assert.Equal("0",correctionSql path "SELECT count(*) FROM schema_migrations WHERE version=14;")
         correctionSql path "DROP TRIGGER fixture_abort14; SELECT 1;" |> ignore
@@ -3658,8 +3658,8 @@ PRAGMA user_version=13;
         TelemetryStoreApplication.migrate13ToCurrent path approved |> unwrap |> ignore
         Assert.Equal("14",correctionSql path "PRAGMA user_version;")
         Assert.Equal("1",correctionSql path "SELECT count(*) FROM schema_migrations WHERE version=14;")
-        Assert.Equal(before[1..],(migration13Snapshot path)[1..])
-        Assert.Equal(files,migration13Files path)
+        Assert.Equal<string list>(before[1..],(migration13Snapshot path)[1..])
+        Assert.Equal<(string * string) array>(files,migration13Files path)
 
     [<Fact>]
     let ``schema13 damaged receipt refuses before14DDL or file mutation`` () =
@@ -3671,8 +3671,8 @@ PRAGMA user_version=13;
         let files = migration13Files path
         Assert.True(TelemetryStoreApplication.migrate13ToCurrent path approved |> Result.isError)
         Assert.Equal("13",correctionSql path "PRAGMA user_version;")
-        Assert.Equal(before,migration13Snapshot path)
-        Assert.Equal(files,migration13Files path)
+        Assert.Equal<string list>(before,migration13Snapshot path)
+        Assert.Equal<(string * string) array>(files,migration13Files path)
         Assert.Equal("0",correctionSql path "SELECT count(*) FROM sqlite_master WHERE name='efficiency_records';")
 
     let private writeSchema13BackupFixture path schema =
@@ -3747,14 +3747,19 @@ PRAGMA user_version=13;
         Assert.NotNull reader
         let parsed = reader.Invoke(null,[|box copied;box "fixture-unavailable"|]) :?> System.Text.Json.Nodes.JsonObject
         Assert.Equal("fsgg.telemetry.roadmap-dispatch-state/1",parsed["schema"].GetValue<string>())
-        Assert.Equal(actual,File.ReadAllBytes copied)
+        Assert.Equal<byte array>(actual,File.ReadAllBytes copied)
         // Closed JSON plus whitespace at exact persisted-byte bounds, including newline.
         let boundary length = Encoding.UTF8.GetBytes("{}"+String(' ',length-3)+"\n")
         File.WriteAllBytes(copied,boundary 1048576)
         Assert.NotNull(reader.Invoke(null,[|box copied;box "fixture-unavailable"|]))
         File.WriteAllBytes(copied,boundary 1048577)
         let refused = Assert.Throws<System.Reflection.TargetInvocationException>(fun () -> reader.Invoke(null,[|box copied;box "fixture-unavailable"|]) |> ignore)
-        Assert.IsType<SkillTelemetryAdapter.AdapterError>(refused.InnerException) |> ignore
+        // The exception is private to the module signature; pin its assembly identity
+        // and exact F# payload without exposing a new production API.
+        let adapterErrorType = moduleType.GetNestedType("AdapterError",System.Reflection.BindingFlags.Public ||| System.Reflection.BindingFlags.NonPublic)
+        Assert.NotNull adapterErrorType
+        Assert.Equal<Type>(adapterErrorType,refused.InnerException.GetType())
+        Assert.Equal<obj array>([|box "fixture-unavailable"|],Microsoft.FSharp.Reflection.FSharpValue.GetExceptionFields(refused.InnerException))
 
     [<Fact>]
     let ``current correction rejects a changed source after planning`` () =
@@ -3790,7 +3795,7 @@ PRAGMA user_version=13;
         let before = migration13Snapshot path
         Assert.True(TelemetryStoreApplication.initialize path approved |> Result.isError)
         Assert.Equal(string version, correctionSql path "PRAGMA user_version;")
-        Assert.Equal(before, migration13Snapshot path)
+        Assert.Equal<string list>(before, migration13Snapshot path)
         if version <> 13 then Assert.True(TelemetryStoreApplication.migrate13ToCurrent path approved |> Result.isError)
 
     [<Fact>]
@@ -3800,7 +3805,7 @@ PRAGMA user_version=13;
         genuineSchema13 path
         let before = migration13Snapshot path
         Assert.True(TelemetryStoreApplication.initialize path approved |> Result.isError)
-        Assert.Equal(before, migration13Snapshot path)
+        Assert.Equal<string list>(before, migration13Snapshot path)
         TelemetryStoreApplication.migrate13ToCurrent path approved |> unwrap |> ignore
 
     [<Fact>]
@@ -3829,7 +3834,7 @@ PRAGMA user_version=13;
         let before = migration13Snapshot path
         Assert.True(TelemetryStoreApplication.migrate13ToCurrent path approved |> Result.isError)
         Assert.Equal("13", correctionSql path "PRAGMA user_version;")
-        Assert.Equal(before, migration13Snapshot path)
+        Assert.Equal<string list>(before, migration13Snapshot path)
         Assert.Equal("0", correctionSql path "SELECT count(*) FROM sqlite_schema WHERE name='efficiency_records';")
 
 
