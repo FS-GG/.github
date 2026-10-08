@@ -87,6 +87,7 @@ module Program =
             1
         elif Array.contains "publish" args && not (String.IsNullOrEmpty mode) then
             let bytes = File.ReadAllBytes(option "--input" args |> Option.get)
+            require (bytes.Length > 0 && bytes[bytes.Length - 1] = byte '\n') "local rejection proof input lost persisted framing"
             use input = JsonDocument.Parse bytes
             let batch = input.RootElement
             let get (name: string) = batch.GetProperty(name).GetString()
@@ -708,6 +709,8 @@ module Program =
         let path = Path.Combine(host.StoreRoot, "orchestrator-dispatches", token + ".json")
         let before = File.ReadAllBytes path
         let state = JsonNode.Parse(before) :?> JsonObject
+        let stateEncoding = JsonSerializerOptions(WriteIndented = false, Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping)
+        require (Encoding.UTF8.GetBytes(state.ToJsonString(stateEncoding) + "\n") = before) "retained-parser fixture did not preserve original state serialization"
         let sequence = state["sequence"].GetValue<int>() + 1
         let activityId = "rejected-activity"
         let identity =
@@ -741,7 +744,7 @@ module Program =
         pending["batch"] <- batch
         state["sequence"] <- JsonValue.Create sequence
         state["pendingPublication"] <- pending
-        File.WriteAllText(path, state.ToJsonString() + "\n")
+        File.WriteAllText(path, state.ToJsonString(stateEncoding) + "\n")
         let poisoned = File.ReadAllBytes path
         let calls = File.ReadAllLines(log).Length
         try
@@ -751,7 +754,10 @@ module Program =
                 require (refused.ExitCode = 1 && File.ReadAllBytes path = poisoned) (mode + " incorrectly cleared retained intent")
             Environment.SetEnvironmentVariable("FSGG_ADAPTER_TEST_REJECTION", "exact")
             let rejected = run (Some host) (Activity(token, FileInfo input))
-            require (rejected.ExitCode = 1 && File.ReadAllBytes path = before) "exact pre-IO parser refusal did not restore original sequence/state"
+            require (rejected.ExitCode = 1) ("exact pre-IO parser refusal unexpectedly succeeded: " + text rejected.Stderr)
+            let restoredBytes = File.ReadAllBytes path
+            let restoredState = JsonNode.Parse(restoredBytes).AsObject()
+            require (restoredBytes = before) ("exact pre-IO parser refusal did not restore original sequence/state; pending=" + string (restoredState.ContainsKey "pendingPublication") + "; " + text rejected.Stderr)
             require (File.ReadAllLines(log).Length = calls) "rejected parser payload was published"
             Environment.SetEnvironmentVariable("FSGG_ADAPTER_TEST_REJECTION", null)
             activity["evidence"] <- JsonArray()

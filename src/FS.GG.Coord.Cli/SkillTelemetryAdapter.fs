@@ -332,9 +332,10 @@ module SkillTelemetryAdapter =
         if requiredString "schema" batch <> batchSchema || requiredString "generation" batch <> invocation ||
            requiredString "cursor" batch <> string sequence then fail "telemetry publication intent is malformed"
         let directory = Path.Combine(config.StoreRoot, "orchestrator-publish")
-        let batchBytes = utf8.GetBytes(batch.ToJsonString compact)
+        // Custody and rejection proofs bind the exact persisted input, including its framing.
+        let inputFileBytes = utf8.GetBytes(batch.ToJsonString(compact) + "\n")
         let engineBefore = localEngineIdentity config
-        let temporary = writePrivateBytes directory $"batch-{invocation}-{sequence}" batchBytes
+        let temporary = writePrivateBytes directory $"batch-{invocation}-{sequence}" inputFileBytes
         let producer = optionalString "associationProducer" state |> Option.defaultValue ""
         let bindingDigest = optionalString "associationDigest" state |> Option.defaultValue ""
         let completed =
@@ -344,7 +345,7 @@ module SkillTelemetryAdapter =
             let message = if String.IsNullOrWhiteSpace completed.Stderr then "telemetry batch publication failed" else completed.Stderr.Trim()
             let rejected =
                 if config.Workspace then false // A receiver error is not exact no-publication-IO proof.
-                else exactLocalParserRejection config batchBytes batch engineBefore completed.Code completed.Stdout completed.Stderr
+                else exactLocalParserRejection config inputFileBytes batch engineBefore completed.Code completed.Stdout completed.Stderr
             if rejected then
                 state["sequence"] <- node (sequence - 1)
                 state.Remove "pendingPublication" |> ignore
