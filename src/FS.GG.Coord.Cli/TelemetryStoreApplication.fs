@@ -699,7 +699,10 @@ PRAGMA user_version=14;
                     invalidOp "store schema definition integrity mismatch"
                 let columns =
                     expectedClauses
-                    |> Array.map (fun clause -> clause.Split(' ')[0])
+                    // A constraint keyword ends before its opening parenthesis, even without whitespace.
+                    // Keep every full clause in the definition comparison above and only omit table
+                    // constraints from the separately ordered column-name comparison.
+                    |> Array.map (fun clause -> Text.RegularExpressions.Regex.Match(clause, @"\A[A-Za-z_][A-Za-z0-9_]*").Value)
                     |> Array.filter (fun column -> not (List.contains column [ "PRIMARY"; "FOREIGN"; "UNIQUE"; "CHECK" ]))
                 use tableInfo = connection.CreateCommand()
                 tableInfo.CommandText <- $"SELECT name FROM pragma_table_info('{entry.Key}') ORDER BY cid;"

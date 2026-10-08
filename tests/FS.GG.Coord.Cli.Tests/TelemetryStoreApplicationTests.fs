@@ -3831,3 +3831,25 @@ PRAGMA user_version=13;
         Assert.Equal("13", correctionSql path "PRAGMA user_version;")
         Assert.Equal(before, migration13Snapshot path)
         Assert.Equal("0", correctionSql path "SELECT count(*) FROM sqlite_schema WHERE name='efficiency_records';")
+
+
+    [<Theory>]
+    [<InlineData("constraint", "store schema definition integrity mismatch")>]
+    [<InlineData("column-order", "store schema column integrity mismatch")>]
+    let ``current schema retains compact constraints and refuses definition or column order drift`` (mutation: string) (expectedError: string) =
+        let cleanup, path = root ()
+        use cleanup = cleanup
+        TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
+        TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
+        TelemetryStoreApplication.status path approved |> unwrap |> ignore
+        Assert.Equal("epoch_id|item_id|original_item_id", correctionSql path "SELECT group_concat(name,'|') FROM (SELECT name FROM pragma_table_info('budget_epoch_membership') ORDER BY cid);")
+        let replacement =
+            match mutation with
+            | "constraint" -> "epoch_id TEXT NOT NULL REFERENCES budget_epochs(epoch_id), item_id TEXT NOT NULL, original_item_id TEXT NOT NULL, PRIMARY KEY(epoch_id,item_id)"
+            | "column-order" -> "item_id TEXT NOT NULL, epoch_id TEXT NOT NULL REFERENCES budget_epochs(epoch_id), original_item_id TEXT NOT NULL, PRIMARY KEY(epoch_id,item_id), UNIQUE(item_id)"
+            | _ -> failwith "unknown schema mutation"
+        correctionSql path ("DROP TABLE budget_epoch_membership; CREATE TABLE budget_epoch_membership(" + replacement + ") STRICT; SELECT 1;") |> ignore
+        Assert.Equal(Error [ expectedError ], TelemetryStoreApplication.initialize path approved)
+        Assert.True(TelemetryStoreApplication.status path approved |> Result.isError)
+        Assert.Equal("14", correctionSql path "PRAGMA user_version;")
+        Assert.Equal("14", correctionSql path "SELECT count(*) FROM schema_migrations;")
