@@ -250,16 +250,13 @@ module BlockerTests =
     /// guard that cries wolf on correct code teaches exactly one lesson, and it is the wrong one.
     [<Fact>]
     let ``#889 no module outside Blockers decides a blocker's resolution`` () =
+        // Bind the source scan to the source used to compile this test, including when
+        // MSBuild writes the test binary to an external artifacts directory.
         let coreSrc =
-            let rec up (d: DirectoryInfo) =
-                if isNull (box d) then
-                    failwith "BlockerTests: no repo root above the test binary (looked for `src/FS.GG.Coord.Core`)."
-                elif Directory.Exists(Path.Combine(d.FullName, "src", "FS.GG.Coord.Core")) then
-                    Path.Combine(d.FullName, "src", "FS.GG.Coord.Core")
-                else
-                    up d.Parent
+            Path.GetFullPath(Path.Combine(__SOURCE_DIRECTORY__, "..", "..", "src", "FS.GG.Coord.Core"))
 
-            up (DirectoryInfo AppContext.BaseDirectory)
+        if not (Directory.Exists coreSrc) then
+            failwithf "BlockerTests: compiled test source tree is unavailable: %s" coreSrc
 
         // `Blockers.fs` IS the owner. Every other module in Core is subject to this.
         let files =
