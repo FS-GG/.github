@@ -225,13 +225,16 @@ acceptance. Do not reinstall, reset the selector or replay the original reader t
   was found in the bounded source-location search; the installed helper is not patched by source delivery.
   The explicit `--version 0.100.0 --install-only --manifest PATH --archive PATH` recipe uses retained,
   pinned promoted-release/public-package bytes, the ordinary supported installer, isolated caches and a
-  public-only NuGet config. It keeps the existing lock inode, refuses an existing destination, verifies
+  public-only NuGet config. Child HOME is disposable; [documented SDK first-use controls](https://learn.microsoft.com/en-us/dotnet/core/tools/dotnet-environment-variables)
+  disable development-certificate generation and global-tool PATH changes. MSBuild server/node reuse
+  is disabled for any restore path that uses it; this recipe invokes no compilation command.
+  It keeps the existing lock inode, refuses an existing destination, verifies
   every packaged tool before and after the absolute version-only command, classifies generated files
   as observed SDK output, and witnesses selector equality. A dangling selector already targeting the
   new destination refuses because filling that directory could implicitly activate it. Partial installs
   and private command logs are retained; failure or reporting does not replace the first cause.
   Disposable tests exercise the source main entry and actual shell wrapper with fake installer/version
-  commands, including the retained public archive. All 15 focused cases passed; routine eligibility
+  commands, including the retained public archive. All 18 focused cases passed; routine eligibility
   and operation-boundary fixtures also passed. They establish source behavior only. Deployment must
   copy both source files together beside each other at the existing updater location; deployment and
   native execution are separate operator-owned effects. No latest query or activation mode is provided.
@@ -239,8 +242,12 @@ acceptance. Do not reinstall, reset the selector or replay the original reader t
   Parent/original owner must resolve the already observed installation/selector against original effect
   identities. Accept existing evidence when sufficient; otherwise name the missing payload/runtime or
   terminal/cleanup fact before selecting one bounded operation. SDK-origin investigation remains paused.
-  The installer bounds its fixed child output and deadline and records direct-child termination/EOF;
-  it does not claim whole-process-tree cleanup qualification or SDK authenticity from fixture results.
+  The installer bounds retained child streams and elapsed work and records direct-child termination/EOF.
+  It inherits the operation owner's runtime resource policy rather than imposing virtual-memory,
+  process-wide file-size or GC limits. Stream limits are not filesystem quotas. An unreaped direct
+  child pins the group number for owned cleanup; a previously reaped leader with open pipes records
+  an unsupported group-custody boundary and is never signalled by stale numeric PGID. Neither result
+  qualifies whole-process-tree cleanup or SDK authenticity from fixtures.
 - [ ] **UTEL-100-HOST-03 — Separate selector and receiver recovery.** Decide whether selector action is
   needed only after original-effect reconciliation. Retained-store maintenance, supported original-intent
   observation/recovery and a useful prospective telemetry journey remain pending. Current14/authentic13
@@ -250,3 +257,10 @@ No generated-workspace, SDD/Templates, provider or lifecycle-default change is p
 window. Fifteen prior synthetic adoption cases retain their original scope; no fixture permit or SDK
 reconstruction gate becomes user authority. Historical usage and missing native dispatch collection
 remain unknown, and no programme efficiency or installed-adoption claim follows from these tests.
+
+A later, separately owned version-only observation executed the verified published entry DLL
+with the already available runtime `10.0.12`: exit 0, exact `0.100.0.0` stdout with newline,
+empty stderr, direct terminal and complete pipes, with the selector unchanged. This qualifies
+that narrow call only; installation/shim provenance, whole custody and receiver acceptance
+remain open. The predecessor CoreCLR initialization failure remains retained. The installer
+source fixture results do not supply this native evidence or widen its scope.

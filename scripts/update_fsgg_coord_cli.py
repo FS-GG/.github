@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """One explicit public-package installation; never select or recover telemetry.
 
-The operator owns admission and the available SDK. This command has no latest,
+The operator owns admission, the available SDK and inherited runtime resource
+policy. This command bounds retained streams and elapsed work; it sets no virtual
+address-space, process-wide file-size or GC policy. It has no latest,
 activation, retry, migration, download-SDK or arbitrary executable recipe mode.
 """
 import argparse
@@ -12,7 +14,6 @@ import io
 import json
 import os
 from pathlib import Path, PurePosixPath
-import resource
 import selectors
 import shutil
 import signal
@@ -198,12 +199,6 @@ def installed(destination, members):
     return observations
 
 
-def child_limits():
-    resource.setrlimit(resource.RLIMIT_FSIZE, (MAX_FILE, MAX_FILE))
-    resource.setrlimit(resource.RLIMIT_AS, (1024 * 1024 * 1024, 1024 * 1024 * 1024))
-    resource.setrlimit(resource.RLIMIT_CPU, (WORK_SECONDS, WORK_SECONDS))
-
-
 def command(argv, environment, workspace, kind, deadline, outcome):
     record = {"kind": kind, "argv": argv, "exit": None, "terminal": False,
               "cleanup": "not-started", "stdout": b"", "stderr": b"",
@@ -212,7 +207,7 @@ def command(argv, environment, workspace, kind, deadline, outcome):
     require(deadline > time.monotonic(), "original-work-deadline")
     process = subprocess.Popen(argv, env=environment, cwd=workspace, stdout=subprocess.PIPE,
                                stderr=subprocess.PIPE, stdin=subprocess.DEVNULL, close_fds=True,
-                               start_new_session=True, preexec_fn=child_limits)
+                               start_new_session=True)
     record["pid"] = process.pid
     first = None
     try:
@@ -246,18 +241,43 @@ def command(argv, environment, workspace, kind, deadline, outcome):
         record["failure"] = str(error)
     finally:
         if process.returncode is None:
+            # This function never polls/reaps before both EOFs. The unreaped direct
+            # child's PID pins its newly created process-group number until wait.
             record["cleanup"] = "owned-process-group-kill-requested"
+            cleanup_failed = False
             try:
                 os.killpg(process.pid, signal.SIGKILL)
-                record["exit"] = process.wait(timeout=CLEANUP_SECONDS)
-                record["terminal"] = True
-                record["cleanup"] = "direct-child-reaped-group-termination-requested"
             except Exception as error:
-                record["cleanup"] = "unknown"
+                cleanup_failed = True
                 if first is None:
                     first = error
                 else:
                     outcome["additionalErrors"].append("cleanup:" + str(error))
+            # Reaping is independent of signal/reporting success, with the same
+            # original cleanup end. A failed signal cannot suppress this attempt.
+            try:
+                remaining = max(0, deadline + CLEANUP_SECONDS - time.monotonic())
+                record["exit"] = process.wait(timeout=min(CLEANUP_SECONDS, remaining))
+                record["terminal"] = True
+            except Exception as error:
+                cleanup_failed = True
+                if first is None:
+                    first = error
+                else:
+                    outcome["additionalErrors"].append("cleanup:" + str(error))
+            record["cleanup"] = "unknown" if cleanup_failed else "direct-child-reaped-group-termination-requested"
+        elif not (record["stdoutEOF"] and record["stderrEOF"]):
+            # A reaped leader no longer pins the PGID. Never signal that numeric
+            # group after custody is lost; retain the unsupported boundary instead
+            # of silently calling descendant cleanup complete.
+            record["cleanup"] = "unsupported-group-custody-after-leader-reap"
+            record["exit"] = process.returncode
+            record["terminal"] = True
+            boundary = "group-cleanup-unsupported-after-leader-reap"
+            if first is None:
+                first = Refusal(boundary)
+            else:
+                outcome["additionalErrors"].append(boundary)
         # Each closer/log write is independent and cannot replace the first cause.
         for name, stream in (("stdout", process.stdout), ("stderr", process.stderr)):
             for action in (stream.close, lambda name=name: (workspace / (kind + "." + name)).write_bytes(record[name])):
@@ -317,8 +337,12 @@ def execute(args):
         outcome["workspace"] = str(workspace)
         config = workspace / "NuGet.Config"
         config.write_bytes(CONFIG)
-        environment = {"HOME": str(home), "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
-                       "DOTNET_CLI_TELEMETRY_OPTOUT": "1", "DOTNET_NOLOGO": "1", "DOTNET_PROCESSOR_COUNT": "1"}
+        sdk_home = workspace / "sdk-home"
+        sdk_home.mkdir(mode=0o700)
+        environment = {"HOME": str(sdk_home), "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
+                       "DOTNET_CLI_TELEMETRY_OPTOUT": "1", "DOTNET_NOLOGO": "1", "DOTNET_PROCESSOR_COUNT": "1",
+                       "DOTNET_GENERATE_ASPNET_CERTIFICATE": "false", "DOTNET_ADD_GLOBAL_TOOLS_TO_PATH": "false",
+                       "DOTNET_CLI_USE_MSBUILD_SERVER": "0", "MSBUILDDISABLENODEREUSE": "1"}
         for key, name in (("DOTNET_CLI_HOME", "dotnet-home"), ("NUGET_PACKAGES", "packages"),
                           ("NUGET_HTTP_CACHE_PATH", "http-cache"), ("NUGET_PLUGINS_CACHE_PATH", "plugins"),
                           ("NUGET_SCRATCH", "scratch"), ("TMPDIR", "tmp")):

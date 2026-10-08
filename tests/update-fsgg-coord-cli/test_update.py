@@ -12,6 +12,7 @@ import importlib.util
 import io
 import json
 import os
+import resource
 from pathlib import Path
 import subprocess
 import sys
@@ -130,7 +131,18 @@ if EXTRA:
         self.assertNotIn("--add-source", command["argv"])
         for key in ("NUGET_PACKAGES", "NUGET_HTTP_CACHE_PATH", "DOTNET_CLI_HOME", "TMPDIR"):
             self.assertTrue(command["environment"][key].startswith(result["workspace"] + "/"))
-        self.assertNotIn("CODEX_THREAD_ID", command["environment"])
+        environment = command["environment"]
+        self.assertEqual(environment["HOME"], result["workspace"] + "/sdk-home")
+        for name in ("DOTNET_GENERATE_ASPNET_CERTIFICATE", "DOTNET_ADD_GLOBAL_TOOLS_TO_PATH"):
+            self.assertEqual(environment[name], "false")
+        self.assertEqual(environment["DOTNET_CLI_USE_MSBUILD_SERVER"], "0")
+        self.assertEqual(environment["MSBUILDDISABLENODEREUSE"], "1")
+        self.assertEqual(set(environment) - {"LC_CTYPE"}, {
+            "HOME", "PATH", "DOTNET_CLI_TELEMETRY_OPTOUT", "DOTNET_NOLOGO", "DOTNET_PROCESSOR_COUNT",
+            "DOTNET_GENERATE_ASPNET_CERTIFICATE", "DOTNET_ADD_GLOBAL_TOOLS_TO_PATH",
+            "DOTNET_CLI_USE_MSBUILD_SERVER", "MSBUILDDISABLENODEREUSE", "DOTNET_CLI_HOME",
+            "NUGET_PACKAGES", "NUGET_HTTP_CACHE_PATH", "NUGET_PLUGINS_CACHE_PATH", "NUGET_SCRATCH", "TMPDIR"})
+        self.assertNotIn("CODEX_THREAD_ID", environment)
         self.assertTrue(all(c["terminal"] and c["exit"] == 0 for c in result["commands"]))
         self.assertTrue(all(g["origin"] == "observed-sdk-output-not-independent-provenance" for g in result["generated"]))
 
@@ -257,6 +269,73 @@ if EXTRA:
         self.assertEqual(result["firstError"], "install-deadline")
         self.assertTrue(result["commands"][0]["terminal"])
         self.assertEqual(result["commands"][0]["cleanup"], "direct-child-reaped-group-termination-requested")
+
+    def test_fake_installer_inherits_runtime_resource_policy(self):
+        fake = self.bin / "dotnet"
+        fake.write_text(fake.read_text().replace("import base64,hashlib,json,os,pathlib,shutil,sys,zipfile",
+                                                "import base64,hashlib,json,os,pathlib,shutil,sys,zipfile,resource") +
+                        "\n(root/'runtime-limits.json').write_text(json.dumps({name:resource.getrlimit(getattr(resource,name)) for name in ('RLIMIT_AS','RLIMIT_FSIZE','RLIMIT_CPU')}))\n")
+        expected = {name: list(resource.getrlimit(getattr(resource, name)))
+                    for name in ("RLIMIT_AS", "RLIMIT_FSIZE", "RLIMIT_CPU")}
+        code, result = self.invoke()
+        self.assertEqual(code, 0, result)
+        self.assertEqual(json.loads((self.root / "runtime-limits.json").read_text()), expected)
+
+    def test_reaped_leader_with_open_pipe_retains_unsupported_group_boundary(self):
+        # Finite fake lifecycle: terminal leader plus pipe still held elsewhere.
+        # No real descendant is abandoned and no numeric PGID is ever signalled.
+        class Reaped:
+            returncode = 0
+            pid = 123456789
+            def __init__(self):
+                out_read, out_write = os.pipe()
+                err_read, err_write = os.pipe()
+                self.stdout, self.stderr = os.fdopen(out_read, "rb"), os.fdopen(err_read, "rb")
+                self.writers = (out_write, err_write)
+        process = Reaped()
+        try:
+            with patch.object(update.subprocess, "Popen", return_value=process), \
+                 patch.object(update.os, "killpg") as kill, patch.object(update, "WORK_SECONDS", 0.02):
+                code, result = self.invoke()
+            self.assertEqual(code, 1)
+            self.assertEqual(result["firstError"], "install-deadline")
+            self.assertEqual(result["commands"][0]["cleanup"], "unsupported-group-custody-after-leader-reap")
+            self.assertIn("group-cleanup-unsupported-after-leader-reap", result["additionalErrors"])
+            kill.assert_not_called()
+        finally:
+            for fd in process.writers:
+                os.close(fd)
+
+    def test_cleanup_failure_preserves_deadline_and_retained_output(self):
+        fake = self.bin / "dotnet"
+        fake.write_text("#!/usr/bin/python3\nimport time\nprint('original output',flush=True)\ntime.sleep(10)\n")
+        original_kill = update.os.killpg
+        def signal_then_fail(pid, sig):
+            # Real fixture termination still happens; only its reporting fails.
+            original_kill(pid, sig)
+            raise OSError("fixture kill reporting failure")
+        captured = []
+        original_popen = update.subprocess.Popen
+        def retain_child(*args, **kwargs):
+            value = original_popen(*args, **kwargs)
+            captured.append(value)
+            return value
+        try:
+            with patch.object(update.subprocess, "Popen", side_effect=retain_child), \
+                 patch.object(update.os, "killpg", side_effect=signal_then_fail), \
+                 patch.object(update, "WORK_SECONDS", 1):
+                code, result = self.invoke()
+            self.assertEqual(code, 1)
+            self.assertEqual(result["firstError"], "install-deadline")
+            self.assertIn("cleanup:fixture kill reporting failure", result["additionalErrors"])
+            self.assertEqual(result["commands"][0]["cleanup"], "unknown")
+            self.assertTrue(result["commands"][0]["terminal"])
+            self.assertGreater(result["commands"][0]["stdout"]["bytes"], 0)
+        finally:
+            # Fixture owner retains the actual child object, independently of the
+            # failed reporting path, and observes the exact terminal process.
+            for child in captured:
+                child.wait(timeout=5)
 
     def test_reporting_failure_preserves_install_first_cause(self):
         self.fake_installer(failure="exit")
