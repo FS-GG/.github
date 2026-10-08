@@ -298,3 +298,23 @@ private stores, credentials, grants, defaults and unknown historical usage remai
 ## Selected breaking coherent successor — 2026-10-08
 
 Current source selects coherent **0.100.0** for Kit, Drivers and CLI with prospective journal `refs/heads/fsgg/v2/journal/release/utel-rel-18`; genuine promoted predecessor remains **0.99.0**. The earlier **0.99.1/utel-rel-17** preparation above is retained historical source work. The new stable0.x minor carries one current receipt ABI, current14 normal init/restore, explicit13 maintenance and scoped14 private dashboard. Historical SQL/digests and all six preservation controls remain; no installed mutation or original-root recovery is established. Keep the same actual candidate archive, first-attempt/exact-main/full qualification, all sixteen durable effect admissions, original-byte recovery and both-feed coherence guards. Coordinate/journal collision absence, candidate qualification, publication, installed adoption and native acceptance remain pending. Host0.5 source/published remains a separate axis; its published frontier was reconciled from the immutable release and exact protected publication evidence. Canonical0.99 pin and frozen Wizard dependency remain historical published bytes.
+
+
+## 0.100.0 publication accepted; adoption pending — 2026-10-08
+
+[PR #4315](https://github.com/FS-GG/.github/pull/4315) merged the current-only telemetry
+contract at `3ed8ad419a64253ca6f665e9779e5e4d110f50a5` after 96 passing checks and four skips.
+Candidate run `37773604415`, artifact `11549291800`, and original archive SHA-256
+`765e396437933eccf68e7c2c1b21acb7ccd4ec1d9920cbcb3e5e1f8f5e722600`
+were carried unchanged through passing preflight `37774706185` and first-attempt
+[publisher `37774941181`](https://github.com/FS-GG/.github/actions/runs/37774941181).
+Journal `utel-rel-18` generation 33 verifies all sixteen effects. The promoted content identity is
+`sha256:7df5886e99d2244dab0c6cb75d5035e4dc68de6a69be42ead6f32ace9dfbe5ca`.
+Independent public archive/manifest/channel downloads and public NuGet normalized payloads
+match the candidate; the protected publisher verified both feeds. The managed repository tool pin
+now selects 0.100.0.
+
+The installed user tool remains 0.99.0. Prepare a fixed 0.100.0 side-by-side adoption with
+installed payload verification before changing its selector. Original pending-reader custody,
+store migration, fresh canonical collection and activation remain unresolved; do not retry the
+held reader or infer native acceptance from publication. Host 0.5 remains its separate published boundary.
