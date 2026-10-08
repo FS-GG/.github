@@ -1,0 +1,32 @@
+name: Coordination CLI host installer self-test
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/update-fsgg-coord-cli-selftest.yml"
+      - "scripts/update-fsgg-coord-cli"
+      - "scripts/update_fsgg_coord_cli.py"
+      - "tests/update-fsgg-coord-cli/**"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/update-fsgg-coord-cli-selftest.yml"
+      - "scripts/update-fsgg-coord-cli"
+      - "scripts/update_fsgg_coord_cli.py"
+      - "tests/update-fsgg-coord-cli/**"
+
+permissions:
+  contents: read
+
+jobs:
+  fixture:
+    name: update-fsgg-coord-cli-fixture
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-policy-python
+      - name: Exercise the source installer with disposable fake commands
+        run: python3 tests/update-fsgg-coord-cli/test_update.py
