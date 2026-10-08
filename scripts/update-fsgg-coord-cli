@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Deploy this entrypoint and update_fsgg_coord_cli.py together beside each other.
+# Source successor of the host helper (3359 bytes, SHA256 4646925112f98b46cd86b5086157e37138b3938ff515a4993f50cc85bbc3c0b5).
+set -euo pipefail
+exec python3 "$(dirname -- "${BASH_SOURCE[0]}")/update_fsgg_coord_cli.py" "$@"
