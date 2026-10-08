@@ -558,7 +558,10 @@ module Program =
                     let files = Directory.GetFiles(Path.Combine(host.StoreRoot,"orchestrator-original-bindings"),"*.json")
                     let pending = files |> Array.map (fun path -> JsonNode.Parse(File.ReadAllBytes path).AsObject()) |> Array.filter (fun state -> not (isNull state["pendingPublication"]))
                     require (pending.Length = 1) "receipt refusal discarded pending intent"
-                    let exactIntent = pending[0]["pendingPublication"].ToJsonString() + ":" + string (pending[0]["sequence"].GetValue<int>())
+                    let retainedState = pending[0]
+                    let retainedPublication = retainedState.["pendingPublication"]
+                    let retainedSequence = retainedState.["sequence"]
+                    let exactIntent = retainedPublication.ToJsonString() + ":" + string (retainedSequence.GetValue<int>())
                     match retainedIntent with
                     | Some prior -> require (exactIntent = prior) "receipt refusal changed exact batch/sequence"
                     | None -> retainedIntent <- Some exactIntent

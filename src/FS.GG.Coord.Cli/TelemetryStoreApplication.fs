@@ -792,10 +792,8 @@ PRAGMA user_version=14;
                         with :? SqliteException as error -> Error(failBusy error)
             with error -> Error [ error.Message ]
 
-    /// Current14 initialization; only genuine empty schema0 is constructed.
     let initialize path assessment = initializeSelected false path assessment
 
-    /// Explicit exact13 transition, or validated14 readback after a completed attempt.
     let migrate13ToCurrent path assessment = initializeSelected true path assessment
 
     let status path assessment =
@@ -6284,11 +6282,9 @@ WHERE n.source_ref=$source;
         with _ ->
             Error [ "backup-integrity-failed" ]
 
-    /// Normal restore accepts current14 only and never migrates implicitly.
     let restoreReceiptStore inputPath path assessment workspace =
         restoreSelectedReceiptStore false inputPath path assessment workspace
 
-    /// Explicit import of an authentic13 receipt backup through a private copy.
     let import13ReceiptBackup inputPath path assessment workspace =
         restoreSelectedReceiptStore true inputPath path assessment workspace
 

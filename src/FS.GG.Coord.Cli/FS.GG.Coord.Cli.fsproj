@@ -130,18 +130,18 @@ bytes under 0.52.0 would make the same version identify different artifacts. Ado
 coherent set cut from corrected source. All three partial sets are recorded in
 `registry/dependencies.yml`.</FsggStandingAdvisories>
 
-    <PackageReleaseNotes>0.99.1 — bounded telemetry dispatch state IO repair.
+    <PackageReleaseNotes>0.100.0 — current telemetry receipt and schema contracts.
 
-Private dispatch-state reads and writes share a finite 1 MiB contract including the
-persisted newline. Large valid metadata remains readable; writes beyond the bound
-refuse before replacing originals or publishing events. Malformed states, links,
-permissions, lineage and unknown usage remain strict. New observations undergo canonical
-full-batch validation before durable intent; exact local pre-IO parser rejections bind
-legacy rollback to original bytes, destination and unchanged engine identity. Unknown
-receiver outcomes retain pending custody. CLI, Kit and Drivers advance
-together without a public signature or wire-schema change. Published0.99 archives
-remain immutable; source preparation establishes no publication, installed adoption,
-telemetry activation or Wizard frozen-closure qualification. Host0.5 remains independent.
+Workspace submissions now return one bounded JSON receipt carrying exact scope, batch,
+digest and status. Unknown receiver outcomes retain the original pending intent; durable
+receipt remains distinct from application. Normal private-store initialization and restore
+accept current schema14 only. Explicit migrate13 and import13 commands retain the historical
+schema13 transition and receipt-backup boundary. The private dashboard requires current
+schema14 snapshots and current producer shapes. These changes remove prior compatibility
+paths and advance CLI, Kit and Drivers together as a new minor version.
+Published0.99 archives remain immutable. Source preparation establishes no publication,
+installed adoption, telemetry activation or Wizard frozen-closure qualification.
+Host0.5 remains independent.
 
 $(FsggStandingAdvisories)
 

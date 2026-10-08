@@ -27,6 +27,7 @@ module RemoteContract =
 
     val validateClientConfig: ClientConfig -> Result<ClientConfig, string>
     val parseReceipt: byte array -> Result<Receipt, string>
+    /// The current workspace-submit ABI, including its terminating newline.
     val writeReceipt: Receipt -> Result<byte array, string>
     val writeError: code: string -> byte array
     val parseError: byte array -> string option

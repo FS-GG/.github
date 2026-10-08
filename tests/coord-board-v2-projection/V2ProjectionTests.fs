@@ -625,7 +625,7 @@ let ``inspection changed issue dependency and access denial remain zero effect``
 let ``fresh three selected issues inspect Current while closed omitted history stays outside the exact map`` () =
     let history = """,{"issue":"FS-GG/.github#3009","nodeId":"I_3009","observedUpdatedAt":"2026-10-04T13:04:38Z","observedState":"closed","decision":"omit-delivered","adjudication":"unknown","pilot":false,"remainingOutcome":null,"roadmap":"docs/github-substrate-v2-roadmap.md","dependencies":[]}"""
     let manifest = canonicalManifest.Substring(0, canonicalManifest.Length - 2) + history + "]}"
-    let memberResponse number response =
+    let memberResponse number (response: IoResult<Response>) =
         response |> Result.map (fun value ->
             { value with Body = value.Body.Replace("I_native", (if number = 2963 then "I_native" else $"I_{number}")).Replace("2963", string number) })
     let reads number =

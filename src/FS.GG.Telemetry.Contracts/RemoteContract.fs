@@ -172,7 +172,6 @@ module RemoteContract =
         | :? JsonException
         | :? ArgumentException -> Error "invalid receipt"
 
-    /// The current workspace-submit ABI, including its terminating newline.
     let writeReceipt (receipt: Receipt) =
         let bytes =
             Encoding.UTF8.GetBytes(

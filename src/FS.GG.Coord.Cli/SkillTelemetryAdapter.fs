@@ -368,7 +368,7 @@ module SkillTelemetryAdapter =
                     if names.Length <> 8 || Array.distinct names |> Array.length <> 8 ||
                        Set.ofArray names <> set [ "schema"; "workspaceId"; "producerId"; "streamId"; "batchId"; "digest"; "status"; "code" ] then
                         fail "workspace receipt is malformed"
-                    let scalar name =
+                    let scalar (name: string) : string =
                         let value = root.GetProperty name
                         if value.ValueKind <> JsonValueKind.String then fail "workspace receipt is malformed"
                         value.GetString()
