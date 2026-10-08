@@ -204,3 +204,8 @@ retain pending custody. See the [operational plan](utel-operational-completeness
 and [reference recipe](../reference/local-telemetry-store.md#operational-collection-and-malformed-observation-recovery).
 Compiled qualification, publication, installed selection and retained-root recovery remain
 separately admitted; original rejected input/state and unavailable observation baseline persist.
+
+
+## Current input-version selection — 2026-10-08
+
+Historical completed migration milestones remain evidence of their original delivered windows. Current source accepts fresh0/current14 normal init and authentic14 normal restore. Only explicit exact13 migration and authentic13 backup import remain historical transition entry points; no1..12 automatic upgrade or9/12 import is supported. Exact earlier SQL/digests, facts/cursors/files, correction lineage and unknown acceptance survive the transition. All six preservation/rollback/integrity/framing obligations remain required through the explicit APIs. Source preparation is unqualified for installed execution; see the [operator matrix and backup scope](../reference/local-telemetry-store.md#schema-and-relations).

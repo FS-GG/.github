@@ -27,6 +27,7 @@ module RemoteContract =
 
     val validateClientConfig: ClientConfig -> Result<ClientConfig, string>
     val parseReceipt: byte array -> Result<Receipt, string>
+    val writeReceipt: Receipt -> Result<byte array, string>
     val writeError: code: string -> byte array
     val parseError: byte array -> string option
     val validErrorCode: string -> bool

@@ -98,6 +98,7 @@ module TelemetryStoreApplication =
         selectedItem: string option -> Result<string, string list>
     val assessProductionRoot: path: string -> TelemetryStore.DurabilityAssessment
     val initialize: path: string -> assessment: TelemetryStore.DurabilityAssessment -> Result<string, string list>
+    val migrate13ToCurrent: path: string -> assessment: TelemetryStore.DurabilityAssessment -> Result<string, string list>
     val status: path: string -> assessment: TelemetryStore.DurabilityAssessment -> Result<string, string list>
 
     val publish:
@@ -254,6 +255,10 @@ module TelemetryStoreApplication =
         assessment: TelemetryStore.DurabilityAssessment ->
         workspace: string ->
             Result<string, string list>
+
+    val import13ReceiptBackup:
+        inputPath: string -> path: string -> assessment: TelemetryStore.DurabilityAssessment ->
+        workspace: string -> Result<string, string list>
 
     val summary:
         path: string -> assessment: TelemetryStore.DurabilityAssessment -> itemId: string -> Result<string, string list>

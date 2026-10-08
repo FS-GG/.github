@@ -288,3 +288,8 @@ both-feed operation after fresh coordinate, predecessor/channel and journal chec
 Canonical tool pin and frozen Wizard dependency remain published0.99; current frozen
 source guard must refuse the changed compiled leaf before acquisition. Host0.5,
 private stores, credentials, grants, defaults and unknown historical usage remain intact.
+
+
+## Selected breaking coherent successor — 2026-10-08
+
+Current source selects coherent **0.100.0** for Kit, Drivers and CLI with prospective journal `refs/heads/fsgg/v2/journal/release/utel-rel-18`; genuine promoted predecessor remains **0.99.0**. The earlier **0.99.1/utel-rel-17** preparation above is retained historical source work. The new stable0.x minor carries one current receipt ABI, current14 normal init/restore, explicit13 maintenance and scoped14 private dashboard. Historical SQL/digests and all six preservation controls remain; no installed mutation or original-root recovery is established. Keep the same actual candidate archive, first-attempt/exact-main/full qualification, all sixteen durable effect admissions, original-byte recovery and both-feed coherence guards. Coordinate/journal collision absence, candidate qualification, publication, installed adoption and native acceptance remain pending. Host0.5 source/0.4 published remains a separate unchanged axis. Canonical0.99 pin and frozen Wizard dependency remain historical published bytes.

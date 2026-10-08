@@ -603,439 +603,200 @@ PRAGMA user_version=14;
                 with _ ->
                     Error [ "storage-unavailable" ]
 
-    let initialize path assessment =
+    // These exact historical SQL bytes define current creation and journal integrity.
+    // Existing versions1..12 are never live upgrade entry states.
+    let private migrations =
+        [|
+            1, migrationSql, migrationDigest
+            2, migration2Sql, migration2Digest
+            3, migration3Sql, migration3Digest
+            4, migration4Sql, migration4Digest
+            5, migration5Sql, migration5Digest
+            6, migration6Sql, migration6Digest
+            7, migration7Sql, migration7Digest
+            8, migration8Sql, migration8Digest
+            9, migration9Sql, migration9Digest
+            10, migration10Sql, migration10Digest
+            11, migration11Sql, migration11Digest
+            12, migration12Sql, migration12Digest
+            13, migration13Sql, migration13Digest
+            14, migration14Sql, migration14Digest
+        |]
+
+    let private verifyMigrationJournal (connection: SqliteConnection) version =
+        if scalarText connection "SELECT count(*) FROM schema_migrations;" <> string version then
+            invalidOp "migration checksum mismatch"
+        for number, _, digest in migrations |> Array.take version do
+            if scalarText connection $"SELECT digest FROM schema_migrations WHERE version={number};" <> digest then
+                invalidOp "migration checksum mismatch"
+
+    let private normalizeSchemaSql (sql: string) =
+        let normalized = StringBuilder()
+        let mutable quoted = false
+        for character in sql do
+            if character = '\'' then quoted <- not quoted
+            if quoted || character = '\'' || (not (Char.IsWhiteSpace character) && character <> '"' && character <> ';') then
+                normalized.Append character |> ignore
+        normalized.ToString()
+
+    let private tableClauses (definition: string) =
+        let startColumns = definition.IndexOf('(') + 1
+        let endColumns = definition.LastIndexOf(')')
+        let clauses = ResizeArray<string>()
+        let mutable depth = 0
+        let mutable quoted = false
+        let mutable start = startColumns
+        for index in startColumns .. endColumns do
+            let character = definition[index]
+            if character = '\'' then quoted <- not quoted
+            if index = endColumns || (character = ',' && depth = 0 && not quoted) then
+                clauses.Add(definition.Substring(start, index - start).Trim())
+                start <- index + 1
+            elif not quoted && character = '(' then depth <- depth + 1
+            elif not quoted && character = ')' then depth <- depth - 1
+        clauses.ToArray()
+
+    // Validate the finite descriptor's declared schema before any14 DDL. Extra triggers
+    // may implement operator rejection policy; they cannot substitute for required objects.
+    let private verifyMigrationSchema (connection: SqliteConnection) version =
+        let objects = Collections.Generic.Dictionary<string, string * string>(StringComparer.Ordinal)
+        for _, sql, _ in migrations |> Array.take version do
+            // The finite trusted descriptor grammar includes trigger bodies with semicolons.
+            let statements = Text.RegularExpressions.Regex.Matches(sql, @"\s*(CREATE TRIGGER\b.*?\bEND|[^;]+);", Text.RegularExpressions.RegexOptions.Singleline)
+            for matched in statements do
+                let statement = matched.Groups[1].Value.Trim()
+                let created = Text.RegularExpressions.Regex.Match(statement, @"\ACREATE (?:UNIQUE )?(TABLE|INDEX|VIEW|TRIGGER) (\w+)")
+                let dropped = Text.RegularExpressions.Regex.Match(statement, @"\ADROP (?:TABLE|INDEX|VIEW|TRIGGER) (\w+)")
+                let renamed = Text.RegularExpressions.Regex.Match(statement, @"\AALTER TABLE (\w+) RENAME TO (\w+)")
+                let added = Text.RegularExpressions.Regex.Match(statement, @"\AALTER TABLE (\w+) ADD COLUMN (.+)")
+                if created.Success then
+                    objects[created.Groups[2].Value] <- (created.Groups[1].Value.ToLowerInvariant(), statement)
+                elif dropped.Success then
+                    objects.Remove dropped.Groups[1].Value |> ignore
+                elif renamed.Success then
+                    let kind, definition = objects[renamed.Groups[1].Value]
+                    objects.Remove renamed.Groups[1].Value |> ignore
+                    objects[renamed.Groups[2].Value] <- (kind, definition.Replace(renamed.Groups[1].Value, renamed.Groups[2].Value, StringComparison.Ordinal))
+                elif added.Success then
+                    let kind, definition = objects[added.Groups[1].Value]
+                    let endColumns = definition.LastIndexOf(") STRICT", StringComparison.Ordinal)
+                    objects[added.Groups[1].Value] <- (kind, definition.Insert(endColumns, ", " + added.Groups[2].Value))
+        for entry in objects do
+            let kind, definition = entry.Value
+            use command = connection.CreateCommand()
+            command.CommandText <- "SELECT count(*) FROM sqlite_schema WHERE name=$name AND type=$kind AND sql IS NOT NULL;"
+            parameter command "$name" entry.Key
+            parameter command "$kind" kind
+            if Convert.ToInt64(command.ExecuteScalar()) <> 1L then invalidOp "store schema integrity mismatch"
+            command.CommandText <- "SELECT sql FROM sqlite_schema WHERE name=$name AND type=$kind;"
+            let actualDefinition = string (command.ExecuteScalar())
+            if kind = "table" then
+                let expectedClauses = tableClauses definition
+                let actualClauses = tableClauses actualDefinition
+                if (expectedClauses |> Array.map normalizeSchemaSql |> Array.sort) <>
+                   (actualClauses |> Array.map normalizeSchemaSql |> Array.sort) ||
+                   not ((normalizeSchemaSql actualDefinition).EndsWith(")STRICT", StringComparison.Ordinal)) then
+                    invalidOp "store schema definition integrity mismatch"
+                let columns =
+                    expectedClauses
+                    |> Array.map (fun clause -> clause.Split(' ')[0])
+                    |> Array.filter (fun column -> not (List.contains column [ "PRIMARY"; "FOREIGN"; "UNIQUE"; "CHECK" ]))
+                use tableInfo = connection.CreateCommand()
+                tableInfo.CommandText <- $"SELECT name FROM pragma_table_info('{entry.Key}') ORDER BY cid;"
+                use tableColumns = tableInfo.ExecuteReader()
+                let actual = ResizeArray<string>()
+                while tableColumns.Read() do actual.Add(tableColumns.GetString 0)
+                if actual.ToArray() <> columns then invalidOp "store schema column integrity mismatch"
+            elif normalizeSchemaSql actualDefinition <> normalizeSchemaSql definition then
+                invalidOp "store schema definition integrity mismatch"
+        if scalarText connection "PRAGMA quick_check;" <> "ok" then invalidOp "store integrity check failed"
+        use foreignKeys = connection.CreateCommand()
+        foreignKeys.CommandText <- "PRAGMA foreign_key_check;"
+        use violations = foreignKeys.ExecuteReader()
+        if violations.Read() then invalidOp "store foreign key integrity mismatch"
+        if scalarText connection "SELECT value FROM store_metadata WHERE key='schema';" <> "fsgg.telemetry.sqlite-store/1" then
+            invalidOp "store schema integrity mismatch"
+        if version >= 13 && String.IsNullOrWhiteSpace(scalarText connection "SELECT value FROM store_metadata WHERE key='ciCorrectionStoreId';") then
+            invalidOp "store schema integrity mismatch"
+
+    let private applyMigration (connection: SqliteConnection) engine (number, sql, digest) =
+        execute connection sql
+        use migration = connection.CreateCommand()
+        migration.CommandText <- "INSERT INTO schema_migrations(version,digest,applied_utc) VALUES($version,$digest,$utc);"
+        parameter migration "$version" number
+        parameter migration "$digest" digest
+        parameter migration "$utc" (DateTimeOffset.UtcNow.ToString("O"))
+        migration.ExecuteNonQuery() |> ignore
+        if number = 1 then
+            use metadata = connection.CreateCommand()
+            metadata.CommandText <- "INSERT INTO store_metadata(key,value) VALUES('schema','fsgg.telemetry.sqlite-store/1'),('nativeEngine',$engine);"
+            parameter metadata "$engine" engine
+            metadata.ExecuteNonQuery() |> ignore
+
+    let private initializeSelected allow13 path assessment =
         match validateRoot path assessment with
         | Error errors -> Error errors
+        | Ok root when allow13 && not (File.Exists(Path.Combine(root, databaseFileName))) ->
+            Error [ "migration requires an existing schema13 store" ]
         | Ok root ->
             try
                 Directory.CreateDirectory root |> ignore
-
                 if not (OperatingSystem.IsWindows()) then
-                    File.SetUnixFileMode(
-                        root,
-                        UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute
-                    )
-
-                let probe = Path.Combine(root, ".fsgg-write-probe-" + Guid.NewGuid().ToString("N"))
-                use _probe = File.Create(probe, 1, FileOptions.DeleteOnClose)
-
+                    File.SetUnixFileMode(root, UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute)
+                // Coordination artifacts (writer.lock and SQLite sidecars) are allowed.
+                // Refusal never publishes14 DDL, data, journal or producer-state changes.
                 match tryWriterLock root with
                 | Error errors -> Error errors
                 | Ok writerLock ->
                     use writerLock = writerLock
-
-                    match connect root SqliteOpenMode.ReadWriteCreate with
+                    let mode = if allow13 then SqliteOpenMode.ReadWrite else SqliteOpenMode.ReadWriteCreate
+                    match connect root mode with
                     | Error errors -> Error errors
                     | Ok(connection, engine) ->
                         use connection = connection
-
                         try
                             let version = Int32.Parse(scalarText connection "PRAGMA user_version;")
-
-                            if version > currentSchemaVersion then
-                                Error
-                                    [
-                                        $"store schema version %d{version} is newer than supported version %d{currentSchemaVersion}"
-                                    ]
+                            if version <> currentSchemaVersion && not (allow13 && version = 13) && not (not allow13 && version = 0) then
+                                Error [ "unsupported store schema; current14 required; exact13 requires telemetry store migrate13" ]
                             else
                                 if version = 0 then
+                                    if scalarText connection "SELECT count(*) FROM sqlite_schema WHERE name NOT LIKE 'sqlite_%';" <> "0" then
+                                        invalidOp "schema0 store is not fresh"
                                     execute connection "PRAGMA journal_mode=WAL;"
+                                else
+                                    verifyMigrationJournal connection version
+                                    verifyMigrationSchema connection version
+                                    if version = 13 then
+                                        execute connection "PRAGMA journal_mode=WAL;"
+                                    elif scalarText connection "PRAGMA journal_mode;" <> "wal" then
+                                        invalidOp "store journal mode mismatch"
+                                if version <> currentSchemaVersion then
                                     beginImmediate connection
-
                                     try
-                                        execute connection migrationSql
-                                        use migration = connection.CreateCommand()
-
-                                        migration.CommandText <-
-                                            "INSERT INTO schema_migrations(version,digest,applied_utc) VALUES(1,$digest,$utc); INSERT INTO store_metadata(key,value) VALUES('schema','fsgg.telemetry.sqlite-store/1'),('nativeEngine',$engine);"
-
-                                        parameter migration "$digest" migrationDigest
-                                        parameter migration "$utc" (DateTimeOffset.UtcNow.ToString("O"))
-                                        parameter migration "$engine" engine
-                                        migration.ExecuteNonQuery() |> ignore
+                                        let selected = if version = 0 then migrations else [| migrations[13] |]
+                                        for migration in selected do applyMigration connection engine migration
+                                        verifyMigrationJournal connection currentSchemaVersion
+                                        verifyMigrationSchema connection currentSchemaVersion
                                         execute connection "COMMIT;"
                                     with error ->
                                         rollback connection
                                         raise error
+                                fsyncDirectory root
+                                fsyncDirectory (Path.GetDirectoryName root)
+                                Ok(JsonSerializer.Serialize
+                                    {| schema = "fsgg.telemetry.store-status/1"
+                                       status = "ready"; root = root; database = databaseFileName
+                                       schemaVersion = currentSchemaVersion; nativeEngine = engine
+                                       journalMode = scalarText connection "PRAGMA journal_mode;"
+                                       synchronous = scalarText connection "PRAGMA synchronous;" |} + "\n")
+                        with :? SqliteException as error -> Error(failBusy error)
+            with error -> Error [ error.Message ]
 
-                                let afterV1 = Int32.Parse(scalarText connection "PRAGMA user_version;")
+    /// Current14 initialization; only genuine empty schema0 is constructed.
+    let initialize path assessment = initializeSelected false path assessment
 
-                                let storedDigest =
-                                    scalarText connection "SELECT digest FROM schema_migrations WHERE version=1;"
-
-                                if storedDigest <> migrationDigest then
-                                    Error [ "migration checksum mismatch" ]
-                                else
-                                    if afterV1 = 1 then
-                                        beginImmediate connection
-
-                                        try
-                                            execute connection migration2Sql
-                                            use migration = connection.CreateCommand()
-
-                                            migration.CommandText <-
-                                                "INSERT INTO schema_migrations(version,digest,applied_utc) VALUES(2,$digest,$utc);"
-
-                                            parameter migration "$digest" migration2Digest
-                                            parameter migration "$utc" (DateTimeOffset.UtcNow.ToString("O"))
-                                            migration.ExecuteNonQuery() |> ignore
-                                            execute connection "COMMIT;"
-                                        with error ->
-                                            rollback connection
-                                            raise error
-
-                                    if
-                                        scalarText connection "SELECT digest FROM schema_migrations WHERE version=2;"
-                                        <> migration2Digest
-                                    then
-                                        Error [ "migration checksum mismatch" ]
-                                    else
-                                        let afterV2 = Int32.Parse(scalarText connection "PRAGMA user_version;")
-
-                                        if afterV2 = 2 then
-                                            beginImmediate connection
-
-                                            try
-                                                execute connection migration3Sql
-                                                use migration = connection.CreateCommand()
-
-                                                migration.CommandText <-
-                                                    "INSERT INTO schema_migrations(version,digest,applied_utc) VALUES(3,$digest,$utc);"
-
-                                                parameter migration "$digest" migration3Digest
-                                                parameter migration "$utc" (DateTimeOffset.UtcNow.ToString("O"))
-                                                migration.ExecuteNonQuery() |> ignore
-                                                execute connection "COMMIT;"
-                                            with error ->
-                                                rollback connection
-                                                raise error
-
-                                        if
-                                            scalarText
-                                                connection
-                                                "SELECT digest FROM schema_migrations WHERE version=3;"
-                                            <> migration3Digest
-                                        then
-                                            Error [ "migration checksum mismatch" ]
-                                        else
-                                            let afterV3 = Int32.Parse(scalarText connection "PRAGMA user_version;")
-
-                                            if afterV3 = 3 then
-                                                beginImmediate connection
-
-                                                try
-                                                    execute connection migration4Sql
-                                                    use migration = connection.CreateCommand()
-
-                                                    migration.CommandText <-
-                                                        "INSERT INTO schema_migrations(version,digest,applied_utc) VALUES(4,$digest,$utc);"
-
-                                                    parameter migration "$digest" migration4Digest
-                                                    parameter migration "$utc" (DateTimeOffset.UtcNow.ToString("O"))
-                                                    migration.ExecuteNonQuery() |> ignore
-                                                    execute connection "COMMIT;"
-                                                with error ->
-                                                    rollback connection
-                                                    raise error
-
-                                            if
-                                                scalarText
-                                                    connection
-                                                    "SELECT digest FROM schema_migrations WHERE version=4;"
-                                                <> migration4Digest
-                                            then
-                                                Error [ "migration checksum mismatch" ]
-                                            else
-                                                let afterV4 = Int32.Parse(scalarText connection "PRAGMA user_version;")
-
-                                                if afterV4 = 4 then
-                                                    beginImmediate connection
-
-                                                    try
-                                                        execute connection migration5Sql
-                                                        use migration = connection.CreateCommand()
-
-                                                        migration.CommandText <-
-                                                            "INSERT INTO schema_migrations(version,digest,applied_utc) VALUES(5,$digest,$utc);"
-
-                                                        parameter migration "$digest" migration5Digest
-                                                        parameter migration "$utc" (DateTimeOffset.UtcNow.ToString("O"))
-                                                        migration.ExecuteNonQuery() |> ignore
-                                                        execute connection "COMMIT;"
-                                                    with error ->
-                                                        rollback connection
-                                                        raise error
-
-                                                if
-                                                    scalarText
-                                                        connection
-                                                        "SELECT digest FROM schema_migrations WHERE version=5;"
-                                                    <> migration5Digest
-                                                then
-                                                    Error [ "migration checksum mismatch" ]
-                                                else
-                                                    let afterV5 =
-                                                        Int32.Parse(scalarText connection "PRAGMA user_version;")
-
-                                                    if afterV5 = 5 then
-                                                        beginImmediate connection
-
-                                                        try
-                                                            execute connection migration6Sql
-                                                            use migration = connection.CreateCommand()
-
-                                                            migration.CommandText <-
-                                                                "INSERT INTO schema_migrations(version,digest,applied_utc) VALUES(6,$digest,$utc);"
-
-                                                            parameter migration "$digest" migration6Digest
-
-                                                            parameter
-                                                                migration
-                                                                "$utc"
-                                                                (DateTimeOffset.UtcNow.ToString("O"))
-
-                                                            migration.ExecuteNonQuery() |> ignore
-                                                            execute connection "COMMIT;"
-                                                        with error ->
-                                                            rollback connection
-                                                            raise error
-
-                                                    if
-                                                        scalarText
-                                                            connection
-                                                            "SELECT digest FROM schema_migrations WHERE version=6;"
-                                                        <> migration6Digest
-                                                    then
-                                                        Error [ "migration checksum mismatch" ]
-                                                    else
-                                                        let afterV6 =
-                                                            Int32.Parse(scalarText connection "PRAGMA user_version;")
-
-                                                        if afterV6 = 6 then
-                                                            beginImmediate connection
-
-                                                            try
-                                                                execute connection migration7Sql
-                                                                use migration = connection.CreateCommand()
-
-                                                                migration.CommandText <-
-                                                                    "INSERT INTO schema_migrations(version,digest,applied_utc) VALUES(7,$digest,$utc);"
-
-                                                                parameter migration "$digest" migration7Digest
-
-                                                                parameter
-                                                                    migration
-                                                                    "$utc"
-                                                                    (DateTimeOffset.UtcNow.ToString("O"))
-
-                                                                migration.ExecuteNonQuery() |> ignore
-                                                                execute connection "COMMIT;"
-                                                            with error ->
-                                                                rollback connection
-                                                                raise error
-
-                                                        if
-                                                            scalarText
-                                                                connection
-                                                                "SELECT digest FROM schema_migrations WHERE version=7;"
-                                                            <> migration7Digest
-                                                        then
-                                                            Error [ "migration checksum mismatch" ]
-                                                        else
-                                                            let afterV7 =
-                                                                Int32.Parse(
-                                                                    scalarText connection "PRAGMA user_version;"
-                                                                )
-
-                                                            if afterV7 = 7 then
-                                                                beginImmediate connection
-
-                                                                try
-                                                                    execute connection migration8Sql
-                                                                    use migration = connection.CreateCommand()
-
-                                                                    migration.CommandText <-
-                                                                        "INSERT INTO schema_migrations(version,digest,applied_utc) VALUES(8,$digest,$utc);"
-
-                                                                    parameter migration "$digest" migration8Digest
-
-                                                                    parameter
-                                                                        migration
-                                                                        "$utc"
-                                                                        (DateTimeOffset.UtcNow.ToString("O"))
-
-                                                                    migration.ExecuteNonQuery() |> ignore
-                                                                    execute connection "COMMIT;"
-                                                                with error ->
-                                                                    rollback connection
-                                                                    raise error
-
-                                                            if
-                                                                scalarText
-                                                                    connection
-                                                                    "SELECT digest FROM schema_migrations WHERE version=8;"
-                                                                <> migration8Digest
-                                                            then
-                                                                Error [ "migration checksum mismatch" ]
-                                                            else
-                                                                if
-                                                                    Int32.Parse(
-                                                                        scalarText connection "PRAGMA user_version;"
-                                                                    )
-                                                                        =
-                                                                        8
-                                                                then
-                                                                    beginImmediate connection
-
-                                                                    try
-                                                                        execute connection migration9Sql
-                                                                        use migration = connection.CreateCommand()
-
-                                                                        migration.CommandText <-
-                                                                            "INSERT INTO schema_migrations(version,digest,applied_utc) VALUES(9,$digest,$utc);"
-
-                                                                        parameter migration "$digest" migration9Digest
-
-                                                                        parameter
-                                                                            migration
-                                                                            "$utc"
-                                                                            (DateTimeOffset.UtcNow.ToString("O"))
-
-                                                                        migration.ExecuteNonQuery() |> ignore
-                                                                        execute connection "COMMIT;"
-                                                                    with error ->
-                                                                        rollback connection
-                                                                        raise error
-
-                                                                if
-                                                                    scalarText
-                                                                        connection
-                                                                        "SELECT digest FROM schema_migrations WHERE version=9;"
-                                                                    <> migration9Digest
-                                                                then
-                                                                    Error [ "migration checksum mismatch" ]
-                                                                else
-                                                                    if
-                                                                        Int32.Parse(
-                                                                            scalarText connection "PRAGMA user_version;"
-                                                                        ) = 9
-                                                                    then
-                                                                        beginImmediate connection
-
-                                                                        try
-                                                                            execute connection migration10Sql
-                                                                            use migration = connection.CreateCommand()
-                                                                            migration.CommandText <-
-                                                                                "INSERT INTO schema_migrations(version,digest,applied_utc) VALUES(10,$digest,$utc);"
-                                                                            parameter migration "$digest" migration10Digest
-                                                                            parameter migration "$utc" (DateTimeOffset.UtcNow.ToString("O"))
-                                                                            migration.ExecuteNonQuery() |> ignore
-                                                                            execute connection "COMMIT;"
-                                                                        with error ->
-                                                                            rollback connection
-                                                                            raise error
-
-                                                                    if
-                                                                        scalarText connection "SELECT digest FROM schema_migrations WHERE version=10;"
-                                                                        <> migration10Digest
-                                                                    then
-                                                                        Error [ "migration checksum mismatch" ]
-                                                                    else
-                                                                        if Int32.Parse(scalarText connection "PRAGMA user_version;") = 10 then
-                                                                            beginImmediate connection
-
-                                                                            try
-                                                                                execute connection migration11Sql
-                                                                                use migration = connection.CreateCommand()
-                                                                                migration.CommandText <-
-                                                                                    "INSERT INTO schema_migrations(version,digest,applied_utc) VALUES(11,$digest,$utc);"
-                                                                                parameter migration "$digest" migration11Digest
-                                                                                parameter migration "$utc" (DateTimeOffset.UtcNow.ToString("O"))
-                                                                                migration.ExecuteNonQuery() |> ignore
-                                                                                execute connection "COMMIT;"
-                                                                            with error ->
-                                                                                rollback connection
-                                                                                raise error
-
-                                                                        if scalarText connection "SELECT digest FROM schema_migrations WHERE version=11;" <> migration11Digest then
-                                                                            Error [ "migration checksum mismatch" ]
-                                                                        else
-                                                                            if Int32.Parse(scalarText connection "PRAGMA user_version;") = 11 then
-                                                                                beginImmediate connection
-
-                                                                                try
-                                                                                    execute connection migration12Sql
-                                                                                    use migration = connection.CreateCommand()
-                                                                                    migration.CommandText <-
-                                                                                        "INSERT INTO schema_migrations(version,digest,applied_utc) VALUES(12,$digest,$utc);"
-                                                                                    parameter migration "$digest" migration12Digest
-                                                                                    parameter migration "$utc" (DateTimeOffset.UtcNow.ToString("O"))
-                                                                                    migration.ExecuteNonQuery() |> ignore
-                                                                                    execute connection "COMMIT;"
-                                                                                with error ->
-                                                                                    rollback connection
-                                                                                    raise error
-
-                                                                            if scalarText connection "SELECT digest FROM schema_migrations WHERE version=12;" <> migration12Digest then
-                                                                                Error [ "migration checksum mismatch" ]
-                                                                            else
-                                                                                if Int32.Parse(scalarText connection "PRAGMA user_version;") = 12 then
-                                                                                    beginImmediate connection
-                                                                                    try
-                                                                                        execute connection migration13Sql
-                                                                                        use migration = connection.CreateCommand()
-                                                                                        migration.CommandText <- "INSERT INTO schema_migrations(version,digest,applied_utc) VALUES(13,$digest,$utc);"
-                                                                                        parameter migration "$digest" migration13Digest
-                                                                                        parameter migration "$utc" (DateTimeOffset.UtcNow.ToString("O"))
-                                                                                        migration.ExecuteNonQuery() |> ignore
-                                                                                        execute connection "COMMIT;"
-                                                                                    with error ->
-                                                                                        rollback connection
-                                                                                        raise error
-                                                                                if scalarText connection "SELECT digest FROM schema_migrations WHERE version=13;" <> migration13Digest then
-                                                                                    invalidOp "migration checksum mismatch"
-                                                                                if Int32.Parse(scalarText connection "PRAGMA user_version;") = 13 then
-                                                                                    beginImmediate connection
-                                                                                    try
-                                                                                        execute connection migration14Sql
-                                                                                        use migration = connection.CreateCommand()
-                                                                                        migration.CommandText <- "INSERT INTO schema_migrations(version,digest,applied_utc) VALUES(14,$digest,$utc);"
-                                                                                        parameter migration "$digest" migration14Digest
-                                                                                        parameter migration "$utc" (DateTimeOffset.UtcNow.ToString("O"))
-                                                                                        migration.ExecuteNonQuery() |> ignore
-                                                                                        execute connection "COMMIT;"
-                                                                                    with error ->
-                                                                                        rollback connection
-                                                                                        raise error
-                                                                                if scalarText connection "SELECT digest FROM schema_migrations WHERE version=14;" <> migration14Digest then
-                                                                                    invalidOp "migration checksum mismatch"
-                                                                                fsyncDirectory root
-                                                                                fsyncDirectory (Path.GetDirectoryName root)
-
-                                                                                Ok(
-                                                                                    JsonSerializer.Serialize
-                                                                                        {|
-                                                                                            schema = "fsgg.telemetry.store-status/1"
-                                                                                            status = "ready"
-                                                                                            root = root
-                                                                                            database = databaseFileName
-                                                                                            schemaVersion = currentSchemaVersion
-                                                                                            nativeEngine = engine
-                                                                                            journalMode =
-                                                                                                scalarText
-                                                                                                    connection
-                                                                                                    "PRAGMA journal_mode;"
-                                                                                            synchronous =
-                                                                                                scalarText
-                                                                                                    connection
-                                                                                                    "PRAGMA synchronous;"
-                                                                                        |}
-                                                                                    + "\n"
-                                                                                )
-                        with :? SqliteException as error ->
-                            Error(failBusy error)
-            with error ->
-                Error [ error.Message ]
+    /// Explicit exact13 transition, or validated14 readback after a completed attempt.
+    let migrate13ToCurrent path assessment = initializeSelected true path assessment
 
     let status path assessment =
         match validateRoot path assessment with
@@ -1065,62 +826,11 @@ PRAGMA user_version=14;
                                 $"store schema version %d{version} is newer than supported version %d{currentSchemaVersion}"
                             ]
                     elif version <> currentSchemaVersion then
-                        Error [ "telemetry store schema requires migration; run telemetry store init" ]
-                    elif
-                        scalarText connection "SELECT digest FROM schema_migrations WHERE version=1;"
-                        <> migrationDigest
-                    then
-                        Error [ "migration checksum mismatch" ]
-                    elif
-                        scalarText connection "SELECT digest FROM schema_migrations WHERE version=2;"
-                        <> migration2Digest
-                    then
-                        Error [ "migration checksum mismatch" ]
-                    elif
-                        scalarText connection "SELECT digest FROM schema_migrations WHERE version=3;"
-                        <> migration3Digest
-                    then
-                        Error [ "migration checksum mismatch" ]
-                    elif
-                        scalarText connection "SELECT digest FROM schema_migrations WHERE version=4;"
-                        <> migration4Digest
-                    then
-                        Error [ "migration checksum mismatch" ]
-                    elif
-                        scalarText connection "SELECT digest FROM schema_migrations WHERE version=5;"
-                        <> migration5Digest
-                    then
-                        Error [ "migration checksum mismatch" ]
-                    elif
-                        scalarText connection "SELECT digest FROM schema_migrations WHERE version=6;"
-                        <> migration6Digest
-                    then
-                        Error [ "migration checksum mismatch" ]
-                    elif
-                        scalarText connection "SELECT digest FROM schema_migrations WHERE version=7;"
-                        <> migration7Digest
-                    then
-                        Error [ "migration checksum mismatch" ]
-                    elif
-                        scalarText connection "SELECT digest FROM schema_migrations WHERE version=8;"
-                        <> migration8Digest
-                    then
-                        Error [ "migration checksum mismatch" ]
-                    elif
-                        scalarText connection "SELECT digest FROM schema_migrations WHERE version=10;"
-                        <> migration10Digest
-                    then
-                        Error [ "migration checksum mismatch" ]
-                    elif
-                        scalarText connection "SELECT digest FROM schema_migrations WHERE version=12;"
-                        <> migration12Digest
-                    then
-                        Error [ "migration checksum mismatch" ]
-                    elif scalarText connection "SELECT digest FROM schema_migrations WHERE version=13;" <> migration13Digest then
-                        Error [ "migration checksum mismatch" ]
-                    elif scalarText connection "SELECT digest FROM schema_migrations WHERE version=14;" <> migration14Digest then
-                        Error [ "migration checksum mismatch" ]
+                        Error [ "telemetry store schema requires migration; current14 required; exact13 requires telemetry store migrate13" ]
                     else
+                        verifyMigrationJournal connection currentSchemaVersion
+                        verifyMigrationSchema connection currentSchemaVersion
+                        if scalarText connection "PRAGMA journal_mode;" <> "wal" then invalidOp "store journal mode mismatch"
                         let inbox = Path.Combine(root, "inbox")
 
                         let pending =
@@ -3641,7 +3351,7 @@ UNION ALL SELECT count(*) FROM runtime_turn_usage WHERE invocation_id=$invocatio
                                 $"store schema version %d{version} is newer than supported version %d{currentSchemaVersion}"
                             ]
                     elif version <> currentSchemaVersion then
-                        Error [ "telemetry store schema requires migration; run telemetry store init" ]
+                        Error [ "telemetry store schema requires migration; current14 required; exact13 requires telemetry store migrate13" ]
                     else
                         beginImmediate connection
 
@@ -6306,7 +6016,7 @@ WHERE n.source_ref=$source;
                                 if Directory.Exists temporary then
                                     Directory.Delete(temporary, true))
 
-    let restoreReceiptStore (inputPath: string) (path: string) assessment workspace =
+    let private restoreSelectedReceiptStore import13 (inputPath: string) (path: string) assessment workspace =
         try
             if
                 not (Path.IsPathFullyQualified inputPath)
@@ -6343,7 +6053,7 @@ WHERE n.source_ref=$source;
                                       "workspaceId"
                                       "files"]
                             || top.GetProperty("schema").GetString() <> "fsgg.telemetry.host-backup/1"
-                            || not ((set [ 9; 12; 13; currentSchemaVersion ]).Contains(top.GetProperty("storeSchemaVersion").GetInt32()))
+                            || top.GetProperty("storeSchemaVersion").GetInt32() <> (if import13 then 13 else currentSchemaVersion)
                             || top.GetProperty("workspaceId").GetString() <> workspace
                         then
                             Error [ "backup-incompatible" ]
@@ -6521,10 +6231,10 @@ WHERE n.source_ref=$source;
                                         let restoredStatus =
                                             if not manifestVersionMatches then
                                                 Error [ "backup-integrity-failed" ]
-                                            elif backupSchemaVersion < currentSchemaVersion then
-                                                initialize temporary assessment
+                                            elif import13 then
+                                                migrate13ToCurrent temporary assessment
                                             else
-                                                status temporary assessment
+                                                initialize temporary assessment
 
                                         match restoredStatus with
                                         | Error errors ->
@@ -6573,6 +6283,14 @@ WHERE n.source_ref=$source;
                                         raise error
         with _ ->
             Error [ "backup-integrity-failed" ]
+
+    /// Normal restore accepts current14 only and never migrates implicitly.
+    let restoreReceiptStore inputPath path assessment workspace =
+        restoreSelectedReceiptStore false inputPath path assessment workspace
+
+    /// Explicit import of an authentic13 receipt backup through a private copy.
+    let import13ReceiptBackup inputPath path assessment workspace =
+        restoreSelectedReceiptStore true inputPath path assessment workspace
 
     let private readSummary (connection: SqliteConnection) itemId : TelemetryStore.Aggregate =
         let count table =
@@ -7560,7 +7278,7 @@ WHERE n.source_ref=$source;
                 let journal = scalarText connection "PRAGMA journal_mode;" |> _.ToLowerInvariant()
 
                 if version <> currentSchemaVersion then
-                    Error [ "telemetry store schema requires migration; run telemetry store init" ]
+                    Error [ "telemetry store schema requires migration; current14 required; exact13 requires telemetry store migrate13" ]
                 elif journal <> "wal" then
                     Error [ "telemetry store journal mode must be WAL" ]
                 else
@@ -7972,7 +7690,7 @@ WHERE n.source_ref=$source;
                 let version = Int32.Parse(scalarText connection "PRAGMA user_version;")
 
                 if version <> currentSchemaVersion then
-                    Error [ "telemetry store schema requires migration; run telemetry store init" ]
+                    Error [ "telemetry store schema requires migration; current14 required; exact13 requires telemetry store migrate13" ]
                 else
                     let readStringOption (reader: SqliteDataReader) index =
                         if reader.IsDBNull index then
@@ -8557,7 +8275,7 @@ WHERE n.source_ref=$source;
                     Int32.Parse(scalarText connection "PRAGMA user_version;")
                     <> currentSchemaVersion
                 then
-                    Error [ "telemetry store schema requires migration; run telemetry store init" ]
+                    Error [ "telemetry store schema requires migration; current14 required; exact13 requires telemetry store migrate13" ]
                 else
                     use command = connection.CreateCommand()
 
@@ -8588,7 +8306,7 @@ WHERE n.source_ref=$source;
                 let version = Int32.Parse(scalarText connection "PRAGMA user_version;")
 
                 if version <> currentSchemaVersion then
-                    Error [ "telemetry store schema requires migration; run telemetry store init" ]
+                    Error [ "telemetry store schema requires migration; current14 required; exact13 requires telemetry store migrate13" ]
                 else
                     use command = connection.CreateCommand()
 
@@ -8653,7 +8371,7 @@ WHERE n.source_ref=$source;
                 let version = Int32.Parse(scalarText connection "PRAGMA user_version;")
 
                 if version <> currentSchemaVersion then
-                    Error [ "telemetry store schema requires migration; run telemetry store init" ]
+                    Error [ "telemetry store schema requires migration; current14 required; exact13 requires telemetry store migrate13" ]
                 else
                     let epoch =
                         scalarText connection "SELECT epoch_id FROM budget_epochs WHERE state='open';"
@@ -8704,7 +8422,7 @@ WHERE n.source_ref=$source;
                     Int32.Parse(scalarText connection "PRAGMA user_version;")
                     <> currentSchemaVersion
                 then
-                    Error [ "telemetry store schema requires migration; run telemetry store init" ]
+                    Error [ "telemetry store schema requires migration; current14 required; exact13 requires telemetry store migrate13" ]
                 else
                     let scalar sql =
                         use command = connection.CreateCommand()
@@ -8903,6 +8621,12 @@ WHERE n.source_ref=$source;
             match action with
             | "status" -> status path assessment |> output
             | "init" -> initialize path assessment |> output
+            | "migrate13" -> migrate13ToCurrent path assessment |> output
+            | "import13" ->
+                match option "--input" args, option "--workspace" args with
+                | Some input, Some workspace when TelemetryReceipt.validId workspace ->
+                    import13ReceiptBackup input path assessment workspace |> output
+                | _ -> output (Error [ "--input and a valid --workspace are required" ])
             | "publish" ->
                 match option "--input" args with
                 | Some input -> publish path assessment (readBounded input) |> output
@@ -8925,7 +8649,7 @@ WHERE n.source_ref=$source;
                 | Some target -> exportPublic path assessment (option "--item" args) target |> output
                 | _ -> output (Error [ "--output is required" ])
             | "export" -> output (Error [ "only --public export is supported" ])
-            | _ -> output (Error [ "action must be status, init, ingest, summary, reconcile, or export" ])
+            | _ -> output (Error [ "action must be status, init, migrate13, import13, publish, drain, ingest, summary, reconcile, or export" ])
 
     let runBudget action args =
         match root args with

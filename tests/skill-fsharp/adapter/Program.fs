@@ -59,7 +59,22 @@ module Program =
                 Console.Out.WriteLine "{\"schema\":\"fsgg.telemetry.dashboard-event-health/1\",\"status\":\"ready\",\"reason\":null,\"observedAt\":\"2026-09-27T00:00:00Z\",\"publicRevision\":null,\"commit\":null}"
                 0
         elif Array.contains "submit" args then
-            Console.Out.WriteLine "applied"
+            use batch = JsonDocument.Parse(File.ReadAllBytes(option "--input" args |> Option.get))
+            let responseMode = Environment.GetEnvironmentVariable "FSGG_ADAPTER_TEST_RECEIPT"
+            let batchId = batch.RootElement.GetProperty("ingestId").GetString()
+            let status = if responseMode = "durable" then "durably-received" else "applied"
+            let receipt = JsonSerializer.Serialize
+                              {| schema = "fsgg.telemetry.receipt/1"; workspaceId = "fixture-workspace"
+                                 producerId = if responseMode = "foreign" then "foreign-producer" else "fixture-association"
+                                 streamId = "runtime"; batchId = batchId; digest = String.replicate 64 "a"; status = status; code = (None : string option) |}
+            match responseMode with
+            | "old-text" -> Console.Out.WriteLine "applied"
+            | "duplicate" -> Console.Out.WriteLine(receipt.Replace("{", "{\"status\":\"applied\","))
+            | "trailing" -> Console.Out.WriteLine(receipt + "{}")
+            | "oversize" -> Console.Out.WriteLine(receipt + String.replicate 4096 " ")
+            | "wrong-batch" -> Console.Out.WriteLine(receipt.Replace(batchId,"foreign-batch"))
+            | "malformed-code" -> Console.Out.WriteLine(receipt.Replace("\"code\":null","\"code\":42"))
+            | _ -> Console.Out.WriteLine receipt
             0
         else
             Console.Out.WriteLine "{}"
@@ -524,8 +539,7 @@ module Program =
                 | Ok(Some value) -> value
                 | Ok None -> failwith "workspace config was not discovered"
                 | Error error -> failwith error.Message
-            // Workspace retains its existing discriminator; retainedParserRejection's
-            // local unknown-error control proves that substring cannot clear local intent.
+            // A workspace receiver error supplies no exact no-publication-IO proof.
             Environment.SetEnvironmentVariable("FSGG_ADAPTER_TEST_REJECTION", "workspace-invalid-request")
             try
                 let rejected = run (Some host) (Begin("WORKSPACE", "WORKSPACE", None, "workspace-rejection", None, None, "root", "fixture-producer", "fixture-model", "medium", 60))
@@ -533,8 +547,22 @@ module Program =
                 let files = Directory.GetFiles(Path.Combine(host.StoreRoot, "orchestrator-dispatches"), "*.json")
                 require (files.Length = 1) "workspace fixture produced unexpected dispatch population"
                 let retained = JsonNode.Parse(File.ReadAllBytes files[0]) :?> JsonObject
-                require (retained["sequence"].GetValue<int>() = 0 && isNull retained["pendingPublication"]) "workspace legacy rejection no longer rolls back"
+                require (retained["sequence"].GetValue<int>() = 1 && not (isNull retained["pendingPublication"])) "workspace ambiguous rejection lost intent"
             finally Environment.SetEnvironmentVariable("FSGG_ADAPTER_TEST_REJECTION", null)
+            let mutable retainedIntent: string option = None
+            for responseMode in [ "old-text"; "duplicate"; "trailing"; "oversize"; "foreign"; "wrong-batch"; "malformed-code"; "durable" ] do
+                Environment.SetEnvironmentVariable("FSGG_ADAPTER_TEST_RECEIPT", responseMode)
+                try
+                    let refused = run (Some host) (PopulationOnly("F", "F.2", "F", "roadmap-orchestrator"))
+                    require (refused.ExitCode = 1) ("receipt mutation unexpectedly applied: " + responseMode)
+                    let files = Directory.GetFiles(Path.Combine(host.StoreRoot,"orchestrator-original-bindings"),"*.json")
+                    let pending = files |> Array.map (fun path -> JsonNode.Parse(File.ReadAllBytes path).AsObject()) |> Array.filter (fun state -> not (isNull state["pendingPublication"]))
+                    require (pending.Length = 1) "receipt refusal discarded pending intent"
+                    let exactIntent = pending[0]["pendingPublication"].ToJsonString() + ":" + string (pending[0]["sequence"].GetValue<int>())
+                    match retainedIntent with
+                    | Some prior -> require (exactIntent = prior) "receipt refusal changed exact batch/sequence"
+                    | None -> retainedIntent <- Some exactIntent
+                finally Environment.SetEnvironmentVariable("FSGG_ADAPTER_TEST_RECEIPT", null)
             let command = PopulationOnly("F", "F.2", "F", "roadmap-orchestrator")
             let first = run (Some host) command
             require (first.ExitCode = 0 && (resultJson first).GetProperty("status").GetString() = "applied") (text first.Stderr)

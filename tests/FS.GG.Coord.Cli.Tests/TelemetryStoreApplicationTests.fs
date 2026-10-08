@@ -313,58 +313,6 @@ DELETE FROM schema_migrations WHERE version=14;
         Assert.Equal(1L, reader.GetInt64 0)
         Assert.Equal(1L, reader.GetInt64 1)
 
-    [<Fact>]
-    let ``v9 native outcomes survive v10 source-kind migration`` () =
-        let cleanup, path = root ()
-        use cleanup = cleanup
-        TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
-        let item = "routine-outcome-before-v10"
-        TelemetryStoreApplication.ingest
-            path
-            approved
-            (operationalBatch "routine-before-v10" item [ nativeOutcome item 1L "delivered" "delivered" "2026-09-08T10:04:01Z" ])
-        |> unwrap
-        |> ignore
-
-        use connection = new SqliteConnection($"Data Source=%s{Path.Combine(path, TelemetryStoreApplication.databaseFileName)};Pooling=False")
-        connection.Open()
-        use downgrade = connection.CreateCommand()
-        downgrade.CommandText <-
-            "BEGIN IMMEDIATE;"
-            + dropEfficiencySchema
-            + """
-DROP VIEW current_ingest_facts; DROP TABLE ci_effective_attribution;
-DROP TABLE ci_correction_evidence;
-DROP TABLE ci_attribution_corrections;
-DELETE FROM schema_migrations WHERE version=13;
-DELETE FROM store_metadata WHERE key='ciCorrectionStoreId';
-DROP TABLE fact_admissions;
-DROP TABLE receipt_admissions;
-ALTER TABLE receipt_producers DROP COLUMN grant_generation;
-ALTER TABLE receipt_producers DROP COLUMN grant_id;
-ALTER TABLE receipt_producers DROP COLUMN authority_role;
-DELETE FROM schema_migrations WHERE version=12;
-DROP TABLE learning_fact_order;
-DELETE FROM schema_migrations WHERE version=11;
-CREATE TABLE native_item_outcomes_v9(identity TEXT PRIMARY KEY, item_id TEXT NOT NULL, repository TEXT NOT NULL, pr_number INTEGER NOT NULL CHECK(pr_number > 0), base_ref TEXT NOT NULL, base_sha TEXT NOT NULL, head TEXT NOT NULL, outcome TEXT NOT NULL, code_delivery TEXT NOT NULL, merge_commit TEXT, occurred_at TEXT, observed_at TEXT NOT NULL, source_kind TEXT NOT NULL CHECK(source_kind='routine-delivery'), source_ref TEXT NOT NULL UNIQUE, fact_revision INTEGER NOT NULL CHECK(fact_revision >= 0)) STRICT;
-INSERT INTO native_item_outcomes_v9 SELECT * FROM native_item_outcomes;
-DROP TABLE native_item_outcomes;
-ALTER TABLE native_item_outcomes_v9 RENAME TO native_item_outcomes;
-CREATE INDEX native_item_outcomes_item_observed ON native_item_outcomes(item_id,observed_at);
-DELETE FROM schema_migrations WHERE version=10;
-PRAGMA user_version=9;
-COMMIT;
-"""
-        downgrade.ExecuteNonQuery() |> ignore
-        connection.Close()
-
-        Assert.Contains("\"schemaVersion\":14", TelemetryStoreApplication.initialize path approved |> unwrap)
-        use reopened = new SqliteConnection($"Data Source=%s{Path.Combine(path, TelemetryStoreApplication.databaseFileName)};Pooling=False")
-        reopened.Open()
-        use command = reopened.CreateCommand()
-        command.CommandText <- "SELECT source_kind FROM native_item_outcomes WHERE item_id=$item;"
-        command.Parameters.AddWithValue("$item", item) |> ignore
-        Assert.Equal("routine-delivery", string (command.ExecuteScalar()))
 
     let private runtimeTerminal item identity invocation outcome exitCode =
         $"""{{"kind":"runtime-terminal","identity":"{identity}","itemId":"{item}","revision":0,"invocationId":"{invocation}","threadId":"thread-{invocation}","outcome":"{outcome}","exitCode":{exitCode}}}"""
@@ -967,36 +915,6 @@ COMMIT;
                 )
 
     [<Fact>]
-    let ``UTEL-03A v1 store migrates transactionally to runtime schema v2`` () =
-        let cleanup, path = root ()
-        use cleanup = cleanup
-        TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
-
-        use connection =
-            new SqliteConnection(
-                $"Data Source=%s{Path.Combine(path, TelemetryStoreApplication.databaseFileName)};Pooling=False"
-            )
-
-        connection.Open()
-        use command = connection.CreateCommand()
-
-        command.CommandText <-
-            dropNativeOutcomeSchema
-            + " "
-            + dropCiPopulationSchema
-            + " "
-            + dropOperationalSchema
-            + " "
-            + dropBudgetSchema
-            + " DROP TABLE ci_coverage; DROP TABLE ci_steps; DROP TABLE ci_jobs; DROP TABLE ci_runs; DROP TABLE ci_pages; DROP TABLE ci_bindings; DROP INDEX runtime_thread_start_identity; DROP INDEX runtime_turn_start_identity; DROP INDEX runtime_turn_native_identity; DROP TABLE runtime_gaps; DROP TABLE runtime_terminals; DROP TABLE runtime_turn_usage; DROP TABLE runtime_starts; DROP TABLE runtime_admissions; DELETE FROM schema_migrations WHERE version IN (2,3); PRAGMA user_version=1;"
-
-        command.ExecuteNonQuery() |> ignore
-        connection.Close()
-        let initialized = TelemetryStoreApplication.initialize path approved |> unwrap
-        Assert.Contains("\"schemaVersion\":14", initialized)
-        Assert.Contains("\"status\":\"ready\"", TelemetryStoreApplication.status path approved |> unwrap)
-
-    [<Fact>]
     let ``UTEL-04A CI observations migrate ingest and summarize without private fields`` () =
         let cleanup, path = root ()
         use cleanup = cleanup
@@ -1113,37 +1031,6 @@ COMMIT;
         Assert.False(
             TelemetryCiApplication.canCreateAdmission "ready" "not-delivered" (Some(String.replicate 40 "b")) head
         )
-
-    [<Fact>]
-    let ``UTEL-04A v2 upgrade preserves runtime observations`` () =
-        let cleanup, path = root ()
-        use cleanup = cleanup
-        TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
-
-        use connection =
-            new SqliteConnection(
-                $"Data Source=%s{Path.Combine(path, TelemetryStoreApplication.databaseFileName)};Pooling=False"
-            )
-
-        connection.Open()
-        use command = connection.CreateCommand()
-
-        command.CommandText <-
-            "INSERT INTO runtime_admissions VALUES('runtime-keep','UTEL-04A','invoke-1','UTEL','a1',NULL,'worker',NULL,NULL,NULL); "
-            + dropNativeOutcomeSchema
-            + " "
-            + dropCiPopulationSchema
-            + " "
-            + dropOperationalSchema
-            + " "
-            + dropBudgetSchema
-            + " DROP TABLE ci_coverage; DROP TABLE ci_steps; DROP TABLE ci_jobs; DROP TABLE ci_runs; DROP TABLE ci_pages; DROP TABLE ci_bindings; DELETE FROM schema_migrations WHERE version=3; PRAGMA user_version=2;"
-
-        command.ExecuteNonQuery() |> ignore
-        connection.Close()
-        Assert.Contains("\"schemaVersion\":14", TelemetryStoreApplication.initialize path approved |> unwrap)
-        let summary = TelemetryStoreApplication.summary path approved "UTEL-04A" |> unwrap
-        Assert.Contains("\"admitted\":1", summary)
 
     [<Fact>]
     let ``UTEL-05A exact thresholds derive pass breach and one severe intervention`` () =
@@ -1529,45 +1416,6 @@ COMMIT;
         Assert.Contains("\"distinctBreaches\":1", TelemetryStoreApplication.budgetStatus path approved |> unwrap)
         Assert.Contains("\"replayed\":2", TelemetryStoreApplication.drain path approved |> unwrap)
         Assert.Contains("\"distinctBreaches\":1", TelemetryStoreApplication.budgetStatus path approved |> unwrap)
-
-    [<Fact>]
-    let ``UTEL-05A v3 upgrade preserves CI facts`` () =
-        let cleanup, path = root ()
-        use cleanup = cleanup
-        TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
-
-        use connection =
-            new SqliteConnection(
-                $"Data Source=%s{Path.Combine(path, TelemetryStoreApplication.databaseFileName)};Pooling=False"
-            )
-
-        connection.Open()
-        use command = connection.CreateCommand()
-
-        command.CommandText <-
-            "INSERT INTO ci_bindings VALUES('keep-binding','UTEL-05A','keep-collection','o/r','aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',1,'ci.yml','UTEL','a1',NULL,'worker','exact'); "
-            + dropNativeOutcomeSchema
-            + " "
-            + dropCiPopulationSchema
-            + " "
-            + dropOperationalSchema
-            + " "
-            + dropBudgetSchema
-            + " PRAGMA user_version=3;"
-
-        command.ExecuteNonQuery() |> ignore
-        connection.Close()
-        Assert.Contains("\"schemaVersion\":14", TelemetryStoreApplication.initialize path approved |> unwrap)
-
-        use verify =
-            new SqliteConnection(
-                $"Data Source=%s{Path.Combine(path, TelemetryStoreApplication.databaseFileName)};Pooling=False"
-            )
-
-        verify.Open()
-        use count = verify.CreateCommand()
-        count.CommandText <- "SELECT count(*) FROM ci_bindings WHERE identity='keep-binding';"
-        Assert.Equal(1L, Convert.ToInt64(count.ExecuteScalar()))
 
     [<Fact>]
     let ``UTEL-05A dimension usability is independent and shared references cannot overlap`` () =
@@ -2171,43 +2019,6 @@ COMMIT;
         Assert.Contains("lifecycle-clock-domain-mismatch", observe mixedClock mixedClockEvents)
 
     [<Fact>]
-    let ``UTEL-06A v4 stores upgrade without changing historical facts`` () =
-        let cleanup, path = root ()
-        use cleanup = cleanup
-        TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
-
-        use connection =
-            new SqliteConnection(
-                $"Data Source=%s{Path.Combine(path, TelemetryStoreApplication.databaseFileName)};Pooling=False"
-            )
-
-        connection.Open()
-        use command = connection.CreateCommand()
-
-        command.CommandText <-
-            "INSERT INTO budget_population_facts VALUES('keep-population','UTEL-06A','UTEL-06A','completed','native-item','native:keep',0); "
-            + dropNativeOutcomeSchema
-            + " "
-            + dropCiPopulationSchema
-            + " "
-            + dropOperationalSchema
-            + " PRAGMA user_version=4;"
-
-        command.ExecuteNonQuery() |> ignore
-        connection.Close()
-        Assert.Contains("\"schemaVersion\":14", TelemetryStoreApplication.initialize path approved |> unwrap)
-
-        use verify =
-            new SqliteConnection(
-                $"Data Source=%s{Path.Combine(path, TelemetryStoreApplication.databaseFileName)};Pooling=False"
-            )
-
-        verify.Open()
-        use count = verify.CreateCommand()
-        count.CommandText <- "SELECT count(*) FROM budget_population_facts WHERE identity='keep-population';"
-        Assert.Equal(1L, Convert.ToInt64(count.ExecuteScalar()))
-
-    [<Fact>]
     let ``UTEL-06A activation contract excludes historical session discovery`` () =
         let item = "operational-history"
 
@@ -2269,54 +2080,6 @@ COMMIT;
             "migration checksum mismatch",
             sprintf "%A" (TelemetryStoreApplication.initialize path approved)
         )
-
-    [<Fact>]
-    let ``UTEL-06C v5 stores upgrade and preserve prospective operational facts`` () =
-        let cleanup, path = root ()
-        use cleanup = cleanup
-        TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
-
-        use connection =
-            new SqliteConnection(
-                $"Data Source=%s{Path.Combine(path, TelemetryStoreApplication.databaseFileName)};Pooling=False"
-            )
-
-        connection.Open()
-        use command = connection.CreateCommand()
-
-        command.CommandText <-
-            "INSERT INTO operational_activations VALUES('keep-activation','UTEL-06C','activation','explicit-future-dispatches','codex-exec','2026-09-08T10:00:00Z','host-wall',60,0); "
-            + dropNativeOutcomeSchema
-            + " "
-            + dropCiPopulationSchema
-            + " PRAGMA user_version=5;"
-
-        command.ExecuteNonQuery() |> ignore
-        connection.Close()
-        Assert.Contains("\"schemaVersion\":14", TelemetryStoreApplication.initialize path approved |> unwrap)
-
-        Assert.False(
-            TelemetryStoreApplication.ciPopulationAdmissionExists
-                path
-                approved
-                "UTEL-06C"
-                "o/r"
-                7
-                "main"
-                "dddddddddddddddddddddddddddddddddddddddd"
-                "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-            |> unwrap
-        )
-
-        use verify =
-            new SqliteConnection(
-                $"Data Source=%s{Path.Combine(path, TelemetryStoreApplication.databaseFileName)};Pooling=False"
-            )
-
-        verify.Open()
-        use count = verify.CreateCommand()
-        count.CommandText <- "SELECT count(*) FROM operational_activations WHERE identity='keep-activation';"
-        Assert.Equal(1L, Convert.ToInt64(count.ExecuteScalar()))
 
     [<Fact>]
     let ``UTEL-06C admission correction and replay remain revision safe`` () =
@@ -3060,36 +2823,6 @@ COMMIT;
         Assert.Contains("\"verdict\":\"unknown\"", TelemetryStoreApplication.budgetSummary path approved item |> unwrap)
 
     [<Fact>]
-    let ``UTEL-06D v6 store upgrades and migration checksum is enforced`` () =
-        let cleanup, path = root ()
-        use cleanup = cleanup
-        TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
-
-        use connection =
-            new SqliteConnection(
-                $"Data Source=%s{Path.Combine(path, TelemetryStoreApplication.databaseFileName)};Pooling=False"
-            )
-
-        connection.Open()
-        use downgrade = connection.CreateCommand()
-        downgrade.CommandText <- dropNativeOutcomeSchema + " PRAGMA user_version=6;"
-        downgrade.ExecuteNonQuery() |> ignore
-        connection.Close()
-        Assert.Contains("\"schemaVersion\":14", TelemetryStoreApplication.initialize path approved |> unwrap)
-
-        use verify =
-            new SqliteConnection(
-                $"Data Source=%s{Path.Combine(path, TelemetryStoreApplication.databaseFileName)};Pooling=False"
-            )
-
-        verify.Open()
-        use corrupt = verify.CreateCommand()
-        corrupt.CommandText <- "UPDATE schema_migrations SET digest='corrupt' WHERE version=7;"
-        corrupt.ExecuteNonQuery() |> ignore
-        verify.Close()
-        Assert.Contains("migration checksum mismatch", sprintf "%A" (TelemetryStoreApplication.status path approved))
-
-    [<Fact>]
     let ``UTEL-08 terminal reviews activities exact attribution and complications produce private item detail`` () =
         let cleanup, path = root ()
         use cleanup = cleanup
@@ -3300,35 +3033,6 @@ COMMIT;
                 (TelemetryStoreApplication.ingest path approved (operationalBatch "allocated-review" item [ allocated ]))
         )
 
-    [<Fact>]
-    let ``UTEL-08 v7 store upgrades without changing earlier migration receipts`` () =
-        let cleanup, path = root ()
-        use cleanup = cleanup
-        TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
-
-        use connection =
-            new SqliteConnection(
-                $"Data Source=%s{Path.Combine(path, TelemetryStoreApplication.databaseFileName)};Pooling=False"
-            )
-
-        connection.Open()
-        use downgrade = connection.CreateCommand()
-        downgrade.CommandText <- dropReviewSchema + " PRAGMA user_version=7;"
-        downgrade.ExecuteNonQuery() |> ignore
-        connection.Close()
-        Assert.Contains("\"schemaVersion\":14", TelemetryStoreApplication.initialize path approved |> unwrap)
-
-        use verify =
-            new SqliteConnection(
-                $"Data Source=%s{Path.Combine(path, TelemetryStoreApplication.databaseFileName)};Pooling=False"
-            )
-
-        verify.Open()
-        use corrupt = verify.CreateCommand()
-        corrupt.CommandText <- "UPDATE schema_migrations SET digest='corrupt' WHERE version=8;"
-        corrupt.ExecuteNonQuery() |> ignore
-        verify.Close()
-        Assert.Contains("migration checksum mismatch", sprintf "%A" (TelemetryStoreApplication.status path approved))
 
     let private correctionRequest () : TelemetryCi.CorrectionRequest =
         let assignment feature item attempt : TelemetryCi.Assignment =
@@ -3531,16 +3235,8 @@ COMMIT;
         Assert.Equal("0", correctionSql path "SELECT count(*) FROM sqlite_master WHERE name IN ('ci_attribution_corrections','ci_correction_evidence','ci_effective_attribution','current_ingest_facts');")
         Assert.Equal(receiptsBeforeMigration, correctionSql path "SELECT group_concat(version || ':' || digest,'|') FROM (SELECT version,digest FROM schema_migrations ORDER BY version);")
         Assert.Equal(rawBeforeMigration, correctionSql path "SELECT group_concat(content_digest || canonical,'|') FROM (SELECT content_digest,canonical FROM ingest_facts ORDER BY identity);")
-        correctionSql path "DROP TRIGGER fixture_migration_abort; SELECT 1;" |> ignore
-        Assert.Contains("\"schemaVersion\":14", TelemetryStoreApplication.initialize path approved |> unwrap)
-        Assert.Contains("\"schemaVersion\":14", TelemetryStoreApplication.initialize path approved |> unwrap)
+        Assert.True(TelemetryStoreApplication.migrate13ToCurrent path approved |> Result.isError)
         Assert.Equal(rawBeforeMigration, correctionSql path "SELECT group_concat(content_digest || canonical,'|') FROM (SELECT content_digest,canonical FROM ingest_facts ORDER BY identity);")
-        Assert.Equal(receiptsBeforeMigration, correctionSql path "SELECT group_concat(version || ':' || digest,'|') FROM (SELECT version,digest FROM schema_migrations WHERE version<=12 ORDER BY version);")
-        let plan = TelemetryStoreApplication.ciCorrectionPlan path approved request |> unwrap |> Encoding.UTF8.GetBytes
-        let changed = nativeOutcome request.Prior.ItemId 2L "delivered" "delivered" "2026-09-08T10:04:02Z"
-        TelemetryStoreApplication.ingest path approved (operationalBatch "pre-apply-change" request.Prior.ItemId [ changed ]) |> unwrap |> ignore
-        Assert.Equal(Error [ "ci-correction-stale-plan" ], TelemetryStoreApplication.ciCorrect path approved plan)
-        Assert.Equal("0", correctionSql path "SELECT count(*) FROM ci_attribution_corrections;")
 
     [<Fact>]
     let ``UTEL-06.8 writer contention refuses and unrelated delivery runtime explicit population survive`` () =
@@ -3899,7 +3595,7 @@ PRAGMA user_version=13;
             command.Parameters.AddWithValue("$utc", "2026-10-01T00:00:00.0000000+00:00") |> ignore
             command.ExecuteNonQuery() |> ignore
             command.Parameters.Clear()
-        command.CommandText <- "INSERT INTO ingest_facts(identity,kind,item_id,revision,content_digest,canonical) VALUES('historical-item','item','MIGRATION-13',0,$digest,$canonical); INSERT INTO source_cursors VALUES('historical-source','historical-generation','cursor-before',$digest); INSERT INTO ingest_batches VALUES('historical-batch',$digest,'historical-source','historical-generation','cursor-before',1,0);"
+        command.CommandText <- "INSERT INTO store_metadata(key,value) VALUES('schema','fsgg.telemetry.sqlite-store/1'),('nativeEngine',sqlite_version()); INSERT INTO ingest_facts(identity,kind,item_id,revision,content_digest,canonical) VALUES('historical-item','item','MIGRATION-13',0,$digest,$canonical); INSERT INTO source_cursors VALUES('historical-source','historical-generation','cursor-before',$digest); INSERT INTO ingest_batches VALUES('historical-batch',$digest,'historical-source','historical-generation','cursor-before',1,0);"
         let canonical = "{\"identity\":\"historical-item\",\"itemId\":\"MIGRATION-13\",\"kind\":\"item\",\"revision\":0}"
         command.Parameters.AddWithValue("$digest", CanonicalJson.sha256(Encoding.UTF8.GetBytes canonical)) |> ignore
         command.Parameters.AddWithValue("$canonical", canonical) |> ignore
@@ -3930,14 +3626,14 @@ PRAGMA user_version=13;
         Assert.Equal("13",correctionSql path "PRAGMA user_version;")
         let before = migration13Snapshot path
         let files = migration13Files path
-        Assert.Contains("\"schemaVersion\":14",TelemetryStoreApplication.initialize path approved |> unwrap)
+        Assert.Contains("\"schemaVersion\":14",TelemetryStoreApplication.migrate13ToCurrent path approved |> unwrap)
         Assert.Equal("14",correctionSql path "PRAGMA user_version;")
         // Old13 rows have no receiver acceptance witness; migration must not invent one.
         Assert.Equal("0",correctionSql path "SELECT count(*) FROM fact_acceptance_times;")
         Assert.Equal(before[1..],(migration13Snapshot path)[1..])
         Assert.Equal(files,migration13Files path)
         let journal = correctionSql path "SELECT group_concat(version||':'||digest||':'||applied_utc,'|') FROM (SELECT * FROM schema_migrations ORDER BY version);"
-        TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
+        TelemetryStoreApplication.migrate13ToCurrent path approved |> unwrap |> ignore
         Assert.Equal(journal,correctionSql path "SELECT group_concat(version||':'||digest||':'||applied_utc,'|') FROM (SELECT * FROM schema_migrations ORDER BY version);")
         Assert.Equal("1",correctionSql path "SELECT count(*) FROM schema_migrations WHERE version=14;")
         Assert.Equal(before[0],correctionSql path "SELECT group_concat(version||':'||digest||':'||applied_utc,'|') FROM (SELECT * FROM schema_migrations WHERE version<=13 ORDER BY version);")
@@ -3951,15 +3647,15 @@ PRAGMA user_version=13;
         let files = migration13Files path
         correctionSql path "CREATE TRIGGER fixture_abort14 BEFORE INSERT ON schema_migrations WHEN NEW.version=14 BEGIN SELECT RAISE(ABORT,'fixture-14-journal-abort'); END; SELECT 1;" |> ignore
         let objects = correctionSql path "SELECT group_concat(type||':'||name||':'||coalesce(sql,''),'|') FROM (SELECT type,name,sql FROM sqlite_master ORDER BY type,name);"
-        Assert.True(TelemetryStoreApplication.initialize path approved |> Result.isError)
+        Assert.True(TelemetryStoreApplication.migrate13ToCurrent path approved |> Result.isError)
         Assert.Equal("13",correctionSql path "PRAGMA user_version;")
         Assert.Equal(before,migration13Snapshot path)
         Assert.Equal(files,migration13Files path)
         Assert.Equal(objects,correctionSql path "SELECT group_concat(type||':'||name||':'||coalesce(sql,''),'|') FROM (SELECT type,name,sql FROM sqlite_master ORDER BY type,name);")
         Assert.Equal("0",correctionSql path "SELECT count(*) FROM schema_migrations WHERE version=14;")
         correctionSql path "DROP TRIGGER fixture_abort14; SELECT 1;" |> ignore
-        TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
-        TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
+        TelemetryStoreApplication.migrate13ToCurrent path approved |> unwrap |> ignore
+        TelemetryStoreApplication.migrate13ToCurrent path approved |> unwrap |> ignore
         Assert.Equal("14",correctionSql path "PRAGMA user_version;")
         Assert.Equal("1",correctionSql path "SELECT count(*) FROM schema_migrations WHERE version=14;")
         Assert.Equal(before[1..],(migration13Snapshot path)[1..])
@@ -3973,7 +3669,7 @@ PRAGMA user_version=13;
         correctionSql path "UPDATE schema_migrations SET digest='corrupt' WHERE version=13; SELECT 1;" |> ignore
         let before = migration13Snapshot path
         let files = migration13Files path
-        Assert.True(TelemetryStoreApplication.initialize path approved |> Result.isError)
+        Assert.True(TelemetryStoreApplication.migrate13ToCurrent path approved |> Result.isError)
         Assert.Equal("13",correctionSql path "PRAGMA user_version;")
         Assert.Equal(before,migration13Snapshot path)
         Assert.Equal(files,migration13Files path)
@@ -3998,13 +3694,13 @@ PRAGMA user_version=13;
         Directory.Delete(Path.Combine(path,"inbox"),true)
         writeSchema13BackupFixture path 13
         let originalDatabase = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(Path.Combine(path,TelemetryStoreApplication.databaseFileName))))
-        TelemetryStoreApplication.restoreReceiptStore path restored approved "migration-workspace" |> unwrap |> ignore
+        TelemetryStoreApplication.import13ReceiptBackup path restored approved "migration-workspace" |> unwrap |> ignore
         Assert.Equal("14",correctionSql restored "PRAGMA user_version;")
         Assert.Equal("13",correctionSql path "PRAGMA user_version;")
         Assert.Equal(facts,correctionSql restored "SELECT content_digest||canonical FROM ingest_facts;")
         Assert.Equal(cursor,correctionSql restored "SELECT cursor||batch_digest FROM source_cursors;")
         Assert.Equal(originalDatabase,Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(Path.Combine(path,TelemetryStoreApplication.databaseFileName)))))
-        Assert.True(TelemetryStoreApplication.restoreReceiptStore path restored approved "migration-workspace" |> Result.isError)
+        Assert.True(TelemetryStoreApplication.import13ReceiptBackup path restored approved "migration-workspace" |> Result.isError)
 
     [<Fact>]
     let ``schema13 mislabeled14 database refuses before restore publication`` () =
@@ -4013,7 +3709,7 @@ PRAGMA user_version=13;
         let restoredCleanup,restored = root ()
         use restoredCleanup = restoredCleanup
         genuineSchema13 path
-        TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
+        TelemetryStoreApplication.migrate13ToCurrent path approved |> unwrap |> ignore
         correctionSql path "DELETE FROM ingest_batches; INSERT INTO store_metadata VALUES('receiptWorkspace','migration-workspace'); SELECT 1;" |> ignore
         Directory.Delete(Path.Combine(path,"inbox"),true)
         // The known closed fixture initializer leaves writer.lock; a backup contains
@@ -4022,7 +3718,7 @@ PRAGMA user_version=13;
         writeSchema13BackupFixture path 13
         Assert.Equal<string array>([|"manifest.json";TelemetryStoreApplication.databaseFileName|],Directory.GetFileSystemEntries(path) |> Array.map Path.GetFileName |> Array.sort)
         Assert.Equal("14",correctionSql path "PRAGMA user_version;")
-        Assert.Equal(Error ["backup-integrity-failed"],TelemetryStoreApplication.restoreReceiptStore path restored approved "migration-workspace")
+        Assert.Equal(Error ["backup-integrity-failed"],TelemetryStoreApplication.import13ReceiptBackup path restored approved "migration-workspace")
         Assert.False(Directory.Exists restored)
         // Same eligible physical backup, truthful14manifest: proves the negative
         // reached the new DBversion/manifest gate rather than an earlier census guard.
@@ -4059,3 +3755,79 @@ PRAGMA user_version=13;
         File.WriteAllBytes(copied,boundary 1048577)
         let refused = Assert.Throws<System.Reflection.TargetInvocationException>(fun () -> reader.Invoke(null,[|box copied;box "fixture-unavailable"|]) |> ignore)
         Assert.IsType<SkillTelemetryAdapter.AdapterError>(refused.InnerException) |> ignore
+
+    [<Fact>]
+    let ``current correction rejects a changed source after planning`` () =
+        let cleanup, path, request = correctionFixture false
+        use cleanup = cleanup
+        let plan = TelemetryStoreApplication.ciCorrectionPlan path approved request |> unwrap |> Encoding.UTF8.GetBytes
+        let changed = nativeOutcome request.Prior.ItemId 2L "delivered" "delivered" "2026-09-08T10:04:02Z"
+        TelemetryStoreApplication.ingest path approved (operationalBatch "pre-apply-change" request.Prior.ItemId [ changed ]) |> unwrap |> ignore
+        Assert.Equal(Error [ "ci-correction-stale-plan" ], TelemetryStoreApplication.ciCorrect path approved plan)
+        Assert.Equal("0", correctionSql path "SELECT count(*) FROM ci_attribution_corrections;")
+
+    [<Theory>]
+    [<InlineData(1)>]
+    [<InlineData(2)>]
+    [<InlineData(3)>]
+    [<InlineData(4)>]
+    [<InlineData(5)>]
+    [<InlineData(6)>]
+    [<InlineData(7)>]
+    [<InlineData(8)>]
+    [<InlineData(9)>]
+    [<InlineData(10)>]
+    [<InlineData(11)>]
+    [<InlineData(12)>]
+    [<InlineData(13)>]
+    let ``normal init refuses all existing historical version labels without data mutation`` version =
+        let cleanup, path = root ()
+        use cleanup = cleanup
+        TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
+        // Synthetic version label isolates the admission gate; genuine13 preservation
+        // and transaction fixtures above independently exercise the supported transition.
+        correctionSql path $"PRAGMA user_version={version}; SELECT 1;" |> ignore
+        let before = migration13Snapshot path
+        Assert.True(TelemetryStoreApplication.initialize path approved |> Result.isError)
+        Assert.Equal(string version, correctionSql path "PRAGMA user_version;")
+        Assert.Equal(before, migration13Snapshot path)
+        if version <> 13 then Assert.True(TelemetryStoreApplication.migrate13ToCurrent path approved |> Result.isError)
+
+    [<Fact>]
+    let ``normal init refuses genuine13 while explicit migration preserves it`` () =
+        let cleanup, path = root ()
+        use cleanup = cleanup
+        genuineSchema13 path
+        let before = migration13Snapshot path
+        Assert.True(TelemetryStoreApplication.initialize path approved |> Result.isError)
+        Assert.Equal(before, migration13Snapshot path)
+        TelemetryStoreApplication.migrate13ToCurrent path approved |> unwrap |> ignore
+
+    [<Fact>]
+    let ``normal restore refuses13 and import refuses mislabeled13 as14`` () =
+        let cleanup, path = root ()
+        use cleanup = cleanup
+        let targetCleanup, target = root ()
+        use targetCleanup = targetCleanup
+        genuineSchema13 path
+        correctionSql path "DELETE FROM ingest_batches; INSERT INTO store_metadata VALUES('receiptWorkspace','migration-workspace'); SELECT 1;" |> ignore
+        Directory.Delete(Path.Combine(path,"inbox"),true)
+        writeSchema13BackupFixture path 13
+        Assert.Equal(Error [ "backup-incompatible" ], TelemetryStoreApplication.restoreReceiptStore path target approved "migration-workspace")
+        Assert.False(Directory.Exists target)
+        writeSchema13BackupFixture path 14
+        Assert.Equal(Error [ "backup-integrity-failed" ], TelemetryStoreApplication.restoreReceiptStore path target approved "migration-workspace")
+        Assert.Equal(Error [ "backup-incompatible" ], TelemetryStoreApplication.import13ReceiptBackup path target approved "migration-workspace")
+        Assert.False(Directory.Exists target)
+
+    [<Fact>]
+    let ``explicit13 migration refuses damaged schema with an intact journal`` () =
+        let cleanup, path = root ()
+        use cleanup = cleanup
+        genuineSchema13 path
+        correctionSql path "DROP TRIGGER ci_correction_immutable_update; SELECT 1;" |> ignore
+        let before = migration13Snapshot path
+        Assert.True(TelemetryStoreApplication.migrate13ToCurrent path approved |> Result.isError)
+        Assert.Equal("13", correctionSql path "PRAGMA user_version;")
+        Assert.Equal(before, migration13Snapshot path)
+        Assert.Equal("0", correctionSql path "SELECT count(*) FROM sqlite_schema WHERE name='efficiency_records';")

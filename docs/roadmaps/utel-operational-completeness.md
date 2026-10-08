@@ -201,3 +201,8 @@ Current readiness, zero observation rows and historical unknown baselines establ
 health nor savings. Resolve the user's selected CI population before bounded reconciliation;
 report each metric's exact source window/cutoff/receipt/coverage and retain missing history.
 This operational window and §9.8 stay open through actual collection/receiver acceptance.
+
+
+## Current-only receipt and recovery boundary — 2026-10-08
+
+Current supported local/remote workspace submit uses one exact JSON receipt ABI. The adapter retains pending input and sequence on malformed, foreign, transport or receiver error; an `invalid-request` substring is not no-publication-IO proof. Population-only binding requires applied rather than durable receipt. Current store/readers select14 with explicit authentic13 maintenance. The installed0.99.0 original root and pending operation remain held; source edits, pending-free backup fixtures and synthetic1MiB framing do not establish original-state recovery or observed usage. Qualification, publication, installed provenance and separately admitted original-identity receiver-effects inspection remain necessary.

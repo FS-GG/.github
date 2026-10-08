@@ -315,6 +315,18 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(set(mapping),{'planning','implementation','review','validation','delivery','repair','operations','other','unclassified'})
         self.assertEqual(mapping['unclassified'],'unknown')
 
+    def test_current_only_selection_preserves_historical_inspection(self):
+        selected=CONTRACT['migration']['currentSelection']
+        self.assertEqual(selected['status'],'prospective-source-only')
+        self.assertEqual(selected['initializeVersions'],[0,14])
+        self.assertEqual(selected['restoreVersions'],[14])
+        self.assertEqual(selected['explicitMigrationVersions'],[13,14])
+        self.assertEqual(selected['explicitImportVersions'],[13])
+        self.assertEqual(CONTRACT['migration']['targetStoreSchemaVersion'],14)
+        self.assertEqual(CONTRACT['sourceInspection']['storeSchemaVersion'],13)
+        self.assertIn('unknown receiver acceptance',CONTRACT['migration']['store'])
+        self.assertIn('historical',CONTRACT['migration']['currentSelection']['activation'])
+
     def test_retained_historical_source_pin(self):
         inspected=CONTRACT['sourceInspection']
         present=subprocess.run(['git','cat-file','-e',inspected['revision']+'^{commit}'],cwd=ROOT,capture_output=True,timeout=5)

@@ -118,8 +118,9 @@ module TelemetryApplication =
             shape [ "--head"; "--kind"; "--id"; "--output" ] [] args
         | "telemetry" :: "qualification" :: "obligation" :: "verify" :: args ->
             shape [ "--head"; "--kind"; "--id"; "--readback"; "--output" ] [] args
-        | "telemetry" :: "store" :: action :: args when action = "status" || action = "init" || action = "drain" ->
+        | "telemetry" :: "store" :: action :: args when action = "status" || action = "init" || action = "drain" || action = "migrate13" ->
             shape [ "--store-root" ] [] args
+        | "telemetry" :: "store" :: "import13" :: args -> shape [ "--store-root"; "--input"; "--workspace" ] [] args
         | "telemetry" :: "store" :: action :: args when action = "ingest" || action = "publish" ->
             shape [ "--store-root"; "--input" ] [] args
         | "telemetry" :: "store" :: action :: args when action = "summary" || action = "reconcile" ->
@@ -1200,7 +1201,9 @@ module TelemetryApplication =
                 match action with
                 | "status"
                 | "init"
-                | "drain" -> [ "--store-root" ], []
+                | "drain"
+                | "migrate13" -> [ "--store-root" ], []
+                | "import13" -> [ "--store-root"; "--input"; "--workspace" ], []
                 | "ingest"
                 | "publish" -> [ "--store-root"; "--input" ], []
                 | "summary"

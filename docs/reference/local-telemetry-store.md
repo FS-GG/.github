@@ -94,6 +94,21 @@ repository name must select exactly one active association; clones and renamed r
 silently reinterpreted as a workspace association. With no workspace configuration, status creates no file,
 directory, lock, or database.
 
+Workspace submit returns one current `fsgg.telemetry.receipt/1` JSON object, newline terminated and bounded to
+4096 bytes, with exactly `schema`, `workspaceId`, `producerId`, `streamId`, `batchId`, `digest`, `status`, and
+nullable `code`. Both supported local and remote workspace routes return that shape; bare status text refuses.
+The workspace caller verifies the selected association and normalized outgoing envelope scope/batch/digest.
+The digest hashes the canonical enveloped payload, not the adapter's raw pending batch. Population-only
+original-item binding advances only on `applied`; `durably-received` retains the same intent for retry.
+Ordinary publication retains its existing durable-acknowledgment phase behavior. Workspace errors, including
+`invalid-request`, provide no exact proof that publication IO did not occur and retain the pending batch and
+sequence. Only the separately defined exact local engine/parser no-IO proof can authorize local rollback.
+
+The private dashboard accepts only a scoped current14 `item-detail/2` snapshot with `responseUsage`,
+`learn-item-detail/4`, and database-transaction pending/applied/rejected receipt counters. Missing workspace,
+old schema/shape or malformed data is unavailable/refused. Last valid current feed retention remains intact;
+unknown and zero counters remain distinct. The compact `/3` exporter and public `host/5` feed are separate.
+
 Workspace capture submits immutable receipt envelopes and opportunistically drains after native work. Remote
 `durably-received` means the receiver owns transport recovery; it does not mean the observation has been applied.
 The producer retains the exact `.ready` envelope and a private durable-receipt marker until an authenticated
@@ -147,6 +162,38 @@ store root.
 
 ## Schema and relations
 
+The selected current source contract uses schema **14**. Normal `telemetry store init` accepts a genuinely
+empty schema0 database or validates an existing14 database; it never upgrades an existing1..13 store.
+Normal receipt restore accepts14 only. The sole historical transition is explicit authentic13 maintenance:
+
+| Operation | Accepted source | Result |
+|---|---|---|
+| `store init` | Fresh empty0, current14 | Current14 creation or validation |
+| `store migrate13` | Exact13, validated completed14 retry | One atomic13→14 transaction or readback |
+| Normal receipt restore | Authentic14 backup | Fresh current14 target, no migration |
+| `store import13` | Authentic13 receipt backup | Migration on a private copy, then fresh-target publication |
+
+These source entry points require new exact-source qualification and separately admitted installed execution.
+An operator must preserve the consistent complete store and producer state, inspect original receiver effects,
+and retain unknown operations before selecting a transition. The explicit commands are:
+
+```console
+fsgg-coord-engine telemetry store migrate13 --store-root /durable/private/existing13
+fsgg-coord-engine telemetry store import13 --store-root /durable/private/fresh14 \
+  --input /durable/private/receipt-backup13 --workspace workspace-a
+```
+
+`migrate13` holds `writer.lock`, verifies every historical1..13 journal digest and the expected schema before14
+DDL, then commits the unchanged14 SQL, receipt and version in one transaction. Failure before commit rolls
+back14 objects and rows; a postcommit sync/response failure remains unknown and requires original-identity
+readback. Earlier facts, cursors, journal timestamps, correction lineage and producer files are preserved.
+Receiver acceptance times remain absent for historical rows without an actual acceptance witness. Coordination
+artifacts such as `writer.lock`, write probes and SQLite sidecars may exist; refusal does not promise zero
+filesystem metadata effects. Versions1..12 have no supported live upgrade route.
+
+The following migration descriptions record historical schema construction. Their exact SQL and digest
+identities also define fresh current14 construction; they do not promise active old-reader compatibility.
+
 Migration 1 creates store metadata/migration receipts, items, features, attempts, parent-child and PR-head
 relations, source generations/cursors, usage/delivery/evidence/coverage observations, diagnostics, immutable
 batch acceptance, native fact identities/content digests and correction history.
@@ -162,15 +209,14 @@ Migration 3 adds `ci_bindings`, `ci_pages`, `ci_runs`, `ci_jobs`, `ci_steps`, an
 binds one item/attempt to an explicit repository, PR, 40-hex head and workflow. Pages are distinct recovery
 evidence; run identity is repository plus native run ID, while attempt, job and step extend that native key.
 The coverage row keeps inventory, attempts, job pages, terminal state, timestamps, lineage, classification and
-critical-path evidence independent. Older v1/v2 stores upgrade in place; migration SQL and checksum receipts
-are immutable.
+critical-path evidence independent. Historical migration SQL and checksum receipts remain immutable.
 
 Migration 4 adds private `budget_population_facts`, `budget_attribution_facts`, `budget_interval_facts` and
 `budget_intervention_facts` projections. `budget_shared_cost_refs` prevents one source cost from entering two
 provider/accounting scopes. `budget_dirty_items` bounds reevaluation work; `budget_epochs` and
 `budget_epoch_membership` retain an original item's first epoch; `budget_assessment_revisions` preserves each
 derived dimension decision; `budget_breaches` counts distinct items; and `budget_interventions` permits one
-open-to-verified transition per epoch. Stores at schema versions 1, 2 or 3 upgrade in place under `writer.lock`.
+open-to-verified transition per epoch. Historical receipts remain unchanged.
 
 Migration 5 adds `operational_activations`, `expected_dispatches`, `invocation_lineage`, and
 `operational_event_times`. These are prospective observation facts: an activation is limited to
@@ -178,8 +224,7 @@ Migration 5 adds `operational_activations`, `expected_dispatches`, `invocation_l
 observation is late. Expected dispatches retain root, child, and follow-up parentage; invocation rows preserve the
 observed dispatch/invocation/root identities; event times retain nullable occurrence and observation timestamps
 with separate `host-wall`, `provider-native`, or `github-native` clock provenance for each timestamp. Event names
-are closed to `admission`, `start`, and `terminal`, with one row per item/invocation/event. Stores at schema
-versions 1 through 4 upgrade in place. Migrations 1–4 and their stored checksums are unchanged.
+are closed to `admission`, `start`, and `terminal`, with one row per item/invocation/event. Historical migration receipts remain unchanged. Migrations 1–4 and their stored checksums are unchanged.
 
 Migration 6 adds immutable `ci_population_admissions`, revisioned `ci_check_runs`, and
 `ci_population_coverage`. First admission requires a routine-eligible `ready`/`not-delivered` candidate plus
@@ -187,13 +232,13 @@ an explicit matching observed head and native confirmation of repository, PR, ba
 Later observations remain fenced to that stored admission, including after the PR head moves. Actions runs,
 all attempts, attempt-specific jobs and native check-runs are reconciled independently; partial pagination,
 inventory mutation, external checks and unsupported event bindings stay explicit rather than becoming zero or
-complete. Stores at schema versions 1 through 5 upgrade in place without changing earlier migration checksums.
+complete. Earlier migration checksums remain historical integrity evidence.
 
 Migration 7 adds `native_item_outcomes`, the durable machine-authored result of the repository-owned routine
 delivery readback. Each revision binds item, repository, PR, base ref/SHA, candidate head, delivery outcome,
 code-delivery truth, optional merge commit, native occurrence time, observation time and private source reference.
 It is queued and drained before provider reconciliation, so the native result survives unavailable CI reads.
-Stores at schema versions 1 through 6 upgrade in place without changing earlier migrations.
+Earlier SQL and migration receipts remain historical integrity evidence.
 
 ## Identities, inbox, and drain
 
@@ -523,9 +568,14 @@ Use `telemetry store summary --item ID` or bounded `export --public --output FIL
 Unknown population remains unknown; persistence alone is not coverage. Private identifiers, raw content and
 paths are never public-export fields. The Python observer does not access SQLite.
 
-Backup, restore and migration CLI workflows are not implemented yet. Until they are qualified, stop writers,
-copy the database plus WAL state only with SQLite-supported tooling, and do not call that an application-level
-restore guarantee.
+The Store provides receipt backup/restore APIs; the Host has separately scoped backup/restore commands.
+Receipt backup contains the SQLite backup and `receipt-inbox/*.ready`; it excludes arbitrary inbox files and
+`orchestrator-dispatches`/`orchestrator-original-bindings`. It is a limited receipt backup, not a complete pending
+root recovery backup, and may recover the receipt index before copying. Normal restore authenticates current14
+manifest, physical database version, exact file census/digests and scoped provenance. Explicit `store import13`
+performs the same checks on an authentic13 input and migrates only its private copy. The original backup remains
+unchanged. Whole pending-state preservation and original-operation recovery require separate admitted controls;
+the pending-free13 fixture and synthetic1MiB framing test do not qualify either operation.
 
 The immutable batch is a future Akka message contract. A per-host telemetry-writer actor may later serialize
 normal drains and supervision, while SQLite locking and native deduplication remain mandatory for process

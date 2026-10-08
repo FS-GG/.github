@@ -343,7 +343,7 @@ module SkillTelemetryAdapter =
         if completed.Code <> 0 then
             let message = if String.IsNullOrWhiteSpace completed.Stderr then "telemetry batch publication failed" else completed.Stderr.Trim()
             let rejected =
-                if config.Workspace then message.Contains("invalid-request", StringComparison.Ordinal)
+                if config.Workspace then false // A receiver error is not exact no-publication-IO proof.
                 else exactLocalParserRejection config batchBytes batch engineBefore completed.Code completed.Stdout completed.Stderr
             if rejected then
                 state["sequence"] <- node (sequence - 1)
@@ -353,22 +353,46 @@ module SkillTelemetryAdapter =
                 if operation.StartsWith("native-roster:", StringComparison.Ordinal) then state.Remove "rosterIntent" |> ignore
                 saveState config state
             fail message
+        // Workspace success has exactly one current, bounded receipt ABI. The workspace
+        // caller verifies association + normalized envelope scope/digest before returning it.
+        let workspaceStatus =
+            if not config.Workspace then None
+            else
+                try
+                    let responseBytes = utf8.GetBytes completed.Stdout
+                    if responseBytes.Length = 0 || responseBytes.Length > 4096 then fail "workspace receipt is malformed"
+                    use document = JsonDocument.Parse responseBytes
+                    let root = document.RootElement
+                    if root.ValueKind <> JsonValueKind.Object then fail "workspace receipt is malformed"
+                    let names = root.EnumerateObject() |> Seq.map _.Name |> Seq.toArray
+                    if names.Length <> 8 || Array.distinct names |> Array.length <> 8 ||
+                       Set.ofArray names <> set [ "schema"; "workspaceId"; "producerId"; "streamId"; "batchId"; "digest"; "status"; "code" ] then
+                        fail "workspace receipt is malformed"
+                    let scalar name =
+                        let value = root.GetProperty name
+                        if value.ValueKind <> JsonValueKind.String then fail "workspace receipt is malformed"
+                        value.GetString()
+                    let validId value = FS.GG.Coord.TelemetryReceipt.validId value
+                    let status = scalar "status"
+                    if scalar "schema" <> "fsgg.telemetry.receipt/1" ||
+                       scalar "batchId" <> requiredString "ingestId" batch ||
+                       not (validId (scalar "workspaceId") && validId (scalar "producerId") && validId (scalar "streamId")) ||
+                       scalar "producerId" <> producer ||
+                       not (Regex.IsMatch(scalar "digest", "^[0-9a-f]{64}\\z")) ||
+                       not (List.contains status [ "durably-received"; "applied"; "rejected"; "expired" ]) then
+                        fail "workspace receipt is malformed"
+                    let code = root.GetProperty "code"
+                    if code.ValueKind <> JsonValueKind.Null &&
+                       (code.ValueKind <> JsonValueKind.String || not (Regex.IsMatch(code.GetString(), "^[a-z0-9-]{0,64}\\z"))) then
+                        fail "workspace receipt is malformed"
+                    Some status
+                with :? JsonException -> fail "workspace receipt is malformed"
         if requiredString "operation" pending = "population-only" then
-            if not config.Workspace then fail "original binding requires a receipt-scoped workspace"
-            let response = completed.Stdout.Trim()
-            let status =
-                if response.StartsWith("{", StringComparison.Ordinal) then
-                    try
-                        use document = JsonDocument.Parse response
-                        let root = document.RootElement
-                        if root.GetProperty("schema").GetString() <> "fsgg.telemetry.receipt/1" ||
-                           root.GetProperty("batchId").GetString() <> requiredString "ingestId" batch then
-                            fail "original binding receipt is malformed"
-                        root.GetProperty("status").GetString()
-                    with :? JsonException -> fail "original binding receipt is malformed"
-                else response
-            if status = "durably-received" then fail "original binding receipt is not applied; retry the exact binding"
-            if status <> "applied" then fail "original binding receipt did not apply"
+            match workspaceStatus with
+            | Some "applied" -> ()
+            | Some "durably-received" -> fail "original binding receipt is not applied; retry the exact binding"
+            | Some _ -> fail "original binding receipt did not apply"
+            | None -> fail "original binding requires a receipt-scoped workspace"
         state["phase"] <- node (requiredString "nextPhase" pending)
         state.Remove "pendingPublication" |> ignore
         saveState config state

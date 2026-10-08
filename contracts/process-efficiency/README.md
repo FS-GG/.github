@@ -167,3 +167,8 @@ The [labeled corpus](../../tests/process-efficiency/labeled-corpus-v1.json) has 
 vocabulary and conservative boundaries, not independently adjudicated truth or achieved precision.
 Do not tune `.5` on held-out outcomes or claim calibration/coverage savings from these authored labels.
 Real missing usage remains missing; no historical session usage is reconstructed here.
+
+
+## Prospective current-only lifecycle — 2026-10-08
+
+The current selection in `measurement-contract-v1.json.migration.currentSelection` narrows active store/readers to14, allows only fresh0 normal creation, and separates authentic13 `migrate13`/`import13` maintenance. Both workspace destinations return one bounded current JSON receipt; the private dashboard requires scoped14 response-aware snapshots. Historical inspected source/digests, vocabulary meanings, correction authority, records and unknown acceptance clocks are preserved. This prospective amendment does not rewrite the .1 source inspection or qualify installed mutation. See the [operator lifecycle](../../docs/reference/local-telemetry-store.md#schema-and-relations).
