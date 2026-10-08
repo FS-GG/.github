@@ -155,7 +155,7 @@ authored `Version` cells of the Versioned contracts table (#748).*
 | `fs-gg-net` | FS.GG.Net | `0.6.0` | `0.6.0` |
 | `keyboard-input` | FS.GG.Rendering | `0.5.0` | — |
 | `coord-engine` | FS-GG/.github | `0.100.0` | `0.99.0` |
-| `telemetry-host` | FS-GG/.github | `0.5.0` | `0.4.0` |
+| `telemetry-host` | FS-GG/.github | `0.5.0` | `0.5.0` |
 | `new-sdd-workspace` | FS-GG/.github | `0.16.0` | `0.15.0` |
 | `fs-gg-workspace-template` | FS.GG.Templates | `0.18.1` | `0.18.1` |
 | `game-skills` | FS.GG.Game | `0.9.0` | `0.9.0` |
