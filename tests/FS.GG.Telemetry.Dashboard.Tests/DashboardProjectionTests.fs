@@ -381,8 +381,10 @@ module DashboardProjectionTests =
         Assert.Contains("native-usage-unsupported", json)
         Assert.Contains("\"nativeUsage\":\"unsupported\"", json)
         Assert.Contains("host-wall", json)
-        Assert.Contains("\"appliedReceipts\":null", json)
-        Assert.Contains("\"rejectedReceipts\":null", json)
+        use projected = JsonDocument.Parse json
+        let operational = projected.RootElement.GetProperty("operational")
+        Assert.Equal(0L, operational.GetProperty("appliedReceipts").GetInt64())
+        Assert.Equal(0L, operational.GetProperty("rejectedReceipts").GetInt64())
 
         for secret in [ "DO-NOT-LEAK"; "/private/path"; "PRIVATE" ] do
             Assert.DoesNotContain(secret, json)

@@ -203,7 +203,7 @@ module Program =
         let activity = Path.Combine(root, "activity.json")
         File.WriteAllText(activity, "{\"schema\":\"fsgg.telemetry.activity-span-input/1\",\"revision\":0,\"activityId\":\"activity-a\",\"category\":\"validation\",\"startedAt\":\"2026-09-27T00:00:00Z\",\"endedAt\":\"2026-09-27T00:00:01Z\",\"clockProvenance\":\"host-wall\",\"evidence\":[],\"summary\":\"fixture\"}")
         let complication = Path.Combine(root, "complication.json")
-        File.WriteAllText(complication, "{\"schema\":\"fsgg.telemetry.complication-input/1\",\"revision\":0,\"complicationId\":\"complication-a\",\"activityId\":\"activity-a\",\"trigger\":\"fixture\",\"cause\":\"fixture\",\"occurredAt\":\"2026-09-27T00:00:01Z\",\"synopsis\":\"fixture\",\"evidence\":[]}")
+        File.WriteAllText(complication, "{\"schema\":\"fsgg.telemetry.complication-input/1\",\"revision\":0,\"complicationId\":\"complication-a\",\"activityId\":\"activity-a\",\"trigger\":\"test-failure\",\"cause\":\"test-defect\",\"occurredAt\":\"2026-09-27T00:00:01Z\",\"synopsis\":\"fixture\",\"evidence\":[]}")
         let usage = Path.Combine(root, "usage.json")
         File.WriteAllText(usage, "{\"schema\":\"fsgg.telemetry.activity-usage-attribution-input/1\",\"revision\":0,\"usageIdentity\":\"usage-a\",\"activityId\":\"activity-a\",\"classification\":\"direct\",\"input\":0,\"cachedInput\":0,\"output\":0,\"reasoning\":0,\"total\":0}")
         let review = Path.Combine(root, "review.json")
@@ -240,6 +240,11 @@ module Program =
         Environment.SetEnvironmentVariable("FSGG_ADAPTER_TEST_DASHBOARD_MODE", null)
         let commands = [ Complication(token, FileInfo complication); UsageAttribution(token, FileInfo usage); Review(token, "attempt", FileInfo review) ]
         commands |> List.iter (fun command -> let result = run (Some host) command in require (result.ExitCode = 0) (text result.Stderr))
+        let validComplication = File.ReadAllText complication
+        File.WriteAllText(complication, validComplication.Replace("test-failure", "fixture").Replace("test-defect", "fixture"))
+        let unsupportedComplication = run (Some host) (Complication(token, FileInfo complication))
+        require (unsupportedComplication.ExitCode = 1 && (text unsupportedComplication.Stderr).Contains "unsupported trigger or cause") "unsupported complication vocabulary was accepted"
+        File.WriteAllText(complication, validComplication)
         File.WriteAllText(activity, "{\"schema\":\"fsgg.telemetry.activity-span-input/1\",\"revision\":0}")
         let refused = run (Some host) (Activity(token, FileInfo activity))
         require (refused.ExitCode = 1 && (text refused.Stderr).Contains "exact") "open observation shape was accepted"
