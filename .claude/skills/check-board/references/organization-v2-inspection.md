@@ -60,3 +60,19 @@ owner disagreements and the actual selection; no worker dispatch is required mer
 Project 1 is a retained legacy reference. Its immutable exact-project1 behavior and separately scoped
 scheduled archive remain unchanged. The hosted V2 refresh job stays dormant and unenrolled. This
 organization contract changes no product board ID, template, provider/lifecycle default or credential.
+
+
+## New three-active population gate — 2026-10-07
+
+Root selected source reconciliation to SDD#928, Templates#441 and .github#3010, retaining closed
+.github#3009 as omitted delivery history in the same manifest. The four-target gate above remains
+its historical acceptance scope. Before using this new population, root must qualify a DISTINCT
+three-target binding against the new protected population revision/blob and actual installed
+CLI/adapter/constructor custody, then record the exact consumer invocation and adoption decision in
+[the reconciliation evidence](https://github.com/FS-GG/.github/blob/main/docs/coordination/board-v2-import-preparation.md#three-active-successor-reconciliation--2026-10-07).
+Require selected/attempted three, all source Current, complete native dependency and owning-plan
+coverage, no population/planning gaps, truthful health and zero mutations. Original-three pilot and
+four-target receipts do not qualify this new population. Closed #3009 retains authenticated delivery
+history and native membership; SDD#935 remains unselected. Preserve all human fields and the strict
+OPEN/current-revision guard. Until that join, inspection is unavailable for this new scope; otherwise
+valid source work continues through owning plans. No refresh, import, switch or lifecycle write follows.

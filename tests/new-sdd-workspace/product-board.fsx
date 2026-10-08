@@ -22,6 +22,32 @@ let binding = """{
 "repositories":["acme/app"]} """.Replace("ADAPTER", adapter)
 let pass = function Ok value -> value | Error error -> failwith error
 let refuse description = function Error _ -> () | Ok _ -> failwith ("accepted " + description)
+// Expected identity comes from committed source, independently of the loaded assembly.
+let coherentSourceVersion (text: string) =
+    try
+        let rows =
+            System.Xml.Linq.XElement.Parse(text).Descendants()
+            |> Seq.filter (fun element -> element.Name.LocalName = "FsggCoherentSetVersion")
+            |> Seq.toArray
+        if rows.Length <> 1 || rows.[0].HasAttributes || rows.[0].HasElements then
+            Error "expected one unconditional coherent version declaration"
+        else
+            let value = rows.[0].Value
+            if Text.RegularExpressions.Regex.IsMatch(value, @"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$") then Ok value
+            else Error "malformed coherent source version"
+    with _ -> Error "malformed coherent source properties"
+let coherentVersionMatches expected actual =
+    if expected = actual then Ok () else Error "compiled Creator loaded a different coherent CLI"
+for invalid in [ "<Project/>"; "<Project><FsggCoherentSetVersion>0.99.1</FsggCoherentSetVersion><FsggCoherentSetVersion>0.99.1</FsggCoherentSetVersion></Project>";
+                 "<Project><FsggCoherentSetVersion>invalid</FsggCoherentSetVersion></Project>";
+                 "<Project><FsggCoherentSetVersion Condition='false'>0.99.1</FsggCoherentSetVersion></Project>"; "<Project>" ] do
+    coherentSourceVersion invalid |> refuse "missing, duplicate or malformed coherent source version"
+coherentSourceVersion "<Project><FsggCoherentSetVersion>0.99.1</FsggCoherentSetVersion></Project>" |> pass |> ignore
+coherentVersionMatches "0.99.1" "0.99.0" |> refuse "loaded version differs from committed source"
+let expectedCoherentVersion =
+    File.ReadAllText(Path.Combine(__SOURCE_DIRECTORY__, "../../Directory.Build.props"))
+    |> coherentSourceVersion |> pass
+
 ProductBoard.validate "acme/app" adapter binding |> pass |> ignore
 ProductBoard.validate "acme/other" adapter binding |> refuse "foreign repository"
 ProductBoard.validate "acme/app" (String.replicate 64 "0") binding |> refuse "wrong loaded artifact"
@@ -79,7 +105,7 @@ try
         (Reflection.Assembly.Load("fsgg-coord-engine").GetCustomAttributes(typeof<Reflection.AssemblyInformationalVersionAttribute>, false)
          |> Array.exactlyOne) :?> Reflection.AssemblyInformationalVersionAttribute
     let pin = version.InformationalVersion.Split('+').[0]
-    if pin <> "0.99.0" then failwith "compiled Creator loaded a different coherent CLI"
+    coherentVersionMatches expectedCoherentVersion pin |> pass
     let tool = sprintf "{\"tools\":{\"fs.gg.coord.cli\":{\"version\":\"%s\",\"commands\":[\"fsgg-coord-engine\"]}}}" pin
     let fetch = function
         | "registry/coordination-kit-skill-manifest.json" -> Ok(manifest kit)

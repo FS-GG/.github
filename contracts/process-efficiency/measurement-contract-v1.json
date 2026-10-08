@@ -371,13 +371,36 @@
   },
   "migration": {
     "mode": "additive versioned sidecar contracts; no new ingest/1 kind activated by .1",
-    "legacy": "retain all existing records, readers, vocabulary and budget policies; do not reinterpret old prose as labeled findings",
+    "legacy": "Retain all historical records, original vocabulary meanings, correction lineage and budget policies; never reinterpret old prose as labeled findings. Active current APIs/readers select schema14; obsolete reader and wire compatibility is not required.",
     "unsupportedVersion": "explicit incompatible state, retain last valid snapshot; never empty successful feed",
-    "store": ".2 implements additive declared input/assessment kinds in the existing sole canonical store; concrete schema declarations freeze record/admission shapes but activate no migration or runtime writer here. Existing schema13 correction and legacy readers remain unchanged.",
+    "store": "Current normal initialization accepts genuinely fresh0 or existing14; normal receipt restore accepts14 only. Exact authentic13 has separate explicit migrate13/import13 maintenance, preserving prior facts, journals, correction lineage and unknown receiver acceptance clocks. Versions1..12 and9/12 backup import are unsupported current entry states.",
     "externalTraceConvention": null,
     "externalTraceReason": "No new OCEL/OpenTelemetry/FOCUS adapter selected; explicit object joins only. An actual adapter must pin its convention before activation.",
     "targetStoreSchemaVersion": 14,
-    "activation": "Selected additive schema14 for .2 new declared records plus receiver acceptance clocks; .1 only freezes shapes. Source implementation, native qualification and installed migration remain separate."
+    "activation": "Selected additive schema14 for .2 new declared records plus receiver acceptance clocks; .1 only freezes shapes. Source implementation, native qualification and installed migration remain separate.",
+    "currentSelection": {
+      "selectedAt": "2026-10-08",
+      "status": "prospective-source-only",
+      "storeSchemaVersion": 14,
+      "initializeVersions": [
+        0,
+        14
+      ],
+      "restoreVersions": [
+        14
+      ],
+      "explicitMigrationVersions": [
+        13,
+        14
+      ],
+      "explicitImportVersions": [
+        13
+      ],
+      "workspaceReceiptSchema": "fsgg.telemetry.receipt/1",
+      "privateItemDetailSchema": "fsgg.telemetry.item-detail/2",
+      "privateLearningSnapshotSchema": "fsgg.telemetry.learn-item-detail/4",
+      "activation": "New source qualification, publication, installed admission and original-identity recovery remain independent; historical sourceInspection and installedDependency are not amended evidence."
+    }
   },
   "producerAdmission": {
     "activation": "Frozen shapes, inactive until .2 decoder/store/native admission is delivered and independently qualified; schema declaration cannot authorize writes.",

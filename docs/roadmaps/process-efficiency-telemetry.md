@@ -409,3 +409,8 @@ Each milestone records source PRs, relevant focused checks and remaining limits 
 Publication, installation and live acceptance are separate fields. The programme-level entry links
 here rather than copying mutable checklists. Planned work remains unchecked until its own acceptance
 is met; neither research volume nor a merged design closes an implementation milestone.
+
+
+## Selected current-only source contract — 2026-10-08
+
+The user-selected no-compatibility implementation moves current producers and consumers together: one JSON workspace receipt ABI; normal fresh0/current14 initialization and14-only receipt restore; separate exact13 migration/import; scoped14 private dashboard with response usage and `learn-item-detail/4`. The measurement contract records this prospective selection while preserving historical source inspection and correction/fact semantics. This updates active .2/.3/.4/.6 obligations without erasing completed historical milestones. All six migration preservation, rollback, integrity and framing methods remain required with current entry points. Hosted full qualification, both-feed publication, installed adoption and actual original-identity recovery remain pending. Limited pending-free backup and framing controls establish no original-root recovery acceptance. See the [operator lifecycle](../reference/local-telemetry-store.md#schema-and-relations).

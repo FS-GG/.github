@@ -130,15 +130,18 @@ bytes under 0.52.0 would make the same version identify different artifacts. Ado
 coherent set cut from corrected source. All three partial sets are recorded in
 `registry/dependencies.yml`.</FsggStandingAdvisories>
 
-    <PackageReleaseNotes>0.99.0 — process efficiency telemetry and current-store assessment preparation.
+    <PackageReleaseNotes>0.100.0 — current telemetry receipt and schema contracts.
 
-Schema14 adds canonical original-group efficiency exports, bounded prospective assessment
-claims and optional runtime prelaunch publication. Drivers carry the assessment helper and
-closed schema inputs. The dashboard keeps Historical and Current stores independent.
-CLI, Kit and Drivers advance together; the independent Host0.5 bundles Store14 for native
-collection. Current source preparation does not establish packaged qualification, publication,
-installed migration, Python runtime availability or an accepted model-backed pilot.
-Unknown historical usage stays unknown; consumed0.98 and Host0.4 releases remain immutable.
+Workspace submissions now return one bounded JSON receipt carrying exact scope, batch,
+digest and status. Unknown receiver outcomes retain the original pending intent; durable
+receipt remains distinct from application. Normal private-store initialization and restore
+accept current schema14 only. Explicit migrate13 and import13 commands retain the historical
+schema13 transition and receipt-backup boundary. The private dashboard requires current
+schema14 snapshots and current producer shapes. These changes remove prior compatibility
+paths and advance CLI, Kit and Drivers together as a new minor version.
+Published0.99 archives remain immutable. Source preparation establishes no publication,
+installed adoption, telemetry activation or Wizard frozen-closure qualification.
+Host0.5 remains independent.
 
 $(FsggStandingAdvisories)
 

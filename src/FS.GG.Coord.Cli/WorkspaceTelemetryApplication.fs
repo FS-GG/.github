@@ -677,7 +677,7 @@ module WorkspaceTelemetryApplication =
                         if not (File.Exists durablePath) then
                             atomicWrite directory durableName outcome |> ignore
 
-                        Ok receipt.Status
+                        Ok receipt
                     else
                         if not (File.Exists(Path.Combine(directory, outcomeName))) then
                             let retained =
@@ -700,7 +700,7 @@ module WorkspaceTelemetryApplication =
                             File.Delete durablePath
                             flushDirectory directory
 
-                        Ok receipt.Status
+                        Ok receipt
             | RemoteClient.Unacknowledged code when
                 List.contains
                     code
@@ -848,6 +848,13 @@ module WorkspaceTelemetryApplication =
                                 | Local root ->
                                     let assessment = TelemetryStoreApplication.assessProductionRoot root
                                     TelemetryStoreApplication.submitReceipt root assessment (scope association) bytes
+                                    |> Result.bind (fun text ->
+                                        RemoteContract.parseReceipt (Encoding.UTF8.GetBytes text)
+                                        |> Result.mapError (fun _ -> [ "receipt-unavailable" ]))
+                                    |> Result.bind (fun receipt ->
+                                        if receipt.Scope = parsed.Scope && receipt.BatchId = parsed.BatchId && receipt.Digest = parsed.Digest then
+                                            Ok receipt
+                                        else Error [ "receipt-unavailable" ])
                                 | Remote(endpoint, reference, spool) ->
                                     match ensurePrivateDirectory spool with
                                     | Error errors -> Error errors
@@ -926,6 +933,10 @@ module WorkspaceTelemetryApplication =
                                             else
                                                 atomicWrite directory name bytes |> ignore
                                                 remoteOne association endpoint reference CancellationToken.None file)
+                |> Result.bind (fun receipt ->
+                    RemoteContract.writeReceipt receipt
+                    |> Result.map Encoding.UTF8.GetString
+                    |> Result.mapError (fun _ -> [ "receipt-unavailable" ]))
             with _ ->
                 Error [ "publication-advisory-failure" ]
 
@@ -982,16 +993,14 @@ module WorkspaceTelemetryApplication =
                                         let settled =
                                             results
                                             |> List.filter (function
-                                                | Ok "applied"
-                                                | Ok "rejected"
-                                                | Ok "expired" -> true
+                                                | Ok receipt when List.contains receipt.Status [ "applied"; "rejected"; "expired" ] -> true
                                                 | _ -> false)
                                             |> List.length
 
                                         let awaiting =
                                             results
                                             |> List.filter (function
-                                                | Ok "durably-received" -> true
+                                                | Ok receipt when receipt.Status = "durably-received" -> true
                                                 | _ -> false)
                                             |> List.length
 

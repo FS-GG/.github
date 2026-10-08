@@ -546,11 +546,11 @@ module DashboardProjection =
                         "canonicalSnapshotGzip"
                         "operational"]
 
-                if not (exactNames envelope names || exactNames envelope (Set.remove "workspaceId" names)) then
+                if not (exactNames envelope names) then
                     Error InvalidEnvelope
                 elif text "schema" envelope <> Some "fsgg.telemetry.item-detail/2" then
                     Error UnsupportedSchema
-                elif text "workspaceId" envelope |> Option.exists (fun workspace -> workspace <> "" && workspace <> authorizedWorkspace) then
+                elif text "workspaceId" envelope <> Some authorizedWorkspace then
                     Error UnauthorizedWorkspace
                 else
                     match
@@ -560,13 +560,6 @@ module DashboardProjection =
                         let observedAt = text "observedAt" envelope |> safeTime
                         let pendingBatches = number "pendingBatches" operational
                         let consistency = text "consistency" operational
-
-                        let legacyOperational =
-                            exactNames
-                                operational
-                                (set["pendingBatches"
-                                     "consistency"])
-                            && consistency = Some "observed-outside-database-transaction"
 
                         let scopedOperational =
                             exactNames
@@ -592,8 +585,7 @@ module DashboardProjection =
                         if
                             observedAt.IsNone
                             || pendingBatches.IsNone
-                            || not legacyOperational
-                               && (not scopedOperational || appliedReceipts.IsNone || rejectedReceipts.IsNone)
+                            || not scopedOperational || appliedReceipts.IsNone || rejectedReceipts.IsNone
                         then
                             Error InvalidEnvelope
                         else
@@ -657,37 +649,21 @@ module DashboardProjection =
                                             "reviews"
                                             "learningObservations"]
 
-                                    let legacyExpected =
-                                        expected
-                                        |> Set.remove "workspaceId"
-                                        |> Set.remove "learningSnapshotSchema"
-                                        |> Set.remove "learningObservations"
-
-                                    let responseSnapshot = exactNames snapshot (Set.add "responseUsage" expected)
-                                    let learningSnapshot = exactNames snapshot expected
-                                    let version = property "store" snapshot |> Option.bind (number "schemaVersion")
                                     let supportedShape =
-                                        if version = Some 14L then
-                                            responseSnapshot
-                                            && text "learningSnapshotSchema" snapshot = Some "fsgg.telemetry.learn-item-detail/4"
-                                        else
-                                            learningSnapshot || exactNames snapshot legacyExpected
+                                        exactNames snapshot (Set.add "responseUsage" expected)
+                                        && text "learningSnapshotSchema" snapshot = Some "fsgg.telemetry.learn-item-detail/4"
+                                        && text "workspaceId" snapshot = Some authorizedWorkspace
 
                                     match property "selection" snapshot, property "store" snapshot with
                                     | Some selection, Some store when
                                         supportedShape
-                                        && (not (learningSnapshot || responseSnapshot)
-                                            || ((text "learningSnapshotSchema" snapshot = Some "fsgg.telemetry.learn-item-detail/3"
-                                                 || text "learningSnapshotSchema" snapshot = Some "fsgg.telemetry.learn-item-detail/4")
-                                                && text "workspaceId" snapshot = text "workspaceId" envelope))
                                         && (text "mode" selection
                                             |> Option.exists (fun mode -> mode = "all" || mode = "item"))
                                         && property "complete" selection
                                            |> Option.exists (fun v -> v.ValueKind = JsonValueKind.True)
                                         ->
                                         match number "schemaVersion" store, text "journalMode" store with
-                                        | Some version, Some "wal" when
-                                            version = 8L || version = 9L || version = 10L || version = 11L || version = 12L || version = 13L || version = 14L ->
+                                        | Some 14L, Some "wal" ->
                                             let arrayNames =
                                                 [
                                                     "items"
@@ -719,13 +695,7 @@ module DashboardProjection =
                                                     "reviews"
                                                 ]
 
-                                            let arrayNames =
-                                                if responseSnapshot then
-                                                    "responseUsage" :: "learningObservations" :: arrayNames
-                                                elif learningSnapshot then
-                                                    "learningObservations" :: arrayNames
-                                                else
-                                                    arrayNames
+                                            let arrayNames = "responseUsage" :: "learningObservations" :: arrayNames
 
                                             let allArrays = arrayNames |> List.map (fun n -> array n snapshot)
 

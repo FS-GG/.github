@@ -132,6 +132,7 @@ it is invoked from.
 from __future__ import annotations
 
 import argparse
+from dataclasses import dataclass
 import ast
 import concurrent.futures
 import io
@@ -142,6 +143,8 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
+import time
 import token as token_module
 import tokenize
 
@@ -811,36 +814,75 @@ def prepare_copy(dest: str) -> None:
     shutil.copy2(os.path.join(REPO, GATE_REL), os.path.join(dest, GATE_REL))
 
 
-def run_fixture(root: str, gate_source: str) -> tuple[int, str]:
+@dataclass(frozen=True)
+class FixtureResult:
+    disposition: str
+    returncode: int | None
+    mode: str
+    complete: bool
+    passed: int
+    failed: int
+    diagnostic: str
+
+
+def classify_fixture(returncode: int, output: str, *, stop_on_failure: bool = False) -> FixtureResult:
+    mode = "first-failure" if stop_on_failure else "full"
+    unknown = FixtureResult("INCONCLUSIVE", returncode, mode, False, 0, 0, output[-4000:])
+    lines = output.splitlines()
+    records = [line for line in lines if line.startswith("fixture-result-v1")]
+    if len(records) != 1 or not lines or lines[-1] != records[0] or len(records[0].encode()) > 512:
+        return unknown
+    match = re.fullmatch(
+        r"fixture-result-v1 mode=(full|first-failure) complete=([01]) passed=(0|[1-9][0-9]{0,7}) failed=(0|[1-9][0-9]{0,7}) status=(passed|assertion-failed|infrastructure-error)", records[0])
+    if not match or match[1] != mode:
+        return unknown
+    complete, passed, failed, status = match[2] == "1", int(match[3]), int(match[4]), match[5]
+    if returncode == 0 and complete and status == "passed" and failed == 0 and passed > 0:
+        disposition = "PASS"
+    elif returncode == 1 and status == "assertion-failed" and failed > 0 and (
+        (mode == "full" and complete) or (mode == "first-failure" and not complete and failed == 1)):
+        disposition = "ASSERTION_FAILURE"
+    else:
+        return unknown
+    return FixtureResult(disposition, returncode, mode, complete, passed, failed, output[-4000:])
+
+
+def run_fixture(root: str, gate_source: str, *, stop_on_failure: bool = False) -> FixtureResult:
     gate_path = os.path.join(root, GATE_REL)
-    with open(gate_path, "w", encoding="utf-8") as handle:
-        handle.write(gate_source)
-    with open(gate_path, encoding="utf-8") as handle:
-        if handle.read() != gate_source:
-            raise SystemExit(f"harness: {gate_path} does not hold the source it was given")
-    proc = subprocess.run(
-        ["bash", os.path.join(root, FIXTURE_REL)],
-        capture_output=True,
-        text=True,
-        env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
-    )
-    # AND STILL HOLDS IT AFTERWARDS. Checking only before the run cannot see a copy that a second
-    # thread rewrote WHILE the fixture was reading it -- which is precisely the race that made this
-    # sweep report `cond-false@403` killed when nothing killed it. Root ownership is now exclusive,
-    # so this must never fire; it is here because "must never fire" is exactly the claim that earned
-    # this row its repair phase, and an unchecked one is worth nothing.
-    with open(gate_path, encoding="utf-8") as handle:
-        if handle.read() != gate_source:
-            raise SystemExit(
-                f"harness: {gate_path} changed underneath a running fixture -- two mutants shared "
-                f"one copy, so every verdict in this sweep is unsound. Refusing to report."
-            )
-    return proc.returncode, proc.stdout + proc.stderr
+    mode = "first-failure" if stop_on_failure else "full"
+    def unknown(message: str, rc: int | None = None) -> FixtureResult:
+        return FixtureResult("INCONCLUSIVE", rc, mode, False, 0, 0, message[-4000:])
+    try:
+        with open(gate_path, "w", encoding="utf-8") as handle:
+            handle.write(gate_source)
+        with open(gate_path, encoding="utf-8") as handle:
+            if handle.read() != gate_source:
+                return unknown(f"harness: {gate_path} does not hold the source it was given")
+        arguments = ["bash", os.path.join(root, FIXTURE_REL), "--python", sys.executable]
+        if stop_on_failure:
+            arguments.append("--mutation-stop-on-failure")
+        proc = subprocess.run(arguments, capture_output=True, text=True,
+                              env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"})
+        # Source custody is checked both before and after genuine completion.
+        with open(gate_path, encoding="utf-8") as handle:
+            if handle.read() != gate_source:
+                return unknown(f"harness: {gate_path} changed underneath a running fixture", proc.returncode)
+        return classify_fixture(proc.returncode, proc.stdout + proc.stderr, stop_on_failure=stop_on_failure)
+    except (OSError, subprocess.SubprocessError, UnicodeError) as error:
+        return unknown(f"harness: fixture unavailable: {error}")
 
 
-def tally(output: str) -> str:
-    match = re.search(r"fixture: (\d+) passed, (\d+) failed", output)
-    return f"{match.group(1)}/{match.group(2)}" if match else "no tally"
+def tally(result: FixtureResult) -> str:
+    return f"{result.passed}/{result.failed}; complete={int(result.complete)}"
+
+
+def observe_fixture(label: str, root: str, source: str, *, stop_on_failure: bool = False) -> FixtureResult:
+    start = time.monotonic()
+    print(f"START {label}", flush=True)
+    result = run_fixture(root, source, stop_on_failure=stop_on_failure)
+    print(f"RESULT {label}: {result.disposition} rc={result.returncode} mode={result.mode} "
+          f"{tally(result)} elapsed={time.monotonic() - start:.3f}s", flush=True)
+    return result
 
 
 def read_allowed() -> dict[str, str]:
@@ -1033,30 +1075,28 @@ def main(argv: list[str] | None = None) -> int:
         # ---- CONTROLS. All three must land, or nothing below is evidence. --------------------
         print()
         print("controls:")
-        rc, out = run_fixture(roots[0], gate_source)
-        print(f"  unmutated fixture         rc={rc} ({tally(out)}) -- want PASS")
-        if rc != 0:
-            print("REFUSING: the unmutated fixture does not pass, so every kill below is a harness artefact.")
-            print(out[-4000:])
+        result = observe_fixture("control unmutated", roots[0], gate_source)
+        if result.disposition != "PASS" or not result.complete:
+            print("REFUSING: unmutated control requires a complete PASS.")
+            print(result.diagnostic)
             return 3
 
-        rc, out = run_fixture(roots[0], control_early_ok(gate_source))
-        print(f"  control early-ok          rc={rc} ({tally(out)}) -- want KILLED")
-        if rc == 0:
-            print("REFUSING: an unconditional `return EX_OK` survives, so KILLED is unreachable.")
+        result = observe_fixture("control early-ok", roots[0], control_early_ok(gate_source), stop_on_failure=True)
+        if result.disposition != "ASSERTION_FAILURE":
+            print("REFUSING: early-ok control requires an explicit first assertion failure.")
+            print(result.diagnostic)
             return 3
 
         inert = control_inert(gate_source)
-        rc, out = run_fixture(roots[0], inert)
-        print(f"  control inert (`pass`)    rc={rc} ({tally(out)}) -- want SURVIVED")
-        if rc != 0:
-            print("REFUSING: a semantically inert edit is reported killed, so SURVIVED is unreachable.")
-            print(out[-4000:])
+        result = observe_fixture("control inert", roots[0], inert)
+        if result.disposition != "PASS" or not result.complete:
+            print("REFUSING: inert control requires a complete PASS.")
+            print(result.diagnostic)
             return 3
 
         # ---- THE SWEEP ------------------------------------------------------------------------
         print()
-        results: dict[str, tuple[bool, str]] = {}
+        results: dict[str, tuple[bool | None, str]] = {}
 
         # EACH RUNNING MUTANT OWNS ITS COPY EXCLUSIVELY, CHECKED OUT OF A QUEUE.
         #
@@ -1074,13 +1114,20 @@ def main(argv: list[str] | None = None) -> int:
         for root in roots:
             available.put(root)
 
-        def work(mutant: Mutant) -> tuple[str, bool, str]:
+        uncertain = threading.Event()
+        def work(mutant: Mutant) -> tuple[str, bool | None, str]:
             root = available.get()
             try:
-                rc, out = run_fixture(root, mutant.source)
+                if uncertain.is_set():
+                    return mutant.mid, None, "blocked after inconclusive fixture"
+                result = observe_fixture(mutant.mid, root, mutant.source, stop_on_failure=True)
+                if result.disposition == "INCONCLUSIVE":
+                    uncertain.set()
+                    print(result.diagnostic, flush=True)
+                    return mutant.mid, None, tally(result)
+                return mutant.mid, result.disposition == "ASSERTION_FAILURE", tally(result)
             finally:
                 available.put(root)
-            return mutant.mid, rc != 0, tally(out)
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=jobs) as pool:
             for mid, killed, counts in pool.map(work, mutants):
@@ -1094,12 +1141,15 @@ def main(argv: list[str] | None = None) -> int:
         shutil.rmtree(tmp, ignore_errors=True)
 
     allowed = read_allowed()
-    survivors = [m for m in mutants if not results[m.mid][0]]
-    killed = len(mutants) - len(survivors)
+    survivors = [m for m in mutants if results[m.mid][0] is False]
+    unknowns = [m for m in mutants if results[m.mid][0] is None]
+    killed = sum(results[m.mid][0] is True for m in mutants)
 
     for mutant in mutants:
         was_killed, counts = results[mutant.mid]
-        if not was_killed:
+        if was_killed is None:
+            print(f"  INCONCLUSIVE       {mutant.mid:<28} {counts}")
+        elif not was_killed:
             note = allowed.get(mutant.mid)
             mark = "SURVIVED (allowed)" if note else "SURVIVED"
             print(f"  {mark:<18} {mutant.mid:<28} {mutant.where}")
@@ -1123,10 +1173,11 @@ def main(argv: list[str] | None = None) -> int:
     print(
         f"signature-doc-siting mutation sweep: {len(mutants)} mutants, {killed} killed, "
         f"{len(survivors)} survived ({len(survivors) - len(unjustified)} justified), "
+        f"{len(unknowns)} inconclusive; "
         f"{len(unjustified)} UNJUSTIFIED; {len(skipped)} site(s) skipped "
         f"({len(justified_skips)} justified), {len(unjustified_skips)} UNJUSTIFIED"
     )
-    live = {m.mid for m in survivors} | {f"skip:{s.site}" for s in skipped}
+    live = {m.mid for m in survivors + unknowns} | {f"skip:{s.site}" for s in skipped}
     stale = sorted(set(allowed) - live)
     if stale:
         print(f"stale entries in {os.path.relpath(ALLOWED, REPO)} -- these mutants no longer survive")
@@ -1143,6 +1194,9 @@ def main(argv: list[str] | None = None) -> int:
         print()
         print("Each UNJUSTIFIED mutant is a dimension of the gate the fixture does not assert.")
         print("Add a fixture leg that reds on it, or justify it in mutants-allowed.txt.")
+    if unknowns:
+        print("REFUSING: inconclusive or blocked fixtures cannot qualify the sweep.")
+        return 3
     if unjustified or unjustified_skips or stale:
         return 1
     return 0

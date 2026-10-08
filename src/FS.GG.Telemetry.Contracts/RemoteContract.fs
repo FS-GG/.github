@@ -71,8 +71,10 @@ module RemoteContract =
         | true, value when value.ValueKind = JsonValueKind.String -> Some(value.GetString())
         | _ -> None
 
-    let parseReceipt bytes =
+    let parseReceipt (bytes: byte array) =
         try
+            if isNull bytes || bytes.Length = 0 || bytes.Length > 4096 then
+                invalidArg "bytes" "invalid receipt"
             let options =
                 JsonDocumentOptions(
                     AllowTrailingCommas = false,
@@ -166,8 +168,26 @@ module RemoteContract =
                                     Code = code
                                 })
                     | _ -> Error "invalid receipt"
-        with :? JsonException ->
-            Error "invalid receipt"
+        with
+        | :? JsonException
+        | :? ArgumentException -> Error "invalid receipt"
+
+    let writeReceipt (receipt: Receipt) =
+        let bytes =
+            Encoding.UTF8.GetBytes(
+                JsonSerializer.Serialize
+                    {|
+                        schema = ReceiptSchema
+                        workspaceId = receipt.Scope.Workspace
+                        producerId = receipt.Scope.Producer
+                        streamId = receipt.Scope.Stream
+                        batchId = receipt.BatchId
+                        digest = receipt.Digest
+                        status = receipt.Status
+                        code = receipt.Code
+                    |}
+                + "\n")
+        parseReceipt bytes |> Result.map (fun _ -> bytes)
 
     let writeError code =
         let stable = if validErrorCode code then code else "storage-unavailable"

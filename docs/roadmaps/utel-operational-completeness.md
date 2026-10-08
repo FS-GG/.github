@@ -175,3 +175,34 @@ Keep the omitted lifecycle default `sdd`; do not activate v2 or alter protected 
 Execute 06.1 then 06.2. Milestone 06.3 may prepare from the identity contract; 06.4 requires both. Publication
 and activation retain their real safeguards. Completion reporting must distinguish source delivered, published,
 installed, activated, supported-scope operationally qualified and platform coverage incomplete.
+
+## 2026-10-07 operational recovery source window
+
+The same UTEL owner extends coherent0.99.1 after canonical0.99 pin and publication
+projection landed. The source repairs the retained dispatch reader/writer bound and
+prevalidates assembled observation batches before durable publication intent. A closed,
+exact local pre-IO parser rejection permits only the existing rollback transition;
+unknown/transport/foreign outcomes retain custody and exact retries. The root's malformed
+nested evidence error and its retained pending publication remain an independent hold.
+The supported collection/recovery recipe is in the [local-store reference](../reference/local-telemetry-store.md#operational-collection-and-malformed-observation-recovery).
+
+Static source checks do not qualify final compiled source, canonical generators, publication,
+installed engine selection, schema compatibility or receiver recovery. Existing0.99 bytes
+remain immutable;0.99.1 remains prepared only. Keep separate original3e8 positive/red
+receipts and the incomplete original130s window. No state edit, replay, migration,
+activation, provider operation or fleet/default change is selected by source preparation.
+
+Root separately admits compiled resource controls and the exact-head source qualification,
+then the existing coherent candidate/preflight/publisher/both-feed sequence and explicit
+operator installation. Retained poison recovery requires disposable fixture proof and an
+original-identity/accepted-effects check before a single admitted supported retry. Then prove
+one useful fresh begin/start/activity/terminal/usage/review and exact-head CI delivery window.
+Current readiness, zero observation rows and historical unknown baselines establish neither
+health nor savings. Resolve the user's selected CI population before bounded reconciliation;
+report each metric's exact source window/cutoff/receipt/coverage and retain missing history.
+This operational window and §9.8 stay open through actual collection/receiver acceptance.
+
+
+## Current-only receipt and recovery boundary — 2026-10-08
+
+Current supported local/remote workspace submit uses one exact JSON receipt ABI. The adapter retains pending input and sequence on malformed, foreign, transport or receiver error; an `invalid-request` substring is not no-publication-IO proof. Population-only binding requires applied rather than durable receipt. Current store/readers select14 with explicit authentic13 maintenance. The installed0.99.0 original root and pending operation remain held; source edits, pending-free backup fixtures and synthetic1MiB framing do not establish original-state recovery or observed usage. Qualification, publication, installed provenance and separately admitted original-identity receiver-effects inspection remain necessary.

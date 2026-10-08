@@ -182,3 +182,30 @@ and one feature replay. A prospective child completed and produced a native usag
 its verified short agent name was bound correctly. The observation guide now distinguishes that name
 from the thread UUID. This establishes the selected recovery and collection path; historical root
 usage, whole-programme coverage and deployed emitter adoption remain separate and unresolved.
+
+## Bounded native dispatch state repair
+
+The private dispatch writer could retain full native metadata above the reader's 256 KiB limit,
+causing strict inventory matching to reject later dispatches. Reader and writer now share a 1 MiB
+state-file bound, including the persisted newline. A transition exceeding it refuses before replacing
+the original state or publishing its intent. The reader remains bounded and rejects malformed JSON,
+symlinks and unsafe permissions; inventory matching still validates every token-named state.
+Synthetic adapter regressions cover metadata above the former limit, preserved identity and follow-up
+lineage, unknown usage baselines, exact-bound writer refusal and strict invalid-inventory handling.
+This is a source-only repair: retained private records and published binaries remain unchanged;
+qualification, publication and installed adoption are separate, and prior observation gaps remain unknown.
+
+### Operational observation validation preparation — 2026-10-07
+
+The prepared coherent0.99.1 source uses canonical full-batch parsing before new durable
+intent and a closed byte/destination/engine-bound local parser rejection for legacy intent.
+This adds no Store migration, persistent schema or counter change. Unknown receiver outcomes
+retain pending custody. See the [operational plan](utel-operational-completeness.md#2026-10-07-operational-recovery-source-window)
+and [reference recipe](../reference/local-telemetry-store.md#operational-collection-and-malformed-observation-recovery).
+Compiled qualification, publication, installed selection and retained-root recovery remain
+separately admitted; original rejected input/state and unavailable observation baseline persist.
+
+
+## Current input-version selection — 2026-10-08
+
+Historical completed migration milestones remain evidence of their original delivered windows. Current source accepts fresh0/current14 normal init and authentic14 normal restore. Only explicit exact13 migration and authentic13 backup import remain historical transition entry points; no1..12 automatic upgrade or9/12 import is supported. Exact earlier SQL/digests, facts/cursors/files, correction lineage and unknown acceptance survive the transition. All six preservation/rollback/integrity/framing obligations remain required through the explicit APIs. Source preparation is unqualified for installed execution; see the [operator matrix and backup scope](../reference/local-telemetry-store.md#schema-and-relations).

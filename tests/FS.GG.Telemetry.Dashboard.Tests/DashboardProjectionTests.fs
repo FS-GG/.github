@@ -31,7 +31,11 @@ module DashboardProjectionTests =
                 """{"mode":"all","requestedItem":null,"complete":true,"maxItems":200,"maxRowsPerRelation":10000}"""
             )
 
-        root["store"] <- JsonNode.Parse("""{"schemaVersion":10,"journalMode":"wal"}""")
+        root["store"] <- JsonNode.Parse("""{"schemaVersion":14,"journalMode":"wal"}""")
+        root["workspaceId"] <- "workspace-a"
+        root["learningSnapshotSchema"] <- "fsgg.telemetry.learn-item-detail/4"
+        root["learningObservations"] <- JsonArray()
+        root["responseUsage"] <- JsonArray()
         root["items"] <- nodes [| JsonValue.Create(item) |]
         root["summaries"] <- nodes [| summary item |]
 
@@ -103,13 +107,16 @@ module DashboardProjectionTests =
         JsonSerializer.SerializeToUtf8Bytes
             {|
                 schema = "fsgg.telemetry.item-detail/2"
+                workspaceId = "workspace-a"
                 observedAt = "2026-09-10T09:00:00Z"
                 revision = Convert.ToHexString(SHA256.HashData canonical).ToLowerInvariant()
                 canonicalSnapshotGzip = Convert.ToBase64String(output.ToArray())
                 operational =
                     {|
                         pendingBatches = 2
-                        consistency = "observed-outside-database-transaction"
+                        appliedReceipts = 0
+                        rejectedReceipts = 0
+                        consistency = "database-transaction"
                     |}
             |}
 
@@ -132,14 +139,12 @@ module DashboardProjectionTests =
         value["responseUsage"] <- JsonArray()
         value
 
-    [<Theory>]
-    [<InlineData(3)>]
-    [<InlineData(4)>]
-    let ``learning snapshot provenance stays private across supported markers`` version =
+    [<Fact>]
+    let ``current learning snapshot provenance stays private`` () =
         let value = snapshot "item-a"
         value["workspaceId"] <- "workspace-a"
-        value["learningSnapshotSchema"] <- $"fsgg.telemetry.learn-item-detail/{version}"
-        value["store"]["schemaVersion"] <- 12
+        value["learningSnapshotSchema"] <- "fsgg.telemetry.learn-item-detail/4"
+        value["store"]["schemaVersion"] <- 14
         value["learningObservations"] <-
             nodes
                 [|
@@ -252,13 +257,23 @@ module DashboardProjectionTests =
             Encoding.UTF8.GetBytes
                 $"""{{"schema":"{TelemetryStore.BatchSchema}","ingestId":"actual-shape","sourceIdentity":"fixture","generation":"g1","cursor":"1","eventCount":2,"events":[{{"kind":"item","identity":"actual-item","itemId":"actual-item","revision":0}},{{"kind":"usage","identity":"actual-usage","itemId":"actual-item","revision":0,"provider":"OpenAI","model":"sol","effort":"medium","input":4,"cachedInput":1,"cacheWriteInput":0,"output":2,"reasoning":null,"total":6,"responses":1,"sessions":1,"turns":1}}]}}"""
 
-        TelemetryStoreApplication.ingest root approved batch
+        let scope: TelemetryReceipt.Scope = { Workspace = "workspace-a"; Producer = "fixture"; Stream = "runtime" }
+        TelemetryStoreApplication.enrollReceiptProducer root approved scope |> unwrap |> ignore
+        let receipt = JsonObject()
+        receipt["schema"] <- TelemetryReceipt.Schema
+        receipt["workspaceId"] <- scope.Workspace
+        receipt["producerId"] <- scope.Producer
+        receipt["streamId"] <- scope.Stream
+        receipt["batchId"] <- "actual-shape"
+        receipt["payload"] <- JsonNode.Parse batch
+        TelemetryStoreApplication.submitReceipt root approved scope (Encoding.UTF8.GetBytes(receipt.ToJsonString())) |> unwrap |> ignore
+        TelemetryStoreApplication.drainReceipts root approved scope.Workspace
         |> function
             | Ok _ -> ()
             | Error errors -> failwithf "%A" errors
 
         let snapshotJson =
-            TelemetryStoreApplication.dashboardSnapshot root approved None
+            TelemetryStoreApplication.scopedDashboardSnapshot root approved "workspace-a" None
             |> function
                 | Ok value -> value
                 | Error errors -> failwithf "%A" errors
@@ -366,8 +381,10 @@ module DashboardProjectionTests =
         Assert.Contains("native-usage-unsupported", json)
         Assert.Contains("\"nativeUsage\":\"unsupported\"", json)
         Assert.Contains("host-wall", json)
-        Assert.Contains("\"appliedReceipts\":null", json)
-        Assert.Contains("\"rejectedReceipts\":null", json)
+        use projected = JsonDocument.Parse json
+        let operational = projected.RootElement.GetProperty("operational")
+        Assert.Equal(0L, operational.GetProperty("appliedReceipts").GetInt64())
+        Assert.Equal(0L, operational.GetProperty("rejectedReceipts").GetInt64())
 
         for secret in [ "DO-NOT-LEAK"; "/private/path"; "PRIVATE" ] do
             Assert.DoesNotContain(secret, json)
@@ -455,7 +472,7 @@ module DashboardProjectionTests =
     [<Fact>]
     let ``rejects unauthorized workspace malformed envelope and revision mismatch`` () =
         Assert.Equal(Error UnauthorizedWorkspace, DashboardProjection.project "../other" (envelope (snapshot "item")))
-        Assert.Equal(Error InvalidEnvelope, DashboardProjection.project "workspace" (Encoding.UTF8.GetBytes "{}"))
+        Assert.Equal(Error InvalidEnvelope, DashboardProjection.project "workspace-a" (Encoding.UTF8.GetBytes "{}"))
         let bytes = envelope (snapshot "item")
         use doc = JsonDocument.Parse bytes
         let changed = JsonNode.Parse(doc.RootElement.GetRawText()).AsObject()
@@ -463,7 +480,7 @@ module DashboardProjectionTests =
 
         Assert.Equal(
             Error InvalidRevision,
-            DashboardProjection.project "workspace" (Encoding.UTF8.GetBytes(changed.ToJsonString()))
+            DashboardProjection.project "workspace-a" (Encoding.UTF8.GetBytes(changed.ToJsonString()))
         )
 
     [<Fact>]
@@ -478,7 +495,7 @@ module DashboardProjectionTests =
 
         Assert.Equal(
             Error InvalidEnvelope,
-            DashboardProjection.project "workspace" (Encoding.UTF8.GetBytes(hybrid.ToJsonString()))
+            DashboardProjection.project "workspace-a" (Encoding.UTF8.GetBytes(hybrid.ToJsonString()))
         )
 
     [<Fact>]
@@ -486,11 +503,11 @@ module DashboardProjectionTests =
         let malformed = snapshot "item"
         let malformedSummary = (malformed["summaries"].AsArray()).[0].AsObject()
         malformedSummary["factCount"] <- "three"
-        Assert.Equal(Error InvalidSnapshot, DashboardProjection.project "workspace" (envelope malformed))
+        Assert.Equal(Error InvalidSnapshot, DashboardProjection.project "workspace-a" (envelope malformed))
 
         Assert.Equal(
             Error EnvelopeTooLarge,
-            DashboardProjection.project "workspace" (Array.zeroCreate<byte>(1024 * 1024 + 1))
+            DashboardProjection.project "workspace-a" (Array.zeroCreate<byte>(1024 * 1024 + 1))
         )
 
     [<Fact>]
@@ -508,7 +525,7 @@ module DashboardProjectionTests =
         value["ciPopulationCoverage"] <- JsonArray()
 
         let projected =
-            DashboardProjection.project "workspace" (envelope value)
+            DashboardProjection.project "workspace-a" (envelope value)
             |> unwrap
             |> Encoding.UTF8.GetString
 
@@ -523,16 +540,16 @@ module DashboardProjectionTests =
         let duplicate = snapshot "item"
         duplicate["items"] <- nodes [| JsonValue.Create("item"); JsonValue.Create("item") |]
         duplicate["summaries"] <- nodes [| summary "item"; summary "item" |]
-        Assert.Equal(Error InvalidSnapshot, DashboardProjection.project "workspace" (envelope duplicate))
+        Assert.Equal(Error InvalidSnapshot, DashboardProjection.project "workspace-a" (envelope duplicate))
         let mixed = snapshot "item"
         mixed["items"] <- nodes [| JsonValue.Create("item"); JsonValue.Create("other") |]
-        Assert.Equal(Error InvalidSnapshot, DashboardProjection.project "workspace" (envelope mixed))
+        Assert.Equal(Error InvalidSnapshot, DashboardProjection.project "workspace-a" (envelope mixed))
         let malformedArray = snapshot "item"
         malformedArray["activities"] <- JsonObject()
-        Assert.Equal(Error InvalidSnapshot, DashboardProjection.project "workspace" (envelope malformedArray))
+        Assert.Equal(Error InvalidSnapshot, DashboardProjection.project "workspace-a" (envelope malformedArray))
         let oversized = snapshot "item"
         oversized["activities"] <- JsonArray(Array.init 10001 (fun _ -> JsonObject() :> JsonNode))
-        Assert.Equal(Error InvalidSnapshot, DashboardProjection.project "workspace" (envelope oversized))
+        Assert.Equal(Error InvalidSnapshot, DashboardProjection.project "workspace-a" (envelope oversized))
 
     [<Fact>]
     let ``rejects gzip expansion beyond canonical bound`` () =
@@ -546,26 +563,29 @@ module DashboardProjectionTests =
             JsonSerializer.SerializeToUtf8Bytes
                 {|
                     schema = "fsgg.telemetry.item-detail/2"
+                    workspaceId = "workspace-a"
                     observedAt = "2026-09-10T09:00:00Z"
                     revision = String.replicate 64 "0"
                     canonicalSnapshotGzip = Convert.ToBase64String(output.ToArray())
                     operational =
                         {|
                             pendingBatches = 0
-                            consistency = "observed-outside-database-transaction"
+                            appliedReceipts = 0
+                            rejectedReceipts = 0
+                            consistency = "database-transaction"
                         |}
                 |}
 
-        Assert.Equal(Error SnapshotTooLarge, DashboardProjection.project "workspace" bytes)
+        Assert.Equal(Error SnapshotTooLarge, DashboardProjection.project "workspace-a" bytes)
 
     [<Fact>]
     let ``rejects incomplete selection and incompatible store`` () =
         let incomplete = snapshot "item"
         incomplete["selection"]["complete"] <- false
-        Assert.Equal(Error IncompleteSnapshot, DashboardProjection.project "workspace" (envelope incomplete))
+        Assert.Equal(Error IncompleteSnapshot, DashboardProjection.project "workspace-a" (envelope incomplete))
         let incompatible = snapshot "item"
         incompatible["store"]["journalMode"] <- "delete"
-        Assert.Equal(Error IncompatibleStore, DashboardProjection.project "workspace" (envelope incompatible))
+        Assert.Equal(Error IncompatibleStore, DashboardProjection.project "workspace-a" (envelope incompatible))
 
     [<Fact>]
     let ``assets are fixed self contained and returned defensively`` () =
@@ -633,9 +653,12 @@ module DashboardProjectionTests =
             value["learningObservations"] <- JsonArray()
             value["responseUsage"] <- JsonArray()
         let encoded = if version = 14 then scopedEnvelope "workspace-a" value else envelope value
-        let result = DashboardProjection.project "workspace-a" encoded |> unwrap
-        Assert.Contains("item-a", Encoding.UTF8.GetString result)
-        Assert.DoesNotContain("ci_attribution_corrections", Encoding.UTF8.GetString result)
+        let projected = DashboardProjection.project "workspace-a" encoded
+        if version = 14 then
+            let result = projected |> unwrap
+            Assert.Contains("item-a", Encoding.UTF8.GetString result)
+            Assert.DoesNotContain("ci_attribution_corrections", Encoding.UTF8.GetString result)
+        else Assert.Equal(Error IncompatibleStore, projected)
         value["store"].["schemaVersion"] <- 15
         Assert.True(DashboardProjection.project "workspace-a" (envelope value) |> Result.isError)
 
@@ -666,9 +689,9 @@ module DashboardProjectionTests =
             value["learningSnapshotSchema"] <- $"fsgg.telemetry.learn-item-detail/{marker}"
             value["learningObservations"] <- JsonArray()
         let encoded () = if marker = 0 then envelope value else scopedEnvelope "workspace-a" value
-        DashboardProjection.project "workspace-a" (encoded ()) |> unwrap |> ignore
+        Assert.True(DashboardProjection.project "workspace-a" (encoded ()) |> Result.isError)
         value["responseUsage"] <- JsonArray()
-        Assert.Equal(Error IncompleteSnapshot, DashboardProjection.project "workspace-a" (encoded ()))
+        Assert.True(DashboardProjection.project "workspace-a" (encoded ()) |> Result.isError)
 
     [<Theory>]
     [<InlineData("input")>]
@@ -739,3 +762,12 @@ module DashboardProjectionTests =
         let steps = result.RootElement.GetProperty("items").[0].GetProperty("steps")
         Assert.Equal(0L, steps.GetProperty("runtimeCount").GetInt64())
         Assert.Equal(0, steps.GetProperty("rows").GetArrayLength())
+
+    [<Fact>]
+    let ``current private projection refuses omitted workspace and historical operational shape`` () =
+        let current = JsonNode.Parse(envelope (snapshot "item-a")).AsObject()
+        current.Remove "workspaceId" |> ignore
+        Assert.Equal(Error InvalidEnvelope, DashboardProjection.project "workspace-a" (JsonSerializer.SerializeToUtf8Bytes current))
+        current["workspaceId"] <- "workspace-a"
+        current["operational"] <- JsonNode.Parse """{"pendingBatches":0,"consistency":"observed-outside-database-transaction"}"""
+        Assert.Equal(Error InvalidEnvelope, DashboardProjection.project "workspace-a" (JsonSerializer.SerializeToUtf8Bytes current))

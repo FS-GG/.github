@@ -97,7 +97,10 @@ module TelemetryStoreApplication =
         path: string -> assessment: TelemetryStore.DurabilityAssessment -> principal: TelemetryReceipt.Principal ->
         selectedItem: string option -> Result<string, string list>
     val assessProductionRoot: path: string -> TelemetryStore.DurabilityAssessment
+    /// Current14 initialization; only genuine empty schema0 is constructed.
     val initialize: path: string -> assessment: TelemetryStore.DurabilityAssessment -> Result<string, string list>
+    /// Explicit exact13 transition, or validated14 readback after a completed attempt.
+    val migrate13ToCurrent: path: string -> assessment: TelemetryStore.DurabilityAssessment -> Result<string, string list>
     val status: path: string -> assessment: TelemetryStore.DurabilityAssessment -> Result<string, string list>
 
     val publish:
@@ -248,12 +251,18 @@ module TelemetryStoreApplication =
         outputPath: string ->
             Result<string, string list>
 
+    /// Normal restore accepts current14 only and never migrates implicitly.
     val restoreReceiptStore:
         inputPath: string ->
         path: string ->
         assessment: TelemetryStore.DurabilityAssessment ->
         workspace: string ->
             Result<string, string list>
+
+    /// Explicit import of an authentic13 receipt backup through a private copy.
+    val import13ReceiptBackup:
+        inputPath: string -> path: string -> assessment: TelemetryStore.DurabilityAssessment ->
+        workspace: string -> Result<string, string list>
 
     val summary:
         path: string -> assessment: TelemetryStore.DurabilityAssessment -> itemId: string -> Result<string, string list>

@@ -902,3 +902,196 @@ dispatch, grant, tag, provider operation, installed adoption, effective-default
 activation or preserving upgrade is admitted by this source work. The original
 worker dispatch preceded restored observation configuration; this follow-up retains
 that attribution gap and unknown usage without substituting the root token.
+
+
+### Incremental telemetry repair sequencing — 2026-10-07
+
+This extends the same SVG-COHERENCE-01.8 dependency window. Root independently
+accepted the compiled and package qualification for Wizard source
+`28caa52be69eb2b69462109eda3d5c5172f93c52`; [#4301](https://github.com/FS-GG/.github/pull/4301)
+merged as `6419282331b9789666527621191b91310a5209bc` at 04:54:37 UTC. Its earlier
+local preparation paragraph above remains a historical checkpoint. Preserve its
+exact 0.99 source/archive qualification and the accepted published release
+`405346080` from `64e95ebec1a8294e16edaafdb27e6aa96f32c6f7` without relabeling them.
+
+The tested telemetry fix at local
+`3e8be3f1c2821a24b4e704bbe82e08ca9df60765` aligns dispatch-state reads and writes
+at a bounded 1 MiB, including the persisted newline. It changes the compiled
+`src/FS.GG.Coord.Cli/SkillTelemetryAdapter.fs` leaf frozen by the Wizard pin.
+The positive source suite and separate original-source red baseline are distinct
+accepted evidence. The first FS0240 control scaffold failure and deadline-refused
+continuation remain an incomplete original window. Existing private states,
+reconciliation records and unknown native usage must remain intact.
+
+**Late main failure remains a dependency fence.** Exact
+[engine-pin run 37573721971/a1](https://github.com/FS-GG/.github/actions/runs/37573721971)
+on merge 641928 failed its live `pin` job `112637946362` after the fixture passed.
+The original log states that the canonical manifest pins 0.97.0 while the newest
+resolvable CLI is 0.99.0. Its raw log SHA256 is
+`eca804356ad7b0fd85a9a68eb0ebd47c8ceaead3a79ecbc2658cb1396166271b`.
+PR success does not waive this main failure or permit dependent activation.
+The existing workflow and `registry/repos.yml:582–609` identify this manifest as
+`.github`'s canonical pin, excluded from Kit delivery under ADR-0068. Repair only
+its `fs.gg.coord.cli.version` to genuinely public **0.99.0**, preserving other rows;
+root has selected the existing SVG Sol owner for this isolated current-pin
+repair, currently pending. Root may join it with the pending publication projection
+in one CI batch. The patch worker preserves this owner and consumes its merged
+result instead of racing the same file. Requalify the ordinary main live check through its authenticated
+reader. Never set it to unpublished 0.99.1: the same gate refuses ahead-of-feed pins.
+This source correction is distinct from installed tool selection or receiver defaults.
+
+**Selected minimal route:** deliver the compatible repair and prepare a fresh
+whole coherent patch; keep the Wizard candidate held until that patch is genuinely
+published and its closure is refreshed. Proposed source version **0.99.1** is a
+patch because the selected change repairs internal bounded IO without changing
+public signatures or a wire schema. It must move CLI, Kit and Drivers together.
+There is no way to retain a passing current-source frozen guard after changing
+this compiled leaf while continuing to name the original 0.99 archive. The guard
+must correctly refuse during the interval. Do not remove that leaf, substitute
+current hashes under the old source SHA, rebuild the old package, use a historical
+main candidate, or weaken the source-before-acquisition check.
+
+**Source CI remains executable during that interval.** At source 28c, ordinary
+`new-sdd-workspace-selftest.yml:94` invokes `tests/new-sdd-workspace/run.sh`, whose
+normal source build does not set `FsggFrozenCoordDependencies`. It then runs the
+pure successor suite. `frozen_dependencies.py:110–147` positively checks the
+published historical source and explicitly expects current-source refusal when
+pinned leaves drift. Only the manual
+`release-new-sdd-workspace-successor-candidate.yml:23–31` exports the frozen
+profile and requires its source check before SDK setup and acquisition. Thus a
+source-fix PR can pass its ordinary technical gates without future archive pins;
+that pass cannot qualify a frozen Wizard release candidate.
+
+The compiled ProductBoard probe at `tests/new-sdd-workspace/product-board.fsx:82`
+currently asserts literal 0.99.0. Replace only that expectation with the independently
+read, uniquely declared `FsggCoherentSetVersion` in committed `Directory.Build.props`.
+Reject absent/duplicate/malformed declarations and a loaded-version mismatch; never
+set expected version from the loaded assembly itself. Its existing kit mismatch,
+fresh-manifest ownership/preimage/mode, retained-conflict and rollback checks stay.
+The frozen candidate already validates the same props through its source guard,
+so the probe remains meaningful for source-built and later frozen patch profiles.
+
+#### Next bounded Sol-medium source window
+
+Root remains the sole integrator. Reuse telemetry repair owner/source and the
+existing Wizard owner for the eventual closure refresh, with one writer for their
+shared plan. Start from freshly observed protected main containing #4301. Integrate
+the exact three-file repair and prepare the compatible patch in one coherent routine
+source PR when root admits its lane. The implementation worker receives the installed
+work-roadmap skill and original evidence; no new feature, board ledger or planning PR.
+
+Exact required source-preparation touch-set:
+
+- Repair: `src/FS.GG.Coord.Cli/SkillTelemetryAdapter.fs`,
+  `tests/skill-fsharp/adapter/Program.fs`, and `docs/roadmaps/utel-local-telemetry-store.md`.
+- Current dependency owned by the existing SVG owner, not the patch worker:
+  `dist/dotnet/.config/dotnet-tools.json` selects published 0.99.0 after the
+  pending repair; preserve that value independently of the source scalar below.
+- Coherent source identity: `Directory.Build.props` and
+  `src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj` release notes; all three existing
+  projects continue to reference the single scalar.
+- Existing release rail: `.github/workflows/release-successor-candidate.yml`,
+  `.github/workflows/release-successor-publish.yml`,
+  `scripts/release-successor-publish.py`, `scripts/release_successor_journal.py`,
+  and `tests/release-successor-candidate/run.py`. Select the proposed patch,
+  genuine promoted 0.99 predecessor/source/channel, and a distinct prospective
+  journal identity together. `utel-rel-17` is a proposed identity, not a grant or
+  an observed unused journal. Preserve existing admission, sixteen effects,
+  first-attempt/source guards and immutable archive recovery semantics.
+- Test compatibility: `tests/new-sdd-workspace/product-board.fsx` as above.
+- Existing records: `docs/roadmaps/utel-release-successor.md`, this SVG plan,
+  `registry/dependencies.yml` and `registry/CHANGELOG.md`. Preserve accepted
+  published 0.99 facts separately from prepared 0.99.1. The inspected registry
+  still reports package frontier 0.98; reconcile that lag only from the genuine
+  accepted 0.99 receipt, never label 0.99.1 published before readback.
+- Derived outputs, only as required by the canonical generators: `docs/architecture.md`,
+  `docs/registry/compatibility.md`, both `.agents`/`.claude` publishing-and-deployment
+  `SKILL.md` mirrors, `registry/driver-skill-manifest.json` and the affected
+  `registry/skills.yml` digest row. Preserve unrelated generated regions and use
+  the repository generators. These are source/publication metadata, not activation.
+
+Leave `creator-frozen-coord-dependencies.json`, its verifier and the Wizard
+candidate download at genuine 0.99 during source preparation. Leave SDD defaults, installed selectors, Host
+version/installation, telemetry stores and all operation credentials unchanged.
+No generic release framework, protocol refactor or new workflow is needed.
+
+**Proportionate qualification:** existing static release-binding tests first,
+then the normal admitted source build/adapter suite and compiled ProductBoard
+probe against the exact prepared source. Require the current Wizard source guard
+to refuse before acquisition and the historical 0.99 positive fixture to pass.
+Keep the original negative baseline receipt; repeat it only if new changes affect
+its meaning. Run existing coherent-version evaluation, release-note and projection/
+registry controls, the existing engine-pin fixture and authenticated live main
+readback after the canonical-pin repair, routine eligibility/operation-boundary
+fixtures, and exact-head
+required/coherent CI. The source PR must be green on these ordinary gates; never
+manufacture a current frozen-closure pass. Preserve all original failures and
+separate source qualification from release qualification. Static sequencing plus
+existing refusal/recovery controls is sufficient; no custom model or new costly
+pipeline is selected. Build/qualification needs separate resource admission.
+
+**Coordinate and effect gates:** fresh public NuGet indices show 0.99.0 present
+and 0.99.1 absent for all three packages; the proposed release and journal ref
+returned 404, while the available GitHub Packages CLI reader returned 403. These
+partial observations do not establish a usable coordinate. Before native work,
+the existing rail must authenticate its own scoped reader, verify all three
+coordinates on both feeds, predecessor channel/source/content, all relevant
+component/coherent tags and release, and the exact proposed protected journal.
+Missing visibility, an occupied coordinate, a prior journal or an uncertain effect
+stops its dependent step. Root decides a distinct successor or exact-byte recovery;
+neither this plan nor source constants activate the publisher or confer a grant.
+
+#### Later dependency boundary and actual receiver acceptance
+
+After root accepts source delivery, hold final main through a separately admitted
+first-attempt patch candidate, original seven-file archive authentication,
+`publish=false` preflight, any selected publication, all sixteen journal effects
+and both-feed readback. Preserve original bytes and source throughout. Only genuine
+published patch identities permit the Wizard owner to update its dependency JSON,
+existing candidate URL/path and selected-version assertions in
+`tests/new-sdd-workspace-successor/frozen_dependencies.py`. Reuse the generic
+closure verifier and version-derived package checks already delivered by #4301;
+re-enumerate actual source/runtime populations rather than guessing hashes or counts.
+Then requalify frozen source, Creator compile/probe, pack and original-byte closure
+on that exact source. Source merge alone never clears the separate Wizard 0.16
+feed-visibility/lineage hold or selects a Wizard candidate/publisher.
+
+The same manifest mismatch is an actual-consumer dependency inside .8:
+`ProductBoard.prepare` fetches `dist/dotnet/.config/dotnet-tools.json` from the
+chosen immutable kit revision and rejects 0.97.0 with loaded 0.99/0.99.1. The
+compiled probe injects a matching synthetic manifest; it proves neither the real
+fetch nor native receiver acceptance. The demonstrated canonical repair to 0.99
+supplies compatible source for a 0.99 receiver only once that exact immutable
+revision and actual caller have been qualified. A source-built 0.99.1 must continue
+to reject a real 0.99 manifest while the patch remains unpublished.
+
+After genuine patch publication, root can join the canonical pin update to 0.99.1
+with the mandatory publication projection and Wizard closure refresh. The canonical
+manifest is excluded from the frozen source-leaf roster and Kit distribution, so
+that isolated pin update does not itself require repacking the coherent patch.
+Select its immutable producer revision and verify real kit/driver leaf digests,
+loaded adapter digest, matching public tool version and actual preparation for
+fresh and retained/conflicting workspaces. This is the existing receiver boundary,
+not an automatic fleet default or installation. Templates full mode uses
+`--no-coordination`, so its public Wizard journey cannot close this Product V2 gap.
+
+Under Unified §9.9, the patch source changes no fresh workspace, installed tool,
+lifecycle default or enabled telemetry. Published package consumption and later
+explicit receiver selection are the first behavior changes; existing workspace
+upgrades retain independent preservation/conflict/rollback checks. No installed
+state repair, retrospective usage reconstruction, new Responses/Host operation
+or GPU claim is selected. Keep .8 and its existing §9.8 link open. This window stops
+at the local source-sequencing plan and typed return; root chooses the next window.
+
+### Compatible telemetry patch source preparation — 2026-10-07
+
+Root admitted local source preparation after canonical0.99 pin/main live checks and
+publication projection landed, through merge `65c8d8ced152cea2634e44521cf25a572c26f79c`.
+The same telemetry owner integrates qualified3e8 and prepares coherent0.99.1,
+prospectiveutel-rel-17, and an independently source-derived ProductBoard probe version.
+Published0.99 archives and frozen Wizard0.99 closure remain immutable and strict;
+current frozen source drift refusal is expected. Source/compiled qualification,
+canonical generated metadata, exact-head CI, publication, Wizard closure refresh
+and actual receiver acceptance remain separate pending boundaries. No operation,
+installation, default change or .8 completion follows. Native follow-up begin remains
+unavailable with genuine old lineage; no token, baseline or usage was substituted.

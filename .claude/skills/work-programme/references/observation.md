@@ -78,3 +78,27 @@ Cached input is still context; cumulative input counts repeated inference histor
 does not repair observation tokens, reconcile usage or establish authenticated item/dispatch attribution.
 Keep the original collector gap alongside these available diagnostics; do not label all native context
 observations unknown merely because the separate item-attribution path is unavailable.
+
+## Operational collection boundary
+
+Readiness is not collection health. For an admitted useful owner window, preserve the
+prospective begin/start lineage; record actual open/closing activity revisions at their
+observed times, then finish and bounded usage-reconcile after terminal. Missing tokens or
+pre-dispatch completed-turn baselines remain UNKNOWN; never substitute the programme root.
+Activity/review/complication evidence uses closed `{kind,digest}` objects, not strings.
+Attempt reviews require an admitted terminal invocation; item reviews require the complete
+settled expected population. Usage repeats exact native identities/counters once, never
+apportioned by elapsed time. Use the necessary exact-head delivery for CI collection.
+
+The prepared adapter canonically parses a new full batch before durable publication intent.
+A retained malformed intent stays immutable unless a separately qualified exact local
+engine returns its closed pre-publication-IO parser rejection bound to the original payload,
+destination and executable identity. Unknown/transport/foreign failures retain pending bytes;
+never clear state manually, forge a receipt or change identity to evade the hold. Root admits
+disposable proof, exact retained recovery and installation independently of source preparation.
+
+Report each metric's selected population/window/source cutoff, event/observation/receipt
+clocks, report time, lineage/attribution coverage and omissions. Historical gaps, zero rows,
+configready, helper success and updated dashboards cannot certify operational recovery or
+cost/efficiency compliance. See `docs/reference/local-telemetry-store.md` for the existing
+commands and concrete recipe. No automatic reviewer, provider interception or backfill follows.

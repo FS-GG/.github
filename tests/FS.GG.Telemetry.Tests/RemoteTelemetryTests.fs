@@ -161,6 +161,38 @@ module RemoteTelemetryTests =
 
     let resolve _ _ = Task.FromResult(Some(String('x', 32)))
 
+    [<Theory>]
+    [<InlineData("durably-received")>]
+    [<InlineData("applied")>]
+    [<InlineData("rejected")>]
+    [<InlineData("expired")>]
+    let ``current receipt serializer preserves all verified fields and newline`` status =
+        let parsed = RemoteContract.parseReceipt (receipt "batch-a" status) |> Result.defaultWith failwith
+        let output = RemoteContract.writeReceipt parsed |> Result.defaultWith failwith
+        Assert.True(output.Length <= 4096)
+        Assert.Equal(byte '\n', output[output.Length - 1])
+        Assert.Equal(Ok parsed, RemoteContract.parseReceipt output)
+        use document = JsonDocument.Parse output
+        Assert.Equal(8, document.RootElement.EnumerateObject() |> Seq.length)
+
+    [<Theory>]
+    [<InlineData("text")>]
+    [<InlineData("duplicate")>]
+    [<InlineData("trailing")>]
+    [<InlineData("oversize")>]
+    [<InlineData("code")>]
+    let ``current receipt refuses alternate and malformed ABIs`` mutation =
+        let valid = Encoding.UTF8.GetString(receipt "batch-a" "applied")
+        let altered =
+            match mutation with
+            | "text" -> "applied\n"
+            | "duplicate" -> valid.Replace("{", "{\"status\":\"applied\",")
+            | "trailing" -> valid + "{}"
+            | "oversize" -> valid + String.replicate 4096 " "
+            | "code" -> valid.Replace("\"code\":null", "\"code\":42")
+            | _ -> failwith "unknown mutation"
+        Assert.True(RemoteContract.parseReceipt (Encoding.UTF8.GetBytes altered) |> Result.isError)
+
     [<Fact>]
     let ``LEARN pre-dispatch facts are typed and bounded by the existing batch contract`` () =
         let bytes =
@@ -332,43 +364,19 @@ DELETE FROM schema_migrations WHERE version=14;
             downgrade11Command.CommandText <- "PRAGMA user_version;"
             Assert.Equal(11L, Convert.ToInt64(downgrade11Command.ExecuteScalar()))
             downgrade11.Close()
-            TelemetryStoreApplication.initialize root TelemetryStore.ApprovedLocalDurable
-            |> Result.defaultWith (String.concat "; " >> failwith) |> ignore
-            Assert.Equal<Map<string, int64>>(beforeVacuum, orders ())
-            let migrated11 =
-                TelemetryStoreApplication.dashboardSnapshot root TelemetryStore.ApprovedLocalDurable None
-                |> Result.defaultWith (String.concat "; " >> failwith)
-            use migrated11Envelope = JsonDocument.Parse migrated11
-            let migrated11Compressed = Convert.FromBase64String(migrated11Envelope.RootElement.GetProperty("canonicalSnapshotGzip").GetString())
-            use migrated11Input = new MemoryStream(migrated11Compressed)
-            use migrated11Gzip = new GZipStream(migrated11Input, CompressionMode.Decompress)
-            use migrated11Canonical = JsonDocument.Parse migrated11Gzip
-            for row in migrated11Canonical.RootElement.GetProperty("learningObservations").EnumerateArray() do
-                Assert.Equal(JsonValueKind.Null, row.GetProperty("receipt_role").ValueKind)
-
-            use downgrade = new SqliteConnection($"Data Source={databasePath};Pooling=False")
-            downgrade.Open()
-            use downgradeCommand = downgrade.CreateCommand()
-            downgradeCommand.CommandText <-
-                removeCorrectionSchema + "DROP TABLE fact_admissions; DROP TABLE receipt_admissions; ALTER TABLE receipt_producers DROP COLUMN grant_generation; ALTER TABLE receipt_producers DROP COLUMN grant_id; ALTER TABLE receipt_producers DROP COLUMN authority_role; DELETE FROM schema_migrations WHERE version=12; DROP TABLE learning_fact_order; DELETE FROM schema_migrations WHERE version=11; PRAGMA user_version=10;"
-            downgradeCommand.ExecuteNonQuery() |> ignore
-            downgradeCommand.CommandText <- correctionObjects
-            Assert.Equal(0L, Convert.ToInt64(downgradeCommand.ExecuteScalar()))
-            downgradeCommand.CommandText <- "PRAGMA user_version;"
-            Assert.Equal(10L, Convert.ToInt64(downgradeCommand.ExecuteScalar()))
-            downgrade.Close()
-            TelemetryStoreApplication.initialize root TelemetryStore.ApprovedLocalDurable
-            |> Result.defaultWith (String.concat "; " >> failwith) |> ignore
-            let upgraded =
-                TelemetryStoreApplication.dashboardSnapshot root TelemetryStore.ApprovedLocalDurable None
-                |> Result.defaultWith (String.concat "; " >> failwith)
-            use upgradedEnvelope = JsonDocument.Parse upgraded
-            let upgradedCompressed = Convert.FromBase64String(upgradedEnvelope.RootElement.GetProperty("canonicalSnapshotGzip").GetString())
-            use upgradedInput = new MemoryStream(upgradedCompressed)
-            use upgradedGzip = new GZipStream(upgradedInput, CompressionMode.Decompress)
-            use upgradedCanonical = JsonDocument.Parse upgradedGzip
-            for row in upgradedCanonical.RootElement.GetProperty("learningObservations").EnumerateArray() do
-                Assert.Equal(JsonValueKind.Null, row.GetProperty("ingest_order").ValueKind)
+            // Historical11 is now a refusal corpus, never an automatic upgrade promise.
+            Assert.True(TelemetryStoreApplication.initialize root TelemetryStore.ApprovedLocalDurable |> Result.isError)
+            Assert.True(TelemetryStoreApplication.migrate13ToCurrent root TelemetryStore.ApprovedLocalDurable |> Result.isError)
+            downgrade11.Open()
+            downgrade11Command.CommandText <- "PRAGMA user_version;"
+            Assert.Equal(11L, Convert.ToInt64(downgrade11Command.ExecuteScalar()))
+            downgrade11Command.CommandText <- correctionObjects
+            Assert.Equal(0L, Convert.ToInt64(downgrade11Command.ExecuteScalar()))
+            downgrade11Command.CommandText <- "SELECT f.kind,o.sequence FROM learning_fact_order o JOIN ingest_facts f ON f.identity=o.identity WHERE f.kind IN ('learn-shared-cost-allocation/1','learn-experiment-assignment');"
+            use retainedOrder = downgrade11Command.ExecuteReader()
+            let retained = ResizeArray<string * int64>()
+            while retainedOrder.Read() do retained.Add(retainedOrder.GetString 0, retainedOrder.GetInt64 1)
+            Assert.Equal<Map<string,int64>>(beforeVacuum, retained |> Map.ofSeq)
         finally
             if Directory.Exists root then Directory.Delete(root, true)
 
@@ -763,7 +771,10 @@ DELETE FROM schema_migrations WHERE version=14;
                     CancellationToken.None
 
             match result with
-            | RemoteClient.Acknowledged value -> Assert.Equal("batch-a", value.BatchId)
+            | RemoteClient.Acknowledged value ->
+                Assert.Equal("batch-a", value.BatchId)
+                let currentAbi = RemoteContract.writeReceipt value |> Result.defaultWith failwith
+                Assert.Equal(Ok value, RemoteContract.parseReceipt currentAbi)
             | _ -> Assert.Fail "expected acknowledgement"
         }
 

@@ -316,6 +316,13 @@ jobs:
       - name: Critic succession's refusals can still say NO — measured, one mutant per refusal
         run: bash tests/review-critic-succession-wire/run.sh
 
+      # Core is a separate test assembly; the CLI suite cannot discover its store and parser controls.
+      - name: Test — core telemetry contracts and source binding
+        run: dotnet test tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj -c Release --no-restore --logger "console;verbosity=normal" --logger "trx;LogFileName=core.trx" --results-directory "$RUNNER_TEMP/coord-engine/core"
+
+      - name: Non-vacuity — the Core run must have executed tests
+        run: python3 scripts/read-trx-count.py "$RUNNER_TEMP/coord-engine/core/core.trx" --minimum 20 --label "coord-engine (Core)" --summary-file "$GITHUB_STEP_SUMMARY"
+
       - name: Test — the wire contract, and the residue rule
         run: dotnet test tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj -c Release --logger "console;verbosity=normal" --logger "trx;LogFileName=cli.trx" --results-directory "$RUNNER_TEMP/coord-engine/cli"
 

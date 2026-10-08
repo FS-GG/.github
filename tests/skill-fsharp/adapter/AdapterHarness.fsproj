@@ -6,6 +6,7 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="FSharp.Core" />
+    <ProjectReference Include="../../../src/FS.GG.Coord.Core/FS.GG.Coord.Core.fsproj" />
     <Compile Include="$(ReaderSourceRoot)/SkillTelemetryReaders.fsi" Link="SkillTelemetryReaders.fsi" />
     <Compile Include="$(ReaderSourceRoot)/SkillTelemetryReaders.fs" Link="SkillTelemetryReaders.fs" />
     <Compile Include="../../../src/FS.GG.Coord.Cli/SkillTelemetryAdapter.fsi" Link="SkillTelemetryAdapter.fsi" />

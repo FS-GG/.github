@@ -26,6 +26,7 @@
 # NO NETWORK, no build, no `dotnet`: the gate is a function of committed source.
 
 set -euo pipefail
+shopt -s inherit_errexit
 
 export PYTHONDONTWRITEBYTECODE=1
 # The gate orders projects with Python's `sorted`, which is codepoint order. `sort` must agree, or
@@ -37,36 +38,93 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 REPO="$(cd "$HERE/../.." && pwd)"
 GATE="$REPO/scripts/check-signature-doc-siting.py"
 
-WORK="$(mktemp -d "${TMPDIR:-/tmp}/signature-doc-siting-fixture.XXXXXX")"
-trap 'rm -rf "$WORK"' EXIT
+MODE=full
+PYTHON=python3
+python_selected=0
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --mutation-stop-on-failure) [ "$MODE" = full ] || exit 64; MODE=first-failure; shift ;;
+    --python) [ "$python_selected" -eq 0 ] && [ "$#" -ge 2 ] && [ -n "$2" ] || exit 64; PYTHON="$2"; python_selected=1; shift 2 ;;
+    *) echo "unknown fixture argument: $1" >&2; exit 64 ;;
+  esac
+done
 
 pass=0
 failcount=0
+WORK=""
+requested=0
+complete=0
+status=infrastructure-error
+finish() {
+  local rc=$?
+  trap - EXIT
+  if [ -n "$WORK" ] && ! rm -rf -- "$WORK"; then
+    requested=0
+    rc=70
+  fi
+  if [ "$requested" -ne 1 ]; then
+    status=infrastructure-error
+    complete=0
+    rc=70
+  fi
+  printf 'fixture-result-v1 mode=%s complete=%s passed=%s failed=%s status=%s\n' "$MODE" "$complete" "$pass" "$failcount" "$status" || exit 70
+  exit "$rc"
+}
+trap finish EXIT
+for tool in "$PYTHON" mktemp rm grep sed find sort awk uniq tr cp cat mkdir rmdir dirname; do
+  command -v -- "$tool" >/dev/null || exit 70
+done
+WORK="$(mktemp -d "${TMPDIR:-/tmp}/signature-doc-siting-fixture.XXXXXX")"
+finalize() {
+  complete="$1"
+  status="$2"
+  requested=1
+  exit "$3"
+}
+infrastructure_error() {
+  echo "fixture infrastructure error: $1" >&2
+  if [ -n "$WORK" ]; then : > "$WORK/infrastructure-error"; fi
+  requested=0
+  exit 70
+}
+check_process() {
+  # Reserved shell statuses, timeout and signals are never assertion failures.
+  [ "$1" -lt 124 ] || infrastructure_error "process unavailable, timed out or signaled (exit $1)"
+}
 ok() {
+  [ ! -f "$WORK/infrastructure-error" ] || infrastructure_error "dependent helper failed"
   echo "PASS  $1"
   pass=$((pass + 1))
 }
 bad() {
+  [ ! -f "$WORK/infrastructure-error" ] || infrastructure_error "dependent helper failed"
   echo "FAIL  $1"
   [ -n "${2:-}" ] && printf '%s\n' "$2" | sed 's/^/    | /'
   failcount=$((failcount + 1))
+  if [ "$MODE" = first-failure ]; then finalize 0 assertion-failed 1; fi
 }
 
-# `grep -qE -- "$re" <<<"$haystack"` rather than a pipe into `grep -q`: under `pipefail` a pipeline
-# ending in an early-exiting reader can report 141 for a haystack that plainly matches (.github#2668).
-matches() { grep -qE -- "$2" <<<"$1"; }
+# grep 0/1 is match/no-match; unavailable tools or malformed patterns are no verdict.
+checked_grep() {
+  local rc=0
+  grep "$@" || rc=$?
+  if [ "$rc" -gt 1 ]; then infrastructure_error "grep failed (exit $rc)"; fi
+  return "$rc"
+}
+matches() { checked_grep -qE -- "$2" <<<"$1"; }
 
 # run_gate <root> [<baseline>] -> sets RC and OUT
 run_gate() {
   local root="$1" baseline="${2:-}"
   set +e
   if [ -n "$baseline" ]; then
-    OUT="$(python3 "$GATE" --root "$root" --baseline "$baseline" 2>&1)"
+    OUT="$("$PYTHON" "$GATE" --root "$root" --baseline "$baseline" 2>&1)"
   else
-    OUT="$(python3 "$GATE" --root "$root" 2>&1)"
+    OUT="$("$PYTHON" "$GATE" --root "$root" 2>&1)"
   fi
   RC=$?
   set -e
+  check_process "$RC"
 }
 
 # must_exit <name> <expected-rc> <pattern> <root> [<baseline>]
@@ -90,7 +148,7 @@ must_exit() {
 must_line() {
   local name="$1" want="$2" root="$3" baseline="${4:-}"
   run_gate "$root" "$baseline"
-  if grep -qxF -- "$want" <<<"$OUT"; then
+  if checked_grep -qxF -- "$want" <<<"$OUT"; then
     ok "$name"
   else
     bad "$name (no line equal to: $want)" "$OUT"
@@ -111,7 +169,7 @@ must_line() {
 must_text() {
   local name="$1" want="$2" root="$3" baseline="${4:-}"
   run_gate "$root" "$baseline"
-  if grep -qF -- "$want" <<<"$OUT"; then
+  if checked_grep -qF -- "$want" <<<"$OUT"; then
     ok "$name"
   else
     bad "$name (no text equal to: $want)" "$OUT"
@@ -126,7 +184,8 @@ must_text() {
 
 # subject_files <root> — every .fs under <root>/src, outside obj|bin, that has a sibling .fsi
 subject_files() {
-  local f
+  local f files
+  files="$(find "$1/src" -name '*.fs' -not -path '*/obj/*' -not -path '*/bin/*' | sort)" || infrastructure_error "subject discovery failed"
   # An explicit `if`, not `[ -f … ] && printf`: under `set -e` the AND-list is the last command in
   # the loop body, and whether a false test then ends the loop is a subtlety no reader should have
   # to adjudicate. Measured either way here (the loop does continue, and `src/` has 4 non-subjects
@@ -134,7 +193,7 @@ subject_files() {
   # is this row's subject, so the construct is written so it cannot.
   while IFS= read -r f; do
     if [ -f "${f}i" ]; then printf '%s\n' "$f"; fi
-  done < <(find "$1/src" -name '*.fs' -not -path '*/obj/*' -not -path '*/bin/*' | sort)
+  done <<<"$files"
 }
 
 # expected_breakdown <root> — "subjects by project: <dir> <n>, ..." as the gate must print it
@@ -144,7 +203,7 @@ expected_breakdown() {
     | sed "s|^$root/src/||" \
     | awk -F/ 'NF>1 {print $1; next} {print "(root)"}' \
     | sort | uniq -c | sort -k2,2 \
-    | awk '{printf "%s%s %s", (NR>1 ? ", " : ""), $2, $1} END {print ""}')"
+    | awk '{printf "%s%s %s", (NR>1 ? ", " : ""), $2, $1} END {print ""}')" || infrastructure_error "project population derivation failed"
   if [ -z "$body" ]; then
     echo "subjects by project: (none)"
   else
@@ -195,10 +254,11 @@ must_exit "green: an implementation with a sibling .fsi and no doc comment" 0 "O
 # sweep. It is not dead code, though — a contributor debugging this gate runs it with no arguments
 # from the repository root, and that is the path exercised here.
 set +e
-NOFLAG_OUT="$(cd "$GREEN" && python3 "$GATE" 2>&1)"
+NOFLAG_OUT="$(cd "$GREEN" && "$PYTHON" "$GATE" 2>&1)"
 NOFLAG_RC=$?
 set -e
-if [ "$NOFLAG_RC" -eq 0 ] && grep -qxF -- "OK: every subject file matches its baseline entry exactly." <<<"$NOFLAG_OUT"; then
+check_process "$NOFLAG_RC"
+if [ "$NOFLAG_RC" -eq 0 ] && checked_grep -qxF -- "OK: every subject file matches its baseline entry exactly." <<<"$NOFLAG_OUT"; then
   ok "green: with NO --root at all, the default resolves to the working directory"
 else
   bad "green: with NO --root at all, the default resolves to the working directory (exit $NOFLAG_RC)" "$NOFLAG_OUT"
@@ -1167,9 +1227,11 @@ helptext() {
   set +e
   # COLUMNS pins the formatter's width: at the default it hyphen-breaks the default baseline PATH
   # across two lines, and a leg written around that break would assert the terminal, not the gate.
-  HELP="$(COLUMNS=200 python3 "$GATE" --help 2>&1 | tr '\n' ' ' | tr -s ' ')"
+  HELP="$(COLUMNS=200 "$PYTHON" "$GATE" --help 2>&1)"
   HRC=$?
   set -e
+  check_process "$HRC"
+  HELP="$(printf '%s\n' "$HELP" | tr '\n' ' ' | tr -s ' ')"
 }
 helptext
 if [ "$HRC" -ne 0 ]; then
@@ -1203,9 +1265,10 @@ spec.loader.exec_module(module)
 print("imported cleanly; char_literal_end =", module.char_literal_end("'x'", 0))
 PY
 set +e
-IMPORTOUT="$(python3 "$WORK/import-probe.py" "$GATE" 2>&1)"
+IMPORTOUT="$("$PYTHON" "$WORK/import-probe.py" "$GATE" 2>&1)"
 IMPORTRC=$?
 set -e
+check_process "$IMPORTRC"
 if [ "$IMPORTRC" -ne 0 ]; then
   bad "importing the gate as a module does not run or exit it" "$IMPORTOUT"
 elif ! matches "$IMPORTOUT" "^imported cleanly; char_literal_end = 3$"; then
@@ -1264,4 +1327,4 @@ must_exit "REAL-3: a doc comment reintroduced into a swept file reds the gate" 1
 
 echo
 echo "signature-doc-siting fixture: $pass passed, $failcount failed"
-[ "$failcount" -eq 0 ] || exit 1
+if [ "$failcount" -eq 0 ]; then finalize 1 passed 0; else finalize 1 assertion-failed 1; fi

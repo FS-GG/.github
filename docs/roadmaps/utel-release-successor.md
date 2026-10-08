@@ -266,4 +266,35 @@ receiver enrollment, Manager installation, provider execution or assessment
 acceptance; those remain in the [efficiency plan](process-efficiency-telemetry.md).
 Retained state and historical unknown usage must remain intact through their separately
 admitted installed operations. These instructions select no new host, credential or
-service-control authority. Both candidate qualification and publication remain pending.
+service-control authority. Host0.5 publication is now reconciled from exact source
+`64e95ebec1a8294e16edaafdb27e6aa96f32c6f7`, successful publisher
+[`37567512069`](https://github.com/FS-GG/.github/actions/runs/37567512069)
+and immutable release [`telemetry-host/v0.5.0`](https://github.com/FS-GG/.github/releases/tag/telemetry-host/v0.5.0).
+Its protected `utel-host-rel-11` journal retains generation17/eight verified effects.
+Installed receiver qualification remains pending.
+
+### Accepted 0.99 publication and prepared compatible patch — 2026-10-07
+
+Root accepted publisher `37566865635/a1`, promoted release `405346080` and both-feed
+readbacks for coherent0.99.0 at source `64e95ebec1a8294e16edaafdb27e6aa96f32c6f7`.
+These immutable receipts supersede the earlier pending-publication checkpoint.
+
+UTEL-REL-17 prepares coherent **0.99.1**, genuine promoted predecessor **0.99.0**
+and prospective protected journal `refs/heads/fsgg/v2/journal/release/utel-rel-17`.
+The patch integrates qualified local telemetry3e8: one bounded1MiB private-state
+reader/writer contract including newline, with refusal preserving full originals.
+It changes no public signature, schema or cost counter. Keep the original incomplete
+130s window distinct from the passing candidate suite and standalone red control.
+
+Source preparation is not a candidate, publication, installed adoption or receiver
+acceptance. Retain all sixteen effect admissions, exact-main/first-attempt/source
+and original-byte recovery guards. Root separately admits qualification and any
+both-feed operation after fresh coordinate, predecessor/channel and journal checks.
+Canonical tool pin and frozen Wizard dependency remain published0.99; current frozen
+source guard must refuse the changed compiled leaf before acquisition. Host0.5,
+private stores, credentials, grants, defaults and unknown historical usage remain intact.
+
+
+## Selected breaking coherent successor — 2026-10-08
+
+Current source selects coherent **0.100.0** for Kit, Drivers and CLI with prospective journal `refs/heads/fsgg/v2/journal/release/utel-rel-18`; genuine promoted predecessor remains **0.99.0**. The earlier **0.99.1/utel-rel-17** preparation above is retained historical source work. The new stable0.x minor carries one current receipt ABI, current14 normal init/restore, explicit13 maintenance and scoped14 private dashboard. Historical SQL/digests and all six preservation controls remain; no installed mutation or original-root recovery is established. Keep the same actual candidate archive, first-attempt/exact-main/full qualification, all sixteen durable effect admissions, original-byte recovery and both-feed coherence guards. Coordinate/journal collision absence, candidate qualification, publication, installed adoption and native acceptance remain pending. Host0.5 source/published remains a separate axis; its published frontier was reconciled from the immutable release and exact protected publication evidence. Canonical0.99 pin and frozen Wizard dependency remain historical published bytes.

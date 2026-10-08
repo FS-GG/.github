@@ -1506,3 +1506,10 @@ module TelemetryCliTests =
     let ``compact dashboard version three keeps ordinary command shape`` () =
         Assert.Equal(Some(Ok()), TelemetryApplication.validateInvocation [ "telemetry"; "item-detail"; "--format-version"; "3"; "--all" ])
         Assert.True(TelemetryApplication.validateInvocation [ "telemetry"; "item-detail"; "--format-version"; "3"; "--all"; "--invented-bound"; "65536" ] |> Option.exists Result.isError)
+
+    [<Fact>]
+    let ``explicit13 maintenance commands have closed independent invocation shapes`` () =
+        Assert.Equal(Some(Ok()), TelemetryApplication.validateInvocation [ "telemetry"; "store"; "migrate13"; "--store-root"; "/private/store" ])
+        Assert.Equal(Some(Ok()), TelemetryApplication.validateInvocation [ "telemetry"; "store"; "import13"; "--store-root"; "/private/fresh"; "--input"; "/private/backup"; "--workspace"; "workspace-a" ])
+        Assert.True(TelemetryApplication.validateInvocation [ "telemetry"; "store"; "migrate13"; "--input"; "/private/backup" ] |> Option.exists Result.isError)
+        Assert.True(TelemetryApplication.validateInvocation [ "telemetry"; "store"; "import13"; "--auto-migrate" ] |> Option.exists Result.isError)
