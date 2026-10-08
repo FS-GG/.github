@@ -746,14 +746,15 @@ module LandableTests =
         // GitHub's own status/conclusion vocabulary, a verdict word this module projects, or one of the two
         // documented `NoDerivation` sentences. A NEW literal reds this test until somebody adds it here
         // deliberately, which is exactly the review moment the hand-written set never got.
-        let rec repoRoot (dir: string) =
-            if File.Exists(Path.Combine(dir, "src/FS.GG.Coord.Core/Landable.fs")) then
-                dir
-            else
-                repoRoot (Directory.GetParent(dir).FullName)
-
+        // Bind the source scan to the source used to compile this test rather than
+        // the test host's working directory or binary output directory.
         let path =
-            Path.Combine(repoRoot (Directory.GetCurrentDirectory()), "src/FS.GG.Coord.Core/Landable.fs")
+            Path.GetFullPath(
+                Path.Combine(__SOURCE_DIRECTORY__, "..", "..", "src", "FS.GG.Coord.Core", "Landable.fs")
+            )
+
+        if not (File.Exists path) then
+            failwithf "LandableTests: compiled test source file is unavailable: %s" path
 
         // Comments cut at `//`, which is sound here because no string literal in this module contains one —
         // a property the allow-list below independently enforces, since a literal carrying `//` would be
