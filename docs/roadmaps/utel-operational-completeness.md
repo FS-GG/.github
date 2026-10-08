@@ -188,7 +188,8 @@ The supported collection/recovery recipe is in the [local-store reference](../re
 
 Static source checks do not qualify final compiled source, canonical generators, publication,
 installed engine selection, schema compatibility or receiver recovery. Existing0.99 bytes
-remain immutable;0.99.1 remains prepared only. Keep separate original3e8 positive/red
+remain immutable; the initial0.99.1 preparation is superseded by the published0.100.0
+source recorded below. Keep separate original3e8 positive/red
 receipts and the incomplete original130s window. No state edit, replay, migration,
 activation, provider operation or fleet/default change is selected by source preparation.
 
@@ -206,3 +207,60 @@ This operational window and §9.8 stay open through actual collection/receiver a
 ## Current-only receipt and recovery boundary — 2026-10-08
 
 Current supported local/remote workspace submit uses one exact JSON receipt ABI. The adapter retains pending input and sequence on malformed, foreign, transport or receiver error; an `invalid-request` substring is not no-publication-IO proof. Population-only binding requires applied rather than durable receipt. Current store/readers select14 with explicit authentic13 maintenance. The installed0.99.0 original root and pending operation remain held; source edits, pending-free backup fixtures and synthetic1MiB framing do not establish original-state recovery or observed usage. Qualification, publication, installed provenance and separately admitted original-identity receiver-effects inspection remain necessary.
+
+## Exact host installation source and observed-state reconciliation — 2026-10-08
+
+Coherent `0.100.0` is already [published](https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.100.0)
+from `3ed8ad419a64253ca6f665e9779e5e4d110f50a5`; publication is not another prerequisite run.
+The preceding prepared-`0.99.1` source window is historical. Campaign `unified-roadmap-20261003`,
+original item `telemetry-dispatch-state-source-repair`, and original root/reader custody continue.
+Read-only host metadata now shows both version directories and a selector targeting `0.100.0`.
+Those paths do not establish installation origin, verified payload, process termination or receiver
+acceptance. Do not reinstall, reset the selector or replay the original reader to reconcile them.
+
+- [x] **UTEL-100-HOST-01 — Exact installer source preparation — routine.** The durable source is
+  [`scripts/update-fsgg-coord-cli`](../../scripts/update-fsgg-coord-cli) and its adjacent Python helper.
+  It succeeds the existing 3,359-byte host script (SHA-256
+  `4646925112f98b46cd86b5086157e37138b3938ff515a4993f50cc85bbc3c0b5`). No managed predecessor
+  was found in the bounded source-location search; the installed helper is not patched by source delivery.
+  The explicit `--version 0.100.0 --install-only --manifest PATH --archive PATH` recipe uses retained,
+  pinned promoted-release/public-package bytes, the ordinary supported installer, isolated caches and a
+  public-only NuGet config. Child HOME is disposable; [documented SDK first-use controls](https://learn.microsoft.com/en-us/dotnet/core/tools/dotnet-environment-variables)
+  disable development-certificate generation and global-tool PATH changes. MSBuild server/node reuse
+  is disabled for any restore path that uses it; this recipe invokes no compilation command.
+  It keeps the existing lock inode, refuses an existing destination, verifies
+  every packaged tool before and after the absolute version-only command, classifies generated files
+  as observed SDK output, and witnesses selector equality. A dangling selector already targeting the
+  new destination refuses because filling that directory could implicitly activate it. Partial installs
+  and private command logs are retained; failure or reporting does not replace the first cause.
+  Disposable tests exercise the source main entry and actual shell wrapper with fake installer/version
+  commands, including the retained public archive. All 18 focused cases passed; routine eligibility
+  and operation-boundary fixtures also passed. They establish source behavior only. Deployment must
+  copy both source files together beside each other at the existing updater location; deployment and
+  native execution are separate operator-owned effects. No latest query or activation mode is provided.
+- [ ] **UTEL-100-HOST-02 — Original installed-state reconciliation and native version-only acceptance.**
+  Parent/original owner must resolve the already observed installation/selector against original effect
+  identities. Accept existing evidence when sufficient; otherwise name the missing payload/runtime or
+  terminal/cleanup fact before selecting one bounded operation. SDK-origin investigation remains paused.
+  The installer bounds retained child streams and elapsed work and records direct-child termination/EOF.
+  It inherits the operation owner's runtime resource policy rather than imposing virtual-memory,
+  process-wide file-size or GC limits. Stream limits are not filesystem quotas. An unreaped direct
+  child pins the group number for owned cleanup; a previously reaped leader with open pipes records
+  an unsupported group-custody boundary and is never signalled by stale numeric PGID. Neither result
+  qualifies whole-process-tree cleanup or SDK authenticity from fixtures.
+- [ ] **UTEL-100-HOST-03 — Separate selector and receiver recovery.** Decide whether selector action is
+  needed only after original-effect reconciliation. Retained-store maintenance, supported original-intent
+  observation/recovery and a useful prospective telemetry journey remain pending. Current14/authentic13
+  boundaries stay in force. Source preparation selects no migration, retry, reader or store operation.
+
+No generated-workspace, SDD/Templates, provider or lifecycle-default change is part of this host source
+window. Fifteen prior synthetic adoption cases retain their original scope; no fixture permit or SDK
+reconstruction gate becomes user authority. Historical usage and missing native dispatch collection
+remain unknown, and no programme efficiency or installed-adoption claim follows from these tests.
+
+A later, separately owned version-only observation executed the verified published entry DLL
+with the already available runtime `10.0.12`: exit 0, exact `0.100.0.0` stdout with newline,
+empty stderr, direct terminal and complete pipes, with the selector unchanged. This qualifies
+that narrow call only; installation/shim provenance, whole custody and receiver acceptance
+remain open. The predecessor CoreCLR initialization failure remains retained. The installer
+source fixture results do not supply this native evidence or widen its scope.

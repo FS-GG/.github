@@ -672,7 +672,7 @@ Use an open activity followed by its closing revision; nested evidence is an arr
 Missing prospective tokens or completed-turn baselines remain UNKNOWN; a root token
 cannot substitute for an owner's missing baseline.
 
-The prepared0.99.1 adapter validates every newly assembled wire batch with the canonical
+The published0.100.0 adapter validates every newly assembled wire batch with the canonical
 Store parser before changing durable sequence/pending intent or invoking the publisher.
 The64KiB batch limit and1MiB private-state limit are independent. Invalid nested fields,
 counts, categories and timestamps retain original bytes and invoke no publisher.
@@ -695,3 +695,8 @@ report pending/unavailable and page/lineage gaps without blocking native deliver
 Each metric must name its population/window, source cutoff and observation/receipt clocks,
 report time and omissions. No helper exit, empty inbox or refreshed report proves collection
 or efficiency. Never backdate activities/reviews or reconstruct unavailable usage.
+
+The [exact host installation window](../roadmaps/utel-operational-completeness.md#exact-host-installation-source-and-observed-state-reconciliation--2026-10-08)
+keeps source delivery, observed existing installation, selector state and original receiver recovery
+separate. An existing version directory is a reconciliation boundary, never permission to reinstall
+or retry retained telemetry. SDK-origin investigation and original unknown effects remain held.
