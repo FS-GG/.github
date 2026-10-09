@@ -495,3 +495,97 @@ let ``UTEL-06C unsupported trigger and external checks remain explicit gaps`` ()
         Assert.Contains("external-checks-not-attributed", result.Gaps)
         Assert.Equal(1, result.ExternalChecks)
     | Error error -> failwithf "%A" error
+
+let private targetRelation repository relationHead relationBase =
+    $"""{{"number":7,"head":{{"sha":"{relationHead}","repo":{{"id":42,"full_name":"{repository}"}}}},"base":{{"sha":"{relationBase}","repo":{{"id":42,"full_name":"o/r"}}}}}}"""
+
+let private targetRun relations =
+    (run 123 1).Replace("\"pull_request\"", "\"pull_request_target\"")
+        .Replace("\"pull_requests\":[]", "\"repository\":{\"id\":42,\"full_name\":\"o/r\"},\"pull_requests\":[" + relations + "]")
+
+[<Fact>]
+let ``UTEL-CI-02 native target relation requires exactly one complete revision tuple`` () =
+    let exact = targetRelation "o/r" head baseSha
+    let cases =
+        [ exact, CiReads.Exact
+          "", CiReads.Missing
+          exact + "," + exact, CiReads.Conflicting
+          targetRelation "foreign/r" head baseSha, CiReads.Conflicting
+          targetRelation "o/r" (String.replicate 40 "b") baseSha, CiReads.Conflicting
+          targetRelation "o/r" head (String.replicate 40 "b"), CiReads.Conflicting
+          exact.Replace("\"number\":7", "\"number\":8"), CiReads.Conflicting
+          "{\"number\":7}", CiReads.Missing ]
+    for relations, expected in cases do
+        use doc = System.Text.Json.JsonDocument.Parse(targetRun relations)
+        Assert.Equal(expected, CiReads.targetAssociation "o/r" 7 head (Some baseSha) doc.RootElement)
+    use title = System.Text.Json.JsonDocument.Parse((targetRun "").Replace("\"status\"", "\"display_title\":\"PR 7 head " + head + "\",\"status\""))
+    Assert.Equal(CiReads.Missing, CiReads.targetAssociation "o/r" 7 head (Some baseSha) title.RootElement)
+
+[<Fact>]
+let ``UTEL-CI-02 population retains empty target join gap without collecting attributable jobs`` () =
+    let row = targetRun ""
+    let page = response ("{\"total_count\":1,\"workflow_runs\":[" + row + "]}") None
+    let fake = Fake [ populationPr head; page; response "{\"total_count\":0,\"check_runs\":[]}" None; page; response "{\"total_count\":0,\"check_runs\":[]}" None ]
+    match discover fake false with
+    | Error error -> failwithf "%A" error
+    | Ok result ->
+        Assert.Single(result.Snapshot.Runs) |> ignore
+        Assert.Empty result.Snapshot.Jobs
+        Assert.Contains("target-association:123:1:Missing", result.Gaps)
+        Assert.Equal("partial", result.Snapshot.LineageCoverage)
+        Assert.DoesNotContain(fake.Requests, fun request -> request.Path.EndsWith("/jobs"))
+
+[<Fact>]
+let ``UTEL-CI-01 contents endpoint pins repository and immutable head and refuses alternate shapes`` () =
+    let bytes = System.Text.Encoding.UTF8.GetBytes("{\"schema\":\"fsgg.telemetry.ci-attribution/1\",\"rules\":[]}")
+    let body = $"""{{"type":"file","path":".fsgg/telemetry-ci-attribution.json","encoding":"base64","content":"{System.Convert.ToBase64String bytes}"}}"""
+    let fake = Fake [ response body None ]
+    Assert.Equal(Ok(Some bytes), CiReads.readAttributionProfile (fake :> ISinglePageGitHubTransport) "o/r" head)
+    Assert.Equal("repos/o/r/contents/.fsgg/telemetry-ci-attribution.json", fake.Requests.Head.Path)
+    Assert.Equal<(string * string) list>([ "ref", head ], fake.Requests.Head.Query)
+    for invalid in [ "[]"; body.Replace("\"file\"", "\"symlink\""); body.Replace("base64", "none"); body.Replace("telemetry-ci-attribution.json", "other.json") ] do
+        let bad = Fake [ response invalid None ]
+        Assert.Equal(Ok None, CiReads.readAttributionProfile (bad :> ISinglePageGitHubTransport) "o/r" head)
+
+[<Fact>]
+let ``UTEL-CI-02 native abbreviated repositories use IDs and conflicting source fields refuse`` () =
+    let exact = targetRun (targetRelation "o/r" head baseSha)
+    use native = System.Text.Json.JsonDocument.Parse(exact.Replace("\"repo\":{\"id\":42,\"full_name\":\"o/r\"}", "\"repo\":{\"id\":42}"))
+    Assert.Equal(CiReads.Exact, CiReads.targetAssociation "o/r" 7 head (Some baseSha) native.RootElement)
+    for body in [ exact.Replace("\"repo\":{\"id\":42", "\"repo\":{\"id\":43")
+                  exact.Replace("\"run_attempt\":1", "\"run_attempt\":0")
+                  exact.Replace("\"number\":7", "\"number\":7,\"number\":8")
+                  exact.Replace("\"status\"", "\"head_repository\":{\"id\":99},\"status\"") ] do
+        use doc = System.Text.Json.JsonDocument.Parse body
+        Assert.NotEqual(CiReads.Exact, CiReads.targetAssociation "o/r" 7 head (Some baseSha) doc.RootElement)
+    for relation in [ "null"; "false"; "7"; "\"title\"" ] do
+        use doc = System.Text.Json.JsonDocument.Parse(targetRun relation)
+        Assert.Equal(CiReads.Missing, CiReads.targetAssociation "o/r" 7 head (Some baseSha) doc.RootElement)
+
+[<Fact>]
+let ``UTEL-CI-02 legacy collection refuses empty target and accepts complete native tuple`` () =
+    for relations, exact in [ "", false; targetRelation "o/r" head baseSha, true ] do
+        let responses =
+            [ populationPr head
+              response ("{\"total_count\":1,\"workflow_runs\":[" + targetRun relations + "]}") None ]
+            @ (if exact then [ response "{\"total_count\":0,\"jobs\":[]}" None; response "{\"run_attempt\":1}" None ] else [])
+        let fake = Fake responses
+        match CiReads.collect (fake :> ISinglePageGitHubTransport) "https://api.github.com" "o" "r" 7 head "ci.yml", exact with
+        | Ok snapshot, true -> Assert.Equal(CiReads.Exact, snapshot.Runs.Head.TargetAssociation)
+        | Ok snapshot, false ->
+            Assert.Equal(Some "target-association:Missing", snapshot.Diagnostic)
+            Assert.Empty snapshot.Jobs
+        | other -> failwithf "%A" other
+
+[<Fact>]
+let ``UTEL-CI-02 legacy target rerun does not clone latest association into unwitnessed attempt`` () =
+    let latest = (targetRun (targetRelation "o/r" head baseSha)).Replace("\"run_attempt\":1", "\"run_attempt\":2")
+    let fake = Fake [ populationPr head; response ("{\"total_count\":1,\"workflow_runs\":[" + latest + "]}") None ]
+    match CiReads.collect (fake :> ISinglePageGitHubTransport) "https://api.github.com" "o" "r" 7 head "ci.yml" with
+    | Error error -> failwithf "%A" error
+    | Ok snapshot ->
+        Assert.Equal(Some "target-association:Missing:unwitnessed-attempt", snapshot.Diagnostic)
+        Assert.Empty snapshot.Jobs
+        Assert.Single snapshot.Runs |> ignore
+        Assert.Equal(2, snapshot.Runs.Head.Attempt)
+        Assert.Equal(2, fake.Requests.Length)

@@ -358,3 +358,134 @@ module TelemetryCiApplicationTests =
         finally
             Console.SetOut priorOut
             Console.SetError priorError
+
+    let private profile rule =
+        System.Text.Encoding.UTF8.GetBytes("{\"schema\":\"fsgg.telemetry.ci-attribution/1\",\"rules\":[" + rule + "]}")
+
+    let private exactRule =
+        """{"workflow":".github/workflows/ci.yml","job":"build","step":"test","classification":"mixed","rationale":"Validation and policy work execute in one native step."}"""
+
+    [<Fact>]
+    let ``UTEL-CI-01 exact tuple matching preserves mixed and refuses aliases or malformed profiles`` () =
+        let classify bytes workflow job step = TelemetryCiApplication.classifyProfileForTesting bytes workflow job step
+        let bytes = profile exactRule
+        Assert.Equal(Ok("mixed", "Validation and policy work execute in one native step."), classify bytes ".github/workflows/ci.yml" "build" "test")
+        for workflow, job, step in [ "ci.yml", "build", "test"; ".github/workflows/ci.yml", "renamed", "test"; ".github/workflows/ci.yml", "build", "renamed" ] do
+            Assert.Equal(Ok("unclassified", "no exact attribution rule"), classify bytes workflow job step)
+        for bad in [ exactRule + "," + exactRule; exactRule + "," + exactRule.Replace("mixed", "admin"); exactRule.Replace("\"job\"", "\"extra\":true,\"job\""); exactRule.Replace("\"job\":\"build\"", "\"job\":\"build\",\"job\":\"build\""); exactRule.Replace(".github/workflows/ci.yml", "ci.yml"); exactRule.Replace("mixed", "unsupported") ] do
+            match classify (profile bad) ".github/workflows/ci.yml" "build" "test" with
+            | Error _ -> ()
+            | Ok _ -> failwith "malformed/duplicate profile must refuse"
+
+    [<Fact>]
+    let ``UTEL-CI-03 native shaped mixed population profile recovery and replay use disposable store`` () =
+        let head = String.replicate 40 "a"
+        let baseSha = String.replicate 40 "d"
+        let run id event relations =
+            $"""{{"id":{id},"run_attempt":1,"path":".github/workflows/ci.yml","event":"{event}","head_sha":"{head}","repository":{{"id":42,"full_name":"o/r"}},"status":"completed","conclusion":"success","created_at":"2026-01-01T00:00:00Z","run_started_at":"2026-01-01T00:00:01Z","updated_at":"2026-01-01T00:01:01Z","pull_requests":[{relations}]}}"""
+        let relation = $"""{{"number":7,"head":{{"sha":"{head}","repo":{{"id":42,"full_name":"o/r"}}}},"base":{{"sha":"{baseSha}","repo":{{"id":42,"full_name":"o/r"}}}}}}"""
+        let rows = String.concat "," [ run 1 "pull_request" "{\"number\":7}"; run 2 "pull_request_target" relation; run 3 "pull_request_target" "" ]
+        let runs = "{\"total_count\":3,\"workflow_runs\":[" + rows + "]}"
+        let jobs id = $"""{{"total_count":1,"jobs":[{{"id":{id},"name":"build","status":"completed","conclusion":"success","started_at":"2026-01-01T00:00:10Z","completed_at":"2026-01-01T00:00:50Z","steps":[{{"number":1,"name":"test","status":"completed","conclusion":"success","started_at":"2026-01-01T00:00:10Z","completed_at":"2026-01-01T00:00:50Z"}},{{"number":2,"name":"skipped","status":"completed","conclusion":"skipped"}}]}}]}}"""
+        let checks = "{\"total_count\":0,\"check_runs\":[]}"
+        let queue = System.Collections.Generic.Queue<string>([ $"""{{"head":{{"sha":"{head}"}},"base":{{"ref":"main","sha":"{baseSha}"}}}}"""; runs; jobs 201; jobs 202; checks; runs; checks ])
+        let transport =
+            { new FS.GG.Coord.GitHub.Transport.ISinglePageGitHubTransport with
+                member _.SendSingle _ =
+                    Ok { Status = 200; Body = queue.Dequeue(); Headers = Map.empty; ETag = None; NextLink = None } }
+        let unwrap = function Ok value -> value | Error error -> failwithf "%A" error
+        let population = FS.GG.Coord.GitHub.CiReads.discoverPopulation transport "https://api.github.com" "o" "r" 7 head "main" baseSha false |> unwrap
+        Assert.Empty queue
+        Assert.Equal(3, population.Snapshot.Runs.Length)
+        Assert.Equal(2, population.Snapshot.Jobs.Length)
+        Assert.Contains("target-association:3:1:Missing", population.Gaps)
+        let assignment: FS.GG.Coord.TelemetryCi.Assignment =
+            { FeatureId = "UTEL"; ItemId = "UTEL-CI-GAPS"; AttemptId = "fixture"; ParentAttemptId = None; ProducerStream = "routine-delivery" }
+        let project bytes = TelemetryCiApplication.projectPopulationForTesting bytes assignment population |> unwrap
+        let missing = project None
+        let malformed = project (Some(System.Text.Encoding.UTF8.GetBytes "{"))
+        let available = project (Some(profile exactRule))
+        let events batches =
+            batches |> List.collect (fun (bytes: byte array) ->
+                use doc = JsonDocument.Parse bytes
+                doc.RootElement.GetProperty("events").EnumerateArray() |> Seq.map (fun node -> node.Clone()) |> Seq.toList)
+        Assert.DoesNotContain(events missing, fun node -> node.GetProperty("kind").GetString() = "ci-step")
+        Assert.DoesNotContain(events malformed, fun node -> node.GetProperty("kind").GetString() = "ci-step")
+        Assert.DoesNotContain(events available, fun node -> node.GetProperty("kind").GetString() = "ci-run" && node.GetProperty("runId").GetInt64() = 3L)
+        Assert.Contains(events available, fun node -> node.GetProperty("kind").GetString() = "diagnostic" && node.GetProperty("code").GetString().Contains(":sha256:"))
+        let root = Path.Combine(Path.GetTempPath(), "fsgg-ci-journey-" + Guid.NewGuid().ToString("N"))
+        try
+            let approved = FS.GG.Coord.TelemetryStore.ApprovedLocalDurable
+            TelemetryStoreApplication.initialize root approved |> unwrap |> ignore
+            for batch in missing @ malformed @ available @ available do
+                let result = TelemetryStoreApplication.ingest root approved batch |> unwrap
+                Assert.DoesNotContain("conflict", result)
+            let summary = TelemetryStoreApplication.ciSummary root approved assignment.ItemId |> unwrap
+            Assert.Contains("\"mixedSeconds\":40", summary)
+            Assert.Contains("\"runnerSeconds\":80", summary)
+            Assert.Contains("\"steps\":4", summary)
+            Assert.Contains("\"usefulValidationSeconds\":null", summary)
+        finally
+            if Directory.Exists root then Directory.Delete(root, true)
+
+    [<Fact>]
+    let ``UTEL-CI-01 maintained profile identities exist in current workflow source`` () =
+        let rec repositoryRoot (path: string) =
+            if File.Exists(Path.Combine(path, ".fsgg", "telemetry-ci-attribution.json")) then path
+            else
+                let parent = Directory.GetParent path
+                if isNull parent then failwith "repository profile prerequisite is missing"
+                repositoryRoot parent.FullName
+        let root = repositoryRoot AppContext.BaseDirectory
+        let bytes = File.ReadAllBytes(Path.Combine(root, ".fsgg", "telemetry-ci-attribution.json"))
+        use document = JsonDocument.Parse bytes
+        for rule in document.RootElement.GetProperty("rules").EnumerateArray() do
+            let workflow, job, step = rule.GetProperty("workflow").GetString(), rule.GetProperty("job").GetString(), rule.GetProperty("step").GetString()
+            let source = File.ReadAllText(Path.Combine(root, workflow))
+            Assert.Contains("  " + job + ":", source)
+            Assert.Contains("- name: " + step, source)
+            let classified = TelemetryCiApplication.classifyProfileForTesting bytes workflow job step
+            match classified with
+            | Ok(classification, _) -> Assert.Equal(rule.GetProperty("classification").GetString(), classification)
+            | Error errors -> failwithf "%A" errors
+        Assert.DoesNotContain("Run tests", System.Text.Encoding.UTF8.GetString bytes)
+
+    [<Fact>]
+    let ``UTEL-CI-03 retained native target empty join stays unknown`` () =
+        // Sanitized read-only native evidence captured on 2026-10-09; not a causal admission.
+        let retained = """
+{
+  "observedAt": "2026-10-09T21:22:05.299284+00:00",
+  "endpoint": "repos/FS-GG/.github/actions/runs/37984850593",
+  "projection": {
+    "check_suite_id": 102923027629,
+    "created_at": "2026-10-09T20:07:27Z",
+    "display_title": "chore: adopt main-backed ordinary settlement",
+    "event": "pull_request_target",
+    "head_branch": "routine/ordinary-main-adoption-preparation-20261009",
+    "head_repository": {
+      "full_name": "FS-GG/.github",
+      "id": 1269292704
+    },
+    "head_sha": "4b4432095f8d58aa689dd26d617461e1d5d075ef",
+    "id": 37984850593,
+    "path": ".github/workflows/routine-eligibility.yml",
+    "pull_requests": [],
+    "repository": {
+      "full_name": "FS-GG/.github",
+      "id": 1269292704
+    },
+    "run_attempt": 1,
+    "updated_at": "2026-10-09T20:08:23Z"
+  },
+  "scope": "Read-only evidence; no collection or native acceptance"
+}
+"""
+        use document = JsonDocument.Parse retained
+        let row = document.RootElement.GetProperty("projection")
+        Assert.Equal(37984850593L, row.GetProperty("id").GetInt64())
+        Assert.Empty(row.GetProperty("pull_requests").EnumerateArray())
+        Assert.Equal(FS.GG.Coord.GitHub.CiReads.Missing,
+            FS.GG.Coord.GitHub.CiReads.targetAssociation "FS-GG/.github" 4342
+                (row.GetProperty("head_sha").GetString())
+                (Some "31795a80e706fc4203c27e421f9e3648a1dd1329") row)

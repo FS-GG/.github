@@ -134,50 +134,79 @@ module TelemetryCiApplication =
             ObservedAt: string
         }
 
-    let private readRules (path: string) =
+    type private Profile =
+        { Rules: Rule list; Available: bool; Evidence: string }
+
+    let private parseRules (bytes: byte array) =
         try
-            use document = JsonDocument.Parse(File.ReadAllBytes path)
+            use document = JsonDocument.Parse bytes
+            let closed (allowed: Set<string>) (node: JsonElement) =
+                node.ValueKind = JsonValueKind.Object
+                && (let names = node.EnumerateObject() |> Seq.map _.Name |> Seq.toList
+                    names.Length = (names |> Set.ofList).Count
+                    && Set.ofList names = allowed)
             let root = document.RootElement
-            let allowed = Set [ "schema"; "rules" ]
-
-            let closed =
-                root.EnumerateObject()
-                |> Seq.forall (fun field -> Set.contains field.Name allowed)
-
-            if
-                not closed
-                || root.GetProperty("schema").GetString() <> "fsgg.telemetry.ci-attribution/1"
-            then
+            if not (closed (Set [ "schema"; "rules" ]) root)
+               || root.GetProperty("schema").GetString() <> "fsgg.telemetry.ci-attribution/1"
+               || root.GetProperty("rules").ValueKind <> JsonValueKind.Array then
                 Error [ "attribution profile is malformed" ]
             else
                 let rules =
                     root.GetProperty("rules").EnumerateArray()
                     |> Seq.map (fun value ->
-                        {
-                            Workflow = value.GetProperty("workflow").GetString()
-                            Job = value.GetProperty("job").GetString()
-                            Step = value.GetProperty("step").GetString()
-                            Classification = value.GetProperty("classification").GetString()
-                            Rationale = value.GetProperty("rationale").GetString()
-                        })
+                        if not (closed (Set [ "workflow"; "job"; "step"; "classification"; "rationale" ]) value) then
+                            invalidOp "attribution rule fields are malformed"
+                        { Workflow = value.GetProperty("workflow").GetString()
+                          Job = value.GetProperty("job").GetString()
+                          Step = value.GetProperty("step").GetString()
+                          Classification = value.GetProperty("classification").GetString()
+                          Rationale = value.GetProperty("rationale").GetString() })
                     |> Seq.toList
+                if rules.Length > 1000 then Error [ "attribution profile exceeds rule bound" ]
+                elif rules |> List.exists (fun rule ->
+                    [ rule.Workflow; rule.Job; rule.Step; rule.Rationale ] |> List.exists String.IsNullOrWhiteSpace
+                    || not (Regex.IsMatch(rule.Workflow, "^\\.github/workflows/[A-Za-z0-9_.-]+\\.ya?ml$"))
+                    || not (Set.contains rule.Classification (Set [ "useful-validation"; "admin"; "necessary-setup"; "mixed"; "unclassified" ]))) then
+                    Error [ "attribution profile contains an invalid literal rule" ]
+                elif (rules |> List.map (fun rule -> rule.Workflow, rule.Job, rule.Step) |> Set.ofList).Count <> rules.Length then
+                    Error [ "attribution profile contains duplicate or conflicting tuples" ]
+                else Ok rules
+        with _ -> Error [ "attribution profile is malformed" ]
 
-                if
-                    rules
-                    |> List.exists (fun rule ->
-                        not (
-                            Set.contains
-                                rule.Classification
-                                (Set [ "useful-validation"; "admin"; "necessary-setup"; "mixed"; "unclassified" ])
-                        ))
-                then
-                    Error [ "attribution profile contains unsupported classification" ]
-                else
-                    Ok rules
-        with error ->
-            Error [ "attribution profile is unavailable: " + error.Message ]
+    let private classify rules workflow job step =
+        rules
+        |> List.tryFind (fun rule -> rule.Workflow = workflow && rule.Job = job && rule.Step = step)
+        |> Option.map (fun rule -> rule.Classification, rule.Rationale)
+        |> Option.defaultValue ("unclassified", "no exact attribution rule")
 
-    let private project (assignment: TelemetryCi.Assignment) (rules: Rule list) (snapshot: CiReads.Snapshot) =
+    let classifyProfileForTesting bytes workflow job step =
+        parseRules bytes |> Result.map (fun rules -> classify rules workflow job step)
+
+    let private profileFromBytes repository head bytes =
+        let evidence = "ci-profile:" + repository + "@" + head
+        match bytes with
+        | None -> { Rules = []; Available = false; Evidence = evidence + ":unavailable" }
+        | Some bytes ->
+            match parseRules bytes with
+            | Error _ -> { Rules = []; Available = false; Evidence = evidence + ":malformed" }
+            | Ok rules -> { Rules = rules; Available = true; Evidence = evidence + ":sha256:" + CanonicalJson.sha256 bytes }
+
+    let private readRules (repository: string) (head: string) =
+        let token =
+            Environment.GetEnvironmentVariable("GITHUB_TOKEN")
+            |> Option.ofObj
+            |> Option.orElseWith (fun () -> Environment.GetEnvironmentVariable("GH_TOKEN") |> Option.ofObj)
+        let bytes =
+            match token with
+            | None -> None
+            | Some token ->
+                use transport = new Transport.HttpTransport(Transport.apiBaseFromEnv (), token)
+                match CiReads.readAttributionProfile (transport :> Transport.ISinglePageGitHubTransport) repository head with
+                | Error _ -> None
+                | Ok bytes -> bytes
+        Ok(profileFromBytes repository head bytes)
+
+    let private project (assignment: TelemetryCi.Assignment) (profile: Profile) (snapshot: CiReads.Snapshot) =
         let collection =
             CanonicalJson.sha256 (
                 Encoding.UTF8.GetBytes(
@@ -218,6 +247,7 @@ module TelemetryCiApplication =
 
         let runs =
             snapshot.Runs
+            |> List.filter (fun run -> run.Event <> "pull_request_target" || run.TargetAssociation = CiReads.Exact)
             |> List.map (fun run ->
                 let node =
                     common
@@ -266,25 +296,15 @@ module TelemetryCiApplication =
         let steps =
             snapshot.Jobs
             |> List.collect (fun job ->
-                job.Steps
+                (if profile.Available then job.Steps else [])
                 |> List.map (fun step ->
                     let workflowIdentity =
                         snapshot.Runs
-                        |> List.tryFind (fun run -> run.Id = job.RunId)
+                        |> List.tryFind (fun run -> run.Id = job.RunId && run.Attempt = job.Attempt)
                         |> Option.map _.Workflow
-                        |> Option.defaultValue snapshot.Workflow
+                        |> Option.defaultValue "*"
 
-                    let matched =
-                        rules
-                        |> List.tryFind (fun rule ->
-                            (rule.Workflow = workflowIdentity || rule.Workflow = snapshot.Workflow)
-                            && rule.Job = job.Name
-                            && rule.Step = step.Name)
-
-                    let classification, rationale =
-                        matched
-                        |> Option.map (fun rule -> rule.Classification, rule.Rationale)
-                        |> Option.defaultValue ("unclassified", "no exact attribution rule")
+                    let classification, rationale = classify profile.Rules workflowIdentity job.Name step.Name
 
                     let node =
                         common
@@ -354,15 +374,16 @@ module TelemetryCiApplication =
         coverage["criticalPath"] <- "unknown"
 
         let diagnostics =
-            snapshot.Diagnostic
-            |> Option.map (fun code ->
+            (Some profile.Evidence :: [ snapshot.Diagnostic ])
+            |> List.choose id
+            |> List.map (fun code ->
                 let node =
                     common "diagnostic" (identity "ci-diagnostic-" [ collection; code ]) assignment.ItemId in
 
                 node["code"] <- code
                 node["severity"] <- "warning"
                 node)
-            |> Option.toList
+
 
         collection, binding :: (pages @ runs @ jobs @ steps @ [ coverage ] @ diagnostics)
 
@@ -487,7 +508,7 @@ module TelemetryCiApplication =
 
     let private projectPopulation
         (assignment: TelemetryCi.Assignment)
-        (rules: Rule list)
+        (profile: Profile)
         (population: CiReads.PopulationSnapshot)
         =
         let snapshot = population.Snapshot
@@ -553,6 +574,7 @@ module TelemetryCiApplication =
 
         let runs =
             snapshot.Runs
+            |> List.filter (fun run -> run.Event <> "pull_request_target" || run.TargetAssociation = CiReads.Exact)
             |> List.map (fun run ->
                 let node =
                     revised "ci-run" (identity "ci-run-" [ snapshot.Repository; string run.Id; string run.Attempt ]) in
@@ -595,7 +617,7 @@ module TelemetryCiApplication =
         let steps =
             snapshot.Jobs
             |> List.collect (fun job ->
-                job.Steps
+                (if profile.Available then job.Steps else [])
                 |> List.map (fun step ->
                     let workflow =
                         snapshot.Runs
@@ -603,15 +625,7 @@ module TelemetryCiApplication =
                         |> Option.map _.Workflow
                         |> Option.defaultValue "*"
 
-                    let matched =
-                        rules
-                        |> List.tryFind (fun rule ->
-                            rule.Workflow = workflow && rule.Job = job.Name && rule.Step = step.Name)
-
-                    let classification, rationale =
-                        matched
-                        |> Option.map (fun rule -> rule.Classification, rule.Rationale)
-                        |> Option.defaultValue ("unclassified", "no exact attribution rule")
+                    let classification, rationale = classify profile.Rules workflow job.Name step.Name
 
                     let node =
                         revised
@@ -694,7 +708,7 @@ module TelemetryCiApplication =
         oldCoverage["criticalPath"] <- "unknown"
 
         let diagnostics =
-            (population.Pending @ population.Gaps)
+            (profile.Evidence :: (population.Pending @ population.Gaps))
             |> List.distinct
             |> List.map (fun code ->
                 let node = revised "diagnostic" (identity "ci-diagnostic-" [ collection; code ]) in
@@ -710,8 +724,13 @@ module TelemetryCiApplication =
         @ jobs
         @ steps
         @ checks
-        @ [ oldCoverage; coverage ]
+        @ (if profile.Available then [ oldCoverage; coverage ] else [ coverage ])
         @ diagnostics
+
+    let projectPopulationForTesting profileBytes assignment (population: CiReads.PopulationSnapshot) =
+        let profile = profileFromBytes population.Snapshot.Repository population.Snapshot.Head profileBytes
+        let collection, events = projectPopulation assignment profile population
+        boundedBatches assignment collection events
 
     let private projectOutcome (assignment: TelemetryCi.Assignment) (delivery: DeliveryBinding) =
         let candidate =
@@ -1033,9 +1052,7 @@ module TelemetryCiApplication =
                     match
                         Int32.TryParse prText,
                         readAssignment assignmentPath,
-                        readRules (
-                            Path.Combine(Directory.GetCurrentDirectory(), ".fsgg", "telemetry-ci-attribution.json")
-                        )
+                        readRules repository head
                     with
                     | (true, pr), Ok assignment, Ok rules when pr > 0 ->
                         let token =
@@ -1138,7 +1155,7 @@ module TelemetryCiApplication =
                                     queued = true
                                     population = "unknown"
                                     pending = [| "remote-admission-query-unavailable" |]
-                                    unsupportedSources = [| "merge_group"; "base"; "pull_request_target"; "push" |]
+                                    unsupportedSources = [| "merge_group"; "base"; "push" |]
                                 |}
                         )
 
@@ -1161,13 +1178,7 @@ module TelemetryCiApplication =
                                 ]
                         else
                             match
-                                readRules (
-                                    Path.Combine(
-                                        Directory.GetCurrentDirectory(),
-                                        ".fsgg",
-                                        "telemetry-ci-attribution.json"
-                                    )
-                                )
+                                readRules delivery.Repository delivery.Head
                             with
                             | Error errors -> fail errors
                             | Ok rules ->
@@ -1206,7 +1217,7 @@ module TelemetryCiApplication =
                                                     population = "unknown"
                                                     pending = population.Pending |> List.toArray
                                                     unsupportedSources =
-                                                        [| "merge_group"; "base"; "pull_request_target"; "push" |]
+                                                        [| "merge_group"; "base"; "push" |]
                                                 |}
                                         )
 
@@ -1275,7 +1286,6 @@ module TelemetryCiApplication =
                                                                 [|
                                                                     "merge_group"
                                                                     "base"
-                                                                    "pull_request_target"
                                                                     "push"
                                                                 |]
                                                         |}
@@ -1284,9 +1294,7 @@ module TelemetryCiApplication =
                                                 0
                     | Ok(Some true) ->
                         match
-                            readRules (
-                                Path.Combine(Directory.GetCurrentDirectory(), ".fsgg", "telemetry-ci-attribution.json")
-                            )
+                            readRules delivery.Repository delivery.Head
                         with
                         | Error errors -> fail errors
                         | Ok rules ->
@@ -1372,7 +1380,7 @@ module TelemetryCiApplication =
                                                         pending = population.Pending |> List.toArray
                                                         gaps = population.Gaps |> List.toArray
                                                         unsupportedSources =
-                                                            [| "merge_group"; "base"; "pull_request_target"; "push" |]
+                                                            [| "merge_group"; "base"; "push" |]
                                                     |}
                                             )
 

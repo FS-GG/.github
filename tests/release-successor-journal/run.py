@@ -400,6 +400,39 @@ with tempfile.TemporaryDirectory() as scratch:
     real.command("update-ref","refs/heads/main",refs["refs/heads/main"],first["desiredMain"])
     apply_once=importer["apply_once"]
     isolated=importer["isolated_git"]
+    # Force automatic maintenance locally and observe actual Git child commands.
+    # The control remains synchronous; no detached writer or real remote is launched.
+    trace_control=root/"maintenance-control.trace"
+    trace_candidate=root/"maintenance-candidate.trace"
+    control=root/"maintenance-control.git"
+    candidate=root/"maintenance-candidate.git"
+    def maintenance_repository(path):
+        path.mkdir()
+        isolated(path,"init","--bare","--quiet")
+        for key,value in [("maintenance.auto","true"),("maintenance.autoDetach","false"),
+                          ("gc.auto","1"),("gc.autoDetach","false")]:
+            isolated(path,"config",key,value)
+    maintenance_repository(control)
+    maintenance_repository(candidate)
+    original_env={**os.environ,"GIT_CONFIG_NOSYSTEM":"1","GIT_CONFIG_GLOBAL":"/dev/null",
+                  "GIT_TRACE2_EVENT":str(trace_control)}
+    subprocess.run(["git","--git-dir",str(control),"fetch","--no-tags",str(real.root),*sorted(set(refs.values()))],
+                   env=original_env,capture_output=True,timeout=60,check=True)
+    isolated(candidate,"fetch","--no-tags",str(real.root),*sorted(set(refs.values())),
+             credentials={"GIT_TRACE2_EVENT":str(trace_candidate)})
+    def maintenance_commands(trace):
+        commands=[entry.get("argv",[]) for entry in map(json.loads,trace.read_text().splitlines())
+                  if entry.get("event")=="child_start"]
+        return [command for command in commands if "maintenance" in command or "gc" in command]
+    assert maintenance_commands(trace_control), "forced-maintenance control did not exercise native Git maintenance"
+    assert not maintenance_commands(trace_candidate), "owned staging launched automatic maintenance"
+    # Real tamper refusal below also proves this staging directory is gone after unwind.
+    from unittest.mock import patch as patch_staging
+    original_stage=importer["stage_proposal"]
+    staged_directories=[]
+    def observe_stage(directory,manifest,fetch):
+        staged_directories.append(directory)
+        return original_stage(directory,manifest,fetch)
     calls=[]
     def frozen_guard(expected):
         assert real.command("rev-parse","refs/heads/main").decode().strip()==expected
@@ -475,10 +508,13 @@ with tempfile.TemporaryDirectory() as scratch:
     assert len(staged_guard_calls)==2 and calls.count("push")==before_push
     bad=json.loads(json.dumps(first));bad["objects"][0]["base64"]=base64.b64encode(b"tampered").decode()
     try:
-        apply_once(bad,frozen_guard,fetch_stage,lease_push,observe,root/"apply-tampered")
+        with patch_staging.dict(apply_once.__globals__,{"stage_proposal":observe_stage}):
+            apply_once(bad,frozen_guard,fetch_stage,lease_push,observe,root/"apply-tampered")
         raise AssertionError("tampered staged object accepted")
-    except ValueError:pass
+    except ValueError as error:
+        assert str(error)=="proposal raw object hash differs", "cleanup masked the original refusal"
     assert calls.count("push")==before_push
+    assert staged_directories and all(not directory.exists() for directory in staged_directories)
     # Unknown/pending original effects survive unchanged and block reconciliation.
     doc["entries"][operation]["stage"] = "effect-pending"
     pending = commit_files({ordinary_path: canonical(doc)}, [operation_head])
@@ -497,9 +533,10 @@ with tempfile.TemporaryDirectory() as scratch:
     for name,raw in source_bytes.items():(generator/name).write_bytes(raw)
     frozen=root/"frozen.json";frozen.write_bytes(canonical(snapshot))
     reference_mirror=root/"reference-fresh.git"
-    subprocess.run(["git","init","--bare","--quiet",str(reference_mirror)],check=True)
-    subprocess.run(["git","--git-dir",str(reference_mirror),"fetch","--quiet","--no-tags",str(real.root),
-                    *[f"{ref}:refs/cleanup-backup/heads/{ref.removeprefix('refs/heads/')}" for ref in sorted(snapshot["refs"])]],check=True)
+    reference_mirror.mkdir()
+    isolated(reference_mirror,"init","--bare","--quiet")
+    isolated(reference_mirror,"fetch","--quiet","--no-tags",str(real.root),
+             *[f"{ref}:refs/cleanup-backup/heads/{ref.removeprefix('refs/heads/')}" for ref in sorted(snapshot["refs"])])
     reference=subprocess.run([sys.executable,str(generator/"authority-state-import.py"),"--mirror",str(reference_mirror),
                               "--snapshot",str(frozen),"--output",str(root/"generator-reference")],capture_output=True)
     assert reference.returncode==2, "pending original was hidden by immutable generator"

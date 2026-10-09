@@ -457,9 +457,19 @@ per page, 4 MiB per response and 30 seconds total. It never retries, sleeps or f
 only validated same-origin/same-repository continuations. Every declared run attempt uses GitHub's
 attempt-specific jobs endpoint; the latest-jobs endpoint is not historical evidence.
 
-The source-controlled `.fsgg/telemetry-ci-attribution.json` profile matches exact workflow/job/step identities
-and records rationale. Missing or drifted matches are unclassified and classification coverage stays unknown;
-`mixed` is not redistributed. Runner seconds sum valid job intervals, while wall seconds union them. Queue,
+The source-controlled `.fsgg/telemetry-ci-attribution.json` profile is read through the native contents endpoint
+at the selected repository and immutable candidate head, with its SHA-256 retained in existing collection diagnostics.
+It matches literal workflow paths, native job display names and native step names; workflow aliases do not match.
+Malformed fields, duplicate tuples and conflicting rules refuse the profile. An unavailable or malformed profile
+leaves classification unknown and defers step facts, allowing a later successful exact-revision read without
+rewriting an earlier immutable classification. Native population coverage remains separate.
+Missing or drifted matches in a valid profile are unclassified and classification coverage stays unknown;
+`mixed` is not redistributed. Target-event timing requires one complete native PR relation whose number,
+head/base SHAs and repository IDs agree with the selected PR/head/base and native run repository.
+Empty, multiple, incomplete, foreign or conflicting relations retain a per-run association gap and contribute
+no attributable target job/step timing. Current PR lookup, head equality, titles and commit membership do not
+establish target-event causality. Native empty-array target runs remain unqualified; this source change adds no
+workflow witness and makes no claim that all target events are supported. Runner seconds sum valid job intervals, while wall seconds union them. Queue,
 avoidable-rerun and critical-path values require their own native witnesses; absent, reversed, pending or
 skipped timestamps never become zero. Monetary cost is not collected.
 
