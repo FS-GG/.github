@@ -151,8 +151,15 @@ class RealGit:
             history = self.command("log", "--first-parent", "--full-history", "--format=%H", query["sha"][0], "--", query["path"][0]).decode().splitlines()
             page = int(query["page"][0]); limit = int(query["per_page"][0])
             return [{"sha": sha} for sha in history[(page - 1) * limit:page * limit]]
+        if "/compare/" in path:
+            left,right=path.split("/compare/",1)[1].split("...")
+            merge=self.command("merge-base",left,right).decode().strip()
+            return {"status":"identical" if left==right else ("ahead" if merge==left else "diverged"),
+                    "base_commit":{"sha":left},"merge_base_commit":{"sha":merge}}
         suffix = path.split("/git/", 1)[1]
         kind, value = suffix.split("/", 1)
+        recursive=value.endswith("?recursive=1")
+        if recursive:value=value.split("?",1)[0]
         if kind == "ref":
             return {"object": {"sha": self.command("rev-parse", "refs/" + value).strip().decode()}}
         raw = self.command("cat-file", {"commits": "commit", "trees": "tree", "blobs": "blob"}[kind], value)
@@ -162,8 +169,8 @@ class RealGit:
             lines = raw.split(b"\n\n", 1)[0].decode().splitlines()
             return {"sha": value, "tree": {"sha": lines[0].split()[1]},
                     "parents": [{"sha": line.split()[1]} for line in lines if line.startswith("parent ")]}
-        entries = self.command("ls-tree", value).decode().splitlines()
-        return {"sha": value, "tree": [dict(zip(("mode", "type", "sha", "path"), line.replace("\t", " ", 1).split(" ", 3))) for line in entries]}
+        entries = self.command("ls-tree", *(("-r","-t") if recursive else ()), value).decode().splitlines()
+        return {"sha": value, "truncated":False, "tree": [dict(zip(("mode", "type", "sha", "path"), line.replace("\t", " ", 1).split(" ", 3))) for line in entries]}
 
     def post(self, path, body):
         kind = path.rsplit("/", 1)[-1]
@@ -389,8 +396,75 @@ with tempfile.TemporaryDirectory() as scratch:
     assert real.command("show", f"refs/heads/main:state/{ordinary_path}") == canonical(doc)
     for oid in refs.values():
         real.command("merge-base", "--is-ancestor", oid, "refs/heads/main")
+    # Concrete apply seam: actual staged objects and exactly one Git lease push.
+    real.command("update-ref","refs/heads/main",refs["refs/heads/main"],first["desiredMain"])
+    apply_once=importer["apply_once"]
+    isolated=importer["isolated_git"]
+    calls=[]
+    def frozen_guard(expected):
+        assert real.command("rev-parse","refs/heads/main").decode().strip()==expected
+        for ref,oid in refs.items():
+            if ref!="refs/heads/main":assert real.command("rev-parse",ref).decode().strip()==oid
+        calls.append("guard")
+    def fetch_stage(stage,oids):
+        isolated(stage,"fetch","--no-tags",str(real.root),*oids)
+    def lease_push(stage,expected,desired):
+        calls.append("push")
+        response=isolated(stage,"push",f"--force-with-lease=refs/heads/main:{expected}",str(real.root),f"{desired}:refs/heads/main",allow_failure=True)
+        return response.returncode==0
+    def observe(manifest):
+        return importer["observe_native_import"](real,manifest)
+    good=apply_once(first,frozen_guard,fetch_stage,lease_push,observe,root/"apply-good")
+    assert good["importApplied"] and good["pushAttempts"]==1 and good["reconciliationComplete"] is False
+    assert calls==["guard","guard","push","guard"]
+    count=calls.count("push")
+    try:
+        apply_once(first,frozen_guard,fetch_stage,lease_push,observe,root/"apply-good")
+        raise AssertionError("existing apply output accepted")
+    except ValueError:pass
+    assert calls.count("push")==count
+    real.command("update-ref","refs/heads/main",refs["refs/heads/main"],first["desiredMain"])
+    def lost_reply(stage,expected,desired):
+        assert lease_push(stage,expected,desired)
+        raise RuntimeError("lost reply after actual local Git push")
+    lost=apply_once(first,frozen_guard,fetch_stage,lost_reply,observe,root/"apply-lost")
+    assert lost["importApplied"] and lost["pushAttempts"]==1 and lost["pushResponse"]=="failed-or-unknown"
+    real.command("update-ref","refs/heads/main",refs["refs/heads/main"],first["desiredMain"])
+    def stale_push(stage,expected,desired):
+        real.sibling("concurrent-main.txt")
+        return lease_push(stage,expected,desired)
+    conflict=apply_once(first,frozen_guard,fetch_stage,stale_push,observe,root/"apply-conflict")
+    sibling=real.command("rev-parse","refs/heads/main").decode().strip()
+    assert not conflict["importApplied"] and conflict["observedMain"]==sibling and conflict["pushAttempts"]==1
+    assert real.command("show","refs/heads/main:concurrent-main.txt")==b"Sibling state\n"
+    real.command("update-ref","refs/heads/main",refs["refs/heads/main"],sibling)
+    unknown=apply_once(first,frozen_guard,fetch_stage,lease_push,lambda m:{"observedMain":m["desiredMain"],"verified":False},root/"apply-unknown")
+    assert not unknown["importApplied"] and unknown["pushAttempts"]==1 and unknown["observedMain"]==first["desiredMain"]
+    real.command("update-ref","refs/heads/main",refs["refs/heads/main"],first["desiredMain"])
+    before_push=calls.count("push")
+    def refused_guard(expected):raise ValueError("moved source or missing freeze visibility")
+    try:
+        apply_once(first,refused_guard,fetch_stage,lease_push,observe,root/"apply-unfenced")
+        raise AssertionError("unfenced apply accepted")
+    except ValueError:pass
+    assert calls.count("push")==before_push
+    staged_guard_calls=[]
+    def moved_second_guard(expected):
+        staged_guard_calls.append(expected)
+        if len(staged_guard_calls)==2:raise ValueError("source or freeze moved during stage")
+        frozen_guard(expected)
+    try:
+        apply_once(first,moved_second_guard,fetch_stage,lease_push,observe,root/"apply-moved-second")
+        raise AssertionError("moved second guard accepted")
+    except ValueError:pass
+    assert len(staged_guard_calls)==2 and calls.count("push")==before_push
+    bad=json.loads(json.dumps(first));bad["objects"][0]["base64"]=base64.b64encode(b"tampered").decode()
+    try:
+        apply_once(bad,frozen_guard,fetch_stage,lease_push,observe,root/"apply-tampered")
+        raise AssertionError("tampered staged object accepted")
+    except ValueError:pass
+    assert calls.count("push")==before_push
     # Unknown/pending original effects survive unchanged and block reconciliation.
-    real.command("update-ref", "refs/heads/main", refs["refs/heads/main"], first["desiredMain"])
     doc["entries"][operation]["stage"] = "effect-pending"
     pending = commit_files({ordinary_path: canonical(doc)}, [operation_head])
     real.command("update-ref", operation_ref, pending, operation_head)
@@ -407,3 +481,44 @@ with tempfile.TemporaryDirectory() as scratch:
         except ValueError:
             pass
 print("deterministic frozen import, exact raw retention, graph reachability and pending-effect refusal passed")
+
+# Admission remains source-disabled before any credential lookup or native call.
+with tempfile.TemporaryDirectory() as scratch:
+    refused=subprocess.run([sys.executable,str(pathlib.Path(__file__).resolve().parents[2]/"scripts/authority-state-import.py"),
+                            "--apply","--manifest","/absent","--output",scratch],capture_output=True,text=True)
+    assert refused.returncode==1 and "native apply is disabled" in refused.stdout
+    assert list(pathlib.Path(scratch).iterdir())==[]
+
+# Synthetic native policy responses exercise refusal boundaries only; no App/native claim.
+import copy
+controls={}
+for name,identifier,target,include,types,actors in (
+    ("mainWriter",24802693,"branch","refs/heads/main",["creation","update"],
+     [{"actor_id":4882140,"actor_type":"Integration","bypass_mode":"always"},{"actor_id":5064713,"actor_type":"Integration","bypass_mode":"always"}]),
+    ("mainIntegrity",24802698,"branch","refs/heads/main",["deletion","non_fast_forward"],[]),
+    ("legacyFence",99901,"branch","refs/heads/fsgg/v2/journal/**/*",["creation","update"],[]),
+    ("legacyTagFence",99902,"tag","refs/tags/fsgg/v2/fleet-cutover/**/*",["creation"],[])):
+    controls[name]={"id":identifier,"name":name,"target":target,"enforcement":"active","updated_at":"2000-01-01T00:00:00Z",
+                    "conditions":{"ref_name":{"include":[include],"exclude":[]}},"rules":[{"type":value} for value in types],"bypass_actors":actors}
+ref_vector={"refs/heads/main":"a"*40,REF:"b"*40,importer["EPOCH"]:"c"*40,importer["PREFIX"]+"operation/00":"d"*40}
+policy={"rulesets":controls,"frozenRefs":ref_vector,"protectionAcceptedAt":"2000-01-01T00:01:00Z",
+        "representativeFrozenRefs":[REF,importer["EPOCH"],importer["PREFIX"]+"operation/00"]}
+class PolicyAPI:
+    def __init__(self,missing=False):self.missing=missing
+    def get(self,path):
+        if path==f"repos/{REPOSITORY}":return {"id":1351660651,"full_name":REPOSITORY}
+        if "/rulesets/" in path:
+            value=copy.deepcopy(next(value for value in controls.values() if value["id"]==int(path.rsplit("/",1)[1])))
+            if self.missing:value.pop("bypass_actors")
+            return value
+        pairs=([("creation",24802693),("update",24802693),("deletion",24802698),("non_fast_forward",24802698)] if path.endswith("/main")
+               else [("creation",99901),("update",99901)])
+        return [{"type":kind,"ruleset_id":identifier,"ruleset_source_type":"Repository","ruleset_source":REPOSITORY} for kind,identifier in pairs]
+importer["validate_native_guard"](PolicyAPI(),lambda:ref_vector,"a"*40,policy)
+for api,selected in ((PolicyAPI(True),policy),(PolicyAPI(),{**policy,"protectionAcceptedAt":"2000-01-01T00:00:59Z"}),
+                     (PolicyAPI(),{**policy,"representativeFrozenRefs":[]})):
+    try:
+        importer["validate_native_guard"](api,lambda:ref_vector,"a"*40,selected)
+        raise AssertionError("incomplete or unstable native protection accepted")
+    except ValueError:pass
+print("disabled apply, actual Git single-lease/unknown-readback controls and protection refusals passed")
