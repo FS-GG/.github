@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 import base64
 import importlib.util
 import json
@@ -22,6 +23,7 @@ assert SPEC.loader is not None
 SPEC.loader.exec_module(MODULE)
 SOURCE = "53a0f6c8f03bb8c4a60d55c3ce8a38c78a26b1b5"
 HEAD = "353ff86a50808959770a73863385646efaf69969"
+RETIRED_FIXTURE = ROOT / "tests/fixtures/retired-v2-ordinary-rehearsal"
 
 
 class NativeObservationTests(unittest.TestCase):
@@ -383,17 +385,43 @@ class NativeObservationTests(unittest.TestCase):
         with self.assertRaisesRegex(MODULE.QUALIFICATION.Refusal, "current protected authority changed"):
             self.run_observation()
 
-    def test_rehearsal_uses_distinct_dispatch_policy_and_environment(self):
+    def test_historical_rehearsal_fixture_uses_distinct_dispatch_policy_and_environment(self):
         self.env["GITHUB_EVENT_NAME"] = "workflow_dispatch"
         self.env["GITHUB_WORKFLOW_REF"] = (
             "FS-GG/.github/.github/workflows/v2-ci-ordinary-rehearsal.yml@refs/heads/main")
-        with patch.object(MODULE, "current_authority", return_value=None):
+        original_read = MODULE.QUALIFICATION.read_json
+        def historical_policy(path):
+            if pathlib.Path(path) == MODULE.REHEARSAL_POLICY_PATH:
+                return original_read(str(RETIRED_FIXTURE / "v2-ci-ordinary-settlement-rehearsal.json"))
+            return original_read(path)
+        with patch.object(MODULE.QUALIFICATION, "read_json", side_effect=historical_policy), patch.object(MODULE, "current_authority", return_value=None):
             receipt = self.run_observation(rehearsal=True)
         self.assertEqual("v2-ci-i1-ordinary-settlement-rehearsal-v1", receipt["policyId"])
         self.assertEqual("ordinary-v2-rehearsal", receipt["environment"])
         self.assertTrue(receipt["activation"])
         with self.assertRaisesRegex(MODULE.QUALIFICATION.Refusal, "pinned protected-main event"):
             self.run_observation()
+
+    def test_retired_live_rehearsal_refuses_before_native_observation(self):
+        policy = MODULE.QUALIFICATION.read_json(str(MODULE.REHEARSAL_POLICY_PATH))
+        self.assertEqual("retired", policy["status"])
+        self.assertFalse(policy["credentialJob"]["installed"])
+        self.env["GITHUB_EVENT_NAME"] = "workflow_dispatch"
+        with patch.object(MODULE, "api") as api:
+            with self.assertRaisesRegex(MODULE.QUALIFICATION.Refusal, "unexpected protected repository, workflow or activation"):
+                self.run_observation(rehearsal=True)
+        api.assert_not_called()
+
+    def test_retired_current_policy_fences_old_rehearsal_checkout(self):
+        historical = (RETIRED_FIXTURE / "v2-ci-ordinary-settlement-rehearsal.json").read_bytes()
+        with tempfile.TemporaryDirectory() as directory:
+            old_root = pathlib.Path(directory)
+            old_policy_path = old_root / "policy/v2-ci-ordinary-settlement-rehearsal.json"
+            old_policy_path.parent.mkdir()
+            old_policy_path.write_bytes(historical)
+            with patch.object(MODULE, "ROOT", old_root), patch.object(MODULE, "api", return_value={"object": {"sha": SOURCE}}), patch.object(MODULE, "current_file", return_value=MODULE.REHEARSAL_POLICY_PATH.read_bytes()):
+                with self.assertRaisesRegex(MODULE.QUALIFICATION.Refusal, "current protected authority changed: policy/v2-ci-ordinary-settlement-rehearsal.json"):
+                    MODULE.current_authority("FS-GG/.github", json.loads(historical), old_policy_path)
 
     def test_unavailable_native_api_refuses_without_treating_403_as_absence(self):
         unavailable = subprocess.CompletedProcess(["gh", "api"], 1, "", "HTTP 403")
@@ -445,8 +473,11 @@ class NativeObservationTests(unittest.TestCase):
         self.assertIn('test "$(sha256sum "$package" | cut -d \' \' -f 1)" = "$PACKAGE_SHA256"', workflow)
         self.assertNotIn("secrets.", workflow.split("  preflight:", 1)[1].split("  settle:", 1)[0])
 
-    def test_rehearsal_workflow_is_manual_main_fenced_and_uses_distinct_custody(self):
-        workflow = (ROOT / ".github/workflows/v2-ci-ordinary-rehearsal.yml").read_text()
+    def test_historical_workflow_is_inert_byte_preserved_and_uses_distinct_custody(self):
+        self.assertFalse((ROOT / ".github/workflows/v2-ci-ordinary-rehearsal.yml").exists())
+        historical = RETIRED_FIXTURE / "v2-ci-ordinary-rehearsal.yml"
+        self.assertEqual("58781a61d50d808f4aa5c90a683ac0cefdc407f5330fb6368319010ce9f4ac54", hashlib.sha256(historical.read_bytes()).hexdigest())
+        workflow = historical.read_text()
         self.assertIn("  workflow_dispatch:", workflow)
         self.assertNotIn("  push:", workflow)
         self.assertIn("needs: [preflight]", workflow)

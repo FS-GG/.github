@@ -1,5 +1,7 @@
 # Ordinary-v2 dedicated custody enrollment
 
+The isolated rehearsal is retired as of 2026-10-09; its enrollment and replay instructions below are historical, not authorization to provision or run it. See the [retirement record](v2-ci-i1-installed-qualification.md#rehearsal-retired--2026-10-09). Production Authority enrollment and migration are unchanged.
+
 This packet records the completed one-time enrollment for V2-CI-I1. The pinned installer, dedicated
 production and rehearsal custody, public anchors and isolated hosted qualification are in place.
 The production ordinary post-merge credential job remains inactive while the real cutover ledger is

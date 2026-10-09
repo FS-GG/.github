@@ -1,7 +1,7 @@
 {
   "schema": "fsgg.github.v2-ci-ordinary-settlement-policy/1",
   "policyId": "v2-ci-i1-ordinary-settlement-rehearsal-v1",
-  "status": "retired",
+  "status": "installed",
   "repository": "FS-GG/.github",
   "operationClass": "ordinary-post-merge-delivery-settlement",
   "trigger": {
@@ -97,7 +97,7 @@
     "allowedBranches": [
       "main"
     ],
-    "installed": false,
+    "installed": true,
     "liveObservation": {
       "observedAt": "2026-09-24T19:55:22.514421Z",
       "environmentId": 22669445419,
