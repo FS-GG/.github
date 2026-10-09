@@ -16,6 +16,12 @@ module CiReads =
             Total: int
         }
 
+    type TargetAssociation =
+        | Exact
+        | Missing
+        | Conflicting
+        | Unsupported
+
     type Run =
         {
             Id: int64
@@ -29,6 +35,7 @@ module CiReads =
             RunStartedAt: string option
             UpdatedAt: string option
             PullRequests: int list
+            TargetAssociation: TargetAssociation
         }
 
     type Step =
@@ -128,6 +135,87 @@ module CiReads =
         with :? JsonException as error ->
             Error(Malformed(subject, error.Message))
 
+    // Only the native relation establishes target-event causality. Current PR state,
+    // branch/title prose and commit membership are deliberately absent from this join.
+    let targetAssociation repository pr head baseSha (item: JsonElement) =
+        let objectField (node: JsonElement) (name: string) =
+            if node.ValueKind <> JsonValueKind.Object then None
+            else
+                match node.TryGetProperty name with
+                | true, value when value.ValueKind = JsonValueKind.Object -> Some value
+                | _ -> None
+        let nested node parent field = objectField node parent |> Option.bind (fun value -> str value field)
+        let rec uniqueFields (node: JsonElement) =
+            match node.ValueKind with
+            | JsonValueKind.Object ->
+                let fields = node.EnumerateObject() |> Seq.toList
+                (fields |> List.map _.Name |> Set.ofList).Count = fields.Length
+                && fields |> List.forall (fun field -> uniqueFields field.Value)
+            | JsonValueKind.Array -> node.EnumerateArray() |> Seq.forall uniqueFields
+            | _ -> true
+        if item.ValueKind <> JsonValueKind.Object then Missing
+        elif not (uniqueFields item) then Conflicting
+        else
+            match str item "event" with
+            | Some "pull_request_target" ->
+                match item.TryGetProperty "pull_requests" with
+                | true, values when values.ValueKind = JsonValueKind.Array && values.GetArrayLength() = 0 -> Missing
+                | true, values when values.ValueKind = JsonValueKind.Array && values.GetArrayLength() = 1 ->
+                    let relation = values[0]
+                    let relationHead = objectField relation "head"
+                    let relationBase = objectField relation "base"
+                    let nativeRepository = objectField item "repository"
+                    let repoId = nativeRepository |> Option.bind (fun value -> int64Value value "id")
+                    let relationRepoId node = objectField node "repo" |> Option.bind (fun value -> int64Value value "id")
+                    let exactRepository node =
+                        relationRepoId node = repoId
+                        && (nested node "repo" "full_name" |> Option.forall ((=) repository))
+                    let headRepositoryConsistent =
+                        objectField item "head_repository"
+                        |> Option.forall (fun value -> int64Value value "id" = repoId
+                                                      && (str value "full_name" |> Option.forall ((=) repository)))
+                    match relationHead, relationBase, baseSha with
+                    | Some h, Some b, Some expectedBase ->
+                        if (int64Value item "id" |> Option.exists (fun id -> id > 0L))
+                           && (int32 item "run_attempt" |> Option.exists (fun attempt -> attempt > 0))
+                           && (repoId |> Option.exists (fun id -> id > 0L))
+                           && nested item "repository" "full_name" = Some repository
+                           && int32 relation "number" = Some pr
+                           && str item "head_sha" = Some head
+                           && str h "sha" = Some head
+                           && str b "sha" = Some expectedBase
+                           && exactRepository h && exactRepository b && headRepositoryConsistent then Exact
+                        elif str h "sha" = None || str b "sha" = None || repoId = None
+                             || relationRepoId h = None || relationRepoId b = None
+                             || nested item "repository" "full_name" = None then Missing
+                        else Conflicting
+                    | _ -> Missing
+                | true, values when values.ValueKind = JsonValueKind.Array -> Conflicting
+                | _ -> Missing
+            | _ -> Unsupported
+
+    let readAttributionProfile (transport: ISinglePageGitHubTransport) (repository: string) (head: string) =
+        transport.SendSingle
+            { Method = "GET"; Path = "repos/" + repository + "/contents/.fsgg/telemetry-ci-attribution.json"
+              Query = [ "ref", head ]; Body = NoBody; Budget = Rest; IfNoneMatch = None
+              Subject = repository + " attribution profile @ " + head }
+        |> Result.bind (fun response ->
+            if response.Status <> 200 || response.NextLink <> None || response.Body.Length > 131072 then Ok None
+            else
+                try
+                    use document = JsonDocument.Parse response.Body
+                    let root = document.RootElement
+                    if str root "type" <> Some "file"
+                       || str root "path" <> Some ".fsgg/telemetry-ci-attribution.json"
+                       || str root "encoding" <> Some "base64" then Ok None
+                    else
+                        match str root "content" with
+                        | Some content ->
+                            let bytes = Convert.FromBase64String content
+                            if bytes.Length > 65536 then Ok None else Ok(Some bytes)
+                        | None -> Ok None
+                with _ -> Ok None)
+
     let collect
         (transport: ISinglePageGitHubTransport)
         (apiBase: string)
@@ -200,6 +288,11 @@ module CiReads =
 
             let prHead =
                 match prDoc.RootElement.TryGetProperty "head" with
+                | true, value when value.ValueKind = JsonValueKind.Object -> str value "sha"
+                | _ -> None
+
+            let selectedBase =
+                match prDoc.RootElement.TryGetProperty "base" with
                 | true, value when value.ValueKind = JsonValueKind.Object -> str value "sha"
                 | _ -> None
 
@@ -291,7 +384,10 @@ module CiReads =
                                             |> Seq.toList
                                         | _ -> []
 
-                                    if not prs.IsEmpty && not (List.contains pr prs) then
+                                    let association = targetAssociation repository pr head selectedBase item
+                                    if event = "pull_request_target" && association <> Exact then
+                                        problem <- Some(Malformed(subject, "target-association:" + string association))
+                                    elif not prs.IsEmpty && not (List.contains pr prs) then
                                         problem <-
                                             Some(Malformed(subject, "run lineage points at a different pull request"))
                                     else
@@ -308,6 +404,7 @@ module CiReads =
                                                 RunStartedAt = str item "run_started_at"
                                                 UpdatedAt = str item "updated_at"
                                                 PullRequests = prs
+                                                TargetAssociation = association
                                             }
 
                                         let key = id, attempt
@@ -492,6 +589,8 @@ module CiReads =
                     detail.Contains("conflicting duplicate", StringComparison.Ordinal)
                     ->
                     Error error
+                | Error(Malformed(_, detail)) when detail.StartsWith("target-association:", StringComparison.Ordinal) ->
+                    Ok(finish false (Some detail))
                 | Error _ -> Ok(finish false (Some "run-pagination-incomplete"))
                 | Ok() ->
                     let jobsResult =
@@ -505,11 +604,14 @@ module CiReads =
                             (fun state run ->
                                 state
                                 |> Result.bind (fun () ->
-                                    readJobPage
-                                        run
-                                        1
-                                        $"repos/%s{owner}/%s{repo}/actions/runs/%d{run.Id}/attempts/%d{run.Attempt}/jobs"
-                                        [ "per_page", "100"; "page", "1" ]))
+                                    if run.Event = "pull_request_target" && not (runs.ContainsKey((run.Id, run.Attempt))) then
+                                        Error(Malformed(repository, "target-association:Missing:unwitnessed-attempt"))
+                                    else
+                                        readJobPage
+                                            run
+                                            1
+                                            $"repos/%s{owner}/%s{repo}/actions/runs/%d{run.Id}/attempts/%d{run.Attempt}/jobs"
+                                            [ "per_page", "100"; "page", "1" ]))
                             (Ok())
 
                     match jobsResult with
@@ -543,6 +645,8 @@ module CiReads =
                         detail.Contains("conflicting duplicate", StringComparison.Ordinal)
                         ->
                         Error error
+                    | Error(Malformed(_, detail)) when detail.StartsWith("target-association:", StringComparison.Ordinal) ->
+                        Ok(finish false (Some detail))
                     | Error _ -> Ok(finish false (Some "job-pagination-incomplete"))
 
     let discoverPopulation
@@ -642,10 +746,13 @@ module CiReads =
                         |> Seq.toList
                     | _ -> []
 
-                if not prs.IsEmpty && not (List.contains pr prs) then
+                if event <> "pull_request_target" && not prs.IsEmpty && not (List.contains pr prs) then
                     Error(Malformed(subject, "run lineage points at a different pull request"))
                 else
-                    if event <> "pull_request" then
+                    let association = targetAssociation repository pr head (Some baseSha) item
+                    if event = "pull_request_target" && association <> Exact then
+                        gaps.Add($"target-association:%d{id}:%d{attempt}:%A{association}")
+                    elif event <> "pull_request" && event <> "pull_request_target" then
                         gaps.Add("unsupported-event:" + event)
 
                     Ok
@@ -661,6 +768,7 @@ module CiReads =
                             RunStartedAt = str item "run_started_at"
                             UpdatedAt = str item "updated_at"
                             PullRequests = prs
+                            TargetAssociation = association
                         }
             | _ -> Error(Malformed(subject, "run row is malformed or wrong-head"))
 
@@ -752,7 +860,10 @@ module CiReads =
                             let key = row.Id, row.Attempt
 
                             match runs.TryGetValue key with
-                            | true, existing when existing <> row -> gaps.Add("conflicting-run-identity")
+                            | true, existing when existing <> row ->
+                                gaps.Add("conflicting-run-identity")
+                                if existing.Event = "pull_request_target" || row.Event = "pull_request_target" then
+                                    runs[key] <- { existing with Event = "pull_request_target"; TargetAssociation = Conflicting }
                             | _ -> runs[key] <- row
 
                         match response.NextLink with
@@ -977,10 +1088,10 @@ module CiReads =
                                     use doc = doc in
 
                                     match parseRun subject doc.RootElement with
-                                    | Ok row ->
+                                    | Ok row when row.Id = latest.Id && row.Attempt = attempt ->
                                         runs[(row.Id, row.Attempt)] <- row
                                         Some row
-                                    | Error _ ->
+                                    | _ ->
                                         attemptsComplete <- false
                                         pending.Add($"run:%d{latest.Id}:%d{attempt}")
                                         None
@@ -990,6 +1101,7 @@ module CiReads =
                                     None
 
                         match run with
+                        | Some row when row.Event = "pull_request_target" && row.TargetAssociation <> Exact -> ()
                         | Some row ->
                             match
                                 jobPages
@@ -1141,7 +1253,7 @@ module CiReads =
                         JobPageCoverage = (if jobsComplete then "complete" else "partial")
                         TerminalCoverage = (if terminal then "complete" else "partial")
                         TimestampCoverage = (if timestamps then "complete" else "partial")
-                        LineageCoverage = (if inventoryComplete then "complete" else "partial")
+                        LineageCoverage = (if inventoryComplete && not (runRows |> List.exists (fun run -> run.Event = "pull_request_target" && run.TargetAssociation <> Exact)) then "complete" else "partial")
                         Diagnostic = diagnostic
                     }
 

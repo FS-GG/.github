@@ -72,6 +72,31 @@ Keep one observation path into the existing store. Extend the maintained integra
 building a temporary second collector. This sequence assigns responsibility and dependencies; it does
 not mark these gaps closed or change the supported scope of completed milestones below.
 
+## UTEL-CI-GAPS — bounded source window
+
+- [ ] **UTEL-CI-01 — Exact maintained classification, deterministic input and honest gaps — routine.**
+  Reuse UTEL-06.3. Select the profile from the exact repository/head, reject malformed or duplicate tuples,
+  consolidate literal path/job/step matching and retain the profile digest in existing diagnostics.
+  Maintain audited engine and routine-eligibility entries; unmatched identities stay unknown and mixed remains
+  unsplit. An unavailable profile defers immutable step facts. Profile changes apply to future candidates;
+  historical correction, producer publication and receiver adoption remain separate.
+- [ ] **UTEL-CI-02 — Trustworthy target-event association and bounded ambiguity refusal — routine.**
+  Parse the native relation for one exact PR/head/base and consistent repository IDs, retaining run/attempt
+  identity and request/time bounds. Refuse empty, multiple, missing, foreign and conflicting relations with
+  explicit gaps and no attributable target timing. Source fixtures do not qualify the observed native empty
+  join (run `37984850593`, attempt 1), and no workflow/run-name witness is introduced in this window.
+- [ ] **UTEL-CI-03 — Integrated source journey and durable scope projection — routine.**
+  Verify mixed PR/target population discovery, profile refusal/recovery and replay through the existing
+  application projection and disposable store, preserving native delivery when telemetry refuses.
+  Source checks and native merge readback must precede source completion. Coordination profile adoption,
+  coherent producer publication, installed receiver qualification and native positive target association
+  remain pending; UTEL remains open.
+
+Local candidate preparation extends the existing reader/application tests and changes only their reserved
+source/profile/documentation paths. No retained store, package version, installer, workflow or generated
+workspace defaults change. The later event-derived witness design requires separate source/provenance
+selection and native proof; head/branch/title heuristics are excluded.
+
 ## Milestones
 
 - [x] **UTEL-06.1 — Real observer acceptance and prospective orchestration identities.** Reproduce PR #3347's

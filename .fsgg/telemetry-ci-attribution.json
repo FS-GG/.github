@@ -4,9 +4,51 @@
     {
       "workflow": ".github/workflows/coord-engine.yml",
       "job": "engine",
-      "step": "Run tests",
+      "step": "Install the pinned SDD provider validator",
+      "classification": "necessary-setup",
+      "rationale": "Installs the pinned provider needed by the subsequent source validation."
+    },
+    {
+      "workflow": ".github/workflows/coord-engine.yml",
+      "job": "engine",
+      "step": "Restore (locked)",
+      "classification": "necessary-setup",
+      "rationale": "Restores the locked dependencies used by the validation suites."
+    },
+    {
+      "workflow": ".github/workflows/coord-engine.yml",
+      "job": "engine",
+      "step": "Build the engine",
+      "classification": "necessary-setup",
+      "rationale": "Builds the candidate engine consumed by subsequent production-route qualification."
+    },
+    {
+      "workflow": ".github/workflows/coord-engine.yml",
+      "job": "engine",
+      "step": "Test — core telemetry contracts and source binding",
       "classification": "useful-validation",
-      "rationale": "The step directly validates the selected coordination-engine source revision."
+      "rationale": "Runs the independent Core contract suite against the selected source revision."
+    },
+    {
+      "workflow": ".github/workflows/coord-engine.yml",
+      "job": "engine",
+      "step": "Test — standalone telemetry HTTPS contracts and host boundaries",
+      "classification": "useful-validation",
+      "rationale": "Runs the standalone telemetry transport and host boundary contract suite."
+    },
+    {
+      "workflow": ".github/workflows/coord-engine.yml",
+      "job": "engine",
+      "step": "Test the shared projection and real loopback browser",
+      "classification": "mixed",
+      "rationale": "Bundles npm/browser installation with dashboard and browser validation; native evidence cannot split the interval."
+    },
+    {
+      "workflow": ".github/workflows/routine-eligibility.yml",
+      "job": "routine-eligibility",
+      "step": "Evaluate with the PR base's policy and validator",
+      "classification": "mixed",
+      "rationale": "Bundles trusted base/head source fetching and routine policy assessment in one native step."
     }
   ]
 }

@@ -9,6 +9,12 @@ module CiReads =
             Total: int
         }
 
+    type TargetAssociation =
+        | Exact
+        | Missing
+        | Conflicting
+        | Unsupported
+
     type Run =
         {
             Id: int64
@@ -22,6 +28,7 @@ module CiReads =
             RunStartedAt: string option
             UpdatedAt: string option
             PullRequests: int list
+            TargetAssociation: TargetAssociation
         }
 
     type Step =
@@ -93,6 +100,16 @@ module CiReads =
             Pending: string list
             Gaps: string list
         }
+
+    /// Classify a native target relation; no heuristic association is attempted.
+    val targetAssociation:
+        repository: string -> pr: int -> head: string -> baseSha: string option ->
+        item: System.Text.Json.JsonElement -> TargetAssociation
+
+    /// Read one bounded profile file at the exact selected source revision.
+    val readAttributionProfile:
+        transport: Transport.ISinglePageGitHubTransport -> repository: string -> head: string ->
+            Errors.IoResult<byte array option>
 
     val collect:
         transport: Transport.ISinglePageGitHubTransport ->
