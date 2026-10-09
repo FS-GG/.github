@@ -23,7 +23,7 @@ assert SPEC.loader is not None
 SPEC.loader.exec_module(MODULE)
 SOURCE = "53a0f6c8f03bb8c4a60d55c3ce8a38c78a26b1b5"
 HEAD = "353ff86a50808959770a73863385646efaf69969"
-RETIRED_FIXTURE = ROOT / "tests/fixtures/retired-v2-ordinary-rehearsal"
+RETIRED_FIXTURE = ROOT / "tests/v2-ci-ordinary-observe/fixtures/retired-rehearsal"
 
 
 class NativeObservationTests(unittest.TestCase):

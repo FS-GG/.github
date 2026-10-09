@@ -11,7 +11,7 @@ The September qualification established the ordinary post-merge settlement route
 
 ## Rehearsal retired — 2026-10-09
 
-The isolated rehearsal route is retired. Workflow `366347875` is disabled, its unchanged source is retained as an [inert fixture](../../tests/fixtures/retired-v2-ordinary-rehearsal/v2-ci-ordinary-rehearsal.yml), and the live rehearsal policy has `status=retired` and `credentialJob.installed=false`. The observer refuses rehearsal activation before native observation. The fixture's historical activation is used only by hermetic tests.
+The isolated rehearsal route is retired. Workflow `366347875` is disabled, its unchanged source is retained as an [inert fixture](../../tests/v2-ci-ordinary-observe/fixtures/retired-rehearsal/v2-ci-ordinary-rehearsal.yml), and the live rehearsal policy has `status=retired` and `credentialJob.installed=false`. The observer refuses rehearsal activation before native observation. The fixture's historical activation is used only by hermetic tests.
 
 The completed sandbox journal commits [c7](https://github.com/FS-GG/FS.GG.Coordination.Authority.Sandbox/tree/fc6a960cca5d563f5be7603019a928b5860e83ac) and [49](https://github.com/FS-GG/FS.GG.Coordination.Authority.Sandbox/tree/aae73530dec02af949aa0fb97532f5fd801479ac) are archived evidence for the September matrix below. Old-attempt replay is retired; removing their live refs is not permission to repeat those effects or recreate their journals. The archive preserves their exact objects independently of live branch retention.
 
