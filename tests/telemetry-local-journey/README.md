@@ -52,3 +52,13 @@ packaged dashboard browser journey checks its one-use bootstrap, scoped item,
 HttpOnly session and logout. This proves that private installed association and
 its packaged collection/display route. Global selection, services, genuine
 agent counters and historical operation custody remain separate.
+
+An admitted retrospective CI profile supplies `--ci-delivery` with the actual
+retained merged delivery and `--ci-workflow` with one exact existing workflow,
+alongside `--activate-workspace --repository OWNER/REPO`. It preserves the
+postmerge first-population admission refusal, then collects genuine provider
+records without inventing prospective readiness. The collector runs from the
+actual checkout so its repository-owned `.fsgg/telemetry-ci-attribution.json`
+classification profile is available. The private workspace configuration stays
+explicit. This does not establish whole-population acceptance, complete agent
+usage or global activation.
