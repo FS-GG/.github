@@ -1,0 +1,51 @@
+name: Admitted Authority state import
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Read-only verify, or source-admitted single import attempt
+        type: choice
+        options: [verify, apply]
+        default: verify
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: authority-main-state-import
+  cancel-in-progress: false
+
+jobs:
+  import:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: ordinary-v2
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Rebuild exact admitted proposal and apply once
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FSGG_APP_PRIVATE_KEY: ${{ secrets.V2_ORDINARY_APP_PRIVATE_KEY }}
+          IMPORT_MODE: ${{ inputs.mode }}
+        run: |
+          case "$IMPORT_MODE" in
+            apply) mode=--prepare-and-apply ;;
+            verify) mode=--verify-admitted ;;
+            *) echo "Unsupported import mode"; exit 2 ;;
+          esac
+          python3 scripts/authority-state-import.py "$mode" \
+            --output "$RUNNER_TEMP/authority-state-import"
+      - name: Retain preparation and single-attempt observation
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: authority-state-import-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/authority-state-import/
+          if-no-files-found: warn
+          retention-days: 90
