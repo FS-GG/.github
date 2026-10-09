@@ -41,6 +41,9 @@
  *      assertion 2 stays managed. This is what makes 1 and 2 falsifiable rather than decorative, and
  *      it is the leg that fails if someone re-adds the rule by hand.
  *
+ * A deliberate repository pause is checked separately. Package-rule regression checks use
+ * enabled:true in memory so their negative controls remain meaningful during that pause.
+ *
  * IT GRADES THE PRESET AS AUTHORED, NOT AS RESOLVED, AND SAYS SO
  *   `resolveConfigPresets` needs the network and would fold a second failure mode into this red.
  *   Whether the RESOLVED form still carries these rules is a real and different question, and it is
@@ -152,6 +155,8 @@ if (fileScopedDisables.length === 0) {
 async function verdict(rules, repository, packageFile, dep) {
   const res = await applyPackageRules({
     ...preset,
+    // Grade retained package rules independently of the repository-wide pause.
+    enabled: true,
     packageRules: rules,
     repository,
     packageFile,
@@ -177,6 +182,18 @@ async function expect(rules, repository, packageFile, want, label) {
 }
 
 const RULES = preset.packageRules ?? [];
+
+if (preset.enabled === false) {
+  console.log('\n--- 0. repository-wide automation is explicitly paused ---');
+  const paused = await applyPackageRules({ ...preset, packageRules: [], repository: 'FS-GG/.github',
+    packageFile: MANIFEST, manager: 'nuget', ...deps[0] }, 'datasource-merge');
+  if (paused.enabled === false) ok('the authored repository pause disables the real extracted dependency');
+  else bad('the authored repository pause is effective', `enabled=${paused.enabled}`);
+  const activeControl = await applyPackageRules({ ...preset, enabled: true, packageRules: [],
+    repository: 'FS-GG/.github', packageFile: MANIFEST, manager: 'nuget', ...deps[0] }, 'datasource-merge');
+  if (activeControl.enabled === true) ok('[control] explicitly enabling the repository removes the pause');
+  else bad('[control] removing the pause changes the verdict', `enabled=${activeControl.enabled}`);
+}
 
 console.log('\n--- 1. ADR-0068\'s delivery path is LIVE in every kit receiver (#1798) ---');
 for (const repo of receivers) {
