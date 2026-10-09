@@ -305,11 +305,14 @@ class AssessmentTests(unittest.TestCase):
         output, packet = fixture()
         with tempfile.TemporaryDirectory() as parent:
             journal = TestJournal(Path(parent) / 'private')
+            # Exercise concurrent idempotency within one bounded caller budget;
+            # the held-lock test separately verifies deadline refusal.
+            deadline = time.monotonic() + 30
             with ThreadPoolExecutor(max_workers=8) as workers:
-                states = list(workers.map(lambda _: journal.transact(packet, 'schedule', 'now'), range(16)))
+                states = list(workers.map(lambda _: journal.transact(packet, 'schedule', 'now', deadline=deadline), range(16)))
             self.assertTrue(all(state['state'] == 'pending' for state in states))
             with ThreadPoolExecutor(max_workers=8) as workers:
-                states = list(workers.map(lambda _: journal.transact(packet, 'start', 'now'), range(16)))
+                states = list(workers.map(lambda _: journal.transact(packet, 'start', 'now', deadline=deadline), range(16)))
             self.assertTrue(all(state['invocations'] == 1 for state in states))
             result = journal.transact(packet, 'settle', 'later', dict(state='ready', reason=None,
                                       inputTokens=2, outputTokens=2, seconds=61, usageRefs=['observed-failed-usage']))
