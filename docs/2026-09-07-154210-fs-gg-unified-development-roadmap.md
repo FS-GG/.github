@@ -61,6 +61,23 @@ reviewed public aggregate releases on GitHub.
 
 ## 0. Current progress report
 
+**2026-10-09: GOV-423-C2 retained capture component source delivered; C2 remains open.**
+[Governance PR #449](https://github.com/FS-GG/FS.GG.Governance/pull/449) merged exact
+`648db7b942a81162bd0a72cadc66e49617e3c4d1` as
+`74dde68efd5fc4a1d5264ae88a82fc86d7858f06` at 04:30:46 UTC after fourteen hosted
+checks passed, including full Debug/Release [coherent validation](https://github.com/FS-GG/FS.GG.Governance/actions/runs/37883456935). The additive caller-held session captures the two explicitly selected documents through
+held Linux directory/file objects under cooperative namespace custody, bounded bytes and original
+deadlines. Local qualification passed 36 synthetic API controls, 35 independent Linux primitive
+controls, the complete Verify Release compile and three additive surface controls. Default Verify
+passed 200 tests with 15 physical cases pending; a separate supervised invocation passed all 15
+physical cases with actual terminal exit, EOF and retirement within original selected bounds.
+Both earlier managed compile failures remain preserved. These controls do not force blocked native
+reads or uncertain descriptor closes, and do not establish hostile-writer safety or an atomic
+multi-file snapshot. The [owning capture window](https://github.com/FS-GG/FS.GG.Governance/blob/74dde68efd5fc4a1d5264ae88a82fc86d7858f06/docs/roadmaps/governance-423-neutral-capability-bindings.md#gov423-c2-retained-provider-document-capture-tier-1-local-qualification)
+keeps those physical retention paths, actual loader/Program wiring, stronger provider profiles,
+coherent SDD packages and C2/C3/C4 acceptance open. Original custody unknowns and the attributed
+telemetry gap are unchanged. No package was published and whole C2 remains open.
+
 **2026-10-09: GOV-423-C2 explicit selector source delivered; C2 remains open.**
 [Governance PR #448](https://github.com/FS-GG/FS.GG.Governance/pull/448) merged exact
 `378633043b007acccb7d90e6fd68589c809b454b` as
