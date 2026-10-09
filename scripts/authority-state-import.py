@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import re
 import subprocess
+import sys
 import tempfile
 from datetime import datetime
 from release_successor_journal import canonical, SCHEMA, valid_transition
@@ -167,14 +168,14 @@ def propose(mirror: Path, snapshot: dict, output: Path):
             steps.append({"label": label, "expectedMain": current, "parents": parents, "tree": tree, "commit": commit})
             current = commit
             existing.update(files)
+        # Inventory is a graph difference, independent of packed/loose caches or
+        # orphan proposal objects already present in the frozen mirror.
+        needed = {line.split(" ",1)[0] for line in git("rev-list","--objects",current,"--not",
+                  *sorted(set(selected.values()))).decode().splitlines()}
         objects = []
-        for folder in sorted((repo / "objects").iterdir()):
-            if not re.fullmatch(r"[0-9a-f]{2}", folder.name):
-                continue
-            for leaf in sorted(folder.iterdir()):
-                oid = folder.name + leaf.name
-                kind = git("cat-file", "-t", oid).decode().strip()
-                objects.append({"oid": oid, "type": kind, "base64": base64.b64encode(git("cat-file", kind, oid)).decode()})
+        for oid in sorted(needed):
+            kind = git("cat-file", "-t", oid).decode().strip()
+            objects.append({"oid": oid, "type": kind, "base64": base64.b64encode(git("cat-file", kind, oid)).decode()})
         # Actual object graph proof, not a manifest assertion.
         for oid in selected.values():
             git("merge-base", "--is-ancestor", oid, current)
@@ -403,14 +404,77 @@ def validate_execution_source(observer,binding,root,current):
     require(tool.get("sha")==blob, "native protected apply source bytes differ")
 
 
-def apply_admitted(manifest_path, output):
+def prepare_frozen_proposal(observer, binding, output, credentials, *, original_objects=False):
+    """Rebuild with the immutable reviewed generator; no native refs are written."""
+    revision = binding["proposalGeneratorRevision"]
+    snapshot = binding["frozenSnapshot"]
+    require(isinstance(revision,str) and re.fullmatch(r"[0-9a-f]{40}",revision), "proposal generator revision")
+    require(snapshot.get("repository")==REPOSITORY and snapshot.get("repositoryId")==1351660651
+            and snapshot["refs"] == binding["frozenRefs"], "source-owned frozen snapshot differs")
+    require(all(ref.startswith("refs/heads/") and (ref=="refs/heads/main" or ref.startswith(PREFIX))
+                and re.fullmatch(r"[0-9a-f]{40}",oid) for ref,oid in snapshot["refs"].items()), "frozen fetch ref shape")
+    require(not output.exists(), "existing hosted preparation; retain it without retry")
+    with tempfile.TemporaryDirectory(prefix="authority-frozen-prepare-") as scratch:
+        directory=Path(scratch);generator=directory/"generator";generator.mkdir()
+        for name in ("authority-state-import.py","release_successor_journal.py","release_successor_execution.py"):
+            selected=observer.get(f"repos/FS-GG/.github/contents/scripts/{name}?ref={revision}")
+            require(selected.get("encoding")=="base64" and selected.get("type")=="file", "immutable generator source unavailable")
+            raw=base64.b64decode(selected["content"])
+            require(len(raw)<=2*1024*1024 and selected.get("sha")==hashlib.sha1(b"blob "+str(len(raw)).encode()+b"\0"+raw).hexdigest(), "immutable generator blob differs")
+            (generator/name).write_bytes(raw)
+        require(hashlib.sha256((generator/"authority-state-import.py").read_bytes()).hexdigest()==binding["proposalToolSha256"], "immutable proposal tool differs")
+        mirror=directory/"fresh-frozen.git";mirror.mkdir()
+        isolated_git(mirror,"init","--bare","--quiet")
+        if original_objects:
+            isolated_git(mirror,"fetch","--no-tags",AUTHORITY_REMOTE,*sorted(set(snapshot["refs"].values())),credentials=credentials)
+            updates="".join(f"create refs/cleanup-backup/heads/{ref.removeprefix('refs/heads/')} {oid}\n" for ref,oid in sorted(snapshot["refs"].items()))
+            isolated_git(mirror,"update-ref","--stdin",data=updates.encode())
+        else:
+            refspecs=[f"{ref}:refs/cleanup-backup/heads/{ref.removeprefix('refs/heads/')}" for ref in sorted(snapshot["refs"])]
+            isolated_git(mirror,"fetch","--no-tags",AUTHORITY_REMOTE,*refspecs,credentials=credentials)
+        frozen=directory/"snapshot.json";frozen.write_bytes(canonical(snapshot))
+        output.mkdir(parents=True)
+        response=subprocess.run([sys.executable,str(generator/"authority-state-import.py"),
+                                 "--mirror",str(mirror),"--snapshot",str(frozen),"--output",str(output)],
+                                env={"PATH":os.environ.get("PATH","/usr/bin:/bin"),"GIT_CONFIG_NOSYSTEM":"1","GIT_CONFIG_GLOBAL":"/dev/null"},
+                                capture_output=True,timeout=180)
+        (output/"preparation.stdout").write_bytes(response.stdout)
+        (output/"preparation.stderr").write_bytes(response.stderr)
+        (output/"preparation-exit-code.txt").write_text(str(response.returncode)+"\n")
+        # Pending originals must remain pending; the builder's exit 2 is not an effect retry.
+        require(response.returncode in (0,2), "immutable frozen proposal refused")
+    return output/"import-manifest.json"
+
+
+def verify_once(manifest, observe, output):
+    destination=output/"verify-observation.json"
+    require(not destination.exists(), "existing verification; retain original observation")
+    output.mkdir(parents=True,exist_ok=True)
+    try:
+        readback=observe(manifest)
+    except (OSError,RuntimeError,ValueError,KeyError,TypeError,subprocess.SubprocessError):
+        readback={"observedMain":None,"verified":False}
+    result={"mode":"read-only-verify-admitted","desiredMain":manifest["desiredMain"],
+            "observedMain":readback.get("observedMain"),"importVerified":readback.get("verified") is True,
+            "pushAttempts":0,"unresolved":manifest["unresolved"],"reconciliationComplete":False}
+    result["result"]="import-verified-original-reconciliation-unchanged" if result["importVerified"] else "import-verification-incomplete-or-main-moved"
+    destination.write_bytes(canonical(result))
+    return result
+
+
+def apply_admitted(manifest_path, output, *, prepare=False, verify=False):
     binding = ADMITTED_IMPORT
     require(isinstance(binding,dict), "native apply is disabled; reviewed source-owned admission is absent")
     require(not (output/"apply-intent.json").exists() and not (output/"apply-observation.json").exists(), "existing apply attempt; no retry")
-    raw = manifest_path.read_bytes();manifest = load(raw)
-    require(raw==canonical(manifest), "admitted manifest is not canonical")
-    require(hashlib.sha256(raw).hexdigest()==binding["manifestSha256"] and manifest["toolSha256"]==binding["proposalToolSha256"], "admitted frozen proposal differs")
-    require(manifest["snapshot"]["refs"]==binding["frozenRefs"], "admitted frozen ref vector differs")
+    def read_manifest(path):
+        raw = path.read_bytes();manifest = load(raw)
+        require(raw==canonical(manifest), "admitted manifest is not canonical")
+        require(hashlib.sha256(raw).hexdigest()==binding["manifestSha256"] and manifest["toolSha256"]==binding["proposalToolSha256"], "admitted frozen proposal differs")
+        require(manifest["snapshot"]["refs"]==binding["frozenRefs"], "admitted frozen ref vector differs")
+        return manifest
+    require(not prepare or manifest_path is None, "hosted preparation takes no caller manifest")
+    require(not verify or prepare, "read-only verification rebuilds the original admitted manifest")
+    manifest = None if prepare else read_manifest(manifest_path)
     published=binding["publishedCli"]
     require(set(published)=={"packageId","version","archiveSha256"} and isinstance(published["packageId"],str)
             and published["packageId"]=="FS.GG.Coordination.Cli" and re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+(?:-[A-Za-z0-9.-]+)?",published["version"])
@@ -448,8 +512,9 @@ def apply_admitted(manifest_path, output):
     require(metadata.get("permissions")=={"metadata":"read"} and metadata.get("token"), "metadata-only mint scope")
     visible=GitHubAPI(metadata["token"]).get("installation/repositories?per_page=100")
     require(visible.get("total_count")==1 and [(r.get("id"),r.get("full_name")) for r in visible["repositories"]]==[(1351660651,REPOSITORY)], "unrestricted installation repository scope differs")
-    token_response=seam.request("/app/installations/164553252/access_tokens",jwt,{"repository_ids":[1351660651],"permissions":{"contents":"write"}})
-    require(token_response.get("permissions")==permissions and isinstance(token_response.get("token"),str) and token_response["token"], "minted writer scope differs")
+    contents_permission="read" if verify else "write"
+    token_response=seam.request("/app/installations/164553252/access_tokens",jwt,{"repository_ids":[1351660651],"permissions":{"contents":contents_permission}})
+    require(token_response.get("permissions")=={"contents":contents_permission,"metadata":"read"} and isinstance(token_response.get("token"),str) and token_response["token"], "minted native scope differs")
     writer=GitHubAPI(token_response["token"]);visible=writer.get("installation/repositories?per_page=100")
     require(visible.get("total_count")==1 and [(r.get("id"),r.get("full_name")) for r in visible["repositories"]]==[(1351660651,REPOSITORY)], "writer installation repository scope differs")
     with tempfile.TemporaryDirectory(prefix="authority-import-askpass-") as scratch:
@@ -464,6 +529,20 @@ def apply_admitted(manifest_path, output):
         def guard(expected):
             validate_execution_source(observer,binding,root,current)
             validate_native_guard(writer,refs,expected,binding)
+        if prepare:
+            expected=binding["frozenRefs"]["refs/heads/main"]
+            if not verify:guard(expected)
+            prepared=prepare_frozen_proposal(observer,binding,output,credentials,original_objects=verify)
+            validate_execution_source(observer,binding,root,current)
+            if not verify:guard(expected)
+            manifest=read_manifest(prepared)
+        if verify:
+            def verification_observation(selected):
+                result=observe_native_import(writer,selected)
+                try:validate_execution_source(observer,binding,root,current)
+                except (OSError,RuntimeError,ValueError,KeyError,TypeError,subprocess.SubprocessError):result["verified"]=False
+                return result
+            return verify_once(manifest,verification_observation,output)
         def fetch(stage,oids):
             isolated_git(stage,"fetch","--no-tags",AUTHORITY_REMOTE,*oids,credentials=credentials)
         def push(stage,expected,desired):
@@ -477,10 +556,18 @@ def main():
     parser.add_argument("--mirror", type=Path)
     parser.add_argument("--snapshot", type=Path)
     parser.add_argument("--apply", action="store_true")
+    parser.add_argument("--prepare-and-apply", action="store_true")
+    parser.add_argument("--verify-admitted", action="store_true")
     parser.add_argument("--manifest", type=Path)
     parser.add_argument("--output", required=True, type=Path)
     args = parser.parse_args()
     try:
+        if args.prepare_and_apply or args.verify_admitted:
+            require(not (args.prepare_and_apply and args.verify_admitted) and not args.apply and args.manifest is None and args.mirror is None and args.snapshot is None,
+                    "hosted invocation takes only source-owned proposal inputs")
+            result = apply_admitted(None,args.output,prepare=True,verify=args.verify_admitted)
+            print(result["result"])
+            return 0 if result["importVerified" if args.verify_admitted else "importApplied"] else 2
         if args.apply:
             require(args.manifest is not None and args.mirror is None and args.snapshot is None, "apply requires only the exact admitted manifest")
             result = apply_admitted(args.manifest,args.output)

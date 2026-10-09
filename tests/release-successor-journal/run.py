@@ -448,6 +448,21 @@ with tempfile.TemporaryDirectory() as scratch:
         raise AssertionError("unfenced apply accepted")
     except ValueError:pass
     assert calls.count("push")==before_push
+    # Pure verification resolves readback only, retaining the original attempt.
+    original_attempt=(root/"apply-unknown/apply-intent.json").read_bytes(),(root/"apply-unknown/apply-observation.json").read_bytes()
+    real.command("update-ref","refs/heads/main",first["desiredMain"],refs["refs/heads/main"])
+    verified=importer["verify_once"](first,observe,root/"verify-good")
+    assert verified["importVerified"] and verified["pushAttempts"]==0 and not verified["reconciliationComplete"]
+    real.sibling("after-import.txt")
+    incomplete=importer["verify_once"](first,observe,root/"verify-moved")
+    assert not incomplete["importVerified"] and incomplete["pushAttempts"]==0 and incomplete["observedMain"]!=first["desiredMain"]
+    assert original_attempt==((root/"apply-unknown/apply-intent.json").read_bytes(),(root/"apply-unknown/apply-observation.json").read_bytes())
+    assert calls.count("push")==before_push
+    moved=real.command("rev-parse","refs/heads/main").decode().strip()
+    real.command("update-ref","refs/heads/main",refs["refs/heads/main"],moved)
+    # Existing orphan proposal objects cannot alter the deterministic inventory.
+    cached=importer["propose"](real.root,snapshot,root/"cached-proposal")
+    assert canonical(cached)==canonical(first)
     staged_guard_calls=[]
     def moved_second_guard(expected):
         staged_guard_calls.append(expected)
@@ -473,6 +488,51 @@ with tempfile.TemporaryDirectory() as scratch:
     snapshot["refs"][operation_ref] = pending
     pending_proposal = importer["propose"](real.root, snapshot, root / "pending")
     assert pending_proposal["reconciliation"] == "required" and pending_proposal["unresolved"][0]["stage"] == "effect-pending"
+    # Hosted preparation uses an independently pinned, unchanged generator closure.
+    repository=pathlib.Path(__file__).resolve().parents[2]
+    revision=subprocess.check_output(["git","rev-parse","HEAD"],cwd=repository,text=True).strip()
+    generator=root/"pinned-generator";generator.mkdir()
+    source_bytes={name:subprocess.check_output(["git","show",f"{revision}:scripts/{name}"],cwd=repository)
+                  for name in ("authority-state-import.py","release_successor_journal.py","release_successor_execution.py")}
+    for name,raw in source_bytes.items():(generator/name).write_bytes(raw)
+    frozen=root/"frozen.json";frozen.write_bytes(canonical(snapshot))
+    reference_mirror=root/"reference-fresh.git"
+    subprocess.run(["git","init","--bare","--quiet",str(reference_mirror)],check=True)
+    subprocess.run(["git","--git-dir",str(reference_mirror),"fetch","--quiet","--no-tags",str(real.root),
+                    *[f"{ref}:refs/cleanup-backup/heads/{ref.removeprefix('refs/heads/')}" for ref in sorted(snapshot["refs"])]],check=True)
+    reference=subprocess.run([sys.executable,str(generator/"authority-state-import.py"),"--mirror",str(reference_mirror),
+                              "--snapshot",str(frozen),"--output",str(root/"generator-reference")],capture_output=True)
+    assert reference.returncode==2, "pending original was hidden by immutable generator"
+    class GeneratorAPI:
+        calls=0
+        def get(self,path):
+            self.calls+=1
+            assert path.endswith(f"?ref={revision}")
+            raw=source_bytes[path.split("/")[-1].split("?")[0]]
+            return {"type":"file","encoding":"base64","content":base64.b64encode(raw).decode(),
+                    "sha":hashlib.sha1(b"blob "+str(len(raw)).encode()+b"\0"+raw).hexdigest()}
+    preparation=importer["prepare_frozen_proposal"]
+    prior_remote=preparation.__globals__["AUTHORITY_REMOTE"]
+    preparation.__globals__["AUTHORITY_REMOTE"]=str(real.root) # Actual local Git seam only.
+    selected={"proposalGeneratorRevision":revision,"frozenSnapshot":snapshot,"frozenRefs":snapshot["refs"],
+              "proposalToolSha256":hashlib.sha256(source_bytes["authority-state-import.py"]).hexdigest()}
+    try:
+        original_refs=real.command("show-ref")
+        observer=GeneratorAPI()
+        prepared=preparation(observer,selected,root/"hosted-prepared",{})
+        assert prepared.read_bytes()==(root/"generator-reference/import-manifest.json").read_bytes()
+        assert (prepared.parent/"preparation-exit-code.txt").read_text()=="2\n"
+        assert real.command("show-ref")==original_refs
+        by_objects=preparation(observer,selected,root/"verify-prepared",{},original_objects=True)
+        assert by_objects.read_bytes()==prepared.read_bytes()
+        for invalid,destination in ((selected,prepared.parent),({**selected,"proposalToolSha256":"0"*64},root/"wrong-generator"),
+                                    ({**selected,"frozenRefs":{}},root/"wrong-snapshot")):
+            try:
+                preparation(observer,invalid,destination,{})
+                raise AssertionError("unreviewed or repeated hosted preparation accepted")
+            except ValueError:pass
+        assert real.command("show-ref")==original_refs
+    finally:preparation.__globals__["AUTHORITY_REMOTE"]=prior_remote
     for bad in ({**snapshot, "refs": {k: v for k, v in snapshot["refs"].items() if k != operation_ref}},
                 {**snapshot, "repositoryId": 1}):
         try:
@@ -486,6 +546,14 @@ print("deterministic frozen import, exact raw retention, graph reachability and 
 with tempfile.TemporaryDirectory() as scratch:
     refused=subprocess.run([sys.executable,str(pathlib.Path(__file__).resolve().parents[2]/"scripts/authority-state-import.py"),
                             "--apply","--manifest","/absent","--output",scratch],capture_output=True,text=True)
+    assert refused.returncode==1 and "native apply is disabled" in refused.stdout
+    assert list(pathlib.Path(scratch).iterdir())==[]
+    refused=subprocess.run([sys.executable,str(pathlib.Path(__file__).resolve().parents[2]/"scripts/authority-state-import.py"),
+                            "--verify-admitted","--output",scratch],capture_output=True,text=True)
+    assert refused.returncode==1 and "native apply is disabled" in refused.stdout
+    assert list(pathlib.Path(scratch).iterdir())==[]
+    refused=subprocess.run([sys.executable,str(pathlib.Path(__file__).resolve().parents[2]/"scripts/authority-state-import.py"),
+                            "--prepare-and-apply","--output",scratch],capture_output=True,text=True)
     assert refused.returncode==1 and "native apply is disabled" in refused.stdout
     assert list(pathlib.Path(scratch).iterdir())==[]
 
