@@ -192,7 +192,7 @@ module TelemetryApplication =
         | "telemetry" :: "ci" :: "correction-history" :: args ->
             shape [ "--correction-id"; "--store-root"; "--config"; "--repository" ] [] args
         | "telemetry" :: "ci" :: "collect" :: args ->
-            shape [ "--assignment"; "--repo"; "--pr"; "--head"; "--workflow"; "--store-root" ] [] args
+            shape [ "--assignment"; "--repo"; "--pr"; "--head"; "--workflow"; "--store-root"; "--config"; "--repository" ] [] args
         | "telemetry" :: "ci" :: "reconcile" :: args ->
             shape [ "--assignment"; "--delivery"; "--store-root"; "--config"; "--repository" ] [] args
         | "telemetry" :: "ci" :: "summary" :: args -> shape [ "--item"; "--store-root" ] [] args

@@ -5,6 +5,7 @@ Run within the maintained PID namespace validation runner. All counter values ar
 explicit test events; this test establishes neither genuine usage nor global activation.
 """
 import argparse
+import importlib.util
 from contextlib import contextmanager
 import hashlib
 import json
@@ -52,6 +53,10 @@ def main():
     parser.add_argument('--store-root', type=Path, required=True)
     parser.add_argument('--engine-path', dest='engine', type=Path)
     parser.add_argument('--skip-browser', action='store_true')
+    parser.add_argument('--repository', default='SYNTHETIC/activation')
+    parser.add_argument('--ci-delivery', type=Path, help='actual retained delivered summary, retrospective observation only')
+    parser.add_argument('--installed-ci-collect-control', action='store_true', help='retain published parser refusal, then use exact fresh bound local store')
+    parser.add_argument('--ci-workflow', help='exact existing workflow for retrospective read-only provider collection')
     parser.add_argument('--activate-workspace', action='store_true',
                         help='qualify an explicit fresh private association, never global selection')
     args = parser.parse_args()
@@ -80,7 +85,9 @@ def main():
         return result
     run.number = 0
     config = private / 'workspace.json'
-    repository = 'SYNTHETIC/activation'
+    repository = args.repository
+    if args.ci_delivery:
+        assert args.activate_workspace and args.ci_workflow, 'CI observation needs fresh explicit association and workflow'
     nonce = uuid.uuid4().hex
     workspace = 'synthetic-activation-' + nonce
     selected = ['--store-root', str(store)]
@@ -200,6 +207,56 @@ def main():
     if not args.skip_browser:
         subprocess.run(['node', str(ROOT / 'tests/telemetry-local-journey/browser.js'), str(private)],
                        check=True, timeout=45, env=env, cwd=ROOT)
+    ci_health = 'not-exercised'
+    if args.ci_delivery:
+        # This postmerge observation cannot create prospective population
+        # admission. Preserve its refusal and collect one exact real workflow.
+        spec = importlib.util.spec_from_file_location('routine_delivery_journey', ROOT / 'tools/routine-delivery.py')
+        routine = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = routine
+        spec.loader.exec_module(routine)
+        delivery = json.loads(args.ci_delivery.read_text())
+        assert delivery['repo'] == repository and delivery['codeDelivery'] == 'delivered'
+        summary = routine.Summary(**delivery)
+        env['FSGG_TELEMETRY_REPOSITORY'] = repository
+        env['PATH'] = str(engine.parent) + os.pathsep + env['PATH']
+        def helper_runner(command, **kwargs):
+            completed = subprocess.run(command, env=env, cwd=ROOT, **kwargs)
+            (private / ('ci-helper-' + str(helper_runner.number) + '.json')).write_text(json.dumps({
+                'command':command, 'exitCode':completed.returncode,
+                'stdout':completed.stdout, 'stderr':completed.stderr}, indent=2))
+            helper_runner.number += 1
+            return completed
+        helper_runner.number = 0
+        configured = routine.discover_telemetry_config(str(config), command_engine=str(engine), runner=helper_runner)
+        assert configured.workspace and configured.repository == repository and configured.store_root == str(store)
+        ci_assignment = routine.create_ci_assignment(configured, feature='V2-EFF-01', item='V2-EFF-01.6',
+            attempt='telemetry-parallel-resume-20261009', parent_attempt=None,
+            command_engine=str(engine), runner=helper_runner)
+        ci_health = routine.observe_candidate(summary, assignment=ci_assignment,
+            config=str(config), repository=repository, engine=str(engine), runner=helper_runner)
+        assert ci_health == 'unavailable', 'postmerge first population must not become prospective readiness'
+        refusal = json.loads((private / 'ci-helper-2.json').read_text())
+        assert 'first CI population admission requires ready' in refusal['stderr'], refusal
+        # collect accepts exact completed workflow facts without inventing a
+        # premerge expected population. Its native observation cutoff is now.
+        collect_destination = selected
+        if args.installed_ci_collect_control:
+            refused = run('telemetry', 'ci', 'collect', '--assignment', ci_assignment,
+                '--repo', repository, '--pr', str(summary.pr), '--head', summary.expectedHead,
+                '--workflow', args.ci_workflow, *selected, code=2)
+            assert b"unrecognized argument '--config'" in refused.stderr, refused.stderr
+            collect_destination = ['--store-root', str(store)]
+        collected = run('telemetry', 'ci', 'collect', '--assignment', ci_assignment,
+            '--repo', repository, '--pr', str(summary.pr), '--head', summary.expectedHead,
+            '--workflow', args.ci_workflow, *collect_destination)
+        (private / 'retrospective-ci-collection.json').write_bytes(collected.stdout)
+        ci_summary = run('telemetry', 'ci', 'summary', '--store-root', str(store), '--item', 'V2-EFF-01.6')
+        (private / 'retrospective-ci-summary.json').write_bytes(ci_summary.stdout)
+        with sqlite3.connect(store.joinpath('telemetry.sqlite3').as_uri()+'?mode=ro', uri=True) as db:
+            assert db.execute("SELECT count(*) FROM ci_runs WHERE item_id='V2-EFF-01.6'").fetchone()[0] > 0
+            assert db.execute("SELECT count(*) FROM ci_population_admissions WHERE item_id='V2-EFF-01.6'").fetchone()[0] == 0
+        ci_health = 'genuine-retrospective-workflow-collected;prospective-population-unaccepted'
     result = {'helperSubprocessEnvironment':'private-verified','browser':'not-run' if args.skip_browser else 'passed','evidenceKind':'synthetic-test-events','sourceRevision':dashboard['sourceRevision'],
               'enginePath':str(engine),'engineSha256':hashlib.sha256(engine.read_bytes()).hexdigest(),
               'sourceAssemblySha256':hashlib.sha256(assembly.read_bytes()).hexdigest() if not args.engine else None,
@@ -207,7 +264,7 @@ def main():
               'nativeExitPreserved':37,'nativeDeliveryOutcomes':0,
               'snapshotRevision':envelope['revision'], 'hostRevision':host['revision'],
               'genuineAgentUsage':'unknown','installedActivation':'private-association-qualified' if args.activate_workspace else 'not-exercised',
-              'globalActivation':'not-exercised','packagedDashboard':'passed' if args.activate_workspace and not args.skip_browser else 'not-run',
+              'ciObservation':ci_health,'globalActivation':'not-exercised','packagedDashboard':'passed' if args.activate_workspace and not args.skip_browser else 'not-run',
               'historicalOperations':'not-observed-or-replayed'}
     (private / 'result.json').write_text(json.dumps(result,indent=2)+'\n')
     print(json.dumps(result))

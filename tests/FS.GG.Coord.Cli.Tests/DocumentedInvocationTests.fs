@@ -460,3 +460,14 @@ module DocumentedInvocationTests =
             Assert.Equal<string list>([ ".github#889"; "Status"; "Ready" ], o.Args)
             Assert.Equal(None, o.Message)
             Assert.Equal(None, o.ToWorker)
+
+    [<Fact>]
+    let ``retrospective CI collect accepts explicit workspace destination options`` () =
+        let args =
+            [ "telemetry"; "ci"; "collect"; "--assignment"; "/private/assignment.json"
+              "--repo"; "FS-GG/.github"; "--pr"; "4329"; "--head"; String.replicate 40 "a"
+              "--workflow"; "telemetry-dashboard.yml"; "--config"; "/private/workspace.json"
+              "--repository"; "FS-GG/.github" ]
+        Assert.Equal(Some(Ok()), TelemetryApplication.validateInvocation args)
+        Assert.Equal(Some(Error "--config requires a value"),
+                     TelemetryApplication.validateInvocation (args |> List.take (args.Length - 3)))

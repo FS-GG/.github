@@ -331,6 +331,7 @@ def observe_candidate(
 ) -> str:
     """Invoke advisory CI reconciliation with the exact generated delivery JSON."""
     payload = json.dumps(asdict(summary), separators=(",", ":"), sort_keys=True) + "\n"
+    reason = "unknown"
     try:
         with tempfile.NamedTemporaryFile(
             "w", encoding="utf-8", prefix="fsgg-routine-delivery-", suffix=".json"
@@ -353,6 +354,21 @@ def observe_candidate(
             else:
                 code, raw = bounded_watch_query(command, deadline, clock=clock, max_seconds=35)
                 completed = subprocess.CompletedProcess(command, code, raw.decode("utf-8"), "")
+        if completed.returncode != 0:
+            # Preserve a useful bounded diagnostic without forwarding provider
+            # text, credentials, arguments or private paths to the caller.
+            reason = f"reconcile-exit-{completed.returncode}"
+            safe_reasons = {
+                "first CI population admission requires ready, not-delivered, and an explicit matching observed head": "prospective-ci-admission-missing",
+                "GITHUB_TOKEN or GH_TOKEN is required": "provider-credential-unavailable",
+                "workspace config and legacy store root cannot both be selected": "destination-selection-conflict",
+                "configuration-version": "configuration-version",
+            }
+            for message, code in safe_reasons.items():
+                if any(line.removeprefix("fsgg-coord-engine: telemetry ci: ").strip() == message
+                       for line in completed.stderr[:8192].splitlines()):
+                    reason += ":" + code
+                    break
         if completed.returncode == 0:
             try:
                 result = json.loads(completed.stdout)
@@ -362,9 +378,9 @@ def observe_candidate(
             except (json.JSONDecodeError, AttributeError):
                 pass
             return "pending"
-    except (OSError, subprocess.SubprocessError, RuntimeError, UnicodeDecodeError):
-        pass
-    print("fsgg routine telemetry: CI observation unavailable; native delivery is unchanged", file=sys.stderr)
+    except (OSError, subprocess.SubprocessError, RuntimeError, UnicodeDecodeError) as error:
+        reason = "helper-" + type(error).__name__
+    print(f"fsgg routine telemetry: CI observation unavailable ({reason}); native delivery is unchanged", file=sys.stderr)
     return "unavailable"
 
 

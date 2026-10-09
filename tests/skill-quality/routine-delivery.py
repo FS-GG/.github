@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import importlib.util
+import contextlib
 import hashlib
 import io
 import json
@@ -465,6 +466,24 @@ class RoutineDeliveryTests(unittest.TestCase):
             summary, assignment="/private/assignment.json", config="/private/telemetry.json",
             repository="FS-GG/.github", engine="engine", runner=runner,
         ))
+
+    def test_ci_failure_reports_safe_admission_reason_without_provider_text(self):
+        summary = MODULE.Summary(
+            "fsgg.routine-delivery/v1", "FS-GG/.github", 7, HEAD, HEAD,
+            "delivered", "delivered", "not-required", MERGE, 1, None, "current", "unobserved",
+        )
+        error = io.StringIO()
+        refusal = "first CI population admission requires ready, not-delivered, and an explicit matching observed head"
+        with contextlib.redirect_stderr(error):
+            health = MODULE.observe_candidate(
+                summary, assignment="/private/assignment", engine="engine",
+                runner=lambda *a, **k: subprocess.CompletedProcess(a[0], 2, "",
+                    "fsgg-coord-engine: telemetry ci: " + refusal + "\nprovider-secret=/private/token"),
+            )
+        self.assertEqual(health, "unavailable")
+        self.assertIn("reconcile-exit-2:prospective-ci-admission-missing", error.getvalue())
+        self.assertNotIn("provider-secret", error.getvalue())
+        self.assertNotIn("/private/", error.getvalue())
 
     def test_observation_failure_does_not_change_native_delivery(self):
         callbacks: list[str] = []

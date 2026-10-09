@@ -52,3 +52,13 @@ packaged dashboard browser journey checks its one-use bootstrap, scoped item,
 HttpOnly session and logout. This proves that private installed association and
 its packaged collection/display route. Global selection, services, genuine
 agent counters and historical operation custody remain separate.
+
+An admitted retrospective CI profile supplies `--ci-delivery` with the actual
+retained merged delivery and `--ci-workflow` with one exact existing workflow,
+alongside `--activate-workspace --repository OWNER/REPO`. It preserves the
+postmerge first-population admission refusal, then collects genuine provider
+records without inventing prospective readiness. The published 0.100 CLI's
+config-option parser refusal is an explicit control selected by
+`--installed-ci-collect-control`; collection then uses only the exact new local
+store proved by that association. This does not establish whole-population
+acceptance, complete agent usage or global activation.
