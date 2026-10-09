@@ -35,6 +35,42 @@ The telemetry SQLite store and the orchestration PostgreSQL journal serve differ
 
 Built-in collaboration has no native final-usage hook. Its explicit dispatch observations can establish expected population and lineage, but cannot establish total tokens. Existing installation evidence for another route or workspace does not establish collection for a selected experiment; inspect actual configuration and preserve unsupported or unconfigured coverage gaps.
 
+### 1.1 Telemetry acceptance at actor-owned dispatch — 2026-10-09
+
+Close prospective lineage, lifecycle and supported usage gaps at the existing Akka executor/provider
+integration boundary under LEARN-01.2 and installed qualification under LEARN-01.4. Reuse accepted
+O0–O3 and delivered LEARN-01.3 source; this decision does not reopen them or introduce another
+scheduler, telemetry journal or temporary parallel collection system. Coordination owns dispatch and
+provider integration, `.github` owns observation/reduction, and SystemAdmin owns the installed boundary.
+
+The selected integration has these acceptance criteria:
+
+- Persist the original item, attempt, invocation, parent and expected child identity before launch;
+  bind returned native session/turn identities to that admission. Retries retain their original lineage.
+- Observe start, completion, failure, cancellation and retry through the owned execution boundary.
+  Reconcile expected and observed invocations across restart and replay without duplicate observations;
+  retain missing terminals and observation loss explicitly. Actor termination alone proves neither
+  provider completion nor descendant cleanup.
+- Capture authentic usage from the provider connection or subprocess owned by the executor, with its
+  accounting semantics, revisions and terminal identity. Demonstrate complete usage only for a supported
+  route. Wrapping an opaque built-in agent call in an actor does not expose its counters; missing host
+  support remains a named capability gap and prevents a complete-usage claim, not otherwise safe delivery.
+- Record declared work purpose, dependency edges, dispatch, wait and completion observations as inputs
+  to attribution and later critical-path analysis. Do not infer purpose from actor role or causality from
+  timestamp order; dependency capture alone does not qualify a critical-path calculation.
+
+Extend the existing bounded installed journey to join a root, child and retry to original admissions,
+native outcomes, usage and the existing store/dashboard. Reuse applicable cancellation, restart, replay
+and missing-usage controls; add only controls needed for changed boundaries. Report lifecycle, usage
+and cleanup acceptance separately. These criteria qualify the selected integration; they do not authorize
+activation or experiment enrollment, or add a prerequisite to independent CI telemetry work.
+
+CI step classification and trustworthy `pull_request_target` association remain independently schedulable
+under the [UTEL gap-closure sequence](utel-operational-completeness.md#gap-closure-sequencing--2026-10-09).
+Critical-path calculation follows qualified causal observations. Historical gaps can close only from
+authentic retained evidence; prospective actor instrumentation cannot reconstruct missing past counters
+or parent relationships.
+
 ## 2. One orchestration loop, with a small initial policy
 
 ```mermaid
@@ -271,7 +307,7 @@ All milestones use the routine route and one accountable owner. Technical/model/
   Owner: Coordination for execution; `.github` for telemetry/analysis; SystemAdmin for selected Main/runner operation; actual receiver owners for adoption.
   Depends on: .2–.3 published and adopted at their real producer/receiver boundaries; relevant O2 installed subscription/recovery/pilot acceptance under its own ledger; applicable O3 scope expansion if enrollment exceeds O2; selected class authority and experiment opt-in. Bind exact artifacts/releases before operation. Normal v2 mutations retain their own epoch gates; a permitted incumbent/read-only route does not acquire a new V0–V6 dependency.
   Scope: clean installed and retained-upgrade proof; prospective telemetry reconciliation; an A/A assignment/analysis rehearsal for machinery, then the predeclared current/focused enrollment with fixed profiles and bounded ordinary workload. Enrollment is a separate operating effect, not implied by this document or a successful package build.
-  Acceptance: actual supported root/child usage, context assembly and native delivery/repair joins; separate warm/cold and requested/observed facts; no missing population concealed. Inject pause/restart, duplicate observation, lost telemetry and unavailable provider to prove assignment persistence, explicit incompleteness and safe native delivery. A/A validates plumbing and detects gross allocation/reporting faults; it does not prove absence of every bias. Complete the declared data lock with failed/cancelled/open issues retained and mature versus censored follow-up explicit.
+  Acceptance: apply the [actor-owned telemetry criteria](#11-telemetry-acceptance-at-actor-owned-dispatch--2026-10-09) to the selected installed executor/provider route; actual supported root/child usage, context assembly and native delivery/repair joins; separate warm/cold and requested/observed facts; no missing population concealed. Inject pause/restart, duplicate observation, lost telemetry and unavailable provider to prove assignment persistence, explicit incompleteness and safe native delivery. A/A validates plumbing and detects gross allocation/reporting faults; it does not prove absence of every bias. Complete the declared data lock with failed/cancelled/open issues retained and mature versus censored follow-up explicit.
   Closure: native installation/operation receipts and a reproducible window dataset/report, or a recorded interrupted/stopped window with reasons. Missing statistical power remains insufficient data; neither receipt closes O2/O3 on their owners' behalf.
 
 - [ ] **LEARN-01.5 — Make and verify the first evidence-based policy decision — route: routine.**

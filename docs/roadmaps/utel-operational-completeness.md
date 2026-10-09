@@ -52,6 +52,26 @@ timestamps, durations and provenance. Missing billing, human, reasoning, critica
 stay unknown. Useful tests are excluded from bureaucracy. Observation loss emits bounded diagnostics and never
 changes native output, exit or delivery.
 
+## Gap-closure sequencing — 2026-10-09
+
+Use the existing actor/executor integration to close prospective dispatch lineage, lifecycle observation
+and supported provider-usage gaps. The [LEARN actor-owned telemetry acceptance criteria](2026-09-12-095059-stable-policy-orchestration-and-statistical-learning.md#11-telemetry-acceptance-at-actor-owned-dispatch--2026-10-09)
+are the owning integration checklist under LEARN-01.2/.4; accepted O0–O3 and LEARN-01.3 source remain
+reusable foundations. This is planned integration, not evidence of installed coverage or authorization
+to activate a runtime.
+
+| Gap | Owner and sequence |
+|---|---|
+| Prospective parent/child lineage, lifecycle and available native usage | Coordination executor/provider and `.github` telemetry owners implement at owned dispatch; SystemAdmin qualifies the installed boundary. Unsupported built-in runtime counters remain an explicit host capability dependency. |
+| CI step classification | `.github` telemetry owners maintain exact workflow/job/step attribution rules and verify classified and unmatched cases. Proceed independently of actor integration, SDD, Config and Templates. |
+| `pull_request_target` coverage | `.github` CI collector owners qualify native run-to-PR/revision association and ambiguity refusals before removing the unsupported-event gap. Proceed independently of actor integration and the product lanes. |
+| Critical-path calculation | Telemetry analysis owners consume qualified dependency and timing observations, then validate the calculation separately. Until then, retain unknown critical-path coverage. |
+| Historical missing counters or lineage | Recover only from authentic retained evidence. New instrumentation does not establish past observations or settle unresolved historical operations. |
+
+Keep one observation path into the existing store. Extend the maintained integration journey rather than
+building a temporary second collector. This sequence assigns responsibility and dependencies; it does
+not mark these gaps closed or change the supported scope of completed milestones below.
+
 ## Milestones
 
 - [x] **UTEL-06.1 — Real observer acceptance and prospective orchestration identities.** Reproduce PR #3347's
