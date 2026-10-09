@@ -97,6 +97,17 @@ source/profile/documentation paths. No retained store, package version, installe
 workspace defaults change. The later event-derived witness design requires separate source/provenance
 selection and native proof; head/branch/title heuristics are excluded.
 
+PR [#4344](https://github.com/FS-GG/.github/pull/4344) delivered the bounded CI source at
+`99715df3d2214de2c86c9ae7c49e6b0ae9ca7f3b` with 48 successful checks and three skips.
+Native target run [37997746345, attempt 1](https://github.com/FS-GG/.github/actions/runs/37997746345)
+contains one complete PR 4344/head/base/repository relation, unlike the retained empty-array case.
+The wired reader tests exercise that sanitized native relation through both collection entrypoints;
+the application test uses its literal job/step observations and exact-head profile through a disposable
+store, preserving mixed classification and replay without duplicate facts. These controlled populations
+do not establish whole-head inventory or installed collection. The empty-array run remains unknown;
+prospective automatic-delivery qualification, producer publication and receiver adoption remain pending.
+No event-derived witness is selected for the complete native-relation case, and UTEL stays open.
+
 ## Milestones
 
 - [x] **UTEL-06.1 — Real observer acceptance and prospective orchestration identities.** Reproduce PR #3347's
