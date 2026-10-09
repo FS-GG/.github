@@ -515,7 +515,22 @@ class PolicyAPI:
                else [("creation",99901),("update",99901)])
         return [{"type":kind,"ruleset_id":identifier,"ruleset_source_type":"Repository","ruleset_source":REPOSITORY} for kind,identifier in pairs]
 importer["validate_native_guard"](PolicyAPI(),lambda:ref_vector,"a"*40,policy)
-for api,selected in ((PolicyAPI(True),policy),(PolicyAPI(),{**policy,"protectionAcceptedAt":"2000-01-01T00:00:59Z"}),
+importer["validate_native_guard"](PolicyAPI(True),lambda:ref_vector,"a"*40,policy)
+class ChangedPolicyAPI(PolicyAPI):
+    def __init__(self,field,value):super().__init__(True);self.field=field;self.value=value
+    def get(self,path):
+        value=super().get(path)
+        if "/rulesets/" in path:value[self.field]=self.value
+        return value
+fractional=copy.deepcopy(policy)
+for value in fractional["rulesets"].values():value["updated_at"]="2000-01-01T02:00:00.235+02:00"
+fractional["protectionAcceptedAt"]="2000-01-01T00:01:00.235Z"
+importer["validate_native_guard"](ChangedPolicyAPI("updated_at","2000-01-01T00:00:00.235Z"),lambda:ref_vector,"a"*40,fractional)
+missing_anchor=copy.deepcopy(policy);missing_anchor["rulesets"]["mainIntegrity"].pop("bypass_actors")
+for api,selected in ((ChangedPolicyAPI("bypass_actors",[]),policy),(ChangedPolicyAPI("bypass_actors",None),policy),
+                     (ChangedPolicyAPI("updated_at","2000-01-01T00:00:00.001Z"),policy),
+                     (ChangedPolicyAPI("enforcement","disabled"),policy),(PolicyAPI(True),missing_anchor),
+                     (PolicyAPI(),{**policy,"protectionAcceptedAt":"2000-01-01T00:00:59Z"}),
                      (PolicyAPI(),{**policy,"representativeFrozenRefs":[]})):
     try:
         importer["validate_native_guard"](api,lambda:ref_vector,"a"*40,selected)

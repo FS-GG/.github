@@ -297,10 +297,19 @@ def validate_native_guard(api, refs, expected_main, binding):
     require(accepted.tzinfo is not None and accepted <= datetime.now(timezone.utc), "protection acceptance timestamp")
     for name, expected in controls.items():
         native = api.get(f"repos/{REPOSITORY}/rulesets/{expected['id']}")
-        fields = ("id", "name", "target", "enforcement", "updated_at", "conditions", "rules", "bypass_actors")
+        fields = ("id", "name", "target", "enforcement", "conditions", "rules")
         require(all(field in native and field in expected and native[field] == expected[field] for field in fields), "native ruleset identity/visibility differs")
+        # Existing enrollment contract: the reviewed full actor binding is stabilized,
+        # then unchanged native version/visible fields detect drift when actors are hidden.
+        # Omission remains unknown, never an empty roster or direct live-roster proof.
+        require(isinstance(expected.get("bypass_actors"), list), "reviewed full bypass binding missing")
+        if "bypass_actors" in native:
+            require(native["bypass_actors"] == expected["bypass_actors"], "native bypass binding differs")
         require(expected["enforcement"] == "active", "native protection is not active")
         updated=datetime.fromisoformat(expected["updated_at"].replace("Z","+00:00"))
+        observed_updated=datetime.fromisoformat(native["updated_at"].replace("Z","+00:00"))
+        require(updated.tzinfo is not None and observed_updated.tzinfo is not None and updated == observed_updated,
+                "native ruleset version differs")
         require(updated.tzinfo is not None and (accepted-updated).total_seconds() >= 60, "protection stabilization bound")
         includes = expected["conditions"]["ref_name"]
         require(includes["exclude"] == [], "native protection exclusions")
