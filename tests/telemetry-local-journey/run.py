@@ -96,6 +96,10 @@ def main():
         assert config.stat().st_mode & 0o777 == 0o600
         selected = ['--config', str(config), '--repository', repository]
         binding = json.loads(run('telemetry', 'workspace', 'binding', *selected).stdout)
+        assert binding['repository'] == repository
+        assert binding['producerId'] == 'synthetic-producer-' + nonce
+        assert binding['configPath'] == str(config)
+        assert binding['destination'] == 'local' and binding['privateStateRoot'] == str(store)
         (private / 'binding.json').write_text(json.dumps(binding, indent=2)+'\n')
         dashboard_status = json.loads(run('telemetry', 'dashboard', 'status', *selected).stdout)
         assert dashboard_status['status'] == 'ready', dashboard_status
@@ -124,6 +128,8 @@ def main():
         run('telemetry', 'workspace', 'drain', *selected)
         status = json.loads(run('telemetry', 'workspace', 'status', *selected).stdout)
         assert status['pending'] == 0, status
+        assert status['workspaceId'] == workspace and status['producerId'] == binding['producerId']
+        assert status['streamId'] == 'runtime' and status['destination'] == 'local'
     with sqlite3.connect(store.joinpath('telemetry.sqlite3').as_uri() + '?mode=ro', uri=True) as db:
         counters = db.execute('SELECT input_count,cached_input,output_count,reasoning,total FROM runtime_turn_usage').fetchall()
         terminals = db.execute('SELECT outcome,exit_code FROM runtime_terminals').fetchall()
