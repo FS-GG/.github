@@ -90,7 +90,7 @@ def classify_journal_destination(api, logical_ref):
     tree = commit.get("tree", {}).get("sha")
     present = True
     selected = logical_ref.removeprefix(prefix)
-    for segment in ("state", "releases", selected):
+    for depth, segment in enumerate(("state", "releases", selected)):
         require(isinstance(tree, str) and re.fullmatch(r"[0-9a-f]{40}", tree),
                 "Authority tree identity is malformed")
         value = api.get(f"repos/{JOURNAL_REPOSITORY}/git/trees/{tree}")
@@ -109,7 +109,7 @@ def classify_journal_destination(api, logical_ref):
                 "Authority destination entries are malformed or ambiguous")
         matches = [entry for entry in entries if entry["path"] == segment]
         if not matches:
-            require(segment == selected, "Authority required parent directory is missing")
+            require(depth == 2, "Authority required parent directory is missing")
             present = False
             break
         require(matches[0].get("type") == "tree" and matches[0].get("mode") == "040000",
