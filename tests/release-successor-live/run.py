@@ -290,6 +290,18 @@ class PublisherJournalTests(unittest.TestCase):
         self.assertEqual(self.journal.initializations, 0)
         self.assertEqual(self.provider.calls, [])
 
+    def test_missing_required_parent_directories_refuse_without_writes(self):
+        for tree, segment in [(self.ledger.root, "state"), (self.ledger.state, "releases")]:
+            with self.subTest(segment=segment):
+                self.ledger.override = {f"repos/{AUTHORITY}/git/trees/{tree}":
+                    {"sha": tree, "truncated": False, "tree": []}}
+                with self.assertRaisesRegex(publisher.Refused, "required parent directory"):
+                    self.prepare()
+                self.assertEqual(self.journal.initializations, 0)
+                self.assertEqual(self.journal.writes, [])
+                self.assertEqual(self.provider.calls, [])
+                self.assertEqual(self.uniqueness_calls, 0)
+
     def test_nested_missing_object_and_unreadable_main_are_not_fresh(self):
         for path, error in [(f"repos/{AUTHORITY}/git/trees/{self.ledger.root}", NotFound("nested tree404")),
                             (f"repos/{AUTHORITY}/git/ref/heads/main", NotFound("main404")),
