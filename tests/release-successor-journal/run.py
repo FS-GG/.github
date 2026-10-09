@@ -542,20 +542,43 @@ with tempfile.TemporaryDirectory() as scratch:
             pass
 print("deterministic frozen import, exact raw retention, graph reachability and pending-effect refusal passed")
 
-# Admission remains source-disabled before any credential lookup or native call.
+# Disabled admission remains an explicit fixture after source-owned activation.
+from contextlib import redirect_stdout
+from io import StringIO
+from unittest.mock import patch
+import os
+def forbidden(*args,**kwargs):raise AssertionError("credential/network/staging effect attempted")
+entry=importer["main"]
+source_binding=entry.__globals__["ADMITTED_IMPORT"]
 with tempfile.TemporaryDirectory() as scratch:
-    refused=subprocess.run([sys.executable,str(pathlib.Path(__file__).resolve().parents[2]/"scripts/authority-state-import.py"),
-                            "--apply","--manifest","/absent","--output",scratch],capture_output=True,text=True)
-    assert refused.returncode==1 and "native apply is disabled" in refused.stdout
-    assert list(pathlib.Path(scratch).iterdir())==[]
-    refused=subprocess.run([sys.executable,str(pathlib.Path(__file__).resolve().parents[2]/"scripts/authority-state-import.py"),
-                            "--verify-admitted","--output",scratch],capture_output=True,text=True)
-    assert refused.returncode==1 and "native apply is disabled" in refused.stdout
-    assert list(pathlib.Path(scratch).iterdir())==[]
-    refused=subprocess.run([sys.executable,str(pathlib.Path(__file__).resolve().parents[2]/"scripts/authority-state-import.py"),
-                            "--prepare-and-apply","--output",scratch],capture_output=True,text=True)
-    assert refused.returncode==1 and "native apply is disabled" in refused.stdout
-    assert list(pathlib.Path(scratch).iterdir())==[]
+    for flags in (["--apply","--manifest","/absent"],["--verify-admitted"],["--prepare-and-apply"]):
+        output=StringIO()
+        with patch.dict(entry.__globals__,{"ADMITTED_IMPORT":None,"isolated_git":forbidden,"prepare_frozen_proposal":forbidden,"apply_once":forbidden}), \
+             patch.object(sys,"argv",["authority-state-import.py",*flags,"--output",scratch]), \
+             patch.dict(os.environ,{},clear=True),patch("subprocess.check_output",forbidden), \
+             patch("urllib.request.urlopen",forbidden),redirect_stdout(output):
+            code=entry()
+        assert code==1 and "native apply is disabled" in output.getvalue()
+        assert list(pathlib.Path(scratch).iterdir())==[]
+
+# The actual source-owned active binding cannot run from a test/PR context.
+assert isinstance(source_binding,dict), "source B must contain the reviewed native admission"
+original_run=subprocess.run
+def only_local_identity(command,*args,**kwargs):
+    assert command in (["git","rev-parse","HEAD"],["git","diff","--quiet","HEAD"]), "mint/staging subprocess attempted"
+    return original_run(command,*args,**kwargs)
+with tempfile.TemporaryDirectory() as scratch:
+    for flags,message in ((["--apply","--manifest","/absent"],"/absent"),
+                          (["--verify-admitted"],"protected apply context differs"),
+                          (["--prepare-and-apply"],"protected apply context differs")):
+        output=StringIO()
+        with patch.dict(entry.__globals__,{"isolated_git":forbidden,"prepare_frozen_proposal":forbidden,"apply_once":forbidden}), \
+             patch.object(sys,"argv",["authority-state-import.py",*flags,"--output",scratch]), \
+             patch.dict(os.environ,{"GH_TOKEN":"synthetic-no-authority","GITHUB_EVENT_NAME":"pull_request"}), \
+             patch("subprocess.run",only_local_identity),patch("urllib.request.urlopen",forbidden),redirect_stdout(output):
+            code=entry()
+        assert code==1 and message in output.getvalue()
+        assert list(pathlib.Path(scratch).iterdir())==[]
 
 # Synthetic native policy responses exercise refusal boundaries only; no App/native claim.
 import copy
