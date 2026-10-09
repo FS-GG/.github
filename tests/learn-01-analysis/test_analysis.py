@@ -1330,6 +1330,101 @@ class Learn01ContractTests(unittest.TestCase):
         with self.assertRaisesRegex(MODULE.Refusal, "repair does not follow acceptance"):
             MODULE.validate_corpus(CONTRACT, corpus)
 
+    def test_causal_fixture_manifest_binds_exact_raw_and_event_bytes(self):
+        fixture = ROOT / "tests/learn-01-analysis/fixtures/causal-admission"
+        manifest = json.loads((fixture / "manifest.json").read_text())
+        self.assertEqual(4, manifest["caseCount"])
+        self.assertEqual(manifest["caseCount"], len(manifest["cases"]))
+        for case in manifest["cases"]:
+            raw = (fixture / case["admissionFile"]).read_bytes()
+            event_bytes = (fixture / case["eventFile"]).read_bytes()
+            self.assertEqual((case["admissionBytes"], case["admissionSha256"]),
+                             (len(raw), hashlib.sha256(raw).hexdigest()))
+            self.assertEqual((case["eventBytes"], case["eventSha256"]),
+                             (len(event_bytes), hashlib.sha256(event_bytes).hexdigest()))
+            event = json.loads(event_bytes)
+            self.assertEqual(raw, base64.b64decode(event["admissionBase64"], validate=True))
+            self.assertEqual(case["invocationId"], MODULE.decode_causal_declaration(event)["invocationId"])
+        root = (fixture / "root.admission.json").read_bytes()
+        self.assertNotEqual(root, json.dumps(json.loads(root), separators=(",", ":")).encode())
+
+    def test_causal_declaration_refuses_mutation_and_keeps_wait_unknown(self):
+        fixture = ROOT / "tests/learn-01-analysis/fixtures/causal-admission"
+        events = [json.loads((fixture / (name + ".event.json")).read_text())
+                  for name in ("root", "child", "follow-up", "explicit-retry")]
+        original = events[0]
+        for mutation in (
+                {"revision": 1},
+                {"identity": "execution-causal-admission-other"},
+                {"admissionBase64": original["admissionBase64"] + " "},
+                {"admissionSha256": "0" * 64},
+                {"unknown": "field"}):
+            changed = {**original, **mutation}
+            with self.assertRaises(MODULE.Refusal):
+                MODULE.decode_causal_declaration(changed)
+        raw = bytearray(base64.b64decode(original["admissionBase64"]))
+        raw.extend(b" ")
+        changed = {**original, "admissionBase64": base64.b64encode(raw).decode(),
+                   "admissionSha256": hashlib.sha256(raw).hexdigest()}
+        self.assertEqual(events[0]["identity"], original["identity"])
+        self.assertEqual(original["itemId"], MODULE.decode_causal_declaration(changed)["originalItemId"])
+        summary = MODULE.causal_observation_summary(
+            {"admissions": [{"invocation_id": event["identity"].removeprefix("execution-causal-admission-"),
+                              "item_id": event["itemId"]} for event in events]},
+            events)
+        self.assertEqual(4, summary["declarationsReturned"])
+        self.assertEqual({"complete": 2, "partial": 1, "unknown": 1},
+                         summary["declaredDependencyCoverage"])
+        self.assertEqual("unknown", summary["waitCoverage"])
+        self.assertEqual("not-evaluated", summary["criticalPath"])
+        self.assertEqual(4, summary["missingOwnJoins"]["count"])
+
+    def test_causal_own_lineage_conflict_is_visible_without_cost_authority(self):
+        fixture = ROOT / "tests/learn-01-analysis/fixtures/causal-admission"
+        event = json.loads((fixture / "root.event.json").read_text())
+        admission = MODULE.decode_causal_declaration(event)
+        summary = MODULE.causal_observation_summary({
+            "admissions": [{"invocation_id": admission["invocationId"], "item_id": admission["originalItemId"]}],
+            "lineage": [{"invocation_id": admission["invocationId"], "item_id": admission["originalItemId"],
+                         "dispatch_id": event["dispatchId"], "root_invocation_id": "wrong",
+                         "parent_invocation_id": None, "relation": "root"}],
+            "expectedDispatches": [{"dispatch_id": event["dispatchId"], "item_id": admission["originalItemId"],
+                                    "relation": "root"}],
+        }, [event])
+        self.assertEqual(1, summary["contradictoryOwnJoins"]["count"])
+        self.assertEqual(0, summary["missingOwnJoins"]["count"])
+        self.assertNotIn("tokenTotal", summary)
+        duplicated = copy.deepcopy({
+            "admissions": [{"invocation_id": admission["invocationId"], "item_id": admission["originalItemId"]}],
+            "lineage": [{"invocation_id": admission["invocationId"], "item_id": admission["originalItemId"],
+                         "dispatch_id": event["dispatchId"], "root_invocation_id": admission["rootInvocationId"],
+                         "parent_invocation_id": None, "relation": "root"}] * 2,
+            "expectedDispatches": [{"dispatch_id": event["dispatchId"], "item_id": admission["originalItemId"],
+                                    "relation": "root"}],
+        })
+        self.assertEqual(1, MODULE.causal_observation_summary(duplicated, [event])["contradictoryOwnJoins"]["count"])
+
+    def test_causal_rows_only_add_inert_snapshot_observation(self):
+        fixture = ROOT / "tests/learn-01-analysis/fixtures/causal-admission"
+        event = json.loads((fixture / "root.event.json").read_text())
+        baseline = {
+            "learningObservations": [
+                {"canonical": json.dumps(row, separators=(",", ":"), sort_keys=True)}
+                for row in OBSERVATIONS["events"]
+            ],
+            "populations": [], "admissions": [], "expectedDispatches": [], "lineage": [],
+            "usage": [], "terminals": [], "runtimeGaps": [],
+        }
+        before = MODULE.analyze_private_snapshot(CONTRACT, private_envelope(baseline, version=4))
+        with_causal = copy.deepcopy(baseline)
+        with_causal["learningObservations"].append({"canonical": json.dumps(event, separators=(",", ":"), sort_keys=True)})
+        after = MODULE.analyze_private_snapshot(CONTRACT, private_envelope(with_causal, version=4))
+        self.assertEqual(1, after["causalObservation"]["declarationsReturned"])
+        self.assertEqual("unknown", after["causalObservation"]["waitCoverage"])
+        for key in ("tokenComparisonQualified", "providerTotalTokensByArm", "incompleteTokenReasons",
+                    "assignedOriginalItemsByArm"):
+            self.assertEqual(before[key], after[key])
+
 
 if __name__ == "__main__":
     unittest.main()

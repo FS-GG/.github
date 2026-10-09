@@ -1630,6 +1630,7 @@ WHERE f.identity=$resource AND f.revision=$sourceRevision AND f.content_digest=$
         | TelemetryStore.RuntimeResponseNativeInventory _
         | TelemetryStore.RuntimeProviderObservation _
         | TelemetryStore.RuntimeResponseUsage _
+        | TelemetryStore.ExecutionCausalAdmission _
         | TelemetryStore.RuntimeNativeInventorySource _
         | TelemetryStore.LearnSharedCost _
         | TelemetryStore.LearnSharedCostAuthority _
@@ -3456,6 +3457,13 @@ UNION ALL SELECT count(*) FROM runtime_turn_usage WHERE invocation_id=$invocatio
                                 | _ -> ()
 
                                 match state with
+                                | Some(oldKind, digest, revision)
+                                    when oldKind = "execution-causal-admission/1"
+                                         || fact.Kind = "execution-causal-admission/1" ->
+                                    if oldKind = fact.Kind && digest = fact.ContentDigest && revision = fact.Revision then
+                                        replayed <- replayed + 1L
+                                    else
+                                        invalidOp "execution-causal-admission/1 is immutable after persistence"
                                 | Some(_, digest, _) when digest = fact.ContentDigest -> replayed <- replayed + 1L
                                 | Some(_, _, revision) when fact.Revision <= revision ->
                                     invalidOp $"native fact identity conflict: %s{fact.Kind}/%s{fact.Identity}"
@@ -3517,6 +3525,7 @@ UNION ALL SELECT count(*) FROM runtime_turn_usage WHERE invocation_id=$invocatio
 
                                     insert.ExecuteNonQuery() |> ignore
                                     if fact.Kind.StartsWith("learn-", StringComparison.Ordinal)
+                                       || fact.Kind = "execution-causal-admission/1"
                                        || fact.Kind = "runtime-native-inventory/1"
                                        || fact.Kind = "runtime-native-inventory-source/1" then
                                         use order = connection.CreateCommand()
@@ -6360,7 +6369,7 @@ WHERE n.source_ref=$source;
             ItemId = itemId
             FactCount =
                 runtimeScalar
-                                    "SELECT count(*) FROM current_ingest_facts WHERE item_id=$item AND kind NOT IN ('learn-task-snapshot','learn-context-manifest','learn-experiment-assignment','learn-accounting-inventory/1','runtime-native-inventory/1','runtime-native-inventory-source/1','learn-shared-cost/1','learn-shared-cost-allocation/1','learn-shared-cost-authority/1','learn-native-delivery-source/1','learn-installed-origin/1');"
+                                    "SELECT count(*) FROM current_ingest_facts WHERE item_id=$item AND kind NOT IN ('learn-task-snapshot','learn-context-manifest','learn-experiment-assignment','learn-accounting-inventory/1','runtime-native-inventory/1','runtime-native-inventory-source/1','learn-shared-cost/1','learn-shared-cost-allocation/1','learn-shared-cost-authority/1','learn-native-delivery-source/1','learn-installed-origin/1','execution-causal-admission/1');"
             UnknownUsageCounters = unknownUsageCounters
             UsageObservations = usageCount
             DeliveryObservations = count "delivery_observations"
@@ -7375,7 +7384,7 @@ WHERE n.source_ref=$source;
                             use learningCount = connection.CreateCommand()
                             learningCount.Transaction <- transaction
                             learningCount.CommandText <-
-                                $"SELECT count(*) FROM ingest_facts WHERE kind IN ('learn-task-snapshot','learn-context-manifest','learn-experiment-assignment','learn-accounting-inventory/1','runtime-native-inventory/1','runtime-native-inventory-source/1','learn-shared-cost/1','learn-shared-cost-allocation/1','learn-shared-cost-authority/1','learn-native-delivery-source/1','learn-installed-origin/1')%s{learningItemFilter};"
+                                $"SELECT count(*) FROM ingest_facts WHERE kind IN ('learn-task-snapshot','learn-context-manifest','learn-experiment-assignment','learn-accounting-inventory/1','runtime-native-inventory/1','runtime-native-inventory-source/1','learn-shared-cost/1','learn-shared-cost-allocation/1','learn-shared-cost-authority/1','learn-native-delivery-source/1','learn-installed-origin/1','execution-causal-admission/1')%s{learningItemFilter};"
                             itemId |> Option.iter (parameter learningCount "$selected")
 
                             if not compactCi && Convert.ToInt64(learningCount.ExecuteScalar()) > 10000L then
@@ -7436,7 +7445,7 @@ WHERE n.source_ref=$source;
                                     JsonArray()
                                 else
                                     rows
-                                        ($"SELECT o.sequence AS ingest_order,a.producer AS receipt_producer,a.stream AS receipt_stream,a.authority_role AS receipt_role,a.grant_id AS receipt_grant_id,a.grant_generation AS receipt_grant_generation,a.receipt_key,a.envelope_digest AS receipt_envelope_digest,f.identity,f.kind,f.item_id,f.revision,f.content_digest,f.canonical FROM ingest_facts f LEFT JOIN learning_fact_order o ON o.identity=f.identity LEFT JOIN fact_admissions a ON a.identity=f.identity WHERE f.kind IN ('learn-task-snapshot','learn-context-manifest','learn-experiment-assignment','learn-accounting-inventory/1','runtime-native-inventory/1','runtime-native-inventory-source/1','learn-shared-cost/1','learn-shared-cost-allocation/1','learn-shared-cost-authority/1','learn-native-delivery-source/1','learn-installed-origin/1')%s{learningFactItemFilter} ORDER BY f.item_id,f.kind,f.identity LIMIT 10001;")
+                                        ($"SELECT o.sequence AS ingest_order,a.producer AS receipt_producer,a.stream AS receipt_stream,a.authority_role AS receipt_role,a.grant_id AS receipt_grant_id,a.grant_generation AS receipt_grant_generation,a.receipt_key,a.envelope_digest AS receipt_envelope_digest,f.identity,f.kind,f.item_id,f.revision,f.content_digest,f.canonical FROM ingest_facts f LEFT JOIN learning_fact_order o ON o.identity=f.identity LEFT JOIN fact_admissions a ON a.identity=f.identity WHERE f.kind IN ('learn-task-snapshot','learn-context-manifest','learn-experiment-assignment','learn-accounting-inventory/1','runtime-native-inventory/1','runtime-native-inventory-source/1','learn-shared-cost/1','learn-shared-cost-allocation/1','learn-shared-cost-authority/1','learn-native-delivery-source/1','learn-installed-origin/1','execution-causal-admission/1')%s{learningFactItemFilter} ORDER BY f.item_id,f.kind,f.identity LIMIT 10001;")
 
                             [
                                 "populations",
@@ -8492,7 +8501,7 @@ WHERE n.source_ref=$source;
                         use command = connection.CreateCommand()
 
                         command.CommandText <-
-                            "SELECT DISTINCT item_id FROM current_ingest_facts WHERE item_id IS NOT NULL AND kind NOT IN ('learn-task-snapshot','learn-context-manifest','learn-experiment-assignment','learn-accounting-inventory/1','runtime-native-inventory/1','runtime-native-inventory-source/1','learn-shared-cost/1','learn-shared-cost-allocation/1','learn-shared-cost-authority/1','learn-native-delivery-source/1','learn-installed-origin/1') ORDER BY item_id;"
+                            "SELECT DISTINCT item_id FROM current_ingest_facts WHERE item_id IS NOT NULL AND kind NOT IN ('learn-task-snapshot','learn-context-manifest','learn-experiment-assignment','learn-accounting-inventory/1','runtime-native-inventory/1','runtime-native-inventory-source/1','learn-shared-cost/1','learn-shared-cost-allocation/1','learn-shared-cost-authority/1','learn-native-delivery-source/1','learn-installed-origin/1','execution-causal-admission/1') ORDER BY item_id;"
 
                         use reader = command.ExecuteReader()
                         let items = ResizeArray<string>()
