@@ -44,6 +44,7 @@ schemaVersion: 1
 updated: "2026-07-09"
 contracts:
   - { id: fsgg-contracts,                version: "1.4.0",           package-version: "1.4.0" }
+  - { id: governance-config, version: "0.3.0", package-version: "0.3.0" }
   - { id: governance-reference-gate-set, version: "1.2.1.1",         package-version: "1.2.1.1" }
   - { id: fs-gg-ui-template,             version: "0.4.0",           package-version: "0.4.0" }
   - { id: game-sim-core,                 version: "0.2.0",           package-version: "0.2.0" }
@@ -80,6 +81,7 @@ FEED="$WORK/feed.json"
 cat > "$FEED" <<'JSON'
 {
   "FS.GG.Contracts":                   ["1.2.0", "1.4.0", "1.1.1", "1.0.1"],
+  "FS.GG.Governance.Config": ["0.3.0"],
   "FS.GG.Governance.ReferenceGateSet": ["1.2.1.1"],
   "FS.GG.UI.Template":                 ["0.4.0", "0.4.0-preview.1", "0.3.1-preview.1", "0.2.0-preview.1"],
   "FS.GG.Game.Core":                   ["0.2.0", "0.1.0-preview.1"],
