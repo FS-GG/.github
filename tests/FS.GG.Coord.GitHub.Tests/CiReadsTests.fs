@@ -576,3 +576,16 @@ let ``UTEL-CI-02 legacy collection refuses empty target and accepts complete nat
             Assert.Equal(Some "target-association:Missing", snapshot.Diagnostic)
             Assert.Empty snapshot.Jobs
         | other -> failwithf "%A" other
+
+[<Fact>]
+let ``UTEL-CI-02 legacy target rerun does not clone latest association into unwitnessed attempt`` () =
+    let latest = (targetRun (targetRelation "o/r" head baseSha)).Replace("\"run_attempt\":1", "\"run_attempt\":2")
+    let fake = Fake [ populationPr head; response ("{\"total_count\":1,\"workflow_runs\":[" + latest + "]}") None ]
+    match CiReads.collect (fake :> ISinglePageGitHubTransport) "https://api.github.com" "o" "r" 7 head "ci.yml" with
+    | Error error -> failwithf "%A" error
+    | Ok snapshot ->
+        Assert.Equal(Some "target-association:Missing:unwitnessed-attempt", snapshot.Diagnostic)
+        Assert.Empty snapshot.Jobs
+        Assert.Single snapshot.Runs |> ignore
+        Assert.Equal(2, snapshot.Runs.Head.Attempt)
+        Assert.Equal(2, fake.Requests.Length)
