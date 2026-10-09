@@ -7,6 +7,9 @@ import importlib.util
 import json
 import pathlib
 import unittest
+from unittest import mock
+import io
+from contextlib import redirect_stdout
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -16,6 +19,9 @@ SPEC = importlib.util.spec_from_file_location("v2_ci_qualification", TOOL)
 MODULE = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader is not None
 SPEC.loader.exec_module(MODULE)
+APP_SPEC = importlib.util.spec_from_file_location("app_readback", ROOT / "tools/v2-ci-ordinary-app-readback.py")
+APP = importlib.util.module_from_spec(APP_SPEC)
+APP_SPEC.loader.exec_module(APP)
 SOURCE = "53a0f6c8f03bb8c4a60d55c3ce8a38c78a26b1b5"
 HEAD = "353ff86a50808959770a73863385646efaf69969"
 
@@ -262,6 +268,97 @@ class OrdinarySettlementQualificationTests(unittest.TestCase):
         self.assertEqual([{"actorId": rehearsal["writer"]["appId"], "actorType": "Integration", "bypassMode": "always"}],
                          rehearsal["rulesets"]["writer"]["bypassActors"])
         self.assertEqual([], rehearsal["rulesets"]["integrity"]["bypassActors"])
+
+
+class MainAppReadbackTests(unittest.TestCase):
+    def native(self, path, token, body=None):
+        self.calls.append((path, token, body))
+        if path.endswith("/rulesets/24802693"):
+            return {"id": 24802693, "bypass_actors": [
+                {"actor_id": 4882140, "actor_type": "Integration", "bypass_mode": "always"},
+                {"actor_id": 5064713, "actor_type": "Integration", "bypass_mode": "always"}]}
+        if path.endswith("/rulesets/24802698"):
+            return {"id": 24802698, "bypass_actors": []}
+        if path.endswith("/rules/branches/main"):
+            return [{"type": kind, "ruleset_id": identifier, "ruleset_source_type": "Repository",
+                     "ruleset_source": "FS-GG/FS.GG.Coordination.Authority"}
+                    for kind, identifier in (("creation", 24802693), ("update", 24802693),
+                                             ("deletion", 24802698), ("non_fast_forward", 24802698))]
+        raise AssertionError(path)
+
+    def setUp(self):
+        self.calls = []
+
+    def test_present_empty_and_missing_bypass_rosters_are_distinct(self):
+        with mock.patch.object(APP, "request", side_effect=self.native):
+            complete = APP.main_rules_readback("FS-GG/FS.GG.Coordination.Authority", "selected-token")
+        self.assertTrue(complete["bypassRosterAvailable"])
+        self.assertEqual([], complete["rulesets"][1]["bypassActors"])
+        self.assertEqual([5, 0, 6, 4, 7, 1, 3], complete["rulesets"][0]["bypassActors"][1]["actorIdDigits"])
+        original = self.native
+        def redacted(path, token, body=None):
+            result = original(path, token, body)
+            if path.endswith("/rulesets/24802693"):
+                result.pop("bypass_actors")
+            return result
+        with mock.patch.object(APP, "request", side_effect=redacted):
+            missing = APP.main_rules_readback("FS-GG/FS.GG.Coordination.Authority", "selected-token")
+        self.assertFalse(missing["bypassRosterAvailable"])
+        self.assertFalse(missing["rulesets"][0]["bypassActorsFieldPresent"])
+        self.assertIsNone(missing["rulesets"][0]["bypassActors"])
+
+    def test_http_refusal_is_unknown_and_independent_reads_continue(self):
+        def refused(path, token, body=None):
+            if path.endswith("/rulesets/24802693"):
+                self.calls.append((path, token, body))
+                raise APP.ReadbackUnavailable(path, 403)
+            return self.native(path, token, body)
+        with mock.patch.object(APP, "request", side_effect=refused):
+            result = APP.main_rules_readback("FS-GG/FS.GG.Coordination.Authority", "selected-token")
+        self.assertFalse(result["observationComplete"])
+        self.assertFalse(result["bypassRosterAvailable"])
+        self.assertEqual(403, result["rulesets"][0]["httpStatus"])
+        self.assertEqual(3, len(self.calls))
+        self.assertTrue(all(token == "selected-token" and body is None for _, token, body in self.calls))
+
+    def test_probe_uses_narrowed_production_token_and_does_not_print_credentials(self):
+        repository = "FS-GG/FS.GG.Coordination.Authority"
+        permissions = {"contents": "write", "metadata": "read"}
+        def api(path, token, body=None):
+            if path == "/app":
+                return {"id": 5064713, "name": "FS-GG Ordinary V2 Settlement", "owner": {"login": "FS-GG"}, "permissions": permissions, "events": []}
+            if path.endswith("/installation"):
+                return {"id": 164553252, "app_id": 5064713, "account": {"login": "FS-GG"}, "repository_selection": "selected", "permissions": permissions, "events": [], "suspended_at": None}
+            if path.endswith("/access_tokens"):
+                self.calls.append((path, token, body))
+                return {"token": "selected-token" if "repository_ids" in body else "metadata-token", "permissions": permissions}
+            if path.startswith("/installation/repositories"):
+                self.calls.append((path, token, body))
+                return {"total_count": 1, "repositories": [{"id": 1351660651, "full_name": repository}]}
+            return self.native(path, token, body)
+        env = {"FSGG_APP_ID": "5064713", "FSGG_EXPECTED_APP_ID": "5064713", "FSGG_EXPECTED_NAME": "FS-GG Ordinary V2 Settlement",
+               "FSGG_EXPECTED_REPOSITORY": repository, "FSGG_EXPECTED_REPOSITORY_ID": "1351660651", "FSGG_APP_PRIVATE_KEY": "private-key-sentinel", "FSGG_MAIN_RULE_READBACK": "1"}
+        output = io.StringIO()
+        with mock.patch.dict(APP.os.environ, env, clear=True), mock.patch.object(APP, "app_jwt", return_value="jwt-sentinel"), \
+             mock.patch.object(APP, "request", side_effect=api), redirect_stdout(output):
+            self.assertEqual(0, APP.main())
+        self.assertIn(("/app/installations/164553252/access_tokens", "jwt-sentinel", {"repository_ids": [1351660651], "permissions": {"contents": "write"}}), self.calls)
+        rules = [(path, token, body) for path, token, body in self.calls if "/rules" in path]
+        self.assertEqual(3, len(rules))
+        self.assertTrue(all(token == "selected-token" and body is None for _, token, body in rules))
+        for secret in ("private-key-sentinel", "jwt-sentinel", "selected-token", "metadata-token"):
+            self.assertNotIn(secret, output.getvalue())
+        self.assertTrue(json.loads(output.getvalue())["mainRuleReadback"]["bypassRosterAvailable"])
+
+    def test_production_selection_does_not_exercise_retired_rehearsal_secrets(self):
+        workflow = (ROOT / ".github/workflows/v2-ci-ordinary-app-readback.yml").read_text()
+        self.assertIn("default: production", workflow)
+        production, retired = workflow.split("  rehearsal:", 1)
+        self.assertIn("inputs.profile == 'production'", production)
+        self.assertIn('FSGG_MAIN_RULE_READBACK: "1"', production)
+        self.assertNotIn("secrets.", retired)
+        self.assertNotIn("environment:", retired)
+        self.assertIn("exit 2", retired)
 
 
 if __name__ == "__main__":
