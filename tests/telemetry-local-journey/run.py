@@ -24,6 +24,13 @@ ASSOCIATION_KEYS = {'FSGG_TELEMETRY_STORE', 'FSGG_TELEMETRY_CONFIG',
                     'FSGG_TELEMETRY_CODEX_INVOCATION', 'GITHUB_REPOSITORY', 'CODEX_THREAD_ID'}
 
 
+def private_environment(config_home):
+    env = dict(os.environ, XDG_CONFIG_HOME=str(config_home))
+    for key in ASSOCIATION_KEYS | {key for key in env if key.startswith('FSGG_TELEMETRY_CREDENTIAL_')}:
+        env.pop(key, None)
+    return env
+
+
 @contextmanager
 def process_environment(env):
     """Scope inherited helper children to the same environment as direct calls."""
@@ -41,7 +48,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--private-root', type=Path, required=True)
     parser.add_argument('--store-root', type=Path, required=True)
-    parser.add_argument('--engine', type=Path)
+    parser.add_argument('--engine-path', dest='engine', type=Path)
     parser.add_argument('--skip-browser', action='store_true')
     args = parser.parse_args()
     private = args.private_root.resolve()
@@ -55,10 +62,8 @@ def main():
     if not args.engine:
         engine.write_text('#!/bin/sh\nexec dotnet ' + "'" + str(assembly).replace("'", "'\\''") + "'" + ' "$@"\n')
         engine.chmod(0o700)
-    env = dict(os.environ, XDG_CONFIG_HOME=str(private / 'config'))
     # Keep this fixture independent of any selected installed association.
-    for key in ASSOCIATION_KEYS | {key for key in env if key.startswith('FSGG_TELEMETRY_CREDENTIAL_')}:
-        env.pop(key, None)
+    env = private_environment(private / 'config')
 
     def run(*argv, code=0):
         result = subprocess.run([str(engine), *argv], env=env, cwd=private,

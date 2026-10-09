@@ -18,7 +18,7 @@ of inherited association and credential keys at the actual helper boundary.
 The browser uses the maintained fixture's standard headless Chromium launch.
 The production durability assessor remains active; overlay refusal is expected.
 
-`--engine ABSOLUTE_ENGINE` selects an already installed CLI without modifying
+`--engine-path ABSOLUTE_ENGINE` selects an already installed CLI without modifying
 its installation or global selection. `--skip-browser` qualifies only the
 collector/store/canonical-export/projection portion; it reports browser
 `not-run`. A failed browser launch or navigation cannot qualify browser
@@ -38,3 +38,8 @@ handles. Each run requires a new output/store path and retains evidence.
 No configuration activation, recurring publisher, remote Host, live Pages,
 provider assessment, historical operation, or whole-item usage is accepted by
 this test.
+
+The existing dashboard CI workflow runs `test_environment.py` through unittest.
+It checks real helper subprocess environment inheritance, the sentinel failure
+control, and restoration after a child failure. That hosted test does not run or
+accept the separately admitted durable-store/browser journey described above.
