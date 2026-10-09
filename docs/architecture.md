@@ -162,17 +162,17 @@ layering rules live in [`docs/design-and-controls.md`](design-and-controls.md).
 
 ### The one rule that keeps it honest
 
-> Governance may **inspect** your rendering or lifecycle artifacts; rendering and
-> the lifecycle never **require** governance to build, test, document, package, or
-> release.
+> Running the Governance CLI or enforcement remains optional. Its Config library
+> can be a declared build dependency without requiring Governance enforcement.
 
-The dependency direction is **one-way**. **FS.GG.Rendering depends on no other
-FS-GG component** — never on Governance. SDD depends on Governance only through an
-*optional* handoff document it can produce and ignore. Your inner development loop
-is never blocked by governance, and if governance ever feels heavy you can drop it
-and keep building. This rule is restated on the
-[org landing page](../profile/README.md) and is the invariant every contract in
-§5 is designed to preserve.
+**FS.GG.Rendering depends on no other FS-GG component** — never on Governance.
+SDD Commands now references the published `FS.GG.Governance.Config` **0.3.0**
+library for configuration parsing and capability-binding resolution, adopted in
+[SDD #1104](https://github.com/FS-GG/FS.GG.SDD/pull/1104). The Governance CLI handoff
+remains optional; SDD **2.3 publication and installed adoption remain pending**.
+The library dependency does not activate Governance enforcement in the development
+loop. The selected dependency edges are recorded in §5 and the
+[registry](registry/compatibility.md).
 
 ---
 
@@ -338,7 +338,8 @@ so the detect-and-warn policy above applies only to *in-project* invocations.
 ### 4.3 FS.GG.Governance — the optional inference kernel
 
 The largest repo by count (**166 `.fsproj`: 80 src + 84 Expecto/FsCheck test
-projects, ~70 packable**), and entirely optional for its siblings.
+projects, ~70 packable**). Running its CLI and enforcement remains optional;
+SDD Commands now has the explicit Config 0.3.0 library dependency described above.
 
 **A pure, BCL-only kernel.** A fixed-point reasoner with full provenance, a
 three-valued Kleene `Verdict` (`Pass`/`Fail`/`Uncertain`), and a reified `Check`
@@ -652,7 +653,8 @@ product's `FS.GG.UI.*` pin), which is a different axis from the template package
 
 Dependency edges (downstream → upstream): Templates → Rendering (template),
 Templates → SDD (scaffold-provider), Templates → Governance (policy/overlay),
-SDD → Governance (handoff, **optional**), **.github → SDD** (`registry-schema` —
+SDD → Governance (optional CLI handoff; Config **0.3.0** Commands source dependency,
+SDD **2.3 publication pending**), **.github → SDD** (`registry-schema` —
 the coherence gate validates this registry with SDD's typed `Fsgg.Registry`), and
 **.github → Rendering + SDD** (`skill-registry` — `skills.yml` is reconciled from the two
 producers' skill-manifests).
