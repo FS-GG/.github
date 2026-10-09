@@ -898,11 +898,14 @@ def apply_once(manifest, guard, fetch, push, verify, output):
     return result
 
 
-def validate_native_guard(api, refs, expected_main, binding):
+def validate_native_protection(api, binding, legacy_refs):
+    """Read the reviewed main/retirement controls without admitting an import."""
     repository = api.get(f"repos/{REPOSITORY}")
     require(repository.get("id") == 1351660651 and repository.get("full_name") == REPOSITORY, "native Authority identity")
-    expected_refs = {**binding["frozenRefs"], "refs/heads/main": expected_main}
-    require(refs() == expected_refs, "native frozen ref vector differs")
+    require(isinstance(legacy_refs, (list, tuple)) and legacy_refs
+            and len(legacy_refs) <= 16 and len(set(legacy_refs)) == len(legacy_refs)
+            and all(isinstance(ref, str) and ref.startswith(PREFIX) for ref in legacy_refs),
+            "legacy effective-rule selection")
     controls = binding["rulesets"]
     require(controls["mainWriter"]["id"]==24802693 and controls["mainIntegrity"]["id"]==24802698, "main protection identity")
     accepted=datetime.fromisoformat(binding["protectionAcceptedAt"].replace("Z","+00:00"))
@@ -950,16 +953,26 @@ def validate_native_guard(api, refs, expected_main, binding):
     expected_rules = {("creation",24802693),("update",24802693),("deletion",24802698),("non_fast_forward",24802698)}
     require(isinstance(native_main,list) and len(native_main)==4 and {(r["type"],r["ruleset_id"]) for r in native_main} == expected_rules
             and all(r["ruleset_source_type"]=="Repository" and r["ruleset_source"]==REPOSITORY for r in native_main), "effective main protection differs")
-    representatives=binding["representativeFrozenRefs"]
-    require(any(ref.startswith(PREFIX+"operation/") for ref in representatives)
-            and any(ref.startswith(PREFIX+"release/") for ref in representatives) and EPOCH in representatives, "frozen effective-rule coverage")
-    for ref in representatives:
-        require(ref in binding["frozenRefs"] and ref.startswith(PREFIX), "frozen effective-rule representative")
+    for ref in legacy_refs:
         from urllib.parse import quote
         rules = api.get(f"repos/{REPOSITORY}/rules/branches/{quote(ref.removeprefix('refs/heads/'),safe='')}")
         required = {("creation",controls["legacyFence"]["id"]),("update",controls["legacyFence"]["id"])}
         require(isinstance(rules,list) and required <= {(r["type"],r["ruleset_id"]) for r in rules}
                 and all(r["ruleset_source_type"]=="Repository" and r["ruleset_source"]==REPOSITORY for r in rules), "effective legacy freeze differs")
+
+
+
+def validate_native_guard(api, refs, expected_main, binding):
+    repository = api.get(f"repos/{REPOSITORY}")
+    require(repository.get("id") == 1351660651 and repository.get("full_name") == REPOSITORY, "native Authority identity")
+    expected_refs = {**binding["frozenRefs"], "refs/heads/main": expected_main}
+    require(refs() == expected_refs, "native frozen ref vector differs")
+    representatives=binding["representativeFrozenRefs"]
+    require(any(ref.startswith(PREFIX+"operation/") for ref in representatives)
+            and any(ref.startswith(PREFIX+"release/") for ref in representatives) and EPOCH in representatives, "frozen effective-rule coverage")
+    for ref in representatives:
+        require(ref in binding["frozenRefs"] and ref.startswith(PREFIX), "frozen effective-rule representative")
+    validate_native_protection(api, binding, representatives)
 
 
 def verify_native_import(api, manifest):

@@ -665,3 +665,46 @@ for api,selected in ((ChangedPolicyAPI("bypass_actors",[]),policy),(ChangedPolic
         raise AssertionError("incomplete or unstable native protection accepted")
     except ValueError:pass
 print("disabled apply, actual Git single-lease/unknown-readback controls and protection refusals passed")
+
+
+# Extraction preserves the import's frozen operation while making only protection reusable.
+validate_protection = importer["validate_native_protection"]
+selected_ref = importer["PREFIX"] + "release/prospective-fixture"
+validate_protection(PolicyAPI(), {"rulesets": controls, "protectionAcceptedAt": policy["protectionAcceptedAt"]}, [selected_ref])
+validate_protection(PolicyAPI(True), policy, [selected_ref])
+for native, selected in ((ChangedPolicyAPI("enforcement", "disabled"), policy),
+                         (ChangedPolicyAPI("updated_at", "2000-01-01T00:00:00.001Z"), policy),
+                         (PolicyAPI(True), missing_anchor)):
+    try:
+        validate_protection(native, selected, [selected_ref])
+        raise AssertionError("extracted protection weakened the importer rule predicate")
+    except ValueError:
+        pass
+for changed_refs in ({**ref_vector, REF: "e" * 40}, {k: v for k, v in ref_vector.items() if k != REF}):
+    try:
+        importer["validate_native_guard"](PolicyAPI(), lambda: changed_refs, "a" * 40, policy)
+        raise AssertionError("extraction removed the import's exact frozen-ref requirement")
+    except ValueError as error:
+        assert "frozen ref vector differs" in str(error)
+for invalid in ({**policy, "representativeFrozenRefs": [selected_ref, importer["EPOCH"], importer["PREFIX"] + "operation/00"]},
+                {**policy, "representativeFrozenRefs": [REF]}):
+    try:
+        importer["validate_native_guard"](PolicyAPI(), lambda: ref_vector, "a" * 40, invalid)
+        raise AssertionError("a release protection selection fabricated import coverage")
+    except ValueError:
+        pass
+class WrongOriginPolicyAPI(PolicyAPI):
+    def get(self, path):
+        value = super().get(path)
+        if isinstance(value, list):
+            for rule in value:
+                rule["ruleset_source"] = "other/repository"
+        return value
+for native in (WrongOriginPolicyAPI(),):
+    try:
+        validate_protection(native, policy, [selected_ref])
+        raise AssertionError("foreign effective protection origin accepted")
+    except ValueError:
+        pass
+assert ProtectedReleaseJournal(FakeGit()).main_directory is False
+print("reusable protection equivalence, exact frozen import and legacy default controls passed")
