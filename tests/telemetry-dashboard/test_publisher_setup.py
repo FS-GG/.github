@@ -18,7 +18,7 @@ class PublisherSetupTests(unittest.TestCase):
     def fixture(self,root):
         config=root/"config.json"; config.write_text("{}\n"); config.chmod(0o600)
         labels=root/"labels.json"; labels.write_text(json.dumps({"schema":D.LABELS_SCHEMA,"items":{},"models":{},"efforts":{},"scopes":{}})+"\n"); labels.chmod(0o600)
-        args=argparse.Namespace(config=config,labels=labels,repo="FS-GG/.github",branch="telemetry-data",path="host.json",output=root/"host.json",systemd_dir=root/"systemd",install_only=False,activate=False,approve_labels=None,authorize_recurring_publication=False,authorize_event_publication=False)
+        args=argparse.Namespace(config=config,labels=labels,repo="FS-GG/.github",branch="fixture-publication",path="host.json",output=root/"host.json",systemd_dir=root/"systemd",install_only=False,activate=False,approve_labels=None,authorize_recurring_publication=False,authorize_event_publication=False)
         return config,labels,args
 
     def test_default_preview_has_zero_external_or_systemd_effects(self):
@@ -109,11 +109,11 @@ class PublisherSetupTests(unittest.TestCase):
             if index==1:
                 changed=dict(snapshot); changed["revision"]="0"*64; content=base64.b64encode(D.dump(changed)).decode()
             answers=[({"encoding":"base64","content":content},{}),({"object":{"sha":refs[index]}},{})]
-            with mock.patch.object(D,"github",side_effect=answers): result=D.verify_publication("FS-GG/.github","telemetry-data","host.json","token",commit,snapshot)
+            with mock.patch.object(D,"github",side_effect=answers): result=D.verify_publication("FS-GG/.github","fixture-publication","host.json","token",commit,snapshot)
             self.assertFalse(result["verified"])
         wrapped="\n".join(good[index:index+60] for index in range(0,len(good),60))
         with mock.patch.object(D,"github",side_effect=[({"encoding":"base64","content":wrapped},{}),({"object":{"sha":commit}}, {})]):
-            self.assertTrue(D.verify_publication("FS-GG/.github","telemetry-data","host.json","token",commit,snapshot)["verified"])
+            self.assertTrue(D.verify_publication("FS-GG/.github","fixture-publication","host.json","token",commit,snapshot)["verified"])
 
 
 class EventPublisherTests(unittest.TestCase):
@@ -121,7 +121,7 @@ class EventPublisherTests(unittest.TestCase):
         config=root/"telemetry.json"; config.write_text("{}\n"); config.chmod(0o600)
         labels=root/"labels.json"; labels.write_text(json.dumps({"schema":D.LABELS_SCHEMA,"items":{},"models":{},"efforts":{},"scopes":{}})+"\n"); labels.chmod(0o600)
         engine=pathlib.Path(D.sys.executable).resolve()
-        receipt={"schema":D.EVENT_RECEIPT_SCHEMA,"configDigest":D.hashlib.sha256(config.read_bytes()).hexdigest(),"engine":str(engine),"labelsPath":str(labels.resolve()),"labelsDigest":D.hashlib.sha256(labels.read_bytes()).hexdigest(),"destination":{"repository":"FS-GG/.github","branch":"telemetry-data","path":"host.json"},"credentialSource":"environment-or-gh-auth"}
+        receipt={"schema":D.EVENT_RECEIPT_SCHEMA,"configDigest":D.hashlib.sha256(config.read_bytes()).hexdigest(),"engine":str(engine),"labelsPath":str(labels.resolve()),"labelsDigest":D.hashlib.sha256(labels.read_bytes()).hexdigest(),"destination":{"repository":"FS-GG/.github","branch":"fixture-publication","path":"host.json"},"credentialSource":"environment-or-gh-auth"}
         receipt_path=root/D.EVENT_RECEIPT_NAME; D.atomic_private(receipt_path,receipt)
         return config,labels,receipt_path,receipt,argparse.Namespace(config=config)
 

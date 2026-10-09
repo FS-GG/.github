@@ -110,16 +110,18 @@ class HandoffPublisherTests(unittest.TestCase):
                 with self.assertRaisesRegex(D.HostSourceError,"HANDOFF_CONFIG_INVALID"):
                     D._explicit_producer_config(config)
 
-    def test_checked_in_two_uid_proof_is_bound_to_current_tool_and_provider(self):
+    def test_checked_in_two_uid_proof_is_historical_and_bound_to_provider(self):
         result=json.loads(pathlib.Path(__file__).with_name("two_uid_handoff_proof.result.json").read_text())
         script=pathlib.Path(__file__).with_name("two_uid_handoff_proof.py")
         self.assertEqual(result["status"],"pass")
-        self.assertEqual(result["candidateToolDigest"],hashlib.sha256((ROOT/"tools"/"telemetry-dashboard.py").read_bytes()).hexdigest())
+        # Preserve the pre-retirement proof. It does not qualify this retired publisher
+        # or establish that any installed publisher/service has stopped.
+        self.assertEqual(result["candidateToolDigest"],"b155781773057a9c732013bfe2ac64e6723534d629e4ca6fdb208eda01e444c5")
         self.assertEqual(result["proofScriptDigest"],hashlib.sha256(script.read_bytes()).hexdigest())
 
     def activate(self,outgoing,state,digest):
         args=argparse.Namespace(outgoing=outgoing,state_dir=state,producer_uid=os.getuid(),handoff_gid=os.getgid(),approve_labels=digest,
-            repo="FS-GG/.github",branch="telemetry-data",path="host.json",candidate_digest=D._candidate_digest(),cutover_proof_dir=state,
+            repo="FS-GG/.github",branch="fixture-publication",path="host.json",candidate_digest=D._candidate_digest(),cutover_proof_dir=state,
             operator_uid=os.getuid()+10000,cutover_gid=os.getgid(),
             record_activation=True,authorize_single_publisher_cutover=True)
         with mock.patch.object(D,"_load_cutover_proof",side_effect=lambda directory,uid,gid,producer_uid,config_digest,candidate_digest: cutover(config_digest,candidate_digest)): return D.handoff_setup(args)
@@ -159,7 +161,7 @@ class HandoffPublisherTests(unittest.TestCase):
         temporary,_,outgoing,state,_,digest,args=self.fixture()
         with temporary:
             self.stage(args); setup=argparse.Namespace(outgoing=outgoing,state_dir=state,producer_uid=os.getuid(),handoff_gid=os.getgid(),approve_labels=digest,
-                repo="FS-GG/.github",branch="telemetry-data",path="host.json",candidate_digest=D._candidate_digest(),cutover_proof_dir=state,
+                repo="FS-GG/.github",branch="fixture-publication",path="host.json",candidate_digest=D._candidate_digest(),cutover_proof_dir=state,
                 operator_uid=os.getuid()+10000,cutover_gid=os.getgid(),
                 record_activation=True,authorize_single_publisher_cutover=True)
             provider=lambda directory,uid,gid,producer_uid,config_digest,candidate_digest: cutover(config_digest,candidate_digest)
@@ -174,7 +176,7 @@ class HandoffPublisherTests(unittest.TestCase):
         temporary,_,outgoing,state,_,digest,args=self.fixture()
         with temporary:
             self.stage(args); setup=argparse.Namespace(outgoing=outgoing,state_dir=state,producer_uid=os.getuid(),handoff_gid=os.getgid(),approve_labels=digest,
-                repo="FS-GG/.github",branch="telemetry-data",path="host.json",candidate_digest=D._candidate_digest(),cutover_proof_dir=None,
+                repo="FS-GG/.github",branch="fixture-publication",path="host.json",candidate_digest=D._candidate_digest(),cutover_proof_dir=None,
                 operator_uid=None,cutover_gid=None,record_activation=False,authorize_single_publisher_cutover=False)
             with mock.patch.object(D,"_load_cutover_proof") as load_proof:
                 result=D.handoff_setup(setup)
@@ -223,7 +225,7 @@ class HandoffPublisherTests(unittest.TestCase):
         with temporary:
             self.stage(args); proof,_=retry_cutover("1"*64,D._candidate_digest(),labels_digest="0"*64)
             setup=argparse.Namespace(outgoing=outgoing,state_dir=state,producer_uid=os.getuid(),handoff_gid=os.getgid(),approve_labels=digest,
-                repo="FS-GG/.github",branch="telemetry-data",path="host.json",candidate_digest=D._candidate_digest(),cutover_proof_dir=state,
+                repo="FS-GG/.github",branch="fixture-publication",path="host.json",candidate_digest=D._candidate_digest(),cutover_proof_dir=state,
                 operator_uid=os.getuid()+10000,cutover_gid=os.getgid(),record_activation=True,authorize_single_publisher_cutover=True)
             with mock.patch.object(D,"_load_cutover_proof",return_value=proof):
                 with self.assertRaisesRegex(D.HostSourceError,"HANDOFF_CUTOVER_PROOF_INVALID"):
@@ -245,7 +247,7 @@ class HandoffPublisherTests(unittest.TestCase):
             self.stage(args); current=F.host(); D.validate_host(current)
             baseline={"commit":"8"*40,"snapshotDigest":hashlib.sha256(D.dump(current)).hexdigest(),"publicRevision":current["revision"]}
             setup=argparse.Namespace(outgoing=outgoing,state_dir=state,producer_uid=os.getuid(),handoff_gid=os.getgid(),approve_labels=digest,
-                repo="FS-GG/.github",branch="telemetry-data",path="host.json",candidate_digest=D._candidate_digest(),cutover_proof_dir=state,
+                repo="FS-GG/.github",branch="fixture-publication",path="host.json",candidate_digest=D._candidate_digest(),cutover_proof_dir=state,
                 operator_uid=os.getuid()+10000,cutover_gid=os.getgid(),record_activation=True,authorize_single_publisher_cutover=True)
             proof=replacement_cutover("1"*64,D._candidate_digest(),digest,baseline)
             def provider(directory,uid,gid,producer_uid,config_digest,candidate_digest):

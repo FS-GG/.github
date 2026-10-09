@@ -35,7 +35,7 @@ class RotationTests(unittest.TestCase):
             directory.mkdir(mode=0o700)
         old_label, new_label = "1" * 64, "2" * 64
         config = {"outgoingDir": str(outgoing), "producerUid": 10, "handoffGid": 20,
-                  "labelsDigest": old_label, "destination": {"repository": "FS-GG/.github", "branch": "telemetry-data", "path": "host.json"},
+                  "labelsDigest": old_label, "destination": {"repository": "FS-GG/.github", "branch": "fixture-publication", "path": "host.json"},
                   "credentialSource": "environment-only"}
         candidate_digest = hashlib.sha256((ROOT / "tools/telemetry-dashboard.py").read_bytes()).hexdigest()
         old = {"config": config, "candidateDigest": candidate_digest}

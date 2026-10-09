@@ -1475,7 +1475,16 @@ def _project_host_snapshot(snapshot: dict[str,Any], envelope: dict[str,Any], lab
     return host
 
 
+RETIRED_PUBLIC_BRANCHES = frozenset({"telemetry-data", "telemetry-data-current"})
+
+
+def reject_retired_publication(branch: str) -> None:
+    if branch in RETIRED_PUBLIC_BRANCHES:
+        raise HostSourceError("PUBLIC_TELEMETRY_FEED_RETIRED")
+
+
 def publish(repo: str, branch: str, path: str, token: str, snapshot: dict[str, Any]) -> str:
+    reject_retired_publication(branch)
     encoded = urllib.parse.quote(branch, safe="")
     try:
         ref,_ = github(f"repos/{repo}/git/ref/heads/{encoded}",token); parent=ref["object"]["sha"]
@@ -1563,6 +1572,7 @@ def install_units(directory: pathlib.Path, units: dict[str,bytes]) -> str:
 
 
 def publisher_setup(args: argparse.Namespace) -> dict[str,Any]:
+    reject_retired_publication(args.branch)
     config_path,cfg=config(args.config)
     config_bytes=read_private_bytes(config_path,8192,"HOST_CONFIG_UNSAFE")
     engine=shutil.which(cfg["engine"])
@@ -1707,6 +1717,7 @@ def publisher_event(args: argparse.Namespace) -> dict[str,Any]:
         if lock is None:
             result=event_health("skipped","EVENT_LOCK_CONTENDED"); write_event_health(config_path,result); return result
         receipt=load_event_receipt(receipt_path)
+        reject_retired_publication(receipt["destination"]["branch"])
         config_bytes=read_private_bytes(config_path,8192,"EVENT_CONFIG_CHANGED")
         if hashlib.sha256(config_bytes).hexdigest()!=receipt["configDigest"]: raise HostSourceError("EVENT_CONFIG_CHANGED")
         engine=shutil.which(cfg["engine"])
@@ -2041,6 +2052,7 @@ def _verify_replacement_baseline(proof: dict[str,Any], destination: dict[str,str
 
 
 def handoff_setup(args: argparse.Namespace) -> dict[str,Any]:
+    reject_retired_publication(args.branch)
     outgoing=args.outgoing.resolve(strict=True); state=args.state_dir.resolve(strict=True)
     _validate_owned_directory(state,0o700,os.getuid(),os.getgid(),"HANDOFF_STATE_UNSAFE")
     manifest,_,_=_load_handoff(outgoing,args.producer_uid,args.handoff_gid)
@@ -2179,6 +2191,7 @@ def handoff_publish(args: argparse.Namespace) -> dict[str,Any]:
     try:
         activation=_load_handoff_activation(state); config=activation["config"]
         destination=config["destination"]
+        reject_retired_publication(destination["branch"])
         pending=_load_publisher_intent(state)
         if (activation["cutoverProof"].get("schema")==HANDOFF_REPLACEMENT_CUTOVER_SCHEMA
             and pending is None and not (state/HANDOFF_SUCCESS_NAME).exists()):
@@ -2562,6 +2575,12 @@ def main() -> int:
     handoff_publisher=subs.add_parser("handoff-publish"); handoff_publisher.add_argument("--state-dir",type=pathlib.Path,required=True)
     comp=subs.add_parser("compose"); comp.add_argument("--actions",type=pathlib.Path,required=True); comp.add_argument("--deliveries",type=pathlib.Path,required=True); comp.add_argument("--host",type=pathlib.Path); comp.add_argument("--host-revision"); comp.add_argument("--source-revision",required=True); comp.add_argument("--output",type=pathlib.Path,required=True)
     args=parser.parse_args()
+    # Retire the public recurring entrypoints without opening their private config/state.
+    if args.cmd in {"publisher-event", "handoff-publish"}:
+        raise HostSourceError("PUBLIC_TELEMETRY_FEED_RETIRED")
+    if args.cmd in {"host-snapshot", "publisher-setup", "handoff-setup"}:
+        if args.cmd != "host-snapshot" or not args.dry_run:
+            reject_retired_publication(args.branch)
     if args.cmd=="collect-actions":
         token=publication_token()
         atomic(args.output,collect_actions(args.repo,token,args.cap)); return 0

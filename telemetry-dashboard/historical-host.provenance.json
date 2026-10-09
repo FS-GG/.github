@@ -1,0 +1,12 @@
+{
+  "schema": "fsgg.telemetry.historical-snapshot/1",
+  "sourceRepository": "FS-GG/.github",
+  "sourceCommit": "e5f16db2c647a4227d51168bf0ae983eb00a228c",
+  "sourcePath": "host.json",
+  "snapshotPath": "telemetry-dashboard/historical-host.json",
+  "snapshotSha256": "69b3a60f4e94c076c2e843a9c5f106eff81025b32bc219a1b4ff6a1a4757516c",
+  "snapshotSchema": "fsgg.telemetry.dashboard-host/5",
+  "observedAt": "2026-10-06T19:32:54.0538106+00:00",
+  "status": "historical-frozen",
+  "meaning": "Last public host snapshot retained byte-for-byte; not live host health or a private store observation."
+}

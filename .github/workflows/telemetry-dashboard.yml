@@ -47,7 +47,7 @@ on:
   workflow_dispatch:
     inputs:
       host_revision:
-        description: "Published telemetry-data commit SHA; leave empty for a manual full refresh"
+        description: "Frozen historical host commit SHA; leave empty for an Actions/delivery refresh"
         required: false
         type: string
 
@@ -91,27 +91,29 @@ jobs:
     timeout-minutes: 10
     outputs:
       should_deploy: ${{ steps.refresh.outputs.build }}
+      host_revision: ${{ steps.refresh.outputs.revision }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
         with:
           python-version: "3.x"
-      - name: Select exact public Host revision
+      - name: Select frozen historical Host revision
         id: refresh
         env:
           GH_TOKEN: ${{ github.token }}
           REQUESTED_HOST_REVISION: ${{ inputs.host_revision }}
         run: |
-          rc=0
-          current="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/telemetry-data-current" --jq .object.sha 2>host-error.txt)" || rc=$?
-          if [ "$rc" -ne 0 ]; then
-            if grep -q 'HTTP 404' host-error.txt; then
-              current=""
-            else
-              sed 's/^/host revision read: /' host-error.txt >&2
-              exit "$rc"
-            fi
-          fi
+          # Select the immutable snapshot carried by this checked-out main revision.
+          current="$(python3 - <<'PYHOST'
+          import hashlib, json
+          from pathlib import Path
+          manifest = json.loads(Path("telemetry-dashboard/historical-host.provenance.json").read_text())
+          raw = Path(manifest["snapshotPath"]).read_bytes()
+          if hashlib.sha256(raw).hexdigest() != manifest["snapshotSha256"]:
+              raise SystemExit("historical snapshot hash mismatch")
+          print(manifest["sourceCommit"])
+          PYHOST
+          )"
           deployed=""
           pages_rc=0
           pages_url="$(gh api "repos/$GITHUB_REPOSITORY/pages" --jq .html_url 2>/dev/null)" || pages_rc=$?
@@ -149,25 +151,17 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: python3 tools/telemetry-dashboard.py collect-deliveries --repo "$GITHUB_REPOSITORY" --cap 200 --output deliveries.json
-      - name: Read optional safe host snapshot
+      - name: Read frozen historical host snapshot from this source revision
         if: steps.refresh.outputs.build == 'true'
         id: host
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
-          revision='${{ steps.refresh.outputs.revision }}'
-          if [ -n "$revision" ]; then
-            gh api "repos/$GITHUB_REPOSITORY/contents/host.json?ref=$revision" --jq .content > host.base64
-            base64 --decode host.base64 > host.json
-            echo "revision=$revision" >> "$GITHUB_OUTPUT"
-          else
-            echo "revision=" >> "$GITHUB_OUTPUT"
-          fi
+          cp telemetry-dashboard/historical-host.json host.json
+          echo "revision=${{ steps.refresh.outputs.revision }}" >> "$GITHUB_OUTPUT"
       - name: Compose exact-revision site data
         if: steps.refresh.outputs.build == 'true'
         run: |
           args=(--actions actions.json --deliveries deliveries.json --source-revision "$GITHUB_SHA" --output telemetry-dashboard/data/dashboard.json)
-          [ ! -f host.json ] || args+=(--host host.json --host-revision '${{ steps.host.outputs.revision }}')
+          args+=(--host host.json --host-revision '${{ steps.host.outputs.revision }}')
           python3 tools/telemetry-dashboard.py compose "${args[@]}"
       - uses: actions/configure-pages@v6
         if: steps.refresh.outputs.build == 'true'
@@ -189,22 +183,17 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - name: Recheck dispatched public revision
+      - name: Check dispatch against the frozen revision used by the built artifact
         id: latest
         env:
-          GH_TOKEN: ${{ github.token }}
           REQUESTED_HOST_REVISION: ${{ inputs.host_revision }}
+          BUILT_HOST_REVISION: ${{ needs.build.outputs.host_revision }}
         run: |
-          if [ -z "$REQUESTED_HOST_REVISION" ]; then
-            echo "deploy=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          current="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/telemetry-data-current" --jq .object.sha)"
-          if [ "$current" = "$REQUESTED_HOST_REVISION" ]; then
+          if [ -z "$REQUESTED_HOST_REVISION" ] || [ "$REQUESTED_HOST_REVISION" = "$BUILT_HOST_REVISION" ]; then
             echo "deploy=true" >> "$GITHUB_OUTPUT"
           else
             echo "deploy=false" >> "$GITHUB_OUTPUT"
-            echo "Skipping stale public revision $REQUESTED_HOST_REVISION"
+            echo "Skipping dispatch for a different historical revision"
           fi
       - name: Deploy exact built artifact
         if: steps.latest.outputs.deploy == 'true'
