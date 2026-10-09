@@ -589,3 +589,152 @@ let ``UTEL-CI-02 legacy target rerun does not clone latest association into unwi
         Assert.Single snapshot.Runs |> ignore
         Assert.Equal(2, snapshot.Runs.Head.Attempt)
         Assert.Equal(2, fake.Requests.Length)
+
+// Sanitized native GET evidence: run37997746345/attempt1 and jobs/check114047987738,
+// captured 2026-10-09. This controlled subpopulation does not claim whole-head inventory.
+let private retainedPositiveTarget = """
+{
+  "id": 37997746345,
+  "run_attempt": 1,
+  "path": ".github/workflows/routine-eligibility.yml",
+  "event": "pull_request_target",
+  "head_sha": "b6be731e8d726fb13d46a034bd0ea60fc01baf2a",
+  "status": "completed",
+  "conclusion": "success",
+  "created_at": "2026-10-09T22:10:29Z",
+  "run_started_at": "2026-10-09T22:10:29Z",
+  "updated_at": "2026-10-09T22:10:36Z",
+  "pull_requests": [
+    {
+      "number": 4344,
+      "head": {
+        "sha": "b6be731e8d726fb13d46a034bd0ea60fc01baf2a",
+        "repo": {
+          "id": 1269292704
+        }
+      },
+      "base": {
+        "sha": "a3415321ec33946d66ad1f39469935d01206bb98",
+        "repo": {
+          "id": 1269292704
+        }
+      }
+    }
+  ],
+  "repository": {
+    "id": 1269292704,
+    "full_name": "FS-GG/.github"
+  },
+  "head_repository": {
+    "id": 1269292704,
+    "full_name": "FS-GG/.github"
+  }
+}
+"""
+let private retainedPositiveJobs = """
+{
+  "total_count": 1,
+  "jobs": [
+    {
+      "id": 114047987738,
+      "name": "routine-eligibility",
+      "status": "completed",
+      "conclusion": "success",
+      "created_at": "2026-10-09T22:10:30Z",
+      "started_at": "2026-10-09T22:10:31Z",
+      "completed_at": "2026-10-09T22:10:36Z",
+      "check_run_url": "https://api.github.com/repos/FS-GG/.github/check-runs/114047987738",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1,
+          "started_at": "2026-10-09T22:10:32Z",
+          "completed_at": "2026-10-09T22:10:32Z"
+        },
+        {
+          "name": "Evaluate with the PR base's policy and validator",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2,
+          "started_at": "2026-10-09T22:10:32Z",
+          "completed_at": "2026-10-09T22:10:35Z"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3,
+          "started_at": "2026-10-09T22:10:35Z",
+          "completed_at": "2026-10-09T22:10:35Z"
+        }
+      ]
+    }
+  ]
+}
+"""
+let private retainedPositiveChecks = """
+{
+  "total_count": 1,
+  "check_runs": [
+    {
+      "id": 114047987738,
+      "name": "routine-eligibility",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-10-09T22:10:31Z",
+      "completed_at": "2026-10-09T22:10:36Z",
+      "app": {
+        "slug": "github-actions"
+      }
+    }
+  ]
+}
+"""
+let private retainedHead = "b6be731e8d726fb13d46a034bd0ea60fc01baf2a"
+let private retainedBase = "a3415321ec33946d66ad1f39469935d01206bb98"
+let private retainedPr =
+    $"""{{"head":{{"sha":"{retainedHead}"}},"base":{{"ref":"main","sha":"{retainedBase}"}}}}"""
+let private retainedRuns = "{\"total_count\":1,\"workflow_runs\":[" + retainedPositiveTarget + "]}"
+
+[<Fact>]
+let ``UTEL-CI-02 retained native positive target passes exact relation and population fences`` () =
+    use document = System.Text.Json.JsonDocument.Parse retainedPositiveTarget
+    Assert.Equal(CiReads.Exact, CiReads.targetAssociation "FS-GG/.github" 4344 retainedHead (Some retainedBase) document.RootElement)
+    Assert.Equal(CiReads.Conflicting, CiReads.targetAssociation "FS-GG/.github" 4344 retainedHead (Some baseSha) document.RootElement)
+    let fake = Fake [ response retainedPr None; response retainedRuns None; response retainedPositiveJobs None
+                      response retainedPositiveChecks None; response retainedRuns None; response retainedPositiveChecks None ]
+    match CiReads.discoverPopulation (fake :> ISinglePageGitHubTransport) "https://api.github.com" "FS-GG" ".github" 4344 retainedHead "main" retainedBase false with
+    | Error error -> failwithf "%A" error
+    | Ok result ->
+        Assert.Empty result.Gaps
+        Assert.Empty result.Pending
+        Assert.True result.AdmissionWitness
+        Assert.Equal("exact", result.Snapshot.Binding)
+        Assert.Equal("complete", result.Snapshot.LineageCoverage)
+        Assert.Equal("complete", result.CheckCoverage)
+        let nativeRun = Assert.Single result.Snapshot.Runs
+        Assert.Equal(37997746345L, nativeRun.Id)
+        Assert.Equal(1, nativeRun.Attempt)
+        Assert.Equal(CiReads.Exact, nativeRun.TargetAssociation)
+        let nativeJob = Assert.Single result.Snapshot.Jobs
+        Assert.Equal(114047987738L, nativeJob.Id)
+        Assert.Equal(Some 114047987738L, nativeJob.CheckRunId)
+        Assert.Equal("routine-eligibility", nativeJob.Name)
+        Assert.Equal("Evaluate with the PR base's policy and validator", nativeJob.Steps[1].Name)
+        Assert.Contains(fake.Requests, fun request -> request.Path.EndsWith("/runs/37997746345/attempts/1/jobs"))
+        Assert.Equal(6, fake.Requests.Length)
+
+[<Fact>]
+let ``UTEL-CI-02 retained native positive target passes legacy attempt-specific collection`` () =
+    let fake = Fake [ response retainedPr None; response retainedRuns None; response retainedPositiveJobs None
+                      response "{\"run_attempt\":1}" None ]
+    match CiReads.collect (fake :> ISinglePageGitHubTransport) "https://api.github.com" "FS-GG" ".github" 4344 retainedHead "routine-eligibility.yml" with
+    | Error error -> failwithf "%A" error
+    | Ok snapshot ->
+        Assert.Equal(CiReads.Exact, snapshot.Runs.Head.TargetAssociation)
+        Assert.Equal(37997746345L, snapshot.Jobs.Head.RunId)
+        Assert.Equal(1, snapshot.Jobs.Head.Attempt)
+        Assert.Equal(3, snapshot.Jobs.Head.Steps.Length)
+        Assert.Contains(fake.Requests, fun request -> request.Path.EndsWith("/runs/37997746345/attempts/1/jobs"))

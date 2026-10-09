@@ -489,3 +489,219 @@ module TelemetryCiApplicationTests =
             FS.GG.Coord.GitHub.CiReads.targetAssociation "FS-GG/.github" 4342
                 (row.GetProperty("head_sha").GetString())
                 (Some "31795a80e706fc4203c27e421f9e3648a1dd1329") row)
+
+    // Sanitized native GET evidence: run37997746345/attempt1 and jobs/check114047987738,
+    // captured 2026-10-09. This controlled subpopulation does not claim whole-head inventory.
+    let private retainedPositiveTarget = """
+    {
+      "id": 37997746345,
+      "run_attempt": 1,
+      "path": ".github/workflows/routine-eligibility.yml",
+      "event": "pull_request_target",
+      "head_sha": "b6be731e8d726fb13d46a034bd0ea60fc01baf2a",
+      "status": "completed",
+      "conclusion": "success",
+      "created_at": "2026-10-09T22:10:29Z",
+      "run_started_at": "2026-10-09T22:10:29Z",
+      "updated_at": "2026-10-09T22:10:36Z",
+      "pull_requests": [
+        {
+          "number": 4344,
+          "head": {
+            "sha": "b6be731e8d726fb13d46a034bd0ea60fc01baf2a",
+            "repo": {
+              "id": 1269292704
+            }
+          },
+          "base": {
+            "sha": "a3415321ec33946d66ad1f39469935d01206bb98",
+            "repo": {
+              "id": 1269292704
+            }
+          }
+        }
+      ],
+      "repository": {
+        "id": 1269292704,
+        "full_name": "FS-GG/.github"
+      },
+      "head_repository": {
+        "id": 1269292704,
+        "full_name": "FS-GG/.github"
+      }
+    }
+    """
+    let private retainedPositiveJobs = """
+    {
+      "total_count": 1,
+      "jobs": [
+        {
+          "id": 114047987738,
+          "name": "routine-eligibility",
+          "status": "completed",
+          "conclusion": "success",
+          "created_at": "2026-10-09T22:10:30Z",
+          "started_at": "2026-10-09T22:10:31Z",
+          "completed_at": "2026-10-09T22:10:36Z",
+          "check_run_url": "https://api.github.com/repos/FS-GG/.github/check-runs/114047987738",
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 1,
+              "started_at": "2026-10-09T22:10:32Z",
+              "completed_at": "2026-10-09T22:10:32Z"
+            },
+            {
+              "name": "Evaluate with the PR base's policy and validator",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 2,
+              "started_at": "2026-10-09T22:10:32Z",
+              "completed_at": "2026-10-09T22:10:35Z"
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 3,
+              "started_at": "2026-10-09T22:10:35Z",
+              "completed_at": "2026-10-09T22:10:35Z"
+            }
+          ]
+        }
+      ]
+    }
+    """
+    let private retainedPositiveChecks = """
+    {
+      "total_count": 1,
+      "check_runs": [
+        {
+          "id": 114047987738,
+          "name": "routine-eligibility",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-10-09T22:10:31Z",
+          "completed_at": "2026-10-09T22:10:36Z",
+          "app": {
+            "slug": "github-actions"
+          }
+        }
+      ]
+    }
+    """
+    let private retainedHead = "b6be731e8d726fb13d46a034bd0ea60fc01baf2a"
+    let private retainedBase = "a3415321ec33946d66ad1f39469935d01206bb98"
+    let private retainedPr =
+        $"""{{"head":{{"sha":"{retainedHead}"}},"base":{{"ref":"main","sha":"{retainedBase}"}}}}"""
+    let private retainedRuns = "{\"total_count\":1,\"workflow_runs\":[" + retainedPositiveTarget + "]}"
+    let private retainedPositiveProfile = """{
+  "schema": "fsgg.telemetry.ci-attribution/1",
+  "rules": [
+    {
+      "workflow": ".github/workflows/coord-engine.yml",
+      "job": "engine",
+      "step": "Install the pinned SDD provider validator",
+      "classification": "necessary-setup",
+      "rationale": "Installs the pinned provider needed by the subsequent source validation."
+    },
+    {
+      "workflow": ".github/workflows/coord-engine.yml",
+      "job": "engine",
+      "step": "Restore (locked)",
+      "classification": "necessary-setup",
+      "rationale": "Restores the locked dependencies used by the validation suites."
+    },
+    {
+      "workflow": ".github/workflows/coord-engine.yml",
+      "job": "engine",
+      "step": "Build the engine",
+      "classification": "necessary-setup",
+      "rationale": "Builds the candidate engine consumed by subsequent production-route qualification."
+    },
+    {
+      "workflow": ".github/workflows/coord-engine.yml",
+      "job": "engine",
+      "step": "Test — core telemetry contracts and source binding",
+      "classification": "useful-validation",
+      "rationale": "Runs the independent Core contract suite against the selected source revision."
+    },
+    {
+      "workflow": ".github/workflows/coord-engine.yml",
+      "job": "engine",
+      "step": "Test — standalone telemetry HTTPS contracts and host boundaries",
+      "classification": "useful-validation",
+      "rationale": "Runs the standalone telemetry transport and host boundary contract suite."
+    },
+    {
+      "workflow": ".github/workflows/coord-engine.yml",
+      "job": "engine",
+      "step": "Test the shared projection and real loopback browser",
+      "classification": "mixed",
+      "rationale": "Bundles npm/browser installation with dashboard and browser validation; native evidence cannot split the interval."
+    },
+    {
+      "workflow": ".github/workflows/routine-eligibility.yml",
+      "job": "routine-eligibility",
+      "step": "Evaluate with the PR base's policy and validator",
+      "classification": "mixed",
+      "rationale": "Bundles trusted base/head source fetching and routine policy assessment in one native step."
+    }
+  ]
+}
+"""
+
+    [<Fact>]
+    let ``UTEL-CI-03 retained native positive target classifies mixed and replays in disposable store`` () =
+        let unwrap = function Ok value -> value | Error error -> failwithf "%A" error
+        let queue = System.Collections.Generic.Queue<string>([ retainedPr; retainedRuns; retainedPositiveJobs;
+                                                              retainedPositiveChecks; retainedRuns; retainedPositiveChecks ])
+        let requests = ResizeArray<FS.GG.Coord.GitHub.Transport.Request>()
+        let transport =
+            { new FS.GG.Coord.GitHub.Transport.ISinglePageGitHubTransport with
+                member _.SendSingle request =
+                    requests.Add request
+                    Ok { Status = 200; Body = queue.Dequeue(); Headers = Map.empty; ETag = None; NextLink = None } }
+        let population = FS.GG.Coord.GitHub.CiReads.discoverPopulation transport "https://api.github.com" "FS-GG" ".github" 4344 retainedHead "main" retainedBase false |> unwrap
+        Assert.Empty queue
+        Assert.Empty population.Gaps
+        let profileBytes = System.Text.Encoding.UTF8.GetBytes retainedPositiveProfile
+        let contents = $"""{{"type":"file","path":".fsgg/telemetry-ci-attribution.json","encoding":"base64","content":"{Convert.ToBase64String profileBytes}"}}"""
+        queue.Enqueue contents
+        let selectedProfile = FS.GG.Coord.GitHub.CiReads.readAttributionProfile transport "FS-GG/.github" retainedHead |> unwrap
+        Assert.Equal(Some profileBytes, selectedProfile)
+        Assert.Equal("repos/FS-GG/.github/contents/.fsgg/telemetry-ci-attribution.json", requests[6].Path)
+        Assert.Equal<(string * string) list>([ "ref", retainedHead ], requests[6].Query)
+        let assignment: FS.GG.Coord.TelemetryCi.Assignment =
+            { FeatureId = "UTEL"; ItemId = "UTEL-CI-GAPS"; AttemptId = "retained-native-positive"; ParentAttemptId = None; ProducerStream = "routine-delivery" }
+        let project bytes = TelemetryCiApplication.projectPopulationForTesting bytes assignment population |> unwrap
+        let missing, available = project None, project selectedProfile
+        let events batches =
+            batches |> List.collect (fun (bytes: byte array) ->
+                use document = JsonDocument.Parse bytes
+                document.RootElement.GetProperty("events").EnumerateArray() |> Seq.map (fun node -> node.Clone()) |> Seq.toList)
+        let steps = events available |> List.filter (fun node -> node.GetProperty("kind").GetString() = "ci-step")
+        Assert.Equal(3, steps.Length)
+        let mixed = Assert.Single(steps |> List.filter (fun node -> node.GetProperty("classification").GetString() = "mixed"))
+        Assert.Equal(37997746345L, mixed.GetProperty("runId").GetInt64())
+        Assert.Equal(1, mixed.GetProperty("attempt").GetInt32())
+        Assert.Equal(114047987738L, mixed.GetProperty("jobId").GetInt64())
+        Assert.Equal("Evaluate with the PR base's policy and validator", mixed.GetProperty("name").GetString())
+        Assert.All(steps |> List.filter (fun node -> node.GetProperty("number").GetInt32() <> 2), fun node -> Assert.Equal("unclassified", node.GetProperty("classification").GetString()))
+        Assert.DoesNotContain(events missing, fun node -> node.GetProperty("kind").GetString() = "ci-step")
+        Assert.Contains(events available, fun node -> node.GetProperty("kind").GetString() = "diagnostic" && node.GetProperty("code").GetString().Contains("3b6ceefa6e1ca1273fdd37bdf1817cd4a79aa771f8e89c5757544f489f0c513c"))
+        let root = Path.Combine(Path.GetTempPath(), "fsgg-native-target-" + Guid.NewGuid().ToString("N"))
+        try
+            let approved = FS.GG.Coord.TelemetryStore.ApprovedLocalDurable
+            TelemetryStoreApplication.initialize root approved |> unwrap |> ignore
+            for batch in missing @ available @ available do
+                TelemetryStoreApplication.ingest root approved batch |> unwrap |> fun result -> Assert.DoesNotContain("conflict", result)
+            let summary = TelemetryStoreApplication.ciSummary root approved assignment.ItemId |> unwrap
+            Assert.Contains("\"mixedSeconds\":3", summary)
+            Assert.Contains("\"runnerSeconds\":5", summary)
+            Assert.Contains("\"steps\":3", summary)
+            Assert.Contains("\"usefulValidationSeconds\":null", summary)
+        finally
+            if Directory.Exists root then Directory.Delete(root, true)
