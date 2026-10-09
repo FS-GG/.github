@@ -122,7 +122,7 @@ class DashboardTests(unittest.TestCase):
             if len(calls)==6: raise D.RefConflict("race")
             return answers.pop(0)
         answers=[({"object":{"sha":"a"*40}},{}),({"tree":{"sha":"b"*40}},{}),({"sha":"c"*40},{}),({"sha":"d"*40},{}),({"sha":"e"*40},{})]
-        with mock.patch.object(D,"github",side_effect=api), self.assertRaises(D.RefConflict): D.publish("FS-GG/.github","telemetry-data","host.json","token",host_fixture())
+        with mock.patch.object(D,"github",side_effect=api), self.assertRaises(D.RefConflict): D.publish("FS-GG/.github","fixture-publication","host.json","token",host_fixture())
         self.assertEqual(len(calls),6); self.assertFalse(calls[-1][0][3]["force"])
 
     def test_collection_deduplicates_page_drift_and_keeps_timestamp_rules(self):

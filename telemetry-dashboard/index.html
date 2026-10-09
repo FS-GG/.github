@@ -205,18 +205,22 @@
         <div class="section-heading">
           <div>
             <p class="eyebrow">PRIVATE HOST / SAFE AGGREGATES</p>
-            <h2 id="local-title">Local signal</h2>
+            <h2 id="local-title">Historical local signal</h2>
           </div>
           <div id="local-state" class="state-chip">Checking feed</div>
         </div>
+        <p role="note" id="historical-host-notice">
+          Frozen historical host snapshot. Public branch publication is retired;
+          these local figures do not describe current host health or current usage.
+          Public Actions and merged-delivery samples remain independently refreshed.
+        </p>
         <div id="local-content">
           <div class="empty-state">
             <span>◌</span>
-            <h3>Awaiting an approved host</h3>
+            <h3>Loading the historical snapshot</h3>
             <p>
-              The public Actions view remains live. Local usage and budget
-              fields stay unknown until a configured host publishes a safe
-              snapshot.
+              The public Actions view remains live. Historical local usage and budget
+              fields come only from the retained snapshot; missing fields remain unknown.
             </p>
           </div>
         </div>
