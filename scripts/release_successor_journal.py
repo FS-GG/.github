@@ -6,8 +6,8 @@ from the exact head just read. GitHub's protected ref only admits the ordinary
 writer App; no ambient Actions token can initialize or advance it.
 
 Explicit main_directory=True retains the same logical commit chain using a
-second parent of an overlay commit on protected main. Main first-parent scans
-are separately bounded to 128 commits. Callers must qualify main protection and
+second parent of an overlay commit on protected main. Native path history is bounded to 128 selected-directory changes; unrelated
+main writes do not consume the logical lineage bound. Callers must qualify main protection and
 fence legacy writers before adoption; this module does not activate a cutover.
 """
 
@@ -16,6 +16,7 @@ from __future__ import annotations
 import base64
 import json
 import re
+from urllib.parse import quote
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -33,7 +34,7 @@ class Refused(RuntimeError):
 
 
 class GitAPI(Protocol):
-    def get(self, path: str) -> dict: ...
+    def get(self, path: str) -> dict | list: ...
 
     def post(self, path: str, body: dict) -> dict: ...
 
@@ -134,31 +135,53 @@ class ProtectedReleaseJournal:
         files = self._main_files(commit)
         if files is None:
             raise Refused("main journal directory is absent")
-        logical, logical_parent = self._main_binding(files)
-        selected = logical
-        # Physical history is separately bounded: sibling writes are not release generations.
-        for _ in range(128):
-            if commit["sha"] == self._physical_head:
-                if self._observed is None or logical != self._observed.head:
-                    raise Refused("main journal cached binding differs")
-                return selected
-            parents = commit["parents"]
-            if not parents:
-                raise Refused("main journal introduction has no prior main head")
+        selected, _ = self._main_binding(files)
+        changes = []
+        complete = False
+        # Native, pinned path history excludes unrelated main traffic. Two pages
+        # suffice for the existing 128 logical-generation bound and completeness.
+        for page in (1, 2):
+            values = self.api.get(f"repos/{REPOSITORY}/commits?sha={physical}&path={quote(self.directory, safe='')}&per_page=100&page={page}")
+            if not isinstance(values, list) or len(values) > 100:
+                raise Refused("main journal path history is incomplete")
+            changes.extend(values)
+            if len(changes) > 128:
+                raise Refused("main journal exceeds bounded logical path history")
+            if len(values) < 100:
+                complete = True
+                break
+        if not complete or not changes:
+            raise Refused("main journal path history is incomplete")
+        seen = set()
+        expected_files = files
+        for index, change in enumerate(changes):
+            oid = change.get("sha") if isinstance(change, dict) else None
+            if not isinstance(oid, str) or not re.fullmatch(r"[0-9a-f]{40}", oid) or oid in seen:
+                raise Refused("main journal path history identity differs")
+            seen.add(oid)
+            introducing = self._main_commit(oid)
+            actual_files = self._main_files(introducing)
+            if actual_files != expected_files:
+                raise Refused("main journal path history skipped a selected change")
+            logical, logical_parent = self._main_binding(actual_files)
+            parents = introducing["parents"]
+            if len(parents) != 2 or parents[1].get("sha") != logical:
+                raise Refused("main journal introduction does not retain its logical head")
             prior = self._main_commit(parents[0]["sha"])
             prior_files = self._main_files(prior)
-            if prior_files != files:
-                if len(parents) != 2 or parents[1].get("sha") != logical:
-                    raise Refused("main journal introduction does not retain its logical head")
-                if prior_files is None:
-                    return selected  # Original legacy chain is retained by this second parent.
-                prior_logical, prior_parent = self._main_binding(prior_files)
+            if prior_files == actual_files:
+                raise Refused("main journal path history contains an unchanged selected directory")
+            if prior_files is None:
+                if index != len(changes) - 1:
+                    raise Refused("main journal path history extends before introduction")
+            else:
+                prior_logical, _ = self._main_binding(prior_files)
                 if logical_parent != prior_logical:
                     raise Refused("main journal logical head does not extend the prior binding")
-                logical, logical_parent = prior_logical, prior_parent
-                files = prior_files
-            commit = prior
-        raise Refused("main journal exceeds bounded physical lineage")
+                if index == len(changes) - 1:
+                    raise Refused("main journal path history truncated prior bindings")
+            expected_files = prior_files
+        return selected
 
     def _overlay(self, physical: str, logical: str, state: dict) -> str:
         parent = self._main_commit(physical)

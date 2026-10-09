@@ -145,6 +145,12 @@ class RealGit:
     def get(self, path):
         if path == f"repos/{REPOSITORY}":
             return {"id": 1351660651, "full_name": REPOSITORY}
+        if "/commits?" in path:
+            from urllib.parse import parse_qs
+            query = parse_qs(path.split("?", 1)[1])
+            history = self.command("log", "--first-parent", "--full-history", "--format=%H", query["sha"][0], "--", query["path"][0]).decode().splitlines()
+            page = int(query["page"][0]); limit = int(query["per_page"][0])
+            return [{"sha": sha} for sha in history[(page - 1) * limit:page * limit]]
         suffix = path.split("/git/", 1)[1]
         kind, value = suffix.split("/", 1)
         if kind == "ref":
@@ -229,6 +235,20 @@ with tempfile.TemporaryDirectory() as scratch:
     assert fresh.read().effects == {"tag": "verified", "draft": "intent"}
     for path in ("ordinary.txt", "another.txt", f"{other.directory}/{PATH}"):
         assert real.command("show", f"refs/heads/main:{path}")
+    # Native path pages cannot silently omit the original introduction.
+    original_get = real.get
+    def incomplete_history(path):
+        value = original_get(path)
+        if "/commits?" in path and value:
+            return value[:-1]
+        return value
+    real.get = incomplete_history
+    try:
+        ProtectedReleaseJournal(real, main_directory=True).read()
+        raise AssertionError("truncated native path history accepted")
+    except Refused:
+        pass
+    real.get = original_get
     # Stale physical CAS refuses without losing another directory's write.
     stale = fresh.read()
     sibling = real.sibling("conflict.txt")
@@ -306,11 +326,7 @@ with tempfile.TemporaryDirectory() as scratch:
     assert main.read().generation == 1
     for index in range(128):
         real.sibling(f"bounded-{index}.txt")
-    try:
-        ProtectedReleaseJournal(real, main_directory=True).read()
-        raise AssertionError("physical history bound silently bypassed")
-    except Refused as error:
-        assert "bounded physical lineage" in str(error)
+    assert ProtectedReleaseJournal(real, main_directory=True).read().generation == 1, "unrelated physical writes expired quiet logical authority"
 
 for kwargs in ({"main_directory": "yes"}, {"main_directory": True, "ref": REF + "/../foreign"}):
     try:
@@ -318,4 +334,76 @@ for kwargs in ({"main_directory": "yes"}, {"main_directory": True, "ref": REF + 
         raise AssertionError("invalid optional location accepted")
     except Refused:
         pass
-print("unknown response, state identity, explicit location and physical bound controls passed")
+print("unknown response, state identity, explicit location and quiet-release unrelated-traffic controls passed")
+
+# The frozen importer constructs objects only in a temporary proposal store.
+import runpy
+importer = runpy.run_path(str(pathlib.Path(__file__).resolve().parents[2] / "scripts/authority-state-import.py"))
+with tempfile.TemporaryDirectory() as scratch:
+    root = pathlib.Path(scratch)
+    real = RealGit(root / "source.git")
+    legacy = ProtectedReleaseJournal(real)
+    legacy.initialize(intent)
+    assert legacy.compare_and_swap(legacy.read(), "tag", "intent")
+    assert legacy.compare_and_swap(legacy.read(), "tag", "verified")
+    epoch_ref = importer["EPOCH"]
+    event = {"fleetId": "fs-gg-production", "phase": "OpenV2", "schema": "fsgg.github-substrate.epoch-event/1"}
+    event_raw = canonical(event)
+    head = {"aggregateId": "fleet-cutover:fs-gg-production", "aggregateDigest": hashlib.sha256(b"30:fleet-cutover:fs-gg-production").hexdigest(),
+            "shard": "d5", "journalKind": "cutover", "generation": 2, "eventDigest": hashlib.sha256(event_raw).hexdigest()}
+    def commit_files(files, parents=()):
+        entries = []
+        for path, raw in files.items():
+            blob = real.post(f"repos/{REPOSITORY}/git/blobs", {"content": base64.b64encode(raw).decode()})
+            entries.append({"path": path, "mode": "100644", "type": "blob", "sha": blob["sha"]})
+        tree = real.post(f"repos/{REPOSITORY}/git/trees", {"tree": entries})
+        return real.post(f"repos/{REPOSITORY}/git/commits", {"tree": tree["sha"], "parents": list(parents), "message": "Frozen source"})["sha"]
+    epoch = commit_files({"head.json": canonical(head), "event.json": event_raw})
+    real.command("update-ref", epoch_ref, epoch)
+    digest, operation_ref = "00" + "a" * 62, importer["PREFIX"] + "operation/00"
+    operation = "operation:fixture"
+    doc = {"schema": "fsgg.coordination.ordinary-settlement-authority-document/1", "journalRef": operation_ref,
+           "entries": {operation: {"attemptId": "fixture:1", "operationId": operation, "generation": 3,
+                      "planDigest": "b" * 64, "receiptDigest": "c" * 64, "stage": "complete"}}, "effects": {operation: "c" * 64}}
+    ordinary_path = f"ordinary-v2/{digest}.json"
+    operation_head = commit_files({ordinary_path: canonical(doc)})
+    real.command("update-ref", operation_ref, operation_head)
+    refs = {ref: real.command("rev-parse", ref).decode().strip() for ref in ("refs/heads/main", REF, epoch_ref, operation_ref)}
+    for ref, oid in refs.items():
+        real.command("update-ref", "refs/cleanup-backup/heads/" + ref.removeprefix("refs/heads/"), oid)
+    snapshot = {"repository": REPOSITORY, "repositoryId": 1351660651, "proposalTimestamp": "2000-01-01T00:00:00Z", "refs": refs}
+    refs_before = real.command("show-ref")
+    object_files_before = sorted(str(path.relative_to(real.root)) for path in (real.root / "objects").rglob("*") if path.is_file())
+    first = importer["propose"](real.root, snapshot, root / "first")
+    second = importer["propose"](real.root, snapshot, root / "second")
+    assert first == second and (root / "first/import-manifest.json").read_bytes() == (root / "second/import-manifest.json").read_bytes()
+    assert real.command("show-ref") == refs_before
+    assert object_files_before == sorted(str(path.relative_to(real.root)) for path in (real.root / "objects").rglob("*") if path.is_file())
+    assert first["unresolved"] == [] and first["adoption"].startswith("blocked")
+    # Adopt only in this disposable Git fixture to verify actual output objects.
+    for obj in first["objects"]:
+        actual = real.command("hash-object", "-t", obj["type"], "-w", "--stdin", data=base64.b64decode(obj["base64"])).decode().strip()
+        assert actual == obj["oid"]
+    real.command("update-ref", "refs/heads/main", first["desiredMain"], refs["refs/heads/main"])
+    assert ProtectedReleaseJournal(real, main_directory=True).read() == legacy.read()
+    assert real.command("show", f"refs/heads/main:state/{ordinary_path}") == canonical(doc)
+    for oid in refs.values():
+        real.command("merge-base", "--is-ancestor", oid, "refs/heads/main")
+    # Unknown/pending original effects survive unchanged and block reconciliation.
+    real.command("update-ref", "refs/heads/main", refs["refs/heads/main"], first["desiredMain"])
+    doc["entries"][operation]["stage"] = "effect-pending"
+    pending = commit_files({ordinary_path: canonical(doc)}, [operation_head])
+    real.command("update-ref", operation_ref, pending, operation_head)
+    backup = "refs/cleanup-backup/heads/" + operation_ref.removeprefix("refs/heads/")
+    real.command("update-ref", backup, pending, operation_head)
+    snapshot["refs"][operation_ref] = pending
+    pending_proposal = importer["propose"](real.root, snapshot, root / "pending")
+    assert pending_proposal["reconciliation"] == "required" and pending_proposal["unresolved"][0]["stage"] == "effect-pending"
+    for bad in ({**snapshot, "refs": {k: v for k, v in snapshot["refs"].items() if k != operation_ref}},
+                {**snapshot, "repositoryId": 1}):
+        try:
+            importer["propose"](real.root, bad, root / "refused")
+            raise AssertionError("incomplete or foreign frozen snapshot accepted")
+        except ValueError:
+            pass
+print("deterministic frozen import, exact raw retention, graph reachability and pending-effect refusal passed")
