@@ -55,7 +55,6 @@ def main():
     parser.add_argument('--skip-browser', action='store_true')
     parser.add_argument('--repository', default='SYNTHETIC/activation')
     parser.add_argument('--ci-delivery', type=Path, help='actual retained delivered summary, retrospective observation only')
-    parser.add_argument('--installed-ci-collect-control', action='store_true', help='retain published parser refusal, then use exact fresh bound local store')
     parser.add_argument('--ci-workflow', help='exact existing workflow for retrospective read-only provider collection')
     parser.add_argument('--activate-workspace', action='store_true',
                         help='qualify an explicit fresh private association, never global selection')
@@ -74,8 +73,8 @@ def main():
     # Keep this fixture independent of any selected installed association.
     env = private_environment(private / 'config')
 
-    def run(*argv, code=0):
-        result = subprocess.run([str(engine), *argv], env=env, cwd=private,
+    def run(*argv, code=0, cwd=None):
+        result = subprocess.run([str(engine), *argv], env=env, cwd=private if cwd is None else cwd,
                                 capture_output=True, timeout=30)
         (private / f'command-{run.number}.json').write_text(json.dumps({
             'argv': list(argv), 'exitCode': result.returncode,
@@ -240,16 +239,9 @@ def main():
         assert 'first CI population admission requires ready' in refusal['stderr'], refusal
         # collect accepts exact completed workflow facts without inventing a
         # premerge expected population. Its native observation cutoff is now.
-        collect_destination = selected
-        if args.installed_ci_collect_control:
-            refused = run('telemetry', 'ci', 'collect', '--assignment', ci_assignment,
-                '--repo', repository, '--pr', str(summary.pr), '--head', summary.expectedHead,
-                '--workflow', args.ci_workflow, *selected, code=2)
-            assert b"unrecognized argument '--config'" in refused.stderr, refused.stderr
-            collect_destination = ['--store-root', str(store)]
         collected = run('telemetry', 'ci', 'collect', '--assignment', ci_assignment,
             '--repo', repository, '--pr', str(summary.pr), '--head', summary.expectedHead,
-            '--workflow', args.ci_workflow, *collect_destination)
+            '--workflow', args.ci_workflow, *selected, cwd=ROOT)
         (private / 'retrospective-ci-collection.json').write_bytes(collected.stdout)
         ci_summary = run('telemetry', 'ci', 'summary', '--store-root', str(store), '--item', 'V2-EFF-01.6')
         (private / 'retrospective-ci-summary.json').write_bytes(ci_summary.stdout)
