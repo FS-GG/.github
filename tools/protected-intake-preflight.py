@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
-"""Read-only candidate preflight for the retained intake protected authority.
+"""Historical candidate preflight for the retained intake protected authority.
 
-The candidate deliberately cannot activate. It checks immutable source bytes, current public
-protection and expected ref absence, then records the still-missing native approval, authorizer,
-environment, credential and accepted readback. No token or mutation endpoint is used.
+Live receipt production is retired. Static validation and historical receipt verification
+remain available; this script cannot activate or replay live expected-absence checks.
+
+The historical evaluator checks immutable source bytes, protection and expected ref absence
+without accepting native approval, authorizer, environment, credentials or activation.
+Its pure fixture controls and blocked receipts remain available; no live CLI producer remains.
 """
 
 from __future__ import annotations
@@ -537,8 +540,7 @@ def main(argv: list[str]) -> int:
         if argv == ["static"]:
             static_candidate()
         elif len(argv) == 2 and argv[0] == "produce":
-            receipt = evaluate(collect_live(dict(os.environ)))
-            pathlib.Path(argv[1]).write_text(json.dumps(receipt, sort_keys=True, separators=(",", ":")) + "\n")
+            raise Refusal("live candidate preflight retired; use static or verify for historical evidence")
         elif len(argv) == 2 and argv[0] == "verify":
             verify_receipt(pathlib.Path(argv[1]))
         else:

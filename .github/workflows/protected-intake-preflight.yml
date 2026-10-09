@@ -1,46 +1,17 @@
-name: Protected intake candidate preflight
+# The original activation:false candidate workflow is retained in
+# tests/protected-intake-preflight/fixtures/historical-workflow.yml.
+# It is retired: expected-absence genesis checks must not replay on each main push.
+name: Retired protected intake candidate preflight
 
 on:
-  push:
-    branches: [main]
+  workflow_dispatch:
 
 permissions: {}
 
-concurrency:
-  group: protected-intake-preflight-${{ github.sha }}
-  cancel-in-progress: false
-
 jobs:
-  preflight:
-    name: protected-intake-secret-free-preflight
+  retired:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 1
     steps:
-      - name: Fetch the exact public protected source without credentials
-        shell: bash
-        run: |
-          set -euo pipefail
-          [[ "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]]
-          source="$RUNNER_TEMP/protected-intake-source"
-          git init "$source"
-          git -C "$source" remote add origin https://github.com/FS-GG/.github.git
-          git -C "$source" fetch --depth=1 origin "$GITHUB_SHA"
-          git -C "$source" checkout --detach FETCH_HEAD
-          test "$(git -C "$source" rev-parse HEAD)" = "$GITHUB_SHA"
-      - name: Validate the inert candidate policy and anchor
-        shell: bash
-        run: |
-          set -euo pipefail
-          cd "$RUNNER_TEMP/protected-intake-source"
-          python3 tools/protected-intake-preflight.py static
-      - name: Read current public authority and produce a blocked receipt
-        shell: bash
-        env:
-          EXPECTED_WORKFLOW_SHA: ${{ github.workflow_sha }}
-        run: |
-          set -euo pipefail
-          cd "$RUNNER_TEMP/protected-intake-source"
-          receipt="$RUNNER_TEMP/protected-intake-preflight.json"
-          python3 tools/protected-intake-preflight.py produce "$receipt"
-          python3 tools/protected-intake-preflight.py verify "$receipt"
-          python3 -c 'import json,sys; value=json.load(open(sys.argv[1])); assert value["activation"] is False; print(json.dumps(value,sort_keys=True))' "$receipt"
+      - name: Report retirement without reading authority
+        run: echo "Protected intake candidate preflight is retired; no authority read or activation performed."
