@@ -23,7 +23,9 @@ its installation or global selection. `--skip-browser` qualifies only the
 collector/store/canonical-export/projection portion; it reports browser
 `not-run`. A failed browser launch or navigation cannot qualify browser
 acceptance. Browser runtime libraries may be supplied through a private
-`LD_LIBRARY_PATH` in the runner's environment.
+`LD_LIBRARY_PATH` in the runner's environment. On hosts without system fonts,
+select a private font directory/cache through a private `FONTCONFIG_FILE`;
+missing font configuration is an environment failure, not dashboard acceptance.
 
 The test preserves synthetic JSONL bytes and native exit 37, checks exact
 persisted counters and terminal outcome, verifies no machine delivery outcome
