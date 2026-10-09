@@ -2,7 +2,7 @@
 """Fresh source CLI -> synthetic Codex JSONL -> store -> dashboard journey.
 
 Run within the maintained PID namespace validation runner. All counter values are
-explicit test events; this test establishes neither native usage nor activation.
+explicit test events; this test establishes neither genuine usage nor global activation.
 """
 import argparse
 from contextlib import contextmanager
@@ -13,6 +13,8 @@ from pathlib import Path
 import sqlite3
 import subprocess
 import sys
+import time
+import uuid
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'tests/telemetry-dashboard'))
@@ -50,6 +52,8 @@ def main():
     parser.add_argument('--store-root', type=Path, required=True)
     parser.add_argument('--engine-path', dest='engine', type=Path)
     parser.add_argument('--skip-browser', action='store_true')
+    parser.add_argument('--activate-workspace', action='store_true',
+                        help='qualify an explicit fresh private association, never global selection')
     args = parser.parse_args()
     private = args.private_root.resolve()
     private.mkdir(mode=0o700, parents=True, exist_ok=False)
@@ -75,7 +79,32 @@ def main():
         assert result.returncode == code, (argv, result.returncode, result.stderr)
         return result
     run.number = 0
-    run('telemetry', 'store', 'init', '--store-root', str(store))
+    config = private / 'workspace.json'
+    repository = 'SYNTHETIC/activation'
+    nonce = uuid.uuid4().hex
+    workspace = 'synthetic-activation-' + nonce
+    selected = ['--store-root', str(store)]
+    if args.activate_workspace:
+        before = sorted(path.name for path in private.iterdir())
+        unconfigured = json.loads(run('telemetry', 'workspace', 'status', '--config', str(config),
+                                     '--repository', repository).stdout)
+        assert unconfigured['status'] == 'unconfigured'
+        assert before == sorted(path.name for path in private.iterdir() if not path.name.startswith('command-'))
+        run('telemetry', 'workspace', 'activate-local', '--config', str(config),
+            '--workspace', workspace, '--producer', 'synthetic-producer-' + nonce,
+            '--stream', 'runtime', '--repository', repository, '--store-root', str(store))
+        assert config.stat().st_mode & 0o777 == 0o600
+        selected = ['--config', str(config), '--repository', repository]
+        binding = json.loads(run('telemetry', 'workspace', 'binding', *selected).stdout)
+        assert binding['repository'] == repository
+        assert binding['producerId'] == 'synthetic-producer-' + nonce
+        assert binding['configPath'] == str(config)
+        assert binding['destination'] == 'local' and binding['privateStateRoot'] == str(store)
+        (private / 'binding.json').write_text(json.dumps(binding, indent=2)+'\n')
+        dashboard_status = json.loads(run('telemetry', 'dashboard', 'status', *selected).stdout)
+        assert dashboard_status['status'] == 'ready', dashboard_status
+    else:
+        run('telemetry', 'store', 'init', '--store-root', str(store))
     bindir = private / 'bin'; bindir.mkdir(mode=0o700)
     # Reuse the maintained package fixture wire shape and native-result control.
     wire = (b'{"type":"thread.started","thread_id":"synthetic-journey-thread"}\n'
@@ -92,15 +121,25 @@ def main():
         'producerStream':'synthetic-local-journey'}))
     assignment.chmod(0o600)
     observed = run('telemetry', 'runtime', 'codex-exec', '--assignment', str(assignment),
-                   '--store-root', str(store), '--', '--json', '--ephemeral', 'synthetic test event', code=37)
+                   *selected, '--', '--json', '--ephemeral', 'synthetic test event', code=37)
     assert observed.stdout == wire, 'collector changed native JSONL bytes'
     assert b'reconciliation pending' not in observed.stderr, observed.stderr
+    if args.activate_workspace:
+        run('telemetry', 'workspace', 'drain', *selected)
+        status = json.loads(run('telemetry', 'workspace', 'status', *selected).stdout)
+        assert status['pending'] == 0, status
+        assert status['workspaceId'] == workspace and status['producerId'] == binding['producerId']
+        assert status['streamId'] == 'runtime' and status['destination'] == 'local'
     with sqlite3.connect(store.joinpath('telemetry.sqlite3').as_uri() + '?mode=ro', uri=True) as db:
         counters = db.execute('SELECT input_count,cached_input,output_count,reasoning,total FROM runtime_turn_usage').fetchall()
         terminals = db.execute('SELECT outcome,exit_code FROM runtime_terminals').fetchall()
         assert counters == [(12,4,5,2,17)], counters
         assert terminals == [('failed',37)], terminals
         assert db.execute('SELECT count(*) FROM native_item_outcomes').fetchone()[0] == 0
+        if args.activate_workspace:
+            receipts = db.execute('SELECT state,count(*) FROM transport_receipts GROUP BY state').fetchall()
+            assert receipts and all(state == 'applied' for state, _ in receipts), receipts
+            (private / 'applied-receipts.json').write_text(json.dumps(receipts)+'\n')
     labels = private / 'labels.json'
     labels.write_text(json.dumps({'schema':D.LABELS_SCHEMA,'items':{},'models':{},'efforts':{},'scopes':{}}))
     labels.chmod(0o600)
@@ -136,6 +175,28 @@ def main():
     D.dump(dashboard)
     (private / 'host.json').write_bytes(D.dump(host))
     (private / 'dashboard.json').write_bytes(D.dump(dashboard))
+    if args.activate_workspace and not args.skip_browser:
+        stdout_path = private / 'packaged-dashboard-url'
+        stderr_path = private / 'packaged-dashboard-stderr'
+        with stdout_path.open('wb') as out, stderr_path.open('wb') as err:
+            server = subprocess.Popen([str(engine), 'telemetry', 'dashboard', 'serve', *selected, '--no-open'],
+                                      env=env, cwd=private, stdout=out, stderr=err)
+            try:
+                deadline = time.monotonic()+10
+                url = ''
+                while time.monotonic() < deadline and server.poll() is None:
+                    url = stdout_path.read_text().strip()
+                    if url: break
+                    time.sleep(0.05)
+                assert url.startswith('http://127.0.0.1:') and '/bootstrap/' in url, stderr_path.read_text()
+                subprocess.run(['node', str(ROOT / 'tests/FS.GG.Telemetry.LocalDashboard.Tests/browser-journey.mjs'),
+                                url, workspace, 'SYNTHETIC-LOCAL-JOURNEY'], env=env, cwd=ROOT,
+                               check=True, timeout=45, stdout=(private / 'packaged-browser.stdout').open('wb'),
+                               stderr=(private / 'packaged-browser.stderr').open('wb'))
+            finally:
+                if server.poll() is None: server.terminate()
+                assert server.wait(timeout=10) == 0, stderr_path.read_text()
+            assert url not in stderr_path.read_text(), 'bootstrap capability leaked to stderr'
     if not args.skip_browser:
         subprocess.run(['node', str(ROOT / 'tests/telemetry-local-journey/browser.js'), str(private)],
                        check=True, timeout=45, env=env, cwd=ROOT)
@@ -145,7 +206,8 @@ def main():
               'collectionStoreDashboard':'passed','testCounters':[12,4,5,2,17],
               'nativeExitPreserved':37,'nativeDeliveryOutcomes':0,
               'snapshotRevision':envelope['revision'], 'hostRevision':host['revision'],
-              'genuineAgentUsage':'unknown','installedActivation':'not-exercised',
+              'genuineAgentUsage':'unknown','installedActivation':'private-association-qualified' if args.activate_workspace else 'not-exercised',
+              'globalActivation':'not-exercised','packagedDashboard':'passed' if args.activate_workspace and not args.skip_browser else 'not-run',
               'historicalOperations':'not-observed-or-replayed'}
     (private / 'result.json').write_text(json.dumps(result,indent=2)+'\n')
     print(json.dumps(result))
