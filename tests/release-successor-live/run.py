@@ -294,7 +294,7 @@ class PublisherJournalTests(unittest.TestCase):
         for tree, segment in [(self.ledger.root, "state"), (self.ledger.state, "releases")]:
             for suffix in (REF.rsplit("/", 1)[1], segment):
                 with self.subTest(segment=segment, selected=suffix):
-                    self.journal.ref = "refs/fsgg/v2/journal/release/" + suffix
+                    self.journal.ref = REF.rsplit("/", 1)[0] + "/" + suffix
                     legacy_path = f"repos/{AUTHORITY}/git/ref/{self.journal.ref.removeprefix('refs/')}"
                     self.ledger.override = {f"repos/{AUTHORITY}/git/trees/{tree}":
                         {"sha": tree, "truncated": False, "tree": []}, legacy_path: NotFound("absent legacy ref")}
