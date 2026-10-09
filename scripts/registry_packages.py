@@ -42,6 +42,7 @@ from fsgg_feed import GateError  # noqa: E402  (path shim above must run first)
 CONTRACT_PACKAGES: dict[str, list[str]] = {
     "fsquint-replay": ["FsQuint", "FsQuint.Tooling"],
     "fsgg-contracts": ["FS.GG.Contracts"],
+    "governance-config": ["FS.GG.Governance.Config"],
     "governance-reference-gate-set": ["FS.GG.Governance.ReferenceGateSet"],
     "fs-gg-ui-template": ["FS.GG.UI.Template"],
     "game-sim-core": ["FS.GG.Game.Core"],

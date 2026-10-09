@@ -3,7 +3,7 @@
 # versions are coherent. A `contract-change` issue MUST update this file as part of
 # its resolution. Human projection: docs/registry/compatibility.md.
 schemaVersion: 2   # → 2 (.github#1114, SDD#508 step 3): `consumers` becomes "required, may be EMPTY" — a present-but-empty `consumers: []` is now a legal, honest value for a package-bearing contract that nothing restores (the `new-sdd-workspace` scaffolder). Schema growth under #686 / ADR-0015; the FS.GG.SDD.Cli validator pin in contract-coherence.yml advances to 0.13.0 with this bump (publish-before-flip, ADR-0037: SDD published the three-state validator FIRST, in SDD#512/#516).
-updated: "2026-10-08"   # Changelog moved to registry/CHANGELOG.md (.github#129 / review M4): prepend one dated entry there per change and set this date to match. Kept short deliberately — the typed validator does not read this comment.
+updated: "2026-10-09"   # Changelog moved to registry/CHANGELOG.md (.github#129 / review M4): prepend one dated entry there per change and set this date to match. Kept short deliberately — the typed validator does not read this comment.
 
 repos:
   fsquint: { name: FsQuint, role: "Independent public Quint–F# decoding, replay and optional tooling" }
@@ -444,6 +444,17 @@ contracts:
     # (ProjectFacts) unchanged; only the on-disk filename/slot moves.
     surface: ".fsgg/governance.yml"
     consumers: [governance]
+  - id: governance-config
+    version: "0.3.0"
+    owner: governance
+    # Governance#423 / SDD#928, ADR-0092: the pure Config library owns the neutral
+    # CapabilityBindings request/resolver used by provider-catalog callers.
+    package-version: "0.3.0"
+    # Published original 37930935334 at 8b3a6d4; read-only run 37939178374
+    # verified both feeds against that original. Public cold consumer passed.
+    # SDD PR1104 (32fee080) adopts Config in source; SDD2.3 publication remains pending.
+    surface: "FS.GG.Governance.Config: configuration parsing and CapabilityBindings request/resolver"
+    consumers: [sdd]
   - id: governance-reference-gate-set
     version: "1.7.0"
     package-version: "1.7.0"
@@ -1142,7 +1153,9 @@ dependencies:
   - { from: templates, to: sdd,        via: "scaffold-provider@1 + SDD skeleton (min fsgg-sdd 0.4.0, orchestrator axis — ADR-0008)" }
   - { from: templates, to: governance, via: "governance-policy@1 / capabilities@2 / tooling@1 config" }
   - { from: templates, to: governance, via: "governance-reference-gate-set@1.2.1.1 (content package — overlay drift-gate source of truth, Templates#14)" }
-  - { from: sdd,       to: governance, via: "governance-handoff@1 (OPTIONAL; SDD runs fully without Governance)" }
+  - { from: sdd,       to: governance, via: "governance-handoff@2.0.0 (optional Governance CLI integration)" }
+  # Protected SDD PR1104 adopts the published library, not the optional Governance CLI.
+  - { from: sdd,       to: governance, via: "governance-config@0.3.0 (Commands PackageReference; source adoption at 32fee080, SDD2.3 publication pending)" }
   # .github#2070 (epic #2067 terminal activation, 2026-08-10): fs-gg-fable-game's authoritative Game
   # logic may use only surfaces graded for the published fs-gg-game-core-fable-lockstep-v1 profile
   # (ADR-0069/ADR-0071 §4) — a second, direct templates -> game edge alongside the existing
