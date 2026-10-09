@@ -295,6 +295,9 @@ test("hidden pages pause checks, resume overdue, and requests never overlap", as
   });
   await page.route("**/data/dashboard.json", (route) => route.fulfill({ json: payload({ schema: "fsgg.telemetry.dashboard-host-unavailable/1", status: "unconfigured", reason: "missing" }) }));
   await page.goto("/");
+  // Navigation may finish before the initial fetch settles and arms its refresh timer.
+  await expect(page.locator("#refresh-status")).toContainText("Checked");
+  await expect(page.locator("#refresh-status")).toContainText("checking every minute");
   await page.evaluate(() => {
     window.__dashboardHidden = true;
     Object.defineProperty(document, "hidden", { configurable: true, get: () => window.__dashboardHidden });
