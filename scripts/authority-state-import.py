@@ -407,7 +407,7 @@ def apply_admitted(manifest_path, output):
             and published["packageId"]=="FS.GG.Coordination.Cli" and re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+(?:-[A-Za-z0-9.-]+)?",published["version"])
             and re.fullmatch(r"[0-9a-f]{64}",published["archiveSha256"]), "admitted published CLI package identity")
     from release_successor_provider import GitHubAPI
-    observer = GitHubAPI(os.environ["AUTHORITY_PROTECTION_READ_TOKEN"])
+    observer = GitHubAPI(os.environ["GH_TOKEN"])
     root = Path(__file__).resolve().parents[1]
     current = subprocess.check_output(["git","rev-parse","HEAD"],cwd=root).decode().strip()
     validate_execution_source(observer,binding,root,current)
@@ -454,7 +454,7 @@ def apply_admitted(manifest_path, output):
             return {ref:oid for oid,ref in (line.split() for line in values)}
         def guard(expected):
             validate_execution_source(observer,binding,root,current)
-            validate_native_guard(observer,refs,expected,binding)
+            validate_native_guard(writer,refs,expected,binding)
         def fetch(stage,oids):
             isolated_git(stage,"fetch","--no-tags",AUTHORITY_REMOTE,*oids,credentials=credentials)
         def push(stage,expected,desired):
