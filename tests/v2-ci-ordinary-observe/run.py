@@ -464,11 +464,11 @@ class NativeObservationTests(unittest.TestCase):
         self.assertIn("environment: ordinary-v2", workflow)
         self.assertIn("  checks: read\n  pull-requests: read", workflow)
         self.assertIn("  actions: read", workflow)
-        self.assertIn("python3 tools/v2-ci-ordinary-observe.py verify", workflow)
-        self.assertIn("ordinary-settlement execute", workflow)
+        self.assertIn("python3 tools/v2-ci-ordinary-observe.py verify-main", workflow)
+        self.assertIn("ordinary-settlement execute-main", workflow)
         self.assertIn("V2_ORDINARY_APP_PRIVATE_KEY: ${{ secrets.V2_ORDINARY_APP_PRIVATE_KEY }}", workflow)
-        self.assertIn("PACKAGE_VERSION: 0.1.2", workflow)
-        self.assertIn("PACKAGE_SHA256: 627d9f54d038d47ef59635f92bd4fd4af2da7bfc971a938b6de1292503b0307e", workflow)
+        self.assertIn("PACKAGE_VERSION: 0.3.0", workflow)
+        self.assertIn("PACKAGE_SHA256: a3109097120cf5bff50e05345b9ec26bbdc86410bf25546a79a755c1e2e2572c", workflow)
         self.assertNotIn("__SERVED_SHA256__", workflow)
         self.assertIn('test "$(sha256sum "$package" | cut -d \' \' -f 1)" = "$PACKAGE_SHA256"', workflow)
         self.assertNotIn("secrets.", workflow.split("  preflight:", 1)[1].split("  settle:", 1)[0])
@@ -489,11 +489,11 @@ class NativeObservationTests(unittest.TestCase):
         self.assertIn("V2_ORDINARY_REHEARSAL_APP_PRIVATE_KEY: ${{ secrets.V2_ORDINARY_REHEARSAL_APP_PRIVATE_KEY }}", workflow)
         self.assertNotIn("V2_ORDINARY_APP_PRIVATE_KEY: ${{ secrets.V2_ORDINARY_APP_PRIVATE_KEY }}", workflow)
         self.assertNotIn("secrets.", workflow.split("  preflight:", 1)[1].split("  rehearse:", 1)[0])
-        production = (ROOT / ".github/workflows/v2-ci-ordinary-settlement.yml").read_text()
-        for key in ("PACKAGE_VERSION", "PACKAGE_SHA256"):
+        historical_pins = {"PACKAGE_VERSION": "0.1.2",
+                           "PACKAGE_SHA256": "627d9f54d038d47ef59635f92bd4fd4af2da7bfc971a938b6de1292503b0307e"}
+        for key, expected in historical_pins.items():
             pattern = rf"^      {key}: (.+)$"
-            self.assertEqual(re.search(pattern, production, re.MULTILINE).group(1),
-                             re.search(pattern, workflow, re.MULTILINE).group(1))
+            self.assertEqual(expected, re.search(pattern, workflow, re.MULTILINE).group(1))
 
 
 
