@@ -239,10 +239,17 @@ def main():
         assert 'first CI population admission requires ready' in refusal['stderr'], refusal
         # collect accepts exact completed workflow facts without inventing a
         # premerge expected population. Its native observation cutoff is now.
+        attribution = ROOT / '.fsgg/telemetry-ci-attribution.json'
+        original_attribution = subprocess.check_output(['git','show', summary.expectedHead+':.fsgg/telemetry-ci-attribution.json'], cwd=ROOT)
+        assert attribution.read_bytes() == original_attribution, 'original selected head attribution changed'
+        (private / 'attribution-identity.json').write_text(json.dumps({
+            'selectedHead':summary.expectedHead, 'sha256':hashlib.sha256(original_attribution).hexdigest(),
+            'matchesSelectedHead':True}, indent=2)+'\n')
         collected = run('telemetry', 'ci', 'collect', '--assignment', ci_assignment,
             '--repo', repository, '--pr', str(summary.pr), '--head', summary.expectedHead,
             '--workflow', args.ci_workflow, *selected, cwd=ROOT)
         (private / 'retrospective-ci-collection.json').write_bytes(collected.stdout)
+        run('telemetry', 'workspace', 'drain', *selected)
         ci_summary = run('telemetry', 'ci', 'summary', '--store-root', str(store), '--item', 'V2-EFF-01.6')
         (private / 'retrospective-ci-summary.json').write_bytes(ci_summary.stdout)
         with sqlite3.connect(store.joinpath('telemetry.sqlite3').as_uri()+'?mode=ro', uri=True) as db:
