@@ -171,8 +171,20 @@ editing navigation.
 The executing owner reads and applies the full
 [diagnostic execution policy](https://github.com/FS-GG/.github/blob/main/docs/coordination/diagnostic-execution.md),
 including independent failure collection, original budgets, prerequisite fences, custody/cleanup, retained
-first cause and separate execution/reporting outcomes. Repeated first-failure repairs get bounded composition
-review in the existing artifact. No extra ceremony or runtime/adoption claim follows from guidance edits.
+first cause and separate execution/reporting outcomes. When bugfixes in the same area turn into repeated
+small fixes, have the same owner perform a deep sweep of the relevant code before another qualification
+attempt. Trace the complete affected paths through callers, shared helpers, guards and tests, including
+failure and cleanup paths. Search for the common root cause, duplicated faulty assumptions and sibling
+instances of the defect; do not limit the review to the latest failing line or compiler diagnostic.
+
+Use the findings to apply a coherent, more general fix where a shared invariant, abstraction or lifecycle
+is responsible. Consolidate connected corrections and remove the cause of recurrence rather than adding
+another local workaround. Keep changes evidence-driven and within the affected area; broader review does
+not require an unrelated rewrite. Escalate material scope or architecture changes through the existing
+planning route. Record the root cause, sweep coverage, connected fixes and remaining uncertainty in the
+existing owner artifact, then validate the complete revised path and meaningful regression cases. Preserve
+original failures, budgets, custody and admission boundaries. No extra ceremony or runtime/adoption claim
+follows from guidance edits.
 
 Use installed `fsgg-coord-engine skill roadmap-telemetry` begin/started/finish and usage-reconcile for every
 native dispatch/follow-up, including bootstrap. The parent reads [observation](references/observation.md)
