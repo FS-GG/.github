@@ -23,7 +23,7 @@ const { chromium, expect } = require('../telemetry-dashboard/node_modules/@playw
   let browser;
   try {
     await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
-    browser = await chromium.launch({headless:true, dumpio:true, args:['--no-zygote','--single-process','--disable-gpu','--disable-software-rasterizer']});
+    browser = await chromium.launch({headless:true});
     const page = await browser.newPage();
     page.on('pageerror', error => errors.push(error.message));
     await page.goto(`http://127.0.0.1:${server.address().port}/`);

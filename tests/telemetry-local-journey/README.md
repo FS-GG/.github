@@ -12,6 +12,10 @@ existing Playwright Chromium setup. Run `run.py --private-root ABSENT_OUTPUT
 `mode: native-runtime`, `backend: pid-namespace`, a 180 second timeout, 15 second
 cleanup, and a bounded output budget. The selected store must be a fresh child
 of an explicitly admitted private durable parent outside the checkout.
+Dashboard helper subprocesses inherit the same scoped private environment as
+direct CLI calls. A checked launcher proves private XDG selection and absence
+of inherited association and credential keys at the actual helper boundary.
+The browser uses the maintained fixture's standard headless Chromium launch.
 The production durability assessor remains active; overlay refusal is expected.
 
 `--engine ABSOLUTE_ENGINE` selects an already installed CLI without modifying

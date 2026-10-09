@@ -5,6 +5,7 @@ Run within the maintained PID namespace validation runner. All counter values ar
 explicit test events; this test establishes neither native usage nor activation.
 """
 import argparse
+from contextlib import contextmanager
 import hashlib
 import json
 import os
@@ -16,6 +17,24 @@ import sys
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'tests/telemetry-dashboard'))
 from test_dashboard import D, actions_fixture, deliveries_fixture
+
+
+ASSOCIATION_KEYS = {'FSGG_TELEMETRY_STORE', 'FSGG_TELEMETRY_CONFIG',
+                    'FSGG_TELEMETRY_REPOSITORY', 'FSGG_TELEMETRY_BINDING_DIGEST',
+                    'FSGG_TELEMETRY_CODEX_INVOCATION', 'GITHUB_REPOSITORY', 'CODEX_THREAD_ID'}
+
+
+@contextmanager
+def process_environment(env):
+    """Scope inherited helper children to the same environment as direct calls."""
+    original = dict(os.environ)
+    try:
+        os.environ.clear()
+        os.environ.update(env)
+        yield
+    finally:
+        os.environ.clear()
+        os.environ.update(original)
 
 
 def main():
@@ -38,7 +57,7 @@ def main():
         engine.chmod(0o700)
     env = dict(os.environ, XDG_CONFIG_HOME=str(private / 'config'))
     # Keep this fixture independent of any selected installed association.
-    for key in ['FSGG_TELEMETRY_STORE', 'FSGG_TELEMETRY_CONFIG', 'CODEX_THREAD_ID']:
+    for key in ASSOCIATION_KEYS | {key for key in env if key.startswith('FSGG_TELEMETRY_CREDENTIAL_')}:
         env.pop(key, None)
 
     def run(*argv, code=0):
@@ -80,8 +99,27 @@ def main():
     labels = private / 'labels.json'
     labels.write_text(json.dumps({'schema':D.LABELS_SCHEMA,'items':{},'models':{},'efforts':{},'scopes':{}}))
     labels.chmod(0o600)
-    snapshot, envelope = D._read_host_snapshot(str(store), str(engine))
-    host = D.build_host(labels_path=labels, resolved_config={'storeRoot':str(store),'engine':str(engine)})
+    # The helper owns its subprocess calls and inherits os.environ. Exercise
+    # that real boundary with a checked launcher, rather than mocking its IO.
+    checked_engine = private / 'checked-engine'
+    environment_evidence = private / 'helper-environment'
+    environment_evidence.mkdir(mode=0o700)
+    checked_engine.write_text('#!' + sys.executable + '\n' +
+        'import json, os, pathlib, sys, uuid\n' +
+        'assert os.environ.get("XDG_CONFIG_HOME") == ' + repr(env['XDG_CONFIG_HOME']) + '\n' +
+        'for key in os.environ:\n' +
+        '    assert key not in ' + repr(sorted(ASSOCIATION_KEYS)) + ' and not key.startswith("FSGG_TELEMETRY_CREDENTIAL_"), "inherited association visible"\n' +
+        'path = pathlib.Path(' + repr(str(environment_evidence)) + ') / (uuid.uuid4().hex + ".json")\n' +
+        'path.write_text(json.dumps({"command":sys.argv[1:3], "privateXdg":True, "associationAbsent":True}))\n' +
+        'os.execv(' + repr(str(engine)) + ', [' + repr(str(engine)) + '] + sys.argv[1:])\n')
+    checked_engine.chmod(0o700)
+    with process_environment(env):
+        snapshot, envelope = D._read_host_snapshot(str(store), str(checked_engine))
+        host = D.build_host(labels_path=labels, resolved_config={'storeRoot':str(store),'engine':str(checked_engine)})
+    helper_checks = [json.loads(path.read_text()) for path in environment_evidence.glob('*.json')]
+    assert [row['command'] for row in helper_checks].count(['telemetry','item-detail']) == 2
+    assert [row['command'] for row in helper_checks].count(['telemetry','efficiency-export']) == 1
+    assert all(row['privateXdg'] and row['associationAbsent'] for row in helper_checks)
     D.validate_host(host)
     assert host['store']['schemaVersion'] == 14
     assert host['store']['pendingBatches'] == 0
@@ -96,7 +134,7 @@ def main():
     if not args.skip_browser:
         subprocess.run(['node', str(ROOT / 'tests/telemetry-local-journey/browser.js'), str(private)],
                        check=True, timeout=45, env=env, cwd=ROOT)
-    result = {'browser':'not-run' if args.skip_browser else 'passed','evidenceKind':'synthetic-test-events','sourceRevision':dashboard['sourceRevision'],
+    result = {'helperSubprocessEnvironment':'private-verified','browser':'not-run' if args.skip_browser else 'passed','evidenceKind':'synthetic-test-events','sourceRevision':dashboard['sourceRevision'],
               'enginePath':str(engine),'engineSha256':hashlib.sha256(engine.read_bytes()).hexdigest(),
               'sourceAssemblySha256':hashlib.sha256(assembly.read_bytes()).hexdigest() if not args.engine else None,
               'collectionStoreDashboard':'passed','testCounters':[12,4,5,2,17],
