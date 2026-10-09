@@ -6,6 +6,7 @@ import importlib.util
 import json
 import pathlib
 import unittest
+from unittest import mock
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 SPEC = importlib.util.spec_from_file_location(
@@ -115,7 +116,7 @@ class ProtectedIntakePreflightTests(unittest.TestCase):
         path = ROOT / "tests/protected-intake-preflight/.receipt.tmp.json"
         try:
             path.write_text(json.dumps(receipt), encoding="utf-8")
-            MODULE.verify_receipt(path)
+            self.assertEqual(0, MODULE.main(["verify", str(path)]))
             receipt["exactBypassRosterReadback"] = True
             receipt["protectionMatchesCandidate"] = True
             receipt["blockers"].remove("exact-bypass-roster-readback-unavailable")
@@ -158,8 +159,8 @@ class ProtectedIntakePreflightTests(unittest.TestCase):
         with self.assertRaisesRegex(MODULE.Refusal, "comment readback incomplete"):
             MODULE.evaluate(changed)
 
-    def test_workflow_is_one_read_only_protected_main_preflight(self):
-        source = MODULE.WORKFLOW_PATH.read_text(encoding="utf-8")
+    def test_historical_workflow_remains_one_read_only_protected_main_preflight(self):
+        source = (ROOT / "tests/protected-intake-preflight/fixtures/historical-workflow.yml").read_text(encoding="utf-8")
         self.assertIn("  push:\n    branches: [main]", source)
         self.assertIn("permissions: {}", source)
         self.assertIn("protected-intake-preflight.py static", source)
@@ -174,6 +175,25 @@ class ProtectedIntakePreflightTests(unittest.TestCase):
             "contents: write", "git push", "environment:",
         ):
             self.assertNotIn(forbidden, lowered)
+
+    def test_current_workflow_cannot_automatically_read_or_replay_authority(self):
+        source = MODULE.WORKFLOW_PATH.read_text(encoding="utf-8")
+        self.assertIn("  workflow_dispatch:", source)
+        self.assertIn("permissions: {}", source)
+        self.assertIn("no authority read or activation performed", source)
+        for forbidden in ("  push:", "  schedule:", "  repository_dispatch:",
+                          "  pull_request:", "  pull_request_target:", "produce", "git fetch",
+                          "urllib", "gh api", "secrets.", "github.token"):
+            self.assertNotIn(forbidden, source)
+
+    def test_retired_produce_refuses_before_live_read_or_output_write(self):
+        with mock.patch.object(MODULE, "collect_live") as collect, \
+             mock.patch.object(pathlib.Path, "write_text") as write, \
+             mock.patch("sys.stderr") as stderr:
+            self.assertEqual(3, MODULE.main(["produce", "/must-not-write.json"]))
+        collect.assert_not_called()
+        write.assert_not_called()
+        self.assertIn("live candidate preflight retired", "".join(str(c) for c in stderr.write.call_args_list))
 
     def test_source_uses_only_unauthenticated_bounded_reads(self):
         source = MODULE.SCRIPT_PATH.read_text(encoding="utf-8")
