@@ -9,6 +9,7 @@ on:
       - "tools/telemetry-dashboard.py"
       - "scripts/telemetry-dashboard-refresh.py"
       - "tests/telemetry-dashboard/**"
+      - "tests/telemetry-local-journey/**"
       - "contracts/process-efficiency/**"
       - "tests/process-efficiency/**"
       - "tests/learn-01-responses-source/**"
@@ -29,6 +30,7 @@ on:
       - "tools/telemetry-dashboard.py"
       - "scripts/telemetry-dashboard-refresh.py"
       - "tests/telemetry-dashboard/**"
+      - "tests/telemetry-local-journey/**"
       - "contracts/process-efficiency/**"
       - "tests/process-efficiency/**"
       - "tests/learn-01-responses-source/**"
@@ -75,6 +77,8 @@ jobs:
         run: |
           python3 tests/learn-01-responses-source/test_responses_source.py
           python3 tests/responses-static-producer/test_static_producer.py
+      - name: Verify local journey helper environment isolation
+        run: python3 -m unittest discover -s tests/telemetry-local-journey -p 'test_*.py'
       - name: Verify feed and dashboard behavior
         env:
           FSGG_DASHBOARD_SKIP_BROWSER: ${{ github.event_name == 'schedule' }}
