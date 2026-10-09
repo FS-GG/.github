@@ -452,14 +452,36 @@ module TelemetryCiApplicationTests =
 
     [<Fact>]
     let ``UTEL-CI-03 retained native target empty join stays unknown`` () =
-        let rec repositoryRoot (path: string) =
-            let fixture = Path.Combine(path, "tests", "telemetry-ci-attribution", "native-target-empty-join.json")
-            if File.Exists fixture then fixture
-            else
-                let parent = Directory.GetParent path
-                if isNull parent then failwith "retained native fixture prerequisite is missing"
-                repositoryRoot parent.FullName
-        use document = JsonDocument.Parse(File.ReadAllBytes(repositoryRoot AppContext.BaseDirectory))
+        // Sanitized read-only native evidence captured on 2026-10-09; not a causal admission.
+        let retained = """
+{
+  "observedAt": "2026-10-09T21:22:05.299284+00:00",
+  "endpoint": "repos/FS-GG/.github/actions/runs/37984850593",
+  "projection": {
+    "check_suite_id": 102923027629,
+    "created_at": "2026-10-09T20:07:27Z",
+    "display_title": "chore: adopt main-backed ordinary settlement",
+    "event": "pull_request_target",
+    "head_branch": "routine/ordinary-main-adoption-preparation-20261009",
+    "head_repository": {
+      "full_name": "FS-GG/.github",
+      "id": 1269292704
+    },
+    "head_sha": "4b4432095f8d58aa689dd26d617461e1d5d075ef",
+    "id": 37984850593,
+    "path": ".github/workflows/routine-eligibility.yml",
+    "pull_requests": [],
+    "repository": {
+      "full_name": "FS-GG/.github",
+      "id": 1269292704
+    },
+    "run_attempt": 1,
+    "updated_at": "2026-10-09T20:08:23Z"
+  },
+  "scope": "Read-only evidence; no collection or native acceptance"
+}
+"""
+        use document = JsonDocument.Parse retained
         let row = document.RootElement.GetProperty("projection")
         Assert.Equal(37984850593L, row.GetProperty("id").GetInt64())
         Assert.Empty(row.GetProperty("pull_requests").EnumerateArray())

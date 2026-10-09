@@ -812,10 +812,12 @@ AUTHORITY_REMOTE = "https://github.com/FS-GG/FS.GG.Coordination.Authority.git"
 
 
 def isolated_git(directory, *arguments, data=None, credentials=None, allow_failure=False):
+    # Owned disposable staging needs no background maintenance after the direct Git child exits.
     env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "GIT_CONFIG_NOSYSTEM": "1",
            "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_TERMINAL_PROMPT": "0", **(credentials or {})}
     result = subprocess.run(["git", "-c", "credential.helper=", "-c", "core.hooksPath=/dev/null",
-                             "-c", "http.sslVerify=true", "-C", str(directory), *arguments],
+                             "-c", "http.sslVerify=true", "-c", "maintenance.auto=false", "-c", "gc.auto=0",
+                             "-C", str(directory), *arguments],
                             input=data, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                             timeout=60, check=False)
     require(allow_failure or result.returncode == 0, "isolated Git operation refused")
