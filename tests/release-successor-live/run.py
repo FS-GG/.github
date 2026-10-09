@@ -52,39 +52,41 @@ class FakeAPI:
         raise AssertionError(path)
 
 
-with tempfile.TemporaryDirectory() as temporary:
-    root = pathlib.Path(temporary)
-    source = "b" * 40
-    content_id = "sha256:" + "a" * 64
-    manifest = root / "release-manifest.json"
-    manifest.write_text(json.dumps({"contentId": content_id, "descriptor": {"sourceSha": source, "version": "0.91.3"}}))
-    api = FakeAPI()
-    provider = LiveProvider(api, manifest, "github-token", "nuget-key")
-    tag = Effect("tag", source, content_id)
-    draft = Effect("draft", content_id, content_id)
-    assert provider.observe(tag).state == "absent"
-    assert provider.dispatch(tag).state == "applied"
-    assert provider.observe(tag).state == "matched"
-    assert provider.observe(draft).state == "absent"
-    assert provider.dispatch(draft).state == "applied"
-    assert provider.observe(draft).state == "matched"
-    assert api.writes[0][1] == {"ref": "refs/tags/coherent-set/v0.91.3", "sha": source}
-    assert len(api.writes) == 2
-    package_name = "FS.GG.Kit.0.91.3.nupkg"
-    (root / package_name).write_bytes(b"candidate package bytes")
-    digest = hashlib.sha256((root / package_name).read_bytes()).hexdigest()
-    archive = Effect("archive-asset:FS.GG.Kit", digest, digest)
-    assert provider.observe(archive).state == "absent"
-    assert provider.dispatch(archive).state == "applied"
-    assert provider.observe(archive).state == "matched"
-    api.assets[package_name] = b"different bytes"
-    assert provider.observe(archive).state == "mismatched"
-    api.tag = "c" * 40
-    assert provider.observe(tag).state == "mismatched"
-    api.release["body"] = "unrelated"
-    assert provider.observe(draft).state == "mismatched"
+def qualify_live_provider():
+    with tempfile.TemporaryDirectory() as temporary:
+        root = pathlib.Path(temporary)
+        source = "b" * 40
+        content_id = "sha256:" + "a" * 64
+        manifest = root / "release-manifest.json"
+        manifest.write_text(json.dumps({"contentId": content_id, "descriptor": {"sourceSha": source, "version": "0.91.3"}}))
+        api = FakeAPI()
+        provider = LiveProvider(api, manifest, "github-token", "nuget-key")
+        tag = Effect("tag", source, content_id)
+        draft = Effect("draft", content_id, content_id)
+        assert provider.observe(tag).state == "absent"
+        assert provider.dispatch(tag).state == "applied"
+        assert provider.observe(tag).state == "matched"
+        assert provider.observe(draft).state == "absent"
+        assert provider.dispatch(draft).state == "applied"
+        assert provider.observe(draft).state == "matched"
+        assert api.writes[0][1] == {"ref": "refs/tags/coherent-set/v0.91.3", "sha": source}
+        assert len(api.writes) == 2
+        package_name = "FS.GG.Kit.0.91.3.nupkg"
+        (root / package_name).write_bytes(b"candidate package bytes")
+        digest = hashlib.sha256((root / package_name).read_bytes()).hexdigest()
+        archive = Effect("archive-asset:FS.GG.Kit", digest, digest)
+        assert provider.observe(archive).state == "absent"
+        assert provider.dispatch(archive).state == "applied"
+        assert provider.observe(archive).state == "matched"
+        api.assets[package_name] = b"different bytes"
+        assert provider.observe(archive).state == "mismatched"
+        api.tag = "c" * 40
+        assert provider.observe(tag).state == "mismatched"
+        api.release["body"] = "unrelated"
+        assert provider.observe(draft).state == "mismatched"
 
-print("release successor live tag/draft fake API cases passed")
+    print("release successor live tag/draft fake API cases passed")
+
 
 # Exercise the actual publisher's route and composite admission with bounded fake APIs.
 import copy
@@ -411,4 +413,6 @@ class PublisherJournalTests(unittest.TestCase):
         self.assertEqual(self.journal.initializations, 0)
 
 
-unittest.main()
+if __name__ == "__main__":
+    qualify_live_provider()
+    unittest.main()

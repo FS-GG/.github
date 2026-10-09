@@ -708,3 +708,19 @@ for native in (WrongOriginPolicyAPI(),):
         pass
 assert ProtectedReleaseJournal(FakeGit()).main_directory is False
 print("reusable protection equivalence, exact frozen import and legacy default controls passed")
+
+
+# The existing PR-wired journal suite consumes the actual coherent caller assertions.
+# Loading the standalone fixture does not execute its provider qualification or entrypoint.
+import importlib.util
+import unittest
+caller_path = pathlib.Path(__file__).resolve().parents[1] / "release-successor-live/run.py"
+caller_spec = importlib.util.spec_from_file_location("pr_wired_successor_caller", caller_path)
+caller_fixture = importlib.util.module_from_spec(caller_spec)
+caller_spec.loader.exec_module(caller_fixture)
+caller_suite = unittest.defaultTestLoader.loadTestsFromTestCase(caller_fixture.PublisherJournalTests)
+caller_assertions = caller_suite.countTestCases()
+assert caller_assertions >= 14, "publisher caller qualification disappeared from the PR-wired suite"
+caller_result = unittest.TextTestRunner().run(caller_suite)
+assert caller_result.wasSuccessful(), "actual publisher caller assertions failed"
+print(f"PR-wired actual publisher caller assertions passed: {caller_assertions}")
