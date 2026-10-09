@@ -7,7 +7,15 @@ description: "Public hosted evidence and bounded cost for the isolated ordinary-
 
 # V2-CI-I1 installed qualification — 2026-09-24
 
-The ordinary post-merge settlement route is **installed and qualified in the isolated Authority sandbox**. The production App, keys, public anchor and ruleset binding are enrolled; the production workflow remains inactive (`credentialJob.installed=false`) while the real cutover ledger is at `OperatingV1`. Its separate protected `OpenV2` decision remains required before production settlement can run. This record selects the qualified receiver profile for GS2-10 candidate preparation; it does not declare a frozen candidate or open the v2 writer.
+The September qualification established the ordinary post-merge settlement route in the isolated Authority sandbox. The production App, keys, public anchor and ruleset binding are enrolled; the production workflow remains inactive (`credentialJob.installed=false`) while the real cutover ledger is at `OperatingV1`. Its separate protected `OpenV2` decision remains required before production settlement can run. This record selects the qualified receiver profile for GS2-10 candidate preparation; it does not declare a frozen candidate or open the v2 writer.
+
+## Rehearsal retired — 2026-10-09
+
+The isolated rehearsal route is retired. Workflow `366347875` is disabled, its unchanged source is retained as an [inert fixture](../../tests/v2-ci-ordinary-observe/fixtures/retired-rehearsal/v2-ci-ordinary-rehearsal.yml), and the live rehearsal policy has `status=retired` and `credentialJob.installed=false`. The observer refuses rehearsal activation before native observation. The fixture's historical activation is used only by hermetic tests.
+
+The completed sandbox journal commits [c7](https://github.com/FS-GG/FS.GG.Coordination.Authority.Sandbox/tree/fc6a960cca5d563f5be7603019a928b5860e83ac) and [49](https://github.com/FS-GG/FS.GG.Coordination.Authority.Sandbox/tree/aae73530dec02af949aa0fb97532f5fd801479ac) are archived evidence for the September matrix below. Old-attempt replay is retired; removing their live refs is not permission to repeat those effects or recreate their journals. The archive preserves their exact objects independently of live branch retention.
+
+Sandbox journal creation fencing and protected ref deletion are separate operator actions. This source change neither alters integrity rules nor deletes journal refs. The production Authority repository, ordinary settlement workflow, and migration/cutover route are unchanged.
 
 ## Custody and source binding
 
@@ -38,4 +46,4 @@ The six rehearsal runs were manually dispatched for controlled fault selection. 
 
 ## Disposition
 
-Use the exact published CLI, two-job workflow, public anchors, and isolated profile as the V2-CI-I1 receiver candidate in GS2-10. Preserve `credentialJob.installed=false` for production until the protected cutover ledger reaches `OpenV2` and the GS2-10 exact candidate qualifies it. The real ledger was independently observed at `OperatingV1` on 2026-09-24. Routine operation after activation needs no per-run human interaction; the protected one-time `OpenV2` decision and exceptional incident handling retain their existing owners.
+The September qualification selected the exact published CLI, two-job workflow, public anchors, and isolated profile as the V2-CI-I1 receiver candidate in GS2-10. That rehearsal selection is historical and no longer authorizes execution or replay. Preserve `credentialJob.installed=false` for production until the protected cutover ledger reaches `OpenV2` and the GS2-10 exact candidate qualifies it. The real ledger was independently observed at `OperatingV1` on 2026-09-24. Routine operation after activation needs no per-run human interaction; the protected one-time `OpenV2` decision and exceptional incident handling retain their existing owners.
