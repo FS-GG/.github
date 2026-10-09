@@ -43,3 +43,12 @@ The existing dashboard CI workflow runs `test_environment.py` through unittest.
 It checks real helper subprocess environment inheritance, the sentinel failure
 control, and restoration after a child failure. That hosted test does not run or
 accept the separately admitted durable-store/browser journey described above.
+
+The optional `--activate-workspace` profile uses actual `workspace activate-local`
+to enroll a uniquely identified producer in a fresh private configuration and
+assessor-approved store. The synthetic collector then uses `--config` and the
+explicit repository association, drains applied receipts, and the existing
+packaged dashboard browser journey checks its one-use bootstrap, scoped item,
+HttpOnly session and logout. This proves that private installed association and
+its packaged collection/display route. Global selection, services, genuine
+agent counters and historical operation custody remain separate.
