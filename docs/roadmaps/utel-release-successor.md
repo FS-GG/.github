@@ -722,8 +722,11 @@ after an exclusive retained attempt record; the result immediately remains an in
 generation-26 checkpoint. Unknown responses stop without retry. Ordinary absent intents
 still wait without resending, and the generation-14 Kit profile remains separate.
 
-Source qualification and native admission for this profile remain pending. Every later
-recovery send needs root reconciliation of earlier known or unknown invocations; the local
-attempt record is not a global lease. Publication still requires runtime settlement, channel,
+Nine affected source suites passed 390 tests, including 20 new recovery controls. The actual
+CLI fixtures counted 767 Authority API entries for the upload branch and 947 for settlement;
+the sibling-preservation case counted 949, below the 4,080 qualification limit. Deadline expiry
+and payload drift refused before mutation. These are offline fixture results; native admission
+for this profile remains pending. Every later recovery send needs root reconciliation of earlier
+known or unknown invocations; the local attempt record is not a global lease. Publication still requires runtime settlement, channel,
 manifest and promotion, followed by independent installed collection and receiver acceptance.
 The earlier HTTP 422 uncertainty, seven possible orphan objects and expired deadlines remain.
