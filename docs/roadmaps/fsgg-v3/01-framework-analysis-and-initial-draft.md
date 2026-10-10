@@ -73,6 +73,19 @@ The following links use the inspected commits, so later v2 changes do not silent
 | Release complexity | Historical comments in the CLI project describe release-note validation failures and partial publication across feeds. | Validate every candidate package before the first external write; promote the same bytes from an immutable candidate. A monorepo removes internal publication joins, not external feed failure modes. |
 | Previous clean-start decision | [ADR 0091](../../adr/0091-speed-first-clean-v2-start.md) already rejected costly migration/compatibility work for v2 and separated source, publication and adoption evidence. | Avoid recreating a migration programme for v3. Preserve the distinction between built, published and usable while automating its evidence. |
 
+## Follow-up architecture inspection
+
+A follow-up read-only review used the Coordination and Governance revisions above and `.github` revision `a988d25c68263ce44a1d0f48c3a1e72f2428fa82`. It examined implementation paths behind the revised proposal; no runtime benchmarks were performed. These observations refine the final design, not the historical first draft above.
+
+| Evidence | Design consequence |
+|---|---|
+| The [PostgreSQL store](https://github.com/FS-GG/FS.GG.Coordination/blob/e8d85f8f4bff1c99c486c15a685ba1967d9382bf/src/FS.GG.Coordination.Orchestration.PostgreSql/PostgreSqlStore.fs#L310) replays stream history in `loadState`, including from the locked append path. Repeated single-event appends can therefore entail quadratic cumulative replay work; this is an algorithmic inference, not measured latency. | Bound ordinary current-state reads and transitions independently of audit-history length; measure query work in M1. |
+| The [coordination CLI](https://github.com/FS-GG/.github/blob/a988d25c68263ce44a1d0f48c3a1e72f2428fa82/src/FS.GG.Coord.Cli/Client.fs) spans roughly 11,000 lines, while Governance has 51 of 85 source projects with at most 300 lines of F# implementation, including comments. The [JsonText project](https://github.com/FS-GG/FS.GG.Governance/blob/b89a1251325b6b75ad0ecfc8486663ce8a2b09be/src/FS.GG.Governance.JsonText/FS.GG.Governance.JsonText.fsproj) packages a small helper separately. | Consolidate internal helpers while separating shared application use cases from interface and adapter responsibilities. Project count alone does not predict compilation savings. |
+| The [release journal](https://github.com/FS-GG/.github/blob/a988d25c68263ce44a1d0f48c3a1e72f2428fa82/scripts/release_successor_journal.py) coordinates logical state with the physical main reference; unrelated writes can conflict safely at that shared reference. | Scope database concurrency to operations/resources and distinguish provenance, reusable evidence inputs and live effect preconditions. |
+| The [release saga](https://github.com/FS-GG/.github/blob/a988d25c68263ce44a1d0f48c3a1e72f2428fa82/scripts/release-saga.py) distinguishes raw package archives from payload identity to accommodate known registry transformations. | Preserve that knowledge: uploading one candidate does not require registry-signed readback archives to have identical raw digests. Verify content and signatures separately. |
+
+The proposed improvements are validated through the roadmap's integrated scenarios, including Q27–Q30. No percentage code reduction, build-speed gain or operating-cost saving is established by this inspection.
+
 ## Responsibility map and expected change locality
 
 | User outcome | Current composition seen in sources | Proposed cohesive owner |
