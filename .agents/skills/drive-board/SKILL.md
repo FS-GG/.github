@@ -12,15 +12,38 @@ cross-repo allocation, not item implementation.
 
 For explicitly selected organization V2 scope, read
 [the organization inspection contract](../check-board/references/organization-v2-inspection.md).
-Its adoption gate remains pending: source preparation alone does not switch a consumer. After root's
-actual four-target qualification and selected adoption, use the bound inspection as the primary queue
-for that admitted scope. Combine its human Status/Track/Roadmap and distinct freshness/acceptance gaps
-with owning plans, actual open PRs, disjoint touch sets and current capacity. Only the current integrator
-makes a bounded selection. Keep the three blocked provider outcomes blocked on their owning plans.
-[.github#3009](https://github.com/FS-GG/.github/issues/3009) is delivered and closed: [PR #4192](https://github.com/FS-GG/.github/pull/4192)
-merged the ADR/design at `4fc6edf6acce60760cea858ba15e4384c9ce0340`. Preserve its admitted cohort
-identity; its closure neither selects another outcome nor authorizes a planning-field mutation.
-SDD#935 and other unselected memberships never enter this queue.
+The current [three-active qualification](https://github.com/FS-GG/.github/blob/79051e56b025dadfc6fcaabd58b79e33f2854928/docs/coordination/board-v2-installed-qualification.md#three-active-installed-inspection-and-consumer-acceptance--2026-10-10)
+records installed CLI **0.100.0** and root's accepted programme/check-board consumers. It supersedes
+the historical four-target population only for those named consumers. Root has prospectively selected
+canonical `drive-board` for a bounded **no-dispatch** consumer window; this source preparation does
+not adopt or execute that consumer. `drive-board-normal` and `drive-board-best` remain unswitched.
+
+Before using this organization queue, require root's separate admission and recorded actual
+`drive-board` consumer decision against the exact three-active binding and accepted inspection.
+Binding SHA-256 is `001cbe24b2ac7f6514cb88f4e06388f46cfd94e795008aaa4c6f471bdd288ebb`;
+inspection SHA-256 is `1452f1dde1fd35da80b5c07413d930a336b4c62ccfb4a92a6e7f8c75f49997e9`;
+root qualification/selected-consumer acceptance is
+`6b3badfb0d0c01ed98b10bea481400be42027d994a97d07a628827bb6cc597b2`.
+These are timestamped retained evidence, not a new freshness observation. Source preparation never
+authorizes another inspection, constructor, driver invocation, intake batch or worker dispatch.
+A separately admitted no-dispatch consumption must read the complete report and record its decision;
+no selected work needs intake or worker execution merely to establish that bounded consumer result.
+
+The admitted three-active population is SDD#928, Templates#441 and .github#3010. All three remain
+**Blocked / Active delivery / Verified**; complete empty native dependency edges do not remove their
+owning-plan source/publication/installed prerequisites. Verified source is not Ready or delivered.
+[.github#3009](https://github.com/FS-GG/.github/issues/3009) retains Closed/completed native state and
+human Ready as delivered history: [PR #4192](https://github.com/FS-GG/.github/pull/4192) merged the ADR/design
+at `4fc6edf6acce60760cea858ba15e4384c9ce0340`. It is not a fourth Current target. Preserve its native
+membership and planning fields; SDD#935 remains unapproved/unseeded and never enters this queue.
+Original pilot/four-target receipts and the unavailable historical binding retain their dated identities.
+
+After root records adoption for the explicitly selected consumer, use only its bound read-only
+inspection route as the primary queue. Combine human Status/Track/Roadmap and distinct
+freshness/acceptance gaps with owning plans and separately obtained PR/touch-set/capacity facts.
+Unknown candidate delivery/publication/native acceptance, PRs, touch sets, capacity and intake remain
+Unknown until independently supplied. Only the current integrator makes a bounded work selection.
+Missing, stale or failed inspection is unavailable evidence, never an empty or Ready queue.
 
 Run the existing intake batch below before dispatch. Routine ownership, PR admission, native delivery
 and required source validation remain unchanged. For V2, do not invoke the numbered legacy host loop,
