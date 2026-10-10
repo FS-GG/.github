@@ -5,6 +5,9 @@ import copy
 import hashlib
 import zlib
 import json
+import hashlib
+import os
+import sys
 import pathlib
 import subprocess
 import tempfile
@@ -12,7 +15,8 @@ import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 PROJECT = ROOT / 'tools/BoardV2Import/BoardV2Import.fsproj'
-DLL = ROOT / 'tools/BoardV2Import/bin/Debug/net10.0/BoardV2Import.dll'
+DLL = pathlib.Path(os.environ.get('BOARD_V2_IMPORT_DLL', ROOT / 'tools/BoardV2Import/bin/Debug/net10.0/BoardV2Import.dll'))
+SOURCE_REVISION = os.environ.get('BOARD_V2_IMPORT_SOURCE_REVISION')
 
 # Exact immutable blob b8e99000690ba0136290b40b6a33e3a43cbc7f02; usable in shallow CI checkouts.
 HISTORICAL_FOUR_TARGET_SHA256 = '7322cdaf3b5a16449e2e5863efb915249cb5802e4972a8d4b139c8f09d73c84c'
@@ -198,6 +202,211 @@ class ManifestTests(unittest.TestCase):
         m=self.approved();m['items'][0]['status']='Claimed';self.refused(m,'Status seed')
         m=self.approved();m['items'][0]['dependencies']=[{'issue':'FS-GG/.github#1','observedState':'unknown','evidence':'unknown'}]*2;self.refused(m,'duplicate dependency')
 
+class ExistingProductTests(unittest.TestCase):
+    """Synthetic files exercise the same compiled qualifier, not native authentication."""
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.directory = pathlib.Path(self.temp.name)
+        self.artifact = hashlib.sha256(DLL.read_bytes()).hexdigest()
+        self.assertIsNotNone(SOURCE_REVISION, 'qualification must bind compiled SourceRevisionId')
+
+    def retain(self, name, value):
+        path = self.directory / name
+        data = json.dumps(value, separators=(',', ':')).encode()
+        path.write_bytes(data)
+        return {'path': str(path), 'sha256': hashlib.sha256(data).hexdigest()}
+
+    def fixture(self, game=False):
+        key = 'game' if game else 'rendering'
+        repo = 'FS-GG/FS.GG.Game' if game else 'FS-GG/FS.GG.Rendering'
+        number, issue_number = (4, 7) if game else (5, 1274)
+        node = 'I_fixture_' + key
+        repo_node = {'id': 'R_fixture_'+key, 'nameWithOwner': repo}
+        principal = {'id': 'USER_fixture', 'login': 'fixture-reader'}
+        project = 'PVT_fixture_' + key
+        title = repo.split('/')[1] + ' — Product V2 qualification'
+        url = f'https://github.com/{repo}/issues/{issue_number}'
+        schema = {}
+        option_names = {'Status':['Backlog','Ready','In progress','Blocked','Done'],
+                        'Track':['Active delivery','Follow-up'],
+                        'Observation':['Verified','Stale','Unknown']}
+        for name in ['Status','Roadmap','Track','Observation']:
+            field = {'__typename':'ProjectV2Field' if name=='Roadmap' else 'ProjectV2SingleSelectField',
+                     'dataType':'TEXT' if name=='Roadmap' else 'SINGLE_SELECT',
+                     'id':'FIELD_'+key+'_'+name,'name':name}
+            if name != 'Roadmap':
+                field['options'] = [{'id':key+'_'+name+'_'+str(i),'name':v} for i,v in enumerate(option_names[name])]
+            schema[name] = field
+        chosen = {'Status':'Backlog' if game else 'Blocked', 'Track':'Follow-up' if game else 'Active delivery', 'Observation':'Unknown', 'Roadmap':url}
+        values = {}
+        for name, field in schema.items():
+            value = {'__typename':'ProjectV2ItemFieldTextValue' if name=='Roadmap' else 'ProjectV2ItemFieldSingleSelectValue', 'field':copy.deepcopy(field), 'id':'VALUE_'+name}
+            if name=='Roadmap': value['text']=chosen[name]
+            else: value.update(name=chosen[name],optionId=next(o['id'] for o in field['options'] if o['name']==chosen[name]))
+            values[name]=value
+        member = {'id':'PVTI_fixture_'+key,'isArchived':False,'type':'ISSUE',
+                  'content':{'__typename':'Issue','id':node,'number':issue_number,'repository':repo_node}}
+        observation = {'target':{'expectedTitle':title,'issueId':node,'issueNumber':issue_number,'number':number,'projectId':project,'repository':repo},
+                       'identityAfter':{'closed':False,'id':project,'number':number,'public':False,'title':title,'url':f'https://github.com/orgs/FS-GG/projects/{number}'},
+                       'schema':schema,'membership':{'complete':True,'issueIdentityCoverage':True,'items':[member],'opaqueItemIds':[],'pages':1,'selectedAbsence':'not-absent','selectedMemberships':[copy.deepcopy(member)],'totalCount':1},
+                       'values':{'allPayloadPreservation':False,'otherValueTypes':[],'selected':values},'findings':[],'notRun':[]}
+        metadata = {'additionalFindings':[],'atomicSnapshot':False,'calls':5,'credentialPrincipal':principal,'firstCause':None,'projects':[observation],'scope':'synthetic fixture only'}
+        text = 'Synthetic remaining outcome with preserved SDD924 textual blocker' if not game else 'Synthetic game remaining outcome'
+        body = text.encode()
+        issue = {'id':node,'number':issue_number,'url':url,'state':'OPEN','updatedAt':'2026-10-10T10:00:00Z'}
+        raw_issue = dict(issue, __typename='Issue', body=text, repository=repo_node)
+        raw_graph = {'data':{'viewer':principal,'organization':{'id':'O_kgDOEYAWYw','login':'FS-GG'},'repository':dict(repo_node,issue=raw_issue)}}
+        requests = []
+        for step,(index,phase) in enumerate(zip([2,4,6] if game else [1,3,5],['issue-before','blocked-by','issue-after'])):
+            raw = self.retain(f'{key}-{phase}.raw.json', [] if phase=='blocked-by' else raw_graph)
+            raw['bytes'] = pathlib.Path(raw['path']).stat().st_size
+            method = 'GET' if phase=='blocked-by' else 'POST'
+            endpoint = f'https://api.github.com/repos/{repo}/issues/{issue_number}/dependencies/blocked_by?per_page=50' if phase=='blocked-by' else 'https://api.github.com/graphql'
+            start, end = f'2026-10-10T10:00:{step*2:02d}Z', f'2026-10-10T10:00:{step*2+1:02d}Z'
+            status = {'index':index,'targetKey':key,'phase':phase,'method':method,'url':endpoint,'startedAt':start,'finishedAt':end,'status':200,'retainedBytes':raw['bytes'],'sha256':raw['sha256'],'bodyRetained':True,'bodyComplete':True,'truncated':False,'transportFailure':None,'additionalFailures':[],
+                      'headers':dict.fromkeys(['link','contentLength','contentType','requestId','rateLimitRemaining'])}
+            ref = self.retain(f'{key}-{phase}.status.json',status)
+            ref['bytes'] = pathlib.Path(ref['path']).stat().st_size
+            requests.append({'index':index,'phase':phase,'method':method,'url':endpoint,'startedAt':start,'finishedAt':end,'status':200,'raw':raw,'metadata':ref})
+        currentness = {'schema':'private.board-dot6.source-currentness/1','targetKey':key,'principal':principal,'organization':{'id':'O_kgDOEYAWYw','login':'FS-GG'},'repository':repo_node,'issue':issue,
+                       'body':{'sha256':hashlib.sha256(body).hexdigest(),'utf8Bytes':len(body)},
+                       'owningPlan':{'kind':'same-native-issue','url':url,'issueId':node,'updatedAt':issue['updatedAt'],'bodySha256':hashlib.sha256(body).hexdigest(),'nonempty':True},
+                       'dependencies':{'complete':True,'items':[],'observedAt':requests[1]['finishedAt']},'revisionStable':True,'requests':requests,'atomicSnapshot':False,'mutations':0,'historicalConstructorAuthenticated':False}
+        prior = {'schema':'fsgg.coordination-board-v2-import/v1','target':{'ownerKind':'organization','owner':'FS-GG','title':title,'id':project,'number':number,'creationState':'created-and-read-back'},
+                 'binding':{'recipeRevision':'2ab0c0ff9f37bdec9a11ba3604ebdc230711934f','artifactSha256':'cb318977a143085680b27ba4c86fffd6fb3f5a91dc6a7e07cf79ef7c67825615'},'items':[]}
+        adjudication = {'schema':'private.board-dot6.source-adjudication/1','targetKey':key,'issueId':node,'currentnessSha256':'','authorization':'root-selected','adjudication':'verified-remaining','decision':'follow-up' if game else 'import','roadmap':url,'remainingOutcome':'Synthetic remaining outcome; no native acceptance',
+                        'textualBlockerDisposition':{'status':'none-observed' if game else 'preserved','evidenceBodySha256':currentness['body']['sha256'],'statement':text}}
+        request = {'schema':'fsgg.board-v2-existing-product-request/1',
+                   'selection':{'authorization':'root-selected','organizationId':'O_kgDOEYAWYw','ownerKind':'organization','owner':'FS-GG','repository':repo,'projectId':project,'projectNumber':number,'projectTitle':title,'principal':principal,'selectedIssues':{node:f'{repo}#{issue_number}'}},
+                   'qualifier':{'recipeRevision':SOURCE_REVISION,'artifactSha256':self.artifact},'adapter':{'recipeRevision':'c'*40,'artifactSha256':'d'*64},'populationRevision':None}
+        return request, metadata, currentness, adjudication, prior
+
+    def call_product(self, fixture, raw_request=None):
+        request,metadata,currentness,adjudication,prior=fixture
+        request=copy.deepcopy(request);adjudication=copy.deepcopy(adjudication)
+        request['metadata']=self.retain('metadata.json',metadata)
+        request['currentness']=self.retain('currentness.json',currentness)
+        adjudication['currentnessSha256']=request['currentness']['sha256']
+        request['adjudication']=self.retain('adjudication.json',adjudication)
+        request['priorPopulation']=self.retain('prior.json',prior)
+        path=self.directory/'request.json'
+        path.write_text(json.dumps(request) if raw_request is None else raw_request(request))
+        return subprocess.run(['dotnet',str(DLL),str(path),'--existing-product'],capture_output=True,text=True)
+
+    def refuse(self, fixture, message):
+        result=self.call_product(fixture)
+        self.assertEqual(2,result.returncode,result.stdout)
+        self.assertIn(message,result.stderr)
+
+    def test_two_product_drafts_are_deterministic_and_never_mutate(self):
+        for game in [False,True]:
+            f=self.fixture(game);r=self.call_product(f)
+            self.assertEqual(0,r.returncode,r.stderr)
+            self.assertEqual(r.stdout,self.call_product(f).stdout)
+            out=json.loads(r.stdout)
+            self.assertFalse(out['executable']);self.assertIsNone(out['binding']['populationRevision'])
+            self.assertEqual([],out['nativeMutationIntents'])
+            for k in ['projectCreationPerformed','membershipMutationPerformed','historicalConstructorAuthenticated']:self.assertFalse(out['provenance'][k])
+            self.assertEqual(f[0]['adapter']['artifactSha256'],out['binding']['artifactSha256'])
+            self.assertEqual(self.artifact,out['binding']['importArtifactSha256'])
+            self.assertEqual(f[4]['binding']['artifactSha256'],'cb318977a143085680b27ba4c86fffd6fb3f5a91dc6a7e07cf79ef7c67825615')
+            item=out['population']['items'][0]
+            self.assertEqual(('Backlog','Follow-up','Unknown') if game else ('Blocked','Active delivery','Unknown'),tuple(item[k] for k in ['status','track','observation']))
+            self.assertIn('prospectiveQualification',out['population']['inventory'])
+            self.assertNotIn(str(self.directory),json.dumps(out['population']))
+            self.assertNotIn('path',out['population']['inventory']['prospectiveQualification'])
+            prior=out['population']['inventory']['prospectiveQualification']['priorImportProvenance']
+            for k in ['recipeRevision','artifactSha256']:self.assertEqual(f[4]['binding'][k],prior[k])
+            self.assertFalse(prior['historicalConstructorAuthenticated'])
+
+    def test_population_commit_is_separate_explicit_axis(self):
+        f=self.fixture();f[0]['populationRevision']='e'*40
+        r=self.call_product(f);self.assertEqual(0,r.returncode,r.stderr)
+        self.assertEqual('e'*40,json.loads(r.stdout)['binding']['populationRevision'])
+        for value in ['fake',SOURCE_REVISION,'c'*40]:
+            f=self.fixture();f[0]['populationRevision']=value;self.refuse(f,'population')
+
+    def test_unknown_duplicate_and_digest_modified_inputs_refuse(self):
+        f=self.fixture();f[0]['unexpected']=True;self.refuse(f,'unexpected property')
+        f=self.fixture();r=self.call_product(f,lambda request:json.dumps(request)[:-1]+',"schema":"duplicate"}')
+        self.assertEqual(2,r.returncode);self.assertIn('duplicate property',r.stderr)
+        f=self.fixture();r=self.call_product(f,lambda request:json.dumps(dict(request,metadata=dict(request['metadata'],sha256='0'*64))))
+        self.assertEqual(2,r.returncode);self.assertIn('evidence digest differs',r.stderr)
+
+    def test_actual_assembly_and_historical_constructor_substitution_refuse(self):
+        for key,value in [('artifactSha256','cb318977a143085680b27ba4c86fffd6fb3f5a91dc6a7e07cf79ef7c67825615'),('recipeRevision','2ab0c0ff9f37bdec9a11ba3604ebdc230711934f')]:
+            f=self.fixture();f[0]['qualifier'][key]=value;self.refuse(f,'qualifier')
+        f=self.fixture();f[0]['adapter']=copy.deepcopy(f[0]['qualifier']);self.refuse(f,'axes')
+
+    def test_scope_and_bound_refusals(self):
+        for key,value in [('authorization','unknown'),('ownerKind','user'),('repository','Foreign/Repo'),('projectNumber',1),('projectNumber',3),('projectId','PVT_kwDOEYAWY84Bb08W'),('projectId','PVT_kwDOEYAWY84Bldpa')]:
+            f=self.fixture();f[0]['selection'][key]=value;self.refuse(f,'refused' if key.startswith('project') else ('differs' if key in ['authorization','ownerKind'] else 'repository'))
+        for count in [0,6]:
+            f=self.fixture();f[0]['selection']['selectedIssues']={f'I_{i}':f'FS-GG/FS.GG.Rendering#{i+1}' for i in range(count)};self.refuse(f,'one to five')
+
+    def test_principal_project_and_member_joins_refuse(self):
+        f=self.fixture();f[1]['credentialPrincipal']['login']='other';self.refuse(f,'differs')
+        f=self.fixture();f[1]['projects'][0]['identityAfter']['id']='PVT_wrong';self.refuse(f,'differs')
+        for key,value in [('complete',False),('issueIdentityCoverage',False),('pages',0),('totalCount',2)]:
+            f=self.fixture();f[1]['projects'][0]['membership'][key]=value;self.refuse(f,'membership')
+        f=self.fixture();f[1]['projects'][0]['membership']['items'][0]['isArchived']=True;self.refuse(f,'archived')
+        f=self.fixture();f[1]['projects'][0]['membership']['items'].append(copy.deepcopy(f[1]['projects'][0]['membership']['items'][0]));f[1]['projects'][0]['membership']['totalCount']=2;self.refuse(f,'duplicate membership')
+
+    def test_field_and_option_identity_joins_refuse(self):
+        for mutate in [lambda row:row['schema']['Status'].update(id=row['schema']['Roadmap']['id']),lambda row:row['schema']['Status']['options'][0].update(name='Claimed'),lambda row:row['values']['selected']['Status'].update(optionId='wrong'),lambda row:row['values']['selected']['Status']['field'].update(id='wrong')]:
+            f=self.fixture();mutate(f[1]['projects'][0]);self.refuse(f,'field' if f[1]['projects'][0]['schema']['Status']['id']==f[1]['projects'][0]['schema']['Roadmap']['id'] else 'differ')
+
+    def test_source_closed_stale_unknown_or_nonempty_dependencies_refuse(self):
+        for mutate,message in [(lambda c:c['issue'].update(state='CLOSED'),'state differs'),(lambda c:c.update(revisionStable=False),'source revision'),(lambda c:c['dependencies'].update(complete=False),'empty dependencies'),(lambda c:c['dependencies'].update(items=[{'id':'I_dependency'}]),'empty dependencies'),(lambda c:c['owningPlan'].update(nonempty=False),'owning plan empty'),(lambda c:c['issue'].update(updatedAt='bad'),'invalid timestamp')]:
+            f=self.fixture();mutate(f[2]);self.refuse(f,message)
+
+    def test_raw_source_and_status_completeness_are_recomputed(self):
+        for mutate,message in [(lambda c:c['body'].update(sha256='0'*64),'bodySha256 differs'),(lambda c:c['requests'][0]['raw'].update(sha256='0'*64),'source raw reference differs'),(lambda c:c['requests'][0].update(status=403),'slot/status differs'),(lambda c:c['requests'][2].update(startedAt='2026-10-10T09:00:00Z'),'request ordering differs')]:
+            f=self.fixture();mutate(f[2]);self.refuse(f,message)
+        for key,value in [('bodyComplete',False),('truncated',True),('transportFailure','Unknown')]:
+            f=self.fixture();ref=f[2]['requests'][1]['metadata'];path=pathlib.Path(ref['path']);status=json.loads(path.read_text());status[key]=value;fresh=self.retain(path.name,status);fresh['bytes']=path.stat().st_size;f[2]['requests'][1]['metadata']=fresh;self.refuse(f,'coverage incomplete')
+        f=self.fixture();ref=f[2]['requests'][1]['metadata'];path=pathlib.Path(ref['path']);status=json.loads(path.read_text());status['headers']['link']='next';fresh=self.retain(path.name,status);fresh['bytes']=path.stat().st_size;f[2]['requests'][1]['metadata']=fresh;self.refuse(f,'paginated')
+
+    def test_root_adjudication_and_textual_blocker_never_inferred(self):
+        for key,value,message in [('authorization','unknown','authorization differs'),('remainingOutcome','','remainingOutcome is required'),('decision','follow-up','decision differs')]:
+            f=self.fixture();f[3][key]=value;self.refuse(f,message)
+        f=self.fixture();f[3]['textualBlockerDisposition']['status']='none-observed';self.refuse(f,'differs')
+        f=self.fixture();f[3]['textualBlockerDisposition']['evidenceBodySha256']='0'*64;self.refuse(f,'differs')
+
+    def test_input_size_links_and_missing_nested_properties_refuse(self):
+        f=self.fixture();r=self.call_product(f,lambda request:' '*1048577)
+        self.assertEqual(2,r.returncode);self.assertIn('exceeds 1 MiB',r.stderr)
+        f=self.fixture();del f[2]['atomicSnapshot'];self.refuse(f,'missing property')
+        f=self.fixture();f[2]['body']['unexpected']=1;self.refuse(f,'unexpected property')
+        f=self.fixture();ref=f[2]['requests'][0]['raw'];original=pathlib.Path(ref['path']);link=self.directory/'linked.json';link.symlink_to(original);ref['path']=str(link);self.refuse(f,'linked input path')
+
+    def test_foreign_member_opaque_population_and_missing_selected_coverage_refuse(self):
+        f=self.fixture();f[1]['projects'][0]['membership']['items'][0]['content']['repository']['nameWithOwner']='FS-GG/Other';self.refuse(f,'nameWithOwner differs')
+        f=self.fixture();f[1]['projects'][0]['membership']['items'][0]['content']['id']='I_wrong';self.refuse(f,'absent or duplicated')
+        f=self.fixture();f[1]['projects'][0]['membership']['opaqueItemIds']=['PVTI_opaque'];self.refuse(f,'opaque')
+        f=self.fixture();f[1]['projects'][0]['membership']['selectedMemberships']=[];self.refuse(f,'summary differs')
+        f=self.fixture();del f[1]['projects'][0]['values']['selected']['Roadmap'];self.refuse(f,'missing property')
+
+    def test_original_raw_revision_and_body_are_not_replaced_by_summary(self):
+        for key,value in [('updatedAt','2026-10-10T10:01:00Z'),('body','changed body')]:
+            f=self.fixture();row=f[2]['requests'][2];path=pathlib.Path(row['raw']['path']);raw=json.loads(path.read_text());raw['data']['repository']['issue'][key]=value
+            fresh=self.retain(path.name,raw);fresh['bytes']=path.stat().st_size;row['raw']=fresh
+            path=pathlib.Path(row['metadata']['path']);status=json.loads(path.read_text());status.update(sha256=fresh['sha256'],retainedBytes=fresh['bytes']);ref=self.retain(path.name,status);ref['bytes']=path.stat().st_size;row['metadata']=ref
+            self.refuse(f,'updatedAt differs' if key=='updatedAt' else 'raw body/owning-plan identity differs')
+
+    def test_option_permutation_and_utf8_header_byte_boundary(self):
+        f=self.fixture();row=f[1]['projects'][0];row['schema']['Status']['options'].reverse();row['values']['selected']['Status']['field']['options'].reverse()
+        r=self.call_product(f);self.assertEqual(0,r.returncode,r.stderr)
+        for text,expected in [('x'*4096,0),('é'*2049,2)]:
+            f=self.fixture();ref=f[2]['requests'][0]['metadata'];path=pathlib.Path(ref['path']);status=json.loads(path.read_text());status['headers']['requestId']=text;fresh=self.retain(path.name,status);fresh['bytes']=path.stat().st_size;f[2]['requests'][0]['metadata']=fresh
+            r=self.call_product(f);self.assertEqual(expected,r.returncode,r.stderr)
+            if expected:self.assertIn('header exceeds bound',r.stderr)
+
 if __name__ == '__main__':
-    subprocess.run(['dotnet','build',str(PROJECT),'--nologo','-m:1','-p:UseSharedCompilation=false'],check=True)
+    if '--no-build' in sys.argv:
+        sys.argv.remove('--no-build')
+    else:
+        SOURCE_REVISION = subprocess.run(['git','rev-parse','HEAD'],cwd=ROOT,capture_output=True,text=True,check=True).stdout.strip()
+        subprocess.run(['dotnet','build',str(PROJECT),'--nologo','-m:1','-p:UseSharedCompilation=false','-p:SourceRevisionId='+SOURCE_REVISION],check=True)
     unittest.main()
