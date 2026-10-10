@@ -619,3 +619,50 @@ retained residuals. Sampled process-group custody does not establish hard whole-
 Source qualification does not complete publication, install a collector, settle the original intent
 or qualify the causal receiver. Fresh protected-source admission and original-identity readback
 remain necessary before native recovery.
+
+
+## Original recovery reaches generation 16 — 2026-10-10
+
+[Recovery run 38057876080](https://github.com/FS-GG/.github/actions/runs/38057876080)
+passed on protected source `6c1775cfbc61d6571e84d181b412fb1a1c23fdd5`. Its authenticated
+checkpoint settled the matching original Kit publication, then recorded and sent the original
+Drivers request once. The remaining two advances waited without resending. Logical generation
+16 contains seven verified effects and the Drivers intent; publication is incomplete.
+The result used 1,067 counted Authority calls: 1,051 GET attempts, fourteen Git-object POSTs
+and two successful non-force reference updates. This actual count does not reserve future quota.
+
+A later bounded observation on protected source `003ec3e7d5c60cffb4622197b58f2bf0f195f8b4`
+matched the exact generation-16 canonical state and logical pointer
+`1b35d40b3b7fca6c9848b34c0886cd822f28d7ea`. All 49 GET responses were retained, with no
+writes and empty observed owned custody. Drivers appeared in the public index, but this read
+neither acquired its package bytes nor established current writer quota. At that observation, its original intent
+was still pending matching-payload settlement. Eight later ordered effects remained:
+three archive assets, two qualification assets, the channel asset, manifest asset and promotion.
+Coherent publication, installed collection and causal-receiver acceptance remain open.
+
+The earlier HTTP 422 cause, possible unreferenced objects, expired operation deadlines and
+incomplete telemetry collection remain preserved. Successful recovery does not resolve them.
+
+
+## Original recovery reaches generation 20 — 2026-10-10
+
+[Recovery run 38060161251](https://github.com/FS-GG/.github/actions/runs/38060161251)
+passed on protected source `003ec3e7d5c60cffb4622197b58f2bf0f195f8b4`. Its retained,
+source-bound checkpoint has nine verified effects and the Kit archive intent at logical
+pointer `1966fc517ef413cd3f1c3035fd13da8836394aec`. The original candidate is unchanged.
+The starting and final states, four successful journal updates and fixed advance order imply
+four steps: settle the matching Drivers payload, send the CLI archive, settle that archive,
+then send the Kit archive. The receipt explicitly records the final Kit archive request as
+applied; it does not enumerate intermediate steps separately.
+
+The operation used 1,731 counted Authority API entries: 1,699 GET attempts, 28 Git-object
+POSTs and four successful non-force reference updates. The single expected legacy-reference
+404 is retained. The quota observation belongs to this run and grants no later capacity.
+The original result archive was read within its five-minute terminal retention window;
+its exact source, candidate, run, artifact and receipt bindings passed, and owned cleanup
+was observed empty.
+
+Publication remains incomplete. Next is matching-payload settlement of the existing Kit
+archive intent, without resending it. Six later effects remain: Drivers archive, qualification
+evidence, qualification runtime, channel asset, manifest asset and promotion. Installed
+collection and causal-receiver acceptance remain open.
