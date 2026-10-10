@@ -77,46 +77,72 @@ class Reader:
         req = urllib.request.Request(API + path, method="GET", headers={
             "Authorization": "Bearer " + self.tokens[credential],
             "Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"})
-        try:
-            response = self.opener.open(req, timeout=min(12, remaining))
-        except urllib.error.HTTPError as error:
-            response = error
-        with response:
-            if response.geturl() != API + path:
-                raise Refused("response-origin-refused")
-            # Recheck a fixed request deadline between bounded stream reads;
-            # a slow response cannot extend it through repeated successful reads.
-            chunks, size = [], 0
-            while size <= 2 * 1024 * 1024:
-                if self.clock() > request_deadline:
-                    raise Refused("request-deadline-bound")
-                chunk = response.read1(min(65536, 2 * 1024 * 1024 + 1 - size))
-                if not chunk:
-                    break
-                chunks.append(chunk)
-                size += len(chunk)
-            raw = b"".join(chunks)
-            status = response.code
-            headers = {k: response.headers[k] for k in HEADERS if k in response.headers}
-        digest = hashlib.sha256(raw).hexdigest()
-        evidence = {"credential": credential, "path": path, "status": status,
-                    "headers": headers, "bytes": len(raw), "sha256": digest}
+        evidence = {"credential": credential, "path": path, "status": None,
+                    "headers": {}, "bytes": 0, "complete": False}
         self.evidence.append(evidence)
-        if len(raw) > 2 * 1024 * 1024 or self.bytes + len(raw) > 24 * 1024 * 1024:
-            evidence["complete"] = False
-            raise Refused("response-byte-bound")
-        self.bytes += len(raw)
-        evidence["complete"] = True
-        target = self.rawdir / f"{self.calls:02d}.body"
-        with target.open("xb") as output:
-            os.chmod(target, 0o600)
-            output.write(raw)
+        chunks, size, primary = [], 0, None
+        try:
+            try:
+                response = self.opener.open(req, timeout=min(12, remaining))
+            except urllib.error.HTTPError as error:
+                response = error
+            with response:
+                evidence["status"] = response.code
+                evidence["headers"] = {k: response.headers[k] for k in HEADERS if k in response.headers}
+                if response.geturl() != API + path:
+                    raise Refused("response-origin-refused")
+                # HTTPError wraps HTTPResponse; both must expose a bounded socket.
+                transport = response
+                sock = None
+                for _ in range(3):
+                    sock = getattr(getattr(getattr(transport, "fp", None), "raw", None), "_sock", None)
+                    if sock is not None:
+                        break
+                    transport = getattr(transport, "fp", None)
+                if sock is None:
+                    raise Refused("transport-timeout-unavailable")
+                while size <= 2 * 1024 * 1024:
+                    remaining = request_deadline - self.clock()
+                    if remaining <= 0:
+                        raise Refused("request-deadline-bound")
+                    sock.settimeout(remaining)
+                    chunk = response.read1(min(65536, 2 * 1024 * 1024 + 1 - size))
+                    if chunk:
+                        chunks.append(chunk)
+                        size += len(chunk)
+                    if self.clock() > request_deadline:
+                        raise Refused("request-deadline-bound")
+                    if not chunk:
+                        evidence["complete"] = True
+                        break
+                if size > 2 * 1024 * 1024 or self.bytes + size > 24 * 1024 * 1024:
+                    evidence["complete"] = False
+                    raise Refused("response-byte-bound")
+                if evidence["status"] != 200:
+                    raise Refused("HTTP-status-" + str(evidence["status"]))
+        except Exception as error:
+            primary = error
+        raw = b"".join(chunks)
+        evidence.update(bytes=len(raw), sha256=hashlib.sha256(raw).hexdigest())
+        retained = raw[:max(0, min(2 * 1024 * 1024, 24 * 1024 * 1024 - self.bytes))]
+        self.bytes += len(retained)
+        evidence["retainedBytes"] = len(retained)
+        # Partial evidence is explicitly labelled; it is never parsed as a response.
+        try:
+            target = self.rawdir / f"{self.calls:02d}.body"
+            with target.open("xb") as output:
+                os.chmod(target, 0o600)
+                output.write(retained)
+        except Exception as error:
+            evidence["rawRetentionFailure"] = type(error).__name__
+            if primary is None:
+                primary = error
+        if primary is not None:
+            raise primary
         if self.clock() > self.deadline:
             raise Refused("collection-deadline-bound")
-        if status != 200:
-            raise Refused("HTTP-status-" + str(status))
         try:
-            return json.loads(raw), headers
+            return json.loads(raw), evidence["headers"]
         except (ValueError, UnicodeError) as error:
             raise Refused("response-JSON-refused") from error
 
@@ -130,12 +156,18 @@ def next_page(headers, page):
         match = re.fullmatch(r'\s*<([^>]+)>; rel="(next|prev|first|last)"\s*', part)
         if not match or match[2] in relations:
             raise Refused("pagination-shape-refused")
-        relations[match[2]] = match[1]
-    if "next" not in relations:
-        return False
-    if relations["next"] != API + f"repos/{REPOSITORY}/releases?per_page=100&page={page + 1}":
-        raise Refused("pagination-destination-refused")
-    return True
+        destination = re.fullmatch(re.escape(API + f"repos/{REPOSITORY}/releases?per_page=100&page=") + r"([1-9][0-9]*)", match[1])
+        if not destination:
+            raise Refused("pagination-destination-refused")
+        relations[match[2]] = int(destination[1])
+    if (relations.get("first", 1) != 1
+            or ("prev" in relations and (page == 1 or relations["prev"] != page - 1))
+            or ("last" in relations and relations["last"] < page)
+            or ("next" in relations and relations["next"] != page + 1)
+            or ("next" in relations and "last" in relations and relations["next"] > relations["last"])
+            or ("next" not in relations and relations.get("last", page) != page)):
+        raise Refused("pagination-completeness-refused")
+    return "next" in relations
 
 
 def draft(reader):

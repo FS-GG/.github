@@ -28,6 +28,8 @@ listpath = f'repos/{m.REPOSITORY}/releases?per_page=100&page=1'
 class Response:
     def __init__(self,url,value,status=200,headers=None):
         self.url,self.code,self.headers=url,status,headers or {}
+        self.timeouts=[]
+        self.fp=types.SimpleNamespace(raw=types.SimpleNamespace(_sock=types.SimpleNamespace(settimeout=self.timeouts.append)))
         self.raw = io.BytesIO(value if isinstance(value,bytes) else json.dumps(value).encode())
     def geturl(self): return self.url
     def read1(self,n): return self.raw.read(n)
@@ -164,6 +166,30 @@ class Cases(unittest.TestCase):
     def test_fixture_has_actual_selector_supported_invocation(self):
         workflow=SOURCE.parents[1]/'.github/workflows/release-successor-recovery-observe.yml'
         self.assertIn('run: python3 tests/release-successor-recovery-observe/run.py',workflow.read_text())
+    def test_unvisited_last_page_and_offhost_prev_are_unknown(self):
+        for link in (f'<{m.API}repos/{m.REPOSITORY}/releases?per_page=100&page=2>; rel="last"',
+                     '<https://evil.invalid>; rel="prev"'):
+            self.fresh_reader();self.fake.headers[listpath]={'link':link}
+            self.assertEqual(m.observe(self.reader,ENV)['outcomes']['draft']['status'],'unknown')
+    def test_late_EOF_and_partial_disconnect_retain_native_evidence(self):
+        for mode in ('late-eof','disconnect'):
+            self.fresh_reader();now=[0];self.reader.clock=lambda:now[0];self.reader.deadline=180
+            original=FakeHTTP.open.__get__(self.fake)
+            def interrupted(req,timeout):
+                response=original(req,timeout);read=response.read1;calls=[0]
+                def part(n):
+                    calls[0]+=1
+                    if calls[0]>1:
+                        if mode=='disconnect':raise OSError('private-secret-sentinel')
+                        now[0]=13;return b''
+                    return read(5)
+                response.read1=part;return response
+            self.fake.open=interrupted
+            with self.assertRaises((m.Refused,OSError)):self.reader.get('ledger','rate_limit')
+            evidence=self.reader.evidence[-1]
+            self.assertFalse(evidence['complete']);self.assertEqual(evidence['status'],200)
+            self.assertEqual(evidence['bytes'],5);self.assertEqual(evidence['retainedBytes'],5)
+            self.assertEqual(len(self.fake.calls)>0,True)
     def test_failed_scope_prevents_draft_but_retains_rates(self):
         self.fake.values['installation/repositories?per_page=100']={'total_count':2,'repositories':[]}
         result=m.observe(self.reader,ENV)
