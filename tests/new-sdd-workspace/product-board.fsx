@@ -8,6 +8,7 @@ open NewSddWorkspace
 open FS.GG.Coord.GitHub.V2Projection
 
 let digest (value: byte array) = SHA256.HashData value |> Convert.ToHexString |> _.ToLowerInvariant()
+let sha (value: string) = digest (Text.Encoding.UTF8.GetBytes value)
 let adapter = digest (File.ReadAllBytes typeof<Binding>.Assembly.Location)
 let binding = """{
 "bindingVersion":3,"importRecipeRevision":"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
@@ -225,6 +226,44 @@ try
     ProductBoard.captureGeneratedToolManifest freshAuthority (freshRoot + "-foreign") true |> refuseDriver "foreign fresh target"
     let snapshot = ProductBoard.captureGeneratedToolManifest freshAuthority freshRoot true |> pass
     let prepareFresh fetch = ProductBoard.prepareGenerated snapshot freshRoot "acme/app" (String.replicate 40 "a") binding fetch
+    let mutable adoptionRefusals = 0
+    let refuseAdoption description result =
+        refuse description result
+        adoptionRefusals <- adoptionRefusals + 1
+        printfn "Fresh generated provenance refusal passed: %s" description
+    let provenanceMutants index : (string * (JsonObject -> unit)) list =
+        [ "missing", (fun value -> value.["driverPaths"].AsArray().RemoveAt index)
+          "duplicate", (fun value -> let rows = value.["driverPaths"].AsArray() in rows.Add(rows.[index].DeepClone()))
+          "foreign owner", (fun value -> value.["driverPaths"].[index].["owner"] <- JsonValue.Create "authored")
+          "stale digest", (fun value -> value.["driverPaths"].[index].["sha256"] <- JsonValue.Create(String.replicate 64 "0")) ]
+    for index in 0 .. driverPaths.Length - 1 do
+        for label, mutate in provenanceMutants index do
+            saveProvenance mutate
+            let mutable fetched = false
+            prepareFresh (fun name -> fetched <- true; fetch name) |> refuseAdoption (label + " ownership after capture")
+            if fetched then failwith "changed scaffold provenance reached producer fetch"
+            File.WriteAllText(freshProvenance, generatedProvenance)
+            let mutable changed = false
+            prepareFresh (fun name ->
+                if not changed then
+                    changed <- true
+                    saveProvenance mutate
+                fetch name) |> refuseAdoption (label + " ownership changed during producer fetch")
+            File.WriteAllText(freshProvenance, generatedProvenance)
+    saveProvenance (fun value -> value.["generator"].["id"] <- JsonValue.Create "foreign")
+    prepareFresh fetch |> refuseAdoption "generator provenance changed after capture"
+    File.WriteAllText(freshProvenance, generatedProvenance)
+    saveProvenance (fun value -> value.["ownerNote"] <- JsonValue.Create "concurrent owner")
+    prepareFresh fetch |> refuseAdoption "unrelated provenance changed after capture"
+    File.WriteAllText(freshProvenance, generatedProvenance)
+    saveProvenance (fun value -> value.["productBoard"] <- JsonObject())
+    ProductBoard.captureGeneratedToolManifest freshAuthority freshRoot true |> refuseAdoption "already adopted provenance cannot create a fresh snapshot"
+    File.WriteAllText(freshProvenance, generatedProvenance)
+    if not (OperatingSystem.IsWindows()) then
+        let mode = File.GetUnixFileMode freshProvenance
+        File.SetUnixFileMode(freshProvenance, mode ^^^ UnixFileMode.UserExecute)
+        prepareFresh fetch |> refuseAdoption "scaffold provenance mode changed after capture"
+        File.SetUnixFileMode(freshProvenance, mode)
     for relative in driverPaths do
         let path = Path.Combine(freshRoot, relative)
         File.AppendAllText(path, "authored edit")
@@ -275,16 +314,48 @@ try
     if driverPaths |> List.exists (fun relative -> freshPlan.Changes |> List.exists (fun change -> change.Path = relative && change.Before = Some(Text.Encoding.UTF8.GetBytes oldDriver) && change.After = Text.Encoding.UTF8.GetBytes content) |> not) then
         failwith "fresh driver plan omitted a selected predecessor replacement"
     let captureMode = if OperatingSystem.IsWindows() then None else Some(File.GetUnixFileMode freshTools)
+    let provenanceMode = if OperatingSystem.IsWindows() then None else Some(File.GetUnixFileMode freshProvenance)
     let blocked = Path.Combine(freshRoot, "blocked")
     File.WriteAllText(blocked, "owner bytes")
     let impossible: ProductBoard.FileChange = { Path = "blocked/child"; Before = None; After = [| 1uy |]; Executable = false; BeforeMode = None }
     ProductBoard.apply freshRoot { freshPlan with Changes = freshPlan.Changes @ [ impossible ] } |> refuse "late failure must roll back generated pin and staged files"
     if File.ReadAllText(freshTools) <> generated || File.ReadAllText(blocked) <> "owner bytes" then failwith "rollback changed generated or owner preimages"
+    if File.ReadAllText(freshProvenance) <> generatedProvenance then failwith "rollback changed original scaffold provenance"
     if captureMode |> Option.exists (fun mode -> File.GetUnixFileMode freshTools <> mode) then failwith "rollback changed generated manifest mode"
+    if provenanceMode |> Option.exists (fun mode -> File.GetUnixFileMode freshProvenance <> mode) then failwith "rollback changed original scaffold provenance mode"
     if driverPaths |> List.exists (fun relative -> File.ReadAllText(Path.Combine(freshRoot, relative)) <> oldDriver) then
         failwith "rollback changed generated driver preimages"
     if File.Exists(Path.Combine(freshRoot, "scripts/fsgg-coord")) then failwith "rollback retained staged producer bytes"
     File.Delete blocked
+    let staleProvenance = prepareFresh fetch |> pass
+    File.AppendAllText(freshProvenance, " ")
+    ProductBoard.apply freshRoot staleProvenance |> refuseAdoption "scaffold provenance bytes changed after preview"
+    File.WriteAllText(freshProvenance, generatedProvenance)
+    if not (OperatingSystem.IsWindows()) then
+        let modePlan = prepareFresh fetch |> pass
+        let mode = File.GetUnixFileMode freshProvenance
+        File.SetUnixFileMode(freshProvenance, mode ^^^ UnixFileMode.UserExecute)
+        ProductBoard.apply freshRoot modePlan |> refuseAdoption "scaffold provenance mode changed after preview"
+        File.SetUnixFileMode(freshProvenance, mode)
+        let aliasTarget = Path.Combine(root, "aliased-provenance")
+        File.WriteAllText(aliasTarget, generatedProvenance)
+        File.Delete freshProvenance
+        File.CreateSymbolicLink(freshProvenance, aliasTarget) |> ignore
+        ProductBoard.captureGeneratedToolManifest freshAuthority freshRoot true |> refuseAdoption "scaffold provenance symlink capture"
+        File.Delete freshProvenance
+        File.WriteAllText(freshProvenance, generatedProvenance)
+        let aliasPlan = prepareFresh fetch |> pass
+        File.Delete freshProvenance
+        File.CreateSymbolicLink(freshProvenance, aliasTarget) |> ignore
+        ProductBoard.apply freshRoot aliasPlan |> refuseAdoption "same-byte provenance symlink after preview"
+        if File.ReadAllText(aliasTarget) <> generatedProvenance then failwith "provenance alias target was written"
+        File.Delete freshProvenance
+        File.WriteAllText(freshProvenance, generatedProvenance)
+        File.Delete aliasTarget
+    let expectedAdoptionRefusals = if OperatingSystem.IsWindows() then 52 else 56
+    if adoptionRefusals <> expectedAdoptionRefusals then
+        failwithf "fresh provenance refusal inventory incomplete: %d / %d" adoptionRefusals expectedAdoptionRefusals
+    printfn "Fresh generated provenance controls passed: %d actual refusals; six active hashes/original provenance and rollback checked." adoptionRefusals
     let staleFresh = prepareFresh fetch |> pass
     File.AppendAllText(freshTools, " ")
     ProductBoard.apply freshRoot staleFresh |> refuse "fresh generated preimage changed after plan"
@@ -342,6 +413,22 @@ try
     ProductBoard.apply freshRoot (prepareFresh fetch |> pass) |> pass
     if driverPaths |> List.exists (fun relative -> File.ReadAllText(Path.Combine(freshRoot, relative)) <> content) then
         failwith "fresh driver installation omitted a selected mirror"
+    let installedProvenance = JsonNode.Parse(File.ReadAllText freshProvenance)
+    let adoption = installedProvenance.["productBoard"].["generatedDriverAdoption"]
+    if adoption.["kitRevision"].GetValue<string>() <> String.replicate 40 "a"
+       || adoption.["originalScaffoldProvenanceSha256"].GetValue<string>() <> sha generatedProvenance
+       || not (JsonNode.DeepEquals(adoption.["originalScaffoldProvenance"], JsonNode.Parse(generatedProvenance))) then
+        failwith "fresh adoption lost exact original scaffold provenance or immutable Kit identity"
+    for relative in driverPaths do
+        let active = installedProvenance.["driverPaths"].AsArray() |> Seq.filter (fun row -> row.["path"].GetValue<string>() = relative) |> Seq.toList
+        let records = adoption.["drivers"].AsArray() |> Seq.filter (fun row -> row.["path"].GetValue<string>() = relative) |> Seq.toList
+        if active.Length <> 1 || active.Head.["owner"].GetValue<string>() <> "driver"
+           || active.Head.["sha256"].GetValue<string>() <> sha (File.ReadAllText(Path.Combine(freshRoot, relative)))
+           || records.Length <> 1 || records.Head.["beforeSha256"].GetValue<string>() <> sha oldDriver
+           || records.Head.["afterSha256"].GetValue<string>() <> sha content then
+            failwith "fresh driver active provenance or adoption history differs from installed bytes"
+    if adoption.["drivers"].AsArray().Count <> 6 then failwith "adoption history broadened beyond selected six leaves"
+    ProductBoard.captureGeneratedToolManifest freshAuthority freshRoot true |> refuse "applied adoption cannot be recaptured as original scaffold"
     let installedTools = JsonNode.Parse(File.ReadAllText freshTools)
     if installedTools.["tools"].["fs.gg.coord.cli"].["version"].GetValue<string>() <> pin
        || installedTools.["tools"].["fs.gg.sdd.cli"].["version"].GetValue<string>() <> "2.1.0"

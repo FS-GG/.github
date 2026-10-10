@@ -45,6 +45,7 @@ echo "new-sdd-workspace parse fixture — dll='$DLL'"
 # not manufacture repository, board, collaborator, chore-lock, or npm answers.
 dotnet fsi --reference:"$DLL" "$HERE/bounded-text.fsx"
 dotnet fsi --reference:"$DLL" "$HERE/wizard-defaults.fsx"
+dotnet fsi --reference:"$DLL" "$HERE/doctor-coherence.fsx"
 dotnet fsi --reference:"$DLL" "$HERE/knowledge-bootstrap.fsx"
 dotnet fsi --reference:"$DLL" "$HERE/pinned-governance.fsx"
 
@@ -561,6 +562,15 @@ cat > "$STUB_DIR/fsgg-sdd" <<'EOF'
 #!/bin/sh
 printf "%s\n" "$*" >> "$FSGG_SDD_LOG"
 [ "$1" = "--version" ] && { printf '%s\n' '2.1.0'; exit 0; }
+if [ "$1" = "doctor" ]; then
+  case "${FSGG_STUB_DOCTOR_CASE:-true}" in
+    true) printf '%s\n' '{"schemaVersion":1,"command":{"name":"doctor"},"outcome":"succeeded","coherent":true,"doctor":{"isCoherent":true}}' ;;
+    false) printf '%s\n' '{"schemaVersion":1,"command":{"name":"doctor"},"outcome":"succeededWithWarnings","coherent":false,"doctor":{"isCoherent":false}}' ;;
+    malformed) printf '%s\n' 'not a doctor report' ;;
+    failure) printf '%s\n' '{"schemaVersion":1,"command":{"name":"doctor"},"outcome":"succeeded","coherent":true,"doctor":{"isCoherent":true}}'; exit 2 ;;
+  esac
+  exit 0
+fi
 case " $* " in
   *" scaffold "*) [ "${FSGG_STUB_TYPED_CASE:-0}" = 1 ] && exit 1 ;;
 esac
@@ -630,6 +640,27 @@ for bundle in studio tactical arcade complete; do
   expect_execution "fable-game forwards the $bundle bundle" fable-game "bundle=$bundle" --template fable-game --bundle "$bundle"
 done
 expect_execution "fable-bindings forwards its scoped closure and target" fable-bindings "target=universal" --template fable-bindings --npm-package @babylonjs/core --npm-version 8.0.0 --binding-target universal
+
+# The actual compiled entry point must use the JSON verdict, not the doctor's zero exit.
+for doctor_case in true false malformed failure; do
+  target="$WORK/doctor-$doctor_case"
+  log="$WORK/doctor-$doctor_case.log"
+  rc=0
+  OUT="$(FSGG_STUB_DOCTOR_CASE="$doctor_case" PATH="$STUB_DIR:$DOTNET_DIR" FSGG_TEMPLATES_RAW_BASE="$RAW_BASE" FSGG_SDD_LOG="$log" dotnet "$DLL" "$target" Product --template console --lifecycle sdd --pinned --no-governance --no-coordination 2>&1)" || rc=$?
+  verdict_ok=1
+  grep -q -- '^doctor .* --json$' "$log" || verdict_ok=0
+  if [ "$doctor_case" = true ]; then
+    grep -qF 'product is coherent with its set' <<<"$OUT" || verdict_ok=0
+  else
+    if grep -qF 'product is coherent with its set' <<<"$OUT"; then verdict_ok=0; fi
+    grep -qF 'non-blocking' <<<"$OUT" || verdict_ok=0
+  fi
+  if [ "$rc" -eq 0 ] && [ "$verdict_ok" -eq 1 ]; then
+    ok "doctor $doctor_case verdict is truthful and retains the nonfatal phase"
+  else
+    bad "doctor $doctor_case verdict" "rc=$rc: $OUT"
+  fi
+done
 
 # ── retrofit subcommand: its own parser, then a clean no-network refusal (#1343) ──────────────────
 # `retrofit <target> …` wires coordination onto an EXISTING workspace. Its parser is separate from the

@@ -216,6 +216,26 @@ let private runProcessIn (workingDir: string option) (echo: bool) (exe: string) 
 
 let private runProcess (echo: bool) (exe: string) (args: string list) : int * string = runProcessIn None echo exe args
 
+/// Doctor is read-only and may exit zero with drift warnings. Only its explicit JSON verdict
+/// establishes coherence; absent, malformed or contradictory observations remain warnings.
+let doctorCoherence (exitCode: int) (output: string) : Result<bool, string> =
+    if exitCode <> 0 then Error(sprintf "doctor reported issues (exit %d)" exitCode)
+    else
+        try
+            let root = JsonNode.Parse(output).AsObject()
+            if root.["schemaVersion"].GetValue<int>() <> 1 then
+                Error "doctor coherence observation has an unsupported schema"
+            elif root.["command"].["name"].GetValue<string>() <> "doctor" then
+                Error "doctor coherence observation names a different command"
+            elif not ([ "succeeded"; "succeededWithWarnings" ] |> List.contains (root.["outcome"].GetValue<string>())) then
+                Error "doctor coherence observation has a failed or unknown outcome"
+            else
+                let coherent = root.["coherent"].GetValue<bool>()
+                let nested = root.["doctor"].["isCoherent"].GetValue<bool>()
+                if coherent <> nested then Error "doctor coherence observation is inconsistent"
+                else Ok coherent
+        with _ -> Error "doctor coherence observation is missing or malformed"
+
 /// The org GitHub Packages feed. It authenticates ALL reads, including PUBLIC packages
 /// (FS-GG/FS.GG.Templates#82), so a bare `dotnet new install FS.GG.Workspace.Template` against a config
 /// that carries this source fails with a 401 on every anonymous read.
@@ -3353,24 +3373,20 @@ let private run (opts: Options) : int =
         // 6 · fsgg-sdd doctor (read-only, non-fatal — matches the shell's `|| true`)
         if not fatal then
             step 6 "fsgg-sdd doctor"
-            let code, _ = runProcess true "fsgg-sdd" [ "doctor"; "--root"; opts.Target ]
+            let code, report = runProcess true "fsgg-sdd" [ "doctor"; "--root"; opts.Target; "--json" ]
 
-            if code = 0 then
+            match doctorCoherence code report with
+            | Ok true ->
                 AnsiConsole.MarkupLine "  [green]✓[/] product is coherent with its set"
-
-                results.Add
-                    {
-                        Title = "doctor"
-                        Outcome = Succeeded
-                    }
-            else
-                AnsiConsole.MarkupLine(sprintf "  [yellow]⚠[/] doctor reported issues (exit %d) — non-blocking" code)
-
-                results.Add
-                    {
-                        Title = "doctor"
-                        Outcome = Warned(sprintf "reported issues (exit %d)" code)
-                    }
+                results.Add { Title = "doctor"; Outcome = Succeeded }
+            | verdict ->
+                let note =
+                    match verdict with
+                    | Ok false -> "doctor observed scaffold drift"
+                    | Error error -> error
+                    | Ok true -> invalidOp "coherent doctor verdict already handled"
+                AnsiConsole.MarkupLine(sprintf "  [yellow]⚠[/] %s — non-blocking" (Markup.Escape note))
+                results.Add { Title = "doctor"; Outcome = Warned note }
 
         // 7 · fsgg-sdd upgrade (optional; fatal on failure, matching the shell's set -e). With the
         //     default pre-scaffold self-update this is largely redundant on a fresh scaffold; it

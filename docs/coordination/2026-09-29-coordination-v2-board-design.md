@@ -765,3 +765,25 @@ process groups/sessions ended empty. This is source qualification, with no succe
 canonical receiver acceptance claimed.
 The genuine source130 candidate remains retained evidence; publication requires the corrected
 protected-source candidate and its own same-candidate canonical receiver acceptance.
+
+
+### Creator fresh driver provenance and doctor verdict — source preparation, 2026-10-11
+
+The genuine ef8 candidate's FreshA run installed all selected Kit bytes, but its SDD doctor
+reported six driver drifts: the fresh adoption had retained the generator's predecessor hashes
+as active `driverPaths` values. Doctor deliberately exited zero with `isCoherent: false`;
+Creator incorrectly printed a coherent verdict from that exit code. The genuine candidate and
+failed receiver remain retained evidence, with no canonical receiver or publication acceptance.
+
+The prepared correction captures original scaffold provenance bytes and permissions with the
+fresh opaque authority, rechecks them after fetching, and stages the six validated active hashes
+with the verified replacement bytes. It records the original provenance and exact before/after
+hashes under the selected product-board adoption, and restores provenance with file preimages
+if installation fails. Ordinary retained and retrofit preparation gain no overwrite or repin
+permission. Creator requests doctor's JSON report and prints coherence only for an explicit,
+consistent successful verdict; drift, missing or malformed reports remain nonfatal warnings.
+
+New provenance ownership, concurrent edit, alias and rollback controls plus actual compiled
+doctor verdict and child-routing controls are prepared and unexecuted. Existing source
+qualification and genuine packages are preserved; this successor needs its own admitted
+qualification, protected-source candidate and same-candidate receiver evidence.

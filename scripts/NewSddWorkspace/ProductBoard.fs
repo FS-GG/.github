@@ -61,7 +61,7 @@ module ProductBoard =
 
     /// Opaque invocation authority: an existing directory without Git is still owner-authored.
     type FreshScaffoldTarget = private FreshScaffoldTarget of string
-    type GeneratedToolManifest = private GeneratedToolManifest of string * byte array * UnixFileMode option * (string * byte array * UnixFileMode option) list
+    type GeneratedToolManifest = private GeneratedToolManifest of string * byte array * UnixFileMode option * (string * byte array * UnixFileMode option) list * (byte array * UnixFileMode option)
 
     // Only the demonstrated SDD driver defaults may be adopted by this fresh-only authority.
     let private generatedDriverPaths =
@@ -103,7 +103,10 @@ module ProductBoard =
         try
             if not scaffoldSucceeded || Path.GetFullPath target <> originalTarget then
                 invalidOp "generated tool authority requires this successful fresh scaffold"
-            let provenance = jsonObject (Path.Combine(target, ".fsgg", "scaffold-provenance.json"))
+            let provenanceBefore, provenanceMode = generatedFilePreimage target ".fsgg/scaffold-provenance.json"
+            let provenance = JsonNode.Parse(Text.Encoding.UTF8.GetString provenanceBefore).AsObject()
+            if not (isNull provenance.["productBoard"]) then
+                invalidOp "generated driver authority requires the original scaffold provenance"
             if provenance.["schemaVersion"].GetValue<int>() <> 1
                || provenance.["generator"].["id"].GetValue<string>() <> "FS.GG.SDD.Artifacts" then
                 invalidOp "generated tool manifest lacks SDD scaffold provenance"
@@ -128,7 +131,7 @@ module ProductBoard =
                     if digest content <> rows.Head.["sha256"].GetValue<string>() then
                         invalidOp ("generated driver differs from scaffold provenance: " + relative)
                     relative, content, fileMode)
-            Ok(GeneratedToolManifest(originalTarget, before, mode, drivers))
+            Ok(GeneratedToolManifest(originalTarget, before, mode, drivers, (provenanceBefore, provenanceMode)))
         with error -> Error("generated tool manifest capture refused: " + error.Message)
 
     let captureOriginAuthority target =
@@ -162,11 +165,14 @@ module ProductBoard =
     let private prepareWithGeneratedManifest generatedManifest (target: string) (repository: string) (kitRevision: string) (bindingJson: string) (fetch: string -> Result<string, string>) =
         try
             match generatedManifest with
-            | Some(GeneratedToolManifest(originalTarget, before, beforeMode, drivers)) ->
+            | Some(GeneratedToolManifest(originalTarget, before, beforeMode, drivers, (provenanceBefore, provenanceMode))) ->
                 let actual, mode = generatedManifestPreimage target
                 if Path.GetFullPath target <> originalTarget || actual <> before || mode <> beforeMode then
                     invalidOp "generated tool manifest changed after the successful scaffold"
                 recheckGeneratedDrivers target drivers
+                let actualProvenance, actualMode = generatedFilePreimage target ".fsgg/scaffold-provenance.json"
+                if actualProvenance <> provenanceBefore || actualMode <> provenanceMode then
+                    invalidOp "generated scaffold provenance changed after capture"
             | None -> ()
             if not (immutableRevision kitRevision) then invalidOp "--board-kit-ref requires an immutable 40 hexadecimal revision"
             let adapterBytes = File.ReadAllBytes typeof<Binding>.Assembly.Location
@@ -208,7 +214,7 @@ module ProductBoard =
             if actualVersion <> Some version then invalidOp "published tool pin differs from the creator's coherent adapter version"
             let toolsRoot =
                 match generatedManifest with
-                | Some(GeneratedToolManifest(_, before, _, _)) -> JsonNode.Parse(Text.Encoding.UTF8.GetString before).AsObject()
+                | Some(GeneratedToolManifest(_, before, _, _, _)) -> JsonNode.Parse(Text.Encoding.UTF8.GetString before).AsObject()
                 | None -> jsonObject (Path.Combine(target, ".config", "dotnet-tools.json"))
             match toolsRoot.["isRoot"] with
             | null -> toolsRoot.["isRoot"] <- JsonValue.Create true
@@ -240,12 +246,45 @@ module ProductBoard =
                   "schemaVersion", string binding.SchemaVersion; "bindingVersion", string binding.BindingVersion
                   "recipeRevision", binding.RecipeRevision; "populationRevision", binding.PopulationRevision ] do
                 setOwned selected key value
+            match generatedManifest with
+            | Some(GeneratedToolManifest(_, _, _, drivers, (originalProvenance, originalMode))) ->
+                let actualProvenance, actualMode = generatedFilePreimage target ".fsgg/scaffold-provenance.json"
+                if actualProvenance <> originalProvenance || actualMode <> originalMode then
+                    invalidOp "generated scaffold provenance changed during producer fetch"
+                let original = JsonNode.Parse(Text.Encoding.UTF8.GetString originalProvenance).AsObject()
+                let adoption = JsonObject()
+                adoption.["schemaVersion"] <- JsonValue.Create 1
+                adoption.["kitRevision"] <- JsonValue.Create kitRevision
+                adoption.["originalScaffoldProvenanceSha256"] <- JsonValue.Create(digest originalProvenance)
+                adoption.["originalScaffoldProvenance"] <- original.DeepClone()
+                let records = JsonArray()
+                for relative, before, _ in drivers do
+                    let rows = provenance.["driverPaths"].AsArray()
+                               |> Seq.filter (fun row -> row.["path"].GetValue<string>() = relative) |> Seq.toList
+                    if rows.Length <> 1 || rows.Head.["owner"].GetValue<string>() <> "driver"
+                       || rows.Head.["sha256"].GetValue<string>() <> digest before then
+                        invalidOp ("generated driver provenance changed: " + relative)
+                    let selectedFiles = staged |> Seq.filter (fun (path, _, _, merge) -> path = relative && not merge) |> Seq.toList
+                    if selectedFiles.Length <> 1 then
+                        invalidOp ("published generated driver payload is incomplete: " + relative)
+                    let _, after, _, _ = selectedFiles.Head
+                    let record = JsonObject()
+                    record.["path"] <- JsonValue.Create relative
+                    record.["beforeSha256"] <- JsonValue.Create(digest before)
+                    record.["afterSha256"] <- JsonValue.Create(digest after)
+                    records.Add record
+                    rows.Head.["sha256"] <- JsonValue.Create(digest after)
+                adoption.["drivers"] <- records
+                if not (isNull selected.["generatedDriverAdoption"]) then
+                    invalidOp "generated driver adoption conflicts with existing provenance"
+                selected.["generatedDriverAdoption"] <- adoption
+            | None -> ()
             staged.Add(".fsgg/scaffold-provenance.json", encode provenance, false, true)
             let duplicates = staged |> Seq.countBy (fun (path, _, _, _) -> path) |> Seq.exists (fun (_, count) -> count <> 1)
             if duplicates then invalidOp "duplicate producer destination"
             // Fetching producer inputs cannot confer authority over a concurrent receiver edit.
             match generatedManifest with
-            | Some(GeneratedToolManifest(_, _, _, drivers)) ->
+            | Some(GeneratedToolManifest(_, _, _, drivers, _)) ->
                 recheckGeneratedDrivers target drivers
                 for relative, _, _ in drivers do
                     if staged |> Seq.exists (fun (path, _, _, merge) -> path = relative && not merge) |> not then
@@ -257,11 +296,15 @@ module ProductBoard =
                     let before = if File.Exists path then Some(File.ReadAllBytes path) else None
                     let mode = if before.IsSome && not (OperatingSystem.IsWindows()) then Some(File.GetUnixFileMode path) else None
                     match generatedManifest with
-                    | Some(GeneratedToolManifest(_, captured, capturedMode, _)) when rel = ".config/dotnet-tools.json" ->
+                    | Some(GeneratedToolManifest(_, captured, capturedMode, _, _)) when rel = ".config/dotnet-tools.json" ->
                         generatedManifestPreimage target |> ignore
                         if before <> Some captured || mode <> capturedMode then
                             invalidOp "generated tool manifest changed during preparation"
-                    | Some(GeneratedToolManifest(_, _, _, drivers)) ->
+                    | Some(GeneratedToolManifest(_, _, _, _, (captured, capturedMode))) when rel = ".fsgg/scaffold-provenance.json" ->
+                        generatedFilePreimage target rel |> ignore
+                        if before <> Some captured || mode <> capturedMode then
+                            invalidOp "generated scaffold provenance changed during preparation"
+                    | Some(GeneratedToolManifest(_, _, _, drivers, _)) ->
                         match drivers |> List.tryFind (fun (relative, _, _) -> relative = rel) with
                         | Some(_, captured, capturedMode) ->
                             let actual, actualMode = generatedFilePreimage target rel
@@ -275,7 +318,7 @@ module ProductBoard =
                     | Some current when current = after -> None
                     | Some current when merge && JsonNode.DeepEquals(JsonNode.Parse(Text.Encoding.UTF8.GetString current), JsonNode.Parse(Text.Encoding.UTF8.GetString after)) -> None
                     | Some _ when not merge &&
-                                  not (generatedManifest |> Option.exists (fun (GeneratedToolManifest(_, _, _, drivers)) ->
+                                  not (generatedManifest |> Option.exists (fun (GeneratedToolManifest(_, _, _, drivers, _)) ->
                                       drivers |> List.exists (fun (relative, captured, capturedMode) ->
                                           relative = rel && before = Some captured && mode = capturedMode))) ->
                         invalidOp ("owner-authored file conflicts: " + rel)
@@ -298,7 +341,7 @@ module ProductBoard =
         try
             for change in plan.Changes do
                 let path = Path.Combine(target, change.Path)
-                if change.Before.IsSome && (generatedDriverPaths |> List.contains change.Path) then
+                if change.Before.IsSome && ((generatedDriverPaths |> List.contains change.Path) || change.Path = ".fsgg/scaffold-provenance.json") then
                     generatedFilePreimage target change.Path |> ignore
                 let actual = if File.Exists path then Some(File.ReadAllBytes path) else None
                 let mode = if actual.IsSome && not (OperatingSystem.IsWindows()) then Some(File.GetUnixFileMode path) else None
