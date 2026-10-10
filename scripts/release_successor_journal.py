@@ -68,6 +68,12 @@ class Observed:
 
 
 class ProtectedReleaseJournal:
+    # One instance validates at most 128 logical generations. Physical history
+    # shares trees/blobs; keep a finite cache without caching live authority.
+    _MAX_IMMUTABLE_OBJECTS = 2048
+    _MAX_IMMUTABLE_BYTES = 16 * 1024 * 1024
+    _MAX_IMMUTABLE_OBJECT_BYTES = 1024 * 1024
+
     def __init__(self, api: GitAPI, ref: str = REF, *, main_directory: bool = False):
         if type(main_directory) is not bool:
             raise Refused("main-directory selection must be explicit boolean")
@@ -87,11 +93,63 @@ class ProtectedReleaseJournal:
             raise Refused("authority repository identity differs")
         self._observed: Observed | None = None
         self._lineage_length = 0
+        self._immutable_objects: dict[tuple[str, str], bytes] = {}
+        self._immutable_bytes = 0
+
+    def _immutable_object(self, kind: str, oid: str) -> dict:
+        if kind not in {"commits", "trees", "blobs"} or not isinstance(oid, str) or not re.fullmatch(r"[0-9a-f]{40}", oid):
+            raise Refused("physical journal object identity is invalid")
+        key = kind, oid
+        if key in self._immutable_objects:
+            return json.loads(self._immutable_objects[key])
+        value = self.api.get(f"repos/{REPOSITORY}/git/{kind}/{oid}")
+        if not isinstance(value, dict) or value.get("sha") != oid:
+            raise Refused("physical journal object identity differs")
+        if kind == "commits" and (
+            not isinstance(value.get("parents"), list) or len(value["parents"]) > 2
+            or not isinstance(value.get("tree"), dict)
+            or not isinstance(value["tree"].get("sha"), str)
+            or not re.fullmatch(r"[0-9a-f]{40}", value["tree"]["sha"])
+            or any(not isinstance(parent, dict) or not isinstance(parent.get("sha"), str)
+                   or not re.fullmatch(r"[0-9a-f]{40}", parent["sha"]) for parent in value["parents"])
+        ):
+            raise Refused("physical journal commit is incomplete")
+        if kind == "trees":
+            if value.get("truncated") is not False or not isinstance(value.get("tree"), list):
+                raise Refused("physical journal tree is incomplete")
+            modes = {"tree": {"040000"}, "blob": {"100644", "100755", "120000"}, "commit": {"160000"}}
+            for entry in value["tree"]:
+                if (not isinstance(entry, dict) or not isinstance(entry.get("path"), str)
+                        or not entry["path"] or "/" in entry["path"] or "\0" in entry["path"]
+                        or not isinstance(entry.get("type"), str)
+                        or entry["type"] not in modes or not isinstance(entry.get("mode"), str)
+                        or entry["mode"] not in modes[entry["type"]]
+                        or not isinstance(entry.get("sha"), str)
+                        or not re.fullmatch(r"[0-9a-f]{40}", entry["sha"])):
+                    raise Refused("physical journal tree entry is incomplete")
+        if kind == "blobs":
+            if value.get("encoding") != "base64" or not isinstance(value.get("content"), str):
+                raise Refused("physical journal blob is incomplete")
+            try:
+                base64.b64decode(value["content"], validate=False)
+            except ValueError as error:
+                raise Refused("physical journal blob encoding differs") from error
+        try:
+            raw = json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False).encode("utf-8")
+        except (ValueError, TypeError, UnicodeError) as error:
+            raise Refused("physical journal object is not serializable") from error
+        if (len(raw) > self._MAX_IMMUTABLE_OBJECT_BYTES
+                or len(self._immutable_objects) >= self._MAX_IMMUTABLE_OBJECTS
+                or self._immutable_bytes + len(raw) > self._MAX_IMMUTABLE_BYTES):
+            raise Refused("physical journal immutable cache exceeds its bound")
+        self._immutable_objects[key] = raw
+        self._immutable_bytes += len(raw)
+        return json.loads(raw)
 
     def _main_files(self, commit: dict) -> tuple[bytes, bytes] | None:
         tree_oid = commit["tree"]["sha"]
         for segment in self.directory.split("/"):
-            tree = self.api.get(f"repos/{REPOSITORY}/git/trees/{tree_oid}")
+            tree = self._immutable_object("trees", tree_oid)
             if tree.get("truncated"):
                 raise Refused("main journal tree is incomplete")
             matches = [entry for entry in tree.get("tree", []) if entry.get("path") == segment]
@@ -100,7 +158,7 @@ class ProtectedReleaseJournal:
             if len(matches) != 1 or matches[0].get("type") != "tree":
                 raise Refused("main journal directory is invalid")
             tree_oid = matches[0]["sha"]
-        tree = self.api.get(f"repos/{REPOSITORY}/git/trees/{tree_oid}")
+        tree = self._immutable_object("trees", tree_oid)
         entries = tree.get("tree", [])
         if tree.get("truncated") or {entry.get("path") for entry in entries} != {PATH, "release-head.txt"} or len(entries) != 2:
             raise Refused("main journal directory contains unexpected files")
@@ -108,14 +166,14 @@ class ProtectedReleaseJournal:
             entry = next(entry for entry in entries if entry["path"] == name)
             if entry.get("type") != "blob" or entry.get("mode") != "100644":
                 raise Refused("main journal entry is not a regular blob")
-            blob = self.api.get(f"repos/{REPOSITORY}/git/blobs/{entry['sha']}")
+            blob = self._immutable_object("blobs", entry["sha"])
             if blob.get("sha") != entry["sha"] or blob.get("encoding") != "base64":
                 raise Refused("main journal blob identity differs")
             return base64.b64decode(blob["content"], validate=False)
         return raw("release-head.txt"), raw(PATH)
 
     def _main_commit(self, oid: str) -> dict:
-        value = self.api.get(f"repos/{REPOSITORY}/git/commits/{oid}")
+        value = self._immutable_object("commits", oid)
         if value.get("sha") != oid or not isinstance(value.get("parents"), list) or len(value["parents"]) > 2:
             raise Refused("main journal commit identity or parents differ")
         return value

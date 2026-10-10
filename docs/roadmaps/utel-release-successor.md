@@ -404,3 +404,36 @@ and approved destination adoption must precede enabled C2 production emission. A
 receiver suffices without a Host successor; analyzer distribution remains separate.
 The installed selector, original held reader/store, full observer inbox/schema gap,
 unknown waits, unevaluated critical path and token coverage remain unresolved.
+
+
+## Original 0.101 partial publication and bounded journal repair — 2026-10-10
+
+Original candidate [38026714312](https://github.com/FS-GG/.github/actions/runs/38026714312),
+attempt1, retained artifact11660242226 and archive SHA-256
+`d5d7d68ab0f73ce020e36f6ae10321b632eb177162d925cd9faabc071891bd64` from
+source `79051e56b025dadfc6fcaabd58b79e33f2854928`. Its packed causal receiver,
+Chromium receipt and durability proofs were accepted independently. Original
+[publish=false preflight38029100526](https://github.com/FS-GG/.github/actions/runs/38029100526)
+passed with all six coordinates at0.100.0 and0.101.0 absent.
+
+Original [publisher38029395937](https://github.com/FS-GG/.github/actions/runs/38029395937),
+attempt1, failed on an Authority immutable-blob HTTP403 with core rate remaining0.
+Authenticated readback bound logical19 head `30edfbd8aee914492ce359f4dd34454701a41d5a`,
+generation14, to the original source, archive and content
+`sha256:e8ed439047f663dfcb34aba1152ffd4c6966a0c3a27be0ebb48eebcf47e26996`.
+Tag, draft, all three org packages and public CLI are verified; public Kit has an
+intent, and nine effects remain pending. Current local org reads are403/unknown;
+local draft enumeration did not settle the recorded draft's identity. Publication,
+public coherence and installed adoption remain unaccepted. No journal reset,
+replacement draft, repack or blind retry follows from this partial state.
+
+The source repair bounds per-instance physical-history memoization to2048 immutable
+Authority commit/tree/blob responses,16MiB total serialized bytes and1MiB per object.
+Only complete successful matching-OID objects enter it; returned values are independent
+copies. Refs, selected path-history pages, protections and admission/provider reads
+remain fresh. Logical-state reads remain direct, including the current canonical blob
+recheck and legacy default behavior. This narrower physical-history cache preserves the
+existing same-head corruption refusal while removing repeated historical object reads.
+Existing offline fixtures cover generations14 and128, cache limits, incomplete/failed
+responses, independent copies and fresh history/head reads; qualification and native
+source admission remain separate from any original-byte descendant recovery.
