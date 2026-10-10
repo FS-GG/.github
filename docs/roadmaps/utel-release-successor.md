@@ -666,3 +666,32 @@ Publication remains incomplete. Next is matching-payload settlement of the exist
 archive intent, without resending it. Six later effects remain: Drivers archive, qualification
 evidence, qualification runtime, channel asset, manifest asset and promotion. Installed
 collection and causal-receiver acceptance remain open.
+
+
+## Original recovery reaches generation 23 — 2026-10-10
+
+[Recovery run 38061751378](https://github.com/FS-GG/.github/actions/runs/38061751378)
+failed on protected source `003ec3e7d5c60cffb4622197b58f2bf0f195f8b4` after three
+successful advances. Its authenticated last-observed checkpoint has eleven verified effects
+and no pending intent at logical pointer `654fd6fe4106036e48a533b8b40cd8485d26260d`.
+The original candidate is unchanged. The source-defined advance order and retained states
+imply settlement of the Kit archive, one Drivers archive request, then settlement of that
+archive. The receipt explicitly records the Drivers request as applied.
+
+The fourth advance refused with `main journal moved during CAS freshness read`. The
+qualified source places this paired-reference check before object creation, the reference
+update and provider dispatch. Thus this invocation did not send the qualification-evidence
+request. This is a concurrency refusal; it does not justify weakening the check or retrying
+the consumed operation. The physical journal head after the refusal remains unknown and
+requires fresh observation of the original logical pointer and canonical state.
+
+The operation used 1,913 counted Authority API entries: 1,889 GET attempts, 21 successful
+Git-object POSTs and three successful non-force reference updates. The expected legacy-ref
+404 and historical quota observation remain retained. The original 1,405-byte result archive
+was read within the terminal retention window, all receipt bindings reconciled, and both
+watch and readback custody were observed empty.
+
+Publication remains incomplete. Five later effects remain: qualification evidence,
+qualification runtime, channel asset, manifest asset and promotion. Installed collection
+and causal-receiver acceptance remain open. This checkpoint does not establish current
+journal state, fresh quota, or permission to resend an earlier effect.
