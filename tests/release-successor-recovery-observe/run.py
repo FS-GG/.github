@@ -190,6 +190,16 @@ class Cases(unittest.TestCase):
             self.assertFalse(evidence['complete']);self.assertEqual(evidence['status'],200)
             self.assertEqual(evidence['bytes'],5);self.assertEqual(evidence['retainedBytes'],5)
             self.assertEqual(len(self.fake.calls)>0,True)
+    def test_short_response_and_missing_timestamps_are_unknown(self):
+        self.fake.headers[prepath]={'content-length':'9999'}
+        result=m.observe(self.reader,ENV)
+        self.assertEqual(result['outcomes']['draft']['cause'],'response-content-length-refused')
+        self.assertFalse(next(x for x in result['requestsEvidence'] if x['path']==prepath)['complete'])
+        self.fake.headers.clear()
+        for stamp in (None,'','2026-02-30T00:00:00Z'):
+            self.fresh_reader();invalid={**target,'updated_at':stamp}
+            self.fake.values[listpath]=[prior,invalid];self.fake.values[f'repos/{m.REPOSITORY}/releases/2']=invalid
+            self.assertEqual(m.observe(self.reader,ENV)['outcomes']['draft']['cause'],'draft-timestamp-refused')
     def test_failed_scope_prevents_draft_but_retains_rates(self):
         self.fake.values['installation/repositories?per_page=100']={'total_count':2,'repositories':[]}
         result=m.observe(self.reader,ENV)

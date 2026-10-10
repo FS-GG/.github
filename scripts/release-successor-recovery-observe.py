@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Closed GET-only observation of the original partial coherent publication."""
+import datetime
 import hashlib
 import json
 import os
@@ -18,7 +19,7 @@ CONTENT = "sha256:e8ed439047f663dfcb34aba1152ffd4c6966a0c3a27be0ebb48eebcf47e269
 MARKER = "release-successor:" + CONTENT
 API = "https://api.github.com/"
 HEADERS = ("date", "x-github-request-id", "x-ratelimit-resource", "x-ratelimit-limit",
-           "x-ratelimit-used", "x-ratelimit-remaining", "x-ratelimit-reset", "retry-after", "link")
+           "x-ratelimit-used", "x-ratelimit-remaining", "x-ratelimit-reset", "retry-after", "link", "content-length")
 
 class Refused(RuntimeError):
     def __init__(self, code, evidence=None):
@@ -118,6 +119,10 @@ class Reader:
                 if size > 2 * 1024 * 1024 or self.bytes + size > 24 * 1024 * 1024:
                     evidence["complete"] = False
                     raise Refused("response-byte-bound")
+                declared = evidence["headers"].get("content-length")
+                if declared is not None and (not re.fullmatch(r"[0-9]+", declared) or int(declared) != size):
+                    evidence["complete"] = False
+                    raise Refused("response-content-length-refused")
                 if evidence["status"] != 200:
                     raise Refused("HTTP-status-" + str(evidence["status"]))
         except Exception as error:
@@ -198,6 +203,14 @@ def draft(reader):
     if not isinstance(detail, dict) or any(detail.get(k) != selected.get(k) for k in
         ("id", "node_id", "tag_name", "draft", "prerelease", "target_commitish", "body", "created_at", "updated_at")):
         raise Refused("draft-detail-identity-refused")
+    for key in ("created_at", "updated_at"):
+        timestamp = detail.get(key)
+        try:
+            if not isinstance(timestamp, str):
+                raise ValueError()
+            datetime.datetime.strptime(timestamp, "%Y-%m-%dT%H:%M:%SZ")
+        except ValueError as error:
+            raise Refused("draft-timestamp-refused") from error
     body = detail.get("body")
     if (detail.get("target_commitish") != SOURCE or detail.get("draft") is not True
             or detail.get("prerelease") is not False or not isinstance(body, str) or MARKER not in body
