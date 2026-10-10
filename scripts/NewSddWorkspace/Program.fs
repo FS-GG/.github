@@ -217,7 +217,7 @@ let private runProcessIn (workingDir: string option) (echo: bool) (exe: string) 
 let private runProcess (echo: bool) (exe: string) (args: string list) : int * string = runProcessIn None echo exe args
 
 /// The org GitHub Packages feed. It authenticates ALL reads, including PUBLIC packages
-/// (FS-GG/FS.GG.Templates#82), so a bare `dotnet new install FS.GG.Templates` against a config
+/// (FS-GG/FS.GG.Templates#82), so a bare `dotnet new install FS.GG.Workspace.Template` against a config
 /// that carries this source fails with a 401 on every anonymous read.
 let private orgFeed = "https://nuget.pkg.github.com/FS-GG/index.json"
 
@@ -235,7 +235,7 @@ let private feedToken () =
         | "" -> None
         | v -> Some v)
 
-/// Run `dotnet new install FS.GG.Templates` from a temp dir carrying `configXml` as its
+/// Run `dotnet new install FS.GG.Workspace.Template` from a temp dir carrying `configXml` as its
 /// nuget.config, then delete the temp dir. `dotnet new install` has no --configfile; it
 /// discovers config from CWD upward, so the isolated dir gives us a config with a `<clear />`
 /// that no ambient source can widen — a 401-on-read org feed in the caller's global config then
@@ -255,7 +255,7 @@ let private installPackageFromTempConfig (refresh: bool) (package: string) (conf
         with _ ->
             ()
 
-let private installFromTempConfig configXml = installPackageFromTempConfig false "FS.GG.Templates" configXml
+let private installFromTempConfig configXml = installPackageFromTempConfig false "FS.GG.Workspace.Template" configXml
 
 /// An isolated nuget.config exposing only nuget.org (anonymous).
 let private nugetOrgConfig () =
@@ -295,7 +295,7 @@ let private orgFeedConfig (token: string) =
             "</configuration>"
         ]
 
-/// Install the FS.GG.Templates template package (which carries the `fs-gg-governance` template).
+/// Install the FS.GG.Workspace.Template template package (which carries the `fs-gg-governance` template).
 /// FS.GG.Templates is published anonymously on nuget.org AND (possibly a newer build) on the
 /// org feed, whose reads are all authenticated (FS-GG/FS.GG.Templates#82). Best-effort ladder:
 /// with a token, try the org feed first (may carry a newer version); with no token — or if the
@@ -2701,6 +2701,105 @@ let private wireCoordination generatedManifest authority kitRef (opts: Options) 
 
 // ── Orchestration ────────────────────────────────────────────────────────────
 
+/// Pinned creation uses the selected public Workspace.Template 0.18.2 Governance payload.
+/// Validate the sole engine registration and refuse conflicts before receiver effects.
+/// The package was published from Templates20c009bc6728302f9ed06fdf49cb2e8bd19e417d;
+/// these hashes bind only its included default-light Governance role, not an install receipt.
+let pinnedGovernanceRegistration (cacheRoot: string) : Result<unit, string> =
+    try
+        let metadata = Path.Combine(cacheRoot, "packages.json")
+        if not (File.Exists metadata) then Error "Pinned Governance requires the installed Workspace.Template 0.18.2 registration."
+        else
+            use document = JsonDocument.Parse(File.ReadAllText metadata)
+            let packages = document.RootElement.GetProperty("Packages").EnumerateArray() |> Seq.toArray
+            let packageId (entry: JsonElement) = entry.GetProperty("Details").GetProperty("PackageId").GetString()
+            let matches id entry = String.Equals(packageId entry, id, StringComparison.OrdinalIgnoreCase)
+            let registrations = packages |> Array.filter (matches "FS.GG.Workspace.Template")
+            if packages |> Array.exists (matches "FS.GG.Templates") then
+                Error "The obsolete FS.GG.Templates registration conflicts with pinned Governance; reconcile the isolated hive."
+            elif registrations.Length <> 1 then
+                Error "Pinned Governance requires exactly one Workspace.Template registration."
+            else
+                let entry = registrations.[0]
+                if entry.GetProperty("Details").GetProperty("Version").GetString() <> "0.18.2" then
+                    Error "Pinned Governance requires Workspace.Template 0.18.2; no update or feed fallback is permitted."
+                else
+                    let archivePath = entry.GetProperty("MountPointUri").GetString()
+                    use archive = System.IO.Compression.ZipFile.OpenRead archivePath
+                    let nuspec =
+                        archive.Entries
+                        |> Seq.filter (fun item -> item.FullName = "FS.GG.Workspace.Template.nuspec")
+                        |> Seq.exactlyOne
+                    use nuspecStream = nuspec.Open()
+                    let spec = System.Xml.Linq.XDocument.Load nuspecStream
+                    let value name =
+                        spec.Descendants()
+                        |> Seq.filter (fun element -> element.Name.LocalName = name)
+                        |> Seq.map _.Value
+                        |> Seq.exactlyOne
+                    let repository = spec.Descendants() |> Seq.filter (fun element -> element.Name.LocalName = "repository") |> Seq.exactlyOne
+                    if value "id" <> "FS.GG.Workspace.Template" || value "version" <> "0.18.2"
+                       || repository.Attribute(System.Xml.Linq.XName.Get "commit").Value <> "20c009bc6728302f9ed06fdf49cb2e8bd19e417d" then
+                        invalidOp "The registered archive differs from the selected public Workspace.Template source/version."
+                    let prefix = "content/templates/fs-gg-governance/"
+                    let expected =
+                        [
+                            ".fsgg/capabilities.yml", "890a5d5db24ff41d41ce5e0cb72a349a17072a83a3179db9c82c50ce4865fcc6"
+                            ".fsgg/controlled-imports.fsx", "2644b60f2c414c43ba9bb310f5804f255ccb2a5ec20c51d6643e2823c21ea4b5"
+                            ".fsgg/controlled-imports.json", "b54600875d8f834721650d7d93c4d33aebf0abf8a8b434846a2f902cc7e6e0a0"
+                            ".fsgg/governance.yml", "d940b4c14fa20b7b1eac46f0ecf03476358baae0bb701702719af6d8fa47eed4"
+                            ".fsgg/policy.yml", "0deb7dc1bfc41b19a0c9245a0e2bb1488eddf6eac69313dc449b6e5b3d6badb3"
+                            ".fsgg/tooling.yml", "d35836da0f7ee990d341bd11de482f39b54e0321ea971ea05edca40e759f7085"
+                            ".template.config/reference-gate-set.json", "9b0a49010c702530f139a5f2c898f78cac67cde9224c9c3f471bb6730da253b0"
+                            ".template.config/template.json", "3fc2fbaea90d030be0a814f6538fbec02b1e66eeb3e96ed62bd9b1b2d29b1ded"
+                            "schema-manifest.json", "b40add4b79155202518e712dde1c6ae9d21083b6a4acf2e9384e4c27a0d4b843"
+                        ]
+                    let members = archive.Entries |> Seq.filter (fun item -> item.FullName.StartsWith(prefix, StringComparison.Ordinal) && not (item.FullName.EndsWith("/", StringComparison.Ordinal))) |> Seq.toArray
+                    if members.Length <> expected.Length then invalidOp "The selected Governance payload has missing, duplicate or additional members."
+                    for name, digest in expected do
+                        let memberEntry = members |> Array.filter (fun item -> item.FullName = prefix + name) |> Array.exactlyOne
+                        use content = memberEntry.Open()
+                        if Convert.ToHexString(System.Security.Cryptography.SHA256.HashData content).ToLowerInvariant() <> digest then
+                            invalidOp "The installed Governance payload differs from the selected public bytes."
+                    // Both included overlay shortnames share one SDK hive. Refuse another
+                    // template registration, including an unexpected alias inside this package.
+                    let checkConflict (template: System.IO.Compression.ZipArchiveEntry) =
+                        use content = template.Open()
+                        use config = JsonDocument.Parse content
+                        let root = config.RootElement
+                        let mutable identity = Unchecked.defaultof<JsonElement>
+                        let mutable shortName = Unchecked.defaultof<JsonElement>
+                        let includedName value =
+                            [ "fs-gg-governance"; "fs-gg-project-knowledge" ]
+                            |> List.exists (fun name -> String.Equals(value, name, StringComparison.OrdinalIgnoreCase))
+                        let includedIdentity value =
+                            [ "FS.GG.Templates.Governance"; "FS.GG.Templates.ProjectKnowledge" ]
+                            |> List.exists (fun name -> String.Equals(value, name, StringComparison.OrdinalIgnoreCase))
+                        let conflict =
+                            (root.TryGetProperty("identity", &identity) && includedIdentity(identity.GetString()))
+                            || (root.TryGetProperty("shortName", &shortName)
+                                && (match shortName.ValueKind with
+                                    | JsonValueKind.String -> includedName(shortName.GetString())
+                                    | JsonValueKind.Array -> shortName.EnumerateArray() |> Seq.exists (fun item -> includedName(item.GetString()))
+                                    | _ -> invalidOp "A registered template has an unknown shortname shape."))
+                        if conflict then invalidOp "Another installed template conflicts with a selected overlay identity/shortname."
+                    let templateEntries (package: System.IO.Compression.ZipArchive) =
+                        package.Entries |> Seq.filter (fun item -> item.FullName.EndsWith(".template.config/template.json", StringComparison.OrdinalIgnoreCase))
+                    for template in templateEntries archive do
+                        if template.FullName <> prefix + ".template.config/template.json"
+                           && template.FullName <> "content/templates/fs-gg-project-knowledge/.template.config/template.json" then
+                            checkConflict template
+                    for other in packages |> Array.filter (matches "FS.GG.Workspace.Template" >> not) do
+                        use otherArchive = System.IO.Compression.ZipFile.OpenRead(other.GetProperty("MountPointUri").GetString())
+                        for template in templateEntries otherArchive do checkConflict template
+                    Ok ()
+    with error -> Error ("Cannot admit pinned Governance: " + error.Message)
+
+let private governanceCacheRoot () =
+    let cliHome = Environment.GetEnvironmentVariable "DOTNET_CLI_HOME"
+    let userHome = if String.IsNullOrWhiteSpace cliHome then Environment.GetFolderPath Environment.SpecialFolder.UserProfile else cliHome
+    Path.Combine(userHome, ".templateengine")
+
 /// Knowledge is admitted only by a stable producer with the selected capability floor.
 let knowledgeProducerVersion (reported: string) : Result<string, string> =
     let exact = reported.Trim()
@@ -2771,7 +2870,7 @@ let knowledgeOverlayRegistration (cacheRoot: string) : Result<bool, string> =
             elif registrations.Length <> 1 then Error "Multiple Workspace.Template registrations exist; reconcile the template cache explicitly."
             else
                 let entry = registrations.[0]
-                if entry.GetProperty("Details").GetProperty("Version").GetString() <> "0.18.0" then Ok false
+                if entry.GetProperty("Details").GetProperty("Version").GetString() <> "0.18.2" then Ok false
                 else
                     let archivePath = entry.GetProperty("MountPointUri").GetString()
                     use archive = System.IO.Compression.ZipFile.OpenRead archivePath
@@ -2784,21 +2883,27 @@ let knowledgeOverlayRegistration (cacheRoot: string) : Result<bool, string> =
                     if entries.Length <> expected.Length then Error "The cached project-knowledge overlay payload is unknown."
                     else
                         let matches = expected |> List.forall (fun (name, digest) ->
-                            let item = archive.GetEntry(prefix + name)
-                            if isNull item then false
+                            let matching = entries |> Array.filter (fun item -> item.FullName = prefix + name)
+                            if matching.Length <> 1 then false
                             else
-                                use content = item.Open()
+                                use content = matching.[0].Open()
                                 Convert.ToHexString(System.Security.Cryptography.SHA256.HashData content).ToLowerInvariant() = digest)
                         if matches then Ok true else Error "The cached project-knowledge overlay differs from the qualified owner payload."
     with error -> Error ("Cannot verify the project-knowledge template cache: " + error.Message)
 
-let rec private installKnowledgeOverlay () =
+let rec private installKnowledgeOverlay pinned =
     let cliHome = Environment.GetEnvironmentVariable "DOTNET_CLI_HOME"
     let userHome = if String.IsNullOrWhiteSpace cliHome then Environment.GetFolderPath Environment.SpecialFolder.UserProfile else cliHome
     let cacheRoot = Path.Combine(userHome, ".templateengine")
-    match knowledgeOverlayRegistration cacheRoot with
+    let admission =
+        if pinned then
+            pinnedGovernanceRegistration cacheRoot
+            |> Result.bind (fun () -> knowledgeOverlayRegistration cacheRoot)
+        else knowledgeOverlayRegistration cacheRoot
+    match admission with
     | Error note -> 1, note
-    | Ok true -> 0, "Reusing exact Workspace.Template 0.18.0 qualified project-knowledge registration."
+    | Ok true -> 0, "Reusing exact Workspace.Template 0.18.2 qualified project-knowledge registration."
+    | Ok false when pinned -> 1, "Pinned project knowledge requires the exact preinstalled Workspace.Template 0.18.2 payload; no feed fallback is permitted."
     | Ok false ->
         let code, log = installKnowledgeOverlayPackage ()
         if code <> 0 then code, log
@@ -2808,7 +2913,7 @@ let rec private installKnowledgeOverlay () =
             | _ -> 1, log + "\nThe installed overlay did not establish one qualified package registration."
 
 and private installKnowledgeOverlayPackage () =
-    let package = "FS.GG.Workspace.Template::0.18.0"
+    let package = "FS.GG.Workspace.Template::0.18.2"
     match feedToken () with
     | None -> installPackageFromTempConfig true package (nugetOrgConfig ())
     | Some token ->
@@ -2833,8 +2938,8 @@ let private bootstrapTypedKnowledge (opts: Options) (version: string) : Outcome 
         // Owned templates carry this same central projection. Rendering is an external
         // immutable archive, so compose the owner's explicit overlay after its scaffold.
         if opts.Template = "rendering" then
-            let installed, _ = installKnowledgeOverlay ()
-            if installed <> 0 then error <- Some "Could not install the exact project-knowledge overlay FS.GG.Workspace.Template::0.18.0."
+            let installed, _ = installKnowledgeOverlay opts.Pinned
+            if installed <> 0 then error <- Some "Could not admit the exact project-knowledge overlay FS.GG.Workspace.Template::0.18.2."
             else
                 let emitted, _ = runProcess true "dotnet" [ "new"; "fs-gg-project-knowledge"; "--lifecycle"; "typed-sdd"; "--output"; opts.Target ]
                 if emitted <> 0 then error <- Some "Project-knowledge overlay refused; existing owner files were not forced."
@@ -2849,18 +2954,39 @@ let private bootstrapTypedKnowledge (opts: Options) (version: string) : Outcome 
         | Some note -> Failed note
         | None -> Succeeded
 
+let pinnedGovernancePreflight (opts: Options) (cacheRoot: string) =
+    let mayIncludeKnowledge =
+        opts.Lifecycle = "typed-sdd" || (opts.Template = "fable-game" && not opts.LifecycleExplicit)
+    if opts.Pinned && (opts.Governance || mayIncludeKnowledge) then
+        pinnedGovernanceRegistration cacheRoot
+        |> Result.bind (fun () ->
+            match knowledgeOverlayRegistration cacheRoot with
+            | Ok true -> Ok ()
+            | Ok false -> Error "Pinned overlays require the sole exact Workspace.Template 0.18.2 project-knowledge payload."
+            | Error note -> Error note)
+    else Ok ()
+
+/// Forward SDD's existing bounded scaffold switch without changing unpinned creation.
+let scaffoldUpdateArgs pinned = if pinned then [ "--no-update" ] else []
+
 let private run (opts: Options) : int =
     header opts
 
+    let governancePreflight = pinnedGovernancePreflight opts (governanceCacheRoot ())
     let authority = ProductBoard.captureOriginAuthority opts.Target
     let freshTarget = ProductBoard.captureFreshScaffoldTarget opts.Target
     let productPreflight =
-        if opts.BoardBinding.IsSome || opts.BoardKitRef.IsSome then
+        if Result.isError governancePreflight then Ok ()
+        elif opts.BoardBinding.IsSome || opts.BoardKitRef.IsSome then
             if not opts.Coordinate || opts.BoardOwner <> "FS-GG" || opts.BoardTitle <> "Coordination" || opts.ChoreLocks.IsSome || opts.PublicBoard.IsSome || not (List.isEmpty opts.TrustedWriters) then
                 Error "V2 binding cannot be combined with legacy coordination/access options"
             else prepareProductBoard None authority false opts.Target opts.WorkspaceRepo opts.BoardBinding opts.BoardKitRef |> Result.map ignore
         else Ok()
-    if Result.isError productPreflight then
+    if Result.isError governancePreflight then
+        let error = governancePreflight |> function Error message -> message | Ok _ -> ""
+        AnsiConsole.MarkupLine(sprintf "[red]pinned Governance refused:[/] %s" (Markup.Escape error))
+        2
+    elif Result.isError productPreflight then
         let error = productPreflight |> function Error message -> message | Ok _ -> ""
         AnsiConsole.MarkupLine(sprintf "[red]product V2 refused:[/] %s" (Markup.Escape error))
         2
@@ -3005,7 +3131,8 @@ let private run (opts: Options) : int =
                      @ npmParams
                      @ bindingTargetParam
                      @ lifecycleParam
-                     @ [ "--param"; sprintf "productName=%s" opts.Product ])
+                     @ [ "--param"; sprintf "productName=%s" opts.Product ]
+                     @ scaffoldUpdateArgs opts.Pinned)
 
             let capture =
                 if code <> 0 then Error(sprintf "scaffold failed (exit %d)" code)
@@ -3046,7 +3173,12 @@ let private run (opts: Options) : int =
                 }
         elif not fatal then
             step 4 "governance overlay"
-            let installCode, installLog = installGovernanceTemplate ()
+            let installCode, installLog =
+                if opts.Pinned then
+                    match pinnedGovernanceRegistration (governanceCacheRoot ()) with
+                    | Ok () -> 0, "Reusing the exact selected Workspace.Template 0.18.2 Governance registration."
+                    | Error note -> 1, note
+                else installGovernanceTemplate ()
 
             if installCode = 0 then
                 let govCode, _ =
@@ -3072,6 +3204,10 @@ let private run (opts: Options) : int =
                             Title = "governance overlay"
                             Outcome = Succeeded
                         }
+                elif opts.Pinned then
+                    fatal <- true
+                    results.Add { Title = "governance overlay"; Outcome = Failed "The selected pinned Governance overlay failed." }
+                    AnsiConsole.MarkupLine "  [red]✗[/] selected pinned Governance overlay failed"
                 else
                     AnsiConsole.MarkupLine "  [yellow]⚠[/] overlay command failed — the product is fine without it"
 
@@ -3080,12 +3216,16 @@ let private run (opts: Options) : int =
                             Title = "governance overlay"
                             Outcome = Warned "overlay command failed; product is fine without it"
                         }
+            elif opts.Pinned then
+                fatal <- true
+                results.Add { Title = "governance overlay"; Outcome = Failed installLog }
+                AnsiConsole.MarkupLine(sprintf "  [red]✗[/] %s" (Markup.Escape installLog))
             else
                 let reason =
                     match feedToken () with
-                    | Some _ -> "could not install the FS.GG.Templates template from the org feed or nuget.org"
+                    | Some _ -> "could not install the FS.GG.Workspace.Template template from the org feed or nuget.org"
                     | None ->
-                        "could not install the FS.GG.Templates template from nuget.org (network?) — "
+                        "could not install the FS.GG.Workspace.Template template from nuget.org (network?) — "
                         + "set FSGG_PACKAGES_TOKEN (or GH_TOKEN) to a read:packages token to try the org feed too"
 
                 AnsiConsole.MarkupLine(sprintf "  [yellow]⊘[/] %s — skipped" reason)
@@ -3097,7 +3237,7 @@ let private run (opts: Options) : int =
 
                 AnsiConsole.MarkupLine(
                     sprintf
-                        "  add later: [grey]dotnet new install FS.GG.Templates --nuget-source %s && dotnet new fs-gg-governance -o %s --appName %s[/]"
+                        "  add later: [grey]dotnet new install FS.GG.Workspace.Template --nuget-source %s && dotnet new fs-gg-governance -o %s --appName %s[/]"
                         nugetOrg
                         (Markup.Escape opts.Target)
                         (Markup.Escape opts.Product)
@@ -3106,7 +3246,7 @@ let private run (opts: Options) : int =
                 results.Add
                     {
                         Title = "governance overlay"
-                        Outcome = Skipped "FS.GG.Templates template feed not reachable"
+                        Outcome = Skipped "FS.GG.Workspace.Template template feed not reachable"
                     }
 
         // 5 · wire the workspace to its coordination board — vendor the kit + write the FSGG_COORD_*

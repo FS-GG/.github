@@ -682,3 +682,30 @@ behavior is retained. Genuine loaded published .99 decoding, Creator016 publicat
 installed fresh and retained receivers, consumer adoption and legacy disposition remain
 separate joins. Milestone .6 stays open; these observations establish no installed
 emission, product adoption or native write authority.
+
+### Pinned Creator overlays — source qualification, 2026-10-10
+
+Pinned creation keeps the selected light Governance overlay and validates the sole
+Workspace.Template 0.18.2 registration before receiver writes. The registered archive
+must match the selected source and Governance/knowledge payloads; missing, duplicate,
+modified or conflicting roles refuse. Pinned overlay stages reuse that registration
+without a feed fallback or downgrade, and the SDD scaffold receives `--no-update`.
+Unpinned Governance installation uses the current Workspace.Template package ID.
+
+The four-path correction at `a9c155768ebce96fcb40906125d96cd12ac447e7` passed
+original-lock offline restore, compiled overlay controls and all 77 grammar/routing
+assertions against genuine frozen published .99 dependencies. All 81 copied public
+bodies and the original lock remained unchanged. The actual Creator app selected
+.NET 10.0.12 under the same-family LatestPatch policy; before/after runtime checks
+matched. The unchanged recursive mutation sweep was outside this focused qualification.
+The first qualification built successfully but its app checks failed because the
+private Disable policy rejected the app's 10.0.0 runtime request on this patched host;
+that failure remains retained.
+
+These controls use synthetic registration metadata and establish source behavior only.
+Milestone .6 remains open for genuine SDK registration and loaded-role observations,
+public UI.Template 0.32.1 byte/provenance verification, provider dependency closure,
+Creator publication including this correction and the shared journal fix, and fresh
+and retained receiver acceptance. Existing population bindings and historical
+failures remain unchanged; no installed decoder, native write or adoption follows
+from this source qualification.

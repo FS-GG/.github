@@ -35,7 +35,7 @@ try
     knowledgeOverlayRegistration cache |> expectOk "empty cache" |> ignore
     File.WriteAllText(Path.Combine(cache, "packages.json"), "malformed")
     knowledgeOverlayRegistration cache |> expectError "malformed engine metadata"
-    File.WriteAllText(Path.Combine(cache, "packages.json"), """{"Packages":[{"Details":{"PackageId":"FS.GG.Workspace.Template","Version":"0.18.0"}},{"Details":{"PackageId":"FS.GG.Workspace.Template","Version":"0.18.0"}}]}""")
+    File.WriteAllText(Path.Combine(cache, "packages.json"), """{"Packages":[{"Details":{"PackageId":"FS.GG.Workspace.Template","Version":"0.18.2"}},{"Details":{"PackageId":"FS.GG.Workspace.Template","Version":"0.18.2"}}]}""")
     knowledgeOverlayRegistration cache |> expectError "duplicate engine registration"
     let game = assembleWizardTemplateOptions "./Arena" "Arena" "fable-game" None None None None
     for version in [ "0.17.0"; "0.18.0" ] do

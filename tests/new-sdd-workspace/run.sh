@@ -45,6 +45,7 @@ echo "new-sdd-workspace parse fixture — dll='$DLL'"
 # not manufacture repository, board, collaborator, chore-lock, or npm answers.
 dotnet fsi --reference:"$DLL" "$HERE/wizard-defaults.fsx"
 dotnet fsi --reference:"$DLL" "$HERE/knowledge-bootstrap.fsx"
+dotnet fsi --reference:"$DLL" "$HERE/pinned-governance.fsx"
 
 # Scrub `fsgg-sdd` from the child's PATH by handing it only the directory the dotnet muxer lives in
 # (onPath does a non-recursive PATH scan, and fsgg-sdd is a global tool in a *different* dir). On a
@@ -53,6 +54,9 @@ DOTNET_DIR="$(dirname "$(command -v dotnet)")"
 
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/new-sdd-workspace-fixture.XXXXXX")"
 trap 'rm -rf "$WORK"' EXIT
+# Logic fixtures use exact public overlay bodies; this is not installed SDK acceptance.
+export DOTNET_CLI_HOME="$WORK/cli-home"
+dotnet fsi --reference:"$DLL" "$HERE/pinned-governance.fsx" --prepare-hive "$DOTNET_CLI_HOME/.templateengine"
 # A target dir that every VALID parse below must leave UNCREATED — proof the Ok leg stopped at the
 # fsgg-sdd preflight and never reached scaffolding (step 1 is the first thing to create it).
 TGT="$WORK/never-created"
@@ -574,6 +578,8 @@ expect_execution() {
   OUT="$(FSGG_STUB_TYPED_CASE="$typed_case" PATH="$STUB_DIR:$DOTNET_DIR" FSGG_TEMPLATES_RAW_BASE="$RAW_BASE" FSGG_SDD_LOG="$log" dotnet "$DLL" "$target" Product --pinned --no-governance --no-coordination "$@" 2>&1)" || rc=$?
   local params_ok=1
   grep -qF "$expected_params" "$log" || params_ok=0
+  # Inspect the actual SDD child argv; a standalone helper result is insufficient.
+  grep -q -- '^scaffold .* --no-update$' "$log" || params_ok=0
   if [ "$template" = "fable-bindings" ]; then
     grep -qF "npmPackage=@babylonjs/core" "$log" && grep -qF "npmVersion=8.0.0" "$log" || params_ok=0
   fi
