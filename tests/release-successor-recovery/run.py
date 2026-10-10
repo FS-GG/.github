@@ -55,7 +55,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 from release_successor_admission import SingleOperatorAdmission
 from release_successor_execution import PACKAGES, Observation, Dispatch, ordered_effects
 from release_successor_journal import ProtectedReleaseJournal, REF, REPOSITORY, canonical, Refused as JournalRefused
-from release_successor_provider import NotFound
+from release_successor_provider import NotFound, LiveProvider, GitHubAPI, Refused as ProviderRefused
 
 spec = importlib.util.spec_from_file_location("recovery_publisher", ROOT / "scripts/release-successor-publish.py")
 publisher = importlib.util.module_from_spec(spec)
@@ -241,13 +241,13 @@ def report():
             "publicationComplete": False}
 
 
-def fixture(generation):
-    candidate = manifest()
+def fixture(generation, candidate=None, archive_sha256="a" * 64):
+    candidate = manifest() if candidate is None else candidate
     effects = ordered_effects(candidate)
     authority = MemoryAuthority()
     setup = ProtectedReleaseJournal(authority, main_directory=True)
     intent = {"contentId": candidate["contentId"], "sourceSha": "b" * 40, "version": "0.101.0",
-              "candidateArchiveSha256": "a" * 64, "operator": "EHotwagner"}
+              "candidateArchiveSha256": archive_sha256, "operator": "EHotwagner"}
     state = setup.initialize(intent)
     for transition in range(generation - 1):
         effect = effects[transition // 2].identity
@@ -955,6 +955,440 @@ class OriginalKitRepeatControls(unittest.TestCase):
         self.assertEqual([row["message"] for row in captured[0]["failure"]["chain"]],
                          ["repeat outcome unknown", "original response lost"])
         self.assertFalse(captured[0]["publicationComplete"])
+
+
+class RuntimeAPI(MemoryPublisher):
+    """Actual scoped provider/proof methods consume bounded inert API responses."""
+    def __init__(self, candidate, root, matched=False):
+        super().__init__()
+        self.candidate, self.root = candidate, root
+        self.uploads, self.downloads = [], []
+        self.mode, self.release_pages, self.asset_pages = None, {}, {}
+        self.release = {"id": 408709919, "tag_name": "coherent-set/v0.101.0", "target_commitish": "b" * 40,
+                        "body": "release-successor:" + candidate["contentId"], "draft": True, "prerelease": False}
+        self.assets = []
+        for i, name in enumerate([*(f"{name}.0.101.0.nupkg" for name in PACKAGES),
+                                  "standalone-telemetry-evidence.json", publisher.RUNTIME_NAME], 1):
+            if name == publisher.RUNTIME_NAME and not matched: continue
+            raw = (root / name).read_bytes()
+            self.assets.append({"id": i, "name": name, "size": len(raw), "state": "uploaded",
+                                "digest": "sha256:" + hashlib.sha256(raw).hexdigest()})
+        body = {"schema": "fsgg.release-successor-result/1", "profile": publisher.RECOVERY_PROFILE,
+                "execution": {"operator": "EHotwagner", "runAttempt": "1", "runId": 38063768172,
+                              "sourceSha": publisher.RUNTIME_REFUSAL_SOURCE},
+                "candidate": {**publisher.RECOVERY_CANDIDATE, "version": "0.101.0"},
+                "originalPublisher": {"runId": 38029395937, "runAttempt": 1, "jobId": 114146971214},
+                "disposition": "failed-or-unknown", "publicationComplete": False, "stage": "advance",
+                "iterationsAttempted": 3, "journalRef": REF, "journalMutationMayHaveOccurred": True,
+                "lastDispatch": {"attempted": True, "effect": "qualification-asset:evidence", "state": "applied"},
+                "failure": {"chain": [{"message": "qualification-asset:runtime: dispatch admission denied",
+                                         "messageTruncated": False, "type": "Refused"}], "chainIncomplete": False},
+                "lastObservedJournal": {"generation": 26, "logicalHead": publisher.ORIGINAL_RUNTIME_HEAD}}
+        self.proof_body = json.dumps(body, sort_keys=True, separators=(",", ":")).encode()
+        import io
+        archive = io.BytesIO()
+        with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED) as z:
+            z.writestr("release-successor-result.json", self.proof_body)
+        self.proof_zip = archive.getvalue()
+        assert len(self.proof_zip) <= 1413
+        self.proof_zip += b"\0" * (1413 - len(self.proof_zip))
+        self.run = {"id": 38063768172, "workflow_id": 362181999, "run_attempt": 1,
+                    "head_sha": publisher.RUNTIME_REFUSAL_SOURCE, "path": ".github/workflows/release-successor-publish.yml",
+                    "head_branch": "main", "event": "workflow_dispatch", "actor": {"login": "EHotwagner"},
+                    "repository": {"id": 1269292704, "full_name": "FS-GG/.github"},
+                    "status": "completed", "conclusion": "failure"}
+        self.artifact = {"id": 11675095562, "name": "release-successor-result", "size_in_bytes": 1413,
+                         "expired": False, "expires_at": "2030-01-01T00:00:00Z", "digest": "sha256:" + hashlib.sha256(self.proof_zip).hexdigest(),
+                         "workflow_run": {"id": 38063768172, "head_sha": publisher.RUNTIME_REFUSAL_SOURCE}}
+
+    def get(self, path):
+        if path.endswith('/actions/runs/38026714312'): self.calls.append(path);return {'head_sha':self.candidate['descriptor']['sourceSha']}
+        if path.endswith('/actions/artifacts/11660242226'): self.calls.append(path);return {'digest':'sha256:'+publisher.RECOVERY_CANDIDATE['archiveSha256']}
+        if path.endswith('/actions/runs/38063768172'): self.calls.append(path); return copy.deepcopy(self.run)
+        if path.endswith('/actions/artifacts/11675095562'): self.calls.append(path); return copy.deepcopy(self.artifact)
+        if '/releases?per_page=100&page=' in path:
+            self.calls.append(path);page = int(path.rsplit('=', 1)[1]);return copy.deepcopy(self.release_pages.get(page, [self.release] if page == 1 else []))
+        if '/releases/408709919/assets?' in path:
+            self.calls.append(path);page = int(path.rsplit('=', 1)[1]) if '&page=' in path else 1
+            return copy.deepcopy(self.asset_pages.get(page, self.assets if page == 1 else []))
+        if '/git/ref/tags/coherent-set/v0.101.0' in path: self.calls.append(path);return {'object': {'sha': 'b' * 40}}
+        return super().get(path)
+
+    def runtime_recovery_json(self,path):
+        return self.get(path)
+
+    def download_runtime_refusal_artifact(self):
+        self.downloads.append('refusal');return self.proof_zip
+    def download_asset(self, ident):
+        self.downloads.append(ident);name = next(row['name'] for row in self.assets if row['id'] == ident)
+        return (self.root / name).read_bytes()
+    def download_runtime_recovery_asset(self, ident, size):
+        raw = self.download_asset(ident)
+        return raw + b'drift' if self.mode == 'wrong-bytes' else raw
+    def upload_runtime_recovery_asset(self, release_id, raw):
+        self.uploads.append((release_id, raw))
+        if self.mode == 'throw': raise OSError('upload response lost')
+        if self.mode == 'unknown': return {}
+        return {'id': 99, 'name': publisher.RUNTIME_NAME, 'size': len(raw), 'state': 'uploaded',
+                'digest': 'sha256:' + hashlib.sha256(raw).hexdigest()}
+
+
+class OriginalRuntimeRecoveryControls(unittest.TestCase):
+    def context(self, root, matched=False):
+        candidate = manifest()
+        payload = b'owned original synthetic runtime payload\n'
+        (root / publisher.RUNTIME_NAME).write_bytes(payload)
+        (root / 'standalone-telemetry-evidence.json').write_bytes(b'owned evidence\n')
+        for row in candidate['descriptor']['packages']:
+            name = row['id'] + '.0.101.0.nupkg';raw = name.encode();(root / name).write_bytes(raw)
+            row['artifact']['sha256'] = hashlib.sha256(raw).hexdigest()
+        candidate['descriptor']['standaloneTelemetry'] = {'qualificationPath': publisher.RUNTIME_NAME,
+                         'qualificationSha256': hashlib.sha256(payload).hexdigest()}
+        candidate['contentId'] = 'sha256:' + hashlib.sha256(
+            json.dumps(candidate['descriptor'], sort_keys=True, separators=(',', ':'), ensure_ascii=False).encode()).hexdigest()
+        manifest_raw = (json.dumps(candidate, sort_keys=True, separators=(',', ':'))+'\n').encode()
+        (root / 'release-manifest.json').write_bytes(manifest_raw)
+        archive = root / 'original-candidate.zip';archive.write_bytes(b'original synthetic candidate archive')
+        fixed = {**publisher.RECOVERY_CANDIDATE, 'contentId':candidate['contentId'], 'sourceSha':'b'*40,
+                 'archiveSha256':hashlib.sha256(archive.read_bytes()).hexdigest()}
+        candidate, authority, intent, setup = fixture(26, candidate, fixed['archiveSha256'])
+        counter, rows, journal, _, _, _ = slice_context(candidate, authority, intent)
+        source = RuntimeAPI(candidate, root, matched)
+        api = publisher.RuntimePublisherAPI(source)
+        provider = LiveProvider(api, root/'release-manifest.json', 'fixture-token', 'fixture-key')
+        admission = publisher.ProtectedPublisherAdmission(SingleOperatorAdmission(api,candidate,'b'*40,1,'EHotwagner','refs/heads/main'),counter,REF)
+        return candidate,authority,counter,rows,journal,admission,provider,source,api,archive,manifest_raw,fixed,setup
+
+    def run_runtime(self, c, path, mutate=None, clock=None):
+        candidate,_,counter,rows,journal,admission,provider,source,api,archive,manifest_raw,fixed,_ = c
+        # Pin only immutable synthetic fixture identities, never replace guard functions.
+        with patch.object(publisher,'RECOVERY_CANDIDATE',fixed), \
+             patch.object(publisher,'ORIGINAL_RUNTIME_HEAD',journal._observed.head), \
+             patch.object(publisher,'ORIGINAL_RUNTIME_STATE_SHA256',hashlib.sha256(canonical(journal._observed.state)).hexdigest()):
+            # Recreate proof under the same explicit synthetic immutable identities.
+            rebuilt = RuntimeAPI(candidate,provider.root,any(x['name']==publisher.RUNTIME_NAME for x in source.assets))
+            source.proof_zip,source.proof_body,source.artifact = rebuilt.proof_zip,rebuilt.proof_body,rebuilt.artifact
+            with patch.object(publisher,'RUNTIME_REFUSAL_ZIP_SHA256',hashlib.sha256(source.proof_zip).hexdigest()), \
+                 patch.object(publisher,'RUNTIME_REFUSAL_MEMBER_SHA256',hashlib.sha256(source.proof_body).hexdigest()), \
+                 patch.object(LiveProvider,'_download_package',lambda self,feed,package:self.root/(package+'.0.101.0.nupkg')):
+                proof=publisher.authenticate_runtime_refusal(api)
+                verify=lambda:publisher.verify_runtime_candidate(candidate,provider,manifest_raw,archive)
+                if mutate:mutate(c)
+                return publisher.run_original_runtime_recovery(candidate,journal,admission,provider,counter,rows,10,proof,verify,path,clock=clock or (lambda:0))
+
+    def test_absent_one_upload_checkpoint26_full_composed_counts(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root=pathlib.Path(temp)/'candidate';root.mkdir();c=self.context(root);path=root/'attempt.json'
+            self.assertEqual(self.run_runtime(c,path),'checkpoint')
+            self.assertEqual(len(c[7].uploads),1);self.assertEqual(c[7].uploads[0],(408709919,(root/publisher.RUNTIME_NAME).read_bytes()))
+            self.assertEqual(c[4]._observed.state['generation'],26);self.assertFalse(c[3]['publicationComplete'])
+            self.assertTrue(all(method=='get' for method,_ in c[1].calls));self.assertLessEqual(sum(c[2].attempted.values()),4080)
+            self.assertEqual(c[3]['lastDispatch']['effect'],publisher.RUNTIME_EFFECT)
+            self.assertEqual(json.loads(path.read_bytes())['journal']['generation'],26)
+            print(json.dumps({'runtimeRecoveryAbsent':{'setupCalls':c[12],'authority':c[2].report(),'publisher':c[8].report()}},sort_keys=True))
+
+    def test_matched_zero_send_normal_cas27_and_sibling_preservation(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root=pathlib.Path(temp)/'candidate';root.mkdir();c=self.context(root,True)
+            original=c[6].observe_runtime_recovery
+            def observe(effect):
+                value=original(effect);CASFreshnessControls.sibling(c[1],'runtime-sibling.txt');return value
+            c[6].observe_runtime_recovery=observe
+            self.assertEqual(self.run_runtime(c,root/'attempt.json'),'checkpoint')
+            self.assertEqual(c[7].uploads,[]);self.assertEqual(c[4]._observed.state['generation'],27)
+            self.assertEqual(c[2].attempted['patch'],1);self.assertLessEqual(sum(c[2].attempted.values()),4080)
+            self.assertTrue(any(r['path']=='runtime-sibling.txt' for r in c[1].objects[('trees',c[1].objects[('commits',c[1].head)]['tree']['sha'])]['tree']))
+            print(json.dumps({'runtimeRecoveryMatched':{'setupCalls':c[12],'authority':c[2].report(),'publisher':c[8].report()}},sort_keys=True))
+
+    def test_ordinary_runtime_absent_still_waits_and_kit_rejects26(self):
+        candidate,authority,intent,_=fixture(26);counter,rows,journal,admission,provider,_=slice_context(candidate,authority,intent)
+        provider.matched.remove(publisher.RUNTIME_EFFECT)
+        self.assertEqual(publisher.advance(candidate,journal,admission,provider),'waiting');self.assertEqual(provider.dispatched,[])
+        with self.assertRaises(RuntimeError):publisher.validate_original_kit_state(candidate,journal)
+
+    def test_original_run_artifact_archive_member_and_semantic_proof_refuse(self):
+        modes=('run','attempt','source','actor','artifact','expiry','archive','member','stage','missing-authentication')
+        import io
+        for mode in modes:
+            with self.subTest(mode=mode),tempfile.TemporaryDirectory() as temp:
+                root=pathlib.Path(temp);c=self.context(root);api=c[7]
+                if mode=='run':api.run['id']=2
+                if mode=='attempt':api.run['run_attempt']=2
+                if mode=='source':api.run['head_sha']='c'*40
+                if mode=='actor':api.run['actor']['login']='other'
+                if mode=='artifact':api.artifact['id']=2
+                if mode=='expiry':api.artifact['expires_at']='2000-01-01T00:00:00Z'
+                body_sha=hashlib.sha256(api.proof_body).hexdigest()
+                if mode=='stage':
+                    body=json.loads(api.proof_body);body['stage']='dispatch';api.proof_body=json.dumps(body).encode()
+                    archive=io.BytesIO()
+                    with zipfile.ZipFile(archive,'w',compression=zipfile.ZIP_DEFLATED) as z:z.writestr('release-successor-result.json',api.proof_body)
+                    api.proof_zip=archive.getvalue();api.proof_zip+=b'\0'*(1413-len(api.proof_zip));body_sha=hashlib.sha256(api.proof_body).hexdigest()
+                zip_sha=hashlib.sha256(api.proof_zip).hexdigest();api.artifact['digest']='sha256:'+zip_sha
+                if mode=='archive':api.proof_zip=b'changed'
+                if mode=='member':body_sha='0'*64
+                def unauthenticated(*args):raise ProviderRefused('credential unavailable')
+                target=patch.object(api,'get',side_effect=unauthenticated) if mode=='missing-authentication' else patch.object(api,'get',wraps=api.get)
+                with patch.object(publisher,'RUNTIME_REFUSAL_ZIP_SHA256',zip_sha),patch.object(publisher,'RUNTIME_REFUSAL_MEMBER_SHA256',body_sha),target,self.assertRaises(RuntimeError):
+                    publisher.authenticate_runtime_refusal(api)
+                self.assertEqual(api.uploads,[])
+
+    def test_closed_generation_head_canonical_prefix_and_content_refuse(self):
+        for mode in ('generation','head','canonical','prefix','content'):
+            with self.subTest(mode=mode),tempfile.TemporaryDirectory() as temp:
+                root=pathlib.Path(temp);c=self.context(root);journal=c[4];good_head=journal._observed.head;good_sha=hashlib.sha256(canonical(journal._observed.state)).hexdigest()
+                if mode=='generation':journal._observed.state['generation']=24
+                if mode=='prefix':journal._observed.state['effects']['channel-asset']='intent'
+                if mode=='content':journal._observed.state['contentId']='sha256:'+'0'*64
+                with patch.object(publisher,'ORIGINAL_RUNTIME_HEAD','0'*40 if mode=='head' else good_head),patch.object(publisher,'ORIGINAL_RUNTIME_STATE_SHA256','0'*64 if mode=='canonical' else good_sha),self.assertRaises(RuntimeError):
+                    publisher.validate_original_runtime_state(c[0],journal)
+                self.assertEqual(c[7].uploads,[])
+
+    def test_complete_populations_duplicates_latepages_replacement_and_bytes_refuse(self):
+        for mode in ('release-overflow','asset-overflow','duplicate-release-later','duplicate-asset-later','promoted','replacement','wrong-target-source','wrong-bytes','bad-shape','prior-asset-moved','later-asset'):
+            with self.subTest(mode=mode),tempfile.TemporaryDirectory() as temp:
+                root=pathlib.Path(temp);c=self.context(root,mode=='wrong-bytes');api=c[7]
+                if mode=='release-overflow':api.release_pages={i:[{'id':i*100+j,'tag_name':'other'} for j in range(100)] for i in range(1,11)}
+                if mode=='asset-overflow':api.asset_pages={i:[{'id':i*100+j,'name':str(i*100+j),'size':0} for j in range(100)] for i in range(1,5)}
+                if mode=='duplicate-release-later':api.release_pages={1:[api.release]+[{'id':i+1,'tag_name':'other'} for i in range(99)],2:[{**api.release,'id':123}]}
+                if mode=='duplicate-asset-later':api.asset_pages={1:[{'id':i+100,'name':str(i),'size':0} for i in range(100)],2:[{'id':100,'name':'late','size':0}]}
+                if mode=='promoted':api.release['draft']=False
+                if mode=='replacement':api.release['id']=123
+                if mode=='wrong-target-source':api.release['target_commitish']='c'*40
+                if mode=='wrong-bytes':api.mode=mode
+                if mode=='bad-shape':api.asset_pages={1:[{'id':True,'name':'x','size':0}]}
+                if mode=='prior-asset-moved':api.assets[0]['digest']='sha256:'+'0'*64
+                if mode=='later-asset':api.assets.append({'id':999,'name':'stable-channel.json','size':0})
+                with self.assertRaises(RuntimeError):c[6].observe_runtime_recovery(ordered_effects(c[0])[12])
+                self.assertEqual(api.uploads,[])
+
+    def test_payload_currentmain_protection_selected_and_physical_movement_refuse(self):
+        for mode in ('payload','main','protection','physical','selected','population'):
+            with self.subTest(mode=mode),tempfile.TemporaryDirectory() as temp:
+                root=pathlib.Path(temp);c=self.context(root)
+                def mutate(c):
+                    if mode=='payload':(root/publisher.RUNTIME_NAME).write_bytes(b'changed')
+                    if mode=='main':c[7].head='c'*40
+                    if mode=='protection':c[1].controls['mainWriter']['enforcement']='disabled'
+                    if mode in ('physical','selected'):
+                        original=c[6].observe_runtime_recovery
+                        def observe(effect):
+                            result=original(effect);CASFreshnessControls.sibling(c[1],'move.txt')
+                            if mode=='selected':c[4]._observed.state['effects']['channel-asset']='intent'
+                            return result
+                        c[6].observe_runtime_recovery=observe
+                    if mode=='population':
+                        original=c[6].observe_runtime_recovery;seen=[]
+                        def observe(effect):
+                            seen.append(True)
+                            if len(seen)>1:c[7].assets.append({'id':999,'name':'late','size':0})
+                            return original(effect)
+                        c[6].observe_runtime_recovery=observe
+                with self.assertRaises(RuntimeError):self.run_runtime(c,root/'attempt.json',mutate)
+                self.assertEqual(c[7].uploads,[])
+
+    def test_unauthorized_current_run_and_unmatched_verified_prefix_refuse(self):
+        for mode in ('actor','attempt','status','head','prefix-unreadable','prefix-absent'):
+            with self.subTest(mode=mode),tempfile.TemporaryDirectory() as temp:
+                root=pathlib.Path(temp);c=self.context(root);get=c[7].get
+                def changed(path):
+                    value=get(path)
+                    if path.endswith('/actions/runs/1'):
+                        if mode=='actor':value['actor']['login']='other'
+                        if mode=='attempt':value['run_attempt']=2
+                        if mode=='status':value['status']='completed'
+                        if mode=='head':value['head_sha']='c'*40
+                    return value
+                c[7].get=changed
+                if mode=='prefix-unreadable':c[6].observe=lambda effect:(_ for _ in ()).throw(ProviderRefused('prefix unavailable'))
+                if mode=='prefix-absent':c[6].observe=lambda effect:Observation('absent')
+                with self.assertRaises(RuntimeError):self.run_runtime(c,root/'attempt.json')
+                self.assertEqual(c[7].uploads,[])
+
+    def test_record_failure_postrecord_payload_counter_quota_deadline_block(self):
+        for mode in ('record','existing-record','postrecord-payload','counter','quota','deadline'):
+            with self.subTest(mode=mode),tempfile.TemporaryDirectory() as temp:
+                root=pathlib.Path(temp);c=self.context(root);path=root/'attempt.json';original=publisher.write_kit_repeat_attempt
+                if mode=='existing-record':path.write_text('retained original attempt')
+                def record(path,value):
+                    if mode=='record':raise OSError('fsync failed')
+                    original(path,value)
+                    if mode=='postrecord-payload':(root/publisher.RUNTIME_NAME).write_bytes(b'changed')
+                    if mode=='counter':c[2].attempted['get']=4200-c[2].attempted['post']-c[2].attempted['patch']
+                    if mode=='quota':c[2].quota['reset']=1
+                with patch.object(publisher,'write_kit_repeat_attempt',side_effect=record),self.assertRaises((RuntimeError,OSError)):
+                    self.run_runtime(c,path,clock=(lambda:11) if mode=='deadline' else None)
+                self.assertEqual(c[7].uploads,[])
+
+    def test_unknown_and_throw_consume_send_without_second_upload(self):
+        for mode in ('unknown','throw'):
+            with self.subTest(mode=mode),tempfile.TemporaryDirectory() as temp:
+                root=pathlib.Path(temp);c=self.context(root);c[7].mode=mode
+                with self.assertRaises(RuntimeError):self.run_runtime(c,root/'attempt.json')
+                self.assertEqual(len(c[7].uploads),1);self.assertEqual(c[3]['lastDispatch']['state'],'unknown')
+                self.assertEqual(c[4]._observed.state['generation'],26)
+
+    def test_scoped_provider_refuses_unobserved_and_second_upload(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root=pathlib.Path(temp);c=self.context(root);effect=ordered_effects(c[0])[12];provider=c[6]
+            with self.assertRaises(RuntimeError):provider.dispatch_runtime_recovery(effect,{'releaseId':408709919})
+            observation,witness=provider.observe_runtime_recovery(effect);self.assertEqual(observation.state,'absent')
+            self.assertEqual(provider.dispatch_runtime_recovery(effect,witness).state,'applied')
+            with self.assertRaises(RuntimeError):provider.dispatch_runtime_recovery(effect,witness)
+            self.assertEqual(len(c[7].uploads),1)
+
+    def test_closed_scoped_json_endpoint_and_publisher_api_ceiling(self):
+        with self.assertRaises(RuntimeError):GitHubAPI('fixture').runtime_recovery_json('repos/other/releases')
+        donor=types.SimpleNamespace(get=lambda path:{})
+        counted=publisher.RuntimePublisherAPI(donor)
+        for _ in range(256):counted.get('fixed synthetic path')
+        with self.assertRaises(RuntimeError):counted.get('257th path')
+        self.assertEqual(sum(counted.attempted.values()),256)
+        with self.assertRaises(RuntimeError):counted.post('unselected',{})
+
+    def test_actual_bounded_runtime_download_refuses_oversize_and_deadline(self):
+        response=types.SimpleNamespace(status=200,headers={},fp=types.SimpleNamespace(raw=types.SimpleNamespace(_sock=types.SimpleNamespace(settimeout=lambda left:None))))
+        response.read1=lambda cap:b'x'*cap
+        class Context:
+            def __enter__(self):return response
+            def __exit__(self,*args):pass
+        opener=types.SimpleNamespace(open=lambda *a,**k:Context())
+        client=GitHubAPI('fixture')
+        with patch('urllib.request.build_opener',return_value=opener),self.assertRaises(RuntimeError):
+            client._runtime_read('https://api.github.com/fixed',100)
+        response.read1=lambda cap:b'x'
+        with patch('urllib.request.build_opener',return_value=opener),patch('release_successor_provider.time.monotonic',side_effect=[0,13]),self.assertRaises(RuntimeError):
+            client._runtime_read('https://api.github.com/fixed',100)
+
+    def test_wrapper_consumes_permission_on_callback_exception_and_repeated_call(self):
+        for outcome in ('applied','throw','unknown'):
+            candidate=manifest();effect=ordered_effects(candidate)[12];rows=report();rows['runtimeRecovery']={}
+            target=types.SimpleNamespace(dispatch_runtime_recovery=lambda *a:Dispatch('applied'))
+            if outcome=='throw':target.dispatch_runtime_recovery=lambda *a:(_ for _ in ()).throw(OSError('lost'))
+            if outcome=='unknown':target.dispatch_runtime_recovery=lambda *a:Dispatch('unknown')
+            guarded=publisher.RuntimeRecoveryProvider(target,rows,effect);guarded.send_enabled=True
+            try:guarded.dispatch(effect)
+            except OSError:pass
+            self.assertTrue(guarded.send_consumed)
+            with self.assertRaises(RuntimeError):guarded.dispatch(effect)
+
+    def test_matched_uncertain_cas_and_readback_stop_without_send(self):
+        for mode in ('patch','readback'):
+            with self.subTest(mode=mode),tempfile.TemporaryDirectory() as temp:
+                root=pathlib.Path(temp);c=self.context(root,True)
+                if mode=='patch':c[1].reject_patch=True
+                else:
+                    original=c[1].patch
+                    def patch_then_unknown(path,body):
+                        result=original(path,body);c[1].fail_at=len(c[1].calls)+1;return result
+                    c[1].patch=patch_then_unknown
+                with self.assertRaises(RuntimeError):self.run_runtime(c,root/'attempt.json')
+                self.assertEqual(c[7].uploads,[]);self.assertTrue(c[3]['journalMutationMayHaveOccurred'])
+
+    def test_actual_cli_workflow_profile_and_conflicting_flags(self):
+        workflow=(ROOT/'.github/workflows/release-successor-publish.yml').read_text()
+        self.assertIn('RECOVER_ORIGINAL_RUNTIME_INTENT: ${{ inputs.recover_original_runtime_intent }}',workflow)
+        self.assertIn('profile+=(--recover-original-runtime-intent)',workflow)
+        self.assertIn('release-successor-result-runtime-recovery-attempt.json',workflow)
+        base=['publisher','--publish','--recover-original-runtime-intent','--candidate-run-id','38026714312',
+              '--candidate-artifact-id','11660242226','--candidate-archive-sha256',publisher.RECOVERY_CANDIDATE['archiveSha256']]
+        for flag in ('--recovery-checkpoint','--repeat-original-nuget-kit-intent'):
+            with patch.object(sys,'argv',base+[flag,'--workdir','/offline/unused']),self.assertRaises(SystemExit):publisher.main()
+        env={'GITHUB_SHA':'b'*40,'GITHUB_ACTOR':'EHotwagner','GITHUB_RUN_ID':'1','GITHUB_EVENT_NAME':'workflow_dispatch',
+             'GITHUB_REPOSITORY':'FS-GG/.github','GITHUB_REF':'refs/heads/main','GITHUB_RUN_ATTEMPT':'1'}
+        with tempfile.TemporaryDirectory() as temp:
+            work=pathlib.Path(temp)/'candidate';result=pathlib.Path(temp)/'result.json'
+            with patch.object(sys,'argv',[x if x!='--publish' else '--preflight-only' for x in base]+['--workdir',str(work),'--result-path',str(result)]),patch.dict(publisher.os.environ,env,clear=True):
+                self.assertEqual(publisher.main(),1)
+            self.assertFalse(work.exists());self.assertFalse(json.loads(result.read_bytes())['publicationComplete'])
+
+    def test_actual_cli_execute_setup_refusal_provider_counter_and_checkpoint(self):
+        import shutil
+        for matched in (False,True):
+            with self.subTest(matched=matched),tempfile.TemporaryDirectory() as temp:
+                root=pathlib.Path(temp)/'fixture';root.mkdir();c=self.context(root,matched)
+                candidate,authority,_,_,journal,_,_,source,_,archive,_,fixed,_=c
+                work=pathlib.Path(temp)/'owned';result=pathlib.Path(temp)/'result.json'
+                env={'GITHUB_SHA':'b'*40,'GITHUB_ACTOR':'EHotwagner','GITHUB_RUN_ID':'1','GITHUB_EVENT_NAME':'workflow_dispatch',
+                     'GITHUB_REPOSITORY':'FS-GG/.github','GITHUB_REF':'refs/heads/main','GITHUB_RUN_ATTEMPT':'1',
+                     'GH_TOKEN':'fixture-token','ORDINARY_LEDGER_TOKEN':'fixture-ledger','NUGET_API_KEY':'fixture-key'}
+                argv=['publisher','--publish','--recover-original-runtime-intent','--candidate-run-id','38026714312',
+                      '--candidate-artifact-id','11660242226','--candidate-archive-sha256',fixed['archiveSha256'],'--workdir',str(work),'--result-path',str(result)]
+                def subprocess_fixture(argv,**kwargs):
+                    if argv[:2]==['gh','api']:
+                        self.assertEqual(argv[2],'repos/FS-GG/.github/actions/artifacts/11660242226/zip');kwargs['stdout'].write(archive.read_bytes())
+                    elif pathlib.Path(argv[1]).name=='release-successor-artifact.py':
+                        target=pathlib.Path(argv[argv.index('--output')+1]);target.mkdir()
+                        for name in [*(p+'.0.101.0.nupkg' for p in PACKAGES),'release-manifest.json','standalone-telemetry-evidence.json',publisher.RUNTIME_NAME]:shutil.copyfile(root/name,target/name)
+                    else:raise AssertionError('unselected subprocess fixture '+repr(argv))
+                    return types.SimpleNamespace(returncode=0)
+                with patch.object(publisher,'RECOVERY_CANDIDATE',fixed),patch.object(publisher,'ORIGINAL_RUNTIME_HEAD',journal._observed.head),patch.object(publisher,'ORIGINAL_RUNTIME_STATE_SHA256',hashlib.sha256(canonical(journal._observed.state)).hexdigest()):
+                    rebuilt=RuntimeAPI(candidate,root,matched);source.proof_body,source.proof_zip,source.artifact=rebuilt.proof_body,rebuilt.proof_zip,rebuilt.artifact
+                    with patch.object(publisher,'RUNTIME_REFUSAL_ZIP_SHA256',hashlib.sha256(source.proof_zip).hexdigest()),patch.object(publisher,'RUNTIME_REFUSAL_MEMBER_SHA256',hashlib.sha256(source.proof_body).hexdigest()), \
+                         patch.object(publisher,'GitHubAPI',side_effect=[source,authority]),patch.object(publisher.subprocess,'run',side_effect=subprocess_fixture), \
+                         patch.object(LiveProvider,'_download_package',lambda self,feed,package:self.root/(package+'.0.101.0.nupkg')),patch.dict(publisher.os.environ,env,clear=True),patch.object(sys,'argv',argv):
+                        authority.calls.clear();self.assertEqual(publisher.main(),0)
+                receipt=json.loads(result.read_bytes());self.assertEqual(receipt['profile'],publisher.RUNTIME_RECOVERY_PROFILE);self.assertFalse(receipt['publicationComplete'])
+                self.assertEqual(receipt['lastObservedJournal']['generation'],27 if matched else 26)
+                self.assertEqual(len(source.uploads),0 if matched else 1);self.assertLessEqual(sum(receipt['authorityRequests']['attemptedByMethod'].values()),4080)
+                self.assertEqual(sum(receipt['authorityRequests']['attemptedByMethod'].values()),len(authority.calls))
+                self.assertLessEqual(sum(receipt['publisherRequests']['attempted'].values()),256)
+                self.assertLessEqual(result.stat().st_size,16384)
+                print(json.dumps({'runtimeRecoveryActualCLI':{'matched':matched,'authority':receipt['authorityRequests'],'publisher':receipt['publisherRequests']}},sort_keys=True))
+
+    def test_matched_observation_expiry_prevents_all_authority_mutations(self):
+        for expiry_stage in ('observation', 'settlement-admission', 'cas-read'):
+            with self.subTest(stage=expiry_stage), tempfile.TemporaryDirectory() as temp:
+                root=pathlib.Path(temp);c=self.context(root,True);now=[0]
+                original_observe=c[6].observe_runtime_recovery
+                original_authorize=c[5].authorize
+                original_get=c[1].get
+                admitted=[False]
+                def observe(effect):
+                    value=original_observe(effect)
+                    if expiry_stage=='observation':now[0]=11
+                    return value
+                def authorize(*args):
+                    result=original_authorize(*args)
+                    if args[2]=='settle':
+                        admitted[0]=True
+                        if expiry_stage=='settlement-admission':now[0]=11
+                    return result
+                def get(path):
+                    result=original_get(path)
+                    if admitted[0] and expiry_stage=='cas-read':now[0]=11
+                    return result
+                with patch.object(c[6],'observe_runtime_recovery',side_effect=observe), \
+                     patch.object(c[5],'authorize',side_effect=authorize),patch.object(c[1],'get',side_effect=get),self.assertRaises(RuntimeError):
+                    self.run_runtime(c,root/'attempt.json',clock=lambda:now[0])
+                self.assertFalse(any(method in {'post','patch'}for method,_ in c[1].calls))
+                self.assertEqual(c[4]._observed.state['generation'],26)
+                self.assertEqual(c[7].uploads,[])
+
+    def test_matched_payload_drift_during_observation_cannot_settle(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root=pathlib.Path(temp);c=self.context(root,True)
+            original=c[7].runtime_recovery_json
+            moved=[False]
+            def read(path):
+                if '/releases?per_page=' in path and not moved[0]:
+                    moved[0]=True;raw=b'different local and remote bytes'
+                    (root/publisher.RUNTIME_NAME).write_bytes(raw)
+                    row=next(x for x in c[7].assets if x['name']==publisher.RUNTIME_NAME)
+                    row.update(size=len(raw),digest='sha256:'+hashlib.sha256(raw).hexdigest())
+                return original(path)
+            with patch.object(c[7],'runtime_recovery_json',side_effect=read),self.assertRaises(RuntimeError):
+                self.run_runtime(c,root/'attempt.json')
+            self.assertTrue(moved[0]);self.assertEqual(c[4]._observed.state['generation'],26)
+            self.assertFalse(any(method in {'post','patch'}for method,_ in c[1].calls));self.assertEqual(c[7].uploads,[])
+
+    def test_primary_upload_uncertainty_survives_report_failure(self):
+        import io
+        argv=['publisher','--publish','--recover-original-runtime-intent','--candidate-run-id','38026714312',
+              '--candidate-artifact-id','11660242226','--candidate-archive-sha256',publisher.RECOVERY_CANDIDATE['archiveSha256'],'--workdir','/offline/unused']
+        with patch.object(sys,'argv',argv),patch.object(publisher,'execute_publisher',side_effect=OSError('runtime upload uncertain')), \
+             patch.object(publisher,'write_result',side_effect=OSError('report unavailable')),patch.object(sys,'stderr',new_callable=io.StringIO) as output:
+            self.assertEqual(publisher.main(),1);self.assertIn('runtime upload uncertain',output.getvalue());self.assertIn('report unavailable',output.getvalue())
 
 
 if __name__ == "__main__":

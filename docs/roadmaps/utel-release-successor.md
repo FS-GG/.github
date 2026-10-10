@@ -695,3 +695,38 @@ Publication remains incomplete. Five later effects remain: qualification evidenc
 qualification runtime, channel asset, manifest asset and promotion. Installed collection
 and causal-receiver acceptance remain open. This checkpoint does not establish current
 journal state, fresh quota, or permission to resend an earlier effect.
+
+## Original runtime intent and scoped recovery — 2026-10-10
+
+[Recovery run 38063768172](https://github.com/FS-GG/.github/actions/runs/38063768172)
+failed after recording generation 26, twelve verified effects and the runtime qualification
+intent at logical pointer `e25521bff7f24dc0c454327c854f0d912fc6fa2c`. Its authenticated
+receipt records the evidence upload as applied, its later settlement, and then
+`qualification-asset:runtime: dispatch admission denied`. The source places that refusal
+after the runtime intent update and before the runtime provider call. The exact admission
+predicate that refused remains unknown. The operation used 1,831 counted Authority entries:
+1,807 GET attempts, 21 successful object POSTs and three successful non-force updates.
+
+The original five-minute result-read grant expired. A separately admitted read-only grant
+authenticated the retained original artifact without extending that grant. A later 49-GET
+observation on protected source `332acd8841f8b0497dccf32c4e27b2d37197e992` matched the
+same generation-26 canonical state and pointer. Neither observation authorizes a send or
+proves that all other invocations withheld the runtime request.
+
+The fixed `--recover-original-runtime-intent` profile authenticates that original refusal
+artifact, the unchanged candidate and exact generation-26 intent. It requires complete
+bounded release and asset censuses plus fresh source, caller, protection, payload, journal
+and quota checks. Matching runtime bytes select ordinary settlement to generation 27 with
+zero sends. A stable absence witness can select one explicit original-byte runtime upload
+after an exclusive retained attempt record; the result immediately remains an incomplete
+generation-26 checkpoint. Unknown responses stop without retry. Ordinary absent intents
+still wait without resending, and the generation-14 Kit profile remains separate.
+
+Nine affected source suites passed 390 tests, including 20 new recovery controls. The actual
+CLI fixtures counted 767 Authority API entries for the upload branch and 947 for settlement;
+the sibling-preservation case counted 949, below the 4,080 qualification limit. Deadline expiry
+and payload drift refused before mutation. These are offline fixture results; native admission
+for this profile remains pending. Every later recovery send needs root reconciliation of earlier
+known or unknown invocations; the local attempt record is not a global lease. Publication still requires runtime settlement, channel,
+manifest and promotion, followed by independent installed collection and receiver acceptance.
+The earlier HTTP 422 uncertainty, seven possible orphan objects and expired deadlines remain.
