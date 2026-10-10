@@ -244,6 +244,10 @@ alone cannot close product adoption.
   switch selected consumers with independent readback, and label the old board as legacy reference.
   Verify no automatic V1 writer resumes and no host-resident autonomous agent is required. Retain the
   actual adopted scope and unresolved items; do not report unselected consumers as migrated.
+  The [current gate inventory](board-v2-outcome-dispositions.md#exact-remaining-4-boundary) records
+  accepted three-active import, all five selected organization consumers and the actual legacy notice.
+  Root must decide the remaining finite population/consumer boundary; no additional mandatory
+  identity or consumer is named by the approved manifest. The .4 checkbox remains open pending that decision.
 - [x] **COORD-BOARD-V2-01.5 — Publish product workspace integration.** SDD/Templates and the shared
   adapter owner implement and publish the V2 binding, initialization, product-local commands and
   materialized guidance. Record exact coherent package identities and the selected coordinated-board
