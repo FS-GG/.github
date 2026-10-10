@@ -368,21 +368,24 @@ with tempfile.TemporaryDirectory() as scratch:
         for _ in range(3):
             assert reader.read().generation == generation
         warm = calls[before:]
-        # All physical-history objects are reused. The live current logical
-        # commit/tree/blob, both main refs and every path-history page remain.
+        # Physical-history misses are zero. Every introducing/prior binding
+        # still validates its logical commit/tree/blob live, as does read().
         history_pages = 1 if generation < 100 else 2
-        assert len(warm) == 3 * (5 + history_pages), "warm physical history still fetched immutable objects"
+        live_logical_reads = 2 * generation + 1
+        warm_per_read = 3 * live_logical_reads + 2 + history_pages
+        assert len(warm) == 3 * warm_per_read, "physical misses or live-read accounting differ"
         assert sum("/git/ref/" in path for path in warm) == 6
         assert sum("/commits?" in path for path in warm) == 3 * history_pages
-        assert sum("/git/commits/" in path for path in warm) == 3
-        assert sum("/git/trees/" in path for path in warm) == 3
-        assert sum("/git/blobs/" in path for path in warm) == 3
+        assert sum("/git/commits/" in path for path in warm) == 3 * live_logical_reads
+        assert sum("/git/trees/" in path for path in warm) == 3 * live_logical_reads
+        assert sum("/git/blobs/" in path for path in warm) == 3 * live_logical_reads
         count, size = len(reader._immutable_objects), reader._immutable_bytes
         largest = max(map(len, reader._immutable_objects.values()))
         assert count < reader._MAX_IMMUTABLE_OBJECTS and size < reader._MAX_IMMUTABLE_BYTES
         assert largest < reader._MAX_IMMUTABLE_OBJECT_BYTES
         metrics.append({"generation": generation, "coldGETs": cold_calls,
-                        "warmGETsPerRead": 5 + history_pages, "cachedObjects": count,
+                        "warmGETsPerRead": warm_per_read, "liveLogicalReadsPerRead": live_logical_reads,
+                        "warmPhysicalMisses": 0, "cachedObjects": count,
                         "cachedBytes": size, "largestObjectBytes": largest})
         # Each result is an independent copy, including nested values.
         physical = reader._physical_head
@@ -419,7 +422,12 @@ class CacheAPI:
 cache_oid = "a" * 40
 for bad in (RuntimeError("unreadable"), {"sha": "b" * 40, "tree": [], "truncated": False},
             {"sha": cache_oid, "tree": [], "truncated": True},
-            {"sha": cache_oid, "tree": None, "truncated": False}):
+            {"sha": cache_oid, "tree": None, "truncated": False},
+            *({"sha": cache_oid, "tree": [entry], "truncated": False} for entry in
+              (None, {}, {"path": "state", "type": "tree", "mode": "040000"},
+               {"path": "state", "type": "tree", "mode": "100644", "sha": cache_oid},
+               {"path": "state", "type": "tree", "mode": "040000", "sha": "bad"},
+               {"path": "state", "type": [], "mode": "040000", "sha": cache_oid}))):
     native = CacheAPI(bad)
     reader = ProtectedReleaseJournal(native, main_directory=True)
     try:
@@ -431,6 +439,14 @@ for bad in (RuntimeError("unreadable"), {"sha": "b" * 40, "tree": [], "truncated
     native.value = {"sha": cache_oid, "tree": [], "truncated": False}
     assert reader._immutable_object("trees", cache_oid)["sha"] == cache_oid
     assert native.calls == 2 and native.writes == 0
+
+for entry_type, mode in (("tree", "040000"), ("blob", "100644"), ("blob", "100755"),
+                         ("blob", "120000"), ("commit", "160000")):
+    native = CacheAPI({"sha": cache_oid, "truncated": False,
+                       "tree": [{"path": "unrelated", "type": entry_type, "mode": mode, "sha": cache_oid}]})
+    reader = ProtectedReleaseJournal(native, main_directory=True)
+    assert reader._immutable_object("trees", cache_oid)["tree"][0]["mode"] == mode
+    assert native.calls == 1 and native.writes == 0
 
 for bad in ({"sha": cache_oid, "encoding": "base64", "content": "a"},
             {"sha": cache_oid, "encoding": "base64", "content": 1},

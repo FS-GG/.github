@@ -114,8 +114,19 @@ class ProtectedReleaseJournal:
                    or not re.fullmatch(r"[0-9a-f]{40}", parent["sha"]) for parent in value["parents"])
         ):
             raise Refused("physical journal commit is incomplete")
-        if kind == "trees" and (value.get("truncated") is not False or not isinstance(value.get("tree"), list)):
-            raise Refused("physical journal tree is incomplete")
+        if kind == "trees":
+            if value.get("truncated") is not False or not isinstance(value.get("tree"), list):
+                raise Refused("physical journal tree is incomplete")
+            modes = {"tree": {"040000"}, "blob": {"100644", "100755", "120000"}, "commit": {"160000"}}
+            for entry in value["tree"]:
+                if (not isinstance(entry, dict) or not isinstance(entry.get("path"), str)
+                        or not entry["path"] or "/" in entry["path"] or "\0" in entry["path"]
+                        or not isinstance(entry.get("type"), str)
+                        or entry["type"] not in modes or not isinstance(entry.get("mode"), str)
+                        or entry["mode"] not in modes[entry["type"]]
+                        or not isinstance(entry.get("sha"), str)
+                        or not re.fullmatch(r"[0-9a-f]{40}", entry["sha"])):
+                    raise Refused("physical journal tree entry is incomplete")
         if kind == "blobs":
             if value.get("encoding") != "base64" or not isinstance(value.get("content"), str):
                 raise Refused("physical journal blob is incomplete")
