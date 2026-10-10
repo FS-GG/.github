@@ -767,7 +767,7 @@ The genuine source130 candidate remains retained evidence; publication requires 
 protected-source candidate and its own same-candidate canonical receiver acceptance.
 
 
-### Creator fresh driver provenance and doctor verdict — source preparation, 2026-10-11
+### Creator fresh driver provenance and doctor verdict — qualified source, 2026-10-11
 
 The genuine ef8 candidate's FreshA run installed all selected Kit bytes, but its SDD doctor
 reported six driver drifts: the fresh adoption had retained the generator's predecessor hashes
@@ -775,7 +775,7 @@ as active `driverPaths` values. Doctor deliberately exited zero with `isCoherent
 Creator incorrectly printed a coherent verdict from that exit code. The genuine candidate and
 failed receiver remain retained evidence, with no canonical receiver or publication acceptance.
 
-The prepared correction captures original scaffold provenance bytes and permissions with the
+The qualified correction captures original scaffold provenance bytes and permissions with the
 fresh opaque authority, rechecks them after fetching, and stages the six validated active hashes
 with the verified replacement bytes. It records the original provenance and exact before/after
 hashes under the selected product-board adoption, and restores provenance with file preimages
@@ -783,7 +783,16 @@ if installation fails. Ordinary retained and retrofit preparation gain no overwr
 permission. Creator requests doctor's JSON report and prints coherence only for an explicit,
 consistent successful verdict; drift, missing or malformed reports remain nonfatal warnings.
 
-New provenance ownership, concurrent edit, alias and rollback controls plus actual compiled
-doctor verdict and child-routing controls are prepared and unexecuted. Existing source
-qualification and genuine packages are preserved; this successor needs its own admitted
-qualification, protected-source candidate and same-candidate receiver evidence.
+The root-admitted twelve-stage offline aggregate on source `20487128` passed. The actual
+compiled ProductBoard suite logged 56 new provenance refusals alongside the existing 77 driver
+refusals and checked six active hashes, original provenance/history, rollback and exact repeat.
+The compiled doctor fixture passed its 18 judgments; all 81 grammar/routing assertions passed,
+including four CLI routes for true, false, malformed and failed doctor results. Existing 135
+transport assertions also passed. The Release build reported zero warnings and errors; all 81
+frozen published Coordination .99 bodies, 30 staged producer outputs and 4,216 runtime closure
+rows remained unchanged. Runtime selection was 10.0.12, and observed groups, sessions and known
+descendants were empty at completion. This establishes compiled source behavior with inert
+fixtures, with no genuine installed SDD doctor or canonical receiver acceptance claimed. Existing
+qualification, genuine candidates and the failed ef8 receiver remain preserved. Publication
+requires a genuinely packaged protected-source successor and its own same-candidate receiver
+acceptance; COORD-BOARD-V2-01.6 remains open.
