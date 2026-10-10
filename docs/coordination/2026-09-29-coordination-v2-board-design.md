@@ -391,6 +391,23 @@ Contracts **7.6.0** source / **7.5.2** public-feed fence under SDD928-C4 and GOV
 visibility stays unknown alongside accepted hosted observations. Fresh/retained installed016
 receivers, consumer switch and retirement remain open under .6; no whole .5/.6 closure is claimed.
 
+**2026-10-10: Creator016 publication caller qualified; publication remains pending.**
+The caller now uses Authority main directory `state/releases/board-v2-product-creator-016`
+for the existing logical release identity. It preserves the original five-field intent,
+nonforced CAS and eight ordered effects, with fresh protection checks and a shared request
+counter under the original deadline. The workflow retains a bounded sanitized summary.
+An explicit summary amendment verifies the original publish-job seal after removing that
+single addition; historical 0.13 recovery jobs retain their original seals.
+
+All seven offline Python/Git suites passed on source
+`a1928bb938f7752c4b1581930b8996e6e84aa031`, including 164 Creator tests, 14 new caller
+controls and nine summary/history seal mutants. The healthy all-eight fixture used 2,608
+Authority calls against the 4,200 ceiling. These are synthetic source results; candidate
+acceptance, fresh native classification, credential/effect admission, publication and
+receiver adoption remain pending. The original candidate `38043700250/a1`, its expired
+hold and three failed qualification operations remain history; the lost-custody operation
+remains unqualified. COORD-BOARD-V2-01.6 and Unified §9.8/§9.9 boundaries remain open.
+
 **Selected next source outcome: COORD-BOARD-V2-01.5 product binding and materialization.** Prepare
 it independently of broader .4 carryover and BAR/SC2 native qualification. The qualified .3 projection
 contract is the producer foundation. Publication and actual product adoption still need their own
