@@ -64,6 +64,18 @@ The implication for low-bureaucracy development is concrete: the platform handle
 | R26 — Amazon, 2015, [formal methods experience](https://www.amazon.science/publications/how-amazon-web-services-uses-formal-methods) | Engineers used specification and model checking to expose difficult design errors in critical systems. | Spend formal effort on concurrency, cancellation, fencing and unknown effects. This does not justify model-checking ordinary prose or treating model validity as implementation proof. |
 | R27 — Quint, [model-based testing](https://quint.sh/docs/model-based-testing) | Model traces can drive implementation tests; implementation correspondence remains a separate problem from validating the model. | Connect typed-SDD invariants to reducer tests and real adapter fault injection through FsQuint. Keep modeled assumptions visible. Exhaustiveness claims require explicit bounds and verified correspondence. |
 
+## Self-hosted forge proposal
+
+| Source | Technical constraint | Application and limitation |
+|---|---|---|
+| R31 — Forgejo, [API usage](https://forgejo.org/docs/latest/user/api/usage/), [branch protection](https://forgejo.org/docs/latest/user/repository/protection/) and [Actions differences](https://forgejo.org/docs/latest/user/actions/github-actions/) | Forgejo exposes a versioned REST API and repository protection; Actions compatibility with GitHub is not identity. | Candidate primary forge, with one adapter against a pinned release. Qualify required status, review, token and workflow behavior rather than translating GitHub assumptions mechanically. Documentation does not establish FS.GG throughput. |
+| R32 — Forgejo, [NuGet registry](https://forgejo.org/docs/latest/user/packages/nuget/) and [repository mirrors](https://forgejo.org/docs/latest/user/repo-mirror/) | Forgejo supports NuGet package hosting and repository mirroring. | Candidate internal feed and optional outward GitHub mirror. Verify immutable publication/readback and define one canonical writable repository; mirrors are not workflow authority or a substitute for backup. |
+| R33 — Microsoft, [NuGet trusted publishing](https://learn.microsoft.com/en-us/nuget/nuget-org/trusted-publishing) | Trusted publishing depends on accepted identity providers and configured publisher bindings. | Forgejo Actions/OIDC capability does not prove nuget.org accepts that issuer. Qualify a supported identity route or deliberately select a scoped publication credential; keep this separate from internal-feed support. |
+
+The revised proposal prefers self-hosted Forgejo to gain control over placement, capacity and upgrades. The performance benefit remains unmeasured; keeping runtime transitions in PostgreSQL is required regardless of forge. One qualified adapter is sufficient initially. Gitea and GitLab remain alternatives if a concrete required capability fails qualification, not parallel implementation targets. A universal forge abstraction or a second CI authority would undermine the simplification.
+
+Self-hosting transfers responsibility for availability, backups, upgrades and runner containment to the operator. M1 validates the protected change journey, retained planning outcomes, feed authentication and concurrent workload; M4 qualifies restore, upgrades and the single canonical-host cutover. Existing GitHub findings above remain evidence about the v2 environment, not claims about Forgejo semantics. The first draft's GitHub destination is superseded by this proposal; no Forgejo instance has been provisioned or accepted by this documentation change.
+
 ## Evidence that challenges the requested rewrite strategy
 
 R28 — Joel Spolsky's 2000 essay, [Things You Should Never Do, Part I](https://www.joelonsoftware.com/2000/04/06/things-you-should-never-do-part-i/), argues that rewrites discard hard-earned behavior embedded in existing code and can delay delivery substantially. This is an influential practitioner argument, not a controlled study of all rewrites. Together with DORA's platform guidance, it is a substantive warning against an open-ended “build everything, then discover whether it works” programme.
@@ -74,6 +86,7 @@ The requested delivery policy remains a complete rewrite and single replacement,
 
 | Initial idea | Refined decision | Evidence that changed or constrained it |
 |---|---|---|
+| GitHub is the fixed infrastructure boundary | Self-hosted Forgejo as primary candidate; one adapter, runtime independent of forge availability | R31–R33 support feasibility and expose compatibility/authentication gates; performance and operational benefit require M1/M4 evidence |
 | A logical monorepo | Platform-only monorepo with enforced boundaries and change-locality measurements | R01–R04: colocation alone is insufficient; tooling and coupling costs remain |
 | Akka orchestrates the pipeline | Typed recipe builder/reducer plus one durable authority; plain worker baseline before justified alternatives | R05–R13/R29: delivery, hosting, persistence and effect settlement are different guarantees |
 | Durable history implies event-sourced state | Transactional state with atomic intent/history initially; replay only for demonstrated reconstruction needs | R30 and local invariants: auditability and durable-before-dispatch do not by themselves select a replay engine |

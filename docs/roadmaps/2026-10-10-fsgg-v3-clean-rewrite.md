@@ -4,19 +4,19 @@ Status: proposed architecture and future programme, 2026-10-10. Implementation s
 
 This is a proposal for **version 3 of the development framework**. It is distinct from the [current unified roadmap's third revision](2026-10-07-unified-development-roadmap-v3.md), which organizes existing v2 work.
 
-The recommended design is a dedicated platform monorepo containing a modular control plane, typed-SDD integration, a small durable runtime, GitHub and execution adapters, and cohesive built-in product packs. Start runtime evaluation with a PostgreSQL-backed .NET worker; choose the smallest implementation that passes the required recovery and workload scenarios. Build a complete replacement with new contracts and storage, then switch once. Preserve the useful behavioral knowledge from v2 without preserving its APIs, command names, schemas or historical process machinery.
+The recommended design is a dedicated platform monorepo containing a modular control plane, typed-SDD integration, a small durable runtime, Forgejo and execution adapters, and cohesive built-in product packs. Start runtime evaluation with a PostgreSQL-backed .NET worker; choose the smallest implementation that passes the required recovery and workload scenarios. Build a complete replacement with new contracts and storage, then switch once. Preserve the useful behavioral knowledge from v2 without preserving its APIs, command names, schemas or historical process machinery.
 
 Supporting documents:
 
 - [Framework analysis and first draft](fsgg-v3/01-framework-analysis-and-initial-draft.md): inspected revisions, source evidence, responsibility map and limitations.
-- [Prior art and research](fsgg-v3/02-prior-art-and-research.md): 30 research entries, experience reports, alternatives and limits of inference.
+- [Prior art and research](fsgg-v3/02-prior-art-and-research.md): 33 research entries, experience reports, alternatives and limits of inference.
 - [Delivery roadmap](fsgg-v3/03-delivery-roadmap.md): dependencies, parallel workstreams, acceptance scenarios and single-cutover plan.
 
 ## 1. Product outcome and scope
 
 The platform turns a development intent into a reviewable, tested change using the accepted project model, project-specific materials and explicitly authorized tools. The normal experience should be: describe the change, let the platform prepare and run the work, inspect the result, and merge under repository policy. The user should not assemble version joins, claim documents or proof receipts by hand.
 
-The rewrite covers the **development platform**: workspace creation, typed specification lifecycle, planning, scheduling, agent/process execution, verification, GitHub delivery, board projection, diagnostics, product materialization and platform publication. Product libraries such as Rendering, Game, Audio and Net remain independently buildable runtime dependencies. Their implementation is not rewritten merely to reorganize the development framework. Their supported project types and development workflows remain in the capability inventory.
+The rewrite covers the **development platform**: workspace creation, typed specification lifecycle, planning, scheduling, agent/process execution, verification, forge delivery, board projection, diagnostics, product materialization and platform publication. Product libraries such as Rendering, Game, Audio and Net remain independently buildable runtime dependencies. Their implementation is not rewritten merely to reorganize the development framework. Their supported project types and development workflows remain in the capability inventory.
 
 The completion-baseline inventory must account for every supported v2 platform capability and classify it as retained, redesigned or intentionally retired. “Not yet inspected” is not a retirement decision. New features beyond that finite scope require an explicit tradeoff against the rewrite's completion, not automatic admission into the programme.
 
@@ -37,7 +37,7 @@ The source analysis found valuable existing boundaries: pure orchestration decis
 
 Experience from [Shopify](https://shopify.engineering/shopify-monolith) supports enforcing dependency boundaries and evaluating change locality; [Segment](https://www.twilio.com/en-us/blog/developers/best-practices/goodbye-microservices) illustrates both the operational benefit of consolidation and the cost in fault isolation. These findings inform the platform boundary; they do not establish a numerical productivity forecast.
 
-The selected product name is **Specairn**, and its future monorepo is the public [FS-GG/specairn repository](https://github.com/FS-GG/specairn), created on 2026-10-10. Repository reservation does not start implementation; the rewrite still begins only after v2 is complete. Leave organization defaults and organization-level discoverability in `.github`. Keep generic FsQuint functionality independently owned. Product runtime repositories can remain separate. Inside the platform, source-level project references replace producer-to-consumer package publication for normal development. Only genuine external consumers justify public packages.
+The selected product name is **Specairn**, with one platform monorepo. The public [FS-GG/specairn GitHub repository](https://github.com/FS-GG/specairn) was reserved on 2026-10-10. The revised proposal selects self-hosted Forgejo as the primary forge candidate; its instance, canonical repository URL and supported version remain to be qualified in M1. The GitHub reservation may serve as an optional outward mirror, with no independent delivery authority. Repository reservation does not start implementation; the rewrite still begins only after v2 is complete. Leave organization defaults and organization-level discoverability in `.github`. Keep generic FsQuint functionality independently owned. Product runtime repositories can remain separate. Inside the platform, source-level project references replace producer-to-consumer package publication for normal development. Only genuine external consumers justify public packages.
 
 ## 3. Repository, modules and deployment
 
@@ -52,7 +52,7 @@ specairn/
     Runtime/                scheduling, recovery, admission and supervision
     Adapters/
       PostgreSql/           transactional operation state, history and observations
-      GitHub/               native facts, commands, PRs, checks and Projects
+      Forgejo/              native facts, PRs, checks and planning integration
       Execution/            provider implementations and runner protocol
       Artifacts/            content-addressed storage and publication transports
     Host/                   API, authentication and composition root
@@ -80,18 +80,18 @@ flowchart TD
     HOST --> AD[Concrete adapters]
     AD --> D
     RT -. uses domain ports .-> AD
-    AD --> GH[GitHub]
+    AD --> FORGE[Forgejo]
     AD --> DB[PostgreSQL]
     AD --> STORE[Artifact storage]
     AD --> RUN[Isolated runner]
     RUN --> EXEC[Agent or process provider]
 ```
 
-Solid arrows between code modules represent allowed source dependencies; dotted runtime calls use interfaces owned inward. The Host composes concrete adapters. The domain does not reference Akka, PostgreSQL, GitHub, provider SDKs or UI types. Specifications and Planning do not perform network I/O. Pure authorization/rule evaluation belongs inward; credential acquisition and enforcement at the effect boundary belong in adapters.
+Solid arrows between code modules represent allowed source dependencies; dotted runtime calls use interfaces owned inward. The Host composes concrete adapters. The domain does not reference Akka, PostgreSQL, forge SDKs, provider SDKs or UI types. Specifications and Planning do not perform network I/O. Pure authorization/rule evaluation belongs inward; credential acquisition and enforcement at the effect boundary belong in adapters.
 
 Deploy one trusted Host and one PostgreSQL instance initially, plus separate runners. The CLI uses the same application semantics for planning and inspection. Local workspace generation and pure validation work without a running scheduler; durable unattended runs require the Host and database. A local development deployment uses the same database semantics as hosted execution. Do not maintain a second SQLite workflow engine for convenience.
 
-Keep GitHub outside the internal execution hot path. Load accepted Git inputs at an exact revision, then schedule, execute, verify and recover admitted work through the runtime, database and workers. An internal transition must not require a GitHub request, workflow dispatch or board update. GitHub remains authoritative for its native collaboration and delivery objects; it is not the runtime's queue, operation journal or progress database. A smaller implementation is acceptable only if it also meets measured throughput and scheduling-latency requirements.
+Keep the forge outside the internal execution hot path. Load accepted Git inputs at an exact revision, then schedule, execute, verify and recover admitted work through the runtime, database and workers. An internal transition must not require a forge request, workflow dispatch or board update. The selected forge remains authoritative for its native collaboration and delivery objects; it is not the runtime's queue, operation journal or progress database. A smaller implementation is acceptable only if it also meets measured throughput and scheduling-latency requirements.
 
 Do not start with Akka Cluster, multiple competing Hosts, a message broker, Kubernetes operators or a service mesh. A single Host is an explicit availability tradeoff: recovery can pause execution, but must preserve durable intent. Multi-host availability is a later requirement unless the completed-v2 scope makes it necessary; in that case, include it in the initial capability inventory and qualify failover before cutover.
 
@@ -100,9 +100,9 @@ Do not start with Akka Cluster, multiple competing Hosts, a message broker, Kube
 | Information | Authority | Derived views |
 |---|---|---|
 | Accepted product semantics, source, pack definitions and dependency locks | Protected Git revision | Generated guidance, compiled plans, documentation |
-| PR head, checks, merge result, issue state and published GitHub objects | Native GitHub observations | Runtime snapshots, board status, CLI display |
+| PR head, checks, merge result, issue state and published forge objects | Native forge observations | Runtime snapshots, board status, CLI display |
 | Work admission, run state, attempts, operation intent, reservations and recovery | PostgreSQL transactional state and immutable intent/history | Worker or actor memory, run UI, scheduling queues |
-| Human priority, explicit hold, requested scope | Configured planning input, including designated Project fields | Admitted runtime commands with actor identity and observation |
+| Human priority, explicit hold, requested scope | Configured planning input, including designated planning fields | Admitted runtime commands with actor identity and observation |
 | Agent conversation/session state | Execution provider | Diagnostic references; never acceptance or delivery authority |
 | Artifact bytes | Content-addressed artifact store | Database metadata binds digest, size, media type, origin and retention |
 | Metrics and logs | Telemetry pipeline | Advisory diagnosis; not a source of workflow success |
@@ -163,9 +163,9 @@ The runtime remains narrower than a general workflow platform. M1 evaluates the 
 
 Cancellation requested is an additional flag, not immediate terminal success. Deadline expiry stops new work and starts settlement; it does not prove the remote process is gone. Cleanup has its own durable status. A resource reservation is released only when the relevant work has stopped or the resource is isolated from future use.
 
-Classify effects as read-only, retryable with a provider idempotency contract, or reconcile-before-repeat. Use stable intent keys, parameter digests, bounded retries and jitter. The GitHub adapter cannot assume every endpoint supports idempotency keys. For an ambiguous PR creation, inspect a deterministic branch and operation binding before retrying; for ambiguous merge or publish, read the native object and digest. If the API cannot disambiguate, leave the operation unresolved and show exactly what is missing.
+Classify effects as read-only, retryable with a provider idempotency contract, or reconcile-before-repeat. Use stable intent keys, parameter digests, bounded retries and jitter. The forge adapter cannot assume every endpoint supports idempotency keys. For an ambiguous PR creation, inspect a deterministic branch and operation binding before retrying; for ambiguous merge or publish, read the native object and digest. If the API cannot disambiguate, leave the operation unresolved and show exactly what is missing.
 
-Database fencing rejects stale state updates, but GitHub does not understand a PostgreSQL fencing token. Route privileged external mutations through one effect broker. Before replacing its owner, settle or isolate in-flight calls; do not claim that a lease expiry prevents a stale network request from completing. Runner assignments similarly bind run, attempt, generation, capability, artifact identity and original deadline. A lost heartbeat alone is not permission to launch a duplicate job.
+Database fencing rejects stale state updates, but the forge does not understand a PostgreSQL fencing token. Route privileged external mutations through one effect broker. Before replacing its owner, settle or isolate in-flight calls; do not claim that a lease expiry prevents a stale network request from completing. Runner assignments similarly bind run, attempt, generation, capability, artifact identity and original deadline. A lost heartbeat alone is not permission to launch a duplicate job.
 
 ### Persistence and artifact operations
 
@@ -183,17 +183,19 @@ At integration, compare the actual diff, semantic base and current target. Rebas
 
 Exclusive reservations are for real shared resources: a publication name/version, mutable deployment target, scarce device, credential-bearing effect channel or incompatible workspace operation. Ordinary source ownership does not require a lease ceremony. Parallelism is measured by completed useful changes, not by agent count or the number of “ready” rows.
 
-## 8. GitHub infrastructure and Projects
+## 8. Forgejo infrastructure and planning integration
 
-Expose typed ports for repository facts, change delivery, checks, planning inputs and publication. Implement REST/GraphQL directly behind the adapter for hosted use. `gh` remains useful for interactive bootstrap and diagnostics; do not make human-readable CLI output the domain protocol. Handle pagination, incomplete responses, rate limits and authentication expiration explicitly.
+Use self-hosted **Forgejo** as the proposed primary forge for v3 repositories, PRs, reviews, required checks and native delivery facts. This gives the operator control over placement, capacity and upgrades; it is not evidence of lower latency or unlimited throughput. Keep scheduling, durable state and agent execution in Specairn. Forgejo Actions runs bounded repository CI where useful; it is not the workflow engine for every agent step.
 
-Validate webhook signatures and durably enqueue delivery IDs before acknowledging. Deduplicate redeliveries and reconcile periodically; do not assume ordered or complete notifications. Refresh native facts at consequential boundaries. Failed or partial board reads mean “unavailable/incomplete,” not “no work.” [GitHub webhook guidance](https://docs.github.com/en/webhooks/using-webhooks/best-practices-for-using-webhooks) and [GraphQL limits](https://docs.github.com/en/graphql/overview/rate-limits-and-query-limits-for-the-graphql-api) motivate these adapter obligations.
+Expose small typed ports for repository facts, change delivery, checks, planning inputs and publication. Implement one Forgejo REST adapter against a pinned, qualified version and its [API contract](https://forgejo.org/docs/latest/user/api/usage/). Keep endpoint, credentials and native IDs in external bindings. Do not build a universal forge framework or a second production adapter speculatively. M0 must explicitly dispose of required GitHub integrations from completed v2; the proposed default replaces them at cutover rather than retaining compatibility. A concrete retained external consumer is the only reason to expand that scope.
 
-Share native observations through the adapter instead of giving each run or agent its own poller. Coalesce equivalent reads and pending projection updates, with explicit freshness requirements for each use. Progress and board projection may lag; already-admitted independent work continues during GitHub slowness or outages. Merge, publication, changed authority and other native prerequisites still require their applicable current observations. Cached facts never silently substitute for those checks. Persist internal operation history in PostgreSQL, not through GitHub commits, comments or per-step workflow dispatches.
+Qualify scoped credentials, webhook authentication and delivery identity, pagination, incomplete responses, rate/backpressure behavior, PR head binding, review authority, required status contexts and merge protection in a disposable instance. Verify ambiguous writes by native readback before retrying. [Forgejo branch protection](https://forgejo.org/docs/latest/user/repository/protection/) and [Actions compatibility guidance](https://forgejo.org/docs/latest/user/actions/github-actions/) are inputs to these tests, not permission to copy GitHub workflows or assume identical check, token or merge-queue semantics. M1 proves the protected PR journey, including rejection of stale or missing evidence.
 
-Projects has two clearly assigned roles. Designated human fields express priority, requested work and holds. Machine-owned fields summarize runtime state and native delivery facts. A field has one owner; the projector does not overwrite a human hold to make a row look consistent. A completed issue with a stale “Ready” status is a projection discrepancy, not schedulable new work. Admission binds a specific set of work identities and revisions, not whatever rows happen to be visible later.
+Durably enqueue authenticated webhook notifications, deduplicate and reconcile periodically. Share native observations across runs and coalesce reads and pending projections with explicit freshness requirements. Already-admitted independent work continues during forge slowness or outages; native-dependent effects wait. Merge, publication and changed authority still require applicable current observations. Persist internal history in PostgreSQL, not in forge commits, comments or per-step CI dispatches.
 
-Board updates are resumable projections; board availability does not block already-authorized local implementation. Missing authority or uncertainty about scope blocks the affected external effect. A read-only inspection mode performs no writes, launches or admission and reports its observation completeness. Keep these distinctions visible in the API and CLI rather than relying on a skill paragraph to prevent mutation.
+Planning has two roles: designated human inputs express priority, requested work and holds; machine projections summarize runtime and native delivery facts. Select the smallest Forgejo-native representation that satisfies retained outcomes in M1; GitHub Projects field/API parity is not assumed. A field has one owner, and a projector never overwrites a human hold. Partial reads mean incomplete observation, not an empty population. Admission binds explicit work identities and revisions. Read-only inspection performs no writes, launches or admissions.
+
+Self-hosting adds an operational responsibility: assign an owner, pin the supported release, bound runner resources and qualify upgrades and restore of repositories, forge database, configuration and required package/artifact storage. Separate untrusted CI jobs from administration and publication credentials. An optional GitHub mirror is asynchronous and one-way from the canonical forge; it neither gates runtime progress nor accepts independent PR/merge authority. There is one canonical writable delivery surface.
 
 ## 9. Product packs and workspace creation
 
@@ -212,7 +214,7 @@ A product pack is the cohesive definition of how to create and develop one suppo
 
 Pack manifests are data. Executable extensions run through the runner capability boundary, not in the privileged Host. Distinguish trusted built-in adapters from externally supplied executable packs. Secret values do not enter generated source, ordinary parameters or logs.
 
-Generate workspaces in a staging directory, verify the expected tree and then finalize locally. Repository creation and Projects wiring are separate visible external operations with their own authorization and recovery. A failed GitHub setup does not destroy a valid local workspace or pretend remote setup succeeded.
+Generate workspaces in a staging directory, verify the expected tree and then finalize locally. Repository creation and planning integration are separate visible external operations with their own authorization and recovery. A failed forge setup does not destroy a valid local workspace or pretend remote setup succeeded.
 
 Keep one canonical skill source and generate agent-specific views as build/materialization outputs. The views contain guidance, not independent lifecycle authority. A product pack references released runtime libraries instead of vendoring their implementation. There is no v2 workspace migration feature in v3 launch scope: supported v3 workspaces start fresh. Existing product source may be placed into a newly configured v3 workspace through an explicit product adoption decision, but old orchestration state and configuration are not imported.
 
@@ -222,7 +224,7 @@ A new product kind that uses existing capabilities should require only pack chan
 
 The runner receives bounded assignments and returns outcomes/artifacts. Provider adapters advertise launch, inspect, cancel, resume, streaming and usage capabilities; unavailable resume is explicit. Keep provider-specific session IDs and transport behavior outside the platform domain. Do not hardcode model names or assume token accounting means monetary billing.
 
-Use ephemeral working directories and separate execution identities. The Host holds GitHub administration, merge and publication credentials; arbitrary agent/build code does not receive them. Authenticated runner transport binds an assignment to its registered runner and expiry. Local transport can use operating-system peer identity; remote transport needs authenticated encrypted channels and short-lived credentials.
+Use ephemeral working directories and separate execution identities. The Host holds forge administration, merge and publication credentials; arbitrary agent/build code does not receive them. Authenticated runner transport binds an assignment to its registered runner and expiry. Local transport can use operating-system peer identity; remote transport needs authenticated encrypted channels and short-lived credentials.
 
 Execution profiles declare filesystem, process, network and resource restrictions. Qualify those restrictions on every supported environment. Environment-variable scrubbing alone is not containment. If a required isolation capability is unavailable, the run is ineligible for that profile; the UI explains why. Start with the environments required by completed-v2 scope rather than pretending to provide universal sandboxing.
 
@@ -242,7 +244,7 @@ The unit of work is one intent, one proposed change and one PR. The accepted spe
 
 Use concise diagnostics: what happened, what is still uncertain, which action can resolve it, and whether the platform can take that action automatically. A normal user should not see journal sequence arithmetic, hashes or recovery flags unless expanding diagnostic detail. Human and machine-readable CLI output describe the same state; JSON output is stable and typed. A read-only run view is sufficient initially; a portal is not required.
 
-Typical journeys are explicit. A new-project user selects a pack and supplies parameters; the platform resolves, previews and creates it. A feature author states intent; the platform proposes the semantic change and execution plan, then runs authorized work. A stalled-run user sees “merge result unknown; checking GitHub” rather than a misleading failure/retry prompt. A release owner reviews a fully qualified candidate before the first publication action.
+Typical journeys are explicit. A new-project user selects a pack and supplies parameters; the platform resolves, previews and creates it. A feature author states intent; the platform proposes the semantic change and execution plan, then runs authorized work. A stalled-run user sees “merge result unknown; checking the forge” rather than a misleading failure/retry prompt. A release owner reviews a fully qualified candidate before the first publication action.
 
 Do not add standing committees, mandatory reviewer chains, separate evidence ledgers or manual per-phase admission forms. Automated technical checks and targeted approval at real authority boundaries provide the control. Exceptions should identify a concrete missing fact or permission and affect only the operation that needs it.
 
@@ -252,13 +254,15 @@ Use five complementary layers: pure reducer/plan-builder tests, pack and adapter
 
 Model critical invariants: an effect is not dispatched before durable intent; stale generations cannot advance state; a changed semantic base cannot be silently accepted; dependencies require valid outcomes; cancellation does not imply settlement; an unknown effect cannot trigger an unsafe repeat; capacity cannot be reused while its previous effect remains active. Connect model traces to actual reducer/runtime behavior through FsQuint. [Quint's model-based testing guidance](https://quint.sh/docs/model-based-testing) explains why a valid model alone does not prove implementation correspondence.
 
-CI initially runs the complete fast suite with a small always-running classifier and required result aggregator. Select expensive integration scenarios through an explicit mapping; unknown or shared-input changes conservatively broaden selection. Include pack-content, toolchain, schema and generated-material dependencies. Add finer project-graph impact analysis or result caching only when measured feedback cost justifies its implementation and qualification. Keep selection inside the workflow. [GitHub required-check behavior](https://docs.github.com/en/pull-requests/how-tos/merge-and-close-pull-requests/troubleshooting-required-status-checks) makes skipped required workflows and unhandled merge-group events unsuitable as a foundation.
+CI initially runs the complete fast suite with a small always-running classifier and required result aggregator. Select expensive integration scenarios through an explicit mapping; unknown or shared-input changes conservatively broaden selection. Include pack-content, toolchain, schema and generated-material dependencies. Add finer project-graph impact analysis or result caching only when measured feedback cost justifies its implementation and qualification. Keep selection inside the workflow. The earlier [GitHub required-check findings](https://docs.github.com/en/pull-requests/how-tos/merge-and-close-pull-requests/troubleshooting-required-status-checks) establish a failure case to prevent, not Forgejo semantics. Qualify exact-head status enforcement, stale results and skipped/absent required results on the selected Forgejo release; test merge-group behavior only if that integration mechanism is selected.
 
 Cache or reuse only results whose complete relevant inputs match. Live authorization, remote publication state and mergeability are re-observed when required; they are not timeless cache entries. Keep one result model that distinguishes passed, failed, not applicable, unavailable and not run. Factor qualification into pack conformance, provider conformance, environment isolation and integrated journeys. Record how these cover every required supported combination, and test coupled interactions explicitly; neither a blind Cartesian product nor unexplained sampling is the default. Full release qualification still includes cold installation outside the source tree, supported packs, representative providers and recovery tests. Monorepo source tests do not replace installed-consumer tests.
 
 Publish one platform release train for externally distributed CLI/Host/runner and built-in packs, with a manifest binding exact component digests. Release contracts as a public package only for an actual external consumer; internal libraries are not separately released by default. Independent third-party pack versioning remains deferred unless the accepted capability inventory requires it.
 
 Build a candidate from an immutable source commit. Validate package metadata, payloads, dependencies, signatures/provenance and installation before publishing anything. Publish the same bytes to required feeds, read them back and promote the stable manifest only after the set is complete. If one feed fails, the candidate remains incomplete; retry only missing/verified-safe operations. Do not hold all development on main while a fixed candidate is publishing. [SLSA provenance](https://slsa.dev/spec/v1.2/provenance) informs artifact identity, not a claim that provenance proves functional correctness.
+
+Forgejo provides a [NuGet registry](https://forgejo.org/docs/latest/user/packages/nuget/), making it the candidate internal package feed. M0 identifies the required external feeds; M1 qualifies authentication and immutable candidate publication to each, including nuget.org where required. [NuGet trusted publishing](https://learn.microsoft.com/en-us/nuget/nuget-org/trusted-publishing) does not establish acceptance of a Forgejo issuer: prove an accepted identity route or explicitly select a scoped credential held by the publication broker. Do not retain GitHub Actions implicitly just to hide an unresolved publication dependency.
 
 Use that candidate for installed completeness and cutover rehearsal where inputs remain unchanged. A milestone transition alone does not require another build or a duplicate qualification run. A repair produces a new candidate and invalidates affected evidence; reuse of unaffected results requires complete input correspondence. Cutover still refreshes live authority and native-state checks.
 
@@ -278,10 +282,10 @@ The following are proposed acceptance targets, not measured current performance:
 | Feedback speed | Provisional controlled-run targets: focused local checks within 60 seconds; routine PR checks within 5 minutes, excluding external queue time. M0 measures feasibility and records a justified target if these are unrealistic |
 | Coordination cost | Record interventions, wait time and rework for the same benchmark changes on completed v2 and v3; no claimed improvement without comparable samples |
 | Parallelism | Two independent changes can proceed without shared source locks; a conflicting pair is detected and repaired without losing either intent |
-| GitHub independence | Admitted internal steps make no GitHub calls solely to advance runtime state; delayed/unavailable GitHub blocks only work whose native prerequisites or authority require it |
-| Runtime efficiency | Measure scheduling latency, sustained throughput and database cost at the M0 workload, plus GitHub requests per completed change; select the runtime against those budgets as well as maintenance cost |
+| Forge independence | Admitted internal steps make no forge calls solely to advance runtime state; delayed/unavailable Forgejo blocks only work whose native prerequisites or authority require it |
+| Runtime efficiency | Measure scheduling latency, sustained throughput and database cost at the M0 workload, plus forge requests per completed change; select the runtime against those budgets as well as maintenance cost |
 
-Performance targets must not incentivize skipped correctness obligations. Set hardware, sample count, cache state and percentile method in the M0 benchmark fixture. Separate active execution from provider/GitHub queue time. Small samples establish usability, not statistical certainty about production reliability.
+Performance targets must not incentivize skipped correctness obligations. Set hardware, sample count, cache state and percentile method in the M0 benchmark fixture. Separate active execution from provider/forge queue time. Small samples establish usability, not statistical certainty about production reliability.
 
 ## 14. Single replacement and deliberate exclusions
 
@@ -301,7 +305,8 @@ Deferred unless the completion inventory proves them necessary: multi-tenant Saa
 | Persistence model | Transactional current state, immutable intent and atomic audit history | Recovery/restore tests in M1; require a concrete reconstruction need before selecting full event sourcing for an aggregate |
 | Completed-v2 capability scope | Retain outcomes, redesign interfaces, retire only deliberately | Installed inventory and representative journeys in M0 |
 | Supported environments/providers | All required by the accepted scope, with honest capability declarations | Native availability, isolation and installation matrix in M0 |
-| Packaging | Specairn in [FS-GG/specairn](https://github.com/FS-GG/specairn), one platform release train | Repository choice is settled; external-consumer inventory and package-name availability remain for M0/M1 |
+| Packaging | Specairn platform monorepo, one release train | Product name and repository boundary settled; canonical Forgejo location, external consumers and package names close in M0/M1 |
+| Primary forge | Self-hosted Forgejo, one adapter and one canonical writable delivery surface | M1 protected PR, planning, workload and feed-authentication qualification; M4 upgrade/restore and canonical-host cutover rehearsal |
 | Performance and capacity targets | Small control plane, bounded concurrency, targets above | Controlled v2 baseline and expected workload in M0 |
 | Product source adoption | Fresh v3 workspace semantics, no v2 configuration import | Rehearsed product adoption scenario in M3/M4 |
 | Plan and pack extensibility | Typed recipes and built-in packs with exact references | Expand only for an accepted scenario that the simpler model cannot express clearly |
