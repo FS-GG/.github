@@ -100,7 +100,7 @@ class GitHubAPI:
         except urllib.error.HTTPError as error:
             raise Refused(f"release asset {asset_id} returned HTTP {error.code}") from error
 
-    def _runtime_read(self, url: str, cap: int, accept: str = "application/octet-stream", redirects: bool = True) -> bytes:
+    def _runtime_read(self, url: str, cap: int, accept: str | None = "application/octet-stream", redirects: bool = True) -> bytes:
         """Bound the two read-only downloads selected by runtime recovery."""
         deadline = time.monotonic() + 12
         class Redirect(_StripAuthOnRedirect):
@@ -116,7 +116,10 @@ class GitHubAPI:
                 redirected = super().redirect_request(req, fp, code, msg, headers, target)
                 redirected.timeout = left
                 return redirected
-        request = urllib.request.Request(url, headers={"Authorization": f"Bearer {self.token}", "Accept": accept})
+        headers = {"Authorization": f"Bearer {self.token}"}
+        if accept is not None:
+            headers["Accept"] = accept
+        request = urllib.request.Request(url, headers=headers)
         opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), Redirect())
         with opener.open(request, timeout=12) as response:
             if response.status != 200:
@@ -168,7 +171,8 @@ class GitHubAPI:
                           parse_constant=lambda _: (_ for _ in ()).throw(Refused("nonfinite runtime recovery JSON")))
 
     def download_runtime_refusal_artifact(self) -> bytes:
-        return self._runtime_read(f"https://api.github.com/repos/{REPOSITORY}/actions/artifacts/11675095562/zip", 1413)
+        # Actions archive retrieval uses the bounded artifact reader's header set.
+        return self._runtime_read(f"https://api.github.com/repos/{REPOSITORY}/actions/artifacts/11675095562/zip", 1413, None)
 
     def download_runtime_recovery_asset(self, asset_id: int, size: int) -> bytes:
         if type(asset_id) is not int or asset_id <= 0 or type(size) is not int or not 0 < size <= 1048576:
