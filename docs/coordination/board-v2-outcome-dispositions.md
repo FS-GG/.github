@@ -1,9 +1,11 @@
 # Coordination V2 carryover dispositions — bounded source window
 
 This bounded reconciliation follows COORD-BOARD-V2-01.4. It authorizes no native import, refresh,
-dispatch or consumer switch. The admitted successor remains exactly SDD#928, Templates#441,
-.github#3010 and .github#3009. SDD#935 remains unapproved. Source/plan acceptance, publication, native operation,
-installed adoption and human evidence remain distinct. Full .4 closure is not claimed.
+dispatch or consumer switch. The admitted active successor remains exactly SDD#928, Templates#441
+and .github#3010; .github#3009 remains Closed/completed history with Ready retained.
+SDD#935 remains unapproved/unseeded. Source/plan acceptance, publication, native operation,
+installed adoption and human evidence remain distinct. Root selected the finite .4 acceptance recorded below;
+product outcomes outside that boundary remain open.
 
 ## Named programme outcomes
 
@@ -79,7 +81,8 @@ qualification remain owned by its linked plans. TSDD knowledge has no selected n
 | [Governance#423](https://github.com/FS-GG/FS.GG.Governance/issues/423), `I_kwDOS-Fun88AAAABOUVf4g` | Follow-up outside repository scope | Neutral governance capabilities and current source/publication/native evidence need separate owner adjudication/read scope before a later import. |
 | .github#2954 / #2963 | Omit superseded / delivered | Preserve original manifest dispositions; open issue state does not revive V1 migration gates. |
 | .github#2994 / #3008 | Omit programme links from execution queue | Keep owning epic/design links; no implementation row per checkbox. |
-| .github#2995 / #2996 / #2997 | Unresolved outside selected population | Reconcile actual registry/receiver/default and retirement evidence; do not reimpose superseded omitted-sdd wording or infer fleet retirement. |
+| [.github#2995](https://github.com/FS-GG/.github/issues/2995), `I_kwDOS6feoM8AAAABOP7vTw` | Retain outside approved three-active cohort; Q6 incomplete | Root accepted the bounded [Q6 disposition](#2995-q6-disposition--2026-10-10); no import, closure or implementation selected. |
+| .github#2996 / #2997 | Unresolved outside selected population | Reconcile actual default and retirement evidence; do not reimpose superseded omitted-sdd wording or infer fleet retirement. |
 | Templates#438 | Omit old source upgrade; historical installed acceptance unresolved | Protected current Game0.16.0 pin supersedes old0.13→0.14 source request; no duplicate upgrade or native closure. |
 | Coordination#24 | Unresolved outside selected population | Current shared read-only trace/risk/operations scope and actual publication/native acceptance need owner reconciliation; historical GS2/V1 wording does not create another scheduler. |
 
@@ -214,3 +217,71 @@ archive, closure or issue-body operation ran. The retired lifecycle writer and s
 archive/bootstrap boundaries are unchanged. This supersedes only the pending native notice gate;
 remaining approved carryover and unselected outcome/consumer authority keep .4 open. No additional
 identity, including SDD#935, is selected. Publication .5 remains complete and .6 separate.
+
+
+## #2995 Q6 disposition — 2026-10-10
+
+Root accepted **retain outside the approved three-active cohort** for #2995 after one authorized
+intake/body read. The issue was Open at revision `2026-09-04T07:21:22Z`; author/revision and
+cleanup acceptance SHA-256 is `4991e80fe559d40fade06be2c9223254b033c407e3d6707b89b48f8a72017ec0`.
+The clause reconciliation is `576eb3523eb53651ac6060c642a4b4a59d8cd1e1009ed3b6553adb49984d779a`.
+No further native queries, import, issue closure or product implementation followed.
+
+Q3 producer evidence is partly established: [SDD PR984](https://github.com/FS-GG/FS.GG.SDD/pull/984)
+and [installed Quint qualification34845942599](https://github.com/FS-GG/FS.GG.SDD/actions/runs/34845942599)
+are recorded in the architecture; [SDD PR1088](https://github.com/FS-GG/FS.GG.SDD/pull/1088) and
+[promotion37538040787/2](https://github.com/FS-GG/FS.GG.SDD/actions/runs/37538040787/attempts/2)
+record later coherent publication and 58 Q2/Q3 receiver cases. These records do not supply the missing
+exact Q4 S.I.R. final acceptance, full Q5 protocol acceptance or all-provider Q6 coverage ledger.
+Current registry evidence explicitly leaves installed/default Workspace and Wizard acceptance open.
+The accepted D.5 exception changes omitted SVG lifecycle selection for its exact provider pin;
+#2995's older universal omitted-`sdd` wording is not reinstated. Current broader default and v1
+inspection/rollback coverage is not inferred from those partial receipts. Q6 is not established complete.
+
+## Exact remaining .4 boundary
+
+The [owning acceptance](2026-09-29-coordination-v2-board-design.md#delivery-and-acceptance) requires
+approved imports, selected consumer readback, legacy-reference labeling and preservation of the
+retired V1/no-host boundary. Its current approved manifest identifies only SDD#928, Templates#441
+and .github#3010 as active import targets; their import and distinct three-active qualification are
+accepted. All three remain human Blocked. Their unfinished provider deliverables are product outcomes,
+not another board-import or consumer-switch gate. #3009 is retained Closed/completed history with
+Ready preserved; #935 remains unapproved/unseeded.
+
+| Named .4 gate | Current disposition |
+|---|---|
+| Approved three-active import and independent inspection | Accepted; no additional approved carryover identity appears in the current manifest. |
+| Programme and check-board organization consumers | Accepted against the retained three-active binding/report. |
+| Canonical drive-board, normal and best organization consumers | Accepted no-dispatch; normal model unavailability still refuses actual worker dispatch. |
+| Project 1 legacy-reference notice | Actual metadata mutation and independent readback accepted. |
+| No automatic V1 writer or host-resident agent requirement | Retired credential-free manual diagnostic remains unchanged; the selected consumers require neither writer activation nor a resident agent. Historical archive authority remains separate. |
+| Remaining population/consumer boundary | **Root accepted:** exactly the three approved active identities and five named organization consumers define finite .4 scope. No additional import or consumer is selected. |
+
+This records #2995's unresolved disposition without requiring Q6 completion to finish its bounded
+adjudication. It does not import #2995. Root selected finite .4 acceptance after rechecking all original
+organization adoption clauses; no mandatory obligation remains within that selected boundary. The dated 37-row inventory, #2996/#2997,
+Coordination#24, Governance#423, Templates#438 and other unselected consumers retain their existing
+conditional/unknown dispositions; their product completion is not silently made a .4 prerequisite.
+Publication .5 is complete; product-board adoption/Creator journeys remain separate .6 work.
+This acceptance supersedes earlier cumulative statements that named consumers, the native legacy
+notice or unspecified additional carryover keep .4 open. Historical failed/conditional records retain
+their original scope; finite .4 completion does not certify their missing product evidence. The owning
+checkbox and current Unified index record this root-selected acceptance.
+
+
+### Finite .4 acceptance joins
+
+The original .4 clauses are satisfied for the selected organization scope: import approved outcomes;
+switch selected consumers with independent readback; label the legacy board; preserve retired V1
+writing and the no-resident-agent boundary; retain adopted scope and unresolved items. The
+[installed evidence](board-v2-installed-qualification.md) binds the three-active report
+`1452f1dde1fd35da80b5c07413d930a336b4c62ccfb4a92a6e7f8c75f49997e9` to root qualification
+`6b3badfb0d0c01ed98b10bea481400be42027d994a97d07a628827bb6cc597b2`, canonical consumption
+`040d51f0e81c85e7ba5667317c9c9c6fd5f61a1715a549de5a8e42ea7d1bd910` and normal/best consumption
+`75c5bfddfc206279584a422570400e787dd57a035775983e17aad9c9abdaef3c`.
+Project 1 acceptance `083a02cd9d867ba52f56bfa2d4cbbff2b4f03d7a0a3b61adc6299ab998edceab`
+retains the actual mutation and independent metadata readback;
+source/consumer/notice evidence landed through [PR4381](https://github.com/FS-GG/.github/pull/4381),
+protected `04bf01253ef84535675257658cb0d66b991f99f7`. No new inspection or freshness claim follows.
+Separate historical archive authority remains unchanged; this acceptance requires neither archive
+execution nor dormant writer activation. Candidate work readiness remains Unknown and human Blocked.
