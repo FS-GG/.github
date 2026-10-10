@@ -608,7 +608,7 @@ separate. No 0.101 adoption, package rebuild or new native effect is selected. F
 their own admission.
 
 
-### .6 existing-product prospective qualification — local qualification, 2026-10-10
+### .6 existing-product prospective qualification — protected populations, 2026-10-10
 
 The offline BoardV2Import tool has a separate `REQUEST --existing-product` preparation
 mode for the already-created Rendering Project5 and Game Project4. The root-accepted
@@ -624,8 +624,10 @@ issue/body/owning-plan and complete dependency evidence plus root remaining-outc
 adjudication. It rereads the three original raw/status records for each product, checks
 before/after identity and body correspondence, and refuses closed/stale/incomplete or
 nonempty native dependency evidence. Rendering's known textual SDD924 blocker must
-remain explicitly preserved; empty native blocked_by does not settle it. These source
-inputs and their actual native acceptance are pending, not manufactured by metadata.
+remain explicitly preserved; empty native blocked_by does not settle it. The six
+selected GETs passed complete before/after issue-body and dependency checks on
+2026-10-10. Root adjudication preserves Rendering’s SDD924 blocker and selects only
+Game’s Fantomas 8.0.8 follow-up; neither observation establishes a product outcome.
 
 The resulting prospective population records `projectCreationPerformed=false`,
 `membershipMutationPerformed=false` and `historicalConstructorAuthenticated=false`.
@@ -653,9 +655,30 @@ archive hash for NuGet's lockfile content hash. The successor used the unchanged
 original lockfile; the failed attempt remains retained. These identities belong to
 that local qualification and do not identify a later integrated build.
 
-Organization validation/pilot-plan behavior is retained. Genuine loaded published
-.99 decoding remains pending. Currentness reads, protected per-product
-manifests/companion evidence, exact C/A/M, Creator016 publication, installed fresh and
-retained receivers, consumer adoption and legacy disposition are separate joins.
-Milestone .6 stays open; no publication, installed emission or native writes follow
-from this local qualification.
+[The integrated qualifier](https://github.com/FS-GG/.github/pull/4392) was separately
+restored and built at protected source C
+`482fb0d46625992de0228e1d4799d3ac6963caa1`. All 31 controls passed; actual assembly A is
+`2841486123c0655f59fa3f0c6ef7ca116f81c7f62400cad8702a230da113f086`.
+It produced prospective drafts from the accepted currentness and adjudication inputs.
+The original local C/A and failed restore remain separate historical evidence.
+
+The public populations and companion qualification notes are now protected:
+
+| Product | Delivery | Population revision M | Independent readback |
+| --- | --- | --- | --- |
+| Game Project4 | [Game#712](https://github.com/FS-GG/FS.GG.Game/pull/712) | `4163448cfc69d428e136853212765690265b92c6` | Main and both immutable file blobs matched in three complete GETs. |
+| Rendering Project5 | [Rendering#1417](https://github.com/FS-GG/FS.GG.Rendering/pull/1417) | `ae5af2be9c235ddf644e8e17fbd78796a87a4b2f` | Main and both immutable file blobs matched in three complete GETs. |
+
+Both same-A final binding calls passed: only each draft’s null population revision
+changed to its accepted M; public populations and prospective provenance were identical.
+The independent adapter axis remains recipe
+`64e95ebec1a8294e16edaafdb27e6aa96f32c6f7` and published assembly SHA-256
+`c6fc21abdc7c9a8186eebab02b70ef6d3351a226f536b6d413a5dec432efde29`.
+An assembled binding is data awaiting the genuine installed decoder and native acceptance.
+
+[Creator’s protected-main journal source](https://github.com/FS-GG/.github/pull/4393)
+is delivered, but its publication remains pending. Organization validation/pilot-plan
+behavior is retained. Genuine loaded published .99 decoding, Creator016 publication,
+installed fresh and retained receivers, consumer adoption and legacy disposition remain
+separate joins. Milestone .6 stays open; these observations establish no installed
+emission, product adoption or native write authority.
