@@ -409,12 +409,31 @@ class ProtectedReleaseJournal:
         next_state = {**observed.state, "generation": expected.generation + 1, "effects": {**expected.effects, effect: state}}
         if not valid_transition(observed.state, next_state):
             raise Refused("journal CAS transition is invalid")
+        physical = self._physical_head
+        if self.main_directory:
+            if physical is None:
+                raise Refused("main journal CAS has no physical prior read")
+            # Provider readback and admission may outlast unrelated main writes.
+            # Refresh the physical base without changing the admitted logical state.
+            path = f"repos/{REPOSITORY}/git/ref/heads/main"
+            fresh = self.api.get(path).get("object", {}).get("sha")
+            if not isinstance(fresh, str) or not re.fullmatch(r"[0-9a-f]{40}", fresh):
+                raise Refused("main journal CAS has no exact fresh physical head")
+            logical = self._main_head(fresh)
+            files = self._main_files(self._main_commit(fresh))
+            if logical != observed.head or files != ((observed.head + "\n").encode("ascii"), canonical(observed.state)):
+                raise Refused("main journal selected binding changed before CAS")
+            if self.api.get(path).get("object", {}).get("sha") != fresh:
+                raise Refused("main journal moved during CAS freshness read")
+            physical = fresh
+            self._physical_head = physical
         commit = self._create_commit(next_state, [observed.head])
         physical_commit = commit
         if self.main_directory:
-            if self._physical_head is None:
-                raise Refused("main journal CAS has no physical prior read")
-            physical_commit = self._overlay(self._physical_head, commit, next_state)
+            physical_commit = self._overlay(physical, commit, next_state)
+            # Do not PATCH a stale overlay or retry after a new physical write.
+            if self.api.get(path).get("object", {}).get("sha") != physical:
+                raise Refused("main journal moved before CAS PATCH")
         try:
             self.api.patch(
                 f"repos/{REPOSITORY}/git/refs/{self.physical_ref.removeprefix('refs/')}",

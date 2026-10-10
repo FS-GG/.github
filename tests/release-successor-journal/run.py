@@ -256,16 +256,24 @@ with tempfile.TemporaryDirectory() as scratch:
     except Refused:
         pass
     real.get = original_get
-    # Stale physical CAS refuses without losing another directory's write.
+    # Refresh after an unrelated main update, preserving the fresh sibling tree.
     stale = fresh.read()
     sibling = real.sibling("conflict.txt")
-    try:
-        fresh.compare_and_swap(stale, "draft", "verified")
-        raise AssertionError("stale physical CAS accepted")
-    except Refused:
-        pass
-    assert real.get(f"repos/{REPOSITORY}/git/ref/heads/main")["object"]["sha"] == sibling
-    assert fresh.read() == stale
+    original_post = real.post
+    writes = []
+    def record_post(path, body):
+        writes.append((path, body))
+        return original_post(path, body)
+    real.post = record_post
+    # A harmless sibling update must not change the selected logical binding.
+    assert fresh.compare_and_swap(stale, "draft", "verified")
+    assert real.command("show", "refs/heads/main:conflict.txt") == b"Sibling state\n"
+    overlay_body = [body for path, body in writes if path.endswith("/git/commits")][-1]
+    assert overlay_body["parents"][0] == sibling
+    assert overlay_body["parents"][1] == fresh._observed.head
+    real.post = original_post
+    # Prepare another intent for the independent uncertain-response check below.
+    assert fresh.compare_and_swap(fresh.read(), "publish", "intent")
     # An applied write with a lost response remains uncertain until exact reread.
     prior = fresh.read()
     original_patch = real.patch
@@ -274,16 +282,16 @@ with tempfile.TemporaryDirectory() as scratch:
         raise RuntimeError("synthetic lost response after real Git CAS")
     real.patch = applied_unknown
     try:
-        fresh.compare_and_swap(prior, "draft", "verified")
+        fresh.compare_and_swap(prior, "publish", "verified")
         raise AssertionError("unknown write response promoted to success")
     except Refused:
         pass
     real.patch = original_patch
-    assert fresh.read().effects["draft"] == "verified"
+    assert fresh.read().effects["publish"] == "verified"
     # A valid new logical state without the required retaining second parent refuses.
     physical = fresh._physical_head
     next_state = {**fresh._observed.state, "generation": fresh._observed.state["generation"] + 1,
-                  "effects": {**fresh._observed.state["effects"], "publish": "intent"}}
+                  "effects": {**fresh._observed.state["effects"], "channel": "intent"}}
     next_logical = fresh._create_commit(next_state, [fresh._observed.head])
     overlay = fresh._overlay(physical, next_logical, next_state)
     details = real.get(f"repos/{REPOSITORY}/git/commits/{overlay}")
