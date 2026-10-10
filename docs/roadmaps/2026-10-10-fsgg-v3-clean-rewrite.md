@@ -1,4 +1,4 @@
-# FS.GG v3: clean platform rewrite design
+# Specairn (FS.GG v3): clean platform rewrite design
 
 Status: proposed architecture and future programme, 2026-10-10. Implementation starts only after v2 is complete. This document does not activate work, authorize a cutover, change current policy or declare any proposed capability implemented.
 
@@ -37,14 +37,14 @@ The source analysis found valuable existing boundaries: pure orchestration decis
 
 Experience from [Shopify](https://shopify.engineering/shopify-monolith) supports enforcing dependency boundaries and evaluating change locality; [Segment](https://www.twilio.com/en-us/blog/developers/best-practices/goodbye-microservices) illustrates both the operational benefit of consolidation and the cost in fault isolation. These findings inform the platform boundary; they do not establish a numerical productivity forecast.
 
-Use a proposed repository named `FS.GG.Platform`. Leave organization defaults and organization-level discoverability in `.github`. Keep generic FsQuint functionality independently owned. Product runtime repositories can remain separate. Inside the platform, source-level project references replace producer-to-consumer package publication for normal development. Only genuine external consumers justify public packages.
+The selected product name is **Specairn**, and its future monorepo is the public [FS-GG/specairn repository](https://github.com/FS-GG/specairn), created on 2026-10-10. Repository reservation does not start implementation; the rewrite still begins only after v2 is complete. Leave organization defaults and organization-level discoverability in `.github`. Keep generic FsQuint functionality independently owned. Product runtime repositories can remain separate. Inside the platform, source-level project references replace producer-to-consumer package publication for normal development. Only genuine external consumers justify public packages.
 
 ## 3. Repository, modules and deployment
 
 Illustrative layout, not a scaffolding recipe:
 
 ```text
-FS.GG.Platform/
+specairn/
   src/
     Domain/                 pure identities, plans, transitions, policy values
     Specifications/         WorkspaceModel and typed-SDD application semantics
@@ -288,7 +288,7 @@ Deferred unless the completion inventory proves them necessary: multi-tenant Saa
 | Runtime implementation | Akka.NET with one PostgreSQL authority | Common fault suite and maintenance-cost comparison against Temporal in M1; choose one before expanding runtime-dependent work |
 | Completed-v2 capability scope | Retain outcomes, redesign interfaces, retire only deliberately | Installed inventory and representative journeys in M0 |
 | Supported environments/providers | All required by the accepted scope, with honest capability declarations | Native availability, isolation and installation matrix in M0 |
-| Packaging and repository name | `FS.GG.Platform`, one platform release train | External-consumer inventory and package-name availability in M0/M1 |
+| Packaging | Specairn in [FS-GG/specairn](https://github.com/FS-GG/specairn), one platform release train | Repository choice is settled; external-consumer inventory and package-name availability remain for M0/M1 |
 | Performance and capacity targets | Small control plane, bounded concurrency, targets above | Controlled v2 baseline and expected workload in M0 |
 | Product source adoption | Fresh v3 workspace semantics, no v2 configuration import | Rehearsed product adoption scenario in M3/M4 |
 
