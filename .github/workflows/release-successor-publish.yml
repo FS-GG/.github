@@ -29,6 +29,12 @@ on:
         default: false
         type: boolean
 
+      repeat_original_nuget_kit_intent:
+        description: Explicit original Kit intent repeat under uncertainty; at most one nuget.org send, incomplete checkpoint
+        required: true
+        default: false
+        type: boolean
+
 permissions:
   actions: read
   contents: write
@@ -91,6 +97,7 @@ jobs:
           CANDIDATE_ARCHIVE_SHA256: ${{ inputs.candidate_archive_sha256 }}
           PUBLISH: ${{ inputs.publish }}
           RECOVERY_CHECKPOINT: ${{ inputs.recovery_checkpoint }}
+          REPEAT_ORIGINAL_NUGET_KIT_INTENT: ${{ inputs.repeat_original_nuget_kit_intent }}
         run: |
           set -euo pipefail
           mode=--preflight-only
@@ -98,6 +105,9 @@ jobs:
           profile=()
           if test "$RECOVERY_CHECKPOINT" = true; then
             profile=(--recovery-checkpoint)
+          fi
+          if test "$REPEAT_ORIGINAL_NUGET_KIT_INTENT" = true; then
+            profile+=(--repeat-original-nuget-kit-intent)
           fi
           python3 scripts/release-successor-publish.py \
             "$mode" "${profile[@]}" \
@@ -111,7 +121,9 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: release-successor-result
-          path: ${{ runner.temp }}/release-successor-result.json
+          path: |
+            ${{ runner.temp }}/release-successor-result.json
+            ${{ runner.temp }}/release-successor-result-kit-repeat-attempt.json
           if-no-files-found: error
       - name: Report the actual publication disposition
         if: steps.publication.outcome == 'success'

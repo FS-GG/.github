@@ -501,11 +501,85 @@ the quota checkpoint alone cannot resolve that stranded intent. Source/log
 ordering supports an inference of intent-CAS readback failure before the Kit
 push, but no independent native provider non-entry receipt or publication audit
 establishes that inference. Separate original-intent reconciliation and an
-explicit forward-recovery decision remain required; no intent reset, generic
-resend or additional recovery profile is selected here.
+explicit forward-recovery decision remain required for an actual repeat. The
+checkpoint supplies no intent-reset or generic-resend permission; the distinct
+source-selected repeat profile below has its own admission boundary.
 
 Current native source acceptance, fresh quota and original-operation
-reconciliation remain prerequisites to any recovery invocation. The original
-publisher's draft identity, partial feed state, public coherence and installed
-receiver acceptance remain unresolved. Existing journal, provider and admission
-algorithms and original candidate bytes remain unchanged by this profile.
+reconciliation remain prerequisites to any recovery invocation. The accepted
+read-only [hosted observer38036069257](https://github.com/FS-GG/.github/actions/runs/38036069257),
+attempt1 at protected `c7dda5ca89e60f65e06ba5bfecba587181bdb7bd`, authenticated
+current draft408709919 with tag `coherent-set/v0.101.0`, target source
+`79051e56b025dadfc6fcaabd58b79e33f2854928` and the exact original content marker.
+The historical create-response identity and first local reader remain unknown;
+current draft readback does not reconstruct either. Its fresh Authority-scoped
+credential observed4985→4984 remaining of5000, without reserving quota or
+reconstructing the original exhausted token. Partial feed state, public coherence
+and installed receiver acceptance remain unresolved. Existing journal, provider
+and admission algorithms and original candidate bytes remain unchanged.
+
+## Explicit original Kit intent repeat qualified offline — 2026-10-10
+
+The selected `--repeat-original-nuget-kit-intent` profile permits consideration of
+one further request for the original `FS.GG.Kit`0.101.0 archive on nuget.org under
+the retained intent's uncertainty. It is mutually exclusive with the four-advance
+profile, requires publish mode and defaults to false. Its candidate tuple,
+logical head `30edfbd8aee914492ce359f4dd34454701a41d5a`, canonical generation14
+bytes, six verified predecessors and sole Kit intent are fixed. No package,
+feed, version, replacement bytes or retry-count input is available.
+
+One ordinary advance freshly observes the predecessors and Kit. A matched
+package can settle14→15 through existing admission/CAS and then immediately
+checkpoint without sending. An unreadable or conflicting observation refuses.
+An absent Kit observation leaves the original intent unchanged; only the
+explicit repeat profile supplies additional request permission. The publisher
+then performs one extra canonical journal read and requires unchanged logical
+and physical heads/fullstate, revalidates the original manifest, nupkg hash,
+normalized payload and package identity in owned candidate storage, and applies
+fresh original dispatch admission and native protections.
+
+Before delegation, a bounded exclusive fsynced local record binds the new
+execution, original intent, digests, route and uncertainty. Persistence failure
+stops before sending. A port caps delegation at one existing provider dispatch;
+the publisher immediately returns an incomplete checkpoint on an applied
+response, or failed-or-unknown on an unconfirmed result/exception. It performs
+no later advance, readback settlement or second send in that invocation. The
+record is a new local attempt record, not a historical non-entry proof, global
+lease or assertion that no earlier send occurred. A later repeated request
+requires another explicit root selection and separately admitted operation.
+
+The route is limited to nuget.org: its [publish contract](https://learn.microsoft.com/en-us/nuget/api/package-publish-resource)
+rejects an existing package ID/version with409; other feeds may replace packages.
+No skip-duplicate option is selected. A409 or successful client response does
+not prove payload equality or settle the intent. Later ordinary processing
+must freshly observe exact matching payload before protected settlement; an
+absent observation continues waiting and conflicting payload refuses.
+
+The4200 Authority entry ceiling and4500 observed quota floor remain fixed.
+The original journal transition rules, generic sixteen-effect intent-plus-
+absence policy and provider dispatch remain unchanged. Independent exact-source
+review closed without findings, and one separately admitted offline operation
+passed26 controls: the14 checkpoint controls plus12 repeat-profile controls.
+The latter cover exact original-state refusal, unchanged-journal fencing, local
+candidate and attempt-record failures, fresh admission/protection refusal,
+single-delegation uncertainty, matched settlement and incompatible profiles.
+Process and network guards precede project imports; provider delegation uses an
+inert fixture port. No native package tool, Git process or provider ran.
+
+The absent repeat branch measured430 Authority GET entries and no POST/PATCH;
+the matched ordinary settlement measured443 GET,7 POST and1 PATCH, total451,
+without provider dispatch. Quota observation is included;1632 fixture setup
+entries are separate for each branch. The six checkpoint counts above remained
+unchanged. These synthetic counts stay below4080 and do not establish a live
+quota reservation or original-journal runtime bound.
+
+The original supervisor receipt records exit0, no first cause, observed owned
+custody, empty process group and sampled peak63,504,384 bytes. Independent
+postinspection rehashed all15 input pins and11 retained artifacts and verified
+the exact recorded process births, group and selected session absent. The
+original receipt records PID/birth/PGID, not a separate session identity; session
+absence is a later census observation. The100 ms sampled supervisor/group
+observations leave unobserved transient descendants unknown and do not establish
+hard containment. The old checkpoint commit and14-control evidence remain
+historical. Offline acceptance does not admit an actual repeat, publication,
+overwrite, deletion, replacement draft or receiver adoption.

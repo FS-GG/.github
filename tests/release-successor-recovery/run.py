@@ -18,8 +18,10 @@ import socket
 import subprocess
 import sys
 import tempfile
+import types
 import urllib.request
 import unittest
+import zipfile
 from urllib.parse import parse_qs, urlsplit
 from unittest.mock import patch
 
@@ -473,6 +475,300 @@ class RecoveryControls(unittest.TestCase):
             self.assertEqual(publisher.main(), 1)
             self.assertIn("primary unknown", output.getvalue())
             self.assertIn("report unavailable", output.getvalue())
+
+
+def repeat_candidate(candidate):
+    effect = ordered_effects(candidate)[6]
+    return {"effect": publisher.KIT_EFFECT, "packageId": "FS.GG.Kit", "version": "0.101.0",
+            "feed": "nuget.org", "archiveSha256": effect.request_digest,
+            "payloadSha256": effect.target_digest,
+            "argv": ["dotnet", "nuget", "push", "/fixture/FS.GG.Kit.0.101.0.nupkg", "--source",
+                     publisher.KIT_ENDPOINT, "--api-key", "<credential omitted>"],
+            "localFile": {"device": 1, "inode": 2, "size": 3, "mtimeNs": 4}}
+
+
+class OriginalKitRepeatControls(unittest.TestCase):
+    def context(self, matched=False):
+        candidate, authority, intent, setup = fixture(14)
+        counter, rows, journal, admission, provider, source = slice_context(candidate, authority, intent)
+        if not matched:
+            provider.matched.remove(publisher.KIT_EFFECT)
+        return candidate, authority, counter, rows, journal, admission, provider, source, setup
+
+    def run_repeat(self, context, path, verify=None):
+        candidate, _, counter, rows, journal, admission, provider, _, _ = context
+        # The fixture's synthetic Git identifiers are not original native evidence.
+        # Bind only this internal guard constant to the fixture's synthetic head.
+        with patch.object(publisher, "ORIGINAL_KIT_JOURNAL_HEAD", journal._observed.head), \
+             patch.object(publisher, "ORIGINAL_KIT_STATE_SHA256", hashlib.sha256(canonical(journal._observed.state)).hexdigest()):
+            return publisher.run_original_kit_repeat(candidate, journal, admission, provider, counter,
+                   rows, 10, verify or (lambda: repeat_candidate(candidate)), path, clock=lambda: 0)
+
+    def test_explicit_absent_repeat_once_immediate_checkpoint_and_count(self):
+        context = self.context()
+        candidate, authority, counter, rows, journal, _, provider, _, setup = context
+        with tempfile.TemporaryDirectory() as directory:
+            path = pathlib.Path(directory) / "attempt.json"
+            with patch.object(journal, "read", wraps=journal.read) as reads:
+                self.assertEqual(self.run_repeat(context, path), "checkpoint")
+                self.assertEqual(reads.call_count, 2)  # Ordinary read plus one unchanged read.
+            attempt = json.loads(path.read_text())
+            self.assertEqual(attempt["effect"]["feed"], "nuget.org")
+            self.assertFalse(attempt["historicalNonDispatchProved"])
+            self.assertFalse(attempt["globalOnceClaim"])
+            self.assertEqual(attempt["journal"]["generation"], 14)
+            self.assertEqual(attempt["providerOutcome"], "not yet delegated; any prior send remains uncertain")
+            self.assertEqual(provider.dispatched, [publisher.KIT_EFFECT])
+            self.assertEqual(journal._observed.state["generation"], 14)
+            self.assertEqual(rows["lastDispatch"]["state"], "applied")
+            self.assertFalse(rows["publicationComplete"])
+            self.assertLessEqual(path.stat().st_size, 16384)
+        self.assertTrue(all(method == "get" for method, _ in authority.calls))
+        self.assertEqual(sum(counter.attempted.values()), len(authority.calls))
+        self.assertLessEqual(sum(counter.attempted.values()), 4080)
+        print(json.dumps({"kitRepeatAbsent": {"setupCalls": setup, "calls": counter.attempted}}, sort_keys=True))
+
+    def test_already_matched_settles_without_repeat_or_extra_read(self):
+        context = self.context(matched=True)
+        _, authority, counter, rows, journal, _, provider, _, setup = context
+        with tempfile.TemporaryDirectory() as directory:
+            path = pathlib.Path(directory) / "attempt.json"
+            verify = unittest.mock.Mock(side_effect=AssertionError("matched must not prepare a push"))
+            with patch.object(journal, "read", wraps=journal.read) as reads:
+                self.assertEqual(self.run_repeat(context, path, verify), "checkpoint")
+                self.assertEqual(reads.call_count, 1)
+            self.assertFalse(path.exists())
+            self.assertEqual(provider.dispatched, [])
+            self.assertEqual(journal._observed.state["generation"], 15)
+            self.assertEqual(rows["kitRepeat"]["branch"], "matched-settlement-no-send")
+            self.assertEqual(rows["lastAdvanceResult"], "verified")
+        self.assertLessEqual(sum(counter.attempted.values()), 4080)
+        print(json.dumps({"kitRepeatMatched": {"setupCalls": setup, "calls": counter.attempted}}, sort_keys=True))
+
+    def test_ordinary_absent_intent_has_no_repeat_permission(self):
+        candidate, _, _, rows, journal, admission, provider, _, _ = self.context()
+        self.assertEqual(publisher.advance(candidate, journal, admission, provider), "waiting")
+        self.assertEqual(provider.dispatched, [])
+        self.assertEqual(journal._observed.state["generation"], 14)
+
+    def test_unreadable_conflicting_target_and_predecessors_never_send(self):
+        for mode in ("target-unreadable", "target-unknown", "target-conflict", "predecessor-absent", "predecessor-unreadable"):
+            context = self.context()
+            candidate, _, _, _, _, _, provider, _, _ = context
+            original = provider.provider.observe
+            def observe(effect):
+                if mode == "target-unreadable" and effect.identity == publisher.KIT_EFFECT:
+                    raise RuntimeError("target unreadable")
+                if mode in {"target-unknown", "target-conflict"} and effect.identity == publisher.KIT_EFFECT:
+                    return Observation("unknown" if mode == "target-unknown" else "mismatched")
+                return original(effect)
+            provider.provider.observe = observe
+            if mode == "predecessor-absent": provider.matched.remove("tag")
+            if mode == "predecessor-unreadable": provider.provider.fail_observe = "draft"
+            with tempfile.TemporaryDirectory() as directory, self.assertRaises(RuntimeError):
+                self.run_repeat(context, pathlib.Path(directory) / "attempt.json")
+            self.assertEqual(provider.dispatched, [])
+
+    def test_changed_journal_head_prefix_and_native_admission_refuse(self):
+        for mode in ("wrong-head", "wrong-prefix", "physical-movement", "source-movement", "protection-drift"):
+            context = self.context()
+            candidate, authority, _, _, journal, _, provider, source, _ = context
+            verify = lambda: repeat_candidate(candidate)
+            if mode == "wrong-prefix":
+                journal._observed.state["effects"]["promote"] = "intent"
+            if mode == "physical-movement":
+                original = provider.provider.observe
+                def observe(effect):
+                    value = original(effect)
+                    if effect.identity == publisher.KIT_EFFECT:
+                        tree = authority.objects[("commits", authority.head)]["tree"]["sha"]
+                        authority.head = authority.commit(tree, [authority.head], "unrelated main movement")
+                    return value
+                provider.provider.observe = observe
+            if mode in {"source-movement", "protection-drift"}:
+                def verify():
+                    if mode == "source-movement": source.head = "c" * 40
+                    else: authority.controls["mainWriter"]["enforcement"] = "disabled"
+                    return repeat_candidate(candidate)
+            with tempfile.TemporaryDirectory() as directory:
+                path = pathlib.Path(directory) / "attempt.json"
+                if mode == "wrong-head":
+                    with self.assertRaises(RuntimeError):
+                        publisher.run_original_kit_repeat(candidate, journal, context[5], provider, context[2],
+                                                        context[3], 10, verify, path, clock=lambda: 0)
+                else:
+                    with self.assertRaises(RuntimeError): self.run_repeat(context, path, verify)
+            self.assertEqual(provider.dispatched, [])
+
+    def test_wrong_effect_feed_version_digests_and_presend_failures_never_send(self):
+        for mode in ("effect", "feed", "version", "archive", "payload", "route", "record", "existing-record", "local-drift"):
+            context = self.context()
+            candidate, _, _, rows, _, _, provider, _, _ = context
+            calls = []
+            def verify():
+                value = repeat_candidate(candidate)
+                calls.append(True)
+                if mode == "effect": value["effect"] = "nuget:FS.GG.Drivers"
+                if mode == "feed": value["feed"] = "github"
+                if mode == "version": value["version"] = "0.102.0"
+                if mode == "archive": value["archiveSha256"] = "a" * 64
+                if mode == "payload": value["payloadSha256"] = "sha256:" + "a" * 64
+                if mode == "route": value["argv"][5] = "https://nuget.pkg.github.com/FS-GG/index.json"
+                if mode == "local-drift" and len(calls) == 2: value["localFile"]["inode"] = 9
+                return value
+            with tempfile.TemporaryDirectory() as directory:
+                path = pathlib.Path(directory) / "attempt.json"
+                if mode == "existing-record": path.write_text("original retained attempt")
+                record_patch = patch.object(publisher, "write_kit_repeat_attempt", side_effect=OSError("presend fsync failed")) if mode == "record" else patch.object(publisher, "write_kit_repeat_attempt", wraps=publisher.write_kit_repeat_attempt)
+                with record_patch, self.assertRaises((RuntimeError, OSError)):
+                    self.run_repeat(context, path, verify)
+            self.assertEqual(provider.dispatched, [])
+            self.assertFalse(rows["publicationComplete"])
+
+    def test_counter_exhaustion_before_reads_admission_and_delegation(self):
+        for mode in ("first-read", "extra-read", "dispatch-admission", "delegation"):
+            context = self.context()
+            candidate, _, counter, _, _, _, provider, _, _ = context
+            def exhaust(): counter.attempted["get"] = 4200 - counter.attempted["post"] - counter.attempted["patch"]
+            if mode == "first-read": exhaust()
+            if mode == "extra-read":
+                original = provider.provider.observe
+                def observe(effect):
+                    value = original(effect)
+                    if effect.identity == publisher.KIT_EFFECT: exhaust()
+                    return value
+                provider.provider.observe = observe
+            def verify():
+                if mode == "dispatch-admission": exhaust()
+                return repeat_candidate(candidate)
+            record = publisher.write_kit_repeat_attempt
+            def write(path, value):
+                record(path, value)
+                if mode == "delegation": exhaust()
+            with tempfile.TemporaryDirectory() as directory, patch.object(publisher, "write_kit_repeat_attempt", side_effect=write), self.assertRaises(RuntimeError):
+                self.run_repeat(context, pathlib.Path(directory) / "attempt.json", verify)
+            self.assertEqual(provider.dispatched, [])
+
+    def test_duplicate_unknown_index_lag_conflict_and_later_matched_settlement(self):
+        for mode in ("409", "applied-response-lost", "unknown-return"):
+            context = self.context()
+            candidate, _, _, rows, journal, admission, provider, _, _ = context
+            def dispatch(effect):
+                provider.dispatched.append(effect.identity)
+                if mode == "applied-response-lost": provider.matched.add(effect.identity)
+                if mode == "unknown-return": return Dispatch("unknown")
+                raise RuntimeError("409 duplicate is not payload equality" if mode == "409" else "applied response lost")
+            provider.provider.dispatch = dispatch
+            with tempfile.TemporaryDirectory() as directory, self.assertRaises(RuntimeError):
+                self.run_repeat(context, pathlib.Path(directory) / "attempt.json")
+            self.assertEqual(provider.dispatched, [publisher.KIT_EFFECT])
+            self.assertEqual(journal._observed.state["generation"], 14)
+            self.assertEqual(rows["lastDispatch"]["state"], "unknown")
+            self.assertFalse(rows["publicationComplete"])
+            if mode != "applied-response-lost":
+                self.assertEqual(publisher.advance(candidate, journal, admission, provider), "waiting")
+                original = provider.provider.observe
+                provider.provider.observe = lambda effect: Observation("mismatched") if effect.identity == publisher.KIT_EFFECT else original(effect)
+                with self.assertRaises(RuntimeError): publisher.advance(candidate, journal, admission, provider)
+                provider.provider.observe = original
+                provider.matched.add(publisher.KIT_EFFECT)
+            self.assertEqual(publisher.advance(candidate, journal, admission, provider), "verified")
+            self.assertEqual(journal._observed.state["generation"], 15)
+            self.assertEqual(provider.dispatched, [publisher.KIT_EFFECT])
+
+    def test_port_consumes_single_send_on_success_or_exception(self):
+        for fail in (False, True):
+            context = self.context()
+            candidate, _, _, rows, _, _, provider, _, _ = context
+            rows["kitRepeat"] = {"observations": []}
+            port = publisher.KitObservationProvider(provider, rows, ordered_effects(candidate)[6])
+            port.repeat_enabled = True
+            provider.provider.fail_dispatch = fail
+            if fail:
+                with self.assertRaises(RuntimeError): port.dispatch(ordered_effects(candidate)[6])
+            else: port.dispatch(ordered_effects(candidate)[6])
+            with self.assertRaises(RuntimeError): port.dispatch(ordered_effects(candidate)[6])
+            self.assertEqual(provider.dispatched, [publisher.KIT_EFFECT])
+
+    def test_real_local_archive_payload_manifest_and_endpoint_checks(self):
+        saga_spec = importlib.util.spec_from_file_location("repeat_saga_fixture", ROOT / "scripts/release-saga.py")
+        saga = importlib.util.module_from_spec(saga_spec)
+        saga_spec.loader.exec_module(saga)
+        for mode in ("valid", "archive-drift", "payload-drift", "manifest-drift", "wrong-version", "wrong-endpoint"):
+            with tempfile.TemporaryDirectory() as directory:
+                root = pathlib.Path(directory)
+                path = root / "FS.GG.Kit.0.101.0.nupkg"
+                version = "0.102.0" if mode == "wrong-version" else "0.101.0"
+                with zipfile.ZipFile(path, "w") as archive:
+                    archive.writestr("FS.GG.Kit.nuspec", f"<package><metadata><id>FS.GG.Kit</id><version>{version}</version></metadata></package>")
+                    archive.writestr("lib/kit.dll", b"synthetic fixture payload")
+                candidate = manifest()
+                row = next(row for row in candidate["descriptor"]["packages"] if row["id"] == "FS.GG.Kit")
+                row["artifact"].update(path=path.name, sha256=saga.sha256(path), payloadSha256=saga.payload_id(path))
+                if mode == "payload-drift": row["artifact"]["payloadSha256"] = "sha256:" + "a" * 64
+                candidate["contentId"] = "sha256:" + hashlib.sha256(json.dumps(candidate["descriptor"], sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+                manifest_path = root / "release-manifest.json"
+                raw = json.dumps(candidate).encode();manifest_path.write_bytes(raw)
+                provider = publisher.LiveProvider(MemoryPublisher(), manifest_path, "fixture-token", "fixture-key")
+                if mode == "archive-drift": path.write_bytes(path.read_bytes() + b"drift")
+                if mode == "manifest-drift": manifest_path.write_bytes(raw + b" ")
+                if mode == "wrong-endpoint": provider._feed_url = lambda *args: "https://other-feed.invalid/"
+                if mode == "valid":
+                    value = publisher.verify_kit_repeat_candidate(candidate, provider, raw)
+                    self.assertEqual(value["feed"], "nuget.org")
+                    self.assertNotIn("--skip-duplicate", value["argv"])
+                    requested = []
+                    def inert_push(argv, **kwargs):
+                        requested.append(argv)
+                        return types.SimpleNamespace(returncode=0)
+                    # Inspect actual LiveProvider argv with an inert port; the
+                    # audit/process/network guards remain installed underneath.
+                    with patch.object(publisher.subprocess, "run", side_effect=inert_push):
+                        self.assertEqual(provider.dispatch(ordered_effects(candidate)[6]).state, "applied")
+                    self.assertEqual(requested, [["dotnet", "nuget", "push", str(path),
+                                     "--source", publisher.KIT_ENDPOINT, "--api-key", "fixture-key"]])
+                else:
+                    with self.assertRaises(RuntimeError): publisher.verify_kit_repeat_candidate(candidate, provider, raw)
+
+    def test_profile_flags_and_original_tuple_are_closed(self):
+        env = {"GITHUB_SHA": "b" * 40, "GITHUB_ACTOR": "EHotwagner", "GITHUB_RUN_ID": "1",
+               "GITHUB_EVENT_NAME": "workflow_dispatch", "GITHUB_REPOSITORY": "FS-GG/.github",
+               "GITHUB_REF": "refs/heads/main", "GITHUB_RUN_ATTEMPT": "1"}
+        with tempfile.TemporaryDirectory() as directory:
+            for key in ("candidate_run_id", "candidate_artifact_id", "candidate_archive_sha256", "preflight_only"):
+                args = types.SimpleNamespace(candidate_run_id=38026714312, candidate_artifact_id=11660242226,
+                        candidate_archive_sha256=publisher.RECOVERY_CANDIDATE["archiveSha256"],
+                        recovery_checkpoint=False, repeat_original_nuget_kit_intent=True, publish=True,
+                        preflight_only=False, workdir=pathlib.Path(directory) / key)
+                setattr(args, key, True if key == "preflight_only" else 9 if key.endswith("id") else "a" * 64)
+                with patch.dict(publisher.os.environ, env, clear=True), self.assertRaises(RuntimeError):
+                    publisher.execute_publisher(args, report())
+                self.assertFalse(args.workdir.exists())
+        argv = ["publisher", "--publish", "--recovery-checkpoint", "--repeat-original-nuget-kit-intent",
+                "--candidate-run-id", "38026714312", "--candidate-artifact-id", "11660242226",
+                "--candidate-archive-sha256", "a" * 64, "--workdir", "/offline/unused"]
+        with patch.object(sys, "argv", argv), self.assertRaises(SystemExit): publisher.main()
+
+    def test_repeat_primary_cause_survives_result_reporting_failure(self):
+        argv = ["publisher", "--publish", "--repeat-original-nuget-kit-intent",
+                "--candidate-run-id", "38026714312", "--candidate-artifact-id", "11660242226",
+                "--candidate-archive-sha256", "a" * 64, "--workdir", "/offline/unused"]
+        primary = RuntimeError("repeat outcome unknown")
+        primary.__cause__ = OSError("original response lost")
+        captured = []
+        def failed_report(path, value):
+            captured.append(copy.deepcopy(value))
+            raise OSError("repeat result unavailable")
+        import io
+        with patch.object(sys, "argv", argv), patch.object(publisher, "execute_publisher", side_effect=primary), \
+             patch.object(publisher, "write_result", side_effect=failed_report), patch.object(sys, "stderr", new_callable=io.StringIO) as output:
+            self.assertEqual(publisher.main(), 1)
+            self.assertIn("repeat outcome unknown", output.getvalue())
+            self.assertIn("repeat result unavailable", output.getvalue())
+        self.assertEqual(captured[0]["profile"], publisher.KIT_REPEAT_PROFILE)
+        self.assertEqual([row["message"] for row in captured[0]["failure"]["chain"]],
+                         ["repeat outcome unknown", "original response lost"])
+        self.assertFalse(captured[0]["publicationComplete"])
 
 
 if __name__ == "__main__":
