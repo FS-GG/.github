@@ -189,7 +189,7 @@
 # nuget.org and reds daily while any receiver is behind. Nothing has to push for it to fire.
 
 schemaVersion: 11
-updated: 2026-08-26
+updated: 2026-10-10
 authority: FS-GG/.github
 
 # Cross-repository repository_dispatch contracts.  The sender's POST is successful even when the
@@ -549,6 +549,7 @@ capabilities:
 #
 # ADR-0085: public package ownership does not require board or receiver participation.
 outside-fabric:
+  - { full: FS-GG/specairn, reason: "Public future monorepo for Specairn (FS.GG v3), reserved 2026-10-10; implementation starts after v2 completion per docs/roadmaps/2026-10-10-fsgg-v3-clean-rewrite.md. No active v2 board scope, kit or build-config adoption." }
   - { full: FS-GG/FsQuint, reason: "ADR-0085 independent public Quint–F# package owner; consumers qualify NuGet updates without board scope, kit, build-config or installed organization runtime" }
 
 # The coordination kit every `coordination-kit` receiver must hold. The slice-2 sync
