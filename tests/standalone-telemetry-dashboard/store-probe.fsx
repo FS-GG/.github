@@ -274,7 +274,7 @@ let causalEvents (cases: CausalCase array) (case: CausalCase) =
     let parentDispatch =
         cases |> Array.tryFind (fun candidate -> causalText candidate.admission "invocationId" = parentInvocation)
         |> Option.map (fun candidate -> causalText candidate.event "dispatchId") |> Option.defaultValue null
-    let attempt field generation =
+    let attempt (field: string) (generation: string) =
         let value = get field
         if isNull value then null else Guid.Parse(value).ToString("N") + "-g" + string (admission.GetProperty(generation).GetInt32())
     [| JsonNode.Parse(case.event.GetRawText())
