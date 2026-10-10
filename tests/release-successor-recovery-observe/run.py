@@ -113,6 +113,8 @@ class Cases(unittest.TestCase):
         self.assertEqual(result['outcomes']['actionsFinalRate']['status'],'observed')
         evidence=next(x for x in result['requestsEvidence'] if x['status']==403)
         self.assertEqual(evidence['headers']['x-ratelimit-remaining'],'0')
+        self.assertEqual(self.fake.calls[-1],('rate_limit','Bearer '+ENV['LEDGER_TOKEN']))
+        self.assertLess(next(i for i,(path,_) in enumerate(self.fake.calls) if path==prepath),len(self.fake.calls)-1)
     def test_transport_error_masks_credentials_and_preserves_first_cause(self):
         self.fake.error[prepath]=RuntimeError('signedURL='+ENV['ACTIONS_TOKEN'])
         self.fake.error['rate_limit']=RuntimeError(ENV['LEDGER_TOKEN'])

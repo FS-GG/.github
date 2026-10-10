@@ -281,13 +281,13 @@ def observe(reader, env):
             raise Refused("ledger-repository-scope-refused")
         return {"repository": AUTHORITY, "installationId": env["ACTUAL_INSTALLATION_ID"], "appId": 4882140}
     independent("ledgerScope", scope)
-    independent("ledgerFinalRate", lambda: get("ledger", "rate_limit"))
     independent("actionsInitialRate", lambda: get("actions", "rate_limit"))
     if result["outcomes"]["ledgerScope"]["status"] == "observed":
         independent("draft", lambda: draft(reader))
     else:
         result["outcomes"]["draft"] = {"status": "unknown", "cause": "scope-prerequisite-refused"}
     independent("actionsFinalRate", lambda: get("actions", "rate_limit"))
+    independent("ledgerFinalRate", lambda: get("ledger", "rate_limit"))
     result.update(requests=reader.calls, retainedResponseBytes=reader.bytes, requestsEvidence=reader.evidence)
     return result
 
