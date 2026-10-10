@@ -560,3 +560,32 @@ archive, closure or issue-body operation ran. The retired lifecycle writer and s
 archive/bootstrap boundaries are unchanged. This supersedes only the pending native notice gate;
 remaining approved carryover and unselected outcome/consumer authority keep .4 open. No additional
 identity, including SDD#935, is selected. Publication .5 remains complete and .6 separate.
+
+
+## Creator .6 source correspondence preparation — 2026-10-10
+
+The selected route preserves authentic published coordination **0.99.0**, source
+`64e95ebec1a8294e16edaafdb27e6aa96f32c6f7` and the existing immutable archive, 281 source leaves
+and 81 published bodies. Current Creator source and the isolated pinned producer source now have
+explicit separate roots. Frozen mode selects only the historical producer project graph, stages
+its published implementation bodies there and disables dependency rebuilding/content queries.
+Ordinary mode retains the current graph. Missing paired properties, unknown source identity, graph
+or leaf drift, links and preexisting staged outputs refuse; no fallback or 0.101 repin is selected.
+Package evidence reports current Creator and published dependency source identities separately.
+
+The exact `9f53428e7a95383fd28bb094a597709a82de2769` composition passed one ten-stage
+offline qualification: locked restore, Creator-only Release compilation with zero warnings/errors,
+and the actual compiled ProductBoard controls. All 81 copied published bodies and 30 staged producer
+output files/modes remained unchanged; no producer `obj/Release` files appeared. Full SDK/runtime,
+static native/apphost and alias checks matched before/after. The compiled Creator SHA256 is
+`c0b3dbe2bd4b6e0f3e44a3c8456d11737896b5f6f54148aa7ec8545fa61ccb94`; owner result
+`a492f3c09e07a11cade56f8de3ceeab754f1ed40fa6f5e7528bab0c3d35494d6` binds the ten original
+stage vectors and cleanup. Static native closure does not prove every late dynamic load.
+The earlier `62de42a4` preparation passed 14 frozen and two package-join controls; it does not
+replace the compiled successor proof.
+
+This establishes offline source/API compatibility, not a packaged candidate, publication or
+fresh/retained product journey. The historical private `ddd79655`/0.97.1 qualification remains
+separate. No 0.101 adoption, package rebuild or new native effect is selected. Finite organization
+.4 and .5 publication remain unchanged; .6 product bindings, credentials and effects still need
+their own admission.

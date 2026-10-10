@@ -44,7 +44,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../../src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj" />
+    <ProjectReference Include="../../src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj"
+                      Condition="'$(FsggFrozenCoordDependencies)' == '' And '$(FsggFrozenCoordSource)' == ''" />
+    <ProjectReference Include="$(FsggFrozenCoordSource)/src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj"
+                      Condition="'$(FsggFrozenCoordDependencies)' != '' And '$(FsggFrozenCoordSource)' != ''" />
     <PackageReference Include="FSharp.Core" />
     <PackageReference Include="Spectre.Console" />
   </ItemGroup>
@@ -70,8 +73,12 @@
           Link="%(RecursiveDir)%(Filename)%(Extension)"
           CopyToOutputDirectory="Always" CopyToPublishDirectory="Always" />
   </ItemGroup>
+  <Target Name="ValidateFrozenCoordSelection" BeforeTargets="PrepareForBuild">
+    <Error Condition="('$(FsggFrozenCoordDependencies)' == '' And '$(FsggFrozenCoordSource)' != '') Or ('$(FsggFrozenCoordDependencies)' != '' And '$(FsggFrozenCoordSource)' == '')"
+           Text="Frozen coordination source and published binary roots must be supplied together." />
+  </Target>
   <Target Name="VerifyFrozenCoordDependencies" BeforeTargets="PrepareForBuild"
           Condition="'$(FsggFrozenCoordDependencies)' != ''">
-    <Exec Command="python3 &quot;$(MSBuildThisFileDirectory)../creator-frozen-coord-dependencies.py&quot; verify-layout --dependencies &quot;$(FsggFrozenCoordDependencies)&quot;" />
+    <Exec Command="python3 &quot;$(MSBuildThisFileDirectory)../creator-frozen-coord-dependencies.py&quot; verify-layout --producer-source &quot;$(FsggFrozenCoordSource)&quot; --dependencies &quot;$(FsggFrozenCoordDependencies)&quot;" />
   </Target>
 </Project>

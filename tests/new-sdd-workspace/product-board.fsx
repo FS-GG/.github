@@ -44,9 +44,37 @@ for invalid in [ "<Project/>"; "<Project><FsggCoherentSetVersion>0.99.1</FsggCoh
     coherentSourceVersion invalid |> refuse "missing, duplicate or malformed coherent source version"
 coherentSourceVersion "<Project><FsggCoherentSetVersion>0.99.1</FsggCoherentSetVersion></Project>" |> pass |> ignore
 coherentVersionMatches "0.99.1" "0.99.0" |> refuse "loaded version differs from committed source"
+// Frozen compilation uses the authenticated published producer, while the Creator
+// keeps its own current source provenance. Do not compare those independent versions.
+let selectedCoherentVersion currentProperties frozenProperties frozenPropertiesDigest =
+    match frozenProperties, frozenPropertiesDigest with
+    | None, None -> coherentSourceVersion currentProperties
+    | Some properties, Some expectedDigest when digest properties = expectedDigest ->
+        coherentSourceVersion (Text.Encoding.UTF8.GetString properties)
+    | Some _, Some _ -> Error "selected producer properties differ from the fixed source pin"
+    | _ -> Error "selected producer properties and source pin must be paired"
+let testProperties = "<Project><FsggCoherentSetVersion>0.99.1</FsggCoherentSetVersion></Project>"
+let testBytes = Text.Encoding.UTF8.GetBytes testProperties
+let testDigest = digest (Text.Encoding.UTF8.GetBytes testProperties)
+selectedCoherentVersion testProperties None None |> pass |> ignore
+selectedCoherentVersion "<Project/>" (Some testBytes) (Some testDigest) |> pass |> ignore
+selectedCoherentVersion testProperties (Some (Text.Encoding.UTF8.GetBytes(testProperties.Replace("0.99.1", "0.99.0")))) (Some testDigest)
+    |> refuse "changed selected producer version"
+selectedCoherentVersion testProperties (Some testBytes) None |> refuse "unpaired producer source pin"
+let creatorRoot = Path.GetFullPath(Path.Combine(__SOURCE_DIRECTORY__, "../.."))
+let frozenSetting name = Environment.GetEnvironmentVariable name |> Option.ofObj |> Option.filter (String.IsNullOrWhiteSpace >> not)
 let expectedCoherentVersion =
-    File.ReadAllText(Path.Combine(__SOURCE_DIRECTORY__, "../../Directory.Build.props"))
-    |> coherentSourceVersion |> pass
+    let currentProperties = File.ReadAllText(Path.Combine(creatorRoot, "Directory.Build.props"))
+    match frozenSetting "FsggFrozenCoordSource", frozenSetting "FsggFrozenCoordDependencies" with
+    | None, None -> selectedCoherentVersion currentProperties None None |> pass
+    | Some source, Some _ ->
+        if not (Path.IsPathFullyQualified source) || Path.GetFullPath source = creatorRoot then
+            failwith "frozen producer source must be a distinct absolute root"
+        let pin = JsonNode.Parse(File.ReadAllText(Path.Combine(creatorRoot, "scripts/creator-frozen-coord-dependencies.json")))
+        let leaf = pin.["sourceLeaves"].AsArray() |> Seq.filter (fun row -> row.["path"].GetValue<string>() = "Directory.Build.props") |> Seq.exactlyOne
+        let properties = File.ReadAllBytes(Path.Combine(source, "Directory.Build.props"))
+        selectedCoherentVersion currentProperties (Some properties) (Some (leaf.["sha256"].GetValue<string>())) |> pass
+    | _ -> failwith "frozen producer source and binary roots must be paired"
 
 ProductBoard.validate "acme/app" adapter binding |> pass |> ignore
 ProductBoard.validate "acme/other" adapter binding |> refuse "foreign repository"

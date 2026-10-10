@@ -699,6 +699,56 @@ wf "$RBP/.github/workflows/w.yml" '      - "src/A/**"
 expect "property-valued Include cannot become a literal graph edge" \
   3 "requires MSBuild evaluation" "$RBP"
 
+# The frozen Creator route is a closed immutable external closure, not an arbitrary property
+# graph. Cover the ordinary local reference; every altered selector/guard stays no-verdict.
+RBF="$(root "$WORK/cover-closed-frozen-creator")"
+mkdir -p "$RBF/scripts/NewSddWorkspace"
+cp "$REPO_ROOT/scripts/NewSddWorkspace/NewSddWorkspace.fsproj" "$RBF/scripts/NewSddWorkspace/"
+cp "$REPO_ROOT/scripts/creator-frozen-coord-dependencies.json" "$RBF/scripts/"
+proj "$RBF" "src/FS.GG.Coord.Cli"
+wf "$RBF/.github/workflows/w.yml" '      - "scripts/NewSddWorkspace/**"
+      - "src/FS.GG.Coord.Cli/**"' '      - "scripts/NewSddWorkspace/**"
+      - "src/FS.GG.Coord.Cli/**"'
+expect "closed frozen Creator route retains ordinary local closure" 0 "ok:" "$RBF"
+for mutation in root condition ordinary parent pair error-continue content-child build copy verify pin malformed-pin; do
+  RBFC="$WORK/closed-frozen-$mutation"
+  cp -R "$RBF" "$RBFC"
+  python3 - "$RBFC" "$mutation" <<'PYCONTROL'
+import json,pathlib,sys,xml.etree.ElementTree as ET
+root=pathlib.Path(sys.argv[1]);mode=sys.argv[2];path=root/'scripts/NewSddWorkspace/NewSddWorkspace.fsproj'
+xml=ET.parse(path);project=xml.getroot();refs=list(project.iter('ProjectReference'));frozen=next(r for r in refs if '$(FsggFrozenCoordSource)' in r.get('Include',''))
+if mode=='root':frozen.set('Include',frozen.get('Include').replace('FsggFrozenCoordSource','ForeignRoot'))
+elif mode=='condition':frozen.set('Condition',"'$(FsggFrozenCoordSource)' != ''")
+elif mode=='ordinary':
+ for group in project.findall('ItemGroup'):
+  for ref in list(group):
+   if ref.tag=='ProjectReference' and ref is not frozen:group.remove(ref)
+elif mode=='parent':
+ next(g for g in project.findall('ItemGroup') if frozen in list(g)).set('Condition','false')
+elif mode=='pair':project.remove(next(t for t in project.findall('Target') if t.get('Name')=='ValidateFrozenCoordSelection'))
+elif mode=='error-continue':next(t for t in project.findall('Target') if t.get('Name')=='ValidateFrozenCoordSelection')[0].set('ContinueOnError','WarnAndContinue')
+elif mode=='content-child':ET.SubElement(next(n for g in project.findall('ItemGroup') for n in g.findall('None') if n.get('Include')=='$(FsggFrozenCoordDependencies)/**/*'),'CopyToOutputDirectory').text='Never'
+elif mode=='build':next(project.iter('BuildProjectReferences')).text='true'
+elif mode=='copy':next(project.iter('_GetChildProjectCopyToOutputDirectoryItems')).text='true'
+elif mode=='verify':next(t for t in project.findall('Target') if t.get('Name')=='VerifyFrozenCoordDependencies')[0].set('Command','echo unverified')
+elif mode=='malformed-pin':
+ pin=root/'scripts/creator-frozen-coord-dependencies.json';value=json.loads(pin.read_text());value['projects']=list(value['projects']);pin.write_text(json.dumps(value))
+elif mode=='pin':
+ pin=root/'scripts/creator-frozen-coord-dependencies.json';value=json.loads(pin.read_text());value['sourceLeaves'].pop();pin.write_text(json.dumps(value))
+xml.write(path,encoding='unicode')
+PYCONTROL
+  expect "closed frozen Creator $mutation drift refuses dynamic edge" 3 "requires MSBuild evaluation" "$RBFC"
+done
+# Prove the ordinary reference is still an actual graph edge, not just a valid shape.
+RBFM="$WORK/closed-frozen-missing-local-filter";cp -R "$RBF" "$RBFM"
+wf "$RBFM/.github/workflows/w.yml" '      - "scripts/NewSddWorkspace/**"' '      - "scripts/NewSddWorkspace/**"'
+expect "closed frozen Creator still requires ordinary CLI dependency coverage" \
+  1 "nothing in the filter selects 'src/FS.GG.Coord.Cli'" "$RBFM"
+# Filename alone never admits a dynamic route.
+RBFF="$WORK/closed-frozen-other-name";cp -R "$RBF" "$RBFF"
+mv "$RBFF/scripts/NewSddWorkspace" "$RBFF/scripts/OtherCreator"
+expect "same frozen XML at another project identity stays no-verdict" 3 "requires MSBuild evaluation" "$RBFF"
+
 # A Windows drive path is absolute to MSBuild, but POSIX os.path.join treats C:/ as relative.
 # That fabricates an edge under src/A, so an A-only filter appears to cover an external project.
 RBAD="$(root "$WORK/cover-absolute-drive-reference")"

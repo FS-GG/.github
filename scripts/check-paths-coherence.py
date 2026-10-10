@@ -182,6 +182,7 @@ from __future__ import annotations
 import argparse
 import ast
 import glob
+import json
 import os
 import re
 import sys
@@ -511,6 +512,68 @@ def literal_prefix(pattern: str) -> str:
     return pattern[:cut].rstrip("/")
 
 
+def frozen_creator_reference(root: str, rel: str, project: ET.ElementTree, reference: ET.Element) -> bool:
+    """Recognize the closed immutable external route; keep its ordinary local edge.
+
+    This does not evaluate arbitrary MSBuild properties. The dispatch-only frozen route
+    authenticates a separate pinned source tree and copies published bodies without rebuilding
+    it; local path-filter coverage follows the paired ordinary route instead. Unknown contracts
+    retain the existing no-verdict rather than inventing an external project edge.
+    """
+    frozen = "$(FsggFrozenCoordSource)/src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj"
+    if rel != "scripts/NewSddWorkspace/NewSddWorkspace.fsproj" or reference.get("Include") != frozen:
+        return False
+    xml = project.getroot()
+    ordinary = "../../src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj"
+    empty = "'$(FsggFrozenCoordDependencies)' == '' And '$(FsggFrozenCoordSource)' == ''"
+    selected = "'$(FsggFrozenCoordDependencies)' != '' And '$(FsggFrozenCoordSource)' != ''"
+    scope = "'$(FsggFrozenCoordDependencies)' != ''"
+    pair_error = "('$(FsggFrozenCoordDependencies)' == '' And '$(FsggFrozenCoordSource)' != '') Or ('$(FsggFrozenCoordDependencies)' != '' And '$(FsggFrozenCoordSource)' == '')"
+    refs = list(xml.iter("ProjectReference"))
+    groups = [g for g in xml.findall("ItemGroup") if g.findall("ProjectReference")]
+    if (len(refs) != 2 or {(r.get("Include"), r.get("Condition")) for r in refs} != {(ordinary, empty), (frozen, selected)}
+            or any(set(r.attrib) != {"Include", "Condition"} or list(r) for r in refs)
+            or not groups or any(g.attrib for g in groups)
+            or sum(len(g.findall("ProjectReference")) for g in groups) != len(refs)):
+        return False
+    properties = [g for g in xml.findall("PropertyGroup") if g.get("Condition") == scope]
+    if len(properties) != 1 or set(properties[0].attrib) != {"Condition"}:
+        return False
+    for name in ("BuildProjectReferences", "CompileUsingReferenceAssemblies", "_GetChildProjectCopyToOutputDirectoryItems", "_GetChildProjectCopyToPublishDirectoryItems"):
+        values = list(xml.iter(name))
+        if len(values) != 1 or values[0] not in list(properties[0]) or values[0].text != "false" or values[0].attrib:
+            return False
+    pair = [t for t in xml.findall("Target") if t.get("Name") == "ValidateFrozenCoordSelection"]
+    if (len(pair) != 1 or pair[0].attrib != {"Name": "ValidateFrozenCoordSelection", "BeforeTargets": "PrepareForBuild"}
+            or len(list(pair[0])) != 1 or pair[0][0].tag != "Error" or pair[0][0].get("Condition") != pair_error
+            or set(pair[0][0].attrib) != {"Condition", "Text"} or not pair[0][0].get("Text", "").strip() or list(pair[0][0])):
+        return False
+    content = [n for g in xml.findall("ItemGroup") if g.attrib == {"Condition": scope} for n in g.findall("None") if n.get("Include") == "$(FsggFrozenCoordDependencies)/**/*"]
+    if (len(content) != 1 or content[0].attrib != {"Include": "$(FsggFrozenCoordDependencies)/**/*", "Exclude": ";".join("$(FsggFrozenCoordDependencies)/fsgg-coord-engine" + suffix for suffix in (".dll", ".pdb", ".xml")), "Link": "%(RecursiveDir)%(Filename)%(Extension)", "CopyToOutputDirectory": "Always", "CopyToPublishDirectory": "Always"}
+            or list(content[0]) or list(xml.iter("ErrorOnDuplicatePublishOutputFiles"))):
+        return False
+    verify = [t for t in xml.findall("Target") if t.get("Name") == "VerifyFrozenCoordDependencies"]
+    command = 'python3 "$(MSBuildThisFileDirectory)../creator-frozen-coord-dependencies.py" verify-layout --producer-source "$(FsggFrozenCoordSource)" --dependencies "$(FsggFrozenCoordDependencies)"'
+    if (len(verify) != 1 or verify[0].attrib != {"Name": "VerifyFrozenCoordDependencies", "BeforeTargets": "PrepareForBuild", "Condition": scope}
+            or len(list(verify[0])) != 1 or verify[0][0].tag != "Exec" or verify[0][0].attrib != {"Command": command}):
+        return False
+    # The external recipe remains explicit source input, never a guessed property target.
+    pin_path = os.path.join(root, "scripts", "creator-frozen-coord-dependencies.json")
+    try:
+        with open(pin_path, encoding="utf-8") as source:
+            pin = json.load(source)
+        return (isinstance(pin, dict) and isinstance(pin.get("projects"), dict)
+                and isinstance(pin.get("sourceLeaves"), list) and all(isinstance(r, dict) and isinstance(r.get("path"), str) for r in pin["sourceLeaves"])
+                and isinstance(pin.get("members"), dict)
+                and re.fullmatch(r"[0-9a-f]{40}", pin["sourceSha"]) is not None
+                and re.fullmatch(r"[0-9a-f]{64}", pin["archiveSha256"]) is not None
+                and len(pin["projects"]) == 11 and pin["projects"].get(rel) == "new-sdd-workspace"
+                and len(pin["sourceLeaves"]) == 281 and len({r["path"] for r in pin["sourceLeaves"]}) == 281
+                and len(pin["members"]) == 81)
+    except (OSError, ValueError, KeyError, TypeError):
+        return False
+
+
 def project_graph(root: str) -> dict[str, list[str]]:
     """Every MSBuild project in the tree, and the projects it references. Repo-relative paths.
 
@@ -659,6 +722,8 @@ def project_graph(root: str) -> dict[str, list[str]]:
                     raise GateError(f"{rel}: ProjectReference Remove requires MSBuild evaluation")
                 inc = element.get("Include")
                 if not inc:
+                    continue
+                if frozen_creator_reference(root, rel, project, element):
                     continue
                 # MSBuild expands item lists, globs, %-escapes, and expressions. A literal path
                 # for any of them invents one edge and can hide the actual project closure.
