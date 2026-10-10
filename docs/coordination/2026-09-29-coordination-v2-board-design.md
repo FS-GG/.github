@@ -738,3 +738,30 @@ remain pending. Candidate `38068323563` at source `332acd88` remains genuine
 retained package/install evidence but is superseded for publication; no patched receiver substitutes
 for it. A genuinely packaged successor, same-candidate receiver acceptance and
 publication remain separate gates. COORD-BOARD-V2-01.6 remains open.
+
+
+### Creator fresh generated driver adoption — qualified source, 2026-10-10
+
+The genuine retained B1 trace found six SDD-generated driver leaves whose recorded predecessor
+bytes differ from the selected immutable Kit: `work-board/SKILL.md`,
+`work-board/references/workspace-scope.md` and `padd-item/SKILL.md`, each mirrored under
+`.agents/skills` and `.claude/skills`. The fresh Creator route has the same conflict because its
+existing fresh scaffold authority covers only the generated tool manifest.
+
+The qualified correction extends that opaque, invocation-local authority to these six paths only.
+The target must have been absent before scaffold effects, SDD must succeed, each exact path must
+have one `driverPaths` entry owned by `driver`, and its recorded hash must match the captured
+bytes. Capture, preparation and installation refuse symbolic link aliases; bytes and permissions
+are rechecked after fetching the selected Kit and before writes. Other authored files and all
+retained/retrofit targets keep the existing conflict refusal. Historical copied B1 requires its
+separate explicit migration; generated-looking metadata does not grant it fresh authority.
+
+The root-admitted twelve-stage offline aggregate on source `2110856d` passed. The actual compiled
+ProductBoard suite logged all 77 new Linux refusals and verified six-mirror replacement, rollback
+and exact repeat. Existing 135 transport and 77 grammar/routing assertions also passed. The Release
+build had zero warnings/errors; all 81 frozen published .99 bodies, 30 staged producer outputs and
+4216 runtime closure rows remained unchanged. The real runtime was 10.0.12; all observed owned
+process groups/sessions ended empty. This is source qualification, with no successor candidate or
+canonical receiver acceptance claimed.
+The genuine source130 candidate remains retained evidence; publication requires the corrected
+protected-source candidate and its own same-candidate canonical receiver acceptance.

@@ -61,7 +61,13 @@ module ProductBoard =
 
     /// Opaque invocation authority: an existing directory without Git is still owner-authored.
     type FreshScaffoldTarget = private FreshScaffoldTarget of string
-    type GeneratedToolManifest = private GeneratedToolManifest of string * byte array * UnixFileMode option
+    type GeneratedToolManifest = private GeneratedToolManifest of string * byte array * UnixFileMode option * (string * byte array * UnixFileMode option) list
+
+    // Only the demonstrated SDD driver defaults may be adopted by this fresh-only authority.
+    let private generatedDriverPaths =
+        [ for root in [ ".agents/skills"; ".claude/skills" ] do
+              for leaf in [ "work-board/SKILL.md"; "work-board/references/workspace-scope.md"; "padd-item/SKILL.md" ] do
+                  yield root + "/" + leaf ]
 
     let captureFreshScaffoldTarget (target: string) =
         let absent =
@@ -71,14 +77,26 @@ module ProductBoard =
             | _ -> false
         if absent then Some(FreshScaffoldTarget(Path.GetFullPath target)) else None
 
-    let private generatedManifestPreimage target =
-        let path = Path.Combine(target, ".config", "dotnet-tools.json")
-        for entry in [ target; Path.Combine(target, ".config"); path ] do
+    let private generatedFilePreimage (target: string) (relative: string) =
+        let path = Path.Combine(target, relative)
+        let mutable entry = Path.GetFullPath target
+        if (File.GetAttributes entry &&& FileAttributes.ReparsePoint) <> enum<FileAttributes> 0 then
+            invalidOp "generated path must not contain symbolic links"
+        for part in relative.Split('/') do
+            entry <- Path.Combine(entry, part)
             if (File.GetAttributes entry &&& FileAttributes.ReparsePoint) <> enum<FileAttributes> 0 then
-                invalidOp "generated tool manifest path must not contain symbolic links"
+                invalidOp "generated path must not contain symbolic links"
         let before = File.ReadAllBytes path
         let mode = if OperatingSystem.IsWindows() then None else Some(File.GetUnixFileMode path)
         before, mode
+
+    let private generatedManifestPreimage target = generatedFilePreimage target ".config/dotnet-tools.json"
+
+    let private recheckGeneratedDrivers target drivers =
+        for relative, before, beforeMode in drivers do
+            let actual, mode = generatedFilePreimage target relative
+            if actual <> before || mode <> beforeMode then
+                invalidOp ("generated driver changed after the successful scaffold: " + relative)
 
     /// Capture immediately after the successful SDD call, before any subsequent creator phase.
     let captureGeneratedToolManifest (FreshScaffoldTarget originalTarget) target scaffoldSucceeded =
@@ -100,7 +118,17 @@ module ProductBoard =
             let tool = root.["tools"].["fs.gg.coord.cli"].AsObject()
             if String.IsNullOrWhiteSpace(tool.["version"].GetValue<string>()) || tool.["commands"].AsArray().Count = 0 then
                 invalidOp "generated coordination default is malformed"
-            Ok(GeneratedToolManifest(originalTarget, before, mode))
+            let drivers =
+                generatedDriverPaths |> List.map (fun relative ->
+                    let rows = provenance.["driverPaths"].AsArray()
+                               |> Seq.filter (fun row -> row.["path"].GetValue<string>() = relative) |> Seq.toList
+                    if rows.Length <> 1 || rows.Head.["owner"].GetValue<string>() <> "driver" then
+                        invalidOp ("generated driver is not uniquely scaffold-owned: " + relative)
+                    let content, fileMode = generatedFilePreimage target relative
+                    if digest content <> rows.Head.["sha256"].GetValue<string>() then
+                        invalidOp ("generated driver differs from scaffold provenance: " + relative)
+                    relative, content, fileMode)
+            Ok(GeneratedToolManifest(originalTarget, before, mode, drivers))
         with error -> Error("generated tool manifest capture refused: " + error.Message)
 
     let captureOriginAuthority target =
@@ -134,10 +162,11 @@ module ProductBoard =
     let private prepareWithGeneratedManifest generatedManifest (target: string) (repository: string) (kitRevision: string) (bindingJson: string) (fetch: string -> Result<string, string>) =
         try
             match generatedManifest with
-            | Some(GeneratedToolManifest(originalTarget, before, beforeMode)) ->
+            | Some(GeneratedToolManifest(originalTarget, before, beforeMode, drivers)) ->
                 let actual, mode = generatedManifestPreimage target
                 if Path.GetFullPath target <> originalTarget || actual <> before || mode <> beforeMode then
                     invalidOp "generated tool manifest changed after the successful scaffold"
+                recheckGeneratedDrivers target drivers
             | None -> ()
             if not (immutableRevision kitRevision) then invalidOp "--board-kit-ref requires an immutable 40 hexadecimal revision"
             let adapterBytes = File.ReadAllBytes typeof<Binding>.Assembly.Location
@@ -179,7 +208,7 @@ module ProductBoard =
             if actualVersion <> Some version then invalidOp "published tool pin differs from the creator's coherent adapter version"
             let toolsRoot =
                 match generatedManifest with
-                | Some(GeneratedToolManifest(_, before, _)) -> JsonNode.Parse(Text.Encoding.UTF8.GetString before).AsObject()
+                | Some(GeneratedToolManifest(_, before, _, _)) -> JsonNode.Parse(Text.Encoding.UTF8.GetString before).AsObject()
                 | None -> jsonObject (Path.Combine(target, ".config", "dotnet-tools.json"))
             match toolsRoot.["isRoot"] with
             | null -> toolsRoot.["isRoot"] <- JsonValue.Create true
@@ -214,23 +243,42 @@ module ProductBoard =
             staged.Add(".fsgg/scaffold-provenance.json", encode provenance, false, true)
             let duplicates = staged |> Seq.countBy (fun (path, _, _, _) -> path) |> Seq.exists (fun (_, count) -> count <> 1)
             if duplicates then invalidOp "duplicate producer destination"
+            // Fetching producer inputs cannot confer authority over a concurrent receiver edit.
+            match generatedManifest with
+            | Some(GeneratedToolManifest(_, _, _, drivers)) ->
+                recheckGeneratedDrivers target drivers
+                for relative, _, _ in drivers do
+                    if staged |> Seq.exists (fun (path, _, _, merge) -> path = relative && not merge) |> not then
+                        invalidOp ("published generated driver payload is incomplete: " + relative)
+            | None -> ()
             let changes =
                 staged |> Seq.choose (fun (rel, after, executable, merge) ->
                     let path = Path.Combine(target, rel)
                     let before = if File.Exists path then Some(File.ReadAllBytes path) else None
                     let mode = if before.IsSome && not (OperatingSystem.IsWindows()) then Some(File.GetUnixFileMode path) else None
                     match generatedManifest with
-                    | Some(GeneratedToolManifest(_, captured, capturedMode)) when rel = ".config/dotnet-tools.json" ->
+                    | Some(GeneratedToolManifest(_, captured, capturedMode, _)) when rel = ".config/dotnet-tools.json" ->
                         generatedManifestPreimage target |> ignore
                         if before <> Some captured || mode <> capturedMode then
                             invalidOp "generated tool manifest changed during preparation"
+                    | Some(GeneratedToolManifest(_, _, _, drivers)) ->
+                        match drivers |> List.tryFind (fun (relative, _, _) -> relative = rel) with
+                        | Some(_, captured, capturedMode) ->
+                            let actual, actualMode = generatedFilePreimage target rel
+                            if actual <> captured || actualMode <> capturedMode then
+                                invalidOp ("generated driver changed during preparation: " + rel)
+                        | None -> ()
                     | _ -> ()
                     if executable && (mode |> Option.exists (fun value -> (value &&& UnixFileMode.UserExecute) = enum<UnixFileMode> 0)) then
                         invalidOp ("selected executable has conflicting mode: " + rel)
                     match before with
                     | Some current when current = after -> None
                     | Some current when merge && JsonNode.DeepEquals(JsonNode.Parse(Text.Encoding.UTF8.GetString current), JsonNode.Parse(Text.Encoding.UTF8.GetString after)) -> None
-                    | Some _ when not merge -> invalidOp ("owner-authored file conflicts: " + rel)
+                    | Some _ when not merge &&
+                                  not (generatedManifest |> Option.exists (fun (GeneratedToolManifest(_, _, _, drivers)) ->
+                                      drivers |> List.exists (fun (relative, captured, capturedMode) ->
+                                          relative = rel && before = Some captured && mode = capturedMode))) ->
+                        invalidOp ("owner-authored file conflicts: " + rel)
                     | _ -> Some { Path = rel; Before = before; After = after; Executable = executable; BeforeMode = mode }) |> Seq.toList
             Ok { Repository = repository; ProjectId = binding.ProjectId; Changes = changes }
         with error -> Error("product V2 preparation refused: " + error.Message)
@@ -239,7 +287,7 @@ module ProductBoard =
     let prepare target repository kitRevision bindingJson fetch =
         prepareWithGeneratedManifest None target repository kitRevision bindingJson fetch
 
-    /// Only the opaque, same-invocation successful fresh scaffold snapshot grants replacement.
+    /// Only the opaque, unchanged fresh scaffold manifest and six driver preimages grant replacement.
     let prepareGenerated snapshot target repository kitRevision bindingJson fetch =
         prepareWithGeneratedManifest (Some snapshot) target repository kitRevision bindingJson fetch
 
@@ -250,6 +298,8 @@ module ProductBoard =
         try
             for change in plan.Changes do
                 let path = Path.Combine(target, change.Path)
+                if change.Before.IsSome && (generatedDriverPaths |> List.contains change.Path) then
+                    generatedFilePreimage target change.Path |> ignore
                 let actual = if File.Exists path then Some(File.ReadAllBytes path) else None
                 let mode = if actual.IsSome && not (OperatingSystem.IsWindows()) then Some(File.GetUnixFileMode path) else None
                 if actual <> change.Before || mode <> change.BeforeMode then invalidOp ("workspace changed after preview: " + change.Path)
