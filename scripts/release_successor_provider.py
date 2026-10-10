@@ -155,7 +155,7 @@ class GitHubAPI:
     def runtime_recovery_json(self, path: str):
         prefix = f"repos/{REPOSITORY}/"
         allowed = path in {prefix + "actions/runs/38063768172", prefix + "actions/artifacts/11675095562"}
-        allowed = allowed or re.fullmatch(re.escape(prefix) + r"releases\?per_page=100&page=(?:[1-9]|10)", path) is not None
+        allowed = allowed or re.fullmatch(re.escape(prefix) + r"releases\?per_page=25&page=(?:[1-9]|[1-3][0-9]|40)", path) is not None
         allowed = allowed or re.fullmatch(re.escape(prefix) + r"releases/408709919/assets\?per_page=100&page=[1-4]", path) is not None
         if not allowed:
             raise Refused("runtime recovery JSON endpoint is not selected")
@@ -231,15 +231,15 @@ class LiveProvider:
                 or effect.target_digest != self.content_id):
             raise Refused("runtime recovery effect differs")
         releases = []
-        for page in range(1, 11):
-            rows = self.api.runtime_recovery_json(f"repos/{REPOSITORY}/releases?per_page=100&page={page}")
-            if not isinstance(rows, list) or len(rows) > 100 or any(
+        for page in range(1, 41):
+            rows = self.api.runtime_recovery_json(f"repos/{REPOSITORY}/releases?per_page=25&page={page}")
+            if not isinstance(rows, list) or len(rows) > 25 or any(
                 not isinstance(row, dict) or type(row.get("id")) is not int or row["id"] <= 0
                 or not isinstance(row.get("tag_name"), str) for row in rows
             ):
                 raise Refused("runtime recovery release census malformed")
             releases.extend(rows)
-            if len(rows) < 100:
+            if len(rows) < 25:
                 break
         else:
             raise Refused("runtime recovery release census incomplete")

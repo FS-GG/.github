@@ -1007,7 +1007,7 @@ class RuntimeAPI(MemoryPublisher):
         if path.endswith('/actions/artifacts/11660242226'): self.calls.append(path);return {'digest':'sha256:'+publisher.RECOVERY_CANDIDATE['archiveSha256']}
         if path.endswith('/actions/runs/38063768172'): self.calls.append(path); return copy.deepcopy(self.run)
         if path.endswith('/actions/artifacts/11675095562'): self.calls.append(path); return copy.deepcopy(self.artifact)
-        if '/releases?per_page=100&page=' in path:
+        if '/releases?per_page=100&page=' in path or '/releases?per_page=25&page=' in path:
             self.calls.append(path);page = int(path.rsplit('=', 1)[1]);return copy.deepcopy(self.release_pages.get(page, [self.release] if page == 1 else []))
         if '/releases/408709919/assets?' in path:
             self.calls.append(path);page = int(path.rsplit('=', 1)[1]) if '&page=' in path else 1
@@ -1149,9 +1149,9 @@ class OriginalRuntimeRecoveryControls(unittest.TestCase):
         for mode in ('release-overflow','asset-overflow','duplicate-release-later','duplicate-asset-later','promoted','replacement','wrong-target-source','wrong-bytes','bad-shape','prior-asset-moved','later-asset'):
             with self.subTest(mode=mode),tempfile.TemporaryDirectory() as temp:
                 root=pathlib.Path(temp);c=self.context(root,mode=='wrong-bytes');api=c[7]
-                if mode=='release-overflow':api.release_pages={i:[{'id':i*100+j,'tag_name':'other'} for j in range(100)] for i in range(1,11)}
+                if mode=='release-overflow':api.release_pages={i:[{'id':i*25+j,'tag_name':'other'} for j in range(25)] for i in range(1,41)}
                 if mode=='asset-overflow':api.asset_pages={i:[{'id':i*100+j,'name':str(i*100+j),'size':0} for j in range(100)] for i in range(1,5)}
-                if mode=='duplicate-release-later':api.release_pages={1:[api.release]+[{'id':i+1,'tag_name':'other'} for i in range(99)],2:[{**api.release,'id':123}]}
+                if mode=='duplicate-release-later':api.release_pages={1:[api.release]+[{'id':i+1,'tag_name':'other'} for i in range(24)],2:[{**api.release,'id':123}]}
                 if mode=='duplicate-asset-later':api.asset_pages={1:[{'id':i+100,'name':str(i),'size':0} for i in range(100)],2:[{'id':100,'name':'late','size':0}]}
                 if mode=='promoted':api.release['draft']=False
                 if mode=='replacement':api.release['id']=123
@@ -1293,6 +1293,111 @@ class OriginalRuntimeRecoveryControls(unittest.TestCase):
             return types.SimpleNamespace(open=open_request)
         return build, requests, handlers
 
+    def release_transport_fixture(self, source, releases):
+        """Model real JSON response expansion; requests/read loop/decoder stay real."""
+        prefix = 'https://api.github.com/repos/FS-GG/.github/'
+        bodies = {prefix+'releases?per_page=25&page='+str(page):
+                  json.dumps(releases[(page-1)*25:page*25], separators=(',', ':')).encode()
+                  for page in range(1,41)}
+        bodies[prefix+'releases/408709919/assets?per_page=100&page=1'] = json.dumps(source.assets).encode()
+        return bodies
+
+    def test_actual_release_page_transport_realistic_oversized_population_succeeds(self):
+        with tempfile.TemporaryDirectory() as temp:
+            c=self.context(pathlib.Path(temp));source=c[7]
+            rows=[copy.deepcopy(source.release)]+[{'id':200000+i,'tag_name':'retained-'+str(i),
+                    'body':'release notes '*850,'assets':[]} for i in range(99)]
+            old=json.dumps(rows,separators=(',', ':')).encode()
+            self.assertGreater(len(old),1048576)
+            self.assertLess(len(old),2*1048576)
+            bodies=self.release_transport_fixture(source,rows)
+            self.assertTrue(all(len(raw)<=1048576 for raw in bodies.values()))
+            build,requests,_=self.runtime_request_fixture(bodies)
+            c[6].api=GitHubAPI('inert-fixture-token')
+            with patch('urllib.request.build_opener',side_effect=build):
+                observed,witness=c[6].observe_runtime_recovery(ordered_effects(c[0])[12])
+            self.assertEqual(observed.state,'absent');self.assertEqual(witness['releaseCount'],100)
+            self.assertEqual(witness['releasePages'],5);self.assertTrue(witness['complete'])
+            self.assertEqual(len(requests),6);self.assertEqual(source.uploads,[])
+            self.assertTrue(all(req.get_header('Accept')=='application/vnd.github+json' for req in requests))
+            self.assertFalse(any('per_page=100&page=' in req.full_url and '/assets?' not in req.full_url for req in requests))
+
+    def test_actual_release_single_fat_row_still_refuses_before_census_or_upload(self):
+        with tempfile.TemporaryDirectory() as temp:
+            c=self.context(pathlib.Path(temp));rows=[{**c[7].release,'body':'x'*1048576}]
+            bodies=self.release_transport_fixture(c[7],rows);build,requests,_=self.runtime_request_fixture(bodies)
+            c[6].api=GitHubAPI('inert-fixture-token')
+            with patch('urllib.request.build_opener',side_effect=build),self.assertRaisesRegex(RuntimeError,'content length bound'):
+                c[6].observe_runtime_recovery(ordered_effects(c[0])[12])
+            self.assertEqual(len(requests),1);self.assertEqual(c[7].uploads,[])
+            self.assertIsNone(c[6]._runtime_witness)
+
+    def test_actual_release_999_terminator_and_1000_full_pages_boundary(self):
+        for count in (999,1000):
+            with self.subTest(count=count),tempfile.TemporaryDirectory() as temp:
+                c=self.context(pathlib.Path(temp));rows=[c[7].release]+[{'id':300000+i,'tag_name':'retained-'+str(i)} for i in range(count-1)]
+                bodies=self.release_transport_fixture(c[7],rows);build,requests,_=self.runtime_request_fixture(bodies)
+                c[6].api=GitHubAPI('inert-fixture-token')
+                with patch('urllib.request.build_opener',side_effect=build):
+                    if count==999:
+                        observed,witness=c[6].observe_runtime_recovery(ordered_effects(c[0])[12])
+                        self.assertEqual(observed.state,'absent');self.assertEqual(witness['releaseCount'],999)
+                        self.assertEqual(witness['releasePages'],40);self.assertEqual(len(requests),41)
+                    else:
+                        with self.assertRaisesRegex(RuntimeError,'census incomplete'):
+                            c[6].observe_runtime_recovery(ordered_effects(c[0])[12])
+                        self.assertEqual(len(requests),40)
+                self.assertEqual(c[7].uploads,[])
+
+    def test_actual_release_duplicate_or_repeated_pages_refuse(self):
+        for mode in ('duplicate-id','duplicate-tag','repeated-page'):
+            with self.subTest(mode=mode),tempfile.TemporaryDirectory() as temp:
+                c=self.context(pathlib.Path(temp));rows=[c[7].release]+[{'id':400000+i,'tag_name':'retained-'+str(i)} for i in range(24)]
+                if mode=='duplicate-id':rows[-1]['id']=rows[0]['id']
+                if mode=='duplicate-tag':rows[-1]={**c[7].release,'id':400999}
+                bodies=self.release_transport_fixture(c[7],rows)
+                if mode=='repeated-page':
+                    first=bodies['https://api.github.com/repos/FS-GG/.github/releases?per_page=25&page=1']
+                    for page in range(1,41):bodies['https://api.github.com/repos/FS-GG/.github/releases?per_page=25&page='+str(page)]=first
+                build,requests,_=self.runtime_request_fixture(bodies);c[6].api=GitHubAPI('inert-fixture-token')
+                with patch('urllib.request.build_opener',side_effect=build),self.assertRaises(RuntimeError):
+                    c[6].observe_runtime_recovery(ordered_effects(c[0])[12])
+                self.assertLessEqual(len(requests),40);self.assertEqual(c[7].uploads,[])
+
+    def test_actual_release_content_length_and_json_shape_refusals(self):
+        url='https://api.github.com/repos/FS-GG/.github/releases?per_page=25&page=1'
+        for mode in ('non-ascii','non-decimal','truncated','missing','duplicate-json'):
+            with self.subTest(mode=mode):
+                raw=b'[{}]' if mode!='duplicate-json' else b'[ {"id":1,"id":2} ]'
+                build,requests,_=self.runtime_request_fixture({url:raw})
+                def changed_build(*handlers):
+                    opener=build(*handlers);original=opener.open
+                    def open_request(*args,**kwargs):
+                        response=original(*args,**kwargs)
+                        if mode=='non-ascii':response.headers['Content-Length']='１２'
+                        if mode=='non-decimal':response.headers['Content-Length']='-1'
+                        if mode=='truncated':response.headers['Content-Length']=str(len(raw)+1)
+                        if mode=='missing':response.headers.pop('Content-Length')
+                        return response
+                    opener.open=open_request;return opener
+                with patch('urllib.request.build_opener',side_effect=changed_build):
+                    api=GitHubAPI('inert-fixture-token')
+                    if mode=='missing':self.assertEqual(api.runtime_recovery_json('repos/FS-GG/.github/releases?per_page=25&page=1'),[{}])
+                    else:
+                        with self.assertRaises(RuntimeError):api.runtime_recovery_json('repos/FS-GG/.github/releases?per_page=25&page=1')
+                self.assertEqual(len(requests),1)
+
+    def test_actual_release_selected_endpoint_and_deadline_remain_closed(self):
+        for suffix in ('releases?per_page=100&page=1','releases?per_page=25&page=0',
+                       'releases?per_page=25&page=41','releases?per_page=25&page=01'):
+            with self.subTest(suffix=suffix),patch('urllib.request.build_opener',side_effect=AssertionError('unexpected transport')),self.assertRaises(RuntimeError):
+                GitHubAPI('inert-fixture-token').runtime_recovery_json('repos/FS-GG/.github/'+suffix)
+        url='https://api.github.com/repos/FS-GG/.github/releases?per_page=25&page=1'
+        build,requests,_=self.runtime_request_fixture({url:b'[]'})
+        with patch('urllib.request.build_opener',side_effect=build),patch('release_successor_provider.time.monotonic',side_effect=[0,13]),self.assertRaisesRegex(RuntimeError,'deadline'):
+            GitHubAPI('inert-fixture-token').runtime_recovery_json('repos/FS-GG/.github/releases?per_page=25&page=1')
+        self.assertEqual(len(requests),1)
+
     def test_actual_refusal_authentication_artifact_request_omits_accept(self):
         with tempfile.TemporaryDirectory() as temp:
             source = self.context(pathlib.Path(temp))[7]
@@ -1393,9 +1498,12 @@ class OriginalRuntimeRecoveryControls(unittest.TestCase):
 
     def test_actual_cli_execute_setup_refusal_provider_counter_and_checkpoint(self):
         import shutil
-        for matched in (False,True):
-            with self.subTest(matched=matched),tempfile.TemporaryDirectory() as temp:
+        for matched,dense in ((False,False),(True,False),(False,True),(True,True)):
+            with self.subTest(matched=matched,dense=dense),tempfile.TemporaryDirectory() as temp:
                 root=pathlib.Path(temp)/'fixture';root.mkdir();c=self.context(root,matched)
+                if dense:
+                    rows=[c[7].release]+[{'id':100000+i,'tag_name':'retained-'+str(i)} for i in range(998)]
+                    c[7].release_pages={page:rows[(page-1)*25:page*25] for page in range(1,41)}
                 candidate,authority,_,_,journal,_,_,source,_,archive,_,fixed,_=c
                 work=pathlib.Path(temp)/'owned';result=pathlib.Path(temp)/'result.json'
                 env={'GITHUB_SHA':'b'*40,'GITHUB_ACTOR':'EHotwagner','GITHUB_RUN_ID':'1','GITHUB_EVENT_NAME':'workflow_dispatch',
@@ -1423,7 +1531,7 @@ class OriginalRuntimeRecoveryControls(unittest.TestCase):
                 self.assertEqual(sum(receipt['authorityRequests']['attemptedByMethod'].values()),len(authority.calls))
                 self.assertLessEqual(sum(receipt['publisherRequests']['attempted'].values()),256)
                 self.assertLessEqual(result.stat().st_size,16384)
-                print(json.dumps({'runtimeRecoveryActualCLI':{'matched':matched,'authority':receipt['authorityRequests'],'publisher':receipt['publisherRequests']}},sort_keys=True))
+                print(json.dumps({'runtimeRecoveryActualCLI':{'matched':matched,'dense999':dense,'authority':receipt['authorityRequests'],'publisher':receipt['publisherRequests']}},sort_keys=True))
 
     def test_matched_observation_expiry_prevents_all_authority_mutations(self):
         for expiry_stage in ('observation', 'settlement-admission', 'cas-read'):
