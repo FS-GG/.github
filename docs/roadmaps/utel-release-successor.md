@@ -745,3 +745,20 @@ and cross-host credential stripping remain unchanged. Nine affected offline suit
 most 949 Authority entries, below the 4,080 qualification limit. This is source qualification;
 native recovery and publication remain pending, with immutable payload and deadline fences
 and no-second-send guarantees unchanged.
+
+[Runtime recovery run 38079998431](https://github.com/FS-GG/.github/actions/runs/38079998431)
+authenticated the original-refusal ZIP, then refused the first release-census response at
+its content-length bound. Its retained receipt records generation 26, twelve verified
+effects and the runtime intent, with zero Authority writes and no runtime upload in that
+invocation. The original response header was not retained. A separate one-GET diagnostic
+observed HTTP 200 and a 1,203,971-byte content length for the 100-release page using a local
+credential; that observation does not establish the original App response. The selected
+runtime census now requests 25 releases per page across at most 40 pages, retaining the
+1 MiB response cap and the same maximum of 999 releases followed by a terminating partial
+page; 40 full pages still refuse. Asset pagination remains 100 rows across four pages.
+Nine offline suites passed 400 tests, including six new actual-transport controls and
+both actual CLI branches with a dense 999-release population. Authority entries remained
+at most 949, below 4,080; publisher entries reached 110, below 256. Immutable payload,
+deadline, complete-census and no-second-send fences remain. Fresh protected-source, state,
+quota and admission checks are required before another scoped native recovery; publication
+and the four later effects remain open.
