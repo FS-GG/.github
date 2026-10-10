@@ -368,12 +368,45 @@ let runCausal (args: string array) =
     changed["admissionSha256"] <- causalNode (causalHash changedBytes)
     let unknown = JsonNode.Parse(cases[0].event.GetRawText())
     unknown["kind"] <- causalNode "execution-causal-admission/999"
-    for id, fact in [ "immutable-conflict", changed; "unknown-kind", unknown ] do
-        let bytes = Encoding.UTF8.GetBytes((causalBatch id [| fact |]).ToJsonString())
-        match TelemetryStoreApplication.ingest root TelemetryStore.ApprovedLocalDurable bytes with
-        | Ok _ -> fail ("causal receiver accepted " + id)
-        | Error _ -> ()
-        if causalSnapshot root cases <> revision then fail "causal refusal changed canonical revision"
+    let refusalEnvelope id fact =
+        causalObject
+            [ "schema", causalNode TelemetryReceipt.Schema
+              "workspaceId", causalNode scope.Workspace; "producerId", causalNode scope.Producer
+              "streamId", causalNode scope.Stream; "batchId", causalNode id
+              "payload", causalBatch id [| fact |] ]
+        |> fun receipt -> Encoding.UTF8.GetBytes(receipt.ToJsonString())
+    // A fresh receipt identity must reach persisted fact immutability, not the
+    // legacy-ingest scoped-store refusal or transport duplicate-identity guard.
+    let conflictId = "immutable-conflict-" + mode
+    let accepted =
+        TelemetryStoreApplication.submitReceipt root TelemetryStore.ApprovedLocalDurable scope
+            (refusalEnvelope conflictId changed) |> unwrap
+    use acceptedDocument = JsonDocument.Parse accepted
+    if causalText acceptedDocument.RootElement "status" <> "durably-received" then
+        fail "immutable conflict was not durably admitted as a fresh receipt"
+    use drained = JsonDocument.Parse(TelemetryStoreApplication.drainReceipts root TelemetryStore.ApprovedLocalDurable scope.Workspace |> unwrap)
+    if drained.RootElement.GetProperty("applied").GetInt32() <> 0
+       || drained.RootElement.GetProperty("rejected").GetInt32() <> 1 then
+        fail "immutable conflict was not semantically rejected during receipt application"
+    use rejected = JsonDocument.Parse(TelemetryStoreApplication.lookupReceipt root TelemetryStore.ApprovedLocalDurable scope conflictId |> unwrap)
+    if causalText rejected.RootElement "status" <> "rejected"
+       || causalText rejected.RootElement "code" <> "semantic-conflict" then
+        fail "immutable conflict has no durable semantic rejection"
+    if causalSnapshot root cases <> revision then fail "causal refusal changed canonical revision"
+    let unknownId = "unknown-kind-" + mode
+    let unknownBytes = Encoding.UTF8.GetBytes((causalBatch unknownId [| unknown.DeepClone() |]).ToJsonString())
+    match TelemetryStore.parseBatch unknownBytes with
+    | Error errors when errors |> List.exists (fun error -> error.Contains(".kind is unsupported", StringComparison.Ordinal)) -> ()
+    | _ -> fail "unknown causal kind was not refused by the batch parser"
+    // The receipt parser intentionally hides detailed batch validation errors.
+    match TelemetryStoreApplication.submitReceipt root TelemetryStore.ApprovedLocalDurable scope
+              (refusalEnvelope unknownId unknown) with
+    | Error [ "invalid-request" ] -> ()
+    | _ -> fail "unknown causal kind was not refused before receipt admission"
+    match TelemetryStoreApplication.lookupReceipt root TelemetryStore.ApprovedLocalDurable scope unknownId with
+    | Error [ "receipt-unavailable" ] -> ()
+    | _ -> fail "unknown causal kind created a durable receipt"
+    if causalSnapshot root cases <> revision then fail "causal refusal changed canonical revision"
     File.WriteAllText(output, JsonSerializer.Serialize
         {| schema = "fsgg.telemetry.packaged-causal-receiver/1"; phase = mode; qualified = true
            provenance = "synthetic-fixed-contract-through-exact-packed-receiver"
