@@ -3,7 +3,8 @@ run-name: ${{ inputs.promotion_recovery != 'off' && format('Wizard 0.13 recovery
 
 # TSDD-KNOWLEDGE-01.4: retain the existing NuGet Trusted Publishing filename.
 # GS2-08.9's no-effect seal is superseded only for this exact-source, protected-
-# journal wizard 0.14.0 successor. Default dispatch remains read-only.
+# main-directory Creator 0.16.0 successor. Default publication remains false.
+# App mint and explicitly selected NuGet login are separately admitted credential effects.
 on:
   workflow_dispatch:
     inputs:
@@ -130,6 +131,16 @@ jobs:
             --candidate-artifact-id "$CANDIDATE_ARTIFACT_ID" \
             --candidate-archive-sha256 "$CANDIDATE_ARCHIVE_SHA256" \
             --workdir "$RUNNER_TEMP/new-sdd-workspace-successor"
+
+      - name: Retain only the bounded Creator publication summary
+        if: always()
+        timeout-minutes: 2
+        uses: actions/upload-artifact@v7
+        with:
+          name: creator016-publication-summary-${{ github.run_id }}
+          path: ${{ runner.temp }}/creator016-publication-summary.json
+          if-no-files-found: error
+          retention-days: 7
 
   recovery-diagnostic:
     name: new-sdd-workspace-013-recovery-diagnostic
