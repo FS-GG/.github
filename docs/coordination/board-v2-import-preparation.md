@@ -6,7 +6,7 @@ fields and four filtered views, and applied the three approved existing native i
 readback verified each issue identity, one membership and all four field values. An explicit repeat
 apply emitted **zero mutation intents**. The [canonical plan](2026-09-29-coordination-v2-board-design.md)
 retains .2 acceptance; the independently qualified root-local .3 route is recorded below. Broader
-carryover/adoption and publication remain open in .4–.6.
+broader carryover and consumer adoption remain open in .4; .5 publication is complete and .6 product adoption remains separate.
 
 The original pilot manifest at protected `351e5db40d4d72abd6e87882614725305eb2a419` recorded
 **eleven candidates, three approved pilot items, two omissions and six adjudication gaps**. The historical four-target successor appended .github#3009: **twelve candidates and four
