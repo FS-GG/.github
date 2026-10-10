@@ -583,3 +583,39 @@ observations leave unobserved transient descendants unknown and do not establish
 hard containment. The old checkpoint commit and14-control evidence remain
 historical. Offline acceptance does not admit an actual repeat, publication,
 overwrite, deletion, replacement draft or receiver adoption.
+
+
+## Fresh physical-head journal settlement — 2026-10-10
+
+The explicit original Kit repeat in [run 38050387273](https://github.com/FS-GG/.github/actions/runs/38050387273)
+returned an applied request and an incomplete checkpoint. Later ordinary recovery in
+[run 38052044954](https://github.com/FS-GG/.github/actions/runs/38052044954) observed matching Kit
+bytes, then its non-force Authority main-reference update returned HTTP 422. That invocation
+made no provider dispatch. The exact 422 cause remains unknown; seven created Git objects may
+remain unreferenced. A subsequent original-identity observation found logical journal generation
+14 and the same Kit intent, with a stable physical main head during that observation. This does
+not prove that no earlier mutation occurred or authorize another package send.
+
+The shared journal now refreshes the physical main head immediately before constructing a
+selected-path transition. It validates the selected logical pointer and canonical state against
+the originally observed state, checks that main stayed fixed during that proof, and preserves
+unrelated paths by constructing the new tree from the fresh physical parent. An additional
+reference check immediately before the single non-force update refuses intervening movement.
+The logical history retains its original parent. A final race or uncertain response remains a
+failure requiring observation; the helper does not retry the update or provider dispatch.
+
+Nine affected offline suites passed at source `2d60ec39b8301b8a9bef638b532dd80c44352053`:
+370 unittest cases plus imperative real-Git, frozen-import and journal controls. They cover sibling
+writes, selected-state changes, movement during proof/object creation, a final reference race and
+an applied update with a lost response. The same run qualified both UTEL and Creator callers.
+Counted fixture maxima were 2,605 Authority calls for a four-advance UTEL slice and 3,488 for all
+eight Creator effects, below the unchanged 4,200 ceiling. These counts do not reserve live quota.
+Two earlier private-launcher failures remain retained separately; the corrected launcher passed
+nine pure controls and three actual declared local helper launches before this source run.
+
+The original 180-second work limit and 30-second cleanup reserve applied to the nine-suite run.
+All 5,473 pinned inputs and 14 aliases reconciled, with observed empty owned custody and no
+retained residuals. Sampled process-group custody does not establish hard whole-tree containment.
+Source qualification does not complete publication, install a collector, settle the original intent
+or qualify the causal receiver. Fresh protected-source admission and original-identity readback
+remain necessary before native recovery.

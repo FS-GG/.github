@@ -54,7 +54,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
 from release_successor_admission import SingleOperatorAdmission
 from release_successor_execution import PACKAGES, Observation, Dispatch, ordered_effects
-from release_successor_journal import ProtectedReleaseJournal, REF, REPOSITORY, canonical
+from release_successor_journal import ProtectedReleaseJournal, REF, REPOSITORY, canonical, Refused as JournalRefused
 from release_successor_provider import NotFound
 
 spec = importlib.util.spec_from_file_location("recovery_publisher", ROOT / "scripts/release-successor-publish.py")
@@ -271,6 +271,192 @@ def slice_context(candidate, authority, intent):
                                       "b" * 40, "b" * 40, False, lambda: None, recovery_checkpoint=True)
     provider.matched = set(journal._observed.state["effects"])
     return counter, rows, journal, admission, publisher.ReportingProvider(provider, rows), publisher_api
+
+
+class CASFreshnessControls(unittest.TestCase):
+    """Actual journal/admission/provider paths with in-memory Authority races."""
+
+    @staticmethod
+    def sibling(authority, name):
+        prior = authority.head
+        blob = authority.put("blobs", {"encoding": "base64", "content": base64.b64encode(b"fresh sibling\n").decode()})
+        tree = authority.update_tree(authority.objects[("commits", prior)]["tree"]["sha"],
+                                     [name], authority.entry(name, "blob", blob))
+        authority.head = authority.commit(tree, [prior], "unrelated sibling")
+        return authority.head
+
+    def test_counted_actual_advance_refreshes_after_package_observation(self):
+        candidate, authority, intent, _ = fixture(14)
+        counter, rows, journal, admission, provider, _ = slice_context(candidate, authority, intent)
+        original_observe = provider.provider.observe
+        refreshed = []
+        def observe(effect):
+            result = original_observe(effect)
+            if effect.identity == ordered_effects(candidate)[6].identity:
+                refreshed.append(self.sibling(authority, "package-window-sibling.txt"))
+            return result
+        provider.provider.observe = observe
+        authority.calls.clear()
+        self.assertEqual(publisher.advance(candidate, journal, admission, provider), "verified")
+        current = authority.objects[("commits", authority.head)]
+        self.assertEqual(current["parents"][0]["sha"], refreshed[0])
+        self.assertEqual(current["parents"][1]["sha"], journal._observed.head)
+        root = authority.objects[("trees", current["tree"]["sha"])]["tree"]
+        self.assertTrue(any(row["path"] == "package-window-sibling.txt" for row in root))
+        self.assertEqual(journal.read().generation, 15)
+        self.assertEqual(provider.provider.dispatched, [])
+        self.assertIsNone(rows["lastDispatch"])
+        self.assertEqual(sum(method == "patch" for method, _ in authority.calls), 1)
+        self.assertLess(sum(counter.attempted.values()), 4200)
+
+    def test_counted_pending_intent_refresh_preserves_one_dispatch(self):
+        candidate, authority, intent, _ = fixture(15)
+        counter, rows, journal, admission, provider, _ = slice_context(candidate, authority, intent)
+        original_observe = provider.provider.observe
+        siblings = []
+        target = ordered_effects(candidate)[7].identity
+        def observe(effect):
+            result = original_observe(effect)
+            if effect.identity == target:
+                siblings.append(self.sibling(authority, "intent-window-sibling.txt"))
+            return result
+        provider.provider.observe = observe
+        self.assertEqual(publisher.advance(candidate, journal, admission, provider), "waiting")
+        self.assertEqual(provider.provider.dispatched, [target])
+        self.assertEqual(rows["lastDispatch"]["effect"], target)
+        self.assertEqual(journal.read().effects[target], "intent")
+        self.assertEqual(authority.objects[("commits", authority.head)]["parents"][0]["sha"], siblings[0])
+        self.assertLess(sum(counter.attempted.values()), 4200)
+
+    def test_pending_late_fence_prevents_provider_dispatch(self):
+        candidate, authority, intent, _ = fixture(15)
+        _, rows, journal, admission, provider, _ = slice_context(candidate, authority, intent)
+        original_post = authority.post
+        posts = []
+        def post(path, body):
+            value = original_post(path, body)
+            posts.append(path)
+            if len(posts) == 7:
+                self.sibling(authority, "pending-late-sibling.txt")
+            return value
+        authority.post = post
+        authority.calls.clear()
+        with self.assertRaisesRegex(JournalRefused, "moved before CAS PATCH"):
+            publisher.advance(candidate, journal, admission, provider)
+        self.assertEqual(len(posts), 7)
+        self.assertEqual(provider.provider.dispatched, [])
+        self.assertIsNone(rows["lastDispatch"])
+        self.assertFalse(any(method == "patch" for method, _ in authority.calls))
+        self.assertEqual(ProtectedReleaseJournal(authority, main_directory=True).read().generation, 15)
+
+    def test_changed_canonical_bytes_refuse_before_objects(self):
+        candidate, authority, intent, _ = fixture(14)
+        _, _, journal, _, _, _ = slice_context(candidate, authority, intent)
+        expected = journal.read()
+        underlying = journal.journal
+        changed = {**underlying._observed.state, "operator": "other-fixture-operator"}
+        overlay = underlying._overlay(authority.head, underlying._observed.head, changed)
+        authority.head = overlay
+        authority.calls.clear()
+        with self.assertRaisesRegex(JournalRefused, "state differs from its logical head"):
+            journal.compare_and_swap(expected, ordered_effects(candidate)[6].identity, "verified")
+        self.assertTrue(all(method == "get" for method, _ in authority.calls))
+        self.assertEqual(authority.head, overlay)
+
+    def test_selected_change_refuses_before_objects_or_patch(self):
+        candidate, authority, intent, _ = fixture(14)
+        _, rows, journal, _, provider, _ = slice_context(candidate, authority, intent)
+        expected = journal.read()
+        competing = ProtectedReleaseJournal(authority, main_directory=True)
+        self.assertTrue(competing.compare_and_swap(competing.read(), ordered_effects(candidate)[6].identity, "verified"))
+        changed = authority.head
+        authority.calls.clear()
+        with self.assertRaisesRegex(JournalRefused, "selected binding changed"):
+            journal.compare_and_swap(expected, ordered_effects(candidate)[6].identity, "verified")
+        self.assertEqual(authority.head, changed)
+        self.assertTrue(all(method == "get" for method, _ in authority.calls))
+        self.assertEqual(provider.provider.dispatched, [])
+        self.assertEqual(rows["lastObservedJournal"]["generation"], 14)
+
+    def test_movement_during_freshness_read_stops_before_objects(self):
+        candidate, authority, intent, _ = fixture(14)
+        _, _, journal, _, _, _ = slice_context(candidate, authority, intent)
+        expected = journal.read()
+        original_get = authority.get
+        ref_reads = []
+        def get(path):
+            if path == PREFIX + "/git/ref/heads/main":
+                ref_reads.append(path)
+                if len(ref_reads) == 2:
+                    self.sibling(authority, "read-window-sibling.txt")
+            return original_get(path)
+        authority.get = get
+        authority.calls.clear()
+        with self.assertRaisesRegex(JournalRefused, "moved during CAS freshness read"):
+            journal.compare_and_swap(expected, ordered_effects(candidate)[6].identity, "verified")
+        self.assertTrue(all(method == "get" for method, _ in authority.calls))
+        self.assertEqual(len(ref_reads), 2)
+
+    def test_late_object_window_movement_stops_without_patch_or_retry(self):
+        candidate, authority, intent, _ = fixture(14)
+        _, rows, journal, _, provider, _ = slice_context(candidate, authority, intent)
+        expected = journal.read()
+        original_post = authority.post
+        posts = []
+        def post(path, body):
+            value = original_post(path, body)
+            posts.append(path)
+            if len(posts) == 7:
+                self.sibling(authority, "object-window-sibling.txt")
+            return value
+        authority.post = post
+        authority.calls.clear()
+        with self.assertRaisesRegex(JournalRefused, "moved before CAS PATCH"):
+            journal.compare_and_swap(expected, ordered_effects(candidate)[6].identity, "verified")
+        self.assertEqual(len(posts), 7)
+        self.assertFalse(any(method == "patch" for method, _ in authority.calls))
+        self.assertEqual(provider.provider.dispatched, [])
+        self.assertTrue(rows["journalMutationMayHaveOccurred"])
+        self.assertEqual(ProtectedReleaseJournal(authority, main_directory=True).read().generation, 14)
+
+    def test_after_final_fence_patch_race_remains_uncertain_once(self):
+        candidate, authority, intent, _ = fixture(14)
+        _, rows, journal, _, provider, _ = slice_context(candidate, authority, intent)
+        expected = journal.read()
+        original_patch = authority.patch
+        attempts = []
+        def patch_at_boundary(path, body):
+            attempts.append(body)
+            self.sibling(authority, "patch-window-sibling.txt")
+            return original_patch(path, body)
+        authority.patch = patch_at_boundary
+        with self.assertRaisesRegex(JournalRefused, "journal CAS response uncertain"):
+            journal.compare_and_swap(expected, ordered_effects(candidate)[6].identity, "verified")
+        self.assertEqual(len(attempts), 1)
+        self.assertIs(attempts[0]["force"], False)
+        self.assertTrue(rows["journalMutationMayHaveOccurred"])
+        self.assertEqual(provider.provider.dispatched, [])
+        self.assertEqual(ProtectedReleaseJournal(authority, main_directory=True).read().generation, 14)
+
+    def test_applied_lost_response_stops_until_independent_reread(self):
+        candidate, authority, intent, _ = fixture(14)
+        _, rows, journal, _, provider, _ = slice_context(candidate, authority, intent)
+        expected = journal.read()
+        original_patch = authority.patch
+        attempts = []
+        def lost_response(path, body):
+            attempts.append(body)
+            original_patch(path, body)
+            raise RuntimeError("lost response after application")
+        authority.patch = lost_response
+        with self.assertRaisesRegex(JournalRefused, "journal CAS response uncertain"):
+            journal.compare_and_swap(expected, ordered_effects(candidate)[6].identity, "verified")
+        self.assertEqual(len(attempts), 1)
+        self.assertTrue(rows["journalMutationMayHaveOccurred"])
+        self.assertEqual(rows["lastObservedJournal"]["generation"], 14)
+        self.assertEqual(provider.provider.dispatched, [])
+        independent = ProtectedReleaseJournal(authority, main_directory=True)
+        self.assertEqual(independent.read().generation, 15)
 
 
 class RecoveryControls(unittest.TestCase):
