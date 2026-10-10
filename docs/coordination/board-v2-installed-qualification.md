@@ -310,3 +310,27 @@ Only canonical `drive-board` joins the accepted programme/check-board consumers.
 wrappers and other unselected organization consumers remain unswitched. Source delivery is established separately by this change’s native merge readback; this bounded adoption does not authorize later execution.
 Remaining approved carryover and unswitched consumers keep **.4 open**; **.5 is complete** and
 **.6 product-board adoption is separate**.
+
+
+## Normal and best driver no-dispatch adoption — 2026-10-10
+
+Root accepted both organization wrapper consumers at **06:24:36 UTC**. It read both complete
+wrapper contracts, canonical source `5be234a34fcff5f973d8f8d44a57f1c6737daff8`, organization scope,
+the shared inspection contract, all 19 binding fields and the complete report metadata/items/candidates.
+It verified packet pins and byte equality of the paired wrappers at protected `79051e56` and candidate
+`5be234a3`. Wrapper acceptance SHA-256 is
+`75c5bfddfc206279584a422570400e787dd57a035775983e17aad9c9abdaef3c`;
+report SHA-256 remains `1452f1dde1fd35da80b5c07413d930a336b4c62ccfb4a92a6e7f8c75f49997e9`.
+The binding, installed qualification and earlier canonical acceptance retain their recorded identities.
+
+No work was selected and no worker dispatched. Normal Codex `gpt-5.6-terra`/`medium` is unavailable,
+so actual normal dispatch must refuse without substitution or a partial wave. Best
+`gpt-5.6-sol`/`medium` is available but was unused; availability is not dispatch authority.
+Both decisions preserve all three human Blocked statuses, Closed/completed #3009 with Ready retained,
+unapproved/unseeded #935 and Unknown candidate acceptance/intake/PR/touch-set/capacity.
+
+This consumption created only a private decision record: no network, CLI/driver, inspection, Store,
+board/native or worker effects. Freshness remains the original 04:41 observation. The original
+before-census and manifest-coherence failures remain historical; no runtime was repeated.
+Source delivery requires this follow-on's native merge readback. Remaining approved carryover,
+unselected consumers and native legacy-reference gates keep .4 open; .5 is complete and .6 separate.

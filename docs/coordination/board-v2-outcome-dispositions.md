@@ -190,3 +190,16 @@ stay human Blocked; candidate acceptance/intake/PR/touch-set/capacity remains Un
 Only canonical `drive-board` is adopted; normal/best wrappers and other unselected consumers remain
 unswitched. This records no new inspection, freshness, native write or worker admission. Source delivery is established separately by this change’s native merge readback; remaining approved carryover and unselected
 consumer gates keep .4 open. Publication .5 is complete; product adoption .6 remains separate.
+
+
+## Normal and best driver dispositions — 2026-10-10
+
+Root accepted [both wrapper no-dispatch consumers](board-v2-installed-qualification.md#normal-and-best-driver-no-dispatch-adoption--2026-10-10)
+at 06:24:36 UTC against canonical source `5be234a3` and the complete retained three-active report.
+No work or worker was selected; wrapper/model bytes stay unchanged. Normal Codex
+`gpt-5.6-terra`/`medium` remains unavailable and refuses actual dispatch; best availability grants
+no dispatch authority. All three stay human Blocked, #3009 stays Closed/completed with Ready
+retained and #935 unapproved/unseeded. Candidate acceptance/intake/PR/touch-set/capacity stays
+Unknown, with original 04:41 report freshness and no new inspection or native effects.
+Source delivery awaits this follow-on's native merge readback. Remaining approved carryover,
+unselected consumers and native legacy-reference evidence keep .4 open; .5 complete and .6 separate.
