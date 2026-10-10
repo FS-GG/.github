@@ -730,3 +730,18 @@ for this profile remains pending. Every later recovery send needs root reconcili
 known or unknown invocations; the local attempt record is not a global lease. Publication still requires runtime settlement, channel,
 manifest and promotion, followed by independent installed collection and receiver acceptance.
 The earlier HTTP 422 uncertainty, seven possible orphan objects and expired deadlines remain.
+
+
+[Runtime recovery run 38075382153](https://github.com/FS-GG/.github/actions/runs/38075382153)
+failed with HTTP 415 while downloading the original-refusal ZIP, after candidate
+authentication and before Authority construction or runtime upload. Its authenticated
+receipt records zero advances and no dispatch for this invocation; current journal state
+and historical intent outcomes remain unobserved. A distinct read-only grant authenticated
+the retained failure after the original five-minute read grant expired, without extending
+that grant. The fixed Actions artifact request now omits `Accept`, matching the previously
+accepted artifact transport; JSON and release-asset media headers, read and redirect bounds
+and cross-host credential stripping remain unchanged. Nine affected offline suites passed
+394 tests, including four new actual-request controls. Recovery fixtures still counted at
+most 949 Authority entries, below the 4,080 qualification limit. This is source qualification;
+native recovery and publication remain pending, with immutable payload and deadline fences
+and no-second-send guarantees unchanged.

@@ -19,6 +19,7 @@ import subprocess
 import sys
 import tempfile
 import types
+import urllib.error
 import urllib.request
 import unittest
 import zipfile
@@ -1259,6 +1260,94 @@ class OriginalRuntimeRecoveryControls(unittest.TestCase):
         response.read1=lambda cap:b'x'
         with patch('urllib.request.build_opener',return_value=opener),patch('release_successor_provider.time.monotonic',side_effect=[0,13]),self.assertRaises(RuntimeError):
             client._runtime_read('https://api.github.com/fixed',100)
+
+    def runtime_request_fixture(self, bodies):
+        """Keep the real Request/read loop and inject only inert HTTP responses."""
+        requests, handlers = [], []
+        case = self
+        class Response:
+            status = 200
+            def __init__(self, raw):
+                self.raw = raw
+                self.headers = {'Content-Length': str(len(raw))}
+                def timeout(left):
+                    case.assertGreater(left, 0)
+                    case.assertLessEqual(left, 12)
+                self.fp = types.SimpleNamespace(raw=types.SimpleNamespace(
+                    _sock=types.SimpleNamespace(settimeout=timeout)))
+            def read1(self, cap):
+                result, self.raw = self.raw[:cap], self.raw[cap:]
+                return result
+            def __enter__(self):return self
+            def __exit__(self, *args):pass
+        def build(*selected):
+            handlers.append(selected[-1])
+            def open_request(request, timeout):
+                requests.append(request)
+                case.assertEqual(request.get_method(), 'GET')
+                case.assertEqual(timeout, 12)
+                if request.full_url.endswith('/zip') and request.get_header('Accept') is not None:
+                    raise urllib.error.HTTPError(request.full_url, 415, 'Unsupported Media Type', {}, None)
+                case.assertIn(request.full_url, bodies)
+                return Response(bodies[request.full_url])
+            return types.SimpleNamespace(open=open_request)
+        return build, requests, handlers
+
+    def test_actual_refusal_authentication_artifact_request_omits_accept(self):
+        with tempfile.TemporaryDirectory() as temp:
+            source = self.context(pathlib.Path(temp))[7]
+            prefix = 'https://api.github.com/repos/FS-GG/.github/'
+            bodies = {prefix+'actions/runs/38063768172': json.dumps(source.run).encode(),
+                      prefix+'actions/artifacts/11675095562': json.dumps(source.artifact).encode(),
+                      prefix+'actions/artifacts/11675095562/zip': source.proof_zip}
+            build, requests, _ = self.runtime_request_fixture(bodies)
+            with patch('urllib.request.build_opener', side_effect=build), \
+                 patch.object(publisher, 'RUNTIME_REFUSAL_ZIP_SHA256', hashlib.sha256(source.proof_zip).hexdigest()), \
+                 patch.object(publisher, 'RUNTIME_REFUSAL_MEMBER_SHA256', hashlib.sha256(source.proof_body).hexdigest()):
+                proof = publisher.authenticate_runtime_refusal(GitHubAPI('inert-fixture-token'))
+            self.assertEqual(proof['runId'], 38063768172)
+            self.assertFalse(proof['thisInvocationRuntimeDispatchEntered'])
+            self.assertEqual(len(requests), 3)
+            self.assertEqual([r.get_header('Accept') for r in requests],
+                             ['application/vnd.github+json', 'application/vnd.github+json', None])
+            self.assertTrue(all(r.get_header('Authorization') == 'Bearer inert-fixture-token' for r in requests))
+
+    def test_actual_runtime_json_and_release_asset_media_headers_unchanged(self):
+        prefix = 'https://api.github.com/repos/FS-GG/.github/'
+        build, requests, _ = self.runtime_request_fixture({prefix+'actions/runs/38063768172': b'{}',
+                                                          prefix+'releases/assets/77': b'raw'})
+        with patch('urllib.request.build_opener', side_effect=build):
+            api = GitHubAPI('inert-fixture-token')
+            self.assertEqual(api.runtime_recovery_json('repos/FS-GG/.github/actions/runs/38063768172'), {})
+            self.assertEqual(api.download_runtime_recovery_asset(77, 3), b'raw')
+        self.assertEqual([r.get_header('Accept') for r in requests],
+                         ['application/vnd.github+json', 'application/octet-stream'])
+
+    def test_actual_artifact_http_refusal_has_one_request_and_no_fallback(self):
+        calls = []
+        def fail(request, **kwargs):
+            calls.append(request)
+            raise urllib.error.HTTPError(request.full_url, 415, 'Unsupported Media Type', {}, None)
+        with patch('urllib.request.build_opener', return_value=types.SimpleNamespace(open=fail)), \
+             self.assertRaises(urllib.error.HTTPError) as failure:
+            GitHubAPI('inert-fixture-token').download_runtime_refusal_artifact()
+        self.assertEqual(failure.exception.code, 415)
+        self.assertEqual(len(calls), 1)
+        self.assertIsNone(calls[0].get_header('Accept'))
+
+    def test_actual_artifact_redirect_keeps_bound_and_strips_authorization(self):
+        url = 'https://api.github.com/repos/FS-GG/.github/actions/artifacts/11675095562/zip'
+        build, requests, handlers = self.runtime_request_fixture({url:b'archive'})
+        with patch('urllib.request.build_opener', side_effect=build):
+            self.assertEqual(GitHubAPI('inert-fixture-token').download_runtime_refusal_artifact(), b'archive')
+        redirect = handlers[0]
+        target = 'https://retained-artifact.invalid/owned.zip'
+        for _ in range(3):
+            request = redirect.redirect_request(requests[0], None, 302, 'Found', {}, target)
+            self.assertIsNone(request.get_header('Authorization'))
+            self.assertIsNone(request.get_header('Accept'))
+        with self.assertRaises(RuntimeError):
+            redirect.redirect_request(requests[0], None, 302, 'Found', {}, target)
 
     def test_wrapper_consumes_permission_on_callback_exception_and_repeated_call(self):
         for outcome in ('applied','throw','unknown'):
