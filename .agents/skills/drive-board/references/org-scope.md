@@ -7,7 +7,10 @@ accepts the programme/check-board consumers. Root separately accepted canonical 
 bounded no-dispatch consumption at 05:20:25 UTC on 2026-10-10, selecting no work and dispatching none.
 The exact consumed source, binding/report and acceptance identities are recorded in the skill.
 Source delivery is established separately by this change’s native merge readback.
-Normal/best wrappers and other unselected organization consumers remain unswitched.
+Root accepted both normal/best wrappers at 06:24:36 UTC against source `5be234a3` and the same
+complete report; the skill records their acceptance digest. Other unselected consumers remain
+unswitched. Normal worker routing is unavailable and refuses actual dispatch; no model changes
+or workers were used.
 
 The selected cohort is SDD#928, Templates#441 and .github#3010, all human Blocked. .github#3009
 is omitted delivered history, Closed/completed with Ready planning retained; SDD#935 remains

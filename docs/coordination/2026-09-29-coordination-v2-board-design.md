@@ -527,3 +527,27 @@ normal/best wrappers remain unswitched. The decision retains human Blocked and U
 acceptance/intake/PR/touch-set/capacity, not a Ready or scheduling assertion. No new inspection ran.
 Source delivery is established separately by this change’s native merge readback. This bounded .4 consumer adoption
 does not finish remaining carryover or change the complete .5 publication and separate .6 scope.
+
+
+## Wrapper organization consumer adoption — 2026-10-10
+
+Root accepted [both wrapper no-dispatch consumers](board-v2-installed-qualification.md#normal-and-best-driver-no-dispatch-adoption--2026-10-10)
+at 06:24:36 UTC against canonical source `5be234a3` and the complete retained three-active report.
+No work or worker was selected; wrapper/model bytes stay unchanged. Normal Codex
+`gpt-5.6-terra`/`medium` remains unavailable and refuses actual dispatch; best availability grants
+no dispatch authority. All three stay human Blocked, #3009 stays Closed/completed with Ready
+retained and #935 unapproved/unseeded. Candidate acceptance/intake/PR/touch-set/capacity stays
+Unknown, with original 04:41 report freshness and no new inspection or native effects.
+Source delivery awaits this follow-on's native merge readback. Remaining approved carryover,
+unselected consumers and native legacy-reference evidence keep .4 open; .5 complete and .6 separate.
+
+
+## Native legacy-reference gate accepted — 2026-10-10
+
+The [actual Project 1 metadata operation](board-v2-installed-qualification.md#project-1-native-legacy-reference-notice--2026-10-10)
+marked the exact retained board as legacy at 06:57:17 UTC, with full original text preserved and
+independent readback. Title, open state and identity stayed unchanged; no item, membership, field,
+archive, closure or issue-body operation ran. The retired lifecycle writer and separate historical
+archive/bootstrap boundaries are unchanged. This supersedes only the pending native notice gate;
+remaining approved carryover and unselected outcome/consumer authority keep .4 open. No additional
+identity, including SDD#935, is selected. Publication .5 remains complete and .6 separate.

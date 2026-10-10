@@ -15,8 +15,11 @@ For explicitly selected organization V2 scope, read
 The current [three-active qualification](https://github.com/FS-GG/.github/blob/79051e56b025dadfc6fcaabd58b79e33f2854928/docs/coordination/board-v2-installed-qualification.md#three-active-installed-inspection-and-consumer-acceptance--2026-10-10)
 records installed CLI **0.100.0** and root's accepted programme/check-board consumers. Root then
 accepted canonical `drive-board`'s bounded **no-dispatch** consumption at **05:20:25 UTC on 2026-10-10**,
-after reading the complete source contract, binding, report and installed qualification. Only this
-canonical consumer is adopted; `drive-board-normal` and `drive-board-best` remain unswitched.
+after reading the complete source contract, binding, report and installed qualification. Root also accepted `drive-board-normal` and `drive-board-best` for bounded no-dispatch consumption
+at **06:24:36 UTC**, against canonical source `5be234a34fcff5f973d8f8d44a57f1c6737daff8` and the same
+complete binding/report. Wrapper acceptance SHA-256 is
+`75c5bfddfc206279584a422570400e787dd57a035775983e17aad9c9abdaef3c`.
+All three driver consumers are adopted only for these bounded no-dispatch decisions.
 
 The consumed source head is `3c53055f4f17fb5d46b7399fc9d1250a23aa6372`.
 Binding SHA-256 is `001cbe24b2ac7f6514cb88f4e06388f46cfd94e795008aaa4c6f471bdd288ebb`;
@@ -40,11 +43,14 @@ at `4fc6edf6acce60760cea858ba15e4384c9ce0340`. It is not a fourth Current target
 membership and planning fields; SDD#935 remains unapproved/unseeded and never enters this queue.
 Original pilot/four-target receipts and the unavailable historical binding retain their dated identities.
 
-For this explicitly adopted canonical consumer, use only its bound read-only
+For these explicitly adopted driver consumers, use only their bound read-only
 inspection route as the primary queue. Combine human Status/Track/Roadmap and distinct
 freshness/acceptance gaps with owning plans and separately obtained PR/touch-set/capacity facts.
 Unknown candidate delivery/publication/native acceptance, PRs, touch sets, capacity and intake remain
 Unknown until independently supplied. Only the current integrator makes a bounded work selection.
+Normal Codex worker routing remains `gpt-5.6-terra`/`medium`, unavailable on this runtime: stop
+before actual normal dispatch, without substitution or a partial wave. Best routing remains
+`gpt-5.6-sol`/`medium`, available but not used or granted dispatch authority by this acceptance.
 Missing, stale or failed inspection is unavailable evidence, never an empty or Ready queue.
 
 Run the existing intake batch below before dispatch. Routine ownership, PR admission, native delivery
