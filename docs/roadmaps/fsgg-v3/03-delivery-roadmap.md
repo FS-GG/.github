@@ -1,10 +1,10 @@
-# FS.GG v3: delivery roadmap
+# Specairn (FS.GG v3): delivery roadmap
 
 Status: future proposal, 2026-10-10. This roadmap implements the [clean rewrite design](../2026-10-10-fsgg-v3-clean-rewrite.md) only after completed v2. It creates no active work assignments, board items, publication authority or cutover approval.
 
 ## Programme shape
 
-Build one integrated replacement in a dedicated repository. Keep v3 main usable in an isolated environment from the first vertical slice onward. Parallel work converges there continuously; it does not replace parts of production v2. Production adoption happens once, after the complete accepted scope is qualified.
+Build one integrated replacement, **Specairn**, in the public [FS-GG/specairn monorepo](https://github.com/FS-GG/specairn). The repository was created on 2026-10-10 to reserve the destination; implementation remains deferred until v2 completion. Keep v3 main usable in an isolated environment from the first vertical slice onward. Parallel work converges there continuously; it does not replace parts of production v2. Production adoption happens once, after the complete accepted scope is qualified.
 
 Use completed v2 typed-SDD to develop the replacement. Each implementation change carries the minimum accepted semantic delta and focused evidence. A PR is the delivery object; implementation tools derive status and proof summaries. Do not generate a document bundle or a separate phase ledger for every task. Milestone evidence is a query over test and native delivery results, with a short human assessment only where judgment is needed.
 
