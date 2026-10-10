@@ -9,6 +9,17 @@ coherent. Update **both** when a versioned cross-repo contract changes (a
 > directly (which framework repos participate in which fabrics, ADR-0019) — no separate projection;
 > the skill registry is projected in the §Skill-registry sections below.
 
+## Coherent 0.101.0 source preparation
+
+CLI, Kit and Drivers share source version **0.101.0** for exact CI attribution/native
+association and additive immutable causal declarations. Published package-version and
+tag remain **0.100.0**. Current schema14 and existing observations remain supported;
+older receivers reject `execution-causal-admission/1`. Publication and approved receiving
+capability must precede enabled C2 emission. The selected source-only journal19 does not
+authorize an effect or reuse consumed18. Packed receiver qualification and installed
+adoption remain pending. A sufficient local CLI receiver needs no independent Host
+successor; analyzer source/distribution and historical custody remain separate.
+
 ## Dependency graph
 
 ```text

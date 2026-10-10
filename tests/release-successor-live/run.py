@@ -238,7 +238,7 @@ class QualifiedProvider:
 class PublisherJournalTests(unittest.TestCase):
     def setUp(self):
         self.manifest = candidate_manifest()
-        self.intent = {"contentId": self.manifest["contentId"], "sourceSha": "b" * 40, "version": "0.100.0",
+        self.intent = {"contentId": self.manifest["contentId"], "sourceSha": "b" * 40, "version": "0.101.0",
                        "candidateArchiveSha256": "c" * 64, "operator": "EHotwagner"}
         self.ledger = AuthorityAPI()
         self.source = PublisherAPI()
@@ -269,7 +269,7 @@ class PublisherJournalTests(unittest.TestCase):
         self.assertEqual(self.journal.state.generation, 1)
         self.assertEqual(self.provider.calls, [])
 
-    def test_consumed_main18_with_absent_legacy_is_recovery_never_genesis(self):
+    def test_consumed_selected_main_journal_with_absent_legacy_is_recovery_never_genesis(self):
         self.ledger.present = True
         self.assertFalse(self.prepare())
         self.assertEqual(self.journal.state.generation, 33)

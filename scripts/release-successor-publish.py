@@ -132,7 +132,7 @@ def prepare_release_journal(journal, ledger_api, admission, provider, api, manif
     if fresh:
         require(candidate_source == publisher_sha, "fresh publication requires candidate and publisher source to match")
         try:
-            api.get("repos/FS-GG/.github/git/ref/tags/coherent-set/v0.100.0")
+            api.get("repos/FS-GG/.github/git/ref/tags/coherent-set/v0.101.0")
         except NotFound:
             pass
         else:
@@ -208,13 +208,13 @@ def main() -> int:
         )
         manifest_path = candidate / "release-manifest.json"
         manifest = json.loads(manifest_path.read_text())
-        require(manifest["descriptor"]["version"] == "0.100.0", "publisher version differs")
+        require(manifest["descriptor"]["version"] == "0.101.0", "publisher version differs")
         publisher_admission = SingleOperatorAdmission(api, manifest, publisher_sha, run_id, operator, "refs/heads/main")
         provider = LiveProvider(api, manifest_path, github_token, nuget_key)
         intent = {
             "contentId": manifest["contentId"],
             "sourceSha": candidate_source,
-            "version": "0.100.0",
+            "version": "0.101.0",
             "candidateArchiveSha256": args.candidate_archive_sha256,
             "operator": operator,
         }
@@ -224,7 +224,7 @@ def main() -> int:
         def uniqueness():
             subprocess.run(
                 [sys.executable, str(pathlib.Path(__file__).with_name("check-release-candidate-uniqueness.py")),
-                 "--version", "0.100.0", "--predecessor", "0.99.0"],
+                 "--version", "0.101.0", "--predecessor", "0.100.0"],
                 check=True, env={**os.environ, "GITHUB_TOKEN": github_token},
             )
         if prepare_release_journal(journal, ledger_api, admission, provider, api, manifest, intent,
