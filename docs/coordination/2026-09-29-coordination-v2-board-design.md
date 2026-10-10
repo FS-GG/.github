@@ -573,8 +573,19 @@ Ordinary mode retains the current graph. Missing paired properties, unknown sour
 or leaf drift, links and preexisting staged outputs refuse; no fallback or 0.101 repin is selected.
 Package evidence reports current Creator and published dependency source identities separately.
 
-This is source preparation; controls, real MSBuild/API compatibility, candidate publication and
-fresh/retained product journeys remain unqualified. The historical private `ddd79655`/0.97.1
-qualification cannot qualify this 0.99 composition. Actual incompatibility must stop qualification
-before root selects a different dependency. The accepted finite organization .4 and .5 publication
-remain unchanged; .6 product bindings, credentials and effects still need their own admission.
+The exact `9f53428e7a95383fd28bb094a597709a82de2769` composition passed one ten-stage
+offline qualification: locked restore, Creator-only Release compilation with zero warnings/errors,
+and the actual compiled ProductBoard controls. All 81 copied published bodies and 30 staged producer
+output files/modes remained unchanged; no producer `obj/Release` files appeared. Full SDK/runtime,
+static native/apphost and alias checks matched before/after. The compiled Creator SHA256 is
+`c0b3dbe2bd4b6e0f3e44a3c8456d11737896b5f6f54148aa7ec8545fa61ccb94`; owner result
+`a492f3c09e07a11cade56f8de3ceeab754f1ed40fa6f5e7528bab0c3d35494d6` binds the ten original
+stage vectors and cleanup. Static native closure does not prove every late dynamic load.
+The earlier `62de42a4` preparation passed 14 frozen and two package-join controls; it does not
+replace the compiled successor proof.
+
+This establishes offline source/API compatibility, not a packaged candidate, publication or
+fresh/retained product journey. The historical private `ddd79655`/0.97.1 qualification remains
+separate. No 0.101 adoption, package rebuild or new native effect is selected. Finite organization
+.4 and .5 publication remain unchanged; .6 product bindings, credentials and effects still need
+their own admission.
