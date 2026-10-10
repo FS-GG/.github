@@ -1,5 +1,7 @@
 namespace FS.GG.Coord
 
+open System
+
 module TelemetryStore =
     [<Literal>]
     val BatchSchema: string = "fsgg.telemetry.ingest/1"
@@ -118,6 +120,44 @@ module TelemetryStore =
           ProviderCreatedAt: string option
           Status: string }
 
+    type CausalDependency =
+        { OriginalItemId: string
+          InvocationId: string
+          SourceReference: string }
+
+    type CausalDeclaration =
+        { Purpose: string
+          DependencyCoverage: string
+          Dependencies: CausalDependency array
+          RetryOfInvocationId: string option }
+
+    type CausalAdmission =
+        { OriginalItemId: string
+          MemberItemId: string
+          AssignmentId: Guid
+          AttemptId: Guid
+          Generation: int64
+          InvocationId: string
+          RootInvocationId: string
+          ParentInvocationId: string option
+          ParentAttemptId: Guid option
+          ParentGeneration: int64 option
+          RootAttemptId: Guid
+          RootGeneration: int64
+          Relation: string
+          AdmittedAt: DateTimeOffset
+          RootAdmittedAt: DateTimeOffset
+          ClockProvenance: string
+          Declaration: CausalDeclaration }
+
+    type CausalAdmissionEvidence =
+        { DispatchId: string
+          AdmissionBase64: string
+          AdmissionSha256: string
+          RouteBindingSha256: string
+          LaunchIntentSha256: string
+          Admission: CausalAdmission }
+
     type Payload =
         | Item of featureId: string option
         | Feature of name: string
@@ -156,6 +196,7 @@ module TelemetryStore =
             requestedModel: string option *
             requestedEffort: string option *
             backend: string option
+        | ExecutionCausalAdmission of CausalAdmissionEvidence
         | RuntimeStart of
             invocationId: string *
             threadId: string option *

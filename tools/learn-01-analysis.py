@@ -17,6 +17,8 @@ import stat
 import subprocess
 import sys
 import time
+import unicodedata
+import uuid
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta
 
@@ -725,6 +727,205 @@ def assess_pre_admission_owner_evidence(
     }
 
 
+CAUSAL_KIND = "execution-causal-admission/1"
+CAUSAL_SCHEMA = "fsgg.orchestration.execution-causal-admission/1"
+CAUSAL_PURPOSES = {"planning", "implementation", "review", "validation", "delivery",
+                   "repair", "operations", "other", "unclassified"}
+
+
+def decode_causal_declaration(event: dict) -> dict:
+    """Validate the immutable source bytes without normalizing their JSON layout."""
+    required = {"kind", "identity", "itemId", "revision", "dispatchId", "admissionBase64",
+                "admissionSha256", "routeBindingSha256", "launchIntentSha256"}
+    if set(event) != required or event["kind"] != CAUSAL_KIND or type(event["revision"]) is not int or event["revision"] != 0:
+        raise Refusal("causal event has an unsupported shape or revision")
+    for name in ("admissionSha256", "routeBindingSha256", "launchIntentSha256"):
+        if not isinstance(event[name], str) or not re.fullmatch(r"[0-9a-f]{64}", event[name]):
+            raise Refusal("causal source digest is malformed")
+    encoded = event["admissionBase64"]
+    if not isinstance(encoded, str) or len(encoded) > 5464:
+        raise Refusal("causal admission base64 bound")
+    try:
+        raw = base64.b64decode(encoded, validate=True)
+    except (ValueError, base64.binascii.Error) as error:
+        raise Refusal("causal admission base64 is invalid") from error
+    if not 1 <= len(raw) <= 4096 or base64.b64encode(raw).decode() != encoded:
+        raise Refusal("causal admission base64 is noncanonical or oversized")
+    if hashlib.sha256(raw).hexdigest() != event["admissionSha256"]:
+        raise Refusal("causal admission digest does not bind retained bytes")
+    def unique_pairs(pairs):
+        value = {}
+        for key, item in pairs:
+            if key in value:
+                raise Refusal("causal admission contains duplicate property")
+            value[key] = item
+        return value
+    try:
+        admission = json.loads(raw, object_pairs_hook=unique_pairs)
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise Refusal("causal admission JSON is invalid") from error
+    fields = {"schema", "originalItemId", "memberItemId", "assignmentId", "attemptId",
+              "generation", "invocationId", "rootInvocationId", "parentInvocationId",
+              "parentAttemptId", "parentGeneration", "rootAttemptId", "rootGeneration",
+              "relation", "admittedAt", "rootAdmittedAt", "clockProvenance", "declaration"}
+    if not isinstance(admission, dict) or set(admission) != fields or admission["schema"] != CAUSAL_SCHEMA:
+        raise Refusal("causal admission requires the closed admission/1 shape")
+    def text(value, limit):
+        if (not isinstance(value, str) or not value.strip() or len(value) > limit or
+                any(unicodedata.category(char) == "Cc" for char in value)):
+            raise Refusal("causal admission contains invalid bounded text")
+        return value
+    def number(value):
+        if type(value) is not int or value < 0 or value > 2**63 - 1:
+            raise Refusal("causal admission generation is invalid")
+        return value
+    def guid(value):
+        text(value, 64)
+        try:
+            parsed = uuid.UUID(value)
+        except ValueError as error:
+            raise Refusal("causal admission GUID is invalid") from error
+        if parsed.int == 0:
+            raise Refusal("causal admission GUID is empty")
+        return parsed
+    def clock(value):
+        text(value, 64)
+        if not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]+)?(?:Z|[+-][0-9]{2}:[0-9]{2})", value):
+            raise Refusal("causal admission timestamp is malformed")
+        try:
+            return datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError as error:
+            raise Refusal("causal admission timestamp is invalid") from error
+    original = text(admission["originalItemId"], 512)
+    text(admission["memberItemId"], 512)
+    guid(admission["assignmentId"])
+    attempt = guid(admission["attemptId"])
+    generation = number(admission["generation"])
+    invocation = text(admission["invocationId"], 128)
+    root_invocation = text(admission["rootInvocationId"], 128)
+    root_attempt = guid(admission["rootAttemptId"])
+    root_generation = number(admission["rootGeneration"])
+    parent = admission["parentInvocationId"]
+    parent_attempt = admission["parentAttemptId"]
+    parent_generation = admission["parentGeneration"]
+    if parent is not None:
+        text(parent, 128)
+    if parent_attempt is not None:
+        parent_attempt = guid(parent_attempt)
+    if parent_generation is not None:
+        parent_generation = number(parent_generation)
+    admitted = clock(admission["admittedAt"])
+    root_admitted = clock(admission["rootAdmittedAt"])
+    if (admitted == datetime.min.replace(tzinfo=admitted.tzinfo) or
+            root_admitted > admitted or
+            admission["clockProvenance"] != "host-wall" or
+            root_generation > generation):
+        raise Refusal("causal admission clock or generation is inconsistent")
+    derive = lambda current_attempt, current_generation: (
+        "invocation-" + hashlib.sha256(
+            (original + "\x1f" + current_attempt.hex + "\x1f" + str(current_generation) + "\x1finvocation").encode()
+        ).hexdigest())
+    if invocation != derive(attempt, generation) or root_invocation != derive(root_attempt, root_generation):
+        raise Refusal("causal admission invocation identity is not canonical")
+    relation = admission["relation"]
+    if relation == "root":
+        if parent is not None or parent_attempt is not None or parent_generation is not None or invocation != root_invocation:
+            raise Refusal("causal root lineage is inconsistent")
+    elif relation in {"child", "follow-up"}:
+        if (parent is None or parent_attempt is None or parent_generation is None or
+                generation <= root_generation or not root_generation <= parent_generation < generation or
+                parent != derive(parent_attempt, parent_generation)):
+            raise Refusal("causal descendant lineage is inconsistent")
+    else:
+        raise Refusal("causal relation is unsupported")
+    declaration = admission["declaration"]
+    if not isinstance(declaration, dict) or set(declaration) != {"purpose", "dependencyCoverage", "dependencies", "retryOfInvocationId"}:
+        raise Refusal("causal declaration shape is invalid")
+    if (not isinstance(declaration["purpose"], str) or declaration["purpose"] not in CAUSAL_PURPOSES or
+            not isinstance(declaration["dependencyCoverage"], str) or
+            declaration["dependencyCoverage"] not in {"complete", "partial", "unknown"}):
+        raise Refusal("causal declaration vocabulary is invalid")
+    retry = declaration["retryOfInvocationId"]
+    if retry is not None and (not isinstance(retry, str) or retry != parent):
+        raise Refusal("causal retry annotation must name the parent")
+    dependencies = declaration["dependencies"]
+    if not isinstance(dependencies, list) or len(dependencies) > 16:
+        raise Refusal("causal dependencies exceed 16")
+    endpoints = set()
+    for edge in dependencies:
+        if not isinstance(edge, dict) or set(edge) != {"originalItemId", "invocationId", "sourceReference"}:
+            raise Refusal("causal dependency shape is invalid")
+        endpoint = (text(edge["originalItemId"], 512), text(edge["invocationId"], 128))
+        text(edge["sourceReference"], 512)
+        if endpoint in endpoints or endpoint[1] == invocation:
+            raise Refusal("causal dependency repeats or names self")
+        endpoints.add(endpoint)
+    dispatch = "dispatch-" + hashlib.sha256(
+        (original + "\x1f" + attempt.hex + "\x1f" + str(generation) + "\x1fdispatch").encode()
+    ).hexdigest()
+    if (event["identity"] != "execution-causal-admission-" + invocation or
+            event["itemId"] != original or event["dispatchId"] != dispatch):
+        raise Refusal("causal event identity does not bind admission")
+    return admission
+
+
+def causal_observation_summary(content: dict, events: list[dict]) -> dict:
+    declarations = [decode_causal_declaration(event) for event in events if event.get("kind") == CAUSAL_KIND]
+    by_invocation = {}
+    for admission in declarations:
+        invocation = admission["invocationId"]
+        if invocation in by_invocation:
+            raise Refusal("duplicate causal declaration for invocation")
+        by_invocation[invocation] = admission
+    admitted = {row.get("invocation_id"): row for row in content.get("admissions", [])}
+    lineage = defaultdict(list)
+    for row in content.get("lineage", []):
+        lineage[row.get("invocation_id")].append(row)
+    expected = {row.get("dispatch_id"): row for row in content.get("expectedDispatches", [])}
+    missing = sorted(invocation for invocation in admitted if invocation not in by_invocation and isinstance(invocation, str))
+    missing_joins, conflicts, unresolved = set(), set(), set()
+    coverage = Counter(admission["declaration"]["dependencyCoverage"] for admission in declarations)
+    for invocation, declaration in by_invocation.items():
+        original = declaration["originalItemId"]
+        row = admitted.get(invocation)
+        own_lineages = lineage.get(invocation, [])
+        dispatch = "dispatch-" + hashlib.sha256(
+            (original + "\x1f" + uuid.UUID(declaration["attemptId"]).hex + "\x1f" +
+             str(declaration["generation"]) + "\x1fdispatch").encode()).hexdigest()
+        expected_row = expected.get(dispatch)
+        if row is None or not own_lineages or expected_row is None:
+            missing_joins.add(invocation)
+        if row is not None and row.get("item_id") != original:
+            conflicts.add(invocation)
+        if len(own_lineages) > 1:
+            conflicts.add(invocation)
+        for own_lineage in own_lineages:
+            if (own_lineage.get("item_id") != original or own_lineage.get("dispatch_id") != dispatch or
+                    own_lineage.get("root_invocation_id") != declaration["rootInvocationId"] or
+                    own_lineage.get("parent_invocation_id") != declaration["parentInvocationId"] or
+                    own_lineage.get("relation") != declaration["relation"]):
+                conflicts.add(invocation)
+        if expected_row is not None and (expected_row.get("item_id") != original or
+                                         expected_row.get("relation") != declaration["relation"]):
+            conflicts.add(invocation)
+        for target in [declaration["rootInvocationId"], declaration["parentInvocationId"]]:
+            if target and target not in by_invocation:
+                unresolved.add((original, target))
+        for edge in declaration["declaration"]["dependencies"]:
+            endpoint = (edge["originalItemId"], edge["invocationId"])
+            if endpoint[0] != original or endpoint[1] not in by_invocation:
+                unresolved.add(endpoint)
+    def bounded(values):
+        ordered = sorted(values)
+        return {"sample": ordered[:20], "omitted": max(0, len(ordered) - 20), "count": len(ordered)}
+    return {"declarationsReturned": len(declarations), "admittedInvocationsMissingDeclarations": bounded(missing),
+            "missingOwnJoins": bounded(missing_joins), "contradictoryOwnJoins": bounded(conflicts),
+            "declaredDependencyCoverage": {key: coverage[key] for key in ("complete", "partial", "unknown")},
+            "unresolvedReferences": bounded([f"{original}:{invocation}" for original, invocation in unresolved]),
+            "waitCoverage": "unknown", "criticalPath": "not-evaluated",
+            "populationScope": "bounded-selected-snapshot-only"}
+
+
 def analyze_private_snapshot(contract: dict, envelope: dict, *, _protected_captures: list | None = None) -> dict:
     """Derive assigned-treatment token coverage only from one retained private snapshot."""
     content, workspace = decode_private_snapshot(envelope)
@@ -740,11 +941,12 @@ def analyze_private_snapshot(contract: dict, envelope: dict, *, _protected_captu
         "learn-accounting-inventory/1", "runtime-native-inventory/1",
         "runtime-native-inventory-source/1", "learn-shared-cost/1",
         "learn-shared-cost-allocation/1", "learn-shared-cost-authority/1",
-        "learn-native-delivery-source/1"
+        "learn-native-delivery-source/1", CAUSAL_KIND
     }
     unknown_kinds = {event.get("kind") for event in events} - supported_kinds
     if unknown_kinds:
         raise Refusal("private snapshot contains unsupported learning fact kinds: " + ", ".join(sorted(unknown_kinds)))
+    causal_summary = causal_observation_summary(content, events)
     observation_events = [event for event in events if event.get("kind") in observation_kinds]
     assignments = {
         event.get("itemId"): event
@@ -1374,6 +1576,7 @@ def analyze_private_snapshot(contract: dict, envelope: dict, *, _protected_captu
         "contractId": contract["contractId"],
         "workspaceId": workspace,
         "snapshotRevision": envelope["revision"],
+        "causalObservation": causal_summary,
         **observation_result,
         "assignedOriginalItemsByArm": {
             arm: sum(1 for value in arms.values() if value == arm) for arm in ("current", "focused")

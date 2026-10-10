@@ -122,6 +122,44 @@ module TelemetryStore =
           ProviderCreatedAt: string option
           Status: string }
 
+    type CausalDependency =
+        { OriginalItemId: string
+          InvocationId: string
+          SourceReference: string }
+
+    type CausalDeclaration =
+        { Purpose: string
+          DependencyCoverage: string
+          Dependencies: CausalDependency array
+          RetryOfInvocationId: string option }
+
+    type CausalAdmission =
+        { OriginalItemId: string
+          MemberItemId: string
+          AssignmentId: Guid
+          AttemptId: Guid
+          Generation: int64
+          InvocationId: string
+          RootInvocationId: string
+          ParentInvocationId: string option
+          ParentAttemptId: Guid option
+          ParentGeneration: int64 option
+          RootAttemptId: Guid
+          RootGeneration: int64
+          Relation: string
+          AdmittedAt: DateTimeOffset
+          RootAdmittedAt: DateTimeOffset
+          ClockProvenance: string
+          Declaration: CausalDeclaration }
+
+    type CausalAdmissionEvidence =
+        { DispatchId: string
+          AdmissionBase64: string
+          AdmissionSha256: string
+          RouteBindingSha256: string
+          LaunchIntentSha256: string
+          Admission: CausalAdmission }
+
     type Payload =
         | Item of featureId: string option
         | Feature of name: string
@@ -160,6 +198,7 @@ module TelemetryStore =
             requestedModel: string option *
             requestedEffort: string option *
             backend: string option
+        | ExecutionCausalAdmission of CausalAdmissionEvidence
         | RuntimeStart of
             invocationId: string *
             threadId: string option *
@@ -573,6 +612,144 @@ module TelemetryStore =
     let private requiredBoundedText (label: string) (maximum: int) (node: JsonElement) (name: string) =
         requiredText label node name
         |> Result.bind (boundedText $"%s{label}.%s{name}" maximum)
+
+    // This decoder is an independent, closed mirror of the committed admission/1
+    // contract. In particular, it validates the retained bytes rather than a
+    // serialization of the parsed DTO.
+    let private parseCausalAdmission (bytes: byte array) =
+        let reject reason = invalidOp ("execution-causal-admission: " + reason)
+        let field (node: JsonElement) (name: string) : JsonElement =
+            match node.TryGetProperty name with
+            | true, value -> value
+            | _ -> reject ("missing " + name)
+        let shape (node: JsonElement) (names: string list) =
+            if node.ValueKind <> JsonValueKind.Object then reject "object required"
+            let actual = node.EnumerateObject() |> Seq.map _.Name |> Seq.toArray
+            if actual.Length <> names.Length || Set.ofArray actual <> Set.ofList names then
+                reject "closed field set required"
+        let rec noDuplicates (node: JsonElement) =
+            match node.ValueKind with
+            | JsonValueKind.Object ->
+                let values = node.EnumerateObject() |> Seq.toArray
+                if values.Length <> (values |> Array.map _.Name |> Array.distinct |> Array.length) then
+                    reject "duplicate property"
+                values |> Array.iter (fun value -> noDuplicates value.Value)
+            | JsonValueKind.Array -> node.EnumerateArray() |> Seq.iter noDuplicates
+            | _ -> ()
+        let boundedString (maximum: int) (node: JsonElement) : string =
+            if node.ValueKind <> JsonValueKind.String then reject "string required"
+            let value = node.GetString()
+            if String.IsNullOrWhiteSpace value || value.Length > maximum || (value |> Seq.exists Char.IsControl) then
+                reject "bounded string required"
+            value
+        let text (node: JsonElement) (name: string) (maximum: int) = field node name |> boundedString maximum
+        let optionalText (node: JsonElement) (name: string) (maximum: int) =
+            let value = field node name
+            if value.ValueKind = JsonValueKind.Null then None else Some(boundedString maximum value)
+        let integer (node: JsonElement) =
+            if node.ValueKind <> JsonValueKind.Number then reject "integer required"
+            match node.TryGetInt64() with
+            | true, value when value >= 0L -> value
+            | _ -> reject "nonnegative integer required"
+        let number (node: JsonElement) (name: string) = field node name |> integer
+        let optionalNumber (node: JsonElement) (name: string) =
+            let value = field node name
+            if value.ValueKind = JsonValueKind.Null then None else Some(integer value)
+        let guid (node: JsonElement) =
+            let value = boundedString 64 node
+            match Guid.TryParse value with
+            | true, parsed when parsed <> Guid.Empty -> parsed
+            | _ -> reject "nonempty GUID required"
+        let requiredGuid (node: JsonElement) (name: string) = field node name |> guid
+        let optionalGuid (node: JsonElement) (name: string) =
+            let value = field node name
+            if value.ValueKind = JsonValueKind.Null then None else Some(guid value)
+        let timestamp (node: JsonElement) (name: string) =
+            let value = text node name 64
+            if not (validTimestamp value) then reject "RFC3339 timestamp required"
+            DateTimeOffset.Parse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind)
+        let identity (original: string) (attempt: Guid) (generation: int64) (suffix: string) (prefix: string) =
+            prefix +
+            CanonicalJson.sha256
+                (Encoding.UTF8.GetBytes(original + "\u001f" + attempt.ToString("N") + "\u001f" + string generation + "\u001f" + suffix))
+        try
+            if bytes.Length < 1 || bytes.Length > 4096 then reject "size outside 1..4096"
+            use document = JsonDocument.Parse bytes
+            let root = document.RootElement
+            noDuplicates root
+            shape root
+                [ "schema"; "originalItemId"; "memberItemId"; "assignmentId"; "attemptId"; "generation"
+                  "invocationId"; "rootInvocationId"; "parentInvocationId"; "parentAttemptId"
+                  "parentGeneration"; "rootAttemptId"; "rootGeneration"; "relation"; "admittedAt"
+                  "rootAdmittedAt"; "clockProvenance"; "declaration" ]
+            if text root "schema" 128 <> "fsgg.orchestration.execution-causal-admission/1" then reject "schema"
+            let original = text root "originalItemId" 512
+            let memberId = text root "memberItemId" 512
+            let assignment = requiredGuid root "assignmentId"
+            let attempt = requiredGuid root "attemptId"
+            let generation = number root "generation"
+            let invocation = text root "invocationId" 128
+            let rootInvocation = text root "rootInvocationId" 128
+            let parentInvocation = optionalText root "parentInvocationId" 128
+            let parentAttempt = optionalGuid root "parentAttemptId"
+            let parentGeneration = optionalNumber root "parentGeneration"
+            let rootAttempt = requiredGuid root "rootAttemptId"
+            let rootGeneration = number root "rootGeneration"
+            let relation = text root "relation" 16
+            let admitted = timestamp root "admittedAt"
+            let rootAdmitted = timestamp root "rootAdmittedAt"
+            let clock = text root "clockProvenance" 32
+            let declaration = field root "declaration"
+            shape declaration [ "purpose"; "dependencyCoverage"; "dependencies"; "retryOfInvocationId" ]
+            let purpose = text declaration "purpose" 32
+            let coverage = text declaration "dependencyCoverage" 16
+            let retry = optionalText declaration "retryOfInvocationId" 128
+            let edges = field declaration "dependencies"
+            if edges.ValueKind <> JsonValueKind.Array || edges.GetArrayLength() > 16 then reject "dependencies bound"
+            let dependencies =
+                edges.EnumerateArray()
+                |> Seq.map (fun edge ->
+                    shape edge [ "originalItemId"; "invocationId"; "sourceReference" ]
+                    { OriginalItemId = text edge "originalItemId" 512
+                      InvocationId = text edge "invocationId" 128
+                      SourceReference = text edge "sourceReference" 512 })
+                |> Seq.toArray
+            let pairs = dependencies |> Array.map (fun edge -> edge.OriginalItemId, edge.InvocationId)
+            if pairs.Length <> (pairs |> Array.distinct |> Array.length)
+               || (dependencies |> Array.exists (fun edge -> edge.InvocationId = invocation)) then
+                reject "duplicate or self dependency"
+            if not (Set.contains purpose (Set.ofList [ "planning"; "implementation"; "review"; "validation";
+                                                        "delivery"; "repair"; "operations"; "other"; "unclassified" ]))
+               || not (Set.contains coverage (Set.ofList [ "complete"; "partial"; "unknown" ]))
+               || clock <> "host-wall" || admitted = DateTimeOffset.MinValue
+               || rootAdmitted = DateTimeOffset.MinValue || rootGeneration > generation || rootAdmitted > admitted
+               || invocation <> identity original attempt generation "invocation" "invocation-"
+               || rootInvocation <> identity original rootAttempt rootGeneration "invocation" "invocation-"
+               || (relation = "root" &&
+                   (parentInvocation.IsSome || parentAttempt.IsSome || parentGeneration.IsSome
+                    || invocation <> rootInvocation))
+               || (relation <> "root" &&
+                   (not (Set.contains relation (Set.ofList [ "child"; "follow-up" ]))
+                    || parentInvocation.IsNone || parentAttempt.IsNone || parentGeneration.IsNone
+                    || generation <= rootGeneration
+                    || (parentGeneration |> Option.defaultValue -1L) < rootGeneration
+                    || (parentGeneration |> Option.defaultValue -1L) >= generation
+                    || parentInvocation.Value <> identity original parentAttempt.Value parentGeneration.Value "invocation" "invocation-"))
+               || (retry.IsSome && retry <> parentInvocation) then
+                reject "lineage or declaration"
+            Ok
+                { OriginalItemId = original; MemberItemId = memberId; AssignmentId = assignment
+                  AttemptId = attempt; Generation = generation; InvocationId = invocation
+                  RootInvocationId = rootInvocation; ParentInvocationId = parentInvocation
+                  ParentAttemptId = parentAttempt; ParentGeneration = parentGeneration
+                  RootAttemptId = rootAttempt; RootGeneration = rootGeneration
+                  Relation = relation; AdmittedAt = admitted; RootAdmittedAt = rootAdmitted
+                  ClockProvenance = clock
+                  Declaration = { Purpose = purpose; DependencyCoverage = coverage
+                                  Dependencies = dependencies; RetryOfInvocationId = retry } }
+        with
+        | :? JsonException as error -> Error("execution-causal-admission: " + error.Message)
+        | :? InvalidOperationException as error -> Error error.Message
 
     let private requiredTextArray (label: string) (node: JsonElement) (name: string) =
         match node.TryGetProperty name with
@@ -1098,6 +1275,57 @@ module TelemetryStore =
             | "correction" ->
                 match requiredText label node "targetIdentity", requiredText label node "reason" with
                 | Ok target, Ok reason -> make [ "targetIdentity"; "reason" ] (Correction(target, reason))
+                | values -> Error(sprintf "%A" values)
+            | "execution-causal-admission/1" ->
+                match
+                    requiredText label node "dispatchId",
+                    requiredText label node "admissionBase64",
+                    requiredText label node "admissionSha256",
+                    requiredText label node "routeBindingSha256",
+                    requiredText label node "launchIntentSha256"
+                with
+                | Ok dispatch, Ok encoded, Ok admissionDigest, Ok routeDigest, Ok intentDigest ->
+                    let isDigest (value: string) = Regex.IsMatch(value, "^[0-9a-f]{64}$")
+                    let names = node.EnumerateObject() |> Seq.map _.Name |> Seq.toArray
+                    if names.Length <> (names |> Array.distinct |> Array.length)
+                       || not (names |> Array.contains "revision")
+                       || revision <> 0L || not (List.forall isDigest [ admissionDigest; routeDigest; intentDigest ])
+                       || encoded.Length > 5464 then
+                        Error $"%s{label} has invalid immutable admission metadata"
+                    else
+                        try
+                            let raw = Convert.FromBase64String encoded
+                            if raw.Length < 1 || raw.Length > 4096
+                               || Convert.ToBase64String raw <> encoded
+                               || CanonicalJson.sha256 raw <> admissionDigest then
+                                Error $"%s{label} has noncanonical or unbound admission bytes"
+                            else
+                                match parseCausalAdmission raw with
+                                | Error reason -> Error reason
+                                | Ok admission ->
+                                    let expectedDispatch =
+                                        "dispatch-" +
+                                        CanonicalJson.sha256
+                                            (Encoding.UTF8.GetBytes(
+                                                admission.OriginalItemId + "\u001f" +
+                                                admission.AttemptId.ToString("N") + "\u001f" +
+                                                string admission.Generation + "\u001fdispatch"))
+                                    if itemId <> Some admission.OriginalItemId
+                                       || identity <> "execution-causal-admission-" + admission.InvocationId
+                                       || dispatch <> expectedDispatch then
+                                        Error $"%s{label} does not bind the canonical invocation and dispatch"
+                                    else
+                                        make
+                                            [ "dispatchId"; "admissionBase64"; "admissionSha256"
+                                              "routeBindingSha256"; "launchIntentSha256" ]
+                                            (ExecutionCausalAdmission
+                                                { DispatchId = dispatch; AdmissionBase64 = encoded
+                                                  AdmissionSha256 = admissionDigest
+                                                  RouteBindingSha256 = routeDigest
+                                                  LaunchIntentSha256 = intentDigest
+                                                  Admission = admission })
+                        with :? FormatException ->
+                            Error $"%s{label}.admissionBase64 is invalid"
                 | values -> Error(sprintf "%A" values)
             | "runtime-admission" ->
                 match

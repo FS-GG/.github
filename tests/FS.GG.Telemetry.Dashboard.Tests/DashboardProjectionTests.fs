@@ -159,6 +159,17 @@ module DashboardProjectionTests =
         Assert.Equal(Error InvalidSnapshot, DashboardProjection.project "workspace-a" (scopedEnvelope "workspace-a" value))
 
     [<Fact>]
+    let ``causal observation remains an opaque bounded private row in the existing dashboard projection`` () =
+        let value = responseSnapshot ()
+        value["learningObservations"] <-
+            nodes
+                [| row """{"kind":"execution-causal-admission/1","identity":"execution-causal-admission-invocation-example","canonical":"private-admission-bytes","receipt_producer":"private-producer"}""" |]
+        let projected = DashboardProjection.project "workspace-a" (scopedEnvelope "workspace-a" value) |> unwrap
+        let text = Encoding.UTF8.GetString projected
+        Assert.DoesNotContain("private-admission-bytes", text)
+        Assert.DoesNotContain("private-producer", text)
+
+    [<Fact>]
     let ``private item steps expose bounded timing and direct tokens without evidence text`` () =
         let value = snapshot "item-a"
         value["activities"] <-

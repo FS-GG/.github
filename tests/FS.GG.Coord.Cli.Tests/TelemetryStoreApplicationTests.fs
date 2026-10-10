@@ -15,6 +15,15 @@ open FS.GG.Coord.Cli
 module TelemetryStoreApplicationTests =
     let private approved = TelemetryStore.ApprovedLocalDurable
 
+    let private causalFixture name =
+        Path.Combine(__SOURCE_DIRECTORY__, "..", "learn-01-analysis", "fixtures", "causal-admission", name)
+
+    let private causalBatch name event =
+        Encoding.UTF8.GetBytes
+            $"""{{"schema":"{TelemetryStore.BatchSchema}","ingestId":"causal-{name}","sourceIdentity":"coordination","generation":"synthetic-{name}","cursor":"causal-{name}","eventCount":1,"events":[{event}]}}"""
+
+    let private causalEvent name = File.ReadAllText(causalFixture(name + ".event.json")).Trim()
+
     let private unwrap =
         function
         | Ok value -> value
@@ -34,6 +43,42 @@ module TelemetryStoreApplicationTests =
                     Directory.Delete(path, true)
         },
         path
+
+    [<Fact>]
+    let ``causal declaration survives schema14 reopen and refuses immutable correction atomically`` () =
+        let cleanup, path = root ()
+        use cleanup = cleanup
+        TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
+        let rootEvent = causalEvent "root"
+        let batch = causalBatch "root" rootEvent
+        Assert.Contains("\"accepted\":1", TelemetryStoreApplication.ingest path approved batch |> unwrap)
+        Assert.Contains("\"replayed\":1", TelemetryStoreApplication.ingest path approved batch |> unwrap)
+        let snapshot () =
+            use envelope = JsonDocument.Parse(TelemetryStoreApplication.dashboardSnapshot path approved None |> unwrap)
+            let compressed = Convert.FromBase64String(envelope.RootElement.GetProperty("canonicalSnapshotGzip").GetString())
+            use input = new MemoryStream(compressed)
+            use unzip = new GZipStream(input, CompressionMode.Decompress)
+            use plain = new MemoryStream()
+            unzip.CopyTo plain
+            JsonDocument.Parse(plain.ToArray())
+        use first = snapshot ()
+        let rows = first.RootElement.GetProperty("learningObservations")
+        Assert.Equal(1, rows.GetArrayLength())
+        Assert.Equal("execution-causal-admission/1", rows.[0].GetProperty("kind").GetString())
+        use originalEvent = JsonDocument.Parse rootEvent
+        use retainedEvent = JsonDocument.Parse(rows.[0].GetProperty("canonical").GetString())
+        Assert.Equal(originalEvent.RootElement.GetProperty("admissionBase64").GetString(),
+                     retainedEvent.RootElement.GetProperty("admissionBase64").GetString())
+        let event = System.Text.Json.Nodes.JsonNode.Parse rootEvent
+        let admission = Convert.FromBase64String(event["admissionBase64"].GetValue<string>())
+        let changed = Encoding.UTF8.GetString(admission).Replace("\"implementation\"", "\"review\"") |> Encoding.UTF8.GetBytes
+        event["admissionBase64"] <- Convert.ToBase64String changed
+        event["admissionSha256"] <- CanonicalJson.sha256 changed
+        Assert.True(TelemetryStoreApplication.ingest path approved (causalBatch "changed" (event.ToJsonString())) |> Result.isError)
+        use after = snapshot ()
+        Assert.Equal(first.RootElement.GetProperty("learningObservations").[0].GetProperty("content_digest").GetString(),
+                     after.RootElement.GetProperty("learningObservations").[0].GetProperty("content_digest").GetString())
+        Assert.Equal(14, after.RootElement.GetProperty("store").GetProperty("schemaVersion").GetInt32())
 
     let private pragma path value =
         use connection =
