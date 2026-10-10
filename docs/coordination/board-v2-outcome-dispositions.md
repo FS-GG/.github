@@ -266,8 +266,7 @@ Publication .5 is complete; product-board adoption/Creator journeys remain separ
 This acceptance supersedes earlier cumulative statements that named consumers, the native legacy
 notice or unspecified additional carryover keep .4 open. Historical failed/conditional records retain
 their original scope; finite .4 completion does not certify their missing product evidence. The owning
-checkbox and current Unified index record this root-selected acceptance; protected source delivery
-awaits the present change’s native merge readback.
+checkbox and current Unified index record this root-selected acceptance.
 
 
 ### Finite .4 acceptance joins

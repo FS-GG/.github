@@ -252,7 +252,7 @@ alone cannot close product adoption.
   accepted three-active import, all five selected organization consumers and the actual legacy notice.
   Root selected this finite boundary on 2026-10-10 after original-clause reconciliation. No additional
   import or consumer is selected; [actual evidence joins](board-v2-outcome-dispositions.md#finite-4-acceptance-joins)
-  satisfy this scope. Unresolved product work, Q6 and .6 remain separate; source delivery awaits native merge readback.
+  satisfy this scope. Unresolved product work, Q6 and .6 remain separate.
 - [x] **COORD-BOARD-V2-01.5 — Publish product workspace integration.** SDD/Templates and the shared
   adapter owner implement and publish the V2 binding, initialization, product-local commands and
   materialized guidance. Record exact coherent package identities and the selected coordinated-board
