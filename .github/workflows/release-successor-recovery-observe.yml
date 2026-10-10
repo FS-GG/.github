@@ -1,0 +1,80 @@
+name: release-successor-recovery-observe
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/release-successor-recovery-observe.yml
+      - scripts/release-successor-recovery-observe.py
+      - tests/release-successor-recovery-observe/**
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-successor-recovery-observe-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  fixture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - run: python3 tests/release-successor-recovery-observe/run.py
+
+  observe:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.actor == 'EHotwagner' && github.run_attempt == 1
+    needs: fixture
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: release-successor
+    permissions:
+      contents: write # Original Actions draft visibility; reader has only a closed GET route.
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Refuse an unexpected native context before token mint
+        env:
+          APP_ID: ${{ vars.FSGG_ORDINARY_LEDGER_APP_ID }}
+          EXPECTED_INSTALLATION_ID: ${{ secrets.FSGG_ORDINARY_LEDGER_INSTALLATION_ID }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = FS-GG/.github
+          test "$GITHUB_EVENT_NAME" = workflow_dispatch
+          test "$GITHUB_REF" = refs/heads/main
+          test "$GITHUB_ACTOR" = EHotwagner
+          test "$GITHUB_RUN_ATTEMPT" = 1
+          test "$APP_ID" = 4882140
+          [[ "$EXPECTED_INSTALLATION_ID" =~ ^[1-9][0-9]*$ ]]
+      - name: Mint the original ledger App's Authority read token
+        id: ledger
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          app-id: ${{ vars.FSGG_ORDINARY_LEDGER_APP_ID }}
+          private-key: ${{ secrets.FSGG_ORDINARY_LEDGER_APP_PRIVATE_KEY }}
+          owner: FS-GG
+          repositories: FS.GG.Coordination.Authority
+          permission-contents: read
+      - name: Observe original draft identity and distinct credential quotas
+        env:
+          APP_ID: ${{ vars.FSGG_ORDINARY_LEDGER_APP_ID }}
+          EXPECTED_INSTALLATION_ID: ${{ secrets.FSGG_ORDINARY_LEDGER_INSTALLATION_ID }}
+          ACTUAL_INSTALLATION_ID: ${{ steps.ledger.outputs.installation-id }}
+          ACTIONS_TOKEN: ${{ github.token }}
+          LEDGER_TOKEN: ${{ steps.ledger.outputs.token }}
+          OBSERVATION_ROOT: ${{ runner.temp }}/original-release-recovery-observation
+        run: python3 -I -S -B scripts/release-successor-recovery-observe.py
+      - name: Retain only scoped summary; raw unrelated release bodies stay private
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: original-release-recovery-observation
+          path: ${{ runner.temp }}/original-release-recovery-observation/summary.json
+          if-no-files-found: error
+          retention-days: 7
