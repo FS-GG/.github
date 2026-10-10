@@ -318,3 +318,48 @@ The installed user tool remains 0.99.0. Prepare a fixed 0.100.0 side-by-side ado
 installed payload verification before changing its selector. Original pending-reader custody,
 store migration, fresh canonical collection and activation remain unresolved; do not retry the
 held reader or infer native acceptance from publication. Host 0.5 remains its separate published boundary.
+
+## Coherent publisher journal route prepared — 2026-10-10
+
+The coherent publisher explicitly selects the existing main-directory journal route. It
+classifies the selected logical release under immutable Authority main and refuses a
+surviving legacy ref, incomplete or malformed tree, unreadable object or changing head.
+An existing directory is recovery and receives the primitive's full lineage and original
+intent validation; legacy-ref absence cannot make consumed journal18 fresh. Unused
+preflight performs no journal or provider writes. The journal's default legacy mode,
+state machine, sibling preservation, logical history and non-forced CAS remain unchanged.
+
+Each genesis and later intent/dispatch/settlement admission composes the existing exact
+publisher run/head/operator checks with the reviewed main and permanent retirement
+protections. The reusable predicate retains the importer's exact frozen-ref and coverage
+guards. Omitted native bypass actors require the existing stabilized full reviewed binding
+and unchanged rule version; omission is not an observed empty roster.
+
+Historical read-only qualification at source `31795a80e706fc4203c27e421f9e3648a1dd1329`
+verified31 retained release paths and257 ancestries on imported Authority main
+`2e697b07d050ac6d82712550d10235c221746a24`. It does not settle the cancelled original
+apply run37984782893 or its unresolved ordinary effects. The accepted cutover retired the
+coherent publisher workflow362181999; repairing its source does not enable it.
+
+A bounded authenticated read on 2026-10-09 at protected `.github` main
+`de7c37fad562f9f1195fa715b851bce8c1ef044c` found stable Authority main
+`54b069a4422b7aaa1a754360c6ab12c9d3d5cd2e`. Main rules24802693/24802698 and permanent
+fences24812732/24812733 matched the reviewed fields, versions and visible full actor
+rosters. Effective main rules and the prospective19 namespace had the expected repository
+origins. Publisher362181999 remained disabled with no queued, in-progress, requested,
+waiting or pending runs. These observations are historical prerequisites, not permission
+for a later effect; all settings and source bindings must be read freshly at that boundary.
+
+Original read-only feed run [38004777915](https://github.com/FS-GG/.github/actions/runs/38004777915),
+attempt1 and source `d210c54cb37f2b05342d1b4f5f03e8a367baf862`, reported newest stable
+org/public0.100.0 for CLI, Kit and Drivers. Its component-tag-trio comparand was0.90.0,
+separate from the accepted coherent-set/v0.100.0 channel. Prospective0.101.0 and logical
+journal19 remain unselected; consumed18 and independent Host11 remain immutable.
+
+Further release use needs exact source/native qualification and separate explicit workflow
+activation and effect admission. CI+C1 publication also needs the actual packed receiver
+qualification and an approved receiving destination before enabled C2 emission. Analyzer
+distribution remains separate; no CLI pack reference establishes its installed delivery.
+A sufficient approved local CLI receiver does not require an independent Host successor.
+Installed selector, retained store, telemetry inbox/schema coverage gap and original CPU12
+custody remain unresolved by this source preparation.
