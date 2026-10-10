@@ -437,3 +437,75 @@ existing same-head corruption refusal while removing repeated historical object 
 Existing offline fixtures cover generations14 and128, cache limits, incomplete/failed
 responses, independent copies and fresh history/head reads; qualification and native
 source admission remain separate from any original-byte descendant recovery.
+
+## Four-advance recovery checkpoint qualified offline — 2026-10-10
+
+The [publisher](../../scripts/release-successor-publish.py) has an explicit
+`--recovery-checkpoint` profile for the retained candidate above and existing
+main-directory journal19. It requires publish mode, the exact original candidate
+run/artifact/archive/source/content tuple, original intent validation and current
+descendant-publisher admission. A fresh destination refuses before initialization.
+Starting generations14 through33 must retain the known sixteen-effect prefix.
+Each invocation makes at most four actual advances, retains five-second spacing
+and the existing45-minute observation deadline, and never redispatches an absent
+effect whose original intent exists. No automatic next invocation follows.
+
+One fixed adapter counts every Authority GET/POST/PATCH application entry,
+including quota admission, constructor, classification, logical reads, native
+protections and CAS writes/readback. The counted initial core-quota observation
+must contain coherent integer limit/remaining/reset/used fields, a future reset,
+and at least4500 remaining requests. Entry4201 refuses before sending; neither
+the4200 ceiling nor the4500 floor is an input. These bounds do not reserve quota
+against other consumers or bound transport redirects and request duration.
+
+The [workflow](../../.github/workflows/release-successor-publish.yml) retains a
+result artifact on success or failure. A bounded checkpoint can exit successfully
+with `disposition=checkpoint` and `publicationComplete=false`; only an actual
+complete advance reports completion. The16KiB result records the candidate and
+execution identities, starting and last successfully observed journal bindings,
+request counters, quota, iterations and dispatch uncertainty. It performs no
+extra final journal read. Primary errors remain distinct from reporting errors;
+a missing, malformed or truncated result does not establish acceptance.
+
+Independent exact-source review and one admitted run of the
+[offline controls](../../tests/release-successor-recovery/run.py) passed14controls
+at protected base `c7dda5ca89e60f65e06ba5bfecba587181bdb7bd`. The controls use
+in-memory Authority objects with actual journal lineage/read/CAS and composite
+native admission. They cover quota refusal, original intent absence, admission,
+CAS and observation failures, count exhaustion, dispatch uncertainty and result
+failure. Their object IDs are synthetic fixture identities. Measured application
+entries include the quota observation; fixture setup1632 entries is separate.
+
+| Starting generation | GET | POST | PATCH | Total |
+| --- | --- | --- | --- | --- |
+| 14 | 1129 | 28 | 4 | 1161 |
+| 18 | 1385 | 28 | 4 | 1417 |
+| 22 | 1641 | 28 | 4 | 1673 |
+| 26 | 1897 | 28 | 4 | 1929 |
+| 30 | 1922 | 21 | 3 | 1946 |
+| 33 | 751 | 0 | 0 | 751 |
+
+All six measured slices stayed below the conservative4080-call bound. The
+original supervisor receipt records exit0, observed owned custody and an empty
+process group, with sampled peak59,424,768 bytes. Independent postinspection
+verified all14 source/tool pins and exact original process births/group. The
+first prelaunch census classification failure remains retained; correcting its
+own observer exclusion preceded the single actual test attempt. These sampled
+observations do not establish hard containment, reserve live quota or qualify
+the original live journal, native source, provider or publication effects.
+
+The original generation14 still retains `nuget:FS.GG.Kit=intent`. An absent
+package observation does not prove that no dispatch occurred. The unchanged
+advance policy returns waiting without redispatch for intent plus absence, so
+the quota checkpoint alone cannot resolve that stranded intent. Source/log
+ordering supports an inference of intent-CAS readback failure before the Kit
+push, but no independent native provider non-entry receipt or publication audit
+establishes that inference. Separate original-intent reconciliation and an
+explicit forward-recovery decision remain required; no intent reset, generic
+resend or additional recovery profile is selected here.
+
+Current native source acceptance, fresh quota and original-operation
+reconciliation remain prerequisites to any recovery invocation. The original
+publisher's draft identity, partial feed state, public coherence and installed
+receiver acceptance remain unresolved. Existing journal, provider and admission
+algorithms and original candidate bytes remain unchanged by this profile.
