@@ -23,6 +23,7 @@ from unittest.mock import patch
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
 from release_successor_execution import Dispatch, JournalState, Observation, Refused, advance_effects
+from release_successor_journal import Refused as JournalRefused
 from new_sdd_workspace_successor_admission import WizardAdmission
 from new_sdd_workspace_successor_execution import effects, CURRENT_016, CURRENT_015, CURRENT_014, HISTORICAL_013, ReleaseBinding
 from new_sdd_workspace_successor_provider import WizardProvider, NotFound, output_signals, publisher_error, DIAGNOSTIC_LIMIT
@@ -759,6 +760,388 @@ class WizardReleaseTests(unittest.TestCase):
             with patch.object(provider, "_public_install", side_effect=AssertionError("install forbidden during draft readback")), contextlib.redirect_stdout(output):
                 self.assertEqual(provider.observe(self.ordered[-1]).state, "absent")
             row = json.loads(output.getvalue().split(": ", 1)[1]);self.assertEqual(row["reason"], "draft-observed");self.assertEqual(api.writes, [])
+
+
+
+def creator_caller():
+    spec = importlib.util.spec_from_file_location("tested_creator016_publisher", ROOT / "scripts/new-sdd-workspace-successor-publish.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def creator_fixture_sources():
+    """Reuse the actual existing Git adapter without executing its top-level suite."""
+    import base64
+    import os
+    from release_successor_journal import REPOSITORY
+    path = ROOT / "tests/release-successor-journal/run.py"
+    tree = ast.parse(path.read_text(), filename=str(path))
+    selected = next(node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == "RealGit")
+    scope = {"base64": base64, "json": json, "os": os, "pathlib": pathlib,
+             "subprocess": subprocess, "tempfile": tempfile, "REPOSITORY": REPOSITORY}
+    exec(compile(ast.Module(body=[selected], type_ignores=[]), str(path), "exec"), scope)
+    spec = importlib.util.spec_from_file_location("creator_shared_policy_fixture", ROOT / "tests/release-successor-live/run.py")
+    fixture = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(fixture)
+    return scope["RealGit"], fixture
+
+
+class CreatorPublicationTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.caller = creator_caller()
+        cls.primitives = cls.caller.publication_primitives()
+        cls.RealGit, cls.shared = creator_fixture_sources()
+
+    def setUp(self):
+        self.content, self.ordered = effects(manifest())
+        self.intent = {"contentId": self.content, "sourceSha": "a" * 40, "version": "0.16.0",
+                       "candidateArchiveSha256": "d" * 64, "operator": "EHotwagner"}
+        self.report = self.caller.publication_report(1, 2, "d" * 64, "publish")
+
+    def fixture(self, root):
+        import base64
+        import copy
+        from release_successor_journal import REPOSITORY as authority
+        real = self.RealGit(root / "authority.git")
+        # Preserve complete parent directories before selecting fresh absence.
+        parent = real.get(f"repos/{authority}/git/ref/heads/main")["object"]["sha"]
+        commit = real.get(f"repos/{authority}/git/commits/{parent}")
+        blob = real.post(f"repos/{authority}/git/blobs", {"content": base64.b64encode(b"parent marker\n").decode()})
+        tree = real.post(f"repos/{authority}/git/trees", {"base_tree": commit["tree"]["sha"], "tree": [
+            {"path": "state/releases/.parent", "mode": "100644", "type": "blob", "sha": blob["sha"]}]})
+        commit = real.post(f"repos/{authority}/git/commits", {"tree": tree["sha"], "parents": [parent], "message": "Fixture parents"})
+        real.patch(f"repos/{authority}/git/refs/heads/main", {"sha": commit["sha"], "force": False})
+        policy = self.shared.AuthorityAPI()
+        class Transport:
+            def __init__(self):
+                self.calls = []; self.writes = []; self.overrides = {}; self.lose_patch = False
+                self.quota_remaining = 5000
+            def get(self, path):
+                self.calls.append(("get", path))
+                if path in self.overrides:
+                    value = self.overrides[path]
+                    if isinstance(value, Exception): raise value
+                    return copy.deepcopy(value)
+                if path == "rate_limit":
+                    return {"resources": {"core": {"limit": 5000, "remaining": self.quota_remaining,
+                        "used": 5000-self.quota_remaining, "reset": 4102444800}}}
+                if "/rulesets/" in path or "/rules/branches/" in path:
+                    return policy.get(path)
+                if "/git/ref/heads/fsgg/" in path:
+                    raise NotFound(path)
+                value = real.get(path)
+                if path.endswith("/git/ref/heads/main"):
+                    value["object"]["type"] = "commit"
+                return value
+            def post(self, path, body):
+                self.calls.append(("post", path)); self.writes.append(("post", path, body))
+                return real.post(path, body)
+            def patch(self, path, body):
+                self.calls.append(("patch", path)); self.writes.append(("patch", path, body))
+                value = real.patch(path, body)
+                if self.lose_patch:
+                    self.lose_patch = False
+                    raise OSError("lost CAS response")
+                return value
+        native = Transport()
+        counted = self.primitives.CountedAuthorityAPI(native)
+        counted.admit_quota()
+        journal = self.primitives.ReportingJournal(
+            self.caller.ProtectedReleaseJournal(counted, self.caller.REF, main_directory=True), self.report)
+        class PublisherAPI:
+            source = "a" * 40
+            def get(self, path):
+                if path == "repos/FS-GG/.github":
+                    return {"id": 1269292704, "full_name": "FS-GG/.github"}
+                if "/actions/runs/123" in path:
+                    return {"repository": {"id": 1269292704}, "path": ".github/workflows/release-new-sdd-workspace.yml",
+                            "event": "workflow_dispatch", "head_branch": "main", "head_sha": "a"*40,
+                            "run_attempt": 1, "actor": {"login": "EHotwagner"}, "status": "in_progress"}
+                if path.endswith("/git/ref/heads/main"):
+                    return {"object": {"sha": self.source}}
+                if "/compare/" in path:
+                    return {"status": "ahead"}
+                raise AssertionError(path)
+        api = PublisherAPI()
+        admission = self.primitives.ProtectedPublisherAdmission(
+            WizardAdmission(api, manifest(), "a"*40, 123, "EHotwagner", "refs/heads/main"), counted, self.caller.REF)
+        provider = self.primitives.ReportingProvider(Provider(), self.report)
+        return real, native, counted, journal, api, admission, provider, policy
+
+    def prepare(self, counted, journal, api, admission, provider, preflight=False, source="a"*40):
+        return self.caller.prepare_publication(self.primitives, journal, counted, admission, provider, api,
+                    self.intent, self.ordered, source, preflight, self.report)
+
+    def test_inert_checkout_import_and_legacy_default(self):
+        with patch("subprocess.run", side_effect=AssertionError("import must be inert")):
+            primitives = self.caller.publication_primitives()
+            primitives.authority_protection()
+        self.assertEqual(pathlib.Path(primitives.__file__), ROOT / "scripts/release-successor-publish.py")
+        self.assertFalse(self.caller.ProtectedReleaseJournal(self.shared.AuthorityAPI()).main_directory)
+
+    def test_actual_main_directory_all_eight_counted_cold_warm_and_sibling(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            real, native, counted, journal, api, admission, provider, policy = self.fixture(pathlib.Path(temporary))
+            self.assertFalse(self.prepare(counted, journal, api, admission, provider))
+            cold = dict(counted.attempted)
+            cold_calls = list(native.calls)
+            journal.read(); warm = {key: counted.attempted[key]-cold[key] for key in cold}
+            warm_calls = native.calls[len(cold_calls):]
+
+            real.sibling("sibling-state.txt")
+            self.caller.reconcile_publication(self.content, self.ordered, journal, admission, provider,
+                                             self.report, clock=lambda: 0, sleep=lambda _: None)
+            state = journal.read()
+            self.assertEqual(state.generation, 17)
+            self.assertEqual(state.effects, {effect.identity: "verified" for effect in self.ordered})
+            self.assertEqual(provider.writes, [effect.identity for effect in self.ordered])
+            self.assertEqual(real.command("show", "refs/heads/main:sibling-state.txt"), b"Sibling state\n")
+            self.assertEqual(real.command("show", "refs/heads/main:state/releases/.parent"), b"parent marker\n")
+            self.assertTrue(all(body["force"] is False for method, path, body in native.writes if method == "patch"))
+            self.assertFalse(any("/git/refs" in path and method == "post" for method, path, body in native.writes))
+            self.assertEqual(sum(counted.attempted.values()), len(native.calls))
+            rules = [path for method, path in native.calls if "/rulesets/" in path]
+            self.assertEqual(len(rules), 4 * (1 + 3 * len(self.ordered)))
+            def categories(calls):
+                result = {}
+                for method, path in calls:
+                    category = ("quota" if path == "rate_limit" else "protection" if "/rules" in path
+                                else "history" if "/commits?" in path else "compare" if "/compare/" in path
+                                else "refs" if "/git/ref" in path else "commits" if "/git/commits" in path
+                                else "trees" if "/git/trees" in path else "blobs" if "/git/blobs" in path else "repository")
+                    key = method + ":" + category; result[key] = result.get(key, 0) + 1
+                return result
+            total = sum(counted.attempted.values())
+            self.assertLess(total, 4200)
+            print("Creator016 actual all-eight Authority profile: " + json.dumps(
+                {"coldPreparationByMethod": cold, "warmReadByMethod": warm,
+                 "coldPreparationCategories": categories(cold_calls), "warmReadCategories": categories(warm_calls),
+                 "categories": categories(native.calls),
+                 "total": total, "ceiling": 4200, "margin": 4200-total}, sort_keys=True))
+
+    def test_preflight_has_zero_journal_and_provider_writes(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            _, native, counted, journal, api, admission, provider, _ = self.fixture(pathlib.Path(temporary))
+            self.assertTrue(self.prepare(counted, journal, api, admission, provider, preflight=True))
+            self.assertEqual(native.writes, []); self.assertEqual(provider.writes, [])
+            self.assertTrue(self.report["preflightPassed"]); self.assertFalse(self.report["complete"])
+
+    def test_existing_directory_with_legacy_404_validates_original_intent(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            _, native, counted, journal, api, admission, provider, _ = self.fixture(pathlib.Path(temporary))
+            self.prepare(counted, journal, api, admission, provider)
+            writes = len(native.writes)
+            self.assertFalse(self.prepare(counted, journal, api, admission, provider, source="e"*40))
+            self.assertFalse(self.report["fresh"])
+            with self.assertRaisesRegex(Refused, "preflight requires"):
+                self.prepare(counted, journal, api, admission, provider, preflight=True)
+            self.intent["candidateArchiveSha256"] = "f"*64
+            with self.assertRaisesRegex(JournalRefused, "binds a different candidate"):
+                self.prepare(counted, journal, api, admission, provider)
+            self.assertEqual(len(native.writes), writes); self.assertEqual(provider.writes, [])
+
+    def test_source_mismatch_prevents_genesis_and_effects(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            _, native, counted, journal, api, admission, provider, _ = self.fixture(pathlib.Path(temporary))
+            with self.assertRaisesRegex(Refused, "exact current main"):
+                self.prepare(counted, journal, api, admission, provider, source="e"*40)
+            self.assertEqual(native.writes, []); self.assertEqual(provider.writes, [])
+
+    def test_physical_classifier_refuses_incomplete_or_ambiguous_population(self):
+        from release_successor_journal import REPOSITORY as authority
+        for defect in ("parent", "nested404", "truncated", "ambiguous", "repository", "legacy", "moved", "malformed"):
+            with self.subTest(defect=defect):
+                native = self.shared.AuthorityAPI()
+                original = native.get
+                def read(path):
+                    if defect == "legacy" and path.endswith(self.caller.REF.removeprefix("refs/")):
+                        return {"object": {"sha": "e"*40}}
+                    if path.endswith(self.caller.REF.removeprefix("refs/")):
+                        raise NotFound(path)
+                    if defect == "nested404" and path.endswith("/git/trees/"+native.state): raise NotFound(path)
+                    value = original(path)
+                    if defect == "repository" and path == f"repos/{authority}": value["id"] = 1
+                    if "/git/trees/" in path:
+                        if defect == "parent" and path.endswith(native.root): value["tree"] = []
+                        if defect == "truncated": value["truncated"] = True
+                        if defect == "ambiguous" and value["tree"]: value["tree"] *= 2
+                        if defect == "malformed": value["sha"] = "x"
+                    return value
+                if defect == "moved": native.change_main_at = 2
+                native.get = read
+                with self.assertRaises((Refused, NotFound)):
+                    self.primitives.classify_journal_destination(native, self.caller.REF)
+
+    def test_protection_rechecked_and_drift_blocks_actual_execution(self):
+        for defect in ("actor", "enforcement", "version", "exclusion", "origin", "source"):
+            with self.subTest(defect=defect), tempfile.TemporaryDirectory() as temporary:
+                _, native, counted, journal, api, admission, provider, policy = self.fixture(pathlib.Path(temporary))
+                self.prepare(counted, journal, api, admission, provider)
+                if defect == "source": api.source = "e"*40
+                elif defect == "origin":
+                    route = "repos/FS-GG/FS.GG.Coordination.Authority/rules/branches/main"
+                    rows = policy.get(route)
+                    for row in rows: row["ruleset_source"] = "other/repository"
+                    native.overrides[route] = rows
+                elif defect == "actor": policy.controls["mainWriter"]["bypass_actors"] = []
+                elif defect == "enforcement": policy.controls["mainWriter"]["enforcement"] = "disabled"
+                elif defect == "version": policy.controls["mainWriter"]["updated_at"] = "2000-01-01T00:00:00Z"
+                else: policy.controls["mainWriter"]["conditions"]["ref_name"]["exclude"] = ["refs/heads/main"]
+                with self.assertRaises(Refused):
+                    advance_effects(self.content, self.ordered, journal, admission, provider)
+                self.assertEqual(provider.writes, [])
+        with tempfile.TemporaryDirectory() as temporary:
+            _, _, counted, journal, api, admission, provider, policy = self.fixture(pathlib.Path(temporary))
+            policy.omit_actors = True
+            self.assertTrue(self.prepare(counted, journal, api, admission, provider, preflight=True))
+
+    def test_lost_cas_response_is_observed_under_original_identity_without_replay(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            _, native, counted, journal, api, admission, provider, _ = self.fixture(pathlib.Path(temporary))
+            self.prepare(counted, journal, api, admission, provider)
+            native.lose_patch = True
+            with self.assertRaisesRegex(JournalRefused, "CAS response uncertain"):
+                advance_effects(self.content, self.ordered, journal, admission, provider)
+            self.assertEqual(journal.read().effects, {"tag": "intent"})
+            for _ in range(2):
+                self.assertEqual(advance_effects(self.content, self.ordered, journal, admission, provider), "waiting")
+            self.assertEqual(provider.writes, [])
+
+    def test_delayed_last_effect_exhausts_bound_before_send_and_preserves_intent(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            _, native, counted, journal, api, admission, provider, _ = self.fixture(pathlib.Path(temporary))
+            self.prepare(counted, journal, api, admission, provider)
+            provider.delayed.add("promote")
+            with self.assertRaisesRegex(Refused, "ceiling exhausted"):
+                self.caller.reconcile_publication(self.content, self.ordered, journal, admission, provider,
+                                                 self.report, clock=lambda: 0, sleep=lambda _: None)
+            self.assertEqual(sum(counted.attempted.values()), 4200)
+            self.assertEqual(len(native.calls), 4200)
+            self.assertEqual(provider.writes.count("promote"), 1)
+            # Read through the original transport for readback; never reset the invocation counter.
+            reader = self.caller.ProtectedReleaseJournal(native, self.caller.REF, main_directory=True)
+            state = reader.read()
+            self.assertEqual(state.generation, 16); self.assertEqual(state.effects["promote"], "intent")
+            self.assertFalse(self.report["complete"])
+
+    def test_original_deadline_and_iteration_cap_do_not_allow_another_send(self):
+        journal = Journal(self.content)
+        provider = Provider()
+        ticks = iter((0, 2700))
+        with self.assertRaisesRegex(Refused, "deadline expired"):
+            self.caller.reconcile_publication(self.content, self.ordered, journal, Admission(), provider,
+                                             self.report, clock=lambda: next(ticks), sleep=lambda _: None)
+        self.assertEqual(provider.writes, []); self.assertEqual(self.report["iterationsAttempted"], 0)
+        journal.state = JournalState(2, self.content, {"tag": "intent"})
+        with self.assertRaisesRegex(Refused, "bounded reconciliation steps"):
+            self.caller.reconcile_publication(self.content, self.ordered, journal, Admission(), provider,
+                                             self.report, clock=lambda: 0, sleep=lambda _: None)
+        self.assertEqual(self.report["iterationsAttempted"], 136)
+        self.assertEqual(provider.writes, []); self.assertEqual(journal.read().effects, {"tag": "intent"})
+        self.assertFalse(self.report["complete"])
+
+    def test_low_and_malformed_quota_refuse_before_journal_construction(self):
+        for core in (None, {"limit": 5000, "remaining": 4499, "used": 501, "reset": 4102444800},
+                     {"limit": 5000, "remaining": True, "used": 4999, "reset": 4102444800}):
+            class API:
+                writes = []
+                def get(self, path):
+                    self.assert_path = path
+                    return {"resources": {"core": core}}
+            api = API(); counted = self.primitives.CountedAuthorityAPI(api)
+            with self.assertRaises(Refused): counted.admit_quota()
+            self.assertEqual(counted.attempted, {"get": 1, "post": 0, "patch": 0})
+            self.assertEqual(api.writes, [])
+
+    def test_summary_fixed_fields_success_partial_failure_and_exclusive_retention(self):
+        for mode in ("preflight", "publish"):
+            with tempfile.TemporaryDirectory() as temporary:
+                self.report["mode"] = mode
+                self.report["complete"] = mode == "publish"
+                self.report["preflightPassed"] = mode == "preflight"
+                self.report["firstCause"] = self.caller.safe_cause(OSError("SECRET https://signed/?token=x /private/path"))
+                self.report["candidateSourceSha"] = "/private/SECRET"
+                self.report["lastObservedJournal"] = {"generation": 2, "logicalHead": "a"*40,
+                    "physicalHead": "b"*40, "effects": {"tag": "intent", "SECRET": "/private"}}
+                path = pathlib.Path(temporary) / "summary.json"
+                self.caller.retain_summary(path, self.report, None)
+                raw = path.read_text(); row = json.loads(raw)
+                self.assertLess(len(raw.encode()), 65536)
+                self.assertNotIn("SECRET", raw); self.assertNotIn("/private", raw); self.assertNotIn("https", raw)
+                self.assertEqual(row["firstCause"], {"kind": "OSError", "exitCode": None})
+                self.assertEqual(row["lastObservedJournal"]["effects"], {"tag": "intent"})
+                with self.assertRaises(FileExistsError): self.caller.retain_summary(path, self.report, None)
+
+    def test_actual_entry_preflight_and_failure_reporting_preserve_first_cause(self):
+        import os
+        for failure in (None, "first", "report", "both"):
+            with self.subTest(failure=failure), tempfile.TemporaryDirectory() as temporary:
+                root = pathlib.Path(temporary)
+                _, native, _, _, publisher_api, _, _, _ = self.fixture(root)
+                publisher_api_get = publisher_api.get
+                def get(path):
+                    if path.endswith("/actions/artifacts/2"):
+                        return {"id": 2, "digest": "sha256:"+"d"*64}
+                    if path.endswith("/actions/runs/1"):
+                        return {"id": 1, "head_sha": "a"*40}
+                    return publisher_api_get(path)
+                publisher_api.get = get
+                def subprocess_fixture(command, **kwargs):
+                    if command[0] == "gh": return subprocess.CompletedProcess(command, 0)
+                    output = pathlib.Path(command[command.index("--output")+1]); output.mkdir()
+                    (output/"manifest.json").write_text(json.dumps(manifest()))
+                    return subprocess.CompletedProcess(command, 0)
+                argv = ["creator", "--preflight-only", "--candidate-run-id", "1", "--candidate-artifact-id", "2",
+                        "--candidate-archive-sha256", "d"*64, "--workdir", str(root/"candidate-work")]
+                env = {"GITHUB_SHA": "a"*40, "GITHUB_ACTOR": "EHotwagner", "GITHUB_RUN_ID": "123",
+                       "GITHUB_EVENT_NAME": "workflow_dispatch", "GITHUB_REPOSITORY": "FS-GG/.github",
+                       "GITHUB_REF": "refs/heads/main", "GITHUB_RUN_ATTEMPT": "1", "GH_TOKEN": "SECRET-GH",
+                       "ORDINARY_LEDGER_TOKEN": "SECRET-LEDGER", "NUGET_API_KEY": "SECRET-NUGET"}
+                output = io.StringIO()
+                original = self.caller.retain_summary
+                def retain(path, report, counted):
+                    if failure in ("report", "both"): raise OSError("SECRET report /private")
+                    return original(path, report, counted)
+                def api(token): return native if token == "SECRET-LEDGER" else publisher_api
+                if failure in ("first", "both"): native.quota_remaining = 1
+                with patch.object(sys, "argv", argv), patch.dict(os.environ, env, clear=True), \
+                        patch.object(self.caller, "GitHubAPI", side_effect=api), \
+                        patch.object(self.caller.subprocess, "run", side_effect=subprocess_fixture), \
+                        patch.object(self.caller, "WizardProvider", return_value=Provider()), \
+                        patch.object(self.caller, "retain_summary", side_effect=retain), contextlib.redirect_stderr(output):
+                    # Destination fake uses actual preflight reads but no Git subprocess under this mock.
+                    static = self.shared.AuthorityAPI()
+                    original_get = native.get
+                    def read(path):
+                        if path == "rate_limit": return original_get(path)
+                        if path.endswith(self.caller.REF.removeprefix("refs/")): raise NotFound(path)
+                        return static.get(path)
+                    native.get = read
+                    actual = self.caller.main()
+                self.assertEqual(actual, 0 if failure is None else 1)
+                summary = root/"creator016-publication-summary.json"
+                if failure not in ("report", "both"):
+                    row = json.loads(summary.read_text())
+                    self.assertEqual(row["preflightPassed"], failure is None)
+                    self.assertFalse(row["complete"])
+                if failure == "both":
+                    self.assertIn('"code": "authority-quota-floor"', output.getvalue())
+                    self.assertIn('"reportingFailure": {"exitCode": null, "kind": "OSError"}', output.getvalue())
+                self.assertNotIn("SECRET", output.getvalue()); self.assertNotIn("/private", output.getvalue())
+                self.assertEqual(native.writes, [])
+
+    def test_workflow_summary_exact_path_and_historical_job_isolation(self):
+        workflow = (ROOT / ".github/workflows/release-new-sdd-workspace.yml").read_text()
+        ordinary, historical = workflow.split("  recovery-diagnostic:", 1)
+        self.assertIn("name: creator016-publication-summary-${{ github.run_id }}", ordinary)
+        self.assertIn("path: ${{ runner.temp }}/creator016-publication-summary.json", ordinary)
+        self.assertIn("if-no-files-found: error", ordinary)
+        self.assertNotIn("creator016-publication-summary", historical)
+        self.assertIn("timeout-minutes: 60", ordinary)
+        self.assertIn("cancel-in-progress: false", workflow)
+        self.assertIn("promotion_recovery == 'off'", ordinary)
 
 
 def load_tests(loader, tests, pattern):
