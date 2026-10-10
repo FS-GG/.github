@@ -127,7 +127,10 @@ try
     let drivers = [ "work-board"; "work-board-normal"; "work-board-best"; "padd-item" ]
     let content = "fixture consumer\n"
     let manifest ids =
-        let rows = ids |> List.map (fun id -> sprintf "{\"id\":\"%s\",\"files\":[{\"path\":\"SKILL.md\",\"sha256\":\"%s\",\"executable\":false}]}" id (digest (Text.Encoding.UTF8.GetBytes content)))
+        let rows = ids |> List.map (fun id ->
+            let leaves = if id = "work-board" then [ "SKILL.md"; "references/workspace-scope.md" ] else [ "SKILL.md" ]
+            let files = leaves |> List.map (fun path -> sprintf "{\"path\":\"%s\",\"sha256\":\"%s\",\"executable\":false}" path (digest (Text.Encoding.UTF8.GetBytes content)))
+            sprintf "{\"id\":\"%s\",\"files\":[%s]}" id (String.concat "," files))
         "{\"schemaVersion\":2,\"skills\":[" + String.concat "," rows + "]}"
     let version =
         (Reflection.Assembly.Load("fsgg-coord-engine").GetCustomAttributes(typeof<Reflection.AssemblyInformationalVersionAttribute>, false)
@@ -157,7 +160,21 @@ try
     let freshTools = Path.Combine(freshRoot, ".config/dotnet-tools.json")
     let freshProvenance = Path.Combine(freshRoot, ".fsgg/scaffold-provenance.json")
     let generated = """{"version":1,"isRoot":true,"tools":{"fs.gg.coord.cli":{"version":"0.94.0","commands":["fsgg-coord-engine"]},"fs.gg.sdd.cli":{"version":"2.1.0","commands":["fsgg-sdd"]},"owner-tool":{"version":"1.2.3","commands":["keep"]}}}"""
-    let generatedProvenance = """{"schemaVersion":1,"generator":{"id":"FS.GG.SDD.Artifacts"},"sddOwnedPaths":[{"path":".config/dotnet-tools.json","owner":"sdd"}]}"""
+    // Synthetic old/new bodies exercise the real compiled snapshot and replacement boundaries.
+    let driverPaths =
+        [ for mirror in [ ".agents/skills"; ".claude/skills" ] do
+              for leaf in [ "work-board/SKILL.md"; "work-board/references/workspace-scope.md"; "padd-item/SKILL.md" ] do
+                  yield mirror + "/" + leaf ]
+    let oldDriver = "synthetic SDD-generated predecessor driver\n"
+    for relative in driverPaths do
+        let path = Path.Combine(freshRoot, relative)
+        Directory.CreateDirectory(Path.GetDirectoryName path) |> ignore
+        File.WriteAllText(path, oldDriver)
+    let driverRows = driverPaths |> List.map (fun path ->
+        sprintf "{\"path\":\"%s\",\"owner\":\"driver\",\"sha256\":\"%s\"}" path (digest (Text.Encoding.UTF8.GetBytes oldDriver)))
+    let generatedProvenance =
+        """{"schemaVersion":1,"generator":{"id":"FS.GG.SDD.Artifacts"},"sddOwnedPaths":[{"path":".config/dotnet-tools.json","owner":"sdd"}],"driverPaths":["""
+        + String.concat "," driverRows + "]}"
     File.WriteAllText(freshTools, generated)
     File.WriteAllText(freshProvenance, generatedProvenance)
     if ProductBoard.captureFreshScaffoldTarget freshRoot |> Option.isSome then failwith "existing owner directory gained fresh authority"
@@ -171,8 +188,74 @@ try
     File.WriteAllText(freshTools, generated.Replace("\"isRoot\":true", "\"isRoot\":false"))
     ProductBoard.captureGeneratedToolManifest freshAuthority freshRoot true |> refuse "nonroot generated manifest"
     File.WriteAllText(freshTools, generated)
+    let mutable driverRefusals = 0
+    let refuseDriver description result =
+        refuse description result
+        driverRefusals <- driverRefusals + 1
+        printfn "Fresh generated driver refusal passed: %s" description
+    // Metadata cannot manufacture fresh authority for missing, duplicated or edited driver bytes.
+    let saveProvenance (mutate: JsonObject -> unit) =
+        let value = JsonNode.Parse(generatedProvenance).AsObject()
+        mutate value
+        File.WriteAllText(freshProvenance, value.ToJsonString())
+    for index in 0 .. driverPaths.Length - 1 do
+        saveProvenance (fun value -> value.["driverPaths"].AsArray().RemoveAt index)
+        ProductBoard.captureGeneratedToolManifest freshAuthority freshRoot true |> refuseDriver "missing driver ownership"
+        saveProvenance (fun value ->
+            let rows = value.["driverPaths"].AsArray()
+            rows.Add(rows.[index].DeepClone()))
+        ProductBoard.captureGeneratedToolManifest freshAuthority freshRoot true |> refuseDriver "duplicate driver ownership"
+        saveProvenance (fun value -> value.["driverPaths"].[index].["owner"] <- JsonValue.Create "authored")
+        ProductBoard.captureGeneratedToolManifest freshAuthority freshRoot true |> refuseDriver "foreign driver ownership"
+        saveProvenance (fun value -> value.["driverPaths"].[index].["sha256"] <- JsonValue.Create(String.replicate 64 "0"))
+        ProductBoard.captureGeneratedToolManifest freshAuthority freshRoot true |> refuseDriver "wrong driver digest"
+        File.WriteAllText(freshProvenance, generatedProvenance)
+        let path = Path.Combine(freshRoot, driverPaths.[index])
+        File.AppendAllText(path, "authored edit")
+        ProductBoard.captureGeneratedToolManifest freshAuthority freshRoot true |> refuseDriver "driver differs from genuine captured provenance"
+        File.WriteAllText(path, oldDriver)
+        File.Delete path
+        ProductBoard.captureGeneratedToolManifest freshAuthority freshRoot true |> refuseDriver "missing generated driver file"
+        File.WriteAllText(path, oldDriver)
+    saveProvenance (fun value -> value.Remove "driverPaths" |> ignore)
+    ProductBoard.captureGeneratedToolManifest freshAuthority freshRoot true |> refuseDriver "missing driver provenance collection"
+    saveProvenance (fun value -> value.["driverPaths"].[0].["path"] <- JsonValue.Create ".agents/skills/work-board/../SKILL.md")
+    ProductBoard.captureGeneratedToolManifest freshAuthority freshRoot true |> refuseDriver "alias ownership path cannot grant exact driver authority"
+    File.WriteAllText(freshProvenance, generatedProvenance)
+    ProductBoard.captureGeneratedToolManifest freshAuthority (freshRoot + "-foreign") true |> refuseDriver "foreign fresh target"
     let snapshot = ProductBoard.captureGeneratedToolManifest freshAuthority freshRoot true |> pass
     let prepareFresh fetch = ProductBoard.prepareGenerated snapshot freshRoot "acme/app" (String.replicate 40 "a") binding fetch
+    for relative in driverPaths do
+        let path = Path.Combine(freshRoot, relative)
+        File.AppendAllText(path, "authored edit")
+        prepareFresh fetch |> refuseDriver "generated driver edited after capture"
+        File.WriteAllText(path, oldDriver)
+        if not (OperatingSystem.IsWindows()) then
+            let mode = File.GetUnixFileMode path
+            File.SetUnixFileMode(path, mode ^^^ UnixFileMode.UserExecute)
+            prepareFresh fetch |> refuseDriver "generated driver mode edited after capture"
+            File.SetUnixFileMode(path, mode)
+        let mutable mutated = false
+        prepareFresh (fun name ->
+            if not mutated then
+                mutated <- true
+                File.AppendAllText(path, "during fetch")
+            fetch name) |> refuseDriver "generated driver edited during producer fetch"
+        File.WriteAllText(path, oldDriver)
+    // A non-selected driver-like file remains authored even during a fresh invocation.
+    let otherDriver = Path.Combine(freshRoot, ".agents/skills/work-board-best/SKILL.md")
+    Directory.CreateDirectory(Path.GetDirectoryName otherDriver) |> ignore
+    File.WriteAllText(otherDriver, "owner authored")
+    prepareFresh fetch |> refuseDriver "fresh authority does not cover arbitrary driver files"
+    File.Delete otherDriver
+    prepareFresh (fun name ->
+        fetch name |> Result.map (fun value ->
+            if name = "registry/driver-skill-manifest.json" then
+                let manifest = JsonNode.Parse(value).AsObject()
+                let workBoard = manifest.["skills"].AsArray() |> Seq.find (fun row -> row.["id"].GetValue<string>() = "work-board")
+                workBoard.["files"].AsArray().RemoveAt 1
+                manifest.ToJsonString()
+            else value)) |> refuseDriver "selected driver payload omits captured workspace scope"
     File.AppendAllText(freshTools, " ")
     prepareFresh fetch |> refuse "fresh generated manifest edited after capture"
     File.WriteAllText(freshTools, generated)
@@ -189,6 +272,8 @@ try
         fetch path) |> refuse "fresh generated manifest changed during producer fetch"
     File.WriteAllText(freshTools, generated)
     let freshPlan = prepareFresh fetch |> pass
+    if driverPaths |> List.exists (fun relative -> freshPlan.Changes |> List.exists (fun change -> change.Path = relative && change.Before = Some(Text.Encoding.UTF8.GetBytes oldDriver) && change.After = Text.Encoding.UTF8.GetBytes content) |> not) then
+        failwith "fresh driver plan omitted a selected predecessor replacement"
     let captureMode = if OperatingSystem.IsWindows() then None else Some(File.GetUnixFileMode freshTools)
     let blocked = Path.Combine(freshRoot, "blocked")
     File.WriteAllText(blocked, "owner bytes")
@@ -196,13 +281,67 @@ try
     ProductBoard.apply freshRoot { freshPlan with Changes = freshPlan.Changes @ [ impossible ] } |> refuse "late failure must roll back generated pin and staged files"
     if File.ReadAllText(freshTools) <> generated || File.ReadAllText(blocked) <> "owner bytes" then failwith "rollback changed generated or owner preimages"
     if captureMode |> Option.exists (fun mode -> File.GetUnixFileMode freshTools <> mode) then failwith "rollback changed generated manifest mode"
+    if driverPaths |> List.exists (fun relative -> File.ReadAllText(Path.Combine(freshRoot, relative)) <> oldDriver) then
+        failwith "rollback changed generated driver preimages"
     if File.Exists(Path.Combine(freshRoot, "scripts/fsgg-coord")) then failwith "rollback retained staged producer bytes"
     File.Delete blocked
     let staleFresh = prepareFresh fetch |> pass
     File.AppendAllText(freshTools, " ")
     ProductBoard.apply freshRoot staleFresh |> refuse "fresh generated preimage changed after plan"
     File.WriteAllText(freshTools, generated)
+    for relative in driverPaths do
+        let staleDriver = prepareFresh fetch |> pass
+        let path = Path.Combine(freshRoot, relative)
+        File.AppendAllText(path, "after preview")
+        ProductBoard.apply freshRoot staleDriver |> refuseDriver "generated driver changed after preview"
+        File.WriteAllText(path, oldDriver)
+        if not (OperatingSystem.IsWindows()) then
+            let modePlan = prepareFresh fetch |> pass
+            let mode = File.GetUnixFileMode path
+            File.SetUnixFileMode(path, mode ^^^ UnixFileMode.UserExecute)
+            ProductBoard.apply freshRoot modePlan |> refuseDriver "generated driver mode changed after preview"
+            File.SetUnixFileMode(path, mode)
+    if not (OperatingSystem.IsWindows()) then
+        let relative = driverPaths.Head
+        let path = Path.Combine(freshRoot, relative)
+        let aliasTarget = Path.Combine(root, "aliased-driver")
+        File.WriteAllText(aliasTarget, oldDriver)
+        File.Delete path
+        File.CreateSymbolicLink(path, aliasTarget) |> ignore
+        ProductBoard.captureGeneratedToolManifest freshAuthority freshRoot true |> refuseDriver "driver symlink capture"
+        prepareFresh fetch |> refuseDriver "driver symlink after capture"
+        File.Delete path
+        File.WriteAllText(path, oldDriver)
+        let aliasPlan = prepareFresh fetch |> pass
+        File.Delete path
+        File.CreateSymbolicLink(path, aliasTarget) |> ignore
+        ProductBoard.apply freshRoot aliasPlan |> refuseDriver "same-byte driver symlink after preview"
+        if File.ReadAllText(aliasTarget) <> oldDriver then failwith "driver alias target was written"
+        File.Delete path
+        File.WriteAllText(path, oldDriver)
+        File.Delete aliasTarget
+        // Alias ancestors also refuse even when every captured leaf has identical bytes/mode.
+        let driverDirectory = Path.Combine(freshRoot, ".agents/skills/work-board")
+        let heldDirectory = Path.Combine(root, "aliased-driver-directory")
+        Directory.Move(driverDirectory, heldDirectory)
+        Directory.CreateSymbolicLink(driverDirectory, heldDirectory) |> ignore
+        ProductBoard.captureGeneratedToolManifest freshAuthority freshRoot true |> refuseDriver "driver ancestor symlink capture"
+        prepareFresh fetch |> refuseDriver "driver ancestor symlink after capture"
+        Directory.Delete driverDirectory
+        Directory.Move(heldDirectory, driverDirectory)
+        let ancestorPlan = prepareFresh fetch |> pass
+        Directory.Move(driverDirectory, heldDirectory)
+        Directory.CreateSymbolicLink(driverDirectory, heldDirectory) |> ignore
+        ProductBoard.apply freshRoot ancestorPlan |> refuseDriver "driver ancestor symlink after preview"
+        Directory.Delete driverDirectory
+        Directory.Move(heldDirectory, driverDirectory)
+    let expectedDriverRefusals = if OperatingSystem.IsWindows() then 59 else 77
+    if driverRefusals <> expectedDriverRefusals then
+        failwithf "fresh driver refusal inventory incomplete: %d / %d" driverRefusals expectedDriverRefusals
+    printfn "Fresh generated driver controls passed: %d actual refusals, six planned/replaced mirrors, rollback and exact repeat checked below." driverRefusals
     ProductBoard.apply freshRoot (prepareFresh fetch |> pass) |> pass
+    if driverPaths |> List.exists (fun relative -> File.ReadAllText(Path.Combine(freshRoot, relative)) <> content) then
+        failwith "fresh driver installation omitted a selected mirror"
     let installedTools = JsonNode.Parse(File.ReadAllText freshTools)
     if installedTools.["tools"].["fs.gg.coord.cli"].["version"].GetValue<string>() <> pin
        || installedTools.["tools"].["fs.gg.sdd.cli"].["version"].GetValue<string>() <> "2.1.0"

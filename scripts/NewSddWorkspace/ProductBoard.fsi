@@ -32,12 +32,14 @@ module ProductBoard =
     /// Opaque authority captured only for a target absent before invocation effects.
     type FreshScaffoldTarget
 
-    /// Exact successful SDD-owned manifest snapshot; callers cannot construct this authority.
+    /// Exact successful SDD-owned manifest and six scaffold-provenance driver preimages.
+    /// Callers cannot construct this fresh-only authority.
     type GeneratedToolManifest
 
     val captureFreshScaffoldTarget: target: string -> FreshScaffoldTarget option
 
-    /// Capture complete bytes and mode immediately after this successful fresh scaffold.
+    /// Capture manifest bytes/mode and exactly six uniquely driver-owned leaves immediately after
+    /// this successful fresh scaffold. Require recorded hashes and refuse symbolic link ancestors.
     val captureGeneratedToolManifest:
         authority: FreshScaffoldTarget -> target: string -> scaffoldSucceeded: bool ->
         Result<GeneratedToolManifest, string>
@@ -59,7 +61,7 @@ module ProductBoard =
         target: string -> repository: string -> kitRevision: string -> bindingJson: string ->
         fetch: (string -> Result<string, string>) -> Result<Plan, string>
 
-    /// Fresh-only replacement requires the opaque, unchanged manifest snapshot. Other tool entries
+    /// Fresh-only replacement requires the opaque, unchanged manifest and driver snapshot. Other tool entries
     /// and atomic preimages are preserved; ordinary prepare remains strict for existing owners.
     val prepareGenerated:
         snapshot: GeneratedToolManifest -> target: string -> repository: string -> kitRevision: string ->
