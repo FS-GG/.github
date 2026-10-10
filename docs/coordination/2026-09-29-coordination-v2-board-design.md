@@ -540,3 +540,14 @@ retained and #935 unapproved/unseeded. Candidate acceptance/intake/PR/touch-set/
 Unknown, with original 04:41 report freshness and no new inspection or native effects.
 Source delivery awaits this follow-on's native merge readback. Remaining approved carryover,
 unselected consumers and native legacy-reference evidence keep .4 open; .5 complete and .6 separate.
+
+
+## Native legacy-reference gate accepted — 2026-10-10
+
+The [actual Project 1 metadata operation](board-v2-installed-qualification.md#project-1-native-legacy-reference-notice--2026-10-10)
+marked the exact retained board as legacy at 06:57:17 UTC, with full original text preserved and
+independent readback. Title, open state and identity stayed unchanged; no item, membership, field,
+archive, closure or issue-body operation ran. The retired lifecycle writer and separate historical
+archive/bootstrap boundaries are unchanged. This supersedes only the pending native notice gate;
+remaining approved carryover and unselected outcome/consumer authority keep .4 open. No additional
+identity, including SDD#935, is selected. Publication .5 remains complete and .6 separate.

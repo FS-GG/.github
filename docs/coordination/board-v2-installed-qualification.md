@@ -334,3 +334,30 @@ board/native or worker effects. Freshness remains the original 04:41 observation
 before-census and manifest-coherence failures remain historical; no runtime was repeated.
 Source delivery requires this follow-on's native merge readback. Remaining approved carryover,
 unselected consumers and native legacy-reference gates keep .4 open; .5 is complete and .6 separate.
+
+
+## Project 1 native legacy-reference notice — 2026-10-10
+
+Root admitted one metadata-only operation for exact FS-GG Project 1,
+`PVT_kwDOEYAWY84Bb08W`. At **06:57:15–06:57:17 UTC**, the full eight-field before guard matched;
+one `updateProjectV2` mutation and independent metadata readback returned HTTP 200 and exact
+expected values. Description and README now mark the board as a legacy reference and link the
+selected organization V2 scope to Project 3. Both retain all original text as exact suffixes;
+`Coordination`, open state, owner, node/number and URL are unchanged. Item, membership, field,
+archive and closure inputs were absent; no issues/items were read. The legacy lifecycle writer
+remains retired and separately scoped historical bootstrap/archive authority is unchanged.
+
+| Actual evidence | SHA-256 |
+|---|---|
+| Root one-operation admission | `12bb62bd2f75ed38d476e53a64a84f73a3adb506cd21e3591d945536a98bc1d4` |
+| Before metadata response | `e5a2174d3681f501a65b6734bb2a167fd07cafae4a0ca670b33547202a2c81bb` |
+| Original mutation response | `bf36b25cffcf15a73676a1116daf6c18c865a3582111b349964658a05932ee03` |
+| Independent after metadata response | `63f6e67a53e4dd971988b28d4e792e2479d0821e4d13308f33ee4bfb9e0d5554` |
+| Terminal operation result | `594c84ed5ae3cb5aaa137d9125e19baeafc10f64ae19841c32d7bea3e249dcb6` |
+
+The operation took **2.056 seconds**, with one mutation, two metadata queries, no retries and no
+first failure. A durable exclusive intent preceded the POST; root accepted the narrow non-atomic
+read-to-write race. Actual 142-character description and 2,322-character README were accepted;
+no numeric API maximum is inferred. This closes only the native legacy-reference notice gate,
+not carryover or whole .4. The original before-census/manifest failures and runtime holds remain
+retained; .5 is complete and .6 separate.
