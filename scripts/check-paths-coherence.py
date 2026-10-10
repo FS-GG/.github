@@ -545,11 +545,12 @@ def frozen_creator_reference(root: str, rel: str, project: ET.ElementTree, refer
             return False
     pair = [t for t in xml.findall("Target") if t.get("Name") == "ValidateFrozenCoordSelection"]
     if (len(pair) != 1 or pair[0].attrib != {"Name": "ValidateFrozenCoordSelection", "BeforeTargets": "PrepareForBuild"}
-            or len(list(pair[0])) != 1 or pair[0][0].tag != "Error" or pair[0][0].get("Condition") != pair_error):
+            or len(list(pair[0])) != 1 or pair[0][0].tag != "Error" or pair[0][0].get("Condition") != pair_error
+            or set(pair[0][0].attrib) != {"Condition", "Text"} or not pair[0][0].get("Text", "").strip() or list(pair[0][0])):
         return False
     content = [n for g in xml.findall("ItemGroup") if g.attrib == {"Condition": scope} for n in g.findall("None") if n.get("Include") == "$(FsggFrozenCoordDependencies)/**/*"]
     if (len(content) != 1 or content[0].attrib != {"Include": "$(FsggFrozenCoordDependencies)/**/*", "Exclude": ";".join("$(FsggFrozenCoordDependencies)/fsgg-coord-engine" + suffix for suffix in (".dll", ".pdb", ".xml")), "Link": "%(RecursiveDir)%(Filename)%(Extension)", "CopyToOutputDirectory": "Always", "CopyToPublishDirectory": "Always"}
-            or list(xml.iter("ErrorOnDuplicatePublishOutputFiles"))):
+            or list(content[0]) or list(xml.iter("ErrorOnDuplicatePublishOutputFiles"))):
         return False
     verify = [t for t in xml.findall("Target") if t.get("Name") == "VerifyFrozenCoordDependencies"]
     command = 'python3 "$(MSBuildThisFileDirectory)../creator-frozen-coord-dependencies.py" verify-layout --producer-source "$(FsggFrozenCoordSource)" --dependencies "$(FsggFrozenCoordDependencies)"'
@@ -561,7 +562,10 @@ def frozen_creator_reference(root: str, rel: str, project: ET.ElementTree, refer
     try:
         with open(pin_path, encoding="utf-8") as source:
             pin = json.load(source)
-        return (re.fullmatch(r"[0-9a-f]{40}", pin["sourceSha"]) is not None
+        return (isinstance(pin, dict) and isinstance(pin.get("projects"), dict)
+                and isinstance(pin.get("sourceLeaves"), list) and all(isinstance(r, dict) and isinstance(r.get("path"), str) for r in pin["sourceLeaves"])
+                and isinstance(pin.get("members"), list)
+                and re.fullmatch(r"[0-9a-f]{40}", pin["sourceSha"]) is not None
                 and re.fullmatch(r"[0-9a-f]{64}", pin["archiveSha256"]) is not None
                 and len(pin["projects"]) == 11 and pin["projects"].get(rel) == "new-sdd-workspace"
                 and len(pin["sourceLeaves"]) == 281 and len({r["path"] for r in pin["sourceLeaves"]}) == 281

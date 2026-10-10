@@ -710,7 +710,7 @@ wf "$RBF/.github/workflows/w.yml" '      - "scripts/NewSddWorkspace/**"
       - "src/FS.GG.Coord.Cli/**"' '      - "scripts/NewSddWorkspace/**"
       - "src/FS.GG.Coord.Cli/**"'
 expect "closed frozen Creator route retains ordinary local closure" 0 "ok:" "$RBF"
-for mutation in root condition ordinary parent pair build copy verify pin; do
+for mutation in root condition ordinary parent pair error-continue content-child build copy verify pin malformed-pin; do
   RBFC="$WORK/closed-frozen-$mutation"
   cp -R "$RBF" "$RBFC"
   python3 - "$RBFC" "$mutation" <<'PYCONTROL'
@@ -726,15 +726,24 @@ elif mode=='ordinary':
 elif mode=='parent':
  next(g for g in project.findall('ItemGroup') if frozen in list(g)).set('Condition','false')
 elif mode=='pair':project.remove(next(t for t in project.findall('Target') if t.get('Name')=='ValidateFrozenCoordSelection'))
+elif mode=='error-continue':next(t for t in project.findall('Target') if t.get('Name')=='ValidateFrozenCoordSelection')[0].set('ContinueOnError','WarnAndContinue')
+elif mode=='content-child':ET.SubElement(next(n for g in project.findall('ItemGroup') for n in g.findall('None') if n.get('Include')=='$(FsggFrozenCoordDependencies)/**/*'),'CopyToOutputDirectory').text='Never'
 elif mode=='build':next(project.iter('BuildProjectReferences')).text='true'
 elif mode=='copy':next(project.iter('_GetChildProjectCopyToOutputDirectoryItems')).text='true'
 elif mode=='verify':next(t for t in project.findall('Target') if t.get('Name')=='VerifyFrozenCoordDependencies')[0].set('Command','echo unverified')
+elif mode=='malformed-pin':
+ pin=root/'scripts/creator-frozen-coord-dependencies.json';value=json.loads(pin.read_text());value['projects']=list(value['projects']);pin.write_text(json.dumps(value))
 elif mode=='pin':
  pin=root/'scripts/creator-frozen-coord-dependencies.json';value=json.loads(pin.read_text());value['sourceLeaves'].pop();pin.write_text(json.dumps(value))
 xml.write(path,encoding='unicode')
 PYCONTROL
   expect "closed frozen Creator $mutation drift refuses dynamic edge" 3 "requires MSBuild evaluation" "$RBFC"
 done
+# Prove the ordinary reference is still an actual graph edge, not just a valid shape.
+RBFM="$WORK/closed-frozen-missing-local-filter";cp -R "$RBF" "$RBFM"
+wf "$RBFM/.github/workflows/w.yml" '      - "scripts/NewSddWorkspace/**"' '      - "scripts/NewSddWorkspace/**"'
+expect "closed frozen Creator still requires ordinary CLI dependency coverage" \
+  1 "nothing in the filter selects 'src/FS.GG.Coord.Cli'" "$RBFM"
 # Filename alone never admits a dynamic route.
 RBFF="$WORK/closed-frozen-other-name";cp -R "$RBF" "$RBFF"
 mv "$RBFF/scripts/NewSddWorkspace" "$RBFF/scripts/OtherCreator"
