@@ -335,6 +335,142 @@ with tempfile.TemporaryDirectory() as scratch:
         real.sibling(f"bounded-{index}.txt")
     assert ProtectedReleaseJournal(real, main_directory=True).read().generation == 1, "unrelated physical writes expired quiet logical authority"
 
+# Count actual Git physical-history requests separately from deliberately fresh
+# logical-state reads. Build all 128 allowed logical generations without calling
+# the reader after every fixture write; qualification still uses the real reader.
+with tempfile.TemporaryDirectory() as scratch:
+    real = RealGit(pathlib.Path(scratch) / "immutable-cost.git")
+    writer = ProtectedReleaseJournal(real, main_directory=True)
+    writer.initialize(intent)
+    logical = writer._observed.head
+    state = writer._observed.state
+    metrics = []
+    for generation in range(2, 129):
+        identity = f"fixture-{(generation - 2) // 2:03d}"
+        state = {**state, "generation": generation,
+                 "effects": {**state["effects"], identity: "intent" if generation % 2 == 0 else "verified"}}
+        logical = writer._create_commit(state, [logical])
+        physical = real.get(f"repos/{REPOSITORY}/git/ref/heads/main")["object"]["sha"]
+        overlay = writer._overlay(physical, logical, state)
+        real.patch(f"repos/{REPOSITORY}/git/refs/heads/main", {"sha": overlay, "force": False})
+        if generation not in (14, 128):
+            continue
+        original_get = real.get
+        calls = []
+        def counted_get(path):
+            calls.append(path)
+            return original_get(path)
+        real.get = counted_get
+        reader = ProtectedReleaseJournal(real, main_directory=True)
+        assert reader.read().generation == generation
+        cold_calls = len(calls)
+        before = len(calls)
+        for _ in range(3):
+            assert reader.read().generation == generation
+        warm = calls[before:]
+        # All physical-history objects are reused. The live current logical
+        # commit/tree/blob, both main refs and every path-history page remain.
+        history_pages = 1 if generation < 100 else 2
+        assert len(warm) == 3 * (5 + history_pages), "warm physical history still fetched immutable objects"
+        assert sum("/git/ref/" in path for path in warm) == 6
+        assert sum("/commits?" in path for path in warm) == 3 * history_pages
+        assert sum("/git/commits/" in path for path in warm) == 3
+        assert sum("/git/trees/" in path for path in warm) == 3
+        assert sum("/git/blobs/" in path for path in warm) == 3
+        count, size = len(reader._immutable_objects), reader._immutable_bytes
+        largest = max(map(len, reader._immutable_objects.values()))
+        assert count < reader._MAX_IMMUTABLE_OBJECTS and size < reader._MAX_IMMUTABLE_BYTES
+        assert largest < reader._MAX_IMMUTABLE_OBJECT_BYTES
+        metrics.append({"generation": generation, "coldGETs": cold_calls,
+                        "warmGETsPerRead": 5 + history_pages, "cachedObjects": count,
+                        "cachedBytes": size, "largestObjectBytes": largest})
+        # Each result is an independent copy, including nested values.
+        physical = reader._physical_head
+        original = reader._main_commit(physical)
+        copy_of_commit = reader._main_commit(physical)
+        copy_of_commit["tree"]["sha"] = "0" * 40
+        assert reader._main_commit(physical) == original
+        if generation == 14:
+            prior = reader.read()
+            real.sibling("fresh-sibling.txt")
+            assert reader.read() == prior, "new physical head bypassed validation or changed logical state"
+        real.get = original_get
+    print("immutable physical-history request census: " + json.dumps(metrics, sort_keys=True))
+
+# Failures and incomplete representations never populate the cache. Bound
+# refusals preserve existing entries and cannot dispatch a write.
+class CacheAPI:
+    def __init__(self, value):
+        self.value = value
+        self.calls = 0
+        self.writes = 0
+    def get(self, path):
+        if path == f"repos/{REPOSITORY}":
+            return {"id": 1351660651, "full_name": REPOSITORY}
+        self.calls += 1
+        if isinstance(self.value, BaseException):
+            raise self.value
+        return self.value
+    def post(self, *args):
+        self.writes += 1
+        raise AssertionError("immutable read attempted a write")
+    patch = post
+
+cache_oid = "a" * 40
+for bad in (RuntimeError("unreadable"), {"sha": "b" * 40, "tree": [], "truncated": False},
+            {"sha": cache_oid, "tree": [], "truncated": True},
+            {"sha": cache_oid, "tree": None, "truncated": False}):
+    native = CacheAPI(bad)
+    reader = ProtectedReleaseJournal(native, main_directory=True)
+    try:
+        reader._immutable_object("trees", cache_oid)
+        raise AssertionError("unreadable/mismatched/incomplete immutable tree cached")
+    except (Refused, RuntimeError):
+        pass
+    assert reader._immutable_objects == {} and reader._immutable_bytes == 0
+    native.value = {"sha": cache_oid, "tree": [], "truncated": False}
+    assert reader._immutable_object("trees", cache_oid)["sha"] == cache_oid
+    assert native.calls == 2 and native.writes == 0
+
+for bad in ({"sha": cache_oid, "encoding": "base64", "content": "a"},
+            {"sha": cache_oid, "encoding": "base64", "content": 1},
+            {"sha": cache_oid, "encoding": "other", "content": ""}):
+    native = CacheAPI(bad)
+    reader = ProtectedReleaseJournal(native, main_directory=True)
+    try:
+        reader._immutable_object("blobs", cache_oid)
+        raise AssertionError("malformed immutable blob cached")
+    except Refused:
+        pass
+    assert reader._immutable_objects == {} and native.writes == 0
+
+native = CacheAPI({"sha": cache_oid, "encoding": "base64", "content": ""})
+reader = ProtectedReleaseJournal(native, main_directory=True)
+reader._immutable_object("blobs", cache_oid)
+retained = dict(reader._immutable_objects)
+for bound in ("_MAX_IMMUTABLE_OBJECTS", "_MAX_IMMUTABLE_BYTES", "_MAX_IMMUTABLE_OBJECT_BYTES"):
+    bounded = ProtectedReleaseJournal(native, main_directory=True)
+    bounded._immutable_object("blobs", cache_oid)
+    setattr(bounded, bound, 1)
+    native.value = {"sha": "b" * 40, "encoding": "base64", "content": ""}
+    try:
+        bounded._immutable_object("blobs", "b" * 40)
+        raise AssertionError("immutable cache bound bypassed")
+    except Refused:
+        pass
+    assert bounded._immutable_objects == retained and native.writes == 0
+    native.value = {"sha": cache_oid, "encoding": "base64", "content": ""}
+for kind, oid in (("ref", cache_oid), ("trees", "not-an-oid"), ("trees", None)):
+    before = native.calls
+    try:
+        reader._immutable_object(kind, oid)
+        raise AssertionError("dynamic or invalid immutable cache request accepted")
+    except Refused:
+        pass
+    assert native.calls == before and native.writes == 0
+assert journal._immutable_objects == {}, "default legacy route acquired a physical-history cache"
+print("immutable copy, failed-read, incomplete-response, cache-bound and dynamic-request refusal controls passed")
+
 for kwargs in ({"main_directory": "yes"}, {"main_directory": True, "ref": REF + "/../foreign"}):
     try:
         ProtectedReleaseJournal(FakeGit(), **kwargs)
