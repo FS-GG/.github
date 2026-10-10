@@ -174,22 +174,23 @@ class Cases(unittest.TestCase):
     def test_late_EOF_and_partial_disconnect_retain_native_evidence(self):
         for mode in ('late-eof','disconnect'):
             self.fresh_reader();now=[0];self.reader.clock=lambda:now[0];self.reader.deadline=180
-            original=FakeHTTP.open.__get__(self.fake)
+            original=FakeHTTP.open.__get__(self.fake);handles=[]
             def interrupted(req,timeout):
-                response=original(req,timeout);read=response.read1;calls=[0]
+                response=original(req,timeout);handles.append(response);read=response.read1;calls=[0]
                 def part(n):
                     calls[0]+=1
                     if calls[0]>1:
                         if mode=='disconnect':raise OSError('private-secret-sentinel')
                         now[0]=13;return b''
-                    return read(5)
+                    now[0]=10;return read(5)
                 response.read1=part;return response
             self.fake.open=interrupted
             with self.assertRaises((m.Refused,OSError)):self.reader.get('ledger','rate_limit')
             evidence=self.reader.evidence[-1]
             self.assertFalse(evidence['complete']);self.assertEqual(evidence['status'],200)
             self.assertEqual(evidence['bytes'],5);self.assertEqual(evidence['retainedBytes'],5)
-            self.assertEqual(len(self.fake.calls)>0,True)
+            self.assertEqual(self.reader.calls,1)
+            self.assertEqual(handles[0].timeouts,[12,2])
     def test_short_response_and_missing_timestamps_are_unknown(self):
         self.fake.headers[prepath]={'content-length':'9999'}
         result=m.observe(self.reader,ENV)
