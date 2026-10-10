@@ -13,21 +13,23 @@ cross-repo allocation, not item implementation.
 For explicitly selected organization V2 scope, read
 [the organization inspection contract](../check-board/references/organization-v2-inspection.md).
 The current [three-active qualification](https://github.com/FS-GG/.github/blob/79051e56b025dadfc6fcaabd58b79e33f2854928/docs/coordination/board-v2-installed-qualification.md#three-active-installed-inspection-and-consumer-acceptance--2026-10-10)
-records installed CLI **0.100.0** and root's accepted programme/check-board consumers. It supersedes
-the historical four-target population only for those named consumers. Root has prospectively selected
-canonical `drive-board` for a bounded **no-dispatch** consumer window; this source preparation does
-not adopt or execute that consumer. `drive-board-normal` and `drive-board-best` remain unswitched.
+records installed CLI **0.100.0** and root's accepted programme/check-board consumers. Root then
+accepted canonical `drive-board`'s bounded **no-dispatch** consumption at **05:20:25 UTC on 2026-10-10**,
+after reading the complete source contract, binding, report and installed qualification. Only this
+canonical consumer is adopted; `drive-board-normal` and `drive-board-best` remain unswitched.
 
-Before using this organization queue, require root's separate admission and recorded actual
-`drive-board` consumer decision against the exact three-active binding and accepted inspection.
+The consumed source head is `3c53055f4f17fb5d46b7399fc9d1250a23aa6372`.
 Binding SHA-256 is `001cbe24b2ac7f6514cb88f4e06388f46cfd94e795008aaa4c6f471bdd288ebb`;
 inspection SHA-256 is `1452f1dde1fd35da80b5c07413d930a336b4c62ccfb4a92a6e7f8c75f49997e9`;
-root qualification/selected-consumer acceptance is
-`6b3badfb0d0c01ed98b10bea481400be42027d994a97d07a628827bb6cc597b2`.
-These are timestamped retained evidence, not a new freshness observation. Source preparation never
-authorizes another inspection, constructor, driver invocation, intake batch or worker dispatch.
-A separately admitted no-dispatch consumption must read the complete report and record its decision;
-no selected work needs intake or worker execution merely to establish that bounded consumer result.
+installed qualification/selected-consumer acceptance is
+`6b3badfb0d0c01ed98b10bea481400be42027d994a97d07a628827bb6cc597b2`;
+canonical driver no-dispatch acceptance is
+`040d51f0e81c85e7ba5667317c9c9c6fd5f61a1715a549de5a8e42ea7d1bd910`.
+Root selected no work and dispatched none. This consumption made no network, installed CLI/driver,
+intake, worker, Store or native mutation calls. Report freshness remains the original **04:41**
+observation; the later consumer decision is not a new inspection or freshness observation.
+Protected source landing remains pending until native merge readback. The bounded adoption grants
+no later inspection, constructor, driver invocation, intake batch or worker dispatch.
 
 The admitted three-active population is SDD#928, Templates#441 and .github#3010. All three remain
 **Blocked / Active delivery / Verified**; complete empty native dependency edges do not remove their
@@ -38,7 +40,7 @@ at `4fc6edf6acce60760cea858ba15e4384c9ce0340`. It is not a fourth Current target
 membership and planning fields; SDD#935 remains unapproved/unseeded and never enters this queue.
 Original pilot/four-target receipts and the unavailable historical binding retain their dated identities.
 
-After root records adoption for the explicitly selected consumer, use only its bound read-only
+For this explicitly adopted canonical consumer, use only its bound read-only
 inspection route as the primary queue. Combine human Status/Track/Roadmap and distinct
 freshness/acceptance gaps with owning plans and separately obtained PR/touch-set/capacity facts.
 Unknown candidate delivery/publication/native acceptance, PRs, touch sets, capacity and intake remain
