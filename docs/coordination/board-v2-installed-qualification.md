@@ -287,3 +287,26 @@ Verified source does not mean Ready or delivered. This records only the named pr
 check-board consumers. `drive-board` and its wrappers, remaining carryover and full **.4** stay
 open; **.5 publication is complete**, and **.6 product-board adoption** remains separate.
 Original pilot/four-target receipts, constructor history and retained runtime holds are unchanged.
+
+
+## Canonical drive-board no-dispatch adoption — 2026-10-10
+
+At **05:20:25 UTC**, root accepted canonical `drive-board` against the same three-active report.
+Root read the complete canonical skill and organization scope at source
+`3c53055f4f17fb5d46b7399fc9d1250a23aa6372`, all binding fields, report metadata/all three items/all
+three candidates and the complete installed acceptance. It independently verified five input pins,
+the source head and paired skill mirrors. Driver acceptance SHA-256 is
+`040d51f0e81c85e7ba5667317c9c9c6fd5f61a1715a549de5a8e42ea7d1bd910`;
+the binding, report and installed acceptance retain the identities in the preceding evidence table.
+
+The decision selects **no work and no dispatch**. All three stay human Blocked; candidate outcome
+acceptance, intake, PRs, touch sets and capacity stay Unknown. Closed/completed .github#3009 retains
+Ready as delivered history; SDD#935 remains unapproved/unseeded. No network, installed tool/driver,
+intake, worker, Store or native mutation ran; the only new effect was the private consumer record.
+Freshness remains the original **04:41** observation, not the later consumption timestamp. The first
+before-census failure and unavailable historical binding remain retained without retry or reconstruction.
+
+Only canonical `drive-board` joins the accepted programme/check-board consumers. Normal/best
+wrappers and other unselected organization consumers remain unswitched. Source delivery is established separately by this change’s native merge readback; this bounded adoption does not authorize later execution.
+Remaining approved carryover and unswitched consumers keep **.4 open**; **.5 is complete** and
+**.6 product-board adoption is separate**.

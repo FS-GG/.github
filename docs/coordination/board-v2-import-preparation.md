@@ -383,3 +383,14 @@ accepted fresh successor. The linked evidence records actual binding/report/root
 byte custody and cleanup limits. Unknown candidate acceptance/intake/PR/touch-set/capacity stays
 Unknown. This bounded consumer decision does not finish remaining approved carryover or switch
 `drive-board`/wrappers/product boards; full .4 stays open, .5 publication complete, .6 separate.
+
+
+## Canonical drive-board consumer accepted — 2026-10-10
+
+Root's [actual no-dispatch adoption](board-v2-installed-qualification.md#canonical-drive-board-no-dispatch-adoption--2026-10-10)
+at 05:20:25 UTC consumed the exact three-active binding/report and canonical source `3c53055f`.
+It selected no work, retained all three human Blocked values and preserved Unknown candidate
+acceptance/intake/PR/touch-set/capacity. This closes only the canonical driver consumer gate;
+normal/best wrappers remain unswitched. There was no new inspection or native mutation, and report
+freshness remains 04:41. Source delivery is established separately by this change’s native merge readback. Remaining
+carryover and unselected consumers keep .4 open; .5 is complete and .6 remains separate.

@@ -179,3 +179,14 @@ the new population's pending qualification/consumer gate, not the original pilot
 history. Candidate PRs, touch sets, capacity, intake and outcome acceptance remain Unknown.
 Full .4 carryover and unswitched consumers remain open; .5 publication is complete and .6 product
 adoption stays separate. No native issue or planning field was changed.
+
+
+## Canonical driver disposition — 2026-10-10
+
+Root accepted [canonical drive-board no-dispatch consumption](board-v2-installed-qualification.md#canonical-drive-board-no-dispatch-adoption--2026-10-10)
+against the retained three-active report, selecting no work. SDD#928, Templates#441 and .github#3010
+stay human Blocked; candidate acceptance/intake/PR/touch-set/capacity remains Unknown. Delivered
+.github#3009 stays closed/completed with Ready retained; SDD#935 remains unapproved/unseeded.
+Only canonical `drive-board` is adopted; normal/best wrappers and other unselected consumers remain
+unswitched. This records no new inspection, freshness, native write or worker admission. Source delivery is established separately by this change’s native merge readback; remaining approved carryover and unselected
+consumer gates keep .4 open. Publication .5 is complete; product adoption .6 remains separate.

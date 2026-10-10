@@ -516,3 +516,14 @@ uses the normal coherent producer route; installed activation is not a source-te
 workspace behavior change is .6's explicitly qualified receiver adoption. Existing configuration and
 legacy history are preserved until that receiver's readback; rollback of unactivated candidate files
 never restores V1 write authority. No universal provider/lifecycle change follows this feature.
+
+
+## Canonical organization driver adoption — 2026-10-10
+
+The [accepted no-dispatch consumer](board-v2-installed-qualification.md#canonical-drive-board-no-dispatch-adoption--2026-10-10)
+uses the existing three-active binding/report and installed qualification, with no model, wrapper,
+Store, schema or runtime changes. Root consumed canonical source `3c53055f` and selected no work;
+normal/best wrappers remain unswitched. The decision retains human Blocked and Unknown candidate
+acceptance/intake/PR/touch-set/capacity, not a Ready or scheduling assertion. No new inspection ran.
+Source delivery is established separately by this change’s native merge readback. This bounded .4 consumer adoption
+does not finish remaining carryover or change the complete .5 publication and separate .6 scope.
