@@ -564,7 +564,7 @@ def frozen_creator_reference(root: str, rel: str, project: ET.ElementTree, refer
             pin = json.load(source)
         return (isinstance(pin, dict) and isinstance(pin.get("projects"), dict)
                 and isinstance(pin.get("sourceLeaves"), list) and all(isinstance(r, dict) and isinstance(r.get("path"), str) for r in pin["sourceLeaves"])
-                and isinstance(pin.get("members"), list)
+                and isinstance(pin.get("members"), dict)
                 and re.fullmatch(r"[0-9a-f]{40}", pin["sourceSha"]) is not None
                 and re.fullmatch(r"[0-9a-f]{64}", pin["archiveSha256"]) is not None
                 and len(pin["projects"]) == 11 and pin["projects"].get(rel) == "new-sdd-workspace"
