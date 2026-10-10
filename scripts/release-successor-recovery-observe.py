@@ -145,7 +145,7 @@ def draft(reader):
     targets, seen, prior_seen = [], set(), False
     for page in range(1, 11):
         rows, headers = reader.get("actions", f"repos/{REPOSITORY}/releases?per_page=100&page={page}")
-        if not isinstance(rows, list) or len(rows) > 100:
+        if not isinstance(rows, list) or not rows or len(rows) > 100:
             raise Refused("release-page-shape-refused")
         for row in rows:
             if not isinstance(row, dict) or type(row.get("id")) is not int or row["id"] <= 0 or row["id"] in seen:

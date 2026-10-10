@@ -24,7 +24,7 @@ jobs:
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
-      - run: python3 -I -S -B tests/release-successor-recovery-observe/run.py
+      - run: python3 tests/release-successor-recovery-observe/run.py
 
   observe:
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.actor == 'EHotwagner' && github.run_attempt == 1

@@ -142,6 +142,28 @@ class Cases(unittest.TestCase):
         with self.assertRaisesRegex(m.Refused,'response-byte'):self.reader.get('ledger','rate_limit')
         self.reader.deadline=0
         with self.assertRaises(m.Refused):self.reader.get('ledger','rate_limit')
+    def test_empty_followup_page_is_unknown(self):
+        second=f'repos/{m.REPOSITORY}/releases?per_page=100&page=2'
+        self.fake.headers[listpath]={'link':f'<{m.API+second}>; rel="next"'}
+        self.fake.values[second]=[]
+        result=m.observe(self.reader,ENV)
+        self.assertEqual(result['outcomes']['draft']['status'],'unknown')
+        self.assertEqual(result['outcomes']['actionsFinalRate']['status'],'observed')
+    def test_stream_deadline_stops_without_retry(self):
+        now=[0];self.reader.clock=lambda:now[0];self.reader.deadline=180
+        original=self.fake.open
+        def slow(req,timeout):
+            response=original(req,timeout)
+            read=response.read1
+            def delayed(n):
+                chunk=read(n);now[0]+=13;return chunk
+            response.read1=delayed;return response
+        self.fake.open=slow
+        with self.assertRaisesRegex(m.Refused,'request-deadline-bound'):self.reader.get('ledger','rate_limit')
+        self.assertEqual(len(self.fake.calls),1)
+    def test_fixture_has_actual_selector_supported_invocation(self):
+        workflow=SOURCE.parents[1]/'.github/workflows/release-successor-recovery-observe.yml'
+        self.assertIn('run: python3 tests/release-successor-recovery-observe/run.py',workflow.read_text())
     def test_failed_scope_prevents_draft_but_retains_rates(self):
         self.fake.values['installation/repositories?per_page=100']={'total_count':2,'repositories':[]}
         result=m.observe(self.reader,ENV)
