@@ -380,9 +380,68 @@ let private onPath (cmd: string) =
             not (String.IsNullOrWhiteSpace dir)
             && exts |> List.exists (fun ext -> File.Exists(Path.Combine(dir, cmd + ext))))
 
+/// One owned HTTP response: refuse redirects, bound headers/body, and keep the caller's
+/// original cancellation deadline active through stream EOF. The supplied client is disposed
+/// on every outcome; production supplies the fixed handler below, tests supply an inert handler.
+let private readBoundedText (client: HttpClient) (cancellationToken: System.Threading.CancellationToken) (url: string) : Result<string, string> =
+    use ownedClient = client
+    try
+        use response = ownedClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cancellationToken).GetAwaiter().GetResult()
+        if not response.IsSuccessStatusCode then
+            Error(sprintf "HTTP %d fetching %s" (int response.StatusCode) url)
+        else
+            let headerBytes (headers: System.Net.Http.Headers.HttpHeaders) =
+                headers
+                |> Seq.sumBy (fun header ->
+                    int64 (System.Text.Encoding.UTF8.GetByteCount header.Key + 4)
+                    + (header.Value |> Seq.sumBy (fun value -> int64 (System.Text.Encoding.UTF8.GetByteCount value + 2))))
+            let maximumBodyBytes = 256 * 1024
+            let contentLength = response.Content.Headers.ContentLength
+            if headerBytes response.Headers + headerBytes response.Content.Headers > 16L * 1024L then
+                Error(sprintf "Response headers exceed 16 KiB fetching %s" url)
+            elif contentLength.HasValue && (contentLength.Value < 0L || contentLength.Value > int64 maximumBodyBytes) then
+                Error(sprintf "Response body exceeds 256 KiB fetching %s" url)
+            else
+                use source = response.Content.ReadAsStreamAsync(cancellationToken).GetAwaiter().GetResult()
+                use body = new MemoryStream()
+                let buffer = Array.zeroCreate<byte> 8192
+                let mutable ended = false
+                let mutable oversized = false
+                while not ended && not oversized do
+                    let available = min buffer.Length (maximumBodyBytes - int body.Length + 1)
+                    let count = source.ReadAsync(buffer.AsMemory(0, available), cancellationToken).AsTask().GetAwaiter().GetResult()
+                    if count = 0 then ended <- true
+                    elif body.Length + int64 count > int64 maximumBodyBytes then oversized <- true
+                    else body.Write(buffer, 0, count)
+                if oversized then
+                    Error(sprintf "Response body exceeds 256 KiB fetching %s" url)
+                elif contentLength.HasValue && body.Length <> contentLength.Value then
+                    Error(sprintf "Response length differs from Content-Length fetching %s" url)
+                else
+                    cancellationToken.ThrowIfCancellationRequested()
+                    let bytes = body.ToArray()
+                    // ReadAsStringAsync removed a valid UTF-8 preamble; retain that behavior.
+                    let offset = if bytes.Length >= 3 && bytes.[0] = 0xEFuy && bytes.[1] = 0xBBuy && bytes.[2] = 0xBFuy then 3 else 0
+                    Ok(System.Text.UTF8Encoding(false, true).GetString(bytes, offset, bytes.Length - offset))
+    with ex -> Error ex.Message
+
+let private createTextClient () =
+    let handler = new HttpClientHandler(AllowAutoRedirect = false, MaxResponseHeadersLength = 16)
+    let client = new HttpClient(handler)
+    // HttpClient's header-only timeout does not govern body EOF. One original deadline does.
+    client.Timeout <- System.Threading.Timeout.InfiniteTimeSpan
+    client
+
+/// Fetch one UTF-8 text response with no redirect or explicit application retry. The original
+/// 30-second deadline covers request headers, stream acquisition, every body read and EOF.
+let private fetchText (url: string) : Result<string, string> =
+    try
+        use deadline = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds 30.0)
+        readBoundedText (createTextClient ()) deadline.Token url
+    with ex -> Error ex.Message
+
 /// Fetch the committed (already concretely pinned) rendering provider descriptor and write it
-/// to <target>/.fsgg/providers.yml. Returns the pinned `source:` line for display, or an error
-/// string (a non-2xx response mirrors curl's `-f` failure — fatal to the run).
+/// to <target>/.fsgg/providers.yml. Returns the pinned `source:` line for display, or an error.
 let private fetchDescriptor (template: string) (gitRef: string) (dest: string) : Result<string option, string> =
     try
         let baseUrl =
@@ -390,30 +449,18 @@ let private fetchDescriptor (template: string) (gitRef: string) (dest: string) :
             | null
             | "" -> "https://raw.githubusercontent.com/FS-GG/FS.GG.Templates"
             | value -> value.TrimEnd('/')
-
         let url = sprintf "%s/%s/providers/%s.providers.yml" baseUrl gitRef template
-        use client = new HttpClient()
-        client.Timeout <- TimeSpan.FromSeconds 30.0
-        use resp = client.GetAsync(url).GetAwaiter().GetResult()
-
-        if not resp.IsSuccessStatusCode then
-            Error(sprintf "HTTP %d fetching %s" (int resp.StatusCode) url)
-        else
-            let content = resp.Content.ReadAsStringAsync().GetAwaiter().GetResult()
-
-            Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath dest))
-            |> ignore
-
+        match fetchText url with
+        | Error note -> Error note
+        | Ok content ->
+            Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath dest)) |> ignore
             File.WriteAllText(dest, content)
-
             let pinned =
                 content.Replace("\r\n", "\n").Split('\n')
                 |> Array.tryFind (fun l -> l.TrimStart().StartsWith "source:")
                 |> Option.map (fun l -> l.Trim())
-
             Ok pinned
-    with ex ->
-        Error ex.Message
+    with ex -> Error ex.Message
 
 // ── Coordination wiring (the kit + board env into the workspace) ──────────────
 
@@ -1057,21 +1104,6 @@ let private recordSecurityObligations (opts: Options) (report: SecurityReport) =
                 ex
             )
         )
-
-/// Fetch one text file from a raw URL. `Error` on any non-2xx or transport failure — the coordination
-/// step is best-effort, so the caller downgrades a miss to a warning rather than failing the scaffold.
-let private fetchText (url: string) : Result<string, string> =
-    try
-        use client = new HttpClient()
-        client.Timeout <- TimeSpan.FromSeconds 30.0
-        use resp = client.GetAsync(url).GetAwaiter().GetResult()
-
-        if resp.IsSuccessStatusCode then
-            Ok(resp.Content.ReadAsStringAsync().GetAwaiter().GetResult())
-        else
-            Error(sprintf "HTTP %d fetching %s" (int resp.StatusCode) url)
-    with ex ->
-        Error ex.Message
 
 let private writeUnder (target: string) (relPath: string) (content: string) =
     let dest = Path.Combine(target, relPath)

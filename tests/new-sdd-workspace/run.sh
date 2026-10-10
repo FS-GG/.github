@@ -43,6 +43,7 @@ echo "new-sdd-workspace parse fixture — dll='$DLL'"
 # Exercise the wizard's pure decision boundary directly. The normal interactive path intentionally
 # requires a TTY; this deterministic probe proves that creation needs only product + target and does
 # not manufacture repository, board, collaborator, chore-lock, or npm answers.
+dotnet fsi --reference:"$DLL" "$HERE/bounded-text.fsx"
 dotnet fsi --reference:"$DLL" "$HERE/wizard-defaults.fsx"
 dotnet fsi --reference:"$DLL" "$HERE/knowledge-bootstrap.fsx"
 dotnet fsi --reference:"$DLL" "$HERE/pinned-governance.fsx"
