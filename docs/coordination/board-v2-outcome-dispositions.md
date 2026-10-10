@@ -163,3 +163,19 @@ Acceptance needs selected/attempted three, all Current, complete dependency and 
 population/planning gaps, truthful health, zero mutations and root's exact consumer adoption decision.
 Human Blocked remains Blocked. Closed #3009 is authenticated retained history, not a fourth Current row.
 The OPEN/current-revision guard stays strict. Full .4, other consumers and product adoption remain open.
+
+
+## Three-active inspection and consumer disposition — 2026-10-10
+
+Root accepted the [distinct installed three-active inspection](board-v2-installed-qualification.md#three-active-installed-inspection-and-consumer-acceptance--2026-10-10)
+and current programme/check-board no-dispatch decision. SDD#928, Templates#441 and .github#3010
+remain selected **Blocked / Active delivery / Verified**, with complete empty native dependencies
+and current owning-plan reads. Their provider/publication/installed deliverables remain unfinished;
+those blocked deliverables did not prevent read-only inspection. No candidate is dispatched.
+
+All five native memberships and captured schema/field values were preserved. Delivered #3009
+remains closed/completed with human Ready; #935 remains unapproved/unseeded. This supersedes only
+the new population's pending qualification/consumer gate, not the original pilot or four-target
+history. Candidate PRs, touch sets, capacity, intake and outcome acceptance remain Unknown.
+Full .4 carryover and unswitched consumers remain open; .5 publication is complete and .6 product
+adoption stays separate. No native issue or planning field was changed.

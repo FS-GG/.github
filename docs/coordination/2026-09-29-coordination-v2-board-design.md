@@ -12,9 +12,10 @@ one-shot import with independent readbacks, zero-mutation refresh/inspection and
 root-selected check-board consumer qualified through [.github #4134](https://github.com/FS-GG/.github/pull/4134).
 Root also accepted the same four-target `work-unified-roadmap` consumer on 2026-10-04;
 [the actual consumer record](board-v2-installed-qualification.md#work-unified-roadmap-consumer-acceptance--2026-10-04)
-retains its fresh report and bounded no-selection dry-run. Only those named organization consumers
-are adopted. Broader .4 carryover and
-consumer adoption, and .5–.6 product publication/adoption remain pending below.
+retains its fresh report and bounded no-selection dry-run. On 2026-10-10 root accepted the [distinct three-active installed inspection and current
+programme/check-board consumers](board-v2-installed-qualification.md#three-active-installed-inspection-and-consumer-acceptance--2026-10-10).
+Only those named organization consumers are adopted. Broader .4 carryover and unswitched consumers
+remain open; .5 publication is complete and .6 product-board adoption remains separate.
 **Owner:** `.github` owns the organization planning surface and shared consumer contract; SDD and
 Templates own published workspace integration, and product owners adopt their scoped boards.
 Repository owners retain their deliverables and evidence. This is **COORD-BOARD-V2-01** in the
