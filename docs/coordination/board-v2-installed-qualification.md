@@ -5,7 +5,8 @@ passed. COORD-BOARD-V2-01.4 remains open.** The initial qualification correctly 
 absent. Root subsequently selected and applied its one-shot import; independent readback verified the
 new membership, all initial seeds and preservation. Root selected the bounded check-board organization consumer after actual command readback. Its
 primary-queue effect requires this canonical evidence to land; broader outcome carryover and product
-adoption remain distinct.
+adoption remain distinct. The [three-active successor](#three-active-installed-inspection-and-consumer-acceptance--2026-10-10)
+records the current bounded organization qualification; the four-target evidence below retains its dated scope.
 
 ## Public package and installed bytes
 
@@ -226,3 +227,63 @@ This accepts `work-unified-roadmap` for the same bounded organization planning s
 canonical record lands. Check-board's earlier adoption remains valid. Other organization consumers,
 broader carryover and product bindings are separate; full COORD-BOARD-V2-01.4 stays open. This is
 read-only consumer acceptance, not a native issue dispatch, broader import or source-completion claim.
+
+
+## Three-active installed inspection and consumer acceptance — 2026-10-10
+
+Root accepted a DISTINCT three-active inspection and its current programme/check-board
+organization consumers at **04:43:23 UTC**. Installed CLI **0.100.0**, source
+`3ed8ad419a64253ca6f665e9779e5e4d110f50a5`, selected exactly SDD#928, Templates#441 and
+.github#3010. All three were **Current / Verified / Blocked / Active delivery**, with the
+.github#3008 Roadmap. Complete native dependencies were empty and the owning plan was read;
+empty dependency edges do not clear that plan's producer/publication/installed prerequisites.
+
+The version-2 binding fixes population revision `78cfdea962cdea0fd95902855cc9b8e912bbc6df`,
+manifest blob `24857656881499d450c25b5c5fe93ffd07156517` and manifest SHA-256
+`253cb33a83d85a487f112b65dc51a2388996df86833ebee9c26a2159d83a0bd6`. The actual installed
+read independently matched that blob against then-current main
+`e8e759f08b883b50963ecad5156d9c0b0f86cbc1`. All **82** installed tool files matched the
+original release payload; all **87** signed-package payload entries matched, excluding the
+added signature. Adapter SHA-256 remains
+`a2bb97d9aa0d6c50a349800d8a365710f61cb9a06eb2a9705550c4395173922d`.
+The qualified historical constructor provenance above was authenticated from its canonical
+record; its unavailable old binary was neither rebuilt nor loaded by inspection.
+
+Four stages—complete before census, one installed inspection, complete after census and
+binding/preservation verification—returned **0/0/0/0** on pinned runtime **10.0.12**.
+The report has selected/attempted/verified **3/3/3**, all dependency and plan reads complete,
+no population/source/planning gaps and **zero mutation attempts**. The native content of both
+snapshots is identical, including complete schema, all five memberships and field values.
+Closed/completed .github#3009 retains **Ready**; SDD#935 remains unapproved and unseeded.
+Sixteen separate raw query responses are retained. Observation timestamps differ; native data does not.
+
+| Retained evidence | SHA-256 |
+|---|---|
+| Distinct binding | `001cbe24b2ac7f6514cb88f4e06388f46cfd94e795008aaa4c6f471bdd288ebb` |
+| Installed inspection report | `1452f1dde1fd35da80b5c07413d930a336b4c62ccfb4a92a6e7f8c75f49997e9` |
+| Complete before snapshot | `45d006de5c6fb4d6bde0958c6201b421be486e9ef59e7ba994f2c93c9d14880f` |
+| Complete after snapshot | `b0489cd1604aa2a7042ef6e3b0c88e0f9626aa38b615914833df2606ff2d992a` |
+| Owner return with 30 artifact identities | `0f05447730c66c8ae01ae3455cc53e2c438247d3c5f8e5e9d48cb8333261ef8b` |
+| Root consumer acceptance | `6b3badfb0d0c01ed98b10bea481400be42027d994a97d07a628827bb6cc597b2` |
+
+The first operation failed in its before-census helper: native Repository/Labels values lacked
+common authored-value IDs. Installed inspection was **not attempted**. Its failure remains
+retained. The fresh successor preserved those full native payloads using explicit unique schema
+identity, exclusive before/after raw paths and strict connection completeness. Pure composition
+controls preceded the actual successor; fixture reports are not native qualification.
+
+Root independently rehashed all **30** actual artifacts and **283** inputs, compared both native
+snapshots and verified all four exact vectors/exits and birth identities. Every owned stage and
+independent terminal census observed empty live groups/sessions/known descendants and no zombies;
+no signals were sent. Peak sampled RSS was **109,412,352 bytes**, under the prospective CPU1,
+300-second work/30-second cleanup, sampled 2 GiB and 1.5 GiB managed-heap bounds. Sampling is not
+hard containment or proof about transient/unobserved descendants. Budget cache and GraphQL-spend
+writes were confined to the fresh private cache; no Store route or native mutation was invoked.
+This is source-route exclusion, not an instrumented Store-write trace. The observation gap remains.
+
+Root consumed the whole report and chose **no dispatch**: all three remain Blocked; candidate
+PR/touch-set/capacity, delivery/publication/native acceptance and intake facts remain Unknown.
+Verified source does not mean Ready or delivered. This records only the named programme and
+check-board consumers. `drive-board` and its wrappers, remaining carryover and full **.4** stay
+open; **.5 publication is complete**, and **.6 product-board adoption** remains separate.
+Original pilot/four-target receipts, constructor history and retained runtime holds are unchanged.

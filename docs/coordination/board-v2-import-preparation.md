@@ -9,9 +9,9 @@ retains .2 acceptance; the independently qualified root-local .3 route is record
 carryover/adoption and publication remain open in .4–.6.
 
 The original pilot manifest at protected `351e5db40d4d72abd6e87882614725305eb2a419` recorded
-**eleven candidates, three approved pilot items, two omissions and six adjudication gaps**. The current
-[successor manifest](board-v2-import-manifest.json) appends .github#3009: **twelve candidates and four
-selected targets**. The independently qualified bounded .4 operation is recorded below; broader
+**eleven candidates, three approved pilot items, two omissions and six adjudication gaps**. The historical four-target successor appended .github#3009: **twelve candidates and four
+selected targets**. The [current manifest](board-v2-import-manifest.json) now selects three active
+targets and retains closed .github#3009 as omitted delivery history. The independently qualified bounded .4 operation is recorded below; broader
 carryover remains separate. Original three
 issue objects, historical operation/provenance and receipts remain unchanged. `preparationState=adjudication-required` remains accurate
 for the unselected inventory. No issue was created, closed, reopened or converted from a PR. Legacy
@@ -366,3 +366,20 @@ Acceptance needs selected/attempted three, all Current, complete dependency and 
 population/planning gaps, truthful health, zero mutations and root's exact consumer adoption decision.
 Human Blocked remains Blocked. Closed #3009 is authenticated retained history, not a fourth Current row.
 The OPEN/current-revision guard stays strict. Full .4, other consumers and product adoption remain open.
+
+
+## Three-active operation and selected consumers accepted — 2026-10-10
+
+The [actual installed qualification](board-v2-installed-qualification.md#three-active-installed-inspection-and-consumer-acceptance--2026-10-10)
+now satisfies the Oct7 gate for the DISTINCT three-active binding. Root accepted the current
+programme organization-board inspection and check-board no-dispatch consumers at 04:43:23 UTC.
+CLI0.100.0 reported exactly **3/3/3 Current/Verified**, complete dependencies/owning-plan reads,
+no gaps and zero mutations. Complete before/after native data retained all five memberships and
+schema/field values: SDD928/Templates441/.github3010 remain Blocked, closed3009 remains Ready,
+and935 remains unapproved/unseeded. No import, refresh, field normalization or legacy fallback ran.
+
+The first before-census failure, with installed inspection unattempted, remains distinct from the
+accepted fresh successor. The linked evidence records actual binding/report/root acceptance hashes,
+byte custody and cleanup limits. Unknown candidate acceptance/intake/PR/touch-set/capacity stays
+Unknown. This bounded consumer decision does not finish remaining approved carryover or switch
+`drive-board`/wrappers/product boards; full .4 stays open, .5 publication complete, .6 separate.
