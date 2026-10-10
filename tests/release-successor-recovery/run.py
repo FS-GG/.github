@@ -1044,7 +1044,8 @@ class OriginalRuntimeRecoveryControls(unittest.TestCase):
             row['artifact']['sha256'] = hashlib.sha256(raw).hexdigest()
         candidate['descriptor']['standaloneTelemetry'] = {'qualificationPath': publisher.RUNTIME_NAME,
                          'qualificationSha256': hashlib.sha256(payload).hexdigest()}
-        candidate['contentId'] = 'sha256:' + hashlib.sha256(canonical(candidate['descriptor'])).hexdigest()
+        candidate['contentId'] = 'sha256:' + hashlib.sha256(
+            json.dumps(candidate['descriptor'], sort_keys=True, separators=(',', ':'), ensure_ascii=False).encode()).hexdigest()
         manifest_raw = (json.dumps(candidate, sort_keys=True, separators=(',', ':'))+'\n').encode()
         (root / 'release-manifest.json').write_bytes(manifest_raw)
         archive = root / 'original-candidate.zip';archive.write_bytes(b'original synthetic candidate archive')
