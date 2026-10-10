@@ -18,7 +18,19 @@ on:
         required: true
         type: string
       publish:
-        description: Set true only after a passing preflight on the same main SHA and candidate
+        description: Publish only after exact source and effect admission; bounded recovery also requires true
+        required: true
+        default: false
+        type: boolean
+
+      recovery_checkpoint:
+        description: Recover the retained journal19 candidate for at most four advances; checkpoint is incomplete
+        required: true
+        default: false
+        type: boolean
+
+      repeat_original_nuget_kit_intent:
+        description: Explicit original Kit intent repeat under uncertainty; at most one nuget.org send, incomplete checkpoint
         required: true
         default: false
         type: boolean
@@ -54,6 +66,7 @@ jobs:
           python3 tests/release-successor-execution/run.py
           python3 tests/release-successor-journal/run.py
           python3 tests/release-successor-live/run.py
+          python3 tests/release-successor-recovery/run.py
       - name: Mint the ordinary protected-journal writer token
         id: ledger
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
@@ -73,7 +86,8 @@ jobs:
         uses: NuGet/login@v1
         with:
           user: Paradigma11
-      - name: Publish and reconcile every effect from exact candidate bytes
+      - name: Run the selected exact-candidate publication or bounded recovery profile
+        id: publication
         env:
           GH_TOKEN: ${{ github.token }}
           ORDINARY_LEDGER_TOKEN: ${{ steps.ledger.outputs.token }}
@@ -82,13 +96,42 @@ jobs:
           CANDIDATE_ARTIFACT_ID: ${{ inputs.candidate_artifact_id }}
           CANDIDATE_ARCHIVE_SHA256: ${{ inputs.candidate_archive_sha256 }}
           PUBLISH: ${{ inputs.publish }}
+          RECOVERY_CHECKPOINT: ${{ inputs.recovery_checkpoint }}
+          REPEAT_ORIGINAL_NUGET_KIT_INTENT: ${{ inputs.repeat_original_nuget_kit_intent }}
         run: |
           set -euo pipefail
           mode=--preflight-only
           if test "$PUBLISH" = true; then mode=--publish; fi
+          profile=()
+          if test "$RECOVERY_CHECKPOINT" = true; then
+            profile=(--recovery-checkpoint)
+          fi
+          if test "$REPEAT_ORIGINAL_NUGET_KIT_INTENT" = true; then
+            profile+=(--repeat-original-nuget-kit-intent)
+          fi
           python3 scripts/release-successor-publish.py \
-            "$mode" \
+            "$mode" "${profile[@]}" \
             --candidate-run-id "$CANDIDATE_RUN_ID" \
             --candidate-artifact-id "$CANDIDATE_ARTIFACT_ID" \
             --candidate-archive-sha256 "$CANDIDATE_ARCHIVE_SHA256" \
-            --workdir "$RUNNER_TEMP/release-successor"
+            --workdir "$RUNNER_TEMP/release-successor" \
+            --result-path "$RUNNER_TEMP/release-successor-result.json"
+      - name: Retain the exact bounded result, including failures
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-successor-result
+          path: |
+            ${{ runner.temp }}/release-successor-result.json
+            ${{ runner.temp }}/release-successor-result-kit-repeat-attempt.json
+          if-no-files-found: error
+      - name: Report the actual publication disposition
+        if: steps.publication.outcome == 'success'
+        env:
+          DISPOSITION: ${{ steps.publication.outputs.disposition }}
+          PUBLICATION_COMPLETE: ${{ steps.publication.outputs.publication_complete }}
+        run: |
+          printf 'Publication disposition: %s; publicationComplete=%s\n' "$DISPOSITION" "$PUBLICATION_COMPLETE" >> "$GITHUB_STEP_SUMMARY"
+          if test "$DISPOSITION" = checkpoint; then
+            echo 'Bounded recovery checkpoint retained. Publication and receiver acceptance remain incomplete.' >> "$GITHUB_STEP_SUMMARY"
+          fi

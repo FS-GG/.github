@@ -437,3 +437,149 @@ existing same-head corruption refusal while removing repeated historical object 
 Existing offline fixtures cover generations14 and128, cache limits, incomplete/failed
 responses, independent copies and fresh history/head reads; qualification and native
 source admission remain separate from any original-byte descendant recovery.
+
+## Four-advance recovery checkpoint qualified offline — 2026-10-10
+
+The [publisher](../../scripts/release-successor-publish.py) has an explicit
+`--recovery-checkpoint` profile for the retained candidate above and existing
+main-directory journal19. It requires publish mode, the exact original candidate
+run/artifact/archive/source/content tuple, original intent validation and current
+descendant-publisher admission. A fresh destination refuses before initialization.
+Starting generations14 through33 must retain the known sixteen-effect prefix.
+Each invocation makes at most four actual advances, retains five-second spacing
+and the existing45-minute observation deadline, and never redispatches an absent
+effect whose original intent exists. No automatic next invocation follows.
+
+One fixed adapter counts every Authority GET/POST/PATCH application entry,
+including quota admission, constructor, classification, logical reads, native
+protections and CAS writes/readback. The counted initial core-quota observation
+must contain coherent integer limit/remaining/reset/used fields, a future reset,
+and at least4500 remaining requests. Entry4201 refuses before sending; neither
+the4200 ceiling nor the4500 floor is an input. These bounds do not reserve quota
+against other consumers or bound transport redirects and request duration.
+
+The [workflow](../../.github/workflows/release-successor-publish.yml) retains a
+result artifact on success or failure. A bounded checkpoint can exit successfully
+with `disposition=checkpoint` and `publicationComplete=false`; only an actual
+complete advance reports completion. The16KiB result records the candidate and
+execution identities, starting and last successfully observed journal bindings,
+request counters, quota, iterations and dispatch uncertainty. It performs no
+extra final journal read. Primary errors remain distinct from reporting errors;
+a missing, malformed or truncated result does not establish acceptance.
+
+Independent exact-source review and one admitted run of the
+[offline controls](../../tests/release-successor-recovery/run.py) passed14controls
+at protected base `c7dda5ca89e60f65e06ba5bfecba587181bdb7bd`. The controls use
+in-memory Authority objects with actual journal lineage/read/CAS and composite
+native admission. They cover quota refusal, original intent absence, admission,
+CAS and observation failures, count exhaustion, dispatch uncertainty and result
+failure. Their object IDs are synthetic fixture identities. Measured application
+entries include the quota observation; fixture setup1632 entries is separate.
+
+| Starting generation | GET | POST | PATCH | Total |
+| --- | --- | --- | --- | --- |
+| 14 | 1129 | 28 | 4 | 1161 |
+| 18 | 1385 | 28 | 4 | 1417 |
+| 22 | 1641 | 28 | 4 | 1673 |
+| 26 | 1897 | 28 | 4 | 1929 |
+| 30 | 1922 | 21 | 3 | 1946 |
+| 33 | 751 | 0 | 0 | 751 |
+
+All six measured slices stayed below the conservative4080-call bound. The
+original supervisor receipt records exit0, observed owned custody and an empty
+process group, with sampled peak59,424,768 bytes. Independent postinspection
+verified all14 source/tool pins and exact original process births/group. The
+first prelaunch census classification failure remains retained; correcting its
+own observer exclusion preceded the single actual test attempt. These sampled
+observations do not establish hard containment, reserve live quota or qualify
+the original live journal, native source, provider or publication effects.
+
+The original generation14 still retains `nuget:FS.GG.Kit=intent`. An absent
+package observation does not prove that no dispatch occurred. The unchanged
+advance policy returns waiting without redispatch for intent plus absence, so
+the quota checkpoint alone cannot resolve that stranded intent. Source/log
+ordering supports an inference of intent-CAS readback failure before the Kit
+push, but no independent native provider non-entry receipt or publication audit
+establishes that inference. Separate original-intent reconciliation and an
+explicit forward-recovery decision remain required for an actual repeat. The
+checkpoint supplies no intent-reset or generic-resend permission; the distinct
+source-selected repeat profile below has its own admission boundary.
+
+Current native source acceptance, fresh quota and original-operation
+reconciliation remain prerequisites to any recovery invocation. The accepted
+read-only [hosted observer38036069257](https://github.com/FS-GG/.github/actions/runs/38036069257),
+attempt1 at protected `c7dda5ca89e60f65e06ba5bfecba587181bdb7bd`, authenticated
+current draft408709919 with tag `coherent-set/v0.101.0`, target source
+`79051e56b025dadfc6fcaabd58b79e33f2854928` and the exact original content marker.
+The historical create-response identity and first local reader remain unknown;
+current draft readback does not reconstruct either. Its fresh Authority-scoped
+credential observed4985→4984 remaining of5000, without reserving quota or
+reconstructing the original exhausted token. Partial feed state, public coherence
+and installed receiver acceptance remain unresolved. Existing journal, provider
+and admission algorithms and original candidate bytes remain unchanged.
+
+## Explicit original Kit intent repeat qualified offline — 2026-10-10
+
+The selected `--repeat-original-nuget-kit-intent` profile permits consideration of
+one further request for the original `FS.GG.Kit`0.101.0 archive on nuget.org under
+the retained intent's uncertainty. It is mutually exclusive with the four-advance
+profile, requires publish mode and defaults to false. Its candidate tuple,
+logical head `30edfbd8aee914492ce359f4dd34454701a41d5a`, canonical generation14
+bytes, six verified predecessors and sole Kit intent are fixed. No package,
+feed, version, replacement bytes or retry-count input is available.
+
+One ordinary advance freshly observes the predecessors and Kit. A matched
+package can settle14→15 through existing admission/CAS and then immediately
+checkpoint without sending. An unreadable or conflicting observation refuses.
+An absent Kit observation leaves the original intent unchanged; only the
+explicit repeat profile supplies additional request permission. The publisher
+then performs one extra canonical journal read and requires unchanged logical
+and physical heads/fullstate, revalidates the original manifest, nupkg hash,
+normalized payload and package identity in owned candidate storage, and applies
+fresh original dispatch admission and native protections.
+
+Before delegation, a bounded exclusive fsynced local record binds the new
+execution, original intent, digests, route and uncertainty. Persistence failure
+stops before sending. A port caps delegation at one existing provider dispatch;
+the publisher immediately returns an incomplete checkpoint on an applied
+response, or failed-or-unknown on an unconfirmed result/exception. It performs
+no later advance, readback settlement or second send in that invocation. The
+record is a new local attempt record, not a historical non-entry proof, global
+lease or assertion that no earlier send occurred. A later repeated request
+requires another explicit root selection and separately admitted operation.
+
+The route is limited to nuget.org: its [publish contract](https://learn.microsoft.com/en-us/nuget/api/package-publish-resource)
+rejects an existing package ID/version with409; other feeds may replace packages.
+No skip-duplicate option is selected. A409 or successful client response does
+not prove payload equality or settle the intent. Later ordinary processing
+must freshly observe exact matching payload before protected settlement; an
+absent observation continues waiting and conflicting payload refuses.
+
+The4200 Authority entry ceiling and4500 observed quota floor remain fixed.
+The original journal transition rules, generic sixteen-effect intent-plus-
+absence policy and provider dispatch remain unchanged. Independent exact-source
+review closed without findings, and one separately admitted offline operation
+passed26 controls: the14 checkpoint controls plus12 repeat-profile controls.
+The latter cover exact original-state refusal, unchanged-journal fencing, local
+candidate and attempt-record failures, fresh admission/protection refusal,
+single-delegation uncertainty, matched settlement and incompatible profiles.
+Process and network guards precede project imports; provider delegation uses an
+inert fixture port. No native package tool, Git process or provider ran.
+
+The absent repeat branch measured430 Authority GET entries and no POST/PATCH;
+the matched ordinary settlement measured443 GET,7 POST and1 PATCH, total451,
+without provider dispatch. Quota observation is included;1632 fixture setup
+entries are separate for each branch. The six checkpoint counts above remained
+unchanged. These synthetic counts stay below4080 and do not establish a live
+quota reservation or original-journal runtime bound.
+
+The original supervisor receipt records exit0, no first cause, observed owned
+custody, empty process group and sampled peak63,504,384 bytes. Independent
+postinspection rehashed all15 input pins and11 retained artifacts and verified
+the exact recorded process births, group and selected session absent. The
+original receipt records PID/birth/PGID, not a separate session identity; session
+absence is a later census observation. The100 ms sampled supervisor/group
+observations leave unobserved transient descendants unknown and do not establish
+hard containment. The old checkpoint commit and14-control evidence remain
+historical. Offline acceptance does not admit an actual repeat, publication,
+overwrite, deletion, replacement draft or receiver adoption.

@@ -4,18 +4,20 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import importlib.util
 import json
 import os
 import pathlib
 import re
+import stat
 import subprocess
 import sys
 import time
 
 from release_successor_admission import SingleOperatorAdmission
 from release_successor_execution import Refused, advance, ordered_effects
-from release_successor_journal import ProtectedReleaseJournal, REF, REPOSITORY as JOURNAL_REPOSITORY
+from release_successor_journal import ProtectedReleaseJournal, REF, REPOSITORY as JOURNAL_REPOSITORY, canonical
 from release_successor_provider import GitHubAPI, LiveProvider, NotFound
 
 REPOSITORY = "FS-GG/.github"
@@ -126,10 +128,11 @@ def classify_journal_destination(api, logical_ref):
 
 
 def prepare_release_journal(journal, ledger_api, admission, provider, api, manifest, intent,
-                            candidate_source, publisher_sha, preflight_only, uniqueness):
+                            candidate_source, publisher_sha, preflight_only, uniqueness, *, recovery_checkpoint=False):
     """Qualify the physical route before genesis or original-intent recovery."""
     fresh, physical = classify_journal_destination(ledger_api, journal.ref)
     if fresh:
+        require(not recovery_checkpoint, "recovery checkpoint requires the existing original journal")
         require(candidate_source == publisher_sha, "fresh publication requires candidate and publisher source to match")
         try:
             api.get("repos/FS-GG/.github/git/ref/tags/coherent-set/v0.101.0")
@@ -157,94 +160,547 @@ def prepare_release_journal(journal, ledger_api, admission, provider, api, manif
     return False
 
 
+# This profile recovers only the retained journal19 candidate. These are identity
+# bindings, not credentials or an authority receipt for a new invocation.
+RECOVERY_PROFILE = "utel-rel-19/four-advance/1"
+KIT_REPEAT_PROFILE = "utel-rel-19/original-nuget-kit-repeat/1"
+KIT_EFFECT = "nuget:FS.GG.Kit"
+KIT_ENDPOINT = "https://api.nuget.org/v3/index.json"
+ORIGINAL_KIT_JOURNAL_HEAD = "30edfbd8aee914492ce359f4dd34454701a41d5a"
+ORIGINAL_KIT_STATE_SHA256 = "494c772deaadd71f635a50237fc4dee0077c71c71968ee4c3ff6ef31a25e1dce"
+AUTHORITY_CALL_CEILING = 4200
+AUTHORITY_QUOTA_FLOOR = 4500
+RECOVERY_ADVANCES = 4
+RECOVERY_CANDIDATE = {
+    "runId": 38026714312,
+    "artifactId": 11660242226,
+    "archiveSha256": "d5d7d68ab0f73ce020e36f6ae10321b632eb177162d925cd9faabc071891bd64",
+    "sourceSha": "79051e56b025dadfc6fcaabd58b79e33f2854928",
+    "contentId": "sha256:e8ed439047f663dfcb34aba1152ffd4c6966a0c3a27be0ebb48eebcf47e26996",
+}
+
+
+def error_chain(error):
+    """Bound reporting while retaining the primary and explicitly omitted causes."""
+    rows, seen = [], set()
+    while error is not None and id(error) not in seen and len(rows) < 8:
+        seen.add(id(error))
+        message = str(error)
+        rows.append({"type": type(error).__name__, "message": message[:512],
+                     "messageTruncated": len(message) > 512})
+        error = error.__cause__ if error.__cause__ is not None else error.__context__
+    return {"chain": rows, "chainIncomplete": error is not None}
+
+
+class CountedAuthorityAPI:
+    """One counter for application calls through the original installation token.
+
+    This does not count transport redirects, token provisioning, or provider calls.
+    Its fixed ceiling cannot be increased by a CLI input or by token replacement.
+    """
+    def __init__(self, api):
+        self.api = api
+        self.attempted = {method: 0 for method in ("get", "post", "patch")}
+        self.succeeded = {method: 0 for method in self.attempted}
+        self.last_success = None
+        self.last_failure = None
+        self.blocked = None
+        self.quota = None
+
+    def _call(self, method, path, *args):
+        if sum(self.attempted.values()) >= AUTHORITY_CALL_CEILING:
+            self.blocked = {"method": method, "path": path[:256]}
+            error = Refused("fixed recovery Authority API ceiling exhausted; reconcile original operation")
+            self.last_failure = {"method": method, "path": path[:256], "error": error_chain(error)}
+            raise error
+        self.attempted[method] += 1
+        try:
+            result = getattr(self.api, method)(path, *args)
+        except Exception as error:
+            self.last_failure = {"method": method, "path": path[:256], "error": error_chain(error)}
+            raise
+        self.succeeded[method] += 1
+        self.last_success = {"method": method, "path": path[:256]}
+        return result
+
+    def get(self, path):
+        return self._call("get", path)
+
+    def post(self, path, body):
+        return self._call("post", path, body)
+
+    def patch(self, path, body):
+        return self._call("patch", path, body)
+
+    def admit_quota(self, now=None):
+        value = self.get("rate_limit")  # Counted before journal construction.
+        require(isinstance(value, dict) and isinstance(value.get("resources"), dict),
+                "Authority quota resources are malformed")
+        core = value["resources"].get("core")
+        require(isinstance(core, dict), "Authority core quota is unavailable")
+        require(all(type(core.get(key)) is int for key in ("limit", "remaining", "reset", "used")),
+                "Authority core quota fields are malformed")
+        limit, remaining, reset, used = (core[key] for key in ("limit", "remaining", "reset", "used"))
+        require(0 < limit <= 1000000000 and 0 <= remaining <= limit and 0 <= used <= limit
+                and used + remaining == limit and 0 < reset < 2**63,
+                "Authority core quota values are inconsistent")
+        observed = time.time() if now is None else now
+        require(reset > observed, "Authority core quota reset is not in the future")
+        self.quota = {"resource": "core", "limit": limit, "remaining": remaining,
+                      "reset": reset, "used": used, "observedUnix": observed}
+        require(remaining >= AUTHORITY_QUOTA_FLOOR,
+                "fixed recovery requires at least 4500 observed Authority core requests")
+        return self.quota
+
+    def report(self):
+        return {"ceiling": AUTHORITY_CALL_CEILING, "attemptedByMethod": dict(self.attempted),
+                "succeededByMethod": dict(self.succeeded), "lastSuccessfulEntry": self.last_success,
+                "lastFailedEntry": self.last_failure, "blockedBeforeSend": self.blocked,
+                "quota": self.quota, "scope": "application API entries; no reservation or wire-request claim"}
+
+
+class ReportingJournal:
+    """Observe existing successful reads without extra reads or altered CAS policy."""
+    def __init__(self, journal, report):
+        self.journal = journal
+        self.report = report
+
+    def __getattr__(self, name):
+        return getattr(self.journal, name)
+
+    def capture(self):
+        observed = self.journal._observed
+        if observed is not None:
+            state = observed.state
+            value = {"generation": state["generation"], "logicalHead": observed.head,
+                     "physicalHead": self.journal._physical_head,
+                     "effects": dict(state["effects"])}
+            if self.report["startingJournal"] is None:
+                self.report["startingJournal"] = value
+            self.report["lastObservedJournal"] = value
+
+    def read(self):
+        state = self.journal.read()
+        self.capture()
+        return state
+
+    def compare_and_swap(self, expected, effect, state):
+        self.report["journalMutationMayHaveOccurred"] = True
+        try:
+            result = self.journal.compare_and_swap(expected, effect, state)
+            return result
+        finally:
+            # A failed PATCH/readback never becomes a committed-CAS assertion.
+            self.capture()
+
+
+class ReportingProvider:
+    """Retain dispatch uncertainty without retrying or changing provider behavior."""
+    def __init__(self, provider, report):
+        self.provider, self.report = provider, report
+
+    def __getattr__(self, name):
+        return getattr(self.provider, name)
+
+    def observe(self, effect):
+        return self.provider.observe(effect)
+
+    def dispatch(self, effect):
+        row = {"effect": effect.identity, "state": "unknown", "attempted": True}
+        self.report["lastDispatch"] = row
+        result = self.provider.dispatch(effect)
+        row["state"] = result.state
+        return result
+
+
+def validate_checkpoint_state(manifest, journal):
+    effects = ordered_effects(manifest)
+    require(journal.ref == "refs/heads/fsgg/v2/journal/release/utel-rel-19"
+            and journal.main_directory and len(effects) == 16,
+            "fixed recovery journal or effect set differs")
+    observed = journal._observed
+    require(observed is not None, "fixed recovery has no successfully observed journal")
+    current = observed.state
+    require(type(current["generation"]) is int and 14 <= current["generation"] <= 33,
+            "fixed recovery requires starting generation 14 through 33")
+    known = {effect.identity for effect in effects}
+    require(not set(current["effects"]) - known
+            and all(value in {"intent", "verified"} for value in current["effects"].values()),
+            "fixed recovery has an unknown effect or state")
+    opened = False
+    verified = intents = 0
+    for effect in effects:
+        state = current["effects"].get(effect.identity, "pending")
+        require(not (state == "verified" and opened), "fixed recovery verified prefix is incoherent")
+        if state == "verified":
+            verified += 1
+        else:
+            require(not (opened and state != "pending"), "fixed recovery has multiple in-flight effects")
+            opened = True
+            intents += state == "intent"
+    require(current["generation"] == 1 + 2 * verified + intents,
+            "fixed recovery generation disagrees with the retained effect prefix")
+
+
+def run_recovery_checkpoint(manifest, journal, admission, provider, report, deadline,
+                            clock=time.monotonic, sleep=time.sleep):
+    validate_checkpoint_state(manifest, journal)
+    for index in range(RECOVERY_ADVANCES):
+        require(clock() < deadline, "publication observation deadline expired; reconcile before another run")
+        report["iterationsAttempted"] = index + 1
+        report["stage"] = "advance"
+        result = advance(manifest, journal, admission, provider)
+        report["lastAdvanceResult"] = result
+        report["lastSuccessfulStage"] = "advance"
+        require(result in {"verified", "waiting", "complete"}, "unexpected recovery advance result")
+        if result == "complete":
+            return "complete"
+        require(clock() < deadline, "publication observation deadline expired; reconcile before another run")
+        if index + 1 < RECOVERY_ADVANCES:
+            sleep(5)
+    return "checkpoint"
+
+
+def write_result(path, report):
+    body = (json.dumps(report, sort_keys=True, separators=(",", ":")) + "\n").encode()
+    require(len(body) <= 16384, "publisher result exceeds its 16KiB bound")
+    with path.open("xb") as stream:
+        stream.write(body)
+
+
+class KitObservationProvider(ReportingProvider):
+    """Record ordinary observations; only the explicit repeat seam enables one send."""
+    def __init__(self, provider, report, effect):
+        super().__init__(provider, report)
+        self.effect = effect
+        self.observations = []
+        self.repeat_enabled = False
+        self.repeat_attempted = False
+
+    def observe(self, effect):
+        value = self.provider.observe(effect)
+        self.observations.append({"effect": effect.identity, "state": value.state,
+                                  "observedDigest": value.observed_digest})
+        self.report["kitRepeat"]["observations"] = list(self.observations)
+        return value
+
+    def dispatch(self, effect):
+        require(self.repeat_enabled and not self.repeat_attempted and effect == self.effect
+                and effect.identity == KIT_EFFECT, "original Kit repeat send is not admitted")
+        self.repeat_attempted = True  # Exceptions still consume this invocation's send.
+        return super().dispatch(effect)
+
+
+class UnchangedKitJournal:
+    """Fence ordinary pre-send reads to the exact retained generation14 binding."""
+    def __init__(self, journal, observed, physical):
+        self.journal, self.observed, self.physical = journal, observed, physical
+
+    def read(self):
+        value = self.journal.read()
+        require(self.journal._observed == self.observed
+                and self.journal._physical_head == self.physical,
+                "original Kit journal moved before the repeat boundary")
+        return value
+
+    def compare_and_swap(self, *args):
+        return self.journal.compare_and_swap(*args)
+
+
+def validate_original_kit_state(manifest, journal):
+    validate_checkpoint_state(manifest, journal)
+    effects = ordered_effects(manifest)
+    expected = {effect.identity: "verified" for effect in effects[:6]}
+    expected[KIT_EFFECT] = "intent"
+    observed = journal._observed
+    require(observed.head == ORIGINAL_KIT_JOURNAL_HEAD
+            and hashlib.sha256(canonical(observed.state)).hexdigest() == ORIGINAL_KIT_STATE_SHA256
+            and observed.state["generation"] == 14 and observed.state["effects"] == expected
+            and observed.state["contentId"] == manifest["contentId"]
+            and effects[6].identity == KIT_EFFECT,
+            "original Kit repeat requires the exact retained head and generation14 prefix")
+    return effects[6]
+
+
+def verify_kit_repeat_candidate(manifest, provider, manifest_bytes):
+    """Recheck original manifest/archive/payload locally using existing pure semantics."""
+    require(provider.manifest_path.read_bytes() == manifest_bytes
+            and provider.manifest == manifest and provider.content_id == manifest["contentId"]
+            and provider.version == "0.101.0" and provider.source == manifest["descriptor"]["sourceSha"],
+            "original Kit repeat manifest or provider binding changed")
+    effect = next(effect for effect in ordered_effects(manifest) if effect.identity == KIT_EFFECT)
+    package = next(row for row in manifest["descriptor"]["packages"] if row["id"] == "FS.GG.Kit")
+    path = provider.root / "FS.GG.Kit.0.101.0.nupkg"
+    require(package["artifact"]["path"] == path.name and not path.is_symlink()
+            and stat.S_ISREG(path.stat().st_mode) and path.resolve().parent == provider.root.resolve(),
+            "original Kit repeat archive is not the owned exact candidate file")
+    saga_path = pathlib.Path(__file__).with_name("release-saga.py")
+    spec = importlib.util.spec_from_file_location("kit_repeat_payload", saga_path)
+    saga = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(saga)
+    require(saga.sha256(path) == effect.request_digest
+            and saga.payload_id(path) == effect.target_digest
+            and saga.nuspec(path)[:2] == ("FS.GG.Kit", "0.101.0"),
+            "original Kit repeat archive, normalized payload or package identity differs")
+    require(provider._feed_url("nuget", "FS.GG.Kit") ==
+            "https://api.nuget.org/v3-flatcontainer/fs.gg.kit/0.101.0/fs.gg.kit.0.101.0.nupkg",
+            "original Kit repeat observation endpoint differs")
+    return {"effect": KIT_EFFECT, "packageId": "FS.GG.Kit", "version": "0.101.0", "feed": "nuget.org",
+            "archiveSha256": effect.request_digest, "payloadSha256": effect.target_digest,
+            "argv": ["dotnet", "nuget", "push", str(path), "--source", KIT_ENDPOINT,
+                     "--api-key", "<credential omitted>"],
+            "localFile": {"device": path.stat().st_dev, "inode": path.stat().st_ino,
+                          "size": path.stat().st_size, "mtimeNs": path.stat().st_mtime_ns}}
+
+
+def write_kit_repeat_attempt(path, record):
+    """One exclusive fsynced local invocation record, never a global retry lease."""
+    body = (json.dumps(record, sort_keys=True, separators=(",", ":")) + "\n").encode()
+    require(len(body) <= 16384, "original Kit repeat attempt record exceeds16KiB")
+    with path.open("xb") as stream:
+        stream.write(body)
+        stream.flush()
+        os.fsync(stream.fileno())
+    directory = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(directory)
+    finally:
+        os.close(directory)
+
+
+def run_original_kit_repeat(manifest, journal, admission, provider, ledger_api, report, deadline,
+                            verify_candidate, attempt_path, clock=time.monotonic):
+    effect = validate_original_kit_state(manifest, journal)
+    observed = journal._observed
+    physical = journal._physical_head
+    report["kitRepeat"] = {"profile": KIT_REPEAT_PROFILE, "effect": KIT_EFFECT,
+                           "maxDispatchesThisInvocation": 1, "historicalNonDispatchProved": False,
+                           "globalOnceClaim": False, "observations": [], "attemptRecord": None,
+                           "branch": "ordinary-observation"}
+    guarded = UnchangedKitJournal(journal, observed, physical)
+    recorded = KitObservationProvider(provider, report, effect)
+    require(clock() < deadline, "original Kit repeat observation deadline expired")
+    report["iterationsAttempted"] = 1
+    result = advance(manifest, guarded, admission, recorded)
+    report["lastAdvanceResult"] = result
+    report["lastSuccessfulStage"] = "advance"
+    require(clock() < deadline, "original Kit repeat observation deadline expired")
+    if result == "verified":
+        report["kitRepeat"]["branch"] = "matched-settlement-no-send"
+        return "checkpoint"  # Ordinary matched CAS14→15; no second advance/send.
+    require(result == "waiting" and recorded.observations[-1] ==
+            {"effect": KIT_EFFECT, "state": "absent", "observedDigest": None},
+            "original Kit repeat lacks the targeted fresh absent observation")
+    require(clock() < deadline, "original Kit repeat observation deadline expired")
+    report["stage"] = "repeat-unchanged-journal"
+    guarded.read()  # One extra read only, with all ordinary canonical/history checks.
+    candidate = verify_candidate()
+    require(candidate["effect"] == KIT_EFFECT and candidate["feed"] == "nuget.org"
+            and candidate["packageId"] == "FS.GG.Kit" and candidate["version"] == "0.101.0"
+            and candidate["archiveSha256"] == effect.request_digest
+            and candidate["payloadSha256"] == effect.target_digest
+            and candidate["argv"][0:3] == ["dotnet", "nuget", "push"]
+            and candidate["argv"][4:] == ["--source", KIT_ENDPOINT, "--api-key", "<credential omitted>"],
+            "original Kit repeat candidate or push route differs")
+    require(admission.authorize(manifest["contentId"], effect.identity, "dispatch", effect.request_digest),
+            "original Kit repeat fresh dispatch admission denied")
+    require(sum(ledger_api.attempted.values()) < AUTHORITY_CALL_CEILING,
+            "original Kit repeat Authority ceiling exhausted before send")
+    require(clock() < deadline, "original Kit repeat observation deadline expired")
+    record = {"schema": "fsgg.original-kit-repeat-attempt/1", "profile": KIT_REPEAT_PROFILE,
+              "execution": report.get("execution"), "originalPublisher": report.get("originalPublisher"),
+              "candidate": report.get("candidate"), "effect": candidate,
+              "journal": {"logicalHead": observed.head, "physicalHead": physical, "generation": 14,
+                          "canonicalStateSha256": hashlib.sha256(canonical(observed.state)).hexdigest()},
+              "absentObservation": recorded.observations[-1], "originalIntentRetained": True,
+              "historicalNonDispatchProved": False, "globalOnceClaim": False,
+              "permissionScope": "one dispatch in this explicitly selected invocation only",
+              "providerOutcome": "not yet delegated; any prior send remains uncertain"}
+    report["stage"] = "repeat-presend-record"
+    write_kit_repeat_attempt(attempt_path, record)
+    report["kitRepeat"]["attemptRecord"] = {"path": str(attempt_path),
+                                             "sha256": hashlib.sha256(attempt_path.read_bytes()).hexdigest()}
+    require(verify_candidate() == candidate, "original Kit repeat local candidate changed before send")
+    require(sum(ledger_api.attempted.values()) < AUTHORITY_CALL_CEILING and clock() < deadline,
+            "original Kit repeat budget or deadline exhausted before delegation")
+    report["kitRepeat"]["branch"] = "one-explicit-repeat"
+    report["stage"] = "repeat-provider-dispatch"
+    recorded.repeat_enabled = True
+    outcome = recorded.dispatch(effect)
+    require(outcome.state == "applied", "original Kit repeat outcome unconfirmed; reconcile without retry")
+    report["lastSuccessfulStage"] = "repeat-provider-dispatch"
+    return "checkpoint"  # No settlement, final reread, other effect or second send.
+
+
+def execute_publisher(args, report):
+    report["stage"] = "publisher-context"
+    publisher_sha = os.environ["GITHUB_SHA"]
+    operator = os.environ["GITHUB_ACTOR"]
+    run_id = int(os.environ["GITHUB_RUN_ID"])
+    require(os.environ.get("GITHUB_EVENT_NAME") == "workflow_dispatch", "publisher event differs")
+    require(os.environ.get("GITHUB_REPOSITORY") == REPOSITORY, "publisher repository differs")
+    require(os.environ.get("GITHUB_REF") == "refs/heads/main", "publisher branch differs")
+    require(os.environ.get("GITHUB_RUN_ATTEMPT") == "1", "publisher rerun is not admitted")
+    require(operator == "EHotwagner", "publisher operator differs")
+    require(len(args.candidate_archive_sha256) == 64, "candidate archive digest is malformed")
+    if args.recovery_checkpoint or args.repeat_original_nuget_kit_intent:
+        require(args.publish and not args.preflight_only, "recovery checkpoint requires publish, never preflight")
+        require((args.candidate_run_id, args.candidate_artifact_id, args.candidate_archive_sha256) ==
+                (RECOVERY_CANDIDATE["runId"], RECOVERY_CANDIDATE["artifactId"], RECOVERY_CANDIDATE["archiveSha256"]),
+                "fixed recovery original candidate tuple differs")
+    report["execution"] = {"sourceSha": publisher_sha, "runId": run_id,
+                           "runAttempt": os.environ["GITHUB_RUN_ATTEMPT"], "operator": operator}
+    report["lastSuccessfulStage"] = "publisher-context"
+    require(not args.workdir.exists(), "candidate workdir already exists")
+    args.workdir.mkdir(parents=True)
+
+    github_token = os.environ["GH_TOKEN"]
+    ledger_token = os.environ["ORDINARY_LEDGER_TOKEN"]
+    nuget_key = os.environ["NUGET_API_KEY"]
+    api = GitHubAPI(github_token)
+    report["stage"] = "candidate-authentication"
+    artifact = api.get(f"repos/{REPOSITORY}/actions/artifacts/{args.candidate_artifact_id}")
+    run = api.get(f"repos/{REPOSITORY}/actions/runs/{args.candidate_run_id}")
+    candidate_source = run.get("head_sha")
+    require(isinstance(candidate_source, str) and len(candidate_source) == 40, "candidate source is malformed")
+    require(artifact.get("digest") == "sha256:" + args.candidate_archive_sha256, "candidate artifact digest differs")
+    artifact_json = args.workdir / "artifact.json"
+    run_json = args.workdir / "run.json"
+    archive = args.workdir / "candidate.zip"
+    artifact_json.write_text(json.dumps(artifact))
+    run_json.write_text(json.dumps(run))
+    with archive.open("xb") as stream:
+        subprocess.run(
+            ["gh", "api", f"repos/{REPOSITORY}/actions/artifacts/{args.candidate_artifact_id}/zip"],
+            stdout=stream, check=True,
+        )
+    candidate = args.workdir / "candidate"
+    verifier = pathlib.Path(__file__).with_name("release-successor-artifact.py")
+    subprocess.run(
+        [sys.executable, str(verifier), "--artifact-json", str(artifact_json), "--run-json", str(run_json),
+         "--archive", str(archive), "--source-sha", candidate_source, "--output", str(candidate)],
+        check=True,
+    )
+    manifest_path = candidate / "release-manifest.json"
+    manifest_bytes = manifest_path.read_bytes()
+    manifest = json.loads(manifest_bytes)
+    require(manifest["descriptor"]["version"] == "0.101.0", "publisher version differs")
+    if args.recovery_checkpoint or args.repeat_original_nuget_kit_intent:
+        require(candidate_source == RECOVERY_CANDIDATE["sourceSha"]
+                and manifest["contentId"] == RECOVERY_CANDIDATE["contentId"],
+                "fixed recovery original source or content differs")
+    report["candidate"].update(sourceSha=candidate_source, contentId=manifest["contentId"], version="0.101.0")
+    report["lastSuccessfulStage"] = "candidate-authentication"
+    publisher_admission = SingleOperatorAdmission(api, manifest, publisher_sha, run_id, operator, "refs/heads/main")
+    provider = LiveProvider(api, manifest_path, github_token, nuget_key)
+    intent = {
+        "contentId": manifest["contentId"],
+        "sourceSha": candidate_source,
+        "version": "0.101.0",
+        "candidateArchiveSha256": args.candidate_archive_sha256,
+        "operator": operator,
+    }
+    ledger_api = GitHubAPI(ledger_token)
+    if args.recovery_checkpoint or args.repeat_original_nuget_kit_intent:
+        ledger_api = CountedAuthorityAPI(ledger_api)
+        report["authorityCounter"] = ledger_api
+        report["stage"] = "Authority-quota"
+        ledger_api.admit_quota()
+        report["lastSuccessfulStage"] = "Authority-quota"
+    journal = ProtectedReleaseJournal(ledger_api, ref=REF, main_directory=True)
+    if args.recovery_checkpoint or args.repeat_original_nuget_kit_intent:
+        journal = ReportingJournal(journal, report)
+        provider = ReportingProvider(provider, report)
+    admission = ProtectedPublisherAdmission(publisher_admission, ledger_api, REF)
+    def uniqueness():
+        subprocess.run(
+            [sys.executable, str(pathlib.Path(__file__).with_name("check-release-candidate-uniqueness.py")),
+             "--version", "0.101.0", "--predecessor", "0.100.0"],
+            check=True, env={**os.environ, "GITHUB_TOKEN": github_token},
+        )
+    report["stage"] = "journal-preparation"
+    if prepare_release_journal(journal, ledger_api, admission, provider, api, manifest, intent,
+                               candidate_source, publisher_sha, args.preflight_only, uniqueness, recovery_checkpoint=args.recovery_checkpoint or args.repeat_original_nuget_kit_intent):
+        print("Release successor preflight passed; no journal, tag, feed or release was changed.")
+        return "preflight"
+    report["lastSuccessfulStage"] = "journal-preparation"
+    deadline = time.monotonic() + 45 * 60
+    if args.repeat_original_nuget_kit_intent:
+        return run_original_kit_repeat(
+            manifest, journal, admission, provider, ledger_api, report, deadline,
+            lambda: verify_kit_repeat_candidate(manifest, provider, manifest_bytes),
+            args.result_path.with_name(args.result_path.stem + "-kit-repeat-attempt.json"))
+    if args.recovery_checkpoint:
+        return run_recovery_checkpoint(manifest, journal, admission, provider, report, deadline)
+    max_steps = len(ordered_effects(manifest)) * 2 + 120
+    for _ in range(max_steps):
+        result = advance(manifest, journal, admission, provider)
+        print(f"successor effect state: {result}", flush=True)
+        if result == "complete":
+            return "complete"
+        if time.monotonic() >= deadline:
+            raise Refused("publication observation deadline expired; reconcile before another run")
+        time.sleep(5)
+    raise Refused("publication exceeded bounded reconciliation steps")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--candidate-run-id", required=True, type=int)
     parser.add_argument("--candidate-artifact-id", required=True, type=int)
     parser.add_argument("--candidate-archive-sha256", required=True)
     parser.add_argument("--workdir", required=True, type=pathlib.Path)
+    parser.add_argument("--result-path", type=pathlib.Path)
+    profile = parser.add_mutually_exclusive_group()
+    profile.add_argument("--recovery-checkpoint", action="store_true",
+                        help="Recover only the retained journal19 candidate, with at most four advances")
+    profile.add_argument("--repeat-original-nuget-kit-intent", action="store_true",
+                         help="Explicitly permit one same-original nuget.org Kit send under retained intent uncertainty")
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--preflight-only", action="store_true")
     mode.add_argument("--publish", action="store_true")
     args = parser.parse_args()
+    result_path = args.result_path or args.workdir.with_name(args.workdir.name + "-result.json")
+    args.result_path = result_path
+    report = {"schema": "fsgg.release-successor-result/1",
+              "profile": KIT_REPEAT_PROFILE if args.repeat_original_nuget_kit_intent else RECOVERY_PROFILE if args.recovery_checkpoint else "ordinary/1",
+              "candidate": {"runId": args.candidate_run_id, "artifactId": args.candidate_artifact_id,
+                            "archiveSha256": args.candidate_archive_sha256},
+              "execution": None, "originalPublisher": {"runId": 38029395937, "runAttempt": 1, "jobId": 114146971214} if args.recovery_checkpoint or args.repeat_original_nuget_kit_intent else None,
+              "journalRef": REF, "startingJournal": None, "lastObservedJournal": None,
+              "iterationsAttempted": 0, "lastAdvanceResult": None, "lastDispatch": None,
+              "journalMutationMayHaveOccurred": False, "stage": "preparation",
+              "lastSuccessfulStage": None, "disposition": "failed-or-unknown",
+              "publicationComplete": False, "failure": None}
+    exit_code = 1
     try:
-        publisher_sha = os.environ["GITHUB_SHA"]
-        operator = os.environ["GITHUB_ACTOR"]
-        run_id = int(os.environ["GITHUB_RUN_ID"])
-        require(os.environ.get("GITHUB_EVENT_NAME") == "workflow_dispatch", "publisher event differs")
-        require(os.environ.get("GITHUB_REPOSITORY") == REPOSITORY, "publisher repository differs")
-        require(os.environ.get("GITHUB_REF") == "refs/heads/main", "publisher branch differs")
-        require(os.environ.get("GITHUB_RUN_ATTEMPT") == "1", "publisher rerun is not admitted")
-        require(operator == "EHotwagner", "publisher operator differs")
-        require(len(args.candidate_archive_sha256) == 64, "candidate archive digest is malformed")
-        require(not args.workdir.exists(), "candidate workdir already exists")
-        args.workdir.mkdir(parents=True)
-
-        github_token = os.environ["GH_TOKEN"]
-        ledger_token = os.environ["ORDINARY_LEDGER_TOKEN"]
-        nuget_key = os.environ["NUGET_API_KEY"]
-        api = GitHubAPI(github_token)
-        artifact = api.get(f"repos/{REPOSITORY}/actions/artifacts/{args.candidate_artifact_id}")
-        run = api.get(f"repos/{REPOSITORY}/actions/runs/{args.candidate_run_id}")
-        candidate_source = run.get("head_sha")
-        require(isinstance(candidate_source, str) and len(candidate_source) == 40, "candidate source is malformed")
-        require(artifact.get("digest") == "sha256:" + args.candidate_archive_sha256, "candidate artifact digest differs")
-        artifact_json = args.workdir / "artifact.json"
-        run_json = args.workdir / "run.json"
-        archive = args.workdir / "candidate.zip"
-        artifact_json.write_text(json.dumps(artifact))
-        run_json.write_text(json.dumps(run))
-        with archive.open("xb") as stream:
-            subprocess.run(
-                ["gh", "api", f"repos/{REPOSITORY}/actions/artifacts/{args.candidate_artifact_id}/zip"],
-                stdout=stream, check=True,
-            )
-        candidate = args.workdir / "candidate"
-        verifier = pathlib.Path(__file__).with_name("release-successor-artifact.py")
-        subprocess.run(
-            [sys.executable, str(verifier), "--artifact-json", str(artifact_json), "--run-json", str(run_json),
-             "--archive", str(archive), "--source-sha", candidate_source, "--output", str(candidate)],
-            check=True,
-        )
-        manifest_path = candidate / "release-manifest.json"
-        manifest = json.loads(manifest_path.read_text())
-        require(manifest["descriptor"]["version"] == "0.101.0", "publisher version differs")
-        publisher_admission = SingleOperatorAdmission(api, manifest, publisher_sha, run_id, operator, "refs/heads/main")
-        provider = LiveProvider(api, manifest_path, github_token, nuget_key)
-        intent = {
-            "contentId": manifest["contentId"],
-            "sourceSha": candidate_source,
-            "version": "0.101.0",
-            "candidateArchiveSha256": args.candidate_archive_sha256,
-            "operator": operator,
-        }
-        ledger_api = GitHubAPI(ledger_token)
-        journal = ProtectedReleaseJournal(ledger_api, ref=REF, main_directory=True)
-        admission = ProtectedPublisherAdmission(publisher_admission, ledger_api, REF)
-        def uniqueness():
-            subprocess.run(
-                [sys.executable, str(pathlib.Path(__file__).with_name("check-release-candidate-uniqueness.py")),
-                 "--version", "0.101.0", "--predecessor", "0.100.0"],
-                check=True, env={**os.environ, "GITHUB_TOKEN": github_token},
-            )
-        if prepare_release_journal(journal, ledger_api, admission, provider, api, manifest, intent,
-                                   candidate_source, publisher_sha, args.preflight_only, uniqueness):
-            print("Release successor preflight passed; no journal, tag, feed or release was changed.")
-            return 0
-        deadline = time.monotonic() + 45 * 60
-        max_steps = len(ordered_effects(manifest)) * 2 + 120
-        for _ in range(max_steps):
-            result = advance(manifest, journal, admission, provider)
-            print(f"successor effect state: {result}", flush=True)
-            if result == "complete":
-                return 0
-            if time.monotonic() >= deadline:
-                raise Refused("publication observation deadline expired; reconcile before another run")
-            time.sleep(5)
-        raise Refused("publication exceeded bounded reconciliation steps")
-    except (KeyError, TypeError, ValueError, OSError, RuntimeError, subprocess.CalledProcessError) as error:
+        require(not result_path.exists() and not result_path.is_symlink(), "publisher result path already exists")
+        disposition = execute_publisher(args, report)
+        report["disposition"] = disposition
+        report["publicationComplete"] = disposition == "complete"
+        exit_code = 0
+    except BaseException as error:
+        report["failure"] = error_chain(error)
         print(f"release successor refused: {error}", file=sys.stderr)
+    counter = report.pop("authorityCounter", None)
+    report["authorityRequests"] = counter.report() if counter is not None else None
+    try:
+        write_result(result_path, report)
+    except Exception as reporting_error:
+        # Reporting cannot replace the primary cause or normalize a failed effect.
+        print(f"release successor result reporting failed: {reporting_error}", file=sys.stderr)
         return 1
+    output = os.environ.get("GITHUB_OUTPUT")
+    if output:
+        try:
+            with open(output, "a") as stream:
+                stream.write(f"disposition={report['disposition']}\n")
+                stream.write(f"publication_complete={str(report['publicationComplete']).lower()}\n")
+        except OSError as reporting_error:
+            print(f"release successor output reporting failed: {reporting_error}", file=sys.stderr)
+            return 1
+    print(f"Release successor result: {report['disposition']}; publicationComplete={report['publicationComplete']}")
+    return exit_code
 
 
 if __name__ == "__main__":
