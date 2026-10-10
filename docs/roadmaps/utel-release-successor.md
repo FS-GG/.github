@@ -762,3 +762,27 @@ at most 949, below 4,080; publisher entries reached 110, below 256. Immutable pa
 deadline, complete-census and no-second-send fences remain. Fresh protected-source, state,
 quota and admission checks are required before another scoped native recovery; publication
 and the four later effects remain open.
+
+
+## Accepted coherent publication — 2026-10-10
+
+[Original recovery run 38094091013](https://github.com/FS-GG/.github/actions/runs/38094091013)
+completed the original CLI/Kit/Drivers 0.101.0 candidate without rebuilding or advancing its
+version. Its authenticated receipt records generation 33 with all sixteen effects verified
+and `publicationComplete: true`. Starting from generation 31, the ordinary route recorded
+promotion intent, applied one release promotion, verified it at generation 33, and confirmed
+completion on its third advance. It uploaded no package or asset again. The original result
+was read within its five-minute retention window.
+
+The receipt counted 1,950 Authority GET attempts, fourteen successful object POSTs and two
+successful non-force updates: 1,966 application API entries, below the 4,200 limit. The
+missing legacy journal ref accounted for the expected failed GET; it did not prevent
+main-directory journal completion. These counts do not measure wire requests or reserve
+future quota. Historical failed invocations, the unretained HTTP 422 cause and possible
+orphan objects remain separate.
+
+An independent readback of the promoted manifest, stable channel and exact package payloads
+from both feeds remains required. Clean public-feed side-by-side installation, installed
+receiver acceptance, local correction and retained-store migration are subsequent
+obligations; publication completion does not establish installed collection or close the
+operational milestone.
