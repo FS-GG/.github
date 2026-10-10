@@ -292,6 +292,17 @@
           "currentApiContentsBytesSourceSha256": "2b3e641322f2cfb38dd8f594318900a0a0fc781aa9396aec0fc5b95fa2c589e1",
           "currentOriginal16PrimerSourceSha256": "e623de971fabb7c1e25b3716e3c36d57a3026f30844e1538319e9fd917e4941d",
           "scope": "Inbound GitHub API contents CR/LF wrapping only, followed by strict base64 validation; original Git blob/tree/workflow digest joins unchanged. Outbound CAS strict validation and GET-only reader role unchanged. Original failed run37349422772 retained, first refusal cause unknown, no native replay or operation acceptance."
+        },
+        "creator016PublicationSummaryAmendment": {
+          "unit": "COORD-BOARD-V2-01.6",
+          "scope": "Ordinary Creator016 publish job bounded summary retention only; historical recovery job and original post-completion readback seals unchanged.",
+          "previousPublishJobSourceSha256": "21c6dbe4b43845835a01062baa1c600eb087a1f96007cbf3a332142d0b85b797",
+          "currentPublishJobSourceSha256": "21b76924d0be61c5723203f805b4e0bd1820424bbaceb70121dc8fb4350224e9",
+          "summaryArtifactName": "creator016-publication-summary-${{ github.run_id }}",
+          "summaryPath": "${{ runner.temp }}/creator016-publication-summary.json",
+          "originalH4Accepted": false,
+          "oldEffectGrantRenewed": false,
+          "operationAcceptance": "Source only; no candidate, journal initialization, protected preflight or Creator016 publication acceptance."
         }
       }
     },

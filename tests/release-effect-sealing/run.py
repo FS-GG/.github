@@ -112,6 +112,34 @@ def workflow_jobs(source):
     return {m[1]: body[m.start():matches[i + 1].start() if i + 1 < len(matches) else None]
             for i, m in enumerate(matches)}
 
+CREATOR_SUMMARY_STEP = """      - name: Retain only the bounded Creator publication summary
+        if: always()
+        timeout-minutes: 2
+        uses: actions/upload-artifact@v7
+        with:
+          name: creator016-publication-summary-${{ github.run_id }}
+          path: ${{ runner.temp }}/creator016-publication-summary.json
+          if-no-files-found: error
+          retention-days: 7
+
+"""
+
+def verify_creator_publish_job(job, amendment):
+    # The original readback amendment remains an immutable historical snapshot.
+    # Removing this exact summary step must recover its original ordinary job.
+    assert set(amendment) == {"unit", "scope", "previousPublishJobSourceSha256", "currentPublishJobSourceSha256", "summaryArtifactName", "summaryPath", "originalH4Accepted", "oldEffectGrantRenewed", "operationAcceptance"}
+    assert amendment["unit"] == "COORD-BOARD-V2-01.6"
+    previous = proof["postCompletionReadbackAmendment"]["currentJobSourceSha256"]["publish"]
+    assert previous == proof["draftReadCapabilityAmendment"]["currentJobSourceSha256"]["publish"] == "21c6dbe4b43845835a01062baa1c600eb087a1f96007cbf3a332142d0b85b797"
+    assert amendment["previousPublishJobSourceSha256"] == previous
+    assert amendment["summaryArtifactName"] == "creator016-publication-summary-${{ github.run_id }}"
+    assert amendment["summaryPath"] == "${{ runner.temp }}/creator016-publication-summary.json"
+    assert amendment["originalH4Accepted"] is False and amendment["oldEffectGrantRenewed"] is False
+    assert amendment["operationAcceptance"] == "Source only; no candidate, journal initialization, protected preflight or Creator016 publication acceptance."
+    assert job.count(CREATOR_SUMMARY_STEP) == 1
+    assert hashlib.sha256(job.encode()).hexdigest() == amendment["currentPublishJobSourceSha256"]
+    assert hashlib.sha256(job.replace(CREATOR_SUMMARY_STEP, "", 1).encode()).hexdigest() == previous
+
 def verify_diagnostic_job(source):
     global_permissions = source.split("\npermissions:\n", 1)[1].split("\nconcurrency:\n", 1)[0]
     assert global_permissions == "  actions: read\n  contents: write\n  packages: write\n  id-token: write\n"
@@ -138,7 +166,10 @@ def verify_diagnostic_job(source):
     assert "if [ \"$PROMOTION_RECOVERY_MODE\" = post-completion-readback ]; then" in job
     assert "python3 scripts/new_sdd_workspace_promote_recovery.py \\\n              --post-completion-readback \"$RECOVERY_BINDING\"" in job
     for name, expected in proof["postCompletionReadbackAmendment"]["currentJobSourceSha256"].items():
-        assert hashlib.sha256(jobs[name].encode()).hexdigest() == expected, name
+        if name == "publish":
+            verify_creator_publish_job(jobs[name], proof["creator016PublicationSummaryAmendment"])
+        else:
+            assert hashlib.sha256(jobs[name].encode()).hexdigest() == expected, name
 
 readback_amendment = proof["postCompletionReadbackAmendment"]
 assert set(readback_amendment) == {"unit", "scope", "previousWorkflowSha256", "previousRecoveryJobSha256", "previousDraftReadJobSourceSha256", "currentJobSourceSha256", "originalH4Source", "sourceQualification", "role", "journalGeneration", "method", "body", "releaseMutation", "journalMutation", "install", "originalH4Accepted", "oldEffectGrantRenewed", "freshRootAdmissionRequired", "readerSourceSpanSha256"}
@@ -155,6 +186,44 @@ assert capability_amendment["previousWorkflowSha256"] == "060d63be16394bca11cbb8
 assert capability_amendment["previousRecoveryJobSha256"] == proof["historicalRecoveryJobSha256"]
 raw_workflow = (ROOT / WIZARD_SUCCESSOR).read_text()
 verify_diagnostic_job(raw_workflow)
+# Causal controls also repin the candidate metadata: unrelated ordinary-job
+# changes still fail the reconstructed historical seal, rather than being
+# excused by a new current hash. Recovery jobs retain their original full seals.
+publish_job = workflow_jobs(raw_workflow)["publish"]
+summary_amendment = proof["creator016PublicationSummaryAmendment"]
+publish_mutations = (
+    ("        if: always()", "        if: success()"),
+    ("          retention-days: 7", "          retention-days: 8"),
+    ("creator016-publication-summary.json", "unbounded-directory/"),
+    ("inputs.promotion_recovery == 'off'", "true"),
+    ("          persist-credentials: false", "          persist-credentials: true"),
+)
+for original, changed in publish_mutations:
+    assert original in publish_job
+    mutant = publish_job.replace(original, changed, 1)
+    repinned = {**summary_amendment, "currentPublishJobSourceSha256": hashlib.sha256(mutant.encode()).hexdigest()}
+    try:
+        verify_creator_publish_job(mutant, repinned)
+    except AssertionError:
+        pass
+    else:
+        raise AssertionError("repinned Creator ordinary-job mutant accepted: " + original)
+for mutant in (publish_job.replace(CREATOR_SUMMARY_STEP, "", 1), publish_job + CREATOR_SUMMARY_STEP):
+    try:
+        verify_creator_publish_job(mutant, {**summary_amendment, "currentPublishJobSourceSha256": hashlib.sha256(mutant.encode()).hexdigest()})
+    except AssertionError:
+        pass
+    else:
+        raise AssertionError("missing/duplicate Creator summary step accepted")
+for job_name in ("recovery-diagnostic", "recovery-complete"):
+    mutant = raw_workflow.replace("  " + job_name + ":\n", "  " + job_name + ":\n    # unrelated historical job change\n", 1)
+    try:
+        verify_diagnostic_job(mutant)
+    except AssertionError:
+        pass
+    else:
+        raise AssertionError("historical recovery-job drift accepted: " + job_name)
+print(f"Creator016 ordinary summary seal: {len(publish_mutations) + 4} repinned job/summary and recovery mutants refused")
 diagnostic = workflow_jobs(raw_workflow)["recovery-diagnostic"]
 permission_mutations = (
     ("      contents: write", "      contents: read"),
