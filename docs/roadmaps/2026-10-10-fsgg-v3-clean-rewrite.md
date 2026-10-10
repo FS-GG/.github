@@ -49,6 +49,7 @@ specairn/
     Domain/                 pure identities, plans, transitions, policy values
     Specifications/         WorkspaceModel and typed-SDD application semantics
     Planning/               exact pack references and typed plan recipes
+    Application/            shared use cases behind CLI and API
     Runtime/                scheduling, recovery, admission and supervision
     Adapters/
       PostgreSql/           transactional operation state, history and observations
@@ -67,12 +68,16 @@ specairn/
 
 Start with roughly one build project per meaningful boundary. The layout is not a quota: do not create an assembly for every record, codec, report format or command. Separate a project when it enforces an important dependency, has an independent consumer, needs incompatible dependencies or crosses a trust boundary. Prefer internal modules otherwise. Use `.fsi` signatures at public F# boundaries and a fast project-reference check to reject forbidden dependencies.
 
+Application owns shared use cases; CLI and API map inputs and render outcomes rather than duplicating admission, reconciliation or delivery decisions. This is a responsibility boundary, not necessarily another assembly. Keep source files with their owning module instead of linking implementation from a CLI directory into another component. Measure project-graph and build costs before choosing a consolidation target.
+
 ```mermaid
 flowchart TD
     UI[CLI and read-only run UI] --> HOST[Host application API]
-    HOST --> SPEC[Specifications]
-    HOST --> PLAN[Planning]
-    HOST --> RT[Runtime]
+    HOST --> APP[Application use cases]
+    UI --> APP
+    APP --> SPEC[Specifications]
+    APP --> PLAN[Planning]
+    APP --> RT[Runtime]
     SPEC --> D[Pure domain]
     PLAN --> D
     RT --> D
@@ -148,9 +153,13 @@ The baseline persistence design uses authoritative current state plus immutable 
 
 Full event sourcing is not required merely to preserve durable-before-dispatch or an audit trail. Select it for an aggregate only when a concrete recovery or historical-reconstruction requirement justifies replay, event evolution and projection maintenance. Document which state is authoritative and how it is recovered; do not maintain both replay-derived state and separately authoritative mutable state for the same aggregate. [Microsoft's event-sourcing guidance](https://learn.microsoft.com/en-us/azure/architecture/patterns/event-sourcing) describes these tradeoffs. M1 must test the chosen model against restore and unknown-effect scenarios.
 
+Normal operation reads and transitions must not replay audit history. Use bounded indexed queries for pending work, keep network I/O outside database transactions, and scope revisions and locking to independently advancing operations and actual shared resources. Do not replace a large event stream with one growing work-item document containing every attempt, observation and artifact. M1 compares query work with short and long histories; history growth must not make ordinary dispatch read unrelated transitions.
+
 The runtime remains narrower than a general workflow platform. M1 evaluates the plain worker first, then tests Akka/PostgreSQL or Temporal only against a demonstrated gap or credible reduction in implementation and operational burden. Reuse existing evidence and a common fault suite; do not build three substantial engines for a comparison. If Akka is selected, keep actors at scheduling/supervision boundaries and avoid an actor per record, blocking I/O, unbounded stashes or mailbox-only deadlines. [Akka.NET delivery documentation](https://getakka.net/articles/actors/reliable-delivery.html) does not establish exactly-once external effects. If Temporal is selected, its workflow history replaces the custom workflow authority. Whichever implementation wins, it must preserve the operation invariants below.
 
 ### Operation lifecycle
+
+Implement one durable lifecycle for preparation, dispatch, observation, settlement and cleanup. A closed, versioned capability catalog supplies typed inputs, authority requirements and operation-specific execution/reconciliation adapters. Adapters may differ in external semantics; they share deadlines, retry accounting, evidence capture and recovery machinery. Qualify a second operation family against this same engine before expanding the catalog. Do not recreate per-profile orchestration scripts or admit arbitrary privileged commands through pack data.
 
 | State | Meaning | Allowed progress |
 |---|---|---|
@@ -167,6 +176,8 @@ Classify effects as read-only, retryable with a provider idempotency contract, o
 
 Database fencing rejects stale state updates, but the forge does not understand a PostgreSQL fencing token. Route privileged external mutations through one effect broker. Before replacing its owner, settle or isolate in-flight calls; do not claim that a lease expiry prevents a stale network request from completing. Runner assignments similarly bind run, attempt, generation, capability, artifact identity and original deadline. A lost heartbeat alone is not permission to launch a duplicate job.
 
+One broker means one authority boundary, not a global execution mutex. Serialize only effects sharing an exclusive resource; independent effects retain bounded concurrency.
+
 ### Persistence and artifact operations
 
 Logical storage consists of run/operation state, immutable intent and transition history, command deduplication, attempts, reservations, external observations and artifact references. These are logical responsibilities, not a table or service quota. Query current state directly initially; add materialized projections only for demonstrated query needs. Keep payloads bounded. Store large bundles in an artifact adapter with digest verification on upload and readback; use filesystem storage locally and an object store when deployed. Candidate publication begins only after custody is confirmed.
@@ -175,7 +186,7 @@ Backups include the database and referenced artifact retention. Restore enters r
 
 ## 7. Optimistic scheduling and collaboration
 
-Work is eligible when its prerequisites are satisfied and a compatible executor has capacity. Choose priority plus aging initially; keep feasibility separate from ranking. A simpler scheduler is preferable to a cost optimizer whose inputs are mostly unknown. Per-provider and per-project concurrency ceilings provide fairness and backpressure. Cost/token observations may be unknown and must be displayed as unknown; user-specified hard budgets remain enforceable.
+Work is eligible when its prerequisites are satisfied and a compatible executor has capacity. Choose priority plus aging initially; keep feasibility separate from ranking. A simpler scheduler is preferable to a cost optimizer whose inputs are mostly unknown. Per-provider and per-project concurrency ceilings provide fairness and backpressure. Cost/token observations may be unknown and must be displayed as unknown. Providers declare budget capability: provider-enforced, conservatively reserved with a trustworthy upper bound, observed after execution, or unsupported. Admit a requested hard budget only when its bound can actually be enforced; otherwise explain the incompatible capability. Observational limits and unknown consumption are not hard caps or zero usage. Budget enforcement cannot depend on optional telemetry export.
 
 Give each implementation attempt an isolated workspace at an exact base revision. Touch-set predictions help identify likely conflicts but are not global claims on whole repositories. Independent changes proceed concurrently. Shared interfaces are agreed early; a necessary cross-module edit can be one atomic PR rather than several package publications.
 
@@ -190,6 +201,8 @@ Use self-hosted **Forgejo** as the proposed primary forge for v3 repositories, P
 Expose small typed ports for repository facts, change delivery, checks, planning inputs and publication. Implement one Forgejo REST adapter against a pinned, qualified version and its [API contract](https://forgejo.org/docs/latest/user/api/usage/). Keep endpoint, credentials and native IDs in external bindings. Do not build a universal forge framework or a second production adapter speculatively. M0 must explicitly dispose of required GitHub integrations from completed v2; the proposed default replaces them at cutover rather than retaining compatibility. A concrete retained external consumer is the only reason to expand that scope.
 
 Qualify scoped credentials, webhook authentication and delivery identity, pagination, incomplete responses, rate/backpressure behavior, PR head binding, review authority, required status contexts and merge protection in a disposable instance. Verify ambiguous writes by native readback before retrying. [Forgejo branch protection](https://forgejo.org/docs/latest/user/repository/protection/) and [Actions compatibility guidance](https://forgejo.org/docs/latest/user/actions/github-actions/) are inputs to these tests, not permission to copy GitHub workflows or assume identical check, token or merge-queue semantics. M1 proves the protected PR journey, including rejection of stale or missing evidence.
+
+The cited Actions compatibility guidance currently says job `permissions` are ignored. Qualify actual token scopes and runner/broker credential restrictions on the pinned release; copied workflow declarations are not proof of least privilege. Measure forge operating cost, maintenance and recovery alongside latency. Removing native calls from internal scheduling is the primary architectural efficiency gain, independent of the selected forge.
 
 Durably enqueue authenticated webhook notifications, deduplicate and reconcile periodically. Share native observations across runs and coalesce reads and pending projections with explicit freshness requirements. Already-admitted independent work continues during forge slowness or outages; native-dependent effects wait. Merge, publication and changed authority still require applicable current observations. Persist internal history in PostgreSQL, not in forge commits, comments or per-step CI dispatches.
 
@@ -214,7 +227,7 @@ A product pack is the cohesive definition of how to create and develop one suppo
 
 Pack manifests are data. Executable extensions run through the runner capability boundary, not in the privileged Host. Distinguish trusted built-in adapters from externally supplied executable packs. Secret values do not enter generated source, ordinary parameters or logs.
 
-Generate workspaces in a staging directory, verify the expected tree and then finalize locally. Repository creation and planning integration are separate visible external operations with their own authorization and recovery. A failed forge setup does not destroy a valid local workspace or pretend remote setup succeeded.
+Materialize through resolve, validate, render into staging, verify and finalize. Resolve the complete pack/toolchain identity before rendering; keep deterministic tree transformations separate from effects. Avoid shared global template registration; a provider that requires registration uses an operation-local environment. Verify the expected tree before finalizing locally. Repository creation and planning integration are separate visible external operations with their own authorization and recovery. A failed forge setup does not destroy a valid local workspace or pretend remote setup succeeded.
 
 Keep one canonical skill source and generate agent-specific views as build/materialization outputs. The views contain guidance, not independent lifecycle authority. A product pack references released runtime libraries instead of vendoring their implementation. There is no v2 workspace migration feature in v3 launch scope: supported v3 workspaces start fresh. Existing product source may be placed into a newly configured v3 workspace through an explicit product adoption decision, but old orchestration state and configuration are not imported.
 
@@ -227,6 +240,8 @@ The runner receives bounded assignments and returns outcomes/artifacts. Provider
 Use ephemeral working directories and separate execution identities. The Host holds forge administration, merge and publication credentials; arbitrary agent/build code does not receive them. Authenticated runner transport binds an assignment to its registered runner and expiry. Local transport can use operating-system peer identity; remote transport needs authenticated encrypted channels and short-lived credentials.
 
 Execution profiles declare filesystem, process, network and resource restrictions. Qualify those restrictions on every supported environment. Environment-variable scrubbing alone is not containment. If a required isolation capability is unavailable, the run is ineligible for that profile; the UI explains why. Start with the environments required by completed-v2 scope rather than pretending to provide universal sandboxing.
+
+Consolidate existing process-custody and container knowledge into qualified runner profiles. Track descendant processes, prevent escape from the owned process group and verify settlement before reusing capacity. On Linux, [cgroup v2](https://www.kernel.org/doc/html/latest/admin-guide/cgroup-v2.html) can provide resource accounting and recursive termination; it does not replace filesystem, namespace, network or credential isolation. Qualify immutable toolchain bundles by digest and relevant trust policy, reusing that qualification only while those inputs remain valid.
 
 Repository content, issue bodies, tool output and downloaded material are task data. They cannot expand execution authority. An agent may propose privileged work, but only the effect broker can perform it after checking the authorized scope and current native conditions. Candidate code remains untrusted even when it was produced by a trusted developer account.
 
@@ -252,15 +267,23 @@ Do not add standing committees, mandatory reviewer chains, separate evidence led
 
 Use five complementary layers: pure reducer/plan-builder tests, pack and adapter contract tests, PostgreSQL/runtime integration, installed end-to-end scenarios, and deliberate failure injection. Typed-SDD selects the appropriate obligations; uncertainty in impact selection conservatively broadens technical checks, not approval bureaucracy.
 
+Use one executable verification plan locally and in CI, with thin workflow wrappers. Reuse build outputs only when their complete relevant inputs match. Measure queue time, build/test work, repeated verification and forge requests separately before claiming a feedback improvement.
+
 Model critical invariants: an effect is not dispatched before durable intent; stale generations cannot advance state; a changed semantic base cannot be silently accepted; dependencies require valid outcomes; cancellation does not imply settlement; an unknown effect cannot trigger an unsafe repeat; capacity cannot be reused while its previous effect remains active. Connect model traces to actual reducer/runtime behavior through FsQuint. [Quint's model-based testing guidance](https://quint.sh/docs/model-based-testing) explains why a valid model alone does not prove implementation correspondence.
 
 CI initially runs the complete fast suite with a small always-running classifier and required result aggregator. Select expensive integration scenarios through an explicit mapping; unknown or shared-input changes conservatively broaden selection. Include pack-content, toolchain, schema and generated-material dependencies. Add finer project-graph impact analysis or result caching only when measured feedback cost justifies its implementation and qualification. Keep selection inside the workflow. The earlier [GitHub required-check findings](https://docs.github.com/en/pull-requests/how-tos/merge-and-close-pull-requests/troubleshooting-required-status-checks) establish a failure case to prevent, not Forgejo semantics. Qualify exact-head status enforcement, stale results and skipped/absent required results on the selected Forgejo release; test merge-group behavior only if that integration mechanism is selected.
 
-Cache or reuse only results whose complete relevant inputs match. Live authorization, remote publication state and mergeability are re-observed when required; they are not timeless cache entries. Keep one result model that distinguishes passed, failed, not applicable, unavailable and not run. Factor qualification into pack conformance, provider conformance, environment isolation and integrated journeys. Record how these cover every required supported combination, and test coupled interactions explicitly; neither a blind Cartesian product nor unexplained sampling is the default. Full release qualification still includes cold installation outside the source tree, supported packs, representative providers and recovery tests. Monorepo source tests do not replace installed-consumer tests.
+Cache or reuse only results whose complete relevant inputs match. Live authorization, remote publication state and mergeability are re-observed when required; they are not timeless cache entries. Keep one result model that distinguishes passed, failed, not applicable, unavailable and not run.
+
+Represent three identities separately: exact source provenance; the complete relevant input digest for reusable verification; and live effect preconditions. Shared typed dependency and observation records bind evidence to toolchain, pack, semantic, source and policy inputs actually used. An unrelated documentation change must not invalidate toolchain qualification, while cached tests never substitute for current merge or publication authority. Test both valid reuse and invalidation after a relevant change.
+
+Factor qualification into pack conformance, provider conformance, environment isolation and integrated journeys. Record how these cover every required supported combination, and test coupled interactions explicitly; neither a blind Cartesian product nor unexplained sampling is the default. Full release qualification still includes cold installation outside the source tree, supported packs, representative providers and recovery tests. Monorepo source tests do not replace installed-consumer tests.
 
 Publish one platform release train for externally distributed CLI/Host/runner and built-in packs, with a manifest binding exact component digests. Release contracts as a public package only for an actual external consumer; internal libraries are not separately released by default. Independent third-party pack versioning remains deferred unless the accepted capability inventory requires it.
 
-Build a candidate from an immutable source commit. Validate package metadata, payloads, dependencies, signatures/provenance and installation before publishing anything. Publish the same bytes to required feeds, read them back and promote the stable manifest only after the set is complete. If one feed fails, the candidate remains incomplete; retry only missing/verified-safe operations. Do not hold all development on main while a fixed candidate is publishing. [SLSA provenance](https://slsa.dev/spec/v1.2/provenance) informs artifact identity, not a claim that provenance proves functional correctness.
+Build a candidate from an immutable source commit. Validate package metadata, payloads, dependencies, signatures/provenance and installation before publishing anything. Upload the same immutable candidate to required feeds, verify readback and promote the stable manifest only after the set is complete. If one feed fails, the candidate remains incomplete; retry only missing/verified-safe operations. Do not hold all development on main while a fixed candidate is publishing. [SLSA provenance](https://slsa.dev/spec/v1.2/provenance) informs artifact identity, not a claim that provenance proves functional correctness.
+
+Distinguish uploaded archive digest, per-registry served archive digest, package-content identity and signature/provenance verification. [NuGet.org repository-signs packages](https://learn.microsoft.com/en-us/nuget/reference/signed-packages-reference), so readback archives can differ from uploaded bytes. Permit only narrowly specified format transformations with strict content comparison and signature verification; never ignore arbitrary archive differences. Payload equality alone does not establish signature trust. Preserve this existing release knowledge in feed conformance tests.
 
 Forgejo provides a [NuGet registry](https://forgejo.org/docs/latest/user/packages/nuget/), making it the candidate internal package feed. M0 identifies the required external feeds; M1 qualifies authentication and immutable candidate publication to each, including nuget.org where required. [NuGet trusted publishing](https://learn.microsoft.com/en-us/nuget/nuget-org/trusted-publishing) does not establish acceptance of a Forgejo issuer: prove an accepted identity route or explicitly select a scoped credential held by the publication broker. Do not retain GitHub Actions implicitly just to hide an unresolved publication dependency.
 
@@ -286,6 +309,8 @@ The following are proposed acceptance targets, not measured current performance:
 | Runtime efficiency | Measure scheduling latency, sustained throughput and database cost at the M0 workload, plus forge requests per completed change; select the runtime against those budgets as well as maintenance cost |
 
 Performance targets must not incentivize skipped correctness obligations. Set hardware, sample count, cache state and percentile method in the M0 benchmark fixture. Separate active execution from provider/forge queue time. Small samples establish usability, not statistical certainty about production reliability.
+
+Required operation receipts remain authoritative runtime records. Export optional metrics through a bounded spool with backoff and coalesced health diagnostics. Backend failure or a full spool must not block execution or create unbounded diagnostic traffic; loss must remain visible. Qualify this separately from required evidence and budget enforcement.
 
 ## 14. Single replacement and deliberate exclusions
 

@@ -52,13 +52,17 @@ Evaluate a PostgreSQL-backed .NET hosted worker first, using one small plan and 
 
 Set a finite experiment budget before implementation. Reuse existing Akka evidence and test Akka/PostgreSQL or Temporal/.NET against a demonstrated gap or credible reduction in maintenance/operating burden. Compare correctness, scheduling latency, sustained throughput, implementation surface, inspectability, deployment and upgrades at the M0 workload. Do not build three substantial engines merely for a comparison. Select the smallest implementation that meets both correctness and performance requirements here and update the design in the same change. Temporal, if selected, replaces custom workflow durability; do not retain competing authorities or multiple runtime engines as product features.
 
+Prove reuse and bounded cost in the walking skeleton: a second operation family uses the same durable lifecycle; increasing audit history does not increase unrelated rows read during ordinary state access or dispatch; independent effects do not acquire a global broker lock. Record query work and latency separately. Exercise evidence reuse after an unrelated change and invalidation after a relevant input change. These are acceptance conditions for the proposed architecture, not additional approval documents.
+
+M1 closes Q27–Q30 for the walking-skeleton capabilities; M2 extends these cases to retained operations and providers. Q07 closes pack extensibility in M2. Each integrated journey captures its required evidence automatically, with no manually assembled receipt ledger.
+
 The early invariants include durable-before-dispatch, command deduplication, stale-owner rejection, unknown-effect handling and cancellation settlement. Use typed-SDD model checks plus real PostgreSQL/provider-stub tests. A passing model with an untested adapter is not an exit condition.
 
 Delay or disable the forge test adapter during an admitted journey. Internal steps whose prerequisites and authority remain valid must continue without polling the forge to advance state. Native-dependent effects wait with an honest reason. Exercise shared observation/coalescing and asynchronous projections, and measure API use so reduced local complexity cannot be purchased through excessive forge traffic.
 
 Qualify a disposable Forgejo instance and one adapter in the walking skeleton. Pin its release and prove authentication scopes, authenticated webhooks, missing/duplicate notifications, pagination, exact PR-head status enforcement, review/merge protection and rejection of stale or absent required evidence. Select a minimal native planning representation with preserved human holds; do not require GitHub Projects schema parity. Measure concurrent PR/check/read traffic at the M0 workload, including overload and recovery. Self-hosting is a hypothesis to measure, not a throughput guarantee.
 
-Resolve required feed authentication early: publish and read back a disposable immutable package through the proposed Forgejo registry and every required external feed. Forgejo OIDC support alone does not prove nuget.org accepts its issuer. Select an accepted identity route or explicit scoped broker credential. Record an operational owner and backup/upgrade scope. A failed mandatory Forgejo capability returns the design to an explicit decision before M2; it does not silently add a second forge or retain GitHub CI.
+Resolve required feed authentication early: publish and read back a disposable immutable package through the proposed Forgejo registry and every required external feed. Forgejo OIDC support alone does not prove nuget.org accepts its issuer. Select an accepted identity route or explicit scoped broker credential. Verify uploaded and served archive identities separately where repository signing changes bytes; validate both package contents and signatures. Prove actual credential restrictions, including the pinned Forgejo release’s treatment of job `permissions`. Record an operational owner, operating-cost baseline and backup/upgrade scope. A failed mandatory Forgejo capability returns the design to an explicit decision before M2; it does not silently add a second forge or retain GitHub CI.
 
 Start CI with the complete fast suite, one required result aggregator and an explicit mapping for expensive integration scenarios. Broaden selection for unknown/shared inputs. Measure feedback time before introducing fine-grained graph selection or cache-reuse machinery; these optimizations require their own correctness evidence.
 
@@ -95,7 +99,7 @@ These scenarios are product outcomes, not implementation-mirroring unit tests. M
 | Q04 | Prose-only change | Honest no-semantic-change disposition; focused validation; no unnecessary full formal run or manual receipt |
 | Q05 | Two independent changes | Both execute concurrently; no global repository lock; correct integration results |
 | Q06 | Conflicting source or semantic changes | Conflict/stale base detected; replan/rebase reruns affected obligations; neither intent silently lost |
-| Q07 | Add a new product kind with existing capabilities | Pack and fixture changes only; no scheduler/wizard product switch added |
+| Q07 | Add a new product kind with existing capabilities | Pack and fixture changes only; no Domain, Runtime or CLI product switch added; materialization uses staging and no shared global template registration |
 | Q08 | Crash before/after command commit and before acknowledgement | Recovery distinguishes absent, committed and duplicate command without duplicate intent |
 | Q09 | Provider launch or forge write times out after effect | Native/provider reconciliation finds result or reports unknown; no unsafe blind repeat |
 | Q10 | Runner loses heartbeat, returns late, or receives cancellation | Original deadline retained; stale generation cannot advance run; resource not reused while still active |
@@ -107,7 +111,7 @@ These scenarios are product outcomes, not implementation-mirroring unit tests. M
 | Q16 | Agent/build code attempts forbidden filesystem, network or credential access | Declared isolation enforced on supported environments; privileged publication credentials unavailable |
 | Q17 | One publication feed fails | Same candidate bytes retained; stable manifest unpromoted; only safe missing work retried |
 | Q18 | Restore database while external state has advanced | Reconciliation precedes new dispatch; unresolved effects remain owned and visible |
-| Q19 | Metrics/logging backend unavailable | Durable run inspection and correctness continue; missing telemetry is explicit |
+| Q19 | Metrics/logging backend unavailable | Durable run inspection and correctness continue even with a full export spool; missing telemetry is explicit and diagnostics remain bounded |
 | Q20 | Required-check classifier or shared input changes | Affected obligations selected conservatively; final required context reflects actual candidate and selected integration mechanism |
 | Q21 | Self-hosting in isolated resources | Installed v3 completes a real v3 change while independent bootstrap checks validate the result |
 | Q22 | Full cutover and fallback rehearsal | No overlapping writer authority, no v2 state import, explicit handling of any v3 effects before fallback |
@@ -115,6 +119,10 @@ These scenarios are product outcomes, not implementation-mirroring unit tests. M
 | Q24 | Forgejo is slow or unavailable during admitted concurrent work | Eligible internal steps progress without native calls for state transitions; native-dependent effects wait; coalesced projections recover without overwriting human fields or bypassing fresh authority checks |
 | Q25 | Protected delivery and publication on the selected Forgejo release | Exact-head checks and review policy enforced; stale/absent evidence rejected; scoped credentials, planning holds and required package-feed authentication work; measured concurrent workload meets M0 budgets |
 | Q26 | Restore or upgrade the forge, then rehearse the canonical-host switch | Required repository/metadata/artifact state recoverable; reconciliation precedes dispatch; one canonical writable surface; optional mirror failure cannot create a second authority |
+| Q27 | Add a second operation family | Same durable lifecycle handles dispatch, deadlines, observation, settlement and recovery; no separate orchestration script |
+| Q28 | Short and long operation histories at the same active workload | Normal state reads and transitions avoid history replay and unrelated rows; indexed pending-work queries stay bounded; latency and query work recorded |
+| Q29 | Unrelated source change, then relevant evidence-input change | Unrelated qualification reused; affected evidence invalidated; live authority still re-observed |
+| Q30 | Request hard budgets from providers with different usage capabilities | Only enforceable bounds admitted as hard caps; observational/unsupported capability explained; unknown usage never treated as zero |
 
 For deterministic cases, compare exact outcomes and invariant traces. For real agent tasks, evaluate the resulting change and obligations rather than requiring identical tool sequences. Record samples and variability; a single successful agent run does not establish reliability. Failure tests use controlled fault injection, not deliberate disruption of production repositories or providers.
 
