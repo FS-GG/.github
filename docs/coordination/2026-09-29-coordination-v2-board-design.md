@@ -589,3 +589,56 @@ fresh/retained product journey. The historical private `ddd79655`/0.97.1 qualifi
 separate. No 0.101 adoption, package rebuild or new native effect is selected. Finite organization
 .4 and .5 publication remain unchanged; .6 product bindings, credentials and effects still need
 their own admission.
+
+
+### .6 existing-product prospective qualification — local qualification, 2026-10-10
+
+The offline BoardV2Import tool has a separate `REQUEST --existing-product` preparation
+mode for the already-created Rendering Project5 and Game Project4. The root-accepted
+read-only metadata operation observed both exact targets, complete one-item populations,
+four canonical planning fields and matching selected-item values with ten query POSTs
+and no mutations. Rendering remains Blocked / Active delivery / Unknown; Game remains
+Backlog / Follow-up / Unknown. Repeated project identity was stable; these observations
+are point-in-time evidence, not an atomic snapshot or proof of write permission.
+
+The new mode binds reviewed input digests, the exact root-selected repository/cohort,
+project/member/field identities and reader principal. It separately requires current
+issue/body/owning-plan and complete dependency evidence plus root remaining-outcome
+adjudication. It rereads the three original raw/status records for each product, checks
+before/after identity and body correspondence, and refuses closed/stale/incomplete or
+nonempty native dependency evidence. Rendering's known textual SDD924 blocker must
+remain explicitly preserved; empty native blocked_by does not settle it. These source
+inputs and their actual native acceptance are pending, not manufactured by metadata.
+
+The resulting prospective population records `projectCreationPerformed=false`,
+`membershipMutationPerformed=false` and `historicalConstructorAuthenticated=false`.
+`creationState=created-and-read-back` describes an existing project observed now, not
+an authenticated historical creation. Historical import source `2ab0c0ff` and artifact
+`cb318977` remain assertions retained in prior evidence; the original constructor
+execution/receipt remains unknown. The new tool neither recreates projects nor emits
+membership, seed or field-update intents, and preserves human planning values.
+
+Import provenance names the new qualified source commit C and its actual compiled
+BoardV2Import assembly A. The independently published adapter recipe/artifact remains
+a separate axis. A later protected product population commit M is explicit input to
+Binding3; an absent M yields a non-executable draft with null populationRevision.
+Supplying M assembles a candidate for later genuine published decoding and native
+acceptance; it does not grant operation authority. The current metadata/currentness
+route covers exactly one selected member per product. The outer one-to-five cohort
+bound remains, but missing wider planning/currentness coverage refuses.
+
+The tool and actual-executable fixture harness passed an offline locked restore,
+Release build and all 31 synthetic controls (17 organization and 14 product) at source
+`184ee25f92c25607534d28916d61dc0d7a05e389`; the compiled assembly SHA-256 is
+`a9cb14ccd62688120aadc2b4d2f77f4a1558828079cab3ccda061d3c3276ac87`.
+The first restore failed with NU1403 after private preparation substituted a raw
+archive hash for NuGet's lockfile content hash. The successor used the unchanged
+original lockfile; the failed attempt remains retained. These identities belong to
+that local qualification and do not identify a later integrated build.
+
+Organization validation/pilot-plan behavior is retained. Genuine loaded published
+.99 decoding remains pending. Currentness reads, protected per-product
+manifests/companion evidence, exact C/A/M, Creator016 publication, installed fresh and
+retained receivers, consumer adoption and legacy disposition are separate joins.
+Milestone .6 stays open; no publication, installed emission or native writes follow
+from this local qualification.
