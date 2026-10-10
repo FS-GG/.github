@@ -14,8 +14,11 @@ Root also accepted the same four-target `work-unified-roadmap` consumer on 2026-
 [the actual consumer record](board-v2-installed-qualification.md#work-unified-roadmap-consumer-acceptance--2026-10-04)
 retains its fresh report and bounded no-selection dry-run. On 2026-10-10 root accepted the [distinct three-active installed inspection and current
 programme/check-board consumers](board-v2-installed-qualification.md#three-active-installed-inspection-and-consumer-acceptance--2026-10-10).
-Only those named organization consumers are adopted. Broader .4 carryover and unswitched consumers
-remain open; .5 publication is complete and .6 product-board adoption remains separate.
+Root subsequently accepted canonical drive-board and both wrappers without dispatch, plus the actual
+Project 1 legacy notice. On 2026-10-10 root selected finite **.4 completion** for the three approved
+active identities and five named organization consumers; [acceptance clauses and evidence joins](board-v2-outcome-dispositions.md#finite-4-acceptance-joins)
+retain unresolved work outside that scope. .5 publication is complete and .6 product-board adoption
+remains open and separate.
 **Owner:** `.github` owns the organization planning surface and shared consumer contract; SDD and
 Templates own published workspace integration, and product owners adopt their scoped boards.
 Repository owners retain their deliverables and evidence. This is **COORD-BOARD-V2-01** in the
@@ -24,7 +27,8 @@ and the [V2 execution roadmap](../github-substrate-v2-roadmap.md#coordination-v2
 
 ## Migration priority and execution sequence — 2026-10-02
 
-**Next selected item: `COORD-BOARD-V2-01.4`.** The bounded organization pilot in .2 passed through
+**Historical selected item: `COORD-BOARD-V2-01.4`.** The finite 2026-10-10 acceptance above supersedes
+this section’s pending adoption wording. The bounded organization pilot in .2 passed through
 an explicit user-authorized native one-shot administration exception. The
 [pilot evidence](board-v2-import-preparation.md) and [bound manifest](board-v2-import-manifest.json)
 record Project 3, four fields, four filtered views, the three approved existing issues and independent
@@ -240,14 +244,15 @@ alone cannot close product adoption.
   Qualified 2026-10-02 at protected3829 for the selected root-local route: three verified items,
   zero-write no-op, one acknowledged bounded Observation write, independent field readback and
   zero-write repeat. Hosted enrollment remains a separate operating join; no wider writer is enabled.
-- [ ] **COORD-BOARD-V2-01.4 — Adopt and retain history.** Import the remaining approved outcomes,
+- [x] **COORD-BOARD-V2-01.4 — Adopt and retain history.** Import the remaining approved outcomes,
   switch selected consumers with independent readback, and label the old board as legacy reference.
   Verify no automatic V1 writer resumes and no host-resident autonomous agent is required. Retain the
   actual adopted scope and unresolved items; do not report unselected consumers as migrated.
   The [current gate inventory](board-v2-outcome-dispositions.md#exact-remaining-4-boundary) records
   accepted three-active import, all five selected organization consumers and the actual legacy notice.
-  Root must decide the remaining finite population/consumer boundary; no additional mandatory
-  identity or consumer is named by the approved manifest. The .4 checkbox remains open pending that decision.
+  Root selected this finite boundary on 2026-10-10 after original-clause reconciliation. No additional
+  import or consumer is selected; [actual evidence joins](board-v2-outcome-dispositions.md#finite-4-acceptance-joins)
+  satisfy this scope. Unresolved product work, Q6 and .6 remain separate; source delivery awaits native merge readback.
 - [x] **COORD-BOARD-V2-01.5 — Publish product workspace integration.** SDD/Templates and the shared
   adapter owner implement and publish the V2 binding, initialization, product-local commands and
   materialized guidance. Record exact coherent package identities and the selected coordinated-board

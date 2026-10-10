@@ -4,7 +4,8 @@ This bounded reconciliation follows COORD-BOARD-V2-01.4. It authorizes no native
 dispatch or consumer switch. The admitted active successor remains exactly SDD#928, Templates#441
 and .github#3010; .github#3009 remains Closed/completed history with Ready retained.
 SDD#935 remains unapproved/unseeded. Source/plan acceptance, publication, native operation,
-installed adoption and human evidence remain distinct. Full .4 closure is not claimed.
+installed adoption and human evidence remain distinct. Root selected the finite .4 acceptance recorded below;
+product outcomes outside that boundary remain open.
 
 ## Named programme outcomes
 
@@ -254,12 +255,34 @@ Ready preserved; #935 remains unapproved/unseeded.
 | Canonical drive-board, normal and best organization consumers | Accepted no-dispatch; normal model unavailability still refuses actual worker dispatch. |
 | Project 1 legacy-reference notice | Actual metadata mutation and independent readback accepted. |
 | No automatic V1 writer or host-resident agent requirement | Retired credential-free manual diagnostic remains unchanged; the selected consumers require neither writer activation nor a resident agent. Historical archive authority remains separate. |
-| Remaining population/consumer boundary | **Root decision pending:** confirm the approved three-active population and five named consumers as the finite .4 scope, or select a concrete additional identity/consumer with its own admission. No additional mandatory identity or consumer is named by the current approved manifest. |
+| Remaining population/consumer boundary | **Root accepted:** exactly the three approved active identities and five named organization consumers define finite .4 scope. No additional import or consumer is selected. |
 
 This records #2995's unresolved disposition without requiring Q6 completion to finish its bounded
-adjudication. It neither imports #2995 nor closes whole .4. The dated 37-row inventory, #2996/#2997,
+adjudication. It does not import #2995. Root selected finite .4 acceptance after rechecking all original
+organization adoption clauses; no mandatory obligation remains within that selected boundary. The dated 37-row inventory, #2996/#2997,
 Coordination#24, Governance#423, Templates#438 and other unselected consumers retain their existing
 conditional/unknown dispositions; their product completion is not silently made a .4 prerequisite.
 Publication .5 is complete; product-board adoption/Creator journeys remain separate .6 work.
-This boundary supersedes earlier cumulative statements that the now-accepted named consumers or
-native legacy notice still await adoption. Root must decide and record full .4 acceptance separately.
+This acceptance supersedes earlier cumulative statements that named consumers, the native legacy
+notice or unspecified additional carryover keep .4 open. Historical failed/conditional records retain
+their original scope; finite .4 completion does not certify their missing product evidence. The owning
+checkbox and current Unified index record this root-selected acceptance; protected source delivery
+awaits the present change’s native merge readback.
+
+
+### Finite .4 acceptance joins
+
+The original .4 clauses are satisfied for the selected organization scope: import approved outcomes;
+switch selected consumers with independent readback; label the legacy board; preserve retired V1
+writing and the no-resident-agent boundary; retain adopted scope and unresolved items. The
+[installed evidence](board-v2-installed-qualification.md) binds the three-active report
+`1452f1dde1fd35da80b5c07413d930a336b4c62ccfb4a92a6e7f8c75f49997e9` to root qualification
+`6b3badfb0d0c01ed98b10bea481400be42027d994a97d07a628827bb6cc597b2`, canonical consumption
+`040d51f0e81c85e7ba5667317c9c9c6fd5f61a1715a549de5a8e42ea7d1bd910` and normal/best consumption
+`75c5bfddfc206279584a422570400e787dd57a035775983e17aad9c9abdaef3c`.
+Project 1 acceptance `083a02cd9d867ba52f56bfa2d4cbbff2b4f03d7a0a3b61adc6299ab998edceab`
+retains the actual mutation and independent metadata readback;
+source/consumer/notice evidence landed through [PR4381](https://github.com/FS-GG/.github/pull/4381),
+protected `04bf01253ef84535675257658cb0d66b991f99f7`. No new inspection or freshness claim follows.
+Separate historical archive authority remains unchanged; this acceptance requires neither archive
+execution nor dormant writer activation. Candidate work readiness remains Unknown and human Blocked.
