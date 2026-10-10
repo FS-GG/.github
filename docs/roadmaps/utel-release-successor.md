@@ -363,3 +363,44 @@ distribution remains separate; no CLI pack reference establishes its installed d
 A sufficient approved local CLI receiver does not require an independent Host successor.
 Installed selector, retained store, telemetry inbox/schema coverage gap and original CPU12
 custody remain unresolved by this source preparation.
+
+## CI and causal receiver successor source prepared — 2026-10-10
+
+The next source window selects coherent `0.101.0` and logical `utel-rel-19` for
+preparation only. Its protected source includes the exact CI classification/native
+association controls and C1 additive immutable `execution-causal-admission/1`
+receiver, delivered in [PR4353](https://github.com/FS-GG/.github/pull/4353).
+The source selection follows protected main `cf7a28b254962042b0eb978d3d6abc48609a756a`.
+Published package versions and tags remain `0.100.0`; consumed journal18 and its
+original candidate bytes remain immutable.
+
+Original read-only feed run [38008672236](https://github.com/FS-GG/.github/actions/runs/38008672236),
+attempt1 at source `94f4cd7ff880f59748f8dbb162a7d807055d5983`, reported newest stable
+`0.100.0` on all six CLI/Kit/Drivers org and public coordinates at00:21:37Z. A bounded
+source-selection census later read unchanged `.github` main `cf7a28b`, stable Authority
+main `bb424f3a71526e82057f4095a242b6844bd21089`, complete immutable parent trees with
+selected19 absent, and absent legacy19. Native protections matched their reviewed
+versions and visible actor rosters. Publisher362181999 remained disabled; candidate and
+publisher groups were empty. Public target indices had no0.101.0. Local org-feed403
+remains unknown; the hosted six-coordinate read is historical and must be repeated
+freshly at candidate/publication admission, alongside genuine full predecessor/channel
+freshness and unused tag/release/journal checks.
+
+The existing candidate gate requires an exact packed receiver qualifier. It uses a
+fresh assessor-approved disposable destination, generic receipts for the four fixed
+synthetic declaration cases, full format2/schema14 export and exact declaration byte
+readback alongside old admission, lineage and dispatch facts. A second process reopens
+and replays the original receipts without changing the canonical revision. Unknown-kind
+and immutable-declaration conflicts must refuse without changing that revision. Loaded
+Store/Core hashes bind the proof to the packed assemblies. The proof travels inside the
+existing runtime qualification member; the seven-member immutable candidate retention
+contract and performance timings remain unchanged. This synthetic contract qualification
+is distinct from genuine producer lineage, analyzer consumption and installed adoption.
+
+Source preparation does not activate workflows, build a native candidate, publish,
+install, migrate a database or change retained telemetry custody. C1 uses current
+schema14 without migration. The old receiver rejects the new kind, so receiver publication
+and approved destination adoption must precede enabled C2 production emission. A local
+receiver suffices without a Host successor; analyzer distribution remains separate.
+The installed selector, original held reader/store, full observer inbox/schema gap,
+unknown waits, unevaluated critical path and token coverage remain unresolved.
