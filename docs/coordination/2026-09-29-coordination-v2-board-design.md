@@ -560,3 +560,21 @@ archive, closure or issue-body operation ran. The retired lifecycle writer and s
 archive/bootstrap boundaries are unchanged. This supersedes only the pending native notice gate;
 remaining approved carryover and unselected outcome/consumer authority keep .4 open. No additional
 identity, including SDD#935, is selected. Publication .5 remains complete and .6 separate.
+
+
+## Creator .6 source correspondence preparation — 2026-10-10
+
+The selected route preserves authentic published coordination **0.99.0**, source
+`64e95ebec1a8294e16edaafdb27e6aa96f32c6f7` and the existing immutable archive, 281 source leaves
+and 81 published bodies. Current Creator source and the isolated pinned producer source now have
+explicit separate roots. Frozen mode selects only the historical producer project graph, stages
+its published implementation bodies there and disables dependency rebuilding/content queries.
+Ordinary mode retains the current graph. Missing paired properties, unknown source identity, graph
+or leaf drift, links and preexisting staged outputs refuse; no fallback or 0.101 repin is selected.
+Package evidence reports current Creator and published dependency source identities separately.
+
+This is source preparation; controls, real MSBuild/API compatibility, candidate publication and
+fresh/retained product journeys remain unqualified. The historical private `ddd79655`/0.97.1
+qualification cannot qualify this 0.99 composition. Actual incompatibility must stop qualification
+before root selects a different dependency. The accepted finite organization .4 and .5 publication
+remain unchanged; .6 product bindings, credentials and effects still need their own admission.

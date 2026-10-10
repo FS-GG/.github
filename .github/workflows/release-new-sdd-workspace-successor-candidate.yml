@@ -20,6 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
+      FsggFrozenCoordSource: ${{ github.workspace }}/artifacts/frozen-coord-source
       FsggFrozenCoordDependencies: ${{ github.workspace }}/artifacts/frozen-coord-dependencies
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -27,8 +28,15 @@ jobs:
           ref: ${{ github.sha }}
           fetch-depth: 0
           persist-credentials: false
+      - name: Select the immutable published producer source separately
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: 64e95ebec1a8294e16edaafdb27e6aa96f32c6f7
+          path: artifacts/frozen-coord-source
+          fetch-depth: 1
+          persist-credentials: false
       - name: Verify frozen dependency source before acquisition
-        run: python3 scripts/creator-frozen-coord-dependencies.py verify-source
+        run: python3 scripts/creator-frozen-coord-dependencies.py verify-source --producer-source "${FsggFrozenCoordSource:?job frozen source path required}"
       - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
@@ -61,6 +69,7 @@ jobs:
             https://github.com/FS-GG/.github/releases/download/coherent-set/v0.99.0/FS.GG.Coord.Cli.0.99.0.nupkg \
             --output artifacts/dependency-input/FS.GG.Coord.Cli.0.99.0.nupkg
           python3 scripts/creator-frozen-coord-dependencies.py stage \
+            --producer-source "${FsggFrozenCoordSource:?job frozen source path required}" \
             --package artifacts/dependency-input/FS.GG.Coord.Cli.0.99.0.nupkg \
             --dependencies "${FsggFrozenCoordDependencies:?job frozen dependency path required}"
       - name: Qualify wizard source
@@ -92,6 +101,7 @@ jobs:
           python3 tests/new-sdd-workspace-successor/run.py \
             --board-package "$package" --source-sha "$SOURCE_SHA" --release-manifest "$manifest" \
             --frozen-coord-dependencies "${FsggFrozenCoordDependencies:?job frozen dependency path required}" \
+            --frozen-coord-source "${FsggFrozenCoordSource:?job frozen source path required}" \
             > artifacts/new-sdd-workspace/package-evidence.json
       - name: Refuse changed main before retaining candidate
         env:

@@ -37,7 +37,8 @@ def manifest():
 
 
 def board_package_closure(package: pathlib.Path, source_sha: str, *, source_root: pathlib.Path = ROOT,
-                          frozen_dependencies: pathlib.Path | None = None):
+                          frozen_dependencies: pathlib.Path | None = None,
+                          frozen_source: pathlib.Path | None = None):
     """Join the actual current package to its freshly built creator/dependency output."""
     spec = importlib.util.spec_from_file_location("wizard_package_identity", source_root / "scripts/new-sdd-workspace-release.py")
     checker = importlib.util.module_from_spec(spec)
@@ -46,17 +47,32 @@ def board_package_closure(package: pathlib.Path, source_sha: str, *, source_root
         raise ValueError("current creator package/source identity differs")
     dependency_pin = json.loads((source_root / "scripts/creator-frozen-coord-dependencies.json").read_text())
     coherent_version = dependency_pin["version"]
+    if (frozen_dependencies is None) != (frozen_source is None):
+        raise ValueError("frozen package qualification requires paired source and binary roots")
     project = source_root / "scripts/NewSddWorkspace/NewSddWorkspace.fsproj"
     projects = {}
-    def visit(path):
-        path = path.resolve()
-        if path in projects:
-            return
-        xml = ElementTree.parse(path)
-        projects[path] = next((e.text for e in xml.iter("AssemblyName") if e.text), path.stem)
-        for reference in xml.iter("ProjectReference"):
-            visit(path.parent / reference.attrib["Include"])
-    visit(project)
+    helper = runpy.run_path(str(source_root / "scripts/creator-frozen-coord-dependencies.py")) if frozen_source is not None else None
+    if helper is not None:
+        if helper["git_identity"](source_root) != source_sha:
+            raise ValueError("current Creator source revision differs")
+        selected = helper["source_projects"](source_root, dependency_pin, frozen_source)
+        projects = {(project if name == "scripts/NewSddWorkspace/NewSddWorkspace.fsproj"
+                     else frozen_source / name): assembly for name, assembly in selected.items()}
+    else:
+        def visit(path):
+            path = path.resolve()
+            if path in projects:
+                return
+            xml = ElementTree.parse(path)
+            projects[path] = next((e.text for e in xml.iter("AssemblyName") if e.text), path.stem)
+            for reference in xml.iter("ProjectReference"):
+                condition = reference.get("Condition")
+                if condition == "'$(FsggFrozenCoordDependencies)' != '' And '$(FsggFrozenCoordSource)' != ''":
+                    continue
+                if condition not in (None, "'$(FsggFrozenCoordDependencies)' == '' And '$(FsggFrozenCoordSource)' == ''"):
+                    raise ValueError("ambiguous ordinary project reference")
+                visit(path.parent / reference.attrib["Include"])
+        visit(project)
     output = project.parent / "bin/Release/net10.0"
     required = {name + ".dll" for name in projects.values()}
     required.update({"new-sdd-workspace.deps.json", "new-sdd-workspace.runtimeconfig.json"})
@@ -86,13 +102,13 @@ def board_package_closure(package: pathlib.Path, source_sha: str, *, source_root
                     for target in targets.values())):
             raise ValueError("creator package must carry current coherent CLI dependency metadata")
     result = {"schema": "fsgg.creator-board-package-closure/1", "version": CURRENT_016.version,
-            "sourceSha": source_sha, "coherentVersion": coherent_version, "projectCount": len(projects),
+            "sourceSha": source_sha, "currentCreatorSourceSha": source_sha, "coherentVersion": coherent_version, "projectCount": len(projects),
             "builtFilesCompared": len(required), "archiveSha256": hashlib.sha256(package.read_bytes()).hexdigest(),
             "installedAdoptionAccepted": False}
     if frozen_dependencies is not None:
-        helper = runpy.run_path(str(source_root / "scripts/creator-frozen-coord-dependencies.py"))
         result["publishedDependencyClosure"] = helper["package_closure"](
-            package, frozen_dependencies, source_root)
+            package, frozen_dependencies, source_root, frozen_source)
+        result["publishedDependencySourceSha"] = dependency_pin["sourceSha"]
     return result
 
 
@@ -189,6 +205,77 @@ class WizardReleaseTests(unittest.TestCase):
         with self.assertRaises(Refused):
             WizardAdmission(NoReads(), historical, "a" * 40, 1, "EHotwagner", "refs/heads/main")
 
+    def test_frozen_package_joins_current_creator_and_only_the_selected_producer(self):
+        # Real helper/staging/package wiring with synthetic DLL bytes, never executed.
+        with tempfile.TemporaryDirectory() as temporary:
+            base = pathlib.Path(temporary)
+            creator, producer = base / "creator", base / "producer"
+            creator.mkdir(); producer.mkdir()
+            helper = runpy.run_path(str(ROOT / "scripts/creator-frozen-coord-dependencies.py"))
+            projects = json.loads((ROOT / "scripts/creator-frozen-coord-dependencies.json").read_text())["projects"]
+            producer_projects = {p: a for p, a in projects.items() if a != "new-sdd-workspace"}
+            for path, assembly in producer_projects.items():
+                target = producer / path; target.parent.mkdir(parents=True)
+                references = ""
+                if assembly == "fsgg-coord-engine":
+                    references = ''.join('<ProjectReference Include="../' + pathlib.Path(p).parent.name + '/' + pathlib.Path(p).name + '" />'
+                                         for p in producer_projects if p != path)
+                target.write_text('<Project><AssemblyName>' + assembly + '</AssemblyName><ItemGroup>' + references + '</ItemGroup></Project>')
+                (target.parent / "packages.lock.json").write_text('{}')
+            (producer / "global.json").write_text('{}')
+            def seal(root):
+                for argv in (["git", "init", "-q"], ["git", "add", "."],
+                             ["git", "-c", "user.name=fixture", "-c", "user.email=fixture@example.invalid", "commit", "-qm", "fixture"]):
+                    subprocess.run(argv, cwd=root, check=True, capture_output=True, timeout=10)
+                return helper["git_identity"](root)
+            producer_sha = seal(producer)
+            bodies = {a + suffix: ("synthetic, never executed: " + a + suffix).encode()
+                      for a in producer_projects.values() for suffix in (".dll", ".pdb", ".xml")}
+            dependency_package = base / "published.nupkg"
+            prefix = "tools/net10.0/any/"
+            with zipfile.ZipFile(dependency_package, "w") as archive:
+                archive.writestr("FS.GG.Coord.Cli.nuspec", '<package><metadata><id>FS.GG.Coord.Cli</id><version>0.99.0</version><repository commit="' + producer_sha + '"/></metadata></package>')
+                for name, body in bodies.items(): archive.writestr(prefix + name, body)
+            pin = {"version": "0.99.0", "sourceSha": producer_sha, "projects": projects,
+                   "archiveSha256": hashlib.sha256(dependency_package.read_bytes()).hexdigest(),
+                   "members": {n: hashlib.sha256(b).hexdigest() for n, b in bodies.items()},
+                   "sourceLeaves": [{"path": n, "sha256": hashlib.sha256((producer / n).read_bytes()).hexdigest()}
+                                    for n in sorted(helper["dependency_source_paths"](producer, projects))]}
+            for name in ("scripts/NewSddWorkspace/NewSddWorkspace.fsproj", "scripts/new-sdd-workspace-release.py",
+                         "scripts/creator-frozen-coord-dependencies.py"):
+                target = creator / name; target.parent.mkdir(parents=True, exist_ok=True); target.write_bytes((ROOT / name).read_bytes())
+            (creator / "scripts/creator-frozen-coord-dependencies.json").write_text(json.dumps(pin))
+            creator_sha = seal(creator)
+            dependencies = base / "binaries"
+            helper["stage"](creator, dependencies, dependency_package, pin, producer)
+            output = creator / "scripts/NewSddWorkspace/bin/Release/net10.0"; output.mkdir(parents=True)
+            creator_bodies = {**bodies, "new-sdd-workspace.dll": b"synthetic current creator, never executed",
+                "new-sdd-workspace.runtimeconfig.json": b"{}", "new-sdd-workspace.deps.json": json.dumps({
+                    "libraries": {"FS.GG.Coord.Cli/0.99.0": {"type": "project"}}, "targets": {"net10.0": {
+                        "new-sdd-workspace/0.16.0": {"dependencies": {"FS.GG.Coord.Cli": "0.99.0"}},
+                        "FS.GG.Coord.Cli/0.99.0": {"runtime": {"fsgg-coord-engine.dll": {}}}}}}).encode()}
+            package = base / "creator.nupkg"
+            with zipfile.ZipFile(package, "w") as archive:
+                archive.writestr("FS.GG.NewSddWorkspace.nuspec", '<package><metadata><id>FS.GG.NewSddWorkspace</id><version>0.16.0</version><repository commit="' + creator_sha + '"/></metadata></package>')
+                for name, body in creator_bodies.items(): (output / name).write_bytes(body); archive.writestr(prefix + name, body)
+            result = board_package_closure(package, creator_sha, source_root=creator,
+                                           frozen_dependencies=dependencies, frozen_source=producer)
+            self.assertEqual(result["projectCount"], 11)
+            self.assertEqual(result["currentCreatorSourceSha"], creator_sha)
+            self.assertEqual(result["publishedDependencySourceSha"], producer_sha)
+            for selected in (None, creator):
+                with self.assertRaises(ValueError):
+                    board_package_closure(package, creator_sha, source_root=creator,
+                                          frozen_dependencies=dependencies, frozen_source=selected)
+            with self.assertRaisesRegex(ValueError, "package/source identity differs"):
+                board_package_closure(package, "b" * 40, source_root=creator,
+                                      frozen_dependencies=dependencies, frozen_source=producer)
+            (creator / "new-owner-file").write_text("later Creator source")
+            seal(creator)
+            with self.assertRaisesRegex(ValueError, "current Creator source revision differs"):
+                board_package_closure(package, creator_sha, source_root=creator,
+                                      frozen_dependencies=dependencies, frozen_source=producer)
+
     def test_package_closure_joins_projects_metadata_and_actual_built_bytes(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = pathlib.Path(temporary)
@@ -199,6 +286,8 @@ class WizardReleaseTests(unittest.TestCase):
                     return
                 files[relative] = path.read_bytes()
                 for reference in ElementTree.parse(path).iter('ProjectReference'):
+                    if reference.get('Condition') == "'$(FsggFrozenCoordDependencies)' != '' And '$(FsggFrozenCoordSource)' != ''":
+                        continue
                     copy_project((path.parent / reference.attrib['Include']).resolve())
             copy_project(ROOT / 'scripts/NewSddWorkspace/NewSddWorkspace.fsproj')
             files[pathlib.Path('scripts/creator-frozen-coord-dependencies.json')] = (ROOT / 'scripts/creator-frozen-coord-dependencies.json').read_bytes()
@@ -697,9 +786,11 @@ if __name__ == "__main__":
         parser.add_argument("--source-sha", required=True)
         parser.add_argument("--release-manifest", type=pathlib.Path)
         parser.add_argument("--frozen-coord-dependencies", type=pathlib.Path)
+        parser.add_argument("--frozen-coord-source", type=pathlib.Path)
         args = parser.parse_args()
         closure = board_package_closure(args.board_package, args.source_sha,
-                                        frozen_dependencies=args.frozen_coord_dependencies)
+                                        frozen_dependencies=args.frozen_coord_dependencies,
+                                        frozen_source=args.frozen_coord_source)
         if args.release_manifest:
             checker = runpy.run_path(str(ROOT / "scripts/new-sdd-workspace-release.py"))
             evidence = checker["verify_artifact"](args.release_manifest, args.board_package)

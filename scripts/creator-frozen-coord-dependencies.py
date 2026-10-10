@@ -7,6 +7,8 @@ import hashlib
 import json
 import pathlib
 import stat
+import subprocess
+import re
 import zipfile
 from xml.etree import ElementTree
 
@@ -30,31 +32,54 @@ def regular(path):
     return path.read_bytes()
 
 
-def source_projects(root, pin):
+NORMAL_REFERENCE = "../../src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj"
+FROZEN_REFERENCE = "$(FsggFrozenCoordSource)/src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj"
+NORMAL_CONDITION = "'$(FsggFrozenCoordDependencies)' == '' And '$(FsggFrozenCoordSource)' == ''"
+FROZEN_CONDITION = "'$(FsggFrozenCoordDependencies)' != '' And '$(FsggFrozenCoordSource)' != ''"
+PAIR_ERROR = "('$(FsggFrozenCoordDependencies)' == '' And '$(FsggFrozenCoordSource)' != '') Or ('$(FsggFrozenCoordDependencies)' != '' And '$(FsggFrozenCoordSource)' == '')"
+
+
+def git_identity(root):
+    require(root.is_absolute() and root.is_dir()
+            and all(not p.is_symlink() for p in (root, *root.parents)), "missing or linked source root")
+    actual = subprocess.check_output(["git", "-C", str(root), "rev-parse", "--show-toplevel"],
+                                     timeout=10, text=True).strip()
+    require(pathlib.Path(actual) == root, "source root must be the exact Git worktree root")
+    head = subprocess.check_output(["git", "-C", str(root), "rev-parse", "HEAD"],
+                                   timeout=10, text=True).strip()
+    require(re.fullmatch(r"[0-9a-f]{40}", head) is not None, "source root Git identity missing")
+    return head
+
+
+def source_projects(root, pin, producer_root):
+    require(producer_root is not None and producer_root != root, "distinct frozen producer source root required")
+    require(git_identity(producer_root) == pin["sourceSha"], "published dependency source revision changed")
     creator = root / "scripts/NewSddWorkspace/NewSddWorkspace.fsproj"
     frozen_copy_contract(ElementTree.fromstring(regular(creator)))
-    projects = {}
+    projects = {"scripts/NewSddWorkspace/NewSddWorkspace.fsproj": "new-sdd-workspace"}
     def visit(path):
-        relative = path.relative_to(root).as_posix()
+        require(not path.is_symlink() and all(not parent.is_symlink() for parent in path.parents),
+                "linked project reference")
+        path = path.resolve()
+        require(path.is_relative_to(producer_root), "foreign frozen project reference")
+        relative = path.relative_to(producer_root).as_posix()
         if relative in projects:
             return
         xml = ElementTree.fromstring(regular(path))
         projects[relative] = next((e.text for e in xml.iter("AssemblyName") if e.text), path.stem)
         for reference in xml.iter("ProjectReference"):
-            declared = path.parent / reference.attrib["Include"]
-            require(not declared.is_symlink() and all(not parent.is_symlink() for parent in declared.parents),
-                    "linked project reference")
-            child = declared.resolve()
-            require(child.is_relative_to(root), "foreign project reference")
-            visit(child)
-    visit(root / "scripts/NewSddWorkspace/NewSddWorkspace.fsproj")
+            declaration = reference.attrib["Include"]
+            require(not any(c in declaration for c in ("$", "*", "?", ";"))
+                    and not reference.get("Condition"), "ambiguous frozen project reference")
+            visit(path.parent / declaration)
+    visit(producer_root / "src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj")
     require(projects == pin["projects"], "frozen dependency project graph changed")
     declared = [row["path"] for row in pin["sourceLeaves"]]
     require(len(declared) == len(set(declared))
-            and set(declared) == dependency_source_paths(root, projects),
+            and set(declared) == dependency_source_paths(producer_root, projects),
             "frozen dependency source coverage differs")
     for row in pin["sourceLeaves"]:
-        require(digest(regular(root / row["path"])) == row["sha256"],
+        require(digest(regular(producer_root / row["path"])) == row["sha256"],
                 "published dependency source changed: " + row["path"])
     return projects
 
@@ -138,9 +163,15 @@ def frozen_copy_contract(xml):
             and content[0].get("Link") == "%(RecursiveDir)%(Filename)%(Extension)",
             "frozen dependency content copy changed")
     references = list(xml.iter("ProjectReference"))
-    require(len(references) == 1 and not references[0].findall("Private")
-            and "Private" not in references[0].attrib,
-        "frozen dependency reference copy route changed")
+    require(len(references) == 2 and {(r.get("Include"), r.get("Condition")) for r in references}
+            == {(NORMAL_REFERENCE, NORMAL_CONDITION), (FROZEN_REFERENCE, FROZEN_CONDITION)}
+            and all(not r.findall("Private") and "Private" not in r.attrib for r in references),
+            "frozen dependency reference copy route changed")
+    pair = [t for t in xml.findall("Target") if t.get("Name") == "ValidateFrozenCoordSelection"]
+    require(len(pair) == 1 and pair[0].get("BeforeTargets") == "PrepareForBuild"
+            and len(pair[0].findall("Error")) == 1
+            and pair[0].find("Error").get("Condition") == PAIR_ERROR,
+            "frozen dependency paired selection guard changed")
     require(not list(xml.iter("ErrorOnDuplicatePublishOutputFiles")),
             "frozen dependency duplicate publish enforcement changed")
 
@@ -178,8 +209,8 @@ def archive_members(package, pin):
     return members
 
 
-def layout(root, dependencies, pin):
-    source_projects(root, pin)
+def layout(root, dependencies, pin, producer_root):
+    source_projects(root, pin, producer_root)
     require(dependencies.is_dir() and not dependencies.is_symlink(), "missing frozen dependency directory")
     require(all(not p.is_symlink() for p in dependencies.rglob("*")), "linked frozen dependency member")
     files = {p.relative_to(dependencies).as_posix() for p in dependencies.rglob("*") if p.is_file()}
@@ -189,16 +220,17 @@ def layout(root, dependencies, pin):
     for project, assembly in pin["projects"].items():
         if assembly == "new-sdd-workspace":
             continue
-        output = (root / project).parent / "bin/Release/net10.0"
+        output = (producer_root / project).parent / "bin/Release/net10.0"
         for suffix in (".dll", ".pdb", ".xml"):
             name = assembly + suffix
             require(digest(regular(output / name)) == pin["members"][name], "staged project dependency changed")
-    return {"sourceSha": pin["sourceSha"], "archiveSha256": pin["archiveSha256"],
+    return {"currentCreatorSourceSha": git_identity(root), "publishedDependencySourceSha": pin["sourceSha"],
+            "archiveSha256": pin["archiveSha256"],
             "coherentVersion": pin["version"], "dependencyMembers": len(pin["members"])}
 
 
-def stage(root, dependencies, package, pin):
-    source_projects(root, pin)
+def stage(root, dependencies, package, pin, producer_root):
+    source_projects(root, pin, producer_root)
     bodies = archive_members(package, pin)
     require(not dependencies.exists(), "frozen dependency output already exists")
     require(all(not parent.is_symlink() for parent in (dependencies, *dependencies.parents)),
@@ -207,8 +239,9 @@ def stage(root, dependencies, package, pin):
     for project, assembly in pin["projects"].items():
         if assembly == "new-sdd-workspace":
             continue
-        output = (root / project).parent / "bin/Release/net10.0"
+        output = (producer_root / project).parent / "bin/Release/net10.0"
         require(all(not parent.is_symlink() for parent in (output, *output.parents)), "linked staged project output")
+        require(not output.exists(), "staged project output already exists")
         for suffix in (".dll", ".pdb", ".xml"):
             name = assembly + suffix
             target = output / name
@@ -218,16 +251,18 @@ def stage(root, dependencies, package, pin):
     for name, body in bodies.items():
         target = dependencies / name
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_bytes(body)
+        with target.open("xb") as stream:
+            stream.write(body)
     for target, body in destinations:
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_bytes(body)
-    return layout(root, dependencies, pin)
+        with target.open("xb") as stream:
+            stream.write(body)
+    return layout(root, dependencies, pin, producer_root)
 
 
-def package_closure(package, dependencies, root=ROOT):
+def package_closure(package, dependencies, root=ROOT, producer_root=None):
     pin = json.loads(regular(root / "scripts/creator-frozen-coord-dependencies.json"))
-    result = layout(root, dependencies, pin)
+    result = layout(root, dependencies, pin, producer_root)
     with zipfile.ZipFile(package) as archive:
         names = archive.namelist()
         require(len(names) == len(set(names)), "duplicate creator package member")
@@ -240,14 +275,16 @@ def package_closure(package, dependencies, root=ROOT):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("command", choices=("verify-source", "stage", "verify-layout"))
+    parser.add_argument("--producer-source", type=pathlib.Path, required=True)
     parser.add_argument("--dependencies", type=pathlib.Path)
     parser.add_argument("--package", type=pathlib.Path)
     args = parser.parse_args()
     pin = json.loads(regular(PIN))
     if args.command == "verify-source":
         require(args.dependencies is None and args.package is None, "source verification refuses staging inputs")
-        projects = source_projects(ROOT, pin)
-        print(json.dumps({"sourceSha": pin["sourceSha"], "coherentVersion": pin["version"],
+        projects = source_projects(ROOT, pin, args.producer_source)
+        print(json.dumps({"currentCreatorSourceSha": git_identity(ROOT),
+                          "publishedDependencySourceSha": pin["sourceSha"], "coherentVersion": pin["version"],
                           "sourceProjects": len(projects)}, sort_keys=True))
         raise SystemExit(0)
     require(args.dependencies is not None, "frozen dependency directory required")
@@ -256,7 +293,7 @@ if __name__ == "__main__":
     dependencies = args.dependencies
     if args.command == "stage":
         require(args.package is not None, "stage requires accepted dependency archive")
-        result = stage(ROOT, dependencies, args.package, pin)
+        result = stage(ROOT, dependencies, args.package, pin, args.producer_source)
     else:
-        result = layout(ROOT, dependencies, pin)
+        result = layout(ROOT, dependencies, pin, args.producer_source)
     print(json.dumps(result, sort_keys=True))
