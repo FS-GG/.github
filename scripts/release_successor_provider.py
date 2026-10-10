@@ -288,6 +288,8 @@ class LiveProvider:
         asset = target[0]
         expected = (self.root / name).read_bytes()
         digest = hashlib.sha256(expected).hexdigest()
+        if digest != self.manifest["descriptor"]["standaloneTelemetry"]["qualificationSha256"]:
+            raise Refused("runtime recovery matched local payload differs from original manifest")
         if asset.get("state") != "uploaded" or asset["size"] != len(expected) or asset.get("digest") != "sha256:" + digest:
             raise Refused("runtime recovery target asset metadata differs")
         actual = self.api.download_runtime_recovery_asset(asset["id"], asset["size"])

@@ -241,13 +241,13 @@ def report():
             "publicationComplete": False}
 
 
-def fixture(generation):
-    candidate = manifest()
+def fixture(generation, candidate=None, archive_sha256="a" * 64):
+    candidate = manifest() if candidate is None else candidate
     effects = ordered_effects(candidate)
     authority = MemoryAuthority()
     setup = ProtectedReleaseJournal(authority, main_directory=True)
     intent = {"contentId": candidate["contentId"], "sourceSha": "b" * 40, "version": "0.101.0",
-              "candidateArchiveSha256": "a" * 64, "operator": "EHotwagner"}
+              "candidateArchiveSha256": archive_sha256, "operator": "EHotwagner"}
     state = setup.initialize(intent)
     for transition in range(generation - 1):
         effect = effects[transition // 2].identity
@@ -1035,7 +1035,7 @@ class RuntimeAPI(MemoryPublisher):
 
 class OriginalRuntimeRecoveryControls(unittest.TestCase):
     def context(self, root, matched=False):
-        candidate, authority, intent, setup = fixture(26)
+        candidate = manifest()
         payload = b'owned original synthetic runtime payload\n'
         (root / publisher.RUNTIME_NAME).write_bytes(payload)
         (root / 'standalone-telemetry-evidence.json').write_bytes(b'owned evidence\n')
@@ -1044,11 +1044,13 @@ class OriginalRuntimeRecoveryControls(unittest.TestCase):
             row['artifact']['sha256'] = hashlib.sha256(raw).hexdigest()
         candidate['descriptor']['standaloneTelemetry'] = {'qualificationPath': publisher.RUNTIME_NAME,
                          'qualificationSha256': hashlib.sha256(payload).hexdigest()}
+        candidate['contentId'] = 'sha256:' + hashlib.sha256(canonical(candidate['descriptor'])).hexdigest()
         manifest_raw = (json.dumps(candidate, sort_keys=True, separators=(',', ':'))+'\n').encode()
         (root / 'release-manifest.json').write_bytes(manifest_raw)
         archive = root / 'original-candidate.zip';archive.write_bytes(b'original synthetic candidate archive')
         fixed = {**publisher.RECOVERY_CANDIDATE, 'contentId':candidate['contentId'], 'sourceSha':'b'*40,
                  'archiveSha256':hashlib.sha256(archive.read_bytes()).hexdigest()}
+        candidate, authority, intent, setup = fixture(26, candidate, fixed['archiveSha256'])
         counter, rows, journal, _, _, _ = slice_context(candidate, authority, intent)
         source = RuntimeAPI(candidate, root, matched)
         api = publisher.RuntimePublisherAPI(source)
@@ -1332,6 +1334,52 @@ class OriginalRuntimeRecoveryControls(unittest.TestCase):
                 self.assertLessEqual(sum(receipt['publisherRequests']['attempted'].values()),256)
                 self.assertLessEqual(result.stat().st_size,16384)
                 print(json.dumps({'runtimeRecoveryActualCLI':{'matched':matched,'authority':receipt['authorityRequests'],'publisher':receipt['publisherRequests']}},sort_keys=True))
+
+    def test_matched_observation_expiry_prevents_all_authority_mutations(self):
+        for expiry_stage in ('observation', 'settlement-admission', 'cas-read'):
+            with self.subTest(stage=expiry_stage), tempfile.TemporaryDirectory() as temp:
+                root=pathlib.Path(temp);c=self.context(root,True);now=[0]
+                original_observe=c[6].observe_runtime_recovery
+                original_authorize=c[5].authorize
+                original_get=c[1].get
+                admitted=[False]
+                def observe(effect):
+                    value=original_observe(effect)
+                    if expiry_stage=='observation':now[0]=11
+                    return value
+                def authorize(*args):
+                    result=original_authorize(*args)
+                    if args[2]=='settle':
+                        admitted[0]=True
+                        if expiry_stage=='settlement-admission':now[0]=11
+                    return result
+                def get(path):
+                    result=original_get(path)
+                    if admitted[0] and expiry_stage=='cas-read':now[0]=11
+                    return result
+                with patch.object(c[6],'observe_runtime_recovery',side_effect=observe), \
+                     patch.object(c[5],'authorize',side_effect=authorize),patch.object(c[1],'get',side_effect=get),self.assertRaises(RuntimeError):
+                    self.run_runtime(c,root/'attempt.json',clock=lambda:now[0])
+                self.assertFalse(any(method in {'post','patch'}for method,_ in c[1].calls))
+                self.assertEqual(c[4]._observed.state['generation'],26)
+                self.assertEqual(c[7].uploads,[])
+
+    def test_matched_payload_drift_during_observation_cannot_settle(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root=pathlib.Path(temp);c=self.context(root,True)
+            original=c[7].runtime_recovery_json
+            moved=[False]
+            def read(path):
+                if '/releases?per_page=' in path and not moved[0]:
+                    moved[0]=True;raw=b'different local and remote bytes'
+                    (root/publisher.RUNTIME_NAME).write_bytes(raw)
+                    row=next(x for x in c[7].assets if x['name']==publisher.RUNTIME_NAME)
+                    row.update(size=len(raw),digest='sha256:'+hashlib.sha256(raw).hexdigest())
+                return original(path)
+            with patch.object(c[7],'runtime_recovery_json',side_effect=read),self.assertRaises(RuntimeError):
+                self.run_runtime(c,root/'attempt.json')
+            self.assertTrue(moved[0]);self.assertEqual(c[4]._observed.state['generation'],26)
+            self.assertFalse(any(method in {'post','patch'}for method,_ in c[1].calls));self.assertEqual(c[7].uploads,[])
 
     def test_primary_upload_uncertainty_survives_report_failure(self):
         import io

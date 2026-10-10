@@ -683,9 +683,40 @@ class RuntimeRecoveryProvider(ReportingProvider):
         return result
 
 
+class RuntimeDeadlineAdmission:
+    """Keep composite admission and refuse expiry both sides of its reads."""
+    def __init__(self, admission, deadline, clock):
+        self.admission, self.deadline, self.clock = admission, deadline, clock
+
+    def authorize(self, *args):
+        require(self.clock() < self.deadline, "runtime recovery deadline expired before admission")
+        result = self.admission.authorize(*args)
+        require(self.clock() < self.deadline, "runtime recovery deadline expired during admission")
+        return result
+
+
+class RuntimeDeadlineAuthority:
+    """Selected counter still owns calls; fence every underlying mutation."""
+    def __init__(self, api, deadline, clock):
+        self.api, self.deadline, self.clock = api, deadline, clock
+
+    def get(self, *args):
+        return self.api.get(*args)
+
+    def post(self, *args):
+        require(self.clock() < self.deadline, "runtime recovery deadline expired before Authority POST")
+        return self.api.post(*args)
+
+    def patch(self, *args):
+        require(self.clock() < self.deadline, "runtime recovery deadline expired before Authority PATCH")
+        return self.api.patch(*args)
+
+
 def run_original_runtime_recovery(manifest, journal, admission, provider, ledger_api, report, deadline,
                                   proof, verify_candidate, attempt_path, clock=time.monotonic):
     effect = validate_original_runtime_state(manifest, journal)
+    admission = RuntimeDeadlineAdmission(admission, deadline, clock)
+    ledger_api.api = RuntimeDeadlineAuthority(ledger_api.api, deadline, clock)
     observed, physical = journal._observed, journal._physical_head
     require(proof == {"runId": 38063768172, "runAttempt": 1, "sourceSha": RUNTIME_REFUSAL_SOURCE,
                       "artifactId": 11675095562, "archiveSha256": RUNTIME_REFUSAL_ZIP_SHA256,
