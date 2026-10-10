@@ -95,6 +95,23 @@ class CandidateUniquenessTests(unittest.TestCase):
         with self.assertRaisesRegex(gate.GateError, "not predecessor"):
             gate.check("0.98.0", "0.97.1", "test-token")
 
+    def test_selected_0101_window_requires_0100_on_all_six_coordinates(self) -> None:
+        self.github_read.return_value = ["0.100.0"]
+        self.nuget_read.return_value = ["0.100.0"]
+        self.assertEqual(len(gate.check("0.101.0", "0.100.0", "test-token")), 6)
+        for feed in (self.github_read, self.nuget_read):
+            with self.subTest(feed=feed):
+                feed.return_value = ["0.100.0", "0.101.0"]
+                with self.assertRaisesRegex(gate.GateError, "already exists"):
+                    gate.check("0.101.0", "0.100.0", "test-token")
+                feed.return_value = ["0.100.0"]
+        self.nuget_read.return_value = ["0.99.0"]
+        with self.assertRaisesRegex(gate.GateError, "not predecessor"):
+            gate.check("0.101.0", "0.100.0", "test-token")
+        self.github_read.side_effect = gate.GateError("HTTP 403")
+        with self.assertRaisesRegex(gate.GateError, "403"):
+            gate.check("0.101.0", "0.100.0", "test-token")
+
     def test_an_occupied_version_on_either_feed_refuses(self) -> None:
         for feed in (self.github_read, self.nuget_read):
             with self.subTest(feed=feed):
@@ -125,13 +142,13 @@ class CandidateUniquenessTests(unittest.TestCase):
 class SuccessorRailBindingTests(unittest.TestCase):
     def test_candidate_binds_the_next_version_and_exact_predecessor(self) -> None:
         workflow = (ROOT / ".github/workflows/release-successor-candidate.yml").read_text()
-        self.assertIn('test "$version" = 0.100.0', workflow)
-        self.assertIn("gh release download coherent-set/v0.99.0", workflow)
-        self.assertIn("--tag-source 64e95ebec1a8294e16edaafdb27e6aa96f32c6f7", workflow)
-        self.assertEqual(workflow.count("--predecessor 0.99.0"), 2)
-        self.assertIn("--release-tag coherent-set/v0.99.0", workflow)
+        self.assertIn('test "$version" = 0.101.0', workflow)
+        self.assertIn("gh release download coherent-set/v0.100.0", workflow)
+        self.assertIn("--tag-source 3ed8ad419a64253ca6f665e9779e5e4d110f50a5", workflow)
+        self.assertEqual(workflow.count("--predecessor 0.100.0"), 2)
+        self.assertIn("--release-tag coherent-set/v0.100.0", workflow)
         for namespace in ("coherent-set", "kit", "drivers", "coord-engine"):
-            self.assertIn(f"refs/tags/{namespace}/v0.100.0", workflow)
+            self.assertIn(f"refs/tags/{namespace}/v0.101.0", workflow)
         for project in ("FS.GG.Coord.Cli", "FS.GG.Kit", "FS.GG.Drivers"):
             self.assertEqual(workflow.count(f"dotnet pack src/{project}/"), 1)
         self.assertIn("--policy-version release-successor/1", workflow)
@@ -141,15 +158,30 @@ class SuccessorRailBindingTests(unittest.TestCase):
         self.assertIn("skill telemetry-config discover", workflow)
         self.assertIn("test ! -e \"$store\"", workflow)
         self.assertIn("skill preflight assess", workflow)
+        self.assertIn("FSGG_PACKAGE_REQUIRE_CAUSAL_RECEIVER=1", workflow)
+
+    def test_packed_causal_qualifier_preserves_candidate_retention_and_requires_reopen(self) -> None:
+        package = (ROOT / "tests/standalone-telemetry-package/run.sh").read_text()
+        probe = (ROOT / "tests/standalone-telemetry-dashboard/store-probe.fsx").read_text()
+        self.assertIn('REQUIRE_CAUSAL_RECEIVER="${FSGG_PACKAGE_REQUIRE_CAUSAL_RECEIVER:-0}"', package)
+        self.assertIn('for phase in ingest reopen', package)
+        self.assertIn('result["causalReceiver"]', package.replace("'causalReceiver'", '"causalReceiver"'))
+        self.assertIn("required packed causal receiver qualification was completed", package)
+        self.assertIn("causal receipt replay changed canonical revision", probe)
+        self.assertIn("causal refusal changed canonical revision", probe)
+        self.assertIn('"fsgg.telemetry.item-detail/2"', probe)
+        self.assertIn('schemaVersion = 14', probe)
+        self.assertNotIn("receiver-artifact", package + probe)
+        self.assertNotIn("programme-resume", package + probe)
 
     def test_publisher_and_journal_bind_one_unused_successor(self) -> None:
         publisher = (ROOT / "scripts/release-successor-publish.py").read_text()
         journal = (ROOT / "scripts/release_successor_journal.py").read_text()
-        self.assertEqual(publisher.count('"version": "0.100.0"'), 1)
-        self.assertIn('manifest["descriptor"]["version"] == "0.100.0"', publisher)
-        self.assertIn('"--version", "0.100.0", "--predecessor", "0.99.0"', publisher)
-        self.assertIn('api.get("repos/FS-GG/.github/git/ref/tags/coherent-set/v0.100.0")', publisher)
-        self.assertIn('REF = "refs/heads/fsgg/v2/journal/release/utel-rel-18"', journal)
+        self.assertEqual(publisher.count('"version": "0.101.0"'), 1)
+        self.assertIn('manifest["descriptor"]["version"] == "0.101.0"', publisher)
+        self.assertIn('"--version", "0.101.0", "--predecessor", "0.100.0"', publisher)
+        self.assertIn('api.get("repos/FS-GG/.github/git/ref/tags/coherent-set/v0.101.0")', publisher)
+        self.assertIn('REF = "refs/heads/fsgg/v2/journal/release/utel-rel-19"', journal)
         self.assertNotIn("utel-rel-10", journal)
         self.assertNotIn("utel-rel-13", journal)
         self.assertNotIn("utel-rel-14", journal)

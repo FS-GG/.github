@@ -130,18 +130,17 @@ bytes under 0.52.0 would make the same version identify different artifacts. Ado
 coherent set cut from corrected source. All three partial sets are recorded in
 `registry/dependencies.yml`.</FsggStandingAdvisories>
 
-    <PackageReleaseNotes>0.100.0 — current telemetry receipt and schema contracts.
+    <PackageReleaseNotes>0.101.0 — exact CI attribution and causal receiver support.
 
-Workspace submissions now return one bounded JSON receipt carrying exact scope, batch,
-digest and status. Unknown receiver outcomes retain the original pending intent; durable
-receipt remains distinct from application. Normal private-store initialization and restore
-accept current schema14 only. Explicit migrate13 and import13 commands retain the historical
-schema13 transition and receipt-backup boundary. The private dashboard requires current
-schema14 snapshots and current producer shapes. These changes remove prior compatibility
-paths and advance CLI, Kit and Drivers together as a new minor version.
-Published0.99 archives remain immutable. Source preparation establishes no publication,
-installed adoption, telemetry activation or Wizard frozen-closure qualification.
-Host0.5 remains independent.
+CI collection binds the selected source profile to the exact head, preserves literal
+native job and step classification, and refuses ambiguous run-attempt associations.
+Empty native target associations remain unknown. The current schema14 receiver accepts
+immutable execution-causal-admission/1 declarations alongside existing observations.
+Old receivers reject the new kind: publish and adopt the receiving capability before
+enabling the corresponding producer. No database migration or independent Host release
+is implied for a sufficient local CLI receiver.
+Published0.100 archives remain immutable. Source preparation establishes no package
+publication, installed adoption, collector activation or operational-store acceptance.
 
 $(FsggStandingAdvisories)
 

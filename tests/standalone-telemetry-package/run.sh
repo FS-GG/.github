@@ -10,11 +10,18 @@ fi
 PACKAGE="$1"
 EVIDENCE="$2"
 RUNTIME_EVIDENCE="${3:-}"
+REQUIRE_CAUSAL_RECEIVER="${FSGG_PACKAGE_REQUIRE_CAUSAL_RECEIVER:-0}"
+case "$REQUIRE_CAUSAL_RECEIVER" in 0|1) ;; *) echo "causal receiver selection must be 0 or 1" >&2; exit 2;; esac
+if [ "$REQUIRE_CAUSAL_RECEIVER" = 1 ] && { [ -z "$RUNTIME_EVIDENCE" ] || ! [[ "${FSGG_PACKAGE_SOURCE_SHA:-}" =~ ^[0-9a-f]{40}$ ]]; }; then
+  echo "causal receiver qualification requires runtime evidence and exact candidate source" >&2
+  exit 2
+fi
 case "$PACKAGE:$EVIDENCE" in /*:/*) ;; *) echo "package and evidence paths must be absolute" >&2; exit 2;; esac
 [ -f "$PACKAGE" ] || { echo "candidate package is missing: $PACKAGE" >&2; exit 2; }
 
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/standalone-telemetry-package.XXXXXX")"
-trap 'rm -rf "$WORK"' EXIT
+CAUSAL_PROBE_ROOT=""
+trap 'rm -rf "$WORK"; [ -z "$CAUSAL_PROBE_ROOT" ] || rm -rf "$CAUSAL_PROBE_ROOT"' EXIT
 export DOTNET_CLI_HOME="$WORK/dotnet-home"
 export DOTNET_CLI_TELEMETRY_OPTOUT=1
 export DOTNET_NOLOGO=1
@@ -237,6 +244,56 @@ PY
           "$(cd "$(dirname "$0")/../standalone-telemetry-dashboard" && pwd)/store-probe.fsx" -- \
           "$STORE_PROBE_EVIDENCE" "$STORE_PROBE_ROOT" "$STORE_ASSEMBLY_SHA" 100 \
           > "$WORK/store-probe.out" 2> "$WORK/store-probe.err"
+      if [ "$REQUIRE_CAUSAL_RECEIVER" = 1 ]; then
+        CAUSAL_PROBE_ROOT="$DURABLE_PARENT/causal-probe-${PACKAGE_SHA:0:16}-$$"
+        CAUSAL_MANIFEST="$(cd "$(dirname "$0")/../learn-01-analysis/fixtures/causal-admission" && pwd)/manifest.json"
+        CAUSAL_INGEST="$WORK/causal-ingest.json"
+        CAUSAL_REOPEN="$WORK/causal-reopen.json"
+        CAUSAL_PHASES_PASS=1
+        for phase in ingest reopen; do
+          case "$phase" in ingest) phase_output="$CAUSAL_INGEST";; reopen) phase_output="$CAUSAL_REOPEN";; esac
+          if ! LD_LIBRARY_PATH="$NATIVE_LIBRARY_DIR${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+              dotnet fsi --quiet --lib:"$STORE_ASSEMBLY_DIR" \
+                "$(cd "$(dirname "$0")/../standalone-telemetry-dashboard" && pwd)/store-probe.fsx" -- \
+                --causal-receiver "$phase" "$phase_output" "$CAUSAL_PROBE_ROOT" "$STORE_ASSEMBLY_SHA" "$CAUSAL_MANIFEST" \
+                > "$WORK/causal-$phase.out" 2> "$WORK/causal-$phase.err"; then
+            bad "packed causal receiver $phase accepts the fixed contract" "$(tail -5 "$WORK/causal-$phase.err")"
+            CAUSAL_PHASES_PASS=0
+            break
+          fi
+        done
+        # Carry the complete proof in the existing runtime member: archive format
+        # and immutable seven-member candidate custody remain unchanged.
+        if [ "$CAUSAL_PHASES_PASS" = 1 ] && python3 - "$STORE_PROBE_EVIDENCE" "$CAUSAL_INGEST" "$CAUSAL_REOPEN" \
+            "$STORE_ASSEMBLY_SHA" "$STORE_ASSEMBLY_DIR/FS.GG.Coord.Core.dll" "$CAUSAL_MANIFEST" <<'CAUSAL_PY'
+import hashlib, json, pathlib, sys
+performance, ingest, reopen = [pathlib.Path(p) for p in sys.argv[1:4]]
+documents = [json.loads(p.read_bytes()) for p in (ingest, reopen)]
+core_sha = hashlib.sha256(pathlib.Path(sys.argv[5]).read_bytes()).hexdigest()
+manifest_sha = hashlib.sha256(pathlib.Path(sys.argv[6]).read_bytes()).hexdigest()
+for phase, doc in zip(('ingest', 'reopen'), documents):
+    assert doc['schema'] == 'fsgg.telemetry.packaged-causal-receiver/1'
+    assert doc['phase'] == phase and doc['qualified'] is True
+    assert doc['storeAssemblySha256'] == sys.argv[4] and doc['coreAssemblySha256'] == core_sha
+    assert doc['fixtureManifestSha256'] == manifest_sha
+    assert doc['schemaVersion'] == 14
+    assert all(doc[field] == 4 for field in ('causalDeclarations', 'runtimeAdmissions', 'expectedDispatches', 'invocationLineage'))
+    assert doc['immutableConflictRefused'] is True and doc['unknownKindRefused'] is True
+assert documents[1]['replayUnchanged'] is True
+assert documents[0]['canonicalRevision'] == documents[1]['canonicalRevision']
+assert len(documents[0]['canonicalRevision']) == 64
+result = json.loads(performance.read_bytes())
+result['causalReceiver'] = {'ingest': documents[0], 'reopen': documents[1]}
+performance.write_text(json.dumps(result, sort_keys=True) + '\n')
+CAUSAL_PY
+        then
+          ok "exact packed causal receiver accepts reopens replays and refuses immutable conflict and unknown kind"
+        else
+          bad "exact packed causal receiver evidence is complete and byte-bound"
+        fi
+        rm -rf "$CAUSAL_PROBE_ROOT"
+        CAUSAL_PROBE_ROOT=""
+      fi
       RUNTIME_ARGS=(
         --cli-path "$ENGINE" --config "$CONFIG" --repository FS-GG/package-fixture
         --package "$PACKAGE" --source-sha "$FSGG_PACKAGE_SOURCE_SHA"
@@ -263,6 +320,10 @@ else
   else
     bad "local activation either qualifies or fails closed for filesystem placement" "$(tail -5 "$ACTIVATE_LOG" | tr '\n' ' ')"
   fi
+fi
+
+if [ "$REQUIRE_CAUSAL_RECEIVER" = 1 ] && ! grep -Fq 'pass	exact packed causal receiver accepts reopens replays and refuses immutable conflict and unknown kind' "$CHECKS"; then
+  bad "required packed causal receiver qualification was completed"
 fi
 
 REMOTE_PROFILE="not-run"

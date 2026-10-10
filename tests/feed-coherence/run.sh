@@ -643,16 +643,16 @@ new_sdd_registry_block="$(sed -n '/^  - id: new-sdd-workspace$/,/^  - id: fs-gg-
 workspace_registry_block="$(sed -n '/^  - id: fs-gg-workspace-template$/,/^  - id: game-skills$/p' "$REPO_ROOT/registry/dependencies.yml")"
 architecture_template_comparator_is_current() {
   local subject="$1"
-  grep -qF "registry's newest-tracking 0.18.1 pin above" "$subject" \
+  grep -qF "registry's newest-tracking 0.18.2 pin above" "$subject" \
     && ! grep -qF "registry's newest-tracking 0.13.0 pin above" "$subject"
 }
 if [ "$(grep -Fc '| [**FS.GG.Templates**]' "$ARCH")" -eq 1 ] \
-  && [[ "$arch_templates_rows" == *'FS.GG.Workspace.Template` 0.18.1'* ]] \
+  && [[ "$arch_templates_rows" == *'FS.GG.Workspace.Template` 0.18.2'* ]] \
   && [[ "$arch_templates_rows" == *'`new-sdd-workspace` 0.12.0'* ]] \
   && [ "$(grep -Fc '| [**FS.GG.Templates**]' "$COMPONENTS")" -eq 1 ] \
-  && [[ "$component_templates_rows" == *'| `0.18.1` |'* ]] \
+  && [[ "$component_templates_rows" == *'| `0.18.2` |'* ]] \
   && [ "$(grep -Fc '| `fs-gg-workspace-template` | FS.GG.Templates |' "$ARCH")" -eq 1 ] \
-  && [[ "$workspace_contract_rows" == *'| `0.18.1` | `0.18.1` |'* ]] \
+  && [[ "$workspace_contract_rows" == *'| `0.18.2` | `0.18.2` |'* ]] \
   && [ "$(grep -Fc '| `game-skills` | FS.GG.Game |' "$ARCH")" -eq 1 ] \
   && [[ "$game_skills_contract_rows" == *'| `0.9.0` | `0.9.0` |'* ]] \
   && [ "$(grep -Fc '| `fs-gg-workspace-template` | Templates |' "$ARCH")" -eq 1 ] \
@@ -684,9 +684,9 @@ fi
 
 STALE_ARCH="$WORK/architecture-stale-template-comparator.md"
 cp "$ARCH" "$STALE_ARCH"
-sed -i "s/registry's newest-tracking 0.18.1 pin above/registry's newest-tracking 0.13.0 pin above/" "$STALE_ARCH"
+sed -i "s/registry's newest-tracking 0.18.2 pin above/registry's newest-tracking 0.13.0 pin above/" "$STALE_ARCH"
 if cmp -s "$ARCH" "$STALE_ARCH"; then
-  bad "stale Templates comparator mutation is non-vacuous" "the 0.18.1 comparator was absent"
+  bad "stale Templates comparator mutation is non-vacuous" "the 0.18.2 comparator was absent"
 elif ! architecture_template_comparator_is_current "$STALE_ARCH"; then
   ok "reverting the current Templates comparator to 0.13.0 makes the prose guard red"
 else
