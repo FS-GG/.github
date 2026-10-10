@@ -5360,6 +5360,7 @@ WHERE f.kind='learn-installed-origin/1' AND a.producer=$producer AND a.stream=$s
                                 || error = "responses-native-receipt-required"
                                 || error = "responses-current-installed-origin-required"
                                 || error = "activity usage attribution requires known source counters"
+                                || error = "execution-causal-admission/1 is immutable after persistence"
                                 || error.StartsWith("efficiency-", StringComparison.Ordinal))
                             ->
                             terminal connection "rejected" (box "semantic-conflict")
