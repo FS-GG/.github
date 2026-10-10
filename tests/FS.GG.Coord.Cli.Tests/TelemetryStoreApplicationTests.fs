@@ -80,6 +80,68 @@ module TelemetryStoreApplicationTests =
                      after.RootElement.GetProperty("learningObservations").[0].GetProperty("content_digest").GetString())
         Assert.Equal(14, after.RootElement.GetProperty("store").GetProperty("schemaVersion").GetInt32())
 
+    [<Fact>]
+    let ``causal immutable conflict is a terminal semantic receipt rejection`` () =
+        let cleanup, path = root ()
+        use cleanup = cleanup
+        TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
+        let scope: TelemetryReceipt.Scope =
+            { Workspace = "causal-receipt-workspace"; Producer = "causal-receipt-producer"; Stream = "causal" }
+        TelemetryStoreApplication.provisionReceiptWorkspace path approved scope.Workspace |> unwrap |> ignore
+        TelemetryStoreApplication.enrollReceiptProducer path approved scope |> unwrap |> ignore
+        let envelope (batchId: string) (payload: byte[]) =
+            Encoding.UTF8.GetBytes
+                $"""{{"schema":"{TelemetryReceipt.Schema}","workspaceId":"{scope.Workspace}","producerId":"{scope.Producer}","streamId":"{scope.Stream}","batchId":"{batchId}","payload":{Encoding.UTF8.GetString(payload)}}}"""
+        let receipt (batchId: string) =
+            use value = JsonDocument.Parse(TelemetryStoreApplication.lookupReceipt path approved scope batchId |> unwrap)
+            value.RootElement.GetProperty("status").GetString(),
+            value.RootElement.GetProperty("code").GetString()
+        let revision () =
+            use value = JsonDocument.Parse(TelemetryStoreApplication.dashboardSnapshot path approved None |> unwrap)
+            value.RootElement.GetProperty("revision").GetString()
+
+        let rootEvent = causalEvent "root"
+        let original = envelope "causal-original" (causalBatch "root" rootEvent)
+        Assert.Contains("\"durably-received\"", TelemetryStoreApplication.submitReceipt path approved scope original |> unwrap)
+        Assert.Contains("\"applied\":1", TelemetryStoreApplication.drainReceipts path approved scope.Workspace |> unwrap)
+        Assert.Equal("applied", fst (receipt "causal-original"))
+        let retainedRevision = revision ()
+
+        let event = System.Text.Json.Nodes.JsonNode.Parse rootEvent
+        let admission = Convert.FromBase64String(event["admissionBase64"].GetValue<string>())
+        let changed = Encoding.UTF8.GetString(admission).Replace("\"implementation\"", "\"review\"") |> Encoding.UTF8.GetBytes
+        event["admissionBase64"] <- Convert.ToBase64String changed
+        event["admissionSha256"] <- CanonicalJson.sha256 changed
+        let changedBatch = causalBatch "changed" (event.ToJsonString())
+        match TelemetryStore.parseBatch changedBatch with
+        | Ok _ -> ()
+        | Error errors -> failwithf "changed causal batch must parse before immutability guard: %A" errors
+        let conflict = envelope "causal-conflict" changedBatch
+        Assert.Contains("\"durably-received\"", TelemetryStoreApplication.submitReceipt path approved scope conflict |> unwrap)
+        Assert.Contains("\"rejected\":1", TelemetryStoreApplication.drainReceipts path approved scope.Workspace |> unwrap)
+        Assert.Equal(("rejected", "semantic-conflict"), receipt "causal-conflict")
+        Assert.Equal(retainedRevision, revision ())
+        use replay = JsonDocument.Parse(TelemetryStoreApplication.submitReceipt path approved scope conflict |> unwrap)
+        Assert.Equal("rejected", replay.RootElement.GetProperty("status").GetString())
+        Assert.Equal("semantic-conflict", replay.RootElement.GetProperty("code").GetString())
+        Assert.Contains("\"rejected\":0", TelemetryStoreApplication.drainReceipts path approved scope.Workspace |> unwrap)
+        Assert.Equal(retainedRevision, revision ())
+        Assert.Equal("applied", fst (receipt "causal-original"))
+        let _, pending, _ = TelemetryStoreApplication.receiptCapacity path approved |> unwrap
+        Assert.Equal(0L, pending)
+
+        let unknown = rootEvent.Replace("\"kind\":\"execution-causal-admission/1\"", "\"kind\":\"execution-causal-admission/2\"")
+        match TelemetryStore.parseBatch (causalBatch "unknown" unknown) with
+        | Error [ reason ] -> Assert.Contains(".kind is unsupported", reason)
+        | result -> failwithf "unknown causal kind did not receive parser refusal: %A" result
+        Assert.Equal(
+            Error [ "invalid-request" ],
+            TelemetryStoreApplication.submitReceipt path approved scope
+                (envelope "causal-unknown" (causalBatch "unknown" unknown))
+        )
+        Assert.Equal(Error [ "receipt-unavailable" ],
+                     TelemetryStoreApplication.lookupReceipt path approved scope "causal-unknown")
+
     let private pragma path value =
         use connection =
             new SqliteConnection(
