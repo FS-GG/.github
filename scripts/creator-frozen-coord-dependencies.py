@@ -163,6 +163,10 @@ def frozen_copy_contract(xml):
             and content[0].get("Link") == "%(RecursiveDir)%(Filename)%(Extension)",
             "frozen dependency content copy changed")
     references = list(xml.iter("ProjectReference"))
+    groups = [g for g in xml.findall("ItemGroup") if g.findall("ProjectReference")]
+    require(groups and all(g.get("Condition") is None for g in groups)
+            and sum(len(g.findall("ProjectReference")) for g in groups) == len(references),
+            "frozen dependency reference parent scope changed")
     require(len(references) == 2 and {(r.get("Include"), r.get("Condition")) for r in references}
             == {(NORMAL_REFERENCE, NORMAL_CONDITION), (FROZEN_REFERENCE, FROZEN_CONDITION)}
             and all(not r.findall("Private") and "Private" not in r.attrib for r in references),

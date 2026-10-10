@@ -180,14 +180,15 @@ class FrozenDependencyControls(unittest.TestCase):
 
     def test_reference_conditions_and_paired_property_guard_refuse_drift(self):
         original = self.creator.read_text()
-        mutants = [original.replace(HELPER["NORMAL_CONDITION"], ""),
+        mutants = [original.replace('<ItemGroup>\n    <ProjectReference', '<ItemGroup Condition="false">\n    <ProjectReference'),
+                   original.replace(HELPER["NORMAL_CONDITION"], ""),
                    original.replace(HELPER["FROZEN_CONDITION"], HELPER["NORMAL_CONDITION"]),
                    original.replace(HELPER["FROZEN_REFERENCE"], HELPER["NORMAL_REFERENCE"]),
                    original.replace(HELPER["PAIR_ERROR"], "false"),
                    original.replace('</Project>', '<ItemGroup><ProjectReference Include="foreign.fsproj" /></ItemGroup></Project>')]
         for mutant in mutants:
             self.creator.write_text(mutant)
-            with self.assertRaisesRegex(ValueError, "reference copy route|paired selection guard"):
+            with self.assertRaisesRegex(ValueError, "reference copy route|paired selection guard|reference parent scope"):
                 self.stage()
             self.assertFalse(self.dependencies.exists())
         self.creator.write_text(original)
