@@ -92,6 +92,15 @@ class Reader:
                 evidence["headers"] = {k: response.headers[k] for k in HEADERS if k in response.headers}
                 if response.geturl() != API + path:
                     raise Refused("response-origin-refused")
+                declared = evidence["headers"].get("content-length")
+                if declared is not None and not re.fullmatch(r"[0-9]+", declared):
+                    raise Refused("response-content-length-refused")
+                expected_length = int(declared) if declared is not None else None
+                if expected_length is not None and (expected_length > 2 * 1024 * 1024
+                        or expected_length + self.bytes > 24 * 1024 * 1024):
+                    raise Refused("response-byte-bound")
+                if self.clock() > request_deadline:
+                    raise Refused("request-deadline-bound")
                 # HTTPError wraps HTTPResponse; both must expose a bounded socket.
                 transport = response
                 sock = None
@@ -102,7 +111,9 @@ class Reader:
                     transport = getattr(transport, "fp", None)
                 if sock is None:
                     raise Refused("transport-timeout-unavailable")
-                while size <= 2 * 1024 * 1024:
+                if expected_length == 0:
+                    evidence["complete"] = True
+                while not evidence["complete"] and size <= 2 * 1024 * 1024:
                     remaining = request_deadline - self.clock()
                     if remaining <= 0:
                         raise Refused("request-deadline-bound")
@@ -113,7 +124,9 @@ class Reader:
                         size += len(chunk)
                     if self.clock() > request_deadline:
                         raise Refused("request-deadline-bound")
-                    if not chunk:
+                    if not chunk or size == expected_length:
+                        # HTTPResponse closes fp/socket when Content-Length reaches
+                        # zero. Do not settimeout on that now-closed socket for EOF.
                         evidence["complete"] = True
                         break
                 if size > 2 * 1024 * 1024 or self.bytes + size > 24 * 1024 * 1024:

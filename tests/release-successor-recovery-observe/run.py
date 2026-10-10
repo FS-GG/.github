@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 import contextlib
+import http.client
+import urllib.response
 import io
 import json
 import pathlib
@@ -201,6 +203,30 @@ class Cases(unittest.TestCase):
             self.fresh_reader();invalid={**target,'updated_at':stamp}
             self.fake.values[listpath]=[prior,invalid];self.fake.values[f'repos/{m.REPOSITORY}/releases/2']=invalid
             self.assertEqual(m.observe(self.reader,ENV)['outcomes']['draft']['cause'],'draft-timestamp-refused')
+    def test_real_HTTPResponse_content_length_close_and_HTTPError_wrapper(self):
+        for status in (200,403):
+            self.fresh_reader()
+            class InertSocket:
+                closed=False
+                def settimeout(self,seconds):
+                    if self.closed:raise OSError('socket already closed')
+                def makefile(sock,*args):
+                    class ClosingFile(io.BytesIO):
+                        raw=types.SimpleNamespace(_sock=sock)
+                        def close(self):
+                            sock.closed=True;super().close()
+                    body=json.dumps(rate).encode()
+                    return ClosingFile(b'HTTP/1.1 '+str(status).encode()+b' Status\r\nContent-Length: '+str(len(body)).encode()+b'\r\nConnection: close\r\n\r\n'+body)
+            sock=InertSocket();native=http.client.HTTPResponse(sock);native.begin()
+            class Transport:
+                def open(self,req,timeout):
+                    if status==403:raise urllib.error.HTTPError(req.full_url,403,'Forbidden',native.headers,native)
+                    return urllib.response.addinfourl(native,native.headers,req.full_url,status)
+            self.reader.opener=Transport()
+            if status==200:self.assertEqual(self.reader.get('ledger','rate_limit')[0],rate)
+            else:
+                with self.assertRaisesRegex(m.Refused,'HTTP-status-403'):self.reader.get('ledger','rate_limit')
+            self.assertTrue(sock.closed);self.assertTrue(self.reader.evidence[-1]['complete'])
     def test_failed_scope_prevents_draft_but_retains_rates(self):
         self.fake.values['installation/repositories?per_page=100']={'total_count':2,'repositories':[]}
         result=m.observe(self.reader,ENV)
