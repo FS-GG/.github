@@ -73,6 +73,7 @@ class Reader:
         if remaining <= 0 or self.calls >= 17:
             raise Refused("request-or-deadline-bound")
         self.calls += 1
+        request_deadline = min(self.deadline, self.clock() + min(12, remaining))
         req = urllib.request.Request(API + path, method="GET", headers={
             "Authorization": "Bearer " + self.tokens[credential],
             "Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"})
@@ -83,7 +84,18 @@ class Reader:
         with response:
             if response.geturl() != API + path:
                 raise Refused("response-origin-refused")
-            raw = response.read(2 * 1024 * 1024 + 1)
+            # Recheck a fixed request deadline between bounded stream reads;
+            # a slow response cannot extend it through repeated successful reads.
+            chunks, size = [], 0
+            while size <= 2 * 1024 * 1024:
+                if self.clock() > request_deadline:
+                    raise Refused("request-deadline-bound")
+                chunk = response.read1(min(65536, 2 * 1024 * 1024 + 1 - size))
+                if not chunk:
+                    break
+                chunks.append(chunk)
+                size += len(chunk)
+            raw = b"".join(chunks)
             status = response.code
             headers = {k: response.headers[k] for k in HEADERS if k in response.headers}
         digest = hashlib.sha256(raw).hexdigest()
@@ -230,7 +242,8 @@ def write_report(path, result):
     except Exception as error:
         # Do not replace an already recorded collection failure with reporting failure.
         print(json.dumps({"firstCause": result.get("firstCause"), "reportFailure": type(error).__name__}))
-        raise Refused("summary-report-unavailable") from error
+        raise Refused(result.get("firstCause") or "summary-report-unavailable",
+                      {"reportFailure": type(error).__name__}) from error
 
 
 def main():

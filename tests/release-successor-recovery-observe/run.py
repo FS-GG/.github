@@ -28,9 +28,9 @@ listpath = f'repos/{m.REPOSITORY}/releases?per_page=100&page=1'
 class Response:
     def __init__(self,url,value,status=200,headers=None):
         self.url,self.code,self.headers=url,status,headers or {}
-        self.raw = value if isinstance(value,bytes) else json.dumps(value).encode()
+        self.raw = io.BytesIO(value if isinstance(value,bytes) else json.dumps(value).encode())
     def geturl(self): return self.url
-    def read(self,n): return self.raw[:n]
+    def read1(self,n): return self.raw.read(n)
     def __enter__(self): return self
     def __exit__(self,*args): pass
 
