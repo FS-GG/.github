@@ -4,8 +4,10 @@
 from __future__ import annotations
 
 import argparse
+import datetime
 import hashlib
 import importlib.util
+import io
 import json
 import os
 import pathlib
@@ -14,6 +16,7 @@ import stat
 import subprocess
 import sys
 import time
+import zipfile
 
 from release_successor_admission import SingleOperatorAdmission
 from release_successor_execution import Refused, advance, ordered_effects
@@ -164,6 +167,14 @@ def prepare_release_journal(journal, ledger_api, admission, provider, api, manif
 # bindings, not credentials or an authority receipt for a new invocation.
 RECOVERY_PROFILE = "utel-rel-19/four-advance/1"
 KIT_REPEAT_PROFILE = "utel-rel-19/original-nuget-kit-repeat/1"
+RUNTIME_RECOVERY_PROFILE = "utel-rel-19/original-runtime-intent-recovery/1"
+RUNTIME_EFFECT = "qualification-asset:runtime"
+RUNTIME_NAME = "standalone-telemetry-runtime-evidence.json"
+ORIGINAL_RUNTIME_HEAD = "e25521bff7f24dc0c454327c854f0d912fc6fa2c"
+ORIGINAL_RUNTIME_STATE_SHA256 = "8b7b4995a328d9fc300f9db579aeeb7703d1d03c80834f95df55b43ec1d93829"
+RUNTIME_REFUSAL_SOURCE = "a988d25c68263ce44a1d0f48c3a1e72f2428fa82"
+RUNTIME_REFUSAL_ZIP_SHA256 = "7f50582d26f171d2d446ad5eed10268fe169b07e321881b97f41a59fe9232107"
+RUNTIME_REFUSAL_MEMBER_SHA256 = "76dcf6db0ed2f138d22fb19678ec16cdaa09d7a6aabb537c75e8d5c11295dffb"
 KIT_EFFECT = "nuget:FS.GG.Kit"
 KIT_ENDPOINT = "https://api.nuget.org/v3/index.json"
 ORIGINAL_KIT_JOURNAL_HEAD = "30edfbd8aee914492ce359f4dd34454701a41d5a"
@@ -257,6 +268,28 @@ class CountedAuthorityAPI:
                 "succeededByMethod": dict(self.succeeded), "lastSuccessfulEntry": self.last_success,
                 "lastFailedEntry": self.last_failure, "blockedBeforeSend": self.blocked,
                 "quota": self.quota, "scope": "application API entries; no reservation or wire-request claim"}
+
+
+class RuntimePublisherAPI:
+    """Attribute bounded publisher calls separately from the Authority counter."""
+    def __init__(self, api):
+        self.api, self.attempted, self.succeeded = api, {}, {}
+
+    def __getattr__(self, name):
+        if name not in {"get", "runtime_recovery_json", "download_asset", "download_runtime_refusal_artifact",
+                        "download_runtime_recovery_asset", "upload_runtime_recovery_asset"}:
+            raise Refused("runtime recovery API method is not selected")
+        def call(*args):
+            require(sum(self.attempted.values()) < 256, "runtime recovery publisher API bound exhausted")
+            self.attempted[name] = self.attempted.get(name, 0) + 1
+            result = getattr(self.api, name)(*args)
+            self.succeeded[name] = self.succeeded.get(name, 0) + 1
+            return result
+        return call
+
+    def report(self):
+        return {"attempted": self.attempted, "succeeded": self.succeeded, "ceiling": 256,
+                "scope": "publisher API application entries; candidate gh ZIP, feed downloads/subprocesses and redirects are separate"}
 
 
 class ReportingJournal:
@@ -532,7 +565,188 @@ def run_original_kit_repeat(manifest, journal, admission, provider, ledger_api, 
     return "checkpoint"  # No settlement, final reread, other effect or second send.
 
 
+def authenticate_runtime_refusal(api):
+    """Authenticate the fixed original refusal, never caller-provided JSON."""
+    run = api.runtime_recovery_json(f"repos/{REPOSITORY}/actions/runs/38063768172")
+    require(run.get("id") == 38063768172 and run.get("workflow_id") == 362181999
+            and run.get("run_attempt") == 1 and run.get("head_sha") == RUNTIME_REFUSAL_SOURCE
+            and run.get("path") == ".github/workflows/release-successor-publish.yml"
+            and run.get("head_branch") == "main" and run.get("event") == "workflow_dispatch"
+            and run.get("actor", {}).get("login") == "EHotwagner"
+            and run.get("repository", {}).get("id") == 1269292704
+            and run.get("repository", {}).get("full_name") == REPOSITORY
+            and run.get("status") == "completed" and run.get("conclusion") == "failure",
+            "original runtime refusal run identity differs")
+    artifact = api.runtime_recovery_json(f"repos/{REPOSITORY}/actions/artifacts/11675095562")
+    require(artifact.get("id") == 11675095562 and artifact.get("name") == "release-successor-result"
+            and artifact.get("size_in_bytes") == 1413 and artifact.get("expired") is False
+            and artifact.get("digest") == "sha256:" + RUNTIME_REFUSAL_ZIP_SHA256
+            and artifact.get("workflow_run", {}).get("id") == 38063768172
+            and artifact.get("workflow_run", {}).get("head_sha") == RUNTIME_REFUSAL_SOURCE,
+            "original runtime refusal artifact identity differs")
+    expiry = datetime.datetime.fromisoformat(artifact["expires_at"].replace("Z", "+00:00"))
+    require(expiry.tzinfo is not None and expiry > datetime.datetime.now(datetime.timezone.utc),
+            "original runtime refusal artifact expiry passed")
+    raw = api.download_runtime_refusal_artifact()
+    require(len(raw) == 1413 and hashlib.sha256(raw).hexdigest() == RUNTIME_REFUSAL_ZIP_SHA256,
+            "original runtime refusal archive differs")
+    with zipfile.ZipFile(io.BytesIO(raw)) as archive:
+        entries = archive.infolist()
+        require(len(entries) == 1 and entries[0].filename == "release-successor-result.json"
+                and not entries[0].flag_bits & 1 and not entries[0].is_dir()
+                and stat.S_IFMT(entries[0].external_attr >> 16) in (0, stat.S_IFREG)
+                and 0 < entries[0].file_size <= 16384, "original runtime refusal member differs")
+        body = archive.read(entries[0])
+    require(len(body) <= 16384 and hashlib.sha256(body).hexdigest() == RUNTIME_REFUSAL_MEMBER_SHA256,
+            "original runtime refusal member bytes differ")
+    def unique(items):
+        value = {}
+        for key, item in items:
+            require(key not in value, "original runtime refusal duplicate JSON key")
+            value[key] = item
+        return value
+    value = json.loads(body, object_pairs_hook=unique,
+                       parse_constant=lambda _: (_ for _ in ()).throw(Refused("nonfinite runtime refusal JSON")))
+    require(value.get("schema") == "fsgg.release-successor-result/1" and value.get("profile") == RECOVERY_PROFILE
+            and value.get("execution") == {"operator": "EHotwagner", "runAttempt": "1", "runId": 38063768172,
+                                           "sourceSha": RUNTIME_REFUSAL_SOURCE}
+            and value.get("candidate") == {**RECOVERY_CANDIDATE, "version": "0.101.0"}
+            and value.get("originalPublisher") == {"runId": 38029395937, "runAttempt": 1, "jobId": 114146971214}
+            and value.get("disposition") == "failed-or-unknown" and value.get("publicationComplete") is False
+            and value.get("stage") == "advance" and value.get("iterationsAttempted") == 3
+            and value.get("journalRef") == REF and value.get("journalMutationMayHaveOccurred") is True
+            and value.get("lastDispatch") == {"attempted": True, "effect": "qualification-asset:evidence", "state": "applied"}
+            and value.get("failure") == {"chain": [{"message": "qualification-asset:runtime: dispatch admission denied",
+                                                       "messageTruncated": False, "type": "Refused"}], "chainIncomplete": False}
+            and value.get("lastObservedJournal", {}).get("generation") == 26
+            and value["lastObservedJournal"].get("logicalHead") == ORIGINAL_RUNTIME_HEAD,
+            "original runtime refusal semantic binding differs")
+    return {"runId": 38063768172, "runAttempt": 1, "sourceSha": RUNTIME_REFUSAL_SOURCE,
+            "artifactId": 11675095562, "archiveSha256": RUNTIME_REFUSAL_ZIP_SHA256,
+            "memberSha256": RUNTIME_REFUSAL_MEMBER_SHA256, "thisInvocationRuntimeDispatchEntered": False,
+            "historicalNonDispatchProved": False, "globalOnceClaim": False}
+
+
+def validate_original_runtime_state(manifest, journal):
+    validate_checkpoint_state(manifest, journal)
+    effects = ordered_effects(manifest)
+    expected = {effect.identity: "verified" for effect in effects[:12]}
+    expected[RUNTIME_EFFECT] = "intent"
+    observed = journal._observed
+    require(observed.head == ORIGINAL_RUNTIME_HEAD and observed.state["generation"] == 26
+            and hashlib.sha256(canonical(observed.state)).hexdigest() == ORIGINAL_RUNTIME_STATE_SHA256
+            and observed.state["effects"] == expected and effects[12].identity == RUNTIME_EFFECT
+            and observed.state["contentId"] == manifest["contentId"],
+            "runtime recovery requires the exact original generation26 intent")
+    return effects[12]
+
+
+def verify_runtime_candidate(manifest, provider, manifest_bytes, archive):
+    require(provider.manifest_path.read_bytes() == manifest_bytes and provider.manifest == manifest
+            and provider.content_id == RECOVERY_CANDIDATE["contentId"]
+            and provider.source == RECOVERY_CANDIDATE["sourceSha"] and provider.version == "0.101.0"
+            and not archive.is_symlink() and stat.S_ISREG(archive.stat().st_mode)
+            and hashlib.sha256(archive.read_bytes()).hexdigest() == RECOVERY_CANDIDATE["archiveSha256"],
+            "runtime recovery original candidate drift")
+    path = provider.root / RUNTIME_NAME
+    qualification = manifest["descriptor"]["standaloneTelemetry"]
+    require(qualification["qualificationPath"] == RUNTIME_NAME and not path.is_symlink()
+            and path.resolve().parent == provider.root.resolve() and stat.S_ISREG(path.stat().st_mode)
+            and 0 < path.stat().st_size <= 1048576
+            and hashlib.sha256(path.read_bytes()).hexdigest() == qualification["qualificationSha256"],
+            "runtime recovery original payload drift")
+    info = path.stat()
+    return {"effect": RUNTIME_EFFECT, "name": RUNTIME_NAME, "payloadSha256": qualification["qualificationSha256"],
+            "localFile": {"device": info.st_dev, "inode": info.st_ino, "size": info.st_size, "mtimeNs": info.st_mtime_ns}}
+
+
+class RuntimeRecoveryProvider(ReportingProvider):
+    def __init__(self, provider, report, effect):
+        super().__init__(provider, report)
+        self.effect, self.witness = effect, None
+        self.send_enabled = self.send_consumed = False
+
+    def observe(self, effect):
+        if effect.identity != RUNTIME_EFFECT:
+            return self.provider.observe(effect)
+        value, self.witness = self.provider.observe_runtime_recovery(effect)
+        self.report["runtimeRecovery"]["targetObservation"] = {"state": value.state, "witness": self.witness}
+        return value
+
+    def dispatch(self, effect):
+        require(self.send_enabled and not self.send_consumed and effect == self.effect,
+                "runtime recovery send is not admitted")
+        self.send_consumed = True  # Any exception consumes this invocation's permission.
+        self.report["lastDispatch"] = {"effect": effect.identity, "attempted": True, "state": "unknown"}
+        result = self.provider.dispatch_runtime_recovery(effect, self.witness)
+        self.report["lastDispatch"]["state"] = result.state
+        return result
+
+
+def run_original_runtime_recovery(manifest, journal, admission, provider, ledger_api, report, deadline,
+                                  proof, verify_candidate, attempt_path, clock=time.monotonic):
+    effect = validate_original_runtime_state(manifest, journal)
+    observed, physical = journal._observed, journal._physical_head
+    require(proof == {"runId": 38063768172, "runAttempt": 1, "sourceSha": RUNTIME_REFUSAL_SOURCE,
+                      "artifactId": 11675095562, "archiveSha256": RUNTIME_REFUSAL_ZIP_SHA256,
+                      "memberSha256": RUNTIME_REFUSAL_MEMBER_SHA256, "thisInvocationRuntimeDispatchEntered": False,
+                      "historicalNonDispatchProved": False, "globalOnceClaim": False},
+            "runtime recovery authenticated refusal proof differs")
+    report["runtimeRecovery"] = {"profile": RUNTIME_RECOVERY_PROFILE, "originalRefusal": proof,
+                                 "maxDispatchesThisInvocation": 1, "globalOnceClaim": False,
+                                 "historicalNonDispatchProved": False, "branch": "ordinary-observation"}
+    guarded = UnchangedKitJournal(journal, observed, physical)  # Same exact logical/physical read fence.
+    recorded = RuntimeRecoveryProvider(provider, report, effect)
+    candidate = verify_candidate()  # Required even for the zero-send matched branch.
+    require(clock() < deadline, "runtime recovery deadline expired")
+    report["iterationsAttempted"] = 1
+    result = advance(manifest, guarded, admission, recorded)
+    report["lastAdvanceResult"] = result
+    report["lastSuccessfulStage"] = "advance"
+    require(clock() < deadline, "runtime recovery deadline expired")
+    if result == "verified":
+        report["runtimeRecovery"]["branch"] = "matched-settlement-no-send"
+        return "checkpoint"  # Normal CAS26->27, no other effect.
+    require(result == "waiting" and report["runtimeRecovery"]["targetObservation"]["state"] == "absent",
+            "runtime recovery lacks a complete fresh absence witness")
+    witness = recorded.witness
+    guarded.read()  # Full original history, exact selected state and paired physical fence.
+    validate_original_runtime_state(manifest, journal)
+    require(verify_candidate() == candidate, "runtime recovery payload changed during observation")
+    require(recorded.observe(effect).state == "absent" and recorded.witness == witness,
+            "runtime recovery release or asset population moved")
+    require(clock() < deadline, "runtime recovery deadline expired")
+    record = {"schema": "fsgg.original-runtime-recovery-attempt/1", "profile": RUNTIME_RECOVERY_PROFILE,
+              "execution": report.get("execution"), "originalPublisher": report.get("originalPublisher"),
+              "originalRefusal": proof, "candidate": report.get("candidate"), "effect": candidate,
+              "journal": {"logicalHead": observed.head, "physicalHead": physical, "generation": 26,
+                          "canonicalStateSha256": ORIGINAL_RUNTIME_STATE_SHA256},
+              "absenceWitness": witness, "originalIntentRetained": True, "globalOnceClaim": False,
+              "permissionScope": "one fixed runtime upload in this explicitly admitted invocation only",
+              "providerOutcome": "not delegated; prior operations require root reconciliation"}
+    report["stage"] = "runtime-presend-record"
+    write_kit_repeat_attempt(attempt_path, record)  # Existing exclusive fsynced record mechanism.
+    report["runtimeRecovery"]["attemptRecord"] = {"path": str(attempt_path),
+                                                 "sha256": hashlib.sha256(attempt_path.read_bytes()).hexdigest()}
+    require(admission.authorize(manifest["contentId"], effect.identity, "dispatch", effect.request_digest),
+            "runtime recovery fresh dispatch admission denied")
+    require(authority_main(ledger_api) == physical, "runtime recovery physical head moved before upload")
+    require(verify_candidate() == candidate, "runtime recovery payload changed before upload")
+    require(sum(ledger_api.attempted.values()) < AUTHORITY_CALL_CEILING and clock() < deadline
+            and ledger_api.quota is not None and ledger_api.quota["reset"] > time.time(),
+            "runtime recovery quota, counter or deadline expired before upload")
+    report["runtimeRecovery"]["branch"] = "one-explicit-runtime-upload"
+    report["stage"] = "runtime-provider-dispatch"
+    recorded.send_enabled = True
+    outcome = recorded.dispatch(effect)
+    require(outcome.state == "applied", "runtime recovery upload unconfirmed; reconcile without retry")
+    report["lastSuccessfulStage"] = "runtime-provider-dispatch"
+    return "checkpoint"  # Still26/intent: no final read, settlement or later effect.
+
+
 def execute_publisher(args, report):
+    runtime_recovery = getattr(args, "recover_original_runtime_intent", False)
+    runtime_deadline = time.monotonic() + 45 * 60 if runtime_recovery else None
     report["stage"] = "publisher-context"
     publisher_sha = os.environ["GITHUB_SHA"]
     operator = os.environ["GITHUB_ACTOR"]
@@ -543,7 +757,7 @@ def execute_publisher(args, report):
     require(os.environ.get("GITHUB_RUN_ATTEMPT") == "1", "publisher rerun is not admitted")
     require(operator == "EHotwagner", "publisher operator differs")
     require(len(args.candidate_archive_sha256) == 64, "candidate archive digest is malformed")
-    if args.recovery_checkpoint or args.repeat_original_nuget_kit_intent:
+    if args.recovery_checkpoint or args.repeat_original_nuget_kit_intent or runtime_recovery:
         require(args.publish and not args.preflight_only, "recovery checkpoint requires publish, never preflight")
         require((args.candidate_run_id, args.candidate_artifact_id, args.candidate_archive_sha256) ==
                 (RECOVERY_CANDIDATE["runId"], RECOVERY_CANDIDATE["artifactId"], RECOVERY_CANDIDATE["archiveSha256"]),
@@ -558,6 +772,9 @@ def execute_publisher(args, report):
     ledger_token = os.environ["ORDINARY_LEDGER_TOKEN"]
     nuget_key = os.environ["NUGET_API_KEY"]
     api = GitHubAPI(github_token)
+    if runtime_recovery:
+        api = RuntimePublisherAPI(api)
+        report["publisherCounter"] = api
     report["stage"] = "candidate-authentication"
     artifact = api.get(f"repos/{REPOSITORY}/actions/artifacts/{args.candidate_artifact_id}")
     run = api.get(f"repos/{REPOSITORY}/actions/runs/{args.candidate_run_id}")
@@ -585,7 +802,7 @@ def execute_publisher(args, report):
     manifest_bytes = manifest_path.read_bytes()
     manifest = json.loads(manifest_bytes)
     require(manifest["descriptor"]["version"] == "0.101.0", "publisher version differs")
-    if args.recovery_checkpoint or args.repeat_original_nuget_kit_intent:
+    if args.recovery_checkpoint or args.repeat_original_nuget_kit_intent or runtime_recovery:
         require(candidate_source == RECOVERY_CANDIDATE["sourceSha"]
                 and manifest["contentId"] == RECOVERY_CANDIDATE["contentId"],
                 "fixed recovery original source or content differs")
@@ -593,6 +810,12 @@ def execute_publisher(args, report):
     report["lastSuccessfulStage"] = "candidate-authentication"
     publisher_admission = SingleOperatorAdmission(api, manifest, publisher_sha, run_id, operator, "refs/heads/main")
     provider = LiveProvider(api, manifest_path, github_token, nuget_key)
+    runtime_proof = None
+    if runtime_recovery:
+        report["stage"] = "runtime-original-refusal-authentication"
+        runtime_proof = authenticate_runtime_refusal(api)
+        report["runtimeOriginalRefusal"] = runtime_proof
+        require(time.monotonic() < runtime_deadline, "runtime recovery deadline expired")
     intent = {
         "contentId": manifest["contentId"],
         "sourceSha": candidate_source,
@@ -601,14 +824,14 @@ def execute_publisher(args, report):
         "operator": operator,
     }
     ledger_api = GitHubAPI(ledger_token)
-    if args.recovery_checkpoint or args.repeat_original_nuget_kit_intent:
+    if args.recovery_checkpoint or args.repeat_original_nuget_kit_intent or runtime_recovery:
         ledger_api = CountedAuthorityAPI(ledger_api)
         report["authorityCounter"] = ledger_api
         report["stage"] = "Authority-quota"
         ledger_api.admit_quota()
         report["lastSuccessfulStage"] = "Authority-quota"
     journal = ProtectedReleaseJournal(ledger_api, ref=REF, main_directory=True)
-    if args.recovery_checkpoint or args.repeat_original_nuget_kit_intent:
+    if args.recovery_checkpoint or args.repeat_original_nuget_kit_intent or runtime_recovery:
         journal = ReportingJournal(journal, report)
         provider = ReportingProvider(provider, report)
     admission = ProtectedPublisherAdmission(publisher_admission, ledger_api, REF)
@@ -620,11 +843,17 @@ def execute_publisher(args, report):
         )
     report["stage"] = "journal-preparation"
     if prepare_release_journal(journal, ledger_api, admission, provider, api, manifest, intent,
-                               candidate_source, publisher_sha, args.preflight_only, uniqueness, recovery_checkpoint=args.recovery_checkpoint or args.repeat_original_nuget_kit_intent):
+                               candidate_source, publisher_sha, args.preflight_only, uniqueness,
+                               recovery_checkpoint=args.recovery_checkpoint or args.repeat_original_nuget_kit_intent or runtime_recovery):
         print("Release successor preflight passed; no journal, tag, feed or release was changed.")
         return "preflight"
     report["lastSuccessfulStage"] = "journal-preparation"
     deadline = time.monotonic() + 45 * 60
+    if runtime_recovery:
+        return run_original_runtime_recovery(
+            manifest, journal, admission, provider, ledger_api, report, runtime_deadline, runtime_proof,
+            lambda: verify_runtime_candidate(manifest, provider, manifest_bytes, archive),
+            args.result_path.with_name(args.result_path.stem + "-runtime-recovery-attempt.json"))
     if args.repeat_original_nuget_kit_intent:
         return run_original_kit_repeat(
             manifest, journal, admission, provider, ledger_api, report, deadline,
@@ -656,6 +885,8 @@ def main() -> int:
                         help="Recover only the retained journal19 candidate, with at most four advances")
     profile.add_argument("--repeat-original-nuget-kit-intent", action="store_true",
                          help="Explicitly permit one same-original nuget.org Kit send under retained intent uncertainty")
+    profile.add_argument("--recover-original-runtime-intent", action="store_true",
+                         help="Recover only the authenticated original generation26 runtime intent; one upload or matched settlement")
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--preflight-only", action="store_true")
     mode.add_argument("--publish", action="store_true")
@@ -663,10 +894,10 @@ def main() -> int:
     result_path = args.result_path or args.workdir.with_name(args.workdir.name + "-result.json")
     args.result_path = result_path
     report = {"schema": "fsgg.release-successor-result/1",
-              "profile": KIT_REPEAT_PROFILE if args.repeat_original_nuget_kit_intent else RECOVERY_PROFILE if args.recovery_checkpoint else "ordinary/1",
+              "profile": RUNTIME_RECOVERY_PROFILE if args.recover_original_runtime_intent else KIT_REPEAT_PROFILE if args.repeat_original_nuget_kit_intent else RECOVERY_PROFILE if args.recovery_checkpoint else "ordinary/1",
               "candidate": {"runId": args.candidate_run_id, "artifactId": args.candidate_artifact_id,
                             "archiveSha256": args.candidate_archive_sha256},
-              "execution": None, "originalPublisher": {"runId": 38029395937, "runAttempt": 1, "jobId": 114146971214} if args.recovery_checkpoint or args.repeat_original_nuget_kit_intent else None,
+              "execution": None, "originalPublisher": {"runId": 38029395937, "runAttempt": 1, "jobId": 114146971214} if args.recovery_checkpoint or args.repeat_original_nuget_kit_intent or args.recover_original_runtime_intent else None,
               "journalRef": REF, "startingJournal": None, "lastObservedJournal": None,
               "iterationsAttempted": 0, "lastAdvanceResult": None, "lastDispatch": None,
               "journalMutationMayHaveOccurred": False, "stage": "preparation",
@@ -684,6 +915,9 @@ def main() -> int:
         print(f"release successor refused: {error}", file=sys.stderr)
     counter = report.pop("authorityCounter", None)
     report["authorityRequests"] = counter.report() if counter is not None else None
+    publisher_counter = report.pop("publisherCounter", None)
+    if publisher_counter is not None:
+        report["publisherRequests"] = publisher_counter.report()
     try:
         write_result(result_path, report)
     except Exception as reporting_error:

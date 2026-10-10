@@ -11,8 +11,10 @@ import datetime as dt
 import hashlib
 import json
 import pathlib
+import re
 import subprocess
 import sys
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -98,6 +100,90 @@ class GitHubAPI:
         except urllib.error.HTTPError as error:
             raise Refused(f"release asset {asset_id} returned HTTP {error.code}") from error
 
+    def _runtime_read(self, url: str, cap: int, accept: str = "application/octet-stream", redirects: bool = True) -> bytes:
+        """Bound the two read-only downloads selected by runtime recovery."""
+        deadline = time.monotonic() + 12
+        class Redirect(_StripAuthOnRedirect):
+            count = 0
+            def redirect_request(self, req, fp, code, msg, headers, target):
+                self.count += 1
+                if not redirects or self.count > 3 or urllib.parse.urlparse(target).scheme != "https":
+                    raise Refused("runtime recovery download redirect bound")
+                left = deadline - time.monotonic()
+                if left <= 0:
+                    raise Refused("runtime recovery download deadline")
+                req.timeout = left
+                redirected = super().redirect_request(req, fp, code, msg, headers, target)
+                redirected.timeout = left
+                return redirected
+        request = urllib.request.Request(url, headers={"Authorization": f"Bearer {self.token}", "Accept": accept})
+        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), Redirect())
+        with opener.open(request, timeout=12) as response:
+            if response.status != 200:
+                raise Refused("runtime recovery download status differs")
+            length = response.headers.get("Content-Length")
+            if length is not None and (not length.isascii() or not length.isdecimal() or int(length) > cap):
+                raise Refused("runtime recovery download content length bound")
+            expected = int(length) if length is not None else None
+            transport, sock = response, None
+            for _ in range(3):
+                sock = getattr(getattr(getattr(transport, "fp", None), "raw", None), "_sock", None)
+                if sock is not None:
+                    break
+                transport = getattr(transport, "fp", None)
+            if sock is None:
+                raise Refused("runtime recovery transport timeout unavailable")
+            parts, size = [], 0
+            while size <= cap:
+                left = deadline - time.monotonic()
+                if left <= 0:
+                    raise Refused("runtime recovery download deadline")
+                sock.settimeout(left)
+                chunk = response.read1(min(65536, cap + 1 - size))
+                parts.append(chunk); size += len(chunk)
+                if size > cap or time.monotonic() >= deadline:
+                    raise Refused("runtime recovery download byte/deadline bound")
+                if not chunk or size == expected:
+                    break
+            if expected is not None and size != expected:
+                raise Refused("runtime recovery download content length differs")
+            return b"".join(parts)
+
+    def runtime_recovery_json(self, path: str):
+        prefix = f"repos/{REPOSITORY}/"
+        allowed = path in {prefix + "actions/runs/38063768172", prefix + "actions/artifacts/11675095562"}
+        allowed = allowed or re.fullmatch(re.escape(prefix) + r"releases\?per_page=100&page=(?:[1-9]|10)", path) is not None
+        allowed = allowed or re.fullmatch(re.escape(prefix) + r"releases/408709919/assets\?per_page=100&page=[1-4]", path) is not None
+        if not allowed:
+            raise Refused("runtime recovery JSON endpoint is not selected")
+        def unique(items):
+            value = {}
+            for key, item in items:
+                if key in value:
+                    raise Refused("runtime recovery duplicate JSON key")
+                value[key] = item
+            return value
+        return json.loads(self._runtime_read("https://api.github.com/" + path, 1048576,
+                                           "application/vnd.github+json", False), object_pairs_hook=unique,
+                          parse_constant=lambda _: (_ for _ in ()).throw(Refused("nonfinite runtime recovery JSON")))
+
+    def download_runtime_refusal_artifact(self) -> bytes:
+        return self._runtime_read(f"https://api.github.com/repos/{REPOSITORY}/actions/artifacts/11675095562/zip", 1413)
+
+    def download_runtime_recovery_asset(self, asset_id: int, size: int) -> bytes:
+        if type(asset_id) is not int or asset_id <= 0 or type(size) is not int or not 0 < size <= 1048576:
+            raise Refused("runtime recovery asset identity/size differs")
+        body = self._runtime_read(f"https://api.github.com/repos/{REPOSITORY}/releases/assets/{asset_id}", size)
+        if len(body) != size:
+            raise Refused("runtime recovery asset size differs")
+        return body
+
+    def upload_runtime_recovery_asset(self, release_id: int, raw: bytes) -> dict:
+        # One fixed name, exact snapshot bytes, no overwrite/delete or release lookup.
+        url = (f"https://uploads.github.com/repos/{REPOSITORY}/releases/{release_id}/assets?"
+               + urllib.parse.urlencode({"name": "standalone-telemetry-runtime-evidence.json"}))
+        return json.loads(self._request(url, "POST", raw, "application/octet-stream"))
+
 
 class LiveProvider:
     def __init__(self, api: GitHubAPI, manifest_path: pathlib.Path, github_token: str, nuget_key: str):
@@ -114,6 +200,8 @@ class LiveProvider:
         self.nuget_key = nuget_key
         self.observed = self.root / "feed-observations"
         self.observed.mkdir(exist_ok=True)
+        self._runtime_witness = None
+        self._runtime_send_consumed = False
 
     def _release(self) -> dict | None:
         try:
@@ -132,6 +220,105 @@ class LiveProvider:
                 if len(releases) < 100:
                     return None
             raise Refused("release list exceeds bounded draft lookup")
+
+    def observe_runtime_recovery(self, effect: Effect) -> tuple[Observation, dict]:
+        """Complete bounded original draft/asset census, only for the fixed profile."""
+        if (effect.identity != "qualification-asset:runtime" or effect.request_digest != self.content_id
+                or effect.target_digest != self.content_id):
+            raise Refused("runtime recovery effect differs")
+        releases = []
+        for page in range(1, 11):
+            rows = self.api.runtime_recovery_json(f"repos/{REPOSITORY}/releases?per_page=100&page={page}")
+            if not isinstance(rows, list) or len(rows) > 100 or any(
+                not isinstance(row, dict) or type(row.get("id")) is not int or row["id"] <= 0
+                or not isinstance(row.get("tag_name"), str) for row in rows
+            ):
+                raise Refused("runtime recovery release census malformed")
+            releases.extend(rows)
+            if len(rows) < 100:
+                break
+        else:
+            raise Refused("runtime recovery release census incomplete")
+        if len({row["id"] for row in releases}) != len(releases):
+            raise Refused("runtime recovery release census duplicate ID")
+        matches = [row for row in releases if row["tag_name"] == self.tag]
+        if len(matches) != 1:
+            raise Refused("runtime recovery original release is not unique")
+        release = matches[0]
+        if (release["id"] != 408709919 or release.get("draft") is not True
+                or release.get("prerelease") is not False or release.get("target_commitish") != self.source
+                or release.get("body") != self.marker):
+            raise Refused("runtime recovery original draft binding differs")
+        assets = []
+        for asset_page in range(1, 5):
+            rows = self.api.runtime_recovery_json(f"repos/{REPOSITORY}/releases/{release['id']}/assets?per_page=100&page={asset_page}")
+            if not isinstance(rows, list) or len(rows) > 100 or any(
+                not isinstance(row, dict) or type(row.get("id")) is not int or row["id"] <= 0
+                or not isinstance(row.get("name"), str) or not row["name"]
+                or type(row.get("size")) is not int or row["size"] < 0 for row in rows
+            ):
+                raise Refused("runtime recovery asset census malformed")
+            assets.extend(rows)
+            if len(rows) < 100:
+                break
+        else:
+            raise Refused("runtime recovery asset census incomplete")
+        if len({row["id"] for row in assets}) != len(assets) or len({row["name"] for row in assets}) != len(assets):
+            raise Refused("runtime recovery asset census duplicate")
+        required = [*(f"{package}.{self.version}.nupkg" for package in PACKAGES), "standalone-telemetry-evidence.json"]
+        for prior_name in required:
+            prior = [row for row in assets if row["name"] == prior_name]
+            payload = (self.root / prior_name).read_bytes()
+            if (len(prior) != 1 or prior[0].get("state") != "uploaded" or prior[0]["size"] != len(payload)
+                    or prior[0].get("digest") != "sha256:" + hashlib.sha256(payload).hexdigest()):
+                raise Refused("runtime recovery verified release asset metadata moved")
+        if any(row["name"] in {"stable-channel.json", "release-manifest.json"} for row in assets):
+            raise Refused("runtime recovery has a later release asset outside the original intent")
+        name = "standalone-telemetry-runtime-evidence.json"
+        target = [row for row in assets if row["name"] == name]
+        summaries = sorted((row["id"], row["name"], row["size"], row.get("digest")) for row in assets)
+        witness = {"releaseId": release["id"], "tag": self.tag, "sourceSha": self.source,
+                   "contentId": self.content_id, "name": name, "releasePages": page, "assetPages": asset_page,
+                   "releasePopulationSha256": hashlib.sha256(json.dumps(sorted((r["id"], r["tag_name"]) for r in releases)).encode()).hexdigest(),
+                   "assetPopulationSha256": hashlib.sha256(json.dumps(summaries).encode()).hexdigest(),
+                   "releaseCount": len(releases), "assetCount": len(assets), "complete": True}
+        if not target:
+            self._runtime_witness = witness
+            return Observation("absent"), witness
+        asset = target[0]
+        expected = (self.root / name).read_bytes()
+        digest = hashlib.sha256(expected).hexdigest()
+        if asset.get("state") != "uploaded" or asset["size"] != len(expected) or asset.get("digest") != "sha256:" + digest:
+            raise Refused("runtime recovery target asset metadata differs")
+        actual = self.api.download_runtime_recovery_asset(asset["id"], asset["size"])
+        if actual != expected:
+            raise Refused("runtime recovery target asset bytes differ")
+        witness.update(assetId=asset["id"], payloadSha256=digest)
+        self._runtime_witness = witness
+        return Observation("matched", self.content_id), witness
+
+    def dispatch_runtime_recovery(self, effect: Effect, witness: dict) -> Dispatch:
+        if (self._runtime_send_consumed or witness is not self._runtime_witness
+                or effect.identity != "qualification-asset:runtime" or effect.request_digest != self.content_id
+                or effect.target_digest != self.content_id
+                or witness.get("releaseId") != 408709919 or witness.get("name") != "standalone-telemetry-runtime-evidence.json"
+                or witness.get("contentId") != self.content_id or witness.get("sourceSha") != self.source
+                or witness.get("complete") is not True or "assetId" in witness):
+            raise Refused("runtime recovery upload witness differs")
+        self._runtime_send_consumed = True
+        raw = (self.root / witness["name"]).read_bytes()
+        digest = self.manifest["descriptor"]["standaloneTelemetry"]["qualificationSha256"]
+        if hashlib.sha256(raw).hexdigest() != digest:
+            raise Refused("runtime recovery upload payload drift")
+        try:
+            result = self.api.upload_runtime_recovery_asset(witness["releaseId"], raw)
+            if (not isinstance(result, dict) or type(result.get("id")) is not int or result["id"] <= 0 or result.get("name") != witness["name"]
+                    or result.get("size") != len(raw) or result.get("state") != "uploaded"
+                    or result.get("digest") != "sha256:" + digest):
+                return Dispatch("unknown")
+        except (Refused, OSError, urllib.error.URLError, ValueError, KeyError, TypeError):
+            return Dispatch("unknown")
+        return Dispatch("applied")
 
     def _asset(self, name: str) -> bytes | None:
         release = self._release()
