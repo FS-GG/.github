@@ -796,3 +796,22 @@ fixtures, with no genuine installed SDD doctor or canonical receiver acceptance 
 qualification, genuine candidates and the failed ef8 receiver remain preserved. Publication
 requires a genuinely packaged protected-source successor and its own same-candidate receiver
 acceptance; COORD-BOARD-V2-01.6 remains open.
+
+### Creator supported SDD 2.1 doctor contract — source preparation, 2026-10-11
+
+The genuine retained migration doctor is healthy with `outcome: noChange`, top-level
+`coherent: false` and `doctor.isCoherent: true`. The authentic SDD 2.1 package names source
+`518517f6`; its report assembly defines the top-level signal as a no-change stage with a
+nonempty artifact change ledger, while the read-only doctor reports its separate domain verdict.
+The qualified Creator parser incorrectly rejected `noChange` and required those distinct fields
+to agree. Protected source `7bfe4149` therefore has no candidate-build grant. Its successful
+78-control and 17-GET observations remain historical evidence.
+
+The prepared narrow correction accepts the supported no-change outcome and uses the explicit
+nested doctor verdict. It retains schema, command, exit, failed/unknown outcome and malformed
+report checks, and preserves nonfatal warning behavior. Immutable genuine healthy and drift
+reports anchor the compiled fixtures; the healthy CLI route exercises top-level false with nested
+true. Fresh six-driver adoption, rollback, retained conflict rules and all 81 frozen published
+Coordination .99 bodies remain unchanged. This successor is unqualified until its own finite
+admission and actual compiled checks, and still needs a genuinely packaged protected-source
+candidate and same-candidate canonical receiver acceptance before publication.
