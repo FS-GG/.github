@@ -709,3 +709,32 @@ Creator publication including this correction and the shared journal fix, and fr
 and retained receiver acceptance. Existing population bindings and historical
 failures remain unchanged; no installed decoder, native write or adoption follows
 from this source qualification.
+
+### Creator bounded descriptor and Kit text transport — qualified source, 2026-10-10
+
+The canonical receiver trace found that Creator's descriptor and Kit readers followed redirects
+and buffered response bodies without a size limit. Qualified source now routes both callers
+through one text reader: redirects are refused, response headers are capped at 16 KiB, and each
+body is capped at 256 KiB. One original 30-second cancellation deadline stays active through
+stream EOF; declared length mismatches and malformed UTF-8 refuse. Valid UTF-8 BOM handling,
+URLs, immutable revisions and caller failure/write behavior remain unchanged.
+
+The selected immutable Kit inventory contains 48 application fetches and 598,723 bytes, with
+a largest member of 114,971 bytes; the selected descriptor is 26,437 bytes. These source sizes
+substantiate the body cap. Header sizes are unobserved, so 16 KiB remains a selected finite refusal
+limit with actual header sizes unknown. The exact selected fresh path makes 97 application fetch calls; this is a manifest-specific
+call inventory, not a generic request ceiling or proof about internal HTTP protocol retries.
+
+Focused controls exercise the compiled reader with inert handlers and streams, including
+redirect/status refusal, header and body limits, truncated/declared-length mismatch, UTF-8 and
+BOM handling, cancellation after headers, disposal, and compiled caller/factory correspondence.
+The root-admitted offline aggregate on source `5972947d` passed all eleven stages: 135 actual
+compiled transport assertions and all 77 grammar/routing assertions passed. The Release build
+reported zero warnings and errors, all 81 frozen published Coordination 0.99 bodies remained
+unchanged, and the 4,216-file runtime closure matched before and after qualification. Observed
+owned groups, sessions and known descendants were empty at completion. This establishes source
+behavior with inert transport fixtures; actual successor HTTP and canonical receiver acceptance
+remain pending. Candidate `38068323563` at source `332acd88` remains genuine
+retained package/install evidence but is superseded for publication; no patched receiver substitutes
+for it. A genuinely packaged successor, same-candidate receiver acceptance and
+publication remain separate gates. COORD-BOARD-V2-01.6 remains open.
