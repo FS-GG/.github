@@ -188,6 +188,5 @@ against the retained three-active report, selecting no work. SDD#928, Templates#
 stay human Blocked; candidate acceptance/intake/PR/touch-set/capacity remains Unknown. Delivered
 .github#3009 stays closed/completed with Ready retained; SDD#935 remains unapproved/unseeded.
 Only canonical `drive-board` is adopted; normal/best wrappers and other unselected consumers remain
-unswitched. This records no new inspection, freshness, native write or worker admission. Protected
-source landing is pending native merge readback; remaining approved carryover and unselected
+unswitched. This records no new inspection, freshness, native write or worker admission. Source delivery is established separately by this change’s native merge readback; remaining approved carryover and unselected
 consumer gates keep .4 open. Publication .5 is complete; product adoption .6 remains separate.

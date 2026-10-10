@@ -392,5 +392,5 @@ at 05:20:25 UTC consumed the exact three-active binding/report and canonical sou
 It selected no work, retained all three human Blocked values and preserved Unknown candidate
 acceptance/intake/PR/touch-set/capacity. This closes only the canonical driver consumer gate;
 normal/best wrappers remain unswitched. There was no new inspection or native mutation, and report
-freshness remains 04:41. Protected source landing is pending native merge readback. Remaining
+freshness remains 04:41. Source delivery is established separately by this change’s native merge readback. Remaining
 carryover and unselected consumers keep .4 open; .5 is complete and .6 remains separate.

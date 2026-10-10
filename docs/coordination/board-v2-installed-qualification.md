@@ -307,7 +307,6 @@ Freshness remains the original **04:41** observation, not the later consumption 
 before-census failure and unavailable historical binding remain retained without retry or reconstruction.
 
 Only canonical `drive-board` joins the accepted programme/check-board consumers. Normal/best
-wrappers and other unselected organization consumers remain unswitched. Protected source landing
-is pending native merge readback; this bounded adoption does not authorize later execution.
+wrappers and other unselected organization consumers remain unswitched. Source delivery is established separately by this change’s native merge readback; this bounded adoption does not authorize later execution.
 Remaining approved carryover and unswitched consumers keep **.4 open**; **.5 is complete** and
 **.6 product-board adoption is separate**.

@@ -28,7 +28,7 @@ canonical driver no-dispatch acceptance is
 Root selected no work and dispatched none. This consumption made no network, installed CLI/driver,
 intake, worker, Store or native mutation calls. Report freshness remains the original **04:41**
 observation; the later consumer decision is not a new inspection or freshness observation.
-Protected source landing remains pending until native merge readback. The bounded adoption grants
+Source delivery is established separately by this change’s native merge readback. The bounded adoption grants
 no later inspection, constructor, driver invocation, intake batch or worker dispatch.
 
 The admitted three-active population is SDD#928, Templates#441 and .github#3010. All three remain

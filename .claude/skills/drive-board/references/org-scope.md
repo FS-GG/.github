@@ -6,7 +6,7 @@ The [current three-active qualification](https://github.com/FS-GG/.github/blob/7
 accepts the programme/check-board consumers. Root separately accepted canonical `drive-board`'s
 bounded no-dispatch consumption at 05:20:25 UTC on 2026-10-10, selecting no work and dispatching none.
 The exact consumed source, binding/report and acceptance identities are recorded in the skill.
-Protected source landing remains pending until native merge readback.
+Source delivery is established separately by this change’s native merge readback.
 Normal/best wrappers and other unselected organization consumers remain unswitched.
 
 The selected cohort is SDD#928, Templates#441 and .github#3010, all human Blocked. .github#3009

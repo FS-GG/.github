@@ -525,5 +525,5 @@ uses the existing three-active binding/report and installed qualification, with 
 Store, schema or runtime changes. Root consumed canonical source `3c53055f` and selected no work;
 normal/best wrappers remain unswitched. The decision retains human Blocked and Unknown candidate
 acceptance/intake/PR/touch-set/capacity, not a Ready or scheduling assertion. No new inspection ran.
-Protected source landing remains pending native merge readback. This bounded .4 consumer adoption
+Source delivery is established separately by this change’s native merge readback. This bounded .4 consumer adoption
 does not finish remaining carryover or change the complete .5 publication and separate .6 scope.
