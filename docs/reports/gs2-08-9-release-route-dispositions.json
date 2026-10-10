@@ -31,7 +31,7 @@
     },
     {
       "path": ".github/workflows/release-new-sdd-workspace.yml",
-      "sha256": "2c4597678880a221a074cd190dd1e3c19a9f7d2668cc980085f28848480a7f94",
+      "sha256": "cef8b997e05cca5c9d5c0c97d74cb55afe34220e821e46fa650e7360d0b6d746",
       "disposition": "exact-source-protected-journal-successor-only",
       "successorAmendment": {
         "unit": "COORD-BOARD-V2-01.5",

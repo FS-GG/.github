@@ -23,6 +23,7 @@ from unittest.mock import patch
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
 from release_successor_execution import Dispatch, JournalState, Observation, Refused, advance_effects
+from release_successor_journal import Refused as JournalRefused
 from new_sdd_workspace_successor_admission import WizardAdmission
 from new_sdd_workspace_successor_execution import effects, CURRENT_016, CURRENT_015, CURRENT_014, HISTORICAL_013, ReleaseBinding
 from new_sdd_workspace_successor_provider import WizardProvider, NotFound, output_signals, publisher_error, DIAGNOSTIC_LIMIT
@@ -885,7 +886,10 @@ class CreatorPublicationTests(unittest.TestCase):
             real, native, counted, journal, api, admission, provider, policy = self.fixture(pathlib.Path(temporary))
             self.assertFalse(self.prepare(counted, journal, api, admission, provider))
             cold = dict(counted.attempted)
+            cold_calls = list(native.calls)
             journal.read(); warm = {key: counted.attempted[key]-cold[key] for key in cold}
+            warm_calls = native.calls[len(cold_calls):]
+
             real.sibling("sibling-state.txt")
             self.caller.reconcile_publication(self.content, self.ordered, journal, admission, provider,
                                              self.report, clock=lambda: 0, sleep=lambda _: None)
@@ -900,17 +904,21 @@ class CreatorPublicationTests(unittest.TestCase):
             self.assertEqual(sum(counted.attempted.values()), len(native.calls))
             rules = [path for method, path in native.calls if "/rulesets/" in path]
             self.assertEqual(len(rules), 4 * (1 + 3 * len(self.ordered)))
-            categories = {}
-            for method, path in native.calls:
-                category = ("quota" if path == "rate_limit" else "protection" if "/rules" in path
-                            else "history" if "/commits?" in path else "compare" if "/compare/" in path
-                            else "refs" if "/git/ref" in path else "commits" if "/git/commits" in path
-                            else "trees" if "/git/trees" in path else "blobs" if "/git/blobs" in path else "repository")
-                key = method + ":" + category; categories[key] = categories.get(key, 0) + 1
+            def categories(calls):
+                result = {}
+                for method, path in calls:
+                    category = ("quota" if path == "rate_limit" else "protection" if "/rules" in path
+                                else "history" if "/commits?" in path else "compare" if "/compare/" in path
+                                else "refs" if "/git/ref" in path else "commits" if "/git/commits" in path
+                                else "trees" if "/git/trees" in path else "blobs" if "/git/blobs" in path else "repository")
+                    key = method + ":" + category; result[key] = result.get(key, 0) + 1
+                return result
             total = sum(counted.attempted.values())
             self.assertLess(total, 4200)
             print("Creator016 actual all-eight Authority profile: " + json.dumps(
-                {"coldPreparationByMethod": cold, "warmReadByMethod": warm, "categories": categories,
+                {"coldPreparationByMethod": cold, "warmReadByMethod": warm,
+                 "coldPreparationCategories": categories(cold_calls), "warmReadCategories": categories(warm_calls),
+                 "categories": categories(native.calls),
                  "total": total, "ceiling": 4200, "margin": 4200-total}, sort_keys=True))
 
     def test_preflight_has_zero_journal_and_provider_writes(self):
@@ -930,7 +938,8 @@ class CreatorPublicationTests(unittest.TestCase):
             with self.assertRaisesRegex(Refused, "preflight requires"):
                 self.prepare(counted, journal, api, admission, provider, preflight=True)
             self.intent["candidateArchiveSha256"] = "f"*64
-            with self.assertRaises(Refused): self.prepare(counted, journal, api, admission, provider)
+            with self.assertRaisesRegex(JournalRefused, "binds a different candidate"):
+                self.prepare(counted, journal, api, admission, provider)
             self.assertEqual(len(native.writes), writes); self.assertEqual(provider.writes, [])
 
     def test_source_mismatch_prevents_genesis_and_effects(self):
@@ -993,7 +1002,8 @@ class CreatorPublicationTests(unittest.TestCase):
             _, native, counted, journal, api, admission, provider, _ = self.fixture(pathlib.Path(temporary))
             self.prepare(counted, journal, api, admission, provider)
             native.lose_patch = True
-            with self.assertRaises(Refused): advance_effects(self.content, self.ordered, journal, admission, provider)
+            with self.assertRaisesRegex(JournalRefused, "CAS response uncertain"):
+                advance_effects(self.content, self.ordered, journal, admission, provider)
             self.assertEqual(journal.read().effects, {"tag": "intent"})
             for _ in range(2):
                 self.assertEqual(advance_effects(self.content, self.ordered, journal, admission, provider), "waiting")
