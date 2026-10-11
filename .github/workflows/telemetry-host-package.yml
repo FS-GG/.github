@@ -338,6 +338,16 @@ jobs:
           test "$(/usr/bin/dotnet --version)" = 10.0.401 || sdk_refuse usr-bin-dotnet-version-after-normalization
           test "$(readlink -f "$(command -v dotnet)")" = "$(readlink -f /usr/bin/dotnet)" || sdk_refuse dotnet-selection-after-normalization
           python3 -c 'import yaml; print(yaml.__version__)' > "$RUNNER_TEMP/host-binding-pyyaml-version.txt" || sdk_refuse pyyaml-import
+          # Compile current LEARN F# source before costly fixture/model work.
+          # One original 120s envelope covers locked restore plus build; this
+          # gate invokes no console, C controls or privileged native fixture.
+          timeout --kill-after=15s 120s /usr/bin/bash -c '
+            set -euo pipefail
+            export DOTNET_CLI_DO_NOT_USE_MSBUILD_SERVER=1 MSBUILDDISABLENODEREUSE=1
+            project=tests/telemetry-collector-persistent-v3-image-closure/PersistentV3.ImageClosure.Tests.fsproj
+            /usr/bin/dotnet restore "$project" --locked-mode --disable-build-servers -m:1 /nodeReuse:false
+            /usr/bin/dotnet build "$project" --no-restore --disable-build-servers -m:1 /nodeReuse:false -p:UseSharedCompilation=false
+          '
           /usr/bin/dotnet restore deployment/telemetry-collector/host-binding/tests/HostBinding.Tests.fsproj --locked-mode
           /usr/bin/dotnet test deployment/telemetry-collector/host-binding/tests/HostBinding.Tests.fsproj \
             --configuration Release --no-restore --logger "trx;LogFileName=host-binding.trx" \

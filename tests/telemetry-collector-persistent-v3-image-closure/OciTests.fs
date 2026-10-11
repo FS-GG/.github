@@ -482,7 +482,7 @@ let custodyAdapterNativeFixture()=
         // acknowledgment, then disconnect. The C controller bounds SO_SNDBUF;
         // its retained source/terminal evidence must identify actual delivery.
         let fd=Int32.Parse(Environment.GetEnvironmentVariable "FSGG_LEARN_CUSTODY_FD")
-        use handle=new Microsoft.Win32.SafeHandles.SafeSocketHandle(nativeint fd,true)
+        use handle=new System.Net.Sockets.SafeSocketHandle(nativeint fd,true)
         use socket=new System.Net.Sockets.Socket(handle)
         use stream=new System.Net.Sockets.NetworkStream(socket,false)
         let binding=Environment.GetEnvironmentVariable "FSGG_LEARN_CUSTODY_BINDING"|>Convert.FromBase64String
