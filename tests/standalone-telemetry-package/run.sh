@@ -21,7 +21,8 @@ case "$PACKAGE:$EVIDENCE" in /*:/*) ;; *) echo "package and evidence paths must 
 
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/standalone-telemetry-package.XXXXXX")"
 CAUSAL_PROBE_ROOT=""
-trap 'rm -rf "$WORK"; [ -z "$CAUSAL_PROBE_ROOT" ] || rm -rf "$CAUSAL_PROBE_ROOT"' EXIT
+PAIRING_ROOT=""
+trap '[ -z "$PAIRING_ROOT" ] || rm -rf "$PAIRING_ROOT"; rm -rf "$WORK"; [ -z "$CAUSAL_PROBE_ROOT" ] || rm -rf "$CAUSAL_PROBE_ROOT"' EXIT
 export DOTNET_CLI_HOME="$WORK/dotnet-home"
 export DOTNET_CLI_TELEMETRY_OPTOUT=1
 export DOTNET_NOLOGO=1
@@ -186,6 +187,68 @@ if (cd "$WORKSPACE" && "$ENGINE" telemetry workspace activate-local --config "$C
   PROFILE="eligible-local"
   PROFILE_REASON="production-assessor-accepted"
   ok "production assessor accepts the explicit user-private local root"
+
+# Exercise the SDK-installed parent and its genuine publish child. No source CLI
+# or adjacent-DLL substitute can establish this installed-layout contract.
+PAIRING_ROOT="$DURABLE_PARENT/retained-parser-${PACKAGE_SHA:0:16}-$$"
+if python3 - "$ENGINE" "$PAIRING_ROOT" <<'PY_PAIRING'
+import hashlib, json, os, pathlib, shutil, subprocess, sys
+engine, root = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
+root.mkdir(mode=0o700)
+assert not engine.with_suffix('.dll').exists(), 'fixture must exercise SDK nested assembly layout'
+env = dict(os.environ, DOTNET_EnableDiagnostics='0', XDG_CONFIG_HOME=str(root/'xdg'))
+env.pop('FSGG_TELEMETRY_CONFIG', None)
+alias_dir = root/'alias'; alias_dir.mkdir(); (alias_dir/'fsgg-coord-engine').symlink_to(engine)
+foreign = root/'foreign-tools'; shutil.copytree(engine.parent, foreign)
+assert hashlib.sha256((foreign/engine.name).read_bytes()).digest() == hashlib.sha256(engine.read_bytes()).digest()
+def compact(value):
+    return (json.dumps(value, ensure_ascii=False, separators=(',', ':'))+'\n').encode()
+def invoke(config, args, selected):
+    child_env = dict(env, PATH=str(selected)+os.pathsep+env.get('PATH',''))
+    return subprocess.run([str(engine),'skill','roadmap-telemetry','--config',str(config),*args],
+                          env=child_env, capture_output=True, timeout=30)
+for label, selected, rollback in [('same',engine.parent,True),('alias',alias_dir,True),('foreign-identical-shim',foreign,False)]:
+    case=root/label;case.mkdir(mode=0o700);store=case/'store';store.mkdir(mode=0o700)
+    initialized=subprocess.run([str(engine),'telemetry','store','init','--store-root',str(store)],env=env,capture_output=True,timeout=30)
+    assert initialized.returncode==0,initialized.stderr.decode()
+    config=case/'telemetry.json'; config.write_bytes(compact(dict(schema='fsgg.telemetry.host-config/1',storeRoot=str(store),engine='fsgg-coord-engine')));config.chmod(0o600)
+    begin=invoke(config,['begin','--feature','FIXTURE','--item','RETAINED','--attempt',label,'--model','fixture','--effort','medium'],engine.parent)
+    assert begin.returncode==0, begin.stderr.decode()
+    token=json.loads(begin.stdout)['token']
+    started=invoke(config,['started','--token',token,'--native-id','fixture-native'],engine.parent)
+    assert started.returncode==0,started.stderr.decode()
+    statepath=store/'orchestrator-dispatches'/(token+'.json');before=statepath.read_bytes();state=json.loads(before)
+    assert compact(state)==before,'fixture serialization differs from genuine adapter state'
+    activity=dict(schema='fsgg.telemetry.activity-span-input/1',revision=0,activityId='retained-layout',category='validation',startedAt='2026-09-27T00:00:00Z',endedAt=None,clockProvenance='fixture',evidence=['invalid'],summary='fixture')
+    inputpath=case/'activity.json';inputpath.write_bytes(compact(activity));inputpath.chmod(0o600)
+    identity='activity-span-'+hashlib.sha256(('RETAINED\x1f'+activity['activityId']).encode()).hexdigest()[:32]
+    event=dict(kind='activity-span',identity=identity,itemId=state['itemId'],invocationId=state['invocationId'],attemptId=state['attemptId'])
+    for name in sorted(set(activity)-{'schema'}):event[name]=activity[name]
+    seq=state['sequence']+1
+    batch=dict(schema='fsgg.telemetry.ingest/1',ingestId=state['invocationId']+'-'+str(seq).zfill(6),sourceIdentity=state['producerStream'],generation=state['invocationId'],cursor=str(seq),eventCount=1,events=[event])
+    state['sequence']=seq;state['pendingPublication']=dict(operation='observation:activity-span:'+identity,nextPhase=state['phase'],batch=batch)
+    statepath.write_bytes(compact(state));poisoned=statepath.read_bytes()
+    unrelated={str(p.relative_to(store)):p.read_bytes() for p in store.rglob('*') if p.is_file() and p!=statepath}
+    result=invoke(config,['activity','--token',token,'--input',str(inputpath)],selected)
+    assert result.returncode==1 and result.stdout==b'',(label,result.returncode,result.stdout,result.stderr)
+    if rollback:
+        assert statepath.read_bytes()==before,(label,result.stderr)
+        assert result.stderr.count(b'fsgg.telemetry.local-parser-rejection/1')==1
+        wire=compact(batch)
+        assert hashlib.sha256(wire).hexdigest().encode() in result.stderr,'genuine child did not reject exact retained wire'
+    else:
+        assert statepath.read_bytes()==poisoned,'foreign identical shim borrowed parent assembly'
+    after={str(p.relative_to(store)):p.read_bytes() for p in store.rglob('*') if p.is_file() and p!=statepath}
+    assert after==unrelated,'rejected input changed receiver or unrelated dispatch bytes'
+    assert not (root/'xdg'/'fs-gg'/'telemetry.json').exists()
+print('SDK-installed retained parser rejection: same and alias rollback; foreign identical shim retained')
+PY_PAIRING
+then
+  ok "SDK-installed parent/child parser rejection preserves or rolls back exact retained bytes"
+else
+  bad "SDK-installed parent/child parser rejection preserves or rolls back exact retained bytes"
+fi
+
 
   (cd "$WORKSPACE" && PATH="$FAKEBIN:$PATH" "$ENGINE" telemetry runtime codex-exec --assignment "$ASSIGNMENT" --config "$CONFIG" --repository FS-GG/package-fixture -- --json --ephemeral synthetic >"$WORK/native-local.out" 2>"$WORK/native-local.err"); NATIVE_LOCAL_RC=$?
   [ "$NATIVE_LOCAL_RC" -eq 37 ] && ok "accepted telemetry path leaves native work exit 37 unchanged" || bad "accepted telemetry path changed native work exit" "rc=$NATIVE_LOCAL_RC"
