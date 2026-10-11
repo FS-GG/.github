@@ -378,3 +378,42 @@ required UID/GID mappings, private namespace/setns authority, actual mapped-user
 visibility, foreign-insertion exclusion, workload control denial or retirement qualification.
 Current native custody and all actual cold-image, installed receiver and activation gates
 remain open. Source delivery follows the Board publication fence.
+
+
+### P2-C custody acknowledgment source preparation, 2026-10-11
+
+The current source review found that action-specific acknowledgment checks ran after
+transport validation returned. A malformed input binding, retention charge, start lease
+or process observation could therefore refuse one action while leaving its channel reusable.
+Observation also lacked enforcement of the selected command's output ceiling, and cached
+`Wait` could return a retired result after another action poisoned the shared channel.
+
+The prepared correction validates every acknowledgment payload inside the existing
+poison-on-failure boundary. Process observations require a closed field set, exact lease,
+boolean retirement, integer exit and non-null output. The combined UTF-8 bytes of stdout
+and stderr must fit the selected one-command ceiling, including unretired observations.
+Retirement is recorded only after the whole acknowledgment passes; poisoned channels
+cannot return cached successful waits or successful cancellation no-ops. Existing cancellation, original deadline, output
+charging, command selection and disposal retain their conservative custody behavior.
+The caller still owns the shared operation allowance and actual descendant retirement.
+
+The existing image-closure source console contains focused controls for the exact combined
+ceiling, multibyte output, null or malformed fields, foreign leases, duplicate/extra fields
+and unretired observations. Actual inherited AF_UNIX channel fixtures cover malformed
+acknowledgments across all five action paths, subsequent-operation refusal, and cached
+wait/cancel refusal after another action poisons a retired lease. The peer stays open to
+distinguish poison rejection from transport failure; bounded test-owned readers are joined.
+`PERSISTENT_V3_CUSTODY_CONTROLS_ONLY=1` selects parser and local-socket controls before
+image fixtures or child execution. Source compilation and these controls
+remain unrun at preparation; protected delivery and runtime qualification remain separate.
+
+The refreshed inventory has not located the owning inherited-namespace C helper or a
+compiler in the named system tool directories. The source-selected `/usr/sbin/podman`
+executable is absent; the observed `setsid` bytes match their selected source pin.
+The separate Coordination bootstrap source
+is retained as an unjoined candidate. Current UID/GID maps have a single 65,536-entry range;
+they do not meet the required singleton UID/GID-0 mapping. The cgroup mount is read-only
+and delegation/foreign-insertion exclusion remain unqualified. Bounded search does not
+prove global source absence. No compiler, native command, container, provider, installation
+or activation was invoked. Complete acquired inputs, two cold images, C5 and live custody
+remain open; consumed or unknown historical operations retain their original reservations.
