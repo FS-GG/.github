@@ -1,0 +1,165 @@
+{
+  "contentId": "sha256:fc16321e011ea616648ccc1dafda00bfc06fa34210fd49ddb008bb56c9ceecf5",
+  "descriptor": {
+    "channel": "stable",
+    "feedOrder": [
+      "github",
+      "nuget"
+    ],
+    "packages": [
+      {
+        "artifact": {
+          "path": "FS.GG.Coord.Cli.0.102.0.nupkg",
+          "payloadSha256": "sha256:3a28a43191e3ca63e8af7498017126af030790e114f71d0b85d24d9f777b9871",
+          "sha256": "3e89785699611e76961e59c683af064aa880d2cd560ff03a349ceefafe241ce9",
+          "size": 32254995
+        },
+        "dependencies": [],
+        "id": "FS.GG.Coord.Cli",
+        "releaseNotesCharacters": 3678,
+        "version": "0.102.0"
+      },
+      {
+        "artifact": {
+          "path": "FS.GG.Drivers.0.102.0.nupkg",
+          "payloadSha256": "sha256:9e57019349c82686b5903b57d1b20199c48657d181121a5dc373af7da937e2e6",
+          "sha256": "1788e4164f7795fa940cd8ccb45970355faa28c1274009e6dba050759fa21af3",
+          "size": 166601
+        },
+        "dependencies": [],
+        "id": "FS.GG.Drivers",
+        "releaseNotesCharacters": 0,
+        "version": "0.102.0"
+      },
+      {
+        "artifact": {
+          "path": "FS.GG.Kit.0.102.0.nupkg",
+          "payloadSha256": "sha256:9ad7a6d024db077165b70e7dbeee8a10d2782dad8c844b7ee23c240b1961cefe",
+          "sha256": "01c9acd510f2abb7a0e6fb17b4d41ba62a25d94eba7efcfc7256d931d0d633f8",
+          "size": 266521
+        },
+        "dependencies": [],
+        "id": "FS.GG.Kit",
+        "releaseNotesCharacters": 0,
+        "version": "0.102.0"
+      }
+    ],
+    "policyVersion": "release-successor/1",
+    "previousStableContentId": "sha256:e8ed439047f663dfcb34aba1152ffd4c6966a0c3a27be0ebb48eebcf47e26996",
+    "previousStableVersion": "0.101.0",
+    "releaseId": "github:0.102.0",
+    "sourceSha": "6e9be17bacd288ece103b67ecd5842d37a9c8e50",
+    "standaloneTelemetry": {
+      "dashboardAssets": [
+        {
+          "path": "app.js",
+          "sha256": "511ab4ada1c27b689c8ca80edad994d5e11c9632bac47e61f6b2c46cb2e8389a",
+          "size": 12258
+        },
+        {
+          "path": "index.html",
+          "sha256": "4719e4b3f5884d44be08aa0e7c0641915b7c1c5550a28b4c68f1c757d23857b8",
+          "size": 1443
+        },
+        {
+          "path": "styles.css",
+          "sha256": "41905201d0a9c3c8e4d812fd8c321a3bc668220c7c1de1f961942ca1ac763f89",
+          "size": 2505
+        }
+      ],
+      "dashboardAssetsSha256": "30d5b075036cc59806c98e10e7127896309a1cd2a7701a103994e5a75c637522",
+      "qualificationPath": "standalone-telemetry-runtime-evidence.json",
+      "qualificationSha256": "d067f19d056e2ba0a86bbeee5818d5810acb4b1fe433ce8cab1e1759fc4e97f1"
+    },
+    "version": "0.102.0"
+  },
+  "schema": "fsgg.release-saga/1",
+  "state": {
+    "channelPromotion": {
+      "promotedAt": null,
+      "receipt": null,
+      "state": "pending"
+    },
+    "createdAt": "2026-10-11T09:28:53Z",
+    "feeds": {
+      "github": {
+        "attempts": [],
+        "packages": {
+          "FS.GG.Coord.Cli": {
+            "externalPayloadSha256": null,
+            "externalSha256": null,
+            "inputSha256": "3e89785699611e76961e59c683af064aa880d2cd560ff03a349ceefafe241ce9",
+            "observedAt": null,
+            "state": "pending"
+          },
+          "FS.GG.Drivers": {
+            "externalPayloadSha256": null,
+            "externalSha256": null,
+            "inputSha256": "1788e4164f7795fa940cd8ccb45970355faa28c1274009e6dba050759fa21af3",
+            "observedAt": null,
+            "state": "pending"
+          },
+          "FS.GG.Kit": {
+            "externalPayloadSha256": null,
+            "externalSha256": null,
+            "inputSha256": "01c9acd510f2abb7a0e6fb17b4d41ba62a25d94eba7efcfc7256d931d0d633f8",
+            "observedAt": null,
+            "state": "pending"
+          }
+        },
+        "state": "pending"
+      },
+      "nuget": {
+        "attempts": [],
+        "packages": {
+          "FS.GG.Coord.Cli": {
+            "externalPayloadSha256": null,
+            "externalSha256": null,
+            "inputSha256": "3e89785699611e76961e59c683af064aa880d2cd560ff03a349ceefafe241ce9",
+            "observedAt": null,
+            "state": "pending"
+          },
+          "FS.GG.Drivers": {
+            "externalPayloadSha256": null,
+            "externalSha256": null,
+            "inputSha256": "1788e4164f7795fa940cd8ccb45970355faa28c1274009e6dba050759fa21af3",
+            "observedAt": null,
+            "state": "pending"
+          },
+          "FS.GG.Kit": {
+            "externalPayloadSha256": null,
+            "externalSha256": null,
+            "inputSha256": "01c9acd510f2abb7a0e6fb17b4d41ba62a25d94eba7efcfc7256d931d0d633f8",
+            "observedAt": null,
+            "state": "pending"
+          }
+        },
+        "state": "pending"
+      }
+    },
+    "phase": "prepared",
+    "preflight": {
+      "github": {
+        "checkedAt": "2026-10-11T09:28:53Z",
+        "constraints": {
+          "maxPackageBytes": 250000000,
+          "maxReleaseNotesCharacters": 35000
+        },
+        "state": "passed"
+      },
+      "nuget": {
+        "checkedAt": "2026-10-11T09:28:53Z",
+        "constraints": {
+          "maxPackageBytes": 250000000,
+          "maxReleaseNotesCharacters": 35000
+        },
+        "state": "passed"
+      }
+    },
+    "recovery": {
+      "lastFailure": null,
+      "resumptions": 0
+    },
+    "updatedAt": "2026-10-11T09:28:53Z"
+  }
+}

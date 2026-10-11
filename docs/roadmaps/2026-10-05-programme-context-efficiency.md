@@ -39,6 +39,35 @@ savings, new process containment or installed consumer qualification. Resource a
 contracts remain in force. Continue measurement and recovery validation during ordinary work; roll
 back the affected coordination component if it loses obligations, lineage or effect correspondence.
 
+## Selected delivery reliability repair, 2026-10-11
+
+The user selected publication reliability alongside original-journal recovery.
+The existing UTEL publisher and terminal adapters remain the owning surfaces:
+cache immutable Git objects, reread live authority, count admitted application
+requests, checkpoint on provider waiting, and collect logs plus available result
+bytes on every terminal outcome under the same original bounded operation.
+Do not renew a deadline, normalize partial evidence into completion, or add a
+separate observer service or ledger. These source changes require their own
+qualification and native acceptance; historical ordinary request totals remain unknown.
+
+Release source reservations when first publication is terminal and the
+initialized journal permits a validated descendant publisher with unchanged
+candidate intent. Documentation integration can then proceed; subsequent effects
+still require fresh source, authority, quota and admission checks. Report the
+current phase, concrete next task, blocker age and conditional remaining window.
+Distinguish checks-green from accepted closure, and separate observed useful
+verification, external waiting, repair and coordination intervals where evidence
+supports that attribution. Leave unobserved active durations unknown.
+
+The retained 2026-10-11 baseline is two projection deliveries: AT PR4420 was green
+at 10:38:23 UTC and merged at 11:38:03 (3,580 seconds); Board PR4421 was green at
+11:17:25 and merged at 11:39:05 (1,300 seconds). Original publication terminated
+at 11:28:57 and its reservation was released at 11:37:59.129923. The intervening
+542.13 seconds combine detection, reconciliation, eligibility and coordination;
+category active time is unknown. Release-to-merge was 3.87 and 65.87 seconds.
+These are projection delivery intervals, not whole-journey overhead or a measured
+cost-saving result. Preserve their original receipts instead of another metric ledger.
+
 ## What exists and what remains unproved
 
 The audit inspected `.github` main at

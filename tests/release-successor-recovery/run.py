@@ -77,7 +77,9 @@ def manifest():
 
 class MemoryAuthority:
     """GitHub-shaped immutable objects and first-parent selected path history."""
-    def __init__(self):
+    def __init__(self, ref=REF):
+        self.logical_ref = ref
+        self.directory_suffix = ref.rsplit("/", 1)[1]
         self.objects = {}
         self.calls = []
         self.override = {}
@@ -118,7 +120,7 @@ class MemoryAuthority:
 
     def selected(self, commit):
         oid = self.objects[("commits", commit)]["tree"]["sha"]
-        for name in ("state", "releases", "utel-rel-19"):
+        for name in ("state", "releases", self.directory_suffix):
             row = next((x for x in self.objects[("trees", oid)]["tree"] if x["path"] == name), None)
             if row is None:
                 return None
@@ -145,14 +147,14 @@ class MemoryAuthority:
             return {"id": 1351660651, "full_name": REPOSITORY}
         if path == PREFIX + "/git/ref/heads/main":
             return {"object": {"sha": self.head, "type": "commit"}}
-        if path == PREFIX + "/git/ref/" + REF.removeprefix("refs/"):
+        if path == PREFIX + "/git/ref/" + self.logical_ref.removeprefix("refs/"):
             raise NotFound(path)
         if "/git/" in path:
             kind, oid = path.split("/git/", 1)[1].split("/", 1)
             return copy.deepcopy(self.objects[(kind, oid)])
         if path.startswith(PREFIX + "/commits?"):
             query = parse_qs(urlsplit(path).query)
-            assert query["path"] == ["state/releases/utel-rel-19"]
+            assert query["path"] == ["state/releases/" + self.directory_suffix]
             oid = query["sha"][0]
             rows = []
             while oid:
@@ -209,10 +211,12 @@ class MemoryPublisher:
             return {"id": 1269292704, "full_name": "FS-GG/.github"}
         if path.endswith("/actions/runs/1"):
             return {"repository": {"id": 1269292704}, "path": ".github/workflows/release-successor-publish.yml",
-                    "event": "workflow_dispatch", "head_branch": "main", "head_sha": "b" * 40,
+                    "event": "workflow_dispatch", "head_branch": "main", "head_sha": self.head,
                     "actor": {"login": "EHotwagner"}, "run_attempt": 1, "status": "in_progress"}
         if path.endswith("/git/ref/heads/main"):
             return {"object": {"sha": self.head}}
+        if "/compare/" in path:
+            return {"status": "ahead"}
         raise NotFound(path)
 
 
@@ -242,12 +246,12 @@ def report():
             "publicationComplete": False}
 
 
-def fixture(generation, candidate=None, archive_sha256="a" * 64):
+def fixture(generation, candidate=None, archive_sha256="a" * 64, ref=REF):
     candidate = manifest() if candidate is None else candidate
     effects = ordered_effects(candidate)
-    authority = MemoryAuthority()
-    setup = ProtectedReleaseJournal(authority, main_directory=True)
-    intent = {"contentId": candidate["contentId"], "sourceSha": "b" * 40, "version": "0.101.0",
+    authority = MemoryAuthority(ref=ref)
+    setup = ProtectedReleaseJournal(authority, ref=ref, main_directory=True)
+    intent = {"contentId": candidate["contentId"], "sourceSha": candidate["descriptor"]["sourceSha"], "version": candidate["descriptor"]["version"],
               "candidateArchiveSha256": archive_sha256, "operator": "EHotwagner"}
     state = setup.initialize(intent)
     for transition in range(generation - 1):
@@ -560,17 +564,27 @@ class RecoveryControls(unittest.TestCase):
             self.assertEqual(provider.dispatched, [])
             self.assertFalse(rows["publicationComplete"])
 
-    def test_same_oid_corruption_is_rechecked(self):
+    def test_new_corrupt_oid_and_live_head_are_rechecked(self):
         candidate, authority, intent, _ = fixture(14)
         _, rows, journal, _, _, _ = slice_context(candidate, authority, intent)
         logical = journal._observed.head
         tree = authority.objects[("commits", logical)]["tree"]["sha"]
-        blob = authority.objects[("trees", tree)]["tree"][0]["sha"]
-        value = json.loads(base64.b64decode(authority.objects[("blobs", blob)]["content"]))
-        value["generation"] = 15
-        authority.objects[("blobs", blob)]["content"] = base64.b64encode(canonical(value)).decode()
+        entry = authority.objects[("trees", tree)]["tree"][0]
+        blob = entry["sha"]
+        accepted = json.loads(base64.b64decode(authority.objects[("blobs", blob)]["content"]))
+        value = {**accepted, "generation": 15}  # No effect transition: invalid successor.
+        new_blob = authority.put("blobs", {"encoding": "base64", "content": base64.b64encode(canonical(value)).decode()})
+        self.assertNotEqual(blob, new_blob)
+        new_tree = authority.tree([{**entry, "sha": new_blob}])
+        corrupt_logical = authority.commit(new_tree, [logical], "invalid unchanged effect transition")
+        physical = authority.head
+        corrupt_physical = journal.journal._overlay(physical, corrupt_logical, value)
+        authority.patch(PREFIX + "/git/refs/heads/main", {"sha": corrupt_physical, "force": False})
         with self.assertRaises(RuntimeError): journal.read()
         self.assertEqual(rows["lastObservedJournal"]["generation"], 14)
+        self.assertNotIn("intent", rows["lastObservedJournal"])
+        self.assertNotIn("stateSHA256", rows["lastObservedJournal"])
+        self.assertEqual(json.loads(base64.b64decode(journal.journal._immutable_object("blobs", blob)["content"])), accepted)
 
     def test_read_movement_and_draft_failure_retain_prior_observation(self):
         for mode in ("moved-head", "draft-unreadable"):
@@ -1603,6 +1617,188 @@ class SelectedReleaseBindingTests(unittest.TestCase):
                 self.assertEqual(publisher.selected_release_binding(args),
                                  ("0.101.0", "0.100.0", "refs/heads/fsgg/v2/journal/release/utel-rel-19"))
 
+
+
+class PublicationReliabilityControls(unittest.TestCase):
+    def context(self, generation=21, ordinary=False):
+        candidate = json.loads((pathlib.Path(__file__).parent / "original-0102-manifest.json").read_bytes())
+        candidate, authority, intent, _ = fixture(generation, candidate,
+                    publisher.SUCCESSOR_CHECKPOINT_CANDIDATE["archiveSha256"], publisher.SUCCESSOR_REF)
+        counter = publisher.CountedAuthorityAPI(authority,
+                    ceiling=publisher.ORDINARY_AUTHORITY_CALL_CEILING,
+                    quota_floor=publisher.ORDINARY_AUTHORITY_QUOTA_FLOOR)
+        counter.admit_quota(now=1900000000)
+        rows = report()
+        journal = publisher.ReportingJournal(ProtectedReleaseJournal(counter, ref=publisher.SUCCESSOR_REF, main_directory=True), rows, detailed=True)
+        api = MemoryPublisher();api.head = candidate["descriptor"]["sourceSha"]
+        provider = MemoryProvider(ordered_effects(candidate), {})
+        admission = publisher.ProtectedPublisherAdmission(
+            SingleOperatorAdmission(api, candidate, api.head, 1, "EHotwagner", "refs/heads/main"), counter, publisher.SUCCESSOR_REF)
+        publisher.prepare_release_journal(journal, counter, admission, provider, api, candidate, intent,
+                                         api.head, api.head, False, lambda: None, recovery_checkpoint=not ordinary)
+        journal.capture()
+        provider.matched = set(journal._observed.state["effects"])
+        expected = {"generation": generation, "logicalHead": journal._observed.head,
+                    "stateSHA256": hashlib.sha256(canonical(journal._observed.state)).hexdigest()}
+        return candidate, authority, counter, rows, journal, admission, publisher.ReportingProvider(provider, rows), expected
+
+    def test_fixed_original_checkpoint_and_later_generation_share_one_interface(self):
+        for generation in (21, 25, 32, 33):
+            with self.subTest(generation=generation):
+                c,a,counter,r,j,ad,p,expected = self.context(generation)
+                publisher.validate_successor_checkpoint(c,j,expected)
+                result = publisher.run_forward(c,j,ad,p,r,10,clock=lambda:0)
+                self.assertIn(result,("checkpoint","complete"))
+                self.assertLessEqual(r["iterationsAttempted"],4)
+                self.assertEqual(sum(counter.attempted.values()),len(a.calls))
+                self.assertLessEqual(sum(counter.attempted.values()),4080)
+                self.assertEqual(r["startingJournal"]["generation"],generation)
+                self.assertIsNotNone(r["lastObservedJournal"])
+                observed = r["lastObservedJournal"]
+                self.assertEqual(observed["stateSHA256"], hashlib.sha256(canonical(j._observed.state)).hexdigest())
+                self.assertEqual(observed["intent"], {key: j._observed.state[key] for key in
+                                  ("contentId", "sourceSha", "version", "candidateArchiveSha256", "operator")})
+                next_expected = {key: observed[key] for key in ("generation", "logicalHead", "stateSHA256")}
+                publisher.validate_successor_checkpoint(c, j, next_expected)
+                self.assertFalse(r["publicationComplete"])
+                print(json.dumps({"composedForwardStart":generation,"disposition":result,"authority":counter.report(),"providerDispatches":p.dispatched},sort_keys=True))
+
+    def test_exact_expected_checkpoint_changes_refuse_before_provider_write(self):
+        for key,value in (("generation",20),("logicalHead","0"*40),("stateSHA256","0"*64)):
+            c,a,n,r,j,ad,p,expected=self.context()
+            expected[key]=value
+            with self.assertRaises(publisher.Refused):publisher.validate_successor_checkpoint(c,j,expected)
+            self.assertEqual(p.dispatched,[])
+            self.assertEqual(n.attempted["post"],0)
+            self.assertEqual(n.attempted["patch"],0)
+
+    def test_original_candidate_and_journal_mismatch_refuse(self):
+        for target in ("content", "ref"):
+            c,a,n,r,j,ad,p,e=self.context()
+            if target=="content":c=copy.deepcopy(c);c["contentId"]="sha256:"+"0"*64
+            else:j.journal.ref=REF
+            with self.assertRaises(publisher.Refused):publisher.validate_successor_checkpoint(c,j,e)
+            self.assertEqual(p.dispatched,[])
+
+    def test_ordinary_wait_checkpoint_records_exact_intent_without_polling_or_resend(self):
+        c,a,n,r,j,ad,p,e=self.context(ordinary=True)
+        self.assertEqual(publisher.run_forward(c,j,ad,p,r,10,maximum=152,clock=lambda:0),"checkpoint")
+        self.assertEqual(r["iterationsAttempted"],1)
+        self.assertEqual(len(p.dispatched),1)
+        self.assertEqual(r["lastObservedJournal"]["generation"],22)
+        self.assertTrue(r["journalMutationMayHaveOccurred"])
+        self.assertEqual(r["lastDispatch"]["state"],"applied")
+        p.matched.remove(p.dispatched[0])
+        self.assertEqual(publisher.run_forward(c,j,ad,p,r,10,maximum=152,clock=lambda:0),"checkpoint")
+        self.assertEqual(len(p.dispatched),1)
+        self.assertEqual(r["iterationsAttempted"],1)
+        self.assertLess(sum(n.attempted.values()),publisher.ORDINARY_AUTHORITY_CALL_CEILING-100)
+        self.assertEqual(sum(n.attempted.values()),len(a.calls))
+        print(json.dumps({"ordinaryWaitActualEntries":n.report(),"providerDispatches":p.dispatched},sort_keys=True))
+
+    def test_ordinary_budget_and_quota_are_distinct_and_refuse_before_send(self):
+        a=MemoryAuthority();a.quota.update(remaining=1799,used=3201)
+        n=publisher.CountedAuthorityAPI(a,ceiling=1500,quota_floor=1800)
+        with self.assertRaisesRegex(publisher.Refused,"ordinary Authority quota"):n.admit_quota(now=1900000000)
+        self.assertEqual(n.attempted,{"get":1,"post":0,"patch":0})
+        n.attempted["get"]=1500
+        before=len(a.calls)
+        for method,args in (("get",()),("post",({},)),("patch",({},))):
+            with self.assertRaises(publisher.Refused):getattr(n,method)("fixture",*args)
+        self.assertEqual(len(a.calls),before)
+        self.assertEqual(n.report()["ceiling"],1500)
+
+    def test_actual_result_entry_marks_quota_wait_as_incomplete_checkpoint(self):
+        with tempfile.TemporaryDirectory() as temp:
+            result=pathlib.Path(temp)/'result.json'
+            argv=['publisher','--publish','--candidate-run-id','38128101680',
+                  '--candidate-artifact-id','11698335858','--candidate-archive-sha256',
+                  publisher.SUCCESSOR_CHECKPOINT_CANDIDATE['archiveSha256'],
+                  '--workdir',str(pathlib.Path(temp)/'uncreated'),'--result-path',str(result)]
+            with patch.object(sys,'argv',argv),patch.object(publisher,'execute_publisher',side_effect=publisher.AuthorityQuotaWaiting('fixture quota waiting')):
+                self.assertEqual(publisher.main(),0)
+            value=json.loads(result.read_bytes())
+            self.assertEqual(value['disposition'],'checkpoint');self.assertFalse(value['publicationComplete'])
+            self.assertIsNone(value['failure']);self.assertIsNotNone(value['quotaWaiting'])
+            self.assertFalse((pathlib.Path(temp)/'uncreated').exists())
+
+    def test_budget_wait_propagates_through_real_protected_admission(self):
+        c,a,n,r,j,ad,p,e=self.context()
+        n.attempted['get']=n.ceiling-1
+        before=len(a.calls)
+        with self.assertRaises(publisher.AuthorityQuotaWaiting):
+            ad.authorize(c['contentId'],ordered_effects(c)[10].identity,'intent',ordered_effects(c)[10].request_digest)
+        self.assertLessEqual(len(a.calls)-before,1)
+        self.assertIsNotNone(n.blocked);self.assertEqual(n.attempted['post'],0);self.assertEqual(n.attempted['patch'],0)
+        # Genuine transport/CAS failures retain their different refusal semantics.
+        n.attempted['get']=n.ceiling-1;n.api=types.SimpleNamespace(get=lambda path:(_ for _ in ()).throw(OSError('transport unavailable')))
+        self.assertFalse(ad.authorize(c['contentId'],'tag','intent','0'*64))
+
+    def test_fresh_journal_preparation_uses_original_mutation_deadline(self):
+        candidate=json.loads((pathlib.Path(__file__).parent/'original-0102-manifest.json').read_bytes())
+        a=MemoryAuthority(ref=publisher.SUCCESSOR_REF)
+        n=publisher.CountedAuthorityAPI(a,ceiling=1500,quota_floor=1800);n.admit_quota(now=1900000000)
+        now=[0];n.api=publisher.RuntimeDeadlineAuthority(n.api,10,lambda:now[0])
+        r=report();j=publisher.ReportingJournal(ProtectedReleaseJournal(n,ref=publisher.SUCCESSOR_REF,main_directory=True),r)
+        api=MemoryPublisher();api.head=candidate['descriptor']['sourceSha']
+        p=MemoryProvider(ordered_effects(candidate),{});p._release=lambda:None
+        composite=publisher.ProtectedPublisherAdmission(SingleOperatorAdmission(api,candidate,api.head,1,'EHotwagner','refs/heads/main'),n,publisher.SUCCESSOR_REF)
+        ad=publisher.RuntimeDeadlineAdmission(composite,10,lambda:now[0])
+        intent={'contentId':candidate['contentId'],'sourceSha':api.head,'version':'0.102.0','candidateArchiveSha256':publisher.SUCCESSOR_CHECKPOINT_CANDIDATE['archiveSha256'],'operator':'EHotwagner'}
+        def uniqueness():now[0]=10
+        with self.assertRaises(publisher.Refused):
+            publisher.prepare_release_journal(j,n,ad,p,api,candidate,intent,api.head,api.head,False,uniqueness)
+        self.assertEqual(n.attempted['post'],0);self.assertEqual(n.attempted['patch'],0)
+        self.assertFalse(r['journalMutationMayHaveOccurred']);self.assertIsNone(j._observed)
+
+    def test_actual_result_entry_preserves_primary_when_stderr_fails(self):
+        class BrokenStderr:
+            def write(self,*args):raise OSError('stderr unavailable')
+            def flush(self):raise OSError('stderr unavailable')
+        with tempfile.TemporaryDirectory() as temp:
+            result=pathlib.Path(temp)/'result.json'
+            argv=['publisher','--publish','--candidate-run-id','38128101680','--candidate-artifact-id','11698335858',
+                  '--candidate-archive-sha256',publisher.SUCCESSOR_CHECKPOINT_CANDIDATE['archiveSha256'],
+                  '--workdir',str(pathlib.Path(temp)/'unused'),'--result-path',str(result)]
+            with patch.object(sys,'argv',argv),patch.object(publisher,'execute_publisher',side_effect=OSError('original execution failure')),patch.object(sys,'stderr',BrokenStderr()):
+                self.assertEqual(publisher.main(),1)
+            value=json.loads(result.read_bytes())
+            self.assertEqual(value['failure']['chain'][0]['message'],'original execution failure')
+            self.assertEqual(value['additionalReportingFailures'],[{'phase':'primary diagnostic','type':'OSError'}])
+            self.assertFalse(value['publicationComplete'])
+            argv[-1]=str(pathlib.Path(temp)/'second-result.json')
+            retained=[]
+            def fail_report(path,report):retained.append(report);raise OSError('result unavailable')
+            with patch.object(sys,'argv',argv),patch.object(publisher,'execute_publisher',side_effect=RuntimeError('original execution failure')),patch.object(publisher,'write_result',side_effect=fail_report),patch.object(sys,'stderr',BrokenStderr()):
+                self.assertEqual(publisher.main(),1)
+            self.assertEqual(retained[0]['failure']['chain'][0]['message'],'original execution failure')
+            self.assertEqual([x['phase']for x in retained[0]['additionalReportingFailures']],['primary diagnostic','result reporting diagnostic'])
+
+    def test_matched_observation_expiry_refuses_dependent_settlement(self):
+        c,a,n,r,j,ad,p,e=self.context(22)
+        selected=ordered_effects(c)[10].identity
+        now=[0]
+        observe=p.provider.observe
+        def expiring(effect):
+            result=observe(effect)
+            if effect.identity==selected:now[0]=10
+            return result
+        p.provider.observe=expiring
+        with self.assertRaises(publisher.Refused):
+            publisher.run_forward(c,j,ad,p,r,10,clock=lambda:now[0])
+        self.assertEqual(n.attempted['post'],0);self.assertEqual(n.attempted['patch'],0)
+        self.assertEqual(p.dispatched,[]);self.assertEqual(r['lastObservedJournal']['generation'],22)
+
+    def test_deadline_failure_and_dispatch_failure_keep_truthful_checkpoint(self):
+        c,a,n,r,j,ad,p,e=self.context()
+        with self.assertRaises(publisher.Refused):publisher.run_forward(c,j,ad,p,r,0,clock=lambda:0)
+        self.assertEqual(r["iterationsAttempted"],0);self.assertEqual(p.dispatched,[])
+        p.provider.fail_dispatch=True
+        with self.assertRaises(RuntimeError):publisher.run_forward(c,j,ad,p,r,10,clock=lambda:0)
+        self.assertEqual(r["lastDispatch"]["state"],"unknown")
+        self.assertEqual(r["lastObservedJournal"]["generation"],22)
+        self.assertTrue(r["journalMutationMayHaveOccurred"])
+        self.assertFalse(r["publicationComplete"])
 
 if __name__ == "__main__":
     unittest.main()

@@ -343,8 +343,8 @@ with tempfile.TemporaryDirectory() as scratch:
         real.sibling(f"bounded-{index}.txt")
     assert ProtectedReleaseJournal(real, main_directory=True).read().generation == 1, "unrelated physical writes expired quiet logical authority"
 
-# Count actual Git physical-history requests separately from deliberately fresh
-# logical-state reads. Build all 128 allowed logical generations without calling
+# Count actual Git requests with immutable logical and physical history cached.
+# Fresh refs/path history remain independent of cached SHA-addressed objects. Build all 128 allowed logical generations without calling
 # the reader after every fixture write; qualification still uses the real reader.
 with tempfile.TemporaryDirectory() as scratch:
     real = RealGit(pathlib.Path(scratch) / "immutable-cost.git")
@@ -376,23 +376,37 @@ with tempfile.TemporaryDirectory() as scratch:
         for _ in range(3):
             assert reader.read().generation == generation
         warm = calls[before:]
-        # Physical-history misses are zero. Every introducing/prior binding
-        # still validates its logical commit/tree/blob live, as does read().
+        # All SHA-addressed objects are cached. Both physical refs and bounded
+        # selected-path history are still fetched for every actual read.
         history_pages = 1 if generation < 100 else 2
-        live_logical_reads = 2 * generation + 1
-        warm_per_read = 3 * live_logical_reads + 2 + history_pages
+        warm_per_read = 2 + history_pages
         assert len(warm) == 3 * warm_per_read, "physical misses or live-read accounting differ"
         assert sum("/git/ref/" in path for path in warm) == 6
         assert sum("/commits?" in path for path in warm) == 3 * history_pages
-        assert sum("/git/commits/" in path for path in warm) == 3 * live_logical_reads
-        assert sum("/git/trees/" in path for path in warm) == 3 * live_logical_reads
-        assert sum("/git/blobs/" in path for path in warm) == 3 * live_logical_reads
+        assert not any("/git/" + kind + "/" in path for path in warm for kind in ("commits", "trees", "blobs")), "immutable logical history refetched"
+        # Compose the former logical-read behavior against the same real Git
+        # objects; physical caching and all live freshness reads remain equal.
+        class UncachedLogicalJournal(ProtectedReleaseJournal):
+            def _read_commit(self, oid):
+                selected = self.main_directory
+                self.main_directory = False
+                try:
+                    return super()._read_commit(oid)
+                finally:
+                    self.main_directory = selected
+        donor = UncachedLogicalJournal(real, main_directory=True)
+        assert donor.read().generation == generation
+        before_donor = len(calls)
+        assert donor.read().generation == generation
+        donor_warm_calls = len(calls) - before_donor
+        assert donor_warm_calls > warm_per_read
         count, size = len(reader._immutable_objects), reader._immutable_bytes
         largest = max(map(len, reader._immutable_objects.values()))
         assert count < reader._MAX_IMMUTABLE_OBJECTS and size < reader._MAX_IMMUTABLE_BYTES
         assert largest < reader._MAX_IMMUTABLE_OBJECT_BYTES
         metrics.append({"generation": generation, "coldGETs": cold_calls,
-                        "warmGETsPerRead": warm_per_read, "liveLogicalReadsPerRead": live_logical_reads,
+                        "warmGETsPerRead": warm_per_read, "uncachedLogicalWarmGETsPerRead": donor_warm_calls,
+                        "actualWarmGETReduction": donor_warm_calls - warm_per_read, "immutableLogicalGETsPerRead": 0,
                         "warmPhysicalMisses": 0, "cachedObjects": count,
                         "cachedBytes": size, "largestObjectBytes": largest})
         # Each result is an independent copy, including nested values.

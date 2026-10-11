@@ -42,6 +42,17 @@ on:
         default: false
         type: boolean
 
+      recover_original_successor_checkpoint:
+        description: Bounded original .102 journal20 continuation; no resend of an unresolved intent
+        required: true
+        default: false
+        type: boolean
+      expected_checkpoint:
+        description: Exact admitted generation, logicalHead and stateSHA256 JSON for .102 continuation only
+        required: false
+        default: ''
+        type: string
+
 permissions:
   actions: read
   contents: write
@@ -106,6 +117,8 @@ jobs:
           RECOVERY_CHECKPOINT: ${{ inputs.recovery_checkpoint }}
           REPEAT_ORIGINAL_NUGET_KIT_INTENT: ${{ inputs.repeat_original_nuget_kit_intent }}
           RECOVER_ORIGINAL_RUNTIME_INTENT: ${{ inputs.recover_original_runtime_intent }}
+          RECOVER_ORIGINAL_SUCCESSOR_CHECKPOINT: ${{ inputs.recover_original_successor_checkpoint }}
+          EXPECTED_CHECKPOINT: ${{ inputs.expected_checkpoint }}
         run: |
           set -euo pipefail
           mode=--preflight-only
@@ -120,8 +133,16 @@ jobs:
           if test "$RECOVER_ORIGINAL_RUNTIME_INTENT" = true; then
             profile+=(--recover-original-runtime-intent)
           fi
+          checkpoint=()
+          if test "$RECOVER_ORIGINAL_SUCCESSOR_CHECKPOINT" = true; then
+            profile+=(--recover-original-successor-checkpoint)
+            checkpoint=(--expected-checkpoint "$EXPECTED_CHECKPOINT")
+          elif test -n "$EXPECTED_CHECKPOINT"; then
+            echo 'Expected checkpoint requires original successor recovery.' >&2
+            exit 1
+          fi
           python3 scripts/release-successor-publish.py \
-            "$mode" "${profile[@]}" \
+            "$mode" "${profile[@]}" "${checkpoint[@]}" \
             --candidate-run-id "$CANDIDATE_RUN_ID" \
             --candidate-artifact-id "$CANDIDATE_ARTIFACT_ID" \
             --candidate-archive-sha256 "$CANDIDATE_ARCHIVE_SHA256" \

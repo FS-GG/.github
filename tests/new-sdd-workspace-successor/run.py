@@ -1010,21 +1010,41 @@ class CreatorPublicationTests(unittest.TestCase):
             self.assertEqual(provider.writes, [])
 
     def test_delayed_last_effect_exhausts_bound_before_send_and_preserves_intent(self):
-        with tempfile.TemporaryDirectory() as temporary:
-            _, native, counted, journal, api, admission, provider, _ = self.fixture(pathlib.Path(temporary))
-            self.prepare(counted, journal, api, admission, provider)
-            provider.delayed.add("promote")
-            with self.assertRaisesRegex(Refused, "ceiling exhausted"):
-                self.caller.reconcile_publication(self.content, self.ordered, journal, admission, provider,
-                                                 self.report, clock=lambda: 0, sleep=lambda _: None)
-            self.assertEqual(sum(counted.attempted.values()), 4200)
-            self.assertEqual(len(native.calls), 4200)
-            self.assertEqual(provider.writes.count("promote"), 1)
-            # Read through the original transport for readback; never reset the invocation counter.
-            reader = self.caller.ProtectedReleaseJournal(native, self.caller.REF, main_directory=True)
-            state = reader.read()
-            self.assertEqual(state.generation, 16); self.assertEqual(state.effects["promote"], "intent")
-            self.assertFalse(self.report["complete"])
+        for bound in ("reconciliation", "authority"):
+            with self.subTest(bound=bound), tempfile.TemporaryDirectory() as temporary:
+                _, native, counted, journal, api, admission, provider, _ = self.fixture(pathlib.Path(temporary))
+                self.prepare(counted, journal, api, admission, provider)
+                provider.delayed.add("promote")
+                if bound == "authority":
+                    original_dispatch = provider.dispatch
+                    def dispatch(effect):
+                        outcome = original_dispatch(effect)
+                        if effect.identity == "promote":
+                            # Exhaust the fixture budget at the actual last send;
+                            # the next fresh journal read must refuse before transport.
+                            counted.ceiling = sum(counted.attempted.values())
+                        return outcome
+                    provider.dispatch = dispatch
+                reason = "ceiling exhausted" if bound == "authority" else "bounded reconciliation steps"
+                with self.assertRaisesRegex(Refused, reason):
+                    self.caller.reconcile_publication(self.content, self.ordered, journal, admission, provider,
+                                                     self.report, clock=lambda: 0, sleep=lambda _: None)
+                total = sum(counted.attempted.values())
+                self.assertEqual(len(native.calls), total)
+                if bound == "authority":
+                    self.assertEqual(total, counted.ceiling)
+                    self.assertGreater(total, 0)
+                    self.assertLess(total, 4200)
+                else:
+                    self.assertEqual(counted.ceiling, 4200)
+                    self.assertLess(total, counted.ceiling)
+                    self.assertEqual(self.report["iterationsAttempted"], len(self.ordered) * 2 + 120)
+                self.assertEqual(provider.writes.count("promote"), 1)
+                # Read through the original transport for readback; never reset the invocation counter.
+                reader = self.caller.ProtectedReleaseJournal(native, self.caller.REF, main_directory=True)
+                state = reader.read()
+                self.assertEqual(state.generation, 16); self.assertEqual(state.effects["promote"], "intent")
+                self.assertFalse(self.report["complete"])
 
     def test_original_deadline_and_iteration_cap_do_not_allow_another_send(self):
         journal = Journal(self.content)

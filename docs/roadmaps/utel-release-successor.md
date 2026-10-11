@@ -837,3 +837,44 @@ A genuine source-bound 0.102.0 candidate must pack the three archives once and
 qualify the four installed parent/child cases before publication. Both-feed
 readback, isolated installation and supported original pending recovery remain
 separate downstream obligations; the milestone is not complete.
+
+
+### Original 0.102.0 publication and bounded continuation — 2026-10-11
+
+[Candidate run 38128101680](https://github.com/FS-GG/.github/actions/runs/38128101680)
+packed one coherent set from protected source `6e9be17bacd288ece103b67ecd5842d37a9c8e50`
+and qualified all four genuine SDK-installed parent/child cases. Its original
+archives and content ID remain the continuation inputs. [Publisher run 38133108945](https://github.com/FS-GG/.github/actions/runs/38133108945)
+failed when the Authority installation token exhausted its core quota. The timely
+terminal read retained the log only; a separately admitted post-expiry read
+subsequently authenticated the original result archive. That ordinary result's
+zero iteration and mutation defaults were uninstrumented and do not prove zero
+writes. A later bounded journal observation established generation 21, ten
+verified effects and no intent at that point; it did not verify provider bytes
+or establish current quota. Publication and downstream 0.102.0 adoption remain open.
+
+The selected source repair caches SHA-addressed immutable logical and physical
+Git objects while rereading live Authority refs and selected-path history. It
+records ordinary journal observations, attempted advances, dispatch uncertainty
+and counted Authority API entries. Ordinary waiting returns an incomplete
+checkpoint immediately instead of repeatedly polling the same prefix. The
+proposed ordinary budget is 1,500 API entries with an observed 1,800-entry quota
+floor; qualification and fresh native quota acceptance remain required. These
+bounds were not enforced by the failed original run and do not reserve shared quota.
+
+One fixed original-candidate continuation accepts an exact admitted generation,
+logical head and canonical state digest, validates the ordered effect prefix,
+and attempts at most four advances. A fresh automated bounded observation and
+continuation can use the next checkpoint without another source profile or an
+operator approval requirement. Existing no-resend, current authority, immutable
+payload and first-cause rules remain in force; no new genesis or rebuild follows.
+The historical 0.101.0 profiles retain their bindings and limits.
+
+The shared terminal acquisition composition collects the job log and available
+result archive for every terminal conclusion in the same bounded caller operation.
+It authenticates original identity, archive digest and member set; missing or
+unreadable evidence stays explicitly partial. Caller-owned original deadlines,
+retention and custody are unchanged. After first publication reaches a terminal
+outcome, an initialized journal with authenticated unchanged intent permits a
+compatible descendant publisher source, so independent documentation merges
+need not remain held. Every later effect still needs fresh admission.

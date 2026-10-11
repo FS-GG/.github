@@ -447,6 +447,126 @@ class PublisherJournalTests(unittest.TestCase):
         self.assertEqual(self.journal.initializations, 0)
 
 
+
+class TerminalAcquisitionControls(unittest.TestCase):
+    def fixture(self, conclusion="failure", names=("release-successor-result.json",)):
+        import datetime,io,zipfile
+        from release_successor_terminal import collect_terminal
+        run={"id":123,"head_sha":"b"*40,"status":"completed","conclusion":conclusion}
+        jobs=[{"id":456,"run_id":123,"run_attempt":1,"head_sha":"b"*40,"name":"publish","status":"completed","conclusion":conclusion,"started_at":"2026-10-11T11:25:00Z","completed_at":"2026-10-11T11:28:57Z"}]
+        stream=io.BytesIO()
+        with zipfile.ZipFile(stream,"w")as z:
+            for name in names:z.writestr(name,json.dumps({"publicationComplete":False,"failure":{"type":"quota"}}))
+        archive=stream.getvalue()
+        artifact={"id":789,"name":"release-successor-result","size_in_bytes":len(archive),
+                  "digest":"sha256:"+hashlib.sha256(archive).hexdigest(),"expired":False,
+                  "expires_at":"2027-01-09T10:45:49Z","workflow_run":{"id":123,"head_sha":"b"*40}}
+        terminal={"run":copy.deepcopy(run),"jobs":copy.deepcopy(jobs),"resultArtifact":artifact,
+                  "timing":{"retentionDeadlineUtc":"2026-10-11T11:33:57Z"}}
+        now=[datetime.datetime(2026,10,11,11,30,tzinfo=datetime.timezone.utc)]
+        entries=[]
+        class Reader:
+            def required(self,name,path):entries.append((name,path));return copy.deepcopy(artifact)
+        def payload(name,path,cap):
+            entries.append((name,path))
+            body=b"native failed log"if name=="job-log"else archive
+            assert len(body)<=cap
+            return body,{"status":200,"complete":True},0
+        def decoder(members):return json.loads(members["release-successor-result.json"])
+        return collect_terminal,Reader(),run,jobs,terminal,payload,decoder,lambda:None,lambda:now[0],entries,now
+
+    def call(self,parts,**kw):
+        f,reader,run,jobs,terminal,payload,decoder,current,clock,*_=parts
+        return f(reader,run,jobs,terminal,payload,decoder,current,clock=clock,**kw)
+
+    def test_queued_cancellation_without_started_job_is_partial_not_fabricated(self):
+        import datetime,importlib.util
+        path=pathlib.Path(__file__).resolve().parents[2]/'scripts/release_successor_terminal.py'
+        spec=importlib.util.spec_from_file_location('terminal_queued',path);m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
+        parts=self.fixture();run=parts[2];terminal=parts[4];now=parts[-1][0]
+        post=now-datetime.timedelta(seconds=60)
+        run.update(status='completed',conclusion='cancelled',created_at=post.isoformat(),updated_at=(now-datetime.timedelta(seconds=5)).isoformat())
+        intent={'postUtc':post.isoformat(),'deadlineUtc':(post+datetime.timedelta(seconds=4500)).isoformat(),
+                'queueSeconds':600,'activeJobsSeconds':3600,'retentionSeconds':300,'aggregateSeconds':4500}
+        for jobs in ([],[{**parts[3][0],'status':'completed','started_at':None,'completed_at':None,'conclusion':'cancelled'}]):
+            timing=m.terminal_timing(run,jobs,intent,now)
+            self.assertIsNone(timing['jobStartedUtc']);self.assertIsNone(timing['jobCompletedUtc'])
+            self.assertEqual(timing['terminalTimestampSource'],'run.updated_at')
+            selected={**terminal,'run':run,'jobs':jobs,'timing':timing,'resultArtifact':None}
+            calls=[]
+            value=m.collect_terminal(parts[1],run,jobs,selected,lambda *args:calls.append(args),parts[6],parts[7],clock=lambda:now)
+            self.assertEqual(calls,[]);self.assertFalse(value['evidenceComplete']);self.assertFalse(value['archiveDownloaded'])
+            self.assertIsNone(value['jobLogSHA256']);self.assertIsNone(value['nativeResult'])
+            self.assertTrue(any('no started job' in x for x in value['gaps']))
+            # Any independently available artifact is still attempted; no joblog ID invented.
+            parts[-2].clear();selected['resultArtifact']=terminal['resultArtifact']
+            value=m.collect_terminal(parts[1],run,jobs,selected,parts[5],parts[6],parts[7],clock=lambda:now)
+            self.assertTrue(value['archiveDownloaded']);self.assertFalse(value['evidenceComplete'])
+            self.assertFalse(any(x[0]=='job-log'for x in parts[-2]))
+        with self.assertRaises(AssertionError):m.terminal_timing(run,[],intent,now+datetime.timedelta(seconds=296))
+
+    def test_all_terminal_conclusions_acquire_log_and_available_result_in_one_call(self):
+        for conclusion in ("success","failure","cancelled","timed_out","action_required","neutral","skipped","stale"):
+            with self.subTest(conclusion=conclusion):
+                parts=self.fixture(conclusion);value=self.call(parts)
+                self.assertTrue(value["archiveDownloaded"]);self.assertTrue(value["evidenceComplete"])
+                self.assertFalse(value["nativeResult"]["publicationComplete"])
+                self.assertEqual([x[0]for x in parts[-2]], ["job-log","artifact","result-archive"])
+
+    def test_missing_result_is_explicit_log_only_partial_evidence(self):
+        parts=self.fixture();parts[4]["resultArtifact"]=None;value=self.call(parts)
+        self.assertFalse(value["archiveDownloaded"]);self.assertFalse(value["evidenceComplete"])
+        self.assertIsNone(value["nativeResult"]);self.assertEqual(len(parts[-2]),1)
+        self.assertTrue(value["gaps"])
+
+    def test_log_failure_preserved_while_available_result_is_still_acquired(self):
+        parts=list(self.fixture());original=parts[5];first=RuntimeError("original log refusal")
+        def fail_log(name,path,cap):
+            if name=="job-log":raise first
+            return original(name,path,cap)
+        parts[5]=fail_log
+        with self.assertRaises(RuntimeError)as error:self.call(parts)
+        self.assertIs(error.exception,first)
+        self.assertTrue(first.terminalEvidence["archiveDownloaded"])
+        self.assertIsNotNone(first.terminalEvidence["nativeResult"])
+        self.assertFalse(first.terminalEvidence["evidenceComplete"])
+
+    def test_artifact_failure_keeps_log_and_both_failures_keep_first(self):
+        for log_fail in (False,True):
+            parts=list(self.fixture());first=RuntimeError("log first");original=parts[5]
+            def fail(name,path,cap):
+                if name=="job-log":
+                    if log_fail:raise first
+                    return original(name,path,cap)
+                raise ValueError("archive second")
+            parts[5]=fail
+            with self.assertRaises((RuntimeError,ValueError))as error:self.call(parts)
+            if log_fail:self.assertIs(error.exception,first);self.assertTrue(first.__notes__)
+            else:self.assertIsNotNone(error.exception.terminalEvidence["jobLogSHA256"])
+            self.assertFalse(error.exception.terminalEvidence["evidenceComplete"])
+
+    def test_expired_original_grant_stops_before_requests(self):
+        import datetime
+        parts=self.fixture();parts[-1][0]=datetime.datetime(2026,10,11,11,34,tzinfo=datetime.timezone.utc)
+        with self.assertRaisesRegex(AssertionError,"grant expired"):self.call(parts)
+        self.assertEqual(parts[-2],[])
+
+    def test_foreign_artifact_source_and_duplicate_member_refused(self):
+        parts=self.fixture();parts[4]["resultArtifact"]["workflow_run"]["head_sha"]="c"*40
+        with self.assertRaisesRegex(AssertionError,"source differs"):self.call(parts)
+        self.assertEqual([x[0]for x in parts[-2]],["job-log","artifact"])
+        parts=self.fixture(names=("release-successor-result.json","unexpected.json"))
+        with self.assertRaisesRegex(AssertionError,"member set differs"):self.call(parts)
+
+    def test_decoder_failure_retains_authenticated_archive_and_member_proof(self):
+        parts=list(self.fixture())
+        def reject(members):raise ValueError("native identity mismatch")
+        parts[6]=reject
+        with self.assertRaises(ValueError)as error:self.call(parts)
+        self.assertTrue(error.exception.terminalEvidence["archiveAuthenticated"])
+        self.assertIn("release-successor-result.json",error.exception.terminalEvidence["memberSHA256"])
+        self.assertIsNone(error.exception.terminalEvidence["nativeResult"])
+
 if __name__ == "__main__":
     qualify_live_provider()
     unittest.main()
