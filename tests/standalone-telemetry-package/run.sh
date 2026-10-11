@@ -208,6 +208,7 @@ def invoke(config, args, selected):
     return subprocess.run([str(engine),'skill','roadmap-telemetry','--config',str(config),*args],
                           env=child_env, capture_output=True, timeout=30)
 for label, selected, rollback in [('same',engine.parent,True),('alias',alias_dir,True),('foreign-identical-shim',foreign,False)]:
+    print('SDK pairing case: '+label+'; phase=initialize', flush=True)
     case=root/label;case.mkdir(mode=0o700);store=case/'store';store.mkdir(mode=0o700)
     initialized=subprocess.run([str(engine),'telemetry','store','init','--store-root',str(store)],env=env,capture_output=True,timeout=30)
     assert initialized.returncode==0,initialized.stderr.decode()
@@ -229,6 +230,7 @@ for label, selected, rollback in [('same',engine.parent,True),('alias',alias_dir
     state['sequence']=seq;state['pendingPublication']=dict(operation='observation:activity-span:'+identity,nextPhase=state['phase'],batch=batch)
     statepath.write_bytes(compact(state));poisoned=statepath.read_bytes()
     unrelated={str(p.relative_to(store)):p.read_bytes() for p in store.rglob('*') if p.is_file() and p!=statepath}
+    print('SDK pairing case: '+label+'; phase=retained-parser-child', flush=True)
     result=invoke(config,['activity','--token',token,'--input',str(inputpath)],selected)
     assert result.returncode==1 and result.stdout==b'',(label,result.returncode,result.stdout,result.stderr)
     # Every case must reach the genuine child parser, including the foreign negative.
@@ -240,8 +242,12 @@ for label, selected, rollback in [('same',engine.parent,True),('alias',alias_dir
     assert len(expected_assemblies)==1,'fixture entry assembly must be unambiguous'
     expected_assembly=expected_assemblies[0].resolve(strict=True)
     assert proof['schema']=='fsgg.telemetry.local-parser-rejection/1' and proof['boundary']=='before-publication-io'
-    assert proof['enginePath']==str(expected_executable) and proof['engineSha256']==hashlib.sha256(expected_executable.read_bytes()).hexdigest()
-    assert proof['assemblyPath']==str(expected_assembly) and proof['assemblySha256']==hashlib.sha256(expected_assembly.read_bytes()).hexdigest()
+    expected_engine_sha=hashlib.sha256(expected_executable.read_bytes()).hexdigest()
+    expected_assembly_sha=hashlib.sha256(expected_assembly.read_bytes()).hexdigest()
+    diagnostic=dict(case=label, configuredBasename='fsgg-coord-engine', selectedPathPrefix=str(selected), parentExecutable=str(engine.resolve(strict=True)), expectedEnginePath=str(expected_executable), expectedEngineSha256=expected_engine_sha, actualEnginePath=proof.get('enginePath'), actualEngineSha256=proof.get('engineSha256'), expectedAssemblyPath=str(expected_assembly), expectedAssemblySha256=expected_assembly_sha, actualAssemblyPath=proof.get('assemblyPath'), actualAssemblySha256=proof.get('assemblySha256'))
+    print('SDK pairing public binary identity: '+json.dumps(diagnostic, sort_keys=True), flush=True)
+    assert proof['enginePath']==str(expected_executable) and proof['engineSha256']==expected_engine_sha, diagnostic
+    assert proof['assemblyPath']==str(expected_assembly) and proof['assemblySha256']==expected_assembly_sha, diagnostic
     assert proof['inputSha256']==hashlib.sha256(compact(batch)).hexdigest(),'genuine child did not reject exact retained wire'
     assert proof['storeRoot']==str(store) and proof['ingestId']==batch['ingestId'] and proof['errors']
     if rollback:
@@ -251,6 +257,7 @@ for label, selected, rollback in [('same',engine.parent,True),('alias',alias_dir
     after={str(p.relative_to(store)):p.read_bytes() for p in store.rglob('*') if p.is_file() and p!=statepath}
     assert after==unrelated,'rejected input changed receiver or unrelated dispatch bytes'
     assert not (root/'xdg'/'fs-gg'/'telemetry.json').exists()
+    print('SDK pairing case: '+label+'; phase=qualified', flush=True)
 print('SDK-installed retained parser rejection: same and alias rollback; foreign identical shim retained')
 PY_PAIRING
 then
