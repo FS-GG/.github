@@ -98,8 +98,13 @@ concurrency:
 
 jobs:
   package:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
+    env:
+      # Explicit existing GitHub-hosted provider trust selection. The native job
+      # tuple must match; these constants do not authenticate newly hashed tools.
+      FSGG_LEARN_CUSTODY_CORE_IMAGE_VERSION: 20261004.327.1
+      FSGG_LEARN_CUSTODY_CORE_IMAGE_SOURCE: e3fe113a581eb9a44ca43f479b69f9c93f36df34
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
@@ -111,6 +116,137 @@ jobs:
           HOSTED_RUNNER_CUSTODY: ${{ runner.environment }}
         run: |
           set -euo pipefail
+          ImageOS="${ImageOS:?native hosted image OS required}"
+          ImageVersion="${ImageVersion:?native hosted image version required}"
+          printf 'custody-core provider=%s os=%s arch=%s image-os=%s actual-image=%s selected-image=%s source=%s\n' "$HOSTED_RUNNER_CUSTODY" "$RUNNER_OS" "$RUNNER_ARCH" "$ImageOS" "$ImageVersion" "$FSGG_LEARN_CUSTODY_CORE_IMAGE_VERSION" "$FSGG_LEARN_CUSTODY_CORE_IMAGE_SOURCE"
+          test "$GITHUB_ACTIONS" = true
+          test "$HOSTED_RUNNER_CUSTODY" = github-hosted
+          test "$RUNNER_ENVIRONMENT" = github-hosted
+          test "$RUNNER_OS" = Linux
+          test "$RUNNER_ARCH" = X64
+          test "$ImageOS" = ubuntu24
+          test "$ImageVersion" = "$FSGG_LEARN_CUSTODY_CORE_IMAGE_VERSION"
+          test "$FSGG_LEARN_CUSTODY_CORE_IMAGE_SOURCE" = e3fe113a581eb9a44ca43f479b69f9c93f36df34
+          # No package installation or compiler probe. Existing trusted image
+          # readers bind provisioned package/file/ELF/search inputs. Root source
+          # admission owns outer resources and actual descendant retirement.
+          timeout --kill-after=15s 45s python3 - <<'PY'
+          import hashlib, json, os, pathlib, re, stat, subprocess
+          def require(ok, reason):
+              if not ok: raise RuntimeError('custody-core-toolchain-refused: '+reason)
+          def read(command):
+              result=subprocess.run(command, check=True, capture_output=True, timeout=10)
+              require(len(result.stdout)<=4194304 and len(result.stderr)<=65536, 'reader-output-bound')
+              return result.stdout.decode('utf-8')
+          compiler=pathlib.Path('/usr/bin/gcc-13')
+          destination=pathlib.Path(os.environ['RUNNER_TEMP'])/'learn-custody-core-toolchain'
+          destination.mkdir(mode=0o700)
+          provider=destination/'provider-original.json'
+          provider.write_text(json.dumps({key:os.environ[key] for key in ('GITHUB_REPOSITORY','GITHUB_RUN_ID','GITHUB_RUN_ATTEMPT','GITHUB_JOB','GITHUB_SHA','RUNNER_ENVIRONMENT','RUNNER_OS','RUNNER_ARCH','ImageOS','ImageVersion')},sort_keys=True)+'\n')
+          provider.chmod(0o600)
+          required=[compiler, pathlib.Path('/usr/libexec/gcc/x86_64-linux-gnu/13/cc1'),
+                    pathlib.Path('/usr/libexec/gcc/x86_64-linux-gnu/13/collect2'),
+                    pathlib.Path('/usr/bin/as'), pathlib.Path('/usr/bin/ld'), pathlib.Path('/usr/bin/readelf'),
+                    pathlib.Path('/usr/lib/gcc/x86_64-linux-gnu/13/include/stddef.h'),
+                    pathlib.Path('/usr/lib/gcc/x86_64-linux-gnu/13/include/stdint.h'),
+                    pathlib.Path('/usr/lib/gcc/x86_64-linux-gnu/13/include/limits.h'),
+                    pathlib.Path('/usr/include/stdint.h'), pathlib.Path('/usr/include/limits.h'),
+                    pathlib.Path('/usr/include/stdio.h'), pathlib.Path('/usr/include/string.h'),
+                    pathlib.Path('/usr/lib/x86_64-linux-gnu/crt1.o'), pathlib.Path('/usr/lib/x86_64-linux-gnu/crti.o'),
+                    pathlib.Path('/usr/lib/x86_64-linux-gnu/crtn.o')]
+          missing=[str(p) for p in required if not p.is_file()]
+          require(not missing, 'required-compiler-linker-header-input:'+','.join(missing))
+          database=read(['/usr/bin/dpkg-query','-W','-f=${Package}\t${Architecture}\t${Version}\t${db:Status-Status}\t${Depends}\t${Pre-Depends}\n'])
+          original=destination/'packages-original.tsv'; original.write_text(database); original.chmod(0o600)
+          installed={}
+          for line in database.splitlines():
+              fields=line.split('\t'); require(len(fields)==6, 'package-fields')
+              name,arch,version,status,depends,predepends=fields
+              if arch in ('amd64','all') and status=='installed': installed[name]=(version,depends,predepends)
+          pending=['gcc-13','libc6-dev','binutils']; selected={}
+          while pending:
+              name=pending.pop()
+              if name in selected: continue
+              require(name in installed, 'missing-package-'+name)
+              selected[name]=installed[name]
+              require(len(selected)<=128, 'package-count')
+              for group in ','.join(installed[name][1:]).split(','):
+                  if not group.strip(): continue
+                  alternatives=[re.split(r'[ (]',part.strip(),1)[0].split(':')[0] for part in group.split('|')]
+                  choice=next((item for item in alternatives if item in installed), None)
+                  require(choice is not None, 'unresolved-package-dependency-'+name)
+                  pending.append(choice)
+          require(selected['gcc-13'][0].startswith('13.3.0-'), 'selected-gcc-version')
+          paths=set(required)
+          for name in sorted(selected):
+              for line in read(['/usr/bin/dpkg-query','-L',name]).splitlines():
+                  if line.startswith(('/usr/bin/','/usr/lib/','/usr/libexec/','/usr/include/','/lib/','/lib64/')):
+                      p=pathlib.Path(line)
+                      if p.is_file(): paths.add(p)
+          # Loader cache/config participates in actual path selection, while fixed
+          # -nostdinc removes ambient /usr/local include search from compilation.
+          for p in [pathlib.Path('/etc/ld.so.cache'),pathlib.Path('/etc/ld.so.conf')]:
+              require(p.is_file(), 'loader-search-input'); paths.add(p)
+          paths.update(p for p in pathlib.Path('/etc/ld.so.conf.d').glob('*') if p.is_file())
+          require(len(paths)<=16384, 'file-count')
+          rows=[]; aliases={}; total=0; cached={}
+          for p in sorted(paths):
+              require(re.fullmatch(r'/[A-Za-z0-9_+./:@-]+',str(p)) is not None, 'path-encoding')
+              require(p.lstat().st_uid==0, 'path-owner')
+              resolved=p.resolve(strict=True); info=resolved.stat()
+              require(stat.S_ISREG(info.st_mode) and info.st_uid==0 and not info.st_mode&0o022, 'file-custody')
+              for ancestor in set(p.parents)|set(resolved.parents):
+                  a=ancestor.stat(); require(a.st_uid==0 and not a.st_mode&0o022, 'ancestor-custody')
+              if resolved not in cached:
+                  total+=info.st_size; require(info.st_size<=134217728 and total<=1073741824, 'read-byte-bound')
+                  digest=hashlib.sha256()
+                  with resolved.open('rb') as source:
+                      for block in iter(lambda:source.read(1048576),b''): digest.update(block)
+                  cached[resolved]=digest.hexdigest()
+              aliases.setdefault(p.name,set()).add(str(resolved))
+              rows.append(dict(path=str(p),resolved=str(resolved),bytes=info.st_size,sha256=cached[resolved],
+                               link=os.readlink(p) if p.is_symlink() else None))
+          manifest=destination/'toolchain.sha256'
+          manifest.write_text(''.join(row['sha256']+'  '+row['path']+'\n' for row in rows)); manifest.chmod(0o600)
+          require(manifest.stat().st_size<=4194304, 'manifest-size')
+          elf=[]
+          elf_original=destination/'elf-original.txt'; elf_original.touch(mode=0o600); elf_bytes=0
+          for resolved in sorted(cached):
+              with resolved.open('rb') as source: magic=source.read(4)
+              if magic!=b'\x7fELF': continue
+              detail=read(['/usr/bin/readelf','--wide','--file-header','--dynamic','--program-headers',str(resolved)])
+              retained=str(resolved)+'\n'+detail+'\n'; elf_bytes+=len(retained.encode())
+              require(elf_bytes<=4194304, 'ELF-evidence-bound')
+              with elf_original.open('a') as output: output.write(retained)
+              require(re.search(r'Class:\s+ELF64',detail) and re.search(r'Machine:.*X86-64',detail), 'ELF-target')
+              needed=re.findall(r'\(NEEDED\).*?\[([^\]]+)\]',detail)
+              require(all(len(aliases.get(name,set()))==1 for name in needed), 'unclosed-or-ambiguous-ELF-needed:'+str(resolved)+':'+','.join(needed))
+              interpreters=re.findall(r'Requesting program interpreter: ([^\]]+)',detail)
+              require(all(pathlib.Path(path).resolve(strict=True) in cached for path in interpreters), 'unclosed-ELF-interpreter')
+              search=re.findall(r'\((?:RPATH|RUNPATH)\).*?\[([^\]]*)\]',detail)
+              # Provisioned libc gconv modules use only their pinned sibling
+              # directory. Refuse arbitrary overrides or a different first hit.
+              for value in search:
+                  require(value in ('$ORIGIN','${ORIGIN}'), 'unexpected-ELF-search-override:'+str(resolved))
+                  for name in needed:
+                      sibling=resolved.parent/name
+                      if sibling.exists():
+                          require(str(sibling.resolve(strict=True))==next(iter(aliases[name])), 'unclosed-ELF-origin-hit')
+              elf.append(dict(path=str(resolved),needed={name:next(iter(aliases[name])) for name in needed},interpreters=interpreters,search=search))
+          evidence=destination/'toolchain-evidence.json'
+          evidence.write_text(json.dumps(dict(provider='github-hosted',image=os.environ['ImageVersion'],
+              imageSource=os.environ['FSGG_LEARN_CUSTODY_CORE_IMAGE_SOURCE'],compiler=str(compiler),
+              packages={name:values[0] for name,values in selected.items()},files=rows,elf=elf,
+              trust='Root-selected immutable GitHub-hosted provisioning; census hashes bind bytes, not provenance.'),sort_keys=True)+'\n')
+          evidence.chmod(0o600); require(evidence.stat().st_size<=8388608, 'evidence-size')
+          compiler_sha=next(row['sha256'] for row in rows if row['path']==str(compiler))
+          manifest_sha=hashlib.sha256(manifest.read_bytes()).hexdigest()
+          with open(os.environ['GITHUB_ENV'],'a') as output:
+              output.write('FSGG_LEARN_CUSTODY_CORE_CC='+str(compiler)+'\nFSGG_LEARN_CUSTODY_CORE_CC_SHA256='+compiler_sha+
+                  '\nFSGG_LEARN_CUSTODY_CORE_TOOLCHAIN_SHA256_FILE='+str(manifest)+'\nFSGG_LEARN_CUSTODY_CORE_TOOLCHAIN_SHA256='+manifest_sha+'\n')
+          print('custody-core trusted-image='+os.environ['ImageVersion']+' image-source='+os.environ['FSGG_LEARN_CUSTODY_CORE_IMAGE_SOURCE']+
+                ' packages='+str(len(selected))+' files='+str(len(rows))+' bytes='+str(total)+' compiler='+compiler_sha+' closure='+manifest_sha)
+          PY
           # BEGIN hosted runner SDK custody normalization
           sdk_refuse() {
             printf 'hosted-sdk-guard-refused stage=%s\n' "$1" >&2
@@ -376,4 +512,12 @@ jobs:
             artifacts/telemetry-host-manifest.json
             artifacts/telemetry-host-package-evidence.json
           if-no-files-found: error
+          retention-days: 14
+      - name: Retain C source qualification toolchain evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: learn-custody-core-toolchain-${{ github.sha }}
+          path: ${{ runner.temp }}/learn-custody-core-toolchain/
+          if-no-files-found: ignore
           retention-days: 14
