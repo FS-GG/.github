@@ -198,7 +198,7 @@ root.mkdir(mode=0o700)
 assert not engine.with_suffix('.dll').exists(), 'fixture must exercise SDK nested assembly layout'
 env = dict(os.environ, DOTNET_EnableDiagnostics='0', XDG_CONFIG_HOME=str(root/'xdg'))
 env.pop('FSGG_TELEMETRY_CONFIG', None)
-alias_dir = root/'alias'; alias_dir.mkdir(); (alias_dir/'fsgg-coord-engine').symlink_to(engine)
+alias_dir = root/'engine-alias'; alias_dir.mkdir(); (alias_dir/'fsgg-coord-engine').symlink_to(engine)
 foreign = root/'foreign-tools'; shutil.copytree(engine.parent, foreign)
 assert hashlib.sha256((foreign/engine.name).read_bytes()).digest() == hashlib.sha256(engine.read_bytes()).digest()
 def compact(value):
