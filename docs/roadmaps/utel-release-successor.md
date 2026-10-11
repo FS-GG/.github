@@ -878,3 +878,38 @@ retention and custody are unchanged. After first publication reaches a terminal
 outcome, an initialized journal with authenticated unchanged intent permits a
 compatible descendant publisher source, so independent documentation merges
 need not remain held. Every later effect still needs fresh admission.
+
+### Accepted 0.102.0 publication and live schema adoption — 2026-10-11
+
+[Continuation run 38156868958](https://github.com/FS-GG/.github/actions/runs/38156868958)
+completed the fixed original candidate from run 38128101680. Its authenticated
+terminal result records generation 33, all 16 effects verified and
+`publicationComplete: true`. The final publisher source is compatible descendant
+`9c31cb723bc9bc08f9c42deca5f03aba90b72fe5`; the candidate source, archives and
+content ID remain unchanged. Independent provider observations verified the
+promoted manifest, stable channel and all three package payloads on both feeds.
+The retained promotion intent was observed and verified without another promotion
+dispatch. Earlier failed and partial runs retain their original outcomes.
+
+The configured live telemetry store was separately preserved and upgraded from
+schema 13 to 14 through the supported 0.101.0 CLI. The complete snapshot was taken
+under the store lock; migration validated historical checksums under its own
+writer lock and preserved existing tables, rows and pending state. Two separately
+bounded drains processed the 256 ready files: 215 committed and 41 were quarantined
+as permanent conflicts. Those quarantines and the original historical pending
+attempt remain unresolved; they were not deleted, reset or retried. Prospective
+telemetry begins and finishes now succeed through the explicitly configured,
+pinned 0.101.0 engine. Native collaboration usage remains unknown where its
+supported collector is unavailable; no additional Codex CLI was launched.
+
+Independent public NuGet acquisition authenticated the 0.102.0 CLI archive.
+Its raw bytes match the archive retained in the externally observed installation,
+and its normalized package payload matches the fixed original candidate. The
+complete population of 91 installed files remained unchanged; its package files
+correspond to that public archive. Generated SDK metadata and the shim retain
+unknown original provenance. This proves CLI package correspondence; the external
+installation owner and native runtime qualification remain unknown. It does not
+accept the global selector or execute the installation. Bounded installed
+qualification, original pending recovery and installed receiver/C2 acceptance
+remain open. Publication and live schema adoption therefore advance this plan
+without completing the operational milestone.
