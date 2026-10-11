@@ -8,11 +8,23 @@ itf_root="$(mktemp -d)"
 custody_source_started=false
 custody_cleanup() {
   local custody_exit_code=$?
+  if test "${FSGG_LEARN_NATIVE_FIXTURE:-false}" = true && test -f "$itf_root/native-fixture.log"; then
+    local native_evidence="${RUNNER_TEMP:-$itf_root}/learn-native-custody-evidence"
+    mkdir -p -- "$native_evidence"
+    # Only the fixed controller's bounded diagnostics enter this artifact.
+    if test "$(wc -c < "$itf_root/native-fixture.log")" -le 131072; then
+      cp -- "$itf_root/native-fixture.log" "$native_evidence/native-fixture.log"
+    else
+      printf 'FAIL native diagnostic artifact bound\n' >&2
+      custody_exit_code=1
+    fi
+  fi
   if test "$custody_exit_code" -eq 0 || test "$custody_source_started" = false; then
     rm -rf -- "$itf_root"
   else
     printf "FAIL retaining source fixture root after failed/unknown qualification: %s\n" "$itf_root" >&2
   fi
+  return "$custody_exit_code"
 }
 trap custody_cleanup EXIT
 # Source qualification requires an independently accepted provider/toolchain
@@ -37,8 +49,9 @@ if test "${GITHUB_ACTIONS:-}" = true; then
   printf 'custody-core hosted-image=%s compiler=%s closure=%s\n' "$custody_image" "$custody_compiler_sha" "$custody_toolchain_sha"
 fi
 custody_source="$repo_root/deployment/telemetry-collector/persistent/v3/image-closure/native/custody_core.c"
+custody_adapter_tests="$repo_root/tests/telemetry-collector-persistent-v3-image-closure/CustodyAdapterTests.c"
 custody_tests="$repo_root/tests/telemetry-collector-persistent-v3-image-closure/CustodyCoreTests.c"
-# One deadline covers both serial compiles and the ordinary C test binary.
+# One original deadline covers four serial compiles and ordinary C controls.
 # The enclosing admitted source profile must separately enforce RSS/census and
 # complete descendant retirement; timeout alone supplies no custody acceptance.
 custody_source_started=true
@@ -46,13 +59,19 @@ timeout --kill-after=15s 120s bash -c '
   set -euo pipefail
   unset LD_PRELOAD LD_LIBRARY_PATH GCC_EXEC_PREFIX COMPILER_PATH LIBRARY_PATH CPATH C_INCLUDE_PATH CPLUS_INCLUDE_PATH OBJC_INCLUDE_PATH DEPENDENCIES_OUTPUT SUNPRO_DEPENDENCIES
   export PATH=/usr/bin:/bin LC_ALL=C LANG=C TZ=UTC
-  compiler="$1"; source="$2"; controls="$3"; destination="$4"
+  compiler="$1"; source="$2"; controls="$3"; destination="$4"; adapter_controls="$5"
   headers=(-nostdinc -isystem /usr/lib/gcc/x86_64-linux-gnu/13/include -isystem /usr/include/x86_64-linux-gnu -isystem /usr/include)
   "$compiler" -std=c11 -O2 -Wall -Wextra -Werror -pedantic "${headers[@]}" "$source" "$controls" -o "$destination/custody-core-tests"
   "$compiler" -std=c11 -O2 -Wall -Wextra -Werror -pedantic "${headers[@]}" -fPIC -shared -DCC_TEST_LIBRARY -Wl,-z,relro,-z,now -Wl,--no-undefined "$source" "$controls" -o "$destination/libfsgg-learn-custody-core-tests.so"
+  "$compiler" -std=c11 -O2 -Wall -Wextra -Werror -pedantic "${headers[@]}" -Wl,-z,relro,-z,now "$source" "$adapter_controls" -o "$destination/custody-adapter-tests"
+  "$compiler" -std=c11 -O2 -Wall -Wextra -Werror -pedantic "${headers[@]}" -fPIC -shared -DLC_TEST_LIBRARY -Wl,-z,relro,-z,now -Wl,--no-undefined "$source" "$adapter_controls" -o "$destination/libfsgg-learn-custody-adapter-tests.so"
+  "$destination/custody-adapter-tests"
   "$destination/custody-core-tests"
-  sha256sum -- "$destination/custody-core-tests" "$destination/libfsgg-learn-custody-core-tests.so"
-' custody-core-source "$custody_compiler" "$custody_source" "$custody_tests" "$itf_root"
+  sha256sum -- "$destination/custody-core-tests" "$destination/libfsgg-learn-custody-core-tests.so" "$destination/custody-adapter-tests" "$destination/libfsgg-learn-custody-adapter-tests.so"
+' custody-core-source "$custody_compiler" "$custody_source" "$custody_tests" "$itf_root" "$custody_adapter_tests"
+export FSGG_LEARN_CUSTODY_ADAPTER_TEST_LIBRARY="$itf_root/libfsgg-learn-custody-adapter-tests.so"
+FSGG_LEARN_CUSTODY_ADAPTER_TEST_LIBRARY_SHA256="$(sha256sum -- "$FSGG_LEARN_CUSTODY_ADAPTER_TEST_LIBRARY" | cut -d' ' -f1)"
+export FSGG_LEARN_CUSTODY_ADAPTER_TEST_LIBRARY_SHA256
 export FSGG_LEARN_CUSTODY_CORE_TEST_LIBRARY="$itf_root/libfsgg-learn-custody-core-tests.so"
 FSGG_LEARN_CUSTODY_CORE_TEST_LIBRARY_SHA256="$(sha256sum -- "$FSGG_LEARN_CUSTODY_CORE_TEST_LIBRARY" | cut -d' ' -f1)"
 export FSGG_LEARN_CUSTODY_CORE_TEST_LIBRARY_SHA256
@@ -65,6 +84,15 @@ test "$(find "$itf_root" -maxdepth 1 -name '*.itf.json' -type f | wc -l)" -eq 16
 dotnet restore "$repo_root/tests/telemetry-collector-persistent-v3-image-closure/PersistentV3.ImageClosure.Tests.fsproj" --locked-mode --disable-build-servers -m:1 /nodeReuse:false
 dotnet build "$repo_root/tests/telemetry-collector-persistent-v3-image-closure/PersistentV3.ImageClosure.Tests.fsproj" --no-restore --disable-build-servers -m:1 /nodeReuse:false -p:UseSharedCompilation=false
 dotnet "$repo_root/tests/telemetry-collector-persistent-v3-image-closure/bin/Debug/net10.0/PersistentV3.ImageClosure.Tests.dll"
+if test "${FSGG_LEARN_NATIVE_FIXTURE:-false}" = true; then
+  # Root's reviewed native operation supplies retained delegation/home handles.
+  # No automatic sudo, system-cgroup takeover or installation is attempted.
+  # The fixed C controller owns the original 120s/15s cleanup deadline; the
+  # admitted outer supervisor must retain unknowns if the runner disappears.
+  FSGG_LEARN_NATIVE_ADAPTER_SHA256="$(sha256sum -- "$itf_root/custody-adapter-tests" | cut -d' ' -f1)"
+  export FSGG_LEARN_NATIVE_ADAPTER_SHA256
+  "$itf_root/custody-adapter-tests" --native-fixture "$(type -P dotnet)" "$repo_root/tests/telemetry-collector-persistent-v3-image-closure/bin/Debug/net10.0/PersistentV3.ImageClosure.Tests.dll" | tee "$itf_root/native-fixture.log"
+fi
 dotnet restore "$repo_root/deployment/telemetry-collector/persistent/v3/image-closure/correspondence/PersistentV3.ImageClosure.Correspondence.fsproj" --locked-mode --disable-build-servers -m:1 /nodeReuse:false
 dotnet build "$repo_root/deployment/telemetry-collector/persistent/v3/image-closure/correspondence/PersistentV3.ImageClosure.Correspondence.fsproj" --no-restore --disable-build-servers -m:1 /nodeReuse:false -p:UseSharedCompilation=false
 runner_tool="${PERSISTENT_V3_RUNNER_TOOL:-$(type -P quint)}"
