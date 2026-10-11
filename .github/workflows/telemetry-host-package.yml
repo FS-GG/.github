@@ -220,8 +220,16 @@ jobs:
               require(all(len(aliases.get(name,set()))==1 for name in needed), 'unclosed-or-ambiguous-ELF-needed:'+str(resolved)+':'+','.join(needed))
               interpreters=re.findall(r'Requesting program interpreter: ([^\]]+)',detail)
               require(all(pathlib.Path(path).resolve(strict=True) in cached for path in interpreters), 'unclosed-ELF-interpreter')
-              require(not re.search(r'\((?:RPATH|RUNPATH)\)',detail), 'unexpected-ELF-search-override')
-              elf.append(dict(path=str(resolved),needed={name:next(iter(aliases[name])) for name in needed},interpreters=interpreters))
+              search=re.findall(r'\((?:RPATH|RUNPATH)\).*?\[([^\]]*)\]',detail)
+              # Provisioned libc gconv modules use only their pinned sibling
+              # directory. Refuse arbitrary overrides or a different first hit.
+              for value in search:
+                  require(value in ('$ORIGIN','${ORIGIN}'), 'unexpected-ELF-search-override:'+str(resolved))
+                  for name in needed:
+                      sibling=resolved.parent/name
+                      if sibling.exists():
+                          require(str(sibling.resolve(strict=True))==next(iter(aliases[name])), 'unclosed-ELF-origin-hit')
+              elf.append(dict(path=str(resolved),needed={name:next(iter(aliases[name])) for name in needed},interpreters=interpreters,search=search))
           evidence=destination/'toolchain-evidence.json'
           evidence.write_text(json.dumps(dict(provider='github-hosted',image=os.environ['ImageVersion'],
               imageSource=os.environ['FSGG_LEARN_CUSTODY_CORE_IMAGE_SOURCE'],compiler=str(compiler),
