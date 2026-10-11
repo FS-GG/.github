@@ -7,9 +7,10 @@ open System.Threading
 open System.Threading.Tasks
 open FSGG.Telemetry.PersistentV3.ImageClosure
 
-// Pure custody controls exit before any fixture creation, child process or image mechanism.
+// Custody controls use only this console and test-owned local sockets; no child or image mechanism.
 if Environment.GetEnvironmentVariable "PERSISTENT_V3_CUSTODY_CONTROLS_ONLY" = "1" then
     OciTests.processBoundaries()
+    OciTests.custodyAcknowledgments()
     Environment.Exit 0
 
 // Source-only targeted route exits before fixture creation or process-backed checks.
@@ -189,6 +190,7 @@ let contractSelection={selected with IdentityClass="production-contract-test";Ac
 let prepareContract value=ImageClosure.prepareWithTrustedNative (Some trustedNative) value
 OciTests.run selected prepared trustedNative
 OciTests.processBoundaries()
+OciTests.custodyAcknowledgments()
 let contractPrepared=match prepareContract contractSelection with ClosureResult.Prepared bytes->JsonDocument.Parse bytes|value->fail $"faithful production contract fixture refused: %A{value}"
 let contractProfile=contractPrepared.RootElement.GetProperty("profile").GetString()
 if not(contractProfile.Contains("\\u0022managerArgv\\u0022"))&&not(contractProfile.Contains("\"managerArgv\""))||not(contractProfile.Contains("-I"))||not(contractProfile.Contains("/opt/fsgg/python/bin/python3.14")) then fail "production argv/search layout absent"

@@ -221,3 +221,104 @@ let processBoundaries()=
     refusesPayload "nonnumeric exit" (fun()->read(parse("{\"lease\":\""+lease+"\",\"retired\":true,\"exitCode\":\"0\",\"stdout\":\"\",\"stderr\":\"\"}"))|>ignore)
     refusesPayload "nonstring output" (fun()->read(parse("{\"lease\":\""+lease+"\",\"retired\":true,\"exitCode\":0,\"stdout\":1,\"stderr\":\"\"}"))|>ignore)
     printfn "PASS custody observation combined UTF-8 bounds and closed retirement joins"
+
+// Exercise the production inherited channel, with an open AF_UNIX peer and no process backend.
+let custodyAcknowledgments()=
+    let identity=String('a',64)
+    let lease=String('c',64)
+    let input=String('d',64)
+    let parse (text:string)=use doc=JsonDocument.Parse text in doc.RootElement.Clone()
+    let json value=JsonSerializer.Serialize value
+    let bound=json {|input=input|}
+    let started=json {|lease=lease|}
+    let terminal=json {|lease=lease;retired=true;exitCode=0;stdout="done";stderr=""|}
+    let wrongObservation=json {|lease=String('e',64);retired=true;exitCode=0;stdout="";stderr=""|}
+    let withChannel (replies:(string*string) list) exercise=
+        let root=Directory.CreateTempSubdirectory("p2c4-custody-socket-").FullName
+        let path=Path.Combine(root,"peer.sock")
+        let oldFd=Environment.GetEnvironmentVariable "FSGG_LEARN_CUSTODY_FD"
+        let oldBinding=Environment.GetEnvironmentVariable "FSGG_LEARN_CUSTODY_BINDING"
+        try
+            use listener=new System.Net.Sockets.Socket(System.Net.Sockets.AddressFamily.Unix,System.Net.Sockets.SocketType.Stream,System.Net.Sockets.ProtocolType.Unspecified)
+            listener.Bind(System.Net.Sockets.UnixDomainSocketEndPoint path)
+            listener.Listen 1
+            use client=new System.Net.Sockets.Socket(System.Net.Sockets.AddressFamily.Unix,System.Net.Sockets.SocketType.Stream,System.Net.Sockets.ProtocolType.Unspecified)
+            client.Connect(System.Net.Sockets.UnixDomainSocketEndPoint path)
+            use peer=listener.Accept()
+            use stream=new System.Net.Sockets.NetworkStream(peer,false)
+            use budget=new CancellationTokenSource(TimeSpan.FromSeconds 5.)
+            let binding=JsonSerializer.SerializeToUtf8Bytes {|schema=CustodyProtocol.Schema;identity=identity;deadline=DateTimeOffset.UtcNow.AddSeconds(5.).ToString("O");admissionSha256=String('b',64)|}
+            Environment.SetEnvironmentVariable("FSGG_LEARN_CUSTODY_FD",client.Handle.ToInt64().ToString(Globalization.CultureInfo.InvariantCulture))
+            Environment.SetEnvironmentVariable("FSGG_LEARN_CUSTODY_BINDING",Convert.ToBase64String binding)
+            // Production BindInherited owns this descriptor; the test client must not close it again.
+            client.SafeHandle.SetHandleAsInvalid()
+            use channel=CustodyChannel.BindInherited()
+            let serving=System.Threading.Tasks.Task.Run(fun()->
+                for expectedAction,payload in replies do
+                    let header=Array.zeroCreate<byte> 4
+                    stream.ReadExactlyAsync(header.AsMemory(),budget.Token).AsTask().GetAwaiter().GetResult()
+                    let count=System.Net.IPAddress.NetworkToHostOrder(BitConverter.ToInt32(header,0))
+                    require(count>0&&count<=2*1024*1024) "fixture request frame bound"
+                    let bytes=Array.zeroCreate<byte> count
+                    stream.ReadExactlyAsync(bytes.AsMemory(),budget.Token).AsTask().GetAwaiter().GetResult()
+                    use request=JsonDocument.Parse bytes
+                    let node=request.RootElement
+                    require(node.GetProperty("action").GetString()=expectedAction) "fixture received unexpected action"
+                    let response=JsonSerializer.SerializeToUtf8Bytes {|schema=CustodyProtocol.Schema;identity=identity;ordinal=node.GetProperty("ordinal").GetInt32();status="acknowledged";payload=parse payload|}
+                    let responseHeader=BitConverter.GetBytes(System.Net.IPAddress.HostToNetworkOrder response.Length)
+                    stream.WriteAsync(responseHeader.AsMemory(),budget.Token).AsTask().GetAwaiter().GetResult()
+                    stream.WriteAsync(response.AsMemory(),budget.Token).AsTask().GetAwaiter().GetResult())
+            try
+                exercise channel
+                serving.GetAwaiter().GetResult()
+            finally
+                budget.Cancel()
+                peer.Dispose()
+                // On an assertion failure, preserve it while settling this test-owned reader.
+                try serving.GetAwaiter().GetResult() with _->()
+        finally
+            Environment.SetEnvironmentVariable("FSGG_LEARN_CUSTODY_FD",oldFd)
+            Environment.SetEnvironmentVariable("FSGG_LEARN_CUSTODY_BINDING",oldBinding)
+            Directory.Delete(root,true)
+    let refuses expected action=
+        let mutable reason=None
+        try action() with :? IOException as error->reason<-Some error.Message
+        require(reason=Some expected) (sprintf "custody refusal differs: expected %s, actual %A" expected reason)
+    let nextRefuses (channel:CustodyChannel)=
+        // Peer is still open; a baseline reuse would attempt IO and fail this exact refusal assertion.
+        refuses "custody-lost-or-expired" (fun()->channel.Retain [||])
+    let command={Executable="/usr/sbin/podman";Arguments=[|"fixture-only-never-executed"|];Environment=Map.empty;WorkingDirectory="/";OutputLimit=1024*1024}
+    withChannel ["bind-input",json {|input=String('e',64)|}] (fun channel->
+        refuses "custody-input-join" (fun()->channel.BindInput input)
+        nextRefuses channel)
+    withChannel ["bind-input",bound;"retain",json {|charged=1|}] (fun channel->
+        channel.BindInput input
+        refuses "custody-output-charge" (fun()->channel.Retain [||])
+        nextRefuses channel)
+    withChannel ["bind-input",bound;"start",json {|lease="invalid"|}] (fun channel->
+        channel.BindInput input
+        refuses "custody-sha256" (fun()->channel.Start command|>ignore)
+        nextRefuses channel)
+    withChannel ["bind-input",bound;"start",started;"observe",wrongObservation] (fun channel->
+        channel.BindInput input
+        use child=channel.Start command
+        refuses "custody-command-join" (fun()->child.Wait CancellationToken.None|>ignore)
+        require(not child.HasExited) "malformed observation credited retirement"
+        nextRefuses channel)
+    withChannel ["bind-input",bound;"start",started;"cancel",wrongObservation] (fun channel->
+        channel.BindInput input
+        use child=channel.Start command
+        refuses "custody-command-join" (fun()->child.Cancel CancellationToken.None)
+        require(not child.HasExited) "malformed cancellation credited retirement"
+        nextRefuses channel)
+    withChannel ["bind-input",bound;"start",started;"observe",terminal;"retain",json {|charged=1|}] (fun channel->
+        channel.BindInput input
+        use child=channel.Start command
+        let output=child.Wait CancellationToken.None
+        require(child.HasExited&&output.Stdout="done") "valid retirement was not observed"
+        refuses "custody-output-charge" (fun()->channel.Retain [||])
+        require(not child.HasExited) "later poison retained successful custody"
+        refuses "custody-lost-or-expired" (fun()->child.Wait CancellationToken.None|>ignore)
+        refuses "custody-lost-or-expired" (fun()->child.Cancel CancellationToken.None)
+        nextRefuses channel)
+    printfn "PASS actual inherited custody poisoning across five actions and cached retirement"

@@ -126,6 +126,8 @@ type CustodyChannel private(socket:Socket,identity:string,deadline:DateTimeOffse
                 while not retired do observe "observe" token
                 result.Value
             member _.Cancel token=
+                CustodyProtocol.require(not failed) "custody-lost-or-expired"
+                token.ThrowIfCancellationRequested()
                 if not retired then observe "cancel" token
                 while not retired do observe "observe" token
             member _.Dispose()=

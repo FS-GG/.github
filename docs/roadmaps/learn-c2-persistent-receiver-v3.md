@@ -393,14 +393,18 @@ poison-on-failure boundary. Process observations require a closed field set, exa
 boolean retirement, integer exit and non-null output. The combined UTF-8 bytes of stdout
 and stderr must fit the selected one-command ceiling, including unretired observations.
 Retirement is recorded only after the whole acknowledgment passes; poisoned channels
-cannot return cached successful waits. Existing cancellation, original deadline, output
+cannot return cached successful waits or successful cancellation no-ops. Existing cancellation, original deadline, output
 charging, command selection and disposal retain their conservative custody behavior.
 The caller still owns the shared operation allowance and actual descendant retirement.
 
 The existing image-closure source console contains focused controls for the exact combined
 ceiling, multibyte output, null or malformed fields, foreign leases, duplicate/extra fields
-and unretired observations. `PERSISTENT_V3_CUSTODY_CONTROLS_ONLY=1` selects those pure
-controls before fixture creation or child execution. Source compilation and these controls
+and unretired observations. Actual inherited AF_UNIX channel fixtures cover malformed
+acknowledgments across all five action paths, subsequent-operation refusal, and cached
+wait/cancel refusal after another action poisons a retired lease. The peer stays open to
+distinguish poison rejection from transport failure; bounded test-owned readers are joined.
+`PERSISTENT_V3_CUSTODY_CONTROLS_ONLY=1` selects parser and local-socket controls before
+image fixtures or child execution. Source compilation and these controls
 remain unrun at preparation; protected delivery and runtime qualification remain separate.
 
 The refreshed inventory has not located the owning inherited-namespace C helper or a
