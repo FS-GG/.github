@@ -347,12 +347,20 @@ def observe_candidate(
                     command.extend(["--config", config])
                 if repository is not None:
                     command.extend(["--repository", repository])
+            child_options = {}
+            if store_root is not None:
+                child_environment = os.environ.copy()
+                child_environment.pop("FSGG_TELEMETRY_CONFIG", None)
+                child_options["env"] = child_environment
             if deadline is None:
                 completed = runner(
                     command, check=False, capture_output=True, text=True, timeout=35,
+                    **child_options,
                 )
             else:
-                code, raw = bounded_watch_query(command, deadline, clock=clock, max_seconds=35)
+                code, raw = bounded_watch_query(
+                    command, deadline, clock=clock, max_seconds=35, **child_options,
+                )
                 completed = subprocess.CompletedProcess(command, code, raw.decode("utf-8"), "")
         if completed.returncode != 0:
             # Preserve a useful bounded diagnostic without forwarding provider
@@ -780,13 +788,15 @@ def bounded_watch_query(
     command: list[str], deadline: float, *, clock: Callable[[], float] = time.monotonic,
     popen: Callable[..., Any] = subprocess.Popen,
     max_seconds: float = WATCH_QUERY_SECONDS, max_bytes: int = WATCH_QUERY_BYTES,
+    env: dict[str, str] | None = None,
 ) -> tuple[int, bytes]:
     """Bound both streams before retaining; kill/reap the same direct child on error."""
     work_end = min(deadline - WATCH_CLEANUP_SECONDS, clock() + max_seconds)
     if work_end <= clock():
         raise WatchDeadline("original watch cleanup reserve reached")
+    process_options = {} if env is None else {"env": env}
     process = popen(command, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE, close_fds=True)
+                    stderr=subprocess.PIPE, close_fds=True, **process_options)
     output = bytearray()
     used = 0
     selector = None

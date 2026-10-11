@@ -653,6 +653,62 @@ class RoutineDeliveryTests(unittest.TestCase):
         self.assertEqual((code, result.outcome, callbacks), (2, "refused", []))
 
 
+class ExplicitHostStoreEnvironmentTests(unittest.TestCase):
+    def summary(self):
+        return MODULE.Summary("fsgg.routine-delivery/v1", "FS-GG/.github", 7, HEAD, HEAD,
+                              "ready", "not-delivered", "not-required", None, 0, None,
+                              "current", "unobserved")
+
+    def test_direct_store_reconcile_excludes_only_inherited_config(self):
+        calls = []
+        def runner(command, **kwargs):
+            calls.append((command, kwargs))
+            return subprocess.CompletedProcess(command, 0, '{"driverHealth":"complete"}', "")
+        inherited = {"FSGG_TELEMETRY_CONFIG": "/private/host-config", "GH_TOKEN": "inert-test-token",
+                     "FSGG_TELEMETRY_STORE": "/private/fallback", "PATH": "/inert/path"}
+        with mock.patch.dict(os.environ, inherited, clear=True):
+            original = dict(os.environ)
+            self.assertEqual(MODULE.observe_candidate(self.summary(), assignment="assignment",
+                             store_root="/private/selected", engine="engine", runner=runner), "complete")
+            self.assertEqual(dict(os.environ), original)
+        command, options = calls[0]
+        self.assertEqual(command[-2:], ["--store-root", "/private/selected"])
+        self.assertNotIn("--config", command)
+        self.assertEqual(options["env"], {key: value for key, value in inherited.items()
+                                         if key != "FSGG_TELEMETRY_CONFIG"})
+        self.assertEqual(options["timeout"], 35)
+
+    def test_bounded_store_reconcile_uses_same_child_environment(self):
+        with mock.patch.dict(os.environ, {"FSGG_TELEMETRY_CONFIG": "host", "GH_TOKEN": "inert"}, clear=True), \
+             mock.patch.object(MODULE, "bounded_watch_query", return_value=(0, b'{"driverHealth":"complete"}')) as query:
+            self.assertEqual(MODULE.observe_candidate(self.summary(), assignment="assignment",
+                             store_root="store", engine="engine", deadline=80), "complete")
+            self.assertEqual(query.call_args.kwargs["env"], {"GH_TOKEN": "inert"})
+            self.assertEqual(query.call_args.args[1], 80)
+            self.assertEqual(query.call_args.kwargs["max_seconds"], 35)
+            self.assertEqual(os.environ["FSGG_TELEMETRY_CONFIG"], "host")
+
+    def test_workspace_reconcile_keeps_inherited_environment_selection(self):
+        calls = []
+        def runner(command, **kwargs):
+            calls.append((command, kwargs))
+            return subprocess.CompletedProcess(command, 0, '{"driverHealth":"complete"}', "")
+        with mock.patch.dict(os.environ, {"FSGG_TELEMETRY_CONFIG": "workspace"}, clear=True):
+            self.assertEqual(MODULE.observe_candidate(self.summary(), assignment="assignment",
+                             config="workspace", repository="FS-GG/.github", engine="engine", runner=runner), "complete")
+            self.assertEqual(os.environ["FSGG_TELEMETRY_CONFIG"], "workspace")
+        self.assertNotIn("env", calls[0][1])
+        self.assertEqual(calls[0][0][-4:], ["--config", "workspace", "--repository", "FS-GG/.github"])
+
+    def test_explicit_store_ambiguity_remains_advisory_refusal_without_retry(self):
+        runner = mock.Mock(return_value=subprocess.CompletedProcess("engine", 1, "",
+            "fsgg-coord-engine: telemetry ci: workspace config and legacy store root cannot both be selected"))
+        with mock.patch.dict(os.environ, {"FSGG_TELEMETRY_CONFIG": "host"}, clear=True):
+            self.assertEqual(MODULE.observe_candidate(self.summary(), assignment="assignment",
+                             store_root="store", engine="engine", runner=runner), "unavailable")
+        self.assertEqual(runner.call_count, 1)
+
+
 class FakeWatchClock:
     def __init__(self):
         self.value = 0.0
@@ -822,7 +878,8 @@ class CheckWatchTests(unittest.TestCase):
 
 
 class BoundedQueryTests(unittest.TestCase):
-    def query(self, *, chunks=None, stderr_chunks=None, never=False, interrupt=False, seconds=5, reaping_unknown=False):
+    def query(self, *, chunks=None, stderr_chunks=None, never=False, interrupt=False, seconds=5, reaping_unknown=False,
+              env=None, spawn_calls=None):
         clock=FakeWatchClock();streams=[mock.Mock(),mock.Mock()]
         streams[0].fileno.return_value=101;streams[1].fileno.return_value=102
         process=mock.Mock(stdout=streams[0],stderr=streams[1],returncode=0)
@@ -842,7 +899,12 @@ class BoundedQueryTests(unittest.TestCase):
              mock.patch.object(MODULE.os,'set_blocking'), \
              mock.patch.object(MODULE.os,'read',side_effect=lambda fd,_count:next(reads[fd])):
             try:
-                result=MODULE.bounded_watch_query(['gh','api','read-only'],seconds,clock=clock,popen=lambda *_a,**_k:process)
+                def popen(*args, **kwargs):
+                    if spawn_calls is not None:
+                        spawn_calls.append((args, kwargs))
+                    return process
+                options = {} if env is None else {"env": env}
+                result=MODULE.bounded_watch_query(['gh','api','read-only'],seconds,clock=clock,popen=popen,**options)
                 return result,process,clock
             except BaseException as error:
                 return error,process,clock
@@ -853,6 +915,29 @@ class BoundedQueryTests(unittest.TestCase):
         process.communicate.assert_not_called();process.kill.assert_not_called()
         self.assertGreaterEqual(process.wait.call_count,1)
         process.stdout.close.assert_called_once();process.stderr.close.assert_called_once()
+
+    def test_selected_child_environment_reaches_popen_without_changing_original_retirement(self):
+        environment = {"GH_TOKEN": "inert", "PATH": "/inert/path"}
+        for never in (False, True):
+            calls = []
+            result, process, clock = self.query(env=environment, spawn_calls=calls, never=never)
+            self.assertEqual(len(calls), 1)
+            self.assertIs(calls[0][1]["env"], environment)
+            self.assertNotIn("FSGG_TELEMETRY_CONFIG", calls[0][1]["env"])
+            self.assertTrue(calls[0][1]["close_fds"])
+            if never:
+                self.assertIsInstance(result, MODULE.WatchDeadline)
+                process.kill.assert_called_once()
+                self.assertLessEqual(process.wait.call_args.kwargs["timeout"], .5)
+                self.assertLessEqual(clock.value, 5)
+            else:
+                self.assertEqual(result, (0, b'[]'))
+                process.kill.assert_not_called()
+            process.stdout.close.assert_called_once()
+            process.stderr.close.assert_called_once()
+        calls = []
+        self.query(spawn_calls=calls)
+        self.assertNotIn("env", calls[0][1])
 
     def test_original_timeout_and_cancellation_kill_and_reap_only_owned_child(self):
         for kwargs in ({'never':True},{'interrupt':True}):
