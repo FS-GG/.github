@@ -255,7 +255,7 @@ jobs:
           def path_record_ok(p):
               value=str(p)
               return (p.is_absolute() and len(value.encode('utf-8'))<=4096
-                  and all(33<=ord(c)<=126 and c!='\\' for c in value)
+                  and all(33<=ord(c)<=126 for c in value)
                   and all(c not in ('.','..') for c in value.split('/')))
           path_records=sorted(str(p) for p in paths)
           require(sum(len(p.encode('utf-8')) for p in path_records)<=1048576, 'path-record-byte-bound')
@@ -282,7 +282,7 @@ jobs:
               rows.append(dict(path=str(p),resolved=str(resolved),bytes=info.st_size,sha256=cached[resolved],
                                link=os.readlink(p) if p.is_symlink() else None))
           manifest=destination/'toolchain.sha256'
-          manifest.write_text(''.join(row['sha256']+'  '+row['path']+'\n' for row in rows)); manifest.chmod(0o600)
+          manifest.write_text(''.join(('\\' if '\\' in row['path'] else '')+row['sha256']+'  '+row['path'].replace('\\','\\\\')+'\n' for row in rows)); manifest.chmod(0o600)
           require(manifest.stat().st_size<=4194304, 'manifest-size')
           elf=[]; elf_defects=[]
           def elf_check(ok,reason):
