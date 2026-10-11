@@ -110,11 +110,14 @@ jobs:
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
         with:
           dotnet-version: 10.0.401
-      - name: Bind the hosted C toolchain before dependent qualification
+      - name: Qualify the typed HOST binding and private template
         env:
+          NUGET_PACKAGES: ${{ runner.temp }}/host-binding-nuget
           HOSTED_RUNNER_CUSTODY: ${{ runner.environment }}
         run: |
           set -euo pipefail
+          ImageOS="${ImageOS:?native hosted image OS required}"
+          ImageVersion="${ImageVersion:?native hosted image version required}"
           printf 'custody-core provider=%s os=%s arch=%s image-os=%s actual-image=%s selected-image=%s source=%s\n' "$HOSTED_RUNNER_CUSTODY" "$RUNNER_OS" "$RUNNER_ARCH" "$ImageOS" "$ImageVersion" "$FSGG_LEARN_CUSTODY_CORE_IMAGE_VERSION" "$FSGG_LEARN_CUSTODY_CORE_IMAGE_SOURCE"
           test "$GITHUB_ACTIONS" = true
           test "$HOSTED_RUNNER_CUSTODY" = github-hosted
@@ -244,12 +247,6 @@ jobs:
           print('custody-core trusted-image='+os.environ['ImageVersion']+' image-source='+os.environ['FSGG_LEARN_CUSTODY_CORE_IMAGE_SOURCE']+
                 ' packages='+str(len(selected))+' files='+str(len(rows))+' bytes='+str(total)+' compiler='+compiler_sha+' closure='+manifest_sha)
           PY
-      - name: Qualify the typed HOST binding and private template
-        env:
-          NUGET_PACKAGES: ${{ runner.temp }}/host-binding-nuget
-          HOSTED_RUNNER_CUSTODY: ${{ runner.environment }}
-        run: |
-          set -euo pipefail
           # BEGIN hosted runner SDK custody normalization
           sdk_refuse() {
             printf 'hosted-sdk-guard-refused stage=%s\n' "$1" >&2

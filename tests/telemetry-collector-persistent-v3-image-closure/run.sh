@@ -6,7 +6,15 @@ model="$repo_root/deployment/telemetry-collector/persistent/v3/image-closure/Per
 model_test="$repo_root/deployment/telemetry-collector/persistent/v3/image-closure/PersistentV3Runner_test.qnt"
 itf_root="$(mktemp -d)"
 custody_source_started=false
-trap 'custody_exit_code=$?; if test "$custody_exit_code" -eq 0 || test "$custody_source_started" = false; then rm -rf -- "$itf_root"; else printf "FAIL retaining source fixture root after failed/unknown qualification: %s\n" "$itf_root" >&2; fi' EXIT
+custody_cleanup() {
+  local custody_exit_code=$?
+  if test "$custody_exit_code" -eq 0 || test "$custody_source_started" = false; then
+    rm -rf -- "$itf_root"
+  else
+    printf "FAIL retaining source fixture root after failed/unknown qualification: %s\n" "$itf_root" >&2
+  fi
+}
+trap custody_cleanup EXIT
 # Source qualification requires an independently accepted provider/toolchain
 # closure. Hash equality below checks that selection; it does not authenticate it.
 # The existing root source-operation admission supplies trust and outer resource
