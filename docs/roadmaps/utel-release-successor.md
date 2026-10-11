@@ -812,3 +812,28 @@ including the foreign executable case. That installed-package regression remains
 unrun and is required on a new coherent candidate before publication. The existing
 0.101.0 archives remain unchanged; original pending recovery, live adoption and C2
 acceptance remain open.
+
+
+### SDK-installed engine pairing successor: 0.102.0 source preparation
+
+The delivered adapter fix pairs the resolved current SDK apphost with its running
+entry assembly. The [source CI run](https://github.com/FS-GG/.github/actions/runs/38118205528)
+qualified all four SDK-installed cases: same executable and alias restore the
+exact retained state after a typed parser rejection; a shadowed basename and a
+selected foreign executable retain it. The package fixture passed 45 checks.
+These candidate test bytes do not replace the immutable published 0.101.0 set.
+
+The next coherent source version is **0.102.0**, with the accepted 0.101.0
+channel and source `79051e56b025dadfc6fcaabd58b79e33f2854928` as predecessor.
+Read-only observations on 2026-10-11 found 0.101.0 newest for all three packages
+on both feeds, and no 0.102.0 package version or tag in the four release namespaces.
+The proposed independent journal is `refs/heads/fsgg/v2/journal/release/utel-rel-20`;
+its absence still requires authenticated readback. Source selection authorizes
+no journal genesis, candidate dispatch or publication. Immediate collision and
+current-authority gates remain mandatory before effects. The completed journal19
+and all fixed original 0.101.0 recovery profiles preserve their original bindings.
+
+A genuine source-bound 0.102.0 candidate must pack the three archives once and
+qualify the four installed parent/child cases before publication. Both-feed
+readback, isolated installation and supported original pending recovery remain
+separate downstream obligations; the milestone is not complete.

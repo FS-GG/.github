@@ -1588,5 +1588,21 @@ class OriginalRuntimeRecoveryControls(unittest.TestCase):
             self.assertEqual(publisher.main(),1);self.assertIn('runtime upload uncertain',output.getvalue());self.assertIn('report unavailable',output.getvalue())
 
 
+class SelectedReleaseBindingTests(unittest.TestCase):
+    def test_new_ordinary_cut_has_102_101_and_distinct20(self):
+        args = types.SimpleNamespace(recovery_checkpoint=False, repeat_original_nuget_kit_intent=False,
+                                     recover_original_runtime_intent=False)
+        self.assertEqual(publisher.selected_release_binding(args),
+                         ("0.102.0", "0.101.0", "refs/heads/fsgg/v2/journal/release/utel-rel-20"))
+
+    def test_every_explicit_original_profile_retains_101_100_and19(self):
+        for selected in ("recovery_checkpoint", "repeat_original_nuget_kit_intent", "recover_original_runtime_intent"):
+            args = types.SimpleNamespace(**{flag: flag == selected for flag in
+                 ("recovery_checkpoint", "repeat_original_nuget_kit_intent", "recover_original_runtime_intent")})
+            with self.subTest(profile=selected):
+                self.assertEqual(publisher.selected_release_binding(args),
+                                 ("0.101.0", "0.100.0", "refs/heads/fsgg/v2/journal/release/utel-rel-19"))
+
+
 if __name__ == "__main__":
     unittest.main()
