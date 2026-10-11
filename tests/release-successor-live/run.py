@@ -103,8 +103,9 @@ spec.loader.exec_module(publisher)
 protection, reviewed_binding = publisher.authority_protection()
 
 
-def candidate_manifest():
+def candidate_manifest(version="0.101.0"):
     descriptor = {"policyVersion": "release-successor/1", "sourceSha": "b" * 40,
+                  "version": version,
                   "standaloneTelemetry": {"qualificationSha256": "c" * 64},
                   "packages": [{"id": package, "artifact": {"sha256": str(index) * 64,
                                 "payloadSha256": "sha256:" + str(index) * 64}}
@@ -114,7 +115,8 @@ def candidate_manifest():
 
 
 class AuthorityAPI:
-    def __init__(self, present=False, legacy=False):
+    def __init__(self, present=False, legacy=False, ref=REF):
+        self.ref = ref
         self.present, self.legacy = present, legacy
         self.reads = []
         self.main_reads = 0
@@ -140,7 +142,7 @@ class AuthorityAPI:
             self.main_reads += 1
             head = "f" * 40 if self.change_main_at and self.main_reads >= self.change_main_at else "a" * 40
             return {"object": {"sha": head, "type": "commit"}}
-        if path == f"repos/{AUTHORITY}/git/ref/{REF.removeprefix('refs/')}":
+        if path == f"repos/{AUTHORITY}/git/ref/{self.ref.removeprefix('refs/')}":
             if self.legacy:
                 return {"object": {"sha": "e" * 40, "type": "commit"}}
             raise NotFound(path)
@@ -149,7 +151,7 @@ class AuthorityAPI:
         if "/git/trees/" in path:
             tree = path.rsplit("/", 1)[1]
             rows = {self.root: [("state", self.state)], self.state: [("releases", self.releases)],
-                    self.releases: [(REF.rsplit("/", 1)[1], self.directory)] if self.present else []}[tree]
+                    self.releases: [(self.ref.rsplit("/", 1)[1], self.directory)] if self.present else []}[tree]
             return {"sha": tree, "truncated": False,
                     "tree": [{"path": name, "mode": "040000", "type": "tree", "sha": sha} for name, sha in rows]}
         if "/rulesets/" in path:
@@ -193,7 +195,8 @@ class PublisherAPI:
 class PreparedJournal:
     ref = REF
 
-    def __init__(self, intent, generation=33):
+    def __init__(self, intent, generation=33, ref=REF):
+        self.ref = ref
         self.intent = copy.deepcopy(intent)
         self.state = JournalState(generation, intent["contentId"], {})
         self.initializations = 0
@@ -238,7 +241,7 @@ class QualifiedProvider:
 class PublisherJournalTests(unittest.TestCase):
     def setUp(self):
         self.manifest = candidate_manifest()
-        self.intent = {"contentId": self.manifest["contentId"], "sourceSha": "b" * 40, "version": "0.101.0",
+        self.intent = {"contentId": self.manifest["contentId"], "sourceSha": "b" * 40, "version": self.manifest["descriptor"]["version"],
                        "candidateArchiveSha256": "c" * 64, "operator": "EHotwagner"}
         self.ledger = AuthorityAPI()
         self.source = PublisherAPI()
@@ -267,6 +270,22 @@ class PublisherJournalTests(unittest.TestCase):
         self.assertFalse(self.prepare())
         self.assertEqual(self.journal.initializations, 1)
         self.assertEqual(self.journal.state.generation, 1)
+        self.assertEqual(self.provider.calls, [])
+
+    def test_fresh_successor_uses_canonical_version_tag_and_selected_journal(self):
+        self.manifest = candidate_manifest(publisher.SUCCESSOR_VERSION)
+        self.intent = {**self.intent, "contentId": self.manifest["contentId"], "version": publisher.SUCCESSOR_VERSION}
+        self.ledger = AuthorityAPI(ref=publisher.SUCCESSOR_REF)
+        self.journal = PreparedJournal(self.intent, ref=publisher.SUCCESSOR_REF)
+        base = SingleOperatorAdmission(self.source, self.manifest, "b" * 40, 1, "EHotwagner", "refs/heads/main")
+        self.admission = publisher.ProtectedPublisherAdmission(base, self.ledger, publisher.SUCCESSOR_REF)
+        self.assertFalse(self.prepare())
+        self.assertEqual(self.journal.initializations, 1)
+        self.assertEqual(self.journal.intent["version"], "0.102.0")
+        self.assertIn("repos/FS-GG/.github/git/ref/tags/coherent-set/v0.102.0", self.source.reads)
+        self.assertNotIn("repos/FS-GG/.github/git/ref/tags/coherent-set/v0.101.0", self.source.reads)
+        self.assertIn(f"repos/{AUTHORITY}/git/ref/{publisher.SUCCESSOR_REF.removeprefix('refs/')}", self.ledger.reads)
+        self.assertEqual(self.journal.state.content_id, self.manifest["contentId"])
         self.assertEqual(self.provider.calls, [])
 
     def test_consumed_selected_main_journal_with_absent_legacy_is_recovery_never_genesis(self):
