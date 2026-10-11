@@ -192,6 +192,15 @@ ORIGINAL_KIT_STATE_SHA256 = "494c772deaadd71f635a50237fc4dee0077c71c71968ee4c3ff
 AUTHORITY_CALL_CEILING = 4200
 AUTHORITY_QUOTA_FLOOR = 4500
 RECOVERY_ADVANCES = 4
+ORDINARY_AUTHORITY_CALL_CEILING = 1500
+ORDINARY_AUTHORITY_QUOTA_FLOOR = 1800
+SUCCESSOR_CHECKPOINT_PROFILE = "utel-rel-20/original-bounded-forward/1"
+SUCCESSOR_CHECKPOINT_CANDIDATE = {
+    "runId": 38128101680, "artifactId": 11698335858,
+    "archiveSha256": "3ecc266e3c3b2d521ed4143af68555483034f399177e078d213bc719d7908ebb",
+    "sourceSha": "6e9be17bacd288ece103b67ecd5842d37a9c8e50",
+    "contentId": "sha256:fc16321e011ea616648ccc1dafda00bfc06fa34210fd49ddb008bb56c9ceecf5",
+}
 RECOVERY_CANDIDATE = {
     "runId": 38026714312,
     "artifactId": 11660242226,
@@ -213,14 +222,21 @@ def error_chain(error):
     return {"chain": rows, "chainIncomplete": error is not None}
 
 
+class AuthorityQuotaWaiting(Refused):
+    """Ordinary bounded checkpoint: no new time or permission to resend."""
+
+
 class CountedAuthorityAPI:
     """One counter for application calls through the original installation token.
 
     This does not count transport redirects, token provisioning, or provider calls.
     Its fixed ceiling cannot be increased by a CLI input or by token replacement.
     """
-    def __init__(self, api):
-        self.api = api
+    def __init__(self, api, *, ceiling=AUTHORITY_CALL_CEILING, quota_floor=AUTHORITY_QUOTA_FLOOR):
+        require(type(ceiling) is int and 0 < ceiling <= AUTHORITY_CALL_CEILING
+                and type(quota_floor) is int and ceiling < quota_floor <= AUTHORITY_QUOTA_FLOOR,
+                "Authority request budget differs")
+        self.api, self.ceiling, self.quota_floor = api, ceiling, quota_floor
         self.attempted = {method: 0 for method in ("get", "post", "patch")}
         self.succeeded = {method: 0 for method in self.attempted}
         self.last_success = None
@@ -229,9 +245,10 @@ class CountedAuthorityAPI:
         self.quota = None
 
     def _call(self, method, path, *args):
-        if sum(self.attempted.values()) >= AUTHORITY_CALL_CEILING:
+        if sum(self.attempted.values()) >= self.ceiling:
             self.blocked = {"method": method, "path": path[:256]}
-            error = Refused("fixed recovery Authority API ceiling exhausted; reconcile original operation")
+            error_type = Refused if self.ceiling == AUTHORITY_CALL_CEILING else AuthorityQuotaWaiting
+            error = error_type("Authority API ceiling exhausted; reconcile original operation")
             self.last_failure = {"method": method, "path": path[:256], "error": error_chain(error)}
             raise error
         self.attempted[method] += 1
@@ -269,12 +286,14 @@ class CountedAuthorityAPI:
         require(reset > observed, "Authority core quota reset is not in the future")
         self.quota = {"resource": "core", "limit": limit, "remaining": remaining,
                       "reset": reset, "used": used, "observedUnix": observed}
-        require(remaining >= AUTHORITY_QUOTA_FLOOR,
-                "fixed recovery requires at least 4500 observed Authority core requests")
+        if remaining < self.quota_floor:
+            if self.quota_floor == AUTHORITY_QUOTA_FLOOR:
+                raise Refused("fixed recovery requires at least 4500 observed Authority core requests")
+            raise AuthorityQuotaWaiting("ordinary Authority quota is below its admitted request budget")
         return self.quota
 
     def report(self):
-        return {"ceiling": AUTHORITY_CALL_CEILING, "attemptedByMethod": dict(self.attempted),
+        return {"ceiling": self.ceiling, "attemptedByMethod": dict(self.attempted),
                 "succeededByMethod": dict(self.succeeded), "lastSuccessfulEntry": self.last_success,
                 "lastFailedEntry": self.last_failure, "blockedBeforeSend": self.blocked,
                 "quota": self.quota, "scope": "application API entries; no reservation or wire-request claim"}
@@ -326,6 +345,13 @@ class ReportingJournal:
         state = self.journal.read()
         self.capture()
         return state
+
+    def initialize(self, intent):
+        self.report["journalMutationMayHaveOccurred"] = True
+        try:
+            return self.journal.initialize(intent)
+        finally:
+            self.capture()
 
     def compare_and_swap(self, expected, effect, state):
         self.report["journalMutationMayHaveOccurred"] = True
@@ -403,6 +429,69 @@ def run_recovery_checkpoint(manifest, journal, admission, provider, report, dead
             sleep(5)
     return "checkpoint"
 
+
+
+def validate_successor_checkpoint(manifest, journal, expected):
+    require(journal.ref == SUCCESSOR_REF and journal.main_directory
+            and manifest["descriptor"]["version"] == SUCCESSOR_VERSION
+            and manifest["descriptor"]["sourceSha"] == SUCCESSOR_CHECKPOINT_CANDIDATE["sourceSha"]
+            and manifest["contentId"] == SUCCESSOR_CHECKPOINT_CANDIDATE["contentId"],
+            "original successor checkpoint binding differs")
+    require(type(expected) is dict and set(expected) == {"generation", "logicalHead", "stateSHA256"}
+            and type(expected["generation"]) is int and 1 <= expected["generation"] <= 33
+            and isinstance(expected["logicalHead"], str) and re.fullmatch(r"[0-9a-f]{40}", expected["logicalHead"])
+            and isinstance(expected["stateSHA256"], str) and re.fullmatch(r"[0-9a-f]{64}", expected["stateSHA256"]),
+            "expected successor checkpoint is malformed")
+    observed = journal._observed
+    require(observed is not None and observed.head == expected["logicalHead"]
+            and observed.state["generation"] == expected["generation"]
+            and hashlib.sha256(canonical(observed.state)).hexdigest() == expected["stateSHA256"],
+            "original successor checkpoint changed")
+    effects = ordered_effects(manifest)
+    require(len(effects) == 16 and not set(observed.state["effects"]) - {e.identity for e in effects},
+            "original successor effect set differs")
+    verified = intents = 0
+    opened = False
+    for effect in effects:
+        state = observed.state["effects"].get(effect.identity, "pending")
+        require(state in {"pending", "intent", "verified"}, "original successor effect state differs")
+        if state == "verified":
+            require(not opened, "original successor verified prefix differs")
+            verified += 1
+        else:
+            require(not (opened and state != "pending"), "original successor has multiple in-flight effects")
+            opened = True
+            intents += state == "intent"
+    require(observed.state["generation"] == 1 + 2 * verified + intents,
+            "original successor checkpoint generation differs")
+
+
+def run_forward(manifest, journal, admission, provider, report, deadline, *, maximum=RECOVERY_ADVANCES,
+                clock=time.monotonic):
+    """Bounded continuation stops on waiting; another admission observes indexing."""
+    require(type(maximum) is int and 0 < maximum <= 152, "forward advance bound differs")
+    require(clock() < deadline, "publication observation deadline expired; reconcile before another run")
+    # Reuse the qualified admission and dependent Git mutation deadline fences.
+    admission = RuntimeDeadlineAdmission(admission, deadline, clock)
+    counted = journal.journal.api
+    require(isinstance(counted, CountedAuthorityAPI), "forward Authority counter is unavailable")
+    counted.api = RuntimeDeadlineAuthority(counted.api, deadline, clock)
+    for index in range(maximum):
+        require(clock() < deadline, "publication observation deadline expired; reconcile before another run")
+        report["iterationsAttempted"] = index + 1
+        report["stage"] = "advance"
+        result = advance(manifest, journal, admission, provider)
+        report["lastAdvanceResult"] = result
+        report["lastSuccessfulStage"] = "advance"
+        require(result in {"verified", "waiting", "complete"}, "unexpected forward advance result")
+        require(clock() < deadline, "publication observation deadline expired; reconcile before another run")
+        if result == "complete":
+            return "complete"
+        if result == "waiting":
+            report["pendingReason"] = "exact retained intent awaits independent provider observation"
+            return "checkpoint"
+    report["pendingReason"] = "admitted finite advance window exhausted"
+    return "checkpoint"
 
 def write_result(path, report):
     body = (json.dumps(report, sort_keys=True, separators=(",", ":")) + "\n").encode()
@@ -787,6 +876,7 @@ def run_original_runtime_recovery(manifest, journal, admission, provider, ledger
 
 def execute_publisher(args, report):
     version, predecessor, selected_ref = selected_release_binding(args)
+    forward_deadline = time.monotonic() + 45 * 60
     runtime_recovery = getattr(args, "recover_original_runtime_intent", False)
     runtime_deadline = time.monotonic() + 45 * 60 if runtime_recovery else None
     report["stage"] = "publisher-context"
@@ -797,6 +887,14 @@ def execute_publisher(args, report):
     require(os.environ.get("GITHUB_REPOSITORY") == REPOSITORY, "publisher repository differs")
     require(os.environ.get("GITHUB_REF") == "refs/heads/main", "publisher branch differs")
     require(os.environ.get("GITHUB_RUN_ATTEMPT") == "1", "publisher rerun is not admitted")
+    successor_checkpoint = bool(getattr(args, "recover_original_successor_checkpoint", False))
+    expected_checkpoint = getattr(args, "expected_checkpoint", None)
+    require(not successor_checkpoint or args.publish, "original successor checkpoint requires publish")
+    require(successor_checkpoint == bool(expected_checkpoint), "expected checkpoint is required only for original successor recovery")
+    if successor_checkpoint:
+        require((args.candidate_run_id, args.candidate_artifact_id, args.candidate_archive_sha256) ==
+                (SUCCESSOR_CHECKPOINT_CANDIDATE["runId"], SUCCESSOR_CHECKPOINT_CANDIDATE["artifactId"], SUCCESSOR_CHECKPOINT_CANDIDATE["archiveSha256"]),
+                "original successor candidate tuple differs")
     require(operator == "EHotwagner", "publisher operator differs")
     require(len(args.candidate_archive_sha256) == 64, "candidate archive digest is malformed")
     if args.recovery_checkpoint or args.repeat_original_nuget_kit_intent or runtime_recovery:
@@ -866,16 +964,24 @@ def execute_publisher(args, report):
         "operator": operator,
     }
     ledger_api = GitHubAPI(ledger_token)
-    if args.recovery_checkpoint or args.repeat_original_nuget_kit_intent or runtime_recovery:
+    historical_recovery = args.recovery_checkpoint or args.repeat_original_nuget_kit_intent or runtime_recovery
+    # Ordinary budget is independently calibrated; it was not enforced by old runs.
+    if not historical_recovery:
+        ledger_api = CountedAuthorityAPI(ledger_api, ceiling=ORDINARY_AUTHORITY_CALL_CEILING,
+                                         quota_floor=ORDINARY_AUTHORITY_QUOTA_FLOOR)
+        report["authorityCounter"] = ledger_api
+        report["stage"] = "Authority-quota"
+        ledger_api.admit_quota()
+        report["lastSuccessfulStage"] = "Authority-quota"
+    if historical_recovery:
         ledger_api = CountedAuthorityAPI(ledger_api)
         report["authorityCounter"] = ledger_api
         report["stage"] = "Authority-quota"
         ledger_api.admit_quota()
         report["lastSuccessfulStage"] = "Authority-quota"
     journal = ProtectedReleaseJournal(ledger_api, ref=selected_ref, main_directory=True)
-    if args.recovery_checkpoint or args.repeat_original_nuget_kit_intent or runtime_recovery:
-        journal = ReportingJournal(journal, report)
-        provider = ReportingProvider(provider, report)
+    journal = ReportingJournal(journal, report)
+    provider = ReportingProvider(provider, report)
     admission = ProtectedPublisherAdmission(publisher_admission, ledger_api, selected_ref)
     def uniqueness():
         subprocess.run(
@@ -886,10 +992,13 @@ def execute_publisher(args, report):
     report["stage"] = "journal-preparation"
     if prepare_release_journal(journal, ledger_api, admission, provider, api, manifest, intent,
                                candidate_source, publisher_sha, args.preflight_only, uniqueness,
-                               recovery_checkpoint=args.recovery_checkpoint or args.repeat_original_nuget_kit_intent or runtime_recovery):
+                               recovery_checkpoint=args.recovery_checkpoint or args.repeat_original_nuget_kit_intent or runtime_recovery or successor_checkpoint):
         print("Release successor preflight passed; no journal, tag, feed or release was changed.")
         return "preflight"
+    journal.capture()
     report["lastSuccessfulStage"] = "journal-preparation"
+    if successor_checkpoint:
+        validate_successor_checkpoint(manifest, journal, json.loads(expected_checkpoint))
     deadline = time.monotonic() + 45 * 60
     if runtime_recovery:
         return run_original_runtime_recovery(
@@ -903,16 +1012,8 @@ def execute_publisher(args, report):
             args.result_path.with_name(args.result_path.stem + "-kit-repeat-attempt.json"))
     if args.recovery_checkpoint:
         return run_recovery_checkpoint(manifest, journal, admission, provider, report, deadline)
-    max_steps = len(ordered_effects(manifest)) * 2 + 120
-    for _ in range(max_steps):
-        result = advance(manifest, journal, admission, provider)
-        print(f"successor effect state: {result}", flush=True)
-        if result == "complete":
-            return "complete"
-        if time.monotonic() >= deadline:
-            raise Refused("publication observation deadline expired; reconcile before another run")
-        time.sleep(5)
-    raise Refused("publication exceeded bounded reconciliation steps")
+    return run_forward(manifest, journal, admission, provider, report, forward_deadline,
+                       maximum=RECOVERY_ADVANCES if successor_checkpoint else len(ordered_effects(manifest)) * 2 + 120)
 
 
 def main() -> int:
@@ -929,6 +1030,9 @@ def main() -> int:
                          help="Explicitly permit one same-original nuget.org Kit send under retained intent uncertainty")
     profile.add_argument("--recover-original-runtime-intent", action="store_true",
                          help="Recover only the authenticated original generation26 runtime intent; one upload or matched settlement")
+    profile.add_argument("--recover-original-successor-checkpoint", action="store_true",
+                         help="Continue the exact original .102 journal20 candidate, at most four advances and stop on waiting")
+    parser.add_argument("--expected-checkpoint", help="Exact admitted generation/logicalHead/stateSHA256 JSON for original .102 continuation")
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--preflight-only", action="store_true")
     mode.add_argument("--publish", action="store_true")
@@ -936,10 +1040,10 @@ def main() -> int:
     result_path = args.result_path or args.workdir.with_name(args.workdir.name + "-result.json")
     args.result_path = result_path
     report = {"schema": "fsgg.release-successor-result/1",
-              "profile": RUNTIME_RECOVERY_PROFILE if args.recover_original_runtime_intent else KIT_REPEAT_PROFILE if args.repeat_original_nuget_kit_intent else RECOVERY_PROFILE if args.recovery_checkpoint else "ordinary/1",
+              "profile": SUCCESSOR_CHECKPOINT_PROFILE if args.recover_original_successor_checkpoint else RUNTIME_RECOVERY_PROFILE if args.recover_original_runtime_intent else KIT_REPEAT_PROFILE if args.repeat_original_nuget_kit_intent else RECOVERY_PROFILE if args.recovery_checkpoint else "ordinary/1",
               "candidate": {"runId": args.candidate_run_id, "artifactId": args.candidate_artifact_id,
                             "archiveSha256": args.candidate_archive_sha256},
-              "execution": None, "originalPublisher": {"runId": 38029395937, "runAttempt": 1, "jobId": 114146971214} if args.recovery_checkpoint or args.repeat_original_nuget_kit_intent or args.recover_original_runtime_intent else None,
+              "execution": None, "originalPublisher": {"runId": 38133108945, "runAttempt": 1, "jobId": 114451349714} if args.recover_original_successor_checkpoint else {"runId": 38029395937, "runAttempt": 1, "jobId": 114146971214} if args.recovery_checkpoint or args.repeat_original_nuget_kit_intent or args.recover_original_runtime_intent else None,
               "journalRef": selected_release_binding(args)[2], "startingJournal": None, "lastObservedJournal": None,
               "iterationsAttempted": 0, "lastAdvanceResult": None, "lastDispatch": None,
               "journalMutationMayHaveOccurred": False, "stage": "preparation",
@@ -951,6 +1055,11 @@ def main() -> int:
         disposition = execute_publisher(args, report)
         report["disposition"] = disposition
         report["publicationComplete"] = disposition == "complete"
+        exit_code = 0
+    except AuthorityQuotaWaiting as error:
+        report["disposition"] = "checkpoint"
+        report["pendingReason"] = "Authority quota or finite request budget unavailable; fresh bounded observation required"
+        report["quotaWaiting"] = error_chain(error)
         exit_code = 0
     except BaseException as error:
         report["failure"] = error_chain(error)

@@ -253,17 +253,20 @@ class ProtectedReleaseJournal:
         return commit["sha"]
 
     def _read_commit(self, oid: str) -> tuple[dict, str | None]:
-        commit = self.api.get(f"repos/{REPOSITORY}/git/commits/{oid}")
+        # Main-directory history repeatedly binds the same logical Git objects.
+        # Cache only immutable SHA-addressed bytes; refs/path history remain live.
+        immutable = self._immutable_object if self.main_directory else lambda kind, sha: self.api.get(f"repos/{REPOSITORY}/git/{kind}/{sha}")
+        commit = immutable("commits", oid)
         if commit.get("sha") != oid:
             raise Refused("journal commit identity differs")
         parents = commit.get("parents", [])
         if not isinstance(parents, list) or len(parents) > 1:
             raise Refused("journal commit has an invalid parent list")
-        tree = self.api.get(f"repos/{REPOSITORY}/git/trees/{commit['tree']['sha']}")
+        tree = immutable("trees", commit["tree"]["sha"])
         entries = tree.get("tree")
         if not isinstance(entries, list) or len(entries) != 1 or entries[0].get("path") != PATH:
             raise Refused("journal commit tree contains unexpected files")
-        blob = self.api.get(f"repos/{REPOSITORY}/git/blobs/{entries[0]['sha']}")
+        blob = immutable("blobs", entries[0]["sha"])
         if blob.get("encoding") != "base64" or blob.get("sha") != entries[0]["sha"]:
             raise Refused("journal blob encoding differs")
         raw = base64.b64decode(blob["content"], validate=False)
