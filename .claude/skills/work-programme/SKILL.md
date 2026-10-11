@@ -48,12 +48,12 @@ Dispatch ready lanes within actual capacity. Integrate or repair the active set 
 the queue limits progress. Hosted admission follows the live runner queue independently of free agent slots;
 continue independent local work while hosted work drains. Refresh after material native changes.
 
-## Keep investigation with its owner
+## Keep ownership through accepted closure
 
-The parent owns scope, capacity, shared surfaces, integration and exceptional decisions. One accountable
-owner per lane retains investigation, tests, failures and evidence in an isolated worktree with an explicit
-touch-set. Reuse that owner for ordinary milestones and repairs. Route failed checks using exact native
-references before reading logs in the parent. Owners diagnose, repair and qualify within their existing
+The parent owns scope, capacity, shared-surface conflicts and exceptional decisions. One accountable
+owner per lane carries implementation, tests, evidence, PR updates and routine delivery through accepted
+closure in an isolated worktree with an explicit touch-set. Reuse that owner for ordinary milestones and
+repairs. Route failed checks using exact native references before reading logs in the parent. Owners diagnose, repair and qualify within their existing
 scope, authority and budgets, preserving the first failed attempt. Escalate scope/authority changes,
 cross-lane conflicts, unknown effects and root-owned safeguards. Keep mechanical checks and detailed
 reconciliation with the owner; return discrepancies, unresolved decisions and evidence pointers instead
@@ -61,6 +61,14 @@ of successful hash rows or complete manifests. When delegation is unavailable, r
 with bounded result summaries. For safeguards, the owner prepares a
 bounded `review` with changed code, explicit proof obligations and mechanically verified unchanged pins;
 the parent reads required logic and expands missing obligations rather than importing the entire bundle.
+
+At lane assignment, state the existing user authorization, allowed operations, selected execution profiles,
+resource/time bounds, integration owner, acceptance signals and escalation conditions in the existing packet.
+Within that boundary, the owner performs routine preparation, qualification, evidence reconciliation and
+next steps without a separate parent turn for each transition. Fresh native prerequisite checks still run.
+Delegate routine PR admission and delivery to the lane owner where repository integration is disjoint;
+retain one designated integrator for each shared surface. Publication, uncertain external effects and
+explicitly root-owned safeguards keep their applicable admission boundary. A return cannot expand authority.
 
 Bootstrap or lane owners assemble `packet` directly from files. The parent receives path/digest, scope,
 instruction inventory and omissions, not the body. Deliver governing instructions whole and mandatory to
@@ -91,13 +99,15 @@ select fields/ranges and an output bound; redirect raw logs/large responses priv
 evidence: retrieve the missing obligation or route it to the owner. Default parent reads to4KiB of selected
 text and8KiB stdout; name the reason and increase the bound only for a concrete obligation. Whole applicable
 instructions remain mandatory. Use pinned command descriptors instead of rebuilding long qualification
-scripts in conversation; existing guards and fresh root admission retain execution authority. Never read
-binaries as text.
+scripts in conversation; existing guards and fresh admission by the designated owner retain execution authority.
+Explicitly root-owned effects still require root admission. Never read binaries as text.
 
 After a repair or review milestone, the owner consolidates superseded findings into the existing current
 decision view: exact source, established outcomes, unresolved findings/decisions, evidence pointers and next
-action. Replace resolved narrative in the working view and retain linked history, original failures and
-revision joins in the artifacts. Carry forward every unresolved obligation, conflict, unknown effect and
+action. Maintain one current state per attempt, with history separate; remove obsolete current fields such
+as “running” after verified terminal acceptance. Derive reports and handoffs from this current state and
+accepted outcomes rather than maintaining competing progress narratives. Replace resolved narrative in
+the working view and retain linked history, original failures and revision joins in the artifacts. Carry forward every unresolved obligation, conflict, unknown effect and
 reservation; a newer summary cannot establish acceptance or erase them. The parent reasons from this
 current view and deltas, expanding history only for a named decision or required review obligation.
 
@@ -105,6 +115,37 @@ At a completed milestone, consider owner-context rotation when native observatio
 compaction or recovery rereads. Follow [context guidance](references/context.md): checkpoint current state,
 retain the accountable owner and every original identity/reservation, then use supported fresh-context
 continuation. If unsupported, keep the owner and report the gap; never restart an uncertain effect.
+
+## Make acceptance a dependable development capability
+
+For the selected milestone, exercise the smallest genuine end-to-end acceptance path as early as its
+prerequisites and authority permit. Ensure failures yield usable evidence, then add focused regressions
+and the broader coverage required for release. Separate component checks do not establish the integrated
+journey. When the real path is blocked, name the dependency and continue useful independent checks;
+do not replace real acceptance with a growing surrogate suite or waive release gates.
+
+Use a maintained runner and stable input/result schemas for local tests, native qualification, read-only
+remote observation and publication. An operation supplies its command, inputs and a supported profile.
+Consolidate the existing canonical execution tooling; do not create a custom launcher, receipt format or
+reconciliation procedure for every operation. Preflight actual inputs together, including toolchain identity
+versus archive digest, receipt fields, credentials/capability prerequisites and explicit JVM/resource settings.
+The runner should own resource accounting, process custody, cleanup, logs, artifacts and terminal results.
+Reuse qualified unchanged components; requalify changed behavior and affected joins instead of restarting
+an entire qualification campaign for a literal pin or metadata change. Required hosted checks remain intact.
+
+Where repeated custody or runtime-closure work dominates, evaluate disposable isolated qualification
+workers with a proven teardown boundary. Qualify the common platform once per relevant platform change
+and verify each operation's actual inputs and limits. Amortize platform evidence without assuming isolation,
+cleanup or runtime equivalence that has not been demonstrated. Extend existing tooling and retire superseded
+wrappers; do not introduce a parallel execution framework merely to implement this guidance.
+
+When changes repeatedly cross repositories together, assess the coordination cost and reason for separation.
+First prefer qualification against compatible immutable candidate revisions, automated downstream pin
+updates and generated progress projections. Where that still dominates delivery, evaluate consolidating
+tightly coupled implementation and acceptance code into one repository while retaining useful package
+release boundaries. Record the tradeoff and migration implications in the existing owning plan. Repository
+consolidation and a new execution platform require the existing material-planning and scope route; this
+skill update alone neither performs nor authorizes such migrations.
 
 ## Report progress every 30 minutes
 
@@ -120,12 +161,14 @@ Use the existing lane returns and native evidence to report:
   estimate the next useful milestone instead. Refresh estimates from actual progress; do not treat
   an estimate as a deadline, admission or completion claim.
 - **Problems:** problems encountered during the window, whether resolved or still open, and any
-  remaining blockers and their effect on progress.
+  remaining blockers, their age from the first observed blocking event, and their effect on progress.
 - **User intervention:** state whether intervention is necessary. If needed, name the exact decision,
   information or action required and the affected item/lane; otherwise say none is needed.
 
-Keep updates concise without omitting completed items. Continue these updates during long-running
-work and check waits; use existing observations rather than launching reporting-only workers or
+Report completed phases and concrete remaining tasks inside open outcomes as well as whole closures.
+Do not infer an engineering percentage from binary milestone counts; give a weighted estimate only when
+its task denominator and weighting are defensible. Keep updates concise without omitting completed items.
+Continue these updates during long-running work and check waits; use existing observations rather than launching reporting-only workers or
 interrupting qualification. These updates supplement material progress messages and the final report.
 
 ## Preserve integration and effect boundaries
@@ -134,18 +177,34 @@ Routine is default. Only explicit recorded human instruction selects heavyweight
 labels, registration, modeled work and protected paths/effects do not. Technical checks and effect authority
 remain independent; refusals fence affected effects.
 
-The parent integrator admits remote PRs through `tools/pr-lane-admission.py`: stable campaign/chain, exact
-pushed head and prepared title/body. Keep one open PR per chain and at most two managed PRs per repository,
+The designated integrator (parent or delegated lane owner) admits remote PRs through
+`tools/pr-lane-admission.py`: stable campaign/chain, exact pushed head and prepared title/body. Keep one open PR per chain and at most two managed PRs per repository,
 including other campaigns. The lock covers participating local callers only. Read the live check queue;
 prepare locally when CI limits progress and repair existing PRs. One integrator owns shared-file joins.
 
 For hosted waits use `tools/routine-delivery.py --watch-checks --watch-seconds N` with repo, PR and exact head
 (N 1–600). Retain raw records privately; consume material changes or terminal/deadline summaries. Unchanged
 polls need no model turn or polling agent. Watchers never deliver and own only direct query children;
-count their resources and defer incompatible local qualification. Parent integration uses the same delivery
+count their resources and defer incompatible local qualification. The designated integrator uses the same delivery
 helper and [ADR-0084](../../../docs/adr/0084-semantic-reuse-never-cancels-coherent-validation.md) for exact-head
 checks, validated reuse, coherent validation, merge and native readback. Never reinterpret pending as disputed,
 cancel coherent obligations or accept dependent activation after late failure.
+
+Prefer release operations bound to an immutable candidate and an explicit publisher revision over a hold
+on moving `main`. Reserve the release state and shared surfaces actually mutated; unrelated source work
+should proceed when its independence is established. Existing release contracts still govern correspondence,
+live authority, original effects and recovery: never substitute new candidate bytes or replay an uncertain send.
+For each necessary reservation, record its owner, protected surface, exact release condition and bounded
+observation/cleanup route. Automatically transition from terminal watch to evidence readback and release
+when supported by qualified tooling and the established condition; do not add a manual handoff by default.
+Waiting, cancellation requested or an expired lease alone does not prove safe release.
+
+Make ordinary acceptance cheap and observable: cache immutable journal objects while refreshing live
+authority; apply request budgets and quota-aware bounded waiting to ordinary publication as well as recovery.
+Within the original bounded terminal observation, attempt logs and available result artifacts independently
+for every terminal outcome, including failure and cancellation. Preserve partial evidence and first cause;
+artifact/reporting failure must not suppress another available result or renew an expired operation.
+These are requirements for the existing tooling, not a claim that every current caller already implements them.
 
 `verify` proves declared byte equality, not authenticity, complete evidence, semantic acceptance, cleanup or
 authority. Preserve originals and failed attempts. Reuse installed Execution contracts only where qualified;
@@ -162,7 +221,10 @@ evidence and retain the compact row, excluding it from scheduling and recovery. 
 narrow the remaining outcome with **Done: No**. Land the index in the same `.github` PR or immediate
 asynchronous cross-repository follow-up; preparation, source delivery and a completed window alone do
 not close the item. Games closures follow their owning index; preserve detailed history in owning plans.
-Do not advance that chain before projection lands; independent lanes continue. CI ticks need no projection.
+Prefer generating and landing projections with the delivery or its automatic immediate follow-up instead
+of another manual coordination cycle. Preserve current projection fences where the helper or owning contract
+requires them; never mark a pending projection landed to unlock work. Independent implementation and lanes
+that do not consume that projection may continue. CI ticks need no projection.
 [audit guidance](references/evidence-audit.md) applies to audits, which never dispatch development merely by
 editing navigation.
 
@@ -199,6 +261,15 @@ Keep model/effort and acceptance stable when comparing context. Track startup/pa
 return and evidence expansions separately from helper IO and whole-family usage where observable. Unknown
 measurements remain unknown; a smaller parent or changed guidance alone proves no total savings.
 Do not create a separate rollout programme, checkpoint receipts or permanent service.
+
+Measure the next active window using existing native timestamps and owner artifacts: time to accepted
+milestone, owner/parent handoffs, execution-harness failures and repeated qualification work. Separate product
+work, useful acceptance verification, harness repairs, external waiting and coordination; distinguish active
+work from elapsed time and leave unattributed intervals unknown. Track checks-green to accepted closure,
+including legitimate reservation time. Evaluate the operating changes on those outcomes before adding agents
+or lanes; more nearly finished work is not higher throughput. Keep the existing active lanes, finish prepared
+reliability changes and canonical paths, and retire redundant wrappers before increasing concurrency to address
+this bottleneck. Report measured effects and coverage gaps; promise no percentage speedup without evidence.
 
 Stop at user scope, feature exit or unresolved boundary, distinguishing completed window, delivered feature,
 pending publication and blocked work. Retain snapshot/evidence pointers and the bounded dispatch index in
