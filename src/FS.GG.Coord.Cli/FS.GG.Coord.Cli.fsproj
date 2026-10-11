@@ -130,17 +130,16 @@ bytes under 0.52.0 would make the same version identify different artifacts. Ado
 coherent set cut from corrected source. All three partial sets are recorded in
 `registry/dependencies.yml`.</FsggStandingAdvisories>
 
-    <PackageReleaseNotes>0.101.0 — exact CI attribution and causal receiver support.
+    <PackageReleaseNotes>0.102.0 — SDK-installed telemetry engine identity pairing.
 
-CI collection binds the selected source profile to the exact head, preserves literal
-native job and step classification, and refuses ambiguous run-attempt associations.
-Empty native target associations remain unknown. The current schema14 receiver accepts
-immutable execution-causal-admission/1 declarations alongside existing observations.
-Old receivers reject the new kind: publish and adopt the receiving capability before
-enabling the corresponding producer. No database migration or independent Host release
-is implied for a sufficient local CLI receiver.
-Published0.100 archives remain immutable. Source preparation establishes no package
-publication, installed adoption, collector activation or operational-store acceptance.
+The telemetry adapter recognizes the configured engine when it resolves to the running
+SDK-installed executable and independently binds its actual entry assembly. Other
+executables retain the adjacent-assembly route. Exact executable and assembly hashes,
+movement checks and typed rejection proofs remain required; a byte-identical foreign
+executable does not inherit the running engine's identity.
+No Store schema, protocol or pending-input rewrite is introduced. Published0.101
+archives remain immutable. Source qualification alone establishes no successor package
+publication, installed adoption or original operational recovery.
 
 $(FsggStandingAdvisories)
 

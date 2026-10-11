@@ -24,6 +24,16 @@ from release_successor_journal import ProtectedReleaseJournal, REF, REPOSITORY a
 from release_successor_provider import GitHubAPI, LiveProvider, NotFound
 
 REPOSITORY = "FS-GG/.github"
+SUCCESSOR_VERSION = "0.102.0"
+SUCCESSOR_PREDECESSOR = "0.101.0"
+SUCCESSOR_REF = "refs/heads/fsgg/v2/journal/release/utel-rel-20"
+
+
+def selected_release_binding(args):
+    """New ordinary source cut; explicit historical profiles keep original bindings."""
+    historical = any(getattr(args, flag, False) for flag in
+                     ("recovery_checkpoint", "repeat_original_nuget_kit_intent", "recover_original_runtime_intent"))
+    return ("0.101.0", "0.100.0", REF) if historical else (SUCCESSOR_VERSION, SUCCESSOR_PREDECESSOR, SUCCESSOR_REF)
 
 
 def require(condition: bool, reason: str) -> None:
@@ -138,7 +148,7 @@ def prepare_release_journal(journal, ledger_api, admission, provider, api, manif
         require(not recovery_checkpoint, "recovery checkpoint requires the existing original journal")
         require(candidate_source == publisher_sha, "fresh publication requires candidate and publisher source to match")
         try:
-            api.get("repos/FS-GG/.github/git/ref/tags/coherent-set/v0.101.0")
+            api.get(f"repos/FS-GG/.github/git/ref/tags/coherent-set/v{manifest['descriptor']['version']}")
         except NotFound:
             pass
         else:
@@ -776,6 +786,7 @@ def run_original_runtime_recovery(manifest, journal, admission, provider, ledger
 
 
 def execute_publisher(args, report):
+    version, predecessor, selected_ref = selected_release_binding(args)
     runtime_recovery = getattr(args, "recover_original_runtime_intent", False)
     runtime_deadline = time.monotonic() + 45 * 60 if runtime_recovery else None
     report["stage"] = "publisher-context"
@@ -832,12 +843,12 @@ def execute_publisher(args, report):
     manifest_path = candidate / "release-manifest.json"
     manifest_bytes = manifest_path.read_bytes()
     manifest = json.loads(manifest_bytes)
-    require(manifest["descriptor"]["version"] == "0.101.0", "publisher version differs")
+    require(manifest["descriptor"]["version"] == version, "publisher version differs")
     if args.recovery_checkpoint or args.repeat_original_nuget_kit_intent or runtime_recovery:
         require(candidate_source == RECOVERY_CANDIDATE["sourceSha"]
                 and manifest["contentId"] == RECOVERY_CANDIDATE["contentId"],
                 "fixed recovery original source or content differs")
-    report["candidate"].update(sourceSha=candidate_source, contentId=manifest["contentId"], version="0.101.0")
+    report["candidate"].update(sourceSha=candidate_source, contentId=manifest["contentId"], version=version)
     report["lastSuccessfulStage"] = "candidate-authentication"
     publisher_admission = SingleOperatorAdmission(api, manifest, publisher_sha, run_id, operator, "refs/heads/main")
     provider = LiveProvider(api, manifest_path, github_token, nuget_key)
@@ -850,7 +861,7 @@ def execute_publisher(args, report):
     intent = {
         "contentId": manifest["contentId"],
         "sourceSha": candidate_source,
-        "version": "0.101.0",
+        "version": version,
         "candidateArchiveSha256": args.candidate_archive_sha256,
         "operator": operator,
     }
@@ -861,15 +872,15 @@ def execute_publisher(args, report):
         report["stage"] = "Authority-quota"
         ledger_api.admit_quota()
         report["lastSuccessfulStage"] = "Authority-quota"
-    journal = ProtectedReleaseJournal(ledger_api, ref=REF, main_directory=True)
+    journal = ProtectedReleaseJournal(ledger_api, ref=selected_ref, main_directory=True)
     if args.recovery_checkpoint or args.repeat_original_nuget_kit_intent or runtime_recovery:
         journal = ReportingJournal(journal, report)
         provider = ReportingProvider(provider, report)
-    admission = ProtectedPublisherAdmission(publisher_admission, ledger_api, REF)
+    admission = ProtectedPublisherAdmission(publisher_admission, ledger_api, selected_ref)
     def uniqueness():
         subprocess.run(
             [sys.executable, str(pathlib.Path(__file__).with_name("check-release-candidate-uniqueness.py")),
-             "--version", "0.101.0", "--predecessor", "0.100.0"],
+             "--version", version, "--predecessor", predecessor],
             check=True, env={**os.environ, "GITHUB_TOKEN": github_token},
         )
     report["stage"] = "journal-preparation"
@@ -929,7 +940,7 @@ def main() -> int:
               "candidate": {"runId": args.candidate_run_id, "artifactId": args.candidate_artifact_id,
                             "archiveSha256": args.candidate_archive_sha256},
               "execution": None, "originalPublisher": {"runId": 38029395937, "runAttempt": 1, "jobId": 114146971214} if args.recovery_checkpoint or args.repeat_original_nuget_kit_intent or args.recover_original_runtime_intent else None,
-              "journalRef": REF, "startingJournal": None, "lastObservedJournal": None,
+              "journalRef": selected_release_binding(args)[2], "startingJournal": None, "lastObservedJournal": None,
               "iterationsAttempted": 0, "lastAdvanceResult": None, "lastDispatch": None,
               "journalMutationMayHaveOccurred": False, "stage": "preparation",
               "lastSuccessfulStage": None, "disposition": "failed-or-unknown",
