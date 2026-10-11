@@ -901,9 +901,20 @@ one stale same-candidate outcome event, with a strictly newer revision already
 retained: 36 ready-to-delivered, four refused-to-delivered and one delivered-to-delivered
 observation. No batch contained collateral events. All 41 original batches remain
 retained; this does not claim that the current projection preserves every historical
-field. The separate malformed historical pending attempt remains unresolved.
-Neither it nor the quarantines were deleted, reset or retried. Prospective
-telemetry begins and finishes now succeed through the explicitly configured,
+field. The separate malformed historical pending intent was recovered through the
+supported 0.102.0 Activity route after disposable qualification. The exact original
+input produced an authenticated parser rejection before publication I/O; the CLI
+retained native exit 1 and its original cause, removed only the pending intent and
+rolled sequence 3 back to 2. Every other dispatch field, including its started phase
+and native root identity, remained unchanged. This did not deliver a corrected
+event, finish the historical attempt or establish usage coverage. The original
+input, state and refusal receipts remain retained; the quarantines were not replayed.
+A separate current validation activity then passed through the published 0.102.0
+CLI: its recorded response matched one durable activity row, and the original
+root state advanced from sequence 2 to 3 without a pending intent. Its timestamps
+cover only the current evidence inspection. This does not complete the historical
+attempt or establish native usage coverage.
+Prospective telemetry begins and finishes now succeed through the explicitly configured,
 pinned 0.101.0 engine. Native collaboration usage remains unknown where its
 supported collector is unavailable; no additional Codex CLI was launched.
 
@@ -932,10 +943,10 @@ one. This accepts that disposable CLI path only. It does not recover the histori
 pending attempt, change the live store or enable C2 emission.
 
 The next operational milestone is the existing C2 receiver-and-producer acceptance:
-bind the published receiver to an explicitly approved receiving destination and
-verify its contract before enabling genuine producer emission. Synthetic receiver
+bind the published receiver to the already configured receiving destination and
+verify the owning contract before enabling genuine producer emission. Synthetic receiver
 and disposable correction proofs do not establish genuine producer lineage,
-analyzer consumption or native usage coverage. Original pending recovery, unknown
-installation custody and unavailable native collaboration usage remain separate
-obligations. Publication, schema adoption and these selected installed operations
-therefore advance the plan without completing the operational milestone.
+analyzer consumption or native usage coverage. Unknown installation custody,
+unavailable native collaboration usage and genuine operational producer acceptance
+remain separate obligations. Publication, schema adoption and these selected
+installed operations therefore advance the plan without completing the operational milestone.
