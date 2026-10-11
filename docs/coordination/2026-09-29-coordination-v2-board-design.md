@@ -822,3 +822,33 @@ observed groups, sessions and known descendants empty. This proves compiled sour
 no new installed SDD doctor or canonical receiver acceptance is inferred. A genuinely packaged
 protected-source candidate and its own same-candidate receiver acceptance remain required before
 publication. COORD-BOARD-V2-01.6 remains open.
+
+### Creator 0.16 publication — accepted, 2026-10-11
+
+`FS.GG.NewSddWorkspace` 0.16.0 publication is accepted. The genuine
+[candidate run](https://github.com/FS-GG/.github/actions/runs/38098763409) packaged protected
+source `51261fa1` with the qualified transport, fresh-driver provenance and SDD 2.1 doctor
+corrections. Its installed decoder and same-candidate fresh, retained, no-coordination and
+default-light Governance scenarios passed. Retained qualification includes preview, apply and
+exact no-op; these results establish candidate behavior, with public installed adoption still open.
+
+The [original publisher](https://github.com/FS-GG/.github/actions/runs/38106767120) failed after
+sending NuGet once, leaving its journal intent unresolved. Readback found matching package
+contents on both feeds. The [recovery publisher](https://github.com/FS-GG/.github/actions/runs/38111692161)
+used publisher source `37cb18d9`, preserved the original candidate and all five intent fields,
+and settled the observed NuGet effect without resending it. Authenticated terminal readback and
+the complete canonical history verify generation 17 and all eight effects: tag, draft, GitHub
+package, NuGet package, package asset, manifest asset, journal asset and promotion. The original
+failure, expired preflight observations and refused recovery attempt remain preserved.
+
+GitHub Packages returns the submitted archive, SHA-256
+`cfccaea9966cd8e3c86dbb003b262953c7f7d7fe80976b87b5d513a1a0e27122`.
+NuGet returns a different raw archive with an additional `.signature.p7s` member. All 93 common
+package members match exactly, as does normalized producer payload SHA-256
+`5872dbdca24818bf9ec59ff42dc84d7f531775d388713f1f6791e89a7cf59d70`.
+This establishes package-content equivalence; it does not claim cryptographic signature
+verification or raw archive identity across feeds.
+
+Fresh public-package installation and adoption remain pending. The registry records the accepted
+0.16.0 publication separately from that adoption. Candidate qualification and accepted publication
+do not close COORD-BOARD-V2-01.6 or establish fleet adoption; the Unified Roadmap row remains **Whole: No**.
