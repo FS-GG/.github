@@ -6,6 +6,7 @@ open System.Formats.Tar
 open System.Text
 open System.Text.Json
 open System.Threading
+open System.Runtime.InteropServices
 open FSGG.Telemetry.PersistentV3.ImageClosure
 
 let private require condition message=if not condition then raise(InvalidOperationException message)
@@ -222,6 +223,11 @@ let processBoundaries()=
     refusesPayload "nonstring output" (fun()->read(parse("{\"lease\":\""+lease+"\",\"retired\":true,\"exitCode\":0,\"stdout\":1,\"stderr\":\"\"}"))|>ignore)
     printfn "PASS custody observation combined UTF-8 bounds and closed retirement joins"
 
+[<DllImport("libc",EntryPoint="dup",SetLastError=true)>]
+extern int private duplicateDescriptor(int descriptor)
+[<DllImport("libc",EntryPoint="fcntl",SetLastError=true)>]
+extern int private descriptorFlags(int descriptor,int command)
+
 // Exercise the production inherited channel, with an open AF_UNIX peer and no process backend.
 let custodyAcknowledgments()=
     let identity=String('a',64)
@@ -233,28 +239,35 @@ let custodyAcknowledgments()=
     let started=json {|lease=lease|}
     let terminal=json {|lease=lease;retired=true;exitCode=0;stdout="done";stderr=""|}
     let wrongObservation=json {|lease=String('e',64);retired=true;exitCode=0;stdout="";stderr=""|}
-    let withChannel (replies:(string*string) list) exercise=
+    let withChannel name (replies:(string*string) list) exercise=
+        printfn "BEGIN inherited custody fixture %s" name
         let root=Directory.CreateTempSubdirectory("p2c4-custody-socket-").FullName
         let path=Path.Combine(root,"peer.sock")
         let oldFd=Environment.GetEnvironmentVariable "FSGG_LEARN_CUSTODY_FD"
         let oldBinding=Environment.GetEnvironmentVariable "FSGG_LEARN_CUSTODY_BINDING"
         try
+            use budget=new CancellationTokenSource(TimeSpan.FromSeconds 5.)
             use listener=new System.Net.Sockets.Socket(System.Net.Sockets.AddressFamily.Unix,System.Net.Sockets.SocketType.Stream,System.Net.Sockets.ProtocolType.Unspecified)
             listener.Bind(System.Net.Sockets.UnixDomainSocketEndPoint path)
             listener.Listen 1
             use client=new System.Net.Sockets.Socket(System.Net.Sockets.AddressFamily.Unix,System.Net.Sockets.SocketType.Stream,System.Net.Sockets.ProtocolType.Unspecified)
-            client.Connect(System.Net.Sockets.UnixDomainSocketEndPoint path)
-            use peer=listener.Accept()
+            client.ConnectAsync(System.Net.Sockets.UnixDomainSocketEndPoint path,budget.Token).AsTask().GetAwaiter().GetResult()
+            use peer=listener.AcceptAsync(budget.Token).AsTask().GetAwaiter().GetResult()
             use stream=new System.Net.Sockets.NetworkStream(peer,false)
-            use budget=new CancellationTokenSource(TimeSpan.FromSeconds 5.)
             let binding=JsonSerializer.SerializeToUtf8Bytes {|schema=CustodyProtocol.Schema;identity=identity;deadline=DateTimeOffset.UtcNow.AddSeconds(5.).ToString("O");admissionSha256=String('b',64)|}
-            Environment.SetEnvironmentVariable("FSGG_LEARN_CUSTODY_FD",client.Handle.ToInt64().ToString(Globalization.CultureInfo.InvariantCulture))
             Environment.SetEnvironmentVariable("FSGG_LEARN_CUSTODY_BINDING",Convert.ToBase64String binding)
-            // Production BindInherited owns this descriptor; the test client must not close it again.
-            client.SafeHandle.SetHandleAsInvalid()
+            // Independent descriptor ownership: invalidating a Socket SafeHandle suppresses its
+            // ReleaseHandle, but Socket.Dispose waits for that release and can spin forever.
+            let inherited=duplicateDescriptor(client.Handle.ToInt32())
+            require(inherited>=3) "fixture descriptor duplication failed"
+            use transfer=new Microsoft.Win32.SafeHandles.SafeFileHandle(nativeint inherited,true)
+            Environment.SetEnvironmentVariable("FSGG_LEARN_CUSTODY_FD",inherited.ToString(Globalization.CultureInfo.InvariantCulture))
+            transfer.SetHandleAsInvalid() // Only the plain handle transfers; its Dispose does not await Socket.ReleaseHandle.
             use channel=CustodyChannel.BindInherited()
+            printfn "BOUND inherited custody fixture %s" name
             let serving=System.Threading.Tasks.Task.Run(fun()->
                 for expectedAction,payload in replies do
+                    printfn "READ inherited custody fixture %s action %s" name expectedAction
                     let header=Array.zeroCreate<byte> 4
                     stream.ReadExactlyAsync(header.AsMemory(),budget.Token).AsTask().GetAwaiter().GetResult()
                     let count=System.Net.IPAddress.NetworkToHostOrder(BitConverter.ToInt32(header,0))
@@ -268,18 +281,27 @@ let custodyAcknowledgments()=
                     let responseHeader=BitConverter.GetBytes(System.Net.IPAddress.HostToNetworkOrder response.Length)
                     stream.WriteAsync(responseHeader.AsMemory(),budget.Token).AsTask().GetAwaiter().GetResult()
                     stream.WriteAsync(response.AsMemory(),budget.Token).AsTask().GetAwaiter().GetResult())
+            let mutable primaryFailed=false
             try
-                exercise channel
-                serving.GetAwaiter().GetResult()
+                try
+                    exercise channel
+                    serving.WaitAsync(budget.Token).GetAwaiter().GetResult()
+                    printfn "EXERCISED inherited custody fixture %s" name
+                with _->primaryFailed<-true;reraise()
             finally
                 budget.Cancel()
                 peer.Dispose()
-                // On an assertion failure, preserve it while settling this test-owned reader.
-                try serving.GetAwaiter().GetResult() with _->()
+                // Preserve the first assertion, but retain an unsettled-reader timeout as failure.
+                try serving.WaitAsync(TimeSpan.FromSeconds 1.).GetAwaiter().GetResult() with
+                | :? TimeoutException as error->
+                    eprintfn "FAIL unsettled inherited custody fixture %s: %s" name error.Message
+                    if not primaryFailed then raise error
+                | _->()
         finally
             Environment.SetEnvironmentVariable("FSGG_LEARN_CUSTODY_FD",oldFd)
             Environment.SetEnvironmentVariable("FSGG_LEARN_CUSTODY_BINDING",oldBinding)
             Directory.Delete(root,true)
+            printfn "CLEANED inherited custody fixture %s" name
     let refuses expected action=
         let mutable reason=None
         try action() with :? IOException as error->reason<-Some error.Message
@@ -288,30 +310,30 @@ let custodyAcknowledgments()=
         // Peer is still open; a baseline reuse would attempt IO and fail this exact refusal assertion.
         refuses "custody-lost-or-expired" (fun()->channel.Retain [||])
     let command={Executable="/usr/sbin/podman";Arguments=[|"fixture-only-never-executed"|];Environment=Map.empty;WorkingDirectory="/";OutputLimit=1024*1024}
-    withChannel ["bind-input",json {|input=String('e',64)|}] (fun channel->
+    withChannel "bind" ["bind-input",json {|input=String('e',64)|}] (fun channel->
         refuses "custody-input-join" (fun()->channel.BindInput input)
         nextRefuses channel)
-    withChannel ["bind-input",bound;"retain",json {|charged=1|}] (fun channel->
+    withChannel "retain" ["bind-input",bound;"retain",json {|charged=1|}] (fun channel->
         channel.BindInput input
         refuses "custody-output-charge" (fun()->channel.Retain [||])
         nextRefuses channel)
-    withChannel ["bind-input",bound;"start",json {|lease="invalid"|}] (fun channel->
+    withChannel "start" ["bind-input",bound;"start",json {|lease="invalid"|}] (fun channel->
         channel.BindInput input
         refuses "custody-sha256" (fun()->channel.Start command|>ignore)
         nextRefuses channel)
-    withChannel ["bind-input",bound;"start",started;"observe",wrongObservation] (fun channel->
+    withChannel "observe" ["bind-input",bound;"start",started;"observe",wrongObservation] (fun channel->
         channel.BindInput input
         use child=channel.Start command
         refuses "custody-command-join" (fun()->child.Wait CancellationToken.None|>ignore)
         require(not child.HasExited) "malformed observation credited retirement"
         nextRefuses channel)
-    withChannel ["bind-input",bound;"start",started;"cancel",wrongObservation] (fun channel->
+    withChannel "cancel" ["bind-input",bound;"start",started;"cancel",wrongObservation] (fun channel->
         channel.BindInput input
         use child=channel.Start command
         refuses "custody-command-join" (fun()->child.Cancel CancellationToken.None)
         require(not child.HasExited) "malformed cancellation credited retirement"
         nextRefuses channel)
-    withChannel ["bind-input",bound;"start",started;"observe",terminal;"retain",json {|charged=1|}] (fun channel->
+    withChannel "cached-retirement" ["bind-input",bound;"start",started;"observe",terminal;"retain",json {|charged=1|}] (fun channel->
         channel.BindInput input
         use child=channel.Start command
         let output=child.Wait CancellationToken.None
@@ -322,3 +344,37 @@ let custodyAcknowledgments()=
         refuses "custody-lost-or-expired" (fun()->child.Cancel CancellationToken.None)
         nextRefuses channel)
     printfn "PASS actual inherited custody poisoning across five actions and cached retirement"
+    // Binding refusal must release an already admitted numeric descriptor, even when
+    // binding metadata is missing. F_GETFD proves the actual descriptor is closed.
+    let rejectsBinding name selected expected=
+        printfn "BEGIN inherited custody binding refusal %s" name
+        let root=Directory.CreateTempSubdirectory("p2c4-custody-binding-").FullName
+        let oldFd=Environment.GetEnvironmentVariable "FSGG_LEARN_CUSTODY_FD"
+        let oldBinding=Environment.GetEnvironmentVariable "FSGG_LEARN_CUSTODY_BINDING"
+        try
+            use budget=new CancellationTokenSource(TimeSpan.FromSeconds 5.)
+            use listener=new System.Net.Sockets.Socket(System.Net.Sockets.AddressFamily.Unix,System.Net.Sockets.SocketType.Stream,System.Net.Sockets.ProtocolType.Unspecified)
+            let endpoint=System.Net.Sockets.UnixDomainSocketEndPoint(Path.Combine(root,"peer.sock"))
+            listener.Bind endpoint
+            listener.Listen 1
+            use client=new System.Net.Sockets.Socket(System.Net.Sockets.AddressFamily.Unix,System.Net.Sockets.SocketType.Stream,System.Net.Sockets.ProtocolType.Unspecified)
+            client.ConnectAsync(endpoint,budget.Token).AsTask().GetAwaiter().GetResult()
+            use peer=listener.AcceptAsync(budget.Token).AsTask().GetAwaiter().GetResult()
+            let inherited=duplicateDescriptor(client.Handle.ToInt32())
+            require(inherited>=3) "binding fixture descriptor duplication failed"
+            use transfer=new Microsoft.Win32.SafeHandles.SafeFileHandle(nativeint inherited,true)
+            require(descriptorFlags(inherited,1)>=0) "binding fixture descriptor not initially open"
+            Environment.SetEnvironmentVariable("FSGG_LEARN_CUSTODY_FD",inherited.ToString(Globalization.CultureInfo.InvariantCulture))
+            Environment.SetEnvironmentVariable("FSGG_LEARN_CUSTODY_BINDING",selected)
+            transfer.SetHandleAsInvalid()
+            refuses expected (fun()->use channel=CustodyChannel.BindInherited() in ())
+            let flags=descriptorFlags(inherited,1)
+            let error=Marshal.GetLastPInvokeError()
+            require(flags = -1&&error=9) "refused binding retained its inherited descriptor"
+        finally
+            Environment.SetEnvironmentVariable("FSGG_LEARN_CUSTODY_FD",oldFd)
+            Environment.SetEnvironmentVariable("FSGG_LEARN_CUSTODY_BINDING",oldBinding)
+            Directory.Delete(root,true)
+        printfn "PASS inherited custody binding refusal closes descriptor %s" name
+    rejectsBinding "malformed" (Convert.ToBase64String(Encoding.UTF8.GetBytes "{}")) "custody-fields"
+    rejectsBinding "missing" null "root-admitted-custody-channel-required"

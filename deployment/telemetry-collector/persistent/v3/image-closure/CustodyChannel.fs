@@ -137,15 +137,21 @@ type CustodyChannel private(socket:Socket,identity:string,deadline:DateTimeOffse
     static member BindInherited()=
         let raw=Environment.GetEnvironmentVariable "FSGG_LEARN_CUSTODY_FD"
         let selected=Environment.GetEnvironmentVariable "FSGG_LEARN_CUSTODY_BINDING"
-        CustodyProtocol.require(not(String.IsNullOrWhiteSpace raw)&&not(String.IsNullOrWhiteSpace selected)) "root-admitted-custody-channel-required"
+        CustodyProtocol.require(not(String.IsNullOrWhiteSpace raw)) "root-admitted-custody-channel-required"
         let fd=Int32.Parse raw
         CustodyProtocol.require(fd>=3) "custody-inherited-fd"
-        let bytes=Convert.FromBase64String selected
-        CustodyProtocol.require(bytes.Length<=4096) "custody-binding-bound"
-        use doc=JsonDocument.Parse bytes
-        let deadline=CustodyProtocol.binding doc.RootElement
-        let socket=new Socket(new SafeSocketHandle(nativeint fd,true))
+        // Adopt exactly one descriptor before binding validation, so a rejected binding
+        // also closes its inherited resource. Share that SafeHandle with the Socket.
+        let handle=new SafeSocketHandle(nativeint fd,true)
         try
-            CustodyProtocol.require(socket.AddressFamily=AddressFamily.Unix&&socket.SocketType=SocketType.Stream&&socket.Connected) "custody-local-stream-required"
-            new CustodyChannel(socket,doc.RootElement.GetProperty("identity").GetString(),deadline,doc.RootElement.GetProperty("admissionSha256").GetString())
-        with _->socket.Dispose();reraise()
+            let socket=new Socket(handle)
+            try
+                CustodyProtocol.require(not(String.IsNullOrWhiteSpace selected)) "root-admitted-custody-channel-required"
+                let bytes=Convert.FromBase64String selected
+                CustodyProtocol.require(bytes.Length<=4096) "custody-binding-bound"
+                use doc=JsonDocument.Parse bytes
+                let deadline=CustodyProtocol.binding doc.RootElement
+                CustodyProtocol.require(socket.AddressFamily=AddressFamily.Unix&&socket.SocketType=SocketType.Stream&&socket.Connected) "custody-local-stream-required"
+                new CustodyChannel(socket,doc.RootElement.GetProperty("identity").GetString(),deadline,doc.RootElement.GetProperty("admissionSha256").GetString())
+            with _->socket.Dispose();reraise()
+        with _->handle.Dispose();reraise()
