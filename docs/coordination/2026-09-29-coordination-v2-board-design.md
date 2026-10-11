@@ -258,7 +258,7 @@ alone cannot close product adoption.
   materialized guidance. Record exact coherent package identities and the selected coordinated-board
   default; preserve local-only operation and existing provider/lifecycle choices. Depends on .3's
   qualified shared contract; preparation can run alongside .2 and .4.
-- [ ] **COORD-BOARD-V2-01.6 — Qualify and adopt product boards.** Prove fresh and retained published
+- [x] **COORD-BOARD-V2-01.6 — Qualify and adopt product boards.** Prove fresh and retained published
   workspace journeys, separate product bindings and scope refusals. Selectively import each enrolled
   product's relevant issues, switch its consumers and stop its legacy projection after readback.
   Record adopted workspace/board identities and any unresolved consumers. Depends on .5; each
@@ -852,3 +852,34 @@ verification or raw archive identity across feeds.
 Fresh public-package installation and adoption remain pending. The registry records the accepted
 0.16.0 publication separately from that adoption. Candidate qualification and accepted publication
 do not close COORD-BOARD-V2-01.6 or establish fleet adoption; the Unified Roadmap row remains **Whole: No**.
+
+
+### Public product workspace adoption — selected scope complete, 2026-10-11
+
+The [published receiver qualification](../reports/2026-10-11-product-board-published-receiver-qualification.md)
+completes .6 for the selected genuine public Creator 0.16.0 fresh Rendering and newly retained Game
+qualification workspaces, using the installed public coordination 0.99.0 adapter. Actual published
+installation/loading, distinct protected product bindings, preserving preview, apply and no-op on the same target,
+local-only initialization, repeated initialized-skill read/report, configuration conflict and injected
+scope/stale/denial refusals are accepted. Original failures and their corrected completions remain retained.
+
+Both literal product inspections preserved complete native fields and identities. Rendering is accepted
+only at protected commit 93b19deb on 2026-10-11 09:34:59–09:35:05 UTC before its later Rendering #1426 merge; no continuing
+currentness or further Rendering mutation is inferred. Game issue #7 remains a dependency-dashboard follow-up,
+not a Game feature outcome. Its separately admitted original refresh made exactly one selected
+Observation Unknown→Verified write, independently read it back, and repeated with zero dispatch.
+Status, Track, Roadmap, issue body and all other native values were preserved. The typed mutation response
+digest and unknown bypass inventory retain their stated limits; no raw response preimage or blanket
+compliance is claimed. Separate delivery/publication/native-acceptance facts remain Unknown.
+
+Root accepted the existing singleton memberships prospectively after authenticated readback,
+without duplicate imports or claims about their historical constructor. Ten paired materialized consumer routes per workspace are deliberately adopted;
+selected V2 branches and the finite materialized workflow exclude legacy projection. A's missing
+canonical origin was discovered after an overly broad source adoption claim, corrected by adding only
+the local Rendering origin, and verified through exact 541-node/config-only readback. Its initialization
+marker remains pending. B retains its original initialized/local marker and historical checks.
+The original adoption claim and its narrowed correction remain retained. Unselected 78 skill paths per
+workspace, historical check-board/pnext routes and fleet/remote workflows remain unresolved.
+Each selected consumer can adopt independently; this finite closure does not assert global retirement
+or adoption of existing production checkouts. Earlier pending-public-adoption statements record their
+historical stage and are superseded only for this scope.
