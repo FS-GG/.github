@@ -793,3 +793,22 @@ Clean public-feed side-by-side installation, installed receiver acceptance, loca
 and retained-store migration remain open. Existing installed effects, shim provenance and
 historical unknowns are preserved. Independent feed verification does not establish installed
 collection or complete the operational milestone.
+
+
+## Installed engine pairing source repair — 2026-10-11
+
+The accepted public 0.101.0 installation exposed an adapter identity gap: the SDK tool
+shim has no adjacent engine assembly. When the configured executable resolves to the
+running executable, the adapter now binds the actual entry assembly independently.
+A different executable retains the adjacent-assembly route. Both paths preserve the
+existing before-and-after hashes and exact typed rejection proof; they add no Store,
+schema or wire-protocol authority.
+
+The complete adapter source harness passed locked restore, build and execution in
+33.57 seconds with no build warnings or errors. It covers executable aliases, foreign
+paths and assembly movement, alongside the existing adapter cases. The source-free
+package fixture also requires genuine SDK-installed parent/child rejection proofs,
+including the foreign executable case. That installed-package regression remains
+unrun and is required on a new coherent candidate before publication. The existing
+0.101.0 archives remain unchanged; original pending recovery, live adoption and C2
+acceptance remain open.

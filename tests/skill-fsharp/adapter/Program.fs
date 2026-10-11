@@ -107,13 +107,22 @@ module Program =
                                boundary = "before-publication-io"
                                inputSha256 = if mode = "wrong-batch" then String.replicate 64 "0" else SHA256.HashData bytes |> Convert.ToHexString |> _.ToLowerInvariant()
                                enginePath = enginePath; engineSha256 = if mode = "wrong-engine" then String.replicate 64 "0" else hashFile enginePath
-                               assemblyPath = assemblyPath; assemblySha256 = hashFile assemblyPath
+                               assemblyPath = if mode = "wrong-assembly-path" then "/foreign/engine.dll" else assemblyPath
+                               assemblySha256 = if mode = "wrong-assembly-hash" then String.replicate 64 "0" else hashFile assemblyPath
                                storeRoot = if mode = "foreign-store" then "/foreign" else option "--store-root" args |> Option.get |> Path.GetFullPath
                                ingestId = get "ingestId"; sourceIdentity = get "sourceIdentity"
                                generation = get "generation"; cursor = get "cursor"; errors = errors |}
             if mode = "unknown" then Console.Error.WriteLine "invalid-request: delivery outcome unknown"
             else Console.Error.WriteLine("fsgg-coord-engine: telemetry store: " + proof)
-            1
+            if mode = "nonempty-stdout" then Console.Out.WriteLine "ambiguous"
+            if mode = "retarget-alias" then
+                let alias = Environment.GetEnvironmentVariable "FSGG_ADAPTER_TEST_ALIAS"
+                File.Delete alias
+                File.CreateSymbolicLink(alias, Path.Combine(Path.GetDirectoryName alias, "absent-engine")) |> ignore
+            if mode = "move-assembly" then
+                use stream = new FileStream(assemblyPath, FileMode.Append, FileAccess.Write)
+                stream.WriteByte 0uy
+            if mode = "non-one-exit" then 2 else 1
         else fakeAcceptedEngine args
 
     let private config root =
@@ -748,12 +757,53 @@ module Program =
         let poisoned = File.ReadAllBytes path
         let calls = File.ReadAllLines(log).Length
         try
-            for mode in [ "unknown"; "wrong-batch"; "wrong-engine"; "foreign-store" ] do
+            for mode in [ "unknown"; "wrong-batch"; "wrong-engine"; "foreign-store"; "wrong-assembly-path"; "wrong-assembly-hash"; "nonempty-stdout"; "non-one-exit" ] do
                 Environment.SetEnvironmentVariable("FSGG_ADAPTER_TEST_REJECTION", mode)
                 let refused = run (Some host) (Activity(token, FileInfo input))
-                require (refused.ExitCode = 1 && File.ReadAllBytes path = poisoned) (mode + " incorrectly cleared retained intent")
+                require (refused.ExitCode <> 0 && File.ReadAllBytes path = poisoned) (mode + " incorrectly cleared retained intent")
             Environment.SetEnvironmentVariable("FSGG_ADAPTER_TEST_REJECTION", "exact")
-            let rejected = run (Some host) (Activity(token, FileInfo input))
+            // An alias must resolve to the same executable; equality is not shim-hash equality.
+            let alias = Path.Combine(isolated, "engine-alias")
+            File.CreateSymbolicLink(alias, Environment.ProcessPath) |> ignore
+            let aliasedHost = { host with Engine = alias }
+            Environment.SetEnvironmentVariable("FSGG_ADAPTER_TEST_ALIAS", alias)
+            Environment.SetEnvironmentVariable("FSGG_ADAPTER_TEST_REJECTION", "retarget-alias")
+            let moved = run (Some aliasedHost) (Activity(token, FileInfo input))
+            require (moved.ExitCode = 1 && File.ReadAllBytes path = poisoned) "alias movement cleared retained intent"
+            File.Delete alias
+            File.CreateSymbolicLink(alias, Environment.ProcessPath) |> ignore
+            Environment.SetEnvironmentVariable("FSGG_ADAPTER_TEST_ALIAS", null)
+            Environment.SetEnvironmentVariable("FSGG_ADAPTER_TEST_REJECTION", "exact")
+            let missing = run (Some { host with Engine = Path.Combine(isolated, "absent-engine") }) (Activity(token, FileInfo input))
+            require (missing.ExitCode <> 0 && File.ReadAllBytes path = poisoned) "missing executable cleared retained intent"
+            // An independently copied apphost with its own adjacent assembly remains supported.
+            let adjacent = Path.Combine(isolated, "adjacent")
+            Directory.CreateDirectory adjacent |> ignore
+            for file in Directory.GetFiles(Path.GetDirectoryName Environment.ProcessPath) do
+                File.Copy(file, Path.Combine(adjacent, Path.GetFileName file))
+            let adjacentHost = { host with Engine = Path.Combine(adjacent, Path.GetFileName Environment.ProcessPath) }
+            let adjacentRejected = run (Some adjacentHost) (Activity(token, FileInfo input))
+            require (adjacentRejected.ExitCode = 1 && File.ReadAllBytes path = before) "independent adjacent assembly route refused exact proof"
+            File.WriteAllBytes(path, poisoned)
+            let adjacentAssembly = Path.ChangeExtension(adjacentHost.Engine, ".dll")
+            let assemblyBefore = File.ReadAllBytes adjacentAssembly
+            Environment.SetEnvironmentVariable("FSGG_ADAPTER_TEST_REJECTION", "move-assembly")
+            let assemblyMoved = run (Some adjacentHost) (Activity(token, FileInfo input))
+            require (File.ReadAllBytes adjacentAssembly <> assemblyBefore) "assembly movement fixture did not move selected bytes"
+            require (assemblyMoved.ExitCode = 1 && File.ReadAllBytes path = poisoned) "assembly movement cleared retained intent"
+            Environment.SetEnvironmentVariable("FSGG_ADAPTER_TEST_REJECTION", "exact")
+            File.WriteAllBytes(adjacentAssembly, assemblyBefore)
+            if not (OperatingSystem.IsWindows()) then
+                let originalMode = File.GetUnixFileMode adjacentAssembly
+                try
+                    File.SetUnixFileMode(adjacentAssembly, enum<UnixFileMode> 0)
+                    let unreadable = run (Some adjacentHost) (Activity(token, FileInfo input))
+                    require (unreadable.ExitCode <> 0 && File.ReadAllBytes path = poisoned) "unreadable assembly cleared retained intent"
+                finally File.SetUnixFileMode(adjacentAssembly, originalMode)
+            File.Move(adjacentAssembly, adjacentAssembly + ".held")
+            let absentAssembly = run (Some adjacentHost) (Activity(token, FileInfo input))
+            require (absentAssembly.ExitCode <> 0 && File.ReadAllBytes path = poisoned) "absent adjacent assembly cleared retained intent"
+            let rejected = run (Some aliasedHost) (Activity(token, FileInfo input))
             require (rejected.ExitCode = 1) ("exact pre-IO parser refusal unexpectedly succeeded: " + text rejected.Stderr)
             let restoredBytes = File.ReadAllBytes path
             let restoredState = JsonNode.Parse(restoredBytes).AsObject()
@@ -764,7 +814,9 @@ module Program =
             File.WriteAllText(input, activity.ToJsonString())
             require ((run (Some host) (Activity(token, FileInfo input))).ExitCode = 0) "corrected observation refused after classified rejection"
             require (File.ReadAllLines(log).Length = calls + 1) "corrected observation was not published exactly once"
-        finally Environment.SetEnvironmentVariable("FSGG_ADAPTER_TEST_REJECTION", null)
+        finally
+            Environment.SetEnvironmentVariable("FSGG_ADAPTER_TEST_REJECTION", null)
+            Environment.SetEnvironmentVariable("FSGG_ADAPTER_TEST_ALIAS", null)
 
     let private runHarness () =
         let absent = run None Status

@@ -274,9 +274,22 @@ module SkillTelemetryAdapter =
                         |> Array.map (fun directory -> Path.Combine(directory, config.Engine))
                         |> Array.toList
                 let executable = candidates |> List.tryFind File.Exists |> Option.get |> FileInfo
-                let target = executable.ResolveLinkTarget true
-                let path = if isNull target then executable.FullName else target.FullName
-                let assembly = Path.ChangeExtension(path, ".dll")
+                let resolvedPath (file: FileInfo) =
+                    let target = file.ResolveLinkTarget true
+                    Path.GetFullPath(if isNull target then file.FullName else target.FullName)
+                let path = resolvedPath executable
+                // SDK tool apphosts locate their entry assembly inside .store, not beside
+                // the shim. Borrow the running assembly only for the very same executable.
+                let processPath = Environment.ProcessPath
+                if String.IsNullOrWhiteSpace processPath then fail "current executable identity is unavailable"
+                let currentPath = resolvedPath (FileInfo processPath)
+                let assembly =
+                    if path = currentPath then
+                        let entry = System.Reflection.Assembly.GetEntryAssembly()
+                        if isNull entry || String.IsNullOrWhiteSpace entry.Location then
+                            fail "current entry assembly identity is unavailable"
+                        Path.GetFullPath entry.Location
+                    else Path.ChangeExtension(path, ".dll")
                 let hash path =
                     use stream = File.OpenRead path
                     Convert.ToHexString(SHA256.HashData stream).ToLowerInvariant()
