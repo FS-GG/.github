@@ -1706,6 +1706,58 @@ class PublicationReliabilityControls(unittest.TestCase):
             self.assertIsNone(value['failure']);self.assertIsNotNone(value['quotaWaiting'])
             self.assertFalse((pathlib.Path(temp)/'uncreated').exists())
 
+    def test_budget_wait_propagates_through_real_protected_admission(self):
+        c,a,n,r,j,ad,p,e=self.context()
+        n.attempted['get']=n.ceiling-1
+        before=len(a.calls)
+        with self.assertRaises(publisher.AuthorityQuotaWaiting):
+            ad.authorize(c['contentId'],ordered_effects(c)[10].identity,'intent',ordered_effects(c)[10].request_digest)
+        self.assertLessEqual(len(a.calls)-before,1)
+        self.assertIsNotNone(n.blocked);self.assertEqual(n.attempted['post'],0);self.assertEqual(n.attempted['patch'],0)
+        # Genuine transport/CAS failures retain their different refusal semantics.
+        n.attempted['get']=n.ceiling-1;n.api=types.SimpleNamespace(get=lambda path:(_ for _ in ()).throw(OSError('transport unavailable')))
+        self.assertFalse(ad.authorize(c['contentId'],'tag','intent','0'*64))
+
+    def test_fresh_journal_preparation_uses_original_mutation_deadline(self):
+        candidate=json.loads((pathlib.Path(__file__).parent/'original-0102-manifest.json').read_bytes())
+        a=MemoryAuthority(ref=publisher.SUCCESSOR_REF)
+        n=publisher.CountedAuthorityAPI(a,ceiling=1500,quota_floor=1800);n.admit_quota(now=1900000000)
+        now=[0];n.api=publisher.RuntimeDeadlineAuthority(n.api,10,lambda:now[0])
+        r=report();j=publisher.ReportingJournal(ProtectedReleaseJournal(n,ref=publisher.SUCCESSOR_REF,main_directory=True),r)
+        api=MemoryPublisher();api.head=candidate['descriptor']['sourceSha']
+        p=MemoryProvider(ordered_effects(candidate),{});p._release=lambda:None
+        composite=publisher.ProtectedPublisherAdmission(SingleOperatorAdmission(api,candidate,api.head,1,'EHotwagner','refs/heads/main'),n,publisher.SUCCESSOR_REF)
+        ad=publisher.RuntimeDeadlineAdmission(composite,10,lambda:now[0])
+        intent={'contentId':candidate['contentId'],'sourceSha':api.head,'version':'0.102.0','candidateArchiveSha256':publisher.SUCCESSOR_CHECKPOINT_CANDIDATE['archiveSha256'],'operator':'EHotwagner'}
+        def uniqueness():now[0]=10
+        with self.assertRaises(publisher.Refused):
+            publisher.prepare_release_journal(j,n,ad,p,api,candidate,intent,api.head,api.head,False,uniqueness)
+        self.assertEqual(n.attempted['post'],0);self.assertEqual(n.attempted['patch'],0)
+        self.assertFalse(r['journalMutationMayHaveOccurred']);self.assertIsNone(j._observed)
+
+    def test_actual_result_entry_preserves_primary_when_stderr_fails(self):
+        class BrokenStderr:
+            def write(self,*args):raise OSError('stderr unavailable')
+            def flush(self):raise OSError('stderr unavailable')
+        with tempfile.TemporaryDirectory() as temp:
+            result=pathlib.Path(temp)/'result.json'
+            argv=['publisher','--publish','--candidate-run-id','38128101680','--candidate-artifact-id','11698335858',
+                  '--candidate-archive-sha256',publisher.SUCCESSOR_CHECKPOINT_CANDIDATE['archiveSha256'],
+                  '--workdir',str(pathlib.Path(temp)/'unused'),'--result-path',str(result)]
+            with patch.object(sys,'argv',argv),patch.object(publisher,'execute_publisher',side_effect=OSError('original execution failure')),patch.object(sys,'stderr',BrokenStderr()):
+                self.assertEqual(publisher.main(),1)
+            value=json.loads(result.read_bytes())
+            self.assertEqual(value['failure']['chain'][0]['message'],'original execution failure')
+            self.assertEqual(value['additionalReportingFailures'],[{'phase':'primary diagnostic','type':'OSError'}])
+            self.assertFalse(value['publicationComplete'])
+            argv[-1]=str(pathlib.Path(temp)/'second-result.json')
+            retained=[]
+            def fail_report(path,report):retained.append(report);raise OSError('result unavailable')
+            with patch.object(sys,'argv',argv),patch.object(publisher,'execute_publisher',side_effect=RuntimeError('original execution failure')),patch.object(publisher,'write_result',side_effect=fail_report),patch.object(sys,'stderr',BrokenStderr()):
+                self.assertEqual(publisher.main(),1)
+            self.assertEqual(retained[0]['failure']['chain'][0]['message'],'original execution failure')
+            self.assertEqual([x['phase']for x in retained[0]['additionalReportingFailures']],['primary diagnostic','result reporting diagnostic'])
+
     def test_matched_observation_expiry_refuses_dependent_settlement(self):
         c,a,n,r,j,ad,p,e=self.context(22)
         selected=ordered_effects(c)[10].identity

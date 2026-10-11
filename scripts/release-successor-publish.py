@@ -70,6 +70,8 @@ class ProtectedPublisherAdmission:
                 return False
             self.protection(self.ledger_api, self.binding, [self.logical_ref])
             return True
+        except AuthorityQuotaWaiting:
+            raise  # Selected pre-send budget waiting is an incomplete checkpoint.
         except (KeyError, TypeError, ValueError, OSError, RuntimeError):
             return False
 
@@ -979,10 +981,16 @@ def execute_publisher(args, report):
         report["stage"] = "Authority-quota"
         ledger_api.admit_quota()
         report["lastSuccessfulStage"] = "Authority-quota"
+    if not historical_recovery:
+        # The one original forward clock already began before authentication.
+        # Guard dependent genesis mutations as well as later advances.
+        ledger_api.api = RuntimeDeadlineAuthority(ledger_api.api, forward_deadline, time.monotonic)
     journal = ProtectedReleaseJournal(ledger_api, ref=selected_ref, main_directory=True)
     journal = ReportingJournal(journal, report)
     provider = ReportingProvider(provider, report)
     admission = ProtectedPublisherAdmission(publisher_admission, ledger_api, selected_ref)
+    if not historical_recovery:
+        admission = RuntimeDeadlineAdmission(admission, forward_deadline, time.monotonic)
     def uniqueness():
         subprocess.run(
             [sys.executable, str(pathlib.Path(__file__).with_name("check-release-candidate-uniqueness.py")),
@@ -1014,6 +1022,16 @@ def execute_publisher(args, report):
         return run_recovery_checkpoint(manifest, journal, admission, provider, report, deadline)
     return run_forward(manifest, journal, admission, provider, report, forward_deadline,
                        maximum=RECOVERY_ADVANCES if successor_checkpoint else len(ordered_effects(manifest)) * 2 + 120)
+
+
+def diagnostic(report, message, phase):
+    """Diagnostics are additional evidence, never a replacement first cause."""
+    try:
+        print(message, file=sys.stderr)
+    except BaseException as error:
+        rows = report.setdefault("additionalReportingFailures", [])
+        if len(rows) < 16:
+            rows.append({"phase": phase, "type": type(error).__name__})
 
 
 def main() -> int:
@@ -1063,7 +1081,7 @@ def main() -> int:
         exit_code = 0
     except BaseException as error:
         report["failure"] = error_chain(error)
-        print(f"release successor refused: {error}", file=sys.stderr)
+        diagnostic(report, f"release successor refused: {error}", "primary diagnostic")
     counter = report.pop("authorityCounter", None)
     report["authorityRequests"] = counter.report() if counter is not None else None
     publisher_counter = report.pop("publisherCounter", None)
@@ -1071,9 +1089,9 @@ def main() -> int:
         report["publisherRequests"] = publisher_counter.report()
     try:
         write_result(result_path, report)
-    except Exception as reporting_error:
+    except BaseException as reporting_error:
         # Reporting cannot replace the primary cause or normalize a failed effect.
-        print(f"release successor result reporting failed: {reporting_error}", file=sys.stderr)
+        diagnostic(report, f"release successor result reporting failed: {reporting_error}", "result reporting diagnostic")
         return 1
     output = os.environ.get("GITHUB_OUTPUT")
     if output:
@@ -1081,10 +1099,14 @@ def main() -> int:
             with open(output, "a") as stream:
                 stream.write(f"disposition={report['disposition']}\n")
                 stream.write(f"publication_complete={str(report['publicationComplete']).lower()}\n")
-        except OSError as reporting_error:
-            print(f"release successor output reporting failed: {reporting_error}", file=sys.stderr)
+        except BaseException as reporting_error:
+            diagnostic(report, f"release successor output reporting failed: {reporting_error}", "output reporting diagnostic")
             return 1
-    print(f"Release successor result: {report['disposition']}; publicationComplete={report['publicationComplete']}")
+    try:
+        print(f"Release successor result: {report['disposition']}; publicationComplete={report['publicationComplete']}")
+    except BaseException as reporting_error:
+        diagnostic(report, f"release successor summary reporting failed: {reporting_error}", "summary reporting diagnostic")
+        return 1
     return exit_code
 
 

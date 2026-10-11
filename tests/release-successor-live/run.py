@@ -453,7 +453,7 @@ class TerminalAcquisitionControls(unittest.TestCase):
         import datetime,io,zipfile
         from release_successor_terminal import collect_terminal
         run={"id":123,"head_sha":"b"*40,"status":"completed","conclusion":conclusion}
-        jobs=[{"id":456,"completed_at":"2026-10-11T11:28:57Z"}]
+        jobs=[{"id":456,"run_id":123,"run_attempt":1,"head_sha":"b"*40,"name":"publish","status":"completed","conclusion":conclusion,"started_at":"2026-10-11T11:25:00Z","completed_at":"2026-10-11T11:28:57Z"}]
         stream=io.BytesIO()
         with zipfile.ZipFile(stream,"w")as z:
             for name in names:z.writestr(name,json.dumps({"publicationComplete":False,"failure":{"type":"quota"}}))
@@ -478,6 +478,32 @@ class TerminalAcquisitionControls(unittest.TestCase):
     def call(self,parts,**kw):
         f,reader,run,jobs,terminal,payload,decoder,current,clock,*_=parts
         return f(reader,run,jobs,terminal,payload,decoder,current,clock=clock,**kw)
+
+    def test_queued_cancellation_without_started_job_is_partial_not_fabricated(self):
+        import datetime,importlib.util
+        path=pathlib.Path(__file__).resolve().parents[2]/'scripts/release_successor_terminal.py'
+        spec=importlib.util.spec_from_file_location('terminal_queued',path);m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
+        parts=self.fixture();run=parts[2];terminal=parts[4];now=parts[-1][0]
+        post=now-datetime.timedelta(seconds=60)
+        run.update(status='completed',conclusion='cancelled',created_at=post.isoformat(),updated_at=(now-datetime.timedelta(seconds=5)).isoformat())
+        intent={'postUtc':post.isoformat(),'deadlineUtc':(post+datetime.timedelta(seconds=4500)).isoformat(),
+                'queueSeconds':600,'activeJobsSeconds':3600,'retentionSeconds':300,'aggregateSeconds':4500}
+        for jobs in ([],[{**parts[3][0],'status':'completed','started_at':None,'completed_at':None,'conclusion':'cancelled'}]):
+            timing=m.terminal_timing(run,jobs,intent,now)
+            self.assertIsNone(timing['jobStartedUtc']);self.assertIsNone(timing['jobCompletedUtc'])
+            self.assertEqual(timing['terminalTimestampSource'],'run.updated_at')
+            selected={**terminal,'run':run,'jobs':jobs,'timing':timing,'resultArtifact':None}
+            calls=[]
+            value=m.collect_terminal(parts[1],run,jobs,selected,lambda *args:calls.append(args),parts[6],parts[7],clock=lambda:now)
+            self.assertEqual(calls,[]);self.assertFalse(value['evidenceComplete']);self.assertFalse(value['archiveDownloaded'])
+            self.assertIsNone(value['jobLogSHA256']);self.assertIsNone(value['nativeResult'])
+            self.assertTrue(any('no started job' in x for x in value['gaps']))
+            # Any independently available artifact is still attempted; no joblog ID invented.
+            parts[-2].clear();selected['resultArtifact']=terminal['resultArtifact']
+            value=m.collect_terminal(parts[1],run,jobs,selected,parts[5],parts[6],parts[7],clock=lambda:now)
+            self.assertTrue(value['archiveDownloaded']);self.assertFalse(value['evidenceComplete'])
+            self.assertFalse(any(x[0]=='job-log'for x in parts[-2]))
+        with self.assertRaises(AssertionError):m.terminal_timing(run,[],intent,now+datetime.timedelta(seconds=296))
 
     def test_all_terminal_conclusions_acquire_log_and_available_result_in_one_call(self):
         for conclusion in ("success","failure","cancelled","timed_out","action_required","neutral","skipped","stale"):
