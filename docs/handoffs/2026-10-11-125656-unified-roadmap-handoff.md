@@ -123,7 +123,7 @@ or use of the 0.101 journal 19. The old source hold was released at 11:37:59 aft
 terminal reconciliation allowed descendant publisher source; no current hold remains.
 
 Continuation proposal:
-`B/coherent-0102-bounded-original-continuation-preparation/connected-source-review-request.json`,
+`U/coherent-0102-bounded-original-continuation-preparation/connected-source-review-request.json`,
 19,665 bytes, SHA-256 `0929e552c3b4a432eb5bd197d5450136892661a637cf76ef530ff75a82c9b564`.
 Owner reports 13 inert controls prepared, not run, and maximum 44 logical GETs within
 64. `creator_source` was interrupted during independent review; do not claim approval.
