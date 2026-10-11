@@ -1,7 +1,7 @@
 # Shared process execution and supervision
 
 Identity: **V2-PROC-01**. Authored: **2026-10-05**.
-Status: **.1 bounded inventory and retain decision recorded; shared implementation, dependency selection and adoption open**.
+Status: **.1 bounded retain decision delivered; .2 contracts and conformance delivered; .3–.8 and adoption open**.
 Owner: Coordination execution maintainer, with `.github` programme integration and named consumer owners.
 Parent: [Unified Roadmap, section 9.8](../2026-09-07-154210-fs-gg-unified-development-roadmap.md#98-feature-parts-and-subroadmap-index).
 
@@ -17,7 +17,10 @@ change an accepted execution profile, grant operating privileges, raise resource
 service, or establish a native qualification result. Existing accepted source and operations retain
 their original scope. The [2026-10-11 bounded evaluation](../reports/2026-10-11-shared-process-supervision-evaluation.md)
 records .1's decision to retain both layers with explicit failed, inconclusive and blocked coverage.
-It does not deliver shared contracts, a replacement backend or consumer adoption.
+The subsequent [portable contracts and conformance window](2026-10-11-shared-process-contracts.md)
+delivers .2 through [Coordination PR964](https://github.com/FS-GG/FS.GG.Coordination/pull/964),
+merged as `18f3aaafffae568ee1d1f42fdb3d47b962910395`. Neither window selects a
+replacement backend or establishes consumer adoption.
 
 The first consumers are SDD's bounded test command runner and FsQuint's tool runner. A separate Linux
 containment pilot follows in Coordination's qualification tooling. Governance, LEARN, BAR, SC2 and
@@ -85,9 +88,9 @@ Relevant system designs provide the architectural baseline:
 ## Architecture and ownership
 
 Coordination owns the shared source because it already owns execution and custody. Add focused
-projects there only after the initial inventory confirms a dependency boundary. Provisional names are
-`FS.GG.Execution.Contracts`, `FS.GG.Execution.Processes` and `FS.GG.Execution.Linux`; these are proposed
-names, not published packages. Contracts must have no Akka, provider SDK, GitHub, telemetry-store or
+projects after the initial inventory confirms a dependency boundary. .2 implements the non-packable
+`FS.GG.Execution.Contracts` project. `FS.GG.Execution.Processes` and `FS.GG.Execution.Linux` remain
+proposed later names; no package is published by this window. Contracts must have no Akka, provider SDK, GitHub, telemetry-store or
 product dependency. Existing orchestration code depends downward on the new components.
 
 ```mermaid
@@ -117,8 +120,10 @@ supervisor consumes its own CLR/task budget and cannot qualify a native-only boo
 
 ## Proposed contracts
 
-The shapes below describe semantics, not an approved public API or executable schema. Final names and
-F# signatures are established in milestone .2 and reviewed against existing Execution contracts.
+The shapes below describe the original design semantics. The selected .2 F# surface,
+dependency boundary and local conformance evidence are recorded in
+[shared process contracts](2026-10-11-shared-process-contracts.md). Platform implementations
+and consumer adapters beyond the lossless Execution edge remain later work.
 
 | Contract | Required meaning |
 |---|---|
@@ -296,20 +301,30 @@ stop expansion if adoption cost exceeds demonstrated benefit or the selected gua
 
 **.1 inventory and bounded evaluation records a retain-both-layers decision**, with the selected
 research budget stopped and missing comparisons explicit in the
-[evaluation report](../reports/2026-10-11-shared-process-supervision-evaluation.md). Milestones **.2–.8 remain open**;
-this decision selects no new backend, shared API or consumer migration. The table is the implementation
+[evaluation report](../reports/2026-10-11-shared-process-supervision-evaluation.md). Milestone **.2 is delivered with accepted contracts, deterministic/disposable fixtures
+and exact-head hosted qualification**. Milestones **.3–.8 remain open**;
+no backend replacement or consumer migration is selected by the .2 closure. The table is the implementation
 plan, not a second live task board. Record subsequent source and native results with their owners.
 
 | Milestone | Owner and narrow touch-set | Dependencies | Exit evidence |
 |---|---|---|---|
 | **V2-PROC-01.1 Inventory and prior-art evaluation** | Coordination maintainer; read-only consumer inventory and isolated evaluation fixtures under its tests/engineering tree | This design | Classify routine vs contained runners, freeze required guarantees and two consumer cases; pin candidate package/source/runtime; compare CliWrap, Meziantou and ProcessKit against critical lifecycle fixtures; decide reuse/adaptation with explicit gaps and effort bound. [Bounded decision recorded](../reports/2026-10-11-shared-process-supervision-evaluation.md): retain both layers; accepted BCL scopes, failed deadline, inconclusive CliWrap heldpipe and blocked sink remain distinct |
-| **.2 Shared contracts and conformance fixtures** | Coordination; focused contract project and test fixtures | .1 | Typed command/budget/capability/result/cleanup contracts, bounded byte sinks, deterministic lifecycle tests and real disposable-process fixtures; map existing Execution identities and avoid dependency cycles |
+| **.2 Shared contracts and conformance fixtures** | Coordination; focused contract project and test fixtures | .1 | Typed command/budget/capability/result/cleanup contracts, bounded byte sinks and lossless Execution mapping. [.2 delivered and conformance accepted](2026-10-11-shared-process-contracts.md): 65 Contracts + 7 adapter tests, 12 constructor/reducer controls and eight disposable-process cases, plus all required and candidate-scoped coherent checks at the delivered head. Unsupported containment remains excluded |
 | **.3 Routine runner and first consumer** | Coordination runner plus SDD TestShared/ChildProcess tests | .2 and routine backend decision | Selected backend passes fixture matrix for its declared weaker/stronger capabilities; SDD adapter preserves start/timeout/held-pipe distinctions and diagnostics; real affected acceptance tests pass; no unbounded buffering or cleanup wait introduced |
 | **.4 Linux contained backend** | Coordination Linux backend, reviewed launcher/protocol and containment tests | .2 and Linux backend decision; delegated disposable environment for native checks | Placement before target execution, verified controllers/protection, stable identity, channel-loss cleanup, supervisor-death outer owner and bounded retirement all qualify; unsupported profiles refuse; actual overhead recorded |
 | **.5 Second consumer and shared-boundary review** | FsQuint Tooling and tests; Coordination only for demonstrated generic gaps | .3 | Quint-specific policy remains local; bounded cleanup/output behavior passes actual tool fixtures; dependency direction and public signatures remain coherent; two consumer results justify package boundary |
 | **.6 Coherent publication and installed pilots** | Coordination publisher; SDD and FsQuint receiver owners | .5; .4 separately for publishing the Linux backend | Normal package/native-helper release checks, immutable distribution joins and downloaded-only consumer tests; source unavailable during installed proof; upgrade and rollback tested; publication alone does not establish receiver adoption |
 | **.7 Qualification consumer adoption** | One owning adapter at a time: Coordination/LEARN first, then independently selected BAR, SC2, Rendering and Governance | .4 and installed backend from .6; each consumer's existing admission | Side-by-side evidence on fixed fixtures, then one newly admitted real operation; preserve original receipts, domain policies and limits; remove that consumer's replaced mechanics only after its own acceptance |
 | **.8 Consolidation and benefit review** | Coordination and migrated consumer owners | Selected .7 adoptions | Remove obsolete duplicate implementations and temporary adapters; retain conformance suite and servicing owner; report maintenance/runtime impact and remaining exclusions; mark only actually adopted scopes complete |
+
+The .2 candidate also consolidates the canonical engineering command interface around
+one process owner, with typed input/receipt preflight, explicit JVM/TLC resources
+and bounded generated scratch accounting. Thirty-one focused controls and the separately
+admitted original Provider and Runner TLC cases passed their original bytes. The
+final owner/collector lifecycle repair passed 25 hosted diagnostic controls, all six
+required checks, both Provider/Runner formal-base profiles and the full uncanceled
+Bootstrap/coherent cohorts at `653d8c7`. Protected PR964 delivery and main readback
+accepted merge `18f3aaa`; original refusing observations retain their distinct unknowns.
 
 After .2, routine execution (.3) and Linux containment (.4) can proceed independently. The FsQuint
 migration can follow .3 while .4 qualifies; publishing the routine package need not wait for an
