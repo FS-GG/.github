@@ -1,4 +1,4 @@
-import hashlib, json, os, pathlib, re, stat, subprocess
+import hashlib, json, os, pathlib, re, stat, subprocess, sys, sysconfig, signal, select, time
 def require(ok, reason):
     if not ok: raise RuntimeError('custody-core-toolchain-refused: '+reason)
 def read(command):
@@ -58,6 +58,76 @@ for name in sorted(selected):
 for p in [pathlib.Path('/etc/ld.so.cache'),pathlib.Path('/etc/ld.so.conf')]:
     require(p.is_file(), 'loader-search-input'); paths.add(p)
 paths.update(p for p in pathlib.Path('/etc/ld.so.conf.d').glob('*') if p.is_file())
+# This observation binds the already-running provider-trusted interpreter; it
+# cannot retroactively prove immutable startup or the separate SDK/PAM policy.
+require(pathlib.Path(sys.executable).resolve(strict=True)==pathlib.Path('/usr/bin/python3.12'), 'python-executable')
+require(sys.flags.isolated and sys.flags.no_site and sys.flags.ignore_environment and sys.flags.safe_path, 'python-isolation')
+require(sys.prefix==sys.base_prefix=='/usr' and sys.exec_prefix==sys.base_exec_prefix=='/usr', 'python-prefix')
+python_observations=[]
+def observe_python_path(p,role):
+    p=pathlib.Path(p)
+    require(p.is_absolute() and '..' not in p.parts and str(p).startswith(('/usr/bin/','/usr/lib/')), 'python-path-scope:'+str(p))
+    present=p.exists() or p.is_symlink()
+    row={'path':str(p),'role':role,'present':present,'ancestors':[]}
+    try:
+        if present:
+            require(p.lstat().st_uid==0,'python-path-owner:'+str(p))
+            resolved=p.resolve(strict=True); info=resolved.stat()
+            require(str(resolved).startswith(('/usr/bin/','/usr/lib/')), 'python-resolved-scope:'+str(p))
+            require(info.st_uid==0 and not info.st_mode&0o022 and (stat.S_ISREG(info.st_mode) or stat.S_ISDIR(info.st_mode)), 'python-path-custody:'+str(p))
+            row.update(resolved=str(resolved),uid=info.st_uid,mode=oct(stat.S_IMODE(info.st_mode)),type=stat.S_IFMT(info.st_mode))
+            if stat.S_ISREG(info.st_mode): paths.add(p)
+        else:
+            resolved=p
+            row['absence']='exists=false and is_symlink=false at observation'
+        for ancestor in sorted(set(p.parents)|set(resolved.parents)):
+            if not ancestor.exists():
+                require(not ancestor.is_symlink(),'python-dangling-ancestor:'+str(ancestor))
+                row['ancestors'].append({'path':str(ancestor),'present':False})
+                continue
+            info=ancestor.stat()
+            require(stat.S_ISDIR(info.st_mode) and info.st_uid==0 and not info.st_mode&0o022, 'python-ancestor-custody:'+str(ancestor))
+            row['ancestors'].append({'path':str(ancestor),'present':True,'uid':info.st_uid,'mode':oct(stat.S_IMODE(info.st_mode))})
+    finally:
+        python_observations.append(row)
+        encoded=json.dumps(python_observations).encode()
+        require(len(python_observations)<=1024 and len(encoded)<=1048576,'python-observation-bound')
+        (destination/'python-runtime-original.json').write_bytes(encoded)
+for value in sys.path:
+    require(value and str(value).startswith('/usr/lib/'), 'python-search-root:'+str(value))
+    observe_python_path(value,'actual-search-root')
+config_probes={pathlib.Path('/usr/bin/pyvenv.cfg'),pathlib.Path('/usr/pyvenv.cfg'),
+               pathlib.Path('/usr/bin/python3._pth'),pathlib.Path('/usr/bin/python3.12._pth'),
+               pathlib.Path('/usr/bin/pybuilddir.txt')}
+library_dir=sysconfig.get_config_var('LIBDIR'); library_name=sysconfig.get_config_var('LDLIBRARY')
+require(isinstance(library_dir,str) and isinstance(library_name,str) and '/' not in library_name, 'python-library-config')
+config_probes.add(pathlib.Path(library_dir)/(library_name+'._pth'))
+with pathlib.Path('/proc/self/maps').open('rb') as source: maps=source.read(1048577)
+require(len(maps)<=1048576,'python-maps-bound')
+for line in maps.decode('utf-8').splitlines():
+    fields=line.split(None,5)
+    if len(fields)==6 and pathlib.Path(fields[5]).name.startswith('libpython3.12.so'):
+        require(fields[5].startswith('/usr/lib/') and ' (deleted)' not in fields[5], 'python-loaded-library')
+        observe_python_path(fields[5],'actual-loaded-python-library')
+        config_probes.add(pathlib.Path(fields[5]+'._pth'))
+for p in sorted(config_probes):
+    # pyvenv.cfg alongside /usr is outside module roots but still has qualified
+    # existing ancestors; present content is refused rather than interpreted.
+    if p==pathlib.Path('/usr/pyvenv.cfg'):
+        require(not p.exists() and not p.is_symlink(),'python-parent-venv-config')
+        ancestors=[]
+        for ancestor in p.parents:
+            info=ancestor.stat(); require(stat.S_ISDIR(info.st_mode) and info.st_uid==0 and not info.st_mode&0o022,'python-parent-config-ancestor')
+            ancestors.append({'path':str(ancestor),'present':True,'uid':info.st_uid,'mode':oct(stat.S_IMODE(info.st_mode))})
+        python_observations.append({'path':str(p),'role':'path-configuration','present':False,'absence':'exists=false and is_symlink=false at observation','ancestors':ancestors})
+    else: observe_python_path(p,'path-configuration')
+    require(not p.exists() and not p.is_symlink(),'python-present-path-configuration:'+str(p))
+for name,module in sorted(tuple(sys.modules.items())):
+    for value in getattr(module,'__path__',()): observe_python_path(value,'loaded-package-search:'+name)
+    origin=getattr(getattr(module,'__spec__',None),'origin',None)
+    if origin in (None,'built-in','frozen'): continue
+    require(isinstance(origin,str),'python-module-origin:'+name)
+    observe_python_path(origin,'loaded-module:'+name)
 require(len(paths)<=16384, 'file-count')
 # Direct argv/Path/JSON/sha256sum records require no shell escaping.
 def path_record_ok(p):
@@ -75,7 +145,7 @@ invalid_paths=[str(p) for p in sorted(paths) if not path_record_ok(p)]
 require(not invalid_paths, 'path-encoding:'+json.dumps(invalid_paths[0][:4096]) if invalid_paths else 'path-encoding')
 # Complete read-only custody diagnosis precedes all hashing/readelf work.
 # Keep each completed row if a later read, unknown race or budget stops us.
-custody_bytes=0; custody_first=None
+custody_bytes=0; custody_first=None; inventory_only=set()
 custody_output=destination/'path-custody-original.jsonl'
 custody_output.touch(mode=0o600)
 def retain_custody(row):
@@ -88,7 +158,7 @@ def retain_custody(row):
 def mark_custody(row,reason):
     global custody_first
     if reason not in row['defects']: row['defects'].append(reason)
-    if custody_first is None: custody_first=reason+':'+row['path']
+    if custody_first is None and row['path']!='/usr/bin/py3versions': custody_first=reason+':'+row['path']
 for p in sorted(paths):
     row={'path':str(p),'resolved':None,'uid':None,'mode':None,'type':None,'defects':[]}
     try:
@@ -110,10 +180,28 @@ for p in sorted(paths):
         row['unknown']=type(error).__name__+':'+str(error)
         retain_custody(row)
         raise RuntimeError((custody_first or 'custody-unknown:'+str(p))+'; additional:'+row['unknown']) from error
-    retain_custody(row)
+    if str(p)=='/usr/bin/py3versions':
+        try:
+            require(row['resolved']=='/usr/share/python3/py3versions.py' and row['pathUID']==0 and row['uid']==0
+                    and row['type']==stat.S_IFREG and row['pathType']==stat.S_IFLNK,'inventory-only-exact-pair')
+            require(set(row['defects'])<= {'file-custody','ancestor-custody'} and
+                    all(a['path'] in ('/usr/share','/usr/share/python3') and a['uid']==0 and a['type']==stat.S_IFDIR
+                        for a in row['failedAncestors']), 'inventory-only-unexpected-defect')
+            row['scope']='inventory-only; no fixed execution/import/config edge; runtime search prerequisite separately observed'
+            with pathlib.Path(row['resolved']).open('rb') as source: helper_bytes=source.read(65537)
+            require(len(helper_bytes)<=65536,'inventory-only-snapshot-bound')
+            (destination/'inventory-only-py3versions-original.bin').write_bytes(helper_bytes)
+            row['snapshotBytes']=len(helper_bytes); row['snapshotSha256']=hashlib.sha256(helper_bytes).hexdigest()
+            row['snapshotCustodyQualified']=False
+            inventory_only.add(p)
+        finally:
+            retain_custody(row)
+    else:
+        retain_custody(row)
 require(custody_first is None,custody_first or 'path-custody')
 rows=[]; aliases={}; total=0; cached={}
 for p in sorted(paths):
+    if p in inventory_only: continue
     require(p.lstat().st_uid==0, 'path-owner:'+str(p))
     resolved=p.resolve(strict=True); info=resolved.stat()
     require(stat.S_ISREG(info.st_mode) and info.st_uid==0 and not info.st_mode&0o022, 'file-custody:'+str(p))
