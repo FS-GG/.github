@@ -537,11 +537,14 @@ static int fx_client(int requester,const char *socket_path,const char *dotnet,co
   if(channel<0||strlen(socket_path)>=sizeof address.sun_path)_exit(111);
   strcpy(address.sun_path,socket_path);
   if(connect(channel,(struct sockaddr *)&address,sizeof address)||dup2(channel,3)<0||fcntl(3,F_SETFD,0)||syscall(SYS_close_range,4u,~0u,0u))_exit(112);
-  char binding_env[2048],input_env[128],cwd_env[4096],kind_env[128];
-  snprintf(binding_env,sizeof binding_env,"FSGG_LEARN_CUSTODY_BINDING=%s",binding);
-  snprintf(input_env,sizeof input_env,"FSGG_LEARN_NATIVE_INPUT=%s",input);
-  snprintf(cwd_env,sizeof cwd_env,"FSGG_LEARN_NATIVE_CWD=%s",cwd);
-  snprintf(kind_env,sizeof kind_env,"FSGG_LEARN_NATIVE_CASE=%s",kind);
+  /* The closed binding value has a 2048-byte buffer; reserve its key too. */
+  char binding_env[sizeof "FSGG_LEARN_CUSTODY_BINDING="+2048],input_env[128],cwd_env[4096],kind_env[128];
+  int binding_size=snprintf(binding_env,sizeof binding_env,"FSGG_LEARN_CUSTODY_BINDING=%s",binding);
+  int input_size=snprintf(input_env,sizeof input_env,"FSGG_LEARN_NATIVE_INPUT=%s",input);
+  int cwd_size=snprintf(cwd_env,sizeof cwd_env,"FSGG_LEARN_NATIVE_CWD=%s",cwd);
+  int kind_size=snprintf(kind_env,sizeof kind_env,"FSGG_LEARN_NATIVE_CASE=%s",kind);
+  if(binding_size<0||(size_t)binding_size>=sizeof binding_env||input_size<0||(size_t)input_size>=sizeof input_env||
+   cwd_size<0||(size_t)cwd_size>=sizeof cwd_env||kind_size<0||(size_t)kind_size>=sizeof kind_env)_exit(114);
   char *env[]={"PATH=/usr/bin:/bin","LC_ALL=C","DOTNET_PROCESSOR_COUNT=1","DOTNET_EnableDiagnostics=0","DOTNET_gcServer=0","DOTNET_GCHeapHardLimit=10000000",
    "PERSISTENT_V3_CUSTODY_NATIVE_FIXTURE=1","FSGG_LEARN_CUSTODY_FD=3",binding_env,input_env,cwd_env,kind_env,NULL};
   char *args[]={(char *)dotnet,(char *)dll,NULL};
