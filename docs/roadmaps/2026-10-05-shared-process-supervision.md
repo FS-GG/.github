@@ -1,7 +1,7 @@
 # Shared process execution and supervision
 
 Identity: **V2-PROC-01**. Authored: **2026-10-05**.
-Status: **design and implementation plan; implementation, dependency selection and adoption open**.
+Status: **.1 bounded inventory and retain decision recorded; shared implementation, dependency selection and adoption open**.
 Owner: Coordination execution maintainer, with `.github` programme integration and named consumer owners.
 Parent: [Unified Roadmap, section 9.8](../2026-09-07-154210-fs-gg-unified-development-roadmap.md#98-feature-parts-and-subroadmap-index).
 
@@ -15,7 +15,9 @@ operations without requiring every routine command to use a qualification sandbo
 This plan selects development of the shared capability. It does not select a third-party dependency,
 change an accepted execution profile, grant operating privileges, raise resource limits, install a
 service, or establish a native qualification result. Existing accepted source and operations retain
-their original scope. The current task delivers this design and its roadmap joins, not its implementation.
+their original scope. The [2026-10-11 bounded evaluation](../reports/2026-10-11-shared-process-supervision-evaluation.md)
+records .1's decision to retain both layers with explicit failed, inconclusive and blocked coverage.
+It does not deliver shared contracts, a replacement backend or consumer adoption.
 
 The first consumers are SDD's bounded test command runner and FsQuint's tool runner. A separate Linux
 containment pilot follows in Coordination's qualification tooling. Governance, LEARN, BAR, SC2 and
@@ -43,16 +45,16 @@ that any new backend would have passed; original evidence remains immutable.
 
 ## Prior art and dependency decisions
 
-Research was read-only: primary documentation, release metadata and selected source bodies were
-inspected. No candidate library was installed or benchmarked. Package versions and source revisions
-below identify research inputs; the implementation evaluation must join actual package bytes to the
-selected source and runtime before adoption.
+Initial design research was read-only: primary documentation, release metadata and selected source
+bodies were inspected. The subsequent [bounded .1 evaluation](../reports/2026-10-11-shared-process-supervision-evaluation.md)
+joins retained package/source/runtime inputs and exact Meziantou source data, preserves every original
+native outcome, and retains existing implementations. Its limited fixtures do not qualify adoption.
 
 | Candidate | Relevant capability | Planned disposition |
 |---|---|---|
-| [CliWrap 3.10.5](https://github.com/Tyrrrz/CliWrap/releases/tag/3.10.5) | Immutable command description, concurrent streaming, pipelines, graceful/forceful cancellation | Leading candidate behind the ordinary runner. Its [execution implementation](https://github.com/Tyrrrz/CliWrap/blob/3.10.5/CliWrap/Command.Execution.cs) deliberately waits for process exit without a cancellable wait; it cannot alone prove our cleanup deadline. Evaluate bounded custom sinks, output failure, inherited writers and cancellation behavior. |
-| [Meziantou cgroup v2](https://github.com/meziantou/Meziantou.Framework/blob/db940dd4d4f05435c571ae01a2322a9aa505e0bd/src/Meziantou.Framework.Unix.ControlGroups/readme.md), source version 2.0.2 | Controller configuration, resource measurements, freeze and subtree kill | Leading focused Linux mechanism candidate. The [implementation](https://github.com/meziantou/Meziantou.Framework/blob/db940dd4d4f05435c571ae01a2322a9aa505e0bd/src/Meziantou.Framework.Unix.ControlGroups/CGroup2.cs) uses PID migration and ordinary path-based file reads; qualified launch ordering, bounded reads, ownership and retirement remain integration work. |
-| [ProcessKit v2.12.0](https://github.com/ZelAnton/ProcessKit-fSharp/tree/v2.12.0) | F# process groups, platform containment, resource limits, streaming and test seams | Evaluate against the same contract before adding equivalent custom mechanisms. Its [platform contract](https://github.com/ZelAnton/ProcessKit-fSharp/blob/v2.12.0/docs/platform-support.md) documents Linux process-group defaults, cgroups when aggregate limits are requested, setsid escape on the weaker mechanism and direct-child-only Linux parent-death handling. Repository created June 2026; maturity and maintenance need assessment. |
+| [CliWrap 3.10.5](https://github.com/Tyrrrz/CliWrap/releases/tag/3.10.5) | Immutable command description, concurrent streaming, pipelines, graceful/forceful cancellation | Research candidate; the bounded .1 decision retains the existing ordinary runner. Its [execution implementation](https://github.com/Tyrrrz/CliWrap/blob/3.10.5/CliWrap/Command.Execution.cs) deliberately waits for process exit without a cancellable wait; it cannot alone prove our cleanup deadline. Future adaptation needs separately accepted bounded sink, inherited-writer and cancellation behavior. |
+| [Meziantou cgroup v2](https://github.com/meziantou/Meziantou.Framework/blob/db940dd4d4f05435c571ae01a2322a9aa505e0bd/src/Meziantou.Framework.Unix.ControlGroups/readme.md), source version 2.0.2 | Controller configuration, resource measurements, freeze and subtree kill | Focused Linux mechanism candidate; the exact .1 source review retains existing implementations. The [implementation](https://github.com/meziantou/Meziantou.Framework/blob/db940dd4d4f05435c571ae01a2322a9aa505e0bd/src/Meziantou.Framework.Unix.ControlGroups/CGroup2.cs) uses PID migration and ordinary path-based file reads; qualified launch ordering, bounded reads, ownership and retirement remain integration work. |
+| [ProcessKit v2.12.0](https://github.com/ZelAnton/ProcessKit-fSharp/tree/v2.12.0) | F# process groups, platform containment, resource limits, streaming and test seams | The bounded .1 decision retains existing implementations; later adaptation must meet the same contract. Its [platform contract](https://github.com/ZelAnton/ProcessKit-fSharp/blob/v2.12.0/docs/platform-support.md) documents Linux process-group defaults, cgroups when aggregate limits are requested, setsid escape on the weaker mechanism and direct-child-only Linux parent-death handling. Repository created June 2026; maturity and maintenance need assessment. |
 | [Asmichi.ChildProcess](https://github.com/asmichi/ChildProcess) | Native process creation and explicit handle/environment behavior | Secondary candidate if the first options cannot supply the required launch seam; include native helper distribution and architecture support in cost. |
 | [MedallionShell](https://github.com/madelson/MedallionShell), [SimpleExec](https://github.com/adamralph/simple-exec), [ProcessX](https://github.com/Cysharp/ProcessX), [FAKE](https://fake.build/reference/fake-core-createprocess.html) | Routine command execution, streams and cancellation | Reference alternatives. Reuse existing FAKE integrations when appropriate; avoid layering multiple interchangeable wrappers or introducing a build framework solely for custody. |
 | [Vanara](https://github.com/dahall/Vanara), [CsWin32](https://github.com/microsoft/CsWin32) | Windows interop | Consider for a later Job Object backend; select one strategy and keep platform interop out of portable contracts. |
@@ -292,13 +294,15 @@ stop expansion if adoption cost exceeds demonstrated benefit or the selected gua
 
 ## Implementation milestones
 
-All milestones are open. The next implementation window is **.1 inventory and bounded evaluation**.
-The table is the implementation plan, not a second live task board. Record detailed changes and native
-results in the owning repositories and existing issues/PRs when implementation begins.
+**.1 inventory and bounded evaluation records a retain-both-layers decision**, with the selected
+research budget stopped and missing comparisons explicit in the
+[evaluation report](../reports/2026-10-11-shared-process-supervision-evaluation.md). Milestones **.2–.8 remain open**;
+this decision selects no new backend, shared API or consumer migration. The table is the implementation
+plan, not a second live task board. Record subsequent source and native results with their owners.
 
 | Milestone | Owner and narrow touch-set | Dependencies | Exit evidence |
 |---|---|---|---|
-| **V2-PROC-01.1 Inventory and prior-art evaluation** | Coordination maintainer; read-only consumer inventory and isolated evaluation fixtures under its tests/engineering tree | This design | Classify routine vs contained runners, freeze required guarantees and two consumer cases; pin candidate package/source/runtime; compare CliWrap, Meziantou and ProcessKit against critical lifecycle fixtures; decide reuse/adaptation with explicit gaps and effort bound |
+| **V2-PROC-01.1 Inventory and prior-art evaluation** | Coordination maintainer; read-only consumer inventory and isolated evaluation fixtures under its tests/engineering tree | This design | Classify routine vs contained runners, freeze required guarantees and two consumer cases; pin candidate package/source/runtime; compare CliWrap, Meziantou and ProcessKit against critical lifecycle fixtures; decide reuse/adaptation with explicit gaps and effort bound. [Bounded decision recorded](../reports/2026-10-11-shared-process-supervision-evaluation.md): retain both layers; accepted BCL scopes, failed deadline, inconclusive CliWrap heldpipe and blocked sink remain distinct |
 | **.2 Shared contracts and conformance fixtures** | Coordination; focused contract project and test fixtures | .1 | Typed command/budget/capability/result/cleanup contracts, bounded byte sinks, deterministic lifecycle tests and real disposable-process fixtures; map existing Execution identities and avoid dependency cycles |
 | **.3 Routine runner and first consumer** | Coordination runner plus SDD TestShared/ChildProcess tests | .2 and routine backend decision | Selected backend passes fixture matrix for its declared weaker/stronger capabilities; SDD adapter preserves start/timeout/held-pipe distinctions and diagnostics; real affected acceptance tests pass; no unbounded buffering or cleanup wait introduced |
 | **.4 Linux contained backend** | Coordination Linux backend, reviewed launcher/protocol and containment tests | .2 and Linux backend decision; delegated disposable environment for native checks | Placement before target execution, verified controllers/protection, stable identity, channel-loss cleanup, supervisor-death outer owner and bounded retirement all qualify; unsupported profiles refuse; actual overhead recorded |
