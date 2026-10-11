@@ -201,22 +201,35 @@ env.pop('FSGG_TELEMETRY_CONFIG', None)
 alias_dir = root/'engine-alias'; alias_dir.mkdir(); (alias_dir/'fsgg-coord-engine').symlink_to(engine)
 foreign = root/'foreign-tools'; shutil.copytree(engine.parent, foreign)
 assert hashlib.sha256((foreign/engine.name).read_bytes()).digest() == hashlib.sha256(engine.read_bytes()).digest()
+# Keep the shadowed original basename, and separately select an unambiguous
+# foreign child name absent from the parent apphost directory. Both carry the
+# exact same SDK apphost bytes and its copied relative .store entry assembly.
+foreign_name='fsgg-foreign-engine'
+assert not (engine.parent/foreign_name).exists()
+shutil.copy2(foreign/engine.name,foreign/foreign_name)
+assert hashlib.sha256((foreign/foreign_name).read_bytes()).digest() == hashlib.sha256(engine.read_bytes()).digest()
+assert not (foreign/engine.with_suffix('.dll').name).exists() and not (foreign/(foreign_name+'.dll')).exists()
 def compact(value):
     return (json.dumps(value, ensure_ascii=False, separators=(',', ':'))+'\n').encode()
 def invoke(config, args, selected):
     child_env = dict(env, PATH=str(selected)+os.pathsep+env.get('PATH',''))
     return subprocess.run([str(engine),'skill','roadmap-telemetry','--config',str(config),*args],
                           env=child_env, capture_output=True, timeout=30)
-for label, selected, rollback in [('same',engine.parent,True),('alias',alias_dir,True),('foreign-identical-shim',foreign,False)]:
+cases=[('same',engine.parent,engine.name,engine,engine.parent,True),
+       ('alias',alias_dir,engine.name,engine,engine.parent,True),
+       ('shadowed-foreign-basename',foreign,engine.name,engine,engine.parent,False),
+       ('foreign-identical-shim',foreign,foreign_name,foreign/foreign_name,foreign,False)]
+for label, selected, configured_name, expected_child, assembly_root, rollback in cases:
     print('SDK pairing case: '+label+'; phase=initialize', flush=True)
     case=root/label;case.mkdir(mode=0o700);store=case/'store';store.mkdir(mode=0o700)
     initialized=subprocess.run([str(engine),'telemetry','store','init','--store-root',str(store)],env=env,capture_output=True,timeout=30)
     assert initialized.returncode==0,initialized.stderr.decode()
-    config=case/'telemetry.json'; config.write_bytes(compact(dict(schema='fsgg.telemetry.host-config/1',storeRoot=str(store),engine='fsgg-coord-engine')));config.chmod(0o600)
-    begin=invoke(config,['begin','--feature','FIXTURE','--item','RETAINED','--attempt',label,'--model','fixture','--effort','medium'],engine.parent)
+    config=case/'telemetry.json'; config.write_bytes(compact(dict(schema='fsgg.telemetry.host-config/1',storeRoot=str(store),engine=configured_name)));config.chmod(0o600)
+    setup_selected=selected if label=='foreign-identical-shim' else engine.parent
+    begin=invoke(config,['begin','--feature','FIXTURE','--item','RETAINED','--attempt',label,'--model','fixture','--effort','medium'],setup_selected)
     assert begin.returncode==0, begin.stderr.decode()
     token=json.loads(begin.stdout)['token']
-    started=invoke(config,['started','--token',token,'--native-id','fixture-native'],engine.parent)
+    started=invoke(config,['started','--token',token,'--native-id','fixture-native'],setup_selected)
     assert started.returncode==0,started.stderr.decode()
     statepath=store/'orchestrator-dispatches'/(token+'.json');before=statepath.read_bytes();state=json.loads(before)
     assert compact(state)==before,'fixture serialization differs from genuine adapter state'
@@ -237,14 +250,17 @@ for label, selected, rollback in [('same',engine.parent,True),('alias',alias_dir
     prefix=b'fsgg-coord-engine: telemetry store: '
     assert result.stderr.count(prefix)==1,(label,result.stderr)
     proof=json.loads(result.stderr.split(prefix,1)[1].decode().strip())
-    expected_executable=(selected/'fsgg-coord-engine').resolve(strict=True)
-    expected_assemblies=list(selected.resolve(strict=True).rglob('fsgg-coord-engine.dll')) if label=='foreign-identical-shim' else list(engine.parent.rglob('fsgg-coord-engine.dll'))
+    expected_executable=expected_child.resolve(strict=True)
+    expected_assemblies=list(assembly_root.resolve(strict=True).rglob('fsgg-coord-engine.dll'))
     assert len(expected_assemblies)==1,'fixture entry assembly must be unambiguous'
     expected_assembly=expected_assemblies[0].resolve(strict=True)
-    assert proof['schema']=='fsgg.telemetry.local-parser-rejection/1' and proof['boundary']=='before-publication-io'
+    assert set(proof)=={'schema','code','boundary','inputSha256','enginePath','engineSha256','assemblyPath','assemblySha256','storeRoot','ingestId','sourceIdentity','generation','cursor','errors'}, (label, sorted(proof))
+    assert proof['schema']=='fsgg.telemetry.local-parser-rejection/1' and proof['code']=='invalid-batch' and proof['boundary']=='before-publication-io'
+    assert all(proof[name]==batch[name] for name in ('sourceIdentity','generation','cursor')), label
+    assert isinstance(proof['errors'],list) and proof['errors'] and all(isinstance(error,str)for error in proof['errors']), label
     expected_engine_sha=hashlib.sha256(expected_executable.read_bytes()).hexdigest()
     expected_assembly_sha=hashlib.sha256(expected_assembly.read_bytes()).hexdigest()
-    diagnostic=dict(case=label, configuredBasename='fsgg-coord-engine', selectedPathPrefix=str(selected), parentExecutable=str(engine.resolve(strict=True)), expectedEnginePath=str(expected_executable), expectedEngineSha256=expected_engine_sha, actualEnginePath=proof.get('enginePath'), actualEngineSha256=proof.get('engineSha256'), expectedAssemblyPath=str(expected_assembly), expectedAssemblySha256=expected_assembly_sha, actualAssemblyPath=proof.get('assemblyPath'), actualAssemblySha256=proof.get('assemblySha256'))
+    diagnostic=dict(case=label, configuredBasename=configured_name, selectedPathPrefix=str(selected), parentExecutable=str(engine.resolve(strict=True)), expectedEnginePath=str(expected_executable), expectedEngineSha256=expected_engine_sha, actualEnginePath=proof.get('enginePath'), actualEngineSha256=proof.get('engineSha256'), expectedAssemblyPath=str(expected_assembly), expectedAssemblySha256=expected_assembly_sha, actualAssemblyPath=proof.get('assemblyPath'), actualAssemblySha256=proof.get('assemblySha256'))
     print('SDK pairing public binary identity: '+json.dumps(diagnostic, sort_keys=True), flush=True)
     assert proof['enginePath']==str(expected_executable) and proof['engineSha256']==expected_engine_sha, diagnostic
     assert proof['assemblyPath']==str(expected_assembly) and proof['assemblySha256']==expected_assembly_sha, diagnostic
@@ -258,7 +274,7 @@ for label, selected, rollback in [('same',engine.parent,True),('alias',alias_dir
     assert after==unrelated,'rejected input changed receiver or unrelated dispatch bytes'
     assert not (root/'xdg'/'fs-gg'/'telemetry.json').exists()
     print('SDK pairing case: '+label+'; phase=qualified', flush=True)
-print('SDK-installed retained parser rejection: same and alias rollback; foreign identical shim retained')
+print('SDK-installed retained parser rejection: same and alias rollback; shadowed basename and actual foreign identical shim retained')
 PY_PAIRING
 then
   ok "SDK-installed parent/child parser rejection preserves or rolls back exact retained bytes"
