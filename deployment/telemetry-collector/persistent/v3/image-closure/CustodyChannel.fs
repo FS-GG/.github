@@ -40,6 +40,17 @@ module CustodyProtocol=
         let deadline=DateTimeOffset.Parse(node.GetProperty("deadline").GetString(),Globalization.CultureInfo.InvariantCulture)
         require(deadline>DateTimeOffset.UtcNow&&deadline<=DateTimeOffset.UtcNow.AddMinutes 90.) "custody-original-deadline"
         deadline
+    // OutputLimit is a combined UTF-8 byte ceiling, not a character or per-stream allowance.
+    let observation lease outputLimit (node:JsonElement)=
+        exact ["lease";"retired";"exitCode";"stdout";"stderr"] node
+        require(node.GetProperty("lease").GetString()=lease) "custody-command-join"
+        let retired=node.GetProperty("retired").GetBoolean()
+        let exitCode=node.GetProperty("exitCode").GetInt32()
+        let stdout=node.GetProperty("stdout").GetString()
+        let stderr=node.GetProperty("stderr").GetString()
+        require(not(isNull stdout)&&not(isNull stderr)) "custody-output-null"
+        require(outputLimit>0&&int64(Encoding.UTF8.GetByteCount stdout)+int64(Encoding.UTF8.GetByteCount stderr)<=int64 outputLimit) "custody-output-bound"
+        retired,{ExitCode=exitCode;Stdout=stdout;Stderr=stderr}
 
 /// One inherited AF_UNIX stream. Loss/partial framing poisons the lease; no reconnect or legacy fallback.
 type CustodyChannel private(socket:Socket,identity:string,deadline:DateTimeOffset,admissionSha256:string)=
@@ -49,7 +60,7 @@ type CustodyChannel private(socket:Socket,identity:string,deadline:DateTimeOffse
     let mutable failed=false
     let mutable inputBound=false
     let leases=Collections.Generic.HashSet<string>()
-    let exchange action payload (token:CancellationToken)=lock gate (fun()->
+    let exchange action payload (validate:JsonElement->unit) (token:CancellationToken)=lock gate (fun()->
         CustodyProtocol.require(not failed&&DateTimeOffset.UtcNow<deadline) "custody-lost-or-expired"
         token.ThrowIfCancellationRequested()
         ordinal<-ordinal+1
@@ -72,41 +83,46 @@ type CustodyChannel private(socket:Socket,identity:string,deadline:DateTimeOffse
             CustodyProtocol.exact ["schema";"identity";"ordinal";"status";"payload"] node
             CustodyProtocol.require(node.GetProperty("schema").GetString()=CustodyProtocol.Schema&&node.GetProperty("identity").GetString()=identity&&node.GetProperty("ordinal").GetInt32()=ordinal) "custody-reply-join"
             CustodyProtocol.require(node.GetProperty("status").GetString()="acknowledged") "custody-unknown"
-            node.GetProperty("payload").Clone()
+            let reply=node.GetProperty("payload").Clone()
+            // Malformed action acknowledgments poison the same lease as framing/transport loss.
+            validate reply
+            reply
         with _->failed<-true;reraise())
     member _.Identity=identity
     member _.Deadline=deadline
     member _.BindInput input=
         CustodyProtocol.sha input
         CustodyProtocol.require(not inputBound) "custody-input-already-bound"
-        let reply=exchange "bind-input" {|input=input;admissionSha256=admissionSha256|} CancellationToken.None
-        CustodyProtocol.exact ["input"] reply
-        CustodyProtocol.require(reply.GetProperty("input").GetString()=input) "custody-input-join"
+        exchange "bind-input" {|input=input;admissionSha256=admissionSha256|} (fun reply->
+            CustodyProtocol.exact ["input"] reply
+            CustodyProtocol.require(reply.GetProperty("input").GetString()=input) "custody-input-join") CancellationToken.None|>ignore
         inputBound<-true
     member _.Retain(bytes:byte array)=
-        let reply=exchange "retain" {|bytes=bytes.Length|} CancellationToken.None
-        CustodyProtocol.exact ["charged"] reply
-        CustodyProtocol.require(reply.GetProperty("charged").GetInt32()=bytes.Length) "custody-output-charge"
+        exchange "retain" {|bytes=bytes.Length|} (fun reply->
+            CustodyProtocol.exact ["charged"] reply
+            CustodyProtocol.require(reply.GetProperty("charged").GetInt32()=bytes.Length) "custody-output-charge") CancellationToken.None|>ignore
     member _.Start(command:ProcessCommand)=
         CustodyProtocol.require(inputBound&&command.Executable="/usr/sbin/podman"&&command.OutputLimit=1024*1024) "custody-command-not-selected"
-        let reply=exchange "start" command CancellationToken.None
-        CustodyProtocol.exact ["lease"] reply
+        let reply=exchange "start" command (fun reply->
+            CustodyProtocol.exact ["lease"] reply
+            let lease=reply.GetProperty("lease").GetString()
+            CustodyProtocol.sha lease
+            CustodyProtocol.require(leases.Add lease) "custody-lease-reused") CancellationToken.None
         let lease=reply.GetProperty("lease").GetString()
-        CustodyProtocol.sha lease
-        CustodyProtocol.require(leases.Add lease) "custody-lease-reused"
         let mutable retired=false
         let mutable result:ProcessOutput option=None
         let observe action token=
-            let response=exchange action {|lease=lease|} token
-            CustodyProtocol.exact ["lease";"retired";"exitCode";"stdout";"stderr"] response
-            CustodyProtocol.require(response.GetProperty("lease").GetString()=lease) "custody-command-join"
-            if response.GetProperty("retired").GetBoolean() then
-                retired<-true
-                result<-Some {ExitCode=response.GetProperty("exitCode").GetInt32();Stdout=response.GetProperty("stdout").GetString();Stderr=response.GetProperty("stderr").GetString()}
+            exchange action {|lease=lease|} (fun response->
+                let observedRetired,output=CustodyProtocol.observation lease command.OutputLimit response
+                if observedRetired then
+                    result<-Some output
+                    retired<-true) token|>ignore
         {new IOwnedProcess with
             member _.Identity=identity+":"+lease
             member _.HasExited=retired&&not failed
             member _.Wait token=
+                CustodyProtocol.require(not failed) "custody-lost-or-expired"
+                token.ThrowIfCancellationRequested()
                 while not retired do observe "observe" token
                 result.Value
             member _.Cancel token=

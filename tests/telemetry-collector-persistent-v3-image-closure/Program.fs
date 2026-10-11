@@ -7,6 +7,11 @@ open System.Threading
 open System.Threading.Tasks
 open FSGG.Telemetry.PersistentV3.ImageClosure
 
+// Pure custody controls exit before any fixture creation, child process or image mechanism.
+if Environment.GetEnvironmentVariable "PERSISTENT_V3_CUSTODY_CONTROLS_ONLY" = "1" then
+    OciTests.processBoundaries()
+    Environment.Exit 0
+
 // Source-only targeted route exits before fixture creation or process-backed checks.
 PathControls.run()
 InactiveControls.run()

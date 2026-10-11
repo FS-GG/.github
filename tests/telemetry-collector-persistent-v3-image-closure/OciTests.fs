@@ -197,3 +197,27 @@ let processBoundaries()=
     let expired=JsonSerializer.Serialize {|schema=CustodyProtocol.Schema;identity=String('a',64);deadline=DateTimeOffset.UtcNow.AddSeconds(-1.).ToString("O");admissionSha256=String('b',64)|}
     rejects "expired original deadline" (fun()->CustodyProtocol.binding(parse expired)|>ignore)
     rejects "recycled numeric identity" (fun()->CustodyProtocol.sha "pid:123:start:456")
+
+    let lease=String('c',64)
+    let observation (retired:bool) (stdout:string) (stderr:string)=JsonSerializer.Serialize {|lease=lease;retired=retired;exitCode=7;stdout=stdout;stderr=stderr|}|>parse
+    let read node=CustodyProtocol.observation lease 8 node
+    let retired,output=read(observation true "abcd" "efgh")
+    require(retired&&output.ExitCode=7&&output.Stdout="abcd"&&output.Stderr="efgh") "exact combined output ceiling refused"
+    let running,_=read(observation false "" "")
+    require(not running) "running acknowledgment manufactured retirement"
+    rejects "combined output above ceiling" (fun()->read(observation true "abcde" "fghi")|>ignore)
+    rejects "UTF-8 output above ceiling" (fun()->read(observation true "ééééé" "")|>ignore)
+    rejects "null output" (fun()->read(observation true null "")|>ignore)
+    rejects "unretired output above ceiling" (fun()->read(observation false "123456789" "")|>ignore)
+    rejects "foreign process lease" (fun()->CustodyProtocol.observation (String('d',64)) 8 (observation true "" "")|>ignore)
+    let extra=(JsonSerializer.Serialize {|lease=lease;retired=true;exitCode=0;stdout="";stderr=""|}).TrimEnd('}')+",\"extra\":true}"
+    rejects "extra observation field" (fun()->read(parse extra)|>ignore)
+    let duplicate=(JsonSerializer.Serialize {|lease=lease;retired=true;exitCode=0;stdout="";stderr=""|}).TrimEnd('}')+",\"retired\":true}"
+    rejects "duplicate observation field" (fun()->read(parse duplicate)|>ignore)
+    let refusesPayload name action=
+        let refused=try action();false with :? IOException| :? InvalidOperationException| :? FormatException->true
+        require refused ("accepted malformed custody payload "+name)
+    refusesPayload "nonboolean retirement" (fun()->read(parse("{\"lease\":\""+lease+"\",\"retired\":1,\"exitCode\":0,\"stdout\":\"\",\"stderr\":\"\"}"))|>ignore)
+    refusesPayload "nonnumeric exit" (fun()->read(parse("{\"lease\":\""+lease+"\",\"retired\":true,\"exitCode\":\"0\",\"stdout\":\"\",\"stderr\":\"\"}"))|>ignore)
+    refusesPayload "nonstring output" (fun()->read(parse("{\"lease\":\""+lease+"\",\"retired\":true,\"exitCode\":0,\"stdout\":1,\"stderr\":\"\"}"))|>ignore)
+    printfn "PASS custody observation combined UTF-8 bounds and closed retirement joins"
