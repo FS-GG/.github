@@ -190,11 +190,11 @@ jobs:
           # readers bind provisioned package/file/ELF/search inputs. Root source
           # admission owns outer resources and actual descendant retirement.
           timeout --kill-after=15s 45s python3 -I -S -c '
-            import hashlib,pathlib
-            with pathlib.Path("tests/telemetry-collector-persistent-v3-image-closure/native-preflight/toolchain_census.py").open("rb") as stream: source=stream.read(65537)
-            if len(source)>65536 or hashlib.sha256(source).hexdigest()!="455081426450ded7f3ec758915abe17c9c87884b801b6176760d1a7629323a9f":
-                raise RuntimeError("custody-census-source-refused")
-            exec(compile(source,"<pinned-existing-census>","exec"))
+          import hashlib,pathlib
+          with pathlib.Path("tests/telemetry-collector-persistent-v3-image-closure/native-preflight/toolchain_census.py").open("rb") as stream: source=stream.read(65537)
+          if len(source)>65536 or hashlib.sha256(source).hexdigest()!="455081426450ded7f3ec758915abe17c9c87884b801b6176760d1a7629323a9f":
+              raise RuntimeError("custody-census-source-refused")
+          exec(compile(source,"<pinned-existing-census>","exec"))
           '
           # BEGIN hosted runner SDK custody normalization
           sdk_refuse() {
