@@ -3,6 +3,11 @@ name: telemetry-host-package
 on:
   workflow_dispatch:
     inputs:
+      learn_native_preflight:
+        description: Separately admitted read-only privileged provider observation
+        required: true
+        default: false
+        type: boolean
       learn_native_fixture:
         description: Separately admitted protected-main native custody fixture
         required: true
@@ -112,8 +117,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: telemetry-host-package-${{ inputs.learn_native_fixture && 'native' || 'source' }}-${{ github.ref }}
-  cancel-in-progress: ${{ !inputs.learn_native_fixture }}
+  group: telemetry-host-package-${{ (inputs.learn_native_fixture || inputs.learn_native_preflight) && 'native' || 'source' }}-${{ github.ref }}
+  cancel-in-progress: ${{ !(inputs.learn_native_fixture || inputs.learn_native_preflight) }}
 
 jobs:
   package:
@@ -133,6 +138,7 @@ jobs:
         env:
           NUGET_PACKAGES: ${{ runner.temp }}/host-binding-nuget
           HOSTED_RUNNER_CUSTODY: ${{ runner.environment }}
+          FSGG_LEARN_NATIVE_PREFLIGHT: ${{ github.event_name == 'workflow_dispatch' && inputs.learn_native_preflight && 'true' || 'false' }}
           FSGG_LEARN_NATIVE_FIXTURE: ${{ github.event_name == 'workflow_dispatch' && inputs.learn_native_fixture && 'true' || 'false' }}
           FSGG_LEARN_NATIVE_SOURCE: ${{ inputs.learn_native_source }}
           FSGG_LEARN_NATIVE_ADMISSION_SHA256: ${{ inputs.learn_native_admission_sha256 }}
@@ -144,6 +150,16 @@ jobs:
           # Static native selection checks precede provider census/build work.
           # A protected dispatch and these joins still require root's actual
           # operation/profile admission; no PR obtains native privilege.
+          if test "$FSGG_LEARN_NATIVE_PREFLIGHT" = true; then
+            test "$FSGG_LEARN_NATIVE_FIXTURE" = false
+            test "$GITHUB_EVENT_NAME" = workflow_dispatch
+            test "$GITHUB_REF" = refs/heads/main
+            test "$FSGG_LEARN_NATIVE_SOURCE" = "$GITHUB_SHA"
+            [[ "$FSGG_LEARN_NATIVE_ADMISSION_SHA256" =~ ^[a-f0-9]{64}$ ]]
+            [[ "$FSGG_LEARN_NATIVE_PROFILE_SHA256" =~ ^[a-f0-9]{64}$ ]]
+            # Root must separately admit this exact protected read-only effect.
+            # Valid digests do not supply privilege, delegation or custody.
+          fi
           if test "$FSGG_LEARN_NATIVE_FIXTURE" = true; then
             test "$GITHUB_EVENT_NAME" = workflow_dispatch
             test "$GITHUB_REF" = refs/heads/main
@@ -210,6 +226,12 @@ jobs:
               name,arch,version,status,depends,predepends=fields
               if arch in ('amd64','all') and status=='installed': installed[name]=(version,depends,predepends)
           pending=['gcc-13','libc6-dev','binutils']; selected={}
+          # Ordinary source CI must qualify the full provisioned observation
+          # closure before any separately admitted privileged dispatch. Census
+          # only reads package/files/ELF inputs; privilege remains gated below.
+          pending += ['sudo','python3','coreutils','libpam-runtime','libnss-systemd']
+          required += [pathlib.Path('/usr/bin/sudo'),pathlib.Path('/usr/bin/python3'),pathlib.Path('/usr/bin/timeout')]
+          require(all(p.is_file() for p in required), 'observation-required-input')
           while pending:
               name=pending.pop()
               if name in selected: continue
@@ -338,6 +360,58 @@ jobs:
           test "$(/usr/bin/dotnet --version)" = 10.0.401 || sdk_refuse usr-bin-dotnet-version-after-normalization
           test "$(readlink -f "$(command -v dotnet)")" = "$(readlink -f /usr/bin/dotnet)" || sdk_refuse dotnet-selection-after-normalization
           python3 -c 'import yaml; print(yaml.__version__)' > "$RUNNER_TEMP/host-binding-pyyaml-version.txt" || sdk_refuse pyyaml-import
+          if test "$FSGG_LEARN_NATIVE_PREFLIGHT" = true; then
+            # Reuse the unchanged accepted owner runner; no custom launcher.
+            # Provider/tool closure and SDK guards have already succeeded.
+            /usr/bin/python3 -I -S - <<'PY'
+          import hashlib, json, os, pathlib, time
+          inputs={"literal": {"bytes": 6982, "path": "tests/telemetry-collector-persistent-v3-image-closure/native-preflight/privileged_observation.py", "sha256": "46018b4c1b192bb42d99d1d079c313c17ad5712e71a44ee75c9c7e3ad8aaef6a"}, "parser": {"bytes": 4033, "path": "tests/telemetry-collector-persistent-v3-image-closure/native-preflight/observation_parser.py", "sha256": "09aa78d5aaf2746de4368307c210ddb1a65531ef89eeaea74d4c2d98ae8459c7"}, "runner": {"bytes": 7743, "path": "tests/telemetry-collector-persistent-v3-image-closure/native-preflight/owned_install_guards.py", "sha256": "14ba6985a1702419cc5c31fa76e165b2fd90164eb372ae91fe070a2b4a7c0057"}}
+          selected={}
+          workspace=pathlib.Path(os.environ['GITHUB_WORKSPACE'])
+          for name,row in inputs.items():
+              with (workspace/row['path']).open('rb') as stream:
+                  value=stream.read(row['bytes']+1)
+              if len(value)!=row['bytes'] or hashlib.sha256(value).hexdigest()!=row['sha256']:
+                  raise RuntimeError('observation-input-byte-selection:'+name)
+              selected[name]=value
+          runner={'__name__':'accepted_owner_runner_14ba'}
+          parser={'__name__':'observation_evidence_parser'}
+          exec(compile(selected['runner'],'<accepted-owner-runner-14ba>','exec'),runner)
+          exec(compile(selected['parser'],'<observation-evidence-parser>','exec'),parser)
+          destination=pathlib.Path(os.environ['RUNNER_TEMP'])/'learn-native-observation-evidence'
+          destination.mkdir(mode=0o700)
+          output=destination/'original-command.log'
+          original_boot=time.clock_gettime_ns(time.CLOCK_BOOTTIME)
+          original_deadline=time.monotonic()+15
+          original_boot_deadline=original_boot+15000000000
+          observed={}
+          def control(event,child,leader,known):
+              if event=='before-success':
+                  with output.open('rb') as stream: raw=stream.read(65537)
+                  observed.update(parser['validate_observation'](raw,original_boot,original_boot_deadline))
+          argv=['/usr/bin/sudo','-n','--','/usr/bin/timeout','--kill-after=5s','15s',
+                '/usr/bin/python3','-I','-S','-c',selected['literal'].decode('utf-8','strict')]
+          # Existing runner stops sampledRSS; it does not establish hard native
+          # fixture quotas or complete detached/privileged monitor coverage.
+          result=runner['run'](argv,os.environ['GITHUB_WORKSPACE'],
+              {'PATH':'/usr/bin:/bin','LC_ALL':'C','LANG':'C'},original_deadline,5,
+              134217728,str(output),output_cap=65536,control=control)
+          evidence={'schema':'fsgg.learn.native-readonly-observation/1',
+              'source':os.environ['GITHUB_SHA'],'run':os.environ['GITHUB_RUN_ID'],
+              'attempt':os.environ['GITHUB_RUN_ATTEMPT'],'image':os.environ['ImageVersion'],
+              'admissionJoin':os.environ['FSGG_LEARN_NATIVE_ADMISSION_SHA256'],
+              'profileJoin':os.environ['FSGG_LEARN_NATIVE_PROFILE_SHA256'],
+              'inputs':{k:{'sha256':v['sha256'],'bytes':v['bytes']} for k,v in inputs.items()},
+              'observation':observed,'runnerResult':result,
+              'scope':'read-only facts; no exclusive delegation or fixture custody authority',
+              'wholePrivilegedWrapperRetirement':'UNKNOWN',
+              'fixtureExecuted':False,'hardFixtureQuotasAppliedToWrappers':False}
+          encoded=json.dumps(evidence,sort_keys=True).encode()
+          if len(encoded)>131072: raise RuntimeError('observation-evidence-bound')
+          (destination/'observation.json').write_bytes(encoded)
+          print('OBSERVED read-only privileged provider facts; native fixture remains held')
+          PY
+          fi
           # Compile current LEARN F# source before costly fixture/model work.
           # One original 120s envelope covers locked restore plus build; this
           # gate invokes no console, C controls or privileged native fixture.
@@ -580,6 +654,14 @@ jobs:
         with:
           name: learn-custody-core-toolchain-${{ github.sha }}
           path: ${{ runner.temp }}/learn-custody-core-toolchain/
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Retain separately admitted read-only provider observation
+        if: always() && github.event_name == 'workflow_dispatch' && inputs.learn_native_preflight
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: learn-native-observation-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/learn-native-observation-evidence/
           if-no-files-found: ignore
           retention-days: 14
       - name: Retain separately admitted native fixture evidence
