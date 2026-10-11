@@ -902,10 +902,14 @@ telemetry begins and finishes now succeed through the explicitly configured,
 pinned 0.101.0 engine. Native collaboration usage remains unknown where its
 supported collector is unavailable; no additional Codex CLI was launched.
 
-The externally observed 0.102.0 installation has 91 regular files whose package
-payload matches the published candidate. Its installation owner and runtime
-qualification remain unknown. This correspondence does not accept the global
-selector or execute the installation. Independent public acquisition, bounded
-installed qualification, original pending recovery and installed receiver/C2
-acceptance remain open. Publication and live schema adoption therefore advance
-this plan without completing the operational milestone.
+Independent public NuGet acquisition authenticated the 0.102.0 CLI archive.
+Its raw bytes match the archive retained in the externally observed installation,
+and its normalized package payload matches the fixed original candidate. The
+complete population of 91 installed files remained unchanged; its package files
+correspond to that public archive. Generated SDK metadata and the shim retain
+unknown original provenance. This proves CLI package correspondence; the external
+installation owner and native runtime qualification remain unknown. It does not
+accept the global selector or execute the installation. Bounded installed
+qualification, original pending recovery and installed receiver/C2 acceptance
+remain open. Publication and live schema adoption therefore advance this plan
+without completing the operational milestone.
