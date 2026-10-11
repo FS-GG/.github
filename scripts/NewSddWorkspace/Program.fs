@@ -227,13 +227,13 @@ let doctorCoherence (exitCode: int) (output: string) : Result<bool, string> =
                 Error "doctor coherence observation has an unsupported schema"
             elif root.["command"].["name"].GetValue<string>() <> "doctor" then
                 Error "doctor coherence observation names a different command"
-            elif not ([ "succeeded"; "succeededWithWarnings" ] |> List.contains (root.["outcome"].GetValue<string>())) then
+            elif not ([ "succeeded"; "succeededWithWarnings"; "noChange" ] |> List.contains (root.["outcome"].GetValue<string>())) then
                 Error "doctor coherence observation has a failed or unknown outcome"
             else
-                let coherent = root.["coherent"].GetValue<bool>()
-                let nested = root.["doctor"].["isCoherent"].GetValue<bool>()
-                if coherent <> nested then Error "doctor coherence observation is inconsistent"
-                else Ok coherent
+                // The generic stage signal and the read-only doctor's domain verdict differ.
+                // SDD 2.1 reports noChange/coherent=false with doctor.isCoherent=true.
+                root.["coherent"].GetValue<bool>() |> ignore
+                Ok(root.["doctor"].["isCoherent"].GetValue<bool>())
         with _ -> Error "doctor coherence observation is missing or malformed"
 
 /// The org GitHub Packages feed. It authenticates ALL reads, including PUBLIC packages

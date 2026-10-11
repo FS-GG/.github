@@ -564,7 +564,7 @@ printf "%s\n" "$*" >> "$FSGG_SDD_LOG"
 [ "$1" = "--version" ] && { printf '%s\n' '2.1.0'; exit 0; }
 if [ "$1" = "doctor" ]; then
   case "${FSGG_STUB_DOCTOR_CASE:-true}" in
-    true) printf '%s\n' '{"schemaVersion":1,"command":{"name":"doctor"},"outcome":"succeeded","coherent":true,"doctor":{"isCoherent":true}}' ;;
+    true) printf '%s\n' '{"schemaVersion":1,"command":{"name":"doctor"},"outcome":"noChange","coherent":false,"doctor":{"isCoherent":true}}' ;;
     false) printf '%s\n' '{"schemaVersion":1,"command":{"name":"doctor"},"outcome":"succeededWithWarnings","coherent":false,"doctor":{"isCoherent":false}}' ;;
     malformed) printf '%s\n' 'not a doctor report' ;;
     failure) printf '%s\n' '{"schemaVersion":1,"command":{"name":"doctor"},"outcome":"succeeded","coherent":true,"doctor":{"isCoherent":true}}'; exit 2 ;;
