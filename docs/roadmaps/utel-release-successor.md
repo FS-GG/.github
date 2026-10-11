@@ -896,8 +896,13 @@ schema 13 to 14 through the supported 0.101.0 CLI. The complete snapshot was tak
 under the store lock; migration validated historical checksums under its own
 writer lock and preserved existing tables, rows and pending state. Two separately
 bounded drains processed the 256 ready files: 215 committed and 41 were quarantined
-as permanent conflicts. Those quarantines and the original historical pending
-attempt remain unresolved; they were not deleted, reset or retried. Prospective
+as permanent conflicts. Read-only classification of every quarantined batch found
+one stale same-candidate outcome event, with a strictly newer revision already
+retained: 36 ready-to-delivered, four refused-to-delivered and one delivered-to-delivered
+observation. No batch contained collateral events. All 41 original batches remain
+retained; this does not claim that the current projection preserves every historical
+field. The separate malformed historical pending attempt remains unresolved.
+Neither it nor the quarantines were deleted, reset or retried. Prospective
 telemetry begins and finishes now succeed through the explicitly configured,
 pinned 0.101.0 engine. Native collaboration usage remains unknown where its
 supported collector is unavailable; no additional Codex CLI was launched.
@@ -907,9 +912,30 @@ Its raw bytes match the archive retained in the externally observed installation
 and its normalized package payload matches the fixed original candidate. The
 complete population of 91 installed files remained unchanged; its package files
 correspond to that public archive. Generated SDK metadata and the shim retain
-unknown original provenance. This proves CLI package correspondence; the external
-installation owner and native runtime qualification remain unknown. It does not
-accept the global selector or execute the installation. Bounded installed
-qualification, original pending recovery and installed receiver/C2 acceptance
-remain open. Publication and live schema adoption therefore advance this plan
-without completing the operational milestone.
+unknown original provenance; the external installation owner remains unknown.
+A separately admitted read-only installed 0.102.0 store-status operation returned
+schema 14, ready status, WAL mode and zero pending inbox files. It observed the
+three pinned hostfxr, hostpolicy and coreclr runtime anchors, with the complete
+installed population and selector unchanged. The earlier short version operation
+returned the exact version but lacked two runtime observations; that consumed
+qualification refusal remains retained. These results accept the selected status
+operation and runtime evidence, not every installed operation or selector custody.
+
+The existing CLI ingress and local correction driver passed 38 inert refusal
+controls after its reviewed currentness and private-configuration repairs. Its
+separately admitted 15-stage native run then passed against two fresh disposable
+stores. Every stage retained successful original receipts, process retirement and
+all three selected runtime anchors. Ingress reopen and replay preserved the
+canonical revision; one correction applied to ten targets produced one audit entry,
+preserved all ten raw facts and changed effective delivery summaries from zero to
+one. This accepts that disposable CLI path only. It does not recover the historical
+pending attempt, change the live store or enable C2 emission.
+
+The next operational milestone is the existing C2 receiver-and-producer acceptance:
+bind the published receiver to an explicitly approved receiving destination and
+verify its contract before enabling genuine producer emission. Synthetic receiver
+and disposable correction proofs do not establish genuine producer lineage,
+analyzer consumption or native usage coverage. Original pending recovery, unknown
+installation custody and unavailable native collaboration usage remain separate
+obligations. Publication, schema adoption and these selected installed operations
+therefore advance the plan without completing the operational milestone.
