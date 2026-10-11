@@ -449,3 +449,11 @@ pidfd capabilities and authenticated retirement result interface. Historical bod
 and compilation provenance remain unknown. Host feasibility, cold builds/reloads,
 C5, publication/installed adoption, capture/recovery/usage and activation stay open;
 LEARN is not complete.
+
+### Fixed production custody adapter source successor
+
+PR4431's accepted core/source bridge is protected at `db9b91a576039af36044dfc45fcc25ccefbe587b`; its 518 C controls and actual C/F# bridge establish source fixtures, not native process custody. The accepted production-adapter window adds a callable C boundary, frozen exact command slots and retained namespace/cgroup/pidfd controls, continuous shared output charging, joined descendant retirement, and a fixed test-only native controller using the existing F# channel. Source compilation/regressions and native qualification are pending; no current run or acceptance is claimed.
+
+The existing hosted route prepares a default-off protected-main native opt-in with separate original root admission/profile and actual delegated capability requirements. The bounded native fixture may report BLOCKED on provider limitations; it cannot substitute simulated retirement, elevate an ordinary PR, provision privileges or install a helper. Its setup/CLR/controller overhead belongs inside the admitted 32-task/512MiB/one-CPU parent boundary and original 120-second deadline. Actual cleanup, source qualification and protected source delivery will be recorded separately after their genuine operations.
+
+Production root-caller integration, an exact dynamic command producer, actual Podman/runtime/image closure, installed receiver/grants/capture/recovery/usage/activation and historical private-host provenance remain open. Whole LEARN remains incomplete; missing historical artifacts are not reconstructed by this maintained source successor.

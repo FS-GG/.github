@@ -1,6 +1,25 @@
 name: telemetry-host-package
 
 on:
+  workflow_dispatch:
+    inputs:
+      learn_native_fixture:
+        description: Separately admitted protected-main native custody fixture
+        required: true
+        default: false
+        type: boolean
+      learn_native_source:
+        description: Exact protected source commit selected by root admission
+        required: false
+        type: string
+      learn_native_admission_sha256:
+        description: Existing root native operation admission join (not authority by itself)
+        required: false
+        type: string
+      learn_native_profile_sha256:
+        description: Existing root native resource and capability profile join
+        required: false
+        type: string
   pull_request:
     paths:
       - "src/FS.GG.Telemetry.Host/**"
@@ -93,8 +112,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: telemetry-host-package-${{ github.ref }}
-  cancel-in-progress: true
+  group: telemetry-host-package-${{ inputs.learn_native_fixture && 'native' || 'source' }}-${{ github.ref }}
+  cancel-in-progress: ${{ !inputs.learn_native_fixture }}
 
 jobs:
   package:
@@ -114,10 +133,37 @@ jobs:
         env:
           NUGET_PACKAGES: ${{ runner.temp }}/host-binding-nuget
           HOSTED_RUNNER_CUSTODY: ${{ runner.environment }}
+          FSGG_LEARN_NATIVE_FIXTURE: ${{ github.event_name == 'workflow_dispatch' && inputs.learn_native_fixture && 'true' || 'false' }}
+          FSGG_LEARN_NATIVE_SOURCE: ${{ inputs.learn_native_source }}
+          FSGG_LEARN_NATIVE_ADMISSION_SHA256: ${{ inputs.learn_native_admission_sha256 }}
+          FSGG_LEARN_NATIVE_PROFILE_SHA256: ${{ inputs.learn_native_profile_sha256 }}
         run: |
           set -euo pipefail
           ImageOS="${ImageOS:?native hosted image OS required}"
           ImageVersion="${ImageVersion:?native hosted image version required}"
+          # Static native selection checks precede provider census/build work.
+          # A protected dispatch and these joins still require root's actual
+          # operation/profile admission; no PR obtains native privilege.
+          if test "$FSGG_LEARN_NATIVE_FIXTURE" = true; then
+            test "$GITHUB_EVENT_NAME" = workflow_dispatch
+            test "$GITHUB_REF" = refs/heads/main
+            test "$FSGG_LEARN_NATIVE_SOURCE" = "$GITHUB_SHA"
+            [[ "$FSGG_LEARN_NATIVE_ADMISSION_SHA256" =~ ^[a-f0-9]{64}$ ]]
+            [[ "$FSGG_LEARN_NATIVE_PROFILE_SHA256" =~ ^[a-f0-9]{64}$ ]]
+            # These independently checkable prerequisites block native work
+            # before costly source/model builds. Root's admitted supervisor
+            # must supply actual retained descriptors in this invocation;
+            # GITHUB_ENV cannot carry an FD across separate job steps.
+            test "$(id -u)" -eq 0 || { printf 'BLOCKED native root execution profile absent\n' >&2; exit 42; }
+            test -n "${FSGG_LEARN_NATIVE_PARENT_FD:-}" && test -n "${FSGG_LEARN_NATIVE_HOME_FD:-}" || { printf 'BLOCKED native retained delegation/home handles absent\n' >&2; exit 42; }
+          fi
+          if test "$FSGG_LEARN_NATIVE_FIXTURE" = true; then
+            # Only the already-validated fixed hex metadata can cross steps.
+            printf 'FSGG_LEARN_NATIVE_FIXTURE=true\nFSGG_LEARN_NATIVE_ADMISSION_SHA256=%s\nFSGG_LEARN_NATIVE_PROFILE_SHA256=%s\n' "$FSGG_LEARN_NATIVE_ADMISSION_SHA256" "$FSGG_LEARN_NATIVE_PROFILE_SHA256" >> "$GITHUB_ENV"
+          else
+            # Unused dispatch strings never enter the environment file.
+            printf 'FSGG_LEARN_NATIVE_FIXTURE=false\nFSGG_LEARN_NATIVE_ADMISSION_SHA256=\nFSGG_LEARN_NATIVE_PROFILE_SHA256=\n' >> "$GITHUB_ENV"
+          fi
           printf 'custody-core provider=%s os=%s arch=%s image-os=%s actual-image=%s selected-image=%s source=%s\n' "$HOSTED_RUNNER_CUSTODY" "$RUNNER_OS" "$RUNNER_ARCH" "$ImageOS" "$ImageVersion" "$FSGG_LEARN_CUSTODY_CORE_IMAGE_VERSION" "$FSGG_LEARN_CUSTODY_CORE_IMAGE_SOURCE"
           test "$GITHUB_ACTIONS" = true
           test "$HOSTED_RUNNER_CUSTODY" = github-hosted
@@ -292,6 +338,16 @@ jobs:
           test "$(/usr/bin/dotnet --version)" = 10.0.401 || sdk_refuse usr-bin-dotnet-version-after-normalization
           test "$(readlink -f "$(command -v dotnet)")" = "$(readlink -f /usr/bin/dotnet)" || sdk_refuse dotnet-selection-after-normalization
           python3 -c 'import yaml; print(yaml.__version__)' > "$RUNNER_TEMP/host-binding-pyyaml-version.txt" || sdk_refuse pyyaml-import
+          # Compile current LEARN F# source before costly fixture/model work.
+          # One original 120s envelope covers locked restore plus build; this
+          # gate invokes no console, C controls or privileged native fixture.
+          timeout --kill-after=15s 120s /usr/bin/bash -c '
+            set -euo pipefail
+            export DOTNET_CLI_DO_NOT_USE_MSBUILD_SERVER=1 MSBUILDDISABLENODEREUSE=1
+            project=tests/telemetry-collector-persistent-v3-image-closure/PersistentV3.ImageClosure.Tests.fsproj
+            /usr/bin/dotnet restore "$project" --locked-mode --disable-build-servers -m:1 /nodeReuse:false
+            /usr/bin/dotnet build "$project" --no-restore --disable-build-servers -m:1 /nodeReuse:false -p:UseSharedCompilation=false
+          '
           /usr/bin/dotnet restore deployment/telemetry-collector/host-binding/tests/HostBinding.Tests.fsproj --locked-mode
           /usr/bin/dotnet test deployment/telemetry-collector/host-binding/tests/HostBinding.Tests.fsproj \
             --configuration Release --no-restore --logger "trx;LogFileName=host-binding.trx" \
@@ -412,6 +468,11 @@ jobs:
             /usr/bin/dotnet "$RUNNER_TEMP/host-attempt-correspondence/bin/HostAttempt.Correspondence/release/HostAttempt.Correspondence.dll"
           export quint_archive
           export -f quint
+          FSGG_LEARN_NATIVE_SOURCE_SHA256="$(sha256sum deployment/telemetry-collector/persistent/v3/image-closure/native/custody_adapter.c | cut -d' ' -f1)"
+          export FSGG_LEARN_NATIVE_SOURCE_SHA256
+          # Same existing source supervisor/fixture. An ordinary hosted runner
+          # has no native retained delegation: the fixed controller reports
+          # BLOCKED, without sudo, installation or a fabricated native pass.
           PERSISTENT_V3_RUNNER_TOOL="$quint_archive" bash tests/telemetry-collector-persistent-v3-image-closure/run.sh
       - name: Refuse malformed Host release effect policy before costly qualification
         run: |
@@ -519,5 +580,13 @@ jobs:
         with:
           name: learn-custody-core-toolchain-${{ github.sha }}
           path: ${{ runner.temp }}/learn-custody-core-toolchain/
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Retain separately admitted native fixture evidence
+        if: always() && inputs.learn_native_fixture
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: learn-native-custody-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/learn-native-custody-evidence/
           if-no-files-found: ignore
           retention-days: 14

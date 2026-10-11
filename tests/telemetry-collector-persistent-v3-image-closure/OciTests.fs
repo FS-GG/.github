@@ -449,3 +449,103 @@ let custodyAcknowledgments()=
         // Never unload code beneath an unobserved test-owned callback.
         if coreUnsettled then eprintfn "FAIL retaining C test library after unsettled peer; cleanup unknown"
         else NativeLibrary.Free library
+
+[<UnmanagedFunctionPointer(CallingConvention.Cdecl)>]
+type private AdapterControls=delegate of unit->int
+let custodyAdapterSourceControls()=
+    let selected=Environment.GetEnvironmentVariable "FSGG_LEARN_CUSTODY_ADAPTER_TEST_LIBRARY"
+    let selectedHash=Environment.GetEnvironmentVariable "FSGG_LEARN_CUSTODY_ADAPTER_TEST_LIBRARY_SHA256"
+    require(not(String.IsNullOrWhiteSpace selected)&&Path.IsPathFullyQualified selected) "custody-adapter-source-library-required"
+    CustodyProtocol.sha selectedHash
+    require(not(File.GetAttributes(selected).HasFlag FileAttributes.ReparsePoint)&&OciEvidence.shaBytes(File.ReadAllBytes selected)=selectedHash) "custody-adapter-source-library-bytes"
+    let library=NativeLibrary.Load selected
+    try
+        let controls=Marshal.GetDelegateForFunctionPointer<AdapterControls>(NativeLibrary.GetExport(library,"fsgg_custody_adapter_controls"))
+        require(controls.Invoke()=0) "actual adapter C source controls failed"
+        printfn "PASS FSharp ABI invokes actual adapter source controls; native custody NOT_RUN"
+    finally NativeLibrary.Free library
+
+// Invoked only by the admitted fixed C root test controller. These environment
+// values describe its frozen test operation; they do not authenticate admission.
+// No native setup, Podman, shell, process selection or provisioning happens here.
+let custodyAdapterNativeFixture()=
+    let kind=Environment.GetEnvironmentVariable "FSGG_LEARN_NATIVE_CASE"
+    let input=Environment.GetEnvironmentVariable "FSGG_LEARN_NATIVE_INPUT"
+    let cwd=Environment.GetEnvironmentVariable "FSGG_LEARN_NATIVE_CWD"
+    require(Set.contains kind (set["normal";"descendant";"denial";"allowance";"overflow";"wrong-command";"disconnect";"partial-ack"])) "native fixture case"
+    CustodyProtocol.sha input
+    require(Path.IsPathFullyQualified cwd) "native fixture exact directory"
+    let workload=if kind="disconnect" then "descendant" elif kind="partial-ack" then "allowance" else kind
+    let command={Executable="/usr/sbin/podman";Arguments=[|"--custody-fixture-workload";workload|];Environment=Map.ofList["LC_ALL","C";"PATH","/usr/bin:/bin"];WorkingDirectory=cwd;OutputLimit=1024*1024}
+    if kind="partial-ack" then
+        // Deliberately read only two bytes of the actual large observation
+        // acknowledgment, then disconnect. The C controller bounds SO_SNDBUF;
+        // its retained source/terminal evidence must identify actual delivery.
+        let fd=Int32.Parse(Environment.GetEnvironmentVariable "FSGG_LEARN_CUSTODY_FD")
+        use handle=new System.Net.Sockets.SafeSocketHandle(nativeint fd,true)
+        use socket=new System.Net.Sockets.Socket(handle)
+        use stream=new System.Net.Sockets.NetworkStream(socket,false)
+        let binding=Environment.GetEnvironmentVariable "FSGG_LEARN_CUSTODY_BINDING"|>Convert.FromBase64String
+        use selected=JsonDocument.Parse binding
+        let deadline=CustodyProtocol.binding selected.RootElement
+        let identity=selected.RootElement.GetProperty("identity").GetString()
+        let admission=selected.RootElement.GetProperty("admissionSha256").GetString()
+        use wait=new CancellationTokenSource(deadline-DateTimeOffset.UtcNow)
+        let send ordinal action payload=
+            let body=JsonSerializer.SerializeToUtf8Bytes {|schema=CustodyProtocol.Schema;identity=identity;ordinal=ordinal;action=action;payload=payload|}
+            let header=BitConverter.GetBytes(System.Net.IPAddress.HostToNetworkOrder body.Length)
+            stream.WriteAsync(header.AsMemory(),wait.Token).AsTask().GetAwaiter().GetResult()
+            stream.WriteAsync(body.AsMemory(),wait.Token).AsTask().GetAwaiter().GetResult()
+        let read ordinal=
+            let header=Array.zeroCreate<byte> 4
+            stream.ReadExactlyAsync(header.AsMemory(),wait.Token).AsTask().GetAwaiter().GetResult()
+            let count=System.Net.IPAddress.NetworkToHostOrder(BitConverter.ToInt32(header,0))
+            require(count>0&&count<=2*1024*1024) "native response bound"
+            let body=Array.zeroCreate<byte> count
+            stream.ReadExactlyAsync(body.AsMemory(),wait.Token).AsTask().GetAwaiter().GetResult()
+            use doc=JsonDocument.Parse body
+            CustodyProtocol.exact ["schema";"identity";"ordinal";"status";"payload"] doc.RootElement
+            require(doc.RootElement.GetProperty("identity").GetString()=identity&&doc.RootElement.GetProperty("ordinal").GetInt32()=ordinal&&doc.RootElement.GetProperty("status").GetString()="acknowledged") "native response join"
+            doc.RootElement.GetProperty("payload").Clone()
+        send 1 "bind-input" {|input=input;admissionSha256=admission|};read 1|>ignore
+        send 2 "start" command
+        let started=read 2
+        let lease=started.GetProperty("lease").GetString()
+        CustodyProtocol.sha lease
+        Thread.Sleep 200
+        send 3 "observe" {|lease=lease|}
+        let partial=Array.zeroCreate<byte> 2
+        stream.ReadExactlyAsync(partial.AsMemory(),wait.Token).AsTask().GetAwaiter().GetResult()
+        socket.Shutdown(System.Net.Sockets.SocketShutdown.Both)
+    else
+        use channel=CustodyChannel.BindInherited()
+        channel.BindInput input
+        if kind="wrong-command" then
+            let mutable refused=false
+            try
+                use unexpected=channel.Start {command with Arguments=[|"unexpected"|];Environment=Map.add "EXTRA" "1" command.Environment;WorkingDirectory=cwd+"/unexpected"}
+                ()
+            with :? IOException->refused<-true
+            require refused "native mismatched command returned a lease"
+        else
+            use ownedProcess=channel.Start command
+            if kind="disconnect" then ()
+            elif kind="overflow" then
+                let mutable refused=false
+                try ownedProcess.Wait CancellationToken.None|>ignore with :? IOException->refused<-true
+                require refused "native capture overflow acknowledged"
+            elif kind="descendant" then
+                Thread.Sleep 300
+                require(not ownedProcess.HasExited) "native descendant manufactured retirement"
+                ownedProcess.Cancel CancellationToken.None
+                let output=ownedProcess.Wait CancellationToken.None
+                require(output.Stdout="descendant-live\n"&&ownedProcess.HasExited) "native descendant cancellation/drain"
+            else
+                let output=ownedProcess.Wait CancellationToken.None
+                require(output.ExitCode=0&&ownedProcess.HasExited) "native kernel retirement required"
+                match kind with
+                | "normal"->require(output.Stdout="native-output\n"&&output.Stderr="native-error\n") "native actual captured output"
+                | "denial"->require(output.Stdout="controls-denied\n") "native control/descriptor deny probes"
+                | "allowance"->require(output.Stdout=String('x',8192)&&output.Stderr="") "native exact shared allowance"
+                | _->failwith "native fixed case"
+    printfn "PASS native FSharp client case=%s; root controller must independently prove cleanup" kind
