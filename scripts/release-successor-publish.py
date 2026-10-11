@@ -325,9 +325,10 @@ class RuntimePublisherAPI:
 
 class ReportingJournal:
     """Observe existing successful reads without extra reads or altered CAS policy."""
-    def __init__(self, journal, report):
+    def __init__(self, journal, report, *, detailed=False):
         self.journal = journal
         self.report = report
+        self.detailed = detailed
 
     def __getattr__(self, name):
         return getattr(self.journal, name)
@@ -339,6 +340,10 @@ class ReportingJournal:
             value = {"generation": state["generation"], "logicalHead": observed.head,
                      "physicalHead": self.journal._physical_head,
                      "effects": dict(state["effects"])}
+            if self.detailed:
+                value["stateSHA256"] = hashlib.sha256(canonical(state)).hexdigest()
+                value["intent"] = {key: state[key] for key in
+                                   ("contentId", "sourceSha", "version", "candidateArchiveSha256", "operator")}
             if self.report["startingJournal"] is None:
                 self.report["startingJournal"] = value
             self.report["lastObservedJournal"] = value
@@ -986,7 +991,7 @@ def execute_publisher(args, report):
         # Guard dependent genesis mutations as well as later advances.
         ledger_api.api = RuntimeDeadlineAuthority(ledger_api.api, forward_deadline, time.monotonic)
     journal = ProtectedReleaseJournal(ledger_api, ref=selected_ref, main_directory=True)
-    journal = ReportingJournal(journal, report)
+    journal = ReportingJournal(journal, report, detailed=not historical_recovery)
     provider = ReportingProvider(provider, report)
     admission = ProtectedPublisherAdmission(publisher_admission, ledger_api, selected_ref)
     if not historical_recovery:

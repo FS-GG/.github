@@ -564,17 +564,27 @@ class RecoveryControls(unittest.TestCase):
             self.assertEqual(provider.dispatched, [])
             self.assertFalse(rows["publicationComplete"])
 
-    def test_same_oid_corruption_is_rechecked(self):
+    def test_new_corrupt_oid_and_live_head_are_rechecked(self):
         candidate, authority, intent, _ = fixture(14)
         _, rows, journal, _, _, _ = slice_context(candidate, authority, intent)
         logical = journal._observed.head
         tree = authority.objects[("commits", logical)]["tree"]["sha"]
-        blob = authority.objects[("trees", tree)]["tree"][0]["sha"]
-        value = json.loads(base64.b64decode(authority.objects[("blobs", blob)]["content"]))
-        value["generation"] = 15
-        authority.objects[("blobs", blob)]["content"] = base64.b64encode(canonical(value)).decode()
+        entry = authority.objects[("trees", tree)]["tree"][0]
+        blob = entry["sha"]
+        accepted = json.loads(base64.b64decode(authority.objects[("blobs", blob)]["content"]))
+        value = {**accepted, "generation": 15}  # No effect transition: invalid successor.
+        new_blob = authority.put("blobs", {"encoding": "base64", "content": base64.b64encode(canonical(value)).decode()})
+        self.assertNotEqual(blob, new_blob)
+        new_tree = authority.tree([{**entry, "sha": new_blob}])
+        corrupt_logical = authority.commit(new_tree, [logical], "invalid unchanged effect transition")
+        physical = authority.head
+        corrupt_physical = journal.journal._overlay(physical, corrupt_logical, value)
+        authority.patch(PREFIX + "/git/refs/heads/main", {"sha": corrupt_physical, "force": False})
         with self.assertRaises(RuntimeError): journal.read()
         self.assertEqual(rows["lastObservedJournal"]["generation"], 14)
+        self.assertNotIn("intent", rows["lastObservedJournal"])
+        self.assertNotIn("stateSHA256", rows["lastObservedJournal"])
+        self.assertEqual(json.loads(base64.b64decode(journal.journal._immutable_object("blobs", blob)["content"])), accepted)
 
     def test_read_movement_and_draft_failure_retain_prior_observation(self):
         for mode in ("moved-head", "draft-unreadable"):
@@ -1619,7 +1629,7 @@ class PublicationReliabilityControls(unittest.TestCase):
                     quota_floor=publisher.ORDINARY_AUTHORITY_QUOTA_FLOOR)
         counter.admit_quota(now=1900000000)
         rows = report()
-        journal = publisher.ReportingJournal(ProtectedReleaseJournal(counter, ref=publisher.SUCCESSOR_REF, main_directory=True), rows)
+        journal = publisher.ReportingJournal(ProtectedReleaseJournal(counter, ref=publisher.SUCCESSOR_REF, main_directory=True), rows, detailed=True)
         api = MemoryPublisher();api.head = candidate["descriptor"]["sourceSha"]
         provider = MemoryProvider(ordered_effects(candidate), {})
         admission = publisher.ProtectedPublisherAdmission(
@@ -1644,6 +1654,12 @@ class PublicationReliabilityControls(unittest.TestCase):
                 self.assertLessEqual(sum(counter.attempted.values()),4080)
                 self.assertEqual(r["startingJournal"]["generation"],generation)
                 self.assertIsNotNone(r["lastObservedJournal"])
+                observed = r["lastObservedJournal"]
+                self.assertEqual(observed["stateSHA256"], hashlib.sha256(canonical(j._observed.state)).hexdigest())
+                self.assertEqual(observed["intent"], {key: j._observed.state[key] for key in
+                                  ("contentId", "sourceSha", "version", "candidateArchiveSha256", "operator")})
+                next_expected = {key: observed[key] for key in ("generation", "logicalHead", "stateSHA256")}
+                publisher.validate_successor_checkpoint(c, j, next_expected)
                 self.assertFalse(r["publicationComplete"])
                 print(json.dumps({"composedForwardStart":generation,"disposition":result,"authority":counter.report(),"providerDispatches":p.dispatched},sort_keys=True))
 
