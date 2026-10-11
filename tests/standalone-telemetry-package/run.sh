@@ -231,11 +231,21 @@ for label, selected, rollback in [('same',engine.parent,True),('alias',alias_dir
     unrelated={str(p.relative_to(store)):p.read_bytes() for p in store.rglob('*') if p.is_file() and p!=statepath}
     result=invoke(config,['activity','--token',token,'--input',str(inputpath)],selected)
     assert result.returncode==1 and result.stdout==b'',(label,result.returncode,result.stdout,result.stderr)
+    # Every case must reach the genuine child parser, including the foreign negative.
+    prefix=b'fsgg-coord-engine: telemetry store: '
+    assert result.stderr.count(prefix)==1,(label,result.stderr)
+    proof=json.loads(result.stderr.split(prefix,1)[1].decode().strip())
+    expected_executable=(selected/'fsgg-coord-engine').resolve(strict=True)
+    expected_assemblies=list(selected.resolve(strict=True).rglob('fsgg-coord-engine.dll')) if label=='foreign-identical-shim' else list(engine.parent.rglob('fsgg-coord-engine.dll'))
+    assert len(expected_assemblies)==1,'fixture entry assembly must be unambiguous'
+    expected_assembly=expected_assemblies[0].resolve(strict=True)
+    assert proof['schema']=='fsgg.telemetry.local-parser-rejection/1' and proof['boundary']=='before-publication-io'
+    assert proof['enginePath']==str(expected_executable) and proof['engineSha256']==hashlib.sha256(expected_executable.read_bytes()).hexdigest()
+    assert proof['assemblyPath']==str(expected_assembly) and proof['assemblySha256']==hashlib.sha256(expected_assembly.read_bytes()).hexdigest()
+    assert proof['inputSha256']==hashlib.sha256(compact(batch)).hexdigest(),'genuine child did not reject exact retained wire'
+    assert proof['storeRoot']==str(store) and proof['ingestId']==batch['ingestId'] and proof['errors']
     if rollback:
         assert statepath.read_bytes()==before,(label,result.stderr)
-        assert result.stderr.count(b'fsgg.telemetry.local-parser-rejection/1')==1
-        wire=compact(batch)
-        assert hashlib.sha256(wire).hexdigest().encode() in result.stderr,'genuine child did not reject exact retained wire'
     else:
         assert statepath.read_bytes()==poisoned,'foreign identical shim borrowed parent assembly'
     after={str(p.relative_to(store)):p.read_bytes() for p in store.rglob('*') if p.is_file() and p!=statepath}

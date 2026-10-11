@@ -563,9 +563,7 @@ module Program =
                 require (files.Length = 1) "workspace fixture produced unexpected dispatch population"
                 let retained = JsonNode.Parse(File.ReadAllBytes files[0]) :?> JsonObject
                 require (retained["sequence"].GetValue<int>() = 1 && not (isNull retained["pendingPublication"])) "workspace ambiguous rejection lost intent"
-            finally
-            Environment.SetEnvironmentVariable("FSGG_ADAPTER_TEST_REJECTION", null)
-            Environment.SetEnvironmentVariable("FSGG_ADAPTER_TEST_ALIAS", null)
+            finally Environment.SetEnvironmentVariable("FSGG_ADAPTER_TEST_REJECTION", null)
             let mutable retainedIntent: string option = None
             for responseMode in [ "old-text"; "duplicate"; "trailing"; "oversize"; "foreign"; "wrong-batch"; "malformed-code"; "durable" ] do
                 Environment.SetEnvironmentVariable("FSGG_ADAPTER_TEST_RECEIPT", responseMode)
