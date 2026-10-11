@@ -781,8 +781,15 @@ main-directory journal completion. These counts do not measure wire requests or 
 future quota. Historical failed invocations, the unretained HTTP 422 cause and possible
 orphan objects remain separate.
 
-An independent readback of the promoted manifest, stable channel and exact package payloads
-from both feeds remains required. Clean public-feed side-by-side installation, installed
-receiver acceptance, local correction and retained-store migration are subsequent
-obligations; publication completion does not establish installed collection or close the
-operational milestone.
+Independent readback authenticated the promoted manifest and stable channel for this original
+candidate, then verified CLI, Kit and Drivers 0.101.0 package bytes from both feeds. Each
+feed's raw package hash matches its promoted publication receipt, and all three normalized
+payload hashes match the original candidate across both feeds. Public NuGet registry signing
+changes the raw archive bytes; it does not change the authenticated producer payload. These
+are bounded observations of the accepted coherent set, not a claim that the channel or
+repository head remains current.
+
+Clean public-feed side-by-side installation, installed receiver acceptance, local correction
+and retained-store migration remain open. Existing installed effects, shim provenance and
+historical unknowns are preserved. Independent feed verification does not establish installed
+collection or complete the operational milestone.
