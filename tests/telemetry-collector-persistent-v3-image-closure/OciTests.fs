@@ -528,21 +528,21 @@ let custodyAdapterNativeFixture()=
             with :? IOException->refused<-true
             require refused "native mismatched command returned a lease"
         else
-            use process=channel.Start command
+            use ownedProcess=channel.Start command
             if kind="disconnect" then ()
             elif kind="overflow" then
                 let mutable refused=false
-                try process.Wait CancellationToken.None|>ignore with :? IOException->refused<-true
+                try ownedProcess.Wait CancellationToken.None|>ignore with :? IOException->refused<-true
                 require refused "native capture overflow acknowledged"
             elif kind="descendant" then
                 Thread.Sleep 300
-                require(not process.HasExited) "native descendant manufactured retirement"
-                process.Cancel CancellationToken.None
-                let output=process.Wait CancellationToken.None
-                require(output.Stdout="descendant-live\n"&&process.HasExited) "native descendant cancellation/drain"
+                require(not ownedProcess.HasExited) "native descendant manufactured retirement"
+                ownedProcess.Cancel CancellationToken.None
+                let output=ownedProcess.Wait CancellationToken.None
+                require(output.Stdout="descendant-live\n"&&ownedProcess.HasExited) "native descendant cancellation/drain"
             else
-                let output=process.Wait CancellationToken.None
-                require(output.ExitCode=0&&process.HasExited) "native kernel retirement required"
+                let output=ownedProcess.Wait CancellationToken.None
+                require(output.ExitCode=0&&ownedProcess.HasExited) "native kernel retirement required"
                 match kind with
                 | "normal"->require(output.Stdout="native-output\n"&&output.Stderr="native-error\n") "native actual captured output"
                 | "denial"->require(output.Stdout="controls-denied\n") "native control/descriptor deny probes"
