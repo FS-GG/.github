@@ -192,7 +192,7 @@ jobs:
           timeout --kill-after=15s 45s /usr/bin/python3 -I -S -c '
           import hashlib,pathlib
           with pathlib.Path("tests/telemetry-collector-persistent-v3-image-closure/native-preflight/toolchain_census.py").open("rb") as stream: source=stream.read(65537)
-          if len(source)>65536 or hashlib.sha256(source).hexdigest()!="eba0b4ae23183a3fc2e108a40baff7a561ac2f60907361d515470bf8a02bc376":
+          if len(source)>65536 or hashlib.sha256(source).hexdigest()!="ea37894bc20851a632e251ca173495c33b3230b1048bf5c96d77d8ca8d694af9":
               raise RuntimeError("custody-census-source-refused")
           exec(compile(source,"<pinned-existing-census>","exec"))
           '

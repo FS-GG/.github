@@ -234,6 +234,61 @@ def elf_check(ok,reason):
         except Exception as error:
             raise RuntimeError(first+'; additional:defect-retention:'+str(error)) from error
 elf_original=destination/'elf-original.txt'; elf_original.touch(mode=0o600); elf_bytes=0
+lookup_records=[]; lookup_directories={}
+def absolute_search_ok(value):
+    return (isinstance(value,str) and value.startswith(('/usr/lib/','/usr/libexec/'))
+        and value==str(pathlib.Path(value)) and ':' not in value and '$' not in value
+        and path_record_ok(pathlib.Path(value)))
+def needed_basename_ok(name):
+    return bool(re.fullmatch(r'[A-Za-z0-9_.+-]+',name)) and name not in ('.','..')
+def retain_lookup(row):
+    first=elf_defects[0] if elf_defects else 'ELF-search-lookup'
+    require(len(lookup_records)<8192,first+'; additional:lookup-count-bound')
+    encoded=json.dumps(lookup_records+[row]).encode()
+    require(len(encoded)<=1048576,first+'; additional:lookup-evidence-bound')
+    lookup_records.append(row)
+    (destination/'elf-search-lookups-original.json').write_bytes(encoded)
+def lookup_custody(p,row,directory=False):
+    link=p.lstat(); resolved=p.resolve(strict=True); info=resolved.stat()
+    row.update(resolved=str(resolved),uid=info.st_uid,mode=oct(stat.S_IMODE(info.st_mode)),pathUID=link.st_uid)
+    ok=(link.st_uid==0 and info.st_uid==0 and not info.st_mode&0o022
+        and (stat.S_ISDIR(info.st_mode) if directory else stat.S_ISREG(info.st_mode))
+        and str(resolved).startswith(('/usr/lib/','/usr/libexec/')) and path_record_ok(resolved))
+    row['ancestors']=[]
+    ancestors=set(p.parents)|set(resolved.parents)
+    require(len(ancestors)<=128,'ELF-lookup-ancestor-bound')
+    for ancestor in sorted(ancestors):
+        a=ancestor.stat()
+        row['ancestors'].append(dict(path=str(ancestor),uid=a.st_uid,mode=oct(stat.S_IMODE(a.st_mode))))
+        ok=ok and stat.S_ISDIR(a.st_mode) and a.st_uid==0 and not a.st_mode&0o022
+    return bool(ok),resolved
+def inspect_absolute_search(directory,name,selected):
+    p=pathlib.Path(directory); candidate=p/name
+    row={'directory':directory,'name':name,'candidate':str(candidate),'selectedHashedTarget':selected}
+    try:
+        if directory not in lookup_directories:
+            directory_row={'directory':directory,'role':'search-directory'}
+            ok,_=lookup_custody(p,directory_row,directory=True)
+            directory_row['custodyQualified']=ok
+            retain_lookup(directory_row); lookup_directories[directory]=ok
+            elf_check(ok,'ELF-absolute-directory-custody:'+directory)
+        if not lookup_directories[directory]:
+            row['refused']='unqualified-search-directory'; return
+        # lstat distinguishes a missing entry from a dangling symlink.
+        try: candidate.lstat()
+        except FileNotFoundError:
+            row['present']=False; row['absence']='lstat FileNotFoundError in qualified search directory'
+            return
+        row['present']=True
+        ok,resolved=lookup_custody(candidate,row)
+        row['custodyQualified']=ok
+        elf_check(ok,'ELF-absolute-candidate-custody:'+str(candidate))
+        row['matchesHashedUniqueTarget']=str(resolved)==selected and resolved in cached
+        elf_check(row['matchesHashedUniqueTarget'],'ELF-absolute-candidate-target:'+str(candidate))
+    except Exception as error:
+        row['unknown']=type(error).__name__+':'+str(error)
+        raise RuntimeError((elf_defects[0] if elf_defects else 'ELF-lookup-unknown')+'; additional:'+row['unknown']) from error
+    finally: retain_lookup(row)
 for resolved in sorted(cached):
     with resolved.open('rb') as source: magic=source.read(4)
     if magic!=b'\x7fELF': continue
@@ -248,8 +303,15 @@ for resolved in sorted(cached):
     elf_check(all(pathlib.Path(path).resolve(strict=True) in cached for path in interpreters), 'unclosed-ELF-interpreter:'+str(resolved))
     search=re.findall(r'\((?:RPATH|RUNPATH)\).*?\[([^\]]*)\]',detail)
     for value in search:
-        elf_check(value in ('$ORIGIN','${ORIGIN}'), 'unexpected-ELF-search-override:'+str(resolved)+':'+value)
-        if value not in ('$ORIGIN','${ORIGIN}'): continue
+        literal_origin=value in ('$ORIGIN','${ORIGIN}')
+        literal_absolute=absolute_search_ok(value)
+        elf_check(literal_origin or literal_absolute, 'unexpected-ELF-search-override:'+str(resolved)+':'+value)
+        if literal_absolute:
+            for name in needed:
+                safe=needed_basename_ok(name) and len(aliases.get(name,set()))==1
+                elf_check(safe,'ELF-absolute-needed-name-or-alias:'+str(resolved)+':'+name)
+                if safe: inspect_absolute_search(value,name,next(iter(aliases[name])))
+        if not literal_origin: continue
         for name in needed:
             sibling=resolved.parent/name
             if sibling.exists() and len(aliases.get(name,set()))==1:
