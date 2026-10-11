@@ -141,8 +141,8 @@ jobs:
           provider=destination/'provider-original.json'
           provider.write_text(json.dumps({key:os.environ[key] for key in ('GITHUB_REPOSITORY','GITHUB_RUN_ID','GITHUB_RUN_ATTEMPT','GITHUB_JOB','GITHUB_SHA','RUNNER_ENVIRONMENT','RUNNER_OS','RUNNER_ARCH','ImageOS','ImageVersion')},sort_keys=True)+'\n')
           provider.chmod(0o600)
-          required=[compiler, pathlib.Path('/usr/lib/gcc/x86_64-linux-gnu/13/cc1'),
-                    pathlib.Path('/usr/lib/gcc/x86_64-linux-gnu/13/collect2'),
+          required=[compiler, pathlib.Path('/usr/libexec/gcc/x86_64-linux-gnu/13/cc1'),
+                    pathlib.Path('/usr/libexec/gcc/x86_64-linux-gnu/13/collect2'),
                     pathlib.Path('/usr/bin/as'), pathlib.Path('/usr/bin/ld'), pathlib.Path('/usr/bin/readelf'),
                     pathlib.Path('/usr/lib/gcc/x86_64-linux-gnu/13/include/stddef.h'),
                     pathlib.Path('/usr/lib/gcc/x86_64-linux-gnu/13/include/stdint.h'),
@@ -177,7 +177,7 @@ jobs:
           paths=set(required)
           for name in sorted(selected):
               for line in read(['/usr/bin/dpkg-query','-L',name]).splitlines():
-                  if line.startswith(('/usr/bin/','/usr/lib/','/usr/include/','/lib/','/lib64/')):
+                  if line.startswith(('/usr/bin/','/usr/lib/','/usr/libexec/','/usr/include/','/lib/','/lib64/')):
                       p=pathlib.Path(line)
                       if p.is_file(): paths.add(p)
           # Loader cache/config participates in actual path selection, while fixed
