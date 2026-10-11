@@ -417,3 +417,35 @@ and delegation/foreign-insertion exclusion remain unqualified. Bounded search do
 prove global source absence. No compiler, native command, container, provider, installation
 or activation was invoked. Complete acquired inputs, two cold images, C5 and live custody
 remain open; consumed or unknown historical operations retain their original reservations.
+### LEARN-01.4 fresh maintained internal custody core source, 2026-10-11
+
+The accepted source window prepares `learn-custody-core-fresh-v1` independently
+of missing historical helper/private-volume/SSH evidence. The internal C core
+has no production entry point or effects. It decodes the existing closed F# wire
+grammar, joins immutable identity/admission/input/ordinal/deadline values, charges
+cumulative combined output and retained evidence against a supplied aggregate
+allowance, and poisons reuse/cached retirement after failure. Acknowledgments and
+retired state require explicit adapter results; syntax and synthetic results do
+not authenticate command authority or descendant custody.
+
+One focused C test translation unit prepares meaningful semantic controls against
+the actual component. Compilation, execution and genuine C/F# interoperability
+remain unrun. Qualification can select the existing hosted source fixture and its
+pinned runner toolchain, or separately authenticate/acquire/close the proposed
+local compiler. Neither route is admitted by source preparation; Podman acquisition
+is independent of core compilation. Existing source supervision, exact source/tool
+pins, immutable resource/deadline/output bounds and complete cleanup remain required.
+
+The prepared existing Host workflow now binds its early C toolchain census to
+the root-selected GitHub-hosted Ubuntu 24.04 image `20261004.327.1` and official
+source `e3fe113a581eb9a44ca43f479b69f9c93f36df34`. It produces the existing
+fixture's required compiler pins before dependent qualification; fresh native
+image metadata, compilation, C controls and F# interop acceptance remain pending.
+This source preparation does not admit hosted execution or native helper effects.
+
+The next production dependency is the owner-selected root operation lease and
+selected-command binding, immutable shared allowance, retained namespace/cgroup/
+pidfd capabilities and authenticated retirement result interface. Historical body
+and compilation provenance remain unknown. Host feasibility, cold builds/reloads,
+C5, publication/installed adoption, capture/recovery/usage and activation stay open;
+LEARN is not complete.

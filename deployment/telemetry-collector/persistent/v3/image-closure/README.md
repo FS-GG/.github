@@ -64,3 +64,71 @@ The acquisition-required declaration binds the repaired served Manager from run
 `37224476786`, artifact `11311024262`, source `5468ce210ef4886806d70c4e333496a358efbdf1`.
 The focused source console also refuses each of eight historical Manager pins.
 This source rebinding does not accept a native inventory or an installed receiver.
+
+### Internal custody core source
+
+`native/custody_core.h` and `custody_core.c` prepare the fresh maintained
+`learn-custody-core-fresh-v1` internal protocol/state component. This is new
+source, not the missing historical helper. It has no entry point, transport,
+process launch, namespace/cgroup effect or admission authority. Compilation,
+semantic tests and C/F# interoperability are unrun at source preparation.
+
+The caller supplies disjoint frame/text/node storage, an append-only lease table,
+the selected identity/admission/input digests, one original deadline clock and an
+aggregate byte allowance. Frame/text buffers cover the existing 2 MiB bound;
+node and lease capacities are explicit caller-selected storage limits, whose
+fitness must be checked at admission. The parser accepts the existing request
+envelope and five actions, exact PascalCase command fields, JSON escaping and
+valid Unicode, and refuses unknown/duplicate decoded keys, wrong types, trailing
+data, invalid framing or ordinal/input joins. Storage/deadline/validation failure
+poisons the shared core and prevents cached retirement or subsequent reuse.
+
+`cc_feed` may accumulate one fragmented frame; `cc_current` exposes the parsed
+request without acknowledging it. Only an explicit `cc_result` can commit a
+binding, retention charge, fresh lease or synthetic observation through
+`cc_complete`. The caller must authenticate selected commands and handle-backed
+results before using this API in production. Matching `/usr/sbin/podman` is a
+wire-shape check, not permission to execute. The caller must poison on ambiguous,
+partial or lost reply delivery; the component supplies no reconnect route.
+
+Decoded stdout and stderr share the 1 MiB command ceiling. Results represent
+caller-owned cumulative output snapshots: their combined byte count cannot
+decrease; increases and explicit retained evidence consume the supplied shared
+allowance without unsigned overflow. Authentic cumulative stream identity remains
+the future adapter's responsibility. JSON reply escaping has its separate 2 MiB
+frame ceiling, checked before any successful state commit. An explicit retired
+result tests state semantics only; it does not prove descendant retirement.
+
+`CustodyCoreTests.c` is the single focused semantic test translation unit. Its
+conventional test entry runs only after an admitted compile/test operation;
+`CC_TEST_LIBRARY` omits that entry when loaded by the existing source fixture.
+Prepared controls exercise the actual core, including fragmented/truncated frames,
+escaped-equivalent keys, Unicode, identity/ordinal/input joins, immutable deadlines,
+shared budgets, malformed adapter results, lease reuse and poisoned cached results.
+The prepared integration gate feeds actual F# `CustodyChannel` request bytes
+through this C component and returns its acknowledgments using the existing bounded
+AF_UNIX fixture. The accepted source window adds this test-only bridge
+and serial compilation to the existing `run.sh` route without changing `Program`.
+Both remain unrun. The test library is retained rather than unloaded if a callback
+has not settled; failed qualification retains its private build root.
+
+The source route requires a root-selected compiler, exact compiler digest and
+standard SHA256 manifest of the independently authenticated complete toolchain,
+plus its manifest digest. Hosted use also joins a selected immutable image version
+to actual provider metadata. These byte checks are not self-authentication: the
+existing admitted profile must supply provider/package trust, transitive closure,
+RSS/process accounting and complete retirement. The prepared existing Host workflow
+selects GitHub-hosted Ubuntu 24.04 image `20261004.327.1` and official source
+`e3fe113a581eb9a44ca43f479b69f9c93f36df34` under the root-selected provider trust
+boundary. It refuses a different native image tuple, missing compiler inputs,
+unclosed ELF dependencies or writable compiler inputs before dependent qualification.
+Its early package/file/ELF census supplies the four required compiler inputs;
+`run.sh` rechecks those bytes before serial compilation with fixed GCC 13 header
+search and a sanitized environment. Census hashes bind provisioned bytes and do
+not independently authenticate them. Actual fresh hosted compilation, C controls
+and F# interop remain unrun and require effect-specific admission. GNU timeout only bounds the
+serial C compilation/test stage; it does not prove process custody.
+
+The authoritative production adapter, authenticated compiler
+closure, native host prerequisites and every inactive-image/installed gate remain
+open.

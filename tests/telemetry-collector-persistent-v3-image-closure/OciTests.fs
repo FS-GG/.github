@@ -228,6 +228,16 @@ extern int private duplicateDescriptor(int descriptor)
 [<DllImport("libc",EntryPoint="fcntl",SetLastError=true)>]
 extern int private descriptorFlags(int descriptor,int command)
 
+[<UnmanagedFunctionPointer(CallingConvention.Cdecl)>]
+type private CoreReset=delegate of nativeint*unativeint*uint64*uint64->int
+[<UnmanagedFunctionPointer(CallingConvention.Cdecl)>]
+type private CoreReceive=delegate of nativeint*unativeint*uint64->int
+[<UnmanagedFunctionPointer(CallingConvention.Cdecl)>]
+type private CoreComplete=delegate of int*int*int*nativeint*unativeint*nativeint*unativeint*uint64*nativeint*unativeint->int
+let private pinned (bytes:byte array) action=
+    let handle=GCHandle.Alloc(bytes,GCHandleType.Pinned)
+    try action(handle.AddrOfPinnedObject()) finally handle.Free()
+
 // Exercise the production inherited channel, with an open AF_UNIX peer and no process backend.
 let custodyAcknowledgments()=
     let identity=String('a',64)
@@ -239,7 +249,8 @@ let custodyAcknowledgments()=
     let started=json {|lease=lease|}
     let terminal=json {|lease=lease;retired=true;exitCode=0;stdout="done";stderr=""|}
     let wrongObservation=json {|lease=String('e',64);retired=true;exitCode=0;stdout="";stderr=""|}
-    let withChannel name (replies:(string*string) list) exercise=
+    let mutable coreUnsettled=false
+    let withPeer name (replies:(string*string) list) coreFactory exercise=
         printfn "BEGIN inherited custody fixture %s" name
         let root=Directory.CreateTempSubdirectory("p2c4-custody-socket-").FullName
         let path=Path.Combine(root,"peer.sock")
@@ -254,7 +265,9 @@ let custodyAcknowledgments()=
             client.ConnectAsync(System.Net.Sockets.UnixDomainSocketEndPoint path,budget.Token).AsTask().GetAwaiter().GetResult()
             use peer=listener.AcceptAsync(budget.Token).AsTask().GetAwaiter().GetResult()
             use stream=new System.Net.Sockets.NetworkStream(peer,false)
-            let binding=JsonSerializer.SerializeToUtf8Bytes {|schema=CustodyProtocol.Schema;identity=identity;deadline=DateTimeOffset.UtcNow.AddSeconds(5.).ToString("O");admissionSha256=String('b',64)|}
+            let deadline=DateTimeOffset.UtcNow.AddSeconds(5.)
+            let binding=JsonSerializer.SerializeToUtf8Bytes {|schema=CustodyProtocol.Schema;identity=identity;deadline=deadline.ToString("O");admissionSha256=String('b',64)|}
+            let coreReply=coreFactory|>Option.map(fun factory->factory deadline)
             Environment.SetEnvironmentVariable("FSGG_LEARN_CUSTODY_BINDING",Convert.ToBase64String binding)
             // Independent descriptor ownership: invalidating a Socket SafeHandle suppresses its
             // ReleaseHandle, but Socket.Dispose waits for that release and can spin forever.
@@ -277,10 +290,13 @@ let custodyAcknowledgments()=
                     use request=JsonDocument.Parse bytes
                     let node=request.RootElement
                     require(node.GetProperty("action").GetString()=expectedAction) "fixture received unexpected action"
-                    let response=JsonSerializer.SerializeToUtf8Bytes {|schema=CustodyProtocol.Schema;identity=identity;ordinal=node.GetProperty("ordinal").GetInt32();status="acknowledged";payload=parse payload|}
-                    let responseHeader=BitConverter.GetBytes(System.Net.IPAddress.HostToNetworkOrder response.Length)
-                    stream.WriteAsync(responseHeader.AsMemory(),budget.Token).AsTask().GetAwaiter().GetResult()
-                    stream.WriteAsync(response.AsMemory(),budget.Token).AsTask().GetAwaiter().GetResult())
+                    let framed=
+                        match coreReply with
+                        | Some answer->answer (Array.append header bytes) payload
+                        | None->
+                            let response=JsonSerializer.SerializeToUtf8Bytes {|schema=CustodyProtocol.Schema;identity=identity;ordinal=node.GetProperty("ordinal").GetInt32();status="acknowledged";payload=parse payload|}
+                            Array.append (BitConverter.GetBytes(System.Net.IPAddress.HostToNetworkOrder response.Length)) response
+                    stream.WriteAsync(framed.AsMemory(),budget.Token).AsTask().GetAwaiter().GetResult())
             let mutable primaryFailed=false
             try
                 try
@@ -294,6 +310,7 @@ let custodyAcknowledgments()=
                 // Preserve the first assertion, but retain an unsettled-reader timeout as failure.
                 try serving.WaitAsync(TimeSpan.FromSeconds 1.).GetAwaiter().GetResult() with
                 | :? TimeoutException as error->
+                    if Option.isSome coreReply then coreUnsettled<-true
                     eprintfn "FAIL unsettled inherited custody fixture %s: %s" name error.Message
                     if not primaryFailed then raise error
                 | _->()
@@ -302,6 +319,7 @@ let custodyAcknowledgments()=
             Environment.SetEnvironmentVariable("FSGG_LEARN_CUSTODY_BINDING",oldBinding)
             Directory.Delete(root,true)
             printfn "CLEANED inherited custody fixture %s" name
+    let withChannel name replies exercise=withPeer name replies None exercise
     let refuses expected action=
         let mutable reason=None
         try action() with :? IOException as error->reason<-Some error.Message
@@ -378,3 +396,56 @@ let custodyAcknowledgments()=
         printfn "PASS inherited custody binding refusal closes descriptor %s" name
     rejectsBinding "malformed" (Convert.ToBase64String(Encoding.UTF8.GetBytes "{}")) "custody-fields"
     rejectsBinding "missing" null "root-admitted-custody-channel-required"
+
+    // Actual F# serialization/channel framing enters the compiled C parser, and
+    // C acknowledgments enter the production F# validator. Results remain synthetic.
+    let selected=Environment.GetEnvironmentVariable "FSGG_LEARN_CUSTODY_CORE_TEST_LIBRARY"
+    let selectedHash=Environment.GetEnvironmentVariable "FSGG_LEARN_CUSTODY_CORE_TEST_LIBRARY_SHA256"
+    require(not(String.IsNullOrWhiteSpace selected)&&Path.IsPathFullyQualified selected) "custody-core-test-library-required"
+    CustodyProtocol.sha selectedHash
+    require(not(File.GetAttributes(selected).HasFlag FileAttributes.ReparsePoint)&&OciEvidence.shaBytes(File.ReadAllBytes selected)=selectedHash) "custody-core-test-library-bytes"
+    // This byte join does not authenticate the compiler; the admitted source
+    // operation supplies the independently accepted toolchain/provider profile.
+    let library=NativeLibrary.Load selected
+    try
+        let reset=Marshal.GetDelegateForFunctionPointer<CoreReset>(NativeLibrary.GetExport(library,"fsgg_custody_core_fixture_reset"))
+        let receive=Marshal.GetDelegateForFunctionPointer<CoreReceive>(NativeLibrary.GetExport(library,"fsgg_custody_core_fixture_receive"))
+        let complete=Marshal.GetDelegateForFunctionPointer<CoreComplete>(NativeLibrary.GetExport(library,"fsgg_custody_core_fixture_complete"))
+        let now()=uint64(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds())
+        let factory (deadline:DateTimeOffset)=
+            let inputBytes=Encoding.UTF8.GetBytes input
+            require(pinned inputBytes (fun pointer->reset.Invoke(pointer,unativeint inputBytes.Length,now(),uint64(deadline.ToUnixTimeMilliseconds())))=1) "custody-core-fixture-reset"
+            fun (request:byte array) (syntheticPayload:string)->
+                require(pinned request (fun pointer->receive.Invoke(pointer,unativeint request.Length,now()))=1) "custody-core-rejected-FSharp-request"
+                use result=JsonDocument.Parse syntheticPayload
+                let mutable retiredNode=Unchecked.defaultof<JsonElement>
+                let observed=result.RootElement.TryGetProperty("retired",&retiredNode)
+                let retired=if observed&&retiredNode.GetBoolean() then 1 else 0
+                let exitCode=if observed then result.RootElement.GetProperty("exitCode").GetInt32() else 0
+                let stdout=Encoding.UTF8.GetBytes(if observed then result.RootElement.GetProperty("stdout").GetString() else "")
+                let stderr=Encoding.UTF8.GetBytes(if observed then result.RootElement.GetProperty("stderr").GetString() else "")
+                let response=Array.zeroCreate<byte> (2*1024*1024+4)
+                let count=pinned stdout (fun outPointer->pinned stderr (fun errPointer->pinned response (fun replyPointer->
+                    complete.Invoke(1,retired,exitCode,outPointer,unativeint stdout.Length,errPointer,unativeint stderr.Length,now(),replyPointer,unativeint response.Length))))
+                require(count>=4&&count<=response.Length) "custody-core-reply-refused"
+                response[..count-1]
+        let running=json {|lease=String('d',64);retired=false;exitCode=7;stdout="from-c-é";stderr=""|}
+        let finished=json {|lease=String('d',64);retired=true;exitCode=7;stdout="from-c-é";stderr=""|}
+        let cCommand={command with Arguments=[|"fixture-only-never-executed";"é\n\"\\"|];Environment=Map.ofList ["HOME","/private/empty";"LANG","C"]}
+        withPeer "c-core-wait" ["bind-input",bound;"retain",json {|charged=0|};"start",json {|lease=String('d',64)|};"observe",running;"observe",finished] (Some factory) (fun channel->
+            channel.BindInput input
+            channel.Retain [||]
+            use child=channel.Start cCommand
+            let output=child.Wait CancellationToken.None
+            require(child.HasExited&&output.ExitCode=7&&output.Stdout="from-c-é") "custody-core-FSharp-wait-join")
+        withPeer "c-core-cancel" ["bind-input",bound;"start",json {|lease=String('d',64)|};"cancel",running;"observe",finished] (Some factory) (fun channel->
+            channel.BindInput input
+            use child=channel.Start cCommand
+            child.Cancel CancellationToken.None
+            let output=child.Wait CancellationToken.None
+            require(child.HasExited&&output.ExitCode=7&&output.Stdout="from-c-é") "custody-core-FSharp-cancel-cached-join")
+        printfn "PASS compiled C/FSharp custody wire interoperability; retirement results synthetic"
+    finally
+        // Never unload code beneath an unobserved test-owned callback.
+        if coreUnsettled then eprintfn "FAIL retaining C test library after unsettled peer; cleanup unknown"
+        else NativeLibrary.Free library
