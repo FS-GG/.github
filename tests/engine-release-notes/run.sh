@@ -437,7 +437,8 @@ else
 fi
 printf '{"maxReleaseNotesCharacters":%s}\n' "$LIMIT" \
   > "$scan_fixture/tests/release-successor-recovery/adjacent-active-limit.json"
-if secondary_limit_occurrences "$scan_fixture" | grep -q '^tests/release-successor-recovery/adjacent-active-limit.json:'; then
+adjacent_occurrences="$(secondary_limit_occurrences "$scan_fixture")"
+if grep -q '^tests/release-successor-recovery/adjacent-active-limit.json:' <<<"$adjacent_occurrences"; then
   ok "an adjacent JSON copy is not covered by the exact historical exemption"
 else
   bad "an adjacent JSON copy must fail the scan"
