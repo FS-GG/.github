@@ -108,6 +108,9 @@ static void rejects(struct shape *f,const char *name){const char *why=NULL;
  check(!lc_validate(&f->o,&why)&&why!=NULL,name);
  }
 static void source_channel_controls(void);
+/* Shared by the actual denial workload and nonprivileged descriptor controls. */
+static int fx_descriptor_present(int fd) { return fcntl(fd,F_GETFD)>=0; }
+
 int fsgg_custody_adapter_controls(void) {
  struct shape f;
  const char *why=NULL;
@@ -201,6 +204,13 @@ int fsgg_custody_adapter_controls(void) {
  check(!fx_ack_match("yes",3,"yes-extra",9),"fixed registration unexpected ACK field refuses");
  check(!fx_ack_match("yes",3,"ye",2),"fixed registration truncated ACK refuses");
  check(!fx_ack_match("yes",3,"no!",3)&&!fx_ack_match("yes",3,NULL,0),"fixed registration malformed or missing ACK refuses");
+ int denial_probe[2]={-1,-1};
+ check(pipe2(denial_probe,O_CLOEXEC)==0,"nonprivileged original descriptor probe fixture");
+ if(denial_probe[0]>=0){
+  check(fx_descriptor_present(denial_probe[0]),"actual denial primitive detects a retained live descriptor");
+  check(!fx_descriptor_present(-1),"actual denial primitive cannot manufacture a missing descriptor");
+  close(denial_probe[0]);close(denial_probe[1]);
+ }
  struct fx_diagnostic diagnostic={0};char diagnostic_text[512];
  check(fx_diagnostic_note(&diagnostic,"setup/keeper-userns",1,EPERM,1)&&!diagnostic.first_stage,"successful setup cannot create failure");
  check(!fx_diagnostic_note(&diagnostic,"setup/keeper-userns",0,EPERM,1)&&diagnostic.first_errno==EPERM&&diagnostic.first_errno_known==1,"injected syscall failure retains exact stage and errno");
@@ -733,28 +743,33 @@ static void fx_keeper(const char *binary,int ready,int mapped,int prepared) {
  for(;;)pause();
 }
 static int fx_workload(const char *kind) {
- if(getuid()!=32768||getgid()!=32768)return 90;
- if(!strcmp(kind,"normal")){if(write(1,"native-output\n",14)!=14||write(2,"native-error\n",13)!=13)return 91;
+ if(!fx_step("workload/uid",getuid()==32768,0)||!fx_step("workload/gid",getgid()==32768,0))return 90;
+ if(!strcmp(kind,"normal")){if(!fx_result("workload/normal-stdout",write(1,"native-output\n",14),14)||!fx_result("workload/normal-stderr",write(2,"native-error\n",13),13))return 91;
   return 0;
   }
  if(!strcmp(kind,"descendant")){
   pid_t p=fork();
-  if(p<0)return 92;
-  if(!p){if(setsid()<0)_exit(93);
+  if(!fx_step("workload/descendant-fork",p>=0,p<0))return 92;
+  if(!p){if(!fx_step("workload/descendant-setsid",setsid()>=0,1))_exit(93);
    for(;;)pause();
    }
-  if(write(1,"descendant-live\n",16)!=16)return 94;
+  if(!fx_result("workload/descendant-stdout",write(1,"descendant-live\n",16),16))return 94;
   return 0;
  }
  if(!strcmp(kind,"denial")){
   const char *names[]={"/sys/fs/cgroup/cgroup.procs","/sys/fs/cgroup/pids.max","/sys/fs/cgroup/memory.max","/sys/fs/cgroup/cgroup.subtree_control"};
   for(unsigned i=0;i<4;i++){int fd=open(names[i],O_WRONLY|O_CLOEXEC);
    if(fd>=0){close(fd);
+    fx_step("workload/denial-control-open",0,0);
+    fprintf(stderr,"native denial control-index=%u path=%s\n",i,names[i]);
     return 95;
     }}
   /* Root capability descriptors must not survive exec (including stdin). */
-  for(int fd=3;fd<65536;fd++)if(fcntl(fd,F_GETFD)>=0)return 96;
-  if(write(1,"controls-denied\n",16)!=16)return 97;
+  for(int fd=3;fd<65536;fd++)if(fx_descriptor_present(fd)){
+   fx_step("workload/denial-inherited-descriptor",0,0);
+   fprintf(stderr,"native denial unexpected-descriptor=%d\n",fd);return 96;
+  }
+  if(!fx_result("workload/denial-stdout",write(1,"controls-denied\n",16),16))return 97;
   return 0;
  }
  if(!strcmp(kind,"allowance")||!strcmp(kind,"overflow")){
@@ -764,11 +779,11 @@ static int fx_workload(const char *kind) {
   while(count){size_t n=count>sizeof block?sizeof block:count;
    ssize_t wrote=write(1,block,n);
    if(wrote<0){if(errno==EINTR)continue;
-    return 98;
+    fx_step("workload/allowance-or-overflow-stdout",0,1);return 98;
     }count-=(unsigned)wrote;
    }return 0;
  }
- return 99;
+ fx_step("workload/fixed-case-selection",0,0);return 99;
 }
 static int fx_copy_file(const char *from,const char *to,uint64_t *bytes,mode_t mode) {
  if(!fx_work())return 0;
@@ -929,8 +944,8 @@ static int fx_run_case(struct shape *f,int operation,int control,int requester,i
   if(count>CC_FRAME_MAX-*captured){fprintf(stderr,"FAIL original native aggregate capture bound\n");
    goto done;
    }*captured+=count;
-  printf("native case=%s identity=%s lease=%s pidfd=%d leader=%d empty=%d stdoutEOF=%d stderrEOF=%d captured=%llu/%llu cleaned=%d first=%s\n",
-   kind,identity,lease,observed.retained_pidfd,observed.leader_exit_known,observed.recursive_empty,observed.stdout_eof,observed.stderr_eof,
+  printf("native case=%s identity=%s lease=%s pidfd=%d leader=%d leader-exit-code=%d leader-signal=%d empty=%d stdoutEOF=%d stderrEOF=%d captured=%llu/%llu cleaned=%d first=%s\n",
+   kind,identity,lease,observed.retained_pidfd,observed.leader_exit_known,observed.leader_exit_code,observed.leader_signal,observed.recursive_empty,observed.stdout_eof,observed.stderr_eof,
    (unsigned long long)observed.stdout_captured,(unsigned long long)observed.stderr_captured,observed.cleanup_settled,lc_failure(a)?lc_failure(a):"none");
  }
  if(!strcmp(kind,"descendant"))result=a->owned[0].leader_left_descendants;
@@ -1001,6 +1016,7 @@ static int fx_run_case(struct shape *f,int operation,int control,int requester,i
    memset(&info,0,sizeof info);
    if(waitid(P_PIDFD,(id_t)client,&info,WEXITED|WNOHANG))break;
    if(info.si_pid){exited=1;
+    printf("native client case=%s wait-code=%d wait-status=%d\n",kind,info.si_code,info.si_status);
     if(info.si_code!=CLD_EXITED||info.si_status!=0)result=0;
     break;
     }struct pollfd p={client,POLLIN,0};
