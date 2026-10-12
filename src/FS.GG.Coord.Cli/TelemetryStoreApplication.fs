@@ -2031,7 +2031,7 @@ AND EXISTS(
                 "ci"
                 "ci-runner-diagnostic"
 
-    let private budgetReevaluateFor (connection: SqliteConnection) selectedItems allowIntervention =
+    let private budgetReevaluateForLimit (connection: SqliteConnection) selectedItems allowIntervention maximumItems =
         let scalarInt sql parameters =
             use command = connection.CreateCommand()
             command.CommandText <- sql
@@ -2068,7 +2068,8 @@ ON CONFLICT(key) DO UPDATE SET value=excluded.value;"""
 
         let dirtyItems =
             use command = connection.CreateCommand()
-            command.CommandText <- "SELECT item_id FROM budget_dirty_items ORDER BY item_id LIMIT 32;"
+            command.CommandText <- "SELECT item_id FROM budget_dirty_items ORDER BY item_id LIMIT $maximum;"
+            parameter command "$maximum" (box maximumItems)
             use reader = command.ExecuteReader()
             let values = ResizeArray<string>()
 
@@ -2077,7 +2078,9 @@ ON CONFLICT(key) DO UPDATE SET value=excluded.value;"""
 
             List.ofSeq values
 
-        for item in (selectedItems |> Option.defaultValue dirtyItems) do
+        let evaluatedItems = selectedItems |> Option.defaultValue dirtyItems
+
+        for item in evaluatedItems do
             deriveBudgetInputs connection item
             let itemParameter = [ "$item", box item ]
 
@@ -2498,6 +2501,11 @@ AND NOT EXISTS(SELECT 1 FROM budget_attribution_facts f WHERE f.item_id=budget_b
                 parameter close "$epoch" epochId
                 close.ExecuteNonQuery() |> ignore
             | _ -> ()
+
+        evaluatedItems.Length
+
+    let private budgetReevaluateFor connection selectedItems allowIntervention =
+        budgetReevaluateForLimit connection selectedItems allowIntervention 32 |> ignore
 
     let private budgetReevaluate connection = budgetReevaluateFor connection None true
 
@@ -3584,8 +3592,7 @@ UNION ALL SELECT count(*) FROM runtime_turn_usage WHERE invocation_id=$invocatio
 
                                 insertBatch.ExecuteNonQuery() |> ignore
 
-                            if reevaluateBudget then
-                                budgetReevaluate connection
+                            reevaluateBudget connection
 
                             finishReceipt connection
                             recordEfficiencyAcceptance connection factAdmission batch.Facts (List.ofSeq acceptedFacts)
@@ -3863,6 +3870,8 @@ UNION ALL SELECT count(*) FROM runtime_turn_usage WHERE invocation_id=$invocatio
                     let mutable quarantined = 0
                     let mutable failures: string list = []
                     let mutable reevaluated = false
+                    let mutable committedBatches = 0
+                    let mutable remainingBudgetItems = 32
 
                     for ready in selected do
                         let bytes =
@@ -3885,7 +3894,13 @@ UNION ALL SELECT count(*) FROM runtime_turn_usage WHERE invocation_id=$invocatio
                             quarantine root ready [ "ready filename does not match batch identity and digest" ]
                             quarantined <- quarantined + 1
                         | Ok batch ->
-                            match ingestBatchLocked root hooks.BeforeCommit (not reevaluated) batch with
+                            let mutable evaluatedThisBatch = 0
+                            let evaluateBudget connection =
+                                if not reevaluated then
+                                    evaluatedThisBatch <-
+                                        budgetReevaluateForLimit connection None true remainingBudgetItems
+
+                            match ingestBatchLocked root hooks.BeforeCommit evaluateBudget batch with
                             | Error errors when
                                 errors |> List.exists (fun error ->
                                     error = "ci-attribution-corrected-fact-is-immutable"
@@ -3933,6 +3948,9 @@ UNION ALL SELECT count(*) FROM runtime_turn_usage WHERE invocation_id=$invocatio
                                 quarantined <- quarantined + 1
                             | Error errors -> failures <- (String.concat "; " errors) :: failures
                             | Ok result ->
+                                committedBatches <- committedBatches + 1
+                                // Count only assessments whose enclosing batch committed.
+                                remainingBudgetItems <- remainingBudgetItems - evaluatedThisBatch
                                 reevaluated <- true
                                 use doc = JsonDocument.Parse result
                                 accepted <- accepted + doc.RootElement.GetProperty("accepted").GetInt32()
@@ -3945,7 +3963,9 @@ UNION ALL SELECT count(*) FROM runtime_turn_usage WHERE invocation_id=$invocatio
                                 with error ->
                                     failures <- ("committed but ready removal failed: " + error.Message) :: failures
 
-                    if not reevaluated then
+                    // The first batch evaluates atomically with its facts. Later committed
+                    // batches can mark new facts dirty. Share the same 32-item allowance.
+                    if remainingBudgetItems > 0 && (not reevaluated || committedBatches > 1) then
                         match connect root SqliteOpenMode.ReadWrite with
                         | Error errors -> failures <- String.concat "; " errors :: failures
                         | Ok(connection, _) ->
@@ -3953,7 +3973,7 @@ UNION ALL SELECT count(*) FROM runtime_turn_usage WHERE invocation_id=$invocatio
 
                             try
                                 beginImmediate connection
-                                budgetReevaluate connection
+                                budgetReevaluateForLimit connection None true remainingBudgetItems |> ignore
                                 execute connection "COMMIT;"
                             with error ->
                                 rollback connection
@@ -5343,7 +5363,7 @@ WHERE f.kind='learn-installed-origin/1' AND a.producer=$producer AND a.stream=$s
                             ingestBatchWithReceiptLocked
                                 root
                                 (fun () -> hook "before-application-commit")
-                                true
+                                budgetReevaluate
                                 (fun db -> terminal db "applied" DBNull.Value)
                                 (Some admission)
                                 native

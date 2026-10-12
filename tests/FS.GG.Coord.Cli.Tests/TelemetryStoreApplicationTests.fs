@@ -1524,6 +1524,114 @@ DELETE FROM schema_migrations WHERE version=14;
         Assert.Contains("\"replayed\":2", TelemetryStoreApplication.drain path approved |> unwrap)
         Assert.Contains("\"distinctBreaches\":1", TelemetryStoreApplication.budgetStatus path approved |> unwrap)
 
+    let private drainBudgetSql path sql =
+        use connection = new SqliteConnection($"Data Source={Path.Combine(path, TelemetryStoreApplication.databaseFileName)};Pooling=False")
+        connection.Open()
+        use command = connection.CreateCommand()
+        command.CommandText <- sql
+        Convert.ToInt64(command.ExecuteScalar())
+
+    let private drainBudgetPayload name numerator =
+        budgetBatch name name
+            [ population name 0 "completed" ($"native:{name}")
+              attribution name 0 (Some numerator) (Some 100L) "complete" "classified" "runtime" ($"usage:{name}") ]
+
+    [<Fact>]
+    let ``UTEL drain evaluates later committed batches and preserves quarantined conflicts`` () =
+        let cleanup, path = root ()
+        use cleanup = cleanup
+        TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
+        TelemetryStoreApplication.publish path approved (drainBudgetPayload "a-first" 11L) |> unwrap |> ignore
+        TelemetryStoreApplication.publish path approved (drainBudgetPayload "b-later" 26L) |> unwrap |> ignore
+        let conflict = drainBudgetPayload "a-first" 99L |> Encoding.UTF8.GetString
+        let conflict = conflict.Replace("\"ingestId\":\"a-first\"", "\"ingestId\":\"z-conflict\"") |> Encoding.UTF8.GetBytes
+        TelemetryStoreApplication.publish path approved conflict |> unwrap |> ignore
+        let result = TelemetryStoreApplication.drain path approved |> unwrap
+        Assert.Contains("\"accepted\":4", result)
+        Assert.Contains("\"quarantined\":1", result)
+        Assert.Equal(0L, drainBudgetSql path "SELECT count(*) FROM budget_dirty_items;")
+        Assert.Equal(2L, drainBudgetSql path "SELECT count(*) FROM budget_breaches;")
+        Assert.Equal(26L, drainBudgetSql path "SELECT numerator FROM budget_attribution_facts WHERE item_id='b-later';")
+        Assert.Single(Directory.GetFiles(Path.Combine(path, "quarantine"), "*", SearchOption.AllDirectories) |> Array.filter (fun file -> file.EndsWith(".ready.rejected"))) |> ignore
+
+    [<Fact>]
+    let ``UTEL drain first batch assessment remains atomic and is not evaluated twice`` () =
+        let cleanup, path = root ()
+        use cleanup = cleanup
+        TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
+        TelemetryStoreApplication.publish path approved (drainBudgetPayload "single" 11L) |> unwrap |> ignore
+        let before: TelemetryStoreApplication.DrainHooks =
+            { BeforeCommit = (fun () -> raise (IOException "atomic-before-commit")); AfterCommitBeforeDelete = ignore }
+        Assert.Contains("atomic-before-commit", sprintf "%A" (TelemetryStoreApplication.drainWithHooks path approved before))
+        Assert.Equal(0L, drainBudgetSql path "SELECT count(*) FROM budget_assessment_revisions;")
+        let after: TelemetryStoreApplication.DrainHooks =
+            { BeforeCommit = ignore
+              AfterCommitBeforeDelete = (fun () ->
+                  Assert.Equal(0L, drainBudgetSql path "SELECT count(*) FROM budget_dirty_items;")
+                  Assert.Equal(1L, drainBudgetSql path "SELECT count(*) FROM budget_assessment_revisions;")) }
+        TelemetryStoreApplication.drainWithHooks path approved after |> unwrap |> ignore
+        Assert.Equal(1L, drainBudgetSql path "SELECT count(*) FROM budget_assessment_revisions;")
+
+    [<Fact>]
+    let ``UTEL empty drain evaluates existing dirty facts without fabricating ingestion`` () =
+        let cleanup, path = root ()
+        use cleanup = cleanup
+        TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
+        TelemetryStoreApplication.ingest path approved (drainBudgetPayload "empty" 11L) |> unwrap |> ignore
+        drainBudgetSql path "INSERT INTO budget_dirty_items VALUES('empty'); SELECT count(*) FROM budget_dirty_items;" |> ignore
+        let result = TelemetryStoreApplication.drain path approved |> unwrap
+        Assert.Contains("\"accepted\":0", result)
+        Assert.Contains("\"replayed\":0", result)
+        Assert.Equal(0L, drainBudgetSql path "SELECT count(*) FROM budget_dirty_items;")
+        Assert.Equal(1L, drainBudgetSql path "SELECT count(*) FROM budget_assessment_revisions;")
+
+    [<Fact>]
+    let ``UTEL later commit failure retains ready bytes and first batch assessment`` () =
+        let cleanup, path = root ()
+        use cleanup = cleanup
+        TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
+        TelemetryStoreApplication.publish path approved (drainBudgetPayload "a-committed" 11L) |> unwrap |> ignore
+        TelemetryStoreApplication.publish path approved (drainBudgetPayload "b-refused" 26L) |> unwrap |> ignore
+        let mutable calls = 0
+        let hooks: TelemetryStoreApplication.DrainHooks =
+            { BeforeCommit = (fun () -> calls <- calls + 1; if calls = 2 then raise (IOException "later-before-commit"))
+              AfterCommitBeforeDelete = ignore }
+        Assert.Contains("later-before-commit", sprintf "%A" (TelemetryStoreApplication.drainWithHooks path approved hooks))
+        Assert.Equal(1L, drainBudgetSql path "SELECT count(*) FROM budget_assessment_revisions;")
+        Assert.Equal(0L, drainBudgetSql path "SELECT count(*) FROM budget_population_facts WHERE item_id='b-refused';")
+        Assert.Single(Directory.GetFiles(Path.Combine(path, "inbox"), "*.ready", SearchOption.AllDirectories)) |> ignore
+        TelemetryStoreApplication.drain path approved |> unwrap |> ignore
+        Assert.Equal(2L, drainBudgetSql path "SELECT count(*) FROM budget_assessment_revisions;")
+
+    [<Fact>]
+    let ``UTEL final assessment failure preserves committed facts removal cause and replay`` () =
+        let cleanup, path = root ()
+        use cleanup = cleanup
+        TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
+        TelemetryStoreApplication.publish path approved (drainBudgetPayload "a-original" 11L) |> unwrap |> ignore
+        TelemetryStoreApplication.publish path approved (drainBudgetPayload "b-retained" 26L) |> unwrap |> ignore
+        let mutable calls = 0
+        let hooks: TelemetryStoreApplication.DrainHooks =
+            { BeforeCommit = ignore
+              AfterCommitBeforeDelete = (fun () ->
+                  calls <- calls + 1
+                  if calls = 1 then
+                      drainBudgetSql path "CREATE TRIGGER fail_final_budget BEFORE DELETE ON budget_dirty_items BEGIN SELECT RAISE(ABORT,'final-budget-refused'); END; SELECT 0;" |> ignore
+                  else raise (IOException "ready-removal-refused")) }
+        let result = TelemetryStoreApplication.drainWithHooks path approved hooks
+        match result with
+        | Ok _ -> failwith "final assessment failure was hidden"
+        | Error errors ->
+            Assert.StartsWith("committed but ready removal failed: ready-removal-refused", errors.Head)
+            Assert.Contains(errors, fun error -> error.Contains("final-budget-refused"))
+        Assert.Equal(2L, drainBudgetSql path "SELECT count(*) FROM budget_population_facts;")
+        Assert.Equal(1L, drainBudgetSql path "SELECT count(*) FROM budget_dirty_items;")
+        Assert.Equal(1L, drainBudgetSql path "SELECT count(*) FROM budget_assessment_revisions;")
+        drainBudgetSql path "DROP TRIGGER fail_final_budget; SELECT 0;" |> ignore
+        Assert.Contains("\"replayed\":2", TelemetryStoreApplication.drain path approved |> unwrap)
+        Assert.Equal(0L, drainBudgetSql path "SELECT count(*) FROM budget_dirty_items;")
+        Assert.Equal(2L, drainBudgetSql path "SELECT count(*) FROM budget_assessment_revisions;")
+
     [<Fact>]
     let ``UTEL-05A dimension usability is independent and shared references cannot overlap`` () =
         let cleanup, path = root ()
@@ -1566,6 +1674,36 @@ DELETE FROM schema_migrations WHERE version=14;
             "\"dimensions\":[]",
             TelemetryStoreApplication.budgetSummary path approved "budget-overlap" |> unwrap
         )
+
+    [<Fact>]
+    let ``UTEL multi batch evaluation shares remaining thirty two item allowance`` () =
+        let cleanup, path = root ()
+        use cleanup = cleanup
+        TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
+
+        let facts first last =
+            [
+                for number in first..last do
+                    let item = $"budget-shared-%02d{number}"
+                    yield population item 0 "completed" ($"native:{item}")
+                    yield attribution item 0 (Some 10L) (Some 100L) "complete" "classified" "runtime" ($"usage:{item}")
+            ]
+
+        TelemetryStoreApplication.publish path approved (budgetBatch "a-budget-shared" "1" (facts 1 16))
+        |> unwrap |> ignore
+        TelemetryStoreApplication.publish path approved (budgetBatch "b-budget-shared" "2" (facts 17 33))
+        |> unwrap |> ignore
+
+        TelemetryStoreApplication.drain path approved |> unwrap |> ignore
+        Assert.Contains("\"dirtyItems\":1", TelemetryStoreApplication.budgetStatus path approved |> unwrap)
+        Assert.Contains("\"dimensions\":[]", TelemetryStoreApplication.budgetSummary path approved "budget-shared-33" |> unwrap)
+        for number in 1..32 do
+            let item = $"budget-shared-%02d{number}"
+            Assert.DoesNotContain("\"dimensions\":[]", TelemetryStoreApplication.budgetSummary path approved item |> unwrap)
+
+        TelemetryStoreApplication.drain path approved |> unwrap |> ignore
+        Assert.Contains("\"dirtyItems\":0", TelemetryStoreApplication.budgetStatus path approved |> unwrap)
+        Assert.DoesNotContain("\"dimensions\":[]", TelemetryStoreApplication.budgetSummary path approved "budget-shared-33" |> unwrap)
 
     [<Fact>]
     let ``UTEL-05A reevaluation leaves work beyond thirty two items for the next drain`` () =
