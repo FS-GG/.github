@@ -163,12 +163,17 @@ jobs:
             test "$FSGG_LEARN_NATIVE_SOURCE" = "$GITHUB_SHA"
             [[ "$FSGG_LEARN_NATIVE_ADMISSION_SHA256" =~ ^[a-f0-9]{64}$ ]]
             [[ "$FSGG_LEARN_NATIVE_PROFILE_SHA256" =~ ^[a-f0-9]{64}$ ]]
-            # These independently checkable prerequisites block native work
-            # before costly source/model builds. Root's admitted supervisor
-            # must supply actual retained descriptors in this invocation;
-            # GITHUB_ENV cannot carry an FD across separate job steps.
-            test "$(id -u)" -eq 0 || { printf 'BLOCKED native root execution profile absent\n' >&2; exit 42; }
-            test -n "${FSGG_LEARN_NATIVE_PARENT_FD:-}" && test -n "${FSGG_LEARN_NATIVE_HOME_FD:-}" || { printf 'BLOCKED native retained delegation/home handles absent\n' >&2; exit 42; }
+            test "$FSGG_LEARN_NATIVE_PREFLIGHT" = false
+            # Read-only early eligibility; the fixed root controller obtains
+            # fresh actual handles in one invocation after source compilation.
+            # No env FD or historical provider observation is a capability.
+            test -x /usr/bin/sudo
+            test "$(stat -c %u -- /usr/bin/sudo)" -eq 0
+            test -d /sys/fs/cgroup/system.slice
+            grep -Fx domain /sys/fs/cgroup/system.slice/cgroup.type
+            for controller in cpu memory pids; do
+              grep -Eq "(^| )${controller}( |$)" /sys/fs/cgroup/system.slice/cgroup.subtree_control
+            done
           fi
           if test "$FSGG_LEARN_NATIVE_FIXTURE" = true; then
             # Only the already-validated fixed hex metadata can cross steps.
@@ -244,7 +249,7 @@ jobs:
           if test "$FSGG_LEARN_NATIVE_PREFLIGHT" = true; then
             /usr/bin/python3 -I -S - <<'PY'
           import hashlib, json, os, pathlib, time
-          inputs={"literal": {"bytes": 6982, "path": "tests/telemetry-collector-persistent-v3-image-closure/native-preflight/privileged_observation.py", "sha256": "46018b4c1b192bb42d99d1d079c313c17ad5712e71a44ee75c9c7e3ad8aaef6a"}, "parser": {"bytes": 4033, "path": "tests/telemetry-collector-persistent-v3-image-closure/native-preflight/observation_parser.py", "sha256": "09aa78d5aaf2746de4368307c210ddb1a65531ef89eeaea74d4c2d98ae8459c7"}, "runner": {"bytes": 7743, "path": "tests/telemetry-collector-persistent-v3-image-closure/native-preflight/owned_install_guards.py", "sha256": "14ba6985a1702419cc5c31fa76e165b2fd90164eb372ae91fe070a2b4a7c0057"}}
+          inputs={"literal": {"bytes": 6982, "path": "tests/telemetry-collector-persistent-v3-image-closure/native-preflight/privileged_observation.py", "sha256": "46018b4c1b192bb42d99d1d079c313c17ad5712e71a44ee75c9c7e3ad8aaef6a"}, "parser": {"bytes": 4033, "path": "tests/telemetry-collector-persistent-v3-image-closure/native-preflight/observation_parser.py", "sha256": "09aa78d5aaf2746de4368307c210ddb1a65531ef89eeaea74d4c2d98ae8459c7"}, "runner": {"bytes": 37928, "path": "tests/telemetry-collector-persistent-v3-image-closure/native-preflight/owned_install_guards.py", "sha256": "2e5db7fcc36544d57f670dabe14d8866bf9871cc04adc72e10a04600c07c6459"}}
           selected={}
           workspace=pathlib.Path(os.environ['GITHUB_WORKSPACE'])
           for name,row in inputs.items():
@@ -253,9 +258,9 @@ jobs:
               if len(value)!=row['bytes'] or hashlib.sha256(value).hexdigest()!=row['sha256']:
                   raise RuntimeError('observation-input-byte-selection:'+name)
               selected[name]=value
-          runner={'__name__':'accepted_owner_runner_14ba'}
+          runner={'__name__':'accepted_owner_runner_inner_join'}
           parser={'__name__':'observation_evidence_parser'}
-          exec(compile(selected['runner'],'<accepted-owner-runner-14ba>','exec'),runner)
+          exec(compile(selected['runner'],'<accepted-owner-runner-inner-join>','exec'),runner)
           exec(compile(selected['parser'],'<observation-evidence-parser>','exec'),parser)
           destination=pathlib.Path(os.environ['RUNNER_TEMP'])/'learn-native-observation-evidence'
           destination.mkdir(mode=0o700)
@@ -421,9 +426,10 @@ jobs:
           export -f quint
           FSGG_LEARN_NATIVE_SOURCE_SHA256="$(sha256sum deployment/telemetry-collector/persistent/v3/image-closure/native/custody_adapter.c | cut -d' ' -f1)"
           export FSGG_LEARN_NATIVE_SOURCE_SHA256
-          # Same existing source supervisor/fixture. An ordinary hosted runner
-          # has no native retained delegation: the fixed controller reports
-          # BLOCKED, without sudo, installation or a fabricated native pass.
+          # Same existing source supervisor and fixed TEST controller. Native
+          # dispatch is root-admitted and supplies fresh owned handles itself;
+          # ordinary source events never invoke sudo/component provisioning.
+          # Outer wrapper evidence remains sampled/UNKNOWN even on inner PASS.
           PERSISTENT_V3_RUNNER_TOOL="$quint_archive" bash tests/telemetry-collector-persistent-v3-image-closure/run.sh
       - name: Refuse malformed Host release effect policy before costly qualification
         run: |
