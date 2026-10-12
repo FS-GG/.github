@@ -46,6 +46,208 @@ def require(condition: bool, reason: str) -> None:
         raise Refused(reason)
 
 
+# Fixed original bytes; these pins grant compatibility, never effect authority.
+ORIGINAL_0103_PROFILE = "utel-rel-21/original-candidate/1"
+ORIGINAL_0103_CANDIDATE = {
+    "sourceSha": "4d136d5450a7032d0b87c4b8a37f69f020144792",
+    "runId": 38290966724,
+    "attempt": 1,
+    "artifactId": 11766710761,
+    "archiveBytes": 32744064,
+    "archiveSha256": "d8b22728b9e36932bf8d31e1ab486b312f2d1aedddf96660c872fc69f97f25ba",
+    "contentId": "sha256:0615d0d776f06b824b98193233c749f0ae6983e811d900cc5a166ede5e7e5007",
+    "version": "0.103.0",
+    "predecessor": "0.102.0",
+    "predecessorContentId": "sha256:fc16321e011ea616648ccc1dafda00bfc06fa34210fd49ddb008bb56c9ceecf5",
+    "manifestSha256": "0b9236c6fd6d3893361d86f67e2d639c02d4e72ce3044b9b6150eeae2259d18f"
+}
+ORIGINAL_0103_PACKAGES = {
+    "FS.GG.Coord.Cli": {
+        "archiveSha256": "ba23b95624ec9423708f42dd6abf39933fc5e006e5047e6ab7ba160f9d16ff68",
+        "archiveBytes": 32398808,
+        "payloadSha256": "sha256:dd7cfd60abbcaf31f633f7d09d82116ecef2aac6302bd11b23e7e27b611e3461"
+    },
+    "FS.GG.Drivers": {
+        "archiveSha256": "e40b3016d528de783d945bc09d2a3c1cf8f9879e93383158dc4b94ae590709f0",
+        "archiveBytes": 166742,
+        "payloadSha256": "sha256:acbad9f8ac79c84a99aa8ef34f8e8d6b600b1571a8aab7ef18c5a1ebd95623fa"
+    },
+    "FS.GG.Kit": {
+        "archiveSha256": "acdcadd17d002bb92b8b9cc4db766f7a9121c2c6201b09205636a3a54f24aad0",
+        "archiveBytes": 266524,
+        "payloadSha256": "sha256:5a1b4ed3c016225eaca9bf19ac3cbad3cba40e1ed9fb6aebee71ed6c80d88b7f"
+    }
+}
+ORIGINAL_0103_DEPENDENCIES = {
+    "scripts/release_successor_admission.py": {
+        "bytes": 2530,
+        "sha256": "42392e4275db815337eeee3fe41022e784dea8666e9c0aa6c817f9aeb7c60281"
+    },
+    "scripts/release_successor_execution.py": {
+        "bytes": 8257,
+        "sha256": "ea1fb156eca3d63ab4d7ae0c60ecfd6fd5d2c5053c25019252451a855387375e"
+    },
+    "scripts/release_successor_journal.py": {
+        "bytes": 24133,
+        "sha256": "14104ca72087c79412d7fe3828a197bb2f0ea6e70e3675a9e2d70d98c5e9202c"
+    },
+    "scripts/release_successor_provider.py": {
+        "bytes": 30795,
+        "sha256": "7073071f75e95ff38426a5b0772530c4e31b52216b4cda8c6250455e9bcac925"
+    },
+    "scripts/release-successor-artifact.py": {
+        "bytes": 7264,
+        "sha256": "1c2ce68c0f5b80d142be7776ffd50319278d9816f5aaa108abc7be862180f431"
+    },
+    "scripts/release-saga.py": {
+        "bytes": 61127,
+        "sha256": "24bdfa2a4c1491ecc1ddf24f797a072372fdce14881d413d9301b739dc77501c"
+    },
+    "scripts/check-release-candidate-uniqueness.py": {
+        "bytes": 2177,
+        "sha256": "496732557948fa43a8a8a099ce0583235c21aa6bba01223ad31398ff12351424"
+    },
+    "scripts/fsgg_feed.py": {
+        "bytes": 22427,
+        "sha256": "4be8af2a1784a7ac2b1ab32bd548e944f3d3feb7253bf602662b81d18cf8f744"
+    },
+    "scripts/authority-state-import.py": {
+        "bytes": 107728,
+        "sha256": "ccf87a351daa6e83fe313a09bde0854c88abae54146eb11e24c0903c014f5197"
+    }
+}
+_ORIGINAL_0103_SEAL = object()
+
+
+class VerifiedOriginal0103(tuple):
+    """Immutable seam input created by the complete compatibility check."""
+
+    __slots__ = ()
+
+    def __new__(cls, seal, publisher_sha):
+        require(seal is _ORIGINAL_0103_SEAL, "original .103 selection is not verified")
+        return super().__new__(cls, (publisher_sha,))
+
+    @property
+    def publisher_sha(self):
+        return self[0]
+
+
+def validate_original_0103_request(args):
+    selected = bool(getattr(args, "original_0103_candidate", False))
+    if selected:
+        require(not any(getattr(args, name, False) for name in
+                        ("recovery_checkpoint", "repeat_original_nuget_kit_intent",
+                         "recover_original_runtime_intent", "recover_original_successor_checkpoint")),
+                "original .103 selection conflicts with historical profile")
+        fixed = ORIGINAL_0103_CANDIDATE
+        require((args.candidate_run_id, args.candidate_artifact_id, args.candidate_archive_sha256) ==
+                (fixed["runId"], fixed["artifactId"], fixed["archiveSha256"]),
+                "original .103 requested candidate differs")
+        require(selected_release_binding(args) == (fixed["version"], fixed["predecessor"], SUCCESSOR_REF)
+                and SUCCESSOR_REF == "refs/heads/fsgg/v2/journal/release/utel-rel-21",
+                "original .103 release binding differs")
+    return selected
+
+
+def validate_original_0103_metadata(run, artifact):
+    fixed = ORIGINAL_0103_CANDIDATE
+    require(run.get("id") == fixed["runId"] and run.get("run_attempt") == fixed["attempt"]
+            and run.get("head_sha") == fixed["sourceSha"] and run.get("status") == "completed"
+            and run.get("repository", {}).get("id") == 1269292704,
+            "original .103 native run identity differs")
+    require(artifact.get("id") == fixed["artifactId"] and artifact.get("expired") is False
+            and artifact.get("size_in_bytes") == fixed["archiveBytes"]
+            and artifact.get("digest") == "sha256:" + fixed["archiveSha256"],
+            "original .103 native artifact identity differs")
+
+
+def validate_original_0103_manifest(manifest):
+    fixed = ORIGINAL_0103_CANDIDATE
+    descriptor = manifest.get("descriptor", {})
+    descriptor_bytes = json.dumps(descriptor, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
+    require(manifest.get("contentId") == fixed["contentId"]
+            and "sha256:" + hashlib.sha256(descriptor_bytes).hexdigest() == fixed["contentId"]
+            and descriptor.get("sourceSha") == fixed["sourceSha"]
+            and descriptor.get("version") == fixed["version"]
+            and descriptor.get("policyVersion") == "release-successor/1"
+            and descriptor.get("previousStableVersion") == fixed["predecessor"]
+            and descriptor.get("previousStableContentId") == fixed["predecessorContentId"],
+            "original .103 manifest binding differs")
+    rows = descriptor.get("packages", [])
+    require(isinstance(rows, list) and len(rows) == 3
+            and {row.get("id") for row in rows} == set(ORIGINAL_0103_PACKAGES),
+            "original .103 package population differs")
+    for row in rows:
+        package = ORIGINAL_0103_PACKAGES[row["id"]]
+        require(row.get("version") == fixed["version"] and row.get("artifact") == {
+            "path": f"{row['id']}.{fixed['version']}.nupkg", "sha256": package["archiveSha256"],
+            "size": package["archiveBytes"], "payloadSha256": package["payloadSha256"]},
+            "original .103 package binding differs")
+
+
+def verify_original_0103_dependencies(root=None):
+    root = root or pathlib.Path(__file__).resolve().parents[1]
+    for name, pin in ORIGINAL_0103_DEPENDENCIES.items():
+        path = root / name
+        require(not any(part.is_symlink() for part in [path, *path.parents]),
+                "original .103 dependency is linked")
+        with path.open("rb") as stream:
+            before = os.fstat(stream.fileno())
+            require(stat.S_ISREG(before.st_mode) and before.st_size == pin["bytes"],
+                    "original .103 dependency size differs")
+            digest = hashlib.file_digest(stream, "sha256").hexdigest()
+            after = os.fstat(stream.fileno())
+        identity = lambda value: (value.st_dev, value.st_ino, value.st_size, value.st_mtime_ns, value.st_ctime_ns)
+        require(identity(before) == identity(after) == identity(path.stat())
+                and digest == pin["sha256"], "original .103 dependency bytes differ")
+
+
+def verify_original_0103(args, run, artifact, manifest_bytes, archive, candidate, publisher_sha, api):
+    require(validate_original_0103_request(args), "original .103 selection was not requested")
+    validate_original_0103_metadata(run, artifact)
+    fixed = ORIGINAL_0103_CANDIDATE
+    require(hashlib.sha256(manifest_bytes).hexdigest() == fixed["manifestSha256"],
+            "original .103 manifest bytes differ")
+    manifest = json.loads(manifest_bytes)
+    validate_original_0103_manifest(manifest)
+    with archive.open("rb") as stream:
+        require(os.fstat(stream.fileno()).st_size == fixed["archiveBytes"]
+                and hashlib.file_digest(stream, "sha256").hexdigest() == fixed["archiveSha256"],
+                "original .103 archive bytes differ")
+    for name, package in ORIGINAL_0103_PACKAGES.items():
+        with (candidate / f"{name}.{fixed['version']}.nupkg").open("rb") as stream:
+            require(os.fstat(stream.fileno()).st_size == package["archiveBytes"]
+                    and hashlib.file_digest(stream, "sha256").hexdigest() == package["archiveSha256"],
+                    "original .103 retained package bytes differ")
+    verify_original_0103_dependencies()
+    require(isinstance(publisher_sha, str) and re.fullmatch(r"[0-9a-f]{40}", publisher_sha),
+            "original .103 publisher identity differs")
+    if publisher_sha != fixed["sourceSha"]:
+        comparison = api.get(f"repos/{REPOSITORY}/compare/{fixed['sourceSha']}...{publisher_sha}")
+        require(comparison.get("status") == "ahead"
+                and type(comparison.get("ahead_by")) is int and comparison["ahead_by"] > 0
+                and type(comparison.get("behind_by")) is int and comparison["behind_by"] == 0
+                and comparison.get("base_commit", {}).get("sha") == fixed["sourceSha"]
+                and comparison.get("merge_base_commit", {}).get("sha") == fixed["sourceSha"],
+                "original .103 publisher ancestry differs")
+        head = api.get(f"repos/{REPOSITORY}/commits/{publisher_sha}")
+        require(head.get("sha") == publisher_sha, "original .103 publisher commit identity differs")
+    return VerifiedOriginal0103(_ORIGINAL_0103_SEAL, publisher_sha)
+
+
+def validate_original_0103_seam(selection, manifest, intent, candidate_source, publisher_sha, journal_ref):
+    fixed = ORIGINAL_0103_CANDIDATE
+    require(type(selection) is VerifiedOriginal0103 and selection.publisher_sha == publisher_sha,
+            "original .103 journal selection is not verified")
+    validate_original_0103_manifest(manifest)
+    require(candidate_source == fixed["sourceSha"] and journal_ref == SUCCESSOR_REF
+            and journal_ref == "refs/heads/fsgg/v2/journal/release/utel-rel-21"
+            and intent == {"contentId": fixed["contentId"], "sourceSha": fixed["sourceSha"],
+                           "version": fixed["version"], "candidateArchiveSha256": fixed["archiveSha256"],
+                           "operator": "EHotwagner"}, "original .103 journal intent differs")
+
+
 def authority_protection():
     """Load only the existing read-only predicate and reviewed rule binding."""
     path = pathlib.Path(__file__).with_name("authority-state-import.py")
@@ -148,12 +350,17 @@ def classify_journal_destination(api, logical_ref):
 
 
 def prepare_release_journal(journal, ledger_api, admission, provider, api, manifest, intent,
-                            candidate_source, publisher_sha, preflight_only, uniqueness, *, recovery_checkpoint=False):
+                            candidate_source, publisher_sha, preflight_only, uniqueness, *,
+                            recovery_checkpoint=False, original_0103_selection=None):
     """Qualify the physical route before genesis or original-intent recovery."""
+    if original_0103_selection is not None:
+        require(not recovery_checkpoint, "original .103 selection conflicts with recovery checkpoint")
+        validate_original_0103_seam(original_0103_selection, manifest, intent, candidate_source, publisher_sha, journal.ref)
     fresh, physical = classify_journal_destination(ledger_api, journal.ref)
     if fresh:
         require(not recovery_checkpoint, "recovery checkpoint requires the existing original journal")
-        require(candidate_source == publisher_sha, "fresh publication requires candidate and publisher source to match")
+        require(candidate_source == publisher_sha or original_0103_selection is not None,
+                "fresh publication requires candidate and publisher source to match")
         try:
             api.get(f"repos/FS-GG/.github/git/ref/tags/coherent-set/v{manifest['descriptor']['version']}")
         except NotFound:
@@ -889,6 +1096,7 @@ def run_original_runtime_recovery(manifest, journal, admission, provider, ledger
 def execute_publisher(args, report):
     version, predecessor, selected_ref = selected_release_binding(args)
     forward_deadline = time.monotonic() + 45 * 60
+    original_0103 = validate_original_0103_request(args)
     runtime_recovery = getattr(args, "recover_original_runtime_intent", False)
     runtime_deadline = time.monotonic() + 45 * 60 if runtime_recovery else None
     report["stage"] = "publisher-context"
@@ -930,6 +1138,8 @@ def execute_publisher(args, report):
     report["stage"] = "candidate-authentication"
     artifact = api.get(f"repos/{REPOSITORY}/actions/artifacts/{args.candidate_artifact_id}")
     run = api.get(f"repos/{REPOSITORY}/actions/runs/{args.candidate_run_id}")
+    if original_0103:
+        validate_original_0103_metadata(run, artifact)
     candidate_source = run.get("head_sha")
     require(isinstance(candidate_source, str) and len(candidate_source) == 40, "candidate source is malformed")
     require(artifact.get("digest") == "sha256:" + args.candidate_archive_sha256, "candidate artifact digest differs")
@@ -958,6 +1168,14 @@ def execute_publisher(args, report):
         require(candidate_source == RECOVERY_CANDIDATE["sourceSha"]
                 and manifest["contentId"] == RECOVERY_CANDIDATE["contentId"],
                 "fixed recovery original source or content differs")
+    original_selection = None
+    if original_0103:
+        report["stage"] = "original-0103-compatibility"
+        report["originalCandidateCompatibility"] = {"profile": ORIGINAL_0103_PROFILE,
+            "candidateSourceSha": candidate_source, "publisherSha": publisher_sha,
+            "supportingDependencies": len(ORIGINAL_0103_DEPENDENCIES), "verified": False}
+        original_selection = verify_original_0103(args, run, artifact, manifest_bytes, archive, candidate, publisher_sha, api)
+        report["originalCandidateCompatibility"]["verified"] = True
     report["candidate"].update(sourceSha=candidate_source, contentId=manifest["contentId"], version=version)
     report["lastSuccessfulStage"] = "candidate-authentication"
     publisher_admission = SingleOperatorAdmission(api, manifest, publisher_sha, run_id, operator, "refs/heads/main")
@@ -1010,7 +1228,8 @@ def execute_publisher(args, report):
     report["stage"] = "journal-preparation"
     if prepare_release_journal(journal, ledger_api, admission, provider, api, manifest, intent,
                                candidate_source, publisher_sha, args.preflight_only, uniqueness,
-                               recovery_checkpoint=args.recovery_checkpoint or args.repeat_original_nuget_kit_intent or runtime_recovery or successor_checkpoint):
+                               recovery_checkpoint=args.recovery_checkpoint or args.repeat_original_nuget_kit_intent or runtime_recovery or successor_checkpoint,
+                               original_0103_selection=original_selection):
         print("Release successor preflight passed; no journal, tag, feed or release was changed.")
         return "preflight"
     journal.capture()
@@ -1052,6 +1271,8 @@ def main() -> int:
     parser.add_argument("--workdir", required=True, type=pathlib.Path)
     parser.add_argument("--result-path", type=pathlib.Path)
     profile = parser.add_mutually_exclusive_group()
+    profile.add_argument("--original-0103-candidate", action="store_true",
+                         help="Select only the accepted original .103 bytes on a compatible publisher")
     profile.add_argument("--recovery-checkpoint", action="store_true",
                         help="Recover only the retained journal19 candidate, with at most four advances")
     profile.add_argument("--repeat-original-nuget-kit-intent", action="store_true",
@@ -1068,7 +1289,7 @@ def main() -> int:
     result_path = args.result_path or args.workdir.with_name(args.workdir.name + "-result.json")
     args.result_path = result_path
     report = {"schema": "fsgg.release-successor-result/1",
-              "profile": SUCCESSOR_CHECKPOINT_PROFILE if args.recover_original_successor_checkpoint else RUNTIME_RECOVERY_PROFILE if args.recover_original_runtime_intent else KIT_REPEAT_PROFILE if args.repeat_original_nuget_kit_intent else RECOVERY_PROFILE if args.recovery_checkpoint else "ordinary/1",
+              "profile": ORIGINAL_0103_PROFILE if args.original_0103_candidate else SUCCESSOR_CHECKPOINT_PROFILE if args.recover_original_successor_checkpoint else RUNTIME_RECOVERY_PROFILE if args.recover_original_runtime_intent else KIT_REPEAT_PROFILE if args.repeat_original_nuget_kit_intent else RECOVERY_PROFILE if args.recovery_checkpoint else "ordinary/1",
               "candidate": {"runId": args.candidate_run_id, "artifactId": args.candidate_artifact_id,
                             "archiveSha256": args.candidate_archive_sha256},
               "execution": None, "originalPublisher": {"runId": 38133108945, "runAttempt": 1, "jobId": 114451349714} if args.recover_original_successor_checkpoint else {"runId": 38029395937, "runAttempt": 1, "jobId": 114146971214} if args.recovery_checkpoint or args.repeat_original_nuget_kit_intent or args.recover_original_runtime_intent else None,

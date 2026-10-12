@@ -174,6 +174,17 @@ class SuccessorRailBindingTests(unittest.TestCase):
         self.assertNotIn("receiver-artifact", package + probe)
         self.assertNotIn("programme-resume", package + probe)
 
+    def test_original_candidate_is_an_opt_in_profile_without_a_version_or_ref_override(self) -> None:
+        workflow = (ROOT / ".github/workflows/release-successor-publish.yml").read_text()
+        block = workflow.split("      original_0103_candidate:\n", 1)[1].split("      recovery_checkpoint:", 1)[0]
+        self.assertIn("default: false", block)
+        self.assertIn("type: boolean", block)
+        self.assertIn('profile+=(--original-0103-candidate)', workflow)
+        self.assertIn('profile+=(--recovery-checkpoint)', workflow)
+        self.assertNotIn('profile=(--recovery-checkpoint)', workflow)
+        self.assertIn('ref: ${{ github.sha }}', workflow)
+        self.assertNotIn('publisher_revision:', workflow)
+
     def test_publisher_and_journal_bind_one_unused_successor(self) -> None:
         publisher = (ROOT / "scripts/release-successor-publish.py").read_text()
         journal = (ROOT / "scripts/release_successor_journal.py").read_text()

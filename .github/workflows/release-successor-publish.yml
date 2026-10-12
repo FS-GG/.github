@@ -24,6 +24,12 @@ on:
         default: false
         type: boolean
 
+      original_0103_candidate:
+        description: Select only the accepted original .103 candidate on a compatible descendant publisher
+        required: true
+        default: false
+        type: boolean
+
       recovery_checkpoint:
         description: Recover the retained journal19 candidate for at most four advances; checkpoint is incomplete
         required: true
@@ -114,6 +120,7 @@ jobs:
           CANDIDATE_ARTIFACT_ID: ${{ inputs.candidate_artifact_id }}
           CANDIDATE_ARCHIVE_SHA256: ${{ inputs.candidate_archive_sha256 }}
           PUBLISH: ${{ inputs.publish }}
+          ORIGINAL_0103_CANDIDATE: ${{ inputs.original_0103_candidate }}
           RECOVERY_CHECKPOINT: ${{ inputs.recovery_checkpoint }}
           REPEAT_ORIGINAL_NUGET_KIT_INTENT: ${{ inputs.repeat_original_nuget_kit_intent }}
           RECOVER_ORIGINAL_RUNTIME_INTENT: ${{ inputs.recover_original_runtime_intent }}
@@ -124,8 +131,11 @@ jobs:
           mode=--preflight-only
           if test "$PUBLISH" = true; then mode=--publish; fi
           profile=()
+          if test "$ORIGINAL_0103_CANDIDATE" = true; then
+            profile+=(--original-0103-candidate)
+          fi
           if test "$RECOVERY_CHECKPOINT" = true; then
-            profile=(--recovery-checkpoint)
+            profile+=(--recovery-checkpoint)
           fi
           if test "$REPEAT_ORIGINAL_NUGET_KIT_INTENT" = true; then
             profile+=(--repeat-original-nuget-kit-intent)
