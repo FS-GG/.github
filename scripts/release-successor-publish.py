@@ -24,13 +24,18 @@ from release_successor_journal import ProtectedReleaseJournal, REF, REPOSITORY a
 from release_successor_provider import GitHubAPI, LiveProvider, NotFound
 
 REPOSITORY = "FS-GG/.github"
-SUCCESSOR_VERSION = "0.102.0"
-SUCCESSOR_PREDECESSOR = "0.101.0"
-SUCCESSOR_REF = "refs/heads/fsgg/v2/journal/release/utel-rel-20"
+SUCCESSOR_VERSION = "0.103.0"
+SUCCESSOR_PREDECESSOR = "0.102.0"
+SUCCESSOR_REF = "refs/heads/fsgg/v2/journal/release/utel-rel-21"
+ORIGINAL_SUCCESSOR_VERSION = "0.102.0"
+ORIGINAL_SUCCESSOR_PREDECESSOR = "0.101.0"
+ORIGINAL_SUCCESSOR_REF = "refs/heads/fsgg/v2/journal/release/utel-rel-20"
 
 
 def selected_release_binding(args):
     """New ordinary source cut; explicit historical profiles keep original bindings."""
+    if getattr(args, "recover_original_successor_checkpoint", False):
+        return (ORIGINAL_SUCCESSOR_VERSION, ORIGINAL_SUCCESSOR_PREDECESSOR, ORIGINAL_SUCCESSOR_REF)
     historical = any(getattr(args, flag, False) for flag in
                      ("recovery_checkpoint", "repeat_original_nuget_kit_intent", "recover_original_runtime_intent"))
     return ("0.101.0", "0.100.0", REF) if historical else (SUCCESSOR_VERSION, SUCCESSOR_PREDECESSOR, SUCCESSOR_REF)
@@ -439,8 +444,8 @@ def run_recovery_checkpoint(manifest, journal, admission, provider, report, dead
 
 
 def validate_successor_checkpoint(manifest, journal, expected):
-    require(journal.ref == SUCCESSOR_REF and journal.main_directory
-            and manifest["descriptor"]["version"] == SUCCESSOR_VERSION
+    require(journal.ref == ORIGINAL_SUCCESSOR_REF and journal.main_directory
+            and manifest["descriptor"]["version"] == ORIGINAL_SUCCESSOR_VERSION
             and manifest["descriptor"]["sourceSha"] == SUCCESSOR_CHECKPOINT_CANDIDATE["sourceSha"]
             and manifest["contentId"] == SUCCESSOR_CHECKPOINT_CANDIDATE["contentId"],
             "original successor checkpoint binding differs")

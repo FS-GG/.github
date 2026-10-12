@@ -977,3 +977,27 @@ continuation contract must bind the exact admitted candidate and base, retained
 resource progress, complete inventory and final stability checks within explicit
 request and time bounds. No larger cap, new cursor or provider replay follows
 from this diagnosis.
+
+
+### C3 receiver-first coherent successor source — 2026-10-12
+
+Source selects coherent **0.103.0** and fresh logical `utel-rel-21`, with published
+0.102.0 as predecessor. The source includes PR #4446's authenticated CI suite graph,
+durable pending recovery and aggregate bounded provider continuation. Candidate and
+publisher identities are selected only after exact source qualification and fresh
+both-feed, tag, release and journal collision checks; this source selection creates
+no release effect. The existing candidate/preflight/publisher rail remains in force.
+
+The explicit original-successor recovery profile remains pinned to the unchanged
+0.102.0 candidate and consumed `utel-rel-20`; advancing ordinary source cannot redirect
+that recovery into `utel-rel-21`. Original 0.101.0 profiles, consumed journals, archived
+package bytes and the five sealed historical workflows remain unchanged.
+
+Publish and verify the coherent CLI/Kit/Drivers bytes before receiver adoption.
+Install the capable local CLI receiver before enabling the new producer route; an
+independent Host successor is unnecessary for that selected destination. Verify the
+installed suite contract and exact payload, schema-14 migration journal and historical
+rows, then qualify packaged receiver composition and the genuinely admitted native
+more-than-40-request provider journey. These publication, installation and native
+acceptance outcomes remain pending; version-only output and source tests do not
+qualify them. Whole UTEL remains open.

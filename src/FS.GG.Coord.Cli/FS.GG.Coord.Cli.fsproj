@@ -130,7 +130,8 @@ bytes under 0.52.0 would make the same version identify different artifacts. Ado
 coherent set cut from corrected source. All three partial sets are recorded in
 `registry/dependencies.yml`.</FsggStandingAdvisories>
 
-    <PackageReleaseNotes>0.102.0 — SDK-installed telemetry engine identity pairing.
+    <PackageReleaseNotes>0.103.0 — Authenticated bounded CI continuation and receiver suite graphs.
+0.102.0 — SDK-installed telemetry engine identity pairing.
 
 The telemetry adapter recognizes the configured engine when it resolves to the running
 SDK-installed executable and independently binds its actual entry assembly. Other
