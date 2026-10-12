@@ -17,6 +17,11 @@ for parent retrieval, safeguard reviews, pinned guard-command preparation and na
 when CLR helper execution is held. See the [context-efficiency plan](../../../docs/roadmaps/2026-10-05-programme-context-efficiency.md).
 Delivered coordination behavior does not establish whole-family savings, remaining integration or effect authority.
 
+For horizon planning, recurring qualification failures or changes to acceptance tooling, read
+[delivery reliability](references/delivery-reliability.md). It records the 2026-10-12 review and maps
+its findings to these defaults; its historical observations are neither a current frontier nor another
+task ledger. Refresh the owning facts before selecting work.
+
 ## Delegate recovery before loading history
 
 First check available runtime capacity; a killed parent does not prove its children or operations ended.
@@ -47,6 +52,13 @@ Recovery preserves original timestamps, unknown reservations and genuine packet/
 Dispatch ready lanes within actual capacity. Integrate or repair the active set before opening more PRs when
 the queue limits progress. Hosted admission follows the live runner queue independently of free agent slots;
 continue independent local work while hosted work drains. Refresh after material native changes.
+
+Choose the next horizon by the nearest independently useful accepted consumer outcome, not PR count
+or available agent slots. Finish the selected publication/install/adoption path while useful disjoint
+preparation continues. Use v3 section 1.1 compatible receiver cohorts with separate assertions; routine
+process adoption need not await Linux containment, qualified driver correctness need not await a
+statistical savings experiment, and WASM-only adoption need not await presentation adoption. Do not
+reopen completed Board/Portal work, stopped profiling or unselected conditional scope.
 
 ## Keep ownership through accepted closure
 
@@ -115,6 +127,13 @@ the working view and retain linked history, original failures and revision joins
 reservation; a newer summary cannot establish acceptance or erase them. The parent reasons from this
 current view and deltas, expanding history only for a named decision or required review obligation.
 
+For an external blocker, record the exact missing evidence or capability, accountable supplying owner
+(or explicitly unknown), first-observed time, affected assertion and reopening condition in the existing
+decision view. Repeat discovery only when new evidence or a concrete authentic location could change
+the decision. More local harness repairs cannot supply missing provisioner trust, original effect
+receipts, candidate custody, engine access or consenting-player feedback. Preserve the hold and advance
+independent ready work.
+
 At a completed milestone, consider owner-context rotation when native observations show repeated
 compaction or recovery rereads. Follow [context guidance](references/context.md): checkpoint current state,
 retain the accountable owner and every original identity/reservation, then use supported fresh-context
@@ -138,10 +157,22 @@ resolved diagnostics for semantic review. After two failures of the same class, 
 expression or generation path and make one coherent repair before another qualification. A cheap parse
 check must inspect diagnostics as well as exit status and never replaces compilation or required tests.
 
+Before expensive qualification, run relevant cheap deterministic checks on the final candidate: input
+shape and native identity syntax, branch-specific expected results, generated metadata/digest bindings,
+mirror/link consistency and workflow selectors. Inspect the transitive launch closure of each test
+command: a Python or shell entry that invokes CLR, native tools or external effects needs that profile
+and its admission. A language label is not an execution boundary.
+
 For the selected milestone, exercise the smallest genuine end-to-end acceptance path as early as its
 prerequisites and authority permit. Ensure failures yield usable evidence, then add focused regressions
 and the broader coverage required for release. Separate component checks do not establish the integrated
-journey. When the real path is blocked, name the dependency and continue useful independent checks;
+journey. Exercise real library/caller control flow with inert external transport where feasible: preserve
+callback lifetimes, request/response identity, effective runtime fields and failure/cleanup behavior.
+Recorded actual-runtime fixtures supplement adversarial controls; test count alone does not establish
+representative integration. Keep candidate package-consumer checks early in the existing preparation
+route where admitted; they do not replace required downloaded-only installed proof.
+
+When the real path is blocked, name the dependency and continue useful independent checks;
 do not replace real acceptance with a growing surrogate suite or waive release gates.
 
 Use a maintained runner and stable input/result schemas for local tests, native qualification, read-only
@@ -244,6 +275,10 @@ authority; apply request budgets and quota-aware bounded waiting to ordinary pub
 Within the original bounded terminal observation, attempt logs and available result artifacts independently
 for every terminal outcome, including failure and cancellation. Preserve partial evidence and first cause;
 artifact/reporting failure must not suppress another available result or renew an expired operation.
+Make the first failure diagnosable before temporary resources are cleaned: retain bounded sanitized
+stderr/status, actual evaluated fields and expected invariants, relevant runtime/source/artifact identity,
+and independent cleanup/reporting outcomes. Exclude credentials, sensitive URLs and full environments.
+Do not depend on a later diagnostic PR or invocation to recover values already available to the caller.
 The maintained route should automatically collect terminal logs/artifacts, check their identity and produce
 one compact result containing the exact candidate, required-check outcomes, artifact verification, cleanup
 status and unresolved exceptions. Retain raw evidence; root reviews exceptions and acceptance-determining
@@ -269,6 +304,11 @@ evidence and retain the compact row, excluding it from scheduling and recovery. 
 narrow the remaining outcome with **Done: No**. Land the index in the same `.github` PR or immediate
 asynchronous cross-repository follow-up; preparation, source delivery and a completed window alone do
 not close the item. Games closures follow their owning index; preserve detailed history in owning plans.
+Keep each open-index row compact: current accepted frontier, remaining assertion, entry/blocking join
+and owning evidence link. Replace stale current claims after authoritative acceptance; an accepted
+migration of one exact store must not remain a task for that store or imply fleet migration. Move
+extended completed history to owning reports while preserving links and historical evidence. Report
+accepted submilestones inside broad open rows without converting their binary count into a percentage.
 Prefer generating and landing projections with the delivery or its automatic immediate follow-up instead
 of another manual coordination cycle. Preserve current projection fences where the helper or owning contract
 requires them; never mark a pending projection landed to unlock work. Independent implementation and lanes
@@ -316,11 +356,25 @@ return and evidence expansions separately from helper IO and whole-family usage 
 measurements remain unknown; a smaller parent or changed guidance alone proves no total savings.
 Do not create a separate rollout programme, checkpoint receipts or permanent service.
 
+Before hosted qualification, validate the complete workflow budget, including setup, all required
+suites, artifact/report collection and cleanup, against available actual stage timings. Retain variability
+and missing-stage uncertainty. A timeout increase may prevent an incomplete run but does not establish
+higher throughput. When CI dominates, inspect repeated restore/build work, compatible immutable
+artifacts and safely independent stages under the existing
+[pipeline preflight](../pipeline-preflight/SKILL.md). Use ADR-0084 exact-head
+reuse only with its complete donor and scope proof; retain required checks, coherent obligations and
+capacity limits. Do not respond by blindly increasing concurrency or dropping suites.
+
 Measure the next active window using existing native timestamps and owner artifacts: time to accepted
 milestone, owner/parent handoffs, execution-harness failures and repeated qualification work. Separate product
 work, useful acceptance verification, harness repairs, external waiting and coordination; distinguish active
 work from elapsed time and leave unattributed intervals unknown. Track checks-green to accepted closure,
-including legitimate reservation time. Also measure edit-to-compiler feedback, routine retry parent
+including legitimate reservation time. Record first-pass qualification success and repair causes,
+diagnostic completeness on terminal failures, time to accepted installed consumer behavior, repeated
+evidence exposure, and actionable-observation-to-closure latency. State selected populations, denominators
+and coverage; PR-open time excludes pre-PR development, and overlapping CI time is not critical-path
+delay. Collect from existing necessary operations, not reporting-only workloads. Also measure
+edit-to-compiler feedback, routine retry parent
 transitions, unused grant expirations and review rework. Trial the defaults in one existing lane/window;
 target zero parent transitions for ordinary compile retries, zero unused grant expirations and merge within
 five minutes of eligibility when no external dependency remains. Targets are not acceptance waivers or
