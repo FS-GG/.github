@@ -117,7 +117,8 @@ test("process overview abstains, preserves selected refresh, and distinguishes h
   fail=true;await page.locator("#refresh").click();
   await expect(page.locator("#error")).toContainText("last valid snapshot remains displayed");
   await expect(page.locator("article h3")).toHaveText("fixture-only-source-item");
-  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  const mobileLayout=await page.evaluate(()=>({viewport:innerWidth,width:document.documentElement.scrollWidth,overflow:[...document.querySelectorAll("body *")].filter(node=>node.getBoundingClientRect().right>innerWidth).map(node=>({tag:node.tagName,id:node.id,class:node.className,right:node.getBoundingClientRect().right}))}));
+  expect(mobileLayout.width,JSON.stringify(mobileLayout)).toBeLessThanOrEqual(mobileLayout.viewport);
   fail=false;
   for(const corrupt of [value=>{value.items[0].steps.rows=[null];},value=>{value.items[0].processHealth.sourceEvidence={};},value=>{value.items[0].processHealth.edges=[null];},value=>{value.items[0].processHealth.gaps=[{}];}]){
     malformed=structuredClone(data);corrupt(malformed);await page.locator("#refresh").click();

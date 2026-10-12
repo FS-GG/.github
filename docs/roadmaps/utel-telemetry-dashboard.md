@@ -326,3 +326,7 @@ malformed refresh retains the last valid view, and scope/session changes clear i
 The existing host candidate artifact retains two fixture-only screenshots, each
 bounded to one MiB, for independent desktop/mobile visual review. Whole-feature completion
 and UTEL-DASH-15 remain open.
+The first hosted candidate preserved a mobile-overflow regression failure and an
+obsolete standalone readiness assertion. The successor keeps the 390-pixel
+viewport check, bounds responsive controls and pipeline boxes, and requires the
+new private snapshot and process-health contracts with the same workspace scope.
