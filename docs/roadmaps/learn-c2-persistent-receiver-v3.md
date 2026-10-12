@@ -482,3 +482,32 @@ controller; resource limits, original deadlines, setup predicates and custody
 acceptance remain intact. Ordinary source qualification does not establish a new
 native result. A subsequent fixture requires fresh root admission, and production
 caller/adoption and whole-wrapper retirement remain open.
+
+
+### Preserve native read-only mount restrictions, 2026-10-12
+
+[PR #4440](https://github.com/FS-GG/.github/pull/4440) delivered diagnostics after
+114 adapter controls, 105 owner controls and the full hosted source package passed.
+The independently admitted [native run 38209809730](https://github.com/FS-GG/.github/actions/runs/38209809730)
+joined its hard inner boundary, then the keeper recorded `setup/readonly-remount`
+with actual errno 1 (`EPERM`) at `/usr/sbin/podman`. The prepared handshake then
+failed indirectly. No workload was born; eight cases remained not run, capture
+was zero, native exit was 43 and cleanup remained UNKNOWN. Both failed native
+invocations and their distinct remote resources remain retained.
+
+The old bind remount supplied a replacement flag set containing only read-only.
+Dropping locked inherited restrictions is a hypothesis: this failed run did not
+retain its flag mask or establish the kernel's exact rejection branch. The
+[Linux mount attribute contract](https://kernel.googlesource.com/pub/scm/docs/man-pages/man-pages/+/99891e9f3c184347ce1616361e8b32fb04cffd1f/man/man2/mount_setattr.2)
+permits an additive read-only request with no cleared attributes. The fixed
+keeper now uses that request on each new bind, with no recursive change,
+propagation or ownership change, privilege fallback or remount fallback.
+Bounded flag readbacks require read-only and preservation of every prior flag;
+injected source controls reject lost restrictions. The production population
+reader also had a separate one-byte offset error: it rejected genuine
+`populated 0` and `populated 1` kernel records. Its shared parser now requires one
+complete Boolean population line, refuses duplicates and truncated records, and
+preserves the output value on refusal. Direct production-parser controls cover
+these cases. Existing descriptor/capability validation, original clocks and
+quotas remain unchanged. Source qualification cannot establish native success or cleanup;
+a new fixture still requires separate root admission.
