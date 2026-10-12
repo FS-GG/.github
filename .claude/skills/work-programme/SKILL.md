@@ -65,7 +65,11 @@ the parent reads required logic and expands missing obligations rather than impo
 At lane assignment, state the existing user authorization, allowed operations, selected execution profiles,
 resource/time bounds, integration owner, acceptance signals and escalation conditions in the existing packet.
 Within that boundary, the owner performs routine preparation, qualification, evidence reconciliation and
-next steps without a separate parent turn for each transition. Fresh native prerequisite checks still run.
+next steps without a separate parent turn for each transition. This includes edit/build/test/repair loops,
+existing PR updates and ordinary CI collection; independent acceptance of each intermediate attempt is not
+required. Retain native logs and the first failure; detailed intermediate reconciliation is for exceptions,
+unknown effects and protected operations. Root reviews milestone semantics/results or changed authority,
+not each compiler invocation. Fresh native prerequisite checks still run.
 Delegate routine PR admission and delivery to the lane owner where repository integration is disjoint;
 retain one designated integrator for each shared surface. Publication, uncertain external effects and
 explicitly root-owned safeguards keep their applicable admission boundary. A return cannot expand authority.
@@ -118,6 +122,22 @@ continuation. If unsupported, keep the owner and report the gap; never restart a
 
 ## Make acceptance a dependable development capability
 
+Separate development authority from final acceptance. Apply these defaults within the assigned scope:
+
+| Operation | Authority and acceptance boundary |
+| --- | --- |
+| Edits, builds and focused tests in the approved isolated workspace | Owner executes and repairs within resource limits; no per-attempt parent grant |
+| Read-only CI observation and evidence collection | Automatic bounded observation, quota and retention checks; exceptions return to the owner |
+| Ordinary PR updates and integration | Designated owner/integrator uses existing admission and required checks; escalate conflicts or scope changes |
+| Publication, live-store mutation, privileged/native safeguards | Operation-specific admission, custody and final evidence remain required |
+| Uncertain external effects | Observe the original identity and reconcile before retry |
+
+Use edit → incremental compile → focused tests → semantic review → full required qualification.
+Run the existing compiler early inside the approved environment; normally submit compiling source and
+resolved diagnostics for semantic review. After two failures of the same class, sweep the affected module,
+expression or generation path and make one coherent repair before another qualification. A cheap parse
+check must inspect diagnostics as well as exit status and never replaces compilation or required tests.
+
 For the selected milestone, exercise the smallest genuine end-to-end acceptance path as early as its
 prerequisites and authority permit. Ensure failures yield usable evidence, then add focused regressions
 and the broader coverage required for release. Separate component checks do not establish the integrated
@@ -131,11 +151,24 @@ reconciliation procedure for every operation. Preflight actual inputs together, 
 versus archive digest, receipt fields, credentials/capability prerequisites and explicit JVM/resource settings.
 The runner should own resource accounting, process custody, cleanup, logs, artifacts and terminal results.
 Reuse qualified unchanged components; requalify changed behavior and affected joins instead of restarting
-an entire qualification campaign for a literal pin or metadata change. Required hosted checks remain intact.
+an entire qualification campaign for a literal pin or metadata change. Routine PR metadata corrections use
+the existing delivery route without a new qualification profile. Required hosted checks remain intact.
+
+Keep freshness checks beside execution. For an authorized operation class, the maintained runner checks
+current source/resources, acquires its reservation, establishes the execution deadline and launches in one
+bounded transition. Do not send a short-lived grant through conversation before launch; where the current
+runner requires sealing, seal and invoke together. Never revive an expired grant or extend an in-flight
+operation. Read-only observation may receive a separate fresh budget tied to the original operation;
+watch expiry does not imply execution failure, termination or permission to replay an effect.
 
 Where repeated custody or runtime-closure work dominates, evaluate disposable isolated qualification
 workers with a proven teardown boundary. Qualify the common platform once per relevant platform change
-and verify each operation's actual inputs and limits. Amortize platform evidence without assuming isolation,
+and verify each operation's changed source, relevant inputs and limits. Prefer a qualified immutable image
+with resource enforcement and reliable teardown over repeated full host/toolchain closure checks. Invalidate
+cached platform evidence when the image, runner or relevant environment changes; hashes of mutable host
+files alone are not an isolation boundary. Privileged fixtures need an environment qualified for their
+capabilities. Preserve historical unknown processes and reservations; do not make new isolated workers
+inherit their scheduling burden where independence is established. Amortize platform evidence without assuming isolation,
 cleanup or runtime equivalence that has not been demonstrated. Extend existing tooling and retire superseded
 wrappers; do not introduce a parallel execution framework merely to implement this guidance.
 
@@ -190,6 +223,13 @@ helper and [ADR-0084](../../../docs/adr/0084-semantic-reuse-never-cancels-cohere
 checks, validated reuse, coherent validation, merge and native readback. Never reinterpret pending as disputed,
 cancel coherent obligations or accept dependent activation after late failure.
 
+An owner may cancel superseded source-validation jobs only after verifying exact ownership and old PR head,
+absence of publication/shared-state effects, and a supported cleanup mechanism. Preserve existing failure
+logs, record uncompleted checks as cancelled, and require normal qualification of the replacement head.
+This does not cancel ADR-0084 coherent obligations, publishers, migrations, privileged fixtures or jobs with
+unknown effects. Observe actual termination/cleanup before releasing conflicting resources; independent
+preparation or a replacement push need not wait for unrelated safe jobs to settle.
+
 Prefer release operations bound to an immutable candidate and an explicit publisher revision over a hold
 on moving `main`. Reserve the release state and shared surfaces actually mutated; unrelated source work
 should proceed when its independence is established. Existing release contracts still govern correspondence,
@@ -204,11 +244,19 @@ authority; apply request budgets and quota-aware bounded waiting to ordinary pub
 Within the original bounded terminal observation, attempt logs and available result artifacts independently
 for every terminal outcome, including failure and cancellation. Preserve partial evidence and first cause;
 artifact/reporting failure must not suppress another available result or renew an expired operation.
-These are requirements for the existing tooling, not a claim that every current caller already implements them.
+The maintained route should automatically collect terminal logs/artifacts, check their identity and produce
+one compact result containing the exact candidate, required-check outcomes, artifact verification, cleanup
+status and unresolved exceptions. Retain raw evidence; root reviews exceptions and acceptance-determining
+assertions instead of duplicating each acquisition and offline check. If original observation expires,
+separately budget read-only retrieval of still-retained evidence and record its actual collection time;
+never claim timely acquisition retroactively. These are requirements for the existing tooling, not a claim
+that every current caller already implements them. Unsupported automation is an explicit owning-tool gap,
+not permission to fabricate evidence or add another CLI, receipt ledger or execution framework.
 
 `verify` proves declared byte equality, not authenticity, complete evidence, semantic acceptance, cleanup or
 authority. Preserve originals and failed attempts. Reuse installed Execution contracts only where qualified;
-keep root review, custody, resources, deadlines and one-use requirements. Unknown effects require original-
+keep applicable protected-operation root review, custody, resources, deadlines and one-use requirements;
+ordinary development uses the lane-level authority above. Unknown effects require original-
 identity observation before retry. Cancel requested is not termination observed. Source, publication,
 installed adoption and native acceptance remain separate. Owners cannot admit parent-owned effects by return.
 
@@ -248,10 +296,16 @@ existing owner artifact, then validate the complete revised path and meaningful 
 original failures, budgets, custody and admission boundaries. No extra ceremony or runtime/adoption claim
 follows from guidance edits.
 
-Use installed `fsgg-coord-engine skill roadmap-telemetry` begin/started/finish and usage-reconcile for every
-native dispatch/follow-up, including bootstrap. The parent reads [observation](references/observation.md)
-before dispatch; native IDs, stable lineage and advisory coverage are mandatory. Helper IO/duration never
-infer model tokens or compaction. Missing native collection remains an attributed gap, not zero.
+Use installed `fsgg-coord-engine skill roadmap-telemetry` begin/started/finish and usage-reconcile for native
+dispatches/follow-ups, including bootstrap, with bounded best-effort collection. The parent reads
+[observation](references/observation.md) before dispatch. Preserve genuine native identities and available
+lineage; missing tokens/baselines remain attributed gaps, never fabricated joins. An unavailable collector,
+full inbox or incomplete usage attribution must not block otherwise authorized routine development.
+Preserve minimal available events in existing private native logs and reconcile detailed usage asynchronously
+where authentic joins permit. Block only the affected operation when its correctness depends on telemetry
+state; live-store mutation and publication recovery retain their strict boundaries. Record the exact store
+identity with schema/status claims. Helper IO/duration never infer model tokens or compaction. Report missing
+coverage once and route repair to the existing owner; no new telemetry CLI, service or ledger.
 
 Run `report PRIVATE_ROOT` after a bounded window and the [native context report](references/context.md)
 when session records are available. Supply explicit parent/worker sessions, report missing coverage, and
@@ -266,7 +320,11 @@ Measure the next active window using existing native timestamps and owner artifa
 milestone, owner/parent handoffs, execution-harness failures and repeated qualification work. Separate product
 work, useful acceptance verification, harness repairs, external waiting and coordination; distinguish active
 work from elapsed time and leave unattributed intervals unknown. Track checks-green to accepted closure,
-including legitimate reservation time. Evaluate the operating changes on those outcomes before adding agents
+including legitimate reservation time. Also measure edit-to-compiler feedback, routine retry parent
+transitions, unused grant expirations and review rework. Trial the defaults in one existing lane/window;
+target zero parent transitions for ordinary compile retries, zero unused grant expirations and merge within
+five minutes of eligibility when no external dependency remains. Targets are not acceptance waivers or
+measured savings. Evaluate the operating changes on those outcomes before adding agents
 or lanes; more nearly finished work is not higher throughput. Keep the existing active lanes, finish prepared
 reliability changes and canonical paths, and retire redundant wrappers before increasing concurrency to address
 this bottleneck. Report measured effects and coverage gaps; promise no percentage speedup without evidence.
