@@ -139,9 +139,10 @@ jobs:
     needs: change-completeness
     if: github.event_name == 'workflow_dispatch' || needs.change-completeness.outputs.engine_changed == 'true'
     runs-on: ubuntu-latest
-    # The full board-intake qualification reached BoardOps after 25m13s on ubuntu-latest; retain
-    # every parity/replay/HTTP/write suite and leave bounded headroom for the remaining tests.
-    timeout-minutes: 35
+    # Original full run 38280175982 reached the standalone suite after 34m31s and timed out at 35m.
+    # Its passed prefix plus successful run 38250332353's remaining tail projects 36m02s;
+    # retain every suite and count guard with about four minutes of bounded runner variability.
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v7
 
