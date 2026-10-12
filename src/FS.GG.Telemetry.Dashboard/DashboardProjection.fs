@@ -24,7 +24,7 @@ type ProjectionError =
 
 module DashboardProjection =
     [<Literal>]
-    let Schema = "fsgg.telemetry.private-dashboard/1"
+    let Schema = "fsgg.telemetry.private-dashboard/2"
 
     let private envelopeLimit = 1024 * 1024
     let private snapshotLimit = 4 * envelopeLimit
@@ -78,6 +78,15 @@ module DashboardProjection =
                 | true, n when n >= 0L -> Some n
                 | _ -> None)
 
+    let private signedExitCode name value =
+        property name value
+        |> Option.bind (fun v ->
+            if v.ValueKind <> JsonValueKind.Number then None
+            else
+                match v.TryGetInt32() with
+                | true, exitCode -> Some exitCode
+                | _ -> None)
+
     let private nullableNumber name value =
         match property name value with
         | Some v when v.ValueKind = JsonValueKind.Null -> Some None
@@ -101,7 +110,17 @@ module DashboardProjection =
             | _ -> None
         | None -> None
 
-    let private itemSteps (perKindLimit: int) item activities attributions ciSteps admissions times usage lineage =
+    // These references are private source-native identifiers, never display ordinals.
+    let private reference name row =
+        text name row |> Option.filter (fun value -> validItem value)
+        |> Option.map JsonValue.Create |> Option.toObj
+
+    let private sourceFields (node: JsonObject) row =
+        node["factIdentity"] <- reference "identity" row
+        node["factRevision"] <- number "fact_revision" row |> Option.map JsonValue.Create |> Option.toObj
+        node["contentDigest"] <- null // This scoped reader does not supply retained canonical digests.
+
+    let private itemSteps (perKindLimit: int) item activities attributions ciSteps admissions terminals times usage lineage =
         let activityRows = activities |> Array.filter (fun row -> text "item_id" row = Some item)
         let ciRows = ciSteps |> Array.filter (fun row -> text "item_id" row = Some item)
         let runtimeRows = admissions |> Array.filter (fun row -> text "item_id" row = Some item)
@@ -118,7 +137,7 @@ module DashboardProjection =
             let events =
                 times
                 |> Array.filter (fun event ->
-                    text "item_id" event = Some item && text "invocation_id" event = invocation)
+                    invocation.IsSome && text "item_id" event = Some item && text "invocation_id" event = invocation)
             let latest eventName = events |> Array.tryFind (fun event -> text "event" event = Some eventName)
             let start = latest "start" |> Option.bind (text "occurred_at") |> safeTime
             let finish = latest "terminal" |> Option.bind (text "occurred_at") |> safeTime
@@ -128,7 +147,7 @@ module DashboardProjection =
             let invocationUsage =
                 usage
                 |> Array.filter (fun entry ->
-                    text "item_id" entry = Some item && text "invocation_id" entry = invocation)
+                    invocation.IsSome && text "item_id" entry = Some item && text "invocation_id" entry = invocation)
             let bases =
                 invocationUsage
                 |> Array.choose (fun entry ->
@@ -146,10 +165,22 @@ module DashboardProjection =
             let relation =
                 lineage
                 |> Array.tryFind (fun entry ->
-                    text "item_id" entry = Some item && text "invocation_id" entry = invocation)
+                    invocation.IsSome && text "item_id" entry = Some item && text "invocation_id" entry = invocation)
                 |> Option.bind (text "relation")
                 |> safeToken "unclassified"
             let node = JsonObject()
+            sourceFields node row
+            node["id"] <- reference "invocation_id" row
+            node["attemptId"] <- reference "attempt_id" row
+            node["parentAttemptId"] <- reference "parent_attempt_id" row
+            let terminal = terminals |> Array.tryFind (fun entry -> invocation.IsSome && text "item_id" entry = Some item && text "invocation_id" entry = invocation)
+            node["outcome"] <- terminal |> Option.bind (text "outcome") |> safeToken "unknown"
+            node["terminalIdentity"] <- terminal |> Option.map (reference "identity") |> Option.toObj
+            node["exitCode"] <- terminal |> Option.bind (signedExitCode "exit_code") |> Option.map JsonValue.Create |> Option.toObj
+            let lineageRow = lineage |> Array.tryFind (fun entry -> invocation.IsSome && text "item_id" entry = Some item && text "invocation_id" entry = invocation)
+            node["parentId"] <- lineageRow |> Option.map (reference "parent_invocation_id") |> Option.toObj
+            node["rootId"] <- lineageRow |> Option.map (reference "root_invocation_id") |> Option.toObj
+            node["lineageIdentity"] <- lineageRow |> Option.map (reference "identity") |> Option.toObj
             node["kind"] <- "runtime"
             node["label"] <- $"Runtime invocation {index + 1}"
             node["classification"] <- relation
@@ -195,6 +226,12 @@ module DashboardProjection =
                     let total = attributed |> Array.sumBy (fun (value, _, _) -> bigint value)
                     if total > bigint Int64.MaxValue then None else Some(int64 total)
             let node = JsonObject()
+            sourceFields node row
+            node["id"] <- reference "activity_id" row
+            node["invocationId"] <- reference "invocation_id" row
+            node["attemptId"] <- reference "attempt_id" row
+            node["parentId"] <- null
+            node["rootId"] <- null
             node["kind"] <- "activity"
             node["label"] <- category
             node["classification"] <- category
@@ -207,6 +244,14 @@ module DashboardProjection =
 
         for index, row in ciRows |> Array.truncate perKindLimit |> Array.indexed do
             let node = JsonObject()
+            sourceFields node row
+            node["id"] <- reference "identity" row
+            node["parentId"] <- null
+            node["rootId"] <- null
+            for name in [ "run_id"; "job_id"; "attempt"; "number" ] do
+                node[name] <- number name row |> Option.map JsonValue.Create |> Option.toObj
+            node["status"] <- safeToken "unknown" (text "status" row)
+            node["conclusion"] <- safeToken "unknown" (text "conclusion" row)
             node["kind"] <- "ci"
             node["label"] <- $"CI step {index + 1}"
             node["classification"] <-
@@ -273,6 +318,7 @@ module DashboardProjection =
         attributions
         ciSteps
         admissions
+        terminals
         usageRows
         lineage
         perKindLimit
@@ -371,7 +417,7 @@ module DashboardProjection =
                             (times
                              |> Array.choose (fun row ->
                                  if text "item_id" row = Some item then
-                                     text "clock" row |> Option.filter tokenPattern.IsMatch
+                                     text "occurred_clock_provenance" row |> Option.filter tokenPattern.IsMatch
                                  else
                                      None))
                             (activities
@@ -513,7 +559,63 @@ module DashboardProjection =
 
                     node["coverage"] <- coverage
                     node["clockProvenance"] <- JsonArray(clocks |> Array.map (fun v -> JsonValue.Create(v) :> JsonNode))
-                    node["steps"] <- itemSteps perKindLimit item activities attributions ciSteps admissions times usageRows lineage
+                    let steps = itemSteps perKindLimit item activities attributions ciSteps admissions terminals times usageRows lineage
+                    node["steps"] <- steps
+                    let health = JsonObject()
+                    health["schema"] <- "fsgg.telemetry.process-health/1"
+                    health["verdict"] <- "insufficient-evidence"
+                    health["confidence"] <- "insufficient"
+                    health["reason"] <- "Diagnostic assessment, dependency coverage, active effort and retained history are not supplied by this snapshot."
+                    health["dimensions"] <- JsonArray([| "delivery"; "rework"; "coordination"; "cost"; "reliability" |] |> Array.map (fun dimension ->
+                        let value = JsonObject()
+                        value["dimension"] <- dimension
+                        value["verdict"] <- "insufficient-evidence"
+                        value :> JsonNode))
+                    health["effortCategories"] <- JsonArray([| "product-implementation"; "necessary-validation"; "tooling-infrastructure-repair"; "coordination-approvals"; "repeated-work"; "external-waiting"; "unknown-unattributed" |] |> Array.map (fun category ->
+                        let value = JsonObject()
+                        value["category"] <- category
+                        value["amount"] <- null
+                        value["unit"] <- null
+                        value["coverage"] <- "unknown"
+                        value :> JsonNode))
+                    let stages = JsonObject()
+                    stages["source"] <- state["codeDelivery"].DeepClone()
+                    for stage in [ "publication"; "installation"; "adoption"; "verifiedOperation" ] do stages[stage] <- "unknown"
+                    health["stages"] <- stages
+                    let diagnosticCoverage = JsonObject()
+                    diagnosticCoverage["population"] <- coverage["populationCoverage"].DeepClone()
+                    diagnosticCoverage["usage"] <- usageNode["nativeUsage"].DeepClone()
+                    diagnosticCoverage["lineage"] <- if lineage |> Array.exists (fun row -> text "item_id" row = Some item) then "observed-partial" else "unknown"
+                    for relation in [ "classification"; "dependencies"; "history"; "operationalStages" ] do diagnosticCoverage[relation] <- "unknown"
+                    health["coverage"] <- diagnosticCoverage
+                    let evidence = JsonObject()
+                    match outcome with
+                    | Some row ->
+                        sourceFields evidence row
+                        evidence["sourceReference"] <- reference "source_ref" row
+                        evidence["repository"] <- reference "repository" row
+                        evidence["pullRequest"] <- number "pr_number" row |> Option.map JsonValue.Create |> Option.toObj
+                        evidence["head"] <- reference "head" row
+                        evidence["mergeCommit"] <- reference "merge_commit" row
+                    | None ->
+                        for name in [ "factIdentity"; "factRevision"; "contentDigest"; "sourceReference"; "repository"; "pullRequest"; "head"; "mergeCommit" ] do evidence[name] <- null
+                    health["sourceEvidence"] <- evidence
+                    let edges = JsonArray()
+                    let rows = steps["rows"].AsArray()
+                    for row in rows do
+                        if row["kind"].GetValue<string>() = "runtime" && not (isNull row["parentId"]) then
+                            let edge = JsonObject()
+                            edge["from"] <- row["parentId"].DeepClone()
+                            edge["to"] <- if isNull row["id"] then null else row["id"].DeepClone()
+                            edge["relation"] <- row["classification"].DeepClone()
+                            edge["evidenceIdentity"] <- if isNull row["lineageIdentity"] then null else row["lineageIdentity"].DeepClone()
+                            edge["targetCoverage"] <- if rows |> Seq.exists (fun candidate -> not (isNull candidate["id"]) && candidate["kind"].GetValue<string>() = "runtime" && candidate["id"].ToJsonString() = row["parentId"].ToJsonString()) then "displayed" else "unresolved"
+                            edges.Add edge
+                    health["edges"] <- edges
+                    health["gaps"] <- JsonArray(Array.append gapCodes [| "diagnostic-assessment-unavailable"; "active-effort-unavailable"; "seven-category-allocation-unavailable"; "dependency-coverage-unknown"; "historical-knowledge-time-unavailable"; "operational-stage-evidence-unavailable"; "canonical-digests-unavailable"; "source-freshness-coverage-unknown" |] |> Array.distinct |> Array.map (fun value -> JsonValue.Create(value) :> JsonNode))
+                    health["anomalies"] <- null
+                    health["interventions"] <- null
+                    node["processHealth"] <- health
                     Ok(node :> JsonNode)
             | _ -> Error InvalidSnapshot
 
@@ -763,6 +865,7 @@ module DashboardProjection =
                                                                     (array "activityUsageAttributions" snapshot |> Option.get)
                                                                     (array "ciSteps" snapshot |> Option.get)
                                                                     (array "admissions" snapshot |> Option.get)
+                                                                    (array "terminals" snapshot |> Option.get)
                                                                     (array "usage" snapshot |> Option.get)
                                                                     (array "lineage" snapshot |> Option.get)
                                                                     (min 64 (max 1 (128 / max 1 items.Length)))
@@ -781,6 +884,22 @@ module DashboardProjection =
                                                             result["workspaceId"] <- authorizedWorkspace
                                                             result["observedAt"] <- observedAt.Value
                                                             result["revision"] <- revision
+                                                            let provenance = JsonObject()
+                                                            provenance["schema"] <- "fsgg.telemetry.process-health/1"
+                                                            provenance["verdict"] <- "insufficient-evidence"
+                                                            provenance["selectionMode"] <- text "mode" selection |> Option.get
+                                                            provenance["requestedItem"] <- reference "requestedItem" selection
+                                                            provenance["sourceObservedAt"] <- null
+                                                            provenance["snapshotObservedAt"] <- observedAt.Value
+                                                            provenance["ingestedAt"] <- null
+                                                            provenance["projectionAt"] <- DateTimeOffset.UtcNow.ToString("O")
+                                                            provenance["cutoff"] <- null
+                                                            provenance["timezone"] <- null
+                                                            provenance["sessionId"] <- null
+                                                            provenance["configVersion"] <- null
+                                                            provenance["ruleVersion"] <- null
+                                                            provenance["classificationVersion"] <- null
+                                                            result["processHealth"] <- provenance
                                                             let op = JsonObject()
                                                             op["pendingBatches"] <- pendingBatches.Value
 

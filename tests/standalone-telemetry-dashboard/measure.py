@@ -168,7 +168,7 @@ def start(engine:pathlib.Path,config:pathlib.Path,repository:str,timeout:float=5
   snapshot_request=urllib.request.Request(origin+'/api/snapshot',data=body,method='POST',headers={'Origin':origin,'Content-Type':'application/json'})
   with opener.open(snapshot_request,timeout=2) as response:
    snapshot=json.load(response)
-  if snapshot.get('schema')!='fsgg.telemetry.private-dashboard/1' or snapshot.get('workspaceId')!=workspace: raise ValueError('dashboard readiness snapshot is invalid')
+  if snapshot.get('schema')!='fsgg.telemetry.private-dashboard/2' or snapshot.get('workspaceId')!=workspace or snapshot.get('processHealth',{}).get('schema')!='fsgg.telemetry.process-health/1': raise ValueError('dashboard readiness snapshot is invalid')
   elapsed=(time.monotonic_ns()-started)/1_000_000
   return process,elapsed,origin
  except BaseException:

@@ -296,3 +296,37 @@ No numerical delivery dates or savings percentages are asserted without a scoped
 
 
 Landing this proposal does not implement the dashboard, change existing policy, authorize a feed cutover or establish native acceptance. It extends V2-EFF-01.2–.6 within the existing programme; whole-feature completion remains open.
+
+
+### PH-1 source candidate — 2026-10-12
+
+The shared authenticated dashboard now projects `private-dashboard/2` with bounded
+`process-health/1` evidence. It preserves genuine recorded invocation, activity and
+CI identities, witnessed parent relations and source-delivery references; absent
+canonical revisions, digests, operational stages and diagnostic measurements remain
+unknown. The private overview exposes outcome selection, clock-separated parallel
+steps, explicit historical context and seven unmeasured effort categories. Its
+initial verdict is **Insufficient evidence**. Existing public efficiency summaries
+precede activity; public health remains unavailable without an approved assessment.
+
+Incremental compilation and 61 focused projection cases pass against unchanged
+locked package inputs. Four hosted-server security cases and 12 local-server
+security cases pass. Three local Chromium journeys remain omitted because the
+local browser custody profile refused detached children. The existing hosted
+workflows remain the required private/public browser source qualification route. The first browser attempts retained the missing
+native-library failure and the subsequent detached-process custody refusal; neither
+establishes UI acceptance. Candidate installation, a workspace-authorized real
+outcome journey and richer canonical assessment remain separate acceptance gates.
+Accepted installed read-only discovery confirms that the legacy store has no
+workspace binding, and the currently selected host configuration has no workspace
+association. These facts cannot authorize a private session. Prospective enrollment
+uses the existing canonical route with a separate store and explicit configuration;
+legacy observations cannot be relabeled. Detailed evidence is disclosed on demand;
+malformed refresh retains the last valid view, and scope/session changes clear it.
+The existing host candidate artifact retains two fixture-only screenshots, each
+bounded to one MiB, for independent desktop/mobile visual review. Whole-feature completion
+and UTEL-DASH-15 remain open.
+The first hosted candidate preserved a mobile-overflow regression failure and an
+obsolete standalone readiness assertion. The successor keeps the 390-pixel
+viewport check, bounds responsive controls and pipeline boxes, and requires the
+new private snapshot and process-health contracts with the same workspace scope.

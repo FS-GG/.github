@@ -94,7 +94,7 @@ module DashboardProjectionTests =
                         $"""{{"item_id":"{item}","attempts":"partial","jobs":"partial","terminal":"unknown","timestamps":"complete","continuation":"pending","external_checks":2}}"""
                 |]
 
-        root["times"] <- nodes [| row $"""{{"item_id":"{item}","clock":"host-wall","command":"PRIVATE"}}""" |]
+        root["times"] <- nodes [| row $"""{{"item_id":"{item}","occurred_clock_provenance":"host-wall","command":"PRIVATE"}}""" |]
         root
 
     let private envelope (snapshot: JsonNode) =
@@ -206,7 +206,9 @@ module DashboardProjectionTests =
             nodes [| row """{"item_id":"item-a","invocation_id":"PRIVATE-INVOCATION","relation":"root"}""" |]
         let bytes = DashboardProjection.project "workspace-a" (envelope value) |> unwrap
         let output = Encoding.UTF8.GetString bytes
-        Assert.DoesNotContain("PRIVATE-", output)
+        Assert.Contains("PRIVATE-INVOCATION", output)
+        for secret in [ "PRIVATE-EVIDENCE"; "PRIVATE-SUMMARY"; "PRIVATE-USAGE"; "PRIVATE-CI-STEP-NAME"; "PRIVATE-RATIONALE" ] do
+            Assert.DoesNotContain(secret, output)
         use document = JsonDocument.Parse bytes
         let steps = document.RootElement.GetProperty("items").[0].GetProperty("steps")
         Assert.Equal(1, steps.GetProperty("activityCount").GetInt32())
@@ -782,3 +784,43 @@ module DashboardProjectionTests =
         current["workspaceId"] <- "workspace-a"
         current["operational"] <- JsonNode.Parse """{"pendingBatches":0,"consistency":"observed-outside-database-transaction"}"""
         Assert.Equal(Error InvalidEnvelope, DashboardProjection.project "workspace-a" (JsonSerializer.SerializeToUtf8Bytes current))
+
+    [<Fact>]
+    let ``process health preserves witnessed chain and abstains from unsupported diagnosis`` () =
+        let value = snapshot "item-a"
+        value["admissions"] <- nodes [| row """{"item_id":"item-a","invocation_id":"child-native","attempt_id":"original-attempt-native","identity":"admission-native","fact_revision":4}""" |]
+        value["terminals"] <- nodes [| row """{"item_id":"item-a","invocation_id":"child-native","identity":"original-failure-native","outcome":"failed","exit_code":-15}""" |]
+        value["lineage"] <- nodes [| row """{"item_id":"item-a","invocation_id":"child-native","parent_invocation_id":"parent-native","root_invocation_id":"root-native","identity":"lineage-native","relation":"child"}""" |]
+        use result = DashboardProjection.project "workspace-a" (envelope value) |> unwrap |> JsonDocument.Parse
+        Assert.Equal("fsgg.telemetry.private-dashboard/2", result.RootElement.GetProperty("schema").GetString())
+        Assert.Equal(JsonValueKind.Null, result.RootElement.GetProperty("processHealth").GetProperty("sourceObservedAt").ValueKind)
+        Assert.Equal("2026-09-10T09:00:00.0000000+00:00", result.RootElement.GetProperty("processHealth").GetProperty("snapshotObservedAt").GetString())
+        let item = result.RootElement.GetProperty("items").[0]
+        let health = item.GetProperty("processHealth")
+        Assert.Equal("insufficient-evidence", health.GetProperty("verdict").GetString())
+        Assert.Equal(7, health.GetProperty("effortCategories").GetArrayLength())
+        for category in health.GetProperty("effortCategories").EnumerateArray() do
+            Assert.Equal(JsonValueKind.Null, category.GetProperty("amount").ValueKind)
+        Assert.Equal("unknown", health.GetProperty("stages").GetProperty("verifiedOperation").GetString())
+        let step = item.GetProperty("steps").GetProperty("rows").[0]
+        Assert.Equal("child-native", step.GetProperty("id").GetString())
+        Assert.Equal("admission-native", step.GetProperty("factIdentity").GetString())
+        Assert.Equal("original-attempt-native", step.GetProperty("attemptId").GetString())
+        Assert.Equal("failed", step.GetProperty("outcome").GetString())
+        Assert.Equal(-15, step.GetProperty("exitCode").GetInt32())
+        Assert.Equal("original-failure-native", step.GetProperty("terminalIdentity").GetString())
+        Assert.Equal(4L, step.GetProperty("factRevision").GetInt64())
+        Assert.Equal(JsonValueKind.Null, step.GetProperty("contentDigest").ValueKind)
+        let edge = health.GetProperty("edges").[0]
+        Assert.Equal("parent-native", edge.GetProperty("from").GetString())
+        Assert.Equal("unresolved", edge.GetProperty("targetCoverage").GetString())
+        Assert.Equal("lineage-native", edge.GetProperty("evidenceIdentity").GetString())
+
+    [<Fact>]
+    let ``missing native step identity is null rather than an ordinal`` () =
+        let value = snapshot "item-a"
+        value["admissions"] <- nodes [| row """{"item_id":"item-a"}""" |]
+        use result = DashboardProjection.project "workspace-a" (envelope value) |> unwrap |> JsonDocument.Parse
+        let item = result.RootElement.GetProperty("items").[0]
+        Assert.Equal(JsonValueKind.Null, item.GetProperty("steps").GetProperty("rows").[0].GetProperty("id").ValueKind)
+        Assert.Equal(0, item.GetProperty("processHealth").GetProperty("edges").GetArrayLength())
