@@ -651,3 +651,62 @@ let ``#507 the child's id is sent as a JSON NUMBER, not a string`` () =
     |> ignore
 
     Assert.True(recorder.Logged "sub-issue-add FS-GG/FS.GG.SDD 42 -F sub_issue_id=1047")
+
+[<Fact>]
+let ``deadline page refuses invalid allowance and non read request before HTTP`` () =
+    use http = new HttpTransport("http://127.0.0.1:1", "")
+    let transport = http :> IDeadlineSinglePageGitHubTransport
+    for remaining in [ TimeSpan.Zero; TimeSpan.FromSeconds -1.0; TimeSpan.FromSeconds 30.001 ] do
+        Assert.True(transport.SendSingleWithin(request "repos/o/r/actions/runs" Rest, remaining) |> Result.isError)
+    for invalid in [ { request "repos/o/r/actions/runs" Rest with Method = "POST" }
+                     { request "repos/o/r/actions/runs" Rest with Body = Json "{}" }
+                     request "graphql" GraphQl ] do
+        match transport.SendSingleWithin(invalid, TimeSpan.FromSeconds 1.0) with
+        | Error(Malformed(_, detail)) -> Assert.Contains("only bodyless REST GET", detail)
+        | actual -> failwithf "request reached HTTP boundary: %A" actual
+
+[<Theory>]
+[<InlineData(true)>]
+[<InlineData(false)>]
+let ``deadline page cancellation covers delayed headers and delayed response body`` slowHeaders =
+    use allocator = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0)
+    allocator.Start()
+    let port = (allocator.LocalEndpoint :?> System.Net.IPEndPoint).Port
+    allocator.Stop()
+    use server = new System.Net.HttpListener()
+    let origin = $"http://127.0.0.1:{port}/"
+    server.Prefixes.Add origin
+    server.Start()
+    let observed = new System.Threading.ManualResetEventSlim(false)
+    let task =
+        System.Threading.Tasks.Task.Run(
+            fun () ->
+                try
+                    let context = server.GetContext()
+                    observed.Set()
+                    if slowHeaders then System.Threading.Thread.Sleep 600
+                    context.Response.SendChunked <- true
+                    context.Response.StatusCode <- 200
+                    use stream = context.Response.OutputStream
+                    let prefix = Encoding.UTF8.GetBytes "{\"partial\":"
+                    stream.Write(prefix, 0, prefix.Length)
+                    stream.Flush()
+                    if not slowHeaders then System.Threading.Thread.Sleep 600
+                    let suffix = Encoding.UTF8.GetBytes "true}"
+                    stream.Write(suffix, 0, suffix.Length)
+                    context.Response.Close()
+                with
+                | :? System.Net.HttpListenerException -> ()
+                | :? System.IO.IOException -> ()
+                | :? ObjectDisposedException -> ())
+    try
+        use http = new HttpTransport(origin, "")
+        let timer = System.Diagnostics.Stopwatch.StartNew()
+        let result = (http :> IDeadlineSinglePageGitHubTransport).SendSingleWithin(request "resource" Rest, TimeSpan.FromMilliseconds 150.0)
+        Assert.True(observed.Wait 1000)
+        Assert.True(result |> Result.isError)
+        Assert.True(timer.Elapsed < TimeSpan.FromSeconds 2.0)
+    finally
+        server.Stop()
+        task.Wait 2000 |> ignore
+        observed.Dispose()

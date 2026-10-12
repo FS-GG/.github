@@ -12,6 +12,16 @@ open Microsoft.Data.Sqlite
 open FS.GG.Coord
 
 module TelemetryStoreApplication =
+
+    type CiSuiteReceiverSnapshot =
+        { StoreId: string
+          ReceiverContract: string
+          ItemId: string
+          Producer: string
+          Stream: string
+          RevisionFloor: int64
+          AuthenticatedFacts: TelemetryStore.Fact list }
+
     type DrainHooks =
         {
             BeforeCommit: unit -> unit
@@ -852,6 +862,7 @@ PRAGMA user_version=14;
                                     root = root
                                     database = databaseFileName
                                     schemaVersion = version
+                                    ciSuiteReceiverContract = "fsgg.telemetry.ci-suite-receiver/1"
                                     nativeEngine = engine
                                     journalMode = scalarText connection "PRAGMA journal_mode;"
                                     pendingBatches = pending
@@ -1636,10 +1647,12 @@ WHERE f.identity=$resource AND f.revision=$sourceRevision AND f.content_digest=$
         | TelemetryStore.LearnSharedCostAuthority _
         | TelemetryStore.LearnNativeDeliverySource _ -> ()
         | TelemetryStore.LearnInstalledOrigin _ -> ()
+        | TelemetryStore.CiSuitePage _
+        | TelemetryStore.CiSuiteSeal _ -> () // Canonical ledger only; the authenticated graph gate derives coverage.
 
         match fact.ItemId, fact.Payload with
         | Some item,
-          (TelemetryStore.BudgetPopulation _ | TelemetryStore.BudgetAttribution _ | TelemetryStore.BudgetInterval _ | TelemetryStore.BudgetIntervention _ | TelemetryStore.RuntimeAdmission _ | TelemetryStore.RuntimeStart _ | TelemetryStore.RuntimeTurnUsage _ | TelemetryStore.RuntimeResponseUsage _ | TelemetryStore.RuntimeProviderObservation _ | TelemetryStore.RuntimeTerminal _ | TelemetryStore.RuntimeGap _ | TelemetryStore.CiBinding _ | TelemetryStore.CiPage _ | TelemetryStore.CiRun _ | TelemetryStore.CiJob _ | TelemetryStore.CiStep _ | TelemetryStore.CiCoverage _ | TelemetryStore.CiPopulationAdmission _ | TelemetryStore.CiCheck _ | TelemetryStore.CiPopulationCoverage _ | TelemetryStore.NativeItemOutcome _ | TelemetryStore.OperationalActivation _ | TelemetryStore.ExpectedDispatch _ | TelemetryStore.InvocationLineage _ | TelemetryStore.EventTime _ | TelemetryStore.ProcessReview _ | TelemetryStore.ActivitySpan _ | TelemetryStore.ActivityUsageAttribution _ | TelemetryStore.Complication _) ->
+          (TelemetryStore.CiSuitePage _ | TelemetryStore.CiSuiteSeal _ | TelemetryStore.BudgetPopulation _ | TelemetryStore.BudgetAttribution _ | TelemetryStore.BudgetInterval _ | TelemetryStore.BudgetIntervention _ | TelemetryStore.RuntimeAdmission _ | TelemetryStore.RuntimeStart _ | TelemetryStore.RuntimeTurnUsage _ | TelemetryStore.RuntimeResponseUsage _ | TelemetryStore.RuntimeProviderObservation _ | TelemetryStore.RuntimeTerminal _ | TelemetryStore.RuntimeGap _ | TelemetryStore.CiBinding _ | TelemetryStore.CiPage _ | TelemetryStore.CiRun _ | TelemetryStore.CiJob _ | TelemetryStore.CiStep _ | TelemetryStore.CiCoverage _ | TelemetryStore.CiPopulationAdmission _ | TelemetryStore.CiCheck _ | TelemetryStore.CiPopulationCoverage _ | TelemetryStore.NativeItemOutcome _ | TelemetryStore.OperationalActivation _ | TelemetryStore.ExpectedDispatch _ | TelemetryStore.InvocationLineage _ | TelemetryStore.EventTime _ | TelemetryStore.ProcessReview _ | TelemetryStore.ActivitySpan _ | TelemetryStore.ActivityUsageAttribution _ | TelemetryStore.Complication _) ->
             use dirty = connection.CreateCommand()
 
             dirty.CommandText <-
@@ -2978,6 +2991,111 @@ WHERE a.identity=$identity AND (($native=1 AND a.authority_role='native-collecto
                 invalidOp "efficiency-resource-scope-mismatch"
         | _ -> invalidOp "efficiency-resource-counter-unavailable"
 
+    // Read each current canonical revision only through its exact applied authenticated receipt.
+    // The limit is a conservative coverage refusal, never a reduced graph presented as complete.
+    let private authenticatedCiFacts (connection: SqliteConnection) transaction itemId producer stream includeObservations =
+        use command = connection.CreateCommand()
+        command.Transaction <- transaction
+        command.CommandText <- """
+SELECT f.canonical,f.content_digest FROM current_ingest_facts f
+JOIN fact_admissions a ON a.identity=f.identity
+JOIN fact_acceptance_times t ON t.identity=f.identity AND t.fact_revision=f.revision
+ AND t.content_digest=f.content_digest AND t.receipt_key=a.receipt_key
+JOIN receipt_admissions ra ON ra.receipt_key=a.receipt_key AND ra.envelope_digest=a.envelope_digest
+ AND ra.producer=a.producer AND ra.stream=a.stream
+JOIN transport_receipts tr ON tr.producer=ra.producer AND tr.batch=ra.batch AND tr.state='applied'
+ AND tr.digest=ra.envelope_digest
+WHERE f.item_id=$item AND a.producer=$producer AND a.stream=$stream
+ AND f.kind IN ('ci-suite-page/1','ci-suite-seal/1','ci-population-admission','ci-binding','ci-coverage','ci-population-coverage','ci-check')
+ORDER BY f.identity LIMIT 413701;
+"""
+        if includeObservations then
+            command.CommandText <- command.CommandText.Replace(
+                "'ci-suite-page/1','ci-suite-seal/1','ci-population-admission','ci-binding','ci-coverage','ci-population-coverage','ci-check'",
+                "'ci-suite-page/1','ci-suite-seal/1','ci-population-admission','ci-binding','ci-coverage','ci-population-coverage','ci-check','ci-page','ci-run','ci-job','ci-step','diagnostic'",
+                StringComparison.Ordinal)
+        [ "$item", box itemId; "$producer", box producer; "$stream", box stream ]
+        |> List.iter (fun (name, value) -> parameter command name value)
+        use reader = command.ExecuteReader()
+        let facts = ResizeArray<TelemetryStore.Fact>()
+        let mutable totalBytes = 0L
+        while reader.Read() do
+            if facts.Count >= 413700 then invalidOp "ci-suite-receiver-fact-population-bound"
+            let canonical = reader.GetString 0
+            let bytes = Encoding.UTF8.GetBytes canonical
+            totalBytes <- totalBytes + int64 bytes.Length
+            if bytes.Length > 65536 || totalBytes > 100663296L then invalidOp "ci-suite-receiver-canonical-byte-bound"
+            let batch =
+                "{\"schema\":\"fsgg.telemetry.ingest/1\",\"ingestId\":\"ci-suite-readback\",\"sourceIdentity\":\"ci-suite-readback\",\"generation\":\"readback\",\"cursor\":\"0\",\"eventCount\":1,\"events\":[" + canonical + "]}"
+            match TelemetryStore.parseBatch (Encoding.UTF8.GetBytes batch) with
+            | Ok parsed when parsed.Facts.Length = 1 ->
+                let fact = List.head parsed.Facts
+                if fact.ContentDigest <> reader.GetString 1 then invalidOp "ci-suite-current-canonical-digest"
+                facts.Add fact
+            | _ -> invalidOp "ci-suite-current-canonical-parser"
+        facts |> Seq.toList
+
+    let private authenticatedCiSuiteFacts connection transaction itemId producer stream =
+        authenticatedCiFacts connection transaction itemId producer stream false
+
+    // Same-source receiver capability and authenticated current facts are distinct from a private checkpoint.
+    // The caller must retain its collection lock and compare this exact immutable store identity before effects.
+    let ciSuiteReceiverReadback path assessment (itemId: string) producer stream =
+        match validateRoot path assessment |> Result.bind (fun root -> connect root SqliteOpenMode.ReadOnly) with
+        | Error errors -> Error errors
+        | Ok(connection, _) ->
+            use connection = connection
+            try
+                use transaction = connection.BeginTransaction()
+                if Int32.Parse(scalarText connection "PRAGMA user_version;") <> currentSchemaVersion then
+                    invalidOp "ci-suite-capable-schema14-receiver-required"
+                verifyMigrationJournal connection currentSchemaVersion
+                verifyMigrationSchema connection currentSchemaVersion
+                use store = connection.CreateCommand()
+                store.Transaction <- transaction
+                store.CommandText <- "SELECT value FROM store_metadata WHERE key='ciCorrectionStoreId';"
+                let storeId = store.ExecuteScalar() |> string
+                if String.IsNullOrWhiteSpace storeId then invalidOp "ci-suite-stable-store-identity-required"
+                use revisions = connection.CreateCommand()
+                revisions.Transaction <- transaction
+                revisions.CommandText <- "SELECT coalesce(max(revision),0) FROM current_ingest_facts WHERE item_id=$item;"
+                parameter revisions "$item" itemId
+                let revision = Convert.ToInt64(revisions.ExecuteScalar())
+                let facts = authenticatedCiFacts connection transaction itemId producer stream true
+                Ok { StoreId = storeId; ReceiverContract = "fsgg.telemetry.ci-suite-receiver/1"
+                     ItemId = itemId; Producer = producer; Stream = stream; RevisionFloor = revision
+                     AuthenticatedFacts = facts }
+            with error -> Error [ error.Message ]
+
+    let private validateCiSuitePageOwner (connection: SqliteConnection) itemId producer stream (scope: TelemetryStore.CiSuiteProofScope) =
+        use command = connection.CreateCommand()
+        command.CommandText <- """
+SELECT count(*) FROM current_ingest_facts f JOIN fact_admissions a ON a.identity=f.identity
+JOIN fact_acceptance_times t ON t.identity=f.identity AND t.fact_revision=f.revision
+ AND t.content_digest=f.content_digest AND t.receipt_key=a.receipt_key
+JOIN receipt_admissions ra ON ra.receipt_key=a.receipt_key AND ra.envelope_digest=a.envelope_digest
+ AND ra.producer=a.producer AND ra.stream=a.stream
+JOIN transport_receipts tr ON tr.producer=ra.producer AND tr.batch=ra.batch AND tr.state='applied'
+ AND tr.digest=ra.envelope_digest
+WHERE f.item_id=$item AND a.producer=$producer AND a.stream=$stream AND
+ ((f.kind='ci-binding' AND f.identity IN (SELECT identity FROM ci_bindings WHERE collection_id=$collection
+   AND item_id=$item AND repository=$repository AND head=$head AND pr_number=$pr AND producer_stream=$stream))
+ OR (f.kind='ci-population-admission' AND f.identity IN (SELECT identity FROM ci_population_admissions
+   WHERE collection_id=$collection AND item_id=$item AND repository=$repository AND head=$head
+    AND pr_number=$pr AND base_ref=$baseRef AND base_sha=$baseSha)));
+"""
+        [ "$item", box itemId; "$producer", box producer; "$stream", box stream
+          "$collection", box scope.CollectionId; "$repository", box scope.Repository; "$head", box scope.Head
+          "$pr", box scope.PullRequest; "$baseRef", box scope.BaseRef; "$baseSha", box scope.BaseSha ]
+        |> List.iter (fun (name, value) -> parameter command name value)
+        if Convert.ToInt64(command.ExecuteScalar()) <> 2L then invalidOp "ci-suite-page-current-admission-owner-required"
+
+    let private validateAuthenticatedCiSuiteSeal connection transaction itemId producer stream seal =
+        let facts = authenticatedCiSuiteFacts connection transaction itemId producer stream
+        match TelemetryStore.validateCiSuiteGraph itemId seal facts with
+        | Ok() -> ()
+        | Error errors -> invalidOp (String.concat ";" errors)
+
     let private validateEfficiencyFact connection (admission: TelemetryReceipt.Admission option) sourceIdentity (fact: TelemetryStore.Fact) =
         match fact.Payload with
         | TelemetryStore.EfficiencyRecord record ->
@@ -3394,6 +3512,13 @@ UNION ALL SELECT count(*) FROM runtime_turn_usage WHERE invocation_id=$invocatio
                             let acceptedFacts = ResizeArray<TelemetryStore.Fact>()
 
                             for fact in batch.Facts do
+                                match fact.Payload with
+                                | TelemetryStore.CiSuiteSeal seal ->
+                                    let admission = factAdmission |> Option.defaultWith (fun () -> invalidOp "ci-suite-authenticated-receipt-required")
+                                    if batch.Facts.Length <> 1 then invalidOp "ci-suite-seal-separate-final-phase-required"
+                                    validateAuthenticatedCiSuiteSeal connection null (fact.ItemId |> Option.defaultWith (fun () -> invalidOp "ci-suite-item-required"))
+                                        admission.Principal.Scope.Producer admission.Principal.Scope.Stream seal
+                                | _ -> ()
                                 validateEfficiencyFact connection factAdmission batch.SourceIdentity fact
                                 use fenced = connection.CreateCommand()
                                 fenced.CommandText <- "SELECT count(*) FROM ci_effective_attribution WHERE identity=$identity;"
@@ -3408,6 +3533,12 @@ UNION ALL SELECT count(*) FROM runtime_turn_usage WHERE invocation_id=$invocatio
                                     use candidate = connection.CreateCommand()
                                     let values =
                                         match fact.Payload with
+                                        | TelemetryStore.CiSuitePage page ->
+                                            candidate.CommandText <- "SELECT count(*) FROM ci_attribution_corrections WHERE repository=$repository AND pr_number=$pr AND base_ref=$baseRef AND base_sha=$baseSha AND head=$head;"
+                                            [ "$repository", box page.Scope.Repository; "$pr", box page.Scope.PullRequest; "$baseRef", box page.Scope.BaseRef; "$baseSha", box page.Scope.BaseSha; "$head", box page.Scope.Head ]
+                                        | TelemetryStore.CiSuiteSeal seal ->
+                                            candidate.CommandText <- "SELECT count(*) FROM ci_attribution_corrections WHERE repository=$repository AND pr_number=$pr AND base_ref=$baseRef AND base_sha=$baseSha AND head=$head;"
+                                            [ "$repository", box seal.Scope.Repository; "$pr", box seal.Scope.PullRequest; "$baseRef", box seal.Scope.BaseRef; "$baseSha", box seal.Scope.BaseSha; "$head", box seal.Scope.Head ]
                                         | TelemetryStore.NativeItemOutcome(repository, pr, baseRef, baseSha, head, _, _, _, _, _, _, _) ->
                                             candidate.CommandText <- "SELECT count(*) FROM ci_attribution_corrections WHERE repository=$repository AND pr_number=$pr AND base_ref=$baseRef AND base_sha=$baseSha AND head=$head;"
                                             [ "$repository", box repository; "$pr", box pr; "$baseRef", box baseRef; "$baseSha", box baseSha; "$head", box head ]
@@ -3452,6 +3583,19 @@ UNION ALL SELECT count(*) FROM runtime_turn_usage WHERE invocation_id=$invocatio
 
                                 validateResponseFact connection factAdmission fact
 
+                                match fact.Payload with
+                                | TelemetryStore.CiSuitePage page ->
+                                    let admission = factAdmission |> Option.defaultWith (fun () -> invalidOp "ci-suite-authenticated-receipt-required")
+                                    if fact.ItemId.IsNone || fact.Revision <= 0L || admission.Envelope.Batch.SourceIdentity <> page.Scope.ProducerStream
+                                       || admission.Principal.Scope.Stream <> page.Scope.ProducerStream then
+                                        invalidOp "ci-suite-page-authenticated-stream-or-item-mismatch"
+                                    validateCiSuitePageOwner connection fact.ItemId.Value admission.Principal.Scope.Producer admission.Principal.Scope.Stream page.Scope
+                                | TelemetryStore.CiSuiteSeal seal ->
+                                    let admission = factAdmission |> Option.defaultWith (fun () -> invalidOp "ci-suite-authenticated-receipt-required")
+                                    if fact.ItemId.IsNone || fact.Revision <= 0L || admission.Envelope.Batch.SourceIdentity <> seal.Scope.ProducerStream
+                                       || admission.Principal.Scope.Stream <> seal.Scope.ProducerStream then
+                                        invalidOp "ci-suite-seal-authenticated-stream-or-item-mismatch"
+                                | _ -> ()
                                 match state with
                                 | Some(oldKind, _, _) when oldKind.StartsWith("efficiency-", StringComparison.Ordinal) ->
                                     if oldKind <> fact.Kind then invalidOp "efficiency-record-kind-is-immutable"
@@ -3472,6 +3616,11 @@ UNION ALL SELECT count(*) FROM runtime_turn_usage WHERE invocation_id=$invocatio
                                         replayed <- replayed + 1L
                                     else
                                         invalidOp "execution-causal-admission/1 is immutable after persistence"
+                                | Some(oldKind, digest, revision) when oldKind = "ci-suite-page/1" || oldKind = "ci-suite-seal/1"
+                                                                              || fact.Kind = "ci-suite-page/1" || fact.Kind = "ci-suite-seal/1" ->
+                                    if oldKind = fact.Kind && digest = fact.ContentDigest && revision = fact.Revision then
+                                        replayed <- replayed + 1L
+                                    else invalidOp "ci-suite-generation-fact-is-immutable"
                                 | Some(_, digest, _) when digest = fact.ContentDigest -> replayed <- replayed + 1L
                                 | Some(_, _, revision) when fact.Revision <= revision ->
                                     invalidOp $"native fact identity conflict: %s{fact.Kind}/%s{fact.Identity}"
@@ -3592,10 +3741,12 @@ UNION ALL SELECT count(*) FROM runtime_turn_usage WHERE invocation_id=$invocatio
 
                                 insertBatch.ExecuteNonQuery() |> ignore
 
-                            reevaluateBudget connection
-
                             finishReceipt connection
                             recordEfficiencyAcceptance connection factAdmission batch.Facts (List.ofSeq acceptedFacts)
+                            // Derived coverage must observe this revision's authenticated
+                            // acceptance within the same transaction; any later refusal
+                            // still rolls back facts, receipt and derived budget together.
+                            reevaluateBudget connection
                             beforeCommit ()
                             execute connection "COMMIT;"
 
@@ -5381,7 +5532,8 @@ WHERE f.kind='learn-installed-origin/1' AND a.producer=$producer AND a.stream=$s
                                 || error = "responses-current-installed-origin-required"
                                 || error = "activity usage attribution requires known source counters"
                                 || error = "execution-causal-admission/1 is immutable after persistence"
-                                || error.StartsWith("efficiency-", StringComparison.Ordinal))
+                                || error.StartsWith("efficiency-", StringComparison.Ordinal)
+                                || error.StartsWith("ci-suite-", StringComparison.Ordinal))
                             ->
                             terminal connection "rejected" (box "semantic-conflict")
                             rejected <- rejected + 1
@@ -6685,6 +6837,45 @@ WHERE n.source_ref=$source;
     // schema.  Every database value below is selected on this one connection while
     // one explicit transaction is open.  Keeping the table vocabulary here makes
     // the engine the sole owner of SQLite and migration knowledge.
+    // All read-model consumers use the same current authenticated graph predicate.
+    // Legacy coverage enums are retained as partial provenance, never promoted to suite proof.
+    let private ciSuiteCoverageInSnapshot (connection: SqliteConnection) (transaction: SqliteTransaction) itemId =
+        try
+            use command = connection.CreateCommand()
+            command.Transaction <- transaction
+            command.CommandText <- "SELECT DISTINCT a.producer,a.stream FROM current_ingest_facts f JOIN fact_admissions a ON a.identity=f.identity WHERE f.item_id=$item AND f.kind IN ('ci-suite-page/1','ci-suite-seal/1') LIMIT 129;"
+            parameter command "$item" itemId
+            let principals =
+                use reader = command.ExecuteReader()
+                [ while reader.Read() do yield reader.GetString 0, reader.GetString 1 ]
+            if principals.IsEmpty then "partial", "ci-suite-authenticated-seal-required"
+            elif principals.Length > 128 then "partial", "ci-suite-principal-population-bound"
+            else
+                for producer, stream in principals do
+                    let facts = authenticatedCiSuiteFacts connection transaction itemId producer stream
+                    let scoped =
+                        facts |> List.choose (fun fact ->
+                            match fact.Payload with
+                            | TelemetryStore.CiSuitePage page -> Some(page.Scope, fact)
+                            | TelemetryStore.CiSuiteSeal seal -> Some(seal.Scope, fact)
+                            | _ -> None)
+                    if scoped.IsEmpty then invalidOp "ci-suite-current-applied-receipt-required"
+                    for _, collection in scoped |> List.groupBy (fun (scope, _) -> scope.CollectionId) do
+                        let latest = collection |> List.maxBy (fun (scope, _) -> scope.Generation) |> fst
+                        let seals =
+                            collection |> List.choose (fun (scope, fact) ->
+                                match fact.Payload with
+                                | TelemetryStore.CiSuiteSeal seal when scope.Generation = latest.Generation -> Some seal
+                                | _ -> None)
+                        match seals with
+                        | [ seal ] ->
+                            match TelemetryStore.validateCiSuiteGraph itemId seal facts with
+                            | Ok() -> ()
+                            | Error errors -> invalidOp (String.concat ";" errors)
+                        | _ -> invalidOp "ci-suite-one-current-generation-seal-required"
+                "complete", "none"
+        with error -> "partial", error.Message
+
     let private ciSummaryInSnapshot (connection: SqliteConnection) (transaction: SqliteTransaction) (itemId: string) =
         let scalar sql =
             use command = connection.CreateCommand()
@@ -6737,6 +6928,8 @@ WHERE n.source_ref=$source;
                 fallback
             else
                 string value
+
+        let suiteCoverage, suiteCoverageReason = ciSuiteCoverageInSnapshot connection transaction itemId
 
         let jobs =
             intervals "SELECT started_at,completed_at FROM ci_jobs WHERE item_id=$item;"
@@ -6807,7 +7000,8 @@ WHERE n.source_ref=$source;
                 monetary = "unknown"
                 avoidableRerun = "unknown"
                 inventoryCoverage = population "actions" (coverage "inventory")
-                checkCoverage = population "checks" "unknown"
+                checkCoverage = suiteCoverage
+                suiteProofCoverageReason = suiteCoverageReason
                 attemptCoverage = population "attempts" (coverage "attempts")
                 jobPageCoverage = population "jobs" (coverage "job_pages")
                 terminalCoverage = population "terminal" (coverage "terminal")
@@ -8047,6 +8241,8 @@ WHERE n.source_ref=$source;
         let count sql values =
             use command = query sql values
             Convert.ToInt64(command.ExecuteScalar())
+        if count "SELECT count(*) FROM current_ingest_facts WHERE kind IN ('ci-suite-page/1','ci-suite-seal/1') AND json_extract(canonical,'$.scope.repository')=$repo AND json_extract(canonical,'$.scope.pullRequest')=$pr AND json_extract(canonical,'$.scope.baseRef')=$baseRef AND json_extract(canonical,'$.scope.baseSha')=$baseSha AND json_extract(canonical,'$.scope.head')=$head;" deliveryValues <> 0L then
+            invalidOp "ci-correction-suite-proof-contract-unavailable"
         let outcomes =
             identities "SELECT identity FROM native_item_outcomes WHERE item_id=$item AND repository=$repo AND pr_number=$pr AND base_ref=$baseRef AND base_sha=$baseSha AND head=$head AND merge_commit=$merge AND code_delivery='delivered' ORDER BY identity LIMIT 4097;" deliveryValues
         if count "SELECT count(*) FROM native_item_outcomes WHERE repository=$repo AND pr_number=$pr AND base_ref=$baseRef AND base_sha=$baseSha AND head=$head;" deliveryValues <> 1L then

@@ -160,7 +160,153 @@ module TelemetryStore =
           LaunchIntentSha256: string
           Admission: CausalAdmission }
 
+    // Exact canonical receiver reference; the producer claim requires per-revision authenticated readback.
+    type CiSuiteProofReference =
+        { Identity: string
+          Revision: int64
+          Digest: string }
+
+    // Immutable candidate, assignment and authenticated producer scope for one published graph generation.
+    type CiSuiteProofScope =
+        { CollectionId: string
+          Generation: int64
+          Repository: string
+          RepositoryId: int64
+          PullRequest: int64
+          BaseRef: string
+          BaseSha: string
+          Head: string
+          AssignmentDigest: string
+          ProfileDigest: string
+          ParserContract: string
+          ProducerStream: string }
+
+    type CiSuiteInventoryRow =
+        { SuiteId: int64
+          AppId: int64
+          AppSlug: string option
+          Status: string
+          Conclusion: string option }
+
+    type CiSuiteCheckMembershipRow =
+        { CheckId: int64
+          AppId: int64
+          AppSlug: string option
+          CheckRef: CiSuiteProofReference }
+
+    type CiSuitePageRows =
+        | SuiteInventoryRows of CiSuiteInventoryRow list
+        | SuiteCheckMembershipRows of CiSuiteCheckMembershipRow list
+
+    // One immutable fragment of an actual native page, including explicit zero-row evidence.
+    type CiSuitePageProof =
+        { Scope: CiSuiteProofScope
+          SuiteId: int64 option
+          Page: int64
+          NativeCount: int64
+          NativeTotal: int64
+          NextPage: int64 option
+          BodyDigest: string
+          ObservedAt: string
+          ValidatedAt: string
+          FragmentIndex: int64
+          FragmentCount: int64
+          RowOffset: int64
+          Rows: CiSuitePageRows }
+
+    // Final attestation; completeness is derived by the receiver from every referenced authenticated fact.
+    type CiSuiteSealProof =
+        { Scope: CiSuiteProofScope
+          AdmissionRef: CiSuiteProofReference
+          BindingRef: CiSuiteProofReference
+          CoverageRef: CiSuiteProofReference
+          PopulationCoverageRef: CiSuiteProofReference
+          GraphDigest: string
+          ResourceCount: int64
+          FragmentCount: int64
+          SuiteCount: int64
+          CheckCount: int64
+          FirstSweepDigest: string
+          SecondSweepDigest: string
+          BarrierDigest: string
+          ObservedFrom: string
+          ObservedThrough: string }
+
+    // Fingerprint the exact typed receiver graph. This is distinct from the private provider-resource digest.
+    // Authentication, contiguous native-page membership and terminal completeness remain receiver predicates.
+    let ciSuiteGraphDigest (pages: CiSuitePageProof list) =
+        let number (value: int64) = value.ToString(Globalization.CultureInfo.InvariantCulture)
+        let optionNumber value =
+            match value with
+            | None -> [| "none" |]
+            | Some actual -> [| "some"; number actual |]
+        let optionText value =
+            match value with
+            | None -> [| "none" |]
+            | Some actual -> [| "some"; actual |]
+        let reference (value: CiSuiteProofReference) =
+            [| value.Identity; number value.Revision; value.Digest |]
+        let rows (value: CiSuitePageRows) =
+            match value with
+            | SuiteInventoryRows inventory ->
+                inventory
+                |> List.map (fun (row: CiSuiteInventoryRow) ->
+                    [| [| "suite"; number row.SuiteId; number row.AppId; row.Status |]
+                       optionText row.AppSlug
+                       optionText row.Conclusion |])
+                |> List.toArray
+            | SuiteCheckMembershipRows membership ->
+                membership
+                |> List.map (fun (row: CiSuiteCheckMembershipRow) ->
+                    [| [| "check"; number row.CheckId; number row.AppId |]
+                       optionText row.AppSlug
+                       reference row.CheckRef |])
+                |> List.toArray
+        let page (value: CiSuitePageProof) =
+            let scope = value.Scope
+            let encodedRows = JsonSerializer.Serialize<string array array array>(rows value.Rows)
+            [| [| "fsgg.telemetry.receiver-suite-graph/1";
+                   scope.CollectionId;
+                   number scope.Generation;
+                   scope.Repository;
+                   number scope.RepositoryId;
+                   number scope.PullRequest;
+                   scope.BaseRef;
+                   scope.BaseSha;
+                   scope.Head;
+                   scope.AssignmentDigest;
+                   scope.ProfileDigest;
+                   scope.ParserContract;
+                   scope.ProducerStream |]
+               optionNumber value.SuiteId
+               [| number value.Page
+                  number value.NativeCount
+                  number value.NativeTotal
+                  value.BodyDigest
+                  value.ObservedAt
+                  value.ValidatedAt
+                  number value.FragmentIndex
+                  number value.FragmentCount
+                  number value.RowOffset
+                  encodedRows |]
+               optionNumber value.NextPage |]
+        let encodedPages: string array array array =
+            pages
+            |> List.sortBy (fun value ->
+                value.Scope.CollectionId,
+                value.Scope.Generation,
+                value.SuiteId,
+                value.Page,
+                value.FragmentIndex)
+            |> List.map page
+            |> List.toArray
+        JsonSerializer.Serialize<string array array array>(encodedPages)
+        |> Encoding.UTF8.GetBytes
+        |> CanonicalJson.sha256
+
     type Payload =
+        | CiSuitePage of CiSuitePageProof
+        | CiSuiteSeal of CiSuiteSealProof
         | Item of featureId: string option
         | Feature of name: string
         | Attempt of parentItemId: string * status: string
@@ -439,6 +585,127 @@ module TelemetryStore =
             Canonical: string
             ContentDigest: string
         }
+
+    // Join every immutable graph-part reference to its typed payload digest.
+    // Receipt authentication is an independent receiver prerequisite.
+    let ciSuiteFactGraphDigest (facts: Fact list) =
+        let pages =
+            facts |> List.map (fun fact ->
+                match fact.Payload with
+                | CiSuitePage page -> fact, page
+                | _ -> invalidOp "ci-suite-graph-nonpage")
+            |> List.sortBy (fun (fact, page) -> page.SuiteId, page.Page, page.FragmentIndex, fact.Identity)
+        let references =
+            pages |> List.map (fun (fact, _) ->
+                [| fact.Identity; fact.Revision.ToString(Globalization.CultureInfo.InvariantCulture); fact.ContentDigest |])
+            |> List.toArray
+        JsonSerializer.Serialize [| "fsgg.telemetry.receiver-suite-fact-graph/1";
+                                    ciSuiteGraphDigest (pages |> List.map snd);
+                                    JsonSerializer.Serialize references |]
+        |> Encoding.UTF8.GetBytes |> CanonicalJson.sha256
+
+    // Validate the full current graph and exact fact references after authenticated receiver joins.
+    // This pure check supplies no provider or receipt authenticity by itself.
+    let validateCiSuiteGraph (itemId: string) (seal: CiSuiteSealProof) (facts: Fact list) =
+        try
+            let require condition reason = if not condition then invalidOp reason
+            let scope = seal.Scope
+            require (facts.Length <= 413700) "ci-suite-fact-population-bound"
+            let byIdentity = facts |> List.groupBy (fun fact -> fact.Identity) |> Map.ofList
+            let reference kind (value: CiSuiteProofReference) =
+                match Map.tryFind value.Identity byIdentity with
+                | Some [ fact ] when fact.Kind = kind && fact.ItemId = Some itemId
+                                     && fact.Revision = value.Revision && fact.ContentDigest = value.Digest -> fact
+                | _ -> invalidOp "ci-suite-current-exact-reference-required"
+            match (reference "ci-population-admission" seal.AdmissionRef).Payload with
+            | CiPopulationAdmission(collection, repository, pr, baseRef, baseSha, head, _) ->
+                require (collection = scope.CollectionId && repository = scope.Repository && pr = scope.PullRequest
+                         && baseRef = scope.BaseRef && baseSha = scope.BaseSha && head = scope.Head) "ci-suite-admission-scope"
+            | _ -> invalidOp "ci-suite-admission-kind"
+            match (reference "ci-binding" seal.BindingRef).Payload with
+            | CiBinding(collection, repository, head, pr, _, _, _, _, stream, _) ->
+                require (collection = scope.CollectionId && repository = scope.Repository && head = scope.Head
+                         && pr = scope.PullRequest && stream = scope.ProducerStream) "ci-suite-binding-scope"
+            | _ -> invalidOp "ci-suite-binding-kind"
+            match (reference "ci-coverage" seal.CoverageRef).Payload with
+            | CiCoverage(collection, _, _, _, _, _, _, _, _) -> require (collection = scope.CollectionId) "ci-suite-coverage-scope"
+            | _ -> invalidOp "ci-suite-coverage-kind"
+            match (reference "ci-population-coverage" seal.PopulationCoverageRef).Payload with
+            | CiPopulationCoverage(collection, _, checks, _, _, _, _, continuation, _, _) ->
+                require (collection = scope.CollectionId && checks <> "complete" && continuation <> "complete") "ci-suite-partial-fence-required"
+            | _ -> invalidOp "ci-suite-population-coverage-kind"
+            let pageFacts =
+                facts |> List.choose (fun fact ->
+                    match fact.Payload with
+                    | CiSuitePage page when page.Scope.CollectionId = scope.CollectionId && page.Scope.Generation = scope.Generation ->
+                        require (fact.ItemId = Some itemId && page.Scope = scope) "ci-suite-page-scope"
+                        Some(fact, page)
+                    | _ -> None)
+            require (int64 pageFacts.Length = seal.FragmentCount && not pageFacts.IsEmpty) "ci-suite-fragment-population"
+            require (ciSuiteFactGraphDigest (pageFacts |> List.map fst) = seal.GraphDigest) "ci-suite-graph-digest"
+            require (seal.FirstSweepDigest = seal.SecondSweepDigest) "ci-suite-sweep-population"
+            let startAt = DateTimeOffset.Parse seal.ObservedFrom
+            let endAt = DateTimeOffset.Parse seal.ObservedThrough
+            require (startAt <= endAt) "ci-suite-seal-clock-order"
+            let rowCount (page: CiSuitePageProof) =
+                match page.Rows with
+                | SuiteInventoryRows rows -> rows.Length
+                | SuiteCheckMembershipRows rows -> rows.Length
+            let pages =
+                pageFacts |> List.groupBy (fun (_, page) -> page.SuiteId, page.Page)
+                |> List.map (fun ((suiteId, pageNumber), fragments) ->
+                    let ordered = fragments |> List.map snd |> List.sortBy (fun page -> page.FragmentIndex)
+                    let first = List.head ordered
+                    require (int64 ordered.Length = first.FragmentCount) "ci-suite-fragment-count"
+                    let mutable offset = 0L
+                    for index, part in List.indexed ordered do
+                        require (part.FragmentIndex = int64 index && part.FragmentCount = first.FragmentCount
+                                 && part.NativeCount = first.NativeCount && part.NativeTotal = first.NativeTotal
+                                 && part.NextPage = first.NextPage && part.BodyDigest = first.BodyDigest
+                                 && part.ObservedAt = first.ObservedAt && part.ValidatedAt = first.ValidatedAt
+                                 && part.RowOffset = offset) "ci-suite-fragment-metadata-or-range"
+                        require (DateTimeOffset.Parse part.ObservedAt >= startAt && DateTimeOffset.Parse part.ValidatedAt <= endAt) "ci-suite-page-outside-seal-interval"
+                        offset <- offset + int64 (rowCount part)
+                    require (offset = first.NativeCount) "ci-suite-native-count"
+                    suiteId, pageNumber, first, ordered)
+            require (int64 pages.Length = seal.ResourceCount && pages.Length <= 4096) "ci-suite-resource-count"
+            let families = pages |> List.groupBy (fun (suiteId, _, _, _) -> suiteId)
+            for _, family in families do
+                let ordered = family |> List.sortBy (fun (_, page, _, _) -> page)
+                let _, _, first, _ = List.head ordered
+                let mutable count = 0L
+                for index, (_, pageNumber, page, _) in List.indexed ordered do
+                    let expectedNext = if index + 1 < ordered.Length then Some(pageNumber + 1L) else None
+                    require (pageNumber = int64 index + 1L && page.NativeTotal = first.NativeTotal && page.NextPage = expectedNext) "ci-suite-native-page-chain"
+                    count <- count + page.NativeCount
+                require (count = first.NativeTotal) "ci-suite-native-total"
+            let suites =
+                pageFacts |> List.collect (fun (_, page) ->
+                    match page.Rows with
+                    | SuiteInventoryRows rows when page.SuiteId.IsNone -> rows
+                    | SuiteCheckMembershipRows _ when page.SuiteId.IsSome -> []
+                    | _ -> invalidOp "ci-suite-resource-row-kind")
+            require (families |> List.exists (fun (id, _) -> id.IsNone)) "ci-suite-inventory-family-required"
+            require (int64 suites.Length = seal.SuiteCount && (suites |> List.distinctBy (fun row -> row.SuiteId)).Length = suites.Length) "ci-suite-suite-roster"
+            let suiteMap = suites |> List.map (fun row -> row.SuiteId, row) |> Map.ofList
+            let checkFamilies = families |> List.choose (fun (id, family) -> id |> Option.map (fun suiteId -> suiteId, family))
+            require (checkFamilies.Length = suites.Length && (checkFamilies |> List.forall (fun (id, _) -> Map.containsKey id suiteMap))) "ci-suite-check-family-roster"
+            let memberships =
+                pageFacts |> List.collect (fun (_, page) ->
+                    match page.SuiteId, page.Rows with
+                    | Some id, SuiteCheckMembershipRows rows -> rows |> List.map (fun row -> id, row)
+                    | _ -> [])
+            require (int64 memberships.Length = seal.CheckCount
+                     && (memberships |> List.distinctBy (fun (_, row) -> row.CheckId)).Length = memberships.Length) "ci-suite-check-roster"
+            for suiteId, row in memberships do
+                let suite = suiteMap[suiteId]
+                require (suite.AppId = row.AppId && suite.AppSlug = row.AppSlug) "ci-suite-check-app-membership"
+                match (reference "ci-check" row.CheckRef).Payload with
+                | CiCheck(repository, id, _, app, _, _, _, _) ->
+                    require (repository = scope.Repository && id = row.CheckId && app = row.AppSlug) "ci-suite-published-check-correspondence"
+                | _ -> invalidOp "ci-suite-check-kind"
+            Ok()
+        with error -> Error [ error.Message ]
 
     type Batch =
         {
@@ -1080,6 +1347,162 @@ module TelemetryStore =
         | true, value when value.ValueKind = JsonValueKind.Array -> Error $"%s{label}.%s{name} exceeds 16 entries"
         | _ -> Error $"%s{label}.%s{name} must be an array"
 
+    // These records authenticate shape only. Complete coverage requires the receiver's
+    // same-transaction graph and per-revision admission proof; a producer seal is not a verdict.
+    let private suiteProofValue result = Result.defaultWith invalidOp result
+
+    let private suiteProofObject (label: string) (names: string list) (node: JsonElement) =
+        if node.ValueKind <> JsonValueKind.Object then invalidOp (label + " must be an object")
+        let fields = node.EnumerateObject() |> Seq.map _.Name |> Seq.toList
+        if fields.Length <> names.Length || Set.ofList fields <> Set.ofList names then
+            invalidOp (label + " has missing, duplicate or unknown fields")
+
+    let private suiteProofDigest (label: string) (node: JsonElement) (name: string) =
+        let value = requiredText label node name |> suiteProofValue
+        if value.Length <> 64 || not (value |> Seq.forall Char.IsAsciiHexDigitLower) then
+            invalidOp (label + "." + name + " must be a lowercase SHA256 digest")
+        value
+
+    let private suiteProofText (label: string) (node: JsonElement) (name: string) =
+        let value = requiredBoundedText label 256 node name |> suiteProofValue
+        if value |> Seq.exists Char.IsControl then invalidOp (label + "." + name + " contains controls")
+        value
+
+    let private suiteProofPositive (label: string) (node: JsonElement) (name: string) =
+        let value = requiredInt label node name |> suiteProofValue
+        if value = 0L then invalidOp (label + "." + name + " must be positive")
+        value
+
+    let private suiteProofClock (label: string) (node: JsonElement) (name: string) =
+        let value = requiredTimestamp label node name |> suiteProofValue
+        if DateTimeOffset.Parse(value, CultureInfo.InvariantCulture).Offset <> TimeSpan.Zero then
+            invalidOp (label + "." + name + " must be UTC")
+        value
+
+    let private suiteProofReference (label: string) (node: JsonElement) : CiSuiteProofReference =
+        suiteProofObject label [ "identity"; "revision"; "digest" ] node
+        {
+            Identity = suiteProofText label node "identity"
+            Revision = suiteProofPositive label node "revision"
+            Digest = suiteProofDigest label node "digest"
+        }
+
+    let private suiteProofScope (label: string) (node: JsonElement) : CiSuiteProofScope =
+        suiteProofObject label
+            [ "collectionId"; "generation"; "repository"; "repositoryId"; "pullRequest"
+              "baseRef"; "baseSha"; "head"; "assignmentDigest"; "profileDigest"; "parserContract"; "producerStream" ] node
+        let sha (name: string) =
+            let value = suiteProofText label node name
+            if value.Length <> 40 || not (value |> Seq.forall Char.IsAsciiHexDigitLower) then
+                invalidOp (label + "." + name + " must be a lowercase Git SHA")
+            value
+        let repository = suiteProofText label node "repository"
+        if repository.Split('/').Length <> 2 || (repository.Split('/') |> Array.exists String.IsNullOrWhiteSpace) then
+            invalidOp (label + ".repository must be owner/repository")
+        let stream = suiteProofText label node "producerStream"
+        if not (Regex.IsMatch(stream, "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")) then
+            invalidOp (label + ".producerStream must be a safe stream identifier")
+        {
+            CollectionId = suiteProofText label node "collectionId"
+            Generation = suiteProofPositive label node "generation"
+            Repository = repository; RepositoryId = suiteProofPositive label node "repositoryId"
+            PullRequest = suiteProofPositive label node "pullRequest"
+            BaseRef = suiteProofText label node "baseRef"; BaseSha = sha "baseSha"; Head = sha "head"
+            AssignmentDigest = suiteProofDigest label node "assignmentDigest"
+            ProfileDigest = suiteProofDigest label node "profileDigest"
+            ParserContract = suiteProofText label node "parserContract"; ProducerStream = stream
+        }
+
+    let private suiteProofRows (label: string) (node: JsonElement) =
+        if node.ValueKind <> JsonValueKind.Array || node.GetArrayLength() > 100 then
+            invalidOp (label + " must be an array of at most100 rows")
+        node.EnumerateArray() |> Seq.toList
+
+    let private parseSuitePage (label: string) (node: JsonElement) =
+        try
+            suiteProofObject label
+                [ "kind"; "identity"; "itemId"; "revision"; "scope"; "resourceKind"; "suiteId"; "page"; "nativeCount"
+                  "nativeTotal"; "nextPage"; "bodyDigest"; "observedAt"; "validatedAt"; "fragmentIndex"; "fragmentCount"; "rowOffset"; "rows" ] node
+            let scope = suiteProofScope (label + ".scope") (node.GetProperty "scope")
+            let resourceKind = suiteProofText label node "resourceKind"
+            let suiteId = optionalInt label node "suiteId" |> suiteProofValue
+            let rows = suiteProofRows (label + ".rows") (node.GetProperty "rows")
+            let parsedRows =
+                match resourceKind, suiteId with
+                | "suites", None ->
+                    rows |> List.map (fun row ->
+                        suiteProofObject (label + ".row") [ "suiteId"; "appId"; "appSlug"; "status"; "conclusion" ] row
+                        {
+                            SuiteId = suiteProofPositive label row "suiteId"; AppId = suiteProofPositive label row "appId"
+                            AppSlug = optionalText label row "appSlug" |> suiteProofValue
+                            Status = suiteProofText label row "status"; Conclusion = optionalText label row "conclusion" |> suiteProofValue
+                        })
+                    |> SuiteInventoryRows
+                | "suite-checks", Some id when id > 0L ->
+                    rows |> List.map (fun row ->
+                        suiteProofObject (label + ".row") [ "checkId"; "appId"; "appSlug"; "checkRef" ] row
+                        {
+                            CheckId = suiteProofPositive label row "checkId"; AppId = suiteProofPositive label row "appId"
+                            AppSlug = optionalText label row "appSlug" |> suiteProofValue
+                            CheckRef = suiteProofReference (label + ".checkRef") (row.GetProperty "checkRef")
+                        })
+                    |> SuiteCheckMembershipRows
+                | _ -> invalidOp (label + " has invalid resourceKind/suiteId correspondence")
+            let count = requiredInt label node "nativeCount" |> suiteProofValue
+            let total = requiredInt label node "nativeTotal" |> suiteProofValue
+            let page = suiteProofPositive label node "page"
+            let next = optionalInt label node "nextPage" |> suiteProofValue
+            let fragments = suiteProofPositive label node "fragmentCount"
+            let fragment = requiredInt label node "fragmentIndex" |> suiteProofValue
+            let offset = requiredInt label node "rowOffset" |> suiteProofValue
+            if count > 100L || total > (if resourceKind = "suites" then 4096L else 1000L)
+               || count > total || page > 4096L || fragments > 4096L || fragment >= fragments
+               || offset + int64 rows.Length > count || (next |> Option.exists (fun value -> value <> page + 1L)) then
+                invalidOp (label + " has invalid page/fragment bounds")
+            if count = 0L && (rows.Length <> 0 || fragment <> 0L || fragments <> 1L || offset <> 0L || next.IsSome) then
+                invalidOp (label + " has invalid explicit empty-page proof")
+            let observed = suiteProofClock label node "observedAt"
+            let validated = suiteProofClock label node "validatedAt"
+            if DateTimeOffset.Parse observed > DateTimeOffset.Parse validated then invalidOp (label + " has reversed validation clocks")
+            Ok
+                {
+                    Scope = scope; SuiteId = suiteId; Page = page; NativeCount = count; NativeTotal = total
+                    NextPage = next; BodyDigest = suiteProofDigest label node "bodyDigest"
+                    ObservedAt = observed; ValidatedAt = validated; FragmentIndex = fragment
+                    FragmentCount = fragments; RowOffset = offset; Rows = parsedRows
+                }
+        with error -> Error(label + " suite page refused: " + error.Message)
+
+    let private parseSuiteSeal (label: string) (node: JsonElement) =
+        try
+            suiteProofObject label
+                [ "kind"; "identity"; "itemId"; "revision"; "scope"; "admissionRef"; "bindingRef"; "coverageRef"; "populationCoverageRef"
+                  "graphDigest"; "resourceCount"; "fragmentCount"; "suiteCount"; "checkCount"; "firstSweepDigest"; "secondSweepDigest"
+                  "barrierDigest"; "observedFrom"; "observedThrough" ] node
+            let bounded (maximum: int64) (name: string) =
+                let value = requiredInt label node name |> suiteProofValue
+                if value > maximum then invalidOp (label + "." + name + " exceeds graph cardinality bound")
+                value
+            let first = suiteProofDigest label node "firstSweepDigest"
+            let second = suiteProofDigest label node "secondSweepDigest"
+            if first <> second then invalidOp (label + " sweep populations differ")
+            let from = suiteProofClock label node "observedFrom"
+            let through = suiteProofClock label node "observedThrough"
+            if DateTimeOffset.Parse from > DateTimeOffset.Parse through then invalidOp (label + " has reversed seal interval")
+            Ok
+                {
+                    Scope = suiteProofScope (label + ".scope") (node.GetProperty "scope")
+                    AdmissionRef = suiteProofReference (label + ".admissionRef") (node.GetProperty "admissionRef")
+                    BindingRef = suiteProofReference (label + ".bindingRef") (node.GetProperty "bindingRef")
+                    CoverageRef = suiteProofReference (label + ".coverageRef") (node.GetProperty "coverageRef")
+                    PopulationCoverageRef = suiteProofReference (label + ".populationCoverageRef") (node.GetProperty "populationCoverageRef")
+                    GraphDigest = suiteProofDigest label node "graphDigest"; ResourceCount = bounded 4096L "resourceCount"
+                    FragmentCount = bounded 409600L "fragmentCount"; SuiteCount = bounded 4096L "suiteCount"; CheckCount = bounded 409600L "checkCount"
+                    FirstSweepDigest = first; SecondSweepDigest = second; BarrierDigest = suiteProofDigest label node "barrierDigest"
+                    ObservedFrom = from; ObservedThrough = through
+                }
+        with error -> Error(label + " suite seal refused: " + error.Message)
+
     let private parseEvent index (node: JsonElement) =
         let label = $"events[%d{index}]"
         let kindResult = requiredText label node "kind"
@@ -1113,6 +1536,15 @@ module TelemetryStore =
                     })
 
             match kind with
+            | "ci-suite-page/1" ->
+                parseSuitePage label node
+                |> Result.bind (CiSuitePage >> make [ "scope"; "resourceKind"; "suiteId"; "page"; "nativeCount"; "nativeTotal"; "nextPage";
+                                                    "bodyDigest"; "observedAt"; "validatedAt"; "fragmentIndex"; "fragmentCount"; "rowOffset"; "rows" ])
+            | "ci-suite-seal/1" ->
+                parseSuiteSeal label node
+                |> Result.bind (CiSuiteSeal >> make [ "scope"; "admissionRef"; "bindingRef"; "coverageRef"; "populationCoverageRef";
+                                                    "graphDigest"; "resourceCount"; "fragmentCount"; "suiteCount"; "checkCount";
+                                                    "firstSweepDigest"; "secondSweepDigest"; "barrierDigest"; "observedFrom"; "observedThrough" ])
             | "efficiency-resource-allocation/1"
             | "efficiency-problem-episode/1"
             | "efficiency-assessment/1" ->

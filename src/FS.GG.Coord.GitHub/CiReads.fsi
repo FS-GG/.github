@@ -134,3 +134,49 @@ module CiReads =
         baseSha: string ->
         admitted: bool ->
             Errors.IoResult<PopulationSnapshot>
+
+    /// Private provider progress, separate from receiver facts and ingest cursor. A population is
+    /// present only after two complete resource sweeps and the fresh complete inventory barrier.
+    type ContinuationResult =
+        { Checkpoint: FS.GG.Coord.TelemetryCi.ProviderCheckpoint.Checkpoint
+          Population: PopulationSnapshot option
+          Requests: int
+          Gap: string option }
+
+    /// Resume one unchanged admitted identity under a total40 GET/30-second allowance, including the
+    /// pinned profile. All retained bodies are parsed again. PublicationPending refuses until C3's
+    /// exact receiver readback; this function performs no file/database writes or retries.
+    /// `admitted` requires authentic original receiver admission from the caller, never a cache flag;
+    /// it preserves original-head reconciliation after supersession and reports actual moved-base gaps.
+    val resumePopulation:
+        transport: Transport.IDeadlineSinglePageGitHubTransport ->
+        expected: FS.GG.Coord.TelemetryCi.ProviderCheckpoint.Identity ->
+        clock: (unit -> System.DateTimeOffset) ->
+        admitted: bool ->
+        storeRevisionFloor: int64 ->
+        original: FS.GG.Coord.TelemetryCi.ProviderCheckpoint.Checkpoint option ->
+            Errors.IoResult<ContinuationResult>
+
+    /// Read-only DTOs from the existing retained native graph parser; not authority or freshness receipts.
+    type RetainedSuiteWitness =
+        { SuiteId: int64; AppId: int64; AppSlug: string option; Status: string; Conclusion: string option }
+
+    type RetainedCheckMembershipWitness =
+        { CheckId: int64; SuiteId: int64; AppId: int64; AppSlug: string option }
+
+    type RetainedSuiteGraphPage =
+        { Key: FS.GG.Coord.TelemetryCi.ProviderCheckpoint.ResourceKey
+          BodyDigest: string
+          NextPage: int option
+          ObservedAt: System.DateTimeOffset
+          ValidatedAt: System.DateTimeOffset
+          Page: Page
+          Suites: RetainedSuiteWitness list
+          Checks: RetainedCheckMembershipWitness list
+          CheckObservations: Check list }
+
+    /// Exact retained-byte/full native graph projection only; never provider freshness or receiver authority.
+    val retainedSuiteGraph:
+        expected: FS.GG.Coord.TelemetryCi.ProviderCheckpoint.Identity -> now: System.DateTimeOffset ->
+        admitted: bool -> checkpoint: FS.GG.Coord.TelemetryCi.ProviderCheckpoint.Checkpoint ->
+            Errors.IoResult<RetainedSuiteGraphPage list>

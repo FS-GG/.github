@@ -130,7 +130,13 @@ No event-derived witness is selected for the complete native-relation case, and 
   cancellation, late completion, correction/replay and an omitted-run incomplete control. A provider command is
   source preparation until the delivery driver invokes it automatically. Source now includes the advisory
   routine-delivery hook and executable reconciliation tests; publication, installation, activation and operational
-  qualification remain pending.
+  qualification remain pending. The C3 continuation source adds durable fence/graph/seal publication,
+  authenticated current-receiver readback, pending recovery before acquisition, and an aggregate native request
+  budget across repository/profile discovery and continuation. Combined Core (36), GitHub (90), and CLI (158)
+  controls passed, including a metered 41-suite acquisition and actual disposable authenticated receiver
+  crash/restart journey. The CLI execution passed all 158 cases; its full-identity report was corrected offline
+  after a reporting failure, with separately timed unchanged build-output verification. These source controls
+  do not establish coherent publication, installed adoption or the actual external more-than-40-request journey.
 - [x] **UTEL-06.4 — Derive whole-item inputs and fail-visible budget reconciliation.** Derive population,
   attribution and interval facts from admitted runtime, CI and native outcome; accept no caller-authored verdicts.
   Merge does not close running children, and a late follow-up revises assessment. Expose this in the existing

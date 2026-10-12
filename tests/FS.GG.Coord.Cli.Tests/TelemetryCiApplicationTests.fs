@@ -705,3 +705,519 @@ module TelemetryCiApplicationTests =
             Assert.Contains("\"usefulValidationSeconds\":null", summary)
         finally
             if Directory.Exists root then Directory.Delete(root, true)
+
+    let private continuationFixture storeId =
+        let head = String.replicate 40 "a"
+        let baseSha = String.replicate 40 "d"
+        let now = DateTimeOffset.Parse "2026-10-12T00:00:00Z"
+        let bytes = profile exactRule
+        let digest bytes = FS.GG.Coord.TelemetryCi.ProviderCheckpoint.digest bytes
+        let assignment: FS.GG.Coord.TelemetryCi.Assignment =
+            { FeatureId = "UTEL"; ItemId = "UTEL-C3-PHASE"; AttemptId = "fixture"; ParentAttemptId = None; ProducerStream = "routine-delivery" }
+        let identity: FS.GG.Coord.TelemetryCi.ProviderCheckpoint.Identity =
+            { Assignment = assignment; AssignmentDigest = digest (System.Text.Encoding.UTF8.GetBytes "assignment")
+              StoreId = storeId; Collection = digest (System.Text.Encoding.UTF8.GetBytes($"o/r\u001f{head}\u001f7\u001f{assignment.ItemId}\u001fall-workflows"))
+              ApiOrigin = "https://api.github.com"; Repository = "o/r"; RepositoryId = 42L; PullRequest = 7L
+              BaseRef = "main"; BaseSha = baseSha; Head = head; ProfileDigest = digest bytes; ParserContract = "provider/1" }
+        let transport =
+            { new FS.GG.Coord.GitHub.Transport.IDeadlineSinglePageGitHubTransport with
+                member _.SendSingleWithin(request, _) =
+                    let body =
+                        if request.Path.Contains("/contents/") then
+                            $"""{{"type":"file","path":".fsgg/telemetry-ci-attribution.json","encoding":"base64","content":"{Convert.ToBase64String bytes}"}}"""
+                        elif request.Path.Contains("/pulls/") then
+                            $"""{{"number":7,"head":{{"sha":"{head}"}},"base":{{"ref":"main","sha":"{baseSha}","repo":{{"id":42,"full_name":"o/r"}}}}}}"""
+                        elif request.Path.EndsWith("/check-suites") then "{\"total_count\":0,\"check_suites\":[]}"
+                        else "{\"total_count\":0,\"workflow_runs\":[]}"
+                    Ok { Status = 200; Body = body; Headers = Map.empty; ETag = None; NextLink = None } }
+        let unwrap = function Ok value -> value | Error errors -> failwithf "%A" errors
+        let mutable state = None
+        let mutable terminal = None
+        for _ in 1 .. 10 do
+            if terminal.IsNone then
+                let result = FS.GG.Coord.GitHub.CiReads.resumePopulation transport identity (fun () -> now) false 0L state |> unwrap
+                state <- Some result.Checkpoint
+                if result.Population.IsSome then terminal <- Some result
+        let result = terminal |> Option.defaultWith (fun () -> failwith "fixture did not stabilize")
+        now, bytes, identity, result
+
+    [<Fact>]
+    let ``C3 typed continuation prepares exact fence graph seal phases without effects`` () =
+        let now, bytes, identity, result = continuationFixture "disposable-store"
+        let digest bytes = FS.GG.Coord.TelemetryCi.ProviderCheckpoint.digest bytes
+        let unwrap = function Ok value -> value | Error errors -> failwithf "%A" errors
+        let project expected cp = TelemetryCiApplication.projectContinuationForTesting expected now false 0L (Some bytes) [] cp result.Population.Value
+        let fence, graph, seal = project identity result.Checkpoint |> unwrap
+        let replay = project identity result.Checkpoint |> unwrap
+        Assert.Equal((fence, graph, seal), replay)
+        let pending = TelemetryCiApplication.prepareContinuationPendingForTesting identity now [] result.Checkpoint (fence, graph, seal) |> unwrap
+        let exact, phase, batch = TelemetryCiApplication.recoverContinuationPendingForTesting identity now [] pending |> unwrap
+        Assert.Equal(0, phase)
+        Assert.Equal(0, batch)
+        Assert.Equal<byte array>(List.head fence, exact.Value)
+        let preparedFixtureFacts =
+            (fence @ graph @ seal) |> List.collect (fun payload ->
+                (FS.GG.Coord.TelemetryStore.parseBatch payload |> unwrap).Facts)
+        let scope: FS.GG.Coord.TelemetryReceipt.Scope = { Workspace = "fixture"; Producer = "collector"; Stream = "routine-delivery" }
+        let receipt payload status changedDigest changedProducer changedStream =
+            let node = System.Text.Json.Nodes.JsonObject()
+            node["schema"] <- FS.GG.Coord.TelemetryReceipt.Schema
+            node["workspaceId"] <- scope.Workspace
+            node["producerId"] <- scope.Producer
+            node["streamId"] <- scope.Stream
+            node["batchId"] <- (FS.GG.Coord.TelemetryStore.parseBatch payload |> unwrap).IngestId
+            node["payload"] <- System.Text.Json.Nodes.JsonNode.Parse(payload)
+            let envelope = FS.GG.Coord.TelemetryReceipt.parse (System.Text.Encoding.UTF8.GetBytes(node.ToJsonString())) |> unwrap
+            JsonSerializer.Serialize
+                {| schema = "fsgg.telemetry.receipt/1"; workspaceId = scope.Workspace
+                   producerId = changedProducer |> Option.defaultValue scope.Producer
+                   streamId = changedStream |> Option.defaultValue scope.Stream; batchId = envelope.BatchId
+                   digest = changedDigest |> Option.defaultValue envelope.Digest; status = status; code = (None: string option) |}
+        let first = List.head fence
+        for wrong in [ receipt first "durably-received" None None None
+                       receipt first "applied" (Some(String.replicate 64 "0")) None None
+                       receipt first "applied" None (Some "foreign-producer") None
+                       receipt first "applied" None None (Some "foreign-principal-stream") ] do
+            let unchanged, complete = TelemetryCiApplication.advanceContinuationPendingForTesting identity now scope preparedFixtureFacts pending wrong |> unwrap
+            Assert.False complete
+            Assert.Equal<byte array>(pending, unchanged)
+        let noFacts, noFactsComplete = TelemetryCiApplication.advanceContinuationPendingForTesting identity now scope [] pending (receipt first "applied" None None None) |> unwrap
+        Assert.False noFactsComplete
+        Assert.Equal<byte array>(pending, noFacts)
+        let mutable replayState = pending
+        let mutable completed = false
+        for payload in fence @ graph @ seal do
+            let exactPayload, _, _ = TelemetryCiApplication.recoverContinuationPendingForTesting identity now preparedFixtureFacts replayState |> unwrap
+            Assert.Equal<byte array>(payload, exactPayload.Value)
+            let next, complete = TelemetryCiApplication.advanceContinuationPendingForTesting identity now scope preparedFixtureFacts replayState (receipt payload "applied" None None None) |> unwrap
+            replayState <- next
+            completed <- complete
+        Assert.True completed
+        let promoted = FS.GG.Coord.TelemetryCi.ProviderCheckpoint.parse identity now replayState |> unwrap
+        Assert.Equal(FS.GG.Coord.TelemetryCi.ProviderCheckpoint.Stable, promoted.Phase)
+        Assert.Equal("", promoted.PendingBatchDigest)
+        Assert.Empty promoted.FactReferences
+        let saved = FS.GG.Coord.TelemetryCi.ProviderCheckpoint.parse identity now pending |> unwrap
+        let claim = System.Text.Json.Nodes.JsonNode.Parse(Convert.FromBase64String saved.PendingBatchBase64).AsObject()
+        claim["phase"] <- 3
+        claim["batch"] <- 0
+        let claimedBytes = System.Text.Encoding.UTF8.GetBytes(claim.ToJsonString()) |> TelemetryCiApplication.normalizePendingBytesForTesting
+        let forgedDone =
+            { saved with PendingBatchDigest = digest claimedBytes; PendingBatchBase64 = Convert.ToBase64String claimedBytes }
+            |> FS.GG.Coord.TelemetryCi.ProviderCheckpoint.encode identity now |> unwrap
+        match TelemetryCiApplication.recoverContinuationPendingForTesting identity now [] forgedDone with
+        | Error _ -> ()
+        | Ok _ -> failwith "private pending phase cannot declare receiver completion"
+        for changed in [ { identity with StoreId = "other-store" }; { identity with Head = String.replicate 40 "f" } ] do
+            match TelemetryCiApplication.recoverContinuationPendingForTesting changed now [] pending with
+            | Error _ -> ()
+            | Ok _ -> failwith "pending private state cannot rebind custody/candidate"
+        match TelemetryCiApplication.prepareContinuationPendingForTesting identity now [] result.Checkpoint (graph, fence, seal) with
+        | Error _ -> ()
+        | Ok _ -> failwith "phase order must refuse before persistence"
+        let events batches =
+            batches |> List.collect (fun (payload: byte array) ->
+                Assert.InRange(payload.Length, 1, FS.GG.Coord.TelemetryStore.MaxBatchBytes)
+                Assert.Equal(byte '\n', payload[payload.Length - 1])
+                use doc = JsonDocument.Parse payload
+                doc.RootElement.GetProperty("events").EnumerateArray() |> Seq.map _.Clone() |> Seq.toList)
+        let fenceEvents, graphEvents, sealEvents = events fence, events graph, events seal
+        Assert.Contains(fenceEvents, fun node -> node.GetProperty("kind").GetString() = "ci-population-coverage" && node.GetProperty("checks").GetString() = "partial")
+        Assert.Contains(graphEvents, fun node -> node.GetProperty("kind").GetString() = "ci-suite-page/1" && node.GetProperty("nativeCount").GetInt32() = 0)
+        Assert.DoesNotContain(graphEvents, fun node -> node.GetProperty("kind").GetString() = "ci-suite-seal/1")
+        Assert.Equal("ci-suite-seal/1", (List.exactlyOne sealEvents).GetProperty("kind").GetString())
+        for invalid in [ { identity with Head = String.replicate 40 "f" }; { identity with StoreId = "other-store" } ] do
+            match project invalid result.Checkpoint with Error _ -> () | Ok _ -> failwith "changed custody/scope must refuse"
+        match project identity { result.Checkpoint with Phase = FS.GG.Coord.TelemetryCi.ProviderCheckpoint.FirstSweep } with
+        | Error _ -> ()
+        | Ok _ -> failwith "unfinished provider stability must refuse"
+
+    [<Fact>]
+    let ``C3 LF normalized intent bytes are immutable and idempotent`` () =
+        let input = System.Text.Encoding.UTF8.GetBytes "{}"
+        let normalized = TelemetryCiApplication.normalizePendingBytesForTesting input
+        Assert.Equal<byte array>([| byte '{'; byte '}'; byte '\n' |], normalized)
+        Assert.Equal<byte array>(normalized, TelemetryCiApplication.normalizePendingBytesForTesting normalized)
+        normalized[0] <- byte 'x'
+        Assert.Equal<byte array>(System.Text.Encoding.UTF8.GetBytes "{}", input)
+
+    // The custody contract rejects shared writable ancestors, including /tmp. The
+    // maintained local profile supplies a private TMPDIR; hosted runners need a
+    // safe home parent instead. This fixture selection grants no production authority:
+    // every tested operation still performs its native ownership/inode checks.
+    let private continuationFixtureParent (temporaryParent: string) (privateParent: string) =
+        let rec safeAncestry (path: string) =
+            let info = DirectoryInfo path
+            info.Exists && isNull info.LinkTarget
+            && (File.GetUnixFileMode info.FullName &&& enum<UnixFileMode> 0o022) = enum<UnixFileMode> 0
+            && (isNull info.Parent || safeAncestry info.Parent.FullName)
+        let temporaryParent = Path.GetFullPath temporaryParent
+        let privateParent = Path.GetFullPath privateParent
+        if safeAncestry temporaryParent then temporaryParent
+        elif safeAncestry privateParent then privateParent
+        else invalidOp "ci-custody-fixture-safe-ancestry-required"
+
+    let private withContinuationPrivateDirectory action =
+        let parent = continuationFixtureParent (Path.GetTempPath()) (Environment.GetFolderPath(Environment.SpecialFolder.UserProfile))
+        let directory = Path.Combine(parent, "fsgg-ci-custody-" + Guid.NewGuid().ToString("N"))
+        Directory.CreateDirectory(directory, enum<UnixFileMode> 0o700) |> ignore
+        try action directory finally Directory.Delete(directory, true)
+
+    [<Fact>]
+    let ``C3 private custody fixture selects safe ancestry without trusting public temporary roots`` () =
+        withContinuationPrivateDirectory (fun directory ->
+            let safe = Path.Combine(directory, "safe")
+            let shared = Path.Combine(directory, "shared")
+            Directory.CreateDirectory(safe, enum<UnixFileMode> 0o700) |> ignore
+            Directory.CreateDirectory(shared, enum<UnixFileMode> 0o700) |> ignore
+            File.SetUnixFileMode(shared, enum<UnixFileMode> 0o777)
+            Assert.Equal(safe, continuationFixtureParent shared safe)
+            Assert.Equal(safe, continuationFixtureParent safe shared)
+            Assert.Throws<InvalidOperationException>(fun () -> continuationFixtureParent shared shared |> ignore) |> ignore)
+
+    let private continuationManySuiteTransport (profileBytes: byte array) (expected: FS.GG.Coord.TelemetryCi.ProviderCheckpoint.Identity) observe repositoryId =
+            { new FS.GG.Coord.GitHub.Transport.IDeadlineSinglePageGitHubTransport with
+                member _.SendSingleWithin(request, remaining) =
+                    observe ()
+                    Assert.Equal("GET", request.Method)
+                    Assert.True(remaining > TimeSpan.Zero && remaining <= TimeSpan.FromSeconds 30.0)
+                    let body =
+                        if request.Path = "repos/o/r" then
+                            $"""{{"id":{repositoryId ()},"full_name":"o/r"}}"""
+                        elif request.Path.Contains("/contents/") then
+                            $"""{{"type":"file","path":".fsgg/telemetry-ci-attribution.json","encoding":"base64","content":"{Convert.ToBase64String profileBytes}"}}"""
+                        elif request.Path.Contains("/pulls/") then
+                            $"""{{"number":7,"head":{{"sha":"{expected.Head}"}},"base":{{"ref":"main","sha":"{expected.BaseSha}","repo":{{"id":42,"full_name":"o/r"}}}}}}"""
+                        elif request.Path.EndsWith("/check-suites") then
+                            let suites =
+                                [ 1 .. 41 ] |> List.map (fun id ->
+                                    $"""{{"id":{id},"head_sha":"{expected.Head}","repository":{{"id":42,"full_name":"o/r"}},"app":{{"id":1,"slug":"github-actions"}},"status":"completed","conclusion":"success","check_runs_url":"https://api.github.com/repos/o/r/check-suites/{id}/check-runs"}}""") |> String.concat ","
+                            $"""{{"total_count":41,"check_suites":[{suites}]}}"""
+                        elif request.Path.Contains("/check-runs") then "{\"total_count\":0,\"check_runs\":[]}"
+                        else "{\"total_count\":0,\"workflow_runs\":[]}"
+                    Ok { Status = 200; Body = body; Headers = Map.empty; ETag = None; NextLink = None } }
+
+    [<Fact>]
+    let ``C3 acquisition meters identity profile and multi invocation native graph together`` () =
+        let unwrap = function Ok value -> value | Error errors -> failwithf "%A" errors
+        let now, profileBytes, expected, _ = continuationFixture "disposable-store"
+        let mutable calls = 0
+        let mutable repositoryId = 42L
+        let transport = continuationManySuiteTransport profileBytes expected (fun () -> calls <- calls + 1) (fun () -> repositoryId)
+        let mutable state = None
+        let mutable actual = { expected with RepositoryId = 0L; ProfileDigest = "" }
+        let mutable terminal = None
+        let mutable invocations = 0
+        let mutable total = 0
+        while terminal.IsNone && invocations < 10 do
+            calls <- 0
+            let identity, bytes, result, requests =
+                TelemetryCiApplication.acquireContinuationForTesting transport actual (fun () -> now) false 0L state |> unwrap
+            Assert.Equal(calls, requests)
+            Assert.InRange(requests, 1, 40)
+            Assert.Equal<byte array>(profileBytes, bytes)
+            if invocations = 0 then
+                Assert.Equal(40, requests)
+                Assert.True(result.Population.IsNone)
+            actual <- identity
+            state <- Some result.Checkpoint
+            total <- total + requests
+            invocations <- invocations + 1
+            if result.Population.IsSome then terminal <- Some result
+        Assert.True(invocations > 1 && total > 40)
+        let complete = terminal |> Option.defaultWith (fun () -> failwith "bounded native graph did not stabilize")
+        Assert.Equal(41, complete.Checkpoint.Resources |> List.filter (fun resource -> resource.Key.Kind = FS.GG.Coord.TelemetryCi.ProviderCheckpoint.SuiteChecks) |> List.length)
+        repositoryId <- 43L
+        calls <- 0
+        match TelemetryCiApplication.acquireContinuationForTesting transport actual (fun () -> now) false 0L state with
+        | Error _ -> Assert.Equal(1, calls)
+        | Ok _ -> failwith "native repository substitution must refuse before dependent profile or graph requests"
+
+    [<Fact>]
+    let ``C3 retained collection joins bounded acquisition to authenticated graph publication`` () =
+        withContinuationPrivateDirectory (fun directory ->
+            let unwrap = function Ok value -> value | Error errors -> failwithf "%A" errors
+            let approved = FS.GG.Coord.TelemetryStore.ApprovedLocalDurable
+            let path = Path.Combine(directory, "receiver")
+            TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
+            let scope: FS.GG.Coord.TelemetryReceipt.Scope =
+                { Workspace = "fixture"; Producer = "collector"; Stream = "routine-delivery" }
+            TelemetryStoreApplication.provisionReceiptWorkspace path approved scope.Workspace |> unwrap |> ignore
+            TelemetryStoreApplication.enrollReceiptProducer path approved scope |> unwrap |> ignore
+            let storeId, _, _, _ = TelemetryCiApplication.receiverContinuationReadbackForTesting path approved "UTEL-C3-PHASE" scope |> unwrap
+            let now, profileBytes, expected, _ = continuationFixture storeId
+            let expected = { expected with RepositoryId = 0L; ProfileDigest = "" }
+            let mutable calls = 0
+            let transport = continuationManySuiteTransport profileBytes expected (fun () -> calls <- calls + 1) (fun () -> 42L)
+            let submitted = ResizeArray<string>()
+            let publish (payload: byte array) =
+                let batch = FS.GG.Coord.TelemetryStore.parseBatch payload |> unwrap
+                submitted.Add batch.IngestId
+                let node = System.Text.Json.Nodes.JsonObject()
+                node["schema"] <- FS.GG.Coord.TelemetryReceipt.Schema
+                node["workspaceId"] <- scope.Workspace
+                node["producerId"] <- scope.Producer
+                node["streamId"] <- scope.Stream
+                node["batchId"] <- batch.IngestId
+                node["payload"] <- System.Text.Json.Nodes.JsonNode.Parse(payload)
+                TelemetryStoreApplication.submitReceipt path approved scope (System.Text.Encoding.UTF8.GetBytes(node.ToJsonString()))
+            let drain () = TelemetryStoreApplication.drainReceipts path approved scope.Workspace |> Result.map ignore
+            let name = "continuation-" + String.replicate 64 "c"
+            let mutable terminal = None
+            for _ in 1 .. 10 do
+                if terminal.IsNone then
+                    calls <- 0
+                    let status, requests, checkpoint =
+                        TelemetryCiApplication.continueCollectionForTesting directory name path approved expected (fun () -> now) scope transport publish drain ignore |> unwrap
+                    Assert.Equal(calls, requests)
+                    Assert.InRange(requests, 1, 40)
+                    let retained = FS.GG.Coord.TelemetryCi.ProviderCheckpoint.parse checkpoint.Identity now (File.ReadAllBytes(Path.Combine(directory, name + ".json"))) |> unwrap
+                    Assert.Equal(checkpoint, retained)
+                    if status = "complete" then terminal <- Some checkpoint
+            Assert.True(terminal.IsSome)
+            Assert.Equal(submitted.Count, submitted |> Seq.distinct |> Seq.length)
+            let _, _, _, applied = TelemetryCiApplication.receiverContinuationReadbackForTesting path approved expected.Assignment.ItemId scope |> unwrap
+            let seal = applied |> List.filter (fun fact -> fact.Kind = "ci-suite-seal/1") |> List.exactlyOne
+            Assert.True(seal.Revision > 0L)
+            let summary = TelemetryStoreApplication.ciSummary path approved expected.Assignment.ItemId |> unwrap
+            use summaryDocument = JsonDocument.Parse summary
+            Assert.Equal("complete", summaryDocument.RootElement.GetProperty("checkCoverage").GetString())
+            calls <- 0
+            let status, requests, _ =
+                TelemetryCiApplication.continueCollectionForTesting directory name path approved expected (fun () -> now) scope transport publish drain ignore |> unwrap
+            Assert.True(calls > 0)
+            Assert.Equal(calls, requests)
+            Assert.Equal("pending", status))
+
+    [<Fact>]
+    let ``C3 configured CLI refuses current binding drift and completes retained receiver journey`` () =
+        withContinuationPrivateDirectory (fun directory ->
+            let unwrap = function Ok value -> value | Error errors -> failwithf "%A" errors
+            let approved = FS.GG.Coord.TelemetryStore.ApprovedLocalDurable
+            let path = Path.Combine(directory, "receiver")
+            TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
+            let scope: FS.GG.Coord.TelemetryReceipt.Scope =
+                { Workspace = "fixture"; Producer = "collector"; Stream = "routine-delivery" }
+            TelemetryStoreApplication.provisionReceiptWorkspace path approved scope.Workspace |> unwrap |> ignore
+            TelemetryStoreApplication.enrollReceiptProducer path approved scope |> unwrap |> ignore
+            let storeId, _, _, _ = TelemetryCiApplication.receiverContinuationReadbackForTesting path approved "UTEL-C3-PHASE" scope |> unwrap
+            let now, profileBytes, expected, _ = continuationFixture storeId
+            let config = Path.Combine(directory, "workspace.json")
+            let assignment = Path.Combine(directory, "assignment.json")
+            let delivery = Path.Combine(directory, "delivery.json")
+            let assignmentBytes =
+                System.Text.Encoding.UTF8.GetBytes(
+                    """{"schema":"fsgg.telemetry.ci-assignment/1","featureId":"UTEL","itemId":"UTEL-C3-PHASE","attemptId":"fixture","parentAttemptId":null,"producerStream":"routine-delivery"}""")
+            let privateWrite (target: string) (bytes: byte array) =
+                File.WriteAllBytes(target, bytes)
+                File.SetUnixFileMode(target, enum<UnixFileMode> 0o600)
+            privateWrite assignment assignmentBytes
+            File.WriteAllText(delivery,
+                $"""{{"schema":"fsgg.routine-delivery/v1","repo":"o/r","pr":7,"baseRef":"main","baseSha":"{expected.BaseSha}","expectedHead":"{expected.Head}","observedHead":"{expected.Head}","outcome":"ready","codeDelivery":"not-delivered","mergeCommit":null,"outcomeAt":null,"observedAt":"2026-10-12T00:00:00Z"}}""")
+            File.SetUnixFileMode(delivery, enum<UnixFileMode> 0o644)
+            privateWrite config (System.Text.Encoding.UTF8.GetBytes
+                $"""{{"schema":"fsgg.telemetry.workspace-config/1","engine":"fsgg-coord-engine","associations":[{{"workspaceId":"{scope.Workspace}","producerId":"{scope.Producer}","streamId":"{scope.Stream}","repositories":["o/r"],"destination":{{"kind":"local","storeRoot":"{path}"}}}}],"retiredAssociations":[]}}""")
+            let mutable calls = 0
+            let mutable changeAssignment = false
+            let transport =
+                continuationManySuiteTransport profileBytes expected
+                    (fun () ->
+                        calls <- calls + 1
+                        if changeAssignment then
+                            changeAssignment <- false
+                            privateWrite assignment (System.Text.Encoding.UTF8.GetBytes
+                                """{"schema":"fsgg.telemetry.ci-assignment/1","featureId":"UTEL","itemId":"UTEL-C3-PHASE","attemptId":"changed","parentAttemptId":null,"producerStream":"routine-delivery"}"""))
+                    (fun () -> 42L)
+            let args = [ "--config"; config; "--repository"; "o/r"; "--assignment"; assignment; "--delivery"; delivery ]
+            let invoke () =
+                let oldOut, oldError = Console.Out, Console.Error
+                use stdout = new StringWriter()
+                use stderr = new StringWriter()
+                try
+                    Console.SetOut stdout
+                    Console.SetError stderr
+                    let code = TelemetryCiApplication.runConfiguredContinuationForTesting approved (fun () -> now) transport args
+                    code, stdout.ToString(), stderr.ToString()
+                finally
+                    Console.SetOut oldOut
+                    Console.SetError oldError
+            privateWrite assignment (System.Text.Encoding.UTF8.GetBytes(System.Text.Encoding.UTF8.GetString(assignmentBytes).Replace("routine-delivery", "foreign-principal")))
+            let wrongCode, _, wrongError = invoke ()
+            Assert.Equal(1, wrongCode)
+            Assert.Contains("ci-continuation-principal-stream-binding", wrongError)
+            Assert.Equal(0, calls)
+            privateWrite assignment assignmentBytes
+            changeAssignment <- true
+            let driftCode, _, driftError = invoke ()
+            Assert.Equal(1, driftCode)
+            Assert.Contains("ci-continuation-current-input-drift", driftError)
+            Assert.Equal(1, calls)
+            Assert.Empty(Directory.GetFiles(path, "continuation-*.json"))
+            privateWrite assignment assignmentBytes
+            let mutable complete = false
+            for _ in 1 .. 10 do
+                if not complete then
+                    calls <- 0
+                    let code, json, error = invoke ()
+                    Assert.True((code = 0), error)
+                    use output = JsonDocument.Parse json
+                    Assert.Equal(calls, output.RootElement.GetProperty("nativeRequests").GetInt32())
+                    Assert.InRange(calls, 1, 40)
+                    complete <- output.RootElement.GetProperty("status").GetString() = "complete"
+            Assert.True complete
+            let _, _, _, facts = TelemetryCiApplication.receiverContinuationReadbackForTesting path approved expected.Assignment.ItemId scope |> unwrap
+            Assert.Contains(facts, fun fact -> fact.Kind = "ci-suite-seal/1")
+            use summary = JsonDocument.Parse(TelemetryStoreApplication.ciSummary path approved expected.Assignment.ItemId |> unwrap)
+            Assert.Equal("complete", summary.RootElement.GetProperty("checkCoverage").GetString()))
+
+    [<Fact>]
+    let ``C3 durable actor resumes authenticated receiver custody without resubmission`` () =
+        withContinuationPrivateDirectory (fun directory ->
+            let unwrap = function Ok value -> value | Error errors -> failwithf "%A" errors
+            let approved = FS.GG.Coord.TelemetryStore.ApprovedLocalDurable
+            let path = Path.Combine(directory, "receiver")
+            TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
+            let scope: FS.GG.Coord.TelemetryReceipt.Scope =
+                { Workspace = "fixture"; Producer = "collector"; Stream = "routine-delivery" }
+            TelemetryStoreApplication.provisionReceiptWorkspace path approved scope.Workspace |> unwrap |> ignore
+            TelemetryStoreApplication.enrollReceiptProducer path approved scope |> unwrap |> ignore
+            let storeId, contract, _, facts =
+                TelemetryCiApplication.receiverContinuationReadbackForTesting path approved "UTEL-C3-PHASE" scope |> unwrap
+            Assert.Equal("fsgg.telemetry.ci-suite-receiver/1", contract)
+            Assert.Empty facts
+            let now, profileBytes, identity, result = continuationFixture storeId
+            let phases =
+                TelemetryCiApplication.projectContinuationForTesting identity now false 0L (Some profileBytes) [] result.Checkpoint result.Population.Value |> unwrap
+            let pending = TelemetryCiApplication.prepareContinuationPendingForTesting identity now [] result.Checkpoint phases |> unwrap
+            let name = "continuation-" + String.replicate 64 "b"
+            let retainedPath = Path.Combine(directory, name + ".json")
+            let submitted = ResizeArray<string>()
+            let publish (payload: byte array) =
+                let batch = FS.GG.Coord.TelemetryStore.parseBatch payload |> unwrap
+                submitted.Add batch.IngestId
+                let node = System.Text.Json.Nodes.JsonObject()
+                node["schema"] <- FS.GG.Coord.TelemetryReceipt.Schema
+                node["workspaceId"] <- scope.Workspace
+                node["producerId"] <- scope.Producer
+                node["streamId"] <- scope.Stream
+                node["batchId"] <- batch.IngestId
+                node["payload"] <- System.Text.Json.Nodes.JsonNode.Parse(payload)
+                TelemetryStoreApplication.submitReceipt path approved scope (System.Text.Encoding.UTF8.GetBytes(node.ToJsonString()))
+            let mutable drains = 0
+            let drain () =
+                drains <- drains + 1
+                TelemetryStoreApplication.drainReceipts path approved scope.Workspace |> Result.map ignore
+            let run hook expected =
+                TelemetryCiApplication.publishContinuationPendingForTesting directory name path approved expected (fun () -> now) scope pending publish drain hook
+            match run ignore { identity with StoreId = "foreign-store" } with
+            | Error _ -> Assert.False(File.Exists retainedPath); Assert.Empty submitted
+            | Ok _ -> failwith "wrong receiver must refuse before private persistence or publication"
+            let crashAt boundary stage = if stage = boundary then failwith ("fixture-crash-" + boundary)
+            match run (crashAt "after-publication") identity with
+            | Error errors -> Assert.Contains("fixture-crash-after-publication", errors)
+            | Ok _ -> failwith "publication crash control must interrupt"
+            Assert.Equal(1, submitted.Count)
+            Assert.Equal(0, drains)
+            Assert.Equal<byte array>(pending, File.ReadAllBytes retainedPath)
+            match run (crashAt "after-drain") identity with
+            | Error errors -> Assert.Contains("fixture-crash-after-drain", errors)
+            | Ok _ -> failwith "drain crash control must interrupt"
+            Assert.Equal(1, submitted.Count)
+            Assert.Equal(1, drains)
+            Assert.Equal<byte array>(pending, File.ReadAllBytes retainedPath)
+            match run (crashAt "before-checkpoint-write") identity with
+            | Error errors -> Assert.Contains("fixture-crash-before-checkpoint-write", errors)
+            | Ok _ -> failwith "applied readback crash control must interrupt"
+            Assert.Equal(1, submitted.Count)
+            Assert.Equal(1, drains)
+            Assert.Equal<byte array>(pending, File.ReadAllBytes retainedPath)
+            let stableBytes, status = run ignore identity |> unwrap
+            Assert.Equal("complete", status)
+            let fence, graph, seal = phases
+            Assert.Equal(fence.Length + graph.Length + seal.Length, submitted.Count)
+            Assert.Equal(submitted.Count, submitted |> Seq.distinct |> Seq.length)
+            Assert.Equal<byte array>(stableBytes, File.ReadAllBytes retainedPath)
+            let checkpoint = FS.GG.Coord.TelemetryCi.ProviderCheckpoint.parse identity now stableBytes |> unwrap
+            Assert.Equal(FS.GG.Coord.TelemetryCi.ProviderCheckpoint.Stable, checkpoint.Phase)
+            let _, _, _, applied =
+                TelemetryCiApplication.receiverContinuationReadbackForTesting path approved identity.Assignment.ItemId scope |> unwrap
+            Assert.Contains(applied, fun fact -> fact.Kind = "ci-suite-seal/1")
+            let publishesAtCompletion = submitted.Count
+            match run ignore identity with
+            | Error _ -> Assert.Equal(publishesAtCompletion, submitted.Count)
+            | Ok _ -> failwith "stable private checkpoint must not infer fresh provider completion")
+
+    [<Fact>]
+    let ``C3 private publication lock is exclusive and retains the original inode`` () =
+        withContinuationPrivateDirectory (fun directory ->
+            let result =
+                TelemetryCiApplication.continuationPrivateCustodyForTesting directory (fun guard ->
+                    guard ()
+                    match TelemetryCiApplication.continuationPrivateCustodyForTesting directory (fun _ -> Ok()) with
+                    | Error errors -> Assert.Contains("ci-continuation-publication-busy", errors)
+                    | Ok _ -> failwith "concurrent publication lock must refuse"
+                    guard ()
+                    Ok "guarded")
+            Assert.Equal<Result<string, string list>>(Ok "guarded", result)
+            Assert.True(File.Exists(Path.Combine(directory, "publication.lock"))))
+
+    [<Fact>]
+    let ``C3 private publication refuses replaced named lock despite retained descriptor`` () =
+        withContinuationPrivateDirectory (fun directory ->
+            let result =
+                TelemetryCiApplication.continuationPrivateCustodyForTesting directory (fun guard ->
+                    let path = Path.Combine(directory, "publication.lock")
+                    File.Move(path, path + ".original")
+                    File.WriteAllBytes(path, Array.empty)
+                    File.SetUnixFileMode(path, enum<UnixFileMode> 0o600)
+                    guard ()
+                    Ok())
+            match result with
+            | Error errors -> Assert.Contains("ci-continuation-private-lock-custody-lost", errors)
+            | Ok _ -> failwith "replaced named inode must refuse")
+
+    [<Fact>]
+    let ``C3 private publication refuses symlink and writable ancestry before callback`` () =
+        withContinuationPrivateDirectory (fun directory ->
+            let mutable entered = false
+            let run path = TelemetryCiApplication.continuationPrivateCustodyForTesting path (fun _ -> entered <- true; Ok())
+            let child = Path.Combine(directory, "child")
+            Directory.CreateDirectory(child, enum<UnixFileMode> 0o700) |> ignore
+            File.SetUnixFileMode(directory, enum<UnixFileMode> 0o702)
+            match run child with Error _ -> () | Ok _ -> failwith "writable ancestor must refuse"
+            File.SetUnixFileMode(directory, enum<UnixFileMode> 0o700)
+            let alias = Path.Combine(directory, "alias")
+            Directory.CreateSymbolicLink(alias, child) |> ignore
+            match run alias with Error _ -> () | Ok _ -> failwith "symlink directory must refuse"
+            Assert.False entered)
+
+    [<Fact>]
+    let ``C3 durable intent uses exact normalized bytes through atomic writer and readback`` () =
+        withContinuationPrivateDirectory (fun directory ->
+            let name = "continuation-" + String.replicate 64 "a"
+            let input = System.Text.Encoding.UTF8.GetBytes "{}"
+            let expected = System.Text.Encoding.UTF8.GetBytes "{}\n"
+            let persist bytes =
+                match TelemetryCiApplication.continuationExactIntentForTesting directory name bytes with
+                | Ok actual -> actual
+                | Error errors -> failwithf "%A" errors
+            Assert.Equal<byte array>(expected, persist input)
+            Assert.Equal<byte array>(expected, File.ReadAllBytes(Path.Combine(directory, name + ".json")))
+            Assert.Equal<byte array>(expected, persist expected)
+            Assert.Equal(enum<UnixFileMode> 0o600, File.GetUnixFileMode(Path.Combine(directory, name + ".json"))))
+
+    [<Fact>]
+    let ``C3 durable intent refuses symlink and normalized bound before replacing bytes`` () =
+        withContinuationPrivateDirectory (fun directory ->
+            let name = "continuation-" + String.replicate 64 "b"
+            let target = Path.Combine(directory, "target")
+            File.WriteAllText(target, "unchanged")
+            let path = Path.Combine(directory, name + ".json")
+            File.CreateSymbolicLink(path, target) |> ignore
+            let run bytes = TelemetryCiApplication.continuationExactIntentForTesting directory name bytes
+            match run [| byte '{'; byte '}' |] with Error _ -> () | Ok _ -> failwith "symlink existing intent must refuse"
+            Assert.Equal("unchanged", File.ReadAllText target)
+            Assert.NotNull(FileInfo(path).LinkTarget)
+            File.Delete path
+            match run (Array.create (8 * 1024 * 1024) (byte 'x')) with Error _ -> () | Ok _ -> failwith "normalized bundle exceeds admitted8MiB"
+            Assert.False(File.Exists path))
