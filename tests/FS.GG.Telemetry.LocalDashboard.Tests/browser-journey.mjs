@@ -60,7 +60,7 @@ try {
       throw new Error('operational receipts are not applied and drained');
     }
     const card = page.getByRole('listitem').filter({ hasText: expectedItem });
-    await card.locator('details').evaluate(node => { node.open = true; });
+    await card.locator('.item-steps').evaluate(node => { node.open = true; });
     await card.getByText(/CI steps/, { exact: false }).first().waitFor({ state: 'visible' });
     const visibleText = await card.innerText();
     if (!visibleText.includes('delivered') || !visibleText.includes('unknown')) {

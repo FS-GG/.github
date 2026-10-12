@@ -529,6 +529,7 @@ jobs:
             artifacts/telemetry-host-pack-a/FS.GG.Telemetry.Host.*.nupkg
             artifacts/telemetry-host-manifest.json
             artifacts/telemetry-host-package-evidence.json
+            tests/FS.GG.Telemetry.Dashboard.Tests/test-results/**/fixture-process-*.png
           if-no-files-found: error
           retention-days: 14
       - name: Retain C source qualification toolchain evidence

@@ -94,7 +94,7 @@ module DashboardProjectionTests =
                         $"""{{"item_id":"{item}","attempts":"partial","jobs":"partial","terminal":"unknown","timestamps":"complete","continuation":"pending","external_checks":2}}"""
                 |]
 
-        root["times"] <- nodes [| row $"""{{"item_id":"{item}","clock":"host-wall","command":"PRIVATE"}}""" |]
+        root["times"] <- nodes [| row $"""{{"item_id":"{item}","occurred_clock_provenance":"host-wall","command":"PRIVATE"}}""" |]
         root
 
     let private envelope (snapshot: JsonNode) =
@@ -788,7 +788,8 @@ module DashboardProjectionTests =
     [<Fact>]
     let ``process health preserves witnessed chain and abstains from unsupported diagnosis`` () =
         let value = snapshot "item-a"
-        value["admissions"] <- nodes [| row """{"item_id":"item-a","invocation_id":"child-native","identity":"admission-native","fact_revision":4}""" |]
+        value["admissions"] <- nodes [| row """{"item_id":"item-a","invocation_id":"child-native","attempt_id":"original-attempt-native","identity":"admission-native","fact_revision":4}""" |]
+        value["terminals"] <- nodes [| row """{"item_id":"item-a","invocation_id":"child-native","identity":"original-failure-native","outcome":"failed","exit_code":-15}""" |]
         value["lineage"] <- nodes [| row """{"item_id":"item-a","invocation_id":"child-native","parent_invocation_id":"parent-native","root_invocation_id":"root-native","identity":"lineage-native","relation":"child"}""" |]
         use result = DashboardProjection.project "workspace-a" (envelope value) |> unwrap |> JsonDocument.Parse
         Assert.Equal("fsgg.telemetry.private-dashboard/2", result.RootElement.GetProperty("schema").GetString())
@@ -802,6 +803,10 @@ module DashboardProjectionTests =
         let step = item.GetProperty("steps").GetProperty("rows").[0]
         Assert.Equal("child-native", step.GetProperty("id").GetString())
         Assert.Equal("admission-native", step.GetProperty("factIdentity").GetString())
+        Assert.Equal("original-attempt-native", step.GetProperty("attemptId").GetString())
+        Assert.Equal("failed", step.GetProperty("outcome").GetString())
+        Assert.Equal(-15, step.GetProperty("exitCode").GetInt32())
+        Assert.Equal("original-failure-native", step.GetProperty("terminalIdentity").GetString())
         Assert.Equal(4L, step.GetProperty("factRevision").GetInt64())
         Assert.Equal(JsonValueKind.Null, step.GetProperty("contentDigest").ValueKind)
         let edge = health.GetProperty("edges").[0]

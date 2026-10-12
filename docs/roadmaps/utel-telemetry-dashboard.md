@@ -310,11 +310,19 @@ initial verdict is **Insufficient evidence**. Existing public efficiency summari
 precede activity; public health remains unavailable without an approved assessment.
 
 Incremental compilation and 61 focused projection cases pass against unchanged
-locked package inputs. Private browser, server security and public browser
-qualification remain pending. The first browser attempts retained the missing
+locked package inputs. Four hosted-server security cases and 12 local-server
+security cases pass. Three local Chromium journeys remain omitted because the
+local browser custody profile refused detached children. The existing hosted
+workflows remain the required private/public browser source qualification route. The first browser attempts retained the missing
 native-library failure and the subsequent detached-process custody refusal; neither
 establishes UI acceptance. Candidate installation, a workspace-authorized real
 outcome journey and richer canonical assessment remain separate acceptance gates.
-The currently selected host configuration has no workspace association; discovering
-recorded metadata cannot itself authorize a private session. Whole-feature completion
+Accepted installed read-only discovery confirms that the legacy store has no
+workspace binding, and the currently selected host configuration has no workspace
+association. These facts cannot authorize a private session. Prospective enrollment
+uses the existing canonical route with a separate store and explicit configuration;
+legacy observations cannot be relabeled. Detailed evidence is disclosed on demand;
+malformed refresh retains the last valid view, and scope/session changes clear it.
+The existing host candidate artifact retains two fixture-only screenshots, each
+bounded to one MiB, for independent desktop/mobile visual review. Whole-feature completion
 and UTEL-DASH-15 remain open.

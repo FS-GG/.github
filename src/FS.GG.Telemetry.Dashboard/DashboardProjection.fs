@@ -78,6 +78,15 @@ module DashboardProjection =
                 | true, n when n >= 0L -> Some n
                 | _ -> None)
 
+    let private signedExitCode name value =
+        property name value
+        |> Option.bind (fun v ->
+            if v.ValueKind <> JsonValueKind.Number then None
+            else
+                match v.TryGetInt32() with
+                | true, exitCode -> Some exitCode
+                | _ -> None)
+
     let private nullableNumber name value =
         match property name value with
         | Some v when v.ValueKind = JsonValueKind.Null -> Some None
@@ -111,7 +120,7 @@ module DashboardProjection =
         node["factRevision"] <- number "fact_revision" row |> Option.map JsonValue.Create |> Option.toObj
         node["contentDigest"] <- null // This scoped reader does not supply retained canonical digests.
 
-    let private itemSteps (perKindLimit: int) item activities attributions ciSteps admissions times usage lineage =
+    let private itemSteps (perKindLimit: int) item activities attributions ciSteps admissions terminals times usage lineage =
         let activityRows = activities |> Array.filter (fun row -> text "item_id" row = Some item)
         let ciRows = ciSteps |> Array.filter (fun row -> text "item_id" row = Some item)
         let runtimeRows = admissions |> Array.filter (fun row -> text "item_id" row = Some item)
@@ -162,6 +171,12 @@ module DashboardProjection =
             let node = JsonObject()
             sourceFields node row
             node["id"] <- reference "invocation_id" row
+            node["attemptId"] <- reference "attempt_id" row
+            node["parentAttemptId"] <- reference "parent_attempt_id" row
+            let terminal = terminals |> Array.tryFind (fun entry -> invocation.IsSome && text "item_id" entry = Some item && text "invocation_id" entry = invocation)
+            node["outcome"] <- terminal |> Option.bind (text "outcome") |> safeToken "unknown"
+            node["terminalIdentity"] <- terminal |> Option.map (reference "identity") |> Option.toObj
+            node["exitCode"] <- terminal |> Option.bind (signedExitCode "exit_code") |> Option.map JsonValue.Create |> Option.toObj
             let lineageRow = lineage |> Array.tryFind (fun entry -> invocation.IsSome && text "item_id" entry = Some item && text "invocation_id" entry = invocation)
             node["parentId"] <- lineageRow |> Option.map (reference "parent_invocation_id") |> Option.toObj
             node["rootId"] <- lineageRow |> Option.map (reference "root_invocation_id") |> Option.toObj
@@ -213,6 +228,8 @@ module DashboardProjection =
             let node = JsonObject()
             sourceFields node row
             node["id"] <- reference "activity_id" row
+            node["invocationId"] <- reference "invocation_id" row
+            node["attemptId"] <- reference "attempt_id" row
             node["parentId"] <- null
             node["rootId"] <- null
             node["kind"] <- "activity"
@@ -301,6 +318,7 @@ module DashboardProjection =
         attributions
         ciSteps
         admissions
+        terminals
         usageRows
         lineage
         perKindLimit
@@ -399,7 +417,7 @@ module DashboardProjection =
                             (times
                              |> Array.choose (fun row ->
                                  if text "item_id" row = Some item then
-                                     text "clock" row |> Option.filter tokenPattern.IsMatch
+                                     text "occurred_clock_provenance" row |> Option.filter tokenPattern.IsMatch
                                  else
                                      None))
                             (activities
@@ -541,7 +559,7 @@ module DashboardProjection =
 
                     node["coverage"] <- coverage
                     node["clockProvenance"] <- JsonArray(clocks |> Array.map (fun v -> JsonValue.Create(v) :> JsonNode))
-                    let steps = itemSteps perKindLimit item activities attributions ciSteps admissions times usageRows lineage
+                    let steps = itemSteps perKindLimit item activities attributions ciSteps admissions terminals times usageRows lineage
                     node["steps"] <- steps
                     let health = JsonObject()
                     health["schema"] <- "fsgg.telemetry.process-health/1"
@@ -564,6 +582,12 @@ module DashboardProjection =
                     stages["source"] <- state["codeDelivery"].DeepClone()
                     for stage in [ "publication"; "installation"; "adoption"; "verifiedOperation" ] do stages[stage] <- "unknown"
                     health["stages"] <- stages
+                    let diagnosticCoverage = JsonObject()
+                    diagnosticCoverage["population"] <- coverage["populationCoverage"].DeepClone()
+                    diagnosticCoverage["usage"] <- usageNode["nativeUsage"].DeepClone()
+                    diagnosticCoverage["lineage"] <- if lineage |> Array.exists (fun row -> text "item_id" row = Some item) then "observed-partial" else "unknown"
+                    for relation in [ "classification"; "dependencies"; "history"; "operationalStages" ] do diagnosticCoverage[relation] <- "unknown"
+                    health["coverage"] <- diagnosticCoverage
                     let evidence = JsonObject()
                     match outcome with
                     | Some row ->
@@ -841,6 +865,7 @@ module DashboardProjection =
                                                                     (array "activityUsageAttributions" snapshot |> Option.get)
                                                                     (array "ciSteps" snapshot |> Option.get)
                                                                     (array "admissions" snapshot |> Option.get)
+                                                                    (array "terminals" snapshot |> Option.get)
                                                                     (array "usage" snapshot |> Option.get)
                                                                     (array "lineage" snapshot |> Option.get)
                                                                     (min 64 (max 1 (128 / max 1 items.Length)))
