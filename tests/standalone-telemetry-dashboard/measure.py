@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Measure an installed local dashboard on an assessor-qualified store."""
 from __future__ import annotations
+from fractions import Fraction
 import argparse,hashlib,http.cookiejar,importlib.util,json,math,os,pathlib,secrets,selectors,signal,statistics,subprocess,tempfile,time,urllib.request,zipfile
 
 SCHEMA="fsgg.telemetry.standalone-qualification/2"
@@ -19,6 +20,18 @@ def p95(values:list[float])->float:
 def distribution(values:list[float])->dict:
  if not values: raise ValueError('samples are empty')
  return {"medianMilliseconds":round(statistics.median(values),3),"p95Milliseconds":round(p95(values),3),"maximumMilliseconds":round(max(values),3)}
+
+def wall_time_failure(index,start,end,frequency,recorded,sample,reconstructed,delta,failed)->ValueError:
+ prefix='Store phase diagnostics wall time differs'
+ try:
+  def scalar(value):
+   text=str(value)
+   return text if len(text.encode('utf-8'))<=96 else '<oversized>'
+  fields={'index':index,'failed':failed,'tickDelta':end-start,'frequency':frequency,'recordedMilliseconds':recorded,'storedSampleMilliseconds':sample,'reconstructedMilliseconds':reconstructed,'exactNominalDeltaMilliseconds':delta}
+  message=prefix+'; '+', '.join(name+'='+scalar(value) for name,value in fields.items())
+  if len(message.encode('utf-8'))>960: message=prefix+'; details omitted (oversized)'
+ except Exception: message=prefix+'; details unavailable'
+ return ValueError(message)
 
 def verify_phase_diagnostics(data:dict,assembly:pathlib.Path,package:pathlib.Path|None=None,required:bool=False)->None:
  diagnostics=data.get('diagnostics')
@@ -42,7 +55,18 @@ def verify_phase_diagnostics(data:dict,assembly:pathlib.Path,package:pathlib.Pat
   previous_end=end
   milliseconds=row.get('elapsedMilliseconds'); cpu=row.get('processCpuMilliseconds')
   if any(isinstance(value,bool) or not isinstance(value,(int,float)) or not math.isfinite(value) or value<0 for value in [milliseconds,cpu]): raise ValueError('Store phase diagnostics timings are invalid')
-  if milliseconds!=data['samples']['warmInProcessAdmissionMilliseconds'][index] or abs(milliseconds-round((end-start)*1000/frequency,3))>0.001: raise ValueError('Store phase diagnostics wall time differs')
+  sample=data['samples']['warmInProcessAdmissionMilliseconds'][index];sample_differs=milliseconds!=sample
+  try:
+   reconstructed=round((end-start)*1000/frequency,3)
+   # Exact nominal decimal tolerance; preserve strict row/sample equality separately.
+   delta=Fraction(str(milliseconds))-Fraction(str(reconstructed))
+  except Exception:
+   if sample_differs: raise wall_time_failure(index,start,end,frequency,milliseconds,sample,None,None,'sample')
+   raise # Preserve the original reconstruction failure when strict samples agree.
+  wall_differs=abs(delta)>Fraction(1,1000)
+  if sample_differs or wall_differs:
+   failed='sample-and-wall' if sample_differs and wall_differs else 'sample' if sample_differs else 'wall'
+   raise wall_time_failure(index,start,end,frequency,milliseconds,sample,reconstructed,delta,failed)
   gc=row.get('gcCollections')
   if not isinstance(gc,list) or len(gc)!=3 or any(type(count) is not int or count<0 for count in gc): raise ValueError('Store phase diagnostics GC counts differ')
   if row.get('phasesTruncated') is not False: raise ValueError('Store phase diagnostics are truncated')
