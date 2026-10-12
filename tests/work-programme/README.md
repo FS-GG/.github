@@ -1,11 +1,17 @@
 # Work-programme acceptance entry
 
 Run `bash tests/work-programme/run.sh`. The existing three FSI suites, Python
-collector tests and runner controls execute serially. `unittest` still collects
+collector tests, context controls, owner-restart structural controls, synthetic
+watcher regressions and runner controls execute serially. `unittest` still collects
 independent test failures and owns its per-test cleanup.
 
 `run.py` declares each suite's required tools, exact source inputs and dependency
-list. The FSI suites share the programme script but create separate temporary
+list. The restart structural suite pins its script, fixture index, all six delta
+inputs and all six expectations; the watcher suite pins its script and imported
+`tools/routine-delivery.py`. Their statuses and captured evidence appear as required
+`context-restart-structure` and `context-restart-watcher` rows in the same report.
+These synthetic controls establish input shape and watcher behavior only; integrated
+restart, native usage, context savings and adoption remain separate. The FSI suites share the programme script but create separate temporary
 state. Source hashes are checked before and after each child. Missing tools or
 inputs block their dependent suites; unknown dependency declarations never admit
 execution. Changed shared inputs invalidate the current observation and block
