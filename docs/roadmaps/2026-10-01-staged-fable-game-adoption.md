@@ -249,6 +249,16 @@ Templates owns composition; shared behavior stays in Rendering/Game and product 
 native gateways, licensed assets and authority stay in their products. The
 [games roadmap](2026-10-07-games-development-roadmap.md) owns .5–.7 product pilots/adoption/removal.
 
+For the compatible remaining Wizard/knowledge/Release-D/reference joins, use the
+[v3 shared receiver cohort](2026-10-07-unified-development-roadmap-v3.md#11-selected-simplifications--2026-10-12).
+Select exact published inputs and map assertions to each owning outcome in the existing acceptance record.
+Share acquisition, empty-cache setup, generation and browser harness where inputs and profiles match;
+retain all required browsers, actual AT journeys, knowledge-limit/refusal cases, opted-in examples and
+promised preserving upgrades. Keep fixture state independent where cases mutate a workspace. One outcome's
+failure does not erase other results or close its own row. Batch ready work without waiting for an unrelated
+consumer; different package/profile/activation selections require their own proof. This changes execution
+packaging, not required product semantics or native authority.
+
 The next reference window must map each reusable finding to an existing published capability,
 a demonstrated producer gap, a template example/conformance case, or explicit product-only
 non-applicability. Reuse the accepted local and external-authority reference source; do not

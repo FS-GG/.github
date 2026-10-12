@@ -285,8 +285,16 @@ count. The helper remains useful as a byte/duration proxy with that narrower lab
 | Latency and recovery | End-to-end item duration, time from actionable observation to response, and recovery reads/turns; separate CI/resource wait from model work. |
 | Compaction | Native observed events only, with coverage. When unavailable, report not observed, not zero. |
 
-First use retained, sanitized fixtures for replay and an offline pilot. Then, when an existing LEARN
-window is admitted, compare the current driver against one fixed treatment. Keep task population,
+Selected simplification, 2026-10-12: first use retained sanitized fixtures, then one bounded ordinary driver
+window for operational acceptance. Exercise the .4 interruption/restart and reservation obligations;
+report quality, parent transitions, feedback/closure latency, coverage and available whole-family usage.
+An explicit inconclusive economic disposition is valid; independently justified correctness/reliability
+improvements can advance to .6 with rollback. This requires genuine operational evidence, not source tests
+alone, and does not assert savings or complete LEARN. Do not replay product workloads just to collect metrics.
+
+A controlled economic comparison is conditional on selecting a statistical savings or learning claim.
+When that question and an existing LEARN window are admitted, compare the current driver against one fixed
+treatment. Keep task population,
 model/effort, acceptance obligations and resource constraints fixed; record unavoidable differences.
 Randomize or use a declared matched design through LEARN, avoid cross-arm memory contamination, and
 predeclare sample size, analysis, practical benefit and non-inferiority margins before observing results.
@@ -313,11 +321,12 @@ acceptance, not pre-authorized operation launches.
 | **.2 — Typed observations, returns and pure deltas** | `.github` helper owner; after .1; consult existing Coordination types | Add the smallest compatible contracts and deterministic projection, with time and evaluator identity retained. Exit: replay, duplicate/out-of-order/conflict, source freshness, changed scope and missing-base tests pass; no replay path launches effects. Version readers/writers together or preserve an explicit compatible fallback. |
 | **.3 — Bounded evidence views and evaluation reuse** | `.github` packet/evidence owner; after .2 contract | Add selective artifact views, obligation discovery checks and complete-input mechanical reuse. Exit: mandatory omission/overflow, drift, untrusted instructions, hidden dependency, validator change and expired-evidence negative controls pass; semantic/native acceptance remains external. |
 | **.4 — Owner and watcher integration** | `.github` driver owner with Coordination adapter owner; parallel with .3 after .2, disjoint files/worktrees | Connect typed returns and material-change notifications behind the existing route. Exit: same-owner repair, superseded return, interrupted dispatch, missed event, bounded wait and compact restart work without duplicate effects or lost reservations. Single-owner fallback is exercised. |
-| **.5 — End-to-end comparison** | `.github` integration owner with UTEL/LEARN; after .3 and .4; live comparison additionally needs its admitted LEARN window | Run offline correspondence first, then the selected controlled window. Exit: quality, lineage, total cost, parent churn, latency and coverage are reported together; benefit is supported or explicitly inconclusive. No live comparison is inferred from source tests. |
+| **.5 — Bounded operational evaluation** | `.github` integration owner with UTEL; after .3 and .4; ordinary admitted driver window, independent of LEARN | Run offline correspondence and genuine integrated operation/restart checks. Exit: quality, lineage, available total cost, parent churn, latency and coverage are reported; benefit is supported only by adequate evidence or explicitly inconclusive. A statistical economic comparison is separately conditional; source tests cannot replace the real route. |
 | **.6 — Bounded adoption and retirement** | `.github` driver owner; after .5 disposition | Adopt only qualified behavior, keep a rollback route and update mirrored skill guidance once. Exit: current driver entry points select the qualified implementation; obsolete glue is removed after retained-attempt compatibility is established. Retire with the programme or transfer only demonstrated reusable contracts to an existing owner. |
 
-The next useful priority is .1 followed by .2: trustworthy observations and compact returns make later
-context savings assessable. Source work can proceed while LEARN qualification is blocked. V2-PROC-01
+Resume the current accepted frontier; do not repeat accepted portions of .1–.3. Remaining .4 integration and
+.5 operational evaluation precede .6 adoption. Source and operational correctness work can proceed while
+LEARN qualification is blocked; missing economic evidence stays explicit. V2-PROC-01
 remains a complementary lane; its containment implementation is not a dependency of pure projections or
 packet work. A later watcher/process-runner adoption must use its qualified profile and account for
 helper/observer processes within actual capacity. Do not replace an active operation's backend.

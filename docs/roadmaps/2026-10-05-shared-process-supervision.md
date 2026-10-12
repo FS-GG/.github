@@ -317,6 +317,14 @@ plan, not a second live task board. Record subsequent source and native results 
 | **.7 Qualification consumer adoption** | One owning adapter at a time: Coordination/LEARN first, then independently selected BAR, SC2, Rendering and Governance | .4 and installed backend from .6; each consumer's existing admission | Side-by-side evidence on fixed fixtures, then one newly admitted real operation; preserve original receipts, domain policies and limits; remove that consumer's replaced mechanics only after its own acceptance |
 | **.8 Consolidation and benefit review** | Coordination and migrated consumer owners | Selected .7 adoptions | Remove obsolete duplicate implementations and temporary adapters; retain conformance suite and servicing owner; report maintenance/runtime impact and remaining exclusions; mark only actually adopted scopes complete |
 
+Selected simplification, 2026-10-12: freeze the selected .7 consumer population and enforcing profiles in
+the existing owning window before execution; retain every already selected consumer. Qualify and retire
+replaced mechanics per accepted consumer;
+an unready Linux backend or unrelated consumer does not block routine .3/.5/.6 delivery. Run adoption and
+retirement assertions in that consumer's existing acceptance route, reusing exact compatible conformance
+evidence. New consumers require a separately selected extension instead of silently extending .8. Keep
+unadopted scopes explicit; no backend/consumer gains stronger guarantees from another profile's pass.
+
 The .2 candidate also consolidates the canonical engineering command interface around
 one process owner, with typed input/receipt preflight, explicit JVM/TLC resources
 and bounded generated scratch accounting. Thirty-one focused controls and the separately

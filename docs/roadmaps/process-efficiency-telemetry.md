@@ -10,9 +10,14 @@ new telemetry route while preserving historical facts, correction lineage and au
 
 ## Delivery objective
 
-Each completed item receives a bounded, evidence-linked agent assessment explaining useful work,
-problems, retries, avoidable process and possible improvements. The dashboard connects those
-explanations to reproducible resource accounting, accepted outcomes and explicit data coverage.
+Selected simplification, 2026-10-12: every observable item receives deterministic outcome and coverage
+visibility. Bounded model assessments explain exceptions and a prospectively selected sample of successful
+items. Declare selection rules and per-item/window budgets before inspecting the outcomes; preserve
+unsampled, unavailable and failed-analysis states. This supersedes the earlier expectation of a model
+assessment for every completed item, not the measurement contract or truthful complete-population accounting.
+The dashboard connects available explanations to reproducible resource accounting, accepted outcomes and
+explicit data coverage. Sampling reduces cost at the price of fewer item-specific explanations; do not
+extrapolate sampled reviews to unreviewed items or use a selected sample as an unbiased savings estimate.
 Known source delivery remains visible when runtime accounting or analysis is incomplete.
 
 Deliver through the existing Coordination telemetry store, observation adapters, dashboard projection
@@ -89,8 +94,10 @@ old readers and binaries need not remain compatible.
 ### V2-EFF-01.3 — Generate bounded assessments on completion
 
 - [ ] Owner: completion/observation adapter maintainer.
-- [ ] Wire durable completion notification/reconciliation to the existing review route. Add the
-  admitted provisional-delivery route where native populations are incomplete.
+- [ ] Wire durable completion notification/reconciliation to the existing review route with the
+  prospectively declared exception/success-sample selector and window budget. All observable items retain
+  deterministic status; unselected items create no analyst invocation or invented review. Add the admitted
+  provisional-delivery route where native populations are incomplete.
 - [ ] Build the bounded evidence packet, analyst prompt/rubric, structured output validator, stable
   idempotency key and assessment lifecycle. Record model usage and prevent analysis self-trigger loops.
 - [ ] Recover from restart, missing token/authority, timeout, malformed response, exhausted budget and
@@ -100,7 +107,8 @@ Depends on .1 for contract implementation against fixtures; real producer integr
 .2. Touch-set: completion scheduling/outbox integration, evidence assembler, prompt and assessment
 validator. Acceptance: an actual admitted item gets one bounded evidence-linked review; a delivery
 with missing runtime gets a clearly provisional explanation or explicit unavailable state. Duplicate
-notifications do not duplicate analysis. Facts, permissions and required checks are unchanged.
+notifications do not duplicate analysis; unselected items and budget exhaustion preserve status without
+blocking delivery or silently entering another analysis queue. Facts, permissions and required checks are unchanged.
 Analysis cost is visible; additional evidence revisions remain within a declared per-item budget.
 
 Canonical custody dependency delivered (2026-10-06): Coordination
@@ -371,7 +379,13 @@ checks intact; recommendations alone do not count as completed process improveme
 - [ ] Adopt the verified assessment behavior for the selected completion paths. Record coverage,
   health/freshness expectations, bounded backfill and tested rollback. Expand only after pilot evidence.
 
-Depends on .5 and the relevant publication gates. Touch-set: release/receiver configuration and
+Depends on .5's calibration/disposition and the relevant publication gates. Candidate installation and
+reversible facts/coverage-only visibility may support .5 through the existing selected release route;
+model-generated explanations remain explicitly experimental until calibrated. Reuse compatible accepted
+UTEL installation/migration and LEARN receiver evidence via the v3 shared cohort; qualify each missing
+assessment/provider/correction assertion and record the exact store identity instead of repeating migration.
+A selected real item must still traverse installed assessment/projection/browser acceptance before .6 closes.
+Touch-set: release/receiver configuration and
 deployment integration; no unrelated product changes. Acceptance: installed end-to-end evidence,
 including a provisional/missing-data case and a supported correction, reconciles with canonical
 records. One current attributed outcome remains after correction. Existing source history remains
