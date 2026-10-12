@@ -1,7 +1,15 @@
 # Dispatch observation
 
 
-Telemetry is prospectively on by default for repository-owned dispatches. At driver entry, use the installed
+Telemetry is prospectively on by default for repository-owned dispatches, with bounded best-effort
+collection. Missing tokens, a full inbox or unavailable collection do not block otherwise authorized routine
+development. Preserve available native events in existing private logs, report the attributed gap once and
+reconcile asynchronously where genuine identities permit; never fabricate a begin token or completed-turn
+baseline. The begin/started/finish sequence below applies where collection is available. Live-store mutation,
+publication recovery and operations whose correctness depends on telemetry state keep their own admission
+boundary. Record exact store identity with schema/status evidence; no additional CLI, service or ledger.
+
+When collection is available, at driver entry use the installed
 `fsgg-coord-engine skill roadmap-telemetry begin` command
 with the feature, item, attempt, selected model and effort. Pass a stable `--original-item` for a root member
 when distinct roadmap items belong to one canonical original; otherwise the item is its own original. Bind the
