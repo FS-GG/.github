@@ -42,7 +42,17 @@ try {
     if (snapshot.workspaceId !== expectedWorkspace || !snapshot.items.some(item => item.id === expectedItem)) {
       throw new Error('operational snapshot is not the exact scoped item');
     }
+    if(snapshot.schema !== 'fsgg.telemetry.private-dashboard/2' || snapshot.processHealth?.verdict !== 'insufficient-evidence')throw new Error('new process-health projection is absent');
     const item = snapshot.items.find(item => item.id === expectedItem);
+    if(item.processHealth?.verdict !== 'insufficient-evidence' || item.processHealth.stages.verifiedOperation !== 'unknown')throw new Error('unsupported health or operational acceptance claimed');
+    await page.locator('#outcome').selectOption(expectedItem);
+    await page.locator('#process-verdict').filter({hasText:'Insufficient evidence'}).waitFor({state:'visible'});
+    await page.locator('#window').selectOption('7d');
+    await page.locator('#window').selectOption('24h');
+    await page.setViewportSize({width:390,height:844});
+    if(await page.evaluate(()=>document.documentElement.scrollWidth>window.innerWidth))throw new Error('mobile dashboard overflows');
+    await page.locator('#refresh').focus();
+    if(!await page.locator('#refresh').evaluate(node=>node===document.activeElement))throw new Error('keyboard refresh focus unavailable');
     if (item.state.outcome !== 'delivered' || !item.steps || item.steps.ciStepCount < 1) {
       throw new Error('genuine delivered CI steps are absent');
     }
@@ -60,7 +70,7 @@ try {
     fs.writeFileSync(path.join(proofDirectory, 'browser-proof.json'), JSON.stringify({
       evidenceKind:'genuine-operational-ci', workspaceId:expectedWorkspace,
       itemId:expectedItem, delivered:true, ciSteps:item.steps.ciStepCount,
-      unknownCoverageVisible:true, visibleText
+      processHealth:'insufficient-evidence', operationalAcceptance:'unknown', sameOutcome:true, mobileAndKeyboard:true, unknownCoverageVisible:true, visibleText
     }, null, 2)+'\n');
     await page.screenshot({path:path.join(proofDirectory, 'dashboard.png'), fullPage:true});
   }

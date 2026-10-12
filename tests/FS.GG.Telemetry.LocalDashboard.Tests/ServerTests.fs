@@ -57,7 +57,7 @@ module ServerTests =
                 })
 
         let snapshot =
-            """{"schema":"fsgg.telemetry.private-dashboard/1","workspaceId":"workspace-alpha","observedAt":null,"revision":1,"operational":{"pendingBatches":0,"appliedReceipts":1,"rejectedReceipts":0,"consistency":"complete"},"items":[{"id":"local-item","state":{"outcome":"complete","population":"complete"},"usage":{"total":1},"runtime":{"terminal":1,"admitted":1},"coverage":{"populationCoverage":"complete","ciInventory":"complete"}}]}"""
+            """{"schema":"fsgg.telemetry.private-dashboard/2","workspaceId":"workspace-alpha","observedAt":null,"revision":1,"operational":{"pendingBatches":0,"appliedReceipts":1,"rejectedReceipts":0,"consistency":"complete"},"items":[{"id":"local-item","state":{"outcome":"complete","population":"complete"},"usage":{"total":1},"runtime":{"terminal":1,"admitted":1},"coverage":{"populationCoverage":"complete","ciInventory":"complete"}}]}"""
 
         TelemetryDashboardServer.defaultOptions workspaceId assets (fun _ _ ->
             Task.FromResult(Ok(Encoding.UTF8.GetBytes snapshot)))

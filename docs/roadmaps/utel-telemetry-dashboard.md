@@ -296,3 +296,25 @@ No numerical delivery dates or savings percentages are asserted without a scoped
 
 
 Landing this proposal does not implement the dashboard, change existing policy, authorize a feed cutover or establish native acceptance. It extends V2-EFF-01.2–.6 within the existing programme; whole-feature completion remains open.
+
+
+### PH-1 source candidate — 2026-10-12
+
+The shared authenticated dashboard now projects `private-dashboard/2` with bounded
+`process-health/1` evidence. It preserves genuine recorded invocation, activity and
+CI identities, witnessed parent relations and source-delivery references; absent
+canonical revisions, digests, operational stages and diagnostic measurements remain
+unknown. The private overview exposes outcome selection, clock-separated parallel
+steps, explicit historical context and seven unmeasured effort categories. Its
+initial verdict is **Insufficient evidence**. Existing public efficiency summaries
+precede activity; public health remains unavailable without an approved assessment.
+
+Incremental compilation and 61 focused projection cases pass against unchanged
+locked package inputs. Private browser, server security and public browser
+qualification remain pending. The first browser attempts retained the missing
+native-library failure and the subsequent detached-process custody refusal; neither
+establishes UI acceptance. Candidate installation, a workspace-authorized real
+outcome journey and richer canonical assessment remain separate acceptance gates.
+The currently selected host configuration has no workspace association; discovering
+recorded metadata cannot itself authorize a private session. Whole-feature completion
+and UTEL-DASH-15 remain open.

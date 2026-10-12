@@ -3,7 +3,7 @@ const fs=require("node:fs");
 const path=require("node:path");
 const assets=path.resolve(__dirname,"../../src/FS.GG.Telemetry.Dashboard/Assets");
 const session={schema:"fsgg.telemetry.browser-session/1",workspaces:["workspace-a","workspace-b"]};
-const snapshot=(workspace)=>({schema:"fsgg.telemetry.private-dashboard/1",workspaceId:workspace,observedAt:"2026-09-10T09:00:00Z",revision:"a".repeat(64),operational:{pendingBatches:2,appliedReceipts:3,rejectedReceipts:1,consistency:"database-transaction"},items:[{id:"<img src=x onerror=alert(1)>",factCount:1,usageObservations:0,deliveryObservations:0,usage:{input:0,cachedInput:0,cacheWriteInput:0,output:0,total:0,reasoning:null,nativeUsage:"missing"},runtime:{admitted:0,started:0,terminal:0,usage:0,missingAdmission:0,missingStart:0,missingTerminal:0,missingUsage:0,gapCodes:[]},state:{population:"missing",dirty:false,outcome:"missing",codeDelivery:"unknown",observedAt:null},coverage:{recordValidity:"unknown",joinIntegrity:"unknown",populationCoverage:"unknown",qualification:"not-evaluated",ciInventory:"unknown",ciChecks:"unknown",ciAttempts:"unknown",ciJobs:"unknown",ciTerminal:"unknown",ciTimestamps:"unknown",ciContinuation:"none",externalChecks:null},clockProvenance:[]} ]});
+const snapshot=(workspace)=>({schema:"fsgg.telemetry.private-dashboard/2",workspaceId:workspace,observedAt:"2026-09-10T09:00:00Z",revision:"a".repeat(64),operational:{pendingBatches:2,appliedReceipts:3,rejectedReceipts:1,consistency:"database-transaction"},items:[{id:"<img src=x onerror=alert(1)>",factCount:1,usageObservations:0,deliveryObservations:0,usage:{input:0,cachedInput:0,cacheWriteInput:0,output:0,total:0,reasoning:null,nativeUsage:"missing"},runtime:{admitted:0,started:0,terminal:0,usage:0,missingAdmission:0,missingStart:0,missingTerminal:0,missingUsage:0,gapCodes:[]},state:{population:"missing",dirty:false,outcome:"missing",codeDelivery:"unknown",observedAt:null},coverage:{recordValidity:"unknown",joinIntegrity:"unknown",populationCoverage:"unknown",qualification:"not-evaluated",ciInventory:"unknown",ciChecks:"unknown",ciAttempts:"unknown",ciJobs:"unknown",ciTerminal:"unknown",ciTimestamps:"unknown",ciContinuation:"none",externalChecks:null},clockProvenance:[]} ]});
 
 test("mocked transport UI journey covers login, scoped refresh, expiry and logout",async({page})=>{
   let authenticated=false, expired=false, loginBody=null, snapshots=[];
@@ -77,4 +77,41 @@ test("item steps render real browser bars with honest token and missing-data lab
   await expect(empty.locator(".item-time")).toHaveText("Observed item runtime: unknown");
   await expect(page.locator("article").nth(2).locator(".item-time")).toHaveText("Observed runtime from displayed steps: 2m 0s (host-wall clock · partial; 1/2 timed invocations)");
   await expect(page.locator("article").nth(3).locator(".item-time")).toHaveText("Observed item runtime: unknown (multiple clock domains)");
+});
+
+test("process overview abstains, preserves selected refresh, and distinguishes historical context",async({page},testInfo)=>{
+  const data=snapshot("workspace-a");data.items[0].id="source-item";
+  data.items[0].state={...data.items[0].state,codeDelivery:"delivered",outcome:"delivered",population:"completed"};
+  data.items[0].steps={runtimeCount:1,activityCount:0,ciStepCount:0,truncated:false,limitPerKind:64,rows:[{id:"native-invocation",kind:"runtime",label:"Invocation",classification:"root",clock:"host-wall",startedAt:"2026-09-01T00:00:00Z",endedAt:"2026-09-01T01:00:00Z",tokens:null,tokenBasis:"unknown"}]};
+  let fail=false;
+  await page.route("https://telemetry.test/private/dashboard/**",async route=>{
+    const request=route.request(),url=new URL(request.url());
+    if(request.method()==="GET"){
+      const file=url.pathname.endsWith("app.js")?"app.js":url.pathname.endsWith("styles.css")?"styles.css":"index.html";
+      return route.fulfill({status:200,contentType:file.endsWith(".js")?"text/javascript":file.endsWith(".css")?"text/css":"text/html",body:fs.readFileSync(path.join(assets,file))});
+    }
+    if(url.pathname.endsWith("/session/refresh"))return route.fulfill({status:200,json:session});
+    if(url.pathname.endsWith("/snapshot"))return route.fulfill(fail?{status:503}:{status:200,json:data});
+    return route.fulfill({status:404});
+  });
+  await page.setViewportSize({width:390,height:844});
+  await page.goto("https://telemetry.test/private/dashboard/");
+  await expect(page.locator("#process-verdict")).toHaveText("Insufficient evidence");
+  await expect(page.locator("#categories p")).toHaveCount(7);
+  await expect(page.locator("#window")).toHaveValue("24h");
+  await page.locator("#outcome").selectOption("source-item");
+  await expect(page.locator(".step-identity")).toHaveText("native-invocation");
+  await expect(page.locator("article")).toContainText("Historical context outside selected step window");
+  await expect(page.locator("article")).toContainText("Verified operation: unknown");
+  await page.locator("#window").selectOption("7d");
+  await page.locator("#refresh").focus();await page.keyboard.press("Enter");
+  await expect(page.locator("#outcome")).toHaveValue("source-item");
+  await page.screenshot({path:testInfo.outputPath("fixture-process-overview-mobile.png"),fullPage:true});
+  await page.setViewportSize({width:1440,height:1000});
+  await page.screenshot({path:testInfo.outputPath("fixture-process-chain-desktop.png"),fullPage:true});
+  await page.setViewportSize({width:390,height:844});
+  fail=true;await page.locator("#refresh").click();
+  await expect(page.locator("#error")).toContainText("last valid snapshot remains displayed");
+  await expect(page.locator("article h3")).toHaveText("source-item");
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
 });

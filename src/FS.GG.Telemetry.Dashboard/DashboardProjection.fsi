@@ -13,7 +13,7 @@ type ProjectionError =
 
 module DashboardProjection =
     [<Literal>]
-    val Schema: string = "fsgg.telemetry.private-dashboard/1"
+    val Schema: string = "fsgg.telemetry.private-dashboard/2"
 
     val project:
         authorizedWorkspace: string -> canonicalSnapshotEnvelopeBytes: byte array -> Result<byte array, ProjectionError>
