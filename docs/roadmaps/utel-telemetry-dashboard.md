@@ -2,9 +2,9 @@
 
 Owner: `.github`
 
-Backlink: [Unified Development Roadmap §9.8](../2026-09-07-154210-fs-gg-unified-development-roadmap.md#98-feature-parts-and-subroadmap-index)
+Backlink: [Unified Development Roadmap v3](2026-10-07-unified-development-roadmap-v3.md) — V2-EFF-01.2–.6
 
-Roadmap position: **Simplified baseline and v2 policy binding / V0**
+Roadmap position: **V2-EFF-01.2–.6 — telemetry, dashboard and receiver owners**
 
 ## Outcome
 
@@ -175,3 +175,124 @@ published through this path. The supported CI-to-event refresh proposal remains 
 The existing Pages schedule collects public sources on GitHub's best-effort cadence; it does not
 repair missing producer events. Timer recurrence without a user bus and complete Governance
 runtime coverage remain open. This migration does not close those limits or whole UTEL.
+
+## Development process health dashboard — proposed 2026-10-12
+
+Status: user-approved product direction; proposed implementation, not delivered behavior.
+
+Owner: existing telemetry, dashboard and receiver owners under V2-EFF-01.2–.6.
+
+### Purpose
+
+Answer whether development is healthy or pathological, how much effort reaches accepted outcomes, how much is coordination or repeated work, and what evidence explains anomalies. The dashboard supports diagnosis and intervention rather than treating activity, green checks or merged source as sufficient evidence of progress.
+
+The user prioritizes slow delivery, repeated rework, excessive coordination, execution cost and unreliable results, in that order. A busy programme with passing tests may still receive a Pathological verdict when accepted delivery stalls and repeated preparation dominates. Conversely, a difficult feature or justified validation is not pathological merely because it is slow or expensive.
+
+### Opening screen
+
+1. **Overall verdict:** Healthy, Strained, Pathological or Insufficient evidence. Show confidence, observation freshness, coverage, changes since the comparison window and the evidence responsible for the verdict. Do not average dimensions into a score that conceals a serious problem.
+2. **Delivery:** accepted outcomes alongside unfinished work accumulating, aging work and time between meaningful acceptance stages. Distinguish source delivery, publication, installation, adoption and verified operational completion where applicable. Retain useful intermediate milestones without counting them as whole outcomes.
+3. **Effort breakdown:** the seven categories below, with their measurement basis and unknown remainder. Show elapsed delay, agent-hours and compute cost separately.
+4. **Top five anomalies:** ranked by impact on delivery, with Watch or Investigate severity. Make the remaining anomalies searchable; do not turn the opening screen into an unbounded inbox.
+5. **Recommended interventions:** each links to its evidence, expected benefit, tradeoff, confidence and an observable criterion for success.
+
+Agent activity appears below these diagnostic views. Empty, malformed, unsupported, partial and stale data have explicit states. A refreshed browser must not make old source observations appear current.
+
+### Effort and measurement semantics
+
+Use these primary effort categories:
+
+| Category | Meaning |
+| --- | --- |
+| Product implementation | Work that changes or prepares the intended product outcome. |
+| Necessary validation | Validation with an evidenced relationship to a relevant risk or acceptance obligation. |
+| Tooling and infrastructure repair | Repairing the development or execution capability needed to do the work. |
+| Coordination and approvals | Handoffs, scheduling, review coordination and authorization work. |
+| Repeated work | Repetition caused by failed attempts, lost context, reopened decisions or invalidated preparation. |
+| External waiting | Delay awaiting CI capacity, services, dependencies or another external condition. |
+| Unknown or unattributed | Effort or delay that cannot be assigned defensibly from available observations. |
+
+Keep primary categories distinct from activity labels and causal tags. For example, a repeated validation attempt can retain its validation activity, repetition cause and policy-required flag without charging its cost twice. Version classifications and retain their supporting observations, uncertainty and correction history. Do not infer bureaucracy from an agent's role or a step's name alone.
+
+**Required by policy** is a separate attribute, not an exemption from scrutiny. Flag duplicated, disproportionate or poorly justified required checks when evidence supports that diagnosis. Recommendations may propose a policy review, but they do not authorize skipping existing checks or alter canonical budget/completion verdicts. Any eventual change to accepted policy or reducer semantics needs its normal implementation and validation route.
+
+Show elapsed time and active effort separately. Ten agents active for an hour can contribute ten observed agent-hours while the elapsed interval is one hour; neither is automatically ten compute-hours. Use actual supported measurement semantics and label invocation spans, waiting, token usage and monetary cost by their respective basis. Missing activity instrumentation is not evidence of inactivity. Unknown prices, incompatible accounting scopes and incomplete lineage must not become fabricated cost totals.
+
+For parallel work, distinguish aggregate effort from the elapsed union of observed intervals. Do not sum overlapping durations into programme wall time or imply that category delay totals form an exclusive partition when they overlap. Queue delay can be low-cost but high-impact; surface both facts.
+
+### Health assessment and anomaly detection
+
+Expose separate delivery, churn, coordination, cost and reliability indicators beneath the overall verdict. Explain which indicators drive the verdict and why confidence is sufficient or insufficient. A favorable measured subset cannot conceal a material unknown remainder or stale evidence. Conversely, absence of evidence cannot prove pathology.
+
+Compare observations against the same programme's recent history, comparable completed work and explicit targets. Show baseline population, window, sample size and relevant scope differences. Version the assessment rules and keep configurable thresholds inspectable. Initial numeric thresholds are a calibration task, not facts already established by this proposal.
+
+Detect at least these patterns:
+
+- Delivery stalls despite continuing activity; unfinished work grows or ages without accepted outcomes.
+- Repeated failures, repeated preparation refusals or repeated attempts that do not resolve a common cause.
+- Re-review of unchanged source, equivalent artifact rebuilds and repeated qualification without an evidenced invalidation reason.
+- Reopened decisions, excessive handoffs, context recovery and work repeatedly redirected before delivery.
+- Coordination or execution-tool repair consuming disproportionate effort relative to product work and accepted outcomes.
+- Passing checks or merged source followed by missing publication, adoption or operational verification.
+- Cost growth without corresponding delivery, with coverage and accounting limitations made explicit.
+- Stale statuses, missing events, incomplete usage attribution and contradictory reported/native outcomes.
+
+Necessary retries and independent qualification remain visible with their justification. Detect a suspicious repetition without automatically declaring it waste. Distinguish observations from causal hypotheses and provide confidence for the latter.
+
+Use **Watch** for early signals and **Investigate** for sustained or well-supported problems. Group repeated notifications for the same incident. Rank primarily by delivery impact, using the agreed priorities as an explicit tie-breaker rather than presenting an opaque score.
+
+### Overhead chain and investigation
+
+The overhead chain is the default drill-down for stalled work and accepted outcomes. Present a timeline with parallel lanes and a compact effort/delay breakdown. Link implementation, validation, source delivery, publication, adoption and final acceptance through genuine recorded identities and dependencies.
+
+Include original attempts, failures, retries, reviews, handoffs, preparation, waiting and outstanding obligations. Highlight repeated steps and show whether their inputs, outputs, source or acceptance basis changed. Preserve original failure and operation identities; do not infer a retry, causal dependency or owner transfer solely from nearby timestamps or similar text.
+
+An anomaly opens in this order:
+
+1. What happened and which outcome is affected.
+2. Measured effort and elapsed delay, including unknown portions.
+3. Repeated steps and relevant input/output changes.
+4. Suspected cause, alternatives and confidence.
+5. Supporting evidence and the complete chronological chain.
+6. Possible intervention and how to evaluate it.
+
+The deepest view exposes events, attempts, agents, tools, source changes, checks, resource usage, handoffs and original evidence links. Raw logs are one additional action away, within the private access boundary. Name affected components and process rules; do not assign personal blame where the cause is systemic or uncertain.
+
+Support both **what was known then** and **current interpretation**. Retain the earlier evidence cutoff, rule/configuration version, verdict and coverage rather than silently rewriting the historical assessment. Corrections can improve the current interpretation without inventing historical knowledge.
+
+### Views, controls and notifications
+
+- Default to the last 24 hours, with current-session, seven-day and whole-programme windows and the preceding comparable period. Label session identity and timezone.
+- Filter by programme, repository, outcome, lane, agent, tool, phase and time. Opening an anomaly applies its relevant filters visibly, with a clear reset. Retain deep links and normal interaction state during refresh.
+- Keep thresholds, baseline selection and classification adjustments editable through an authorized configuration path. Record the actor, old/new values, timestamp, reason and assessment version; show how a change affects the verdict. Preserve raw observations.
+- Start with advisory recommendations. No automatic pausing, reprioritization, budget changes, release approvals or policy bypasses. Any later operational controls require a separately designed explicit-user-action path and existing authorization checks.
+- Keep routine signals in the dashboard. Optional external notifications cover newly sustained Investigate conditions, meaningful deterioration or decisions requiring the user. Do not notify on every retry or repeated unchanged condition. Delivery channels and configuration remain implementation choices, with notifications disabled until configured.
+- Preserve keyboard access, readable text equivalents, mobile layouts, light/dark themes and explicit empty/error states.
+
+### Data and privacy boundaries
+
+Reuse the canonical telemetry engine and its read-only, versioned projections. Preserve canonical completion and budget authority. The dashboard is a consumer, not another store reader, migration owner or completion reducer.
+
+The existing GitHub Pages dashboard has a restrictive approved-public projection. Its current policy excludes raw logs and private item, invocation, thread and provider identities. Full diagnostic detail therefore belongs in an authorized private/local view or equivalently protected surface. Public output may expose only explicitly approved aggregates, aliases, links and notes under the existing rules. Do not weaken those rules or upload private chains/logs merely to satisfy the new UI.
+
+Select the minimum data contract needed for evidence-backed classification, causal links, history and coverage. Missing producers should yield a useful partial view with explicit gaps; they must not trigger fabricated event joins or block unrelated delivery. Private evidence access must enforce its own authorization independently of a public deep link.
+
+Instrument the dashboard itself: collection cost and duration, refresh failures, freshness, missing events, attribution gaps, projection size and reporting overhead. Its collection/reporting work belongs in the same process-efficiency accounting where genuine attribution is available. Rate-limit and bound collection; reuse unchanged evidence and avoid a new reporting bureaucracy.
+
+### Implementation roadmap
+
+These are proposed phases within the existing dashboard/efficiency outcome. They do not reopen completed historical milestones or establish authority to activate a feed or change policy.
+
+| Phase | Scope and dependencies | Acceptance |
+| --- | --- | --- |
+| 1. Evidence and measurement contract | Inventory existing engine/receiver/dashboard projections. Define outcome stages, event and attempt joins, effort categories, causal tags, required-by-policy metadata, coverage, clocks and historical configuration identity. Resolve the private diagnostic/public projection architecture before implementing protected detail. | Versioned minimal contract; fixtures covering missing lineage, incompatible cost bases, overlap, stale data, corrections and unsupported classifications. No duplicate completion/budget authority or public privacy expansion. |
+| 2. Overhead-chain projection | Build bounded engine-owned read models for delivered and stalled outcomes, preserving original failures, parallel spans, handoffs and unresolved obligations. Add evidence navigation and observation-time/current-interpretation joins. Depends on phase 1. | Independent reconstruction of representative chains agrees with original evidence; elapsed union and effort totals do not double-count; missing causes remain unknown; historical views reproduce their recorded evidence cutoff. |
+| 3. Health and anomaly assessment | Implement explainable dimensional indicators, overall verdict, confidence, baselines, Watch/Investigate states, ranking and versioned configuration. Required validation remains open to scrutiny without bypassing policy. Depends on phases 1–2. | Scenario corpus distinguishes busy-but-stalled work, justified expensive validation, repeated unchanged checks, external waiting, insufficient evidence and healthy delivery. Every verdict and anomaly has inspectable reasons and provenance; no unexplained percentage or score substitutes for evidence. |
+| 4. Diagnostic interface | Implement the opening screen, top-five anomalies, delivery/effort views, parallel overhead timeline, filters, private evidence drill-down and historical comparison. Retain useful supported public aggregates. Depends on phases 2–3; UI shells can proceed earlier against the settled contract. | Browser tests cover navigation, filter reset/deep links, refresh-state preservation, accessibility, mobile layout, stale/malformed/partial states and private/public separation. User scenarios reach the original evidence behind a verdict without exposing private content publicly. |
+| 5. Advisory interventions and operational options | Add evidence-backed recommendations, recorded threshold/classification changes, comparison of pre/post-intervention behavior and optional deduplicated notifications. Include collection and reporting overhead. Depends on a usable phase 4 diagnosis. | Recommendations state benefit, tradeoff, confidence and success criteria. Configuration changes are auditable, notifications remain bounded and opted in, and no automatic process mutation occurs. Dashboard overhead and unavailable measurements are visible. |
+| 6. Coherent delivery, calibration and live acceptance | Complete the existing release, installation, schema/store compatibility, supported-provider enrollment and matching feed/dashboard deployment obligations. Run a bounded pilot across representative healthy and problematic work, calibrate thresholds and compare findings with independent evidence review. | Published and installed components correspond to the qualified source; real browser/readback and privacy checks pass; pilot findings, false alarms, missed detections, coverage limits and collection cost are recorded. Relevant source/publication/adoption/activation outcomes are accepted separately before whole-feature closure. |
+
+No numerical delivery dates or savings percentages are asserted without a scoped implementation estimate and baseline. Start the earliest meaningful end-to-end slice with one real outcome and its chain, then extend coverage. Do not grow surrogate control suites while deferring genuine private-view, installed-feed and operational acceptance indefinitely.
+
+
+Landing this proposal does not implement the dashboard, change existing policy, authorize a feed cutover or establish native acceptance. It extends V2-EFF-01.2–.6 within the existing programme; whole-feature completion remains open.
