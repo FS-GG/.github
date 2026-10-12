@@ -19,6 +19,7 @@
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/statfs.h>
+#include <sys/statvfs.h>
 #include <sys/syscall.h>
 #include <sys/types.h>
 #include <sys/un.h>
@@ -88,6 +89,15 @@ static int fx_diagnostic_text(char *out,size_t capacity,const struct fx_diagnost
  int n=snprintf(out,capacity,"native diagnostic stage=%s errno-known=%d errno=%d first-stage=%s first-errno-known=%d first-errno=%d additional=%u\n",
   stage,known,known?error:0,d->first_stage?d->first_stage:"none",d->first_errno_known,d->first_errno,d->additional);
  return n>=0&&(size_t)n<capacity;
+}
+/* An additive attribute request cannot clear an inherited restriction, change
+ * propagation/ownership, or request a recursive change. Unsupported kernels
+ * remain a setup failure; there is no privilege or remount fallback. */
+static struct mount_attr fx_readonly_attributes(void) {
+ return (struct mount_attr){.attr_set=MOUNT_ATTR_RDONLY};
+}
+static int fx_readonly_flags_preserved(unsigned long before,unsigned long after) {
+ return (after&ST_RDONLY)&&(after&before)==before;
 }
 static unsigned controls,failures;
 static void check(int condition,const char *name){controls++;
@@ -208,6 +218,18 @@ int fsgg_custody_adapter_controls(void) {
   fx_diagnostic_note(&diagnostic,"setup/unreached",++evaluated==3,0,0);
  check(!injected&&evaluated==2&&!strcmp(diagnostic.first_stage,"setup/second-failure"),"injected compound setup preserves evaluation order and stops on first failure");
  check(diagnostic.first_errno==EIO&&diagnostic.additional==0,"unreached setup cannot add or replace errno");
+ struct mount_attr readonly=fx_readonly_attributes();
+ check(readonly.attr_set==MOUNT_ATTR_RDONLY&&readonly.attr_clr==0,"readonly request adds only readonly and never clears restrictions");
+ check(readonly.propagation==0&&readonly.userns_fd==0,"readonly request cannot change propagation or mount ownership");
+ unsigned long restrictions=ST_NOSUID|ST_NODEV|ST_NOEXEC|ST_NOATIME|ST_NODIRATIME|ST_RELATIME;
+ check(fx_readonly_flags_preserved(restrictions,restrictions|ST_RDONLY),"injected inherited restrictions survive additive readonly transition");
+ check(fx_readonly_flags_preserved(restrictions|ST_RDONLY,restrictions|ST_RDONLY),"already readonly inherited mount stays readonly");
+ check(!fx_readonly_flags_preserved(restrictions,restrictions),"readback without readonly refuses");
+ check(!fx_readonly_flags_preserved(restrictions,(restrictions&~ST_NOSUID)|ST_RDONLY),"readback losing inherited nosuid refuses");
+ check(!fx_readonly_flags_preserved(restrictions,(restrictions&~ST_NODEV)|ST_RDONLY),"readback losing inherited nodev refuses");
+ check(!fx_readonly_flags_preserved(restrictions,(restrictions&~ST_NOEXEC)|ST_RDONLY),"readback losing inherited noexec refuses");
+ check(!fx_readonly_flags_preserved(restrictions,(restrictions&~ST_NOATIME)|ST_RDONLY),"readback losing inherited atime restriction refuses");
+ check(fx_readonly_flags_preserved(1UL<<30,(1UL<<30)|ST_RDONLY)&&!fx_readonly_flags_preserved(1UL<<30,ST_RDONLY),"readback preserves even unclassified inherited flag bits");
  printf("adapter source controls=%u failures=%u native=NOT_RUN\n",controls,failures);
  return (int)failures;
 }
@@ -656,8 +678,20 @@ static long fx_clone(int cgroup,int *pidfd) {
  return pid;
 }
 static int fx_readonly_bind(const char *path) {
- return fx_step("setup/readonly-bind-clock",fx_work(),0)&&fx_result("setup/readonly-bind",mount(path,path,NULL,MS_BIND,NULL),0)&&
-  fx_step("setup/readonly-remount-clock",fx_work(),0)&&fx_result("setup/readonly-remount",mount(NULL,path,NULL,MS_REMOUNT|MS_BIND|MS_RDONLY,NULL),0);
+ struct statvfs before,after;
+ struct mount_attr attributes=fx_readonly_attributes();
+ if(!fx_step("setup/readonly-bind-clock",fx_work(),0)||!fx_result("setup/readonly-bind",mount(path,path,NULL,MS_BIND,NULL),0)||
+  !fx_step("setup/readonly-before-flags-clock",fx_work(),0)||!fx_result("setup/readonly-before-flags",statvfs(path,&before),0))return 0;
+ fprintf(stderr,"native readonly path=%s before-flags=%lu attr-set=%llu attr-clear=%llu recursive=0\n",
+  path,before.f_flag,(unsigned long long)attributes.attr_set,(unsigned long long)attributes.attr_clr);
+ /* Keep the inherited mount's restrictions instead of replacing its flag
+  * set. Only this fixed new bind in the keeper's private namespace changes. */
+ if(!fx_step("setup/readonly-attribute-clock",fx_work(),0)||
+  !fx_result("setup/readonly-attribute",syscall(SYS_mount_setattr,AT_FDCWD,path,0,&attributes,sizeof attributes),0)||
+  !fx_step("setup/readonly-after-flags-clock",fx_work(),0)||!fx_result("setup/readonly-after-flags",statvfs(path,&after),0))return 0;
+ fprintf(stderr,"native readonly path=%s before-flags=%lu after-flags=%lu preserved=%d\n",
+  path,before.f_flag,after.f_flag,fx_readonly_flags_preserved(before.f_flag,after.f_flag));
+ return fx_step("setup/readonly-flags-preserved",fx_readonly_flags_preserved(before.f_flag,after.f_flag),0);
 }
 static void fx_keeper(const char *binary,int ready,int mapped,int prepared) {
  /* Parent installs exactly two singleton maps before mount setup. The new
