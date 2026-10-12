@@ -511,3 +511,36 @@ preserves the output value on refusal. Direct production-parser controls cover
 these cases. Existing descriptor/capability validation, original clocks and
 quotas remain unchanged. Source qualification cannot establish native success or cleanup;
 a new fixture still requires separate root admission.
+
+
+### Held-process census retirement source repair, 2026-10-12
+
+The separately admitted run `38213947377` observed all three additive read-only
+binds preserving their prior restrictions, then two cases and their two drains.
+It stopped at a retained-process observation with `ENOENT` for `/proc/12046`.
+The exact caller stack was not retained. Native exit, captured-byte total,
+remaining six cases, final controller drain and self-restoration remain UNKNOWN;
+this partial evidence does not establish eight-case success. Its distinct runner
+and known remote names remain held, alongside the two earlier failed native runs.
+
+The source repair permits census-only retirement of an already-held exact birth
+when the original retained pidfd has an accepted terminal poll event and a fresh
+independent read from the exact known cgroup excludes that PID. The event does
+not establish exit status or cause of termination. PID reuse, unknown first
+birth, live or invalid pidfd events, missing or denied descriptors, malformed
+process data and unavailable membership remain fatal. JOIN, CASE and sender
+admission retain their strict live-process gates. Actual owner wait and cleanup
+still require their separate witnesses. Bounded primitive, phase, role and birth
+diagnostics preserve the original exception and errno.
+
+After the original operation DRAIN has been validated and its acknowledgement
+sent, disappearance of that exact operation name during topology observation
+permits one reread. The retained parent and home identities must still match,
+and the fresh parent census must contain only home. Pre-DRAIN disappearance,
+foreign children, permission failures and failures reading an opened cgroup
+remain fatal. Name absence is never group-retirement evidence. The receipt
+records actual aggregate-drain observation separately from the contractual
+self-restoration description. Original deadlines, task/memory/CPU limits and
+capability ownership remain unchanged. The existing owner source-control block
+passes 171 injected checks; these mocked inputs establish source behavior only.
+Protected hosted qualification and any new native admission remain separate.
