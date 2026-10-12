@@ -219,13 +219,26 @@ static int number_equal(int fd,const char *name,uint64_t expected) {
  if(snprintf(e,sizeof e,"%llu\n",(unsigned long long)expected)<0)return 0;
  return read_at(fd,name,b,sizeof b)&&strcmp(b,e)==0;
 }
-static int populated(int fd,int *value) {
- char b[256],*p;
- if(!read_at(fd,"cgroup.events",b,sizeof b))return 0;
- p=strstr(b,"populated ");
- if(!p||p[10]!='\n'||(p[9]!='0'&&p[9]!='1'))return 0;
- *value=p[9]=='1';
+static int events_populated(const char *text,int *value) {
+ int parsed=-1;
+ if(!text||!value)return 0;
+ for(const char *line=text;*line;){
+  const char *end=strchr(line,'\n');
+  if(!end)return 0;
+  size_t size=(size_t)(end-line);
+  if(size>=10&&!memcmp(line,"populated ",10)){
+   if(parsed>=0||size!=11||(line[10]!='0'&&line[10]!='1'))return 0;
+   parsed=line[10]=='1';
+  }
+  line=end+1;
+ }
+ if(parsed<0)return 0;
+ *value=parsed;
  return 1;
+}
+static int populated(int fd,int *value) {
+ char b[256];
+ return read_at(fd,"cgroup.events",b,sizeof b)&&events_populated(b,value);
 }
 static int pidfd_alive(int fd) {
  struct pollfd p={fd,POLLIN,0};

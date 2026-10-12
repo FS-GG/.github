@@ -503,6 +503,11 @@ permits an additive read-only request with no cleared attributes. The fixed
 keeper now uses that request on each new bind, with no recursive change,
 propagation or ownership change, privilege fallback or remount fallback.
 Bounded flag readbacks require read-only and preservation of every prior flag;
-injected source controls reject lost restrictions. Original clocks and quotas
-remain unchanged. Source qualification cannot establish native success or cleanup;
+injected source controls reject lost restrictions. The production population
+reader also had a separate one-byte offset error: it rejected genuine
+`populated 0` and `populated 1` kernel records. Its shared parser now requires one
+complete Boolean population line, refuses duplicates and truncated records, and
+preserves the output value on refusal. Direct production-parser controls cover
+these cases. Existing descriptor/capability validation, original clocks and
+quotas remain unchanged. Source qualification cannot establish native success or cleanup;
 a new fixture still requires separate root admission.
