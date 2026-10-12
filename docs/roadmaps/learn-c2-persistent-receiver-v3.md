@@ -578,3 +578,41 @@ permission failures. The workflow selection tests corrupt each of its three
 inputs independently. These are nonprivileged source controls; exact hosted
 qualification, protected source correspondence and another root native admission
 remain separate.
+
+
+### Native case and caller failure diagnostics, 2026-10-12
+
+Run `38230597573` passed the normal and descendant client cases, then the denial
+client failed the combined zero-exit and retirement assertion. The controller
+observed three case drains, 43 captured bytes and actual self-restoration, but
+aggregate drain was not observed and cleanup remained UNKNOWN. The retained
+controller line did not expose the denial workload's exit code or signal, so
+its exact failed primitive remains unknown. The remaining five cases did not
+run. This original and its distinct runner, cgroup, storage, seal and source
+fixture remain held alongside the four earlier remote uncertainties. No
+provider terminal status releases those resources or admits a replay.
+
+Diagnostics now identify failed workload UID/GID, control-open, inherited-FD
+and write predicates without changing their return codes or order. Failed
+syscalls retain their actual errno; unexpected successful opens or live FDs
+are predicate failures with errno explicitly unknown. These failure-only
+messages enter the existing bounded stderr capture. Controller evidence also
+prints its already-measured leader exit code, signal and original client wait
+code/status. An exit code is interpreted only with its accompanying measured
+leader-exit flag; an observer terminal poll alone remains insufficient.
+
+The F# fixture preserves its ExitCode-first short circuit, evaluates HasExited
+at most once, and reports either that actual result or NOT_EVALUATED. On refusal,
+it retains up to 512 characters of the actually captured stderr as escaped JSON,
+with an explicit truncation flag, so workload-stage diagnostics survive the
+client assertion. Its
+nonprivileged controls reject live custody, retain the original read exception,
+and refuse to evaluate retirement after a nonzero exit. Direct C source
+controls exercise the same descriptor primitive with a real retained pipe FD
+and a missing FD. All eight case selections, their original budgets and
+allowances, capability ownership, client wait and cleanup predicates remain
+unchanged. These diagnostics do not establish the cause of the held failure.
+Hosted compiler/full source qualification remains required. Because the caller
+changed, the next exact protected-source correspondence must include
+`OciTests.fs` as a sixth leaf alongside the previous five leaves; any native
+successor still requires its own root review and effect admission.

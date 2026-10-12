@@ -452,7 +452,39 @@ let custodyAcknowledgments()=
 
 [<UnmanagedFunctionPointer(CallingConvention.Cdecl)>]
 type private AdapterControls=delegate of unit->int
+// Preserve the fixture's original ExitCode-first short circuit. The text
+// records only an actually evaluated HasExited predicate, never a guessed one.
+let private nativeRetirementPredicate exitCode hasExited=
+    if exitCode<>0 then false,"NOT_EVALUATED"
+    else
+        let actual=hasExited()
+        actual,(if actual then "true" else "false")
+
+let private nativeRetirementFailure kind exitCode observedRetirement (stderr:string)=
+    let text=if isNull stderr then "<NULL>" else stderr
+    let truncated=text.Length>512
+    let selected=if truncated then text.Substring(0,512) else text
+    $"native kernel retirement required case={kind} exit-code={exitCode} has-exited={observedRetirement} stderr-truncated={truncated} stderr-json={JsonSerializer.Serialize selected}"
+
 let custodyAdapterSourceControls()=
+    let mutable reads=0
+    let retired ()=reads<-reads+1;true
+    let nonzero,notObserved=nativeRetirementPredicate 96 (fun ()->failwith "nonzero exit evaluated retirement")
+    require(not nonzero&&notObserved="NOT_EVALUATED") "native nonzero preserves short-circuit evidence"
+    let live,observedLive=nativeRetirementPredicate 0 (fun ()->reads<-reads+1;false)
+    require(not live&&observedLive="false"&&reads=1) "native zero exit cannot credit live custody"
+    let accepted,observedRetired=nativeRetirementPredicate 0 retired
+    require(accepted&&observedRetired="true"&&reads=2) "native terminal predicate read once"
+    let mutable originalFailure=false
+    try nativeRetirementPredicate 0 (fun ()->raise(IOException "original retirement read failure"))|>ignore
+    with :? IOException as error->originalFailure<-error.Message="original retirement read failure"
+    require originalFailure "native retirement read failure must remain original"
+    let actualDiagnostic=nativeRetirementFailure "denial" 96 "NOT_EVALUATED" "native diagnostic stage=workload/denial-inherited-descriptor\n"
+    require(actualDiagnostic.Contains("workload/denial-inherited-descriptor")&&actualDiagnostic.Contains("\\n")&&not(actualDiagnostic.Contains("\n"))) "native captured failure is retained and escaped"
+    let boundedDiagnostic=nativeRetirementFailure "denial" 96 "NOT_EVALUATED" (String('x',1024))
+    require(boundedDiagnostic.Length<1024&&boundedDiagnostic.Contains("stderr-truncated=True")) "native failure text has independent bound"
+    require((nativeRetirementFailure "denial" 96 "NOT_EVALUATED" null).Contains("<NULL>")||
+            (nativeRetirementFailure "denial" 96 "NOT_EVALUATED" null).Contains("\\u003CNULL\\u003E")) "native null diagnostic cannot mask original refusal"
     let selected=Environment.GetEnvironmentVariable "FSGG_LEARN_CUSTODY_ADAPTER_TEST_LIBRARY"
     let selectedHash=Environment.GetEnvironmentVariable "FSGG_LEARN_CUSTODY_ADAPTER_TEST_LIBRARY_SHA256"
     require(not(String.IsNullOrWhiteSpace selected)&&Path.IsPathFullyQualified selected) "custody-adapter-source-library-required"
@@ -542,7 +574,8 @@ let custodyAdapterNativeFixture()=
                 require(output.Stdout="descendant-live\n"&&ownedProcess.HasExited) "native descendant cancellation/drain"
             else
                 let output=ownedProcess.Wait CancellationToken.None
-                require(output.ExitCode=0&&ownedProcess.HasExited) "native kernel retirement required"
+                let accepted,observedRetirement=nativeRetirementPredicate output.ExitCode (fun ()->ownedProcess.HasExited)
+                if not accepted then require false (nativeRetirementFailure kind output.ExitCode observedRetirement output.Stderr)
                 match kind with
                 | "normal"->require(output.Stdout="native-output\n"&&output.Stderr="native-error\n") "native actual captured output"
                 | "denial"->require(output.Stdout="controls-denied\n") "native control/descriptor deny probes"
