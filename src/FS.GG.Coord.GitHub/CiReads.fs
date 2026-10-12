@@ -1277,7 +1277,7 @@ module CiReads =
           Requests: int
           Gap: string option }
 
-    /// Read-only DTOs from the existing retained native graph parser; not authority or freshness receipts.
+    // Read-only DTOs from the existing retained native graph parser; not authority or freshness receipts.
     type RetainedSuiteWitness =
         { SuiteId: int64; AppId: int64; AppSlug: string option; Status: string; Conclusion: string option }
 
@@ -1727,8 +1727,8 @@ module CiReads =
                 }
             population
 
-    /// Validate every retained byte and the complete native graph, then expose only suite/check/page DTOs.
-    /// Performs no requests, writes, authority admission or fresh-provider observation.
+    // Validate every retained byte and the complete native graph, then expose only suite/check/page DTOs.
+    // Performs no requests, writes, authority admission or fresh-provider observation.
     let retainedSuiteGraph
         (expected: FS.GG.Coord.TelemetryCi.ProviderCheckpoint.Identity)
         (now: DateTimeOffset)
@@ -1759,9 +1759,9 @@ module CiReads =
                 |> List.sortBy (fun page -> page.Key.Kind, page.Key.SuiteId, page.Key.Page)
                 |> Ok
 
-    /// Resume one private checkpoint under one aggregate 40-GET/30-second allowance. All cached bodies
-    /// are parsed again before reuse; cache hits spend no native request. A partial result is progress,
-    /// never permission to emit full coverage. Persistence and receiver readback belong to C3.
+    // Resume one private checkpoint under one aggregate 40-GET/30-second allowance. All cached bodies
+    // are parsed again before reuse; cache hits spend no native request. A partial result is progress,
+    // never permission to emit full coverage. Persistence and receiver readback belong to C3.
     let resumePopulation
         (transport: IDeadlineSinglePageGitHubTransport)
         (expected: FS.GG.Coord.TelemetryCi.ProviderCheckpoint.Identity)

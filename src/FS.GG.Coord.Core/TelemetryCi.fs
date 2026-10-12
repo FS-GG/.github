@@ -286,7 +286,7 @@ module TelemetryCi =
 
             Some(sourceSeconds - (unionSeconds overlaps |> Option.defaultValue 0L))
 
-    /// Producer-private provider progress. It is not a receiver event or database ingest cursor.
+    // Producer-private provider progress. It is not a receiver event or database ingest cursor.
     module ProviderCheckpoint =
         type Identity =
             { Assignment: Assignment
@@ -426,8 +426,8 @@ module TelemetryCi =
                | Attempt -> key.SuiteId = 0L && key.RunId > 0L && key.Attempt > 0 && key.Page = 1
                | Jobs -> key.SuiteId = 0L && key.RunId > 0L && key.Attempt > 0
 
-        /// Fingerprint every retained resource, including its exact body and next-page topology.
-        /// Observation clocks are excluded so an unchanged re-read can match the prior sweep.
+        // Fingerprint every retained resource, including its exact body and next-page topology.
+        // Observation clocks are excluded so an unchanged re-read can match the prior sweep.
         let populationDigest (resources: Resource list) =
             resources
             |> List.sortBy _.Key
@@ -446,8 +446,8 @@ module TelemetryCi =
             |> utf8.GetBytes
             |> digest
 
-        /// Validate private state before any cache reuse. Provider bodies must additionally be re-parsed
-        /// by the provider adapter; a structurally valid checkpoint is never provider authority.
+        // Validate private state before any cache reuse. Provider bodies must additionally be re-parsed
+        // by the provider adapter; a structurally valid checkpoint is never provider authority.
         let private validateState (expected: Identity) (now: DateTimeOffset) (checkpoint: Checkpoint) =
             let errors = ResizeArray<string>()
             let refuse condition code = if not condition then errors.Add code
@@ -514,7 +514,7 @@ module TelemetryCi =
             try validateState expected now checkpoint
             with _ -> Error [ "checkpoint-malformed" ]
 
-        /// Pure sweep transitions operate on validated local state, without publishing receiver facts.
+        // Pure sweep transitions operate on validated local state, without publishing receiver facts.
         let beginSweep (checkpoint: Checkpoint) =
             if checkpoint.Phase = PublicationPending then Error [ "checkpoint-publication-readback-required" ]
             else
@@ -548,7 +548,7 @@ module TelemetryCi =
                 Ok { checkpoint with Phase = Acquiring; Cursor = 0; FirstSweepDigest = ""; SecondSweepDigest = "" }
             else Error [ "checkpoint-not-validating" ]
 
-        /// Revision advancement is logical and checked; provider timestamps never choose this value.
+        // Revision advancement is logical and checked; provider timestamps never choose this value.
         let nextRevision (prior: int64) (storeFloor: int64) =
             let floor = max prior storeFloor
             if prior < 0L || storeFloor < 0L || floor = Int64.MaxValue then Error [ "checkpoint-revision-exhausted" ]

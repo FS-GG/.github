@@ -160,13 +160,13 @@ module TelemetryStore =
           LaunchIntentSha256: string
           Admission: CausalAdmission }
 
-    /// Exact canonical receiver reference; the producer claim requires per-revision authenticated readback.
+    // Exact canonical receiver reference; the producer claim requires per-revision authenticated readback.
     type CiSuiteProofReference =
         { Identity: string
           Revision: int64
           Digest: string }
 
-    /// Immutable candidate, assignment and authenticated producer scope for one published graph generation.
+    // Immutable candidate, assignment and authenticated producer scope for one published graph generation.
     type CiSuiteProofScope =
         { CollectionId: string
           Generation: int64
@@ -198,7 +198,7 @@ module TelemetryStore =
         | SuiteInventoryRows of CiSuiteInventoryRow list
         | SuiteCheckMembershipRows of CiSuiteCheckMembershipRow list
 
-    /// One immutable fragment of an actual native page, including explicit zero-row evidence.
+    // One immutable fragment of an actual native page, including explicit zero-row evidence.
     type CiSuitePageProof =
         { Scope: CiSuiteProofScope
           SuiteId: int64 option
@@ -214,7 +214,7 @@ module TelemetryStore =
           RowOffset: int64
           Rows: CiSuitePageRows }
 
-    /// Final attestation; completeness is derived by the receiver from every referenced authenticated fact.
+    // Final attestation; completeness is derived by the receiver from every referenced authenticated fact.
     type CiSuiteSealProof =
         { Scope: CiSuiteProofScope
           AdmissionRef: CiSuiteProofReference
@@ -232,8 +232,8 @@ module TelemetryStore =
           ObservedFrom: string
           ObservedThrough: string }
 
-    /// Fingerprint the exact typed receiver graph. This is distinct from the private provider-resource digest.
-    /// Authentication, contiguous native-page membership and terminal completeness remain receiver predicates.
+    // Fingerprint the exact typed receiver graph. This is distinct from the private provider-resource digest.
+    // Authentication, contiguous native-page membership and terminal completeness remain receiver predicates.
     let ciSuiteGraphDigest (pages: CiSuitePageProof list) =
         let number (value: int64) = value.ToString(Globalization.CultureInfo.InvariantCulture)
         let optionNumber value =
@@ -586,8 +586,8 @@ module TelemetryStore =
             ContentDigest: string
         }
 
-    /// Join every immutable graph-part reference to its typed payload digest.
-    /// Receipt authentication is an independent receiver prerequisite.
+    // Join every immutable graph-part reference to its typed payload digest.
+    // Receipt authentication is an independent receiver prerequisite.
     let ciSuiteFactGraphDigest (facts: Fact list) =
         let pages =
             facts |> List.map (fun fact ->
@@ -604,8 +604,8 @@ module TelemetryStore =
                                     JsonSerializer.Serialize references |]
         |> Encoding.UTF8.GetBytes |> CanonicalJson.sha256
 
-    /// Validate the full current graph and exact fact references after authenticated receiver joins.
-    /// This pure check supplies no provider or receipt authenticity by itself.
+    // Validate the full current graph and exact fact references after authenticated receiver joins.
+    // This pure check supplies no provider or receipt authenticity by itself.
     let validateCiSuiteGraph (itemId: string) (seal: CiSuiteSealProof) (facts: Fact list) =
         try
             let require condition reason = if not condition then invalidOp reason

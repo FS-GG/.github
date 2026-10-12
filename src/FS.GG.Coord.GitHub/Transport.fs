@@ -71,7 +71,7 @@ module Transport =
     type ISinglePageGitHubTransport =
         abstract SendSingle: request: Request -> IoResult<Response>
 
-    /// One read page under the caller's remaining aggregate invocation allowance.
+    // One read page under the caller's remaining aggregate invocation allowance.
     type IDeadlineSinglePageGitHubTransport =
         abstract SendSingleWithin: request: Request * remaining: TimeSpan -> IoResult<Response>
 

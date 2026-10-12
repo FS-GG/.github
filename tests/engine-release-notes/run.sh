@@ -409,9 +409,9 @@ secondary_limit_occurrences() {
   (cd "$1" && grep -rn --exclude-dir=regression -- "$LIMIT" \
     scripts/ .github/workflows/ tests/ \
     | grep -v "^$holder:" \
-    | grep -v '^tests/engine-release-notes/run.sh:' \
-    | grep -v '^tests/kit-bump-shape/release-manifest-v0.91.4.json:' \
-    | grep -v '^tests/release-successor-recovery/original-0102-manifest.json:' || true)
+    | grep -v '^tests/engine-release-notes/run\.sh:' \
+    | grep -v '^tests/kit-bump-shape/release-manifest-v0\.91\.4\.json:' \
+    | grep -v '^tests/release-successor-recovery/original-0102-manifest\.json:' || true)
 }
 elsewhere="$(secondary_limit_occurrences "$ROOT")"
 if [ "$assignments" = "1" ] && [ -z "$elsewhere" ]; then
@@ -442,6 +442,14 @@ if grep -q '^tests/release-successor-recovery/adjacent-active-limit.json:' <<<"$
   ok "an adjacent JSON copy is not covered by the exact historical exemption"
 else
   bad "an adjacent JSON copy must fail the scan"
+fi
+printf '{"maxReleaseNotesCharacters":%s}\n' "$LIMIT" \
+  > "$scan_fixture/tests/release-successor-recovery/original-0102-manifestXjson"
+near_name_occurrences="$(secondary_limit_occurrences "$scan_fixture")"
+if grep -q '^tests/release-successor-recovery/original-0102-manifestXjson:' <<<"$near_name_occurrences"; then
+  ok "a near-name historical manifest is not exempted by regex punctuation"
+else
+  bad "a near-name historical manifest must fail the scan"
 fi
 printf 'NUGET_ORG_RELEASE_NOTES_LIMIT = %s\n' "$LIMIT" \
   > "$scan_fixture/scripts/duplicate-release-limit.py"
