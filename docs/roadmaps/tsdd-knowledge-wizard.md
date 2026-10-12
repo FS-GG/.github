@@ -1,5 +1,10 @@
 # TSDD knowledge Wizard bootstrap
 
+For remaining successor receiver work, use the compatible
+[v3 shared qualification cohort](2026-10-07-unified-development-roadmap-v3.md#11-selected-simplifications--2026-10-12)
+with separate assertions for this outcome. Historical release evidence and completed milestones keep their
+original scope; the shared cohort neither reopens them nor accepts a later package/default by inheritance.
+
 Item: `TSDD-KNOWLEDGE-01.4`. Accountable owner: Wizard/bootstrap lane; integrator: Unified roadmap root. Source candidate only; public activation remains pending.
 
 The Wizard requires an actual stable SDD producer at least 2.1.0 for `typed-sdd`, records its exact version in a root local tool manifest, and checks the generated knowledge store before the first-agent handoff. Rendering app and game creation composes the central Workspace.Template 0.18.0 knowledge overlay without changing the original Rendering archive. The caller retains ownership of the ordinary initial Git commit.

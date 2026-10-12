@@ -1,5 +1,10 @@
 # SVG-RELEASE-D — complete workspace publication and activation
 
+For remaining successor receiver work, use the compatible
+[v3 shared qualification cohort](2026-10-07-unified-development-roadmap-v3.md#11-selected-simplifications--2026-10-12)
+with separate assertions for this outcome. Historical release evidence and completed milestones keep their
+original scope; the shared cohort neither reopens them nor accepts a later package/default by inheritance.
+
 Status: complete through .5 on 2026-09-28 after public clean-creation acceptance, protected pin activation
 and independent default readback under [ADR-0091](../adr/0091-speed-first-clean-v2-start.md). Route: protected operation
 for immutable publication; routine source delivery with required checks for default adoption. Durable public

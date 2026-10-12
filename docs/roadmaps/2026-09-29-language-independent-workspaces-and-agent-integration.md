@@ -153,6 +153,15 @@ cancellation, duplicate delivery and recovery. Include an unsupported-toolchain 
 non-.NET product environment that uses the distributed integration tooling without a .NET SDK or
 product-library dependency. Record any tooling runtime requirement explicitly.
 
+Selected simplification, 2026-10-12: factor the selected matrix by the actual enforcing runtime/profile.
+Run its common cancellation, duplicate-delivery and restart/cleanup conformance once on exact shared
+artifacts, then every selected language's real entrypoint, toolchain/serialization path and distinct
+failure modes. Reuse only where the implementation, limits and relevant inputs match; a language-specific
+launcher, adapter or cleanup path needs its own affected cases. Retain the selected mixed-component and
+no-.NET product-environment journeys. This reduces repeated common tests, not the TypeScript/Rust/Go
+population or installed/publication requirements. Record the case-to-profile/language mapping in the
+existing matrix and invalidate affected reuse when shared code or profiles change. Required CI remains.
+
 ### Current source and native evidence
 
 Source delivery and native qualification are separate gates:
