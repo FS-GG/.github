@@ -130,16 +130,15 @@ bytes under 0.52.0 would make the same version identify different artifacts. Ado
 coherent set cut from corrected source. All three partial sets are recorded in
 `registry/dependencies.yml`.</FsggStandingAdvisories>
 
-    <PackageReleaseNotes>0.102.0 — SDK-installed telemetry engine identity pairing.
+    <PackageReleaseNotes>0.103.0 — Authenticated bounded CI continuation and receiver suite graphs.
 
-The telemetry adapter recognizes the configured engine when it resolves to the running
-SDK-installed executable and independently binds its actual entry assembly. Other
-executables retain the adjacent-assembly route. Exact executable and assembly hashes,
-movement checks and typed rejection proofs remain required; a byte-identical foreign
-executable does not inherit the running engine's identity.
-No Store schema, protocol or pending-input rewrite is introduced. Published0.101
-archives remain immutable. Source qualification alone establishes no successor package
-publication, installed adoption or original operational recovery.
+The telemetry receiver proves exact executable and entry-assembly identity before
+accepting bounded provider continuation. Authenticated suite graphs retain exact
+applied-fact references and reject foreign, moved or mismatched receiver identities.
+This coherent source candidate advances the ordinary release rail while keeping
+original0.102 operational recovery pinned to its immutable candidate and journal.
+No Store schema, protocol or pending-input rewrite is introduced. Source qualification
+alone establishes no package publication, installed adoption or operational recovery.
 
 $(FsggStandingAdvisories)
 

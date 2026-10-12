@@ -1603,11 +1603,18 @@ class OriginalRuntimeRecoveryControls(unittest.TestCase):
 
 
 class SelectedReleaseBindingTests(unittest.TestCase):
-    def test_new_ordinary_cut_has_102_101_and_distinct20(self):
+    def test_new_ordinary_cut_has_103_102_and_distinct21(self):
         args = types.SimpleNamespace(recovery_checkpoint=False, repeat_original_nuget_kit_intent=False,
                                      recover_original_runtime_intent=False)
         self.assertEqual(publisher.selected_release_binding(args),
+                         ("0.103.0", "0.102.0", "refs/heads/fsgg/v2/journal/release/utel-rel-21"))
+
+    def test_original_102_checkpoint_retains_consumed20_after_ordinary_cut_moves(self):
+        args = types.SimpleNamespace(recover_original_successor_checkpoint=True)
+        self.assertEqual(publisher.selected_release_binding(args),
                          ("0.102.0", "0.101.0", "refs/heads/fsgg/v2/journal/release/utel-rel-20"))
+        self.assertNotEqual(publisher.ORIGINAL_SUCCESSOR_REF, publisher.SUCCESSOR_REF)
+        self.assertNotEqual(publisher.ORIGINAL_SUCCESSOR_VERSION, publisher.SUCCESSOR_VERSION)
 
     def test_every_explicit_original_profile_retains_101_100_and19(self):
         for selected in ("recovery_checkpoint", "repeat_original_nuget_kit_intent", "recover_original_runtime_intent"):
@@ -1623,17 +1630,17 @@ class PublicationReliabilityControls(unittest.TestCase):
     def context(self, generation=21, ordinary=False):
         candidate = json.loads((pathlib.Path(__file__).parent / "original-0102-manifest.json").read_bytes())
         candidate, authority, intent, _ = fixture(generation, candidate,
-                    publisher.SUCCESSOR_CHECKPOINT_CANDIDATE["archiveSha256"], publisher.SUCCESSOR_REF)
+                    publisher.SUCCESSOR_CHECKPOINT_CANDIDATE["archiveSha256"], publisher.ORIGINAL_SUCCESSOR_REF)
         counter = publisher.CountedAuthorityAPI(authority,
                     ceiling=publisher.ORDINARY_AUTHORITY_CALL_CEILING,
                     quota_floor=publisher.ORDINARY_AUTHORITY_QUOTA_FLOOR)
         counter.admit_quota(now=1900000000)
         rows = report()
-        journal = publisher.ReportingJournal(ProtectedReleaseJournal(counter, ref=publisher.SUCCESSOR_REF, main_directory=True), rows, detailed=True)
+        journal = publisher.ReportingJournal(ProtectedReleaseJournal(counter, ref=publisher.ORIGINAL_SUCCESSOR_REF, main_directory=True), rows, detailed=True)
         api = MemoryPublisher();api.head = candidate["descriptor"]["sourceSha"]
         provider = MemoryProvider(ordered_effects(candidate), {})
         admission = publisher.ProtectedPublisherAdmission(
-            SingleOperatorAdmission(api, candidate, api.head, 1, "EHotwagner", "refs/heads/main"), counter, publisher.SUCCESSOR_REF)
+            SingleOperatorAdmission(api, candidate, api.head, 1, "EHotwagner", "refs/heads/main"), counter, publisher.ORIGINAL_SUCCESSOR_REF)
         publisher.prepare_release_journal(journal, counter, admission, provider, api, candidate, intent,
                                          api.head, api.head, False, lambda: None, recovery_checkpoint=not ordinary)
         journal.capture()
@@ -1673,10 +1680,12 @@ class PublicationReliabilityControls(unittest.TestCase):
             self.assertEqual(n.attempted["patch"],0)
 
     def test_original_candidate_and_journal_mismatch_refuse(self):
-        for target in ("content", "ref"):
+        for target in ("content", "ref", "ordinary-ref", "ordinary-version"):
             c,a,n,r,j,ad,p,e=self.context()
             if target=="content":c=copy.deepcopy(c);c["contentId"]="sha256:"+"0"*64
-            else:j.journal.ref=REF
+            elif target=="ref":j.journal.ref=REF
+            elif target=="ordinary-ref":j.journal.ref=publisher.SUCCESSOR_REF
+            else:c=copy.deepcopy(c);c["descriptor"]["version"]=publisher.SUCCESSOR_VERSION
             with self.assertRaises(publisher.Refused):publisher.validate_successor_checkpoint(c,j,e)
             self.assertEqual(p.dispatched,[])
 
@@ -1736,13 +1745,13 @@ class PublicationReliabilityControls(unittest.TestCase):
 
     def test_fresh_journal_preparation_uses_original_mutation_deadline(self):
         candidate=json.loads((pathlib.Path(__file__).parent/'original-0102-manifest.json').read_bytes())
-        a=MemoryAuthority(ref=publisher.SUCCESSOR_REF)
+        a=MemoryAuthority(ref=publisher.ORIGINAL_SUCCESSOR_REF)
         n=publisher.CountedAuthorityAPI(a,ceiling=1500,quota_floor=1800);n.admit_quota(now=1900000000)
         now=[0];n.api=publisher.RuntimeDeadlineAuthority(n.api,10,lambda:now[0])
-        r=report();j=publisher.ReportingJournal(ProtectedReleaseJournal(n,ref=publisher.SUCCESSOR_REF,main_directory=True),r)
+        r=report();j=publisher.ReportingJournal(ProtectedReleaseJournal(n,ref=publisher.ORIGINAL_SUCCESSOR_REF,main_directory=True),r)
         api=MemoryPublisher();api.head=candidate['descriptor']['sourceSha']
         p=MemoryProvider(ordered_effects(candidate),{});p._release=lambda:None
-        composite=publisher.ProtectedPublisherAdmission(SingleOperatorAdmission(api,candidate,api.head,1,'EHotwagner','refs/heads/main'),n,publisher.SUCCESSOR_REF)
+        composite=publisher.ProtectedPublisherAdmission(SingleOperatorAdmission(api,candidate,api.head,1,'EHotwagner','refs/heads/main'),n,publisher.ORIGINAL_SUCCESSOR_REF)
         ad=publisher.RuntimeDeadlineAdmission(composite,10,lambda:now[0])
         intent={'contentId':candidate['contentId'],'sourceSha':api.head,'version':'0.102.0','candidateArchiveSha256':publisher.SUCCESSOR_CHECKPOINT_CANDIDATE['archiveSha256'],'operator':'EHotwagner'}
         def uniqueness():now[0]=10
