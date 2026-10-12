@@ -496,6 +496,65 @@ check(j.operation_topology_reread_used and not j.operation_topology_reread_obser
 j=census_fixture();j.joined=True;j.case=1;j.case_drains=[0,1];j.first=None;j.first_context=None;j.messages=5;j.last_memory=0
 check(j.report()['aggregateDrainObserved'] is False)
 j.aggregate_drained=True;check(j.report()['aggregateDrainObserved'] is True)
+# Execute the actual assembled native/preflight loader prefixes only. Stop
+# before module execution, mkdir, sealing, subprocess or privileged work.
+import ast,copy,textwrap
+shell=path.parents[1]/'run.sh';shell_text=shell.read_text()
+native_text=shell_text.split("<<'PY_NATIVE'\n",1)[1].split('\nPY_NATIVE',1)[0]
+def prefix_tree(text):
+    tree=ast.parse(text);stop=next(i for i,node in enumerate(tree.body) if isinstance(node,ast.Assign) and any(isinstance(t,ast.Name) and t.id=='runner' for t in node.targets))
+    return ast.Module(body=tree.body[:stop],type_ignores=[])
+native_prefix=prefix_tree(native_text)
+repo=path.parents[3]
+workflow=(repo/'.github/workflows/telemetry-host-package.yml').read_text()
+start=workflow.index('          import hashlib, json, os, pathlib, time\n          inputs=')
+end=workflow.index("          runner={'__name__':",start)
+preflight_prefix=ast.parse(textwrap.dedent(workflow[start:end]))
+def prefix_run(tree,workspace):
+    with patch.dict(os.environ,{'GITHUB_WORKSPACE':str(workspace)}),patch.object(sys,'argv',['native-prefix','fixed-controller','fixed-assemblies']):
+        namespace={};exec(compile(ast.fix_missing_locations(tree),'<actual-loader-prefix>','exec'),namespace)
+    return namespace
+native_selected=prefix_run(copy.deepcopy(native_prefix),repo)
+check(native_selected['runner_source']==source and native_selected['runner_size']==len(source))
+preflight_selected=prefix_run(copy.deepcopy(preflight_prefix),repo)
+check(preflight_selected['selected']['runner']==source and set(preflight_selected['selected'])=={'literal','parser','runner'})
+def native_fixture(payload,declared=None,missing=False):
+    with tempfile.TemporaryDirectory() as temporary:
+        workspace=pathlib.Path(temporary);target=workspace/'tests/telemetry-collector-persistent-v3-image-closure/native-preflight/owned_install_guards.py';target.parent.mkdir(parents=True)
+        if not missing:target.write_bytes(payload)
+        tree=copy.deepcopy(native_prefix)
+        if declared is not None:
+            for node in tree.body:
+                if isinstance(node,ast.Assign) and any(isinstance(t,ast.Name) and t.id=='runner_size' for t in node.targets):node.value=ast.Constant(declared)
+        return prefix_run(tree,workspace)
+for payload in [source[:-1],source+b'x',source+b'x'*65536,bytes([source[0]^1])+source[1:]]:
+    refused(lambda:native_fixture(payload),'component-maintained-owner-input-refused')
+for declared in [0,-1,65537,True,'48966']:
+    refused(lambda:native_fixture(source,declared),'component-maintained-owner-size-bound')
+refused(lambda:native_fixture(source,37928),'component-maintained-owner-input-refused')
+refused_io(lambda:native_fixture(source,missing=True),FileNotFoundError,2)
+with patch.object(pathlib.Path,'open',side_effect=PermissionError(13,'selected owner denied')):
+    refused_io(lambda:prefix_run(copy.deepcopy(native_prefix),repo),PermissionError,13)
+# Actual dormant preflight selection validates all three declared sources;
+# corrupt each one independently, leaving all other selected leaves exact.
+inputs=preflight_selected['inputs']
+for name in inputs:
+    for mutation in ['short','long','digest','missing']:
+        with tempfile.TemporaryDirectory() as temporary:
+            workspace=pathlib.Path(temporary)
+            for role,row_input in inputs.items():
+                target=workspace/row_input['path'];target.parent.mkdir(parents=True,exist_ok=True);payload=(repo/row_input['path']).read_bytes()
+                if role==name:
+                    if mutation=='missing':continue
+                    if mutation=='short':payload=payload[:-1]
+                    elif mutation=='long':payload+=b'x'
+                    else:payload=bytes([payload[0]^1])+payload[1:]
+                target.write_bytes(payload)
+            if mutation=='missing':refused_io(lambda:prefix_run(copy.deepcopy(preflight_prefix),workspace),FileNotFoundError,2)
+            else:refused(lambda:prefix_run(copy.deepcopy(preflight_prefix),workspace),'observation-input-byte-selection:'+name)
+# Prefix completion never executes or adopts the selected owner, nor creates
+# a native output directory. The real source guards below remain separate.
+check('runner' not in native_selected and 'destination' not in native_selected and 'runner' not in preflight_selected)
 print('custody owner source-controls='+str(count)+' native=NOT_RUN mocked-kernel-inputs=true')
 PY_OWNER_SOURCE
 custody_source_started=true
@@ -543,8 +602,11 @@ def original_work():
 controller=pathlib.Path(sys.argv[1]); assemblies=pathlib.Path(sys.argv[2])
 workspace=pathlib.Path(os.environ['GITHUB_WORKSPACE'])
 runner_path=workspace/'tests/telemetry-collector-persistent-v3-image-closure/native-preflight/owned_install_guards.py'
-with runner_path.open('rb') as stream: runner_source=stream.read(37929)
-if len(runner_source)!=48966 or hashlib.sha256(runner_source).hexdigest()!='1fdc52b0985b6ad374ae9d0c74b1e85abc2930f2f431416b3b49681294e8772d':
+runner_size=48966
+if type(runner_size) is not int or not 0<runner_size<=65536:
+    raise RuntimeError('component-maintained-owner-size-bound')
+with runner_path.open('rb') as stream: runner_source=stream.read(runner_size+1)
+if len(runner_source)!=runner_size or hashlib.sha256(runner_source).hexdigest()!='1fdc52b0985b6ad374ae9d0c74b1e85abc2930f2f431416b3b49681294e8772d':
     raise RuntimeError('component-maintained-owner-input-refused')
 runner={'__name__':'accepted_owner_runner_inner_join'}
 exec(compile(runner_source,'<accepted-owner-runner-inner-join>','exec'),runner)
