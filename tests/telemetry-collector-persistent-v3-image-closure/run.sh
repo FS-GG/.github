@@ -56,7 +56,7 @@ custody_tests="$repo_root/tests/telemetry-collector-persistent-v3-image-closure/
 # complete descendant retirement; timeout alone supplies no custody acceptance.
 # The maintained owner predicates below run only against mocked kernel and
 # child inputs. They qualify source semantics, never process/cgroup custody.
-/usr/bin/timeout --kill-after=5s 15s /usr/bin/python3 -I -S - "$repo_root/tests/telemetry-collector-persistent-v3-image-closure/native-preflight/owned_install_guards.py" 1fdc52b0985b6ad374ae9d0c74b1e85abc2930f2f431416b3b49681294e8772d <<'PY_OWNER_SOURCE'
+/usr/bin/timeout --kill-after=5s 15s /usr/bin/python3 -I -S - "$repo_root/tests/telemetry-collector-persistent-v3-image-closure/native-preflight/owned_install_guards.py" 554a196be2687fb1c0040c13d5f51e59138510e8248b948f8c66b76625fc5012 <<'PY_OWNER_SOURCE'
 # Existing source qualification only: actual methods, mocked kernel/process inputs.
 import array,hashlib,json,os,pathlib,socket,struct,sys,tempfile,time,types
 from unittest.mock import patch
@@ -77,6 +77,72 @@ def refused(call,reason):
     except (RuntimeError,TimeoutError) as e:check(reason in str(e))
     else:raise AssertionError('expected '+reason)
 
+# Root-selected all-thread resource predicates: causal mocked controls, no native effects.
+resource_row={'pid':42,'tid':43,'processStart':100,'threadStart':101,'uid':1000,'exeSha256':'a'*64,'cgroup':'0::/runtime\n','affinity':[0,1,2]}
+resource_row['credentials']=m.resource_credentials(b'Uid: 1000 1000 1000 1000\nGid: 1000 1000 1000 1000\nGroups: 1000\nCapInh: 0\nCapPrm: 0\nCapEff: 0\nCapBnd: 0\nCapAmb: 0\nNoNewPrivs: 0\nSeccomp: 2\n')
+resource_profile={'cpu':1,'ambient':[],'heldBirths':[],'excludedCpus':[0,2,6,8,9,12,13,14,15,19,20,21,22,23],'rootAuthenticated':True}
+resource_admission={'startedAtEpoch':100,'absoluteDeadline':700,'launchBeforeEpoch':160,'originalMonotonicDeadline':1000}
+def resources(profile=resource_profile,rows=None,wall=110,mono=900):
+    return m.admit_thread_resources(profile,resource_admission,census_reader=lambda:[resource_row] if rows is None else rows,clock=lambda:mono,wall=lambda:wall)
+refused(lambda:resources(),'unadmitted-affinity-intersections')
+refused(lambda:resources(dict(resource_profile,rootAuthenticated=False)),'root-selection')
+refused(lambda:resources(dict(resource_profile,cpu=0)),'held-cpu')
+refused(lambda:resources(wall=160),'original-deadline')
+refused(lambda:resources(mono=1000),'original-deadline')
+refused(lambda:resources(rows=[]),'population-bound')
+refused(lambda:resources(rows=[resource_row,resource_row]),'affinity-shape')
+refused(lambda:resources(dict(resource_profile,heldBirths=[{'pid':42,'processStart':100}])),'held-birth-intersects')
+with tempfile.TemporaryDirectory() as temporary:
+    provenance=pathlib.Path(temporary)/'root-selected-input';provenance.write_bytes(b'independently reviewed root input')
+    selected={k:v for k,v in resource_row.items() if k not in ['affinity','credentials']}
+    selected['provenance']={'path':str(provenance),'bytes':provenance.stat().st_size,'sha256':hashlib.sha256(provenance.read_bytes()).hexdigest()}
+    profile=dict(resource_profile,ambient=[selected])
+    result=resources(profile);check(result['sharedAmbient']==[resource_row] and result['cpuExclusive'] is False and result['effectGranted'] is False)
+    check(resources(dict(profile,cpu=0,excludedCpus=[]))['cpuExclusive'] is False) # Shared helper has no programme-global CPU assumption.
+    for field,value in [('threadStart',102),('processStart',102),('uid',0),('exeSha256','b'*64),('cgroup','0::/other\n')]:
+        refused(lambda:resources(profile,rows=[dict(resource_row,**{field:value},credentials=({**resource_row['credentials'],'Uid':('1000',str(value),'1000','1000')} if field=='uid' else resource_row['credentials']))]),'unadmitted-affinity-intersections')
+    check(resources(profile,rows=[dict(resource_row,affinity=[1])])['cpuExclusive'] is False)
+    refused(lambda:resources(profile,rows=[resource_row,dict(resource_row,pid=55,tid=56)]),'unadmitted-affinity-intersections')
+    sequence=iter([[resource_row],[dict(resource_row,affinity=[1])]])
+    refused(lambda:m.admit_thread_resources(profile,resource_admission,census_reader=lambda:next(sequence),clock=lambda:900,wall=lambda:110),'census-unstable')
+    sequence=iter([[resource_row],[dict(resource_row,credentials={**resource_row['credentials'],'Uid':('1001','1000','1000','1000')})]])
+    refused(lambda:m.admit_thread_resources(profile,resource_admission,census_reader=lambda:next(sequence),clock=lambda:900,wall=lambda:110),'census-unstable')
+    provenance.write_bytes(b'changed')
+    refused(lambda:resources(profile),'provenance-extent')
+# Exercise the actual census against status-counter churn, not a duplicate predicate.
+import io
+credential_status=b'Uid:\t1000 1000 1000 1000\nGid:\t1000 1000 1000 1000\nGroups:\t1000\nCapInh:\t0\nCapPrm:\t0\nCapEff:\t0\nCapBnd:\t0\nCapAmb:\t0\nNoNewPrivs:\t0\nSeccomp:\t2\n'
+class ResourceStream(io.BytesIO):
+    def fileno(self):return 777
+metadata=types.SimpleNamespace(st_dev=1,st_ino=2,st_size=3,st_mtime_ns=4,st_ctime_ns=5,st_mode=0o100444)
+def census_fixture(change_uid=False,oversize=False):
+    reads={'task':0,'counter':0};events=[]
+    def listing(path):
+        if str(path)=='/proc':return iter([pathlib.Path('/proc/42')])
+        if str(path)=='/proc/42/task':return iter([pathlib.Path('/proc/42/task/43')])
+        raise AssertionError('unexpected population')
+    def birth(pid,tid=None):
+        if tid is not None:events.append('birth')
+        return {'pid':pid,'tid':pid if tid is None else tid,'start':100 if tid is None else 101,'ppid':30,'pgid':42,'sid':42}
+    def opening(path,*a,**k):
+        if path.name=='exe':return ResourceStream(b'abc')
+        if path.name=='cgroup':return ResourceStream(b'0::/runtime\n')
+        if path.name=='status':
+            reads['counter']+=1;body=credential_status
+            if '/task/' in str(path):
+                events.append('status');reads['task']+=1
+                if change_uid and reads['task']==2:body=body.replace(b'1000 1000 1000 1000',b'1000 1001 1000 1000',1)
+            return ResourceStream(body+b'VmRSS:\t'+str(reads['counter']).encode()+b' kB\nvoluntary_ctxt_switches:\t'+str(reads['counter']).encode()+b'\n')
+        raise AssertionError('unexpected read '+str(path))
+    selected=metadata if not oversize else types.SimpleNamespace(**dict(vars(metadata),st_size=536870913))
+    with patch.object(pathlib.Path,'iterdir',listing),patch.object(pathlib.Path,'open',opening),patch.object(m,'resource_birth',birth),patch.object(m.os,'fstat',return_value=selected),patch.object(m.os,'stat',return_value=selected),patch.object(m.os,'sched_getaffinity',return_value={0,1,2}):
+        result=m.resource_thread_census(1000,clock=lambda:900)
+    check(events.index('birth')<events.index('status'))
+    return result
+check(census_fixture()==[dict(resource_row,exeSha256=hashlib.sha256(b'abc').hexdigest())])
+refused(lambda:census_fixture(change_uid=True),'thread-drift')
+refused(lambda:census_fixture(oversize=True),'executable-bound')
+# Birth/source/provenance matches cannot authenticate an unrelated broad-affinity process.
 row={'pid':42,'start':100,'state':'S','rss':4096,'ppid':30,'pgid':42}
 check(m.inner_live_join(row,row,True,True,True)==row)
 for before,after,a,b,member,reason in [(None,row,True,True,True,'unavailable'),(row,None,True,True,True,'unavailable'),(row,row,False,True,True,'unavailable'),(row,row,True,False,True,'unavailable'),(dict(row,state='Z'),row,True,True,True,'zombie'),(row,dict(row,start=101),True,True,True,'changed'),(row,row,True,True,False,'unjoined')]:
@@ -529,7 +595,7 @@ def native_fixture(payload,declared=None,missing=False):
         return prefix_run(tree,workspace)
 for payload in [source[:-1],source+b'x',source+b'x'*65536,bytes([source[0]^1])+source[1:]]:
     refused(lambda:native_fixture(payload),'component-maintained-owner-input-refused')
-for declared in [0,-1,65537,True,'48966']:
+for declared in [0,-1,65537,True,'61187']:
     refused(lambda:native_fixture(source,declared),'component-maintained-owner-size-bound')
 refused(lambda:native_fixture(source,37928),'component-maintained-owner-input-refused')
 refused_io(lambda:native_fixture(source,missing=True),FileNotFoundError,2)
@@ -602,11 +668,11 @@ def original_work():
 controller=pathlib.Path(sys.argv[1]); assemblies=pathlib.Path(sys.argv[2])
 workspace=pathlib.Path(os.environ['GITHUB_WORKSPACE'])
 runner_path=workspace/'tests/telemetry-collector-persistent-v3-image-closure/native-preflight/owned_install_guards.py'
-runner_size=48966
+runner_size=61187
 if type(runner_size) is not int or not 0<runner_size<=65536:
     raise RuntimeError('component-maintained-owner-size-bound')
 with runner_path.open('rb') as stream: runner_source=stream.read(runner_size+1)
-if len(runner_source)!=runner_size or hashlib.sha256(runner_source).hexdigest()!='1fdc52b0985b6ad374ae9d0c74b1e85abc2930f2f431416b3b49681294e8772d':
+if len(runner_source)!=runner_size or hashlib.sha256(runner_source).hexdigest()!='554a196be2687fb1c0040c13d5f51e59138510e8248b948f8c66b76625fc5012':
     raise RuntimeError('component-maintained-owner-input-refused')
 runner={'__name__':'accepted_owner_runner_inner_join'}
 exec(compile(runner_source,'<accepted-owner-runner-inner-join>','exec'),runner)

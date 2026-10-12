@@ -5,6 +5,168 @@ Sampled RSS/disk are stops, not hard containment. Unknown birth never licenses a
 """
 import hashlib, json, os, pathlib, signal, subprocess, time
 import array, errno, fcntl, select, socket, stat, struct
+import math
+
+def resource_birth(pid, tid=None):
+    """Read an exact kernel birth; disappearance is uncertainty, never zero load."""
+    path=pathlib.Path('/proc',str(pid))
+    if tid is not None:path=path/'task'/str(tid)
+    text=(path/'stat').read_text(); fields=text[text.rindex(')')+2:].split()
+    if int(text.split(' ',1)[0])!=(pid if tid is None else tid):raise RuntimeError('resource-birth-identity')
+    return {'pid':pid,'tid':pid if tid is None else tid,'start':int(fields[19]),
+            'ppid':int(fields[1]),'pgid':int(fields[2]),'sid':int(fields[3])}
+
+def resource_credentials(raw):
+    # Status counters/RSS/scheduling diagnostics are not credential identity.
+    names={'Uid','Gid','Groups','CapInh','CapPrm','CapEff','CapBnd','CapAmb','NoNewPrivs','Seccomp','Seccomp_filters'}
+    fields={}
+    for line in raw.decode().splitlines():
+        name,separator,value=line.partition(':')
+        if separator and name in names:
+            if name in fields:raise RuntimeError('resource-credential-duplicate')
+            fields[name]=tuple(value.split())
+    if not names-{'Seccomp_filters'}<=set(fields):raise RuntimeError('resource-credential-fields')
+    for name in ['Uid','Gid']:
+        if len(fields[name])!=4 or any(not v.isdecimal() for v in fields[name]):raise RuntimeError('resource-credential-ids')
+    return fields
+
+def resource_thread_census(deadline, clock=time.monotonic):
+    """Stable bounded all-thread observation, without scheduling or ambient exemptions."""
+    def live():
+        if clock()>=deadline:raise TimeoutError('resource-census-original-deadline')
+    def population():
+        live(); result=[]
+        for path in pathlib.Path('/proc').iterdir():
+            if path.name.isdigit():
+                for task in (path/'task').iterdir():
+                    if task.name.isdigit():result.append((int(path.name),int(task.name)))
+        if not result or len(result)>4096:raise RuntimeError('resource-census-population-bound')
+        return sorted(result)
+    def bounded(path,maximum):
+        with path.open('rb') as stream:body=stream.read(maximum+1)
+        if len(body)>maximum:raise RuntimeError('resource-proc-read-bound')
+        return body
+    initial=population(); processes={}; rows=[]; exe_cache={}
+    for pid,tid in initial:
+        live()
+        if pid not in processes:
+            before=resource_birth(pid); root=pathlib.Path('/proc',str(pid))
+            credentials=resource_credentials(bounded(root/'status',65536))
+            cgroup=bounded(root/'cgroup',65536)
+            if not cgroup or len(cgroup)>65536:raise RuntimeError('resource-census-cgroup-bound')
+            with (root/'exe').open('rb') as stream:
+                metadata=os.fstat(stream.fileno())
+                identity=(metadata.st_dev,metadata.st_ino,metadata.st_size,metadata.st_mtime_ns,metadata.st_ctime_ns)
+                if not stat.S_ISREG(metadata.st_mode) or not 0<metadata.st_size<=536870912:raise RuntimeError('resource-census-executable-bound')
+                if identity not in exe_cache:
+                    digest=hashlib.sha256();extent=0
+                    while True:
+                        live();body=stream.read(65536)
+                        if not body:break
+                        extent+=len(body)
+                        if extent>metadata.st_size:raise RuntimeError('resource-census-executable-extent')
+                        digest.update(body)
+                    if extent!=metadata.st_size:raise RuntimeError('resource-census-executable-extent')
+                    exe_cache[identity]=digest.hexdigest()
+                after=os.fstat(stream.fileno())
+                if identity!=(after.st_dev,after.st_ino,after.st_size,after.st_mtime_ns,after.st_ctime_ns):raise RuntimeError('resource-census-executable-drift')
+            if resource_birth(pid)!=before or bounded(root/'cgroup',65536)!=cgroup or resource_credentials(bounded(root/'status',65536))!=credentials:raise RuntimeError('resource-census-process-drift')
+            current=os.stat(root/'exe')
+            if identity!=(current.st_dev,current.st_ino,current.st_size,current.st_mtime_ns,current.st_ctime_ns):raise RuntimeError('resource-census-executable-replaced')
+            processes[pid]=(before,int(credentials['Uid'][1]),exe_cache[identity],cgroup.decode('utf-8'))
+        leader,uid,exe,cgroup=processes[pid]
+        task=pathlib.Path('/proc',str(pid),'task',str(tid))
+        before=resource_birth(pid,tid)
+        credentials=resource_credentials(bounded(task/'status',65536));task_group=bounded(task/'cgroup',65536)
+        if not task_group:raise RuntimeError('resource-thread-cgroup-shape')
+        uid=int(credentials['Uid'][1]);cgroup=task_group.decode()
+        affinity=sorted(os.sched_getaffinity(tid))
+        if not affinity or resource_birth(pid,tid)!=before or sorted(os.sched_getaffinity(tid))!=affinity or resource_birth(pid)!=leader or resource_credentials(bounded(task/'status',65536))!=credentials or bounded(task/'cgroup',65536)!=task_group:raise RuntimeError('resource-census-thread-drift')
+        rows.append({'pid':pid,'tid':tid,'processStart':leader['start'],'threadStart':before['start'],
+                     'uid':uid,'exeSha256':exe,'cgroup':cgroup,'affinity':affinity,'credentials':credentials})
+    if population()!=initial:raise RuntimeError('resource-census-population-drift')
+    live();return rows
+
+def admit_thread_resources(profile, admission, *, census_reader=None, clock=time.monotonic, wall=time.time):
+    """Check root-selected identities; permitted ambient remains explicitly SHARED LOAD.
+
+    Root authenticates each provenance pin independently before selecting this existing
+    admission profile. Byte equality below cannot authenticate its producer or grant an effect.
+    No basename, idle state, broad affinity or same-executable rule supplies an exemption.
+    """
+    required={'cpu','ambient','heldBirths','excludedCpus','rootAuthenticated'}
+    if not isinstance(profile,dict) or set(profile)!=required or profile['rootAuthenticated'] is not True:raise RuntimeError('resource-profile-root-selection')
+    cpu=profile['cpu']
+    if type(cpu) is not int or cpu<0 or not isinstance(profile['excludedCpus'],list) or any(type(v) is not int or v<0 for v in profile['excludedCpus']) or cpu in profile['excludedCpus']:raise RuntimeError('resource-profile-held-cpu')
+    if not isinstance(profile['ambient'],list) or len(profile['ambient'])>4096 or not isinstance(profile['heldBirths'],list) or len(profile['heldBirths'])>4096:raise RuntimeError('resource-profile-population-bound')
+    identity_keys={'pid','tid','processStart','threadStart','uid','exeSha256','cgroup'}
+    def identity(row):
+        if not isinstance(row,dict) or not identity_keys<=set(row):raise RuntimeError('resource-identity-shape')
+        if any(type(row[k]) is not int or row[k]<(0 if k=='uid' else 1) for k in ['pid','tid','processStart','threadStart','uid']):raise RuntimeError('resource-identity-birth')
+        digest=row['exeSha256']
+        if not isinstance(digest,str) or len(digest)!=64 or any(v not in '0123456789abcdef' for v in digest) or not isinstance(row['cgroup'],str) or not 0<len(row['cgroup'])<=65536:raise RuntimeError('resource-identity-source')
+        return tuple(row[k] for k in sorted(identity_keys))
+    def live():
+        for key in ['startedAtEpoch','absoluteDeadline','originalMonotonicDeadline','launchBeforeEpoch']:
+            if type(admission.get(key)) not in [int,float] or not math.isfinite(admission[key]):raise RuntimeError('resource-original-clock-shape')
+        if admission['absoluteDeadline']!=admission['startedAtEpoch']+600 or admission['launchBeforeEpoch']!=admission['startedAtEpoch']+60:raise RuntimeError('resource-original-clock-binding')
+        now=wall()
+        if now<admission['startedAtEpoch'] or now>=min(admission['absoluteDeadline'],admission['launchBeforeEpoch']) or clock()>=admission['originalMonotonicDeadline']:raise TimeoutError('resource-original-deadline')
+    live()
+    selected={}
+    for row in profile['ambient']:
+        if not isinstance(row,dict) or set(row)!=identity_keys|{'provenance'}:raise RuntimeError('resource-ambient-closed-shape')
+        key=identity(row)
+        if key in selected:raise RuntimeError('resource-ambient-duplicate')
+        pin=row['provenance']
+        if not isinstance(pin,dict) or set(pin)!={'path','bytes','sha256'} or not isinstance(pin['path'],str) or not pathlib.Path(pin['path']).is_absolute() or type(pin['bytes']) is not int or not 0<pin['bytes']<=2097152:raise RuntimeError('resource-provenance-shape')
+        live();path=pathlib.Path(pin['path'])
+        if path.is_symlink() or path.resolve()!=path:raise RuntimeError('resource-provenance-linked')
+        fd=os.open(path,os.O_RDONLY|os.O_CLOEXEC|os.O_NOFOLLOW|os.O_NONBLOCK)
+        try:
+            before=os.fstat(fd)
+            if not stat.S_ISREG(before.st_mode) or before.st_size!=pin['bytes']:raise RuntimeError('resource-provenance-extent')
+            body=os.read(fd,pin['bytes']+1);after=os.fstat(fd)
+            keys=['st_dev','st_ino','st_mode','st_uid','st_gid','st_size','st_mtime_ns','st_ctime_ns']
+            if any(getattr(before,k)!=getattr(after,k) for k in keys):raise RuntimeError('resource-provenance-unstable')
+        finally:os.close(fd)
+        live()
+        if len(body)!=pin['bytes'] or hashlib.sha256(body).hexdigest()!=pin['sha256']:raise RuntimeError('resource-provenance-drift')
+        selected[key]=row
+    held=set()
+    for row in profile['heldBirths']:
+        if not isinstance(row,dict) or set(row)!={'pid','processStart'} or any(type(v) is not int or v<1 for v in row.values()):raise RuntimeError('resource-held-birth-shape')
+        held.add((row['pid'],row['processStart']))
+    live(); reader=census_reader if census_reader is not None else lambda:resource_thread_census(min(admission['originalMonotonicDeadline'],clock()+max(0,admission['launchBeforeEpoch']-wall())),clock)
+    first=reader();live();second=reader();live()
+    def normalized(rows):
+        if not isinstance(rows,list) or not rows or len(rows)>4096:raise RuntimeError('resource-census-population-bound')
+        seen=set();out={}
+        for row in rows:
+            if not isinstance(row,dict) or set(row)!=identity_keys|{'affinity','credentials'}:raise RuntimeError('resource-census-closed-shape')
+            key=identity(row);birth=(row['pid'],row['tid'])
+            affinity=row['affinity']
+            if birth in seen or not isinstance(affinity,list) or not affinity or any(type(v) is not int or v<0 for v in affinity) or len(set(affinity))!=len(affinity):raise RuntimeError('resource-census-affinity-shape')
+            credentials=row['credentials']
+            if not isinstance(credentials,dict) or any(not isinstance(v,(tuple,list)) or any(not isinstance(x,str) for x in v) for v in credentials.values()):raise RuntimeError('resource-census-credentials-shape')
+            canonical=resource_credentials(('\n'.join(k+': '+ ' '.join(v) for k,v in credentials.items())+'\n').encode())
+            if set(canonical)!=set(credentials) or int(canonical['Uid'][1])!=row['uid']:raise RuntimeError('resource-census-credentials-identity')
+            seen.add(birth);out[key]=(sorted(affinity),canonical)
+        return out
+    a=normalized(first); b=normalized(second)
+    if a!=b:raise RuntimeError('resource-census-unstable')
+    intersections=[];unknown=[]
+    for row in second:
+        if cpu not in row['affinity']:continue
+        if (row['pid'],row['processStart']) in held:raise RuntimeError('resource-held-birth-intersects')
+        intersections.append(row)
+        if identity(row) not in selected:unknown.append(row)
+    if unknown:
+        error=RuntimeError('resource-unadmitted-affinity-intersections')
+        error.resource_observation={'cpu':cpu,'intersections':intersections,'unadmitted':unknown,'cpuExclusive':False,'effectGranted':False}
+        raise error
+    live();return {'cpu':cpu,'intersections':intersections,'sharedAmbient':intersections,
+                   'cpuExclusive':False,'scope':'Stable sampled all-thread affinity intersections; root-selected ambient is SHARED LOAD, no hard scheduler exclusion','effectGranted':False}
 
 def describe(error):
     try:return type(error).__name__+': '+str(error)
