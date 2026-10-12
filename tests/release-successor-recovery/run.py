@@ -10,6 +10,7 @@ are used without importing the existing subprocess-based journal test runner.
 import base64
 import copy
 import hashlib
+import io
 import importlib.util
 import json
 import os
@@ -1808,6 +1809,300 @@ class PublicationReliabilityControls(unittest.TestCase):
         self.assertEqual(r["lastObservedJournal"]["generation"],22)
         self.assertTrue(r["journalMutationMayHaveOccurred"])
         self.assertFalse(r["publicationComplete"])
+
+
+class Original0103Controls(unittest.TestCase):
+    """Actual publisher, extractor, saga, uniqueness and journal with inert IO.
+
+    Small synthetic package bytes replace the fixed byte pins only inside the
+    fixture. Production identities are independently checked against the retained
+    real manifest; no fixture claims authentic publication or native acceptance.
+    """
+
+    @staticmethod
+    def module(name, filename):
+        spec = importlib.util.spec_from_file_location(name, ROOT / 'scripts' / filename)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = pathlib.Path(self.temp.name)
+        self.candidate = json.loads((pathlib.Path(__file__).parent / 'original-0103-manifest.json').read_bytes())
+        self.saga = self.module('original103_saga', 'release-saga.py')
+        self.verifier = self.module('original103_artifact', 'release-successor-artifact.py')
+        self.uniqueness = self.module('original103_uniqueness', 'check-release-candidate-uniqueness.py')
+        self.source = publisher.ORIGINAL_0103_CANDIDATE['sourceSha']
+        self.publisher_sha = 'd' * 40
+        self.authority = MemoryAuthority(ref=publisher.SUCCESSOR_REF)
+        self.native = MemoryPublisher()
+        self.native.head = self.publisher_sha
+        self.native_get = self.native.get
+        self.comparison = {'status': 'ahead', 'ahead_by': 3, 'behind_by': 0,
+                           'base_commit': {'sha': self.source}, 'merge_base_commit': {'sha': self.source}}
+        self.returned_head = self.publisher_sha
+        self.run = {'id': 38290966724, 'run_attempt': 1, 'head_sha': self.source,
+                    'head_branch': 'main', 'event': 'workflow_dispatch', 'status': 'completed',
+                    'conclusion': 'success', 'repository': {'id': 1269292704},
+                    'path': '.github/workflows/release-successor-candidate.yml'}
+        self.versions = ['0.102.0']
+        self.external_calls = []
+        self.verifier_calls = 0
+        self.saga_calls = 0
+        self.feed_calls = []
+        self.archive_members = {}
+        self.package_pins = {}
+        for row in self.candidate['descriptor']['packages']:
+            name = row['id']
+            stream = io.BytesIO()
+            with zipfile.ZipFile(stream, 'w') as archive:
+                archive.writestr(name + '.nuspec', f'<package><metadata><id>{name}</id><version>0.103.0</version>'
+                    f'<repository commit="{self.source}" /></metadata></package>')
+                archive.writestr('lib/fixture.txt', name)
+            body = stream.getvalue()
+            path = self.root / row['artifact']['path']
+            path.write_bytes(body)
+            row['artifact'].update(sha256=hashlib.sha256(body).hexdigest(), size=len(body),
+                                   payloadSha256=self.saga.payload_id(path))
+            self.package_pins[name] = {'archiveSha256': row['artifact']['sha256'],
+                'archiveBytes': len(body), 'payloadSha256': row['artifact']['payloadSha256']}
+            self.archive_members[path.name] = body
+        qualification = {'schema': 'fsgg.telemetry.standalone-qualification/2', 'qualified': True,
+            'binding': {'sourceSha': self.source,
+                'packageSha256': self.package_pins['FS.GG.Coord.Cli']['archiveSha256'],
+                'sourceBinding': 'prepared-for-release-manifest'},
+            'claims': {'processCrashAndFilesystemApi': True, 'physicalPowerLoss': False,
+                       'mainInstalled': False, 'publicRelease': False},
+            'checks': {name: True for name in ('startupP95Milliseconds', 'idleRssPeakBytes',
+                'coldCliSubmissionP95Milliseconds', 'warmInProcessAdmissionP95Milliseconds')},
+            'limits': {'coldCliSubmissionP95Milliseconds': 1000, 'warmInProcessAdmissionP95Milliseconds': 100},
+            'packagedStore': {'schema': 'fsgg.telemetry.packaged-store-performance/1',
+                             'qualified': True, 'assessment': 'approved-local-durable'}}
+        runtime = json.dumps(qualification).encode()
+        self.candidate['descriptor']['standaloneTelemetry']['qualificationSha256'] = hashlib.sha256(runtime).hexdigest()
+        self.candidate['contentId'] = 'sha256:' + hashlib.sha256(self.saga.canonical(self.candidate['descriptor'])).hexdigest()
+        self.archive_members.update({'release-manifest.json': json.dumps(self.candidate).encode(),
+            'standalone-telemetry-runtime-evidence.json': runtime, 'standalone-telemetry-evidence.json': b'{}',
+            'previous-stable-channel.json': json.dumps({'version': '0.102.0',
+                'contentId': self.candidate['descriptor']['previousStableContentId']}).encode()})
+        self.retain_archive()
+        self.provider = MemoryProvider(ordered_effects(self.candidate), {})
+        self.provider._release = lambda: None
+        self.environment = {'GITHUB_SHA': self.publisher_sha, 'GITHUB_ACTOR': 'EHotwagner',
+            'GITHUB_RUN_ID': '1', 'GITHUB_EVENT_NAME': 'workflow_dispatch', 'GITHUB_REPOSITORY': 'FS-GG/.github',
+            'GITHUB_REF': 'refs/heads/main', 'GITHUB_RUN_ATTEMPT': '1', 'GH_TOKEN': 'fixture',
+            'ORDINARY_LEDGER_TOKEN': 'fixture-ledger', 'NUGET_API_KEY': 'fixture'}
+
+    def retain_archive(self):
+        stream = io.BytesIO()
+        with zipfile.ZipFile(stream, 'w') as archive:
+            for name, body in self.archive_members.items():
+                archive.writestr(name, body)
+        self.archive_bytes = stream.getvalue()
+        self.fixed = {**publisher.ORIGINAL_0103_CANDIDATE, 'archiveBytes': len(self.archive_bytes),
+            'archiveSha256': hashlib.sha256(self.archive_bytes).hexdigest(),
+            'manifestSha256': hashlib.sha256(self.archive_members['release-manifest.json']).hexdigest(),
+            'contentId': self.candidate['contentId']}
+        self.artifact = {'id': 11766710761, 'expired': False, 'size_in_bytes': len(self.archive_bytes),
+            'digest': 'sha256:' + self.fixed['archiveSha256'],
+            'name': f'release-successor-candidate-{self.source}-38290966724',
+            'workflow_run': {'id': 38290966724, 'head_sha': self.source, 'head_branch': 'main',
+                             'repository_id': 1269292704, 'head_repository_id': 1269292704}}
+
+    def get(self, path):
+        if path.endswith('/actions/runs/38290966724'):
+            return copy.deepcopy(self.run)
+        if path.endswith('/actions/artifacts/11766710761'):
+            return copy.deepcopy(self.artifact)
+        if '/compare/' in path:
+            self.native.calls.append(path)
+            return copy.deepcopy(self.comparison)
+        if '/commits/' in path:
+            self.native.calls.append(path)
+            return {'sha': self.returned_head}
+        return self.native_get(path)
+
+    def transport(self, command, **kwargs):
+        self.external_calls.append(command)
+        if command[:2] == ['gh', 'api']:
+            kwargs['stdout'].write(self.archive_bytes)
+        elif pathlib.Path(command[1]).name == 'release-successor-artifact.py':
+            self.verifier_calls += 1
+            flags = dict(zip(command[2::2], command[3::2]))
+            self.verifier.extract_verified(json.loads(pathlib.Path(flags['--artifact-json']).read_bytes()),
+                json.loads(pathlib.Path(flags['--run-json']).read_bytes()), pathlib.Path(flags['--archive']),
+                pathlib.Path(flags['--output']), flags['--source-sha'])
+        elif pathlib.Path(command[1]).name == 'release-saga.py':
+            self.saga_calls += 1
+            path = pathlib.Path(command[-1])
+            self.saga.assert_bound(path, self.saga.load(path))
+        elif pathlib.Path(command[1]).name == 'check-release-candidate-uniqueness.py':
+            self.uniqueness.check(command[3], command[5], 'fixture')
+        else:
+            raise AssertionError('undeclared external command ' + repr(command))
+        return types.SimpleNamespace(returncode=0)
+
+    def feed(self, package, *args):
+        self.feed_calls.append(package)
+        return self.versions
+
+    def execute(self, publish=False, selected=True, **changes):
+        args = types.SimpleNamespace(candidate_run_id=38290966724, candidate_artifact_id=11766710761,
+            candidate_archive_sha256=self.fixed['archiveSha256'], original_0103_candidate=selected,
+            recovery_checkpoint=False, repeat_original_nuget_kit_intent=False, recover_original_runtime_intent=False,
+            recover_original_successor_checkpoint=False, expected_checkpoint=None, publish=publish,
+            preflight_only=not publish, workdir=self.root / ('operation-' + str(len(self.external_calls))),
+            result_path=self.root / 'result.json')
+        args.__dict__.update(changes)
+        self.rows = {**report(), 'candidate': {}}
+        self.native.get = self.get
+        with patch.dict(os.environ, self.environment, clear=True), \
+             patch.object(publisher, 'ORIGINAL_0103_CANDIDATE', self.fixed), \
+             patch.object(publisher, 'ORIGINAL_0103_PACKAGES', self.package_pins), \
+             patch.object(publisher, 'GitHubAPI', side_effect=lambda token: self.authority if token == 'fixture-ledger' else self.native), \
+             patch.object(publisher, 'LiveProvider', return_value=self.provider), \
+             patch.object(subprocess, 'run', side_effect=self.transport), \
+             patch.object(self.uniqueness, 'feed_versions', side_effect=self.feed), \
+             patch.object(self.uniqueness, 'nuget_org_versions', side_effect=self.feed):
+            return publisher.execute_publisher(args, self.rows)
+
+    def assert_no_writes(self):
+        self.assertFalse(any(method != 'get' for method, *_ in self.authority.calls))
+        self.assertEqual(self.provider.dispatched, [])
+
+    def test_actual_parser_conflicts_refuse_and_original_selection_cannot_be_mutated(self):
+        for other in ('--recovery-checkpoint', '--repeat-original-nuget-kit-intent',
+                      '--recover-original-runtime-intent', '--recover-original-successor-checkpoint'):
+            argv = ['publisher', '--preflight-only', '--candidate-run-id', '38290966724',
+                    '--candidate-artifact-id', '11766710761', '--candidate-archive-sha256', self.fixed['archiveSha256'],
+                    '--workdir', str(self.root / 'unused'), '--original-0103-candidate', other]
+            with self.subTest(other=other), patch.object(sys, 'argv', argv), \
+                 patch.object(sys, 'stderr', io.StringIO()), self.assertRaises(SystemExit) as error:
+                publisher.main()
+            self.assertEqual(error.exception.code, 2)
+        selection = publisher.VerifiedOriginal0103(publisher._ORIGINAL_0103_SEAL, self.publisher_sha)
+        with self.assertRaises(AttributeError):
+            selection.publisher_sha = 'f' * 40
+        with self.assertRaises(publisher.Refused):
+            publisher.VerifiedOriginal0103(True, self.publisher_sha)
+        self.assertFalse((self.root / 'unused').exists()); self.assert_no_writes()
+
+    def test_production_tuple_and_real_retained_manifest_are_fixed(self):
+        candidate = json.loads((pathlib.Path(__file__).parent / 'original-0103-manifest.json').read_bytes())
+        publisher.validate_original_0103_manifest(candidate)
+        self.assertEqual(publisher.ORIGINAL_0103_CANDIDATE['runId'], 38290966724)
+        self.assertEqual(publisher.ORIGINAL_0103_CANDIDATE['artifactId'], 11766710761)
+        self.assertEqual(publisher.ORIGINAL_0103_CANDIDATE['archiveSha256'],
+            'd8b22728b9e36932bf8d31e1ab486b312f2d1aedddf96660c872fc69f97f25ba')
+        self.assertEqual(hashlib.sha256((pathlib.Path(__file__).parent / 'original-0103-manifest.json').read_bytes()).hexdigest(),
+            publisher.ORIGINAL_0103_CANDIDATE['manifestSha256'])
+        publisher.verify_original_0103_dependencies()
+
+    def test_actual_selected_preflight_checks_verifier_saga_feeds_and_mutates_nothing(self):
+        self.assertEqual(self.execute(), 'preflight')
+        self.assertEqual((self.verifier_calls, self.saga_calls, len(self.feed_calls)), (1, 1, 6))
+        self.assertTrue(self.rows['originalCandidateCompatibility']['verified'])
+        self.assertEqual(self.rows['execution']['sourceSha'], self.publisher_sha)
+        self.assertEqual(self.rows['candidate']['sourceSha'], self.source)
+        self.assertIn(f'repos/FS-GG/.github/commits/{self.publisher_sha}', self.native.calls)
+        self.assert_no_writes()
+
+    def test_actual_genesis_and_initialized_recovery_preserve_original_intent_without_repacking(self):
+        self.assertEqual(self.execute(publish=True), 'checkpoint')
+        original_archive = self.archive_bytes
+        journal = ProtectedReleaseJournal(self.authority, ref=publisher.SUCCESSOR_REF, main_directory=True)
+        observed = journal.read()
+        self.assertEqual(observed.effects['tag'], 'intent')
+        self.assertEqual(journal._observed.state['sourceSha'], self.source)
+        self.assertEqual(journal._observed.state['candidateArchiveSha256'], self.fixed['archiveSha256'])
+        self.assertEqual(self.provider.dispatched, ['tag'])
+        self.provider.matched.clear()  # An unresolved original intent waits; never resend.
+        self.assertEqual(self.execute(publish=True), 'checkpoint')
+        self.assertEqual(self.provider.dispatched, ['tag'])
+        self.assertEqual(self.archive_bytes, original_archive)
+        with self.assertRaisesRegex(publisher.Refused, 'unused release journal'):
+            self.execute()
+
+    def test_unselected_old_source_and_direct_boolean_seam_refuse(self):
+        with self.assertRaisesRegex(publisher.Refused, 'source to match'):
+            self.execute(selected=False)
+        with self.assertRaisesRegex(publisher.Refused, 'not verified'):
+            publisher.validate_original_0103_seam(True, self.candidate, {}, self.source,
+                                                 self.publisher_sha, publisher.SUCCESSOR_REF)
+        self.assert_no_writes()
+
+    def test_returned_native_ids_rerun_and_expiration_refuse_before_acquisition(self):
+        for row, field, value in [(self.run, 'id', 123), (self.run, 'run_attempt', 2),
+                                 (self.artifact, 'id', 123), (self.artifact, 'expired', True)]:
+            with self.subTest(field=field):
+                old = row[field]; row[field] = value
+                with self.assertRaises(publisher.Refused): self.execute()
+                row[field] = old
+        self.assertEqual(self.external_calls, [])
+        self.assert_no_writes()
+
+    def test_original_request_conflicts_and_fixed_tuple_deviations_refuse(self):
+        for change in ({'candidate_run_id': 123}, {'candidate_artifact_id': 123},
+                       {'candidate_archive_sha256': 'f' * 64}, {'recovery_checkpoint': True},
+                       {'repeat_original_nuget_kit_intent': True}, {'recover_original_runtime_intent': True},
+                       {'recover_original_successor_checkpoint': True}):
+            with self.subTest(change=change), self.assertRaises(publisher.Refused): self.execute(**change)
+        self.assertEqual(self.external_calls, []); self.assert_no_writes()
+
+    def test_native_ancestry_requires_full_exact_base_merge_base_and_commit(self):
+        for field, value in [('status', 'diverged'), ('ahead_by', 0), ('ahead_by', True),
+                             ('behind_by', 1), ('base_commit', {'sha': 'f' * 40}),
+                             ('merge_base_commit', {'sha': 'f' * 40})]:
+            with self.subTest(field=field):
+                old = self.comparison[field]; self.comparison[field] = value
+                with self.assertRaisesRegex(publisher.Refused, 'ancestry'): self.execute()
+                self.comparison[field] = old
+        old = self.comparison; self.comparison = {'status': 'ahead'}
+        with self.assertRaisesRegex(publisher.Refused, 'ancestry'): self.execute()
+        self.comparison = old; self.returned_head = 'f' * 40
+        with self.assertRaisesRegex(publisher.Refused, 'commit identity'): self.execute()
+        self.assert_no_writes()
+
+    def test_manifest_source_content_package_and_predecessor_deviations_refuse(self):
+        original = json.loads((pathlib.Path(__file__).parent / 'original-0103-manifest.json').read_bytes())
+        for field in ('sourceSha', 'version', 'policyVersion', 'previousStableVersion', 'previousStableContentId'):
+            altered = copy.deepcopy(original); altered['descriptor'][field] = 'different'
+            with self.subTest(field=field), self.assertRaises(publisher.Refused):
+                publisher.validate_original_0103_manifest(altered)
+        altered = copy.deepcopy(original); altered['descriptor']['packages'][0]['artifact']['payloadSha256'] = 'sha256:' + 'f' * 64
+        with self.assertRaises(publisher.Refused): publisher.validate_original_0103_manifest(altered)
+
+    def test_dependency_drift_missing_and_symlink_refuse(self):
+        target = self.root / 'dependencies'; target.mkdir()
+        for name, pin in publisher.ORIGINAL_0103_DEPENDENCIES.items():
+            path = target / name; path.parent.mkdir(exist_ok=True)
+            path.write_bytes((ROOT / name).read_bytes())
+        path = target / next(iter(publisher.ORIGINAL_0103_DEPENDENCIES))
+        original = path.read_bytes(); path.write_bytes(original + b'changed')
+        with self.assertRaises(publisher.Refused): publisher.verify_original_0103_dependencies(target)
+        path.unlink()
+        with self.assertRaises(OSError): publisher.verify_original_0103_dependencies(target)
+        path.symlink_to(ROOT / next(iter(publisher.ORIGINAL_0103_DEPENDENCIES)))
+        with self.assertRaisesRegex(publisher.Refused, 'linked'): publisher.verify_original_0103_dependencies(target)
+
+    def test_extra_or_unsafe_archive_member_refuses_real_verifier(self):
+        self.archive_members['extra'] = b'bad'; self.retain_archive()
+        with self.assertRaises(ValueError): self.execute()
+        self.assertEqual(self.verifier_calls, 1); self.assertEqual(self.saga_calls, 0); self.assert_no_writes()
+
+    def test_current_main_move_protection_and_feed_failure_refuse_at_existing_boundaries(self):
+        self.native.head = 'f' * 40
+        with self.assertRaisesRegex(publisher.Refused, 'initialization admission'): self.execute()
+        self.assert_no_writes()
+        self.native.head = self.publisher_sha
+        self.authority.controls['mainIntegrity']['enforcement'] = 'disabled'
+        with self.assertRaisesRegex(publisher.Refused, 'initialization admission'): self.execute()
+        self.assert_no_writes()
+        self.authority.controls = copy.deepcopy(BINDING['rulesets']); self.versions = ['0.102.0', '0.103.0']
+        with self.assertRaises(self.uniqueness.GateError): self.execute()
+        self.assert_no_writes()
 
 if __name__ == "__main__":
     unittest.main()
