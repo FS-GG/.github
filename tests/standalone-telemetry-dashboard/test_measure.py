@@ -1,3 +1,5 @@
+import contextlib,io,sys
+from unittest import mock
 import copy,importlib.util,json,pathlib,tempfile,unittest,zipfile
 spec=importlib.util.spec_from_file_location('measure',pathlib.Path(__file__).with_name('measure.py')); measure=importlib.util.module_from_spec(spec); spec.loader.exec_module(measure)
 class RuntimeMeasureTests(unittest.TestCase):
@@ -20,6 +22,59 @@ class RuntimeMeasureTests(unittest.TestCase):
     'context':{'runtimeVersion':'10.0.0','runtimeAssemblySha256':'1'*64,'fsiHostVersion':'14.0.0.0','fsiHostSha256':'2'*64,'framework':'.NET 10.0.0','processArchitecture':'X64','osArchitecture':'X64','processorCount':2,'cpuModel':None,'cpuQuota':None,'operatingSystem':'Linux','isServerGC':False,'gcLatencyMode':'Interactive','storeAssemblySha256':measure.digest(assembly),'coreAssemblySha256':measure.digest(core),'nativeSqliteSha256':measure.digest(native),
      'observedEnvironment':{prefix+name:None for prefix in ['DOTNET_','COMPlus_'] for name in ['TieredCompilation','TieredPGO','ReadyToRun','gcServer','gcConcurrent']}}}}
   return evidence,assembly,package
+ def wall_time_fixture(self,root,recorded,tick_delta=2675500):
+  evidence,assembly,package=self.phase_fixture(root,[recorded]+[1.0]*99)
+  rows=evidence['diagnostics']['admissions'];evidence['diagnostics']['timestampFrequency']=1000000000
+  for row in rows:
+   row['startTimestamp']*=1000;row['endTimestamp']*=1000
+   for phase in row['phases']:phase['timestamp']*=1000
+  shift=tick_delta-(rows[0]['endTimestamp']-rows[0]['startTimestamp']);rows[0]['endTimestamp']=rows[0]['startTimestamp']+tick_delta
+  for row in rows[1:]:
+   row['startTimestamp']+=shift;row['endTimestamp']+=shift
+   for phase in row['phases']:phase['timestamp']+=shift
+  return evidence,assembly,package
+ def test_nominal_wall_time_boundary_is_inclusive_in_both_directions(self):
+  for recorded in (2.676,2.674):
+   with self.subTest(recorded=recorded),tempfile.TemporaryDirectory() as temporary:
+    root=pathlib.Path(temporary);evidence,assembly,package=self.wall_time_fixture(root,recorded);path=root/'probe.json';path.write_text(json.dumps(evidence))
+    result=measure.verify_store_probe(path,assembly,package,True)
+    self.assertTrue(result['qualified']);self.assertEqual(len(result['samples']['warmInProcessAdmissionMilliseconds']),100);self.assertEqual(result['diagnostics']['admissions'][0]['elapsedMilliseconds'],recorded)
+ def test_outside_nominal_boundary_refuses_in_both_directions(self):
+  for recorded in (2.676001,2.673999):
+   with self.subTest(recorded=recorded),tempfile.TemporaryDirectory() as temporary:
+    root=pathlib.Path(temporary);evidence,assembly,package=self.wall_time_fixture(root,recorded);path=root/'probe.json';path.write_text(json.dumps(evidence))
+    with self.assertRaisesRegex(ValueError,'wall time differs; .*failed=wall'):measure.verify_store_probe(path,assembly,package,True)
+ def test_strict_row_sample_equality_survives_inclusive_wall_boundary(self):
+  with tempfile.TemporaryDirectory() as temporary:
+   root=pathlib.Path(temporary);evidence,assembly,package=self.wall_time_fixture(root,2.676);evidence['samples']['warmInProcessAdmissionMilliseconds'][0]=2.675;path=root/'probe.json';path.write_text(json.dumps(evidence))
+   with self.assertRaisesRegex(ValueError,'wall time differs; .*failed=sample,'):measure.verify_store_probe(path,assembly,package,True)
+ def test_sample_mismatch_preserves_refusal_when_reconstruction_is_unavailable(self):
+  with tempfile.TemporaryDirectory() as temporary:
+   root=pathlib.Path(temporary);evidence,assembly,package=self.phase_fixture(root);evidence['diagnostics']['admissions'][0]['endTimestamp']=10**1000;evidence['samples']['warmInProcessAdmissionMilliseconds'][0]=1.001;path=root/'probe.json';path.write_text(json.dumps(evidence))
+   with self.assertRaisesRegex(ValueError,'wall time differs; .*failed=sample,'):measure.verify_store_probe(path,assembly,package,True)
+ def test_wall_time_refusal_has_bounded_scalars_on_existing_main_exit(self):
+  with tempfile.TemporaryDirectory() as temporary:
+   root=pathlib.Path(temporary);evidence,assembly,package=self.wall_time_fixture(root,2.677);path=root/'probe.json';path.write_text(json.dumps(evidence));output=root/'runtime.json';stderr=io.StringIO()
+   argv=['measure.py','--cli-path',str(root/'never-cli'),'--config',str(root/'never-config'),'--repository','fixture','--package',str(package),'--source-sha','a'*40,'--filesystem-evidence',str(root/'never-filesystem'),'--store-probe-evidence',str(path),'--store-assembly',str(assembly),'--output',str(output)]
+   with mock.patch.object(sys,'argv',argv),contextlib.redirect_stderr(stderr),mock.patch.object(measure.subprocess,'run',side_effect=AssertionError('subprocess forbidden')),mock.patch.object(measure.subprocess,'Popen',side_effect=AssertionError('child forbidden')),mock.patch.object(measure.urllib.request,'build_opener',side_effect=AssertionError('network forbidden')),mock.patch.object(measure.time,'sleep',side_effect=AssertionError('workload forbidden')):
+    self.assertEqual(measure.main(),2)
+   message=stderr.getvalue();self.assertTrue(message.startswith('standalone-telemetry-dashboard: Store phase diagnostics wall time differs; '));self.assertLessEqual(len(message.encode('utf-8')),1024);self.assertFalse(output.exists())
+   for field in ('index=0','failed=wall','tickDelta=2675500','frequency=1000000000','recordedMilliseconds=2.677','storedSampleMilliseconds=2.677','reconstructedMilliseconds=2.675','exactNominalDeltaMilliseconds=1/500'):self.assertIn(field,message)
+ def test_oversized_wall_scalar_and_formatting_failure_preserve_refusal(self):
+  with tempfile.TemporaryDirectory() as temporary:
+   root=pathlib.Path(temporary);evidence,assembly,package=self.wall_time_fixture(root,2.677);evidence['diagnostics']['timestampFrequency']=10**1000
+   # Keep the same finite reconstruction while exercising bounded frequency output.
+   factor=10**991
+   for row in evidence['diagnostics']['admissions']:
+    row['startTimestamp']*=factor;row['endTimestamp']*=factor
+    for phase in row['phases']:phase['timestamp']*=factor
+   path=root/'probe.json';path.write_text(json.dumps(evidence))
+   with self.assertRaises(ValueError) as caught:measure.verify_store_probe(path,assembly,package,True)
+   message=str(caught.exception);self.assertTrue(message.startswith('Store phase diagnostics wall time differs'));self.assertIn('frequency=<oversized>',message);self.assertLessEqual(len(message.encode('utf-8')),960)
+  class BadScalar:
+   def __str__(self):raise RuntimeError('formatter failed')
+  error=measure.wall_time_failure(0,0,1,1,BadScalar(),1,1,0,'wall')
+  self.assertIsInstance(error,ValueError);self.assertEqual(str(error),'Store phase diagnostics wall time differs; details unavailable')
  def test_phase_diagnostics_bind_first_hundred_samples_and_package_bytes(self):
   with tempfile.TemporaryDirectory() as temporary:
    root=pathlib.Path(temporary); evidence,assembly,package=self.phase_fixture(root)
