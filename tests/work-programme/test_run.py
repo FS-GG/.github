@@ -61,6 +61,67 @@ class RunnerTests(unittest.TestCase):
         self.assertEqual(report['suites'][0]['reason'], 'shared-input-changed')
         self.assertEqual(child.call_count, 1)
 
+    def restart_python_suites(self):
+        return [suite for suite in runner.suites(self.root)
+                if suite['id'] in ('context-restart-structure', 'context-restart-watcher')]
+
+    def test_restart_python_inventory_covers_actual_transitive_reads(self):
+        source_root = Path(__file__).resolve().parents[2]
+        prefix = 'tests/work-programme/context-owner-restart-fixtures/'
+        index = json.loads((source_root / (prefix + 'fixture-index.json')).read_text())
+        structure, watcher = self.restart_python_suites()
+        consumed = {prefix + 'structural-check.py', prefix + 'fixture-index.json'}
+        consumed.update(prefix + name + suffix for name in index['fixtures']
+                        for suffix in ('.delta-input.json', '.expectations.json'))
+        self.assertEqual(set(structure['inputs']), consumed)
+        self.assertEqual(set(watcher['inputs']),
+                         {prefix + 'watcher-regression.py', 'tools/routine-delivery.py'})
+        for suite in (structure, watcher):
+            self.assertEqual(suite['command'], [sys.executable, suite['inputs'][0]])
+            self.assertEqual(suite['prerequisites'], ['python'])
+            self.assertEqual(suite['dependsOn'], [])
+            self.assertTrue(suite['independent'])
+
+    def test_each_restart_python_input_drift_invalidates_and_blocks_next_reader(self):
+        for selected in self.restart_python_suites():
+            for changed_name in selected['inputs']:
+                with self.subTest(suite=selected['id'], input=changed_name):
+                    for name in selected['inputs']:
+                        path = self.root / name
+                        path.parent.mkdir(parents=True, exist_ok=True)
+                        path.write_text('synthetic original input')
+                    changed = self.root / changed_name
+                    def synthetic_child(*_args):
+                        changed.write_text('synthetic drift')
+                        return dict(exit=0, reason=None, cleanup='passed',
+                                    output='synthetic evidence', outputBytes=18)
+                    with patch.object(runner, 'run_child', side_effect=synthetic_child) as child:
+                        report, code = self.collect([selected, {**selected, 'id': 'next-reader'}])
+                    self.assertEqual(code, 1)
+                    self.assertIn(changed_name, report['candidate'])
+                    self.assertEqual([row['status'] for row in report['suites']], ['unknown', 'blocked'])
+                    self.assertEqual(report['suites'][0]['reason'], 'shared-input-changed')
+                    self.assertEqual(report['suites'][1]['reason'], 'shared-input-missing-or-changed')
+                    self.assertEqual(child.call_count, 1)
+
+    def test_missing_restart_input_blocks_only_its_suite_and_retains_first_failure(self):
+        selected = self.restart_python_suites()
+        for suite in selected:
+            for name in suite['inputs']:
+                path = self.root / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text('synthetic original input')
+        (self.root / selected[0]['inputs'][-1]).unlink()
+        with patch.object(runner, 'run_child', return_value=dict(
+                exit=1, reason=None, cleanup='passed', output='watcher assertion', outputBytes=17)) as child:
+            report, code = self.collect(selected)
+        self.assertEqual(code, 1)
+        self.assertEqual([row['status'] for row in report['suites']], ['blocked', 'failed'])
+        self.assertEqual(report['firstCause'], 'context-restart-structure: shared-input-missing-or-changed')
+        self.assertEqual(report['suites'][1]['evidence'], 'watcher assertion')
+        self.assertEqual(report['omittedCoverage'], ['context-restart-structure'])
+        self.assertEqual(child.call_count, 1)
+
     def test_independent_assertions_and_success_retained(self):
         report, code = self.collect([self.suite('a', 'assert False, "first"'),
                                     self.suite('b', 'assert False, "second"'), self.suite('c')])

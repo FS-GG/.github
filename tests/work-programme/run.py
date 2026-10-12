@@ -20,24 +20,30 @@ OUTPUT_BYTES = 1024 * 1024
 
 def suites(root):
     shared = ['.agents/skills/work-programme/scripts/programme.fsx']
+    restart = 'tests/work-programme/context-owner-restart-fixtures/'
+    restart_names = ['interrupted-dispatch', 'missed-owner-revision', 'absent-owner',
+                     'full-reservation', 'one-integrator-same-owner-repair', 'superseded-owner-return']
     return [
         dict(id=name, command=['dotnet', 'fsi', '--exec', 'tests/work-programme/' + name + '.fsx'],
              inputs=shared + ['tests/work-programme/' + name + '.fsx'] + extra,
              prerequisites=['dotnet'], dependsOn=[], independent=True)
         for name, extra in [('acceptance', []), ('context-delta', [
             'tests/work-programme/context-delta-input.json', 'tests/work-programme/context-delta-expected.json',
-            'tests/work-programme/context-owner-restart-fixtures/interrupted-dispatch.delta-input.json',
-            'tests/work-programme/context-owner-restart-fixtures/missed-owner-revision.delta-input.json',
-            'tests/work-programme/context-owner-restart-fixtures/absent-owner.delta-input.json',
-            'tests/work-programme/context-owner-restart-fixtures/full-reservation.delta-input.json',
-            'tests/work-programme/context-owner-restart-fixtures/one-integrator-same-owner-repair.delta-input.json',
-            'tests/work-programme/context-owner-restart-fixtures/superseded-owner-return.delta-input.json']),
+            ] + [restart + name + '.delta-input.json' for name in restart_names]),
             ('context-evidence', [])]
     ] + [dict(id='context-baseline', command=[sys.executable, 'tests/work-programme/context-baseline/test_collect.py'],
               inputs=['tests/work-programme/context-baseline/' + f for f in ['test_collect.py', 'collect.py', 'replay.json']],
               prerequisites=['python'], dependsOn=[], independent=True),
          dict(id='context-controls', command=[sys.executable, 'tests/work-programme/test_context.py'],
               inputs=['tests/work-programme/test_context.py', '.agents/skills/work-programme/scripts/context.py'],
+              prerequisites=['python'], dependsOn=[], independent=True),
+         dict(id='context-restart-structure', command=[sys.executable, restart + 'structural-check.py'],
+              inputs=[restart + 'structural-check.py', restart + 'fixture-index.json'] +
+                     [restart + name + suffix for name in restart_names
+                      for suffix in ['.delta-input.json', '.expectations.json']],
+              prerequisites=['python'], dependsOn=[], independent=True),
+         dict(id='context-restart-watcher', command=[sys.executable, restart + 'watcher-regression.py'],
+              inputs=[restart + 'watcher-regression.py', 'tools/routine-delivery.py'],
               prerequisites=['python'], dependsOn=[], independent=True),
          dict(id='runner-controls', command=[sys.executable, 'tests/work-programme/test_run.py'],
               inputs=['tests/work-programme/test_run.py', 'tests/work-programme/run.py', 'tests/work-programme/run.sh'],
