@@ -98,19 +98,19 @@ class CandidateUniquenessTests(unittest.TestCase):
     def test_selected_0101_window_requires_0100_on_all_six_coordinates(self) -> None:
         self.github_read.return_value = ["0.100.0"]
         self.nuget_read.return_value = ["0.100.0"]
-        self.assertEqual(len(gate.check("0.102.0", "0.100.0", "test-token")), 6)
+        self.assertEqual(len(gate.check("0.101.0", "0.100.0", "test-token")), 6)
         for feed in (self.github_read, self.nuget_read):
             with self.subTest(feed=feed):
-                feed.return_value = ["0.100.0", "0.102.0"]
+                feed.return_value = ["0.100.0", "0.101.0"]
                 with self.assertRaisesRegex(gate.GateError, "already exists"):
-                    gate.check("0.102.0", "0.100.0", "test-token")
+                    gate.check("0.101.0", "0.100.0", "test-token")
                 feed.return_value = ["0.100.0"]
         self.nuget_read.return_value = ["0.99.0"]
         with self.assertRaisesRegex(gate.GateError, "not predecessor"):
-            gate.check("0.102.0", "0.100.0", "test-token")
+            gate.check("0.101.0", "0.100.0", "test-token")
         self.github_read.side_effect = gate.GateError("HTTP 403")
         with self.assertRaisesRegex(gate.GateError, "403"):
-            gate.check("0.102.0", "0.100.0", "test-token")
+            gate.check("0.101.0", "0.100.0", "test-token")
 
     def test_an_occupied_version_on_either_feed_refuses(self) -> None:
         for feed in (self.github_read, self.nuget_read):
