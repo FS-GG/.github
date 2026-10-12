@@ -1270,3 +1270,763 @@ module CiReads =
                         Pending = List.ofSeq pending |> List.distinct
                         Gaps = List.ofSeq gaps |> List.distinct
                     }
+
+    type ContinuationResult =
+        { Checkpoint: FS.GG.Coord.TelemetryCi.ProviderCheckpoint.Checkpoint
+          Population: PopulationSnapshot option
+          Requests: int
+          Gap: string option }
+
+    /// Read-only DTOs from the existing retained native graph parser; not authority or freshness receipts.
+    type RetainedSuiteWitness =
+        { SuiteId: int64; AppId: int64; AppSlug: string option; Status: string; Conclusion: string option }
+
+    type RetainedCheckMembershipWitness =
+        { CheckId: int64; SuiteId: int64; AppId: int64; AppSlug: string option }
+
+    type RetainedSuiteGraphPage =
+        { Key: FS.GG.Coord.TelemetryCi.ProviderCheckpoint.ResourceKey
+          BodyDigest: string
+          NextPage: int option
+          ObservedAt: System.DateTimeOffset
+          ValidatedAt: System.DateTimeOffset
+          Page: Page
+          Suites: RetainedSuiteWitness list
+          Checks: RetainedCheckMembershipWitness list
+          CheckObservations: Check list }
+
+    // A separate producer-private collection route. Existing collect/discover interfaces and budgets
+    // remain unchanged until the caller composition is reviewed and qualified.
+    module private Continuation =
+        open FS.GG.Coord.TelemetryCi.ProviderCheckpoint
+
+        type NativeAdmission = { Head: string; BaseRef: string; BaseSha: string }
+
+        type NativeSuite =
+            { Id: int64; AppId: int64; AppSlug: string option; Status: string; Conclusion: string option }
+
+        type CheckWitness = { Id: int64; SuiteId: int64; AppId: int64; AppSlug: string option }
+
+        type ParsedPage =
+            { Resource: Resource
+              Runs: Run list
+              Jobs: Job list
+              Checks: Check list
+              Suites: NativeSuite list
+              CheckWitnesses: CheckWitness list
+              Page: Page option
+              Dependencies: ResourceKey list
+              Admission: NativeAdmission option }
+
+        let key kind runId attempt page : ResourceKey =
+            { Kind = kind; RunId = runId; SuiteId = 0L; Attempt = attempt; Page = page }
+
+        let suiteKey suiteId page = { Kind = SuiteChecks; RunId = 0L; SuiteId = suiteId; Attempt = 0; Page = page }
+
+        let request (identity: Identity) (resourceKey: ResourceKey) =
+            let prefix = "repos/" + identity.Repository + "/"
+            let pagination = [ "per_page", "100"; "page", string resourceKey.Page ]
+            let path, query =
+                match resourceKey.Kind with
+                | Admission -> prefix + "pulls/" + string identity.PullRequest, []
+                | Runs -> prefix + "actions/runs", ("head_sha", identity.Head) :: pagination
+                | Attempt -> prefix + $"actions/runs/{resourceKey.RunId}/attempts/{resourceKey.Attempt}", []
+                | Jobs -> prefix + $"actions/runs/{resourceKey.RunId}/attempts/{resourceKey.Attempt}/jobs", pagination
+                | Checks -> prefix + "commits/" + identity.Head + "/check-runs", ("filter", "all") :: pagination
+                | Suites -> prefix + "commits/" + identity.Head + "/check-suites", pagination
+                | SuiteChecks -> prefix + $"check-suites/{resourceKey.SuiteId}/check-runs", ("filter", "all") :: pagination
+            {
+                Method = "GET";
+                Path = path;
+                Query = query;
+                Body = NoBody;
+                Budget = Rest;
+                IfNoneMatch = None;
+                Subject = identity.Repository + " provider continuation " + string resourceKey;
+            }
+
+        let private requiredString (field: string) (element: JsonElement) =
+            match str element field with
+            | Some value when not (String.IsNullOrWhiteSpace value) -> value
+            | _ -> invalidOp ("malformed-provider-string:" + field)
+
+        let private requiredId (field: string) (element: JsonElement) =
+            match int64Value element field with
+            | Some value when value > 0L -> value
+            | _ -> invalidOp ("malformed-provider-id:" + field)
+
+        let private requiredNumber (field: string) (element: JsonElement) =
+            match int32 element field with
+            | Some value when value > 0 -> value
+            | _ -> invalidOp ("malformed-provider-number:" + field)
+
+        let private timestamp (field: string) (element: JsonElement) =
+            match element.TryGetProperty field with
+            | false, _ -> None
+            | true, value when value.ValueKind = JsonValueKind.Null -> None
+            | true, value when value.ValueKind = JsonValueKind.String ->
+                let text = value.GetString()
+                match DateTimeOffset.TryParse(text, Globalization.CultureInfo.InvariantCulture, Globalization.DateTimeStyles.RoundtripKind) with
+                | true, parsed when parsed.Offset = TimeSpan.Zero
+                                    && System.Text.RegularExpressions.Regex.IsMatch(text, @"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,7})?(Z|\+00:00)$") -> Some text
+                | _ -> invalidOp ("malformed-provider-timestamp:" + field)
+            | _ -> invalidOp ("malformed-provider-timestamp:" + field)
+
+        let private array (field: string) (maximum: int) (element: JsonElement) =
+            let values = element.GetProperty field
+            if values.ValueKind <> JsonValueKind.Array || values.GetArrayLength() > maximum then
+                invalidOp ("malformed-provider-array:" + field)
+            values.EnumerateArray() |> Seq.toList
+
+        let private unique name identities =
+            if (Set.ofList identities).Count <> identities.Length then invalidOp ("duplicate-provider-identity:" + name)
+
+        let private run (identity: Identity) (item: JsonElement) =
+            let id = requiredId "id" item
+            let attempt = requiredNumber "run_attempt" item
+            if attempt > maximumResources || requiredString "head_sha" item <> identity.Head then
+                invalidOp "run-attempt-bound-or-head-mismatch"
+            let repository = item.GetProperty "repository"
+            if requiredString "full_name" repository <> identity.Repository
+               || (identity.RepositoryId <> 0L && requiredId "id" repository <> identity.RepositoryId) then
+                invalidOp "run-repository-mismatch"
+            let event = requiredString "event" item
+            let relations = array "pull_requests" 100 item |> List.map (requiredNumber "number")
+            unique "run-pull-request" relations
+            if event <> "pull_request_target" && not relations.IsEmpty && not (List.contains (int identity.PullRequest) relations) then
+                invalidOp "run-pull-request-mismatch"
+            {
+                Id = id;
+                Attempt = attempt;
+                Workflow = requiredString "path" item;
+                Event = event;
+                HeadSha = identity.Head;
+                Status = requiredString "status" item;
+                Conclusion = str item "conclusion";
+                CreatedAt = timestamp "created_at" item;
+                RunStartedAt = timestamp "run_started_at" item;
+                UpdatedAt = timestamp "updated_at" item;
+                PullRequests = relations;
+                TargetAssociation = targetAssociation identity.Repository (int identity.PullRequest) identity.Head (Some identity.BaseSha) item;
+            }
+
+        let private job (identity: Identity) (resourceKey: ResourceKey) (item: JsonElement) =
+            let steps =
+                array "steps" 1000 item
+                |> List.map (fun step ->
+                    {
+                        Number = requiredNumber "number" step;
+                        Name = requiredString "name" step;
+                        Status = requiredString "status" step;
+                        Conclusion = str step "conclusion";
+                        StartedAt = timestamp "started_at" step;
+                        CompletedAt = timestamp "completed_at" step;
+                    })
+            unique "step-number" (steps |> List.map _.Number)
+            let checkRunId =
+                str item "check_run_url"
+                |> Option.bind (fun url ->
+                    let prefix = identity.ApiOrigin + "/repos/" + identity.Repository + "/check-runs/"
+                    if not (url.StartsWith(prefix, StringComparison.Ordinal)) then invalidOp "foreign-job-check-url"
+                    match Int64.TryParse(url.Substring(prefix.Length)) with
+                    | true, value when value > 0L -> Some value
+                    | _ -> invalidOp "malformed-job-check-id")
+            {
+                RunId = resourceKey.RunId;
+                Attempt = resourceKey.Attempt;
+                Id = requiredId "id" item;
+                Name = requiredString "name" item;
+                Status = requiredString "status" item;
+                Conclusion = str item "conclusion";
+                CreatedAt = timestamp "created_at" item;
+                StartedAt = timestamp "started_at" item;
+                CompletedAt = timestamp "completed_at" item;
+                RunnerName = str item "runner_name";
+                CheckRunId = checkRunId;
+                Steps = steps;
+            }
+
+        let private check (item: JsonElement) =
+            let app = item.GetProperty "app"
+            if app.ValueKind <> JsonValueKind.Object then invalidOp "malformed-check-app"
+            {
+                Id = requiredId "id" item;
+                Name = requiredString "name" item;
+                AppSlug = str app "slug";
+                Status = requiredString "status" item;
+                Conclusion = str item "conclusion";
+                StartedAt = timestamp "started_at" item;
+                CompletedAt = timestamp "completed_at" item;
+            }
+
+        let private suite (identity: Identity) (item: JsonElement) =
+            let id = requiredId "id" item
+            let repository = item.GetProperty "repository"
+            let app = item.GetProperty "app"
+            if requiredString "head_sha" item <> identity.Head
+               || requiredString "full_name" repository <> identity.Repository
+               || requiredId "id" repository <> identity.RepositoryId
+               || requiredString "check_runs_url" item <> identity.ApiOrigin + $"/repos/{identity.Repository}/check-suites/{id}/check-runs" then
+                invalidOp "foreign-suite-head-repository-or-check-url"
+            {
+                Id = id;
+                AppId = requiredId "id" app;
+                AppSlug = str app "slug";
+                Status = requiredString "status" item;
+                Conclusion = str item "conclusion";
+            }
+
+        let private checkWitness (identity: Identity) (resourceKey: ResourceKey) (item: JsonElement) =
+            let app = item.GetProperty "app"
+            let suite = item.GetProperty "check_suite"
+            let suiteId = requiredId "id" suite
+            if suiteId <> resourceKey.SuiteId || requiredString "head_sha" item <> identity.Head then
+                invalidOp "foreign-check-suite-or-head"
+            { Id = requiredId "id" item; SuiteId = suiteId; AppId = requiredId "id" app; AppSlug = str app "slug" }
+
+        let private nextKey (identity: Identity) (resourceKey: ResourceKey) (next: string) =
+            if next = "" then None
+            elif resourceKey.Kind = Admission || resourceKey.Kind = Attempt then invalidOp "unexpected-provider-next-page"
+            else
+                let uri = Uri(next, UriKind.Absolute)
+                let nextResource = { resourceKey with Page = resourceKey.Page + 1 }
+                let expected = request identity nextResource
+                let pairs =
+                    uri.Query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries)
+                    |> Array.map (fun pair ->
+                        let parts = pair.Split('=', 2)
+                        if parts.Length <> 2 then invalidOp "malformed-next-query"
+                        Uri.UnescapeDataString parts[0], Uri.UnescapeDataString parts[1])
+                    |> Array.toList
+                unique "next-query" (pairs |> List.map fst)
+                if uri.GetLeftPart(UriPartial.Authority) <> identity.ApiOrigin || uri.UserInfo <> "" || uri.Fragment <> ""
+                   || uri.AbsolutePath <> "/" + expected.Path || Map.ofList pairs <> Map.ofList expected.Query then
+                    invalidOp "foreign-or-noncontiguous-provider-next-page"
+                Some nextResource
+
+        let parseResource (identity: Identity) admitted (resource: Resource) =
+            try
+                use document = JsonDocument.Parse(resource.Body, JsonDocumentOptions(MaxDepth = 64))
+                let root = document.RootElement
+                let rec uniqueFields (value: JsonElement) =
+                    match value.ValueKind with
+                    | JsonValueKind.Object ->
+                        let fields = value.EnumerateObject() |> Seq.toList
+                        unique "json-field" (fields |> List.map _.Name)
+                        fields |> List.iter (fun field -> uniqueFields field.Value)
+                    | JsonValueKind.Array -> value.EnumerateArray() |> Seq.iter uniqueFields
+                    | _ -> ()
+                uniqueFields root
+                let mutable dependencies = nextKey identity resource.Key resource.Next |> Option.toList
+                let mutable admission = None
+                let mutable suites = []
+                let mutable checkWitnesses = []
+                let runs, jobs, checks, page =
+                    match resource.Key.Kind with
+                    | Admission ->
+                        let head = root.GetProperty "head"
+                        let baseValue = root.GetProperty "base"
+                        let repository = baseValue.GetProperty "repo"
+                        let observed =
+                            {
+                                Head = requiredString "sha" head;
+                                BaseRef = requiredString "ref" baseValue;
+                                BaseSha = requiredString "sha" baseValue;
+                            }
+                        if requiredId "number" root <> identity.PullRequest
+                           || requiredString "full_name" repository <> identity.Repository
+                           || (identity.RepositoryId <> 0L && requiredId "id" repository <> identity.RepositoryId)
+                           || (not admitted && (observed.Head <> identity.Head || observed.BaseRef <> identity.BaseRef || observed.BaseSha <> identity.BaseSha)) then
+                            invalidOp "provider-admission-head-base-repository-mismatch"
+                        admission <- Some observed
+                        [], [], [], None
+                    | Attempt ->
+                        let row = run identity root
+                        if row.Id <> resource.Key.RunId || row.Attempt <> resource.Key.Attempt then
+                            invalidOp "provider-attempt-identity-mismatch"
+                        dependencies <- key Jobs row.Id row.Attempt 1 :: dependencies
+                        [ row ], [], [], None
+                    | Runs | Jobs | Checks | Suites | SuiteChecks ->
+                        let total =
+                            match int32 root "total_count" with
+                            | Some value when value >= 0 && value <= (if resource.Key.Kind = Suites then maximumResources else 1000) -> value
+                            | _ -> invalidOp "provider-page-total-bound"
+                        let field = match resource.Key.Kind with Runs -> "workflow_runs" | Jobs -> "jobs" | Suites -> "check_suites" | _ -> "check_runs"
+                        let items = array field 100 root
+                        if items.Length > total || (resource.Next <> "" && items.IsEmpty) then invalidOp "provider-page-count-shape"
+                        let runs, jobs, checks =
+                            match resource.Key.Kind with
+                            | Runs ->
+                                let rows = items |> List.map (run identity)
+                                unique "run-attempt" (rows |> List.map (fun row -> row.Id, row.Attempt))
+                                for row in rows do
+                                    dependencies <- [ for attempt in 1 .. row.Attempt -> key Attempt row.Id attempt 1 ] @ dependencies
+                                rows, [], []
+                            | Jobs ->
+                                let rows = items |> List.map (job identity resource.Key)
+                                unique "job" (rows |> List.map _.Id)
+                                [], rows, []
+                            | Suites ->
+                                suites <- items |> List.map (suite identity)
+                                unique "suite" (suites |> List.map _.Id)
+                                dependencies <- (suites |> List.map (fun row -> suiteKey row.Id 1)) @ dependencies
+                                [], [], []
+                            | SuiteChecks ->
+                                checkWitnesses <- items |> List.map (checkWitness identity resource.Key)
+                                let rows = items |> List.map check
+                                unique "check" (rows |> List.map _.Id)
+                                [], [], rows
+                            | _ -> invalidOp "reference-check-inventory-not-a-suite-proof"
+                        let nativePage: Page =
+                            {
+                                Resource =
+                                    (string resource.Key.Kind
+                                     + ":" + string resource.Key.RunId
+                                     + ":" + string resource.Key.SuiteId
+                                     + ":" + string resource.Key.Attempt);
+                                Index = resource.Key.Page;
+                                Count = items.Length;
+                                Total = total;
+                            }
+                        runs, jobs, checks, Some nativePage
+                // Exact body bytes conservatively include all parsed identity/status/step fields. No
+                // provider timestamp or first-page count substitutes for the full resource fingerprint.
+                if resource.ProjectionDigest <> resource.BodyDigest then invalidOp "provider-projection-proof-mismatch"
+                Ok { Resource = resource; Runs = runs; Jobs = jobs; Checks = checks; Suites = suites; CheckWitnesses = checkWitnesses; Page = page; Dependencies = dependencies; Admission = admission }
+            with error -> Error(Malformed(identity.Repository, "provider-resource-refused:" + error.Message))
+
+        let graphFromParsed (identity: Identity) (resources: Resource list) (parsed: ParsedPage list) =
+            let initial = [ key Admission 0L 0 1; key Runs 0L 0 1; key Suites 0L 0 1 ]
+            let required = initial @ (parsed |> Seq.collect _.Dependencies |> Seq.toList) |> Set.ofList
+            let available = resources |> List.map _.Key |> Set.ofList
+            if required.Count > maximumResources then Error(Malformed(identity.Repository, "provider-resource-graph-bound"))
+            elif not (Set.isSubset available required) then Error(Malformed(identity.Repository, "provider-resource-disappeared-or-foreign"))
+            else
+                let missing = Set.difference required available |> Set.toList
+                let groups =
+                    parsed
+                    |> Seq.filter (fun page -> page.Page.IsSome)
+                    |> Seq.groupBy (fun page -> page.Resource.Key.Kind, page.Resource.Key.RunId, page.Resource.Key.SuiteId, page.Resource.Key.Attempt)
+                let mutable gap = None
+                for (kind, runId, suiteId, attempt), pages in groups do
+                    let rows = pages |> Seq.sortBy _.Resource.Key.Page |> Seq.toList
+                    let totals = rows |> List.map (fun row -> row.Page.Value.Total) |> Set.ofList
+                    let ids =
+                        rows
+                        |> List.collect (fun row ->
+                            row.Runs |> List.map (fun item -> item.Id, item.Attempt)
+                            |> List.append (row.Jobs |> List.map (fun item -> item.Id, 0))
+                            |> List.append (row.Checks |> List.map (fun item -> item.Id, 0))
+                            |> List.append (row.Suites |> List.map (fun item -> item.Id, 0)))
+                    if totals.Count <> 1 || (Set.ofList ids).Count <> ids.Length then gap <- Some "provider-page-total-or-identity-changed"
+                    let familyMissing = missing |> List.exists (fun resource -> resource.Kind = kind && resource.RunId = runId && resource.SuiteId = suiteId && resource.Attempt = attempt)
+                    let contiguous = (rows |> List.map _.Resource.Key.Page) = [ 1 .. rows.Length ]
+                    if not familyMissing && contiguous && (List.last rows).Resource.Next = ""
+                       && (rows |> List.sumBy (fun row -> row.Page.Value.Count)) <> (Set.minElement totals) then
+                        gap <- Some "provider-page-inventory-incomplete"
+                let suites = parsed |> List.collect _.Suites
+                let witnesses = parsed |> List.collect _.CheckWitnesses
+                if (suites |> List.map _.Id |> Set.ofList).Count <> suites.Length
+                   || (witnesses |> List.map _.Id |> Set.ofList).Count <> witnesses.Length then
+                    gap <- Some "duplicate-suite-or-cross-suite-check-identity"
+                for witness in witnesses do
+                    match suites |> List.tryFind (fun suite -> suite.Id = witness.SuiteId) with
+                    | Some suite when suite.AppId = witness.AppId && suite.AppSlug = witness.AppSlug -> ()
+                    | _ -> gap <- Some "check-suite-app-lineage-mismatch"
+                match gap with
+                | Some code -> Error(Malformed(identity.Repository, code))
+                | None -> Ok(parsed |> Seq.toList, missing)
+
+
+        let graph (identity: Identity) admitted (resources: Resource list) =
+            let parsed = ResizeArray<ParsedPage>()
+            let mutable failure = None
+            for resource in resources do
+                match parseResource identity admitted resource with
+                | Ok page -> parsed.Add page
+                | Error error -> if failure.IsNone then failure <- Some error
+            match failure with
+            | Some error -> Error error
+            | None -> graphFromParsed identity resources (List.ofSeq parsed)
+
+        let population (identity: Identity) (revision: int64) (pages: ParsedPage list) =
+            let runGroups = pages |> List.collect _.Runs |> List.groupBy (fun row -> row.Id, row.Attempt)
+            let conflictingRun = runGroups |> List.exists (fun (_, rows) -> (Set.ofList rows).Count <> 1)
+            let runs = runGroups |> List.map (fun (_, rows) -> rows.Head) |> List.sortBy (fun row -> row.Id, row.Attempt)
+            let jobs = pages |> List.collect _.Jobs |> List.sortBy (fun row -> row.RunId, row.Attempt, row.Id)
+            let checks = pages |> List.collect _.Checks |> List.sortBy _.Id
+            let nativeAdmission = pages |> List.choose _.Admission |> List.exactlyOne
+            let witnessed = nativeAdmission.Head = identity.Head && nativeAdmission.BaseRef = identity.BaseRef && nativeAdmission.BaseSha = identity.BaseSha
+            let gaps = ResizeArray<string>()
+            if nativeAdmission.BaseRef <> identity.BaseRef || nativeAdmission.BaseSha <> identity.BaseSha then gaps.Add "admitted-base-moved"
+            if conflictingRun then gaps.Add "conflicting-run-attempt-observations"
+            if jobs |> List.exists (fun job -> not (runs |> List.exists (fun run -> run.Id = job.RunId && run.Attempt = job.Attempt))) then
+                gaps.Add "job-run-attempt-lineage-mismatch"
+            for run in runs do
+                if run.Event = "pull_request_target" && run.TargetAssociation <> Exact then gaps.Add "target-association-unproven"
+                elif run.Event <> "pull_request" && run.Event <> "pull_request_target" then gaps.Add "unsupported-event"
+            let actionChecks = checks |> List.filter (fun row -> row.AppSlug = Some "github-actions") |> List.map _.Id |> Set.ofList
+            let jobChecks = jobs |> List.choose _.CheckRunId |> Set.ofList
+            let external = checks |> List.filter (fun row -> row.AppSlug <> Some "github-actions") |> List.length
+            if external > 0 then gaps.Add "external-checks-not-attributed"
+            if actionChecks <> jobChecks || (jobs |> List.exists _.CheckRunId.IsNone) then gaps.Add "workflow-check-inventory-mismatch"
+            // Complete means the currently API-accessible paginated suite graph, never
+            // historical records GitHub may have deleted under its per-name retention cap.
+            if pages |> List.exists (fun page -> page.Resource.Key.Kind = SuiteChecks && page.Page.Value.Total >= 1000) then
+                gaps.Add "provider-check-run-retention-cap-unproven"
+            let completedJob (row: Job) =
+                row.Status = "completed"
+                && row.Conclusion.IsSome
+                && (row.Steps
+                    |> List.forall (fun step ->
+                        step.Status = "completed" && step.Conclusion.IsSome))
+            let completedJobTimestamps (row: Job) =
+                row.Status <> "completed"
+                || ((FS.GG.Coord.TelemetryCi.interval row.StartedAt row.CompletedAt |> Option.isSome)
+                    && (row.Steps
+                        |> List.forall (fun step ->
+                            step.Status <> "completed"
+                            || (FS.GG.Coord.TelemetryCi.interval step.StartedAt step.CompletedAt |> Option.isSome))))
+            let terminal =
+                (runs |> List.forall (fun row -> row.Status = "completed" && row.Conclusion.IsSome))
+                && (jobs |> List.forall completedJob)
+                && (pages |> List.collect _.Suites |> List.forall (fun row -> row.Status = "completed" && row.Conclusion.IsSome))
+                && (checks |> List.forall (fun row -> row.Status = "completed" && row.Conclusion.IsSome))
+            let timestamps = jobs |> List.forall completedJobTimestamps
+            let lineage = not (gaps |> Seq.exists (fun code -> code <> "external-checks-not-attributed"))
+            let snapshot: Snapshot =
+                {
+                    Repository = identity.Repository;
+                    Head = identity.Head;
+                    PullRequest = int identity.PullRequest;
+                    Workflow = "*";
+                    Binding = (if witnessed then "exact" else "admitted-superseded");
+                    Pages = pages |> List.choose _.Page |> List.sortBy (fun page -> page.Resource, page.Index);
+                    Runs = runs;
+                    Jobs = jobs;
+                    InventoryCoverage = "complete";
+                    AttemptCoverage = "complete";
+                    JobPageCoverage = "complete";
+                    TerminalCoverage = (if terminal then "complete" else "partial");
+                    TimestampCoverage = (if timestamps then "complete" else "partial");
+                    LineageCoverage = (if lineage then "complete" else "partial");
+                    Diagnostic = gaps |> Seq.tryHead;
+                }
+            let population: PopulationSnapshot =
+                {
+                    Snapshot = snapshot;
+                    BaseRef = Some nativeAdmission.BaseRef;
+                    BaseSha = Some nativeAdmission.BaseSha;
+                    Checks = checks;
+                    CheckCoverage = (if lineage then "complete" else "partial");
+                    ExternalChecks = external;
+                    AdmissionWitness = witnessed;
+                    Revision = revision;
+                    Pending = (if terminal then [] else [ "native-population-nonterminal" ]);
+                    Gaps = List.ofSeq gaps;
+                }
+            population
+
+    /// Validate every retained byte and the complete native graph, then expose only suite/check/page DTOs.
+    /// Performs no requests, writes, authority admission or fresh-provider observation.
+    let retainedSuiteGraph
+        (expected: FS.GG.Coord.TelemetryCi.ProviderCheckpoint.Identity)
+        (now: DateTimeOffset)
+        admitted
+        (checkpoint: FS.GG.Coord.TelemetryCi.ProviderCheckpoint.Checkpoint)
+        =
+        match FS.GG.Coord.TelemetryCi.ProviderCheckpoint.validate expected now checkpoint with
+        | Error errors -> Error(Malformed(expected.Repository, String.concat ";" errors))
+        | Ok validated ->
+            match Continuation.graph expected admitted validated.Resources with
+            | Error error -> Error error
+            | Ok(_, missing) when not missing.IsEmpty -> Error(Malformed(expected.Repository, "provider-retained-suite-graph-incomplete"))
+            | Ok(pages, _) ->
+                pages |> List.choose (fun page ->
+                    match page.Resource.Key.Kind, page.Page with
+                    | (FS.GG.Coord.TelemetryCi.ProviderCheckpoint.Suites | FS.GG.Coord.TelemetryCi.ProviderCheckpoint.SuiteChecks), Some nativePage ->
+                        let suites: RetainedSuiteWitness list =
+                            page.Suites |> List.map (fun row ->
+                                { SuiteId = row.Id; AppId = row.AppId; AppSlug = row.AppSlug; Status = row.Status; Conclusion = row.Conclusion })
+                        let checks: RetainedCheckMembershipWitness list =
+                            page.CheckWitnesses |> List.map (fun row ->
+                                { CheckId = row.Id; SuiteId = row.SuiteId; AppId = row.AppId; AppSlug = row.AppSlug })
+                        Some { Key = page.Resource.Key; BodyDigest = page.Resource.BodyDigest
+                               NextPage = (if page.Resource.Next = "" then None else Some(page.Resource.Key.Page + 1))
+                               ObservedAt = page.Resource.ObservedAt; ValidatedAt = page.Resource.ValidatedAt
+                               Page = nativePage; Suites = suites; Checks = checks; CheckObservations = page.Checks }
+                    | _ -> None)
+                |> List.sortBy (fun page -> page.Key.Kind, page.Key.SuiteId, page.Key.Page)
+                |> Ok
+
+    /// Resume one private checkpoint under one aggregate 40-GET/30-second allowance. All cached bodies
+    /// are parsed again before reuse; cache hits spend no native request. A partial result is progress,
+    /// never permission to emit full coverage. Persistence and receiver readback belong to C3.
+    let resumePopulation
+        (transport: IDeadlineSinglePageGitHubTransport)
+        (expected: FS.GG.Coord.TelemetryCi.ProviderCheckpoint.Identity)
+        (clock: unit -> DateTimeOffset)
+        (admitted: bool)
+        (storeRevisionFloor: int64)
+        (original: FS.GG.Coord.TelemetryCi.ProviderCheckpoint.Checkpoint option)
+        =
+        let timer = Stopwatch.StartNew()
+        let startedAt = clock()
+        let mutable calls = 0
+        let mutable firstGap = None
+        let send (request: Request) =
+            let remaining = TimeSpan.FromSeconds 30.0 - timer.Elapsed
+            if calls >= 40 || remaining <= TimeSpan.Zero then
+                Error(Malformed(request.Subject, "provider-continuation-original-budget-exhausted"))
+            else
+                calls <- calls + 1
+                transport.SendSingleWithin(request, remaining)
+        let initial : FS.GG.Coord.TelemetryCi.ProviderCheckpoint.Checkpoint =
+            {
+                Identity = expected;
+                Generation = 1L;
+                CreatedAt = startedAt;
+                ObservedThrough = startedAt;
+                PriorCheckpointDigest = "";
+                CandidateDigest = FS.GG.Coord.TelemetryCi.ProviderCheckpoint.identityDigest expected;
+                Phase = FS.GG.Coord.TelemetryCi.ProviderCheckpoint.Acquiring;
+                Cursor = 0;
+                Resources = [];
+                FirstSweepDigest = "";
+                SecondSweepDigest = "";
+                Revision = 0L;
+                PendingBatchDigest = "";
+                PendingBatchBase64 = "";
+                FactReferences = [];
+            }
+        let preparation =
+            match original with
+            | None -> FS.GG.Coord.TelemetryCi.ProviderCheckpoint.validate expected startedAt initial
+            | Some checkpoint -> FS.GG.Coord.TelemetryCi.ProviderCheckpoint.validate expected startedAt checkpoint
+        match preparation with
+        | Error errors -> Error(Malformed(expected.Repository, String.concat ";" errors))
+        | Ok _ when expected.RepositoryId <= 0L ->
+            Error(Malformed(expected.Repository, "provider-native-repository-witness-required"))
+        | Ok checkpoint when checkpoint.Phase = FS.GG.Coord.TelemetryCi.ProviderCheckpoint.PublicationPending ->
+            Error(Malformed(expected.Repository, "provider-publication-readback-required-before-resume"))
+        | Ok checkpoint when checkpoint.Generation = Int64.MaxValue ->
+            Error(Malformed(expected.Repository, "provider-checkpoint-generation-exhausted"))
+        | Ok checkpoint ->
+            let profileTransport =
+                { new ISinglePageGitHubTransport with
+                    member _.SendSingle request = send request }
+            match readAttributionProfile profileTransport expected.Repository expected.Head with
+            | Error error -> Error error
+            | Ok None -> Error(Malformed(expected.Repository, "provider-attribution-profile-unvalidated"))
+            | Ok profile when FS.GG.Coord.TelemetryCi.ProviderCheckpoint.digest (profile |> Option.defaultValue Array.empty) <> expected.ProfileDigest ->
+                Error(Malformed(expected.Repository, "provider-attribution-profile-drift"))
+            | Ok _ ->
+                let predecessorDigest =
+                    match original with
+                    | None -> ""
+                    | Some _ ->
+                        match FS.GG.Coord.TelemetryCi.ProviderCheckpoint.encode expected startedAt checkpoint with
+                        | Ok bytes -> FS.GG.Coord.TelemetryCi.ProviderCheckpoint.digest bytes
+                        | Error errors -> invalidOp (String.concat ";" errors)
+                let mutable current =
+                    { checkpoint with
+                        PriorCheckpointDigest = predecessorDigest;
+                        Generation = (if original.IsSome then checkpoint.Generation + 1L else 1L);
+                        Phase = (if checkpoint.Phase = FS.GG.Coord.TelemetryCi.ProviderCheckpoint.Stable
+                                               then FS.GG.Coord.TelemetryCi.ProviderCheckpoint.FirstSweep else checkpoint.Phase);
+                        Cursor = (if checkpoint.Phase = FS.GG.Coord.TelemetryCi.ProviderCheckpoint.Stable then 0 else checkpoint.Cursor);
+                        SecondSweepDigest = (if checkpoint.Phase = FS.GG.Coord.TelemetryCi.ProviderCheckpoint.Stable then "" else checkpoint.SecondSweepDigest);
+                    }
+                let mutable running = true
+                let mutable fatal = None
+                let parsedCache = Dictionary<FS.GG.Coord.TelemetryCi.ProviderCheckpoint.ResourceKey, Continuation.ParsedPage>()
+                let bodySizes = Dictionary<FS.GG.Coord.TelemetryCi.ProviderCheckpoint.ResourceKey, int>()
+                // Authenticate every retained body once per invocation. Reuse below is only of these
+                // local parsed values; no unchecked deserialized projection becomes authority.
+                match Continuation.graph expected admitted current.Resources with
+                | Error error -> fatal <- Some error
+                | Ok(pages, _) ->
+                    for page in pages do
+                        parsedCache[page.Resource.Key] <- page
+                        bodySizes[page.Resource.Key] <- System.Text.Encoding.UTF8.GetByteCount page.Resource.Body
+                let bodyDigest (text: string) =
+                    System.Text.UTF8Encoding(false, true).GetBytes(text)
+                    |> FS.GG.Coord.TelemetryCi.ProviderCheckpoint.digest
+                let refresh resourceKey =
+                    let previous = current.Resources |> List.tryFind (fun resource -> resource.Key = resourceKey)
+                    let request = Continuation.request expected resourceKey
+                    let conditional = { request with IfNoneMatch = previous |> Option.bind (fun resource -> if resource.Validator = "" then None else Some resource.Validator) }
+                    send conditional
+                    |> Result.bind (fun response ->
+                        let observedAt = clock()
+                        let result =
+                            match response.Status, previous with
+                            | 304, Some cached when (response.NextLink |> Option.exists (fun next -> next <> cached.Next)) ->
+                                Error(Malformed(request.Subject, "provider-304-conflicting-pagination-topology"))
+                            | 304, Some cached when conditional.IfNoneMatch.IsSome
+                                                    && (response.ETag.IsNone || response.ETag = conditional.IfNoneMatch) ->
+                                Ok { cached with ValidatedAt = observedAt }
+                            | 304, _ -> Error(Malformed(request.Subject, "provider-304-without-exact-retained-body"))
+                            | 200, _ ->
+                                let digest = bodyDigest response.Body
+                                Ok
+                                    {
+                                        Key = resourceKey;
+                                        Body = response.Body;
+                                        BodyDigest = digest;
+                                        Validator = response.ETag |> Option.defaultValue "";
+                                        Next = response.NextLink |> Option.defaultValue "";
+                                        ProjectionDigest = digest;
+                                        ObservedAt = observedAt;
+                                        ValidatedAt = observedAt;
+                                    }
+                            | _ -> Error(Malformed(request.Subject, "provider-unexpected-resource-status"))
+                        result
+                        |> Result.bind (fun resource ->
+                            let parsed =
+                                match response.Status, parsedCache.TryGetValue resourceKey with
+                                | 304, (true, cached) -> Ok { cached with Resource = resource }
+                                | _ -> Continuation.parseResource expected admitted resource
+                            parsed
+                            |> Result.bind (fun page ->
+                                let size = System.Text.Encoding.UTF8.GetByteCount resource.Body
+                                let aggregate = int64 size + (bodySizes |> Seq.filter (fun pair -> pair.Key <> resourceKey) |> Seq.sumBy (fun pair -> int64 pair.Value))
+                                let resources = resource :: (current.Resources |> List.filter (fun item -> item.Key <> resourceKey)) |> List.sortBy _.Key
+                                if size > FS.GG.Coord.TelemetryCi.ProviderCheckpoint.maximumBodyBytes
+                                   || aggregate > int64 FS.GG.Coord.TelemetryCi.ProviderCheckpoint.maximumAggregateBodyBytes
+                                   || resources.Length > FS.GG.Coord.TelemetryCi.ProviderCheckpoint.maximumResources then
+                                    Error(Malformed(request.Subject, "provider-retained-resource-bound"))
+                                elif timer.Elapsed >= TimeSpan.FromSeconds 30.0 then
+                                    Error(Malformed(request.Subject, "provider-original-deadline-exhausted-after-body-parse"))
+                                else
+                                    let changed = previous |> Option.forall (fun cached -> cached.BodyDigest <> resource.BodyDigest || cached.Next <> resource.Next)
+                                    parsedCache[resourceKey] <- page
+                                    bodySizes[resourceKey] <- size
+                                    current <- { current with Resources = resources; ObservedThrough = observedAt }
+                                    // Invalidate immediately, before any later barrier fetch can fail.
+                                    // The updated body must never retain proofs for the old population.
+                                    if changed && current.Phase = FS.GG.Coord.TelemetryCi.ProviderCheckpoint.FinalBarrier then
+                                        current <-
+                                            { current with
+                                                Phase = FS.GG.Coord.TelemetryCi.ProviderCheckpoint.Acquiring;
+                                                Cursor = 0;
+                                                FirstSweepDigest = "";
+                                                SecondSweepDigest = "";
+                                            }
+                                    Ok changed)))
+                while running && fatal.IsNone do
+                    if timer.Elapsed >= TimeSpan.FromSeconds 30.0 then
+                        firstGap <- Some "provider-continuation-original-deadline-exhausted"
+                        running <- false
+                    match (if running then Continuation.graphFromParsed expected current.Resources (parsedCache.Values |> Seq.toList) else Ok([], [])) with
+                    | Error error -> fatal <- Some error
+                    | Ok(_, _) when not running -> ()
+                    | Ok(_, missing) ->
+                        let acquire = FS.GG.Coord.TelemetryCi.ProviderCheckpoint.Acquiring
+                        if not missing.IsEmpty then
+                            current <- { current with Phase = acquire; Cursor = 0; FirstSweepDigest = ""; SecondSweepDigest = "" }
+                            match refresh missing.Head with
+                            | Ok _ -> ()
+                            | Error error -> firstGap <- Some(sprintf "%A" error); running <- false
+                        else
+                            let resources = current.Resources |> List.sortBy _.Key
+                            match current.Phase with
+                            | FS.GG.Coord.TelemetryCi.ProviderCheckpoint.Acquiring ->
+                                match FS.GG.Coord.TelemetryCi.ProviderCheckpoint.beginSweep current with
+                                | Ok next -> current <- next
+                                | Error errors -> fatal <- Some(Malformed(expected.Repository, String.concat ";" errors))
+                            | FS.GG.Coord.TelemetryCi.ProviderCheckpoint.FirstSweep
+                            | FS.GG.Coord.TelemetryCi.ProviderCheckpoint.SecondSweep ->
+                                if current.Cursor = resources.Length then
+                                    match FS.GG.Coord.TelemetryCi.ProviderCheckpoint.finishSweep current with
+                                    | Ok next -> current <- next
+                                    | Error errors -> fatal <- Some(Malformed(expected.Repository, String.concat ";" errors))
+                                else
+                                    match refresh resources[current.Cursor].Key with
+                                    | Error error -> firstGap <- Some(sprintf "%A" error); running <- false
+                                    | Ok changed ->
+                                        match FS.GG.Coord.TelemetryCi.ProviderCheckpoint.advanceSweep resources[current.Cursor].Key changed current with
+                                        | Ok next -> current <- next
+                                        | Error errors -> fatal <- Some(Malformed(expected.Repository, String.concat ";" errors))
+                            | FS.GG.Coord.TelemetryCi.ProviderCheckpoint.FinalBarrier
+                            | FS.GG.Coord.TelemetryCi.ProviderCheckpoint.Stable ->
+                                let barrier =
+                                    resources
+                                    |> List.filter (fun resource ->
+                                        match resource.Key.Kind with
+                                        | FS.GG.Coord.TelemetryCi.ProviderCheckpoint.Admission
+                                        | FS.GG.Coord.TelemetryCi.ProviderCheckpoint.Runs
+                                        | FS.GG.Coord.TelemetryCi.ProviderCheckpoint.Suites -> true
+                                        | _ -> false)
+                                if barrier.Length > 39 then
+                                    firstGap <- Some "provider-final-barrier-exceeds-fixed-invocation-budget"; running <- false
+                                elif calls + barrier.Length > 40 then
+                                    current <- { current with Phase = FS.GG.Coord.TelemetryCi.ProviderCheckpoint.FinalBarrier; Cursor = 0 }
+                                    firstGap <- Some "provider-final-barrier-deferred-for-whole-invocation-allowance"; running <- false
+                                else
+                                    let mutable changed = false
+                                    for resource in barrier do
+                                        if running then
+                                            match refresh resource.Key with
+                                            | Ok mutation -> changed <- changed || mutation
+                                            | Error error -> firstGap <- Some(sprintf "%A" error); running <- false
+                                    if running then
+                                        if changed then
+                                            current <- { current with Phase = acquire; Cursor = 0; FirstSweepDigest = ""; SecondSweepDigest = "" }
+                                        else
+                                            current <-
+                                                { current with
+                                                    Phase = FS.GG.Coord.TelemetryCi.ProviderCheckpoint.Stable;
+                                                    Cursor = resources.Length;
+                                                }
+                                            running <- false
+                            | FS.GG.Coord.TelemetryCi.ProviderCheckpoint.PublicationPending ->
+                                fatal <- Some(Malformed(expected.Repository, "provider-publication-readback-required"))
+                match fatal with
+                | Some error -> Error error
+                | None ->
+                    if timer.Elapsed >= TimeSpan.FromSeconds 30.0
+                       && current.Phase = FS.GG.Coord.TelemetryCi.ProviderCheckpoint.Stable then
+                        current <- { current with Phase = FS.GG.Coord.TelemetryCi.ProviderCheckpoint.FinalBarrier; Cursor = 0 }
+                        firstGap <- Some "provider-original-deadline-exhausted-before-final-projection"
+                    let priorDigest = FS.GG.Coord.TelemetryCi.ProviderCheckpoint.populationDigest checkpoint.Resources
+                    let currentDigest = FS.GG.Coord.TelemetryCi.ProviderCheckpoint.populationDigest current.Resources
+                    let revision =
+                        if currentDigest = priorDigest && current.Phase = checkpoint.Phase
+                           && current.Revision > storeRevisionFloor then Ok current.Revision
+                        else FS.GG.Coord.TelemetryCi.ProviderCheckpoint.nextRevision current.Revision storeRevisionFloor
+                    revision |> Result.mapError (fun errors -> Malformed(expected.Repository, String.concat ";" errors))
+                    |> Result.bind (fun value ->
+                        current <- { current with Revision = value; ObservedThrough = clock() }
+                        FS.GG.Coord.TelemetryCi.ProviderCheckpoint.validate expected (clock()) current
+                        |> Result.mapError (fun errors -> Malformed(expected.Repository, String.concat ";" errors))
+                        |> Result.bind (fun validatedCheckpoint ->
+                            if validatedCheckpoint.Phase = FS.GG.Coord.TelemetryCi.ProviderCheckpoint.Stable then
+                                Continuation.graphFromParsed expected validatedCheckpoint.Resources (parsedCache.Values |> Seq.toList)
+                                |> Result.bind (fun (pages, missing) ->
+                                    if not missing.IsEmpty then invalidOp "stable-provider-graph-incomplete"
+                                    let population = Continuation.population expected value pages
+                                    if timer.Elapsed >= TimeSpan.FromSeconds 30.0 then
+                                        let deferredRevision =
+                                            if checkpoint.Phase = FS.GG.Coord.TelemetryCi.ProviderCheckpoint.FinalBarrier
+                                               || value > checkpoint.Revision then Ok value
+                                            else FS.GG.Coord.TelemetryCi.ProviderCheckpoint.nextRevision value storeRevisionFloor
+                                        deferredRevision
+                                        |> Result.mapError (fun errors -> Malformed(expected.Repository, String.concat ";" errors))
+                                        |> Result.map (fun revision ->
+                                            {
+                                                Checkpoint = { validatedCheckpoint with Phase = FS.GG.Coord.TelemetryCi.ProviderCheckpoint.FinalBarrier; Cursor = 0; Revision = revision };
+                                                Population = None;
+                                                Requests = calls;
+                                                Gap = Some "provider-original-deadline-exhausted-after-final-projection";
+                                            })
+                                    else
+                                        Ok
+                                            {
+                                                Checkpoint = validatedCheckpoint;
+                                                Population = Some population;
+                                                Requests = calls;
+                                                Gap = firstGap;
+                                            })
+                            else
+                                Ok { Checkpoint = validatedCheckpoint; Population = None; Requests = calls; Gap = firstGap }))

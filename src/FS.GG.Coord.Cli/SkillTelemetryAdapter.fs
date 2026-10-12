@@ -153,7 +153,7 @@ module SkillTelemetryAdapter =
         elif OperatingSystem.IsWindows() then true
         else (File.GetUnixFileMode path &&& enum<UnixFileMode> 0o777) = enum<UnixFileMode> 0o600
 
-    let private writePrivateBytes directory name (bytes: byte array) =
+    let internal writePrivateBytes directory name (bytes: byte array) =
         if Directory.Exists directory then
             let info = DirectoryInfo directory
             if info.LinkTarget <> null then fail "private telemetry directory must not be a symlink"

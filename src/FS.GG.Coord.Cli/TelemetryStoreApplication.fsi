@@ -3,6 +3,17 @@ namespace FS.GG.Coord.Cli
 open FS.GG.Coord
 
 module TelemetryStoreApplication =
+
+    /// Read-only current receipt-authenticated data; this DTO grants no authority or freshness.
+    type CiSuiteReceiverSnapshot =
+        { StoreId: string
+          ReceiverContract: string
+          ItemId: string
+          Producer: string
+          Stream: string
+          RevisionFloor: int64
+          AuthenticatedFacts: TelemetryStore.Fact list }
+
     type DrainHooks =
         {
             BeforeCommit: unit -> unit
@@ -365,3 +376,10 @@ module TelemetryStoreApplication =
     val runBudget: action: string -> args: string list -> int
     val runReview: action: string -> args: string list -> int
     val runItemDetail: args: string list -> int
+
+    /// Bounded current authenticated receiver facts; requires separate collector custody and installed-byte admission.
+    /// Validate schema/store identity and exact current applied receipt joins for the named producer/stream.
+    /// The caller must retain independent current binding/custody before any publication.
+    val ciSuiteReceiverReadback:
+        path: string -> assessment: TelemetryStore.DurabilityAssessment -> itemId: string ->
+        producer: string -> stream: string -> Result<CiSuiteReceiverSnapshot, string list>

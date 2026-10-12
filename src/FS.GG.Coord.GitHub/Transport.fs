@@ -71,6 +71,10 @@ module Transport =
     type ISinglePageGitHubTransport =
         abstract SendSingle: request: Request -> IoResult<Response>
 
+    /// One read page under the caller's remaining aggregate invocation allowance.
+    type IDeadlineSinglePageGitHubTransport =
+        abstract SendSingleWithin: request: Request * remaining: TimeSpan -> IoResult<Response>
+
     [<Literal>]
     let private DefaultApiBase = "https://api.github.com"
 
@@ -437,6 +441,7 @@ module Transport =
             (url: string)
             (maximumBytes: int option)
             (rawMutationResponse: bool)
+            (remaining: TimeSpan option)
             : IoResult<Response> =
             try
                 let method =
@@ -464,7 +469,20 @@ module Transport =
                     message.Content <-
                         new StringContent(graphQlPayload document variables, Encoding.UTF8, "application/json")
 
-                use response = http.Send message
+                use cancellation = new System.Threading.CancellationTokenSource()
+
+                match remaining with
+                | Some allowance -> cancellation.CancelAfter allowance
+                | None -> ()
+
+                let cancellationToken = cancellation.Token
+
+                use response =
+                    match remaining with
+                    | None -> http.Send message
+                    | Some _ ->
+                        http.SendAsync(message, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
+                            .GetAwaiter().GetResult()
                 let status = int response.StatusCode
 
                 let body =
@@ -478,13 +496,18 @@ module Transport =
                             raise (IO.InvalidDataException "response exceeds 4 MiB")
                         | _ -> ()
 
-                        use stream = response.Content.ReadAsStream()
+                        use stream =
+                            response.Content.ReadAsStreamAsync(cancellationToken).GetAwaiter().GetResult()
                         use memory = new IO.MemoryStream()
                         let buffer = Array.zeroCreate<byte> 8192
                         let mutable reading = true
 
                         while reading do
-                            let count = stream.Read(buffer, 0, buffer.Length)
+                            let count =
+                                match remaining with
+                                | None -> stream.Read(buffer, 0, buffer.Length)
+                                | Some _ ->
+                                    stream.ReadAsync(buffer.AsMemory(), cancellationToken).AsTask().GetAwaiter().GetResult()
 
                             if count = 0 then
                                 reading <- false
@@ -493,7 +516,9 @@ module Transport =
                             else
                                 memory.Write(buffer, 0, count)
 
-                        Encoding.UTF8.GetString(memory.ToArray())
+                        match remaining with
+                        | None -> Encoding.UTF8.GetString(memory.ToArray())
+                        | Some _ -> UTF8Encoding(false, true).GetString(memory.ToArray())
 
                 let headers =
                     response.Headers
@@ -575,12 +600,14 @@ module Transport =
                     | inner -> $"%s{x.Message} <- %s{chain inner}"
 
                 Error(Transport(chain e))
-            | :? TaskCanceledException as e -> Error(Transport $"timed out: %s{e.Message}")
+            | :? OperationCanceledException as e -> Error(Transport $"timed out: %s{e.Message}")
             | :? IO.InvalidDataException as e -> Error(Malformed(request.Subject, e.Message))
+            | :? DecoderFallbackException as e -> Error(Malformed(request.Subject, e.Message))
+            | :? IO.IOException as e -> Error(Transport e.Message)
 
         let sendOne http request url maximumBytes rawMutationResponse =
             if rawMutationResponse || isLegacyReadRequest request then
-                sendOneUnchecked http request url maximumBytes rawMutationResponse
+                sendOneUnchecked http request url maximumBytes rawMutationResponse None
             else
                 Error(Malformed(request.Subject, "mutation requires the typed SendMutation boundary"))
 
@@ -638,6 +665,16 @@ module Transport =
             member _.SendSingle(request: Request) : IoResult<Response> =
                 let url = base' + "/" + request.Path.TrimStart('/') + buildQuery request.Query
                 sendOne singlePageClient request url (Some(4 * 1024 * 1024)) false
+
+        interface IDeadlineSinglePageGitHubTransport with
+            member _.SendSingleWithin(request: Request, remaining: TimeSpan) : IoResult<Response> =
+                if remaining <= TimeSpan.Zero || remaining > TimeSpan.FromSeconds 30.0 then
+                    Error(Malformed(request.Subject, "remaining invocation allowance must be in (0, 30] seconds"))
+                elif request.Method <> "GET" || request.Body <> NoBody || request.Budget <> Rest then
+                    Error(Malformed(request.Subject, "deadline single-page boundary admits only bodyless REST GET"))
+                else
+                    let url = base' + "/" + request.Path.TrimStart('/') + buildQuery request.Query
+                    sendOneUnchecked singlePageClient request url (Some(4 * 1024 * 1024)) false (Some remaining)
 
         interface IDisposable with
             member _.Dispose() =

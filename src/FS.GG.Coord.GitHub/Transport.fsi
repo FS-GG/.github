@@ -161,6 +161,12 @@ module Transport =
     type ISinglePageGitHubTransport =
         abstract SendSingle: request: Request -> IoResult<Response>
 
+    /// Read one bodyless REST GET with an allowance in (0, 30] seconds. The same cancellation
+    /// covers headers and the bounded 4 MiB body. No redirect, continuation or retry is followed.
+    /// Existing single-page and ordinary request interfaces retain their behavior.
+    type IDeadlineSinglePageGitHubTransport =
+        abstract SendSingleWithin: request: Request * remaining: System.TimeSpan -> IoResult<Response>
+
     /// The real one.
     ///
     /// `apiBase` is CONFIGURABLE (`FSGG_GITHUB_API_BASE`, default `https://api.github.com`). That is
@@ -176,6 +182,7 @@ module Transport =
         interface IGitHubTransport
         interface IProviderGitHubTransport
         interface ISinglePageGitHubTransport
+        interface IDeadlineSinglePageGitHubTransport
         interface System.IDisposable
 
     /// Decorate a raw provider transport with the durable v1 admission fence. `Send` remains temporarily

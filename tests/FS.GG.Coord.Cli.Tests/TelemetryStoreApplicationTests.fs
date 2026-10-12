@@ -4103,3 +4103,102 @@ PRAGMA user_version=13;
         Assert.True(TelemetryStoreApplication.status path approved |> Result.isError)
         Assert.Equal("14", correctionSql path "PRAGMA user_version;")
         Assert.Equal("14", correctionSql path "SELECT count(*) FROM schema_migrations;")
+
+
+    [<Fact>]
+    let ``suite receiver accepts actual1001 suite graph through bounded authenticated batches`` () =
+        let cleanup, path = root ()
+        use cleanup = cleanup
+        TelemetryStoreApplication.initialize path approved |> unwrap |> ignore
+        use capability = JsonDocument.Parse(TelemetryStoreApplication.status path approved |> unwrap)
+        Assert.Equal<string>("fsgg.telemetry.ci-suite-receiver/1", capability.RootElement.GetProperty("ciSuiteReceiverContract").GetString())
+        let principal: TelemetryReceipt.Scope =
+            { Workspace = "suite-workspace"; Producer = "suite-producer"; Stream = "suite-stream" }
+        TelemetryStoreApplication.provisionReceiptWorkspace path approved principal.Workspace |> unwrap |> ignore
+        TelemetryStoreApplication.enrollReceiptProducer path approved principal |> unwrap |> ignore
+        let digest = String('d', 64)
+        let sha = String('a', 40)
+        let scope = $"""{{"collectionId":"collection-1001","generation":1,"repository":"o/r","repositoryId":1,"pullRequest":2,"baseRef":"main","baseSha":"{sha}","head":"{sha}","assignmentDigest":"{digest}","profileDigest":"{digest}","parserContract":"provider-checkpoint/2","producerStream":"{principal.Stream}"}}"""
+        let event (identity: string) (kind: string) (fields: string) =
+            $"""{{"kind":"{kind}","identity":"{identity}","itemId":"UTEL-06.3","revision":1,{fields.Substring(1, fields.Length - 2)}}}"""
+        let dependencies =
+            [ event "suite-admission" "ci-population-admission" $"""{{"collectionId":"collection-1001","repository":"o/r","prNumber":2,"baseRef":"main","baseSha":"{sha}","head":"{sha}","witness":"native-pr-head"}}"""
+              event "suite-binding" "ci-binding" $"""{{"collectionId":"collection-1001","repository":"o/r","head":"{sha}","prNumber":2,"workflow":"*","featureId":"UTEL","attemptId":"attempt","parentAttemptId":null,"producerStream":"{principal.Stream}","binding":"exact"}}"""
+              event "suite-coverage" "ci-coverage" """{"collectionId":"collection-1001","inventory":"partial","attempts":"partial","jobPages":"partial","terminal":"partial","timestamps":"partial","lineage":"unknown","classification":"unknown","criticalPath":"unknown"}"""
+              event "suite-population" "ci-population-coverage" """{"collectionId":"collection-1001","actions":"partial","checks":"partial","attempts":"partial","jobs":"partial","terminal":"partial","timestamps":"partial","continuation":"pending","externalChecks":0,"gaps":"[]"}""" ]
+        let parse (value: string) =
+            TelemetryStore.parseBatch (causalBatch "suite-parse" value) |> unwrap |> fun batch -> batch.Facts.Head
+        let reference value =
+            let fact = parse value
+            $"""{{"identity":"{fact.Identity}","revision":{fact.Revision},"digest":"{fact.ContentDigest}"}}"""
+        let page identity resource suiteId page count total next rows =
+            event identity "ci-suite-page/1"
+                $"""{{"scope":{scope},"resourceKind":"{resource}","suiteId":{suiteId},"page":{page},"nativeCount":{count},"nativeTotal":{total},"nextPage":{next},"bodyDigest":"{digest}","observedAt":"2026-10-12T00:00:00Z","validatedAt":"2026-10-12T00:00:01Z","fragmentIndex":0,"fragmentCount":1,"rowOffset":0,"rows":[{rows}]}}"""
+        let inventory =
+            [ 1 .. 1001 ] |> List.chunkBySize 100
+            |> List.mapi (fun index ids ->
+                let rows = ids |> List.map (fun id -> $"""{{"suiteId":{id},"appId":4,"appSlug":"github-actions","status":"completed","conclusion":"success"}}""") |> String.concat ","
+                page $"suite-inventory-{index}" "suites" "null" (index + 1) ids.Length 1001 (if index < 10 then string (index + 2) else "null") rows)
+        let emptyChecks =
+            [ 1 .. 1001 ] |> List.map (fun id -> page $"suite-checks-{id}" "suite-checks" (string id) 1 0 0 "null" "")
+        let parts = inventory @ emptyChecks
+        let graphDigest = parts |> List.map parse |> TelemetryStore.ciSuiteFactGraphDigest
+        let seal =
+            event "suite-seal" "ci-suite-seal/1"
+                $"""{{"scope":{scope},"admissionRef":{reference dependencies[0]},"bindingRef":{reference dependencies[1]},"coverageRef":{reference dependencies[2]},"populationCoverageRef":{reference dependencies[3]},"graphDigest":"{graphDigest}","resourceCount":1012,"fragmentCount":1012,"suiteCount":1001,"checkCount":0,"firstSweepDigest":"{digest}","secondSweepDigest":"{digest}","barrierDigest":"{digest}","observedFrom":"2026-10-12T00:00:00Z","observedThrough":"2026-10-12T00:00:01Z"}}"""
+        let sendAs (sender: TelemetryReceipt.Scope) source expected name (events: string list) =
+            let batch = $"""{{"schema":"{TelemetryStore.BatchSchema}","ingestId":"suite-{name}","sourceIdentity":"{source}","generation":"1","cursor":"{name}","eventCount":{events.Length},"events":[{String.concat "," events}]}}"""
+            let envelope = Encoding.UTF8.GetBytes $"""{{"schema":"{TelemetryReceipt.Schema}","workspaceId":"{sender.Workspace}","producerId":"{sender.Producer}","streamId":"{sender.Stream}","batchId":"suite-{name}","payload":{batch}}}"""
+            Assert.True(envelope.Length <= 65536)
+            TelemetryStoreApplication.submitReceipt path approved sender envelope |> unwrap |> ignore
+            TelemetryStoreApplication.drainReceipts path approved sender.Workspace |> unwrap |> ignore
+            use receipt = JsonDocument.Parse(TelemetryStoreApplication.lookupReceipt path approved sender ("suite-" + name) |> unwrap)
+            Assert.Equal<string>(expected, receipt.RootElement.GetProperty("status").GetString())
+        let send name events = sendAs principal principal.Stream "applied" name events
+        let item = """{"kind":"item","identity":"UTEL-06.3","itemId":"UTEL-06.3","revision":0}"""
+        send "fence" (item :: dependencies)
+        let observationEvents =
+            [ event "collector-page" "ci-page" """{"collectionId":"collection-1001","resource":"Jobs:1:1","page":1,"count":0,"total":0}"""
+              event "collector-diagnostic" "diagnostic" """{"code":"collector-readback-fixture","severity":"warning"}""" ]
+        send "collector-observations" observationEvents
+        let readback sender = TelemetryCiApplication.receiverContinuationReadbackForTesting path approved "UTEL-06.3" sender |> unwrap
+        let storeId, contract, revision, initialFacts = readback principal
+        Assert.False(String.IsNullOrWhiteSpace storeId)
+        Assert.Equal("fsgg.telemetry.ci-suite-receiver/1", contract)
+        Assert.Equal(1L, revision)
+        Assert.Equal(6, initialFacts.Length)
+        Assert.Contains(initialFacts, fun fact -> fact.Kind = "ci-page")
+        Assert.Contains(initialFacts, fun fact -> fact.Kind = "diagnostic")
+
+        // Both original source-stream and authenticated principal/collection ownership remain required.
+        sendAs principal "foreign-source" "rejected" "wrong-source" [ parts.Head ]
+        let foreignStream = { principal with Producer = "foreign-stream-producer"; Stream = "foreign-stream" }
+        TelemetryStoreApplication.enrollReceiptProducer path approved foreignStream |> unwrap |> ignore
+        sendAs foreignStream principal.Stream "rejected" "wrong-principal" [ parts.Head ]
+        let foreignProducer = { principal with Producer = "foreign-producer" }
+        TelemetryStoreApplication.enrollReceiptProducer path approved foreignProducer |> unwrap |> ignore
+        sendAs foreignProducer principal.Stream "rejected" "wrong-producer" [ parts.Head ]
+
+        for index, group in parts |> List.chunkBySize 4 |> List.indexed do send $"parts-{index}" group
+        use partial = JsonDocument.Parse(TelemetryStoreApplication.ciSummary path approved "UTEL-06.3" |> unwrap)
+        Assert.Equal<string>("partial", partial.RootElement.GetProperty("checkCoverage").GetString())
+        send "seal" [ seal ]
+        let finalStoreId, finalContract, finalRevision, finalFacts = readback principal
+        Assert.Equal(storeId, finalStoreId)
+        Assert.Equal(contract, finalContract)
+        Assert.Equal(1L, finalRevision)
+        Assert.Equal(1019, finalFacts.Length)
+        let actual = finalFacts |> List.map (fun fact -> fact.Identity, fact.Revision, fact.ContentDigest) |> Set.ofList
+        let expected = dependencies @ observationEvents @ parts @ [ seal ] |> List.map parse |> List.map (fun fact -> fact.Identity, fact.Revision, fact.ContentDigest) |> Set.ofList
+        Assert.Equal<Set<string * int64 * string>>(expected, actual)
+        let _, _, _, wrongProducerFacts = readback foreignProducer
+        Assert.Empty wrongProducerFacts
+        let _, _, _, wrongPrincipalFacts = readback foreignStream
+        Assert.Empty wrongPrincipalFacts
+        use complete = JsonDocument.Parse(TelemetryStoreApplication.ciSummary path approved "UTEL-06.3" |> unwrap)
+        Assert.Equal<string>("complete", complete.RootElement.GetProperty("checkCoverage").GetString())
+        Assert.Equal<string>("none", complete.RootElement.GetProperty("suiteProofCoverageReason").GetString())
+        // Exact authenticated replay preserves the same current graph; there is no second fact population.
+        send "seal" [ seal ]
+        use reopened = JsonDocument.Parse(TelemetryStoreApplication.ciSummary path approved "UTEL-06.3" |> unwrap)
+        Assert.Equal<string>("complete", reopened.RootElement.GetProperty("checkCoverage").GetString())

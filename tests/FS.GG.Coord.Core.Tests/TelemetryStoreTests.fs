@@ -255,3 +255,200 @@ module TelemetryStoreTests =
                         ]
                 ))
         )
+
+    let private suiteScope =
+        let digest = String('d', 64)
+        let sha = String('a', 40)
+        $"""{{"collectionId":"collection-1","generation":1,"repository":"o/r","repositoryId":1,"pullRequest":2,"baseRef":"main","baseSha":"{sha}","head":"{sha}","assignmentDigest":"{digest}","profileDigest":"{digest}","parserContract":"provider-checkpoint/2","producerStream":"coordination"}}"""
+
+    let private suitePageEvent =
+        let digest = String('d', 64)
+        $"""{{"kind":"ci-suite-page/1","identity":"suite-page-1","itemId":"UTEL-06.3","revision":1,"scope":{suiteScope},"resourceKind":"suites","suiteId":null,"page":1,"nativeCount":1,"nativeTotal":1,"nextPage":null,"bodyDigest":"{digest}","observedAt":"2026-10-12T00:00:00Z","validatedAt":"2026-10-12T00:00:01Z","fragmentIndex":0,"fragmentCount":1,"rowOffset":0,"rows":[{{"suiteId":3,"appId":4,"appSlug":"github-actions","status":"completed","conclusion":"success"}}]}}"""
+
+    [<Fact>]
+    let ``suite page closed wire retains exact scope and inventory rows`` () =
+        match TelemetryStore.parseBatch (causalBatch suitePageEvent) with
+        | Ok batch ->
+            match batch.Facts.Head.Payload with
+            | TelemetryStore.CiSuitePage page ->
+                Assert.Equal<string>("collection-1", page.Scope.CollectionId)
+                Assert.Equal<int64>(1L, page.Scope.Generation)
+                Assert.Equal<int64>(1L, page.NativeCount)
+                match page.Rows with
+                | TelemetryStore.SuiteInventoryRows [ row ] ->
+                    Assert.Equal<int64>(3L, row.SuiteId)
+                    Assert.Equal<int64>(4L, row.AppId)
+                | _ -> Assert.Fail "expected exact single suite inventory row"
+            | _ -> Assert.Fail "expected suite page payload"
+        | Error errors -> Assert.Fail(String.concat ";" errors)
+
+    [<Fact>]
+    let ``suite page refuses changed shape resource correspondence and fragment bounds`` () =
+        let refused event = Assert.True(TelemetryStore.parseBatch (causalBatch event) |> Result.isError)
+        refused (suitePageEvent.Replace("\"fragmentIndex\":0", "\"fragmentIndex\":1"))
+        refused (suitePageEvent.Replace("\"rowOffset\":0", "\"rowOffset\":1"))
+        refused (suitePageEvent.Replace("\"nativeCount\":1", "\"nativeCount\":101"))
+        refused (suitePageEvent.Replace("\"suiteId\":null", "\"suiteId\":3"))
+        refused (suitePageEvent.Replace("\"resourceKind\":\"suites\"", "\"resourceKind\":\"foreign\""))
+        refused (suitePageEvent.Replace("\"bodyDigest\":", "\"unknownField\":true,\"bodyDigest\":"))
+        refused (suitePageEvent.Replace("\"fragmentCount\":1", "\"fragmentCount\":1,\"fragmentCount\":1"))
+        refused (suitePageEvent.Replace("2026-10-12T00:00:01Z", "2026-10-11T23:59:59Z"))
+
+    [<Fact>]
+    let ``suite empty page requires explicit zero proof without invented continuation`` () =
+        let empty =
+            suitePageEvent
+            |> fun value -> value.Replace("\"nativeCount\":1", "\"nativeCount\":0")
+            |> fun value -> value.Replace("\"nativeTotal\":1", "\"nativeTotal\":0")
+            |> fun value -> value.Replace("[{\"suiteId\":3,\"appId\":4,\"appSlug\":\"github-actions\",\"status\":\"completed\",\"conclusion\":\"success\"}]", "[]")
+        Assert.True(TelemetryStore.parseBatch (causalBatch empty) |> Result.isOk)
+        Assert.True(TelemetryStore.parseBatch (causalBatch (empty.Replace("\"nextPage\":null", "\"nextPage\":2"))) |> Result.isError)
+        Assert.True(TelemetryStore.parseBatch (causalBatch (empty.Replace("\"fragmentCount\":1", "\"fragmentCount\":2"))) |> Result.isError)
+
+    [<Fact>]
+    let ``suite inventory accepts1001 suites while check retention remains1000`` () =
+        let inventory = suitePageEvent.Replace("\"nativeTotal\":1", "\"nativeTotal\":1001").Replace("\"nextPage\":null", "\"nextPage\":2")
+        Assert.True(TelemetryStore.parseBatch (causalBatch inventory) |> Result.isOk)
+        let checkPage =
+            inventory.Replace("\"resourceKind\":\"suites\"", "\"resourceKind\":\"suite-checks\"")
+                     .Replace("\"suiteId\":null", "\"suiteId\":3")
+        Assert.True(TelemetryStore.parseBatch (causalBatch checkPage) |> Result.isError)
+        Assert.True(TelemetryStore.parseBatch (causalBatch (inventory.Replace("\"nativeTotal\":1001", "\"nativeTotal\":4097"))) |> Result.isError)
+
+    let private parsedSuitePage () =
+        match TelemetryStore.parseBatch (causalBatch suitePageEvent) with
+        | Ok batch ->
+            match batch.Facts.Head.Payload with
+            | TelemetryStore.CiSuitePage page -> page
+            | _ -> failwith "expected suite page"
+        | Error errors -> failwith (String.concat ";" errors)
+
+    [<Fact>]
+    let ``typed suite graph digest sorts pages but preserves native row and observation facts`` () =
+        let first = parsedSuitePage ()
+        let second =
+            { first with
+                Page = 2L
+                BodyDigest = String('e', 64)
+            }
+        let expected = TelemetryStore.ciSuiteGraphDigest [ first; second ]
+        Assert.Equal<string>(expected, TelemetryStore.ciSuiteGraphDigest [ second; first ])
+        let changes: TelemetryStore.CiSuitePageProof list =
+            [
+                { second with NativeTotal = 1001L }
+                { second with NextPage = Some 3L }
+                { second with ValidatedAt = "2026-10-12T00:00:02Z" }
+                { second with Scope = { second.Scope with Generation = 2L } }
+                { second with FragmentCount = 2L }
+            ]
+        for changed in changes do
+            Assert.NotEqual<string>(expected, TelemetryStore.ciSuiteGraphDigest [ first; changed ])
+        Assert.NotEqual<string>(expected, TelemetryStore.ciSuiteGraphDigest [ first; second; second ])
+
+    [<Fact>]
+    let ``typed suite graph digest binds exact canonical check reference and option distinctions`` () =
+        let inventory = parsedSuitePage ()
+        let checkReference: TelemetryStore.CiSuiteProofReference =
+            {
+                Identity = "check-5"
+                Revision = 1L
+                Digest = String('d', 64)
+            }
+        let check: TelemetryStore.CiSuiteCheckMembershipRow =
+            {
+                CheckId = 5L
+                AppId = 4L
+                AppSlug = Some "github-actions"
+                CheckRef = checkReference
+            }
+        let membership =
+            { inventory with
+                SuiteId = Some 3L
+                Rows = TelemetryStore.SuiteCheckMembershipRows [ check ]
+            }
+        let expected = TelemetryStore.ciSuiteGraphDigest [ inventory; membership ]
+        for changed in
+            [
+                { check with CheckRef = { checkReference with Revision = 2L } }
+                { check with CheckRef = { checkReference with Digest = String('e', 64) } }
+                { check with CheckRef = { checkReference with Identity = "check-6" } }
+                { check with AppSlug = None }
+                { check with AppSlug = Some "" }
+                { check with AppId = 5L }
+            ] do
+            let page =
+                { membership with
+                    Rows = TelemetryStore.SuiteCheckMembershipRows [ changed ]
+                }
+            Assert.NotEqual<string>(expected, TelemetryStore.ciSuiteGraphDigest [ inventory; page ])
+        let absent =
+            { membership with
+                Rows = TelemetryStore.SuiteCheckMembershipRows [ { check with AppSlug = None } ]
+            }
+        let empty =
+            { membership with
+                Rows = TelemetryStore.SuiteCheckMembershipRows [ { check with AppSlug = Some "" } ]
+            }
+        Assert.NotEqual<string>(TelemetryStore.ciSuiteGraphDigest [ absent ], TelemetryStore.ciSuiteGraphDigest [ empty ])
+
+    let private completePureSuiteGraph () =
+        let page = parsedSuitePage ()
+        let scope = page.Scope
+        let fact identity kind payload: TelemetryStore.Fact =
+            { Identity = identity; ItemId = Some "UTEL-06.3"; Revision = 1L; Kind = kind
+              Payload = payload; Canonical = "{}"; ContentDigest = String('d', 64) }
+        let reference (value: TelemetryStore.Fact): TelemetryStore.CiSuiteProofReference =
+            { Identity = value.Identity; Revision = value.Revision; Digest = value.ContentDigest }
+        let admission = fact "admission" "ci-population-admission" (TelemetryStore.CiPopulationAdmission(scope.CollectionId, scope.Repository, scope.PullRequest, scope.BaseRef, scope.BaseSha, scope.Head, "native-pr-head"))
+        let binding = fact "binding" "ci-binding" (TelemetryStore.CiBinding(scope.CollectionId, scope.Repository, scope.Head, scope.PullRequest, "*", "UTEL", "attempt", None, scope.ProducerStream, "native-pr-head"))
+        let coverage = fact "coverage" "ci-coverage" (TelemetryStore.CiCoverage(scope.CollectionId, "partial", "partial", "partial", "partial", "partial", "unknown", "unknown", "unknown"))
+        let population = fact "population" "ci-population-coverage" (TelemetryStore.CiPopulationCoverage(scope.CollectionId, "partial", "partial", "partial", "partial", "partial", "partial", "pending", 0L, "[]"))
+        let inventory = fact "inventory" "ci-suite-page/1" (TelemetryStore.CiSuitePage page)
+        let empty =
+            { page with SuiteId = Some 3L; NativeCount = 0L; NativeTotal = 0L
+                        Rows = TelemetryStore.SuiteCheckMembershipRows [] }
+        let membership = fact "membership" "ci-suite-page/1" (TelemetryStore.CiSuitePage empty)
+        let seal: TelemetryStore.CiSuiteSealProof =
+            { Scope = scope; AdmissionRef = reference admission; BindingRef = reference binding
+              CoverageRef = reference coverage; PopulationCoverageRef = reference population
+              GraphDigest = TelemetryStore.ciSuiteFactGraphDigest [ inventory; membership ]
+              ResourceCount = 2L; FragmentCount = 2L; SuiteCount = 1L; CheckCount = 0L
+              FirstSweepDigest = String('d', 64); SecondSweepDigest = String('d', 64)
+              BarrierDigest = String('e', 64); ObservedFrom = page.ObservedAt; ObservedThrough = page.ValidatedAt }
+        seal, [ admission; binding; coverage; population; inventory; membership ]
+
+    [<Fact>]
+    let ``suite graph validates exact complete inventory with explicit zero check family`` () =
+        let seal, facts = completePureSuiteGraph ()
+        Assert.True(TelemetryStore.validateCiSuiteGraph "UTEL-06.3" seal facts |> Result.isOk)
+        Assert.Equal<string>(seal.GraphDigest, TelemetryStore.ciSuiteFactGraphDigest (facts |> List.filter (fun fact -> fact.Kind = "ci-suite-page/1") |> List.rev))
+
+    [<Fact>]
+    let ``suite graph refuses missing duplicate foreign or changed current facts`` () =
+        let seal, facts = completePureSuiteGraph ()
+        let refuses values = Assert.True(TelemetryStore.validateCiSuiteGraph "UTEL-06.3" seal values |> Result.isError)
+        refuses (facts |> List.filter (fun fact -> fact.Identity <> "membership"))
+        refuses (facts @ [ facts.Head ])
+        refuses (facts |> List.map (fun fact -> if fact.Identity = "admission" then { fact with Revision = 2L } else fact))
+        refuses (facts |> List.map (fun fact -> if fact.Identity = "population" then { fact with ItemId = Some "foreign" } else fact))
+        let changed =
+            facts |> List.map (fun fact ->
+                match fact.Payload with
+                | TelemetryStore.CiSuitePage page when fact.Identity = "membership" ->
+                    { fact with Payload = TelemetryStore.CiSuitePage { page with Scope = { page.Scope with Head = String('b', 40) } } }
+                | _ -> fact)
+        refuses changed
+
+    [<Fact>]
+    let ``suite graph cannot use digest equality to waive native chain and roster bounds`` () =
+        let seal, facts = completePureSuiteGraph ()
+        let changed =
+            facts |> List.map (fun fact ->
+                match fact.Payload with
+                | TelemetryStore.CiSuitePage page when fact.Identity = "inventory" ->
+                    { fact with Payload = TelemetryStore.CiSuitePage { page with NativeTotal = 2L } }
+                | _ -> fact)
+        let mutated = { seal with GraphDigest = TelemetryStore.ciSuiteFactGraphDigest (changed |> List.filter (fun fact -> fact.Kind = "ci-suite-page/1")) }
+        Assert.True(TelemetryStore.validateCiSuiteGraph "UTEL-06.3" mutated changed |> Result.isError)
+        Assert.True(TelemetryStore.validateCiSuiteGraph "UTEL-06.3" { seal with SuiteCount = 2L } facts |> Result.isError)
+        Assert.True(TelemetryStore.validateCiSuiteGraph "UTEL-06.3" { seal with FirstSweepDigest = String('e', 64) } facts |> Result.isError)

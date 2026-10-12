@@ -158,7 +158,81 @@ module TelemetryStore =
           LaunchIntentSha256: string
           Admission: CausalAdmission }
 
+    /// Exact canonical receiver reference; the producer claim requires per-revision authenticated readback.
+    type CiSuiteProofReference =
+        { Identity: string
+          Revision: int64
+          Digest: string }
+
+    /// Immutable candidate, assignment and authenticated producer scope for one published graph generation.
+    type CiSuiteProofScope =
+        { CollectionId: string
+          Generation: int64
+          Repository: string
+          RepositoryId: int64
+          PullRequest: int64
+          BaseRef: string
+          BaseSha: string
+          Head: string
+          AssignmentDigest: string
+          ProfileDigest: string
+          ParserContract: string
+          ProducerStream: string }
+
+    type CiSuiteInventoryRow =
+        { SuiteId: int64
+          AppId: int64
+          AppSlug: string option
+          Status: string
+          Conclusion: string option }
+
+    type CiSuiteCheckMembershipRow =
+        { CheckId: int64
+          AppId: int64
+          AppSlug: string option
+          CheckRef: CiSuiteProofReference }
+
+    type CiSuitePageRows =
+        | SuiteInventoryRows of CiSuiteInventoryRow list
+        | SuiteCheckMembershipRows of CiSuiteCheckMembershipRow list
+
+    /// One immutable fragment of an actual native page, including explicit zero-row evidence.
+    type CiSuitePageProof =
+        { Scope: CiSuiteProofScope
+          SuiteId: int64 option
+          Page: int64
+          NativeCount: int64
+          NativeTotal: int64
+          NextPage: int64 option
+          BodyDigest: string
+          ObservedAt: string
+          ValidatedAt: string
+          FragmentIndex: int64
+          FragmentCount: int64
+          RowOffset: int64
+          Rows: CiSuitePageRows }
+
+    /// Final attestation; completeness is derived by the receiver from every referenced authenticated fact.
+    type CiSuiteSealProof =
+        { Scope: CiSuiteProofScope
+          AdmissionRef: CiSuiteProofReference
+          BindingRef: CiSuiteProofReference
+          CoverageRef: CiSuiteProofReference
+          PopulationCoverageRef: CiSuiteProofReference
+          GraphDigest: string
+          ResourceCount: int64
+          FragmentCount: int64
+          SuiteCount: int64
+          CheckCount: int64
+          FirstSweepDigest: string
+          SecondSweepDigest: string
+          BarrierDigest: string
+          ObservedFrom: string
+          ObservedThrough: string }
+
     type Payload =
+        | CiSuitePage of CiSuitePageProof
+        | CiSuiteSeal of CiSuiteSealProof
         | Item of featureId: string option
         | Feature of name: string
         | Attempt of parentItemId: string * status: string
@@ -474,6 +548,11 @@ module TelemetryStore =
             PopulationCoverage: string
             Qualification: string
         }
+
+    /// Exact typed graph fingerprint; this alone does not authenticate facts or establish completeness.
+    val ciSuiteGraphDigest: pages: CiSuitePageProof list -> string
+    val ciSuiteFactGraphDigest: facts: Fact list -> string
+    val validateCiSuiteGraph: itemId: string -> seal: CiSuiteSealProof -> facts: Fact list -> Result<unit, string list>
 
     val parseBatch: bytes: byte array -> Result<Batch, string list>
     val reduce: itemId: string -> facts: Fact list -> Result<Aggregate, string list>

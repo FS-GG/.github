@@ -23,5 +23,7 @@ module SkillTelemetryAdapter =
         | Complication of token: string * input: FileInfo
         | Status
 
+    val internal writePrivateBytes: directory: string -> name: string -> bytes: byte array -> string
+
     val run: SkillTelemetryReaders.HostConfig option -> TelemetryCommand -> CommandResult
     val acceptsStateSchema: string -> bool
