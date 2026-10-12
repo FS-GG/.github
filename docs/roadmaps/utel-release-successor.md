@@ -950,3 +950,30 @@ analyzer consumption or native usage coverage. Unknown installation custody,
 unavailable native collaboration usage and genuine operational producer acceptance
 remain separate obligations. Publication, schema adoption and these selected
 installed operations therefore advance the plan without completing the operational milestone.
+
+### Current CI collection and budget repair qualification — 2026-10-12
+
+The genuine LEARN adapter source was delivered through PR #4433. Its current-head
+observer retained the admission, binding and delivered outcome, plus 41 terminal
+runs and 69 terminal jobs. Actions, checks and jobs coverage remains partial;
+continuation is pending. These facts do not establish complete CI health or
+production adapter adoption.
+
+Source diagnosis found that a multi-batch drain evaluates budgets in the first
+committed batch but can leave later committed facts dirty. The proposed repair
+preserves that first transaction and performs one final existing budget transaction
+after multiple successful batches. Initial qualification passed 107 of 108
+maintained cases but exposed an extra 32-item allowance in that final transaction.
+The source successor shares one 32-item allowance across committed assessments;
+rolled-back batch work does not consume it. Inbox bounds, replay, quarantine and
+failure handling remain unchanged. The corrected successor passed all 109 maintained
+cases, including six focused multi-batch, rollback and replay controls, after
+locked restore and build succeeded. Source delivery and installed acceptance
+remain required before using the repair against the configured live store.
+
+Whole-head provider discovery currently restarts its bounded inventory on each
+call; the retained continuation flag is not a resource checkpoint. A separate
+continuation contract must bind the exact admitted candidate and base, retained
+resource progress, complete inventory and final stability checks within explicit
+request and time bounds. No larger cap, new cursor or provider replay follows
+from this diagnosis.
