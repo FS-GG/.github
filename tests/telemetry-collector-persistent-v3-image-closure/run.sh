@@ -56,7 +56,7 @@ custody_tests="$repo_root/tests/telemetry-collector-persistent-v3-image-closure/
 # complete descendant retirement; timeout alone supplies no custody acceptance.
 # The maintained owner predicates below run only against mocked kernel and
 # child inputs. They qualify source semantics, never process/cgroup custody.
-/usr/bin/timeout --kill-after=5s 15s /usr/bin/python3 -I -S - "$repo_root/tests/telemetry-collector-persistent-v3-image-closure/native-preflight/owned_install_guards.py" 2e5db7fcc36544d57f670dabe14d8866bf9871cc04adc72e10a04600c07c6459 <<'PY_OWNER_SOURCE'
+/usr/bin/timeout --kill-after=5s 15s /usr/bin/python3 -I -S - "$repo_root/tests/telemetry-collector-persistent-v3-image-closure/native-preflight/owned_install_guards.py" 1fdc52b0985b6ad374ae9d0c74b1e85abc2930f2f431416b3b49681294e8772d <<'PY_OWNER_SOURCE'
 # Existing source qualification only: actual methods, mocked kernel/process inputs.
 import array,hashlib,json,os,pathlib,socket,struct,sys,tempfile,time,types
 from unittest.mock import patch
@@ -87,21 +87,21 @@ refused(lambda:m.inner_union_rows([row],[dict(row,start=101)]),'pid-reuse')
 
 J=m.InnerCgroupJoin
 j=J.__new__(J);j.joined=True;j.operation_drained=False;j.aggregate_drained=False
-record={'fd':20,'birth':row,'role':'command'};j.records={(42,100):record};j.controller=None
-seen=[];j._member=lambda r,roles:(seen.append((r,roles)) or (row,'command'))
+record={'fd':20,'birth':row,'role':'command'};j.records={(42,100):record};j.controller=None;j.identities={42:100};j.held=[20];j._live=lambda fd:True
+seen=[];j._member=lambda r,roles,**kwargs:(seen.append((r,roles)) or (row,'command'))
 check(j.classify([row])==[] and len(seen)==1)
 foreign=[dict(row,pid=43,uid=1001,path='/sys/fs/cgroup/system.slice/owned-prefix-foreign'),dict(row,pid=44,uid=0),dict(row,start=101)]
 check(j.classify(foreign)==foreign)
 j.aggregate_drained=True;check(j.classify([row])==[row])
 j.controller=record;check(j.classify([row])==[])
 
-j=J.__new__(J);j._proc=lambda pid:row;j._live=lambda fd:True
+j=J.__new__(J);j._proc=lambda pid,**kwargs:row;j._live=lambda fd:True
 j._members=lambda role:{42};check(j._member(record,('command',))==(row,'command'))
 reads=iter([{42},set()]);j._members=lambda role:next(reads)
 refused(lambda:j._member(record,('command',)),'unjoined')
 j._members=lambda role:{42};j._live=lambda fd:False
 refused(lambda:j._member(record,('command',)),'unavailable')
-j._live=lambda fd:True;j._proc=lambda pid:dict(row,start=101)
+j._live=lambda fd:True;j._proc=lambda pid,**kwargs:dict(row,start=101)
 refused(lambda:j._member(record,('command',)),'retained-birth-changed')
 
 j=J.__new__(J);j.joined=True;j.failed=True;j.operation_drained=False;j.active=None;j.case=-1
@@ -174,12 +174,12 @@ for wrong in [(1,3,36),(2,2,36),(1,2,37)]:
     j._directory=lambda fd:wrong;refused(j._validate_limits,'identity-changed')
 
 # Per-message sender and live pidfd/lineage checks use real guard methods.
-j=J.__new__(J);j.controller={'fd':20,'birth':row};j._live=lambda fd:True;j._proc=lambda pid:row
+j=J.__new__(J);j.controller={'fd':20,'birth':row};j._live=lambda fd:True;j._proc=lambda pid,**kwargs:row
 j._sender((42,0,0));check(True)
 refused(lambda:j._sender((43,0,0)),'sender')
 refused(lambda:j._sender((42,1001,1001)),'sender')
 j._live=lambda fd:False;refused(lambda:j._sender((42,0,0)),'sender')
-j._live=lambda fd:True;j._proc=lambda pid:dict(row,start=101);refused(lambda:j._sender((42,0,0)),'birth-changed')
+j._live=lambda fd:True;j._proc=lambda pid,**kwargs:dict(row,start=101);refused(lambda:j._sender((42,0,0)),'birth-changed')
 j=J.__new__(J);j.leader={'birth':dict(row,pid=30,start=99)}
 j._retain_process=lambda pid:{'birth':dict(row,pid=pid,ppid=1)}
 refused(lambda:j._lineage(record),'lineage-unjoined')
@@ -312,6 +312,190 @@ with tempfile.TemporaryDirectory() as directory:
             refused(lambda:m.run(['fixed'],directory,{},10,15,536870912,str(pathlib.Path(directory)/'failed.log'),control=fail,inner_cgroup_join={}),'first-hook-failure')
             receipt=json.loads((pathlib.Path(directory)/'failed.log.result.json').read_text())
             check(calls==[] and receipt['firstCause']=='RuntimeError: first-hook-failure' and receipt['innerCgroupJoin']['aborts']==['first-hook-failure'])
+# Census retirement is limited to an already-held exact birth. No native
+# descriptor/process is created; kernel observations and all I/O are injected.
+def fail(error):raise error
+def proc_gone(message='gone'):
+    error=FileNotFoundError(2,message,'/proc/42')
+    J._context(error,'proc-directory-open','injected-proc',42,'command',100)
+    return error
+def refused_io(call,kind,number=None):
+    try:call()
+    except kind as error:check(number is None or error.errno==number)
+    else:raise AssertionError('expected I/O refusal')
+def census_fixture():
+    j=J.__new__(J);j.operation_drained=False;j.aggregate_drained=False
+    j.records={(42,100):record};j.identities={42:100};j.held=[20]
+    j.census_retirements=[];j.extra=[];j._live=lambda fd:False
+    j.operation_topology_reread_used=False;j.operation_topology_reread_observed=False
+    j.operation_drain_acknowledged=False
+    j._proc=lambda pid,**kwargs:fail(proc_gone())
+    j._members=lambda role:set();return j
+j=census_fixture();member_reads=[];j._members=lambda role:(member_reads.append(role) or set())
+check(j._census_member(record,('command',),'sample')==(None,None))
+check(member_reads==['command'] and j.census_retirements[0]['originalPidfdTerminal'] and j.held==[20])
+j=census_fixture();j._proc=lambda pid,**kwargs:dict(row,state='Z')
+check(j._census_member(record,('command',),'escape-classify')==(None,None))
+j=census_fixture();j._live=lambda fd:True;j._member=lambda *args,**kwargs:fail(proc_gone())
+refused_io(lambda:j._census_member(record,('command',),'sample'),FileNotFoundError,2)
+check(j.census_retirements==[])
+j=census_fixture();j._members=lambda role:{42}
+refused(lambda:j._census_member(record,('command',),'sample'),'still-member')
+j=census_fixture();states=iter([True,False,False]);j._live=lambda fd:next(states)
+j._member=lambda *args,**kwargs:fail(proc_gone())
+check(j._census_member(record,('command',),'sample')==(None,None))
+for roles in [(),('parent',),('command','command')]:
+    j=census_fixture();refused(lambda:j._census_member(record,roles,'sample'),'known-role')
+j=census_fixture();refused(lambda:j._census_member(record,('control',),'sample'),'original-role-not-read')
+for change in ['missing-record','wrong-start','missing-held-fd','different-record']:
+    j=census_fixture()
+    if change=='missing-record':j.records={}
+    elif change=='wrong-start':j.identities={42:101}
+    elif change=='missing-held-fd':j.held=[]
+    else:j.records={(42,100):dict(record)}
+    refused(lambda:j._census_member(record,('command',),'sample'),'original-held-birth')
+j=census_fixture();j._proc=lambda pid,**kwargs:dict(row,start=101)
+refused(lambda:j._census_member(record,('command',),'sample'),'pid-reused')
+for primitive in ['proc','pidfd','members']:
+    for error_type,number in [(FileNotFoundError,2),(PermissionError,13)]:
+        if primitive=='proc' and error_type is FileNotFoundError:continue # Qualified exit case above.
+        j=census_fixture();injected=lambda *args,**kwargs:fail(error_type(number,'unavailable'))
+        if primitive=='proc':j._proc=injected
+        elif primitive=='pidfd':j._live=injected
+        else:j._members=injected
+        refused_io(lambda:j._census_member(record,('command',),'sample'),error_type,number)
+        check(j.census_retirements==[])
+j=census_fixture();j._proc=lambda *args,**kwargs:fail(ValueError('malformed stat'))
+refused_io(lambda:j._census_member(record,('command',),'sample'),ValueError)
+j=census_fixture();j._live=lambda fd:fail(RuntimeError('pidfd-readiness-unknown'))
+refused(lambda:j._census_member(record,('command',),'sample'),'readiness-unknown')
+j=census_fixture();j._members=lambda role:fail(RuntimeError('task-discovery-bound'))
+refused(lambda:j._census_member(record,('command',),'sample'),'task-discovery-bound')
+# A qualified existing census record may retire during paired stat/poll reads;
+# no observed different birth can be reconciled as that original's termination.
+for message,before,after in [('inner-live-birth-unavailable',row,row),('inner-first-seen-zombie',row,dict(row,state='Z'))]:
+    j=census_fixture();states=iter([True,False,False]);j._live=lambda fd:next(states)
+    j._member=lambda *args,**kwargs:fail(m.InnerProcessUnavailable(message,before,after))
+    check(j._census_member(record,('command',),'sample')==(None,None))
+for before,after in [(row,dict(row,start=101)),(dict(row,start=101),dict(row,state='Z'))]:
+    j=census_fixture();j._live=lambda fd:True
+    j._member=lambda *args,**kwargs:fail(m.InnerProcessUnavailable('inner-live-birth-unavailable',before,after))
+    refused(lambda:j._census_member(record,('command',),'sample'),'unavailable')
+    check(j.census_retirements==[])
+# A first non-proc ENOENT must not be hidden by later valid retirement.
+for primitive in ['retained-pidfd-role-readlink','retained-descriptor-fdinfo-read','cgroup-members-read',None]:
+    j=census_fixture();calls=[];error=FileNotFoundError(2,'non-proc gone')
+    if primitive:J._context(error,primitive,'injected-non-proc')
+    states=iter([True,False,False]);j._live=lambda fd:next(states)
+    j._member=lambda *args,**kwargs:fail(error)
+    j._members=lambda role:(calls.append(role) or set())
+    refused_io(lambda:j._census_member(record,('command',),'sample'),FileNotFoundError,2)
+    check(j.census_retirements==[] and calls==[])
+for failed_read in ['pidfd','members']:
+    j=census_fixture();j._proc=lambda *args,**kwargs:row;reads=[]
+    def actual_live(fd):
+        reads.append('pidfd')
+        if failed_read=='pidfd' and reads.count('pidfd')==2:raise FileNotFoundError(2,'pidfd role gone')
+        return len(reads)==1 or failed_read=='members'
+    def actual_members(role):
+        reads.append('members')
+        if failed_read=='members':raise FileNotFoundError(2,'retained cgroup.procs gone')
+        return set()
+    j._live=actual_live;j._members=actual_members
+    refused_io(lambda:j._census_member(record,('command',),'sample'),FileNotFoundError,2)
+    check(j.census_retirements==[] and (reads==['pidfd','pidfd'] if failed_read=='pidfd' else reads==['pidfd','pidfd','members']))
+# Even an exception raised inside _proc needs its actual proc primitive.
+j=census_fixture();j._proc=lambda *args,**kwargs:fail(FileNotFoundError(2,'unclassified gone'))
+refused_io(lambda:j._census_member(record,('command',),'sample'),FileNotFoundError,2)
+check(j.census_retirements==[])
+# Admission stays strict even with a terminal or disappearing process.
+j=census_fixture();j._proc=lambda pid,**kwargs:row
+refused(lambda:j._member(record,('command',)),'unavailable')
+j=census_fixture();j.records={};j.identities={};j._pidfd=lambda *args:42;j._live=lambda fd:True
+refused_io(lambda:j._retain_process(42,20,'requester'),FileNotFoundError,2)
+check(j.census_retirements==[] and j.records=={})
+# Primitive/caller context survives without replacing the original errno.
+j=census_fixture()
+with patch.object(m.os,'open',side_effect=FileNotFoundError(2,'gone','/proc/42')):
+    try:J._proc(j,42,phase='sample',role='command',expected_start=100)
+    except FileNotFoundError as error:
+        check(error.errno==2 and error.inner_observation_context=={'primitive':'proc-directory-open','phase':'sample','pid':42,'role':'command','expectedStart':100,'errno':2})
+    else:raise AssertionError('proc disappearance expected')
+j=census_fixture();j._at=lambda *args:fail(FileNotFoundError(2,'gone','stat'))
+with patch.object(m.os,'open',return_value=90),patch.object(m.os,'fstat',return_value=types.SimpleNamespace(st_dev=1,st_ino=2)),patch.object(m.os,'close',side_effect=PermissionError(13,'close denied')):
+    try:J._proc(j,42,phase='sample',role='command',expected_start=100)
+    except FileNotFoundError as error:check(error.errno==2 and error.inner_proc_close_unknown and error.inner_observation_context['primitive']=='held-proc-stat-read' and len(j.extra)==1)
+    else:raise AssertionError('original stat failure expected')
+j=census_fixture();j._read=lambda *args:fail(FileNotFoundError(2,'read gone','stat'))
+with patch.object(m.os,'open',return_value=91),patch.object(m.os,'close',side_effect=PermissionError(13,'close denied')):
+    try:J._at(j,90,'stat')
+    except FileNotFoundError as error:check(error.errno==2 and error.inner_proc_close_unknown and len(j.extra)==1)
+    else:raise AssertionError('original read failure expected')
+j=census_fixture();error=proc_gone();error.inner_proc_close_unknown=True
+j._live=lambda fd:True;j._member=lambda *args,**kwargs:fail(error)
+refused_io(lambda:j._census_member(record,('command',),'sample'),FileNotFoundError,2)
+check(j.census_retirements==[])
+j=census_fixture();states=iter([True,False]);j._live=lambda fd:next(states)
+j._member=lambda *args,**kwargs:fail(proc_gone('original gone'))
+j._proc=lambda *args,**kwargs:fail(PermissionError(13,'reconciliation denied'))
+refused_io(lambda:j._census_member(record,('command',),'sample'),FileNotFoundError,2)
+check(j.census_retirements==[] and len(j.extra)==1 and 'PermissionError' in j.extra[0])
+# Actual topology branches: only witnessed post-DRAIN exact-name disappearance
+# admits one fresh retained-parent/home observation, never group retirement.
+def topology_case(stage='stat',drained=True,fresh=('home',),denied=False,changed=None,broken_control=False,initial=('home','operation-fixed')):
+    j=census_fixture();j.operation_drained=drained;j.operation_drain_acknowledged=drained;j.operation_name='operation-fixed'
+    j.handles={role:{'fd':fd,'identity':role} for role,fd in [('parent',10),('home',11),('operation',12)]}
+    j._time=lambda work:None
+    j._directory=lambda fd:'changed' if changed and fd=={'parent':10,'home':21,'operation':22}.get(changed) else {10:'parent',21:'home',22:'operation'}[fd]
+    directory=j._directory
+    def read_directory(fd):
+        if broken_control and fd==22:raise FileNotFoundError(2,'operation cgroup.type gone')
+        return directory(fd)
+    j._directory=read_directory
+    lists=iter([list(initial),list(fresh)])
+    stat_failures=[False]
+    def stat_name(name,**kwargs):
+        if name=='home' and stage=='home-stat':raise FileNotFoundError(2,'home gone')
+        if name=='operation-fixed' and stage=='stat' and not stat_failures[0]:
+            stat_failures[0]=True
+            raise PermissionError(13,'denied') if denied else FileNotFoundError(2,'gone')
+        return types.SimpleNamespace(st_mode=0o040700)
+    def open_name(name,*args,**kwargs):
+        if name=='home' and stage=='home-open':raise FileNotFoundError(2,'home gone')
+        if name=='operation-fixed' and stage=='open':
+            raise PermissionError(13,'denied') if denied else FileNotFoundError(2,'gone')
+        return 21 if name=='home' else 22
+    with patch.object(m.os,'listdir',side_effect=lambda fd:next(lists)),patch.object(m.os,'stat',side_effect=stat_name),patch.object(m.os,'open',side_effect=open_name),patch.object(m.os,'close'):
+        J._topology(j)
+    return j
+for stage in ['stat','open']:
+    j=topology_case(stage)
+    check(j.operation_topology_reread_used and j.operation_topology_reread_observed and j.operation_drained and not j.aggregate_drained)
+    refused(lambda:j._retiring_topology_reread(),'unadmitted')
+    refused_io(lambda:topology_case(stage,denied=True),PermissionError,13)
+refused_io(lambda:topology_case('stat',drained=False),FileNotFoundError,2)
+refused(lambda:topology_case(initial=('foreign','operation-fixed','home')),'foreign-child-before-reread')
+for fresh in [('home','foreign'),('home','operation-fixed'),()]:
+    refused(lambda:topology_case('stat',fresh=fresh),'reappeared-or-foreign')
+refused_io(lambda:topology_case('home-stat'),FileNotFoundError,2)
+refused_io(lambda:topology_case('home-open'),FileNotFoundError,2)
+refused_io(lambda:topology_case('present',broken_control=True),FileNotFoundError,2)
+refused(lambda:topology_case('present',changed='operation'),'ancestry')
+# Retained identities and independent home read remain mandatory.
+for role,reason in [('parent','parent-identity-changed'),('home','ancestry')]:
+    refused(lambda:topology_case(changed=role),reason)
+j=census_fixture();j.operation_drained=True
+refused(j._retiring_topology_reread,'unadmitted')
+# Missing home or a fresh membership observation is never excused by op absence.
+j=census_fixture();j.operation_drained=True;j.operation_drain_acknowledged=True;j.operation_topology_reread_used=False
+j.handles={'parent':{'fd':10,'identity':'parent'}};j._time=lambda work:None;j._directory=lambda fd:'parent'
+with patch.object(m.os,'listdir',return_value=['home']),patch.object(m.os,'stat',side_effect=FileNotFoundError(2,'home gone')):
+    refused_io(j._retiring_topology_reread,FileNotFoundError,2)
+check(j.operation_topology_reread_used and not j.operation_topology_reread_observed)
+# Contract text is never an actual self-restoration witness.
+j=census_fixture();j.joined=True;j.case=1;j.case_drains=[0,1];j.first=None;j.first_context=None;j.messages=5;j.last_memory=0
+check(j.report()['aggregateDrainObserved'] is False)
+j.aggregate_drained=True;check(j.report()['aggregateDrainObserved'] is True)
 print('custody owner source-controls='+str(count)+' native=NOT_RUN mocked-kernel-inputs=true')
 PY_OWNER_SOURCE
 custody_source_started=true
@@ -360,7 +544,7 @@ controller=pathlib.Path(sys.argv[1]); assemblies=pathlib.Path(sys.argv[2])
 workspace=pathlib.Path(os.environ['GITHUB_WORKSPACE'])
 runner_path=workspace/'tests/telemetry-collector-persistent-v3-image-closure/native-preflight/owned_install_guards.py'
 with runner_path.open('rb') as stream: runner_source=stream.read(37929)
-if len(runner_source)!=37928 or hashlib.sha256(runner_source).hexdigest()!='2e5db7fcc36544d57f670dabe14d8866bf9871cc04adc72e10a04600c07c6459':
+if len(runner_source)!=48966 or hashlib.sha256(runner_source).hexdigest()!='1fdc52b0985b6ad374ae9d0c74b1e85abc2930f2f431416b3b49681294e8772d':
     raise RuntimeError('component-maintained-owner-input-refused')
 runner={'__name__':'accepted_owner_runner_inner_join'}
 exec(compile(runner_source,'<accepted-owner-runner-inner-join>','exec'),runner)

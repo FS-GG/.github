@@ -4,7 +4,7 @@ One direct child and one synchronous hook, no second owner/thread. Unexecuted so
 Sampled RSS/disk are stops, not hard containment. Unknown birth never licenses a signal.
 """
 import hashlib, json, os, pathlib, signal, subprocess, time
-import array, fcntl, select, socket, stat, struct
+import array, errno, fcntl, select, socket, stat, struct
 
 def describe(error):
     try:return type(error).__name__+': '+str(error)
@@ -54,13 +54,17 @@ def inner_union_rows(outer, inner):
             by_identity[key]=row
     return list(by_identity.values())
 
+class InnerProcessUnavailable(RuntimeError):
+    def __init__(self,message,before,after):
+        super().__init__(message);self.before=before;self.after=after
+
 def inner_live_join(before, after, live_before, live_after, exact_member):
     # Actual admission paths call this after held-proc/pidfd/membership reads.
     # Source controls can supply kernel observations; that is not native proof.
     if not live_before or not live_after or before is None or after is None:
-        raise RuntimeError('inner-live-birth-unavailable')
+        raise InnerProcessUnavailable('inner-live-birth-unavailable',before,after)
     if before['state']=='Z' or after['state']=='Z':
-        raise RuntimeError('inner-first-seen-zombie')
+        raise InnerProcessUnavailable('inner-first-seen-zombie',before,after)
     if (before['pid'],before['start'])!=(after['pid'],after['start']):
         raise RuntimeError('inner-birth-changed')
     if not exact_member:raise RuntimeError('inner-exact-member-unjoined')
@@ -111,6 +115,9 @@ class InnerCgroupJoin:
         self.joined=False; self.case=-1; self.active=None; self.case_drains=[]
         self.operation_drained=False; self.aggregate_drained=False; self.failed=False
         self.first=None; self.extra=[]; self.closed=False; self.last_memory=None
+        self.first_context=None; self.census_retirements=[]
+        self.operation_topology_reread_used=False;self.operation_topology_reread_observed=False
+        self.operation_drain_acknowledged=False
     def _time(self, work):
         utc=time.time_ns()//1000000; boot=time.clock_gettime_ns(time.CLOCK_BOOTTIME)
         start_utc=self.selected['originalParentUtcMs']; start_boot=self.selected['originalParentBootNs']
@@ -127,17 +134,29 @@ class InnerCgroupJoin:
         return data
     def _at(self, fd, name, maximum=4096):
         child=os.open(name,os.O_RDONLY|os.O_CLOEXEC|os.O_NOFOLLOW,dir_fd=fd)
+        first=None
         try:return self._read(child,maximum)
-        finally:os.close(child)
+        except BaseException as error:first=error;raise
+        finally:
+            try:os.close(child)
+            except BaseException as error:
+                if first is None:
+                    self._context(error,'temporary-control-close','capability-read');raise
+                first.inner_proc_close_unknown=True
+                self.extra.append('temporary-control-close:'+describe(error))
     @staticmethod
     def _identity(fd):
-        s=os.fstat(fd)
-        with pathlib.Path('/proc/self/fdinfo/'+str(fd)).open('rb') as stream: raw=stream.read(4097)
-        if len(raw)>4096:raise RuntimeError('inner-fdinfo-bound')
-        text=raw.decode()
-        matches=[x.split(':',1)[1].strip() for x in text.splitlines() if x.startswith('mnt_id:')]
-        if len(matches)!=1 or not matches[0].isdigit():raise RuntimeError('inner-fd-mount-id')
-        return (s.st_dev,s.st_ino,int(matches[0]))
+        primitive='retained-descriptor-fstat'
+        try:
+            s=os.fstat(fd);primitive='retained-descriptor-fdinfo-read'
+            with pathlib.Path('/proc/self/fdinfo/'+str(fd)).open('rb') as stream:raw=stream.read(4097)
+            if len(raw)>4096:raise RuntimeError('inner-fdinfo-bound')
+            primitive='retained-descriptor-fdinfo-parse';text=raw.decode()
+            matches=[x.split(':',1)[1].strip() for x in text.splitlines() if x.startswith('mnt_id:')]
+            if len(matches)!=1 or not matches[0].isdigit():raise RuntimeError('inner-fd-mount-id')
+            return (s.st_dev,s.st_ino,int(matches[0]))
+        except BaseException as error:
+            InnerCgroupJoin._context(error,primitive,'retained-capability-identity');raise
     def _directory(self, fd):
         info=os.fstat(fd)
         if not stat.S_ISDIR(info.st_mode) or info.st_uid!=0 or info.st_mode&0o022 or fcntl.fcntl(fd,fcntl.F_GETFL)&os.O_ACCMODE!=os.O_RDONLY:
@@ -150,37 +169,129 @@ class InnerCgroupJoin:
         if self._at(fd,'cgroup.type')!=b'domain\n':raise RuntimeError('inner-cgroup-domain')
         return identity
     def _pidfd(self, fd, expected=None):
-        if os.readlink('/proc/self/fd/'+str(fd))!='anon_inode:[pidfd]':raise RuntimeError('inner-pidfd-role')
-        with pathlib.Path('/proc/self/fdinfo/'+str(fd)).open('rb') as stream:text=stream.read(4097)
-        if len(text)>4096:raise RuntimeError('inner-pidfd-info-bound')
-        ids=[line.split(b':',1)[1].strip() for line in text.splitlines() if line.startswith(b'Pid:')]
-        if len(ids)!=1 or not ids[0].isdigit():raise RuntimeError('inner-live-pidfd-unavailable')
-        pid=int(ids[0]);
-        if pid<=1 or (expected is not None and pid!=expected):raise RuntimeError('inner-pidfd-pid-join')
-        if not self._live(fd):raise RuntimeError('inner-first-pidfd-exited')
-        return pid
+        primitive='pidfd-role-readlink';pid=expected
+        try:
+            if os.readlink('/proc/self/fd/'+str(fd))!='anon_inode:[pidfd]':raise RuntimeError('inner-pidfd-role')
+            primitive='pidfd-fdinfo-read'
+            with pathlib.Path('/proc/self/fdinfo/'+str(fd)).open('rb') as stream:text=stream.read(4097)
+            if len(text)>4096:raise RuntimeError('inner-pidfd-info-bound')
+            primitive='pidfd-fdinfo-parse'
+            ids=[line.split(b':',1)[1].strip() for line in text.splitlines() if line.startswith(b'Pid:')]
+            if len(ids)!=1 or not ids[0].isdigit():raise RuntimeError('inner-live-pidfd-unavailable')
+            pid=int(ids[0])
+            if pid<=1 or (expected is not None and pid!=expected):raise RuntimeError('inner-pidfd-pid-join')
+            if not self._live(fd):raise RuntimeError('inner-first-pidfd-exited')
+            return pid
+        except BaseException as error:
+            self._context(error,primitive,'live-pidfd-admission',pid,None,getattr(self,'identities',{}).get(pid));raise
     @staticmethod
     def _live(fd):
-        # Only a retained actual pidfd's normal terminal readiness proves exit.
-        # Invalid/error/unexpected events are lost custody, never retirement.
-        if os.readlink('/proc/self/fd/'+str(fd))!='anon_inode:[pidfd]':
-            raise RuntimeError('inner-retained-pidfd-role-lost')
-        p=select.poll();p.register(fd,select.POLLIN|select.POLLERR|select.POLLHUP)
-        events=p.poll(0)
-        for observed,flags in events:
-            if observed!=fd or not flags or flags&~(select.POLLIN|select.POLLHUP):
-                raise RuntimeError('inner-retained-pidfd-readiness-unknown')
-        return not events
-    def _proc(self, pid):
-        root=os.open('/proc/'+str(pid),os.O_RDONLY|os.O_DIRECTORY|os.O_CLOEXEC|os.O_NOFOLLOW)
+        # Accepted terminal poll events witness termination only. No status0
+        # or cause of termination follows; invalid/error masks stay fatal.
+        primitive='retained-pidfd-role-readlink'
         try:
-            before=os.fstat(root)
-            text=self._at(root,'stat').decode(); tail=text[text.rindex(')')+2:].split()
+            if os.readlink('/proc/self/fd/'+str(fd))!='anon_inode:[pidfd]':
+                raise RuntimeError('inner-retained-pidfd-role-lost')
+            primitive='retained-pidfd-poll-register'
+            p=select.poll();p.register(fd,select.POLLIN|select.POLLERR|select.POLLHUP)
+            primitive='retained-pidfd-poll';events=p.poll(0)
+            primitive='retained-pidfd-event-mask'
+            for observed,flags in events:
+                if observed!=fd or not flags or flags&~(select.POLLIN|select.POLLHUP):
+                    raise RuntimeError('inner-retained-pidfd-readiness-unknown')
+            return not events
+        except BaseException as error:
+            InnerCgroupJoin._context(error,primitive,'pidfd-observation');raise
+    @staticmethod
+    def _context(error, primitive, phase, pid=None, role=None, expected_start=None):
+        # Preserve the actual exception/errno; diagnostics never grant retirement.
+        if not hasattr(error,'inner_observation_context'):
+            error.inner_observation_context={'primitive':primitive,'phase':phase,
+                'pid':pid,'role':role,'expectedStart':expected_start,
+                'errno':error.errno if isinstance(error,OSError) else None}
+        else:
+            context=error.inner_observation_context
+            for key,value in [('pid',pid),('role',role),('expectedStart',expected_start)]:
+                if context.get(key) is None and value is not None:context[key]=value
+            if context['phase']!=phase:
+                phases=context.setdefault('callerPhases',[])
+                if phase not in phases and len(phases)<3:phases.append(phase)
+        return error
+    def _proc(self, pid, *, phase='proc', role=None, expected_start=None):
+        root=None;first=None;primitive='proc-directory-open'
+        try:
+            root=os.open('/proc/'+str(pid),os.O_RDONLY|os.O_DIRECTORY|os.O_CLOEXEC|os.O_NOFOLLOW)
+            primitive='held-proc-fstat-before';before=os.fstat(root)
+            primitive='held-proc-stat-read';text=self._at(root,'stat').decode()
+            primitive='held-proc-stat-parse';tail=text[text.rindex(')')+2:].split()
             row={'pid':pid,'state':tail[0],'ppid':int(tail[1]),'pgid':int(tail[2]),'start':int(tail[19]),'rss':int(tail[21])*os.sysconf('SC_PAGE_SIZE')}
-            after=os.fstat(root)
+            primitive='held-proc-fstat-after';after=os.fstat(root)
             if (before.st_dev,before.st_ino)!=(after.st_dev,after.st_ino):raise RuntimeError('inner-held-proc-object-changed')
             return row
-        finally:os.close(root)
+        except BaseException as error:
+            first=error;self._context(error,primitive,phase,pid,role,expected_start);raise
+        finally:
+            if root is not None:
+                try:os.close(root)
+                except BaseException as error:
+                    if first is None:
+                        self._context(error,'held-proc-close',phase,pid,role,expected_start);raise
+                    first.inner_proc_close_unknown=True
+                    self.extra.append('held-proc-close:'+describe(error))
+    @staticmethod
+    def _proc_disappearance(error):
+        context=getattr(error,'inner_observation_context',{})
+        return (isinstance(error,(FileNotFoundError,ProcessLookupError))
+                and error.errno in (errno.ENOENT,errno.ESRCH)
+                and context.get('primitive') in ('proc-directory-open','held-proc-stat-read')
+                and not getattr(error,'inner_proc_close_unknown',False))
+    def _census_retired(self, record, roles, phase):
+        birth=record['birth'];pid=birth['pid'];start=birth['start']
+        allowed=('home',) if self.operation_drained else ('home','control','requester','command')
+        if not roles or len(set(roles))!=len(roles) or any(role not in allowed for role in roles):
+            raise RuntimeError('inner-census-independent-known-role-unavailable')
+        if record['role'] in allowed and record['role'] not in roles:
+            raise RuntimeError('inner-census-original-role-not-read')
+        if self.records.get((pid,start)) is not record or self.identities.get(pid)!=start or record['fd'] not in self.held:
+            raise RuntimeError('inner-census-original-held-birth-unavailable')
+        # A retained original pidfd's accepted terminal poll, never proc
+        # absence, witnesses termination. It does not measure exit status. Permission/FD/parse errors remain lost observation.
+        if self._live(record['fd']):return False
+        try:current=self._proc(pid,phase=phase+'-retirement',role=record['role'],expected_start=start)
+        except (FileNotFoundError,ProcessLookupError) as error:
+            if not self._proc_disappearance(error):raise
+            current=None
+        if current is not None and current['start']!=start:raise RuntimeError('inner-census-retired-pid-reused')
+        members={role:self._members(role) for role in roles}
+        if not members or any(pid in values for values in members.values()):return False
+        if self._live(record['fd']):raise RuntimeError('inner-census-retirement-pidfd-changed')
+        evidence={'pid':pid,'start':start,'role':record['role'],'phase':phase,
+                  'originalPidfdTerminal':True,'absentFromRoles':list(roles)}
+        if not any(x['pid']==pid and x['start']==start for x in self.census_retirements):
+            if len(self.census_retirements)>=32:raise RuntimeError('inner-census-retirement-report-bound')
+            self.census_retirements.append(evidence)
+        return True
+    def _census_member(self, record, roles, phase):
+        try:
+            birth=record['birth']
+            if self.records.get((birth['pid'],birth['start'])) is not record or self.identities.get(birth['pid'])!=birth['start'] or record['fd'] not in self.held:
+                raise RuntimeError('inner-census-original-held-birth-unavailable')
+            if not self._live(record['fd']):
+                if self._census_retired(record,roles,phase):return None,None
+                raise RuntimeError('inner-census-exited-original-still-member')
+            try:return self._member(record,roles,phase=phase)
+            except (FileNotFoundError,ProcessLookupError,InnerProcessUnavailable) as error:
+                if isinstance(error,InnerProcessUnavailable):
+                    if any(row is not None and (row['pid'],row['start'])!=(record['birth']['pid'],record['birth']['start']) for row in (error.before,error.after)):raise
+                elif not self._proc_disappearance(error):raise
+                try:retired=self._census_retired(record,roles,phase)
+                except BaseException as problem:
+                    self.extra.append('census-retirement-check:'+describe(problem))
+                    raise error from problem
+                if retired:return None,None
+                raise
+        except BaseException as error:
+            self._context(error,'census-original-observation',phase,record['birth']['pid'],record['role'],record['birth']['start']);raise
     def _retain_process(self, pid, supplied=None, role=None):
         if pid==os.getpid():raise RuntimeError('inner-observer-cannot-own-self')
         previous=self.records.get((pid,self.identities.get(pid)))
@@ -188,10 +299,10 @@ class InnerCgroupJoin:
         if supplied is None and previous is None:
             try:self._hold(fd)
             except BaseException:os.close(fd);raise
-        self._pidfd(fd,pid);live_before=self._live(fd);before=self._proc(pid)
+        self._pidfd(fd,pid);live_before=self._live(fd);before=self._proc(pid,phase="live-retain-before",role=role,expected_start=self.identities.get(pid))
         old=self.identities.get(pid)
         if old is not None and old!=before['start']:raise RuntimeError('inner-retained-pid-reuse')
-        after=self._proc(pid)
+        after=self._proc(pid,phase="live-retain-after",role=role,expected_start=old)
         inner_live_join(before,after,live_before,self._live(fd),True)
         key=(pid,after['start'])
         existing=self.records.get(key)
@@ -234,7 +345,10 @@ class InnerCgroupJoin:
         for role, row in self.handles.items():
             if self.operation_drained and role in ('operation','control','requester','command'):continue
             if self.aggregate_drained:continue
-            if self._directory(row['fd'])!=row['identity']:raise RuntimeError('inner-retained-cgroup-identity-changed')
+            try:
+                if self._directory(row['fd'])!=row['identity']:raise RuntimeError('inner-retained-cgroup-identity-changed')
+            except BaseException as error:
+                self._context(error,'cgroup-role-validation','validate-limits',role=role);raise
         if not self.aggregate_drained:
             c=self.controls['parent']
             if self._read(c['pids.max'])!=b'32\n' or self._read(c['memory.max'])!=b'536870912\n' or self._read(c['cpu.max'])!=b'100000 100000\n':
@@ -252,16 +366,31 @@ class InnerCgroupJoin:
         parts=value.split()
         if len(parts)>32 or any(not x.isdigit() or int(x)<=1 for x in parts):raise RuntimeError('inner-task-discovery-bound')
         return set(map(int,parts))
-    def _member(self, record, roles):
-        pid=record['birth']['pid'];before=self._proc(pid)
+    def _member(self, record, roles, *, phase="live-member"):
+        pid=record['birth']['pid'];before=self._proc(pid,phase=phase+"-before",role=record["role"],expected_start=record["birth"]["start"])
         live_before=self._live(record['fd'])
         matched=[role for role in roles if pid in self._members(role)]
-        after=self._proc(pid)
+        after=self._proc(pid,phase=phase+"-after",role=record["role"],expected_start=record["birth"]["start"])
         matched_after=[role for role in roles if pid in self._members(role)]
         row=inner_live_join(before,after,live_before,self._live(record['fd']),len(matched)==1 and matched_after==matched)
         if row['start']!=record['birth']['start']:raise RuntimeError('inner-retained-birth-changed')
         # Membership is actual read from exact retained cgroup object, not a path prefix.
         return row,matched[0]
+    def _retiring_topology_reread(self):
+        # Topology alone never proves group/process retirement. Only an already
+        # acknowledged original operation DRAIN permits this single reread.
+        if not self.operation_drained or not self.operation_drain_acknowledged or self.aggregate_drained or self.operation_topology_reread_used:
+            raise RuntimeError('inner-retiring-topology-reread-unadmitted')
+        self.operation_topology_reread_used=True;self._time(False)
+        parent=self.handles['parent']
+        if self._directory(parent['fd'])!=parent['identity']:
+            raise RuntimeError('inner-retiring-parent-identity-changed')
+        actual=set()
+        for name in os.listdir(parent['fd']):
+            if stat.S_ISDIR(os.stat(name,dir_fd=parent['fd'],follow_symlinks=False).st_mode):actual.add(name)
+        if actual!={'home'}:raise RuntimeError('inner-retiring-operation-reappeared-or-foreign-child')
+        self._direct('parent','home','home')
+        self.operation_topology_reread_observed=True
     def _topology(self):
         if self.aggregate_drained:return
         expected={'parent':{'home'} if self.operation_drained else {'home',self.operation_name},'operation':{'control','requester','command'}}
@@ -269,11 +398,26 @@ class InnerCgroupJoin:
             if self.operation_drained and role=='operation':continue
             actual=set()
             for name in os.listdir(self.handles[role]['fd']):
-                if stat.S_ISDIR(os.stat(name,dir_fd=self.handles[role]['fd'],follow_symlinks=False).st_mode):actual.add(name)
+                try:info=os.stat(name,dir_fd=self.handles[role]['fd'],follow_symlinks=False)
+                except FileNotFoundError as error:
+                    self._context(error,'cgroup-child-stat','topology',role=role)
+                    if error.errno==errno.ENOENT and self.operation_drained and role=='parent' and name==self.operation_name:
+                        if not actual.issubset({'home',self.operation_name}):
+                            raise RuntimeError('inner-retiring-foreign-child-before-reread') from error
+                        self._retiring_topology_reread();return
+                    raise
+                if stat.S_ISDIR(info.st_mode):actual.add(name)
             if self.operation_drained and role=='parent':
                 if not actual.issubset({'home',self.operation_name}) or 'home' not in actual:raise RuntimeError('inner-unregistered-retiring-topology')
                 self._direct('parent','home','home')
-                if self.operation_name in actual:self._direct('parent',self.operation_name,'operation')
+                if self.operation_name in actual:
+                    try:fd=os.open(self.operation_name,os.O_RDONLY|os.O_DIRECTORY|os.O_CLOEXEC|os.O_NOFOLLOW,dir_fd=self.handles['parent']['fd'])
+                    except FileNotFoundError as error:
+                        if error.errno!=errno.ENOENT:raise
+                        self._retiring_topology_reread();return
+                    try:
+                        if self._directory(fd)!=self.handles['operation']['identity']:raise RuntimeError('inner-exact-role-ancestry')
+                    finally:os.close(fd)
             elif actual!=names:raise RuntimeError('inner-unregistered-cgroup-topology')
     def _ack(self, message):
         value={'version':1,'nonce':self.selected['nonce'],'kind':message['kind'],'accepted':True}
@@ -329,7 +473,7 @@ class InnerCgroupJoin:
         self._ack(message)
     def _sender(self, credential):
         if self.controller is None or credential!=(self.controller['birth']['pid'],0,0) or not self._live(self.controller['fd']):raise RuntimeError('inner-original-controller-sender')
-        now=self._proc(credential[0])
+        now=self._proc(credential[0],phase='live-sender',role='controller',expected_start=self.controller['birth']['start'])
         if now['start']!=self.controller['birth']['start']:raise RuntimeError('inner-controller-birth-changed')
     def _empty(self, roles):
         for role in roles:
@@ -359,11 +503,12 @@ class InnerCgroupJoin:
             self._empty(('parent','home'));self.aggregate_drained=True
         else:raise RuntimeError('inner-drain-phase')
         self._ack(message)
+        if phase=='operation':self.operation_drain_acknowledged=True
     def receive(self):
         for unused in range(20):
             try:data,ancillary,flags,address=self.socket.recvmsg(8193,socket.CMSG_SPACE(32*4)+socket.CMSG_SPACE(12),socket.MSG_DONTWAIT|socket.MSG_CMSG_CLOEXEC)
             except BlockingIOError:return
-            fds=[];kept=False
+            fds=[];kept=False;message=None
             try:
                 credentials=[];ancillary_bad=False
                 for level,kind,value in ancillary:
@@ -389,6 +534,9 @@ class InnerCgroupJoin:
                 elif message.get('kind')=='DRAIN':self._drain(message,fds,credentials[0])
                 else:raise RuntimeError('inner-message-kind')
                 kept=True
+            except BaseException as error:
+                kind=message.get('kind') if isinstance(message,dict) else None
+                self._context(error,'protocol-message','receive-'+(kind if kind in ('JOIN','CASE','DRAIN') else 'unknown'));raise
             finally:
                 if not kept:
                     # Adopted capabilities stay owned through abort/cleanup even
@@ -408,8 +556,10 @@ class InnerCgroupJoin:
         for role in roles:
             for pid in self._members(role):
                 if pid in seen:raise RuntimeError('inner-ambiguous-leaf-membership')
-                seen.add(pid);record=self._retain_process(pid,role=role)
-                row,actual=self._member(record,(role,));record['role']=role;rows.append(row)
+                seen.add(pid);record=self.records.get((pid,self.identities.get(pid)))
+                if record is None:record=self._retain_process(pid,role=role) # New births remain strict.
+                row,actual=self._census_member(record,(role,),'sample')
+                if row is not None:record['role']=actual;rows.append(row)
         self._validate_limits()
         return rows
     def classify(self, candidates):
@@ -423,11 +573,12 @@ class InnerCgroupJoin:
                 # Retained original controller may finish sampled outer teardown;
                 # no new process is accepted after empty aggregate readback.
                 if record is not self.controller:bad.append(row)
-            else:self._member(record,roles)
+            else:self._census_member(record,roles,'escape-classify')
         return bad
     def abort(self, error):
         self.failed=True
-        if self.first is None:self.first=describe(error)
+        if self.first is None:
+            self.first=describe(error);self.first_context=getattr(error,'inner_observation_context',None)
         if self.active is not None:
             try:self.active['abort'].shutdown(socket.SHUT_RDWR)
             except BaseException as problem:self.extra.append('exact-case-abort:'+describe(problem))
@@ -441,10 +592,14 @@ class InnerCgroupJoin:
     def report(self):
         return {'joined':self.joined,'cases':self.case+1,'caseDrains':self.case_drains,
                 'operationEmptyBeforeRemoval':self.operation_drained,'aggregateEmptyBeforeRemoval':self.aggregate_drained,
-                'firstCause':self.first,'additionalFailures':self.extra,'messages':self.messages,
+                'firstCause':self.first,'firstObservationContext':self.first_context,
+                'additionalFailures':self.extra,'messages':self.messages,'censusRetirements':self.census_retirements,
                 'hardInnerMemoryCurrentLast':self.last_memory,'hardInnerMemoryLimit':536870912,
                 'alreadyAdmittedCloneRace':'possible; original retained inner custody required, not atomic revocation',
-                'wholePrivilegedWrapperRetirement':'UNKNOWN','hardInnerAccountingEnd':'actual controller self-restoration'}
+                'wholePrivilegedWrapperRetirement':'UNKNOWN','hardInnerAccountingEnd':'actual controller self-restoration',
+                'aggregateDrainObserved':self.aggregate_drained,
+                'postOperationDrainTopologyReread':{'attempted':self.operation_topology_reread_used,
+                    'observedKnownNameAbsence':self.operation_topology_reread_observed,'groupRetirementProof':False}}
     def close(self):
         if self.closed:return
         self.closed=True
