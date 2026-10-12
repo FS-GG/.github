@@ -457,3 +457,28 @@ PR4431's accepted core/source bridge is protected at `db9b91a576039af36044dfc45f
 The existing hosted route prepares a default-off protected-main native opt-in with separate original root admission/profile and actual delegated capability requirements. The bounded native fixture may report BLOCKED on provider limitations; it cannot substitute simulated retirement, elevate an ordinary PR, provision privileges or install a helper. Its setup/CLR/controller overhead belongs inside the admitted 32-task/512MiB/one-CPU parent boundary and original 120-second deadline. Actual cleanup, source qualification and protected source delivery will be recorded separately after their genuine operations.
 
 Production root-caller integration, an exact dynamic command producer, actual Podman/runtime/image closure, installed receiver/grants/capture/recovery/usage/activation and historical private-host provenance remain open. Whole LEARN remains incomplete; missing historical artifacts are not reconstructed by this maintained source successor.
+
+
+### Fixed native component diagnosis, 2026-10-12
+
+[PR #4436](https://github.com/FS-GG/.github/pull/4436) delivered the joined
+controller source with four C builds, 105 owner controls, 103 adapter controls,
+518 core controls and the C/F# ABI, wire and model checks passing. The admitted
+[native run 38204892063](https://github.com/FS-GG/.github/actions/runs/38204892063)
+used the unchanged four source files at protected `e95ea340`. Its actual hard
+inner enrollment joined, then namespace/map/mount setup blocked before workload
+birth. All eight cases were not run and capture count was zero. The controller
+returned 43 with cleanup UNKNOWN; the later outer channel-lost symptom does not
+identify the first failing setup syscall. Provider job failure and completion do
+not prove native empty-cgroup cleanup or whole-wrapper retirement. Retained
+remote identities remain reserved and this consumed invocation is never replayed.
+
+The diagnostic source successor records the actual failing setup or cleanup
+stage, distinguishes a captured syscall errno from an unknown clock/indirect
+errno, and preserves each process's first cause through later cleanup findings.
+Injected source controls cover failure ordering, original-cause retention and
+bounded formatting. This adds observability to the existing fixed test
+controller; resource limits, original deadlines, setup predicates and custody
+acceptance remain intact. Ordinary source qualification does not establish a new
+native result. A subsequent fixture requires fresh root admission, and production
+caller/adoption and whole-wrapper retirement remain open.

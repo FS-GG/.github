@@ -74,6 +74,21 @@ static int fx_original_clock(uint64_t utc,uint64_t boot,uint64_t now_utc,uint64_
 static int fx_ack_match(const char *expected,size_t expected_bytes,const char *actual,size_t actual_bytes) {
  return expected&&actual&&expected_bytes>0&&expected_bytes<=1024&&actual_bytes==expected_bytes&&!memcmp(expected,actual,actual_bytes);
 }
+/* Diagnostic state is per controller/keeper process. A later cleanup failure
+ * never replaces its first observed failure, and an indirect/clock failure
+ * never acquires a guessed syscall errno. No diagnostic grants custody. */
+struct fx_diagnostic { const char *first_stage; int first_errno,first_errno_known; unsigned additional; };
+static int fx_diagnostic_note(struct fx_diagnostic *d,const char *stage,int ok,int error,int known) {
+ if(ok)return 1;
+ if(!d->first_stage){d->first_stage=stage;d->first_errno=known?error:0;d->first_errno_known=known;}
+ else d->additional++;
+ return 0;
+}
+static int fx_diagnostic_text(char *out,size_t capacity,const struct fx_diagnostic *d,const char *stage,int error,int known) {
+ int n=snprintf(out,capacity,"native diagnostic stage=%s errno-known=%d errno=%d first-stage=%s first-errno-known=%d first-errno=%d additional=%u\n",
+  stage,known,known?error:0,d->first_stage?d->first_stage:"none",d->first_errno_known,d->first_errno,d->additional);
+ return n>=0&&(size_t)n<capacity;
+}
 static unsigned controls,failures;
 static void check(int condition,const char *name){controls++;
  if(!condition){failures++;
@@ -176,6 +191,23 @@ int fsgg_custody_adapter_controls(void) {
  check(!fx_ack_match("yes",3,"yes-extra",9),"fixed registration unexpected ACK field refuses");
  check(!fx_ack_match("yes",3,"ye",2),"fixed registration truncated ACK refuses");
  check(!fx_ack_match("yes",3,"no!",3)&&!fx_ack_match("yes",3,NULL,0),"fixed registration malformed or missing ACK refuses");
+ struct fx_diagnostic diagnostic={0};char diagnostic_text[512];
+ check(fx_diagnostic_note(&diagnostic,"setup/keeper-userns",1,EPERM,1)&&!diagnostic.first_stage,"successful setup cannot create failure");
+ check(!fx_diagnostic_note(&diagnostic,"setup/keeper-userns",0,EPERM,1)&&diagnostic.first_errno==EPERM&&diagnostic.first_errno_known==1,"injected syscall failure retains exact stage and errno");
+ check(!fx_diagnostic_note(&diagnostic,"cleanup/keeper-wait",0,ECHILD,1)&&!strcmp(diagnostic.first_stage,"setup/keeper-userns")&&diagnostic.first_errno==EPERM&&diagnostic.additional==1,"cleanup failure preserves original setup cause");
+ check(fx_diagnostic_note(&diagnostic,"cleanup/home-restored",1,0,1)&&diagnostic.additional==1,"successful cleanup cannot erase or add failure");
+ check(fx_diagnostic_text(diagnostic_text,sizeof diagnostic_text,&diagnostic,"cleanup/keeper-wait",ECHILD,1)&&strstr(diagnostic_text,"stage=cleanup/keeper-wait")&&strstr(diagnostic_text,"first-stage=setup/keeper-userns")&&strstr(diagnostic_text,"additional=1"),"actual diagnostic formatter reports first and additional causes");
+ diagnostic=(struct fx_diagnostic){0};
+ check(!fx_diagnostic_note(&diagnostic,"setup/original-clock",0,EPERM,0)&&diagnostic.first_errno==0&&diagnostic.first_errno_known==0,"clock failure cannot inherit stale errno");
+ check(!fx_diagnostic_note(&diagnostic,"setup/keeper-ready",0,EACCES,0)&&diagnostic.first_errno==0&&diagnostic.additional==1,"indirect setup failure cannot claim syscall errno");
+ check(fx_diagnostic_text(diagnostic_text,sizeof diagnostic_text,&diagnostic,"setup/keeper-ready",EACCES,0)&&strstr(diagnostic_text,"errno-known=0 errno=0"),"unknown errno renders explicitly unknown");
+ check(!fx_diagnostic_text(diagnostic_text,1,&diagnostic,"setup/keeper-ready",0,0),"diagnostic overflow cannot masquerade as complete report");
+ diagnostic=(struct fx_diagnostic){0};unsigned evaluated=0;
+ int injected=fx_diagnostic_note(&diagnostic,"setup/first-success",++evaluated==1,0,0)&&
+  fx_diagnostic_note(&diagnostic,"setup/second-failure",++evaluated==99,EIO,1)&&
+  fx_diagnostic_note(&diagnostic,"setup/unreached",++evaluated==3,0,0);
+ check(!injected&&evaluated==2&&!strcmp(diagnostic.first_stage,"setup/second-failure"),"injected compound setup preserves evaluation order and stops on first failure");
+ check(diagnostic.first_errno==EIO&&diagnostic.additional==0,"unreached setup cannot add or replace errno");
  printf("adapter source controls=%u failures=%u native=NOT_RUN\n",controls,failures);
  return (int)failures;
 }
@@ -371,6 +403,20 @@ static void source_channel_controls(void) {
  * No child/setup/case creates or renews an operation clock. */
 static uint64_t fx_started_boot,fx_started_utc,fx_deadline,fx_deadline_utc;
 static int fx_child_open_unknown;
+static struct fx_diagnostic fx_first_failure;
+static int fx_step(const char *stage,int ok,int known) {
+ int saved_errno=errno;
+ if(fx_diagnostic_note(&fx_first_failure,stage,ok,saved_errno,known))return 1;
+ char text[512];
+ if(fx_diagnostic_text(text,sizeof text,&fx_first_failure,stage,saved_errno,known))fputs(text,stderr);
+ else fputs("native diagnostic reporting=BOUND first cause retained in controller state\n",stderr);
+ errno=saved_errno;
+ return 0;
+}
+static int fx_result(const char *stage,long actual,long expected) {
+ return fx_step(stage,actual==expected,actual<0);
+}
+
 static int fx_alive(void){uint64_t utc,boot;
  return clocks(&utc,&boot)&&boot>=fx_started_boot&&utc>=fx_started_utc&&boot<fx_deadline&&utc<fx_deadline_utc;
  }
@@ -517,11 +563,12 @@ static int fx_join_drain(unsigned ordinal,const char *phase) {
 }
 
 static int fx_write_limit(int fd,const char *name,const char *value,int work) {
- if(!(work?fx_work():fx_alive()))return 0;
+ if(!fx_step(work?"setup/control-file-clock":"cleanup/control-file-clock",work?fx_work():fx_alive(),0))return 0;
  int out=openat(fd,name,O_WRONLY|O_CLOEXEC|O_NOFOLLOW);
  size_t n=strlen(value);
- if(out<0)return 0;
- int ok=(work?fx_work():fx_alive())&&write(out,value,n)==(ssize_t)n;
+ if(!fx_step(work?"setup/control-file-open":"cleanup/control-file-open",out>=0,1))return 0;
+ int ok=fx_step(work?"setup/control-write-clock":"cleanup/control-write-clock",work?fx_work():fx_alive(),0)&&
+  fx_result(name,write(out,value,n),(long)n);
  close(out);
  return ok;
 }
@@ -532,10 +579,10 @@ static int fx_write_work(int fd,const char *name,const char *value) {
  return fx_write_limit(fd,name,value,1);
 }
 static int fx_child_group(int parent,const char *name) {
- if(!fx_work()||mkdirat(parent,name,0755))return -1;
+ if(!fx_step("setup/owned-group-clock",fx_work(),0)||!fx_result("setup/owned-group-mkdir",mkdirat(parent,name,0755),0))return -1;
  int child=openat(parent,name,O_RDONLY|O_DIRECTORY|O_CLOEXEC|O_NOFOLLOW);
- if(child<0)fx_child_open_unknown=1; /* Created identity cannot be adopted. */
- if(child>=0&&(!fx_work()||fchmod(child,0755))){
+ if(!fx_step("setup/owned-group-open",child>=0,1))fx_child_open_unknown=1; /* Created identity cannot be adopted. */
+ if(child>=0&&(!fx_step("setup/owned-group-mode-clock",fx_work(),0)||!fx_result("setup/owned-group-mode",fchmod(child,0755),0))){
   fx_child_open_unknown=1;close(child);return -1;
  }
  /* Only this newly created directory receives readonly observer traversal;
@@ -545,21 +592,21 @@ static int fx_child_group(int parent,const char *name) {
 static int fx_wait_byte(int fd) {
  while(fx_work()){struct pollfd p={fd,POLLIN,0};
   if(poll(&p,1,10)>0){char c;
-   return read(fd,&c,1)==1&&c=='1';
+   return fx_result("setup/wait-byte-read",read(fd,&c,1),1)&&fx_step("setup/wait-byte-value",c=='1',0);
    }}
- return 0;
+ return fx_step("setup/wait-byte-original-clock",0,0);
 }
-static void fx_pidfd_kill(int fd){if(fd>=0&&fx_alive())syscall(SYS_pidfd_send_signal,fd,SIGKILL,NULL,0);
+static void fx_pidfd_kill(int fd){if(fd>=0&&fx_alive())(void)fx_result("cleanup/owned-pidfd-signal",syscall(SYS_pidfd_send_signal,fd,SIGKILL,NULL,0),0);
  }
 static int fx_wait_exit(int fd) {
  while(fx_alive()){siginfo_t info;
   memset(&info,0,sizeof info);
-  if(waitid(P_PIDFD,(id_t)fd,&info,WEXITED|WNOHANG))return 0;
+  if(!fx_result("cleanup/owned-pidfd-waitid",waitid(P_PIDFD,(id_t)fd,&info,WEXITED|WNOHANG),0))return 0;
   if(info.si_pid)return 1;
   struct pollfd p={fd,POLLIN,0};
   poll(&p,1,10);
   }
- return 0;
+ return fx_step("cleanup/owned-pidfd-wait-original-clock",0,0);
 }
 static int fx_cap(lc_capability *c,lc_role role,uint32_t slot,int fd) {
  if(!fx_work())return 0;
@@ -596,7 +643,7 @@ static int fx_base64(const char *in,char *out,size_t capacity) {
  return 1;
 }
 static long fx_clone(int cgroup,int *pidfd) {
- if(!fx_work())return -1;
+ if(!fx_step("setup/owned-clone-clock",fx_work(),0))return -1;
  struct clone_args args;
  memset(&args,0,sizeof args);
  args.flags=CLONE_INTO_CGROUP|CLONE_PIDFD;
@@ -604,28 +651,36 @@ static long fx_clone(int cgroup,int *pidfd) {
  args.pidfd=(uint64_t)(uintptr_t)pidfd;
  args.exit_signal=SIGCHLD;
  long pid=syscall(SYS_clone3,&args,sizeof args);
+ (void)fx_step("setup/owned-clone3",pid>=0,1);
  if(!pid)close(STDIN_FILENO);
  return pid;
 }
 static int fx_readonly_bind(const char *path) {
- return fx_work()&&mount(path,path,NULL,MS_BIND,NULL)==0&&fx_work()&&mount(NULL,path,NULL,MS_REMOUNT|MS_BIND|MS_RDONLY,NULL)==0;
+ return fx_step("setup/readonly-bind-clock",fx_work(),0)&&fx_result("setup/readonly-bind",mount(path,path,NULL,MS_BIND,NULL),0)&&
+  fx_step("setup/readonly-remount-clock",fx_work(),0)&&fx_result("setup/readonly-remount",mount(NULL,path,NULL,MS_REMOUNT|MS_BIND|MS_RDONLY,NULL),0);
 }
 static void fx_keeper(const char *binary,int ready,int mapped,int prepared) {
  /* Parent installs exactly two singleton maps before mount setup. The new
   * mount namespace is owned by this new user namespace, matching setns order. */
- if(!fx_work()||unshare(CLONE_NEWUSER)||write(ready,"1",1)!=1||!fx_wait_byte(mapped)||!fx_work()||setresgid(0,0,0)||!fx_work()||setresuid(0,0,0)||!fx_work()||unshare(CLONE_NEWNS))_exit(101);
+ if(!fx_step("setup/keeper-before-userns-clock",fx_work(),0)||!fx_result("setup/keeper-userns",unshare(CLONE_NEWUSER),0)||
+  !fx_result("setup/keeper-ready-write",write(ready,"1",1),1)||!fx_step("setup/keeper-map-ack",fx_wait_byte(mapped),0)||
+  !fx_step("setup/keeper-before-gid-clock",fx_work(),0)||!fx_result("setup/keeper-setresgid",setresgid(0,0,0),0)||
+  !fx_step("setup/keeper-before-uid-clock",fx_work(),0)||!fx_result("setup/keeper-setresuid",setresuid(0,0,0),0)||
+  !fx_step("setup/keeper-before-mountns-clock",fx_work(),0)||!fx_result("setup/keeper-mountns",unshare(CLONE_NEWNS),0))_exit(101);
  /* Seal the parent before adding private children. A later nonrecursive
   * /usr bind would hide selected /usr/sbin and setsid submounts. */
- if(!fx_work()||mount(NULL,"/",NULL,MS_REC|MS_PRIVATE,NULL)||!fx_readonly_bind("/usr")||
-  !fx_work()||mount("tmpfs","/usr/sbin","tmpfs",MS_NOSUID|MS_NODEV,"size=1048576,mode=0755"))_exit(102);
- if(!fx_work())_exit(103);
+ if(!fx_step("setup/keeper-private-mount-clock",fx_work(),0)||!fx_result("setup/keeper-private-root",mount(NULL,"/",NULL,MS_REC|MS_PRIVATE,NULL),0)||
+  !fx_step("setup/keeper-readonly-usr",fx_readonly_bind("/usr"),0)||!fx_step("setup/keeper-sbin-clock",fx_work(),0)||
+  !fx_result("setup/keeper-sbin-tmpfs",mount("tmpfs","/usr/sbin","tmpfs",MS_NOSUID|MS_NODEV,"size=1048576,mode=0755"),0))_exit(102);
+ if(!fx_step("setup/keeper-podman-file-clock",fx_work(),0))_exit(103);
  int target=open("/usr/sbin/podman",O_CREAT|O_EXCL|O_RDONLY|O_CLOEXEC,0555);
- if(target<0)_exit(103);
+ if(!fx_step("setup/keeper-podman-file",target>=0,1))_exit(103);
  close(target);
- if(!fx_work()||mount(binary,"/usr/sbin/podman",NULL,MS_BIND,NULL)||!fx_readonly_bind("/usr/sbin/podman")||
-  !fx_readonly_bind("/usr/bin/setsid")||
-  !fx_work()||mount("tmpfs","/sys/fs/cgroup","tmpfs",MS_NOSUID|MS_NODEV|MS_NOEXEC,"size=1048576,mode=0555")||
-  !fx_work()||mount(NULL,"/sys/fs/cgroup",NULL,MS_REMOUNT|MS_RDONLY|MS_NOSUID|MS_NODEV|MS_NOEXEC,NULL)||!fx_work()||write(prepared,"1",1)!=1)_exit(104);
+ if(!fx_step("setup/keeper-podman-bind-clock",fx_work(),0)||!fx_result("setup/keeper-podman-bind",mount(binary,"/usr/sbin/podman",NULL,MS_BIND,NULL),0)||
+  !fx_step("setup/keeper-podman-readonly",fx_readonly_bind("/usr/sbin/podman"),0)||!fx_step("setup/keeper-setsid-readonly",fx_readonly_bind("/usr/bin/setsid"),0)||
+  !fx_step("setup/keeper-cgroup-mount-clock",fx_work(),0)||!fx_result("setup/keeper-cgroup-tmpfs",mount("tmpfs","/sys/fs/cgroup","tmpfs",MS_NOSUID|MS_NODEV|MS_NOEXEC,"size=1048576,mode=0555"),0)||
+  !fx_step("setup/keeper-cgroup-readonly-clock",fx_work(),0)||!fx_result("setup/keeper-cgroup-readonly",mount(NULL,"/sys/fs/cgroup",NULL,MS_REMOUNT|MS_RDONLY|MS_NOSUID|MS_NODEV|MS_NOEXEC,NULL),0)||
+  !fx_step("setup/keeper-prepared-clock",fx_work(),0)||!fx_result("setup/keeper-prepared-write",write(prepared,"1",1),1))_exit(104);
  for(;;)pause();
 }
 static int fx_workload(const char *kind) {
@@ -698,8 +753,10 @@ static int fx_map(long pid) {
  char path[64];
  snprintf(path,sizeof path,"/proc/%ld",pid);
  int proc=open(path,O_RDONLY|O_DIRECTORY|O_CLOEXEC|O_NOFOLLOW);
- if(proc<0)return 0;
- int ok=fx_write_work(proc,"setgroups","deny\n")&&fx_write_work(proc,"uid_map","0 60000 1\n32768 60001 1\n")&&fx_write_work(proc,"gid_map","0 60000 1\n32768 60001 1\n");
+ if(!fx_step("setup/keeper-map-proc-open",proc>=0,1))return 0;
+ int ok=fx_step("setup/keeper-setgroups-map",fx_write_work(proc,"setgroups","deny\n"),0)&&
+  fx_step("setup/keeper-uid-map",fx_write_work(proc,"uid_map","0 60000 1\n32768 60001 1\n"),0)&&
+  fx_step("setup/keeper-gid-map",fx_write_work(proc,"gid_map","0 60000 1\n32768 60001 1\n"),0);
  close(proc);
  return ok;
 }
@@ -996,10 +1053,11 @@ static int fx_native(const char *binary,const char *dotnet,const char *source_dl
  snprintf(self,sizeof self,"%ld\n",(long)getpid());
  if(!fx_write_work(control,"cgroup.procs",self))goto done;
  moved=1;
- if(!fx_join_root(parent,home,operation,control,requester,command,name)){
+ if(!fx_step("setup/controller-registration-join",fx_join_root(parent,home,operation,control,requester,command,name),0)){
   fprintf(stderr,"BLOCKED native registration JOIN before child release\n");uncertain=1;goto done;
  }
- if(!fx_work()||pipe2(ready,O_CLOEXEC)||pipe2(mapped,O_CLOEXEC)||pipe2(prepared,O_CLOEXEC))goto done;
+ if(!fx_step("setup/controller-pipe-clock",fx_work(),0)||!fx_result("setup/controller-ready-pipe",pipe2(ready,O_CLOEXEC),0)||
+  !fx_result("setup/controller-mapped-pipe",pipe2(mapped,O_CLOEXEC),0)||!fx_result("setup/controller-prepared-pipe",pipe2(prepared,O_CLOEXEC),0))goto done;
  keeper_pid=fx_clone(control,&keeper);
  if(keeper_pid<0){fprintf(stderr,"BLOCKED native atomic setup clone3 errno=%d\n",errno);
   goto done;
@@ -1016,7 +1074,9 @@ static int fx_native(const char *binary,const char *dotnet,const char *source_dl
  mapped[0]=-1;
  close(prepared[1]);
  prepared[1]=-1;
- if(!fx_wait_byte(ready[0])||!fx_map(keeper_pid)||!fx_work()||write(mapped[1],"1",1)!=1||!fx_wait_byte(prepared[0])){
+ if(!fx_step("setup/controller-keeper-ready",fx_wait_byte(ready[0]),0)||!fx_step("setup/controller-singleton-maps",fx_map(keeper_pid),0)||
+  !fx_step("setup/controller-map-ack-clock",fx_work(),0)||!fx_result("setup/controller-map-ack-write",write(mapped[1],"1",1),1)||
+  !fx_step("setup/controller-keeper-prepared",fx_wait_byte(prepared[0]),0)){
   fprintf(stderr,"BLOCKED native actual namespace/map/mount setup; no workload birth\n");
   goto done;
   }
@@ -1051,27 +1111,31 @@ static int fx_native(const char *binary,const char *dotnet,const char *source_dl
  /* Preserve original subtree/first cause on any unknown. Do not rerun a case.
   * Actual parent/controller-home handles remain with the outer root profile. */
  if(command>=0){int pop;
-  if(!populated(command,&pop))uncertain=1;
+  if(!fx_step("cleanup/command-population",populated(command,&pop),0))uncertain=1;
   else if(pop){if(!fx_write(command,"cgroup.kill","1\n"))uncertain=1;
    while(fx_alive()&&pop){if(!populated(command,&pop)){uncertain=1;
      break;
      }struct pollfd p={-1,0,0};
     poll(&p,0,10);
-    }if(pop)uncertain=1;
+    }if(!fx_step("cleanup/command-empty-before-retirement",!pop,0))uncertain=1;
    }}
  if(keeper>=0){fx_pidfd_kill(keeper);
-  if(!fx_wait_exit(keeper))uncertain=1;
+  if(!fx_step("cleanup/keeper-exit",fx_wait_exit(keeper),0))uncertain=1;
   }
  if(moved){char self[32];
   snprintf(self,sizeof self,"%ld\n",(long)getpid());
-  if(!fx_write(home,"cgroup.procs",self)||!membership((long)getpid(),home))uncertain=1;
+  if(!fx_step("cleanup/controller-home-write",fx_write(home,"cgroup.procs",self),0)||
+   !fx_step("cleanup/controller-home-readback",membership((long)getpid(),home),0))uncertain=1;
   }
- if(fx_join.registered&&!uncertain&&!fx_join_drain(8,"operation"))uncertain=1;
+ if(fx_join.registered&&!uncertain&&!fx_step("cleanup/operation-drain-ack",fx_join_drain(8,"operation"),0))uncertain=1;
  int fds[]={user,mount_ns,executable,supervisor,cwd,keeper,ready[0],ready[1],mapped[0],mapped[1],prepared[0],prepared[1],command,requester,control};
  for(unsigned i=0;i<sizeof fds/sizeof fds[0];i++)if(fds[i]>=0)close(fds[i]);
  if(operation>=0&&!uncertain){int pop;
-  if(!populated(operation,&pop)||pop)uncertain=1;
-  else if(!fx_alive()||unlinkat(operation,"command",AT_REMOVEDIR)||!fx_alive()||unlinkat(operation,"requester",AT_REMOVEDIR)||!fx_alive()||unlinkat(operation,"control",AT_REMOVEDIR)||!fx_alive()||unlinkat(parent,name,AT_REMOVEDIR))uncertain=1;
+  if(!fx_step("cleanup/operation-population",populated(operation,&pop),0)||!fx_step("cleanup/operation-empty",!pop,0))uncertain=1;
+  else if(!fx_step("cleanup/command-remove-clock",fx_alive(),0)||!fx_result("cleanup/command-remove",unlinkat(operation,"command",AT_REMOVEDIR),0)||
+   !fx_step("cleanup/requester-remove-clock",fx_alive(),0)||!fx_result("cleanup/requester-remove",unlinkat(operation,"requester",AT_REMOVEDIR),0)||
+   !fx_step("cleanup/control-remove-clock",fx_alive(),0)||!fx_result("cleanup/control-remove",unlinkat(operation,"control",AT_REMOVEDIR),0)||
+   !fx_step("cleanup/operation-remove-clock",fx_alive(),0)||!fx_result("cleanup/operation-remove",unlinkat(parent,name,AT_REMOVEDIR),0))uncertain=1;
   }
  if(operation>=0)close(operation);
  if(home>=0)close(home);
@@ -1230,13 +1294,14 @@ static int fx_owned_native(const char *binary,const char *dotnet,const char *dll
   * separately bounded:64MiB seal +62MiB fixture +two1MiB keeper
   * tmpfs mounts stay<=128MiB file-data capacity. Kernel/inode metadata is
   * inner memory charge; provider root-seal metadata is sampled outer. */
- if(!fx_work()||unshare(CLONE_NEWNS)||!fx_work()||mount(NULL,"/",NULL,MS_PRIVATE|MS_REC,NULL)||
-  !fx_seal_mount("/usr")||!fx_seal_mount("/etc")){
+ if(!fx_step("setup/outer-private-mount-clock",fx_work(),0)||!fx_result("setup/outer-private-mountns",unshare(CLONE_NEWNS),0)||
+  !fx_step("setup/outer-private-root-clock",fx_work(),0)||!fx_result("setup/outer-private-root",mount(NULL,"/",NULL,MS_PRIVATE|MS_REC,NULL),0)||
+  !fx_step("setup/outer-usr-seal",fx_seal_mount("/usr"),0)||!fx_step("setup/outer-etc-seal",fx_seal_mount("/etc"),0)){
   first="private-immutable-visible-runtime-closure";goto done;
  }
- if(!fx_work()||!mkdtemp(storage)){first="owned-fixture-storage-create";goto done;}
+ if(!fx_step("setup/outer-storage-clock",fx_work(),0)||!fx_step("setup/outer-storage-create",mkdtemp(storage)!=NULL,1)){first="owned-fixture-storage-create";goto done;}
  storage_created=1;
- if(!fx_work()||mount("tmpfs",storage,"tmpfs",MS_NOSUID|MS_NODEV,"size=65011712,mode=0755")){
+ if(!fx_step("setup/outer-storage-mount-clock",fx_work(),0)||!fx_result("setup/outer-storage-tmpfs",mount("tmpfs",storage,"tmpfs",MS_NOSUID|MS_NODEV,"size=65011712,mode=0755"),0)){
   first="hard-fixture-disk-before-write";goto done;
  }
  storage_mounted=1;
@@ -1254,28 +1319,34 @@ static int fx_owned_native(const char *binary,const char *dotnet,const char *dll
   * storage/name/seal retirement is sampled outer custody, not hard-contained. */
  if(moved){char self[32];
   int written=snprintf(self,sizeof self,"%ld\n",(long)getpid());
-  if(written<0||(size_t)written>=sizeof self||!verify_cap(&original_cap)||
-   !fx_write(original_home,"cgroup.procs",self)||!membership((long)getpid(),original_home))uncertain=1;
+  if(!fx_step("cleanup/outer-home-identity-format",written>=0&&(size_t)written<sizeof self,0)||
+   !fx_step("cleanup/outer-home-capability",verify_cap(&original_cap),0)||
+   !fx_step("cleanup/outer-home-write",fx_write(original_home,"cgroup.procs",self),0)||
+   !fx_step("cleanup/outer-home-readback",membership((long)getpid(),original_home),0))uncertain=1;
   else restored=1;
  }
  if(parent>=0){int pop=1;
-  if(!verify_cap(&parent_cap)||!populated(parent,&pop)||pop)uncertain=1;
+  if(!fx_step("cleanup/outer-parent-capability",verify_cap(&parent_cap),0)||
+   !fx_step("cleanup/outer-parent-population",populated(parent,&pop),0)||!fx_step("cleanup/outer-parent-empty",!pop,0))uncertain=1;
  }
- if(home>=0&&!verify_cap(&home_cap))uncertain=1;
- if(fx_join.registered&&!uncertain&&!fx_join_drain(8,"aggregate"))uncertain=1;
- if(!fx_alive())uncertain=1;
- if(!uncertain&&storage_mounted&&(!fx_alive()||umount2(storage,0)))uncertain=1;
- if(!uncertain&&storage_created&&(!fx_alive()||rmdir(storage)))uncertain=1;
- if(!uncertain&&home>=0&&(!fx_alive()||unlinkat(parent,"home",AT_REMOVEDIR)))uncertain=1;
- if(!uncertain&&parent>=0&&(!fx_alive()||!verify_cap(&anchor_cap)||unlinkat(anchor,name,AT_REMOVEDIR)))uncertain=1;
+ if(home>=0&&!fx_step("cleanup/outer-home-capability-terminal",verify_cap(&home_cap),0))uncertain=1;
+ if(fx_join.registered&&!uncertain&&!fx_step("cleanup/aggregate-drain-ack",fx_join_drain(8,"aggregate"),0))uncertain=1;
+ if(!fx_step("cleanup/outer-original-clock",fx_alive(),0))uncertain=1;
+ if(!uncertain&&storage_mounted&&(!fx_step("cleanup/outer-storage-unmount-clock",fx_alive(),0)||!fx_result("cleanup/outer-storage-unmount",umount2(storage,0),0)))uncertain=1;
+ if(!uncertain&&storage_created&&(!fx_step("cleanup/outer-storage-remove-clock",fx_alive(),0)||!fx_result("cleanup/outer-storage-remove",rmdir(storage),0)))uncertain=1;
+ if(!uncertain&&home>=0&&(!fx_step("cleanup/outer-home-remove-clock",fx_alive(),0)||!fx_result("cleanup/outer-home-remove",unlinkat(parent,"home",AT_REMOVEDIR),0)))uncertain=1;
+ if(!uncertain&&parent>=0&&(!fx_step("cleanup/outer-parent-remove-clock",fx_alive(),0)||!fx_step("cleanup/outer-anchor-capability",verify_cap(&anchor_cap),0)||
+  !fx_result("cleanup/outer-parent-remove",unlinkat(anchor,name,AT_REMOVEDIR),0)))uncertain=1;
  /* Remove only the original fixed seal files after both inner and setup
   * cleanup are known. An unjoined seal/extra file is retained, never rm-rf'd. */
  if(seal>=0&&!uncertain){struct stat current;
-  if(fstat(seal,&current)||current.st_dev!=seal_identity.st_dev||current.st_ino!=seal_identity.st_ino)uncertain=1;
-  for(unsigned i=0;i<7&&!uncertain;i++)if(fstatat(seal,seal_names[i],&current,AT_SYMLINK_NOFOLLOW)||
-   current.st_dev!=seal_inputs[i].st_dev||current.st_ino!=seal_inputs[i].st_ino||current.st_uid!=0)uncertain=1;
-  if(!uncertain){for(unsigned i=0;i<7&&!uncertain;i++)if(!fx_alive()||unlinkat(seal,seal_names[i],0))uncertain=1;
-   if(!uncertain&&(!fx_alive()||rmdir(seal_path)))uncertain=1;
+  if(!fx_result("cleanup/outer-seal-stat",fstat(seal,&current),0)||
+   !fx_step("cleanup/outer-seal-identity",current.st_dev==seal_identity.st_dev&&current.st_ino==seal_identity.st_ino,0))uncertain=1;
+  for(unsigned i=0;i<7&&!uncertain;i++)if(!fx_result("cleanup/outer-seal-input-stat",fstatat(seal,seal_names[i],&current,AT_SYMLINK_NOFOLLOW),0)||
+   !fx_step("cleanup/outer-seal-input-identity",current.st_dev==seal_inputs[i].st_dev&&current.st_ino==seal_inputs[i].st_ino&&current.st_uid==0,0))uncertain=1;
+  if(!uncertain){for(unsigned i=0;i<7&&!uncertain;i++)if(!fx_step("cleanup/outer-seal-input-remove-clock",fx_alive(),0)||
+    !fx_result("cleanup/outer-seal-input-remove",unlinkat(seal,seal_names[i],0),0))uncertain=1;
+   if(!uncertain&&(!fx_step("cleanup/outer-seal-remove-clock",fx_alive(),0)||!fx_result("cleanup/outer-seal-remove",rmdir(seal_path),0)))uncertain=1;
   }
  }
  if(!clocks(&utc,&boot)||boot>=fx_deadline||utc>=fx_deadline_utc){
