@@ -841,10 +841,39 @@ module TelemetryCiApplicationTests =
         normalized[0] <- byte 'x'
         Assert.Equal<byte array>(System.Text.Encoding.UTF8.GetBytes "{}", input)
 
+    // The custody contract rejects shared writable ancestors, including /tmp. The
+    // maintained local profile supplies a private TMPDIR; hosted runners need a
+    // safe home parent instead. This fixture selection grants no production authority:
+    // every tested operation still performs its native ownership/inode checks.
+    let private continuationFixtureParent (temporaryParent: string) (privateParent: string) =
+        let rec safeAncestry (path: string) =
+            let info = DirectoryInfo path
+            info.Exists && isNull info.LinkTarget
+            && (File.GetUnixFileMode info.FullName &&& enum<UnixFileMode> 0o022) = enum<UnixFileMode> 0
+            && (isNull info.Parent || safeAncestry info.Parent.FullName)
+        let temporaryParent = Path.GetFullPath temporaryParent
+        let privateParent = Path.GetFullPath privateParent
+        if safeAncestry temporaryParent then temporaryParent
+        elif safeAncestry privateParent then privateParent
+        else invalidOp "ci-custody-fixture-safe-ancestry-required"
+
     let private withContinuationPrivateDirectory action =
-        let directory = Path.Combine(Path.GetTempPath(), "fsgg-ci-custody-" + Guid.NewGuid().ToString("N"))
+        let parent = continuationFixtureParent (Path.GetTempPath()) (Environment.GetFolderPath(Environment.SpecialFolder.UserProfile))
+        let directory = Path.Combine(parent, "fsgg-ci-custody-" + Guid.NewGuid().ToString("N"))
         Directory.CreateDirectory(directory, enum<UnixFileMode> 0o700) |> ignore
         try action directory finally Directory.Delete(directory, true)
+
+    [<Fact>]
+    let ``C3 private custody fixture selects safe ancestry without trusting public temporary roots`` () =
+        withContinuationPrivateDirectory (fun directory ->
+            let safe = Path.Combine(directory, "safe")
+            let shared = Path.Combine(directory, "shared")
+            Directory.CreateDirectory(safe, enum<UnixFileMode> 0o700) |> ignore
+            Directory.CreateDirectory(shared, enum<UnixFileMode> 0o700) |> ignore
+            File.SetUnixFileMode(shared, enum<UnixFileMode> 0o777)
+            Assert.Equal(safe, continuationFixtureParent shared safe)
+            Assert.Equal(safe, continuationFixtureParent safe shared)
+            Assert.Throws<InvalidOperationException>(fun () -> continuationFixtureParent shared shared |> ignore) |> ignore)
 
     let private continuationManySuiteTransport (profileBytes: byte array) (expected: FS.GG.Coord.TelemetryCi.ProviderCheckpoint.Identity) observe repositoryId =
             { new FS.GG.Coord.GitHub.Transport.IDeadlineSinglePageGitHubTransport with
