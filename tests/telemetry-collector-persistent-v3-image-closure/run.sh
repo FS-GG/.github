@@ -56,7 +56,7 @@ custody_tests="$repo_root/tests/telemetry-collector-persistent-v3-image-closure/
 # complete descendant retirement; timeout alone supplies no custody acceptance.
 # The maintained owner predicates below run only against mocked kernel and
 # child inputs. They qualify source semantics, never process/cgroup custody.
-/usr/bin/timeout --kill-after=5s 15s /usr/bin/python3 -I -S - "$repo_root/tests/telemetry-collector-persistent-v3-image-closure/native-preflight/owned_install_guards.py" 554a196be2687fb1c0040c13d5f51e59138510e8248b948f8c66b76625fc5012 <<'PY_OWNER_SOURCE'
+/usr/bin/timeout --kill-after=5s 15s /usr/bin/python3 -I -S - "$repo_root/tests/telemetry-collector-persistent-v3-image-closure/native-preflight/owned_install_guards.py" 20bb67be5004feb023499b7393f4352602010ddfb1e61eef086ec7e0496a5fc0 <<'PY_OWNER_SOURCE'
 # Existing source qualification only: actual methods, mocked kernel/process inputs.
 import array,hashlib,json,os,pathlib,socket,struct,sys,tempfile,time,types
 from unittest.mock import patch
@@ -115,7 +115,7 @@ credential_status=b'Uid:\t1000 1000 1000 1000\nGid:\t1000 1000 1000 1000\nGroups
 class ResourceStream(io.BytesIO):
     def fileno(self):return 777
 metadata=types.SimpleNamespace(st_dev=1,st_ino=2,st_size=3,st_mtime_ns=4,st_ctime_ns=5,st_mode=0o100444)
-def census_fixture(change_uid=False,oversize=False):
+def census_fixture(change_uid=False,oversize=False,zombie=False,zombie_drift=False,no_exe=False):
     reads={'task':0,'counter':0};events=[]
     def listing(path):
         if str(path)=='/proc':return iter([pathlib.Path('/proc/42')])
@@ -125,7 +125,10 @@ def census_fixture(change_uid=False,oversize=False):
         if tid is not None:events.append('birth')
         return {'pid':pid,'tid':pid if tid is None else tid,'start':100 if tid is None else 101,'ppid':30,'pgid':42,'sid':42}
     def opening(path,*a,**k):
-        if path.name=='exe':return ResourceStream(b'abc')
+        if path.name=='exe':
+            if zombie:raise AssertionError('zombie executable must stay absent')
+            if no_exe:raise RuntimeError('live executable unavailable')
+            return ResourceStream(b'abc')
         if path.name=='cgroup':return ResourceStream(b'0::/runtime\n')
         if path.name=='status':
             reads['counter']+=1;body=credential_status
@@ -134,14 +137,28 @@ def census_fixture(change_uid=False,oversize=False):
                 if change_uid and reads['task']==2:body=body.replace(b'1000 1000 1000 1000',b'1000 1001 1000 1000',1)
             return ResourceStream(body+b'VmRSS:\t'+str(reads['counter']).encode()+b' kB\nvoluntary_ctxt_switches:\t'+str(reads['counter']).encode()+b'\n')
         raise AssertionError('unexpected read '+str(path))
+    states=iter(['Z','S']) if zombie_drift else None
+    def state(pid,tid=None):return next(states) if states is not None else ('Z' if zombie else 'S')
     selected=metadata if not oversize else types.SimpleNamespace(**dict(vars(metadata),st_size=536870913))
-    with patch.object(pathlib.Path,'iterdir',listing),patch.object(pathlib.Path,'open',opening),patch.object(m,'resource_birth',birth),patch.object(m.os,'fstat',return_value=selected),patch.object(m.os,'stat',return_value=selected),patch.object(m.os,'sched_getaffinity',return_value={0,1,2}):
+    with patch.object(pathlib.Path,'iterdir',listing),patch.object(pathlib.Path,'open',opening),patch.object(m,'resource_birth',birth),patch.object(m,'resource_state',state),patch.object(m.os,'fstat',return_value=selected),patch.object(m.os,'stat',return_value=selected),patch.object(m.os,'sched_getaffinity',return_value={0,1,2}):
         result=m.resource_thread_census(1000,clock=lambda:900)
     check(events.index('birth')<events.index('status'))
     return result
 check(census_fixture()==[dict(resource_row,exeSha256=hashlib.sha256(b'abc').hexdigest())])
 refused(lambda:census_fixture(change_uid=True),'thread-drift')
 refused(lambda:census_fixture(oversize=True),'executable-bound')
+refused(lambda:census_fixture(no_exe=True),'live executable unavailable')
+refused(lambda:census_fixture(zombie=True,zombie_drift=True),'zombie-drift')
+zombie_row=dict(resource_row,state='Z',exeSha256=None)
+check(census_fixture(zombie=True)==[zombie_row])
+result=resources(rows=[zombie_row]);check(result['nonExecuting']==[zombie_row] and not result['intersections'] and result['effectGranted'] is False)
+result=resources(dict(resource_profile,heldBirths=[{'pid':42,'processStart':100}]),rows=[zombie_row])
+check(result['nonExecuting']==[zombie_row] and result['cpuExclusive'] is False) # Observation does not retire the held birth.
+refused(lambda:resources(rows=[dict(zombie_row,exeSha256='a'*64)]),'zombie-executable')
+refused(lambda:resources(rows=[dict(zombie_row,state='S')]),'closed-shape')
+refused(lambda:resources(rows=[dict(resource_row,exeSha256=None)]),'identity-source')
+sequence=iter([[zombie_row],[resource_row]])
+refused(lambda:m.admit_thread_resources(resource_profile,resource_admission,census_reader=lambda:next(sequence),clock=lambda:900,wall=lambda:110),'census-unstable')
 # Birth/source/provenance matches cannot authenticate an unrelated broad-affinity process.
 row={'pid':42,'start':100,'state':'S','rss':4096,'ppid':30,'pgid':42}
 check(m.inner_live_join(row,row,True,True,True)==row)
@@ -668,11 +685,11 @@ def original_work():
 controller=pathlib.Path(sys.argv[1]); assemblies=pathlib.Path(sys.argv[2])
 workspace=pathlib.Path(os.environ['GITHUB_WORKSPACE'])
 runner_path=workspace/'tests/telemetry-collector-persistent-v3-image-closure/native-preflight/owned_install_guards.py'
-runner_size=61187
+runner_size=63010
 if type(runner_size) is not int or not 0<runner_size<=65536:
     raise RuntimeError('component-maintained-owner-size-bound')
 with runner_path.open('rb') as stream: runner_source=stream.read(runner_size+1)
-if len(runner_source)!=runner_size or hashlib.sha256(runner_source).hexdigest()!='554a196be2687fb1c0040c13d5f51e59138510e8248b948f8c66b76625fc5012':
+if len(runner_source)!=runner_size or hashlib.sha256(runner_source).hexdigest()!='20bb67be5004feb023499b7393f4352602010ddfb1e61eef086ec7e0496a5fc0':
     raise RuntimeError('component-maintained-owner-input-refused')
 runner={'__name__':'accepted_owner_runner_inner_join'}
 exec(compile(runner_source,'<accepted-owner-runner-inner-join>','exec'),runner)

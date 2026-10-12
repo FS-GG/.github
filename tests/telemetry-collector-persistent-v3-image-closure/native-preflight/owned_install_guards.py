@@ -30,6 +30,14 @@ def resource_credentials(raw):
         if len(fields[name])!=4 or any(not v.isdecimal() for v in fields[name]):raise RuntimeError('resource-credential-ids')
     return fields
 
+def resource_state(pid, tid=None):
+    """Kernel state is evidence only; a zombie observation never retires a hold."""
+    root=pathlib.Path('/proc',str(pid))
+    if tid is not None:root=root/'task'/str(tid)
+    text=(root/'stat').read_text();fields=text[text.rindex(')')+2:].split()
+    if int(text.split(' ',1)[0])!=(pid if tid is None else tid):raise RuntimeError('resource-state-identity')
+    return fields[0]
+
 def resource_thread_census(deadline, clock=time.monotonic):
     """Stable bounded all-thread observation, without scheduling or ambient exemptions."""
     def live():
@@ -51,9 +59,16 @@ def resource_thread_census(deadline, clock=time.monotonic):
         live()
         if pid not in processes:
             before=resource_birth(pid); root=pathlib.Path('/proc',str(pid))
+            state=resource_state(pid)
             credentials=resource_credentials(bounded(root/'status',65536))
             cgroup=bounded(root/'cgroup',65536)
             if not cgroup or len(cgroup)>65536:raise RuntimeError('resource-census-cgroup-bound')
+            if state=='Z':
+                if resource_birth(pid)!=before or resource_state(pid)!='Z' or bounded(root/'cgroup',65536)!=cgroup or resource_credentials(bounded(root/'status',65536))!=credentials:raise RuntimeError('resource-census-zombie-drift')
+                processes[pid]=(before,int(credentials['Uid'][1]),None,cgroup.decode('utf-8'),'Z')
+            else:
+                processes[pid]=None
+        if processes[pid] is None:
             with (root/'exe').open('rb') as stream:
                 metadata=os.fstat(stream.fileno())
                 identity=(metadata.st_dev,metadata.st_ino,metadata.st_size,metadata.st_mtime_ns,metadata.st_ctime_ns)
@@ -70,11 +85,11 @@ def resource_thread_census(deadline, clock=time.monotonic):
                     exe_cache[identity]=digest.hexdigest()
                 after=os.fstat(stream.fileno())
                 if identity!=(after.st_dev,after.st_ino,after.st_size,after.st_mtime_ns,after.st_ctime_ns):raise RuntimeError('resource-census-executable-drift')
-            if resource_birth(pid)!=before or bounded(root/'cgroup',65536)!=cgroup or resource_credentials(bounded(root/'status',65536))!=credentials:raise RuntimeError('resource-census-process-drift')
+            if resource_birth(pid)!=before or resource_state(pid)=='Z' or bounded(root/'cgroup',65536)!=cgroup or resource_credentials(bounded(root/'status',65536))!=credentials:raise RuntimeError('resource-census-process-drift')
             current=os.stat(root/'exe')
             if identity!=(current.st_dev,current.st_ino,current.st_size,current.st_mtime_ns,current.st_ctime_ns):raise RuntimeError('resource-census-executable-replaced')
-            processes[pid]=(before,int(credentials['Uid'][1]),exe_cache[identity],cgroup.decode('utf-8'))
-        leader,uid,exe,cgroup=processes[pid]
+            processes[pid]=(before,int(credentials['Uid'][1]),exe_cache[identity],cgroup.decode('utf-8'),None)
+        leader,uid,exe,cgroup,zombie=processes[pid]
         task=pathlib.Path('/proc',str(pid),'task',str(tid))
         before=resource_birth(pid,tid)
         credentials=resource_credentials(bounded(task/'status',65536));task_group=bounded(task/'cgroup',65536)
@@ -82,8 +97,10 @@ def resource_thread_census(deadline, clock=time.monotonic):
         uid=int(credentials['Uid'][1]);cgroup=task_group.decode()
         affinity=sorted(os.sched_getaffinity(tid))
         if not affinity or resource_birth(pid,tid)!=before or sorted(os.sched_getaffinity(tid))!=affinity or resource_birth(pid)!=leader or resource_credentials(bounded(task/'status',65536))!=credentials or bounded(task/'cgroup',65536)!=task_group:raise RuntimeError('resource-census-thread-drift')
+        if zombie and (resource_state(pid)!='Z' or resource_state(pid,tid)!='Z'):raise RuntimeError('resource-census-zombie-drift')
         rows.append({'pid':pid,'tid':tid,'processStart':leader['start'],'threadStart':before['start'],
                      'uid':uid,'exeSha256':exe,'cgroup':cgroup,'affinity':affinity,'credentials':credentials})
+        if zombie:rows[-1]['state']='Z'
     if population()!=initial:raise RuntimeError('resource-census-population-drift')
     live();return rows
 
@@ -100,11 +117,12 @@ def admit_thread_resources(profile, admission, *, census_reader=None, clock=time
     if type(cpu) is not int or cpu<0 or not isinstance(profile['excludedCpus'],list) or any(type(v) is not int or v<0 for v in profile['excludedCpus']) or cpu in profile['excludedCpus']:raise RuntimeError('resource-profile-held-cpu')
     if not isinstance(profile['ambient'],list) or len(profile['ambient'])>4096 or not isinstance(profile['heldBirths'],list) or len(profile['heldBirths'])>4096:raise RuntimeError('resource-profile-population-bound')
     identity_keys={'pid','tid','processStart','threadStart','uid','exeSha256','cgroup'}
-    def identity(row):
+    def identity(row,non_executing=False):
         if not isinstance(row,dict) or not identity_keys<=set(row):raise RuntimeError('resource-identity-shape')
         if any(type(row[k]) is not int or row[k]<(0 if k=='uid' else 1) for k in ['pid','tid','processStart','threadStart','uid']):raise RuntimeError('resource-identity-birth')
         digest=row['exeSha256']
-        if not isinstance(digest,str) or len(digest)!=64 or any(v not in '0123456789abcdef' for v in digest) or not isinstance(row['cgroup'],str) or not 0<len(row['cgroup'])<=65536:raise RuntimeError('resource-identity-source')
+        if not (non_executing and digest is None) and (not isinstance(digest,str) or len(digest)!=64 or any(v not in '0123456789abcdef' for v in digest)):raise RuntimeError('resource-identity-source')
+        if not isinstance(row['cgroup'],str) or not 0<len(row['cgroup'])<=65536:raise RuntimeError('resource-identity-source')
         return tuple(row[k] for k in sorted(identity_keys))
     def live():
         for key in ['startedAtEpoch','absoluteDeadline','originalMonotonicDeadline','launchBeforeEpoch']:
@@ -143,8 +161,15 @@ def admit_thread_resources(profile, admission, *, census_reader=None, clock=time
         if not isinstance(rows,list) or not rows or len(rows)>4096:raise RuntimeError('resource-census-population-bound')
         seen=set();out={}
         for row in rows:
-            if not isinstance(row,dict) or set(row)!=identity_keys|{'affinity','credentials'}:raise RuntimeError('resource-census-closed-shape')
-            key=identity(row);birth=(row['pid'],row['tid'])
+            zombie=isinstance(row,dict) and row.get('state')=='Z'
+            if not isinstance(row,dict) or set(row)!=identity_keys|{'affinity','credentials'}|({'state'} if zombie else set()):raise RuntimeError('resource-census-closed-shape')
+            if zombie:
+                if row['exeSha256'] is not None:raise RuntimeError('resource-census-zombie-executable')
+                # Keep absent executable identity explicit. These observations
+                # never enter ambient matching and cannot release reservations.
+                key=identity(row,non_executing=True)+('Z',)
+            else:key=identity(row)
+            birth=(row['pid'],row['tid'])
             affinity=row['affinity']
             if birth in seen or not isinstance(affinity,list) or not affinity or any(type(v) is not int or v<0 for v in affinity) or len(set(affinity))!=len(affinity):raise RuntimeError('resource-census-affinity-shape')
             credentials=row['credentials']
@@ -155,8 +180,10 @@ def admit_thread_resources(profile, admission, *, census_reader=None, clock=time
         return out
     a=normalized(first); b=normalized(second)
     if a!=b:raise RuntimeError('resource-census-unstable')
-    intersections=[];unknown=[]
+    intersections=[];unknown=[];non_executing=[]
     for row in second:
+        if row.get('state')=='Z':
+            non_executing.append(row);continue
         if cpu not in row['affinity']:continue
         if (row['pid'],row['processStart']) in held:raise RuntimeError('resource-held-birth-intersects')
         intersections.append(row)
@@ -165,7 +192,7 @@ def admit_thread_resources(profile, admission, *, census_reader=None, clock=time
         error=RuntimeError('resource-unadmitted-affinity-intersections')
         error.resource_observation={'cpu':cpu,'intersections':intersections,'unadmitted':unknown,'cpuExclusive':False,'effectGranted':False}
         raise error
-    live();return {'cpu':cpu,'intersections':intersections,'sharedAmbient':intersections,
+    live();return {'cpu':cpu,'intersections':intersections,'sharedAmbient':intersections,'nonExecuting':non_executing,
                    'cpuExclusive':False,'scope':'Stable sampled all-thread affinity intersections; root-selected ambient is SHARED LOAD, no hard scheduler exclusion','effectGranted':False}
 
 def describe(error):
