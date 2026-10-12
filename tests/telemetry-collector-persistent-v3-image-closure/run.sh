@@ -56,7 +56,7 @@ custody_tests="$repo_root/tests/telemetry-collector-persistent-v3-image-closure/
 # complete descendant retirement; timeout alone supplies no custody acceptance.
 # The maintained owner predicates below run only against mocked kernel and
 # child inputs. They qualify source semantics, never process/cgroup custody.
-/usr/bin/timeout --kill-after=5s 15s /usr/bin/python3 -I -S - "$repo_root/tests/telemetry-collector-persistent-v3-image-closure/native-preflight/owned_install_guards.py" f219ac6b7d9b516f8a710a1c7e16dd6822755de6052b6144466c1cc2b4c2fdaf <<'PY_OWNER_SOURCE'
+/usr/bin/timeout --kill-after=5s 15s /usr/bin/python3 -I -S - "$repo_root/tests/telemetry-collector-persistent-v3-image-closure/native-preflight/owned_install_guards.py" ceb01dfeee225b910782f593b602f95196f67b5b244a6dad47b61d9bd6175408 <<'PY_OWNER_SOURCE'
 # Existing source qualification only: actual methods, mocked kernel/process inputs.
 import array,hashlib,json,os,pathlib,socket,struct,sys,tempfile,time,types
 from unittest.mock import patch
@@ -315,6 +315,10 @@ with tempfile.TemporaryDirectory() as directory:
 # Census retirement is limited to an already-held exact birth. No native
 # descriptor/process is created; kernel observations and all I/O are injected.
 def fail(error):raise error
+def proc_gone(message='gone'):
+    error=FileNotFoundError(2,message,'/proc/42')
+    J._context(error,'proc-directory-open','injected-proc',42,'command',100)
+    return error
 def refused_io(call,kind,number=None):
     try:call()
     except kind as error:check(number is None or error.errno==number)
@@ -325,20 +329,20 @@ def census_fixture():
     j.census_retirements=[];j.extra=[];j._live=lambda fd:False
     j.operation_topology_reread_used=False;j.operation_topology_reread_observed=False
     j.operation_drain_acknowledged=False
-    j._proc=lambda pid,**kwargs:fail(FileNotFoundError(2,'gone','/proc/42'))
+    j._proc=lambda pid,**kwargs:fail(proc_gone())
     j._members=lambda role:set();return j
 j=census_fixture();member_reads=[];j._members=lambda role:(member_reads.append(role) or set())
 check(j._census_member(record,('command',),'sample')==(None,None))
 check(member_reads==['command'] and j.census_retirements[0]['originalPidfdTerminal'] and j.held==[20])
 j=census_fixture();j._proc=lambda pid,**kwargs:dict(row,state='Z')
 check(j._census_member(record,('command',),'escape-classify')==(None,None))
-j=census_fixture();j._live=lambda fd:True;j._member=lambda *args,**kwargs:fail(FileNotFoundError(2,'gone','/proc/42'))
+j=census_fixture();j._live=lambda fd:True;j._member=lambda *args,**kwargs:fail(proc_gone())
 refused_io(lambda:j._census_member(record,('command',),'sample'),FileNotFoundError,2)
 check(j.census_retirements==[])
 j=census_fixture();j._members=lambda role:{42}
 refused(lambda:j._census_member(record,('command',),'sample'),'still-member')
 j=census_fixture();states=iter([True,False,False]);j._live=lambda fd:next(states)
-j._member=lambda *args,**kwargs:fail(FileNotFoundError(2,'gone','/proc/42'))
+j._member=lambda *args,**kwargs:fail(proc_gone())
 check(j._census_member(record,('command',),'sample')==(None,None))
 for roles in [(),('parent',),('command','command')]:
     j=census_fixture();refused(lambda:j._census_member(record,roles,'sample'),'known-role')
@@ -378,6 +382,32 @@ for before,after in [(row,dict(row,start=101)),(dict(row,start=101),dict(row,sta
     j._member=lambda *args,**kwargs:fail(m.InnerProcessUnavailable('inner-live-birth-unavailable',before,after))
     refused(lambda:j._census_member(record,('command',),'sample'),'unavailable')
     check(j.census_retirements==[])
+# A first non-proc ENOENT must not be hidden by later valid retirement.
+for primitive in ['retained-pidfd-role-readlink','retained-descriptor-fdinfo-read','cgroup-members-read',None]:
+    j=census_fixture();calls=[];error=FileNotFoundError(2,'non-proc gone')
+    if primitive:J._context(error,primitive,'injected-non-proc')
+    states=iter([True,False,False]);j._live=lambda fd:next(states)
+    j._member=lambda *args,**kwargs:fail(error)
+    j._members=lambda role:(calls.append(role) or set())
+    refused_io(lambda:j._census_member(record,('command',),'sample'),FileNotFoundError,2)
+    check(j.census_retirements==[] and calls==[])
+for failed_read in ['pidfd','members']:
+    j=census_fixture();j._proc=lambda *args,**kwargs:row;reads=[]
+    def actual_live(fd):
+        reads.append('pidfd')
+        if failed_read=='pidfd' and reads.count('pidfd')==2:raise FileNotFoundError(2,'pidfd role gone')
+        return len(reads)==1 or failed_read=='members'
+    def actual_members(role):
+        reads.append('members')
+        if failed_read=='members':raise FileNotFoundError(2,'retained cgroup.procs gone')
+        return set()
+    j._live=actual_live;j._members=actual_members
+    refused_io(lambda:j._census_member(record,('command',),'sample'),FileNotFoundError,2)
+    check(j.census_retirements==[] and (reads==['pidfd','pidfd'] if failed_read=='pidfd' else reads==['pidfd','pidfd','members']))
+# Even an exception raised inside _proc needs its actual proc primitive.
+j=census_fixture();j._proc=lambda *args,**kwargs:fail(FileNotFoundError(2,'unclassified gone'))
+refused_io(lambda:j._census_member(record,('command',),'sample'),FileNotFoundError,2)
+check(j.census_retirements==[])
 # Admission stays strict even with a terminal or disappearing process.
 j=census_fixture();j._proc=lambda pid,**kwargs:row
 refused(lambda:j._member(record,('command',)),'unavailable')
@@ -401,12 +431,12 @@ with patch.object(m.os,'open',return_value=91),patch.object(m.os,'close',side_ef
     try:J._at(j,90,'stat')
     except FileNotFoundError as error:check(error.errno==2 and error.inner_proc_close_unknown and len(j.extra)==1)
     else:raise AssertionError('original read failure expected')
-j=census_fixture();error=FileNotFoundError(2,'gone','/proc/42');error.inner_proc_close_unknown=True
+j=census_fixture();error=proc_gone();error.inner_proc_close_unknown=True
 j._live=lambda fd:True;j._member=lambda *args,**kwargs:fail(error)
 refused_io(lambda:j._census_member(record,('command',),'sample'),FileNotFoundError,2)
 check(j.census_retirements==[])
 j=census_fixture();states=iter([True,False]);j._live=lambda fd:next(states)
-j._member=lambda *args,**kwargs:fail(FileNotFoundError(2,'original gone','/proc/42'))
+j._member=lambda *args,**kwargs:fail(proc_gone('original gone'))
 j._proc=lambda *args,**kwargs:fail(PermissionError(13,'reconciliation denied'))
 refused_io(lambda:j._census_member(record,('command',),'sample'),FileNotFoundError,2)
 check(j.census_retirements==[] and len(j.extra)==1 and 'PermissionError' in j.extra[0])
@@ -513,7 +543,7 @@ controller=pathlib.Path(sys.argv[1]); assemblies=pathlib.Path(sys.argv[2])
 workspace=pathlib.Path(os.environ['GITHUB_WORKSPACE'])
 runner_path=workspace/'tests/telemetry-collector-persistent-v3-image-closure/native-preflight/owned_install_guards.py'
 with runner_path.open('rb') as stream: runner_source=stream.read(37929)
-if len(runner_source)!=48488 or hashlib.sha256(runner_source).hexdigest()!='f219ac6b7d9b516f8a710a1c7e16dd6822755de6052b6144466c1cc2b4c2fdaf':
+if len(runner_source)!=48784 or hashlib.sha256(runner_source).hexdigest()!='ceb01dfeee225b910782f593b602f95196f67b5b244a6dad47b61d9bd6175408':
     raise RuntimeError('component-maintained-owner-input-refused')
 runner={'__name__':'accepted_owner_runner_inner_join'}
 exec(compile(runner_source,'<accepted-owner-runner-inner-join>','exec'),runner)

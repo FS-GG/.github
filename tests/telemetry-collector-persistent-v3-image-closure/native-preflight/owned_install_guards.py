@@ -238,6 +238,13 @@ class InnerCgroupJoin:
                         self._context(error,'held-proc-close',phase,pid,role,expected_start);raise
                     first.inner_proc_close_unknown=True
                     self.extra.append('held-proc-close:'+describe(error))
+    @staticmethod
+    def _proc_disappearance(error):
+        context=getattr(error,'inner_observation_context',{})
+        return (isinstance(error,(FileNotFoundError,ProcessLookupError))
+                and error.errno in (errno.ENOENT,errno.ESRCH)
+                and context.get('primitive') in ('proc-directory-open','held-proc-stat-read')
+                and not getattr(error,'inner_proc_close_unknown',False))
     def _census_retired(self, record, roles, phase):
         birth=record['birth'];pid=birth['pid'];start=birth['start']
         allowed=('home',) if self.operation_drained else ('home','control','requester','command')
@@ -252,7 +259,7 @@ class InnerCgroupJoin:
         if self._live(record['fd']):return False
         try:current=self._proc(pid,phase=phase+'-retirement',role=record['role'],expected_start=start)
         except (FileNotFoundError,ProcessLookupError) as error:
-            if error.errno not in (errno.ENOENT,errno.ESRCH) or getattr(error,'inner_proc_close_unknown',False):raise
+            if not self._proc_disappearance(error):raise
             current=None
         if current is not None and current['start']!=start:raise RuntimeError('inner-census-retired-pid-reused')
         members={role:self._members(role) for role in roles}
@@ -276,7 +283,7 @@ class InnerCgroupJoin:
             except (FileNotFoundError,ProcessLookupError,InnerProcessUnavailable) as error:
                 if isinstance(error,InnerProcessUnavailable):
                     if any(row is not None and (row['pid'],row['start'])!=(record['birth']['pid'],record['birth']['start']) for row in (error.before,error.after)):raise
-                elif error.errno not in (errno.ENOENT,errno.ESRCH) or getattr(error,'inner_proc_close_unknown',False):raise
+                elif not self._proc_disappearance(error):raise
                 try:retired=self._census_retired(record,roles,phase)
                 except BaseException as problem:
                     self.extra.append('census-retirement-check:'+describe(problem))

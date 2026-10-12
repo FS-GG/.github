@@ -531,7 +531,10 @@ birth, live or invalid pidfd events, missing or denied descriptors, malformed
 process data and unavailable membership remain fatal. JOIN, CASE and sender
 admission retain their strict live-process gates. Actual owner wait and cleanup
 still require their separate witnesses. Bounded primitive, phase, role and birth
-diagnostics preserve the original exception and errno.
+diagnostics preserve the original exception and errno. Recovery requires an
+explicit process-directory or held process-stat disappearance primitive; an
+ENOENT from pidfd, cgroup, control or close observations cannot be reconciled
+as process retirement.
 
 After the original operation DRAIN has been validated and its acknowledgement
 sent, disappearance of that exact operation name during topology observation
@@ -542,5 +545,5 @@ remain fatal. Name absence is never group-retirement evidence. The receipt
 records actual aggregate-drain observation separately from the contractual
 self-restoration description. Original deadlines, task/memory/CPU limits and
 capability ownership remain unchanged. The existing owner source-control block
-passes 171 injected checks; these mocked inputs establish source behavior only.
+passes 185 injected checks; these mocked inputs establish source behavior only.
 Protected hosted qualification and any new native admission remain separate.
