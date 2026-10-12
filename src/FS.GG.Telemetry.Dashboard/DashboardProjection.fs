@@ -612,7 +612,7 @@ module DashboardProjection =
                             edge["targetCoverage"] <- if rows |> Seq.exists (fun candidate -> not (isNull candidate["id"]) && candidate["kind"].GetValue<string>() = "runtime" && candidate["id"].ToJsonString() = row["parentId"].ToJsonString()) then "displayed" else "unresolved"
                             edges.Add edge
                     health["edges"] <- edges
-                    health["gaps"] <- JsonArray(Array.append gapCodes [| "diagnostic-assessment-unavailable"; "active-effort-unavailable"; "seven-category-allocation-unavailable"; "dependency-coverage-unknown"; "historical-knowledge-time-unavailable"; "operational-stage-evidence-unavailable"; "canonical-digests-unavailable" |] |> Array.distinct |> Array.map (fun value -> JsonValue.Create(value) :> JsonNode))
+                    health["gaps"] <- JsonArray(Array.append gapCodes [| "diagnostic-assessment-unavailable"; "active-effort-unavailable"; "seven-category-allocation-unavailable"; "dependency-coverage-unknown"; "historical-knowledge-time-unavailable"; "operational-stage-evidence-unavailable"; "canonical-digests-unavailable"; "source-freshness-coverage-unknown" |] |> Array.distinct |> Array.map (fun value -> JsonValue.Create(value) :> JsonNode))
                     health["anomalies"] <- null
                     health["interventions"] <- null
                     node["processHealth"] <- health
@@ -889,7 +889,8 @@ module DashboardProjection =
                                                             provenance["verdict"] <- "insufficient-evidence"
                                                             provenance["selectionMode"] <- text "mode" selection |> Option.get
                                                             provenance["requestedItem"] <- reference "requestedItem" selection
-                                                            provenance["sourceObservedAt"] <- observedAt.Value
+                                                            provenance["sourceObservedAt"] <- null
+                                                            provenance["snapshotObservedAt"] <- observedAt.Value
                                                             provenance["ingestedAt"] <- null
                                                             provenance["projectionAt"] <- DateTimeOffset.UtcNow.ToString("O")
                                                             provenance["cutoff"] <- null

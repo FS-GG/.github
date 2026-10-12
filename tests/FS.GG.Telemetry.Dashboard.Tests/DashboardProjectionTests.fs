@@ -793,6 +793,8 @@ module DashboardProjectionTests =
         value["lineage"] <- nodes [| row """{"item_id":"item-a","invocation_id":"child-native","parent_invocation_id":"parent-native","root_invocation_id":"root-native","identity":"lineage-native","relation":"child"}""" |]
         use result = DashboardProjection.project "workspace-a" (envelope value) |> unwrap |> JsonDocument.Parse
         Assert.Equal("fsgg.telemetry.private-dashboard/2", result.RootElement.GetProperty("schema").GetString())
+        Assert.Equal(JsonValueKind.Null, result.RootElement.GetProperty("processHealth").GetProperty("sourceObservedAt").ValueKind)
+        Assert.Equal("2026-09-10T09:00:00.0000000+00:00", result.RootElement.GetProperty("processHealth").GetProperty("snapshotObservedAt").GetString())
         let item = result.RootElement.GetProperty("items").[0]
         let health = item.GetProperty("processHealth")
         Assert.Equal("insufficient-evidence", health.GetProperty("verdict").GetString())

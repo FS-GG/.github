@@ -123,7 +123,7 @@
     selector.value=selectedOutcome;
     const categories=$("categories");categories.replaceChildren();
     for(const name of ["Product implementation","Necessary validation","Tooling/infrastructure repair","Coordination/approvals","Repeated work","External waiting","Unknown/unattributed"])categories.append(element("p",`${name}: unknown`));
-    text($("window-note"),`Step window: ${$("window").selectedOptions[0].textContent}, ending at source observation ${data.observedAt||"unavailable"}. UTC evidence clocks; display timezone ${Intl.DateTimeFormat().resolvedOptions().timeZone}. Outcome totals remain all recorded context. Historical steps outside this window remain explicitly labelled; session boundaries are unavailable.`);
+    text($("window-note"),`Step window: ${$("window").selectedOptions[0].textContent}, ending at snapshot read ${data.observedAt||"unavailable"}. UTC evidence clocks; display timezone ${Intl.DateTimeFormat().resolvedOptions().timeZone}. Outcome totals remain all recorded context. Historical steps outside this window remain explicitly labelled; session boundaries are unavailable.`);
   }
   function applySelection(){for(const card of $("items").children)card.hidden=Boolean(selectedOutcome&&card.dataset.item!==selectedOutcome);}
 
@@ -137,7 +137,7 @@
   }
   function render(data) {
     renderOverview(data);
-    text($("freshness"),data.observedAt?`Snapshot observed ${new Date(data.observedAt).toLocaleString()}`:"Observation time unavailable");
+    text($("freshness"),data.observedAt?`Snapshot read ${new Date(data.observedAt).toLocaleString()} · source freshness unestablished`:"Observation time unavailable");
     const receipts=data.operational.appliedReceipts==null||data.operational.rejectedReceipts==null?"receipt outcomes unavailable":`${data.operational.appliedReceipts} applied receipts · ${data.operational.rejectedReceipts} rejected receipts`;
     text($("health"),`${count(data.operational.pendingBatches)} pending receipts · ${receipts} · ${data.operational.consistency}`);
     const target=$("items");target.replaceChildren();
@@ -147,6 +147,7 @@
       card.append(element("h3",item.id));
       card.append(element("p",relationSummary(item),"relation"));
       card.append(element("p",`${item.state.outcome} · ${item.state.population}`,"state"));
+      card.append(element("p",item.state.observedAt?`Outcome fact observed ${new Date(item.state.observedAt).toLocaleString()}`:"Outcome observation time unavailable","source-observation"));
       const totals=document.createElement("div");totals.className="item-totals";
       totals.append(element("p",observedRuntime(item),"item-time"));
       totals.append(element("p",tokenSummary(item),"item-token"));
@@ -196,7 +197,7 @@
     && optionalExitCode(row.exitCode);
   const validItem = item => object(item) && string(item.id) && object(item.state)
     && ["outcome","population","codeDelivery"].every(name=>string(item.state[name])) && typeof item.state.dirty==="boolean"
-    && optionalString(item.state.memberRelation) && optionalString(item.state.originalItemId)
+    && optionalString(item.state.memberRelation) && optionalString(item.state.originalItemId) && (item.state.observedAt===undefined || timestamp(item.state.observedAt))
     && object(item.usage) && quantity(item.usage.total) && ["missing","unsupported","incomplete","observed"].includes(item.usage.nativeUsage)
     && object(item.runtime) && quantity(item.runtime.terminal) && quantity(item.runtime.admitted)
     && object(item.coverage) && ["populationCoverage","ciInventory"].every(name=>string(item.coverage[name]))
