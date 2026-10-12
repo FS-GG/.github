@@ -249,7 +249,7 @@ jobs:
           if test "$FSGG_LEARN_NATIVE_PREFLIGHT" = true; then
             /usr/bin/python3 -I -S - <<'PY'
           import hashlib, json, os, pathlib, time
-          inputs={"literal": {"bytes": 6982, "path": "tests/telemetry-collector-persistent-v3-image-closure/native-preflight/privileged_observation.py", "sha256": "46018b4c1b192bb42d99d1d079c313c17ad5712e71a44ee75c9c7e3ad8aaef6a"}, "parser": {"bytes": 4033, "path": "tests/telemetry-collector-persistent-v3-image-closure/native-preflight/observation_parser.py", "sha256": "09aa78d5aaf2746de4368307c210ddb1a65531ef89eeaea74d4c2d98ae8459c7"}, "runner": {"bytes": 37928, "path": "tests/telemetry-collector-persistent-v3-image-closure/native-preflight/owned_install_guards.py", "sha256": "2e5db7fcc36544d57f670dabe14d8866bf9871cc04adc72e10a04600c07c6459"}}
+          inputs={"literal": {"bytes": 6982, "path": "tests/telemetry-collector-persistent-v3-image-closure/native-preflight/privileged_observation.py", "sha256": "46018b4c1b192bb42d99d1d079c313c17ad5712e71a44ee75c9c7e3ad8aaef6a"}, "parser": {"bytes": 4033, "path": "tests/telemetry-collector-persistent-v3-image-closure/native-preflight/observation_parser.py", "sha256": "09aa78d5aaf2746de4368307c210ddb1a65531ef89eeaea74d4c2d98ae8459c7"}, "runner": {"bytes": 48966, "path": "tests/telemetry-collector-persistent-v3-image-closure/native-preflight/owned_install_guards.py", "sha256": "1fdc52b0985b6ad374ae9d0c74b1e85abc2930f2f431416b3b49681294e8772d"}}
           selected={}
           workspace=pathlib.Path(os.environ['GITHUB_WORKSPACE'])
           for name,row in inputs.items():

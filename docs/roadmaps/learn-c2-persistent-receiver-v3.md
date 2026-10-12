@@ -548,3 +548,33 @@ self-restoration description. Original deadlines, task/memory/CPU limits and
 capability ownership remain unchanged. The existing owner source-control block
 passes 186 injected checks; these mocked inputs establish source behavior only.
 Protected hosted qualification and any new native admission remain separate.
+
+
+### Assembled native loader input-bound repair, 2026-10-12
+
+Run `38222624305` refused the maintained owner input before executing the owner
+module, creating the native evidence directory or starting the native TEST
+controller. The loader still read at most 37,929 bytes while its selected guard
+required 48,966 bytes. This missed dependent bound deterministically truncated
+the selected input. All eight native cases remained not run. The original was
+consumed and will not be replayed; its runner and retained source fixture remain
+uncertain, alongside the three earlier native UNKNOWN holds. Provider terminal
+status and its orphan-process cleanup do not establish native group retirement.
+
+The exact declared owner size now drives both its read limit and length check.
+The read allows one extra byte to reject oversized inputs, and an independent
+64 KiB ceiling rejects invalid declarations before opening the file. The
+dormant privileged-observation manifest also binds the current owner size and
+digest. This updates input correspondence without enabling that route or
+changing its authority. Existing clocks, quotas, custody gates and cleanup
+remain unchanged.
+
+The existing owner-control block now passes 213 checks. Its additional controls
+execute the actual assembled native loader prefix and dormant preflight input
+selection against the selected source files, stopping before module execution,
+sealing, output creation or privileged work. They reject stale declarations,
+invalid ceilings, short or oversized input, digest drift, missing files and
+permission failures. The workflow selection tests corrupt each of its three
+inputs independently. These are nonprivileged source controls; exact hosted
+qualification, protected source correspondence and another root native admission
+remain separate.
