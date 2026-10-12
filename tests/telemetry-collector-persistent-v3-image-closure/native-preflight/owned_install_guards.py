@@ -402,6 +402,8 @@ class InnerCgroupJoin:
                 except FileNotFoundError as error:
                     self._context(error,'cgroup-child-stat','topology',role=role)
                     if error.errno==errno.ENOENT and self.operation_drained and role=='parent' and name==self.operation_name:
+                        if not actual.issubset({'home',self.operation_name}):
+                            raise RuntimeError('inner-retiring-foreign-child-before-reread') from error
                         self._retiring_topology_reread();return
                     raise
                 if stat.S_ISDIR(info.st_mode):actual.add(name)

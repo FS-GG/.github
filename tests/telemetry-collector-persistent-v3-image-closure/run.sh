@@ -56,7 +56,7 @@ custody_tests="$repo_root/tests/telemetry-collector-persistent-v3-image-closure/
 # complete descendant retirement; timeout alone supplies no custody acceptance.
 # The maintained owner predicates below run only against mocked kernel and
 # child inputs. They qualify source semantics, never process/cgroup custody.
-/usr/bin/timeout --kill-after=5s 15s /usr/bin/python3 -I -S - "$repo_root/tests/telemetry-collector-persistent-v3-image-closure/native-preflight/owned_install_guards.py" ceb01dfeee225b910782f593b602f95196f67b5b244a6dad47b61d9bd6175408 <<'PY_OWNER_SOURCE'
+/usr/bin/timeout --kill-after=5s 15s /usr/bin/python3 -I -S - "$repo_root/tests/telemetry-collector-persistent-v3-image-closure/native-preflight/owned_install_guards.py" 1fdc52b0985b6ad374ae9d0c74b1e85abc2930f2f431416b3b49681294e8772d <<'PY_OWNER_SOURCE'
 # Existing source qualification only: actual methods, mocked kernel/process inputs.
 import array,hashlib,json,os,pathlib,socket,struct,sys,tempfile,time,types
 from unittest.mock import patch
@@ -442,7 +442,7 @@ refused_io(lambda:j._census_member(record,('command',),'sample'),FileNotFoundErr
 check(j.census_retirements==[] and len(j.extra)==1 and 'PermissionError' in j.extra[0])
 # Actual topology branches: only witnessed post-DRAIN exact-name disappearance
 # admits one fresh retained-parent/home observation, never group retirement.
-def topology_case(stage='stat',drained=True,fresh=('home',),denied=False,changed=None,broken_control=False):
+def topology_case(stage='stat',drained=True,fresh=('home',),denied=False,changed=None,broken_control=False,initial=('home','operation-fixed')):
     j=census_fixture();j.operation_drained=drained;j.operation_drain_acknowledged=drained;j.operation_name='operation-fixed'
     j.handles={role:{'fd':fd,'identity':role} for role,fd in [('parent',10),('home',11),('operation',12)]}
     j._time=lambda work:None
@@ -452,7 +452,7 @@ def topology_case(stage='stat',drained=True,fresh=('home',),denied=False,changed
         if broken_control and fd==22:raise FileNotFoundError(2,'operation cgroup.type gone')
         return directory(fd)
     j._directory=read_directory
-    lists=iter([['home','operation-fixed'],list(fresh)])
+    lists=iter([list(initial),list(fresh)])
     stat_failures=[False]
     def stat_name(name,**kwargs):
         if name=='home' and stage=='home-stat':raise FileNotFoundError(2,'home gone')
@@ -474,6 +474,7 @@ for stage in ['stat','open']:
     refused(lambda:j._retiring_topology_reread(),'unadmitted')
     refused_io(lambda:topology_case(stage,denied=True),PermissionError,13)
 refused_io(lambda:topology_case('stat',drained=False),FileNotFoundError,2)
+refused(lambda:topology_case(initial=('foreign','operation-fixed','home')),'foreign-child-before-reread')
 for fresh in [('home','foreign'),('home','operation-fixed'),()]:
     refused(lambda:topology_case('stat',fresh=fresh),'reappeared-or-foreign')
 refused_io(lambda:topology_case('home-stat'),FileNotFoundError,2)
@@ -543,7 +544,7 @@ controller=pathlib.Path(sys.argv[1]); assemblies=pathlib.Path(sys.argv[2])
 workspace=pathlib.Path(os.environ['GITHUB_WORKSPACE'])
 runner_path=workspace/'tests/telemetry-collector-persistent-v3-image-closure/native-preflight/owned_install_guards.py'
 with runner_path.open('rb') as stream: runner_source=stream.read(37929)
-if len(runner_source)!=48784 or hashlib.sha256(runner_source).hexdigest()!='ceb01dfeee225b910782f593b602f95196f67b5b244a6dad47b61d9bd6175408':
+if len(runner_source)!=48966 or hashlib.sha256(runner_source).hexdigest()!='1fdc52b0985b6ad374ae9d0c74b1e85abc2930f2f431416b3b49681294e8772d':
     raise RuntimeError('component-maintained-owner-input-refused')
 runner={'__name__':'accepted_owner_runner_inner_join'}
 exec(compile(runner_source,'<accepted-owner-runner-inner-join>','exec'),runner)

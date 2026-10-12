@@ -539,11 +539,12 @@ as process retirement.
 After the original operation DRAIN has been validated and its acknowledgement
 sent, disappearance of that exact operation name during topology observation
 permits one reread. The retained parent and home identities must still match,
-and the fresh parent census must contain only home. Pre-DRAIN disappearance,
+and the fresh parent census must contain only home. An already-observed foreign
+directory cannot be discarded by the reread. Pre-DRAIN disappearance,
 foreign children, permission failures and failures reading an opened cgroup
 remain fatal. Name absence is never group-retirement evidence. The receipt
 records actual aggregate-drain observation separately from the contractual
 self-restoration description. Original deadlines, task/memory/CPU limits and
 capability ownership remain unchanged. The existing owner source-control block
-passes 185 injected checks; these mocked inputs establish source behavior only.
+passes 186 injected checks; these mocked inputs establish source behavior only.
 Protected hosted qualification and any new native admission remain separate.
