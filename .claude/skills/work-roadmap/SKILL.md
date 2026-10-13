@@ -84,6 +84,11 @@ select heavyweight process or turn a missing gate into passing eligibility.
 The helper verifies native repository/default/base/head identity, the exact source-change marker,
 absence of all five files and the native producer, complete file/tree/check populations, canonical
 bytes/modes, successful receiver-required checks and completed exact-head coherent qualification.
+Only native `FS-GG/FsQuint` (repository ID `1375501179`) may establish an authentically empty
+required policy through recognized classic absence and complete authenticated empty effective rules
+and inherited rulesets. It still requires the reviewed protected full `ci.yml` workflow, complete
+nonempty exact-head successful native jobs/checks and technical steps, and fresh policy readback
+before merge; denied, unknown, changed or newly required policy refuses.
 The current owner is read from its authenticated protected commit ref and compared to the selected
 immutable source by an immutable ancestry request. The selected immutable owner source must remain byte-identical to the current protected five-file
 closure; the executing helper must match current protected owner source. Partial/existing/disabled
