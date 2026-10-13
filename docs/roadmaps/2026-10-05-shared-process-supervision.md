@@ -317,6 +317,30 @@ plan, not a second live task board. Record subsequent source and native results 
 | **.7 Qualification consumer adoption** | One owning adapter at a time: Coordination/LEARN first, then independently selected BAR, SC2, Rendering and Governance | .4 and installed backend from .6; each consumer's existing admission | Side-by-side evidence on fixed fixtures, then one newly admitted real operation; preserve original receipts, domain policies and limits; remove that consumer's replaced mechanics only after its own acceptance |
 | **.8 Consolidation and benefit review** | Coordination and migrated consumer owners | Selected .7 adoptions | Remove obsolete duplicate implementations and temporary adapters; retain conformance suite and servicing owner; report maintenance/runtime impact and remaining exclusions; mark only actually adopted scopes complete |
 
+### R8 consumer executor source delivery — 2026-10-13
+
+[Coordination #974](https://github.com/FS-GG/FS.GG.Coordination/pull/974) merged at
+`0b1b100323b46f811886b90ee673282928a8c553` on 2026-10-13 at 23:25:24 UTC.
+The accepted candidate and protected tree match across the three changed paths.
+All six required checks, full coherent run `38480379660` and Bootstrap run
+`38480379554` passed; native readback records 47 passing checks and six expected skips.
+This source correction accepts typed NuGet lock schemas 1 and 2 and supplies the
+genuine SDK-bundled FSharp.Core 10.1.401 package as an explicit cold input for FsQuint
+S1. All seven owning source locks remain unchanged. The public package with the same
+version has different bytes; it cannot substitute for that selected SDK input.
+
+Original [source-excluded consumer `38474252015/a1`](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/38474252015) remains partial. Its acquisition
+and FsQuint public rollback passed (73 rollback cases); the other three jobs failed
+on the original SDK-package hash mismatch or schema-2 refusal. The source correction
+neither replays that original nor establishes qualification of the complete four-consumer
+cohort. A new consumer dispatch has not occurred and remains separately root-gated.
+Original candidate `b11fb121`, the `.3` archive identified by `75b1`, producer run
+`38455588652` and artifact `11842360725` remain immutable. Coherent publication,
+publication/policy admission and installed-consumer acceptance remain separate obligations.
+The full V2-PROC-01 outcome remains **Done: No**; all historical custody holds survive.
+
+[Coordination #970](https://github.com/FS-GG/FS.GG.Coordination/pull/970) delivers read-only original-pair publisher/preflight provenance controls, with native source checks passing. This prerequisite mechanism establishes no original-pair publication, selected 0.3 candidate/source freeze, first-consumer adoption or .3–.8 completion. [.1 bounded evaluation decision](../reports/2026-10-11-shared-process-supervision-evaluation.md) retains existing routine and contained implementations. Accepted BCL scopes, the failed deadline, inconclusive CliWrap heldpipe and blocked sink remain distinct; unresolved original custody is not cleared by the decision. Contract selection precedes routine/Linux implementation; native containment retains separate admission.
+
 Selected simplification, 2026-10-12: freeze the selected .7 consumer population and enforcing profiles in
 the existing owning window before execution; retain every already selected consumer. Qualify and retire
 replaced mechanics per accepted consumer;
