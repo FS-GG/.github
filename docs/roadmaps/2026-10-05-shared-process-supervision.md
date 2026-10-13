@@ -333,11 +333,37 @@ Original [source-excluded consumer `38474252015/a1`](https://github.com/FS-GG/FS
 and FsQuint public rollback passed (73 rollback cases); the other three jobs failed
 on the original SDK-package hash mismatch or schema-2 refusal. The source correction
 neither replays that original nor establishes qualification of the complete four-consumer
-cohort. A new consumer dispatch has not occurred and remains separately root-gated.
+cohort. At that source-delivery milestone, a new consumer dispatch had not occurred
+and remained separately root-gated; the separately admitted successor is recorded below.
 Original candidate `b11fb121`, the `.3` archive identified by `75b1`, producer run
 `38455588652` and artifact `11842360725` remain immutable. Coherent publication,
 publication/policy admission and installed-consumer acceptance remain separate obligations.
 The full V2-PROC-01 outcome remains **Done: No**; all historical custody holds survive.
+
+### Downloaded-package consumer cohort — 2026-10-13
+
+Original [consumer run `38484632631/a1`](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/38484632631)
+passed all five native jobs on the protected [#974 executor](https://github.com/FS-GG/FS.GG.Coordination/pull/974).
+Each job used a distinct runner/worker and completed Setup. All five original ZIP artifacts
+and logs were independently acquired. The four selected fixtures passed: SDD S1 71 cases,
+SDD public rollback 66, FsQuint S1 124 (including 12 lifecycle cases), and FsQuint public
+rollback 73. This is a separate admitted original; failed `38474252015/a1` remains retained
+and was neither replayed nor substituted.
+
+Acceptance joins the original candidate archive and Execution package pair to four authentic
+receiver heads, immutable NuGet schema-1/2 locks, cache/assets and compiler/runtime bytes.
+FsQuint S1 uses the genuine SDK-bundled Core401 cold input, preserving all seven owning
+source locks, three compiled locks and both DLL payload pins. The independent strict
+publisher preparation helper accepted the four authentic consumer proofs. These checks
+accept only the selected ordinary Linux downloaded-package cohort with evaluated
+workspace/temp/source exclusion, network reachability and native-guard runtime bytes.
+They establish no hard containment, full process custody, provider teardown or public adoption.
+
+The existing publisher preparation remains private and disabled, with its protected root
+publication gate pending. Original candidate/archive, publication/policy gates and all
+historical custody holds remain unchanged. Coherent publication, public installed adoption,
+remaining containment and consolidation still require their own acceptance; the full
+V2-PROC-01 outcome remains **Done: No**.
 
 [Coordination #970](https://github.com/FS-GG/FS.GG.Coordination/pull/970) delivers read-only original-pair publisher/preflight provenance controls, with native source checks passing. This prerequisite mechanism establishes no original-pair publication, selected 0.3 candidate/source freeze, first-consumer adoption or .3–.8 completion. [.1 bounded evaluation decision](../reports/2026-10-11-shared-process-supervision-evaluation.md) retains existing routine and contained implementations. Accepted BCL scopes, the failed deadline, inconclusive CliWrap heldpipe and blocked sink remain distinct; unresolved original custody is not cleared by the decision. Contract selection precedes routine/Linux implementation; native containment retains separate admission.
 
