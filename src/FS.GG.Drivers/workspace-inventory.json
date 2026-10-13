@@ -22,6 +22,10 @@
       "path": "scripts/lib/gate.py"
     },
     {
+      "source": "tools/pr-lane-admission.py",
+      "path": "tools/pr-lane-admission.py"
+    },
+    {
       "source": "tools/routine-delivery.py",
       "path": "tools/routine-delivery.py"
     },

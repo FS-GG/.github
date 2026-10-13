@@ -311,16 +311,51 @@ python3 "$WORK/receiver/scripts/check-routine-eligibility-envelope.py" \
   --head-sha "$head" --body "$WORK/receiver/pr-body.md" \
   --validator "$WORK/receiver/scripts/check-claim-generation.py" >/dev/null
 mkdir -p "$WORK/fake-bin"
-printf '%s\n' '#!/usr/bin/env python3' \
-  'import json' \
-  'print(json.dumps({"state":"open","draft":False,"merged":False,"mergeable":True,"mergeable_state":"clean","head":{"sha":"'"$head"'"},"base":{"ref":"main","sha":"'"$base"'"}}))' \
-  > "$WORK/fake-bin/gh"
+# The installed helper now validates the routine envelope and authentic native
+# producer. Model those reads, while refusing every undeclared endpoint.
+cat > "$WORK/fake-bin/gh" <<'PYFIXTURE'
+#!/usr/bin/env python3
+import json, os, sys
+
+head, base = os.environ["FSGG_FIXTURE_HEAD"], os.environ["FSGG_FIXTURE_BASE"]
+endpoint = sys.argv[2] if len(sys.argv) == 3 and sys.argv[1] == "api" else ""
+conclusion = os.environ.get("FSGG_FIXTURE_CONCLUSION", "success")
+run = {"id": 101, "workflow_id": 404, "path": ".github/workflows/routine-eligibility.yml",
+       "event": "pull_request_target", "head_sha": head, "head_branch": "routine/fixture",
+       "check_suite_id": 303, "repository": {"full_name": "fixture/receiver"},
+       "run_attempt": 1, "status": "completed", "conclusion": conclusion}
+job = {"id": 202, "run_id": 101, "run_attempt": 1, "head_sha": head,
+       "name": "routine-eligibility", "status": "completed", "conclusion": conclusion,
+       "check_run_url": "https://api.github.com/repos/fixture/receiver/check-runs/202"}
+check = {"id": 202, "name": "routine-eligibility", "head_sha": head,
+         "status": "completed", "conclusion": conclusion,
+         "started_at": "2026-01-01T00:00:00Z", "app": {"id": 15368},
+         "check_suite": {"id": 303},
+         "details_url": "https://github.com/fixture/receiver/actions/runs/101/job/202"}
+responses = {
+    "repos/fixture/receiver/pulls/1": {
+        "state": "open", "draft": False, "merged": False, "mergeable": True,
+        "mergeable_state": "clean", "head": {"sha": head, "ref": "routine/fixture"},
+        "base": {"ref": "main", "sha": base},
+        "body": f"<!-- fsgg:routine-development/v1 head={head} operation=source-change -->"},
+    f"repos/fixture/receiver/commits/{head}/check-runs?per_page=100": {
+        "total_count": 1, "check_runs": [check]},
+    "repos/fixture/receiver/actions/workflows/routine-eligibility.yml": {
+        "id": 404, "path": ".github/workflows/routine-eligibility.yml"},
+    "repos/fixture/receiver/actions/runs/101": run,
+    "repos/fixture/receiver/actions/jobs/202": job,
+}
+if endpoint not in responses:
+    raise SystemExit("unexpected fixture endpoint: " + endpoint)
+print(json.dumps(responses[endpoint]))
+PYFIXTURE
 chmod +x "$WORK/fake-bin/gh"
 # A poison sibling proves the installed routine helper does not silently return to
 # the retired Python-import boundary when its required packaged CLI is absent.
 printf '%s\n' 'raise RuntimeError("Python telemetry fallback was imported")' \
   > "$WORK/receiver/tools/fsgg_telemetry_defaults.py"
-XDG_CONFIG_HOME="$WORK/no-host-config" PATH="$WORK/fake-bin:/usr/bin:/bin" \
+FSGG_FIXTURE_HEAD="$head" FSGG_FIXTURE_BASE="$base" \
+  XDG_CONFIG_HOME="$WORK/no-host-config" PATH="$WORK/fake-bin:/usr/bin:/bin" \
   python3 "$WORK/receiver/tools/routine-delivery.py" \
     --repo fixture/receiver --pr 1 --head "$head" \
     --telemetry-feature SVG-WORKSPACE-01 --telemetry-item SVG-WORKSPACE-01.2 \
@@ -332,6 +367,16 @@ grep -Fq '"telemetryHealth":"unavailable"' "$WORK/routine-delivery.json" \
   || fail "installed routine-delivery helper did not report the missing packaged coordination engine"
 grep -Fq 'compiled telemetry helper is unavailable' "$WORK/routine-delivery.stderr" \
   || fail "installed routine-delivery helper did not preserve fail-visible missing-tool telemetry"
+# Successful package bytes must still refuse a real native qualification failure.
+if FSGG_FIXTURE_HEAD="$head" FSGG_FIXTURE_BASE="$base" FSGG_FIXTURE_CONCLUSION=failure \
+  XDG_CONFIG_HOME="$WORK/no-host-config" PATH="$WORK/fake-bin:/usr/bin:/bin" \
+  python3 "$WORK/receiver/tools/routine-delivery.py" \
+    --repo fixture/receiver --pr 1 --head "$head" \
+    > "$WORK/routine-delivery-failed.json" 2> "$WORK/routine-delivery-failed.stderr"; then
+  fail "installed routine helper accepted failed native eligibility"
+fi
+grep -Fq 'latest routine eligibility check is not successful' "$WORK/routine-delivery-failed.json" \
+  || fail "installed routine helper did not retain the native eligibility failure"
 for referenced in scripts/check-claim-generation.py scripts/check-routine-eligibility-envelope.py scripts/lib/gate.py; do
   grep -Fq "$referenced" "$WORK/receiver/.github/workflows/routine-eligibility.yml" \
     || fail "installed native workflow does not reference $referenced"
