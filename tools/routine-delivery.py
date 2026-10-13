@@ -372,7 +372,7 @@ class GhApi:
         changed = {p for p in a.keys() | b.keys() if a.get(p) != b.get(p)}
         expected = set(PRODUCER_PATHS)
         if PRODUCER_REGISTRATION in changed:
-            if repo != "FS-GG/Coordination" or metadata["id"] != 1346720714:
+            if repo != "FS-GG/FS.GG.Coordination" or metadata["id"] != 1346720714:
                 raise RuntimeError("derived installation registration belongs only to the native Coordination receiver")
             original, registered = old.get(PRODUCER_REGISTRATION), candidate.get(PRODUCER_REGISTRATION)
             if (original is None or registered is None or original.get("type") != "blob"

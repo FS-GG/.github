@@ -72,7 +72,7 @@ inspect/apply route only for an independently reviewed installation PR adding th
 canonical files from protected `FS-GG/.github`: `.fsgg/routine-development.json`,
 `.github/workflows/routine-eligibility.yml`, `scripts/check-claim-generation.py`,
 `scripts/check-routine-eligibility-envelope.py`, and `scripts/lib/gate.py`.
-Only native `FS-GG/Coordination` (repository ID `1346720714`) may additionally modify its existing regular
+Only native `FS-GG/FS.GG.Coordination` (repository ID `1346720714`) may additionally modify its existing regular
 `evidence/github-substrate-v2/gs2-06-7/execution-pins-extension.json` by appending the single derived
 workflow record. The helper preserves every original byte and record order, derives the SHA-256 from the
 protected canonical routine workflow, and requires empty external/local references and no `uses:` steps.
