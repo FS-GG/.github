@@ -30,6 +30,16 @@ advances the pin to that CLI.
 
 ## Entries
 
+### 2026-10-13 — Reconcile existing producer skill digests (.github; ADR-0017)
+
+Reconcile `fable-bindings` from FS.GG.Templates at
+`fe93aad50963dba101ac2cb6645ff33eb69ab324` and `drive-board` from the current
+`.github` driver manifest at `ff0010af6edfc24b7eb2457447a24df6f9994f39`.
+Both producer manifests already match their authored skill bodies. The consumer
+registry retained older digests, causing the absolute main registry check in
+run `38345290157` to fail after PR #4459. Update those two digests and the
+registry date; delivery predicates, schema and package versions stay unchanged.
+
 ### 2026-10-07 — Unified v3 roadmap references (.github; ADR-0054)
 
 Reconcile `work-roadmap` (driver scope) from the regenerated
