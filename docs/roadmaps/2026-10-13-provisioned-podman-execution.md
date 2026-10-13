@@ -1,6 +1,6 @@
 # V3-ENV-01: Provisioned Podman execution and ephemeral nested storage
 
-Date: 2026-10-13. Status: proposed implementation sequence; document delivery establishes no provisioning, native qualification, publication, installation or activation.
+Date: 2026-10-13. Status: ordinary basic qualification accepted; provisioned storage, strong containment, delivery and portability remain pending.
 Parent: [Unified Roadmap v3](2026-10-07-unified-development-roadmap-v3.md).
 Design: [provisioned execution](../designs/2026-10-13-provisioned-podman-execution.md).
 Assessment: [upstream prior art](../reports/2026-10-13-provisioned-podman-prior-art.md).
@@ -22,25 +22,15 @@ The new outcome owns host/profile provisioning, ephemeral allocation/teardown an
 
 This plan does not resume existing native operations, activate LEARN or admit a publication. It does not remove unwithdrawn cross-platform promises. Ordinary source work, routine process adoption and independent roadmap outcomes continue under their existing qualified routes.
 
-## Current source frontier, 2026-10-13
+## Current qualification frontier, 2026-10-13
 
-The [supplied profile inventory](../designs/2026-10-13-provisioned-podman-execution.md#supplied-development-profile-source-inventory-2026-10-13)
-records the rebuilt development container's installed Arch/Podman metadata, valid
-subordinate-range arithmetic, finite shared outer limits and dedicated tmpfs mounts.
-Namespace execution remains not run. Read-only cgroups leave the contained-profile
-join open; ordinary feasibility need not await that join when an existing qualified
-route supplies actual admission, accounting, custody and bounded cleanup. The
-inspected image qualification scripts do not establish that probe execution contract.
+Root accepted the ordinary supplied-profile Podman assertion on 2026-10-13. Clean Coordination source `b11fb121f046898e655b779dfc6809f35fc7aac6` passed native rootless Linux/amd64 preflight with mappings covering container UID 32768. The pinned inputs produced an image whose seven offline Python, TypeScript and composed cases returned exit 0 and matched all six expected output digests. Its OCI export and maintained layer, config, platform and user validation passed within the original operation deadline. See [qualification and limits](../reports/2026-10-13-basic-portable-podman-qualification.md).
 
-The visible temporary stores are memory-backed; a qualified local disk-backed
-allocation, its independent cleanup owner and the actual build baseline remain
-unavailable. The original private Arch draft and acquisition evidence were lost.
-Its owner `podman_profile` retains source reconstruction: join authentic donor
-inventory, maintained full-system dependency resolution and trusted archives before
-creating a genuine package checksum manifest or building an image. Preserve the
-[saved failures and pending joins](../handoffs/2026-10-13-095258-unified-roadmap-handoff.md#private-evidence-drafts-and-truthful-limits);
-missing bytes do not permit replaying consumed operations or inventing historical
-packet/attempt evidence. This source correction closes no milestone.
+The original build failed because Buildah mounted a context overlay on inherited-overlay backing. A fresh admitted context and temporary directory on the existing tmpfs supported the build. The original monitored allocation cap stopped that successor after its seven cases passed; the separately admitted export reused the built image and actual case evidence without replaying either. Both failures remain recorded. This ordinary check required neither systemd nor writable delegated cgroups.
+
+Final scoped readback found no containers, including external build containers, or members of the known original process group. The private pause process, mount retirement and both store allocations remain held or Unknown. Fresh containers permit a distinct admitted ordinary attempt; they do not prove retirement of earlier work. All 439 historical holds and the earlier unknown pause remain unchanged.
+
+This accepts the narrow ordinary-profile assertion under .1, rather than completing .1's whole profile/baseline population or V3-ENV-01. The storage is memory-backed: .2 host-backed allocation and independent teardown, .3 measured storage benefit, .4 strong containment, .6 other-machine/reboot recovery, public delivery and installed adoption remain pending. Whole-item Done remains No.
 
 ## Delivery milestones
 
