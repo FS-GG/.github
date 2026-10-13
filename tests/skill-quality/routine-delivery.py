@@ -966,7 +966,7 @@ class CheckWatchTests(unittest.TestCase):
 
 class BoundedQueryTests(unittest.TestCase):
     def query(self, *, chunks=None, stderr_chunks=None, never=False, interrupt=False, seconds=5, reaping_unknown=False,
-              env=None, spawn_calls=None):
+              env=None, spawn_calls=None, stderr_output=None, max_bytes=None):
         clock=FakeWatchClock();streams=[mock.Mock(),mock.Mock()]
         streams[0].fileno.return_value=101;streams[1].fileno.return_value=102
         process=mock.Mock(stdout=streams[0],stderr=streams[1],returncode=0)
@@ -991,6 +991,8 @@ class BoundedQueryTests(unittest.TestCase):
                         spawn_calls.append((args, kwargs))
                     return process
                 options = {} if env is None else {"env": env}
+                if stderr_output is not None: options["stderr_output"]=stderr_output
+                if max_bytes is not None: options["max_bytes"]=max_bytes
                 result=MODULE.bounded_watch_query(['gh','api','read-only'],seconds,clock=clock,popen=popen,**options)
                 return result,process,clock
             except BaseException as error:
@@ -1357,7 +1359,9 @@ jobs:
         fixture = alias(self.fixture)
         responses = fixture["responses"]
         pr = alias(self.pr)
+        pr["head"]["ref"] = "routine/install-routine-producer-90ccedb7"
         after = alias(self.after)
+        after["head"]["ref"] = pr["head"]["ref"]
         head = fixture["head"]
         responses[f"repos/{repo}/git/ref/heads/main"] = dict(ref="refs/heads/main",object=dict(type="commit",sha=fixture['base']))
         metadata = responses[f"repos/{repo}"]
@@ -1399,7 +1403,11 @@ jobs:
             nonlocal policy_reads
             reads.append(command)
             if command[:3] == ["gh","pr","checks"]:
-                return (1,b"[]") if required is None else required
+                native = (1,b"",b"no required checks reported on the 'routine/install-routine-producer-90ccedb7' branch\n")
+                response = native if required is None else required
+                if _kwargs.get("stderr_output") is not None:
+                    _kwargs["stderr_output"].extend(response[2] if len(response)==3 else b"")
+                return response[:2]
             endpoint = command[-1]
             if endpoint in policy:
                 if endpoint.endswith("required_status_checks"):
@@ -1440,9 +1448,36 @@ jobs:
         code,result,api,reads=self.fsquint_transport(required=(0,json.dumps([row]).encode()))
         self.assertEqual((code,api.attempts,result.reason),(0,0,None))
         self.assertFalse(any('--include' in command for command in reads))
-        for required in ((0,b'[]'),(1,b'{}'),(1,json.dumps([row]).encode()),(4,b'[]')):
+        for required in ((0,b'[]'),(1,b'{}'),(1,b'[]'),(1,json.dumps([row]).encode()),(4,b'')):
             code,_,api,_=self.fsquint_transport(apply=True,required=required)
             self.assertEqual((code,api.attempts),(2,0))
+
+    def test_fsquint_authentic_no_required_diagnostic_transport_is_exact(self):
+        diagnostic=b"no required checks reported on the 'routine/install-routine-producer-90ccedb7' branch\n"
+        # Retained authenticated FsQuint PR44 gh2.102.0 transport: exit1/stdout0/stderr86.
+        self.assertEqual(len(diagnostic),86)
+        for value in [(1,b"",b""),(1,b"",b"permission denied\n"),(1,b"",diagnostic+b"extra\n"),
+                      (1,b"",diagnostic.rstrip()),(1,b"",diagnostic.replace(b"90ccedb7",b"foreign")),
+                      (1,b"[]",diagnostic),(1,b" ",diagnostic),(4,b"",diagnostic),(0,b"",diagnostic)]:
+            with self.subTest(value=value):
+                code,_,api,_=self.fsquint_transport(apply=True,required=value)
+                self.assertEqual((code,api.attempts),(2,0))
+
+    def test_bounded_native_query_optional_stderr_preserves_default_and_combined_cap(self):
+        query=BoundedQueryTests().query
+        result,process,_=query(chunks=[b'out'],stderr_chunks=[b'err'])
+        self.assertEqual(result,(0,b'out'))
+        stderr=bytearray()
+        result,process,_=query(chunks=[b'out'],stderr_chunks=[b'err'],stderr_output=stderr)
+        self.assertEqual(result,(0,b'out'));self.assertEqual(stderr,b'err')
+        self.assertGreaterEqual(process.wait.call_count,1)
+        process.stdout.close.assert_called_once();process.stderr.close.assert_called_once()
+        result,process,_=query(chunks=[b'out'],stderr_chunks=[b'err'],max_bytes=5,stderr_output=bytearray())
+        self.assertIsInstance(result,RuntimeError);self.assertIn('combined stdout/stderr',str(result))
+        for options in [dict(never=True),dict(reaping_unknown=True),dict(interrupt=True)]:
+            result,process,_=query(stderr_output=bytearray(),**options)
+            self.assertIsInstance(result,BaseException)
+            process.stdout.close.assert_called_once();process.stderr.close.assert_called_once()
 
     def test_fsquint_policy_http_transport_refuses_pagination_and_ambiguity(self):
         api=MODULE.GhApi()

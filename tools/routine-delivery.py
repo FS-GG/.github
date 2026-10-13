@@ -434,10 +434,24 @@ class GhApi:
         self._installation_policy_fact = None
         # The existing native checks reader remains the receiver-specific requirement authority.
         api = WatchGhApi(time.monotonic() + 31)
-        code, checks = api._watch_read(["gh", "pr", "checks", str(number), "--repo", repo,
-                                      "--required", "--json", WATCH_FIELDS],
-                                     (0, 1) if repo == "FS-GG/FsQuint" else (0,))
-        if repo == "FS-GG/FsQuint" and code == 1 and checks == []:
+        command = ["gh", "pr", "checks", str(number), "--repo", repo,
+                   "--required", "--json", WATCH_FIELDS]
+        if repo == "FS-GG/FsQuint":
+            stderr = bytearray()
+            code, raw = bounded_watch_query(command, time.monotonic() + 31, stderr_output=stderr)
+            absent = (code == 1 and raw == b"" and bytes(stderr) ==
+                      f"no required checks reported on the '{branch}' branch\n".encode("utf-8"))
+            if code != 0 and not absent:
+                raise RuntimeError("installation required-check transport is denied or unknown")
+            if not absent:
+                try:
+                    checks = json.loads(raw)
+                except (UnicodeError, ValueError) as error:
+                    raise RuntimeError("installation required-check transport is malformed") from error
+        else:
+            code, checks = api._watch_read(command, (0,))
+            absent = False
+        if absent:
             self.installation_empty_policy(repo, head, roster, metadata, base, candidate, coherent_workflow, branch)
             self._installation_policy_fact = "required-policy-observed-empty"
             return
@@ -1429,7 +1443,7 @@ def bounded_watch_query(
     command: list[str], deadline: float, *, clock: Callable[[], float] = time.monotonic,
     popen: Callable[..., Any] = subprocess.Popen,
     max_seconds: float = WATCH_QUERY_SECONDS, max_bytes: int = WATCH_QUERY_BYTES,
-    env: dict[str, str] | None = None,
+    env: dict[str, str] | None = None, stderr_output: bytearray | None = None,
 ) -> tuple[int, bytes]:
     """Bound both streams before retaining; kill/reap the same direct child on error."""
     work_end = min(deadline - WATCH_CLEANUP_SECONDS, clock() + max_seconds)
@@ -1462,6 +1476,8 @@ def bounded_watch_query(
                 used += len(raw)
                 if key.data:
                     output.extend(raw)
+                elif stderr_output is not None:
+                    stderr_output.extend(raw)
         process.wait(timeout=max(0, min(WATCH_CLEANUP_SECONDS, deadline - clock())))
         return process.returncode, bytes(output)
     finally:
