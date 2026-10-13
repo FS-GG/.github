@@ -225,7 +225,7 @@ class NativeApi(Protocol):
     def routine_eligibility(self, repo: str, head: str, branch: str) -> None: ...
 
     def installation_contract(self, repo: str, number: int, pr: dict, head: str,
-                              source: str, *, delivered: bool = False) -> None: ...
+                              source: str, *, delivered: bool = False, coherent_workflow: str | None = None) -> None: ...
 
 
 class GhApi:
@@ -282,14 +282,14 @@ class GhApi:
         return body
 
     def installation_contract(self, repo: str, number: int, pr: dict, head: str,
-                              source: str, *, delivered: bool = False) -> None:
+                              source: str, *, delivered: bool = False, coherent_workflow: str | None = None) -> None:
         try:
-            self._installation_contract(repo, number, pr, head, source, delivered=delivered)
+            self._installation_contract(repo, number, pr, head, source, delivered=delivered, coherent_workflow=coherent_workflow)
         except (KeyError, TypeError, ValueError, AttributeError, IndexError) as error:
             raise RuntimeError("installation native response shape is malformed") from error
 
     def _installation_contract(self, repo: str, number: int, pr: dict, head: str,
-                               source: str, *, delivered: bool = False) -> None:
+                               source: str, *, delivered: bool = False, coherent_workflow: str | None = None) -> None:
         """Closed five-file predicate, independent of ordinary eligibility success."""
         metadata = self.installation_read(f"repos/{repo}")
         if (not isinstance(metadata, dict) or metadata.get("full_name") != repo
@@ -423,14 +423,40 @@ class GhApi:
         if (any(r.get("path") == PRODUCER_PATHS[1] or r.get("name") == "routine-eligibility" for r in workflows["workflows"])
                 or any(r.get("name") == "routine-eligibility" for r in checks["check_runs"])):
             raise RuntimeError("native eligibility producer/check already exists")
-        self.installation_required_checks(repo, number, head, checks["check_runs"])
+        self.installation_required_checks(repo, number, head, checks["check_runs"],
+                                          metadata=metadata, base=base, candidate=candidate,
+                                          coherent_workflow=coherent_workflow, branch=pr["head"]["ref"])
         protected_owner_still_current()
 
-    def installation_required_checks(self, repo: str, number: int, head: str, roster: list[dict]) -> None:
+    def installation_required_checks(self, repo: str, number: int, head: str, roster: list[dict],
+                                     *, metadata: dict, base: str, candidate: dict,
+                                     coherent_workflow: str | None, branch: str) -> None:
+        self._installation_policy_fact = None
         # The existing native checks reader remains the receiver-specific requirement authority.
         api = WatchGhApi(time.monotonic() + 31)
-        _code, checks = api._watch_read(["gh", "pr", "checks", str(number), "--repo", repo,
-                                      "--required", "--json", WATCH_FIELDS], (0,))
+        command = ["gh", "pr", "checks", str(number), "--repo", repo,
+                   "--required", "--json", WATCH_FIELDS]
+        if repo == "FS-GG/FsQuint":
+            stderr = bytearray()
+            code, raw = bounded_watch_query(command, time.monotonic() + 31, stderr_output=stderr)
+            absent = (code == 1 and raw == b"" and bytes(stderr) ==
+                      f"no required checks reported on the '{branch}' branch\n".encode("utf-8"))
+            if code != 0 and not absent:
+                raise RuntimeError("installation required-check transport is denied or unknown")
+            if not absent:
+                try:
+                    checks = json.loads(raw)
+                except (UnicodeError, ValueError) as error:
+                    raise RuntimeError("installation required-check transport is malformed") from error
+        else:
+            code, checks = api._watch_read(command, (0,))
+            absent = False
+        if absent:
+            self.installation_empty_policy(repo, head, roster, metadata, base, candidate, coherent_workflow, branch)
+            self._installation_policy_fact = "required-policy-observed-empty"
+            return
+        if code != 0:
+            raise RuntimeError("installation required checks read failed")
         if (not isinstance(checks, list) or not 0 < len(checks) <= WATCH_MAX_CHECKS
                 or any(not isinstance(r, dict) or set(r) != set(WATCH_FIELDS.split(",")) or r.get("bucket") != "pass"
                        or r.get("state") != "SUCCESS" or not r.get("completedAt") for r in checks)):
@@ -463,6 +489,122 @@ class GhApi:
                     or type(job.get("run_attempt")) is not int
                     or job.get("run_attempt") != run["run_attempt"]):
                 raise RuntimeError("installation required check exact-head/run/attempt differs")
+
+    def installation_policy_read(self, endpoint: str) -> tuple[int, Any]:
+        """Observe authenticated HTTP status and complete policy body together."""
+        code, raw = bounded_watch_query(["gh", "api", "--include", endpoint],
+                                       time.monotonic() + 31, max_bytes=1_048_576)
+        try:
+            headers, body = raw.decode("utf-8").replace("\r\n", "\n").split("\n\n", 1)
+            lines = headers.splitlines()
+            match = re.fullmatch(r"HTTP/\S+ ([0-9]{3})(?: .*)?", lines[0])
+            if not match or any(line.lower().startswith("link:") for line in lines[1:]):
+                raise ValueError("unknown HTTP status or paginated policy")
+            status = int(match[1])
+            if (status == 200 and code != 0) or (status == 404 and code != 1) or status not in (200, 404):
+                raise ValueError("denied or contradictory HTTP result")
+            def unique(pairs):
+                value = {}
+                for key, item in pairs:
+                    if key in value:
+                        raise ValueError("duplicate policy property")
+                    value[key] = item
+                return value
+            return status, json.loads(body, object_pairs_hook=unique)
+        except (UnicodeError, ValueError, IndexError) as error:
+            raise RuntimeError("installation required-policy read is denied, incomplete or unknown") from error
+
+    def installation_empty_policy(self, repo: str, head: str, roster: list[dict],
+                                  metadata: dict, base: str, candidate: dict,
+                                  coherent_workflow: str | None, branch: str) -> None:
+        # This reviewed exception is only for the authentic first-install FsQuint receiver.
+        if (type(metadata.get("id")) is not int or metadata.get("id") != 1375501179 or metadata.get("private") is not False
+                or metadata.get("default_branch") != "main"
+                or not isinstance(metadata.get("permissions"), dict)
+                or metadata["permissions"].get("admin") is not True
+                or metadata["permissions"].get("push") is not True
+                or metadata["permissions"].get("pull") is not True
+                or coherent_workflow != "ci.yml"):
+            raise RuntimeError("installation empty-policy receiver/capability/coherent selector differs")
+        default = self.installation_read(f"repos/{repo}/git/ref/heads/main")
+        if (not isinstance(default, dict) or default.get("ref") != "refs/heads/main"
+                or (default.get("object") or {}).get("type") != "commit"
+                or (default.get("object") or {}).get("sha") != base):
+            raise RuntimeError("installation empty-policy current default/base identity differs")
+        classic_status, classic = self.installation_policy_read(f"repos/{repo}/branches/main/protection/required_status_checks")
+        rules_status, rules = self.installation_policy_read(f"repos/{repo}/rules/branches/main?per_page=100")
+        sets_status, sets = self.installation_policy_read(f"repos/{repo}/rulesets?includes_parents=true&per_page=100")
+        if (classic_status != 404 or not isinstance(classic, dict)
+                or set(classic) != {"message", "documentation_url", "status"}
+                or classic.get("message") != "Branch not protected" or classic.get("status") != "404"
+                or classic.get("documentation_url") != "https://docs.github.com/rest/branches/branch-protection#get-status-checks-protection"
+                or rules_status != 200 or rules != [] or sets_status != 200 or sets != []):
+            raise RuntimeError("installation required policy is not authentically empty")
+        workflow = self.installation_read(f"repos/{repo}/actions/workflows/ci.yml")
+        if (not isinstance(workflow, dict) or type(workflow.get("id")) is not int or workflow.get("id") != 361154226
+                or workflow.get("path") != ".github/workflows/ci.yml" or workflow.get("state") != "active"):
+            raise RuntimeError("installation full native CI workflow differs")
+        path = workflow["path"]
+        baseline = self.installation_tree(repo, base).get(path)
+        if baseline is None or candidate.get(path) != baseline:
+            raise RuntimeError("installation full CI source differs from protected base")
+        # Pin the reviewed unconditional qualify job running CiPreflight/check.sh and eng/check.sh.
+        if hashlib.sha256(self.installation_blob(repo, baseline)).hexdigest() != "e93a1f3569de84d541de0f52ed08c52848d35631b644e28b79dd187badc0a520":
+            raise RuntimeError("installation full CI source is not the reviewed technical cohort")
+        population = self.installation_read(f"repos/{repo}/actions/workflows/361154226/runs?head_sha={head}&per_page=100")
+        if (not isinstance(population, dict) or type(population.get("total_count")) is not int or population.get("total_count") != 1
+                or not isinstance(population.get("workflow_runs"), list) or len(population["workflow_runs"]) != 1):
+            raise RuntimeError("installation full CI exact-head run population is incomplete or ambiguous")
+        run = population["workflow_runs"][0]
+        if (not isinstance(run, dict) or type(run.get("id")) is not int or run["id"] < 1
+                or run.get("workflow_id") != workflow["id"] or run.get("path") != path
+                or run.get("head_sha") != head or run.get("head_branch") != branch
+                or run.get("event") != "pull_request" or type(run.get("run_attempt")) is not int or run.get("run_attempt") != 1
+                or run.get("status") != "completed" or run.get("conclusion") != "success"
+                or (run.get("repository") or {}).get("id") != metadata["id"]
+                or (run.get("repository") or {}).get("full_name") != repo
+                or type(run.get("check_suite_id")) is not int):
+            raise RuntimeError("installation full CI run identity/attempt/success differs")
+        detail = self.installation_read(f"repos/{repo}/actions/runs/{run['id']}")
+        if any(detail.get(key) != run.get(key) for key in ("id", "workflow_id", "path", "head_sha", "event", "run_attempt", "status", "conclusion", "check_suite_id", "repository")):
+            raise RuntimeError("installation full CI run readback differs")
+        jobs = self.installation_read(f"repos/{repo}/actions/runs/{run['id']}/attempts/1/jobs?per_page=100")
+        if (not isinstance(jobs, dict) or type(jobs.get("total_count")) is not int or jobs.get("total_count") != 1
+                or not isinstance(jobs.get("jobs"), list) or len(jobs["jobs"]) != 1
+                or not isinstance(jobs["jobs"][0], dict) or jobs["jobs"][0].get("name") != "qualify"):
+            raise RuntimeError("installation full CI job cohort is incomplete")
+        statuses = self.installation_read(f"repos/{repo}/commits/{head}/status?per_page=100")
+        if (not isinstance(statuses, dict) or statuses.get("sha") != head
+                or type(statuses.get("total_count")) is not int or statuses.get("total_count") != 0 or statuses.get("statuses") != []):
+            raise RuntimeError("installation exact-head status provenance is unknown")
+        if not roster or len({r.get("id") for r in roster}) != len(roster):
+            raise RuntimeError("installation complete technical check cohort is missing or duplicated")
+        cohort = jobs["jobs"][0]
+        # Every actual native check must belong to this complete reviewed CI run and job.
+        if len(roster) != 1 or cohort.get("id") != roster[0].get("id"):
+            raise RuntimeError("installation native check/job population differs")
+        check = roster[0]
+        steps = cohort.get("steps")
+        if (not isinstance(steps, list) or not 6 <= len(steps) <= 32
+                or any(not isinstance(step, dict) or step.get("status") != "completed"
+                       or step.get("conclusion") != "success" for step in steps)
+                or [step.get("name") for step in steps[:6]] != ["Set up job", "Run actions/checkout@v7",
+                    "Run actions/setup-dotnet@v6", "Provision pinned Quint", "Check independent CI preflight example",
+                    "Qualify core, tooling and external package consumer"]):
+            raise RuntimeError("installation full CI technical steps are absent, skipped or failed")
+        link = f"https://github.com/{repo}/actions/runs/{run['id']}/job/{cohort.get('id')}"
+        job = self.installation_read(f"repos/{repo}/actions/jobs/{cohort.get('id')}")
+        if (job != cohort or type(job.get("id")) is not int or job["id"] < 1
+                or job.get("run_id") != run["id"] or type(job.get("run_attempt")) is not int or job.get("run_attempt") != 1
+                or job.get("head_sha") != head or job.get("name") != "qualify"
+                or job.get("status") != "completed" or job.get("conclusion") != "success"
+                or not job.get("completed_at")
+                or job.get("check_run_url") != f"https://api.github.com/repos/{repo}/check-runs/{job['id']}"
+                or check.get("head_sha") != head or check.get("name") != "qualify"
+                or check.get("details_url") != link or (check.get("app") or {}).get("id") != 15368
+                or (check.get("check_suite") or {}).get("id") != run["check_suite_id"]
+                or check.get("status") != "completed" or check.get("conclusion") != "success"):
+            raise RuntimeError("installation full CI check/app/job/run/attempt provenance differs")
 
     @staticmethod
     def _run(
@@ -1075,6 +1217,8 @@ def summarize(
                        observedAt=now.isoformat().replace("+00:00", "Z"),
                        routineEligibility=routine_state)
         if producer_source is not None:
+            if result.reason is None and getattr(api, "_installation_policy_fact", None) == "required-policy-observed-empty":
+                result = replace(result, reason="required-policy-observed-empty")
             state = "ready" if result.outcome == "ready" else result.outcome
             if result.codeDelivery == "delivered":
                 try:
@@ -1117,7 +1261,7 @@ def summarize(
     try:
         if producer_source is not None:
             api.installation_contract(repo, pr_number, before, expected_head, producer_source,
-                                      delivered=is_merged(before))
+                                      delivered=is_merged(before), coherent_workflow=coherent_workflow)
             routine_state = "unavailable-first-install"
         else:
             routine_state = routine_contract(api, repo, before, expected_head)
@@ -1169,7 +1313,8 @@ def summarize(
                     or (current.get("head") or {}).get("ref") != (before.get("head") or {}).get("ref")):
                 raise RuntimeError(current_reason or "routine PR envelope changed before merge")
             if producer_source is not None:
-                api.installation_contract(repo, pr_number, current, expected_head, producer_source)
+                api.installation_contract(repo, pr_number, current, expected_head, producer_source,
+                                          coherent_workflow=coherent_workflow)
                 disposition, coherent, reason = validation_state(api, repo, coherent_workflow, expected_head)
                 if coherent != "passed" or disposition in ("invalid", "deferred", "failed"):
                     raise RuntimeError("installation coherent validation changed before merge")
@@ -1298,7 +1443,7 @@ def bounded_watch_query(
     command: list[str], deadline: float, *, clock: Callable[[], float] = time.monotonic,
     popen: Callable[..., Any] = subprocess.Popen,
     max_seconds: float = WATCH_QUERY_SECONDS, max_bytes: int = WATCH_QUERY_BYTES,
-    env: dict[str, str] | None = None,
+    env: dict[str, str] | None = None, stderr_output: bytearray | None = None,
 ) -> tuple[int, bytes]:
     """Bound both streams before retaining; kill/reap the same direct child on error."""
     work_end = min(deadline - WATCH_CLEANUP_SECONDS, clock() + max_seconds)
@@ -1331,6 +1476,8 @@ def bounded_watch_query(
                 used += len(raw)
                 if key.data:
                     output.extend(raw)
+                elif stderr_output is not None:
+                    stderr_output.extend(raw)
         process.wait(timeout=max(0, min(WATCH_CLEANUP_SECONDS, deadline - clock())))
         return process.returncode, bytes(output)
     finally:

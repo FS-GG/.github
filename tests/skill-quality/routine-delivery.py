@@ -966,7 +966,7 @@ class CheckWatchTests(unittest.TestCase):
 
 class BoundedQueryTests(unittest.TestCase):
     def query(self, *, chunks=None, stderr_chunks=None, never=False, interrupt=False, seconds=5, reaping_unknown=False,
-              env=None, spawn_calls=None):
+              env=None, spawn_calls=None, stderr_output=None, max_bytes=None):
         clock=FakeWatchClock();streams=[mock.Mock(),mock.Mock()]
         streams[0].fileno.return_value=101;streams[1].fileno.return_value=102
         process=mock.Mock(stdout=streams[0],stderr=streams[1],returncode=0)
@@ -991,6 +991,8 @@ class BoundedQueryTests(unittest.TestCase):
                         spawn_calls.append((args, kwargs))
                     return process
                 options = {} if env is None else {"env": env}
+                if stderr_output is not None: options["stderr_output"]=stderr_output
+                if max_bytes is not None: options["max_bytes"]=max_bytes
                 result=MODULE.bounded_watch_query(['gh','api','read-only'],seconds,clock=clock,popen=popen,**options)
                 return result,process,clock
             except BaseException as error:
@@ -1255,6 +1257,39 @@ class ProducerInstallationTests(unittest.TestCase):
         # Native PR971 protected base 45f71c3785d6e2fbf84ab8fc68eee0855be10411; exact retained extension bytes.
         cls.registration_base=MODULE.base64.b64decode('ewogICJzY2hlbWEiOiAiZnNnZy5jb29yZGluYXRpb24uZXhlY3V0aW9uLXBpbnMtZXh0ZW5zaW9uLzEiLAogICJjb21wbGV0ZSI6IHRydWUsCiAgImRvY3VtZW50cyI6IFsKICAgIHsKICAgICAgImtpbmQiOiAiYWN0aW9uIiwKICAgICAgInBhdGgiOiAiLmdpdGh1Yi9hY3Rpb25zL2Nvb3JkaW5hdGlvbi1zZXR1cC9hY3Rpb24ueW1sIiwKICAgICAgInNoYTI1NiI6ICI5YTI3OWI5MmE5ZjdmMGYwNTkwYzZlZWNlNGZhOWRhN2UwZmRkZWNhZGMwMmE0OTE2NWE2YWU5ODMwMzcxYjJiIiwKICAgICAgImV4dGVybmFsUmVmZXJlbmNlcyI6IFsKICAgICAgICAiYWN0aW9ucy9zZXR1cC1kb3RuZXRAYTk4YjU2ODUyYzM1YjhlMzE5MGFjMjhjOGMyMjcxZGE1OTEwNmM2OCIKICAgICAgXSwKICAgICAgImxvY2FsUmVmZXJlbmNlcyI6IFtdCiAgICB9LAogICAgewogICAgICAia2luZCI6ICJ3b3JrZmxvdyIsCiAgICAgICJwYXRoIjogIi5naXRodWIvd29ya2Zsb3dzL29wdGltaXN0aWMtcGFyYWxsZWwtdmFsaWRhdGlvbi55bWwiLAogICAgICAic2hhMjU2IjogIjU2ZTI5ZjE1MjU4MGE5ZjRiMjJiNjQ3YTVmZWM4NWIxYWJiYTk1NTJkYjdkNzM0YmFiYThjZDA3OTMyZGYxZTkiLAogICAgICAiZXh0ZXJuYWxSZWZlcmVuY2VzIjogWwogICAgICAgICJhY3Rpb25zL2NoZWNrb3V0QDNkM2M0MmU1YWFjNWJhODA1ODI1ZGE3NjQxMGMxODEyNzNiYTkwYjEiLAogICAgICAgICJhY3Rpb25zL2Rvd25sb2FkLWFydGlmYWN0QDNlNWY0NWIyY2ZiOTE3MjA1NGI0MDg3YTQwZThlMGI1YTU0NjFlN2MiLAogICAgICAgICJhY3Rpb25zL3NldHVwLWRvdG5ldEBhOThiNTY4NTJjMzViOGUzMTkwYWMyOGM4YzIyNzFkYTU5MTA2YzY4IiwKICAgICAgICAiYWN0aW9ucy91cGxvYWQtYXJ0aWZhY3RAMDQzZmI0NmQxYTkzYzc3YWFlNjU2ZTdjMWM2NGE4NzVkMWZjNmEwYSIKICAgICAgXSwKICAgICAgImxvY2FsUmVmZXJlbmNlcyI6IFtdCiAgICB9LAogICAgewogICAgICAia2luZCI6ICJ3b3JrZmxvdyIsCiAgICAgICJwYXRoIjogIi5naXRodWIvd29ya2Zsb3dzL3JldXNhYmxlLW9ibGlnYXRpb24tc2VsZWN0aW9uLnltbCIsCiAgICAgICJzaGEyNTYiOiAiMDIyZGI5YjU5NzE5YzRkNTMzYTZhMDZjNGMyNDBlNjA0MWE1ZmMxMGRhNDQzOWMyYjgwZTFkZThiZWMyNTg5MSIsCiAgICAgICJleHRlcm5hbFJlZmVyZW5jZXMiOiBbCiAgICAgICAgImFjdGlvbnMvY2hlY2tvdXRAM2QzYzQyZTVhYWM1YmE4MDU4MjVkYTc2NDEwYzE4MTI3M2JhOTBiMSIKICAgICAgXSwKICAgICAgImxvY2FsUmVmZXJlbmNlcyI6IFsKICAgICAgICAiLi8uZ2l0aHViL2FjdGlvbnMvY29vcmRpbmF0aW9uLXNldHVwIgogICAgICBdCiAgICB9LAogICAgewogICAgICAia2luZCI6ICJ3b3JrZmxvdyIsCiAgICAgICJwYXRoIjogIi5naXRodWIvd29ya2Zsb3dzL3dvcmtmbG93LXNlbGVjdGlvbi1zZW50aW5lbC55bWwiLAogICAgICAic2hhMjU2IjogImQxNWUwMzAwOTQyN2I3ZGFhNGRkYmZmNDI4MmUzODkzN2YwMzg0NGNkNWZkNjgwZDg0OGExZTM1YTk3MjExY2YiLAogICAgICAiZXh0ZXJuYWxSZWZlcmVuY2VzIjogWwogICAgICAgICJhY3Rpb25zL2NoZWNrb3V0QDNkM2M0MmU1YWFjNWJhODA1ODI1ZGE3NjQxMGMxODEyNzNiYTkwYjEiLAogICAgICAgICJhY3Rpb25zL3VwbG9hZC1hcnRpZmFjdEAwNDNmYjQ2ZDFhOTNjNzdhYWU2NTZlN2MxYzY0YTg3NWQxZmM2YTBhIgogICAgICBdLAogICAgICAibG9jYWxSZWZlcmVuY2VzIjogWwogICAgICAgICIuLy5naXRodWIvYWN0aW9ucy9jb29yZGluYXRpb24tc2V0dXAiCiAgICAgIF0KICAgIH0sCiAgICB7CiAgICAgICJraW5kIjogIndvcmtmbG93IiwKICAgICAgInBhdGgiOiAiLmdpdGh1Yi93b3JrZmxvd3Mvb3JjaGVzdHJhdGlvbi1ob3N0LWNhbmRpZGF0ZS55bWwiLAogICAgICAic2hhMjU2IjogIjgxZDIzYjlkNjY0MGJiMWYyNDdiNmY2MDk2YTY4NjkyY2E0YzEyNmUyYTIwOTg3ZDJhZjVhYzYzNTI3OWY1NGQiLAogICAgICAiZXh0ZXJuYWxSZWZlcmVuY2VzIjogWwogICAgICAgICJhY3Rpb25zL2NoZWNrb3V0QDNkM2M0MmU1YWFjNWJhODA1ODI1ZGE3NjQxMGMxODEyNzNiYTkwYjEiLAogICAgICAgICJhY3Rpb25zL3NldHVwLWRvdG5ldEBhOThiNTY4NTJjMzViOGUzMTkwYWMyOGM4YzIyNzFkYTU5MTA2YzY4IiwKICAgICAgICAiYWN0aW9ucy91cGxvYWQtYXJ0aWZhY3RAMDQzZmI0NmQxYTkzYzc3YWFlNjU2ZTdjMWM2NGE4NzVkMWZjNmEwYSIsCiAgICAgICAgImFjdGlvbnMvZG93bmxvYWQtYXJ0aWZhY3RAM2U1ZjQ1YjJjZmI5MTcyMDU0YjQwODdhNDBlOGUwYjVhNTQ2MWU3YyIKICAgICAgXSwKICAgICAgImxvY2FsUmVmZXJlbmNlcyI6IFtdCiAgICB9LAogICAgewogICAgICAia2luZCI6ICJ3b3JrZmxvdyIsCiAgICAgICJwYXRoIjogIi5naXRodWIvd29ya2Zsb3dzL29yY2hlc3RyYXRpb24tcnVubmVyLWNsaWVudC1jYW5kaWRhdGUueW1sIiwKICAgICAgInNoYTI1NiI6ICI2MDAwMGQ2ZDY1ZDE4ZDYwYzUzZDRjNTk3MDA0ZGJlZGQzNTE2MmUwODAwNzFmMGRhMzAwZDUwYzNjYjgwNTMyIiwKICAgICAgImV4dGVybmFsUmVmZXJlbmNlcyI6IFsKICAgICAgICAiYWN0aW9ucy9jaGVja291dEAzZDNjNDJlNWFhYzViYTgwNTgyNWRhNzY0MTBjMTgxMjczYmE5MGIxIiwKICAgICAgICAiYWN0aW9ucy9zZXR1cC1kb3RuZXRAYTk4YjU2ODUyYzM1YjhlMzE5MGFjMjhjOGMyMjcxZGE1OTEwNmM2OCIsCiAgICAgICAgImFjdGlvbnMvdXBsb2FkLWFydGlmYWN0QDA0M2ZiNDZkMWE5M2M3N2FhZTY1NmU3YzFjNjRhODc1ZDFmYzZhMGEiLAogICAgICAgICJhY3Rpb25zL2Rvd25sb2FkLWFydGlmYWN0QDNlNWY0NWIyY2ZiOTE3MjA1NGI0MDg3YTQwZThlMGI1YTU0NjFlN2MiCiAgICAgIF0sCiAgICAgICJsb2NhbFJlZmVyZW5jZXMiOiBbXQogICAgfSwKICAgIHsKICAgICAgImtpbmQiOiAid29ya2Zsb3ciLAogICAgICAicGF0aCI6ICIuZ2l0aHViL3dvcmtmbG93cy9vcmNoZXN0cmF0aW9uLWNvbnRhaW5lci1idW5kbGUueW1sIiwKICAgICAgInNoYTI1NiI6ICIzMTdiY2U5MTQwZGZlZWFhOGI1M2JlOTFkYzdiYjg3MTAwMDIzN2JiZDZkMzg5NDYwM2RiZTA3MjhhZTFkZWQ1IiwKICAgICAgImV4dGVybmFsUmVmZXJlbmNlcyI6IFsKICAgICAgICAiYWN0aW9ucy9jaGVja291dEAzZDNjNDJlNWFhYzViYTgwNTgyNWRhNzY0MTBjMTgxMjczYmE5MGIxIiwKICAgICAgICAiYWN0aW9ucy9zZXR1cC1kb3RuZXRAYTk4YjU2ODUyYzM1YjhlMzE5MGFjMjhjOGMyMjcxZGE1OTEwNmM2OCIsCiAgICAgICAgImFjdGlvbnMvdXBsb2FkLWFydGlmYWN0QDA0M2ZiNDZkMWE5M2M3N2FhZTY1NmU3YzFjNjRhODc1ZDFmYzZhMGEiLAogICAgICAgICJhY3Rpb25zL2Rvd25sb2FkLWFydGlmYWN0QDNlNWY0NWIyY2ZiOTE3MjA1NGI0MDg3YTQwZThlMGI1YTU0NjFlN2MiCiAgICAgIF0sCiAgICAgICJsb2NhbFJlZmVyZW5jZXMiOiBbXQogICAgfSwKICAgIHsKICAgICAgImtpbmQiOiAid29ya2Zsb3ciLAogICAgICAicGF0aCI6ICIuZ2l0aHViL3dvcmtmbG93cy9jYWxsYWJsZS1jbGktcmVsZWFzZS1wcmVwYXJlLnltbCIsCiAgICAgICJzaGEyNTYiOiAiZGVlMjBmNzExMmQzZTdiMGM4NGY4YjIxYmQ2YmZjMWIxNGQ0YjkzNzJmZmE1NWYyNWQ2MzhhZDZlMGE5NDMxMiIsCiAgICAgICJleHRlcm5hbFJlZmVyZW5jZXMiOiBbCiAgICAgICAgImFjdGlvbnMvY2hlY2tvdXRAM2QzYzQyZTVhYWM1YmE4MDU4MjVkYTc2NDEwYzE4MTI3M2JhOTBiMSIsCiAgICAgICAgImFjdGlvbnMvc2V0dXAtZG90bmV0QGE5OGI1Njg1MmMzNWI4ZTMxOTBhYzI4YzhjMjI3MWRhNTkxMDZjNjgiLAogICAgICAgICJhY3Rpb25zL3VwbG9hZC1hcnRpZmFjdEAwNDNmYjQ2ZDFhOTNjNzdhYWU2NTZlN2MxYzY0YTg3NWQxZmM2YTBhIgogICAgICBdLAogICAgICAibG9jYWxSZWZlcmVuY2VzIjogW10KICAgIH0sCiAgICB7CiAgICAgICJraW5kIjogIndvcmtmbG93IiwKICAgICAgInBhdGgiOiAiLmdpdGh1Yi93b3JrZmxvd3MvY2FsbGFibGUtY2xpLXJlbGVhc2UtcHVibGlzaC55bWwiLAogICAgICAic2hhMjU2IjogIjY3OTE1NDI5NzZhYzFhNTg3ZTAwNjAxMDlmY2YyYzQzMzQxMTE0ODc0NDZkZDQ1Y2ZhZTIyM2JjYzYzNWY1YmUiLAogICAgICAiZXh0ZXJuYWxSZWZlcmVuY2VzIjogWwogICAgICAgICJOdUdldC9sb2dpbkA4ZDE5Njc1NGI0MDM2MTUwNTM3ZjgwYWM1MzllMTVjMmYxMDI4ODQxIiwKICAgICAgICAiYWN0aW9ucy9hdHRlc3RAMWU2OWY0OGFjYjgyZDE5NjZhMzk0ZGE5MTZiNGMxNjk4YWE1NjlkNiIsCiAgICAgICAgImFjdGlvbnMvY2hlY2tvdXRAM2QzYzQyZTVhYWM1YmE4MDU4MjVkYTc2NDEwYzE4MTI3M2JhOTBiMSIsCiAgICAgICAgImFjdGlvbnMvZG93bmxvYWQtYXJ0aWZhY3RAM2U1ZjQ1YjJjZmI5MTcyMDU0YjQwODdhNDBlOGUwYjVhNTQ2MWU3YyIsCiAgICAgICAgImFjdGlvbnMvc2V0dXAtZG90bmV0QGE5OGI1Njg1MmMzNWI4ZTMxOTBhYzI4YzhjMjI3MWRhNTkxMDZjNjgiLAogICAgICAgICJhY3Rpb25zL3VwbG9hZC1hcnRpZmFjdEAwNDNmYjQ2ZDFhOTNjNzdhYWU2NTZlN2MxYzY0YTg3NWQxZmM2YTBhIgogICAgICBdLAogICAgICAibG9jYWxSZWZlcmVuY2VzIjogW10KICAgIH0sCiAgICB7CiAgICAgICJraW5kIjogIndvcmtmbG93IiwKICAgICAgInBhdGgiOiAiLmdpdGh1Yi93b3JrZmxvd3MvY2FsbGFibGUtY2xpLXJlbGVhc2UtcHJlcGFyZS0wMTEueW1sIiwKICAgICAgInNoYTI1NiI6ICIxNDY5OWZiMGRhNzU2NGJhMDkzYmI0ZmQ0YmRmOGVkZDk3ZGFmMWQ0MDQ3ZmRiNjA0MzQ5NGIxYmZhNzdjNGRlIiwKICAgICAgImV4dGVybmFsUmVmZXJlbmNlcyI6IFsKICAgICAgICAiYWN0aW9ucy9jaGVja291dEAzZDNjNDJlNWFhYzViYTgwNTgyNWRhNzY0MTBjMTgxMjczYmE5MGIxIiwKICAgICAgICAiYWN0aW9ucy9zZXR1cC1kb3RuZXRAYTk4YjU2ODUyYzM1YjhlMzE5MGFjMjhjOGMyMjcxZGE1OTEwNmM2OCIsCiAgICAgICAgImFjdGlvbnMvdXBsb2FkLWFydGlmYWN0QDA0M2ZiNDZkMWE5M2M3N2FhZTY1NmU3YzFjNjRhODc1ZDFmYzZhMGEiCiAgICAgIF0sCiAgICAgICJsb2NhbFJlZmVyZW5jZXMiOiBbXQogICAgfSwKICAgIHsKICAgICAgImtpbmQiOiAid29ya2Zsb3ciLAogICAgICAicGF0aCI6ICIuZ2l0aHViL3dvcmtmbG93cy9jYWxsYWJsZS1jbGktcmVsZWFzZS1wdWJsaXNoLTAxMS55bWwiLAogICAgICAic2hhMjU2IjogIjkzMGVjYTk0M2VlNThiZjk0MTJiYjlkZjM0ODhhMmM5OGQzZTJiMzNkYjIyMThkMTNjM2NiM2Y3ZjU5NDcwODciLAogICAgICAiZXh0ZXJuYWxSZWZlcmVuY2VzIjogWwogICAgICAgICJOdUdldC9sb2dpbkA4ZDE5Njc1NGI0MDM2MTUwNTM3ZjgwYWM1MzllMTVjMmYxMDI4ODQxIiwKICAgICAgICAiYWN0aW9ucy9hdHRlc3RAMWU2OWY0OGFjYjgyZDE5NjZhMzk0ZGE5MTZiNGMxNjk4YWE1NjlkNiIsCiAgICAgICAgImFjdGlvbnMvY2hlY2tvdXRAM2QzYzQyZTVhYWM1YmE4MDU4MjVkYTc2NDEwYzE4MTI3M2JhOTBiMSIsCiAgICAgICAgImFjdGlvbnMvc2V0dXAtZG90bmV0QGE5OGI1Njg1MmMzNWI4ZTMxOTBhYzI4YzhjMjI3MWRhNTkxMDZjNjgiLAogICAgICAgICJhY3Rpb25zL3VwbG9hZC1hcnRpZmFjdEAwNDNmYjQ2ZDFhOTNjNzdhYWU2NTZlN2MxYzY0YTg3NWQxZmM2YTBhIgogICAgICBdLAogICAgICAibG9jYWxSZWZlcmVuY2VzIjogW10KICAgIH0sCiAgICB7CiAgICAgICJraW5kIjogIndvcmtmbG93IiwKICAgICAgInBhdGgiOiAiLmdpdGh1Yi93b3JrZmxvd3MvY2FsbGFibGUtaXNvbGF0ZWQtdjItZWZmZWN0LXJlbGVhc2UueW1sIiwKICAgICAgInNoYTI1NiI6ICJjYjAxODNmZTE5YjZiM2EwNmUyN2Y1MTEyZTRlNjViYmQ4ZDdjZWVhYzFjMGQ2NjkzYmNmMjYwY2IwYmUxODIwIiwKICAgICAgImV4dGVybmFsUmVmZXJlbmNlcyI6IFsKICAgICAgICAiYWN0aW9ucy9jaGVja291dEAzZDNjNDJlNWFhYzViYTgwNTgyNWRhNzY0MTBjMTgxMjczYmE5MGIxIiwKICAgICAgICAiYWN0aW9ucy91cGxvYWQtYXJ0aWZhY3RAMDQzZmI0NmQxYTkzYzc3YWFlNjU2ZTdjMWM2NGE4NzVkMWZjNmEwYSIKICAgICAgXSwKICAgICAgImxvY2FsUmVmZXJlbmNlcyI6IFtdCiAgICB9LAogICAgewogICAgICAia2luZCI6ICJ3b3JrZmxvdyIsCiAgICAgICJwYXRoIjogIi5naXRodWIvd29ya2Zsb3dzL2NhbGxhYmxlLWlzb2xhdGVkLXYyLWV4ZWN1dGUueW1sIiwKICAgICAgInNoYTI1NiI6ICI3NDA2ZWZlYWJiNWFjYTA1MDRlOGFlMzlhNTE0MDM4ZDc0NzNiNmZkOTdhNjZkMmU0ZWZjYzViMmM5NDc5OWRiIiwKICAgICAgImV4dGVybmFsUmVmZXJlbmNlcyI6IFtdLAogICAgICAibG9jYWxSZWZlcmVuY2VzIjogW10KICAgIH0sCiAgICB7CiAgICAgICJraW5kIjogIndvcmtmbG93IiwKICAgICAgInBhdGgiOiAiLmdpdGh1Yi93b3JrZmxvd3MvY2FsbGFibGUtaXNvbGF0ZWQtdjItcnVudGltZS1jYW5kaWRhdGUueW1sIiwKICAgICAgInNoYTI1NiI6ICJhYTg0ODY0OGNmZjBiNzhjMTIwZGIzMDUwYjRiNTZmZjE2N2I3MDNjMDAzY2EyZDNhYTY0ZTdkNjRiMGU5NzY1IiwKICAgICAgImV4dGVybmFsUmVmZXJlbmNlcyI6IFsKICAgICAgICAiYWN0aW9ucy9jaGVja291dEAzZDNjNDJlNWFhYzViYTgwNTgyNWRhNzY0MTBjMTgxMjczYmE5MGIxIiwKICAgICAgICAiYWN0aW9ucy91cGxvYWQtYXJ0aWZhY3RAMDQzZmI0NmQxYTkzYzc3YWFlNjU2ZTdjMWM2NGE4NzVkMWZjNmEwYSIKICAgICAgXSwKICAgICAgImxvY2FsUmVmZXJlbmNlcyI6IFtdCiAgICB9LAogICAgewogICAgICAia2luZCI6ICJ3b3JrZmxvdyIsCiAgICAgICJwYXRoIjogIi5naXRodWIvd29ya2Zsb3dzL3YyLWhvc3QtZml4ZWQtcXVhbGlmaWNhdGlvbi55bWwiLAogICAgICAic2hhMjU2IjogIjcyMTgxODQwNTg4OWY1MjA1ZmIyYWJmNWEyMzZlOTU5MmU1MmViNjkyNzg3M2VhMGFiOTRiZTczMDIzYzk2MmEiLAogICAgICAiZXh0ZXJuYWxSZWZlcmVuY2VzIjogWwogICAgICAgICJhY3Rpb25zL2NoZWNrb3V0QDNkM2M0MmU1YWFjNWJhODA1ODI1ZGE3NjQxMGMxODEyNzNiYTkwYjEiLAogICAgICAgICJhY3Rpb25zL2Rvd25sb2FkLWFydGlmYWN0QDNlNWY0NWIyY2ZiOTE3MjA1NGI0MDg3YTQwZThlMGI1YTU0NjFlN2MiLAogICAgICAgICJhY3Rpb25zL3VwbG9hZC1hcnRpZmFjdEAwNDNmYjQ2ZDFhOTNjNzdhYWU2NTZlN2MxYzY0YTg3NWQxZmM2YTBhIgogICAgICBdLAogICAgICAibG9jYWxSZWZlcmVuY2VzIjogW10KICAgIH0sCiAgICB7CiAgICAgICJraW5kIjogIndvcmtmbG93IiwKICAgICAgInBhdGgiOiAiLmdpdGh1Yi93b3JrZmxvd3MvdjItY2ktb3JkaW5hcnktc2V0dGxlbWVudC55bWwiLAogICAgICAic2hhMjU2IjogIjJjMTJhZGE2ODg5NzRlOTA5MjE3M2ViNDJjMTBlMGMyMjQ3MGRlM2EwMzQ4Y2E4YTMzODkyMGU4NDdlN2Q4NGUiLAogICAgICAiZXh0ZXJuYWxSZWZlcmVuY2VzIjogWwogICAgICAgICJhY3Rpb25zL2NoZWNrb3V0QDNkM2M0MmU1YWFjNWJhODA1ODI1ZGE3NjQxMGMxODEyNzNiYTkwYjEiLAogICAgICAgICJhY3Rpb25zL2Rvd25sb2FkLWFydGlmYWN0QGQzZjg2YTEwNmEwYmFjNDViOTc0YTYyODg5NmM5MGRiZGY1YzgwOTMiLAogICAgICAgICJhY3Rpb25zL3NldHVwLWRvdG5ldEBhOThiNTY4NTJjMzViOGUzMTkwYWMyOGM4YzIyNzFkYTU5MTA2YzY4IiwKICAgICAgICAiYWN0aW9ucy91cGxvYWQtYXJ0aWZhY3RAMDQzZmI0NmQxYTkzYzc3YWFlNjU2ZTdjMWM2NGE4NzVkMWZjNmEwYSIKICAgICAgXSwKICAgICAgImxvY2FsUmVmZXJlbmNlcyI6IFtdCiAgICB9LAogICAgewogICAgICAia2luZCI6ICJ3b3JrZmxvdyIsCiAgICAgICJwYXRoIjogIi5naXRodWIvd29ya2Zsb3dzL2Nvb3JkaW5hdGlvbi1ib2FyZC12Mi1pbXBvcnQueW1sIiwKICAgICAgInNoYTI1NiI6ICI5MmVmNTY2NWZkY2U4NGJhODllZTc3M2YxYzljNDE4MWYwNWY2OTAzZDc3Y2U5YzJmODBjODhiNWQ2NmZlZWYyIiwKICAgICAgImV4dGVybmFsUmVmZXJlbmNlcyI6IFsKICAgICAgICAiYWN0aW9ucy9jaGVja291dEBkMjM0NDFhNDhlNTE2YjZjMzRhZWE0ZmE0MTU1MWEzMGUzMGFmODAzIiwKICAgICAgICAiYWN0aW9ucy91cGxvYWQtYXJ0aWZhY3RAYjdjNTY2YTc3MmU2YjZiZmI1OGVkMGRjMjUwNTMyYTQ3OWQ3Nzg5ZiIsCiAgICAgICAgImFjdGlvbnMvZG93bmxvYWQtYXJ0aWZhY3RANjM0ZjkzY2IyOTE2ZTNmZGZmNjc4ODU1MWI5OWIwNjJkMDMzNWNlMCIsCiAgICAgICAgImFjdGlvbnMvY3JlYXRlLWdpdGh1Yi1hcHAtdG9rZW5AYmNkMmJhNDkyMTg5MDY3MDRhYjZjMWFhNzk2OTk2ZGE0MDlkM2ViMSIKICAgICAgXSwKICAgICAgImxvY2FsUmVmZXJlbmNlcyI6IFtdCiAgICB9LAogICAgewogICAgICAia2luZCI6ICJ3b3JrZmxvdyIsCiAgICAgICJwYXRoIjogIi5naXRodWIvd29ya2Zsb3dzL3BvcnRhYmxlLXdvcmtzcGFjZS1pbWFnZS1xdWFsaWZpY2F0aW9uLnltbCIsCiAgICAgICJzaGEyNTYiOiAiNjRmNTE4MmEwMDM2MTJmYTQxNTkxZDZiNjRiNDUwZmVlYjBhNDc4ZTE3YWQ0NzdiYmQ4ZGJlNzNhNGM1NzMxYiIsCiAgICAgICJleHRlcm5hbFJlZmVyZW5jZXMiOiBbCiAgICAgICAgImFjdGlvbnMvY2hlY2tvdXRAM2QzYzQyZTVhYWM1YmE4MDU4MjVkYTc2NDEwYzE4MTI3M2JhOTBiMSIsCiAgICAgICAgImFjdGlvbnMvdXBsb2FkLWFydGlmYWN0QDA0M2ZiNDZkMWE5M2M3N2FhZTY1NmU3YzFjNjRhODc1ZDFmYzZhMGEiCiAgICAgIF0sCiAgICAgICJsb2NhbFJlZmVyZW5jZXMiOiBbXQogICAgfSwKICAgIHsKICAgICAgImtpbmQiOiAid29ya2Zsb3ciLAogICAgICAicGF0aCI6ICIuZ2l0aHViL3dvcmtmbG93cy9wb3J0YWJsZS13b3Jrc3BhY2UtZXhlY3V0b3ItcXVhbGlmaWNhdGlvbi55bWwiLAogICAgICAic2hhMjU2IjogIjU4MjdmNjYyYzMzMTY1NmFiNWExNDIzOTQ4NzkwNzA5ZjdhYWQ1ZDE3YTQ0OWZiNjljNGMyYzJhNWM3MGQyZDciLAogICAgICAiZXh0ZXJuYWxSZWZlcmVuY2VzIjogWwogICAgICAgICJhY3Rpb25zL2NoZWNrb3V0QDNkM2M0MmU1YWFjNWJhODA1ODI1ZGE3NjQxMGMxODEyNzNiYTkwYjEiLAogICAgICAgICJhY3Rpb25zL3NldHVwLWRvdG5ldEBhOThiNTY4NTJjMzViOGUzMTkwYWMyOGM4YzIyNzFkYTU5MTA2YzY4IiwKICAgICAgICAiYWN0aW9ucy91cGxvYWQtYXJ0aWZhY3RAMDQzZmI0NmQxYTkzYzc3YWFlNjU2ZTdjMWM2NGE4NzVkMWZjNmEwYSIKICAgICAgXSwKICAgICAgImxvY2FsUmVmZXJlbmNlcyI6IFtdCiAgICB9LAogICAgewogICAgICAia2luZCI6ICJ3b3JrZmxvdyIsCiAgICAgICJwYXRoIjogIi5naXRodWIvd29ya2Zsb3dzL3BvcnRhYmxlLXdvcmtzcGFjZS1weXRob24tcHJvdmlkZXItcXVhbGlmaWNhdGlvbi55bWwiLAogICAgICAic2hhMjU2IjogIjA0ZGY5MjFhYzc0ZmJlZTRjZWFkOTk1ZThjYWMxNzkxMWQxOWNjNzAxNDE2M2ViOWM4YjNkZDVkYmVjYjU1OGUiLAogICAgICAiZXh0ZXJuYWxSZWZlcmVuY2VzIjogWwogICAgICAgICJhY3Rpb25zL2NoZWNrb3V0QDNkM2M0MmU1YWFjNWJhODA1ODI1ZGE3NjQxMGMxODEyNzNiYTkwYjEiLAogICAgICAgICJhY3Rpb25zL2Rvd25sb2FkLWFydGlmYWN0QDNlNWY0NWIyY2ZiOTE3MjA1NGI0MDg3YTQwZThlMGI1YTU0NjFlN2MiLAogICAgICAgICJhY3Rpb25zL3NldHVwLWRvdG5ldEBhOThiNTY4NTJjMzViOGUzMTkwYWMyOGM4YzIyNzFkYTU5MTA2YzY4IiwKICAgICAgICAiYWN0aW9ucy91cGxvYWQtYXJ0aWZhY3RAMDQzZmI0NmQxYTkzYzc3YWFlNjU2ZTdjMWM2NGE4NzVkMWZjNmEwYSIKICAgICAgXSwKICAgICAgImxvY2FsUmVmZXJlbmNlcyI6IFtdCiAgICB9LAogICAgewogICAgICAia2luZCI6ICJ3b3JrZmxvdyIsCiAgICAgICJwYXRoIjogIi5naXRodWIvd29ya2Zsb3dzL3RlbGVtZXRyeS1ob3N0LW1hbmFnZXItYnVuZGxlLnltbCIsCiAgICAgICJzaGEyNTYiOiAiNzdmMDBiOTAxNmNlMmU5MWZjYWZhZTE5NmFmMWYwZjlmNzNkZmZkZTMxM2MyZGI5M2ZjMTdmYTM2ZThiZmU0ZSIsCiAgICAgICJleHRlcm5hbFJlZmVyZW5jZXMiOiBbCiAgICAgICAgImFjdGlvbnMvY2hlY2tvdXRAM2QzYzQyZTVhYWM1YmE4MDU4MjVkYTc2NDEwYzE4MTI3M2JhOTBiMSIsCiAgICAgICAgImFjdGlvbnMvZG93bmxvYWQtYXJ0aWZhY3RAM2U1ZjQ1YjJjZmI5MTcyMDU0YjQwODdhNDBlOGUwYjVhNTQ2MWU3YyIsCiAgICAgICAgImFjdGlvbnMvdXBsb2FkLWFydGlmYWN0QDA0M2ZiNDZkMWE5M2M3N2FhZTY1NmU3YzFjNjRhODc1ZDFmYzZhMGEiCiAgICAgIF0sCiAgICAgICJsb2NhbFJlZmVyZW5jZXMiOiBbXQogICAgfQogIF0KfQo=')
         registration.write_bytes(cls.registration_base)
+        ci = cls.receiver / ".github/workflows/ci.yml"
+        ci.parent.mkdir(parents=True, exist_ok=True)
+        ci.write_text("""name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: '7 3 * * *'
+permissions:
+  contents: read
+jobs:
+  qualify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+      - name: Provision pinned Quint
+        run: bash eng/provision-quint.sh "$RUNNER_TEMP/quint-tools"
+      - name: Check independent CI preflight example
+        env:
+          QUINT_BIN: ${{ runner.temp }}/quint-tools/quint
+          QUINT_HOME: ${{ runner.temp }}/quint-tools/home
+        run: bash examples/CiPreflight/check.sh
+      - name: Qualify core, tooling and external package consumer
+        env:
+          QUINT_BIN: ${{ runner.temp }}/quint-tools/quint
+          QUINT_HOME: ${{ runner.temp }}/quint-tools/home
+        run: bash eng/check.sh
+""")
         base = commit(cls.receiver)
         for path in MODULE.PRODUCER_PATHS:
             target = cls.receiver / path; target.parent.mkdir(parents=True, exist_ok=True)
@@ -1316,6 +1351,212 @@ class ProducerInstallationTests(unittest.TestCase):
             return MODULE.summarize(api, repo="FS-GG/FS.GG.Coordination", pr_number=1,
                 expected_head=self.fixture["head"], merge_method="squash", publication_required=False,
                 apply=apply, coherent_workflow="CI.yml", producer_source=source or self.fixture["source"], installation_prior=prior)
+
+    def fsquint_transport(self, *, apply=False, change=None, drift=None, prior=None,
+                           selector="ci.yml", merged=False, uncertain=False, required=None, fresh=None):
+        repo = "FS-GG/FsQuint"
+        alias = lambda value: json.loads(json.dumps(value).replace("FS-GG/FS.GG.Coordination", repo).replace("1346720714", "1375501179"))
+        fixture = alias(self.fixture)
+        responses = fixture["responses"]
+        pr = alias(self.pr)
+        pr["head"]["ref"] = "routine/install-routine-producer-90ccedb7"
+        after = alias(self.after)
+        after["head"]["ref"] = pr["head"]["ref"]
+        head = fixture["head"]
+        responses[f"repos/{repo}/git/ref/heads/main"] = dict(ref="refs/heads/main",object=dict(type="commit",sha=fixture['base']))
+        metadata = responses[f"repos/{repo}"]
+        metadata.update(private=False, permissions=dict(admin=True, push=True, pull=True))
+        wf = dict(id=361154226, path=".github/workflows/ci.yml", state="active")
+        responses[f"repos/{repo}/actions/workflows/ci.yml"] = wf
+        responses[f"repos/{repo}/actions/workflows?per_page=100"] = dict(total_count=1, workflows=[wf])
+        run = responses[f"repos/{repo}/actions/runs/7"]
+        run.update(workflow_id=361154226, path=wf['path'], event="pull_request", head_branch=pr['head']['ref'])
+        run['repository']['id'] = 1375501179
+        responses[f"repos/{repo}/actions/workflows/361154226/runs?head_sha={head}&per_page=100"] = dict(total_count=1,workflow_runs=[copy.deepcopy(run)])
+        job = responses[f"repos/{repo}/actions/jobs/8"]
+        job.update(name="qualify",completed_at="2026-10-13T00:00:00Z",steps=[dict(name=name,status="completed",conclusion="success") for name in
+            ["Set up job", "Run actions/checkout@v7", "Run actions/setup-dotnet@v6", "Provision pinned Quint",
+             "Check independent CI preflight example", "Qualify core, tooling and external package consumer"]])
+        responses[f"repos/{repo}/actions/runs/7/attempts/1/jobs?per_page=100"] = dict(total_count=1,jobs=[copy.deepcopy(job)])
+        responses[f"repos/{repo}/commits/{head}/check-runs?per_page=100"]['check_runs'][0]['name'] = "qualify"
+        responses[f"repos/{repo}/commits/{head}/status?per_page=100"] = dict(sha=head,total_count=0,statuses=[])
+        policy = {
+            f"repos/{repo}/branches/main/protection/required_status_checks": (1,404,dict(message="Branch not protected",documentation_url="https://docs.github.com/rest/branches/branch-protection#get-status-checks-protection",status="404")),
+            f"repos/{repo}/rules/branches/main?per_page=100": (0,200,[]),
+            f"repos/{repo}/rulesets?includes_parents=true&per_page=100": (0,200,[]),
+        }
+        if change: change(responses, policy, pr)
+        api = InstallationApi(fixture, [after] if merged else [pr,pr,after], [dict(merged=True,sha=head)])
+        original_get_pr=api.get_pr
+        pr_reads=0
+        def fresh_pr(*args):
+            nonlocal pr_reads
+            pr_reads+=1
+            if fresh and pr_reads==2: fresh(responses,policy,pr)
+            return original_get_pr(*args)
+        api.get_pr=fresh_pr
+        api.required = []
+        api.installation_read = MODULE.GhApi.installation_read.__get__(api)
+        reads = []
+        policy_reads = 0
+        def query(command, *_args, **_kwargs):
+            nonlocal policy_reads
+            reads.append(command)
+            if command[:3] == ["gh","pr","checks"]:
+                native = (1,b"",b"no required checks reported on the 'routine/install-routine-producer-90ccedb7' branch\n")
+                response = native if required is None else required
+                if _kwargs.get("stderr_output") is not None:
+                    _kwargs["stderr_output"].extend(response[2] if len(response)==3 else b"")
+                return response[:2]
+            endpoint = command[-1]
+            if endpoint in policy:
+                if endpoint.endswith("required_status_checks"):
+                    policy_reads += 1
+                    if drift and policy_reads == 2: drift(responses, policy, pr)
+                code,status,body = policy[endpoint]
+                return code,(f"HTTP/2.0 {status} Result\r\nContent-Type: application/json\r\n\r\n" + (body if isinstance(body,str) else json.dumps(body))).encode()
+            if endpoint not in responses:
+                raise AssertionError(endpoint)
+            return 0,json.dumps(responses[endpoint]).encode()
+        def native_write(args, **kwargs):
+            api.attempts += 1
+            self.assertEqual(args[:3],["--method","PUT",f"repos/{repo}/pulls/1/merge"])
+            self.assertEqual(json.loads(kwargs['input_text']),dict(sha=head,merge_method="squash"))
+            responses[f"repos/{repo}/git/ref/heads/main"] = dict(object=dict(sha=head))
+            if uncertain: raise MODULE.AmbiguousWrite("lost response")
+            return dict(merged=True,sha=head)
+        api._run = native_write
+        if merged: responses[f"repos/{repo}/git/ref/heads/main"] = dict(object=dict(sha=head))
+        watcher=MODULE.WatchGhApi
+        with mock.patch.object(MODULE,'bounded_watch_query',side_effect=query), mock.patch.object(MODULE,'WatchGhApi',side_effect=lambda deadline:watcher(deadline,query=query)):
+            code,result = MODULE.summarize(api,repo=repo,pr_number=1,expected_head=head,merge_method="squash",
+                publication_required=False,apply=apply,coherent_workflow=selector,producer_source=fixture['source'],installation_prior=prior)
+        return code,result,api,reads
+
+    def test_fsquint_authenticated_empty_policy_full_transport_ready_and_cas(self):
+        for apply in (False,True):
+            code,result,api,reads = self.fsquint_transport(apply=apply)
+            self.assertEqual((code,api.attempts,result.producerInstallation,result.routineEligibility),
+                (0,int(apply),'delivered-activation-pending' if apply else 'ready','unavailable-first-install'))
+            self.assertEqual(sum(c[-1].endswith('required_status_checks') for c in reads),2 if apply else 1)
+            self.assertEqual(result.reason,'required-policy-observed-empty')
+
+    def test_fsquint_nonempty_required_checks_keep_original_path(self):
+        row=dict(name="qualify",bucket="pass",state="SUCCESS",completedAt="2026-10-13T00:00:00Z",
+                 event="pull_request",workflow="ci",startedAt="2026-10-13T00:00:00Z",
+                 link="https://github.com/FS-GG/FsQuint/actions/runs/7/job/8")
+        code,result,api,reads=self.fsquint_transport(required=(0,json.dumps([row]).encode()))
+        self.assertEqual((code,api.attempts,result.reason),(0,0,None))
+        self.assertFalse(any('--include' in command for command in reads))
+        for required in ((0,b'[]'),(1,b'{}'),(1,b'[]'),(1,json.dumps([row]).encode()),(4,b'')):
+            code,_,api,_=self.fsquint_transport(apply=True,required=required)
+            self.assertEqual((code,api.attempts),(2,0))
+
+    def test_fsquint_authentic_no_required_diagnostic_transport_is_exact(self):
+        diagnostic=b"no required checks reported on the 'routine/install-routine-producer-90ccedb7' branch\n"
+        # Retained authenticated FsQuint PR44 gh2.102.0 transport: exit1/stdout0/stderr86.
+        self.assertEqual(len(diagnostic),86)
+        for value in [(1,b"",b""),(1,b"",b"permission denied\n"),(1,b"",diagnostic+b"extra\n"),
+                      (1,b"",diagnostic.rstrip()),(1,b"",diagnostic.replace(b"90ccedb7",b"foreign")),
+                      (1,b"[]",diagnostic),(1,b" ",diagnostic),(4,b"",diagnostic),(0,b"",diagnostic)]:
+            with self.subTest(value=value):
+                code,_,api,_=self.fsquint_transport(apply=True,required=value)
+                self.assertEqual((code,api.attempts),(2,0))
+
+    def test_bounded_native_query_optional_stderr_preserves_default_and_combined_cap(self):
+        query=BoundedQueryTests().query
+        result,process,_=query(chunks=[b'out'],stderr_chunks=[b'err'])
+        self.assertEqual(result,(0,b'out'))
+        stderr=bytearray()
+        result,process,_=query(chunks=[b'out'],stderr_chunks=[b'err'],stderr_output=stderr)
+        self.assertEqual(result,(0,b'out'));self.assertEqual(stderr,b'err')
+        self.assertGreaterEqual(process.wait.call_count,1)
+        process.stdout.close.assert_called_once();process.stderr.close.assert_called_once()
+        result,process,_=query(chunks=[b'out'],stderr_chunks=[b'err'],max_bytes=5,stderr_output=bytearray())
+        self.assertIsInstance(result,RuntimeError);self.assertIn('combined stdout/stderr',str(result))
+        for options in [dict(never=True),dict(reaping_unknown=True),dict(interrupt=True)]:
+            result,process,_=query(stderr_output=bytearray(),**options)
+            self.assertIsInstance(result,BaseException)
+            process.stdout.close.assert_called_once();process.stderr.close.assert_called_once()
+
+    def test_fsquint_policy_http_transport_refuses_pagination_and_ambiguity(self):
+        api=MODULE.GhApi()
+        cases=[(0,b'HTTP/2.0 200 OK\r\nLink: <next>; rel="next"\r\n\r\n[]'),
+               (0,b'HTTP/2.0 200 OK\r\n\r\n[]extra'),(1,b'HTTP/2.0 401 Denied\r\n\r\n[]'),
+               (0,b'HTTP/2.0 200 OK\r\n\r\n'),(0,b'unknown\n\n[]'),
+               (0,b'HTTP/2.0 200 OK\r\n\r\n{"x":1,"x":2}')]
+        for value in cases:
+            with self.subTest(value=value), mock.patch.object(MODULE,'bounded_watch_query',return_value=value), self.assertRaises(RuntimeError):
+                api.installation_policy_read('repos/FS-GG/FsQuint/rulesets')
+        with mock.patch.object(MODULE,'bounded_watch_query',side_effect=RuntimeError('native query combined stdout/stderr exceeded byte bound')),self.assertRaises(RuntimeError):
+            api.installation_policy_read('repos/FS-GG/FsQuint/rulesets')
+
+    def test_fsquint_empty_policy_full_transport_policy_refusals(self):
+        repo='FS-GG/FsQuint'
+        classic=f'repos/{repo}/branches/main/protection/required_status_checks'
+        rules=f'repos/{repo}/rules/branches/main?per_page=100'
+        sets=f'repos/{repo}/rulesets?includes_parents=true&per_page=100'
+        cases=[(classic,(1,404,dict(message='Not Found',status='404'))),
+               (classic,(1,403,dict(message='denied'))),(classic,(0,200,dict(contexts=['new']))),
+               (classic,(0,404,dict(message='Branch not protected'))),
+               (classic,(1,404,'{"message":"Branch not protected","message":"Branch not protected"}')),
+               (rules,(0,200,[dict(type='required_status_checks')])),(sets,(0,200,[dict(id=1)])),
+               (rules,(1,404,[])),(sets,(0,200,{})),(rules,(0,200,'['))]
+        for endpoint,value in cases:
+            with self.subTest(endpoint=endpoint,value=value):
+                code,result,api,_=self.fsquint_transport(apply=True,change=lambda r,p,pr:p.update({endpoint:value}))
+                self.assertEqual((code,api.attempts,result.codeDelivery),(2,0,'not-delivered'))
+
+    def test_fsquint_empty_policy_full_transport_native_refusals(self):
+        repo='FS-GG/FsQuint';head=self.fixture['head']
+        checks=f'repos/{repo}/commits/{head}/check-runs?per_page=100'
+        runs=f'repos/{repo}/actions/workflows/361154226/runs?head_sha={head}&per_page=100'
+        jobs=f'repos/{repo}/actions/runs/7/attempts/1/jobs?per_page=100'
+        mutations=[
+            lambda r:r[f'repos/{repo}'].update(id=42),
+            lambda r:r[f'repos/{repo}'].update(permissions=dict(push=True,pull=True)),
+            lambda r:r[f'repos/{repo}'].update(default_branch='other'),
+            lambda r:r[f'repos/{repo}/git/ref/heads/main'].update(ref='refs/heads/other'),
+            lambda r:r[f'repos/{repo}/git/ref/heads/main']['object'].update(type='tag'),
+            lambda r:r[f'repos/{repo}/git/ref/heads/main']['object'].update(sha='f'*40),
+            lambda r:r[f'repos/{repo}/actions/workflows/ci.yml'].update(id=42),
+            lambda r:r[f'repos/{repo}/actions/workflows/ci.yml'].update(state='disabled_manually'),
+            lambda r:r[f'repos/{repo}/actions/workflows/ci.yml'].update(path='.github/workflows/trivial.yml'),
+            lambda r:r[runs].update(total_count=2), lambda r:r[runs].update(workflow_runs=[]),
+            lambda r:r[jobs].update(total_count=0,jobs=[]),lambda r:r[jobs].update(total_count=True),
+            lambda r:r[checks].update(total_count=0,check_runs=[]),
+            lambda r:r[checks].update(total_count=2),
+            lambda r:r[f'repos/{repo}/commits/{head}/status?per_page=100'].update(total_count=1,statuses=[dict(state='success')]),
+        ]
+        for field,value in [('head_sha','f'*40),('workflow_id',42),('event','push'),('head_branch','other'),('run_attempt',2),('run_attempt',True),('conclusion','failure'),('conclusion','skipped'),('status','in_progress'),('check_suite_id',42),('repository',dict(id=42,full_name=repo))]:
+            mutations.append(lambda r,f=field,v=value:r[runs]['workflow_runs'][0].update({f:v}))
+        for field,value in [('app',dict(id=42)),('check_suite',dict(id=42)),('head_sha','f'*40),('conclusion','skipped'),('conclusion','failure'),('details_url','https://evil.invalid/check')]:
+            mutations.append(lambda r,f=field,v=value:r[checks]['check_runs'][0].update({f:v}))
+        for field,value in [('run_id',42),('run_attempt',2),('head_sha','f'*40),('conclusion','failure'),('conclusion','skipped'),('status','in_progress'),('name','trivial'),('check_run_url','foreign'),('steps',[])]:
+            mutations.append(lambda r,f=field,v=value:r[jobs]['jobs'][0].update({f:v}))
+        mutations.append(lambda r:r[jobs]['jobs'][0]['steps'][5].update(conclusion='skipped'))
+        mutations.append(lambda r:r[f'repos/{repo}/actions/jobs/8'].update(run_id=42))
+        for mutation in mutations:
+            with self.subTest(mutation=mutation):
+                code,_,api,_=self.fsquint_transport(apply=True,change=lambda r,p,pr:mutation(r))
+                self.assertEqual((code,api.attempts),(2,0))
+        code,_,api,_=self.fsquint_transport(apply=True,selector='trivial.yml')
+        self.assertEqual((code,api.attempts),(2,0))
+
+    def test_fsquint_empty_policy_fresh_policy_drift_and_uncertain_readback(self):
+        rules='repos/FS-GG/FsQuint/rules/branches/main?per_page=100'
+        code,_,api,_=self.fsquint_transport(apply=True,drift=lambda r,p,pr:p.update({rules:(0,200,[dict(type='required_status_checks')])}))
+        self.assertEqual((code,api.attempts),(2,0))
+        for change in (lambda r,p,pr:r['repos/FS-GG/FsQuint'].update(default_branch='other'),
+                       lambda r,p,pr:r['repos/FS-GG/FsQuint/git/ref/heads/main']['object'].update(sha='f'*40),
+                       lambda r,p,pr:pr['head'].update(sha='f'*40)):
+            code,_,api,_=self.fsquint_transport(apply=True,fresh=change)
+            self.assertEqual((code,api.attempts),(2,0))
+        code,result,api,_=self.fsquint_transport(apply=True,uncertain=True)
+        self.assertEqual((code,api.attempts,result.producerInstallation),(0,1,'delivered-activation-pending'))
+        prior=MODULE.asdict(result)
+        code,result,api,_=self.fsquint_transport(apply=True,prior=prior,merged=True)
+        self.assertEqual((code,api.attempts,result.producerInstallation),(0,0,'delivered-activation-pending'))
 
     def test_exact_real_git_payload_is_ready_without_fake_eligibility(self):
         api = self.api(); code, result = self.invoke(api)
