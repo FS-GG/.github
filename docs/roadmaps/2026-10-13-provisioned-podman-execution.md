@@ -22,6 +22,26 @@ The new outcome owns host/profile provisioning, ephemeral allocation/teardown an
 
 This plan does not resume existing native operations, activate LEARN or admit a publication. It does not remove unwithdrawn cross-platform promises. Ordinary source work, routine process adoption and independent roadmap outcomes continue under their existing qualified routes.
 
+## Current source frontier, 2026-10-13
+
+The [supplied profile inventory](../designs/2026-10-13-provisioned-podman-execution.md#supplied-development-profile-source-inventory-2026-10-13)
+records the rebuilt development container's installed Arch/Podman metadata, valid
+subordinate-range arithmetic, finite shared outer limits and dedicated tmpfs mounts.
+Namespace execution remains not run. Read-only cgroups leave the contained-profile
+join open; ordinary feasibility need not await that join when an existing qualified
+route supplies actual admission, accounting, custody and bounded cleanup. The
+inspected image qualification scripts do not establish that probe execution contract.
+
+The visible temporary stores are memory-backed; a qualified local disk-backed
+allocation, its independent cleanup owner and the actual build baseline remain
+unavailable. The original private Arch draft and acquisition evidence were lost.
+Its owner `podman_profile` retains source reconstruction: join authentic donor
+inventory, maintained full-system dependency resolution and trusted archives before
+creating a genuine package checksum manifest or building an image. Preserve the
+[saved failures and pending joins](../handoffs/2026-10-13-095258-unified-roadmap-handoff.md#private-evidence-drafts-and-truthful-limits);
+missing bytes do not permit replaying consumed operations or inventing historical
+packet/attempt evidence. This source correction closes no milestone.
+
 ## Delivery milestones
 
 - [ ] **V3-ENV-01.1 — Freeze the profile, storage baseline and finite pilot population.**
