@@ -306,6 +306,281 @@ let contextDelta inputDigest (spec: DeltaInput) =
     require (Encoding.UTF8.GetByteCount(encode result) <= 262144) "delta-output-payload-bound"
     result
 
+// Pure routine decision domain; wire DTOs retain closed strings at the boundary.
+type OperationClass = Ordinary | Observation | Integration | Protected | UnknownOperation
+type BoundMode = Soft | Enforced | UnknownBound
+type RoutineEvent = Failed | CleanupObserved | CurrentObservation | UnknownEffect | AdmissionRequired | EffectReconciled | ScopeChanged
+type RoutineState = Running | RepairNeeded | CleanupUnconfirmed | CleanupConfirmed | EffectUnknown | AdmissionPending | Waiting | Accepted
+type RoutineAction = ReturnExistingOwner | ObserveOriginalIdentity | RetainAdmission | RefreshFacts | WaitForResources | EscalateConflictOrScope | RetainCurrent
+type RoutineReason = MissingBase | OperationRevisionGap | OrdinaryRepair | CleanupMissing | EffectUncertain | ProtectedBoundary | FactsMissing | RevisionConflict | ScopeInvalidated | DeadlineExpired | SoftTargetExceeded | ResourceUnavailable | ResourceUnknown | OwnerMissing | SharedConflict | DependencyPending | TerminalAccepted | ExistingOwner | AdmissionExternal
+let operationClass = function
+    | "ordinary" -> Ordinary | "observation" -> Observation | "integration" -> Integration
+    | "protected" -> Protected | "unknown" -> UnknownOperation | _ -> fail "unknown-operation-class"
+let boundMode = function | "soft" -> Soft | "enforced" -> Enforced | "unknown" -> UnknownBound | _ -> fail "unknown-bound-mode"
+let routineEvent = function
+    | "failed" -> Failed | "cleanup-observed" -> CleanupObserved | "current-observation" -> CurrentObservation
+    | "unknown-effect" -> UnknownEffect | "admission-required" -> AdmissionRequired
+    | "effect-reconciled" -> EffectReconciled | "scope-changed" -> ScopeChanged | _ -> fail "unknown-routine-event"
+let routineState = function
+    | "running" -> Running | "repair-needed" -> RepairNeeded | "cleanup-unconfirmed" -> CleanupUnconfirmed
+    | "cleanup-observed" -> CleanupConfirmed | "unknown-effect" -> EffectUnknown
+    | "protected-admission" -> AdmissionPending | "waiting" -> Waiting | "accepted" -> Accepted | _ -> fail "unknown-routine-state"
+let actionCode = function
+    | ReturnExistingOwner -> "return-existing-owner" | ObserveOriginalIdentity -> "observe-original-identity"
+    | RetainAdmission -> "retain-admission" | RefreshFacts -> "refresh-facts" | WaitForResources -> "wait-for-resources"
+    | EscalateConflictOrScope -> "escalate-conflict-or-scope" | RetainCurrent -> "retain-current"
+let reasonCode = function
+    | MissingBase -> "missing-delta-base" | OperationRevisionGap -> "operation-revision-gap"
+    | OrdinaryRepair -> "ordinary-repair" | CleanupMissing -> "cleanup-unconfirmed" | EffectUncertain -> "unknown-effect"
+    | ProtectedBoundary -> "protected-admission" | FactsMissing -> "missing-stale-or-future-facts"
+    | RevisionConflict -> "revision-conflict" | ScopeInvalidated -> "scope-policy-evaluator-changed"
+    | DeadlineExpired -> "execution-deadline-expired" | SoftTargetExceeded -> "soft-target-exceeded"
+    | ResourceUnavailable -> "resources-occupied-or-enforced-limit" | ResourceUnknown -> "resource-observation-unknown"
+    | OwnerMissing -> "accountable-owner-missing" | SharedConflict -> "shared-surface-conflict"
+    | DependencyPending -> "dependency-pending" | TerminalAccepted -> "terminal-observed"
+    | ExistingOwner -> "existing-owner-no-new-slot" | AdmissionExternal -> "integration-admission-external"
+type RoutineResources = {
+    Known: bool; ObservedAt: DateTimeOffset; Cpu: int; MemoryMiB: int; OccupiedCpu: int; OccupiedMemoryMiB: int
+    Evidence: string; AgentMode: string; CpuMemoryMode: string
+}
+type RoutineOperation = {
+    Lane: string; Operation: string; OriginalAttempt: string; Attempt: string; Owner: string; Candidate: string
+    Revision: int64; Supersedes: int64; Event: string; Class: string; State: string
+    ObservedAt: DateTimeOffset; Cleanup: string; ExecutionDeadline: DateTimeOffset; ExecutionMode: string
+    ObservationDeadline: DateTimeOffset; Cpu: int; MemoryMiB: int; AllocationCpu: int; AllocationMemoryMiB: int
+    AllocationMode: string; Evidence: string; Sha256: string; History: string
+}
+type RoutineDecision = {
+    Lane: string; Owner: string; Candidate: string; Attempt: string; State: string; Action: string
+    Reasons: string array; Evidence: string array; Operations: RoutineOperation array; Unresolved: string array
+}
+type RoutineInput = {
+    Schema: string; Delta: DeltaInput; Resources: RoutineResources; Events: RoutineOperation array
+    Previous: RoutineDecision array; PreviousPolicyIdentity: string; PreviousEvaluatorIdentity: string; PreviousUserScopeRevision: string
+}
+type RoutineResult = {
+    Schema: string; Advisory: bool; InputSha256: string; EvaluationTime: DateTimeOffset
+    PolicyIdentity: string; EvaluatorIdentity: string; UserScopeRevision: string
+    Current: RoutineDecision array; Changed: RoutineDecision array; ActiveReservations: Lane array
+    Resynchronize: bool; EffectAuthority: string; Coverage: string
+}
+let validateOperation (o: RoutineOperation) =
+    [o.Lane;o.OriginalAttempt;o.Attempt] |> List.iter (fun v -> require (id v) "invalid-operation-identity")
+    require (nonempty o.Operation && o.Operation.Length<=1024 && nonempty o.Owner && o.Owner.Length<=128 && nonempty o.Candidate && o.Candidate.Length<=256 && o.Revision>0L && o.Supersedes>=0L && o.Supersedes<o.Revision) "invalid-operation-revision"
+    operationClass o.Class |> ignore; routineEvent o.Event |> ignore; routineState o.State |> ignore
+    boundMode o.ExecutionMode |> ignore; boundMode o.AllocationMode |> ignore
+    oneOf o.Cleanup ["observed";"unconfirmed"]
+    require (o.ObservedAt<>DateTimeOffset.MinValue && (o.ExecutionDeadline<>DateTimeOffset.MinValue || o.ExecutionMode="unknown") &&
+             o.Cpu>=0 && o.MemoryMiB>=0 && o.AllocationCpu>=0 && o.AllocationMemoryMiB>=0 &&
+             nonempty o.Evidence && o.Evidence.Length<=1024 && isDigest o.Sha256 && nonempty o.History && o.History.Length<=1024) "invalid-operation-facts"
+let operationStream (o: RoutineOperation) = o.Lane,o.Operation,o.OriginalAttempt,o.Attempt,o.Owner,o.Candidate
+let semanticDecision (d: RoutineDecision) = d.Lane,d.Owner,d.Candidate,d.Attempt,d.State,d.Action,d.Reasons,d.Evidence,d.Unresolved
+// One stream join supplies both reservation and routing predicates. Current views
+// carry unresolved obligations separately from the latest observation narrative.
+type TemporalEligibility = WithinBudget | ExecutionExpired | ObservationExpired | ExecutionUnknown
+let temporalEligibility now repairNeeded (o: RoutineOperation) =
+    let requiresBudget=o.State<>"accepted" || repairNeeded
+    if not requiresBudget then WithinBudget
+    elif operationClass o.Class=Observation then
+        if now>=o.ObservationDeadline then ObservationExpired else WithinBudget
+    else
+        match boundMode o.ExecutionMode with
+        | UnknownBound -> ExecutionUnknown
+        | Enforced when now>=o.ExecutionDeadline -> ExecutionExpired
+        | _ -> WithinBudget
+
+type RoutineStream = {
+    Observation: RoutineOperation; Conflict: bool; Missing: bool; Unknown: bool
+    Protected: bool; Scope: bool; Held: bool
+}
+let reduceRoutineStream fresh priorGap (retained: RoutineOperation array) (rows: RoutineOperation array) =
+    let sequence=rows |> Array.sortBy (fun o -> o.Revision,encode o)
+    let latest=Array.last sequence
+    let original=Array.head sequence
+    let immutable (o: RoutineOperation) =
+        o.Class,o.ExecutionDeadline,o.ExecutionMode,o.ObservationDeadline,o.AllocationCpu,o.AllocationMemoryMiB,o.AllocationMode,o.Cpu,o.MemoryMiB,o.History
+    let payloadConflict=sequence |> Array.groupBy _.Revision |> Array.exists (fun (_, values) -> (values |> Array.map encode |> Array.distinct).Length>1)
+    let conflict=payloadConflict || (sequence |> Array.exists (fun o -> immutable o<>immutable original))
+    let prior=if priorGap then None else retained |> Array.tryFind (fun o -> operationStream o=operationStream latest)
+    let mutable revision=prior |> Option.map _.Revision |> Option.defaultValue 0L
+    let mutable missing=false
+    for row in sequence |> Array.distinctBy _.Revision do
+        if row.Revision>revision then
+            if row.Supersedes<>revision || row.Revision<>revision+1L then missing<-true
+            revision<-row.Revision
+    let reconciled=routineEvent latest.Event=EffectReconciled && fresh latest.ObservedAt && not conflict && not missing
+    let unknownClass=sequence |> Array.exists (fun o -> operationClass o.Class=UnknownOperation)
+    let unknown=unknownClass || ((sequence |> Array.exists (fun o -> routineEvent o.Event=UnknownEffect || routineState o.State=EffectUnknown)) && not reconciled)
+    let protectedEffect=sequence |> Array.exists (fun o -> operationClass o.Class=Protected || routineEvent o.Event=AdmissionRequired)
+    let scope=sequence |> Array.exists (fun o -> routineEvent o.Event=ScopeChanged)
+    // Clean terminal evidence releases nothing unless its stream joins are valid/fresh.
+    let held=latest.Cleanup<>"observed" || unknown || conflict || missing || not (fresh latest.ObservedAt)
+    { Observation={latest with Class=original.Class;ExecutionDeadline=original.ExecutionDeadline;ExecutionMode=original.ExecutionMode
+                               ObservationDeadline=original.ObservationDeadline;AllocationCpu=original.AllocationCpu
+                               AllocationMemoryMiB=original.AllocationMemoryMiB;AllocationMode=original.AllocationMode
+                               Cpu=original.Cpu;MemoryMiB=original.MemoryMiB;History=original.History}
+      Conflict=conflict;Missing=missing;Unknown=unknown;Protected=protectedEffect;Scope=scope;Held=held }
+
+let routineDecisions inputDigest (spec: RoutineInput) =
+    require (spec.Schema="fsgg.programme.routine-decisions-input/1") "invalid-routine-schema"
+    require (not (obj.ReferenceEquals(spec.Delta,null)) && not (obj.ReferenceEquals(spec.Resources,null))) "missing-routine-input"
+    array "events" spec.Events; array "previous" spec.Previous
+    require (spec.Events.Length<=128 && spec.Previous.Length<=64 && Encoding.UTF8.GetByteCount(encode spec)<=262144) "routine-input-bound"
+    let delta=contextDelta inputDigest spec.Delta
+    let snapshot=spec.Delta.Snapshot
+    let now=spec.Delta.EvaluationTime
+    let fresh time = time<>DateTimeOffset.MinValue && time<=now && (now-time).TotalSeconds<=float snapshot.MaxAgeSeconds
+    let resources=spec.Resources
+    boundMode resources.AgentMode |> ignore; boundMode resources.CpuMemoryMode |> ignore
+    require (resources.Cpu>=0 && resources.MemoryMiB>=0 && resources.OccupiedCpu>=0 && resources.OccupiedMemoryMiB>=0 &&
+             nonempty resources.Evidence && resources.Evidence.Length<=1024) "invalid-resource-facts"
+    let seen=Collections.Generic.HashSet<string>()
+    for prior in spec.Previous do
+        require (id prior.Lane && seen.Add prior.Lane && nonempty prior.Owner && nonempty prior.Candidate && id prior.Attempt) "invalid-previous-identity"
+        require (snapshot.Lanes |> Array.exists (fun lane -> lane.Id=prior.Lane)) "previous-reservation-missing-from-snapshot"
+        routineState prior.State |> ignore
+        oneOf prior.Action ["return-existing-owner";"observe-original-identity";"retain-admission";"refresh-facts";"wait-for-resources";"escalate-conflict-or-scope";"retain-current"]
+        array "previous-operations" prior.Operations; array "previous-unresolved" prior.Unresolved
+        array "previous-reasons" prior.Reasons; array "previous-evidence" prior.Evidence
+        require (prior.Operations.Length<=128 && prior.Unresolved.Length<=8 && prior.Reasons.Length<=16 && prior.Evidence.Length<=128) "previous-population-bound"
+        prior.Unresolved |> Array.iter (fun value -> oneOf value ["revision-conflict";"unknown-effect";"scope-policy-evaluator-changed";"protected-admission";"operation-revision-gap";"missing-delta-base"])
+        prior.Operations |> Array.iter validateOperation
+        require (prior.Operations |> Array.forall (fun o -> o.Lane=prior.Lane)) "previous-operation-lane-mismatch"
+    spec.Events |> Array.iter (fun o ->
+        validateOperation o
+        require (snapshot.Lanes |> Array.exists (fun lane -> lane.Id=o.Lane && lane.Attempt=o.Attempt && lane.Owner=o.Owner && lane.Head=o.Candidate)) "operation-snapshot-identity-mismatch")
+    let retained=spec.Previous |> Array.collect _.Operations
+    require (retained.Length<=128) "retained-operation-bound"
+    let closure=Array.append retained spec.Events
+    let gapLanes=spec.Previous |> Array.filter (fun d -> Array.contains "operation-revision-gap" d.Unresolved) |> Array.map _.Lane |> Set.ofArray
+    let streams=closure |> Array.groupBy operationStream |> Array.sortBy fst
+                |> Array.map (fun (_, rows) -> reduceRoutineStream fresh (Set.contains rows[0].Lane gapLanes) retained rows)
+    // Original unresolved obligations, not latest narratives or snapshot booleans,
+    // determine retained holds. Only externally reconciled current facts clear them.
+    let priorUnknownResolved name =
+        let selected=streams |> Array.filter (fun stream -> stream.Observation.Lane=name)
+        selected.Length>0 && (selected |> Array.forall (fun stream ->
+            routineEvent stream.Observation.Event=EffectReconciled && fresh stream.Observation.ObservedAt &&
+            not stream.Conflict && not stream.Missing && not stream.Unknown))
+    let priorHeld =
+        spec.Previous
+        |> Array.filter (fun d -> d.Unresolved |> Array.exists (fun reason ->
+            match reason with
+            | "unknown-effect" -> not (priorUnknownResolved d.Lane)
+            | "operation-revision-gap" ->
+                let selected=streams |> Array.filter (fun stream -> stream.Observation.Lane=d.Lane)
+                selected.Length=0 || (selected |> Array.exists _.Missing)
+            | "missing-delta-base" -> delta.Resynchronize
+            | _ -> true))
+        |> Array.map _.Lane |> Set.ofArray
+    let heldLanes=streams |> Array.filter _.Held |> Array.map (fun stream -> stream.Observation.Lane) |> Set.ofArray |> Set.union priorHeld
+    let reservations=snapshot.Lanes |> Array.filter (fun lane -> lane.InFlight || Set.contains lane.Id heldLanes)
+                     |> Array.map (fun lane -> {lane with InFlight=true}) |> Array.sortBy _.Id
+    let invalidated=spec.Previous.Length>0 && (spec.PreviousPolicyIdentity<>spec.Delta.PolicyIdentity ||
+                    spec.PreviousEvaluatorIdentity<>spec.Delta.EvaluatorIdentity || spec.PreviousUserScopeRevision<>spec.Delta.UserScopeRevision)
+    let decisions=snapshot.Lanes |> Array.sortBy _.Id |> Array.map (fun lane ->
+        let prior=spec.Previous |> Array.tryFind (fun d -> d.Lane=lane.Id)
+        let unresolved=ResizeArray<RoutineReason>()
+        if invalidated then unresolved.Add ScopeInvalidated
+        if spec.Delta.BaseRevision="" then unresolved.Add MissingBase
+        if prior |> Option.exists (fun d -> d.Unresolved |> Array.contains "revision-conflict") then unresolved.Add RevisionConflict
+        if prior |> Option.exists (fun d -> d.Unresolved |> Array.contains "scope-policy-evaluator-changed") then unresolved.Add ScopeInvalidated
+        if prior |> Option.exists (fun d -> d.Unresolved |> Array.contains "protected-admission") then unresolved.Add ProtectedBoundary
+        let laneStreams=streams |> Array.filter (fun stream -> stream.Observation.Lane=lane.Id)
+        let operations=laneStreams |> Array.map _.Observation
+        let missing=(laneStreams |> Array.exists _.Missing) ||
+                    (Set.contains lane.Id gapLanes && laneStreams.Length=0)
+        if missing then unresolved.Add OperationRevisionGap
+        for stream in laneStreams do
+            if stream.Conflict then unresolved.Add RevisionConflict
+            if stream.Unknown then unresolved.Add EffectUncertain
+            if stream.Protected then unresolved.Add ProtectedBoundary
+            if stream.Scope then unresolved.Add ScopeInvalidated
+        let lineage=operations |> Array.groupBy (fun o -> o.Operation,o.Attempt,o.Owner,o.Candidate)
+        if lineage |> Array.exists (fun (_, rows) -> (rows |> Array.map _.OriginalAttempt |> Array.distinct).Length>1) then unresolved.Add RevisionConflict
+        if prior |> Option.exists (fun d -> d.Unresolved |> Array.contains "unknown-effect") then
+            if not (priorUnknownResolved lane.Id) then unresolved.Add EffectUncertain
+        let reasons=ResizeArray<RoutineReason>()
+        reasons.AddRange unresolved
+        let mutable action=RetainCurrent
+        let mutable state=lane.State |> function "closed" -> "accepted" | "repair" -> "repair-needed" | "unknown" -> "unknown-effect" | _ -> "running"
+        let choose a r s = action<-a; reasons.Add r; state<-s
+        let repairNeeded=lane.State="repair" || operations |> Array.exists (fun o -> routineEvent o.Event=Failed || o.State="repair-needed" || o.State="cleanup-observed")
+        let temporal=operations |> Array.map (temporalEligibility now repairNeeded)
+        let badFact=not lane.Readable || not (fresh lane.ObservedAt) || missing || delta.Resynchronize ||
+                    (operations |> Array.exists (fun o -> not (fresh o.ObservedAt))) ||
+                    (delta.Notices |> Array.exists (fun n -> (n.Lane=lane.Id || n.Lane="all") && n.Kind<>"older-return-retained-as-history"))
+        let conflict=reservations |> Array.exists (fun other -> other.Id<>lane.Id && overlaps lane other)
+        let dependency=lane.Dependencies |> Array.exists (fun edge ->
+            let other=snapshot.Lanes |> Array.find (fun value -> value.Id=edge.Lane)
+            let qualified=List.contains other.Validation ["passed";"not-required"]
+            let boundary=match edge.Boundary with
+                         | "source" -> other.Source="merged"
+                         | "qualified" -> other.Validation="passed"
+                         | "published" -> other.Publication="published" && qualified
+                         | "installed" -> other.Installed="qualified" && qualified
+                         | "native" -> other.Native="succeeded" && qualified
+                         | _ -> other.State="closed" && qualified
+            not other.Readable || not (fresh other.ObservedAt) || other.Validation="disputed" || other.Native="failed" || not boundary)
+        if unresolved.Contains EffectUncertain || lane.Native="unknown" || lane.State="unknown" then choose ObserveOriginalIdentity EffectUncertain "unknown-effect"
+        elif unresolved.Contains ProtectedBoundary then choose RetainAdmission ProtectedBoundary "protected-admission"
+        elif unresolved.Contains RevisionConflict then choose EscalateConflictOrScope RevisionConflict "waiting"
+        elif unresolved.Contains ScopeInvalidated || (operations |> Array.exists (fun o -> routineEvent o.Event=ScopeChanged)) then choose EscalateConflictOrScope ScopeInvalidated "waiting"
+        elif badFact then
+            if spec.Delta.BaseRevision="" then reasons.Add MissingBase
+            if missing then reasons.Add OperationRevisionGap
+            choose RefreshFacts FactsMissing "waiting"
+        elif conflict then choose EscalateConflictOrScope SharedConflict "waiting"
+        elif dependency then choose RetainCurrent DependencyPending "waiting"
+        elif operations |> Array.exists (fun o -> o.Owner<>lane.Owner || o.Attempt<>lane.Attempt || o.Candidate<>lane.Head) then choose EscalateConflictOrScope OwnerMissing "waiting"
+        elif (repairNeeded && operations.Length=0) ||
+             (operations |> Array.exists (fun o -> o.Cleanup<>"observed" && (o.State<>"running" || repairNeeded))) then choose ObserveOriginalIdentity CleanupMissing "cleanup-unconfirmed"
+        elif Array.contains ExecutionExpired temporal then choose RetainAdmission DeadlineExpired "waiting"
+        elif Array.contains ObservationExpired temporal then choose RefreshFacts DeadlineExpired "waiting"
+        elif Array.contains ExecutionUnknown temporal then choose RetainAdmission FactsMissing "waiting"
+        elif (not repairNeeded && lane.State="closed" && lane.Validation<>"pending" && lane.Validation<>"unknown" && lane.Projection<>"pending" &&
+              (operations |> Array.forall (fun o -> o.State="accepted" && o.Cleanup="observed"))) then choose RetainCurrent TerminalAccepted "accepted"
+        elif not resources.Known || not (fresh resources.ObservedAt) || boundMode resources.CpuMemoryMode=UnknownBound then choose WaitForResources ResourceUnknown "waiting"
+        elif operations |> Array.exists (fun o ->
+            o.Cpu>resources.Cpu-resources.OccupiedCpu || o.MemoryMiB>resources.MemoryMiB-resources.OccupiedMemoryMiB ||
+            (boundMode o.AllocationMode=Enforced && (o.Cpu>o.AllocationCpu || o.MemoryMiB>o.AllocationMemoryMiB))) then choose WaitForResources ResourceUnavailable "waiting"
+        elif operations |> Array.exists (fun o -> operationClass o.Class=Integration) then choose ReturnExistingOwner AdmissionExternal "running"
+        elif not lane.InFlight && operations.Length=0 then choose RetainAdmission OwnerMissing "waiting"
+        else
+            if operations |> Array.exists (fun o ->
+                (boundMode o.ExecutionMode=Soft && now>=o.ExecutionDeadline) ||
+                (boundMode o.AllocationMode=Soft && (o.Cpu>o.AllocationCpu || o.MemoryMiB>o.AllocationMemoryMiB))) then reasons.Add SoftTargetExceeded
+            choose ReturnExistingOwner (if repairNeeded then OrdinaryRepair else ExistingOwner) (if repairNeeded then "repair-needed" else "running")
+        { Lane=lane.Id;Owner=lane.Owner;Candidate=lane.Head;Attempt=lane.Attempt;State=state;Action=actionCode action
+          Reasons=reasons |> Seq.map reasonCode |> Seq.distinct |> Seq.sort |> Seq.toArray
+          Evidence=operations |> Array.map _.Evidence |> Array.append lane.Evidence |> Array.distinct |> Array.sort
+          Operations=operations;Unresolved=unresolved |> Seq.map reasonCode |> Seq.distinct |> Seq.sort |> Seq.toArray })
+    let changed=decisions |> Array.filter (fun d -> spec.Previous |> Array.tryFind (fun old -> old.Lane=d.Lane) |> Option.forall (fun old -> semanticDecision old<>semanticDecision d))
+    let result={ Schema="fsgg.programme.routine-decisions/1";Advisory=true;InputSha256=inputDigest;EvaluationTime=now
+                 PolicyIdentity=spec.Delta.PolicyIdentity;EvaluatorIdentity=spec.Delta.EvaluatorIdentity;UserScopeRevision=spec.Delta.UserScopeRevision
+                 Current=decisions;Changed=changed;ActiveReservations=reservations;Resynchronize=delta.Resynchronize || invalidated || (streams |> Array.exists _.Missing) || (Set.count gapLanes>0 && streams.Length=0)
+                 EffectAuthority="none; existing owner authority and fresh native admission remain external"
+                 Coverage="caller-declared snapshot and resource observations; no native reads, acceptance or effect execution" }
+    require (Encoding.UTF8.GetByteCount(encode result)<=262144) "routine-output-bound"
+    result
+
+// Bound complete UTF-8 JSON including its emitted newline; overflow is a pointer,
+// never a sliced decision or partial evidence. Retention uses the existing helper.
+let routineStdout artifactPath artifactSha256 (observation: RoutineResult) =
+    let compact = encode {| schema="fsgg.programme.routine-decisions-summary/1"; advisory=true
+                            artifact=artifactPath; sha256=artifactSha256; effectAuthority="none"
+                            changed=observation.Changed |> Array.map (fun d ->
+                                {| lane=d.Lane;owner=d.Owner;candidate=d.Candidate;attempt=d.Attempt;state=d.State
+                                   action=d.Action;reasons=d.Reasons;evidence=d.Evidence |}) |}
+    let fits (value: string) = Encoding.UTF8.GetByteCount(value)+1<=2048
+    if fits compact then compact
+    else
+        let pointer=encode {| schema="fsgg.programme.routine-decisions-summary/1";advisory=true
+                              status="overflow-retrieve-artifact";artifact=artifactPath;sha256=artifactSha256
+                              changedCount=observation.Changed.Length;effectAuthority="none" |}
+        require (fits pointer) "routine-artifact-reference-exceeds-bound"
+        pointer
+
 type Reference = { Path: string; Sha256: string; StartLine: int; EndLine: int; Mandatory: bool; Trust: string; Reason: string }
 type Packet = { Schema: string; Lane: string; Objective: string; Stop: string; MandatoryPaths: string array; MaximumBytes: int; References: Reference array }
 let packet (spec: Packet) =
@@ -535,6 +810,7 @@ let run (command: string) (input: string) (root: string) =
     let artifactPath = Path.Combine(root, name + ".json")
     let inputPath = Path.Combine(root, name + ".input.json")
     let mutable inputBytes = 0
+    let mutable routineObservation : RoutineResult option = None
     try
         let bytes = boundedFile (2 * 1024 * 1024) input
         inputBytes <- bytes.Length
@@ -550,6 +826,12 @@ let run (command: string) (input: string) (root: string) =
             let spec, hash = read<DeltaInput> inputPath
             inputDigest <- hash
             output <- contextDelta hash spec |> encode
+        | "routine-decisions" ->
+            let spec, hash = read<RoutineInput> inputPath
+            inputDigest <- hash
+            let observation = routineDecisions hash spec
+            routineObservation <- Some observation
+            output <- encode observation
         | "packet" ->
             let spec, hash = read<Packet> inputPath
             inputDigest <- hash
@@ -582,7 +864,17 @@ let run (command: string) (input: string) (root: string) =
     let bytes = Encoding.UTF8.GetBytes output
     writePrivate artifactPath bytes
     let stdout =
-        if command = "verify" || bytes.Length > 16384 then
+        if command="routine-decisions" then
+            try
+                let value = match routineObservation with
+                            | Some observation -> routineStdout artifactPath (digest bytes) observation
+                            | None -> output
+                require (Encoding.UTF8.GetByteCount(value)+1<=2048) "routine-refusal-exceeds-bound"
+                value
+            with _ ->
+                result <- "refused"
+                encode {| schema="fsgg.programme.refusal/1"; reason="routine-output-reference-or-refusal-exceeds-bound" |}
+        elif command = "verify" || bytes.Length > 16384 then
             encode {| schema = "fsgg.programme.result-summary/1"; result = result; artifact = artifactPath; bytes = bytes.Length |}
         else output
     // Immutable one-file-per-operation logging avoids a shared writer and interleaved JSONL.
@@ -615,6 +907,10 @@ if fsi.CommandLineArgs.Length > 1 then
             match arguments with
             | [| "report"; root |] -> report root
             | [| command; input; root |] -> run command input root
-            | _ -> fail "usage: programme.fsx <frontier|packet|verify|delta|view|reuse> INPUT PRIVATE_ROOT, or report PRIVATE_ROOT"
+            | _ -> fail "usage: programme.fsx <frontier|packet|verify|delta|view|reuse|routine-decisions> INPUT PRIVATE_ROOT, or report PRIVATE_ROOT"
         exit code
-    with error -> eprintfn "%s" error.Message; exit 3
+    with error ->
+        if fsi.CommandLineArgs |> Array.contains "routine-decisions" then
+            eprintfn "routine-decisions initialization refused; inspect the existing private input and root"
+        else eprintfn "%s" error.Message
+        exit 3

@@ -36,6 +36,16 @@ class RunnerTests(unittest.TestCase):
         return {'tests/work-programme/context-owner-restart-fixtures/' + name + '.delta-input.json'
                 for name in names}
 
+    def test_routine_decisions_inventory_covers_actual_source_reads(self):
+        selected = next(suite for suite in runner.suites(self.root) if suite['id'] == 'routine-decisions')
+        self.assertEqual(set(selected['inputs']), {
+            '.agents/skills/work-programme/scripts/programme.fsx',
+            'tests/work-programme/routine-decisions.fsx'})
+        self.assertEqual(selected['command'], ['dotnet', 'fsi', '--exec',
+                                              'tests/work-programme/routine-decisions.fsx'])
+        self.assertEqual(selected['prerequisites'], ['dotnet'])
+        self.assertEqual(selected['dependsOn'], [])
+
     def test_context_delta_inventory_covers_actual_restart_fixture_reads(self):
         consumed = self.restart_fixture_reads()
         selected = next(suite for suite in runner.suites(self.root) if suite['id'] == 'context-delta')

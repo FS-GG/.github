@@ -30,7 +30,7 @@ def suites(root):
         for name, extra in [('acceptance', []), ('context-delta', [
             'tests/work-programme/context-delta-input.json', 'tests/work-programme/context-delta-expected.json',
             ] + [restart + name + '.delta-input.json' for name in restart_names]),
-            ('context-evidence', [])]
+            ('context-evidence', []), ('routine-decisions', [])]
     ] + [dict(id='context-baseline', command=[sys.executable, 'tests/work-programme/context-baseline/test_collect.py'],
               inputs=['tests/work-programme/context-baseline/' + f for f in ['test_collect.py', 'collect.py', 'replay.json']],
               prerequisites=['python'], dependsOn=[], independent=True),

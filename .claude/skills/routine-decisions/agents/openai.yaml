@@ -1,0 +1,4 @@
+interface:
+  display_name: "Routine Decisions"
+  short_description: "Route routine repairs with compact typed decisions"
+  default_prompt: "Use $routine-decisions to route current FS-GG programme observations to their existing owners within the original authority and bounds."

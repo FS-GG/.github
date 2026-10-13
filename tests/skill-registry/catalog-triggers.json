@@ -180,5 +180,12 @@
     "incomplete": "Save a handoff and stop.",
     "negative": "Resume the latest saved report and continue the Unified Roadmap.",
     "boundary": "Prepare a stop-skill draft without interrupting workers or creating a real session handoff."
+  },
+  "routine-decisions": {
+    "positive": "Use $routine-decisions to route these current FS-GG programme observations to their existing owners.",
+    "indirect": "This ordinary FS-GG owner failed compilation after observed cleanup; choose the bounded next action without another parent approval.",
+    "incomplete": "Reconcile routine programme decisions from the current lane view.",
+    "negative": "Create a personal weekly planner for an unrelated project.",
+    "boundary": "Replay these recorded programme observations without dispatching or admitting any protected effect."
   }
 }

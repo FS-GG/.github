@@ -1,6 +1,6 @@
 ---
 name: work-programme
-description: "Advance the temporary FS-GG Unified Roadmap with delegated recovery, typed lane returns, compact decision views and bounded check watchers."
+description: "Advance the FS-GG Unified Roadmap with typed decisions, worker recovery, pinned lane packets and bounded check watchers."
 ---
 
 # Work Programme
@@ -76,12 +76,11 @@ the parent reads required logic and expands missing obligations rather than impo
 
 At lane assignment, state the existing user authorization, allowed operations, selected execution profiles,
 resource/time bounds, integration owner, acceptance signals and escalation conditions in the existing packet.
-Within that boundary, the owner performs routine preparation, qualification, evidence reconciliation and
-next steps without a separate parent turn for each transition. This includes edit/build/test/repair loops,
-existing PR updates and ordinary CI collection; independent acceptance of each intermediate attempt is not
-required. Retain native logs and the first failure; detailed intermediate reconciliation is for exceptions,
-unknown effects and protected operations. Root reviews milestone semantics/results or changed authority,
-not each compiler invocation. Fresh native prerequisite checks still run.
+Apply [routine-decisions](../routine-decisions/SKILL.md) for typed same-owner preparation, qualification,
+repair and observation routing within that boundary. It keeps one current view, unresolved original effects
+and a 2KiB changed-decision projection; no per-attempt parent approval is added. Retain native logs and the
+first failure. Root reviews milestone semantics/results or changed authority; fresh native prerequisite
+checks and operation-specific admission still run.
 Delegate routine PR admission and delivery to the lane owner where repository integration is disjoint;
 retain one designated integrator for each shared surface. Publication, uncertain external effects and
 explicitly root-owned safeguards keep their applicable admission boundary. A return cannot expand authority.
@@ -118,14 +117,11 @@ instructions remain mandatory. Use pinned command descriptors instead of rebuild
 scripts in conversation; existing guards and fresh admission by the designated owner retain execution authority.
 Explicitly root-owned effects still require root admission. Never read binaries as text.
 
-After a repair or review milestone, the owner consolidates superseded findings into the existing current
-decision view: exact source, established outcomes, unresolved findings/decisions, evidence pointers and next
-action. Maintain one current state per attempt, with history separate; remove obsolete current fields such
-as “running” after verified terminal acceptance. Derive reports and handoffs from this current state and
-accepted outcomes rather than maintaining competing progress narratives. Replace resolved narrative in
-the working view and retain linked history, original failures and revision joins in the artifacts. Carry forward every unresolved obligation, conflict, unknown effect and
-reservation; a newer summary cannot establish acceptance or erase them. The parent reasons from this
-current view and deltas, expanding history only for a named decision or required review obligation.
+After a repair or review milestone, consolidate the existing current view under
+[routine-decisions](../routine-decisions/SKILL.md), with exact source, established outcomes, unresolved
+obligations, evidence pointers and next action. Derive reports/handoffs from that view and accepted
+outcomes; keep history separate. A current view cannot establish acceptance or erase reservations.
+The parent expands history only for a named decision or required review obligation.
 
 For an external blocker, record the exact missing evidence or capability, accountable supplying owner
 (or explicitly unknown), first-observed time, affected assertion and reopening condition in the existing

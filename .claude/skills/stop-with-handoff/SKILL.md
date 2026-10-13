@@ -1,6 +1,6 @@
 ---
 name: stop-with-handoff
-description: On session stop/save, stop FS-GG roadmap workers, write a timestamped restartable docs/handoffs report, land it via normal PR delivery, then end work.
+description: "On session save, stop FS-GG workers, write a timestamped restartable handoff, land it by normal PR, end programme tasks."
 ---
 
 # Stop With Handoff
