@@ -429,6 +429,9 @@ let routineDecisions inputDigest (spec: RoutineInput) =
     let delta=contextDelta inputDigest spec.Delta
     let snapshot=spec.Delta.Snapshot
     let now=spec.Delta.EvaluationTime
+    for lane in snapshot.Lanes do
+        require (lane.Owner.Length<=128 && nonempty lane.Head && lane.Head.Length<=256 && lane.Evidence.Length<=128 &&
+                 (lane.Evidence |> Array.forall (fun reference -> reference.Length<=1024))) "routine-lane-reference-bound"
     let fresh time = time<>DateTimeOffset.MinValue && time<=now && (now-time).TotalSeconds<=float snapshot.MaxAgeSeconds
     let resources=spec.Resources
     boundMode resources.AgentMode |> ignore; boundMode resources.CpuMemoryMode |> ignore
@@ -442,7 +445,7 @@ let routineDecisions inputDigest (spec: RoutineInput) =
         oneOf prior.Action ["return-existing-owner";"observe-original-identity";"retain-admission";"refresh-facts";"wait-for-resources";"escalate-conflict-or-scope";"retain-current"]
         array "previous-operations" prior.Operations; array "previous-unresolved" prior.Unresolved
         array "previous-reasons" prior.Reasons; array "previous-evidence" prior.Evidence
-        require (prior.Operations.Length<=128 && prior.Unresolved.Length<=8 && prior.Reasons.Length<=16 && prior.Evidence.Length<=128) "previous-population-bound"
+        require (prior.Operations.Length<=128 && prior.Unresolved.Length<=8 && prior.Reasons.Length<=16 && prior.Evidence.Length<=256) "previous-population-bound"
         prior.Unresolved |> Array.iter (fun value -> oneOf value ["revision-conflict";"unknown-effect";"scope-policy-evaluator-changed";"protected-admission";"operation-revision-gap";"missing-delta-base"])
         prior.Operations |> Array.iter validateOperation
         require (prior.Operations |> Array.forall (fun o -> o.Lane=prior.Lane)) "previous-operation-lane-mismatch"
@@ -453,8 +456,9 @@ let routineDecisions inputDigest (spec: RoutineInput) =
     require (retained.Length<=128) "retained-operation-bound"
     let closure=Array.append retained spec.Events
     let gapLanes=spec.Previous |> Array.filter (fun d -> Array.contains "operation-revision-gap" d.Unresolved) |> Array.map _.Lane |> Set.ofArray
-    let streams=closure |> Array.groupBy operationStream |> Array.sortBy fst
-                |> Array.map (fun (_, rows) -> reduceRoutineStream fresh (Set.contains rows[0].Lane gapLanes) retained rows)
+    let groups=closure |> Array.groupBy operationStream |> Array.sortBy fst
+    require (groups.Length<=128) "routine-current-operation-bound"
+    let streams=groups |> Array.map (fun (_, rows) -> reduceRoutineStream fresh (Set.contains rows[0].Lane gapLanes) retained rows)
     // Original unresolved obligations, not latest narratives or snapshot booleans,
     // determine retained holds. Only externally reconciled current facts clear them.
     let priorUnknownResolved name =
@@ -562,6 +566,14 @@ let routineDecisions inputDigest (spec: RoutineInput) =
                  EffectAuthority="none; existing owner authority and fresh native admission remain external"
                  Coverage="caller-declared snapshot and resource observations; no native reads, acceptance or effect execution" }
     require (Encoding.UTF8.GetByteCount(encode result)<=262144) "routine-output-bound"
+    // A successful current view must fit the next minimal input, including its
+    // retained delta/resource facts and newly established prior identity pins.
+    // Refuse the bounded window before emission; never drop original operations.
+    let replay={spec with
+                    Events=[||];Previous=decisions
+                    PreviousPolicyIdentity=spec.Delta.PolicyIdentity;PreviousEvaluatorIdentity=spec.Delta.EvaluatorIdentity
+                    PreviousUserScopeRevision=spec.Delta.UserScopeRevision}
+    require (Encoding.UTF8.GetByteCount(encode replay)<=262144) "routine-current-replay-bound"
     result
 
 // Bound complete UTF-8 JSON including its emitted newline; overflow is a pointer,

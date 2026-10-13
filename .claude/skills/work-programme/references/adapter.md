@@ -315,7 +315,15 @@ Each event is one original operation observation with these required fields:
   Evidence references are at most1024 characters; equality does not authenticate them.
 
 At most64 snapshot lanes,128 events and128 retained current operation streams are admitted.
-Input/result JSON is at most256KiB, with strict duplicate-key/unknown-field refusal. A previous
+The joined current view also admits at most128 original operation streams; adding a new stream
+beyond this bound refuses without dropping held originals. Lane evidence admits128 references
+and current evidence admits256 references, each at most1024 characters. Routine lane owners
+are at most128 characters and candidates at most256. Input/result JSON is at most256KiB,
+with strict duplicate-key/unknown-field refusal. Before success, the helper checks the exact
+canonical next input with `events=[]`, `previous=current`, the same delta/resources and matching
+previous identity pins against that same byte bound. Repeating events or adding observations
+is a separately bounded input; overflow requires a narrower observation window, never silently
+discarded holds. A previous
 current view carries each lane's owner/candidate/attempt, state/action, reasons/evidence,
 operations and unresolved obligations. Unresolved conflict/scope/unknown effects survive
 new summaries. Dropping a previous lane from the complete snapshot refuses. Unknown/unclean

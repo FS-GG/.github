@@ -219,6 +219,38 @@ test "table one temporal predicate covers state and event induced repair across 
 test "fresh read-only observation budget can inspect unknown execution budget" (fun () ->
     let input={change {operation with Class="observation";ExecutionMode="unknown";ExecutionDeadline=DateTimeOffset.MinValue;State="running";Event="current-observation"} with Delta={delta with Snapshot={snapshot with Lanes=[|{lane with State="active"}|]}}}
     action "return-existing-owner" input)
+test "maximum128 operations plus lane evidence yields replayable current view" (fun () ->
+    let input={spec with Events=[|for index in 1..128 -> {operation with Operation="op-"+string index;Evidence="evidence-"+string index}|]}
+    let current=evaluate input
+    expect (current.Current[0].Operations.Length=128 && current.Current[0].Evidence.Length=129)
+    expect ((evaluate {previous current with Events=[||]}).Changed.Length=0))
+test "128 retained plus new disjoint stream refuses without dropping originals" (fun () ->
+    let first=evaluate {spec with Events=[|for index in 1..128 -> {operation with Operation="op-"+string index;Evidence="same"}|]}
+    let next={previous first with Events=[|{operation with Operation="op-129";Evidence="same"}|]}
+    refuses (fun () -> evaluate next |> ignore)
+    expect (first.Current[0].Operations.Length=128))
+test "maximum256 unique current references from lanes and operation facts replay" (fun () ->
+    let evidence=[|for index in 1..128 -> "lane-reference-"+string index|]
+    let input={spec with Delta={delta with Snapshot={snapshot with Lanes=[|{lane with Evidence=evidence}|]}};Events=[|for index in 1..128 -> {operation with Operation="op-"+string index;Evidence="operation-reference-"+string index}|]}
+    let first=evaluate input
+    expect (first.Current[0].Evidence.Length=256)
+    let next={previous first with Delta=input.Delta;Events=[||]}
+    expect ((evaluate next).Changed.Length=0))
+test "replay population property over multiple lanes and bounded operations" (fun () ->
+    for count in [1;64;128] do
+        let lanes=[|for index in 1..min count 64 -> {lane with Id="L"+string index;Item="L"+string index;OriginalItem="L"+string index;Chain="L"+string index;TouchSet=[|"src/L"+string index+"/**"|]}|]
+        let events=[|for index in 0..count-1 -> {operation with Lane=lanes[index % lanes.Length].Id;Operation="op-"+string index;Evidence="unique-"+string index}|]
+        let input={spec with Delta={delta with Snapshot={snapshot with Lanes=lanes}};Events=events}
+        let first=evaluate input
+        let next={previous first with Delta=input.Delta;Events=[||]}
+        expect ((evaluate next).Current.Length=lanes.Length && (evaluate next).Changed.Length=0))
+test "canonical next input byte overflow refuses before successful current emission" (fun () ->
+    let terminal={lane with State="closed";InFlight=false;Validation="passed";Projection="landed"}
+    let small={change {operation with State="accepted";Event="current-observation"} with Delta={delta with Snapshot={snapshot with Lanes=[|terminal|]}}}
+    let padding=262144-Encoding.UTF8.GetByteCount(encode small)
+    let input={small with Delta={small.Delta with Snapshot={snapshot with Lanes=[|{terminal with Worktree=terminal.Worktree+String('p',padding)}|]}}}
+    expect (Encoding.UTF8.GetByteCount(encode input)=262144)
+    expect (try evaluate input |> ignore;false with :? InvalidOperationException as error -> error.Message="routine-current-replay-bound"))
 test "unknown operation tags refuse" (fun () -> for o in [{operation with Class="spawn"};{operation with Event="approve"};{operation with AllocationMode="invented"}] do refuses (fun () -> evaluate(change o) |> ignore))
 test "event population bounded" (fun () -> refuses (fun () -> evaluate {spec with Events=Array.create 129 operation} |> ignore))
 test "compact UTF8 escaping includes newline" (fun () -> let result=evaluate(change {operation with Evidence=String.replicate 200 "é\\\""}) in let output=routineStdout "/private/artifact" hash result in expect (Encoding.UTF8.GetByteCount(output)+1<=2048 && output.Contains "overflow-retrieve-artifact"))
