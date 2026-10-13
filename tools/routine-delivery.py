@@ -13,6 +13,7 @@ import json
 import pathlib
 import os
 import selectors
+import stat
 import time
 import re
 import subprocess
@@ -611,8 +612,14 @@ def installation_prior_result(path: str) -> dict:
             result[key] = value
         return result
     try:
-        with target.open("rb") as stream:
-            raw = stream.read(65537)
+        descriptor = os.open(target, os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW)
+        try:
+            if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+                raise RuntimeError("installation prior result must be a regular file")
+            with os.fdopen(descriptor, "rb", closefd=False) as stream:
+                raw = stream.read(65537)
+        finally:
+            os.close(descriptor)
         if len(raw) > 65536:
             raise RuntimeError("installation prior result exceeds byte bound")
         value = json.loads(raw, object_pairs_hook=unique)
@@ -994,6 +1001,8 @@ def summarize(
                 else:
                     state = "delivered-activation-pending" if result.outcome == "delivered" else "disputed"
             result = replace(result, producerInstallation=state, producerSource=producer_source)
+        if installation_prior is not None:
+            result = replace(result, attempts=max(result.attempts, installation_prior["attempts"]))
         return result
     allowed, reason = eligible(before, expected_head)
     observed = head_of(before)
@@ -1511,8 +1520,17 @@ def main(argv: list[str]) -> int:
             "fsgg.routine-delivery/v1", args.repo, args.pr, args.head, None,
             "indeterminate", "unknown",
             "pending" if args.publication == "required" else "not-required",
-            None, 0, str(error), "current", "unobserved",
+            None, prior["attempts"] if prior is not None and type(prior.get("attempts")) is int and prior["attempts"] == 1 else 0,
+            str(error), "current", "unobserved",
         )
+        if args.install_routine_producer:
+            joined = prior is not None and all(prior.get(key) == value for key, value in (
+                ("repo", args.repo), ("pr", args.pr), ("expectedHead", args.head),
+                ("producerSource", args.routine_producer_source)))
+            result = replace(result, producerInstallation="indeterminate",
+                producerSource=args.routine_producer_source, routineEligibility="unresolved",
+                baseRef=prior.get("baseRef") if joined else None,
+                baseSha=prior.get("baseSha") if joined else None)
     dashboard_health = "not-run-final-ci-unavailable"
     if observer is not None and result.outcome != "ready":
         observer(result)

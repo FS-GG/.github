@@ -1407,10 +1407,13 @@ class ProducerInstallationTests(unittest.TestCase):
         prior=asdict(uncertain)
         later=self.api([self.pr]);later.required[0]['bucket']='pending'
         code,result=self.invoke(later,True,prior=prior)
-        self.assertEqual((code,later.attempts,result.codeDelivery,result.attempts),(3,0,'unknown',0))
+        self.assertEqual((code,later.attempts,result.codeDelivery,result.attempts),(3,0,'unknown',1))
+        second=self.api([self.pr]);code,second_result=self.invoke(second,True,prior=asdict(result))
+        self.assertEqual((code,second.attempts,second_result.codeDelivery,second_result.attempts),(3,0,'unknown',1))
         later=self.api([self.after]);later.overrides['repos/FS-GG/Receiver/git/ref/heads/main']={'object':{'sha':self.fixture['head']}}
         code,result=self.invoke(later,True,prior=prior)
         self.assertEqual((code,later.attempts,result.producerInstallation),(0,0,'delivered-activation-pending'))
+        self.assertEqual(result.attempts,1)
         for field,value in (('repo','Other/Repo'),('pr',2),('expectedHead','f'*40),('producerSource','f'*40),
                             ('attempts',None),('attempts',True),('attempts',2),('schema','other'),('baseSha','f'*40)):
             bad=copy.deepcopy(prior);bad[field]=value;api=self.api()
@@ -1427,6 +1430,42 @@ class ProducerInstallationTests(unittest.TestCase):
     def test_postmerge_wrong_protected_payload_stays_disputed(self):
         api=self.api([self.pr,self.pr,self.after],[{'merged':True,'sha':self.fixture['head']}]);code,result=self.invoke(api,True)
         self.assertEqual((code,api.attempts,result.codeDelivery,result.producerInstallation),(4,1,'delivered','disputed'))
+
+    def test_prior_result_special_files_and_symlinks_refuse_before_read(self):
+        fifo=self.directory/'prior.fifo';os.mkfifo(fifo)
+        try:
+            with self.assertRaises(RuntimeError):MODULE.installation_prior_result(str(fifo))
+            with self.assertRaises(RuntimeError):MODULE.installation_prior_result(str(self.directory))
+            link=self.directory/'prior.link';link.symlink_to(fifo)
+            try:
+                with self.assertRaises(RuntimeError):MODULE.installation_prior_result(str(link))
+            finally:link.unlink()
+        finally:fifo.unlink()
+
+    def test_cli_disputed_readbacks_exit_nonzero_and_failed_prior_retains_custody(self):
+        args=['--repo','FS-GG/Receiver','--pr','1','--head',self.fixture['head'],
+              '--install-routine-producer','--routine-producer-source',self.fixture['source'],
+              '--coherent-workflow','CI.yml','--apply']
+        for reads,writes in (([self.after],()),
+                             ([self.pr,self.pr,self.after],[{'merged':True,'sha':self.fixture['head']}])):
+            api=self.api(reads,writes)
+            with mock.patch.object(MODULE,'GhApi',return_value=api), \
+                 mock.patch.object(MODULE.WatchGhApi,'_watch_read',side_effect=lambda command,accepted:(0,api.required)), \
+                 mock.patch.dict(os.environ,{},clear=True),mock.patch('sys.stdout',new_callable=io.StringIO) as output:
+                code=MODULE.main(args)
+            result=json.loads(output.getvalue())
+            self.assertEqual((code,result['outcome'],result['producerInstallation']),(4,'delivered-disputed','disputed'))
+        first=self.api([self.pr,self.pr,self.pr],[MODULE.AmbiguousWrite('lost response')])
+        _,uncertain=self.invoke(first,True)
+        path=self.directory/'prior-failure.json';path.write_text(json.dumps(asdict(uncertain)))
+        api=self.api();api.get_pr=mock.Mock(side_effect=RuntimeError('readback unavailable'))
+        with mock.patch.object(MODULE,'GhApi',return_value=api),mock.patch.dict(os.environ,{},clear=True), \
+             mock.patch('sys.stdout',new_callable=io.StringIO) as output:
+            code=MODULE.main(args+['--installation-prior-result',str(path)])
+        result=json.loads(output.getvalue())
+        self.assertEqual((code,api.attempts,result['attempts'],result['producerInstallation']),(3,0,1,'indeterminate'))
+        later=self.api([self.pr]);code,result=self.invoke(later,True,prior=result)
+        self.assertEqual((code,later.attempts,result.attempts),(3,0,1))
 
     def test_delivered_bootstrap_does_not_unlock_ordinary_missing_eligibility(self):
         api=self.api();api.routine_eligibility=mock.Mock(side_effect=RuntimeError('missing'))
