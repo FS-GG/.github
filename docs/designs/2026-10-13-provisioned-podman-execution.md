@@ -13,7 +13,7 @@ The first storage pilot compares the current nested build route with nested Podm
 
 The largest expected reductions are platform variation in PROC, repeated enforcing-runtime qualification in LANG, and environment feasibility/recovery setup in LEARN. Installation and toolchain consistency also help UTEL/EFF, knowledge and template receivers. No numerical saving follows from containerization alone. Preserve publication, real provider execution, causal correctness, accessibility, GPU and native-engine acceptance as separate work.
 
-Host distribution, kernel build, architecture and Podman version have not been supplied. Sole-platform support has not been selected. This proposal therefore defines a primary profile and retains existing compatibility promises. It does not select a Linux release, introduce a runtime upgrade or authorize any provisioning operation.
+The current supplied development container has an observed Arch Linux/Podman package profile, recorded below. Its namespace execution, storage benefit and independent teardown remain unqualified. Sole-platform support has not been selected; the proposal retains existing compatibility promises. Source inventory does not authorize further provisioning or native execution.
 
 ## Evidence and current constraints
 
@@ -26,6 +26,58 @@ The [process supervision design](../roadmaps/2026-10-05-shared-process-supervisi
 The [language plan](../roadmaps/2026-09-29-language-independent-workspaces-and-agent-integration.md#language-qualification-population) already factors common lifecycle cases by identical enforcing runtime/profile while retaining real TypeScript/Rust/Go, mixed-component and no-.NET product journeys. The [persistent LEARN receiver](../roadmaps/learn-c2-persistent-receiver-v3.md) records missing UID mapping and cgroup delegation, alongside unresolved acquisition/custody and installed-runtime acceptance. Provisioning may resolve the former; it cannot reconstruct the latter.
 
 Repository owner plans and their pinned source links were inspected. Other product repositories were not available in the local workspace, so this assessment does not claim a fresh exhaustive source audit of their current heads. The research report separates directly inspected upstream source, documented capabilities, proposals and unqualified guarantees.
+
+## Supplied development profile: source inventory, 2026-10-13
+
+Read-only inspection after the external rebuild observed Arch Linux image metadata
+`VERSION_ID=20260927.0.600689`, kernel `7.2.4-arch1-2`, architecture `x86_64`
+and installed package metadata: Podman `6.1.3-1`, crun `1.30.1-1`, conmon `1:2.2.1-1`,
+containers-common `1:0.69.2-1`, passt `2026_10_02.cba3570-1` and shadow
+`4.20.0.arch1-1`. These are local inventory observations; executable runtime
+results, authenticated image identity and portable package archives remain separate.
+Podman, crun, conmon and the passt target of the pasta symlink are root-owned mode
+`0755`; newuidmap/newgidmap are root-owned mode `4755`.
+
+The current UID/GID maps are `0 1 65536`. The developer's subordinate UID/GID entries
+are `1024:64510`, within the parent namespace and excluding developer ID `1000`.
+This repairs the earlier visible range mismatch, but no nested namespace probe has
+run. Effective capabilities are zero, `Seccomp=0` and `NoNewPrivs=0`; these observed
+settings do not establish a selected security profile or authorize policy changes.
+
+The visible cgroup-v2 root is read-only, with `cpu.max=400000 100000`,
+`memory.max=8589934592` and `pids.max=2048`. Those shared outer limits supply no
+per-operation delegation or containment proof. Ordinary bounded namespace/storage
+feasibility can use an existing qualified execution route without waiting for a
+new contained backend, provided actual admission, helper accounting, retained
+custody and bounded cleanup are valid. The stronger execution envelope still needs
+its requested capabilities and independent cleanup evidence.
+
+The developer owns mode-`0700` mounts at `/var/tmp/fdev-podman` (1 GiB tmpfs),
+`/home/developer/.local/share/containers` (4 GiB tmpfs) and `/run/user/1000`
+(128 MiB tmpfs). A fresh operation-owned child of the first is a candidate for a
+small VFS/crun feasibility probe; it is not a qualified allocation. These
+memory-backed mounts do not establish the proposed local disk-backed build-storage
+mitigation. Allocation identity, effective per-run paths, byte/inode bounds,
+authentic provisioner/image inputs and an independent teardown owner remain open.
+
+Existing Coordination toolchain profiles carry source/image/component identities
+and runtime/output bounds; its portable runtime policy carries explicit Podman
+arguments, state root and host/container environments. Inventory therefore starts
+with those contracts. An authentic allocation/launch/teardown caller seam must be
+selected before proposing any additive allocation field. The current portable
+image qualification scripts have per-command process timeouts but do not establish
+the aggregate deadline and helper/descendant cleanup needed to admit this probe.
+The previous private selected-entry guard is unavailable; its loss does not add a
+new gate to ordinary development. It prevents reusing that guard as native proof.
+
+The [saved source frontier](../handoffs/2026-10-13-095258-unified-roadmap-handoff.md#private-evidence-drafts-and-truthful-limits)
+retains the original Arch acquisition failures and partial outcomes. Its private
+image drafts and retained acquisition bytes are now missing. Reconstruct source
+from authentic inputs under the same owner; do not reconstruct acceptance,
+checksum manifests, old packet/attempt joins or consumed grants. A buildable common
+base still needs genuine donor state, maintained full-system resolver output,
+trusted package archives and the exact SDK archive. All historical unknown
+operations and reservations remain unresolved.
 
 ## Deployment, distribution and workspace adoption
 
