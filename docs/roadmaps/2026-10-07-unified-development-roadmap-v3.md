@@ -71,6 +71,36 @@ busy. Resume the remaining accepted owner frontier; a new research window needs 
 decision. Keep the existing late consolidated GPU batch and product-native acceptance boundaries. Historical
 release closure is not reopened by a later dependency refresh; qualify the successor's actual changed joins.
 
+## 1.2. Provisioned Podman profile and ephemeral nested storage — 2026-10-13
+
+[V3-ENV-01](2026-10-13-provisioned-podman-execution.md) proposes a finite common
+execution/profile outcome for the supplied Linux/Podman environment. Its first storage
+pilot targets slow nested-build file I/O with a fresh host-backed store, comparing actual
+native-overlay, fuse-overlayfs and VFS behavior inside the selected unchanged envelope.
+Default development starts without prior writable engine, dependency-cache or workspace
+state; a second compatible machine reconstructs declared inputs instead of transferring a
+writable store. The existing provisioner owns scoped allocation, export and observed teardown.
+
+The [design](../designs/2026-10-13-provisioned-podman-execution.md) and
+[prior-art assessment](../reports/2026-10-13-provisioned-podman-prior-art.md) preserve existing
+Coordination identity/deadline/custody contracts. No privileged troubleshooting recipe,
+host socket, global reset, new resource cap, automatic restart or broader compatibility
+withdrawal is selected by this document. Actual host/version/filesystem, provisioning
+owner and native capability facts precede dependent experiments. Storage performance does
+not establish containment, publication, installed acceptance or LEARN activation.
+
+The common base Containerfile and qualified image release belong in `.github`; Coordination
+owns the launcher/execution implementation and Templates/SDD materialize product toolchain/profile
+selections. Framework development is the first pilot; ordinary product workspaces consume pinned
+published images through the same launch/storage contract. Host bootstrap and ephemeral allocation
+are provisioner responsibilities, while product production deployment remains product-owned.
+
+Common profile/storage delivery is counted once here; PROC/LANG/LEARN and receiver owners
+retain their existing consumer assertions and can reuse only exact compatible evidence.
+Adding this outcome changes section 2 from 17 rows/two Done to 18 rows/two Done. This is
+scope growth, not an effort-completion percentage. Independent qualified lanes and the
+completed Board and Box2D/Portal P3 outcomes remain unchanged.
+
 ## 2. Open work and owning plans
 
 Rows with **Done: No** are open at their stated boundary. A source milestone already delivered is an
@@ -98,6 +128,7 @@ Conditional work in section 6 is not automatically scheduled.
 | **OPS-TYPED-01 remaining shared/operational adoption — Coordination and qualification owners** | Adopt published typed replacements at selected production entrypoints and complete the bounded administrative-owner migration. Product-specific FourD and SC2 slices are tracked in the games roadmap. | Each product's source, exact artifact and native safeguards join separately; .1/.2 source delivery does not qualify operations. | [Typed administrative policy](2026-10-01-typed-administrative-fsharp-quint.md) | No |
 | **FBX-07 public successor and upstream assessment — Templates** | Qualify public installed second-runtime composition and resolve genuinely selected upstream updates. | Reuse delivered candidate and existing assessment. `updates-found`/`unqualified` is an observation, not accepted upstream adoption. | [Xantham owner](https://github.com/FS-GG/FS.GG.Templates/blob/main/docs/roadmaps/fable-bindings-xantham-candidates.md) | No |
 | **UNITYC-01.1d and product delivery — Unity Client owner** | Qualify genuine Unity Editor/Server operation, then selected publication/installed adoption and remaining declared product outcomes. | Managed-reference/browser source is an input; native title/engine access and exact operator admission are separate. | [Unity design](../2026-09-08-144823-unity-native-shim-fable-client-design-roadmap.md), [owner](https://github.com/FS-GG/FS.GG.Unity.Client/blob/main/docs/roadmaps/unityc-01-reference-admission.md) | No |
+| **V3-ENV-01 provisioned Podman execution / ephemeral nested storage — host provisioner/Coordination; selected receiver owners** | Qualify one finite supplied host/profile, fresh host-backed nested storage and a useful bounded driver/build comparison; deliver compatible installed pilots, a two-machine blank-slate journey and independently observed scoped cleanup. | Exact host/kernel/architecture, engine/runtime/filesystem, mappings/delegation and provisioner authority are not yet established. Reuse current contracts and published routes; no host socket, elevated fallback, global reset or retrospective custody claim. Consumer work stays in existing owning plans; preparation does not admit native execution. | [Profile and storage roadmap](2026-10-13-provisioned-podman-execution.md), [design](../designs/2026-10-13-provisioned-podman-execution.md), [prior art](../reports/2026-10-13-provisioned-podman-prior-art.md) | No |
 
 ## 3. Game template consolidation
 
@@ -130,6 +161,7 @@ reserve workers or authorize operations. Resume existing partial work before cre
 
 | Parallel work | Why it is independent now | Join that must remain serial |
 |---|---|---|
+| Ephemeral nested-storage fixtures, actual backing-filesystem/profile inventory and language-specific input reconstruction | Separate allocation, pure receipt/configuration and consumer toolchain surfaces; existing qualified ordinary routes remain available. | One provisioner owns scoped storage lifetime; matched native driver/build comparisons share bounded host resources. Common runtime/profile and release descriptors have one integrator; installed and second-machine proof follow real provisioning. |
 | Telemetry dispatch/batch repair; remaining process adapters; accepted SVG implementation/conformance gaps | Distinct owning source surfaces and existing plans. Completed evaluation/Board work and stopped SVG diagnostics are not a fresh queue; pure checks need no LEARN activation. | One integrator for overlapping `.github` source, guidance and release pins; compile/native qualification only inside available resources. |
 | Telemetry activity/review integration and dashboard freshness/coverage preparation | Separate producer/consumer surfaces once the measurement contract is fixed. Fixtures can retain unavailable inputs truthfully. | Canonical store migration and live collection follow qualified release/adoption; real reviews need settled populations and usage needs native evidence. |
 | Game template capability inventory, WASM example composition and portal presentation preparation | Independent example/adaptor touch-sets, using accepted published prerequisites where applicable. | Shared Game/Rendering APIs have one owner; one Templates integrator joins composition and release descriptors. Installed proof follows producer publication; compatible knowledge/Wizard/reference outcomes share the cohort in section 1.1. |
