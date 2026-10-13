@@ -32,6 +32,8 @@ MAX_SELECTION_UNCOMPRESSED_BYTES = 1_048_576
 MAX_SELECTION_ENTRIES = 128
 MAX_SELECTION_BYTES = 65_536
 PRODUCER_REGISTRATION = "evidence/github-substrate-v2/gs2-06-7/execution-pins-extension.json"
+TEMPLATES_ASSERTION_PIN = "tests/composition/lib/skill-union.sh"
+ASSERTION_BUNDLE = "dist/skill-union-assert.sh"
 PRODUCER_REPOSITORY = "FS-GG/.github"
 PRODUCER_PATHS = (
     ".fsgg/routine-development.json", ".github/workflows/routine-eligibility.yml",
@@ -290,7 +292,7 @@ class GhApi:
 
     def _installation_contract(self, repo: str, number: int, pr: dict, head: str,
                                source: str, *, delivered: bool = False, coherent_workflow: str | None = None) -> None:
-        """Closed five-file predicate, independent of ordinary eligibility success."""
+        """Closed canonical payload with receiver-specific derived sixth-file edits."""
         metadata = self.installation_read(f"repos/{repo}")
         if (not isinstance(metadata, dict) or metadata.get("full_name") != repo
                 or type(metadata.get("id")) is not int or metadata["id"] < 1
@@ -384,11 +386,44 @@ class GhApi:
             if self.installation_blob(repo, registered) != derived:
                 raise RuntimeError("installation registration must append exactly the derived workflow record")
             expected.add(PRODUCER_REGISTRATION)
+        if TEMPLATES_ASSERTION_PIN in changed:
+            if repo != "FS-GG/FS.GG.Templates" or metadata["id"] != 1281961814:
+                raise RuntimeError("assertion pin refresh belongs only to the native Templates receiver")
+            original, refreshed = old.get(TEMPLATES_ASSERTION_PIN), candidate.get(TEMPLATES_ASSERTION_PIN)
+            if (original is None or refreshed is None or original.get("type") != "blob"
+                    or original.get("mode") not in ("100644", "100755")
+                    or refreshed.get("type") != "blob" or refreshed.get("mode") != original["mode"]):
+                raise RuntimeError("assertion pin refresh must modify an existing regular file without mode change")
+            body = self.installation_blob(repo, original)
+            assignments = list(re.finditer(rb"^[ \t]*(?:export[ \t]+)?SKILL_ASSERT_REF[ \t]*=.*$", body, re.MULTILINE))
+            if len(assignments) != 1 or not re.fullmatch(rb'SKILL_ASSERT_REF="[0-9a-f]{40}"', assignments[0].group()):
+                raise RuntimeError("assertion pin refresh requires exactly one literal full-SHA assignment")
+            assignment = assignments[0]
+            old_pin = assignment.group()[len(b'SKILL_ASSERT_REF="'):-1].decode("ascii")
+            # Compare metadata is invariant across pages; page two omits the potentially
+            # large first-page historical file diff. Commit/tree/blob identity is read below.
+            old_lineage = self.installation_read(f"repos/{PRODUCER_REPOSITORY}/compare/{old_pin}...{source}?per_page=1&page=2")
+            if (not isinstance(old_lineage, dict) or (old_lineage.get("base_commit") or {}).get("sha") != old_pin
+                    or (old_lineage.get("merge_base_commit") or {}).get("sha") != old_pin
+                    or old_lineage.get("status") not in ("identical", "ahead")):
+                raise RuntimeError("old assertion pin is not a selected protected producer ancestor")
+            pinned = self.installation_tree(PRODUCER_REPOSITORY, old_pin)
+            before_bundle, selected_bundle = pinned.get(ASSERTION_BUNDLE), canonical.get(ASSERTION_BUNDLE)
+            if (before_bundle is None or selected_bundle is None
+                    or before_bundle.get("type") != "blob" or before_bundle.get("mode") not in ("100644", "100755")
+                    or any(before_bundle.get(k) != selected_bundle.get(k) for k in ("sha", "mode", "type"))
+                    or self.installation_blob(PRODUCER_REPOSITORY, before_bundle)
+                    != self.installation_blob(PRODUCER_REPOSITORY, selected_bundle)):
+                raise RuntimeError("assertion pin refresh changes the authenticated assertion bundle")
+            derived = body[:assignment.start()] + b'SKILL_ASSERT_REF="' + source.encode("ascii") + b'"' + body[assignment.end():]
+            if self.installation_blob(repo, refreshed) != derived:
+                raise RuntimeError("assertion pin refresh must preserve every byte except the selected source SHA")
+            expected.add(TEMPLATES_ASSERTION_PIN)
         if changed != expected or pr.get("changed_files") != len(expected):
-            raise RuntimeError("installation must add canonical five files with only optional derived registration")
+            raise RuntimeError("installation must add canonical five files with only a receiver-specific derived sixth edit")
         files = self.installation_read(f"repos/{repo}/pulls/{number}/files?per_page=100")
         if (not isinstance(files, list) or len(files) != len(expected)
-                or any(not isinstance(r, dict) or r.get("status") != ("modified" if r.get("filename") == PRODUCER_REGISTRATION else "added")
+                or any(not isinstance(r, dict) or r.get("status") != ("modified" if r.get("filename") in (PRODUCER_REGISTRATION, TEMPLATES_ASSERTION_PIN) else "added")
                        or r.get("previous_filename") is not None for r in files)
                 or {r.get("filename") for r in files} != expected
                 or any(r.get("sha") != candidate[r["filename"]]["sha"] for r in files)):
