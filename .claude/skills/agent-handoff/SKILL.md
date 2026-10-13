@@ -1,6 +1,6 @@
 ---
 name: agent-handoff
-description: "Use for agent handoffs and ongoing mailbox coordination: verify status, name the next owner and action, protect private data, and escalate blockers."
+description: "Coordinate agent handoffs and mailboxes: verify status, name next owner/action, keep data private and escalate blockers."
 ---
 
 # Agent handoff

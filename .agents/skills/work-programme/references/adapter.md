@@ -267,3 +267,108 @@ the F# schemas and packet/delta/reuse semantics unchanged. Use it for parent evi
 FSI qualification is held; it does not stand in for delta evaluation, semantic acceptance or native admission.
 `programme.fsx report` remains a helper-I/O report; pair it with native context observations instead of
 interpreting its `nativeTokens:unknown`/`compactions:not-observed` fields as a census of the host.
+
+## Additive routine decisions
+
+`routine-decisions INPUT PRIVATE_ROOT` extends the existing helper with a pure advisory
+current-view reducer. The legacy commands and `/1` schemas retain their behavior. It reads
+no native state, starts no worker/watch/workload, performs no effect and mints no authority.
+The [routine-decisions skill](../../routine-decisions/SKILL.md) owns its operational guidance.
+
+Input schema is `fsgg.programme.routine-decisions-input/1`. Required fields are `delta`
+(the complete existing `DeltaInput`), `resources`, `events`, `previous`,
+`previousPolicyIdentity`, `previousEvaluatorIdentity`, `previousUserScopeRevision`.
+Use empty previous arrays/identity strings on first evaluation; missing delta base requires
+resynchronization. Evaluation time is exclusively `delta.evaluationTime`.
+
+`resources` has `known`, original `observedAt`, nonnegative `cpu`, `memoryMiB`,
+`occupiedCpu`, `occupiedMemoryMiB`, `evidence`, `agentMode`, `cpuMemoryMode`.
+Modes are `soft`, `enforced`, `unknown`; caller observations do not prove enforcement.
+Available CPU/memory is distinct from agent slots. A same-owner continuation takes no new
+slot. Unknown/stale native resource availability fences new ordinary execution. Soft
+allocation overrun is a distinct reason; enforced limits and observed occupancy constrain it.
+
+Each event is one original operation observation with these required fields:
+
+- Identity: `lane`, `operation`, `originalAttempt`, `attempt`, `owner`, `candidate`.
+  Operation may be an exact original artifact reference (at most1024 characters); owner
+  may be the authentic runtime path (at most128 characters). Lane/attempt identifiers
+  use existing opaque identifier syntax. Owner/attempt/candidate join the snapshot.
+- Revision: positive `revision`, nonnegative `supersedes`, original `observedAt`.
+  Revisions order only this operation stream. Preserve native joins; local recorded-case
+  projection revisions must be explicitly labeled and never replace provider revisions.
+- Event: `failed`, `cleanup-observed`, `current-observation`, `unknown-effect`,
+  `admission-required`, `effect-reconciled`, `scope-changed`.
+- Class: `ordinary`, `observation`, `integration`, `protected`, `unknown`.
+- State: `running`, `repair-needed`, `cleanup-unconfirmed`, `cleanup-observed`,
+  `unknown-effect`, `protected-admission`, `waiting`, `accepted`.
+- Cleanup: `observed` or `unconfirmed`. Exit, cancellation and deadline expiry do not
+  establish cleanup. Failure/repair requires positive cleanup before a repair route.
+- Original bounds: `executionDeadline`, `executionMode`, `observationDeadline`,
+  requested `cpu`, `memoryMiB`, `allocationCpu`, `allocationMemoryMiB`, `allocationMode`.
+  Unknown execution time uses `0001-01-01T00:00:00+00:00` with `executionMode:unknown`;
+  unknown observation deadline uses that same explicit missing-value sentinel. These
+  missing values never renew a window or admit execution. A read-only observation
+  has its separately supplied original deadline. No event extends original bounds.
+- Evidence: nonempty `evidence`, SHA256 `sha256`, external original `history` pointer.
+  History retains original failures/superseded facts outside the current projection.
+  Evidence references are at most1024 characters; equality does not authenticate them.
+
+At most64 snapshot lanes,128 events and128 retained current operation streams are admitted.
+The joined current view also admits at most128 original operation streams; adding a new stream
+beyond this bound refuses without dropping held originals. Lane evidence admits128 references
+and current evidence admits256 references, each at most1024 characters. Routine lane owners
+are at most128 characters and candidates at most256. Input/result JSON is at most256KiB,
+with strict duplicate-key/unknown-field refusal. Before success, the helper checks the exact
+canonical next input with `events=[]`, `previous=current`, the same delta/resources and matching
+previous identity pins against that same byte bound. Repeating events or adding observations
+is a separately bounded input; overflow requires a narrower observation window, never silently
+discarded holds. A previous
+current view carries each lane's owner/candidate/attempt, state/action, reasons/evidence,
+operations and unresolved obligations. Unresolved conflict/scope/unknown effects survive
+new summaries. Dropping a previous lane from the complete snapshot refuses. Unknown/unclean
+original operations retain reservations even when a caller clears `inFlight`; overlap consumes
+that retained inventory. Missing or stale owners cannot release it.
+
+Original operation effect class and execution/observation/allocation bounds are immutable
+across observations. A changed invariant fences the stream; protected history retains its
+admission. Equal-revision disagreement and original-lineage conflicts cannot be overwritten
+by a newer row. Complete revision chains are deterministic under permutations and duplicates;
+gaps, missing bases and stale/future facts require refresh. Gap/base obligations remain
+in the current view and its holds; a latest row cannot become its own accepted base.
+A recorded gap clears only after explicit complete same-stream chain evidence; a missing
+delta base requires a compatible supplied base with no resynchronization notice. Scope-change and admission-required obligations persist across current-view cycles.
+The same validated stream join supplies both retained holds and routing; stale/conflicting
+cleanup or missing revisions cannot release them. A single repair predicate governs
+cleanup, deadline and terminal-display checks, including contradictory accepted/failed labels.
+Fresh explicit original-identity `effect-reconciled` evidence can clear an unknown effect;
+cleanup or an ordinary success alone cannot. Protected operation admission stays external.
+A terminal display never authorizes a retry after the execution deadline.
+
+The full `fsgg.programme.routine-decisions/1` artifact contains one `current` view per lane,
+semantic `changed` decisions, complete retained `activeReservations`, identities, evaluation
+time, resynchronization and explicit authority/coverage limits. Compare semantic decisions,
+excluding incidental observation timestamps. Feed `current` back as `previous`; keep the
+artifact/history external, without a new state store or append-only event ledger.
+
+Stdout is `fsgg.programme.routine-decisions-summary/1` with changed lane/owner/candidate/attempt,
+state/action/reasons/evidence, complete artifact path and SHA256. Its entire UTF-8 encoding,
+including newline, is at most2048 bytes. Overflow emits `overflow-retrieve-artifact`, count
+and pinned artifact reference; no decision or evidence is sliced. Even an oversized artifact
+reference or refusal produces a fixed bounded refusal (exit3). The full retained artifact
+and existing measurement remain available; successful pointer emission does not prove review.
+Legacy stdout limits remain unchanged. Read missing obligations through the bounded context
+view instead of printing the entire artifact.
+
+`tests/work-programme/routine-decisions.fsx` exercises the actual reducer and CLI. Recorded
+private replay is a separate observation-only population: retain original identities, times,
+first failures, native evidence pins and explicit gaps; never dispatch historical work or
+infer acceptance, family usage or savings. First adoption requires these controls, selected
+recorded replay and normal source delivery; later ordinary routing uses fresh native facts
+within existing authority. Active protected operation pins and holds remain unchanged.
+
+For native worker continuation, use `followup_task` for a completed/idle owner;
+`send_message` delivers a message but does not start its next turn. This distinction
+changes no owner/attempt/effect identity. A continuation never replays an unknown native
+operation. Record prospective telemetry when available; a missing follow-up join is an
+attributed gap, and does not block an otherwise authorized ordinary review.

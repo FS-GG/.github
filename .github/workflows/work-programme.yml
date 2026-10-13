@@ -4,6 +4,8 @@ on:
     paths:
       - '.agents/skills/work-programme/**'
       - '.claude/skills/work-programme/**'
+      - '.agents/skills/routine-decisions/**'
+      - '.claude/skills/routine-decisions/**'
       - 'tests/work-programme/**'
       - '.github/workflows/work-programme.yml'
   push:
@@ -11,6 +13,8 @@ on:
     paths:
       - '.agents/skills/work-programme/**'
       - '.claude/skills/work-programme/**'
+      - '.agents/skills/routine-decisions/**'
+      - '.claude/skills/routine-decisions/**'
       - 'tests/work-programme/**'
       - '.github/workflows/work-programme.yml'
 permissions:

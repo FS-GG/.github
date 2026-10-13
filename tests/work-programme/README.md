@@ -1,6 +1,6 @@
 # Work-programme acceptance entry
 
-Run `bash tests/work-programme/run.sh`. The existing three FSI suites, Python
+Run `bash tests/work-programme/run.sh`. The four FSI suites, Python
 collector tests, context controls, owner-restart structural controls, synthetic
 watcher regressions and runner controls execute serially. `unittest` still collects
 independent test failures and owns its per-test cleanup.
@@ -42,3 +42,8 @@ still pass for the exact candidate under its admitted local or hosted resources.
 Fault injection stays in temporary fixtures; production inputs have no injection
 switches. No new model is needed for this fixed serial entry: executable dependency,
 input-drift and process-settlement controls cover its small interaction surface.
+
+The additive `routine-decisions` suite exercises the real pure reducer and CLI, including
+original-effect retention, same-owner repair, typed limits, revision conflict and the
+2048-byte UTF-8 stdout bound. Recorded private replay remains observation-only and separate
+from these synthetic controls; neither supplies execution or publication authority.

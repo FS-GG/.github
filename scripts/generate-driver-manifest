@@ -276,6 +276,7 @@ REPO_NATIVE_EXEMPTIONS = {
     "technical-writer": "repo-native technical-writing and lightweight prose landing route; it has no producer manifest",
     "spectre-console": "repo-native co-tenant; it has no producer manifest",
     "work-programme": "temporary FS-GG Unified Roadmap coordinator; repo-native, not a shared driver package",
+    "routine-decisions": "repo-native advisory routine routing for the temporary programme; no producer package or execution authority",
     "continue-from-handoff": "repo-native entry point resuming the Unified Roadmap from its latest saved handoff; not packaged",
     "stop-with-handoff": "repo-native session shutdown and timestamped Unified Roadmap handoff; not packaged",
 }

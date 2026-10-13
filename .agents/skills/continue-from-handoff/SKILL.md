@@ -1,6 +1,6 @@
 ---
 name: continue-from-handoff
-description: "Resume FS-GG work from the newest timestamped docs/handoffs report, reconcile live state, and finish the Unified Roadmap v3 autonomously through work-programme when continuation is requested."
+description: "Resume FS-GG work from the newest saved handoff, reconcile live state and finish Unified Roadmap through work-programme."
 ---
 
 # Continue From Handoff

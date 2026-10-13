@@ -96,6 +96,7 @@ bounded action. Prefer the runtime's same-owner fresh-context mechanism. Never i
 transfer ownership implicitly. If the mechanism is unavailable, retain the owner and report the capability
 gap; a packet does not erase inherited history. No rotation renews an execution window or changes an attempt.
 
+Use [routine-decisions](../../routine-decisions/SKILL.md) for the sole current lane view and its bounded changed-decision projection.
 Keep the dispatch index focused on current navigation; replace superseded entries and link detailed history.
 A delegated recovery owner reads the full handoff once. Parent recovery consumes its compact decision view,
 complete reservations and unresolved decisions. With delegation prohibited/unavailable, the parent performs
