@@ -1202,7 +1202,7 @@ class InstallationApi(MODULE.GhApi):
         self.required = [dict(name="test", bucket="pass", state="SUCCESS",
                               completedAt="2026-10-13T00:00:00Z",event="pull_request",workflow="CI",
                               startedAt="2026-10-13T00:00:00Z",
-                              link="https://github.com/FS-GG/Receiver/actions/runs/7/job/8")]
+                              link="https://github.com/FS-GG/Coordination/actions/runs/7/job/8")]
         self.runs = [dict(id=7, head_sha=fixture["head"], status="completed", conclusion="success",
                           updated_at="2026-10-13T00:00:00Z", run_attempt=1)]
 
@@ -1219,7 +1219,7 @@ class InstallationApi(MODULE.GhApi):
     def _run(self, args, **kwargs):
         # Exercise the maintained native merge adapter's exact request serialization.
         self.attempts += 1
-        assert args[:3] == ["--method", "PUT", "repos/FS-GG/Receiver/pulls/1/merge"]
+        assert args[:3] == ["--method", "PUT", "repos/FS-GG/Coordination/pulls/1/merge"]
         assert json.loads(kwargs["input_text"]) == {"sha": self.fixture["head"], "merge_method": "squash"}
         value = next(self.writes)
         if isinstance(value, Exception): raise value
@@ -1250,11 +1250,18 @@ class ProducerInstallationTests(unittest.TestCase):
         policy.write_bytes(original); (cls.owner / "README.md").write_text("unrelated owner change")
         owner_head = commit(cls.owner)
         (cls.receiver / "README.md").write_text("base")
+        registration=cls.receiver/MODULE.PRODUCER_REGISTRATION
+        registration.parent.mkdir(parents=True,exist_ok=True)
+        cls.registration_base=b'{"schema":"fsgg.coordination.execution-pins-extension/1","complete":true,"documents":[{"kind":"workflow","path":".github/workflows/old.yml","sha256":"'+b'0'*64+b'","externalReferences":[],"localReferences":[]}]}'
+        registration.write_bytes(cls.registration_base)
         base = commit(cls.receiver)
         for path in MODULE.PRODUCER_PATHS:
             target = cls.receiver / path; target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes((cls.owner / path).read_bytes()); target.chmod((cls.owner / path).stat().st_mode & 0o777)
         head = commit(cls.receiver)
+        registration.write_bytes(MODULE.installation_registration(cls.registration_base,(cls.owner/MODULE.PRODUCER_PATHS[1]).read_bytes()))
+        cls.registered_head=commit(cls.receiver)
+        registration.write_bytes(cls.registration_base)
         (cls.receiver / "README.md").write_text("ordinary routine change")
         cls.successor = commit(cls.receiver)
         responses = {}
@@ -1273,22 +1280,25 @@ class ProducerInstallationTests(unittest.TestCase):
             return rows, tree_sha
         objects("FS-GG/.github", cls.owner, source); objects("FS-GG/.github", cls.owner, obsolete)
         objects("FS-GG/.github", cls.owner, owner_head)
-        objects("FS-GG/Receiver", cls.receiver, base); rows, tree = objects("FS-GG/Receiver", cls.receiver, head)
-        responses["repos/FS-GG/Receiver"] = dict(id=42, full_name="FS-GG/Receiver", default_branch="main")
+        objects("FS-GG/Coordination", cls.receiver, base); rows, tree = objects("FS-GG/Coordination", cls.receiver, head)
+        cls.registered_rows,cls.registered_tree=objects("FS-GG/Coordination",cls.receiver,cls.registered_head)
+        objects("FS-GG/Coordination",cls.receiver,cls.successor)
+        responses["repos/FS-GG/Coordination"] = dict(id=1346720714, full_name="FS-GG/Coordination", default_branch="main")
         responses["repos/FS-GG/.github"] = dict(id=1269292704, full_name="FS-GG/.github", default_branch="main")
         for revision in (source, obsolete):
-            responses[f"repos/FS-GG/.github/compare/{revision}...main"] = dict(status="ahead", merge_base_commit={"sha": revision}, head_commit={"sha": owner_head})
-        responses["repos/FS-GG/Receiver/git/ref/heads/main"] = {"object": {"sha": base}}
-        responses["repos/FS-GG/Receiver/pulls/1/files?per_page=100"] = [dict(filename=row["path"], status="added", sha=row["sha"]) for row in rows if row["path"] in MODULE.PRODUCER_PATHS]
-        responses["repos/FS-GG/Receiver/actions/workflows?per_page=100"] = dict(total_count=0, workflows=[])
-        responses[f"repos/FS-GG/Receiver/commits/{head}/check-runs?per_page=100"] = dict(total_count=1, check_runs=[dict(id=8,name="test",head_sha=head,app={"id":15368},check_suite={"id":9},status="completed",conclusion="success",details_url="https://github.com/FS-GG/Receiver/actions/runs/7/job/8")])
-        responses["repos/FS-GG/Receiver/actions/runs/7"] = dict(id=7, head_sha=head, repository={"full_name": "FS-GG/Receiver"}, status="completed", conclusion="success", run_attempt=1,check_suite_id=9)
-        responses["repos/FS-GG/Receiver/actions/jobs/8"] = dict(id=8, run_id=7, head_sha=head, name="test", status="completed", conclusion="success", run_attempt=1,check_run_url="https://api.github.com/repos/FS-GG/Receiver/check-runs/8")
-        responses[f"repos/FS-GG/Receiver/compare/{head}...{head}"] = dict(status="identical", merge_base_commit={"sha": head})
-        cls.fixture = dict(source=source, obsolete=obsolete, head=head, base=base, tree=tree, responses=responses)
+            responses[f"repos/FS-GG/.github/compare/{revision}...{owner_head}"] = dict(status="ahead", base_commit={"sha":revision}, merge_base_commit={"sha": revision})
+        responses["repos/FS-GG/.github/git/ref/heads/main"] = dict(ref="refs/heads/main",object=dict(type="commit",sha=owner_head))
+        responses["repos/FS-GG/Coordination/git/ref/heads/main"] = {"object": {"sha": base}}
+        responses["repos/FS-GG/Coordination/pulls/1/files?per_page=100"] = [dict(filename=row["path"], status="added", sha=row["sha"]) for row in rows if row["path"] in MODULE.PRODUCER_PATHS]
+        responses["repos/FS-GG/Coordination/actions/workflows?per_page=100"] = dict(total_count=0, workflows=[])
+        responses[f"repos/FS-GG/Coordination/commits/{head}/check-runs?per_page=100"] = dict(total_count=1, check_runs=[dict(id=8,name="test",head_sha=head,app={"id":15368},check_suite={"id":9},status="completed",conclusion="success",details_url="https://github.com/FS-GG/Coordination/actions/runs/7/job/8")])
+        responses["repos/FS-GG/Coordination/actions/runs/7"] = dict(id=7, head_sha=head, repository={"full_name": "FS-GG/Coordination"}, status="completed", conclusion="success", run_attempt=1,check_suite_id=9)
+        responses["repos/FS-GG/Coordination/actions/jobs/8"] = dict(id=8, run_id=7, head_sha=head, name="test", status="completed", conclusion="success", run_attempt=1,check_run_url="https://api.github.com/repos/FS-GG/Coordination/check-runs/8")
+        responses[f"repos/FS-GG/Coordination/compare/{head}...{head}"] = dict(status="identical", merge_base_commit={"sha": head})
+        cls.fixture = dict(owner_head=owner_head, source=source, obsolete=obsolete, head=head, base=base, tree=tree, responses=responses)
         cls.pr = opened(head); cls.pr.update(number=1, changed_files=5)
-        cls.pr["base"].update(sha=base, repo=dict(id=42, full_name="FS-GG/Receiver"))
-        cls.pr["head"].update(ref="routine/install-producer", repo=dict(id=42, full_name="FS-GG/Receiver"))
+        cls.pr["base"].update(sha=base, repo=dict(id=1346720714, full_name="FS-GG/Coordination"))
+        cls.pr["head"].update(ref="routine/install-producer", repo=dict(id=1346720714, full_name="FS-GG/Coordination"))
         cls.pr["body"] = f"<!-- fsgg:routine-development/v1 head={head} operation=source-change -->"
         cls.after = copy.deepcopy(cls.pr); cls.after.update(state="closed", merged=True, merged_at="2026-10-13T00:00:00Z", merge_commit_sha=head)
 
@@ -1302,7 +1312,7 @@ class ProducerInstallationTests(unittest.TestCase):
 
     def invoke(self, api, apply=False, source=None, prior=None):
         with mock.patch.object(MODULE.WatchGhApi, "_watch_read", side_effect=lambda command, accepted: (0, api.required)):
-            return MODULE.summarize(api, repo="FS-GG/Receiver", pr_number=1,
+            return MODULE.summarize(api, repo="FS-GG/Coordination", pr_number=1,
                 expected_head=self.fixture["head"], merge_method="squash", publication_required=False,
                 apply=apply, coherent_workflow="CI.yml", producer_source=source or self.fixture["source"], installation_prior=prior)
 
@@ -1315,7 +1325,7 @@ class ProducerInstallationTests(unittest.TestCase):
         api = self.api([self.pr, self.pr, self.after], [{"merged": True, "sha": self.fixture["head"]}])
         original = api.installation_contract
         def transition(*args, **kwargs):
-            if kwargs.get("delivered"): api.overrides["repos/FS-GG/Receiver/git/ref/heads/main"] = {"object": {"sha": self.fixture["head"]}}
+            if kwargs.get("delivered"): api.overrides["repos/FS-GG/Coordination/git/ref/heads/main"] = {"object": {"sha": self.fixture["head"]}}
             return original(*args, **kwargs)
         with mock.patch.object(api, "installation_contract", side_effect=transition): code, result = self.invoke(api, True)
         self.assertEqual((code, api.attempts, result.producerInstallation, result.routineEligibility), (0, 1, "delivered-activation-pending", "unavailable-first-install"))
@@ -1324,25 +1334,138 @@ class ProducerInstallationTests(unittest.TestCase):
         self.assertEqual(self.invoke(self.api(), source=self.fixture["obsolete"])[0], 2)
         self.assertEqual(self.invoke(self.api(), source=self.fixture["source"])[0], 0)
 
+    def registration_api(self):
+        pr=copy.deepcopy(self.pr);pr['head']['sha']=self.registered_head;pr['changed_files']=6
+        pr['body']=pr['body'].replace(self.fixture['head'],self.registered_head)
+        api=self.api([pr]);files=[dict(filename=r['path'],status='modified' if r['path']==MODULE.PRODUCER_REGISTRATION else 'added',sha=r['sha'])
+            for r in self.registered_rows if r['path'] in (*MODULE.PRODUCER_PATHS,MODULE.PRODUCER_REGISTRATION)]
+        api.overrides['repos/FS-GG/Coordination/pulls/1/files?per_page=100']=files
+        roster=copy.deepcopy(self.fixture['responses'][f"repos/FS-GG/Coordination/commits/{self.fixture['head']}/check-runs?per_page=100"])
+        roster['check_runs'][0]['head_sha']=self.registered_head
+        api.overrides[f"repos/FS-GG/Coordination/commits/{self.registered_head}/check-runs?per_page=100"]=roster
+        for endpoint in ('repos/FS-GG/Coordination/actions/runs/7','repos/FS-GG/Coordination/actions/jobs/8'):
+            value=copy.deepcopy(self.fixture['responses'][endpoint]);value['head_sha']=self.registered_head;api.overrides[endpoint]=value
+        api.fixture=dict(self.fixture,head=self.registered_head)
+        api.runs[0]['head_sha']=self.registered_head
+        return api,pr
+
+    def registration_contract(self,api,pr,delivered=False):
+        with mock.patch.object(MODULE.WatchGhApi,'_watch_read',side_effect=lambda command,accepted:(0,api.required)):
+            return api.installation_contract('FS-GG/Coordination',1,pr,self.registered_head,self.fixture['source'],delivered=delivered)
+
+    def test_derived_registration_preserves_original_bytes_and_native_file_boundary(self):
+        api,pr=self.registration_api();self.registration_contract(api,pr);self.assertEqual(api.attempts,0)
+        baseline=self.registration_base
+        derived=MODULE.installation_registration(baseline,(self.owner/MODULE.PRODUCER_PATHS[1]).read_bytes())
+        record=dict(kind='workflow',path=MODULE.PRODUCER_PATHS[1],sha256=MODULE.hashlib.sha256((self.owner/MODULE.PRODUCER_PATHS[1]).read_bytes()).hexdigest(),externalReferences=[],localReferences=[])
+        self.assertEqual(derived,baseline[:-2]+b',\n'+json.dumps(record,indent=2).encode()+b'\n'+baseline[-2:])
+        for field,value in (('changed_files',5),('changed_files',7)):
+            bad=copy.deepcopy(pr);bad[field]=value
+            with self.assertRaises(RuntimeError):self.registration_contract(self.registration_api()[0],bad)
+        endpoint='repos/FS-GG/Coordination/pulls/1/files?per_page=100'
+        for status in ('added','removed','renamed'):
+            api,pr=self.registration_api();rows=copy.deepcopy(api.overrides[endpoint]);next(r for r in rows if r['filename']==MODULE.PRODUCER_REGISTRATION)['status']=status;api.overrides[endpoint]=rows
+            with self.assertRaises(RuntimeError):self.registration_contract(api,pr)
+        for kind,mode in (('blob','100755'),('blob','120000'),('commit','160000')):
+            api,pr=self.registration_api();endpoint=f"repos/FS-GG/Coordination/git/trees/{self.registered_tree}?recursive=1";tree=copy.deepcopy(self.fixture['responses'][endpoint]);row=next(r for r in tree['tree'] if r['path']==MODULE.PRODUCER_REGISTRATION);row.update(type=kind,mode=mode);api.overrides[endpoint]=tree
+            with self.assertRaises(RuntimeError):self.registration_contract(api,pr)
+
+    def test_six_file_merge_and_protected_registration_readback_remain_guarded(self):
+        for corrupt in (False,True):
+            api,pr=self.registration_api();after=copy.deepcopy(pr);after.update(state='closed',merged=True,merged_at='2026-10-13T00:00:00Z',merge_commit_sha=self.registered_head)
+            api.reads=iter([pr,pr,after]);api.writes=iter([dict(merged=True,sha=self.registered_head)])
+            original=api.installation_contract
+            def transition(*args,**kwargs):
+                if kwargs.get('delivered'):
+                    api.overrides['repos/FS-GG/Coordination/git/ref/heads/main']={'object':{'sha':self.registered_head}}
+                    api.overrides[f'repos/FS-GG/Coordination/compare/{self.registered_head}...{self.registered_head}']=dict(status='identical',merge_base_commit={'sha':self.registered_head})
+                    if corrupt:
+                        # Actual successor retains all core5 bytes but restores the old registration.
+                        api.overrides['repos/FS-GG/Coordination/git/ref/heads/main']={'object':{'sha':self.successor}}
+                return original(*args,**kwargs)
+            with mock.patch.object(api,'installation_contract',side_effect=transition),mock.patch.object(MODULE.WatchGhApi,'_watch_read',side_effect=lambda command,accepted:(0,api.required)):
+                code,result=MODULE.summarize(api,repo='FS-GG/Coordination',pr_number=1,expected_head=self.registered_head,merge_method='squash',publication_required=False,apply=True,coherent_workflow='CI.yml',producer_source=self.fixture['source'])
+            self.assertEqual((code,api.attempts,result.producerInstallation,result.codeDelivery),(4 if corrupt else 0,1,'disputed' if corrupt else 'delivered-activation-pending','delivered'))
+
+    def test_registration_base_creation_deletion_and_wrong_native_receiver_refuse(self):
+        base_tree=self.fixture['responses'][f"repos/FS-GG/Coordination/git/commits/{self.fixture['base']}"]['tree']['sha']
+        for area,mode in (('base','absent'),('base','100755'),('candidate','absent')):
+            api,pr=self.registration_api();treeid=base_tree if area=='base' else self.registered_tree;endpoint=f'repos/FS-GG/Coordination/git/trees/{treeid}?recursive=1';tree=copy.deepcopy(self.fixture['responses'][endpoint])
+            if mode=='absent':tree['tree']=[r for r in tree['tree'] if r['path']!=MODULE.PRODUCER_REGISTRATION]
+            else:next(r for r in tree['tree'] if r['path']==MODULE.PRODUCER_REGISTRATION)['mode']=mode
+            api.overrides[endpoint]=tree
+            with self.assertRaises(RuntimeError):self.registration_contract(api,pr)
+            self.assertEqual(api.attempts,0)
+        api,pr=self.registration_api();api.overrides['repos/FS-GG/Coordination']=dict(id=42,full_name='FS-GG/Coordination',default_branch='main')
+        pr['base']['repo']['id']=pr['head']['repo']['id']=42
+        with self.assertRaises(RuntimeError):self.registration_contract(api,pr)
+        self.assertEqual(api.attempts,0)
+
+    def test_registration_schema_duplicate_existing_reference_and_content_controls(self):
+        workflow=(self.owner/MODULE.PRODUCER_PATHS[1]).read_bytes();baseline=json.loads(self.registration_base)
+        cases=[b'{',self.registration_base.replace(b'"complete":true',b'"complete":true,"complete":true')]
+        for edit in (lambda x:x.update(complete=False),lambda x:x.update(extra=1),lambda x:x['documents'].append(copy.deepcopy(x['documents'][0])),
+                     lambda x:x['documents'][0].update(path=MODULE.PRODUCER_PATHS[1]),lambda x:x['documents'][0].update(sha256='wrong'),
+                     lambda x:x['documents'][0].update(extra=True)):
+            v=copy.deepcopy(baseline);edit(v);cases.append(json.dumps(v).encode())
+        for raw in cases:
+            with self.subTest(raw=raw[:50]),self.assertRaises(RuntimeError):MODULE.installation_registration(raw,workflow)
+        with self.assertRaises(RuntimeError):MODULE.installation_registration(self.registration_base,workflow+b'\n - uses: other/action@main\n')
+        api,pr=self.registration_api();endpoint=f"repos/FS-GG/Coordination/git/trees/{self.registered_tree}?recursive=1";tree=copy.deepcopy(self.fixture['responses'][endpoint]);row=next(r for r in tree['tree'] if r['path']==MODULE.PRODUCER_REGISTRATION)
+        original=MODULE.installation_registration(self.registration_base,workflow)
+        mutations=[]
+        document=json.loads(original)
+        for edit in (lambda x:x['documents'][-1].update(sha256='f'*64),lambda x:x['documents'][-1].update(externalReferences=['other/action@main']),
+                     lambda x:x['documents'][-1].update(localReferences=['./local']),lambda x:x['documents'].reverse(),lambda x:x['documents'].pop(0)):
+            v=copy.deepcopy(document);edit(v);mutations.append(json.dumps(v).encode())
+        mutations.append(original.replace(b'"complete":true',b'"complete":true,"complete":true'))
+        for body in mutations:
+            api,pr=self.registration_api();tree=copy.deepcopy(self.fixture['responses'][endpoint]);row=next(r for r in tree['tree'] if r['path']==MODULE.PRODUCER_REGISTRATION);sha=MODULE.hashlib.sha1(b'blob '+str(len(body)).encode()+b'\0'+body).hexdigest();row['sha']=sha
+            api.overrides[endpoint]=tree;api.overrides[f'repos/FS-GG/Coordination/git/blobs/{sha}']=dict(sha=sha,encoding='base64',size=len(body),content=MODULE.base64.b64encode(body).decode())
+            with self.assertRaises(RuntimeError):self.registration_contract(api,pr)
+
+    def test_explicit_protected_ref_and_real_compare_schema_fail_closed(self):
+        self.assertEqual(self.invoke(self.api())[0],0) # Authentic compare shape has no head_commit.
+        endpoint='repos/FS-GG/.github/git/ref/heads/main'
+        for value in ({},dict(ref='refs/heads/other',object=dict(type='commit',sha=self.fixture['owner_head'])),
+                      dict(ref='refs/heads/main',object=dict(type='tag',sha=self.fixture['owner_head'])),
+                      dict(ref='refs/heads/main',object=dict(type='commit',sha='wrong'))):
+            api=self.api();api.overrides[endpoint]=value;self.assertEqual((self.invoke(api,True)[0],api.attempts),(2,0))
+        endpoint=f"repos/FS-GG/.github/compare/{self.fixture['source']}...{self.fixture['owner_head']}"
+        for field in ('base_commit','merge_base_commit'):
+            api=self.api();v=copy.deepcopy(self.fixture['responses'][endpoint]);v[field]={'sha':'f'*40};api.overrides[endpoint]=v
+            self.assertEqual((self.invoke(api,True)[0],api.attempts),(2,0))
+
+    def test_protected_owner_ref_movement_during_contract_never_writes(self):
+        api=self.api();original=api.installation_read;reads=0
+        def moved(endpoint):
+            nonlocal reads
+            if endpoint=='repos/FS-GG/.github/git/ref/heads/main':
+                reads+=1
+                if reads>1:return dict(ref='refs/heads/main',object=dict(type='commit',sha='f'*40))
+            return original(endpoint)
+        with mock.patch.object(api,'installation_read',side_effect=moved):code,result=self.invoke(api,True)
+        self.assertEqual((code,api.attempts),(2,0))
+
     def test_native_absence_incomplete_denied_disabled_and_existing_check_refuse(self):
         cases = [
-            ("repos/FS-GG/Receiver/actions/workflows?per_page=100", RuntimeError("denied")),
-            ("repos/FS-GG/Receiver/actions/workflows?per_page=100", dict(total_count=1, workflows=[])),
-            ("repos/FS-GG/Receiver/actions/workflows?per_page=100", dict(total_count=1, workflows=[dict(path=MODULE.PRODUCER_PATHS[1], state="disabled_manually")])),
-            (f"repos/FS-GG/Receiver/commits/{self.fixture['head']}/check-runs?per_page=100", dict(total_count=1, check_runs=[dict(name="routine-eligibility", conclusion="failure")]))]
+            ("repos/FS-GG/Coordination/actions/workflows?per_page=100", RuntimeError("denied")),
+            ("repos/FS-GG/Coordination/actions/workflows?per_page=100", dict(total_count=1, workflows=[])),
+            ("repos/FS-GG/Coordination/actions/workflows?per_page=100", dict(total_count=1, workflows=[dict(path=MODULE.PRODUCER_PATHS[1], state="disabled_manually")])),
+            (f"repos/FS-GG/Coordination/commits/{self.fixture['head']}/check-runs?per_page=100", dict(total_count=1, check_runs=[dict(name="routine-eligibility", conclusion="failure")]))]
         for endpoint, value in cases:
             with self.subTest(endpoint=endpoint, value=value):
                 api=self.api(); api.overrides[endpoint]=value
                 self.assertEqual((self.invoke(api)[0], api.attempts), (2, 0))
 
     def test_incomplete_file_list_status_and_payload_mutations_refuse(self):
-        endpoint="repos/FS-GG/Receiver/pulls/1/files?per_page=100"
+        endpoint="repos/FS-GG/Coordination/pulls/1/files?per_page=100"
         for status in ("modified", "renamed", "removed"):
             api=self.api(); rows=copy.deepcopy(self.fixture["responses"][endpoint]); rows[0]["status"]=status;api.overrides[endpoint]=rows
             self.assertEqual(self.invoke(api)[0],2)
         api=self.api();api.overrides[endpoint]=self.fixture["responses"][endpoint][:-1]
         self.assertEqual(self.invoke(api)[0],2)
-        endpoint=f"repos/FS-GG/Receiver/git/trees/{self.fixture['tree']}?recursive=1"
+        endpoint=f"repos/FS-GG/Coordination/git/trees/{self.fixture['tree']}?recursive=1"
         for path in MODULE.PRODUCER_PATHS:
             for field,value in (("sha","f"*40),("mode","120000"),("mode","160000"),("mode","100755" if next(r for r in self.fixture['responses'][endpoint]['tree'] if r['path']==path)['mode']=="100644" else "100644")):
                 with self.subTest(path=path,field=field):
@@ -1359,14 +1482,14 @@ class ProducerInstallationTests(unittest.TestCase):
         pr=copy.deepcopy(self.pr);pr['head']['repo']['id']=43;variants.append(pr)
         pr=copy.deepcopy(self.pr);pr['body']=pr['body'].replace('source-change','internal-docs');variants.append(pr)
         for pr in variants:self.assertEqual(self.invoke(self.api([pr]))[0],2)
-        api=self.api();api.overrides['repos/FS-GG/Receiver']=dict(id=42,full_name='Redirect/Receiver',default_branch='main');self.assertEqual(self.invoke(api)[0],2)
-        api=self.api();api.overrides[f"repos/FS-GG/.github/compare/{self.fixture['source']}...main"]={};self.assertEqual(self.invoke(api)[0],2)
+        api=self.api();api.overrides['repos/FS-GG/Coordination']=dict(id=1346720714,full_name='Redirect/Receiver',default_branch='main');self.assertEqual(self.invoke(api)[0],2)
+        api=self.api();api.overrides[f"repos/FS-GG/.github/compare/{self.fixture['source']}...{self.fixture['owner_head']}"]={};self.assertEqual(self.invoke(api)[0],2)
 
     def test_existing_partial_installation_and_blob_corruption_refuse(self):
-        endpoint=f"repos/FS-GG/Receiver/git/commits/{self.fixture['base']}"
+        endpoint=f"repos/FS-GG/Coordination/git/commits/{self.fixture['base']}"
         api=self.api();value=copy.deepcopy(self.fixture['responses'][endpoint]);value['tree']['sha']=self.fixture['tree'];api.overrides[endpoint]=value
         self.assertEqual(self.invoke(api)[0],2)
-        row=next(r for r in self.fixture['responses'][f"repos/FS-GG/Receiver/git/trees/{self.fixture['tree']}?recursive=1"]['tree'] if r['path']==MODULE.PRODUCER_PATHS[0])
+        row=next(r for r in self.fixture['responses'][f"repos/FS-GG/Coordination/git/trees/{self.fixture['tree']}?recursive=1"]['tree'] if r['path']==MODULE.PRODUCER_PATHS[0])
         endpoint=f"repos/FS-GG/.github/git/blobs/{row['sha']}"
         api=self.api();value=copy.deepcopy(self.fixture['responses'][endpoint]);value['content']=MODULE.base64.b64encode(b'wrong').decode();api.overrides[endpoint]=value
         self.assertEqual(self.invoke(api)[0],2)
@@ -1376,13 +1499,13 @@ class ProducerInstallationTests(unittest.TestCase):
             api=self.api();api.required[0][field]=value;self.assertEqual(self.invoke(api)[0],2)
         api=self.api();api.required=[];self.assertEqual(self.invoke(api)[0],2)
         for field,value in (("head_sha","f"*40),("run_attempt",2),("conclusion","failure")):
-            api=self.api();endpoint='repos/FS-GG/Receiver/actions/jobs/8';job=copy.deepcopy(self.fixture['responses'][endpoint]);job[field]=value;api.overrides[endpoint]=job;self.assertEqual(self.invoke(api)[0],2)
+            api=self.api();endpoint='repos/FS-GG/Coordination/actions/jobs/8';job=copy.deepcopy(self.fixture['responses'][endpoint]);job[field]=value;api.overrides[endpoint]=job;self.assertEqual(self.invoke(api)[0],2)
         for status,conclusion in (("in_progress",None),("completed","failure")):
             api=self.api();api.runs[0].update(status=status,conclusion=conclusion);self.assertEqual(self.invoke(api)[0],2)
         api=self.api();api.runs[0].update(status='in_progress',conclusion=None)
         api.qualification_selection=lambda *_: selection('reused')
         self.assertEqual(self.invoke(api)[0],2)
-        endpoint=f"repos/FS-GG/Receiver/commits/{self.fixture['head']}/check-runs?per_page=100"
+        endpoint=f"repos/FS-GG/Coordination/commits/{self.fixture['head']}/check-runs?per_page=100"
         for field,value in (('head_sha','f'*40),('app',{'id':1}),('check_suite',{'id':10}),('details_url','https://evil.invalid')):
             api=self.api();roster=copy.deepcopy(self.fixture['responses'][endpoint]);roster['check_runs'][0][field]=value;api.overrides[endpoint]=roster
             self.assertEqual(self.invoke(api)[0],2)
@@ -1397,7 +1520,7 @@ class ProducerInstallationTests(unittest.TestCase):
     def test_unknown_write_observes_once_and_never_replays_within_attempt(self):
         api=self.api([self.pr,self.pr,self.pr],[MODULE.AmbiguousWrite('lost response')]);code,result=self.invoke(api,True)
         self.assertEqual((code,api.attempts,result.codeDelivery),(3,1,'unknown'))
-        api=self.api([self.after]);api.overrides['repos/FS-GG/Receiver/git/ref/heads/main']={'object':{'sha':self.fixture['head']}}
+        api=self.api([self.after]);api.overrides['repos/FS-GG/Coordination/git/ref/heads/main']={'object':{'sha':self.fixture['head']}}
         code,result=self.invoke(api,True)
         self.assertEqual((code,api.attempts,result.producerInstallation),(0,0,'delivered-activation-pending'))
 
@@ -1410,7 +1533,7 @@ class ProducerInstallationTests(unittest.TestCase):
         self.assertEqual((code,later.attempts,result.codeDelivery,result.attempts),(3,0,'unknown',1))
         second=self.api([self.pr]);code,second_result=self.invoke(second,True,prior=asdict(result))
         self.assertEqual((code,second.attempts,second_result.codeDelivery,second_result.attempts),(3,0,'unknown',1))
-        later=self.api([self.after]);later.overrides['repos/FS-GG/Receiver/git/ref/heads/main']={'object':{'sha':self.fixture['head']}}
+        later=self.api([self.after]);later.overrides['repos/FS-GG/Coordination/git/ref/heads/main']={'object':{'sha':self.fixture['head']}}
         code,result=self.invoke(later,True,prior=prior)
         self.assertEqual((code,later.attempts,result.producerInstallation),(0,0,'delivered-activation-pending'))
         self.assertEqual(result.attempts,1)
@@ -1443,7 +1566,7 @@ class ProducerInstallationTests(unittest.TestCase):
         finally:fifo.unlink()
 
     def test_cli_disputed_readbacks_exit_nonzero_and_failed_prior_retains_custody(self):
-        args=['--repo','FS-GG/Receiver','--pr','1','--head',self.fixture['head'],
+        args=['--repo','FS-GG/Coordination','--pr','1','--head',self.fixture['head'],
               '--install-routine-producer','--routine-producer-source',self.fixture['source'],
               '--coherent-workflow','CI.yml','--apply']
         for reads,writes in (([self.after],()),
@@ -1469,7 +1592,7 @@ class ProducerInstallationTests(unittest.TestCase):
 
     def test_delivered_bootstrap_does_not_unlock_ordinary_missing_eligibility(self):
         api=self.api();api.routine_eligibility=mock.Mock(side_effect=RuntimeError('missing'))
-        code,result=MODULE.summarize(api,repo='FS-GG/Receiver',pr_number=1,expected_head=self.fixture['head'],merge_method='squash',publication_required=False,apply=False)
+        code,result=MODULE.summarize(api,repo='FS-GG/Coordination',pr_number=1,expected_head=self.fixture['head'],merge_method='squash',publication_required=False,apply=False)
         self.assertEqual((code,result.routineEligibility,api.attempts),(2,'unresolved',0))
 
     def test_actual_owner_validator_security_controls_on_inert_git_repository(self):
@@ -1490,7 +1613,7 @@ class ProducerInstallationTests(unittest.TestCase):
         spec=importlib.util.spec_from_file_location('installation_trusted_envelope', self.owner / 'scripts/check-routine-eligibility-envelope.py')
         envelope=importlib.util.module_from_spec(spec);spec.loader.exec_module(envelope)
         body_path=self.directory/'body.txt';body_path.write_text(body)
-        argv=['envelope','--git-dir',str(self.receiver),'--repository','FS-GG/Receiver','--default-branch','main',
+        argv=['envelope','--git-dir',str(self.receiver),'--repository','FS-GG/Coordination','--default-branch','main',
             '--base-ref','main','--base-revision',self.fixture['head'],'--base-sha',self.fixture['head'],
             '--head-ref','routine/ordinary','--head-revision',self.successor,'--head-sha',self.successor,
             '--body',str(body_path),'--validator',str(self.owner/'scripts/check-claim-generation.py')]
@@ -1515,9 +1638,9 @@ class ProducerInstallationTests(unittest.TestCase):
                 nonlocal calls
                 calls+=1
                 if calls==2:
-                    if failure=='workflow':api.overrides['repos/FS-GG/Receiver/actions/workflows?per_page=100']=dict(total_count=1,workflows=[dict(path=MODULE.PRODUCER_PATHS[1])])
+                    if failure=='workflow':api.overrides['repos/FS-GG/Coordination/actions/workflows?per_page=100']=dict(total_count=1,workflows=[dict(path=MODULE.PRODUCER_PATHS[1])])
                     elif failure=='required':api.required[0]['bucket']='pending'
-                    else:api.overrides[f"repos/FS-GG/.github/compare/{self.fixture['source']}...main"]=dict(status='behind',merge_base_commit={'sha':self.fixture['obsolete']})
+                    else:api.overrides[f"repos/FS-GG/.github/compare/{self.fixture['source']}...{self.fixture['owner_head']}"]=dict(status='behind',merge_base_commit={'sha':self.fixture['obsolete']})
                 return original(*args,**kwargs)
             with mock.patch.object(api,'installation_contract',side_effect=changed):
                 self.assertEqual((self.invoke(api,True)[0],api.attempts),(2,0))
@@ -1525,12 +1648,12 @@ class ProducerInstallationTests(unittest.TestCase):
     def test_actual_bounded_native_transport_rejects_unknown_and_malformed_read(self):
         api=MODULE.GhApi()
         with mock.patch.object(MODULE,'bounded_watch_query',return_value=(0,b'{"id":42}')) as query:
-            self.assertEqual(api.installation_read('repos/FS-GG/Receiver'),{'id':42})
-            self.assertEqual(query.call_args.args[0],['gh','api','repos/FS-GG/Receiver'])
+            self.assertEqual(api.installation_read('repos/FS-GG/Coordination'),{'id':42})
+            self.assertEqual(query.call_args.args[0],['gh','api','repos/FS-GG/Coordination'])
             self.assertEqual(query.call_args.kwargs['max_bytes'],1048576)
         for code,body in ((1,b'{}'),(0,b'not JSON')):
             with mock.patch.object(MODULE,'bounded_watch_query',return_value=(code,body)):
-                with self.assertRaises(RuntimeError):api.installation_read('repos/FS-GG/Receiver')
+                with self.assertRaises(RuntimeError):api.installation_read('repos/FS-GG/Coordination')
 
 
 if __name__ == "__main__":

@@ -68,10 +68,15 @@ For routine delivery:
 
 A receiver with no routine producer cannot satisfy ordinary `routine-eligibility`. Use the existing
 `tools/routine-delivery.py --install-routine-producer --routine-producer-source <protected-owner-sha>`
-inspect/apply route only for an independently reviewed installation PR containing exactly the five
+inspect/apply route only for an independently reviewed installation PR adding the five
 canonical files from protected `FS-GG/.github`: `.fsgg/routine-development.json`,
 `.github/workflows/routine-eligibility.yml`, `scripts/check-claim-generation.py`,
 `scripts/check-routine-eligibility-envelope.py`, and `scripts/lib/gate.py`.
+Only native `FS-GG/Coordination` (repository ID `1346720714`) may additionally modify its existing regular
+`evidence/github-substrate-v2/gs2-06-7/execution-pins-extension.json` by appending the single derived
+workflow record. The helper preserves every original byte and record order, derives the SHA-256 from the
+protected canonical routine workflow, and requires empty external/local references and no `uses:` steps.
+Duplicate keys, existing registration, creation, deletion, mode changes or any other edit refuse.
 Supply the exact repository/PR/head, completed receiver coherent workflow and `--publication none`.
 The accountable owner explicitly selects this closed technical predicate under ADR-0079; it does not
 select heavyweight process or turn a missing gate into passing eligibility.
@@ -79,7 +84,8 @@ select heavyweight process or turn a missing gate into passing eligibility.
 The helper verifies native repository/default/base/head identity, the exact source-change marker,
 absence of all five files and the native producer, complete file/tree/check populations, canonical
 bytes/modes, successful receiver-required checks and completed exact-head coherent qualification.
-The selected immutable owner source must remain byte-identical to the current protected five-file
+The current owner is read from its authenticated protected commit ref and compared to the selected
+immutable source by an immutable ancestry request. The selected immutable owner source must remain byte-identical to the current protected five-file
 closure; the executing helper must match current protected owner source. Partial/existing/disabled
 installations, forks, extra edits, stale payloads, denied metadata or unknown facts refuse.
 
