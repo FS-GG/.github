@@ -270,6 +270,7 @@ ROUTED_VARIANTS = {
 # Absence is a reviewed decision, not an indistinguishable omission. Every other skill directory must
 # appear in DRIVERS or in the coordination-kit manifest.
 REPO_NATIVE_EXEMPTIONS = {
+    "show-progress": "repo-native Unified Roadmap progress, effort and completion forecasting with timestamped reports; not packaged",
     "agent-handoff": "repo-native coordination pilot; kit distribution follows a qualified release",
     "pipeline-preflight": "initial pipeline-preflight standard and helpers; staged kit distribution follows measured pilot adoption",
     "technical-writer": "repo-native technical-writing and lightweight prose landing route; it has no producer manifest",
