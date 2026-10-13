@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import math
 import hashlib
 import importlib.util
@@ -12,13 +13,14 @@ import json
 import pathlib
 import os
 import selectors
+import stat
 import time
 import re
 import subprocess
 import sys
 import tempfile
 import zipfile
-from dataclasses import asdict, dataclass, replace
+from dataclasses import asdict, dataclass, fields, replace
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Protocol
 
@@ -29,6 +31,12 @@ MAX_SELECTION_ARCHIVE_BYTES = 1_048_576
 MAX_SELECTION_UNCOMPRESSED_BYTES = 1_048_576
 MAX_SELECTION_ENTRIES = 128
 MAX_SELECTION_BYTES = 65_536
+PRODUCER_REPOSITORY = "FS-GG/.github"
+PRODUCER_PATHS = (
+    ".fsgg/routine-development.json", ".github/workflows/routine-eligibility.yml",
+    "scripts/check-claim-generation.py", "scripts/check-routine-eligibility-envelope.py",
+    "scripts/lib/gate.py",
+)
 
 
 class AmbiguousWrite(RuntimeError):
@@ -157,8 +165,220 @@ class NativeApi(Protocol):
 
     def routine_eligibility(self, repo: str, head: str, branch: str) -> None: ...
 
+    def installation_contract(self, repo: str, number: int, pr: dict, head: str,
+                              source: str, *, delivered: bool = False) -> None: ...
+
 
 class GhApi:
+    def installation_read(self, endpoint: str) -> Any:
+        """Bounded existing transport; permission/transport errors never mean absence."""
+        code, raw = bounded_watch_query(["gh", "api", endpoint], time.monotonic() + 31,
+                                       max_bytes=1_048_576)
+        if code != 0:
+            raise RuntimeError("routine producer native identity read failed")
+        try:
+            return json.loads(raw)
+        except (UnicodeDecodeError, ValueError) as error:
+            raise RuntimeError("routine producer native read is malformed") from error
+
+    def installation_tree(self, repo: str, commit: str) -> dict[str, dict]:
+        value = self.installation_read(f"repos/{repo}/git/commits/{commit}")
+        if not isinstance(value, dict) or value.get("sha") != commit:
+            raise RuntimeError("installation commit identity differs")
+        tree_sha = (value.get("tree") or {}).get("sha")
+        if not isinstance(tree_sha, str) or not SHA_RE.fullmatch(tree_sha):
+            raise RuntimeError("installation tree identity is missing")
+        tree = self.installation_read(f"repos/{repo}/git/trees/{tree_sha}?recursive=1")
+        if (not isinstance(tree, dict) or tree.get("sha") != tree_sha
+                or tree.get("truncated") is not False or not isinstance(tree.get("tree"), list)
+                or len(tree["tree"]) > 10000):
+            raise RuntimeError("installation tree population is incomplete")
+        entries = {}
+        for row in tree["tree"]:
+            if (not isinstance(row, dict) or not isinstance(row.get("path"), str)
+                    or row["path"] in entries or not row["path"]
+                    or any(p in ("", ".", "..") for p in row["path"].split("/"))
+                    or not isinstance(row.get("sha"), str) or not SHA_RE.fullmatch(row["sha"])
+                    or row.get("type") not in ("tree", "blob", "commit")
+                    or row.get("mode") not in {"tree": ("040000",), "blob": ("100644", "100755", "120000"), "commit": ("160000",)}[row["type"]]):
+                raise RuntimeError("installation tree entry is malformed")
+            entries[row["path"]] = row
+        return entries
+
+    def installation_blob(self, repo: str, row: dict) -> bytes:
+        if row.get("type") != "blob" or row.get("mode") not in ("100644", "100755"):
+            raise RuntimeError("installation payload is not a regular canonical file")
+        value = self.installation_read(f"repos/{repo}/git/blobs/{row['sha']}")
+        if (not isinstance(value, dict) or value.get("sha") != row["sha"]
+                or value.get("encoding") != "base64" or type(value.get("size")) is not int
+                or not 0 < value["size"] <= 131072 or not isinstance(value.get("content"), str)):
+            raise RuntimeError("installation blob identity/encoding is malformed")
+        try:
+            body = base64.b64decode(value["content"].replace("\n", ""), validate=True)
+        except ValueError as error:
+            raise RuntimeError("installation blob encoding is malformed") from error
+        if (len(body) != value["size"] or hashlib.sha1(
+                f"blob {len(body)}\0".encode() + body).hexdigest() != row["sha"]):
+            raise RuntimeError("installation blob bytes differ from Git identity")
+        return body
+
+    def installation_contract(self, repo: str, number: int, pr: dict, head: str,
+                              source: str, *, delivered: bool = False) -> None:
+        try:
+            self._installation_contract(repo, number, pr, head, source, delivered=delivered)
+        except (KeyError, TypeError, ValueError, AttributeError, IndexError) as error:
+            raise RuntimeError("installation native response shape is malformed") from error
+
+    def _installation_contract(self, repo: str, number: int, pr: dict, head: str,
+                               source: str, *, delivered: bool = False) -> None:
+        """Closed five-file predicate, independent of ordinary eligibility success."""
+        metadata = self.installation_read(f"repos/{repo}")
+        if (not isinstance(metadata, dict) or metadata.get("full_name") != repo
+                or type(metadata.get("id")) is not int or metadata["id"] < 1
+                or not isinstance(metadata.get("default_branch"), str)):
+            raise RuntimeError("installation repository identity is unestablished")
+        base_ref, base = base_of(pr)
+        if (base_ref != metadata["default_branch"] or base is None
+                or head_of(pr) != head or pr.get("changed_files") != 5
+                or pr.get("draft") is not False
+                or pr.get("number") != number or (pr.get("base") or {}).get("repo", {}).get("id") != metadata["id"]
+                or type((pr.get("base") or {}).get("repo", {}).get("id")) is not int
+                or type((pr.get("head") or {}).get("repo", {}).get("id")) is not int
+                or (pr.get("head") or {}).get("repo", {}).get("id") != metadata["id"]
+                or (pr.get("base") or {}).get("repo", {}).get("full_name") != repo
+                or (pr.get("head") or {}).get("repo", {}).get("full_name") != repo):
+            raise RuntimeError("installation PR/default/head/repository identity differs; forks refuse")
+        # Reuse the owning parser; a distinct installation route still requires source-change.
+        path = pathlib.Path(__file__).with_name("pr-lane-admission.py")
+        spec = importlib.util.spec_from_file_location("installation_lane_body", path)
+        module = importlib.util.module_from_spec(spec); assert spec and spec.loader
+        spec.loader.exec_module(module)
+        try:
+            valid = module.validate_routine_body(pr.get("body"), pr["head"]["ref"], head)
+            markers = module.routine_validator().marker_fields(module.routine_validator().ROUTINE_MARKER_RE, pr["body"])
+            if not valid or markers[0].get("operation") != "source-change":
+                raise RuntimeError("installation requires the exact source-change routine marker")
+        except (module.ToolError, ValueError, KeyError, IndexError) as error:
+            raise RuntimeError("installation routine marker is invalid") from error
+        default = self.installation_read(f"repos/{repo}/git/ref/heads/{base_ref}")
+        current = (default.get("object") or {}).get("sha") if isinstance(default, dict) else None
+        if not delivered and current != base:
+            raise RuntimeError("installation protected base moved")
+        owner = self.installation_read(f"repos/{PRODUCER_REPOSITORY}")
+        if (not isinstance(owner, dict) or owner.get("full_name") != PRODUCER_REPOSITORY
+                or owner.get("id") != 1269292704 or owner.get("default_branch") != "main"):
+            raise RuntimeError("canonical installation producer repository differs")
+        lineage = self.installation_read(f"repos/{PRODUCER_REPOSITORY}/compare/{source}...main")
+        if (not isinstance(lineage, dict) or (lineage.get("merge_base_commit") or {}).get("sha") != source
+                or lineage.get("status") not in ("identical", "ahead")):
+            raise RuntimeError("installation producer is not a protected-main ancestor")
+        canonical = self.installation_tree(PRODUCER_REPOSITORY, source)
+        owner_head = (lineage.get("head_commit") or {}).get("sha")
+        if not isinstance(owner_head, str) or not SHA_RE.fullmatch(owner_head):
+            raise RuntimeError("current protected producer identity is missing")
+        current_owner = self.installation_tree(PRODUCER_REPOSITORY, owner_head)
+        inventory_row = current_owner.get("src/FS.GG.Drivers/workspace-inventory.json")
+        if inventory_row is None:
+            raise RuntimeError("maintained driver workspace inventory is missing")
+        inventory = json.loads(self.installation_blob(PRODUCER_REPOSITORY, inventory_row))
+        if (not isinstance(inventory, dict) or inventory.get("schema") != "fsgg/driver-workspace-inventory/v1"
+                or not isinstance(inventory.get("files"), list)
+                or any(sum(isinstance(row, dict) and row.get("source") == path and row.get("path") == path
+                           for row in inventory["files"]) != 1 for path in PRODUCER_PATHS)):
+            raise RuntimeError("first-install closure differs from maintained workspace inventory")
+        for path in PRODUCER_PATHS:
+            if (path not in canonical or path not in current_owner
+                    or any(canonical[path].get(k) != current_owner[path].get(k) for k in ("sha", "mode", "type"))):
+                raise RuntimeError("selected producer payload is obsolete at protected main")
+        helper = current_owner.get("tools/routine-delivery.py")
+        if helper is None or self.installation_blob(PRODUCER_REPOSITORY, helper) != pathlib.Path(__file__).read_bytes():
+            raise RuntimeError("running installation helper differs from current protected producer")
+        old = self.installation_tree(repo, base)
+        candidate = self.installation_tree(repo, head)
+        if any(path in old for path in PRODUCER_PATHS):
+            raise RuntimeError("producer dependencies already or partially installed")
+        leaves = lambda tree: {p: (r.get("mode"), r.get("type"), r.get("sha"))
+                               for p, r in tree.items() if r.get("type") != "tree"}
+        a, b = leaves(old), leaves(candidate)
+        changed = {p for p in a.keys() | b.keys() if a.get(p) != b.get(p)}
+        if changed != set(PRODUCER_PATHS):
+            raise RuntimeError("installation must add exactly the canonical five files")
+        files = self.installation_read(f"repos/{repo}/pulls/{number}/files?per_page=100")
+        if (not isinstance(files, list) or len(files) != 5
+                or any(not isinstance(r, dict) or r.get("status") != "added"
+                       or r.get("previous_filename") is not None for r in files)
+                or {r.get("filename") for r in files} != set(PRODUCER_PATHS)
+                or any(r.get("sha") != candidate[r["filename"]]["sha"] for r in files)):
+            raise RuntimeError("installation file-list population/status/identity differs")
+        for path in PRODUCER_PATHS:
+            if path not in canonical or path not in candidate or leaves(candidate)[path] != leaves(canonical).get(path):
+                raise RuntimeError("installation payload mode/content differs from protected producer")
+            self.installation_blob(PRODUCER_REPOSITORY, canonical[path])
+            self.installation_blob(repo, candidate[path])
+        if delivered:
+            merge = merged_commit_of(pr)
+            if not merge or not isinstance(current, str) or not SHA_RE.fullmatch(current):
+                raise RuntimeError("installation protected merge identity is unknown")
+            merged_tree = leaves(self.installation_tree(repo, merge))
+            protected_tree = leaves(self.installation_tree(repo, current))
+            if any(merged_tree.get(p) != b[p] or protected_tree.get(p) != b[p] for p in PRODUCER_PATHS):
+                raise RuntimeError("installation protected payload readback differs")
+            ancestry = self.installation_read(f"repos/{repo}/compare/{merge}...{current}")
+            if ((ancestry.get("merge_base_commit") or {}).get("sha") != merge
+                    or ancestry.get("status") not in ("identical", "ahead")):
+                raise RuntimeError("installation protected payload/ancestry readback differs")
+            return
+        # Full native listings, not a workflow404 (which could hide denied metadata).
+        workflows = self.installation_read(f"repos/{repo}/actions/workflows?per_page=100")
+        checks = self.installation_read(f"repos/{repo}/commits/{head}/check-runs?per_page=100")
+        for value, key in ((workflows, "workflows"), (checks, "check_runs")):
+            if (not isinstance(value, dict) or type(value.get("total_count")) is not int
+                    or not 0 <= value["total_count"] <= 100 or not isinstance(value.get(key), list)
+                    or len(value[key]) != value["total_count"] or any(not isinstance(r, dict) for r in value[key])):
+                raise RuntimeError("installation native producer population is incomplete")
+        if (any(r.get("path") == PRODUCER_PATHS[1] or r.get("name") == "routine-eligibility" for r in workflows["workflows"])
+                or any(r.get("name") == "routine-eligibility" for r in checks["check_runs"])):
+            raise RuntimeError("native eligibility producer/check already exists")
+        self.installation_required_checks(repo, number, head, checks["check_runs"])
+
+    def installation_required_checks(self, repo: str, number: int, head: str, roster: list[dict]) -> None:
+        # The existing native checks reader remains the receiver-specific requirement authority.
+        api = WatchGhApi(time.monotonic() + 31)
+        _code, checks = api._watch_read(["gh", "pr", "checks", str(number), "--repo", repo,
+                                      "--required", "--json", WATCH_FIELDS], (0,))
+        if (not isinstance(checks, list) or not 0 < len(checks) <= WATCH_MAX_CHECKS
+                or any(not isinstance(r, dict) or set(r) != set(WATCH_FIELDS.split(",")) or r.get("bucket") != "pass"
+                       or r.get("state") != "SUCCESS" or not r.get("completedAt") for r in checks)):
+            raise RuntimeError("installation required checks are absent, pending or failed")
+        # Native links establish exact-head provenance instead of trusting a green name.
+        for row in checks:
+            match = re.fullmatch(rf"https://github\.com/{re.escape(repo)}/actions/runs/([1-9][0-9]*)/job/([1-9][0-9]*)", row.get("link", ""))
+            if not match:
+                raise RuntimeError("installation required check provenance is unestablished")
+            run_id, job_id = match.groups()
+            native = [check for check in roster if check.get("id") == int(job_id)]
+            if (len(native) != 1 or native[0].get("name") != row["name"]
+                    or native[0].get("details_url") != row["link"]
+                    or (native[0].get("app") or {}).get("id") != 15368
+                    or native[0].get("head_sha") != head or native[0].get("status") != "completed"
+                    or native[0].get("conclusion") != "success"):
+                raise RuntimeError("installation required check differs from complete native roster")
+            run = self.installation_read(f"repos/{repo}/actions/runs/{run_id}")
+            job = self.installation_read(f"repos/{repo}/actions/jobs/{job_id}")
+            if (run.get("id") != int(run_id) or run.get("head_sha") != head
+                    or (run.get("repository") or {}).get("full_name") != repo
+                    or run.get("status") != "completed" or run.get("conclusion") != "success"
+                    or job.get("id") != int(job_id) or job.get("run_id") != int(run_id)
+                    or job.get("head_sha") != head or job.get("name") != row.get("name")
+                    or job.get("status") != "completed" or job.get("conclusion") != "success"
+                    or type((native[0].get("check_suite") or {}).get("id")) is not int
+                    or (native[0].get("check_suite") or {}).get("id") != run.get("check_suite_id")
+                    or job.get("check_run_url") != f"https://api.github.com/repos/{repo}/check-runs/{job_id}"
+                    or type(run.get("run_attempt")) is not int or run["run_attempt"] < 1
+                    or type(job.get("run_attempt")) is not int
+                    or job.get("run_attempt") != run["run_attempt"]):
+                raise RuntimeError("installation required check exact-head/run/attempt differs")
+
     @staticmethod
     def _run(
         args: list[str], *, timeout: int = 30, input_text: str | None = None,
@@ -375,6 +595,39 @@ class Summary:
     observedAt: str | None = None
     telemetryHealth: str = "not-configured"
     routineEligibility: str = "not-required"
+    producerInstallation: str = "not-selected"
+    producerSource: str | None = None
+
+
+def installation_prior_result(path: str) -> dict:
+    """Existing retained Summary is a restriction, never an installation grant."""
+    target = pathlib.Path(path)
+    if not target.is_absolute() or any(p.is_symlink() for p in (target, *target.parents)):
+        raise RuntimeError("installation prior result must be a regular absolute unlinked path")
+    def unique(pairs):
+        result = {}
+        for key, value in pairs:
+            if key in result:
+                raise RuntimeError("installation prior result has duplicate fields")
+            result[key] = value
+        return result
+    try:
+        descriptor = os.open(target, os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW)
+        try:
+            if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+                raise RuntimeError("installation prior result must be a regular file")
+            with os.fdopen(descriptor, "rb", closefd=False) as stream:
+                raw = stream.read(65537)
+        finally:
+            os.close(descriptor)
+        if len(raw) > 65536:
+            raise RuntimeError("installation prior result exceeds byte bound")
+        value = json.loads(raw, object_pairs_hook=unique)
+    except (OSError, ValueError) as error:
+        raise RuntimeError("installation prior result is unreadable or malformed") from error
+    if not isinstance(value, dict) or set(value) != {f.name for f in fields(Summary)}:
+        raise RuntimeError("installation prior result schema fields differ")
+    return value
 
 
 def observe_candidate(
@@ -693,7 +946,32 @@ def summarize(
     apply: bool,
     coherent_workflow: str | None = None,
     candidate_observer: Callable[[Summary], None] | None = None,
+    producer_source: str | None = None,
+    installation_prior: dict | None = None,
 ) -> tuple[int, Summary]:
+    if producer_source is not None and (publication_required or not coherent_workflow
+                                        or not SHA_RE.fullmatch(producer_source)):
+        raise RuntimeError("producer installation requires a pinned source, completed coherent workflow and no publication")
+    if installation_prior is not None:
+        if (producer_source is None or not isinstance(installation_prior, dict)
+                or set(installation_prior) != {f.name for f in fields(Summary)}
+                or installation_prior.get("schema") != "fsgg.routine-delivery/v1"
+                or installation_prior.get("repo") != repo or installation_prior.get("pr") != pr_number
+                or type(installation_prior.get("pr")) is not int
+                or installation_prior.get("expectedHead") != expected_head
+                or installation_prior.get("producerSource") != producer_source
+                or type(installation_prior.get("attempts")) is not int
+                or not 0 <= installation_prior["attempts"] <= 1
+                or installation_prior.get("routineEligibility") not in ("unavailable-first-install", "unresolved")
+                or installation_prior.get("producerInstallation") not in (
+                    "ready", "refused", "indeterminate", "delivered-activation-pending", "disputed")
+                or installation_prior.get("outcome") not in ("ready", "refused", "indeterminate", "delivered", "delivered-disputed")
+                or installation_prior.get("codeDelivery") not in ("not-delivered", "unknown", "delivered")
+                or installation_prior.get("publication") != "not-required"
+                or not isinstance(installation_prior.get("baseSha"), str)
+                or not SHA_RE.fullmatch(installation_prior["baseSha"])
+                or not isinstance(installation_prior.get("baseRef"), str) or not installation_prior["baseRef"]):
+            raise RuntimeError("installation prior result identity/attempt/schema differs")
     publication = "pending" if publication_required else "not-required"
     before = api.get_pr(repo, pr_number)
     if not isinstance(before, dict):
@@ -707,12 +985,38 @@ def summarize(
             parsed_outcome = datetime.fromisoformat(outcome_at.replace("Z", "+00:00"))
             if parsed_outcome > now:
                 now = parsed_outcome
-        return Summary(*values, baseRef=base_ref, baseSha=base_sha,
+        result = Summary(*values, baseRef=base_ref, baseSha=base_sha,
                        outcomeAt=outcome_at,
                        observedAt=now.isoformat().replace("+00:00", "Z"),
                        routineEligibility=routine_state)
+        if producer_source is not None:
+            state = "ready" if result.outcome == "ready" else result.outcome
+            if result.codeDelivery == "delivered":
+                try:
+                    api.installation_contract(repo, pr_number, native, expected_head, producer_source, delivered=True)
+                except RuntimeError as error:
+                    # Source merge history survives, but installation is not accepted.
+                    result = replace(result, outcome="delivered-disputed", reason=str(error))
+                    state = "disputed"
+                else:
+                    state = "delivered-activation-pending" if result.outcome == "delivered" else "disputed"
+            result = replace(result, producerInstallation=state, producerSource=producer_source)
+        if installation_prior is not None:
+            result = replace(result, attempts=max(result.attempts, installation_prior["attempts"]))
+        return result
     allowed, reason = eligible(before, expected_head)
     observed = head_of(before)
+    if installation_prior is not None and base_of(before) != (installation_prior["baseRef"], installation_prior["baseSha"]):
+        raise RuntimeError("installation prior result original base differs")
+    if installation_prior is not None and installation_prior["attempts"] > 0 and not is_merged(before):
+        # Even an open PR does not settle a lost response or authorize another write.
+        routine_state = "unresolved"
+        return 3, bound(
+            "fsgg.routine-delivery/v1", repo, pr_number, expected_head, observed,
+            "indeterminate", "unknown", publication, None, 0,
+            "original installation effect remains unresolved; prior result forces readback-only",
+            "current", "unobserved",
+        )
     if not allowed:
         return 2, bound(
             "fsgg.routine-delivery/v1", repo, pr_number, expected_head, observed,
@@ -726,7 +1030,12 @@ def summarize(
         )
     routine_reason = None
     try:
-        routine_state = routine_contract(api, repo, before, expected_head)
+        if producer_source is not None:
+            api.installation_contract(repo, pr_number, before, expected_head, producer_source,
+                                      delivered=is_merged(before))
+            routine_state = "unavailable-first-install"
+        else:
+            routine_state = routine_contract(api, repo, before, expected_head)
     except RuntimeError as error:
         routine_state, routine_reason = "unresolved", str(error)
         if not is_merged(before):
@@ -738,7 +1047,7 @@ def summarize(
     if coherent_workflow:
         disposition, coherent, reason = validation_state(api, repo, coherent_workflow, expected_head)
         if not is_merged(before) and (disposition in {"invalid", "deferred", "failed"}
-                                      or (coherent != "passed" and disposition != "reused")):
+                                      or (coherent != "passed" and (producer_source is not None or disposition != "reused"))):
             return 2, bound(
                 "fsgg.routine-delivery/v1", repo, pr_number, expected_head, observed,
                 "refused", "not-delivered", publication, None, 0, reason,
@@ -747,12 +1056,13 @@ def summarize(
     if is_merged(before):
         coherent_disputed = coherent == "failed" or disposition in {"invalid", "deferred", "failed"}
         disputed = coherent_disputed or routine_state == "unresolved"
-        return 4 if disputed else 0, bound(
+        merged_result = bound(
             "fsgg.routine-delivery/v1", repo, pr_number, expected_head, observed,
             "delivered-disputed" if disputed else "delivered", "delivered",
             publication, merged_commit_of(before), 0, routine_reason or (reason if disputed else None), disposition,
             "disputed" if coherent_disputed else coherent,
         )
+        return 4 if merged_result.outcome == "delivered-disputed" else 0, merged_result
     if observed == expected_head and candidate_observer is not None:
         candidate_observer(bound(
             "fsgg.routine-delivery/v1", repo, pr_number, expected_head, observed,
@@ -764,7 +1074,7 @@ def summarize(
             "ready", "not-delivered", publication, None, 0, None, disposition, coherent,
         )
 
-    if routine_state == "passed":
+    if routine_state in ("passed", "unavailable-first-install"):
         current = None
         try:
             current = api.get_pr(repo, pr_number)
@@ -773,9 +1083,15 @@ def summarize(
                     or current.get("body") != before.get("body")
                     or (current.get("head") or {}).get("ref") != (before.get("head") or {}).get("ref")):
                 raise RuntimeError(current_reason or "routine PR envelope changed before merge")
-            routine_state = routine_contract(api, repo, current, expected_head)
-            if routine_state != "passed":
-                raise RuntimeError("routine route changed before merge")
+            if producer_source is not None:
+                api.installation_contract(repo, pr_number, current, expected_head, producer_source)
+                disposition, coherent, reason = validation_state(api, repo, coherent_workflow, expected_head)
+                if coherent != "passed" or disposition in ("invalid", "deferred", "failed"):
+                    raise RuntimeError("installation coherent validation changed before merge")
+            else:
+                routine_state = routine_contract(api, repo, current, expected_head)
+                if routine_state != "passed":
+                    raise RuntimeError("routine route changed before merge")
         except RuntimeError as error:
             routine_state = "unresolved"
             return 2, bound(
@@ -863,11 +1179,12 @@ def summarize(
                 disposition, "disputed", native=after,
             )
     if effect_confirmed:
-        return 0, bound(
+        delivered_result = bound(
             "fsgg.routine-delivery/v1", repo, pr_number, expected_head, head_of(after),
             "delivered", "delivered", publication, merge_commit, attempts, None,
             disposition, coherent, native=after,
         )
+        return 4 if delivered_result.outcome == "delivered-disputed" else 0, delivered_result
     return 3, bound(
         "fsgg.routine-delivery/v1", repo, pr_number, expected_head, head_of(after),
         "indeterminate", "unknown", publication, None, attempts,
@@ -1107,6 +1424,10 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--watch-checks", action="store_true", help="read-only bounded native-check watch; never grants apply")
     result.add_argument("--watch-seconds", type=int, help="required watch budget, 1..600 seconds")
     result.add_argument("--apply", action="store_true")
+    result.add_argument("--install-routine-producer", action="store_true",
+                        help="closed first installation only; never ordinary eligibility success")
+    result.add_argument("--routine-producer-source", help="immutable protected FS-GG/.github template commit")
+    result.add_argument("--installation-prior-result", help="retained installation Summary; prior effects force readback-only")
     return result
 
 
@@ -1118,6 +1439,16 @@ def main(argv: list[str]) -> int:
         parser().error("--pr must be positive")
     if not SHA_RE.fullmatch(args.head):
         parser().error("--head must be a lowercase 40-hex commit SHA")
+    if args.install_routine_producer:
+        if (args.watch_checks or args.publication != "none" or not args.coherent_workflow
+                or not args.routine_producer_source or not SHA_RE.fullmatch(args.routine_producer_source)):
+            parser().error("--install-routine-producer requires --routine-producer-source, --coherent-workflow and publication none; no watch")
+    elif args.routine_producer_source is not None or args.installation_prior_result is not None:
+        parser().error("producer source/prior result requires --install-routine-producer")
+    try:
+        prior = installation_prior_result(args.installation_prior_result) if args.installation_prior_result else None
+    except RuntimeError as error:
+        parser().error(str(error))
     deadline = args.telemetry_advisory_deadline_monotonic
     if deadline is not None and (not math.isfinite(deadline) or deadline <= 0):
         parser().error("--telemetry-advisory-deadline-monotonic must be finite and positive")
@@ -1180,6 +1511,8 @@ def main(argv: list[str]) -> int:
             GhApi(), repo=args.repo, pr_number=args.pr, expected_head=args.head,
             merge_method=args.merge_method, publication_required=args.publication == "required",
             apply=args.apply, coherent_workflow=args.coherent_workflow, candidate_observer=observer,
+            producer_source=args.routine_producer_source if args.install_routine_producer else None,
+            installation_prior=prior,
         )
     except (RuntimeError, AmbiguousWrite) as error:
         code = 3
@@ -1187,8 +1520,17 @@ def main(argv: list[str]) -> int:
             "fsgg.routine-delivery/v1", args.repo, args.pr, args.head, None,
             "indeterminate", "unknown",
             "pending" if args.publication == "required" else "not-required",
-            None, 0, str(error), "current", "unobserved",
+            None, prior["attempts"] if prior is not None and type(prior.get("attempts")) is int and prior["attempts"] == 1 else 0,
+            str(error), "current", "unobserved",
         )
+        if args.install_routine_producer:
+            joined = prior is not None and all(prior.get(key) == value for key, value in (
+                ("repo", args.repo), ("pr", args.pr), ("expectedHead", args.head),
+                ("producerSource", args.routine_producer_source)))
+            result = replace(result, producerInstallation="indeterminate",
+                producerSource=args.routine_producer_source, routineEligibility="unresolved",
+                baseRef=prior.get("baseRef") if joined else None,
+                baseSha=prior.get("baseSha") if joined else None)
     dashboard_health = "not-run-final-ci-unavailable"
     if observer is not None and result.outcome != "ready":
         observer(result)

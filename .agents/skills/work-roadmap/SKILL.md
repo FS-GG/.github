@@ -64,6 +64,36 @@ For routine delivery:
    completed evidence in its owning plan/report. Do not append a completed-work log to either open index. This exception does not apply to CI ticks, waits,
    intermediate checkpoints or any other status copy, and does not create a PR per checkpoint.
 
+## First installation of the routine producer
+
+A receiver with no routine producer cannot satisfy ordinary `routine-eligibility`. Use the existing
+`tools/routine-delivery.py --install-routine-producer --routine-producer-source <protected-owner-sha>`
+inspect/apply route only for an independently reviewed installation PR containing exactly the five
+canonical files from protected `FS-GG/.github`: `.fsgg/routine-development.json`,
+`.github/workflows/routine-eligibility.yml`, `scripts/check-claim-generation.py`,
+`scripts/check-routine-eligibility-envelope.py`, and `scripts/lib/gate.py`.
+Supply the exact repository/PR/head, completed receiver coherent workflow and `--publication none`.
+The accountable owner explicitly selects this closed technical predicate under ADR-0079; it does not
+select heavyweight process or turn a missing gate into passing eligibility.
+
+The helper verifies native repository/default/base/head identity, the exact source-change marker,
+absence of all five files and the native producer, complete file/tree/check populations, canonical
+bytes/modes, successful receiver-required checks and completed exact-head coherent qualification.
+The selected immutable owner source must remain byte-identical to the current protected five-file
+closure; the executing helper must match current protected owner source. Partial/existing/disabled
+installations, forks, extra edits, stale payloads, denied metadata or unknown facts refuse.
+
+Apply uses the existing expected-head native merge and protected-tree readback. Retain the original
+result. For subsequent inspection of an uncertain effect, pass `--installation-prior-result <result.json>`;
+its exact original joins are checked and any prior effect forces readback-only even with `--apply`.
+An open or unavailable readback does not renew apply. The stateless helper cannot detect omission of
+a known prior result; the owner must carry it forward. A delivered installation reports
+`producerInstallation: delivered-activation-pending` and `routineEligibility: unavailable-first-install`.
+It establishes no ordinary eligibility or installed Drivers/package acceptance. Observe a genuine
+subsequent routine PR event through the unchanged authenticated default-branch producer at that PR's
+exact head before ordinary delivery. Existing or failed producers use ordinary repair; bootstrap cannot
+bypass their gate. Root admission still governs receiver integration and protected effects.
+
 Apply the permanent qualification-selection doctrine in
 ADR-0084 (`https://github.com/FS-GG/.github/blob/main/docs/adr/0084-semantic-reuse-never-cancels-coherent-validation.md`). Run the cheap
 content/semantic classifier first; after acceptance, start the coherent run, and only a validated exact-head

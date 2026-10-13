@@ -9,6 +9,10 @@ import json
 import os
 import pathlib
 import subprocess
+import copy
+import tempfile
+import shutil
+from types import SimpleNamespace
 import sys
 import unittest
 import warnings
@@ -1177,8 +1181,367 @@ class DashboardEventTests(unittest.TestCase):
                         self.assertEqual(result["dashboardPublicationHealth"], "published")
 
 
+# Only these fixed inert Git repositories may launch Git; no Actions/native transport.
+GIT_FIXTURE_ROOTS = set()
+GIT_FIXTURE_EXECUTABLE = shutil.which("git")
+
+
+def fixture_git(root, *args):
+    env = {"PATH": os.environ.get("PATH", ""), "GIT_AUTHOR_NAME": "Fixture",
+           "GIT_AUTHOR_EMAIL": "fixture@example.invalid", "GIT_COMMITTER_NAME": "Fixture",
+           "GIT_COMMITTER_EMAIL": "fixture@example.invalid"}
+    return subprocess.run([GIT_FIXTURE_EXECUTABLE, "-c", "core.hooksPath=/dev/null", *args],
+                          cwd=root, env=env, check=True, capture_output=True, timeout=5).stdout
+
+
+class InstallationApi(MODULE.GhApi):
+    def __init__(self, fixture, reads, writes=()):
+        self.fixture = fixture
+        self.reads, self.writes = iter(reads), iter(writes)
+        self.overrides, self.attempts = {}, 0
+        self.required = [dict(name="test", bucket="pass", state="SUCCESS",
+                              completedAt="2026-10-13T00:00:00Z",event="pull_request",workflow="CI",
+                              startedAt="2026-10-13T00:00:00Z",
+                              link="https://github.com/FS-GG/Receiver/actions/runs/7/job/8")]
+        self.runs = [dict(id=7, head_sha=fixture["head"], status="completed", conclusion="success",
+                          updated_at="2026-10-13T00:00:00Z", run_attempt=1)]
+
+    def installation_read(self, endpoint):
+        if endpoint in self.overrides:
+            value = self.overrides[endpoint]
+            if isinstance(value, Exception): raise value
+            return copy.deepcopy(value)
+        return copy.deepcopy(self.fixture["responses"][endpoint])
+
+    def get_pr(self, repo, number):
+        return copy.deepcopy(next(self.reads))
+
+    def _run(self, args, **kwargs):
+        # Exercise the maintained native merge adapter's exact request serialization.
+        self.attempts += 1
+        assert args[:3] == ["--method", "PUT", "repos/FS-GG/Receiver/pulls/1/merge"]
+        assert json.loads(kwargs["input_text"]) == {"sha": self.fixture["head"], "merge_method": "squash"}
+        value = next(self.writes)
+        if isinstance(value, Exception): raise value
+        return value
+
+    def coherent_runs(self, *_): return self.runs
+    def coherent_jobs(self, *_): return []
+    def qualification_selection(self, *_): return None
+
+
+class ProducerInstallationTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tempfile.TemporaryDirectory(prefix="routine-installation-git-")
+        cls.directory = pathlib.Path(cls.tmp.name)
+        cls.owner, cls.receiver = cls.directory / "owner", cls.directory / "receiver"
+        for root in (cls.owner, cls.receiver):
+            root.mkdir(); GIT_FIXTURE_ROOTS.add(str(root)); fixture_git(root, "init", "-q")
+        def commit(root):
+            fixture_git(root, "add", "--all"); fixture_git(root, "commit", "-qm", "inert fixture")
+            return fixture_git(root, "rev-parse", "HEAD").decode().strip()
+        for path in (*MODULE.PRODUCER_PATHS, "tools/routine-delivery.py", "src/FS.GG.Drivers/workspace-inventory.json"):
+            target = cls.owner / path; target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes((ROOT / path).read_bytes()); target.chmod((ROOT / path).stat().st_mode & 0o777)
+        source = commit(cls.owner)
+        policy = cls.owner / MODULE.PRODUCER_PATHS[0]; original = policy.read_bytes()
+        policy.write_bytes(original + b" "); obsolete = commit(cls.owner)
+        policy.write_bytes(original); (cls.owner / "README.md").write_text("unrelated owner change")
+        owner_head = commit(cls.owner)
+        (cls.receiver / "README.md").write_text("base")
+        base = commit(cls.receiver)
+        for path in MODULE.PRODUCER_PATHS:
+            target = cls.receiver / path; target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes((cls.owner / path).read_bytes()); target.chmod((cls.owner / path).stat().st_mode & 0o777)
+        head = commit(cls.receiver)
+        (cls.receiver / "README.md").write_text("ordinary routine change")
+        cls.successor = commit(cls.receiver)
+        responses = {}
+        def objects(repo, root, revision):
+            tree_sha = fixture_git(root, "rev-parse", revision + "^{tree}").decode().strip()
+            rows = []
+            for raw in fixture_git(root, "ls-tree", "-rz", revision).split(b"\0"):
+                if not raw: continue
+                meta, path = raw.split(b"\t", 1); mode, kind, sha = meta.decode().split()
+                rows.append(dict(path=path.decode(), mode=mode, type=kind, sha=sha))
+                body = fixture_git(root, "cat-file", "blob", sha)
+                responses[f"repos/{repo}/git/blobs/{sha}"] = dict(sha=sha, encoding="base64", size=len(body),
+                                                                content=MODULE.base64.b64encode(body).decode())
+            responses[f"repos/{repo}/git/commits/{revision}"] = dict(sha=revision, tree={"sha": tree_sha})
+            responses[f"repos/{repo}/git/trees/{tree_sha}?recursive=1"] = dict(sha=tree_sha, truncated=False, tree=rows)
+            return rows, tree_sha
+        objects("FS-GG/.github", cls.owner, source); objects("FS-GG/.github", cls.owner, obsolete)
+        objects("FS-GG/.github", cls.owner, owner_head)
+        objects("FS-GG/Receiver", cls.receiver, base); rows, tree = objects("FS-GG/Receiver", cls.receiver, head)
+        responses["repos/FS-GG/Receiver"] = dict(id=42, full_name="FS-GG/Receiver", default_branch="main")
+        responses["repos/FS-GG/.github"] = dict(id=1269292704, full_name="FS-GG/.github", default_branch="main")
+        for revision in (source, obsolete):
+            responses[f"repos/FS-GG/.github/compare/{revision}...main"] = dict(status="ahead", merge_base_commit={"sha": revision}, head_commit={"sha": owner_head})
+        responses["repos/FS-GG/Receiver/git/ref/heads/main"] = {"object": {"sha": base}}
+        responses["repos/FS-GG/Receiver/pulls/1/files?per_page=100"] = [dict(filename=row["path"], status="added", sha=row["sha"]) for row in rows if row["path"] in MODULE.PRODUCER_PATHS]
+        responses["repos/FS-GG/Receiver/actions/workflows?per_page=100"] = dict(total_count=0, workflows=[])
+        responses[f"repos/FS-GG/Receiver/commits/{head}/check-runs?per_page=100"] = dict(total_count=1, check_runs=[dict(id=8,name="test",head_sha=head,app={"id":15368},check_suite={"id":9},status="completed",conclusion="success",details_url="https://github.com/FS-GG/Receiver/actions/runs/7/job/8")])
+        responses["repos/FS-GG/Receiver/actions/runs/7"] = dict(id=7, head_sha=head, repository={"full_name": "FS-GG/Receiver"}, status="completed", conclusion="success", run_attempt=1,check_suite_id=9)
+        responses["repos/FS-GG/Receiver/actions/jobs/8"] = dict(id=8, run_id=7, head_sha=head, name="test", status="completed", conclusion="success", run_attempt=1,check_run_url="https://api.github.com/repos/FS-GG/Receiver/check-runs/8")
+        responses[f"repos/FS-GG/Receiver/compare/{head}...{head}"] = dict(status="identical", merge_base_commit={"sha": head})
+        cls.fixture = dict(source=source, obsolete=obsolete, head=head, base=base, tree=tree, responses=responses)
+        cls.pr = opened(head); cls.pr.update(number=1, changed_files=5)
+        cls.pr["base"].update(sha=base, repo=dict(id=42, full_name="FS-GG/Receiver"))
+        cls.pr["head"].update(ref="routine/install-producer", repo=dict(id=42, full_name="FS-GG/Receiver"))
+        cls.pr["body"] = f"<!-- fsgg:routine-development/v1 head={head} operation=source-change -->"
+        cls.after = copy.deepcopy(cls.pr); cls.after.update(state="closed", merged=True, merged_at="2026-10-13T00:00:00Z", merge_commit_sha=head)
+
+    @classmethod
+    def tearDownClass(cls):
+        for root in (cls.owner, cls.receiver): GIT_FIXTURE_ROOTS.discard(str(root))
+        cls.tmp.cleanup()
+
+    def api(self, reads=None, writes=()):
+        return InstallationApi(self.fixture, reads or [self.pr], writes)
+
+    def invoke(self, api, apply=False, source=None, prior=None):
+        with mock.patch.object(MODULE.WatchGhApi, "_watch_read", side_effect=lambda command, accepted: (0, api.required)):
+            return MODULE.summarize(api, repo="FS-GG/Receiver", pr_number=1,
+                expected_head=self.fixture["head"], merge_method="squash", publication_required=False,
+                apply=apply, coherent_workflow="CI.yml", producer_source=source or self.fixture["source"], installation_prior=prior)
+
+    def test_exact_real_git_payload_is_ready_without_fake_eligibility(self):
+        api = self.api(); code, result = self.invoke(api)
+        self.assertEqual((code, result.outcome, result.producerInstallation, result.routineEligibility, api.attempts),
+                         (0, "ready", "ready", "unavailable-first-install", 0))
+
+    def test_merge_uses_existing_cas_and_exact_protected_payload_readback(self):
+        api = self.api([self.pr, self.pr, self.after], [{"merged": True, "sha": self.fixture["head"]}])
+        original = api.installation_contract
+        def transition(*args, **kwargs):
+            if kwargs.get("delivered"): api.overrides["repos/FS-GG/Receiver/git/ref/heads/main"] = {"object": {"sha": self.fixture["head"]}}
+            return original(*args, **kwargs)
+        with mock.patch.object(api, "installation_contract", side_effect=transition): code, result = self.invoke(api, True)
+        self.assertEqual((code, api.attempts, result.producerInstallation, result.routineEligibility), (0, 1, "delivered-activation-pending", "unavailable-first-install"))
+
+    def test_stale_protected_ancestor_policy_refuses_but_identical_closure_ancestor_passes(self):
+        self.assertEqual(self.invoke(self.api(), source=self.fixture["obsolete"])[0], 2)
+        self.assertEqual(self.invoke(self.api(), source=self.fixture["source"])[0], 0)
+
+    def test_native_absence_incomplete_denied_disabled_and_existing_check_refuse(self):
+        cases = [
+            ("repos/FS-GG/Receiver/actions/workflows?per_page=100", RuntimeError("denied")),
+            ("repos/FS-GG/Receiver/actions/workflows?per_page=100", dict(total_count=1, workflows=[])),
+            ("repos/FS-GG/Receiver/actions/workflows?per_page=100", dict(total_count=1, workflows=[dict(path=MODULE.PRODUCER_PATHS[1], state="disabled_manually")])),
+            (f"repos/FS-GG/Receiver/commits/{self.fixture['head']}/check-runs?per_page=100", dict(total_count=1, check_runs=[dict(name="routine-eligibility", conclusion="failure")]))]
+        for endpoint, value in cases:
+            with self.subTest(endpoint=endpoint, value=value):
+                api=self.api(); api.overrides[endpoint]=value
+                self.assertEqual((self.invoke(api)[0], api.attempts), (2, 0))
+
+    def test_incomplete_file_list_status_and_payload_mutations_refuse(self):
+        endpoint="repos/FS-GG/Receiver/pulls/1/files?per_page=100"
+        for status in ("modified", "renamed", "removed"):
+            api=self.api(); rows=copy.deepcopy(self.fixture["responses"][endpoint]); rows[0]["status"]=status;api.overrides[endpoint]=rows
+            self.assertEqual(self.invoke(api)[0],2)
+        api=self.api();api.overrides[endpoint]=self.fixture["responses"][endpoint][:-1]
+        self.assertEqual(self.invoke(api)[0],2)
+        endpoint=f"repos/FS-GG/Receiver/git/trees/{self.fixture['tree']}?recursive=1"
+        for path in MODULE.PRODUCER_PATHS:
+            for field,value in (("sha","f"*40),("mode","120000"),("mode","160000"),("mode","100755" if next(r for r in self.fixture['responses'][endpoint]['tree'] if r['path']==path)['mode']=="100644" else "100644")):
+                with self.subTest(path=path,field=field):
+                    api=self.api();tree=copy.deepcopy(self.fixture['responses'][endpoint]);next(r for r in tree['tree'] if r['path']==path)[field]=value;api.overrides[endpoint]=tree
+                    self.assertEqual(self.invoke(api)[0],2)
+        for transform in (lambda tree: tree.update(truncated=True), lambda tree: tree['tree'].append(dict(path="extra",mode="100644",type="blob",sha="f"*40)), lambda tree: tree['tree'].pop()):
+            api=self.api();tree=copy.deepcopy(self.fixture['responses'][endpoint]);transform(tree);api.overrides[endpoint]=tree
+            self.assertEqual(self.invoke(api)[0],2)
+
+    def test_repo_fork_base_head_body_and_source_identity_controls(self):
+        variants=[]
+        for area,key,value in (("head","sha","f"*40),("head","ref","feature/unbound"),("base","ref","other"),("base","sha","f"*40)):
+            pr=copy.deepcopy(self.pr);pr[area][key]=value;variants.append(pr)
+        pr=copy.deepcopy(self.pr);pr['head']['repo']['id']=43;variants.append(pr)
+        pr=copy.deepcopy(self.pr);pr['body']=pr['body'].replace('source-change','internal-docs');variants.append(pr)
+        for pr in variants:self.assertEqual(self.invoke(self.api([pr]))[0],2)
+        api=self.api();api.overrides['repos/FS-GG/Receiver']=dict(id=42,full_name='Redirect/Receiver',default_branch='main');self.assertEqual(self.invoke(api)[0],2)
+        api=self.api();api.overrides[f"repos/FS-GG/.github/compare/{self.fixture['source']}...main"]={};self.assertEqual(self.invoke(api)[0],2)
+
+    def test_existing_partial_installation_and_blob_corruption_refuse(self):
+        endpoint=f"repos/FS-GG/Receiver/git/commits/{self.fixture['base']}"
+        api=self.api();value=copy.deepcopy(self.fixture['responses'][endpoint]);value['tree']['sha']=self.fixture['tree'];api.overrides[endpoint]=value
+        self.assertEqual(self.invoke(api)[0],2)
+        row=next(r for r in self.fixture['responses'][f"repos/FS-GG/Receiver/git/trees/{self.fixture['tree']}?recursive=1"]['tree'] if r['path']==MODULE.PRODUCER_PATHS[0])
+        endpoint=f"repos/FS-GG/.github/git/blobs/{row['sha']}"
+        api=self.api();value=copy.deepcopy(self.fixture['responses'][endpoint]);value['content']=MODULE.base64.b64encode(b'wrong').decode();api.overrides[endpoint]=value
+        self.assertEqual(self.invoke(api)[0],2)
+
+    def test_required_and_coherent_checks_must_complete_and_exact_native_provenance(self):
+        for field,value in (("bucket","pending"),("state","FAILURE"),("link","https://evil.invalid/check"),("completedAt","")):
+            api=self.api();api.required[0][field]=value;self.assertEqual(self.invoke(api)[0],2)
+        api=self.api();api.required=[];self.assertEqual(self.invoke(api)[0],2)
+        for field,value in (("head_sha","f"*40),("run_attempt",2),("conclusion","failure")):
+            api=self.api();endpoint='repos/FS-GG/Receiver/actions/jobs/8';job=copy.deepcopy(self.fixture['responses'][endpoint]);job[field]=value;api.overrides[endpoint]=job;self.assertEqual(self.invoke(api)[0],2)
+        for status,conclusion in (("in_progress",None),("completed","failure")):
+            api=self.api();api.runs[0].update(status=status,conclusion=conclusion);self.assertEqual(self.invoke(api)[0],2)
+        api=self.api();api.runs[0].update(status='in_progress',conclusion=None)
+        api.qualification_selection=lambda *_: selection('reused')
+        self.assertEqual(self.invoke(api)[0],2)
+        endpoint=f"repos/FS-GG/Receiver/commits/{self.fixture['head']}/check-runs?per_page=100"
+        for field,value in (('head_sha','f'*40),('app',{'id':1}),('check_suite',{'id':10}),('details_url','https://evil.invalid')):
+            api=self.api();roster=copy.deepcopy(self.fixture['responses'][endpoint]);roster['check_runs'][0][field]=value;api.overrides[endpoint]=roster
+            self.assertEqual(self.invoke(api)[0],2)
+
+    def test_last_moment_envelope_race_never_writes(self):
+        for field in ('body','base','head'):
+            late=copy.deepcopy(self.pr)
+            if field=='body':late[field]+=' changed'
+            else:late[field]['sha']='f'*40
+            api=self.api([self.pr,late]);self.assertEqual((self.invoke(api,True)[0],api.attempts),(2,0))
+
+    def test_unknown_write_observes_once_and_never_replays_within_attempt(self):
+        api=self.api([self.pr,self.pr,self.pr],[MODULE.AmbiguousWrite('lost response')]);code,result=self.invoke(api,True)
+        self.assertEqual((code,api.attempts,result.codeDelivery),(3,1,'unknown'))
+        api=self.api([self.after]);api.overrides['repos/FS-GG/Receiver/git/ref/heads/main']={'object':{'sha':self.fixture['head']}}
+        code,result=self.invoke(api,True)
+        self.assertEqual((code,api.attempts,result.producerInstallation),(0,0,'delivered-activation-pending'))
+
+    def test_retained_uncertain_effect_is_readback_only_across_invocations(self):
+        first=self.api([self.pr,self.pr,self.pr],[MODULE.AmbiguousWrite('lost response')])
+        code,uncertain=self.invoke(first,True);self.assertEqual(code,3)
+        prior=asdict(uncertain)
+        later=self.api([self.pr]);later.required[0]['bucket']='pending'
+        code,result=self.invoke(later,True,prior=prior)
+        self.assertEqual((code,later.attempts,result.codeDelivery,result.attempts),(3,0,'unknown',1))
+        second=self.api([self.pr]);code,second_result=self.invoke(second,True,prior=asdict(result))
+        self.assertEqual((code,second.attempts,second_result.codeDelivery,second_result.attempts),(3,0,'unknown',1))
+        later=self.api([self.after]);later.overrides['repos/FS-GG/Receiver/git/ref/heads/main']={'object':{'sha':self.fixture['head']}}
+        code,result=self.invoke(later,True,prior=prior)
+        self.assertEqual((code,later.attempts,result.producerInstallation),(0,0,'delivered-activation-pending'))
+        self.assertEqual(result.attempts,1)
+        for field,value in (('repo','Other/Repo'),('pr',2),('expectedHead','f'*40),('producerSource','f'*40),
+                            ('attempts',None),('attempts',True),('attempts',2),('schema','other'),('baseSha','f'*40)):
+            bad=copy.deepcopy(prior);bad[field]=value;api=self.api()
+            with self.subTest(field=field),self.assertRaises(RuntimeError):self.invoke(api,True,prior=bad)
+            self.assertEqual(api.attempts,0)
+        missing=copy.deepcopy(prior);missing.pop('attempts')
+        with self.assertRaises(RuntimeError):self.invoke(self.api(),True,prior=missing)
+        path=self.directory/'prior.json';path.write_text(json.dumps(prior))
+        self.assertEqual(MODULE.installation_prior_result(str(path)),prior)
+        for raw in ('{"attempts":1,"attempts":1}', '{}', '{', ' '*65537):
+            path.write_text(raw)
+            with self.assertRaises(RuntimeError):MODULE.installation_prior_result(str(path))
+
+    def test_postmerge_wrong_protected_payload_stays_disputed(self):
+        api=self.api([self.pr,self.pr,self.after],[{'merged':True,'sha':self.fixture['head']}]);code,result=self.invoke(api,True)
+        self.assertEqual((code,api.attempts,result.codeDelivery,result.producerInstallation),(4,1,'delivered','disputed'))
+
+    def test_prior_result_special_files_and_symlinks_refuse_before_read(self):
+        fifo=self.directory/'prior.fifo';os.mkfifo(fifo)
+        try:
+            with self.assertRaises(RuntimeError):MODULE.installation_prior_result(str(fifo))
+            with self.assertRaises(RuntimeError):MODULE.installation_prior_result(str(self.directory))
+            link=self.directory/'prior.link';link.symlink_to(fifo)
+            try:
+                with self.assertRaises(RuntimeError):MODULE.installation_prior_result(str(link))
+            finally:link.unlink()
+        finally:fifo.unlink()
+
+    def test_cli_disputed_readbacks_exit_nonzero_and_failed_prior_retains_custody(self):
+        args=['--repo','FS-GG/Receiver','--pr','1','--head',self.fixture['head'],
+              '--install-routine-producer','--routine-producer-source',self.fixture['source'],
+              '--coherent-workflow','CI.yml','--apply']
+        for reads,writes in (([self.after],()),
+                             ([self.pr,self.pr,self.after],[{'merged':True,'sha':self.fixture['head']}])):
+            api=self.api(reads,writes)
+            with mock.patch.object(MODULE,'GhApi',return_value=api), \
+                 mock.patch.object(MODULE.WatchGhApi,'_watch_read',side_effect=lambda command,accepted:(0,api.required)), \
+                 mock.patch.dict(os.environ,{},clear=True),mock.patch('sys.stdout',new_callable=io.StringIO) as output:
+                code=MODULE.main(args)
+            result=json.loads(output.getvalue())
+            self.assertEqual((code,result['outcome'],result['producerInstallation']),(4,'delivered-disputed','disputed'))
+        first=self.api([self.pr,self.pr,self.pr],[MODULE.AmbiguousWrite('lost response')])
+        _,uncertain=self.invoke(first,True)
+        path=self.directory/'prior-failure.json';path.write_text(json.dumps(asdict(uncertain)))
+        api=self.api();api.get_pr=mock.Mock(side_effect=RuntimeError('readback unavailable'))
+        with mock.patch.object(MODULE,'GhApi',return_value=api),mock.patch.dict(os.environ,{},clear=True), \
+             mock.patch('sys.stdout',new_callable=io.StringIO) as output:
+            code=MODULE.main(args+['--installation-prior-result',str(path)])
+        result=json.loads(output.getvalue())
+        self.assertEqual((code,api.attempts,result['attempts'],result['producerInstallation']),(3,0,1,'indeterminate'))
+        later=self.api([self.pr]);code,result=self.invoke(later,True,prior=result)
+        self.assertEqual((code,later.attempts,result.attempts),(3,0,1))
+
+    def test_delivered_bootstrap_does_not_unlock_ordinary_missing_eligibility(self):
+        api=self.api();api.routine_eligibility=mock.Mock(side_effect=RuntimeError('missing'))
+        code,result=MODULE.summarize(api,repo='FS-GG/Receiver',pr_number=1,expected_head=self.fixture['head'],merge_method='squash',publication_required=False,apply=False)
+        self.assertEqual((code,result.routineEligibility,api.attempts),(2,'unresolved',0))
+
+    def test_actual_owner_validator_security_controls_on_inert_git_repository(self):
+        spec=importlib.util.spec_from_file_location('installation_trusted_gate', self.owner / 'scripts/check-claim-generation.py')
+        gate=importlib.util.module_from_spec(spec);sys.modules[spec.name]=gate;spec.loader.exec_module(gate)
+        def trusted_git(command, **kwargs):
+            self.assertEqual(command[0], 'git')
+            self.assertIn(command[1], ('show','diff'))
+            raw=fixture_git(self.receiver,*command[1:])
+            return subprocess.CompletedProcess(command,0,stdout=raw.decode(),stderr='')
+        args=SimpleNamespace(base_sha=self.fixture['head'],head_sha=self.successor,head_ref='routine/ordinary',
+            routine_policy='.fsgg/routine-development.json',routine_policy_ref=self.fixture['head'])
+        body=f'<!-- fsgg:routine-development/v1 head={self.successor} operation=source-change -->'
+        with mock.patch.object(gate,'subprocess',SimpleNamespace(run=trusted_git)):
+            self.assertIsNone(gate.evaluate_routine(args,body)[0])
+            for candidate in ('missing',body+body,body.replace(self.successor,'f'*40),body.replace('source-change','publish')):
+                self.assertIsNotNone(gate.evaluate_routine(args,candidate)[0])
+        spec=importlib.util.spec_from_file_location('installation_trusted_envelope', self.owner / 'scripts/check-routine-eligibility-envelope.py')
+        envelope=importlib.util.module_from_spec(spec);spec.loader.exec_module(envelope)
+        body_path=self.directory/'body.txt';body_path.write_text(body)
+        argv=['envelope','--git-dir',str(self.receiver),'--repository','FS-GG/Receiver','--default-branch','main',
+            '--base-ref','main','--base-revision',self.fixture['head'],'--base-sha',self.fixture['head'],
+            '--head-ref','routine/ordinary','--head-revision',self.successor,'--head-sha',self.successor,
+            '--body',str(body_path),'--validator',str(self.owner/'scripts/check-claim-generation.py')]
+        def transport(command, **kwargs):
+            if command[0]=='git':
+                self.assertEqual(command[1:3],['-C',str(self.receiver)])
+                return subprocess.CompletedProcess(command,0,stdout=fixture_git(self.receiver,*command[3:]).decode(),stderr='')
+            self.assertEqual(command[:2],[sys.executable,str(self.owner/'scripts/check-claim-generation.py')])
+            self.assertEqual(kwargs['cwd'],self.receiver)
+            return subprocess.CompletedProcess(command,0)
+        with mock.patch.object(envelope,'subprocess',SimpleNamespace(run=transport)),mock.patch.object(sys,'argv',argv):
+            self.assertEqual(envelope.main(),0)
+        for flag,value in (('--base-ref','other'),('--base-sha','f'*40),('--head-sha','f'*40),('--head-ref','feature/wrong')):
+            wrong=argv.copy();wrong[wrong.index(flag)+1]=value
+            with mock.patch.object(envelope,'subprocess',SimpleNamespace(run=transport)),mock.patch.object(sys,'argv',wrong):
+                with self.assertRaises(SystemExit):envelope.main()
+
+    def test_final_absence_required_and_owner_closure_races_refuse_without_effect(self):
+        for failure in ('workflow','required','owner'):
+            api=self.api([self.pr,self.pr]);original=api.installation_contract;calls=0
+            def changed(*args,**kwargs):
+                nonlocal calls
+                calls+=1
+                if calls==2:
+                    if failure=='workflow':api.overrides['repos/FS-GG/Receiver/actions/workflows?per_page=100']=dict(total_count=1,workflows=[dict(path=MODULE.PRODUCER_PATHS[1])])
+                    elif failure=='required':api.required[0]['bucket']='pending'
+                    else:api.overrides[f"repos/FS-GG/.github/compare/{self.fixture['source']}...main"]=dict(status='behind',merge_base_commit={'sha':self.fixture['obsolete']})
+                return original(*args,**kwargs)
+            with mock.patch.object(api,'installation_contract',side_effect=changed):
+                self.assertEqual((self.invoke(api,True)[0],api.attempts),(2,0))
+
+    def test_actual_bounded_native_transport_rejects_unknown_and_malformed_read(self):
+        api=MODULE.GhApi()
+        with mock.patch.object(MODULE,'bounded_watch_query',return_value=(0,b'{"id":42}')) as query:
+            self.assertEqual(api.installation_read('repos/FS-GG/Receiver'),{'id':42})
+            self.assertEqual(query.call_args.args[0],['gh','api','repos/FS-GG/Receiver'])
+            self.assertEqual(query.call_args.kwargs['max_bytes'],1048576)
+        for code,body in ((1,b'{}'),(0,b'not JSON')):
+            with mock.patch.object(MODULE,'bounded_watch_query',return_value=(code,body)):
+                with self.assertRaises(RuntimeError):api.installation_read('repos/FS-GG/Receiver')
+
+
 if __name__ == "__main__":
     def inert(event, args):
+        if event == "subprocess.Popen":
+            executable, command, cwd, _env = args
+            if (executable == GIT_FIXTURE_EXECUTABLE and isinstance(command, list)
+                    and command[:3] == [GIT_FIXTURE_EXECUTABLE, "-c", "core.hooksPath=/dev/null"]
+                    and command[3] in ("init", "add", "commit", "rev-parse", "ls-tree", "cat-file", "show", "diff")
+                    and str(cwd) in GIT_FIXTURE_ROOTS):
+                return
         if event in ("socket.connect", "subprocess.Popen", "os.system", "os.exec"):
             raise RuntimeError("offline delivery qualification refuses native effects")
     sys.addaudithook(inert)
