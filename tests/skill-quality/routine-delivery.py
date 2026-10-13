@@ -1243,6 +1243,10 @@ class ProducerInstallationTests(unittest.TestCase):
         def commit(root):
             fixture_git(root, "add", "--all"); fixture_git(root, "commit", "-qm", "inert fixture")
             return fixture_git(root, "rev-parse", "HEAD").decode().strip()
+        bundle = cls.owner / MODULE.ASSERTION_BUNDLE
+        bundle.parent.mkdir(parents=True, exist_ok=True)
+        bundle.write_bytes(b"#!/bin/bash\n# retained assertion alarms\nexit 0\n")
+        cls.assertion_old_pin = commit(cls.owner)
         for path in (*MODULE.PRODUCER_PATHS, "tools/routine-delivery.py", "src/FS.GG.Drivers/workspace-inventory.json"):
             target = cls.owner / path; target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes((ROOT / path).read_bytes()); target.chmod((ROOT / path).stat().st_mode & 0o777)
@@ -1290,11 +1294,18 @@ jobs:
           QUINT_HOME: ${{ runner.temp }}/quint-tools/home
         run: bash eng/check.sh
 """)
+        assertion_pin = cls.receiver / MODULE.TEMPLATES_ASSERTION_PIN
+        assertion_pin.parent.mkdir(parents=True, exist_ok=True)
+        cls.assertion_pin_base = b'# retained header\nSKILL_ASSERT_REF="' + cls.assertion_old_pin.encode() + b'"\n# retained 14d alarm\n'
+        assertion_pin.write_bytes(cls.assertion_pin_base)
         base = commit(cls.receiver)
         for path in MODULE.PRODUCER_PATHS:
             target = cls.receiver / path; target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes((cls.owner / path).read_bytes()); target.chmod((cls.owner / path).stat().st_mode & 0o777)
         head = commit(cls.receiver)
+        assertion_pin.write_bytes(cls.assertion_pin_base.replace(cls.assertion_old_pin.encode(), source.encode()))
+        cls.templates_head = commit(cls.receiver)
+        assertion_pin.write_bytes(cls.assertion_pin_base)
         registration.write_bytes(MODULE.installation_registration(cls.registration_base,(cls.owner/MODULE.PRODUCER_PATHS[1]).read_bytes()))
         cls.registered_head=commit(cls.receiver)
         registration.write_bytes(cls.registration_base)
@@ -1315,9 +1326,12 @@ jobs:
             responses[f"repos/{repo}/git/trees/{tree_sha}?recursive=1"] = dict(sha=tree_sha, truncated=False, tree=rows)
             return rows, tree_sha
         objects("FS-GG/.github", cls.owner, source); objects("FS-GG/.github", cls.owner, obsolete)
+        objects("FS-GG/.github", cls.owner, cls.assertion_old_pin)
+        responses[f"repos/FS-GG/.github/compare/{cls.assertion_old_pin}...{source}?per_page=1&page=2"] = dict(status="ahead", base_commit={"sha":cls.assertion_old_pin}, merge_base_commit={"sha":cls.assertion_old_pin})
         objects("FS-GG/.github", cls.owner, owner_head)
         objects("FS-GG/FS.GG.Coordination", cls.receiver, base); rows, tree = objects("FS-GG/FS.GG.Coordination", cls.receiver, head)
         cls.registered_rows,cls.registered_tree=objects("FS-GG/FS.GG.Coordination",cls.receiver,cls.registered_head)
+        cls.templates_rows,cls.templates_tree=objects("FS-GG/FS.GG.Coordination",cls.receiver,cls.templates_head)
         objects("FS-GG/FS.GG.Coordination",cls.receiver,cls.successor)
         responses["repos/FS-GG/FS.GG.Coordination"] = dict(id=1346720714, full_name="FS-GG/FS.GG.Coordination", default_branch="main")
         responses["repos/FS-GG/.github"] = dict(id=1269292704, full_name="FS-GG/.github", default_branch="main")
@@ -1594,6 +1608,137 @@ jobs:
     def registration_contract(self,api,pr,delivered=False):
         with mock.patch.object(MODULE.WatchGhApi,'_watch_read',side_effect=lambda command,accepted:(0,api.required)):
             return api.installation_contract('FS-GG/FS.GG.Coordination',1,pr,self.registered_head,self.fixture['source'],delivered=delivered)
+
+    def templates_api(self):
+        repo = 'FS-GG/FS.GG.Templates'
+        alias = lambda value: json.loads(json.dumps(value).replace('FS-GG/FS.GG.Coordination', repo).replace('1346720714', '1281961814'))
+        fixture = alias(self.fixture); fixture['head'] = self.templates_head
+        responses = fixture['responses']
+        pr = alias(self.pr); pr['changed_files'] = 6; pr['head']['sha'] = self.templates_head
+        pr['body'] = pr['body'].replace(self.fixture['head'], self.templates_head)
+        responses[f'repos/{repo}/pulls/1/files?per_page=100'] = [dict(filename=r['path'],status='modified' if r['path']==MODULE.TEMPLATES_ASSERTION_PIN else 'added',sha=r['sha'])
+            for r in self.templates_rows if r['path'] in (*MODULE.PRODUCER_PATHS,MODULE.TEMPLATES_ASSERTION_PIN)]
+        roster = responses.pop(f"repos/{repo}/commits/{self.fixture['head']}/check-runs?per_page=100")
+        roster['check_runs'][0]['head_sha'] = self.templates_head
+        responses[f'repos/{repo}/commits/{self.templates_head}/check-runs?per_page=100'] = roster
+        for endpoint in (f'repos/{repo}/actions/runs/7', f'repos/{repo}/actions/jobs/8'):
+            responses[endpoint]['head_sha'] = self.templates_head
+        after = copy.deepcopy(pr); after.update(state='closed',merged=True,merged_at='2026-10-13T00:00:00Z',merge_commit_sha=self.templates_head)
+        responses[f'repos/{repo}/compare/{self.templates_head}...{self.templates_head}'] = dict(status='identical',merge_base_commit=dict(sha=self.templates_head))
+        api = InstallationApi(fixture,[pr,pr,after]); api.runs[0]['head_sha']=self.templates_head
+        api.required = alias(api.required)
+        def merge(args, **kwargs):
+            api.attempts += 1
+            self.assertEqual(args[:3],['--method','PUT',f'repos/{repo}/pulls/1/merge'])
+            self.assertEqual(json.loads(kwargs['input_text']),dict(sha=self.templates_head,merge_method='squash'))
+            responses[f'repos/{repo}/git/ref/heads/main']['object']['sha']=self.templates_head
+            return dict(merged=True,sha=self.templates_head)
+        api._run = merge
+        return api,pr
+
+    def templates_contract(self,api,pr,delivered=False):
+        with mock.patch.object(MODULE.WatchGhApi,'_watch_read',side_effect=lambda command,accepted:(0,api.required)):
+            return api.installation_contract('FS-GG/FS.GG.Templates',1,pr,self.templates_head,self.fixture['source'],delivered=delivered)
+
+    def templates_blob(self,api,treeid,path,body):
+        repo='FS-GG/FS.GG.Templates'; endpoint=f'repos/{repo}/git/trees/{treeid}?recursive=1'
+        tree=copy.deepcopy(api.overrides.get(endpoint,api.fixture['responses'][endpoint]))
+        row=next(r for r in tree['tree'] if r['path']==path)
+        sha=MODULE.hashlib.sha1(b'blob '+str(len(body)).encode()+b'\0'+body).hexdigest(); row['sha']=sha
+        api.overrides[endpoint]=tree
+        api.overrides[f'repos/{repo}/git/blobs/{sha}']=dict(sha=sha,encoding='base64',size=len(body),content=MODULE.base64.b64encode(body).decode())
+
+    def test_templates_pin_refresh_preserves_bytes_and_single_cas_protected_readback(self):
+        api,pr=self.templates_api(); self.templates_contract(api,pr)
+        with mock.patch.object(MODULE.WatchGhApi,'_watch_read',side_effect=lambda command,accepted:(0,api.required)):
+            code,result=MODULE.summarize(api,repo='FS-GG/FS.GG.Templates',pr_number=1,expected_head=self.templates_head,
+                merge_method='squash',publication_required=False,apply=True,coherent_workflow='composition.yml',producer_source=self.fixture['source'])
+        self.assertEqual((code,api.attempts,result.producerInstallation,result.routineEligibility),(0,1,'delivered-activation-pending','unavailable-first-install'))
+
+    def test_templates_pin_wrong_receiver_mode_population_and_status_refuse(self):
+        repo='FS-GG/FS.GG.Templates'; files=f'repos/{repo}/pulls/1/files?per_page=100'
+        for change in ('id','name','mode','symlink','absent','extra','count','status','rename','sha'):
+            with self.subTest(change=change):
+                api,pr=self.templates_api(); r=api.fixture['responses']
+                endpoint=f'repos/{repo}/git/trees/{self.templates_tree}?recursive=1'
+                row=next(x for x in r[endpoint]['tree'] if x['path']==MODULE.TEMPLATES_ASSERTION_PIN)
+                pin=next(x for x in r[files] if x['filename']==MODULE.TEMPLATES_ASSERTION_PIN)
+                if change=='id': r[f'repos/{repo}']['id']=42; pr['base']['repo']['id']=pr['head']['repo']['id']=42
+                elif change=='name': r[f'repos/{repo}']['full_name']='FS-GG/Templates'
+                elif change=='mode': row['mode']='100755'
+                elif change=='symlink': row['mode']='120000'
+                elif change=='absent': r[endpoint]['tree'].remove(row)
+                elif change=='extra': next(x for x in r[endpoint]['tree'] if x['path']=='README.md')['sha']='f'*40
+                elif change=='count': pr['changed_files']=5
+                elif change=='status': pin['status']='added'
+                elif change=='rename': pin['previous_filename']='other'
+                elif change=='sha': pin['sha']='f'*40
+                with self.assertRaises(RuntimeError): self.templates_contract(api,pr)
+
+    def test_templates_pin_bad_original_assignment_or_extra_candidate_byte_refuse(self):
+        repo='FS-GG/FS.GG.Templates'; base_tree=self.fixture['responses'][f"repos/{repo.replace('FS.GG.Templates','FS.GG.Coordination')}/git/commits/{self.fixture['base']}"]['tree']['sha']
+        pin=self.assertion_old_pin.encode()
+        for body in (self.assertion_pin_base.replace(pin,b'main'),self.assertion_pin_base.replace(pin,pin[:-1]),
+                     self.assertion_pin_base.replace(b'"',b"'"),self.assertion_pin_base+b'SKILL_ASSERT_REF="'+pin+b'"\n',
+                     self.assertion_pin_base.replace(b'SKILL_ASSERT_REF=',b'export SKILL_ASSERT_REF='),
+                     self.assertion_pin_base.replace(b'SKILL_ASSERT_REF=',b' SKILL_ASSERT_REF=')):
+            api,pr=self.templates_api();self.templates_blob(api,base_tree,MODULE.TEMPLATES_ASSERTION_PIN,body)
+            with self.assertRaises(RuntimeError):self.templates_contract(api,pr)
+        derived=self.assertion_pin_base.replace(pin,self.fixture['source'].encode())
+        for body in (derived+b'\n',derived.replace(b'14d',b'30d'),derived.replace(self.fixture['source'].encode(),b'f'*40),derived.replace(b'header',b'changed')):
+            api,pr=self.templates_api();self.templates_blob(api,self.templates_tree,MODULE.TEMPLATES_ASSERTION_PIN,body)
+            with self.assertRaises(RuntimeError):self.templates_contract(api,pr)
+
+    def test_templates_pin_old_ancestry_commit_tree_bundle_identity_refuse(self):
+        old=self.assertion_old_pin; source=self.fixture['source']; prefix='repos/FS-GG/.github'
+        for change in ('lineage','base','mergebase','commit','tree','truncated','bundle','mode','forgedblob'):
+            with self.subTest(change=change):
+                api,pr=self.templates_api();r=api.fixture['responses']; lineage=r[f'{prefix}/compare/{old}...{source}?per_page=1&page=2']
+                tree=r[f"{prefix}/git/trees/{r[f'{prefix}/git/commits/{old}']['tree']['sha']}?recursive=1"]
+                row=next(x for x in tree['tree'] if x['path']==MODULE.ASSERTION_BUNDLE)
+                if change=='lineage':lineage['status']='diverged'
+                elif change=='base':lineage['base_commit']['sha']='f'*40
+                elif change=='mergebase':lineage['merge_base_commit']['sha']='f'*40
+                elif change=='commit':r[f'{prefix}/git/commits/{old}']['sha']='f'*40
+                elif change=='tree':tree['sha']='f'*40
+                elif change=='truncated':tree['truncated']=True
+                elif change=='bundle':row['sha']='f'*40
+                elif change=='mode':row['mode']='100755'
+                elif change=='forgedblob':r[f"{prefix}/git/blobs/{row['sha']}"]['content']=MODULE.base64.b64encode(b'forged').decode()
+                with self.assertRaises(RuntimeError):self.templates_contract(api,pr)
+
+    def test_templates_pin_fresh_cas_and_delivered_sixth_readback_refuse_drift(self):
+        api,pr=self.templates_api(); original=api.installation_contract
+        count=0
+        def contract(*args,**kwargs):
+            nonlocal count
+            count+=1
+            if count==2:
+                self.templates_blob(api,self.templates_tree,MODULE.TEMPLATES_ASSERTION_PIN,self.assertion_pin_base)
+            return original(*args,**kwargs)
+        with mock.patch.object(api,'installation_contract',side_effect=contract),mock.patch.object(MODULE.WatchGhApi,'_watch_read',side_effect=lambda command,accepted:(0,api.required)):
+            code,result=MODULE.summarize(api,repo='FS-GG/FS.GG.Templates',pr_number=1,expected_head=self.templates_head,merge_method='squash',publication_required=False,apply=True,coherent_workflow='composition.yml',producer_source=self.fixture['source'])
+        self.assertEqual((code,api.attempts),(2,0))
+        api,pr=self.templates_api();pr.update(merged=True,merge_commit_sha=self.templates_head)
+        api.fixture['responses']['repos/FS-GG/FS.GG.Templates/git/ref/heads/main']['object']['sha']=self.successor
+        with self.assertRaises(RuntimeError):self.templates_contract(api,pr,delivered=True)
+
+    def test_templates_pin_bounded_ancestry_metadata_and_transport_refusal(self):
+        endpoint=f"repos/FS-GG/.github/compare/{self.assertion_old_pin}...{self.fixture['source']}?per_page=1&page=2"
+        api,pr=self.templates_api(); reads=[]; original=api.installation_read
+        def observe(path):
+            reads.append(path)
+            return original(path)
+        api.installation_read=observe; self.templates_contract(api,pr)
+        self.assertIn(endpoint,reads)
+        self.assertNotIn(endpoint.split('?')[0],reads)
+        for refusal in (RuntimeError('native query combined stdout/stderr exceeded byte bound'),
+                        RuntimeError('native query direct-child retirement is unknown'),
+                        dict(status='ahead',base_commit=dict(sha=self.assertion_old_pin)),
+                        dict(status='ahead',base_commit=dict(sha=self.assertion_old_pin),merge_base_commit=dict(sha='f'*40))):
+            api,pr=self.templates_api();api.overrides[endpoint]=refusal
+            with self.assertRaises(RuntimeError):self.templates_contract(api,pr)
+            self.assertEqual(api.attempts,0)
 
     def test_derived_registration_preserves_original_bytes_and_native_file_boundary(self):
         api,pr=self.registration_api();self.registration_contract(api,pr);self.assertEqual(api.attempts,0)

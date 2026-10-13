@@ -77,6 +77,13 @@ Only native `FS-GG/FS.GG.Coordination` (repository ID `1346720714`) may addition
 workflow record. The helper preserves every original byte and record order, derives the SHA-256 from the
 protected canonical routine workflow, and requires empty external/local references and no `uses:` steps.
 Duplicate keys, existing registration, creation, deletion, mode changes or any other edit refuse.
+Only native `FS-GG/FS.GG.Templates` (repository ID `1281961814`) may instead modify its existing regular
+`tests/composition/lib/skill-union.sh` as the sixth file, replacing exactly one double-quoted full-SHA
+`SKILL_ASSERT_REF` assignment with the explicitly selected protected producer source. Every other byte
+and the file mode must remain unchanged. The old pin must be an authenticated ancestor of that source,
+and independent native commit/tree/blob reads must establish identical regular `dist/skill-union-assert.sh`
+bytes and mode at both pins. The bounded ancestry comparison establishes metadata only; it makes no
+historical file-population claim. Other edits, receivers, malformed assignments or changed bundles refuse.
 Supply the exact repository/PR/head, completed receiver coherent workflow and `--publication none`.
 The accountable owner explicitly selects this closed technical predicate under ADR-0079; it does not
 select heavyweight process or turn a missing gate into passing eligibility.
