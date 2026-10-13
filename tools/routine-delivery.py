@@ -31,12 +31,71 @@ MAX_SELECTION_ARCHIVE_BYTES = 1_048_576
 MAX_SELECTION_UNCOMPRESSED_BYTES = 1_048_576
 MAX_SELECTION_ENTRIES = 128
 MAX_SELECTION_BYTES = 65_536
+PRODUCER_REGISTRATION = "evidence/github-substrate-v2/gs2-06-7/execution-pins-extension.json"
 PRODUCER_REPOSITORY = "FS-GG/.github"
 PRODUCER_PATHS = (
     ".fsgg/routine-development.json", ".github/workflows/routine-eligibility.yml",
     "scripts/check-claim-generation.py", "scripts/check-routine-eligibility-envelope.py",
     "scripts/lib/gate.py",
 )
+
+
+def installation_registration(base: bytes, workflow: bytes) -> bytes:
+    """Append only the derived workflow record while preserving every original byte."""
+    def unique(pairs):
+        result = {}
+        for key, value in pairs:
+            if key in result:
+                raise RuntimeError("installation registration has duplicate JSON keys")
+            result[key] = value
+        return result
+    try:
+        text = base.decode("utf-8")
+        decoder = json.JSONDecoder(object_pairs_hook=unique)
+        value = json.loads(text, object_pairs_hook=unique)
+    except (UnicodeError, ValueError) as error:
+        raise RuntimeError("installation registration is malformed") from error
+    if (not isinstance(value, dict) or set(value) != {"schema", "complete", "documents"}
+            or value["schema"] != "fsgg.coordination.execution-pins-extension/1"
+            or value["complete"] is not True or not isinstance(value["documents"], list)
+            or len(value["documents"]) > 128):
+        raise RuntimeError("installation registration schema is incomplete")
+    paths = set()
+    for row in value["documents"]:
+        if (not isinstance(row, dict) or set(row) != {"kind", "path", "sha256", "externalReferences", "localReferences"}
+                or row["kind"] not in ("workflow", "action")
+                or not isinstance(row["path"], str) or not row["path"] or len(row["path"]) > 1024
+                or row["path"] in paths or row["path"] == PRODUCER_PATHS[1]
+                or not isinstance(row["sha256"], str) or not re.fullmatch("[0-9a-f]{64}", row["sha256"])
+                or any(not isinstance(row[key], list) or len(row[key]) > 128
+                       or any(not isinstance(ref, str) or not ref or len(ref) > 1024 for ref in row[key])
+                       for key in ("externalReferences", "localReferences"))):
+            raise RuntimeError("installation registration document differs or already exists")
+        paths.add(row["path"])
+    if re.search(rb"(?m)^\s*(?:-\s*)?uses:\s*", workflow):
+        raise RuntimeError("canonical installation workflow references are not empty")
+    record = dict(kind="workflow", path=PRODUCER_PATHS[1], sha256=hashlib.sha256(workflow).hexdigest(),
+                  externalReferences=[], localReferences=[])
+    # Locate the top-level documents array with the same decoder; never rewrite old records.
+    cursor = text.index("{") + 1
+    while True:
+        cursor += len(text[cursor:]) - len(text[cursor:].lstrip())
+        key, cursor = decoder.raw_decode(text, cursor)
+        cursor += len(text[cursor:]) - len(text[cursor:].lstrip())
+        if text[cursor] != ":":
+            raise RuntimeError("installation registration key separator differs")
+        cursor += 1
+        cursor += len(text[cursor:]) - len(text[cursor:].lstrip())
+        _, end = decoder.raw_decode(text, cursor)
+        if key == "documents":
+            insertion = end - 1
+            appended = ("," if value["documents"] else "") + "\n" + json.dumps(record, indent=2) + "\n"
+            return (text[:insertion] + appended + text[insertion:]).encode("utf-8")
+        cursor = end
+        cursor += len(text[cursor:]) - len(text[cursor:].lstrip())
+        if text[cursor] != ",":
+            raise RuntimeError("installation registration documents array is missing")
+        cursor += 1
 
 
 class AmbiguousWrite(RuntimeError):
@@ -239,7 +298,7 @@ class GhApi:
             raise RuntimeError("installation repository identity is unestablished")
         base_ref, base = base_of(pr)
         if (base_ref != metadata["default_branch"] or base is None
-                or head_of(pr) != head or pr.get("changed_files") != 5
+                or head_of(pr) != head or pr.get("changed_files") not in (5, 6)
                 or pr.get("draft") is not False
                 or pr.get("number") != number or (pr.get("base") or {}).get("repo", {}).get("id") != metadata["id"]
                 or type((pr.get("base") or {}).get("repo", {}).get("id")) is not int
@@ -268,14 +327,24 @@ class GhApi:
         if (not isinstance(owner, dict) or owner.get("full_name") != PRODUCER_REPOSITORY
                 or owner.get("id") != 1269292704 or owner.get("default_branch") != "main"):
             raise RuntimeError("canonical installation producer repository differs")
-        lineage = self.installation_read(f"repos/{PRODUCER_REPOSITORY}/compare/{source}...main")
+        owner_ref = self.installation_read(f"repos/{PRODUCER_REPOSITORY}/git/ref/heads/main")
+        owner_head = (owner_ref.get("object") or {}).get("sha") if isinstance(owner_ref, dict) else None
+        if (not isinstance(owner_ref, dict) or owner_ref.get("ref") != "refs/heads/main"
+                or (owner_ref.get("object") or {}).get("type") != "commit"
+                or not isinstance(owner_head, str) or not SHA_RE.fullmatch(owner_head)):
+            raise RuntimeError("current protected producer identity is missing")
+        lineage = self.installation_read(f"repos/{PRODUCER_REPOSITORY}/compare/{source}...{owner_head}")
         if (not isinstance(lineage, dict) or (lineage.get("merge_base_commit") or {}).get("sha") != source
+                or (lineage.get("base_commit") or {}).get("sha") != source
                 or lineage.get("status") not in ("identical", "ahead")):
             raise RuntimeError("installation producer is not a protected-main ancestor")
         canonical = self.installation_tree(PRODUCER_REPOSITORY, source)
-        owner_head = (lineage.get("head_commit") or {}).get("sha")
-        if not isinstance(owner_head, str) or not SHA_RE.fullmatch(owner_head):
-            raise RuntimeError("current protected producer identity is missing")
+        def protected_owner_still_current():
+            latest = self.installation_read(f"repos/{PRODUCER_REPOSITORY}/git/ref/heads/main")
+            if (not isinstance(latest, dict) or latest.get("ref") != "refs/heads/main"
+                    or (latest.get("object") or {}).get("type") != "commit"
+                    or (latest.get("object") or {}).get("sha") != owner_head):
+                raise RuntimeError("installation protected producer moved during inspection")
         current_owner = self.installation_tree(PRODUCER_REPOSITORY, owner_head)
         inventory_row = current_owner.get("src/FS.GG.Drivers/workspace-inventory.json")
         if inventory_row is None:
@@ -301,13 +370,27 @@ class GhApi:
                                for p, r in tree.items() if r.get("type") != "tree"}
         a, b = leaves(old), leaves(candidate)
         changed = {p for p in a.keys() | b.keys() if a.get(p) != b.get(p)}
-        if changed != set(PRODUCER_PATHS):
-            raise RuntimeError("installation must add exactly the canonical five files")
+        expected = set(PRODUCER_PATHS)
+        if PRODUCER_REGISTRATION in changed:
+            if repo != "FS-GG/FS.GG.Coordination" or metadata["id"] != 1346720714:
+                raise RuntimeError("derived installation registration belongs only to the native Coordination receiver")
+            original, registered = old.get(PRODUCER_REGISTRATION), candidate.get(PRODUCER_REGISTRATION)
+            if (original is None or registered is None or original.get("type") != "blob"
+                    or original.get("mode") != "100644" or registered.get("mode") != "100644"
+                    or registered.get("type") != "blob"):
+                raise RuntimeError("installation registration must modify an existing regular file without mode change")
+            derived = installation_registration(self.installation_blob(repo, original),
+                self.installation_blob(PRODUCER_REPOSITORY, canonical[PRODUCER_PATHS[1]]))
+            if self.installation_blob(repo, registered) != derived:
+                raise RuntimeError("installation registration must append exactly the derived workflow record")
+            expected.add(PRODUCER_REGISTRATION)
+        if changed != expected or pr.get("changed_files") != len(expected):
+            raise RuntimeError("installation must add canonical five files with only optional derived registration")
         files = self.installation_read(f"repos/{repo}/pulls/{number}/files?per_page=100")
-        if (not isinstance(files, list) or len(files) != 5
-                or any(not isinstance(r, dict) or r.get("status") != "added"
+        if (not isinstance(files, list) or len(files) != len(expected)
+                or any(not isinstance(r, dict) or r.get("status") != ("modified" if r.get("filename") == PRODUCER_REGISTRATION else "added")
                        or r.get("previous_filename") is not None for r in files)
-                or {r.get("filename") for r in files} != set(PRODUCER_PATHS)
+                or {r.get("filename") for r in files} != expected
                 or any(r.get("sha") != candidate[r["filename"]]["sha"] for r in files)):
             raise RuntimeError("installation file-list population/status/identity differs")
         for path in PRODUCER_PATHS:
@@ -321,12 +404,13 @@ class GhApi:
                 raise RuntimeError("installation protected merge identity is unknown")
             merged_tree = leaves(self.installation_tree(repo, merge))
             protected_tree = leaves(self.installation_tree(repo, current))
-            if any(merged_tree.get(p) != b[p] or protected_tree.get(p) != b[p] for p in PRODUCER_PATHS):
+            if any(merged_tree.get(p) != b[p] or protected_tree.get(p) != b[p] for p in expected):
                 raise RuntimeError("installation protected payload readback differs")
             ancestry = self.installation_read(f"repos/{repo}/compare/{merge}...{current}")
             if ((ancestry.get("merge_base_commit") or {}).get("sha") != merge
                     or ancestry.get("status") not in ("identical", "ahead")):
                 raise RuntimeError("installation protected payload/ancestry readback differs")
+            protected_owner_still_current()
             return
         # Full native listings, not a workflow404 (which could hide denied metadata).
         workflows = self.installation_read(f"repos/{repo}/actions/workflows?per_page=100")
@@ -340,6 +424,7 @@ class GhApi:
                 or any(r.get("name") == "routine-eligibility" for r in checks["check_runs"])):
             raise RuntimeError("native eligibility producer/check already exists")
         self.installation_required_checks(repo, number, head, checks["check_runs"])
+        protected_owner_still_current()
 
     def installation_required_checks(self, repo: str, number: int, head: str, roster: list[dict]) -> None:
         # The existing native checks reader remains the receiver-specific requirement authority.
