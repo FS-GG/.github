@@ -33,7 +33,7 @@ MERGE = "b" * 40
 
 def opened(head: str = HEAD) -> dict:
     return {
-        "head": {"sha": head}, "state": "open", "draft": False, "merged": False,
+        "head": {"sha": head, "ref": "feature/fixture"}, "body": "Fixture prose", "state": "open", "draft": False, "merged": False,
         "merged_at": None, "mergeable": True, "mergeable_state": "clean",
         "base": {"ref": "main", "sha": "d" * 40},
     }
@@ -41,7 +41,7 @@ def opened(head: str = HEAD) -> dict:
 
 def merged(head: str = HEAD) -> dict:
     return {
-        "head": {"sha": head}, "state": "closed", "draft": False, "merged": True,
+        "head": {"sha": head, "ref": "feature/fixture"}, "body": "Fixture prose", "state": "closed", "draft": False, "merged": True,
         "merged_at": "2026-09-07T00:00:00Z", "merge_commit_sha": MERGE,
         "base": {"ref": "main", "sha": "d" * 40},
     }
@@ -80,6 +80,9 @@ class FakeApi:
 
     def coherent_jobs(self, repo: str, run_id: int) -> list[dict]:
         return next(self.job_reads) if self.job_reads is not None else self.jobs
+
+    def routine_eligibility(self, repo: str, head: str, branch: str) -> None:
+        pass
 
 
 def run(status: str = "in_progress", conclusion: str | None = None, run_id: int = 7) -> dict:
@@ -144,6 +147,86 @@ class RoutineDeliveryTests(unittest.TestCase):
         code, result = self.call(api, apply=False)
         self.assertEqual((code, result.outcome, api.attempts), (0, "ready", 0))
         self.assertEqual((asdict(result)["expectedHead"], asdict(result)["observedHead"]), (HEAD, HEAD))
+
+    def test_routine_body_refuses_before_coherent_or_candidate_observation(self):
+        for body in (None, "missing", f"<!-- fsgg:routine-development/v1 head={'b' * 40} operation=source-change -->"):
+            with self.subTest(body=body):
+                pr = opened(); pr['head']['ref'] = 'routine/fixture'; pr['body'] = body
+                api = FakeApi([pr]); api.coherent_runs = mock.Mock(side_effect=AssertionError('expensive query'))
+                observer = mock.Mock()
+                code, result = MODULE.summarize(api, repo='FS-GG/.github', pr_number=1, expected_head=HEAD,
+                    merge_method='squash', publication_required=False, apply=True,
+                    coherent_workflow='coherent.yml', candidate_observer=observer)
+                self.assertEqual((code, api.attempts, result.routineEligibility), (2, 0, 'unresolved'))
+                observer.assert_not_called()
+        for branch in ('feature/fixture', 'item/7-fixture'):
+            with self.subTest(branch=branch):
+                pr=opened(); pr['head']['ref']=branch; pr['body']=None
+                code,result=self.call(FakeApi([pr]),apply=False)
+                self.assertEqual((code,result.outcome,result.routineEligibility),(0,'ready','not-required'))
+
+    def test_routine_late_body_change_and_new_failed_check_stop_merge(self):
+        pr = opened(); pr['head']['ref'] = 'routine/fixture'
+        pr['body'] = f'<!-- fsgg:routine-development/v1 head={HEAD} operation=source-change -->'
+        for late_body, eligibility in ((pr['body'] + '\nChanged prose', None), (pr['body'], RuntimeError('newest failed'))):
+            with self.subTest(late_body=late_body):
+                late = json.loads(json.dumps(pr)); late['body'] = late_body
+                api = FakeApi([pr, late]); api.routine_eligibility = mock.Mock(side_effect=[None, eligibility])
+                code, result = self.call(api)
+                self.assertEqual((code, result.attempts, api.attempts), (2, 0, 0))
+        api = FakeApi([pr, pr, merged()], [{'merged': True, 'sha': MERGE}])
+        code, result = self.call(api)
+        self.assertEqual((code, result.codeDelivery, api.attempts, result.routineEligibility), (0, 'delivered', 1, 'passed'))
+
+    def test_merged_routine_failure_preserves_delivery_and_coherent_truth(self):
+        pr = merged(); pr['head']['ref'] = 'routine/fixture'; pr['body'] = 'missing'
+        api = FakeApi([pr], runs=[run('completed', 'success')])
+        code, result = self.call(api, coherent=True)
+        self.assertEqual((code, result.codeDelivery, result.mergeCommit, result.coherentValidation,
+            result.routineEligibility, api.attempts), (4, 'delivered', MERGE, 'passed', 'unresolved', 0))
+
+    def test_native_routine_provenance_and_latest_selection(self):
+        repo = 'FS-GG/.github'; workflow = {'id':352355034, 'path':'.github/workflows/routine-eligibility.yml'}
+        def evidence(job_id=11, status='completed', conclusion='success', time='2026-10-13T00:00:00Z'):
+            check = {'id':job_id, 'name':'routine-eligibility', 'app':{'id':15368}, 'head_sha':HEAD,
+                'details_url':f'https://github.com/{repo}/actions/runs/7/job/{job_id}',
+                'check_suite':{'id':13}, 'status':status, 'conclusion':conclusion, 'started_at':time}
+            run = {'id':7, 'workflow_id':352355034, 'path':workflow['path'], 'event':'pull_request_target',
+                'head_sha':HEAD, 'head_branch':'routine/fixture', 'status':'completed', 'conclusion':'success',
+                'check_suite_id':13, 'repository':{'full_name':repo}, 'run_attempt':1, 'pull_requests':[]}
+            job = {'id':job_id, 'run_id':7, 'head_sha':HEAD, 'name':'routine-eligibility',
+                'check_run_url':f'https://api.github.com/repos/{repo}/check-runs/{job_id}',
+                'run_attempt':1, 'status':status, 'conclusion':conclusion}
+            return check, run, job
+        check, native_run, job = evidence()
+        variants = [(None,None), ('check','head_sha'), ('check','app'), ('run','event'), ('run','workflow_id'),
+            ('run','repository'), ('run','check_suite_id'), ('job','run_attempt'), ('job','head_sha')]
+        for section, field in variants:
+            c,r,j = json.loads(json.dumps([check,native_run,job]))
+            if section: {'check':c,'run':r,'job':j}[section][field] = 'wrong'
+            api = MODULE.GhApi()
+            with mock.patch.object(api, '_run', side_effect=[{'total_count':1,'check_runs':[c]},workflow,r,j]):
+                if section:
+                    with self.assertRaises(RuntimeError): api.routine_eligibility(repo,HEAD,'routine/fixture')
+                else: api.routine_eligibility(repo,HEAD,'routine/fixture')
+        for status, conclusion in [('in_progress',None),('completed','failure')]:
+            c,r,j = evidence(12,status,conclusion,'2026-10-13T00:01:00Z')
+            api=MODULE.GhApi()
+            with mock.patch.object(api,'_run',side_effect=[{'total_count':2,'check_runs':[check,c]},workflow,native_run,job,r,j]):
+                with self.assertRaisesRegex(RuntimeError,'latest'): api.routine_eligibility(repo,HEAD,'routine/fixture')
+        api=MODULE.GhApi()
+        with mock.patch.object(api,'_run',return_value={'total_count':2,'check_runs':[check]}):
+            with self.assertRaisesRegex(RuntimeError,'incomplete'): api.routine_eligibility(repo,HEAD,'routine/fixture')
+        for attempt,status,conclusion,branch in [(2,'in_progress',None,'routine/fixture'),
+                (2,'completed','failure','routine/fixture'),(2,'completed','success','routine/fixture'),
+                (1,'in_progress',None,'routine/fixture'),(1,'completed','failure','routine/fixture'),
+                (1,'completed','success','routine/wrong')]:
+            with self.subTest(attempt=attempt,status=status,conclusion=conclusion,branch=branch):
+                r=dict(native_run,run_attempt=attempt,status=status,conclusion=conclusion,head_branch=branch)
+                api=MODULE.GhApi()
+                with mock.patch.object(api,'_run',side_effect=[{'total_count':1,'check_runs':[check]},workflow,r,job]):
+                    with self.assertRaisesRegex(RuntimeError,'current run attempt/branch'):
+                        api.routine_eligibility(repo,HEAD,'routine/fixture')
 
     def test_native_merge_is_head_conditioned_and_uses_no_bypass(self):
         api = MODULE.GhApi()
@@ -1095,4 +1178,8 @@ class DashboardEventTests(unittest.TestCase):
 
 
 if __name__ == "__main__":
+    def inert(event, args):
+        if event in ("socket.connect", "subprocess.Popen", "os.system", "os.exec"):
+            raise RuntimeError("offline delivery qualification refuses native effects")
+    sys.addaudithook(inert)
     unittest.main()

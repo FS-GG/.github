@@ -1007,3 +1007,13 @@ The original successful `.103` candidate remains fixed at run `38290966724` atte
 The fresh-genesis source-equality assumption was invalidated when unrelated documentation and guidance advanced main after packing. The implementation's explicit fixed-original selection separates original candidate provenance from the immutable compatible publisher revision. Its fresh native descendant and dependency checks supplement existing journal classification, uniqueness and per-effect authority; they never authorize historical publisher dispatch, another candidate build, original-effect replay or a journal reset. Before the protected operation, authenticate the retained original artifact again and independently admit the workflow's credential exchanges, runtime/custody and observation budget. Even `publish=false` performs the App token and NuGet OIDC exchanges. Source qualification is a routine delivery outcome; all native release and adoption boundaries below remain separately pending.
 
 The source repair has no fresh-workspace, installed-runtime or lifecycle-default impact. Existing C3 acceptance continues with original-byte coherent publication, public readback, receiver installation and genuinely admitted native provider qualification; whole UTEL remains open.
+
+A later original preflight stopped before dispatch when the compatible publisher's
+ordinary post-merge check found a missing routine-development marker on its source
+PR. Repair the canonical body producer and delivery consumer through a new nonempty,
+normally qualified PR; retain the original failed attempts and full source evidence.
+A successful replacement main preflight can release the installed ordinary-v2
+credential job, so admit that exact automatic settlement path before merging the
+replacement publisher. Qualify its full exact-main workflow and all native gates,
+then select the new compatible immutable publisher while preserving the accepted
+original .103 candidate.

@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import math
 import hashlib
+import importlib.util
 import io
 import json
 import pathlib
@@ -154,6 +155,8 @@ class NativeApi(Protocol):
 
     def coherent_jobs(self, repo: str, run_id: int) -> list[dict[str, Any]]: ...
 
+    def routine_eligibility(self, repo: str, head: str, branch: str) -> None: ...
+
 
 class GhApi:
     @staticmethod
@@ -189,6 +192,62 @@ class GhApi:
         if not isinstance(value, dict):
             raise RuntimeError("GitHub returned a non-object pull request")
         return value
+
+    def routine_eligibility(self, repo: str, head: str, branch: str) -> None:
+        """Require a complete bounded roster and authenticate every named producer."""
+        value = self._run([f"repos/{repo}/commits/{head}/check-runs?per_page=100"])
+        count = value.get("total_count") if isinstance(value, dict) else None
+        checks = value.get("check_runs") if isinstance(value, dict) else None
+        if (type(count) is not int or not 0 <= count <= 100 or not isinstance(checks, list)
+                or len(checks) != count or any(not isinstance(check, dict) for check in checks)):
+            raise RuntimeError("routine eligibility check population is incomplete")
+        matches = [check for check in checks if check.get("name") == "routine-eligibility"]
+        if not matches or len({check.get("id") for check in matches}) != len(matches):
+            raise RuntimeError("routine eligibility check is missing or duplicated")
+        workflow = self._run([f"repos/{repo}/actions/workflows/routine-eligibility.yml"])
+        workflow_id = workflow.get("id") if isinstance(workflow, dict) else None
+        if (type(workflow_id) is not int or workflow_id < 1
+                or workflow.get("path") != ".github/workflows/routine-eligibility.yml"
+                or (repo == "FS-GG/.github" and workflow_id != 352355034)):
+            raise RuntimeError("routine eligibility producer identity is unestablished")
+        native = {}
+        for check in matches:
+            if not isinstance(check.get("details_url"), str) or not isinstance(check.get("app"), dict) or not isinstance(check.get("check_suite"), dict):
+                raise RuntimeError("routine eligibility check identity is malformed")
+            match = re.fullmatch(rf"https://github\.com/{re.escape(repo)}/actions/runs/([1-9][0-9]*)/job/([1-9][0-9]*)",
+                                 check.get("details_url", ""))
+            if (match is None or check.get("app", {}).get("id") != 15368
+                    or check.get("head_sha") != head):
+                raise RuntimeError("routine eligibility has no valid native producer")
+            run_id, job_id = map(int, match.groups())
+            suite = check.get("check_suite", {}).get("id")
+            run = self._run([f"repos/{repo}/actions/runs/{run_id}"])
+            job = self._run([f"repos/{repo}/actions/jobs/{job_id}"])
+            if (type(suite) is not int or suite < 1 or check.get("id") != job_id
+                    or not isinstance(run, dict) or not isinstance(job, dict)
+                    or run.get("id") != run_id or run.get("workflow_id") != workflow_id
+                    or run.get("path") != workflow["path"] or run.get("event") != "pull_request_target"
+                    or run.get("head_sha") != head or run.get("check_suite_id") != suite
+                    or not isinstance(run.get("repository"), dict) or run["repository"].get("full_name") != repo
+                    or type(run.get("run_attempt")) is not int or run["run_attempt"] < 1
+                    or job.get("id") != job_id or job.get("run_id") != run_id
+                    or job.get("head_sha") != head or job.get("name") != "routine-eligibility"
+                    or job.get("check_run_url") != f"https://api.github.com/repos/{repo}/check-runs/{job_id}"
+                    or type(job.get("run_attempt")) is not int
+                    or not 1 <= job["run_attempt"] <= run["run_attempt"]
+                    or job.get("status") != check.get("status") or job.get("conclusion") != check.get("conclusion")):
+                raise RuntimeError("routine eligibility run/job/suite/attempt provenance differs")
+            native[job_id] = (run, job)
+        try:
+            newest = max(matches, key=lambda check: (datetime.fromisoformat(check["started_at"].replace("Z", "+00:00")), check["id"]))
+        except (KeyError, TypeError, ValueError) as error:
+            raise RuntimeError("routine eligibility ordering identity is malformed") from error
+        if newest.get("status") != "completed" or newest.get("conclusion") != "success":
+            raise RuntimeError("latest routine eligibility check is not successful")
+        run, job = native[newest["id"]]
+        if (job["run_attempt"] != run["run_attempt"] or run.get("status") != "completed"
+                or run.get("conclusion") != "success" or run.get("head_branch") != branch):
+            raise RuntimeError("selected routine eligibility is not the successful current run attempt/branch")
 
     def merge(self, request: MergeEffectRequest) -> dict[str, Any]:
         payload = json.dumps(
@@ -315,6 +374,7 @@ class Summary:
     outcomeAt: str | None = None
     observedAt: str | None = None
     telemetryHealth: str = "not-configured"
+    routineEligibility: str = "not-required"
 
 
 def observe_candidate(
@@ -606,6 +666,22 @@ def eligible(pr: dict[str, Any], expected_head: str) -> tuple[bool, str | None]:
     return True, None
 
 
+def routine_contract(api: NativeApi, repo: str, pr: dict[str, Any], head: str) -> str:
+    path = pathlib.Path(__file__).with_name("pr-lane-admission.py")
+    spec = importlib.util.spec_from_file_location("routine_lane_body", path)
+    module = importlib.util.module_from_spec(spec)
+    assert spec and spec.loader
+    spec.loader.exec_module(module)
+    try:
+        routine = module.validate_routine_body(pr.get("body"), (pr.get("head") or {}).get("ref"), head)
+    except (module.ToolError, ValueError) as error:
+        raise RuntimeError(str(error)) from error
+    if not routine:
+        return "not-required"
+    api.routine_eligibility(repo, head, pr["head"]["ref"])
+    return "passed"
+
+
 def summarize(
     api: NativeApi,
     *,
@@ -623,6 +699,7 @@ def summarize(
     if not isinstance(before, dict):
         raise RuntimeError("native pull request readback is not an object")
     base_ref, base_sha = base_of(before)
+    routine_state = "unobserved"
     def bound(*values: Any, native: dict[str, Any] = before) -> Summary:
         now = datetime.now(timezone.utc)
         outcome_at = outcome_time_of(native)
@@ -632,7 +709,8 @@ def summarize(
                 now = parsed_outcome
         return Summary(*values, baseRef=base_ref, baseSha=base_sha,
                        outcomeAt=outcome_at,
-                       observedAt=now.isoformat().replace("+00:00", "Z"))
+                       observedAt=now.isoformat().replace("+00:00", "Z"),
+                       routineEligibility=routine_state)
     allowed, reason = eligible(before, expected_head)
     observed = head_of(before)
     if not allowed:
@@ -646,6 +724,16 @@ def summarize(
             "refused", "not-delivered", publication, None, 0,
             "pull request base identity is unreadable", "current", "unobserved",
         )
+    routine_reason = None
+    try:
+        routine_state = routine_contract(api, repo, before, expected_head)
+    except RuntimeError as error:
+        routine_state, routine_reason = "unresolved", str(error)
+        if not is_merged(before):
+            return 2, bound(
+                "fsgg.routine-delivery/v1", repo, pr_number, expected_head, observed,
+                "refused", "not-delivered", publication, None, 0, routine_reason, "current", "unobserved",
+            )
     disposition, coherent = "current", "not-required"
     if coherent_workflow:
         disposition, coherent, reason = validation_state(api, repo, coherent_workflow, expected_head)
@@ -657,12 +745,13 @@ def summarize(
                 disposition, coherent,
             )
     if is_merged(before):
-        disputed = coherent == "failed" or disposition in {"invalid", "deferred", "failed"}
+        coherent_disputed = coherent == "failed" or disposition in {"invalid", "deferred", "failed"}
+        disputed = coherent_disputed or routine_state == "unresolved"
         return 4 if disputed else 0, bound(
             "fsgg.routine-delivery/v1", repo, pr_number, expected_head, observed,
             "delivered-disputed" if disputed else "delivered", "delivered",
-            publication, merged_commit_of(before), 0, reason if disputed else None, disposition,
-            "disputed" if disputed else coherent,
+            publication, merged_commit_of(before), 0, routine_reason or (reason if disputed else None), disposition,
+            "disputed" if coherent_disputed else coherent,
         )
     if observed == expected_head and candidate_observer is not None:
         candidate_observer(bound(
@@ -674,6 +763,25 @@ def summarize(
             "fsgg.routine-delivery/v1", repo, pr_number, expected_head, observed,
             "ready", "not-delivered", publication, None, 0, None, disposition, coherent,
         )
+
+    if routine_state == "passed":
+        current = None
+        try:
+            current = api.get_pr(repo, pr_number)
+            current_allowed, current_reason = eligible(current, expected_head)
+            if (not current_allowed or is_merged(current) or base_of(current) != base_of(before)
+                    or current.get("body") != before.get("body")
+                    or (current.get("head") or {}).get("ref") != (before.get("head") or {}).get("ref")):
+                raise RuntimeError(current_reason or "routine PR envelope changed before merge")
+            routine_state = routine_contract(api, repo, current, expected_head)
+            if routine_state != "passed":
+                raise RuntimeError("routine route changed before merge")
+        except RuntimeError as error:
+            routine_state = "unresolved"
+            return 2, bound(
+                "fsgg.routine-delivery/v1", repo, pr_number, expected_head, head_of(current) if isinstance(current, dict) else None,
+                "refused", "not-delivered", publication, None, 0, str(error), disposition, coherent,
+            )
 
     request = merge_effect_request(
         repo, pr_number, expected_head, base_ref, base_sha, merge_method,
