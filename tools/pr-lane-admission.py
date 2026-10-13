@@ -7,6 +7,7 @@ import argparse
 import contextlib
 import fcntl
 import hashlib
+import importlib.util
 import json
 import os
 import pathlib
@@ -73,6 +74,56 @@ def append_marker(body: str, generated_marker: str) -> str:
     else:
         separator = "\n\n"
     return f"{body}{separator}{generated_marker}\n"
+
+
+def routine_validator():
+    """Reuse the owning gate's parser and policy without invoking its CLI."""
+    path = pathlib.Path(__file__).resolve().parents[1] / "scripts/check-claim-generation.py"
+    spec = importlib.util.spec_from_file_location("routine_body_validator", path)
+    module = importlib.util.module_from_spec(spec)
+    assert spec and spec.loader
+    spec.loader.exec_module(module)
+    return module
+
+
+def validate_routine_body(body: str, branch: str, head: str) -> bool:
+    if not isinstance(branch, str) or not branch:
+        raise ToolError("pull request branch is unreadable")
+    if not branch.startswith("routine/"):
+        return False
+    if not isinstance(body, str):
+        raise ToolError("routine pull request body is unreadable")
+    gate = routine_validator()
+    if not gate.ROUTINE_BRANCH_RE.fullmatch(branch) or not gate.HEAD_SHA_RE.fullmatch(head):
+        raise ToolError("routine branch and head must match the routine branch/40-hex contract")
+    matches = list(gate.ROUTINE_MARKER_RE.finditer(body))
+    if len(matches) != 1 or body.count("fsgg:routine-development") != 1:
+        raise ToolError("exactly one complete routine-development marker is required")
+    fields = gate.marker_fields(gate.ROUTINE_MARKER_RE, body)[0]
+    policy = gate.load_routine_policy(str(pathlib.Path(__file__).resolve().parents[1] / ".fsgg/routine-development.json"), None)
+    if fields.get("__duplicates__") or fields.get("head") != head:
+        raise ToolError("routine marker has duplicate fields or a stale/missing head")
+    operation = fields.get("operation")
+    if operation not in policy["allowedOperations"] or operation in policy["protectedOperations"]:
+        raise ToolError("routine marker operation is missing, unknown or protected")
+    return True
+
+
+def prepare_body(body: str, branch: str, head: str, campaign: str, chain: str) -> str:
+    """Prepare reviewed metadata once; never silently rebind an existing marker."""
+    if branch.startswith("routine/"):
+        if "fsgg:routine-development" not in body:
+            separator = "" if body.endswith("\n\n") else "\n" if body.endswith("\n") else "\n\n"
+            body = body + separator + (
+                f"<!-- fsgg:routine-development/v1 head={head} operation=source-change -->\n"
+            )
+        validate_routine_body(body, branch, head)
+    expected = marker(campaign, chain)
+    if "fsgg-pr-lane-admission" in body:
+        if marker_from_body(body) != (campaign, chain) or body.count("fsgg-pr-lane-admission") != 1:
+            raise ToolError("PR lane admission marker is malformed, duplicated or conflicts")
+        return body
+    return append_marker(body, expected)
 
 
 def run_gh(gh: str, arguments: list[str], stdin: str | None = None) -> Any:
@@ -232,9 +283,8 @@ def execute(arguments: argparse.Namespace) -> dict[str, Any]:
         original_body = arguments.body_file.read_text(encoding="utf-8")
     except (OSError, UnicodeError) as error:
         raise ToolError(f"could not read UTF-8 body file: {error}") from error
-    managed_body = append_marker(
-        original_body, marker(arguments.campaign_id, arguments.dependency_chain_id)
-    )
+    managed_body = prepare_body(original_body, arguments.head, arguments.head_sha,
+                                arguments.campaign_id, arguments.dependency_chain_id)
     identity = {
         "repo": arguments.repo,
         "campaignId": arguments.campaign_id,

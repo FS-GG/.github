@@ -1,4 +1,6 @@
 import json
+import argparse
+import importlib.util
 import os
 import pathlib
 import subprocess
@@ -21,7 +23,19 @@ def managed_body(campaign: str, chain: str) -> str:
 
 
 class PullRequestLaneAdmissionTests(unittest.TestCase):
-    def invoke(self, state, body="First line\nSecond line\n"):
+    @classmethod
+    def setUpClass(cls):
+        def inert(event, args):
+            if event == "socket.connect":
+                raise RuntimeError("offline qualification refuses network")
+            if event == "subprocess.Popen":
+                argv = args[1]
+                executable = pathlib.Path(argv[0]).name
+                if executable != "git" and not (argv[0] == sys.executable and str(TOOL) in argv) and argv[0] != str(FAKE_GH):
+                    raise RuntimeError("offline qualification refuses nonfixture child")
+        sys.addaudithook(inert)
+
+    def invoke(self, state, body="First line\nSecond line\n", branch="feature/combined", head=EXPECTED_SHA):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         directory = pathlib.Path(temporary.name)
@@ -35,6 +49,7 @@ class PullRequestLaneAdmissionTests(unittest.TestCase):
         completed = subprocess.run(
             [
                 sys.executable,
+                "-I", "-S", "-B",
                 str(TOOL),
                 "--repo",
                 "FS-GG/example",
@@ -43,9 +58,9 @@ class PullRequestLaneAdmissionTests(unittest.TestCase):
                 "--dependency-chain-id",
                 "chain-3",
                 "--head",
-                "feature/combined",
+                branch,
                 "--head-sha",
-                EXPECTED_SHA,
+                head,
                 "--base",
                 "main",
                 "--title",
@@ -134,6 +149,66 @@ class PullRequestLaneAdmissionTests(unittest.TestCase):
             payload["body"],
         )
         self.assertEqual("feature/combined", payload["head"])
+
+    def test_routine_creation_real_gate_and_idempotent_preparation(self):
+        spec = importlib.util.spec_from_file_location("canonical_lane", TOOL)
+        lane = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(lane)
+        with tempfile.TemporaryDirectory() as directory:
+            def git(*args):
+                return subprocess.check_output(["git", "-C", directory, *args], text=True).strip()
+            git("init", "-q")
+            git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.test", "commit", "--allow-empty", "-qm", "base")
+            base = git("rev-parse", "HEAD")
+            pathlib.Path(directory, "fixture.txt").write_text("nonempty source delta\n")
+            git("add", "fixture.txt")
+            git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.test", "commit", "-qm", "candidate")
+            head = git("rev-parse", "HEAD")
+            completed, result, calls = self.invoke({"head_sha": head, "open_pages": [[]]}, branch="routine/fixture", head=head)
+            self.assertEqual(0, completed.returncode, completed.stderr)
+            body = json.loads(calls[-1]["stdin"])["body"]
+            self.assertEqual(1, body.count("fsgg:routine-development/v1"))
+            self.assertEqual(body, lane.prepare_body(body, "routine/fixture", head, "campaign-7", "chain-3"))
+            gate = lane.routine_validator()
+            args = argparse.Namespace(base_sha=base, head_sha=head, head_ref="routine/fixture",
+                routine_policy=str(ROOT / ".fsgg/routine-development.json"), routine_policy_ref=None)
+            previous = os.getcwd()
+            try:
+                os.chdir(directory)
+                self.assertIsNone(gate.evaluate_routine(args, body)[0])
+                self.assertEqual("routine-missing", gate.evaluate_routine(args, "Original missing marker")[0])
+                self.assertEqual("routine-changed-head", gate.evaluate_routine(args, body.replace(head, "f" * 40))[0])
+                args.base_sha = head
+                self.assertEqual("routine-empty", gate.evaluate_routine(args, body)[0])
+            finally:
+                os.chdir(previous)
+
+    def test_routine_invalid_metadata_refuses_without_any_remote_call(self):
+        valid = f"<!-- fsgg:routine-development/v1 head={EXPECTED_SHA} operation=source-change -->"
+        cases = [(valid + valid, "routine/fixture", EXPECTED_SHA),
+                 (valid.replace("operation=source-change", "operation=publish"), "routine/fixture", EXPECTED_SHA),
+                 (valid.replace("head=", "head=" + "b" * 40 + " head="), "routine/fixture", EXPECTED_SHA),
+                 (valid.replace(EXPECTED_SHA, "b" * 40), "routine/fixture", EXPECTED_SHA),
+                 ("<!-- fsgg:routine-development/v1", "routine/fixture", EXPECTED_SHA),
+                 ("", "routine/INVALID", EXPECTED_SHA), ("", "routine/fixture", "a" * 64)]
+        for body, branch, head in cases:
+            with self.subTest(body=body, branch=branch):
+                completed, result, calls = self.invoke({"head_sha": head, "open_pages": [[]]}, body, branch, head)
+                self.assertNotEqual(0, completed.returncode)
+                self.assertEqual([], calls)
+
+    def test_existing_docs_marker_is_preserved_and_lane_conflicts_refuse(self):
+        body = f"Prose\n<!-- fsgg:routine-development/v1 head={EXPECTED_SHA} operation=internal-docs extra=value -->\n"
+        completed, _, calls = self.invoke({"head_sha": EXPECTED_SHA, "open_pages": [[]]}, body, "routine/docs")
+        self.assertEqual(0, completed.returncode)
+        self.assertTrue(json.loads(calls[-1]["stdin"])["body"].startswith(body))
+        conflict = body + managed_body("other", "chain")
+        completed, _, calls = self.invoke({"head_sha": EXPECTED_SHA, "open_pages": [[]]}, conflict, "routine/docs")
+        self.assertNotEqual(0, completed.returncode)
+        self.assertEqual([], calls)
+        completed, _, calls = self.invoke({'head_sha':'a' * 64,'open_pages':[[]]}, 'Generic prose\n', 'feature/generic', 'a' * 64)
+        self.assertEqual(0, completed.returncode)
+        self.assertNotIn('fsgg:routine-development',json.loads(calls[-1]['stdin'])['body'])
 
 
 if __name__ == "__main__":
