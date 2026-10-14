@@ -21,7 +21,7 @@ import zipfile
 from release_successor_admission import SingleOperatorAdmission
 from release_successor_execution import Refused, advance, ordered_effects
 from release_successor_journal import ProtectedReleaseJournal, REF, REPOSITORY as JOURNAL_REPOSITORY, canonical
-from release_successor_provider import GitHubAPI, LiveProvider, NotFound
+from release_successor_provider import GitHubAPI, LiveProvider, NotFound, sanitized_dispatch_diagnostic
 
 REPOSITORY = "FS-GG/.github"
 SUCCESSOR_VERSION = "0.103.0"
@@ -596,7 +596,22 @@ class ReportingProvider:
     def dispatch(self, effect):
         row = {"effect": effect.identity, "state": "unknown", "attempted": True}
         self.report["lastDispatch"] = row
-        result = self.provider.dispatch(effect)
+        def retain(error=None):
+            try:
+                value = getattr(self.provider, "last_dispatch_diagnostic", None)
+                if error is not None and value is None:
+                    value = {"category": "uncaught-provider-failure", "request": getattr(error, "diagnostic", None)}
+                diagnostic = sanitized_dispatch_diagnostic(value)
+                if diagnostic is not None:
+                    row["diagnostic"] = diagnostic
+            except BaseException:
+                row["diagnosticUnavailable"] = True  # Never change the provider's first outcome/cause.
+        try:
+            result = self.provider.dispatch(effect)
+        except BaseException as error:
+            retain(error)
+            raise
+        retain()
         row["state"] = result.state
         return result
 

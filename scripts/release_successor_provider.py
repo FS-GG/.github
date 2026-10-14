@@ -34,13 +34,116 @@ class Refused(RuntimeError):
     pass
 
 
+def request_diagnostic(url, method, status=None, headers=None, error=None):
+    """Retain bounded public request metadata, never credentials or free-form bodies."""
+    row = {"method": method if isinstance(method, str) and method in {"GET", "POST", "PATCH"} else "unknown",
+           "status": status if type(status) is int and 100 <= status <= 599 else None}
+    try:
+        parsed = urllib.parse.urlparse(url)
+    except Exception:
+        parsed = urllib.parse.urlparse("")
+    if parsed.scheme == "https" and parsed.netloc in {"api.github.com", "uploads.github.com"}:
+        path = parsed.path
+        if len(path) <= 512 and re.fullmatch(r"/[A-Za-z0-9._/%-]+", path):
+            row["path"] = path  # Queries, signed redirects and authentication are excluded.
+    def header(name):
+        try:
+            value = headers.get(name) if headers is not None else None
+            return value if isinstance(value, str) else None
+        except Exception:
+            return None
+    request_id = header("X-GitHub-Request-Id")
+    if isinstance(request_id, str) and re.fullmatch(r"[A-Za-z0-9:-]{1,128}", request_id):
+        row["requestId"] = request_id
+    for key, header_name in (("remaining", "X-RateLimit-Remaining"), ("reset", "X-RateLimit-Reset"),
+                        ("retryAfter", "Retry-After")):
+        value = header(header_name)
+        if isinstance(value, str) and re.fullmatch(r"[0-9]{1,20}", value):
+            row[key] = value
+    resource = header("X-RateLimit-Resource")
+    if resource in {"core", "search", "graphql", "integration_manifest", "code_search"}:
+        row["resource"] = resource
+    accepted = header("X-Accepted-GitHub-Permissions")
+    permissions = {"actions", "contents", "workflows", "packages", "metadata", "pull_requests",
+                   "administration", "deployments", "checks", "issues"}
+    if isinstance(accepted, str) and len(accepted) <= 512:
+        pieces = re.split(r"[,;]\s*", accepted)
+        if pieces and len(pieces) <= 16 and all(
+                re.fullmatch(r"[a-z_]+=(?:read|write)", piece) and piece.split("=", 1)[0] in permissions
+                for piece in pieces):
+            row["acceptedPermissions"] = accepted  # Endpoint requirement, not the caller's effective grant.
+    if error is not None:
+        row["responseClass"] = "unclassified"
+        try:
+            raw = error.read(2049)
+            row["bodyTruncated"] = len(raw) > 2048
+            body = json.loads(raw[:2048])
+            message = body.get("message") if isinstance(body, dict) else None
+            known = {"Resource not accessible by integration": "integration-permission-denied",
+                     "Resource not accessible by personal access token": "token-permission-denied",
+                     "Reference already exists": "reference-already-exists",
+                     "Validation Failed": "validation-failed", "Not Found": "not-found"}
+            if isinstance(message, str):
+                row["responseClass"] = known.get(message, "unclassified")
+                if (message.startswith("refusing to allow a GitHub App to create or update workflow ")
+                        and ("without workflows permission" in message or "without `workflows` permission" in message)):
+                    row["responseClass"] = "workflow-permission-denied"
+        except Exception:
+            row["bodyUnavailable"] = True  # Reporting failure must not replace the original HTTP error.
+    return row
+
+
+def sanitized_dispatch_diagnostic(value):
+    """Close the report projection over safe fields, even for a malformed diagnostic."""
+    if not isinstance(value, dict):
+        return None
+    row = {}
+    if value.get("diagnosticUnavailable") is True:
+        row["diagnosticUnavailable"] = True
+    category = value.get("category")
+    if isinstance(category, str) and category in {"provider-refused", "process-failure", "transport-failure",
+                    "os-failure", "protocol-failure", "uncaught-provider-failure"}:
+        row["category"] = category
+    code = value.get("returnCode")
+    if type(code) is int and -(2 ** 31) <= code < 2 ** 31:
+        row["returnCode"] = code
+    request = value.get("request")
+    if isinstance(request, dict):
+        projected = request_diagnostic("https://api.github.com" + request.get("path", "")
+                                       if isinstance(request.get("path"), str) else "",
+                                       request.get("method", "unknown"), request.get("status"), {
+            "X-GitHub-Request-Id": request.get("requestId"),
+            "X-RateLimit-Remaining": request.get("remaining"), "X-RateLimit-Reset": request.get("reset"),
+            "Retry-After": request.get("retryAfter"), "X-RateLimit-Resource": request.get("resource"),
+            "X-Accepted-GitHub-Permissions": request.get("acceptedPermissions")})
+        classification = request.get("responseClass")
+        if isinstance(classification, str) and classification in {"unclassified", "integration-permission-denied", "token-permission-denied",
+                               "reference-already-exists", "validation-failed", "not-found",
+                               "workflow-permission-denied"}:
+            projected["responseClass"] = classification
+        for key in ("bodyTruncated", "bodyUnavailable", "diagnosticUnavailable"):
+            if type(request.get(key)) is bool:
+                projected[key] = request[key]
+        row["request"] = projected
+    return row or None
+
+
+def best_effort_request_diagnostic(*args, **kwargs):
+    try:
+        return request_diagnostic(*args, **kwargs)
+    except BaseException:
+        return {"diagnosticUnavailable": True}
+
+
 class GitHubAPI:
     def __init__(self, token: str):
         if not token:
             raise Refused("GitHub token is missing")
         self.token = token
+        self.last_request_diagnostic = None
 
     def _request(self, url: str, method: str = "GET", body: bytes | None = None, content_type: str = "application/json") -> bytes:
+        self.last_request_diagnostic = best_effort_request_diagnostic(url, method)
         request = urllib.request.Request(
             url,
             data=body,
@@ -55,22 +158,23 @@ class GitHubAPI:
         )
         try:
             with urllib.request.urlopen(request, timeout=60) as response:
+                self.last_request_diagnostic = best_effort_request_diagnostic(url, method, getattr(response, "status", None),
+                                                                  getattr(response, "headers", None))
                 return response.read()
         except urllib.error.HTTPError as error:
+            row = best_effort_request_diagnostic(url, method, error.code, error.headers, error)
+            self.last_request_diagnostic = row
             if error.code == 404:
-                raise NotFound(url) from error
-            limits = ", ".join(
-                f"{name}={value}"
-                for name, header in (
-                    ("remaining", "X-RateLimit-Remaining"),
-                    ("reset", "X-RateLimit-Reset"),
-                    ("resource", "X-RateLimit-Resource"),
-                    ("retry-after", "Retry-After"),
-                )
-                if (value := error.headers.get(header)) is not None
-            )
+                failure = NotFound(url)
+                failure.diagnostic = row
+                raise failure from error
+            limits = ", ".join(f"{name}={row[key]}" for name, key in
+                               (("remaining", "remaining"), ("reset", "reset"),
+                                ("resource", "resource"), ("retry-after", "retryAfter")) if key in row)
             detail = f" ({limits})" if limits else ""
-            raise Refused(f"GitHub {method} {url} returned HTTP {error.code}{detail}") from error
+            failure = Refused(f"GitHub {method} {url} returned HTTP {error.code}{detail}")
+            failure.diagnostic = row
+            raise failure from error
 
     def get(self, path: str) -> dict:
         return json.loads(self._request(f"https://api.github.com/{path}"))
@@ -90,15 +194,22 @@ class GitHubAPI:
 
     def download_asset(self, asset_id: int) -> bytes:
         url = f"https://api.github.com/repos/{REPOSITORY}/releases/assets/{asset_id}"
+        self.last_request_diagnostic = best_effort_request_diagnostic(url, "GET")
         request = urllib.request.Request(
             url,
             headers={"Authorization": f"Bearer {self.token}", "Accept": "application/octet-stream"},
         )
         try:
             with urllib.request.build_opener(_StripAuthOnRedirect).open(request, timeout=60) as response:
+                self.last_request_diagnostic = best_effort_request_diagnostic(url, "GET", getattr(response, "status", None),
+                                                                  getattr(response, "headers", None))
                 return response.read()
         except urllib.error.HTTPError as error:
-            raise Refused(f"release asset {asset_id} returned HTTP {error.code}") from error
+            row = best_effort_request_diagnostic(url, "GET", error.code, error.headers, error)
+            self.last_request_diagnostic = row
+            failure = Refused(f"release asset {asset_id} returned HTTP {error.code}")
+            failure.diagnostic = row
+            raise failure from error
 
     def _runtime_read(self, url: str, cap: int, accept: str | None = "application/octet-stream", redirects: bool = True) -> bytes:
         """Bound the two read-only downloads selected by runtime recovery."""
@@ -206,6 +317,7 @@ class LiveProvider:
         self.observed.mkdir(exist_ok=True)
         self._runtime_witness = None
         self._runtime_send_consumed = False
+        self.last_dispatch_diagnostic = None
 
     def _release(self) -> dict | None:
         try:
@@ -496,6 +608,9 @@ class LiveProvider:
 
     def dispatch(self, effect: Effect) -> Dispatch:
         identity = effect.identity
+        self.last_dispatch_diagnostic = None
+        if isinstance(self.api, GitHubAPI):
+            self.api.last_request_diagnostic = None  # Do not join an earlier observation to this send.
         try:
             if identity == "tag":
                 self.api.post(f"repos/{REPOSITORY}/git/refs", {"ref": f"refs/tags/{self.tag}", "sha": self.source})
@@ -565,5 +680,21 @@ class LiveProvider:
                 raise Refused(f"unknown release effect {identity}")
         except (Refused, subprocess.CalledProcessError, OSError, urllib.error.URLError, ValueError) as error:
             # A transport failure can be after the provider applied the write.
+            category = ("provider-refused" if isinstance(error, Refused) else
+                        "process-failure" if isinstance(error, subprocess.CalledProcessError) else
+                        "transport-failure" if isinstance(error, urllib.error.URLError) else
+                        "os-failure" if isinstance(error, OSError) else "protocol-failure")
+            try:
+                row = {"category": category}
+                diagnostic = getattr(error, "diagnostic", None)
+                if diagnostic is None and isinstance(error, (urllib.error.URLError, ValueError)):
+                    diagnostic = getattr(self.api, "last_request_diagnostic", None)
+                if diagnostic is not None:
+                    row["request"] = diagnostic
+                if isinstance(error, subprocess.CalledProcessError):
+                    row["returnCode"] = error.returncode  # Never retain command/API key or raw subprocess output.
+                self.last_dispatch_diagnostic = sanitized_dispatch_diagnostic(row)
+            except BaseException:
+                self.last_dispatch_diagnostic = {"category": category, "diagnosticUnavailable": True}
             return Dispatch("unknown")
         return Dispatch("applied")
