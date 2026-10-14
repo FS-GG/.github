@@ -85,17 +85,58 @@ class Opener:
         assert request.get_header('Authorization') == 'Bearer inert-owned-token'
 
 
+def binding():
+    return {'mode': 'inert', 'profile': provider.AUTH_PROFILE, 'operation': 'utel-rel-21', 'originalGeneration': 2,
+        'invocation': '00000000-0000-0000-0000-000000000001', 'process': {'pid': 1, 'birth': 'a' * 64},
+        'source': {'childRevision': 'a' * 40, 'childClosure': 'b' * 64, 'runnerRevision': 'c' * 40,
+                   'runnerClosure': 'd' * 64, 'contract': 'e' * 64},
+        'workflow': {'repositoryId': 1269292704, 'path': '.github/workflows/release-successor-publish.yml',
+                     'revision': 'f' * 40, 'run': 0, 'attempt': 0},
+        'clock': {'domain': '00000000-0000-0000-0000-000000000002', 'frequency': '1000',
+                  'start': '0', 'normal': '270000', 'work': '285000', 'total': '300000'},
+        'app': {'id': 4882140, 'installation': 123}}
+
+
+class RetainedChannel:
+    def __init__(self, root, bound=None):
+        self.binding = bound or binding()
+        self.path = pathlib.Path(root) / 'retained-result.json'
+        self.report = {'schema': 'fsgg.release-successor-result/1'}
+        self.frames, self.acks = [], []
+        self.deny = None
+    def __call__(self, frame):
+        row = provider.decode_auth_frame(frame)
+        self.frames.append(frame)
+        if row['k'] == self.deny: return None
+        readback = publisher.persist_authentication_snapshot(self.path, self.report, self.binding, frame)
+        assert readback == {'binding': row['b'], 'ordinal': row['n'], 'frameDigest': __import__('hashlib').sha256(frame).hexdigest()}
+        if row['k'] not in {'ready', 'issuance-possible', 'revocation-possible'}: return None
+        ack = {'v': provider.AUTH_PROTOCOL, 'k': 'ack', 'b': row['b'], 'n': row['n'], 'h': readback['frameDigest']}
+        raw = provider._auth_canonical(ack)
+        encoded = len(raw).to_bytes(4, 'big') + raw
+        self.acks.append(encoded)
+        return encoded
+
+
+def adapter(channel, ticks=lambda: 1):
+    return provider.AuthenticationPhaseAdapter(channel.binding, channel, ticks)
+
+
 class FactoryControls(unittest.TestCase):
     def run_factory(self, opener):
-        report = {}
+        report = {'schema': 'fsgg.release-successor-result/1'}
         with patch.object(provider.LiveProvider, 'dispatch', forbidden), \
              patch.object(provider.VerifiedOriginalTagTransport, 'dispatch', forbidden), \
              patch.object(provider.GitHubAPI, '_request', forbidden), \
              patch.object(journal.ProtectedReleaseJournal, '__init__', forbidden), \
              patch.object(journal.ProtectedReleaseJournal, 'compare_and_swap', forbidden), \
              patch.object(subprocess, 'run', forbidden):
-            session = provider.OriginalTagAuthenticationSession('inert-jwt', 4882140, 123, opener=opener)
-            transport = session.qualify(report)
+            with tempfile.TemporaryDirectory() as root:
+                channel = RetainedChannel(root)
+                channel.report = report
+                session = provider.OriginalTagAuthenticationSession('inert-jwt', 4882140, 123, phase_adapter=adapter(channel), opener=opener)
+                transport = session.qualify(report)
+                self.last_frames = list(channel.frames)
         encoded = json.dumps(report)
         self.assertNotIn('inert-owned-token', encoded)
         self.assertNotIn('inert-jwt', encoded)
@@ -110,10 +151,11 @@ class FactoryControls(unittest.TestCase):
         opener = Opener()
         transport, report = self.run_factory(opener)
         self.assertTrue(report['qualified'])
-        self.assertIsInstance(transport, provider.VerifiedOriginalTagTransport)
-        self.assertEqual(transport.identity()['repositoryId'], 1269292704)
-        self.assertIsNone(transport._token)
-        with self.assertRaises(provider.Refused): transport.dispatch(None)
+        self.assertIs(transport, True)
+        self.assertEqual(report['identity']['repositoryId'], 1269292704)
+        self.assertEqual([provider.decode_auth_frame(x)['k'] for x in self.last_frames], list(provider.AUTH_PHASES))
+        inert = provider.AuthenticationOnlyOriginalTagTransport(provider._ORIGINAL_TAG_TRANSPORT_SEAL, 'fixture', report['identity'])
+        with self.assertRaises(provider.Refused): inert.dispatch(None)
         self.assertEqual([x.method for x in opener.calls], ['GET', 'GET', 'GET', 'POST', 'GET', 'DELETE'])
         self.assertEqual(json.loads(opener.calls[3].data),
                          {'repository_ids': [1269292704], 'permissions': {'contents': 'write', 'workflows': 'write'}})
@@ -127,7 +169,7 @@ class FactoryControls(unittest.TestCase):
             with self.subTest(index=index, key=key):
                 opener = Opener(); opener.rows[index][key] = value
                 transport, report = self.run_factory(opener)
-                self.assertIsNone(transport)
+                self.assertIs(transport, False)
                 self.assertFalse(any(x.method == 'POST' for x in opener.calls))
 
     def test_scope_permissions_expiry_and_forged_identity_refuse_with_cleanup(self):
@@ -143,7 +185,7 @@ class FactoryControls(unittest.TestCase):
                 opener.rows[3]['identity'] = {'appId': 4882140, 'repositoryId': 1269292704,
                                               'permissions': {'contents': 'write', 'workflows': 'write'}}
                 transport, report = self.run_factory(opener)
-                self.assertIsNone(transport)
+                self.assertIs(transport, False)
                 self.assertEqual(report['cleanup'], 'revoked')
                 self.assertEqual(opener.calls[-1].method, 'DELETE')
 
@@ -159,22 +201,23 @@ class FactoryControls(unittest.TestCase):
                     if mutation == 'status': response.status = 403
                 opener.mutate = mutate
                 transport, report = self.run_factory(opener)
-                self.assertIsNone(transport)
+                self.assertIs(transport, False)
                 self.assertEqual(len(opener.calls), 1)
 
     def test_endpoint_budget_and_cleanup_failure_are_closed(self):
         opener = Opener(); opener.fail_cleanup = True
         transport, report = self.run_factory(opener)
-        self.assertIsNone(transport)
-        self.assertEqual(report['cleanup'], 'revocation-failed')
-        session = provider.OriginalTagAuthenticationSession('inert-jwt', 4882140, 123, opener=Opener())
+        self.assertIs(transport, False)
+        self.assertEqual(report['cleanup'], 'revocation-unknown')
+        session = provider.OriginalTagAuthenticationSession('inert-jwt', 4882140, 123,
+            phase_adapter=provider.AuthenticationPhaseAdapter(binding(), forbidden, lambda: 1), opener=Opener())
         for method, path in [('POST', '/repos/FS-GG/.github/git/refs'), ('GET', '/app?x=1'),
                              ('DELETE', '/installation/token')]:
             with self.assertRaises(provider.Refused): session._request(method, path, 'inert-jwt')
         self.assertEqual(session._opener.calls, [])
         session._gets = 8
         with self.assertRaises(provider.Refused): session._request('GET', '/app', 'inert-jwt')
-        session.deadline = 0
+        session.adapter.normal = 0
         with self.assertRaises(provider.Refused): session._request('GET', '/app', 'inert-jwt')
 
     def test_normal_production_factory_remains_unavailable(self):
@@ -205,6 +248,196 @@ class FactoryControls(unittest.TestCase):
         inactive = text.split('- name: Select the inactive authentication-only route', 1)[1].split('\n      - ', 1)[0]
         self.assertNotIn('secrets.', inactive)
         self.assertIn('--qualify-original-tag-authentication-only', inactive)
+
+class ProtocolControls(unittest.TestCase):
+    def test_loss_after_each_retained_phase_preserves_facts_and_stops_all_later_calls(self):
+        for phase in provider.AUTH_PHASES:
+            with self.subTest(phase=phase), tempfile.TemporaryDirectory() as root:
+                channel = RetainedChannel(root); opener = Opener()
+                def lose(raw):
+                    ack = channel(raw)
+                    if provider.decode_auth_frame(raw)['k'] == phase:
+                        raise RuntimeError('synthetic channel loss')
+                    return ack
+                subject = provider.AuthenticationPhaseAdapter(channel.binding, lose, lambda: 1)
+                child = provider.OriginalTagAuthenticationSession('inert-jwt', 4882140, 123,
+                    phase_adapter=subject, opener=opener)
+                self.assertFalse(child.qualify(channel.report))
+                retained = json.loads(channel.path.read_bytes())['authenticationSession']['frame']
+                self.assertEqual(retained['k'], phase)
+                posts = sum(x.method == 'POST' for x in opener.calls)
+                deletes = sum(x.method == 'DELETE' for x in opener.calls)
+                self.assertEqual(posts, 0 if phase in {'ready', 'issuance-possible'} else 1)
+                self.assertEqual(deletes, 1 if phase in {'revoked', 'terminal'} else 0)
+                self.assertTrue(subject.failed)
+
+    def test_exact_snapshot_retention_precedes_every_ack_and_terminal_has_no_bearer(self):
+        with tempfile.TemporaryDirectory() as root:
+            channel = RetainedChannel(root)
+            result = channel.report
+            child = provider.OriginalTagAuthenticationSession('inert-jwt', 4882140, 123,
+                phase_adapter=adapter(channel), opener=Opener())
+            self.assertTrue(child.qualify(result))
+            retained = json.loads(channel.path.read_bytes())['authenticationSession']
+            self.assertEqual(retained, result['authenticationSession'])
+            terminal = retained['frame']['p']
+            self.assertTrue(terminal['qualified']); self.assertTrue(terminal['credentialReferencesDropped'])
+            self.assertEqual(terminal['facts']['counters'], {'getsStarted': 4, 'issuanceReservations': 1, 'revocationReservations': 1})
+            self.assertEqual(terminal['facts']['revocation'], {'state': 'verified', 'tokenSlot': 1, 'status': 204})
+            for raw in channel.frames + channel.acks:
+                self.assertNotIn(b'inert-jwt', raw); self.assertNotIn(b'inert-owned-token', raw)
+            self.assertLessEqual(sum(map(len, channel.frames + channel.acks)), 16384)
+
+    def test_every_gate_denial_prevents_its_dependent_effect_and_never_retries(self):
+        for phase, posts, deletes in [('ready', 0, 0), ('issuance-possible', 0, 0), ('revocation-possible', 1, 0)]:
+            with self.subTest(phase=phase), tempfile.TemporaryDirectory() as root:
+                channel = RetainedChannel(root); channel.deny = phase
+                opener = Opener(); child = provider.OriginalTagAuthenticationSession('inert-jwt', 4882140, 123,
+                    phase_adapter=adapter(channel), opener=opener)
+                self.assertFalse(child.qualify(channel.report))
+                self.assertEqual(sum(x.method == 'POST' for x in opener.calls), posts)
+                self.assertEqual(sum(x.method == 'DELETE' for x in opener.calls), deletes)
+                self.assertTrue(child.adapter.failed)
+                self.assertEqual([provider.decode_auth_frame(x)['k'] for x in channel.frames].count(phase), 1)
+
+    def test_validation_failure_after_ownership_survives_cleanup_and_terminal(self):
+        with tempfile.TemporaryDirectory() as root:
+            channel = RetainedChannel(root); opener = Opener(); opener.rows[3]['permissions'] = {'contents': 'write'}
+            child = provider.OriginalTagAuthenticationSession('inert-jwt', 4882140, 123,
+                phase_adapter=adapter(channel), opener=opener)
+            self.assertFalse(child.qualify(channel.report))
+            phases = [provider.decode_auth_frame(x) for x in channel.frames]
+            self.assertEqual([x['k'] for x in phases], list(provider.AUTH_PHASES))
+            self.assertEqual(phases[2]['p']['facts']['permissions']['status'], 'unknown')
+            terminal = phases[-1]['p']['facts']
+            self.assertEqual(terminal['permissions']['status'], 'failed')
+            self.assertEqual(terminal['firstCause'], {'stage': 'permissions', 'code': 'scope'})
+            self.assertEqual(terminal['revocation']['state'], 'verified')
+            self.assertEqual(terminal['expiry']['status'], 'unknown')
+
+    def test_issuance_and_revocation_transport_losses_remain_distinct_unknowns(self):
+        for lost in ('issuance', 'revocation'):
+            with self.subTest(lost=lost), tempfile.TemporaryDirectory() as root:
+                channel = RetainedChannel(root); opener = Opener()
+                if lost == 'revocation': opener.fail_cleanup = True
+                else:
+                    original = opener.open
+                    def fail(request, timeout):
+                        if request.method == 'POST': raise RuntimeError('inert-jwt secret provider body')
+                        return original(request, timeout)
+                    opener.open = fail
+                child = provider.OriginalTagAuthenticationSession('inert-jwt', 4882140, 123,
+                    phase_adapter=adapter(channel), opener=opener)
+                self.assertFalse(child.qualify(channel.report))
+                facts = channel.report['authenticationSession']['frame']['p']['facts']
+                if lost == 'issuance':
+                    self.assertEqual(facts['issuance'], {'state': 'unknown', 'tokenSlot': None})
+                    self.assertEqual(facts['revocation']['state'], 'not-started')
+                else:
+                    self.assertEqual(facts['issuance']['state'], 'response-owned')
+                    self.assertEqual(facts['revocation']['state'], 'unknown')
+                self.assertNotIn('secret provider body', json.dumps(channel.report))
+
+    def test_ack_encoding_binding_and_boolean_ordinal_are_closed(self):
+        for error in ('boolean', 'digest', 'binding', 'partial', 'duplicate', 'extra'):
+            with self.subTest(error=error):
+                bound = binding()
+                def exchange(raw):
+                    row = provider.decode_auth_frame(raw)
+                    ack = {'v': provider.AUTH_PROTOCOL, 'k': 'ack', 'b': row['b'], 'n': row['n'],
+                           'h': __import__('hashlib').sha256(raw).hexdigest()}
+                    if error == 'boolean': ack['n'] = True
+                    if error == 'digest': ack['h'] = '0' * 64
+                    if error == 'binding': ack['b'] = '0' * 64
+                    if error == 'extra': ack['token'] = 'forged'
+                    data = provider._auth_canonical(ack)
+                    if error == 'duplicate': data = data[:-1] + b',"n":1}'
+                    framed = len(data).to_bytes(4, 'big') + data
+                    return framed[:-1] if error == 'partial' else framed
+                subject = provider.AuthenticationPhaseAdapter(bound, exchange, lambda: 1)
+                with self.assertRaises(provider.Refused): subject.emit('ready', {'binding': bound})
+                self.assertTrue(subject.failed)
+                with self.assertRaises(provider.Refused): subject.emit('ready', {'binding': bound})
+
+    def test_original_tick_cutoffs_are_injected_and_never_renewed(self):
+        with tempfile.TemporaryDirectory() as root:
+            channel = RetainedChannel(root); tick = [269999]
+            subject = adapter(channel, ticks=lambda: tick[0])
+            subject.emit('ready', {'binding': channel.binding})
+            tick[0] = 270000
+            with self.assertRaises(provider.Refused): subject.check()
+            self.assertEqual(subject.check(cleanup=True), 270000)
+            tick[0] = 285000
+            with self.assertRaises(provider.Refused): subject.check(cleanup=True)
+            self.assertEqual(subject.binding['clock']['total'], '300000')
+
+    def test_retention_failure_never_yields_ack_and_keeps_possible_projection(self):
+        with tempfile.TemporaryDirectory() as root:
+            channel = RetainedChannel(root); subject = adapter(channel)
+            subject.emit('ready', {'binding': channel.binding})
+            prior = channel.path.read_bytes()
+            with patch.object(publisher.os, 'fsync', side_effect=OSError('inert write failure')):
+                with self.assertRaises(OSError):
+                    # Writer failure cannot be translated into ACK eligibility.
+                    publisher.persist_authentication_snapshot(channel.path, channel.report, channel.binding,
+                        provider.encode_auth_frame(channel.binding, 2, 'terminal', {
+                            'facts': provider.empty_auth_facts(), 'publication': dict(provider.AUTH_PUBLICATION),
+                            'publicationComplete': False, 'qualified': False, 'credentialReferencesDropped': True}))
+            self.assertEqual(channel.path.read_bytes(), prior)
+            self.assertEqual(len(channel.acks), 1)
+
+    def test_monotone_assertions_success_flags_and_zero_publication_cannot_be_forged(self):
+        data = protocol_vectors()
+        bound = data['binding']; frames = [provider.decode_auth_frame(bytes.fromhex(x)) for x in data['children']]
+        facts = frames[-1]['p']['facts']
+        for name in ('app', 'installation', 'permissions', 'expiry', 'census'):
+            mutated = copy.deepcopy(facts); mutated[name]['status'] = 'unknown'
+            with self.assertRaises(provider.Refused): provider.validate_auth_facts(mutated, bound, facts)
+        for key, value in [('publicationComplete', True), ('publication', dict(provider.AUTH_PUBLICATION, tag=1)),
+                           ('credentialReferencesDropped', False)]:
+            altered = copy.deepcopy(frames[-1]['p']); altered[key] = value
+            with self.assertRaises(provider.Refused): provider.validate_auth_payload('terminal', altered, bound)
+        failed = copy.deepcopy(facts); failed['permissions']['status'] = 'failed'
+        with self.assertRaises(provider.Refused): provider.validate_auth_facts(facts, bound, failed)
+
+    def test_maximum_legal_binding_and_terminal_fit_without_truncation(self):
+        bound = binding(); maximum = (1 << 64) - 1; top = (1 << 63) - 1
+        bound['process']['pid'] = maximum
+        bound['mode'] = 'native'; bound['workflow']['run'] = maximum; bound['workflow']['attempt'] = (1 << 32) - 1
+        bound['app'] = {'id': maximum, 'installation': maximum}
+        for key in ('frequency', 'start', 'normal', 'work', 'total'): bound['clock'][key] = str(top)
+        provider.validate_auth_binding(bound)
+        ready = provider.encode_auth_frame(bound, 1, 'ready', {'binding': bound})
+        data = protocol_vectors(); terminal = provider.decode_auth_frame(bytes.fromhex(data['children'][-1]))['p']
+        terminal['qualified'] = False
+        for item in ('app', 'installation', 'permissions', 'expiry', 'census'): terminal['facts'][item]['status'] = 'failed'
+        terminal['facts']['app']['id'] = maximum
+        terminal['facts']['installation'].update({'id': maximum, 'appId': maximum})
+        terminal['facts']['expiry'].update({'unix': top, 'observedUnix': top})
+        terminal['facts']['census'].update({'total': maximum, 'repositoryId': maximum})
+        terminal['facts']['firstCause'] = {'stage': 'revocation-possible', 'code': 'credential-input'}
+        final = provider.encode_auth_frame(bound, 6, 'terminal', terminal)
+        self.assertLessEqual(len(ready), 2048); self.assertLessEqual(len(final), 2048)
+
+
+def protocol_vectors():
+    import hashlib
+    with tempfile.TemporaryDirectory() as root:
+        channel = RetainedChannel(root)
+        # Deterministic fixture identities/timestamps, never an observed invocation.
+        channel.binding['source']['contract'] = hashlib.sha256((ROOT / 'scripts/release_successor_provider.py').read_bytes()).hexdigest()
+        opener = Opener()
+        opener.rows[3]['expires_at'] = '2030-03-17T18:16:40Z'
+        child = provider.OriginalTagAuthenticationSession('inert-jwt', 4882140, 123,
+            phase_adapter=adapter(channel), opener=opener, wall_clock=lambda: 1900000000)
+        assert child.qualify(channel.report)
+        start = provider._auth_canonical({'v': provider.AUTH_PROTOCOL, 'k': 'start',
+            'b': provider.validate_auth_binding(channel.binding), 'p': channel.binding})
+        return {'binding': channel.binding, 'start': (len(start).to_bytes(4, 'big') + start).hex(),
+                'children': [x.hex() for x in channel.frames], 'acks': [x.hex() for x in channel.acks],
+                'profile': provider.AUTH_PROFILE, 'mode': 'inert',
+                'frameBytes': [len(x) for x in channel.frames]}
+
 
 
 if __name__ == '__main__': unittest.main()

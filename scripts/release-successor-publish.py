@@ -22,7 +22,8 @@ from release_successor_admission import SingleOperatorAdmission
 from release_successor_execution import Refused, advance, ordered_effects
 from release_successor_journal import ProtectedReleaseJournal, REF, REPOSITORY as JOURNAL_REPOSITORY, canonical
 from release_successor_provider import (GitHubAPI, LiveProvider, NotFound, sanitized_dispatch_diagnostic,
-                                       VerifiedOriginalTagTransport, approved_original_tag_transport)
+                                       VerifiedOriginalTagTransport, approved_original_tag_transport,
+                                       AUTH_PROTOCOL, AUTH_PROFILE, decode_auth_frame, validate_auth_binding, validate_auth_payload)
 
 REPOSITORY = "FS-GG/.github"
 SUCCESSOR_VERSION = "0.103.0"
@@ -966,6 +967,52 @@ def write_result(path, report):
         stream.write(body)
 
 
+def persist_authentication_snapshot(path, report, binding, frame):
+    """Retain the optional operation projection, then independently read it back.
+
+    Called outside the producer custody loop. This synchronous local sink is not
+    a hard deadline mechanism; its task and cleanup belong to that producer.
+    No ACK is created here, and an uncertain write/readback cannot permit an ACK.
+    """
+    row = decode_auth_frame(frame)
+    require(set(row) == {'v', 'b', 'n', 'k', 'p'} and row['v'] == AUTH_PROTOCOL
+            and row['b'] == validate_auth_binding(binding) and type(row['n']) is int,
+            'authentication snapshot binding differs')
+    prior = report.get('authenticationSession')
+    previous = prior['frame']['p'].get('facts') if prior is not None else None
+    allowed = {None: {'ready'}, 'ready': {'issuance-possible', 'terminal'},
+               'issuance-possible': {'token-owned', 'terminal'}, 'token-owned': {'revocation-possible'},
+               'revocation-possible': {'revoked', 'terminal'}, 'revoked': {'terminal'}, 'terminal': set()}
+    require(row['n'] == (prior['ordinal'] + 1 if prior else 1)
+            and row['k'] in allowed[prior['frame']['k'] if prior else None], 'authentication snapshot order differs')
+    validate_auth_payload(row['k'], row['p'], binding, previous)
+    projection = {'binding': row['b'], 'ordinal': row['n'],
+                  'frameDigest': hashlib.sha256(frame).hexdigest(), 'frame': row}
+    retained = dict(report, authenticationSession=projection)
+    body = (json.dumps(retained, sort_keys=True, separators=(',', ':')) + '\n').encode('ascii')
+    require(len(body) <= 16384, 'authentication result exceeds existing result bound')
+    temporary = path.with_name(path.name + '.authentication-pending')
+    if path.exists() or path.is_symlink():
+        require(not path.is_symlink() and stat.S_ISREG(path.stat().st_mode), 'authentication result is not regular')
+    with temporary.open('xb') as stream:
+        os.chmod(temporary, 0o600)
+        stream.write(body); stream.flush(); os.fsync(stream.fileno())
+    os.replace(temporary, path)
+    directory = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(directory)
+    finally:
+        os.close(directory)
+    require(not path.is_symlink() and stat.S_ISREG(path.stat().st_mode), 'authentication readback is not regular')
+    with path.open('rb') as stream:
+        actual = stream.read(16385)
+    require(actual == body, 'authentication retained readback differs')
+    observed = json.loads(actual)['authenticationSession']
+    require(observed == projection, 'authentication snapshot readback differs')
+    report['authenticationSession'] = projection
+    return {name: projection[name] for name in ('binding', 'ordinal', 'frameDigest')}
+
+
 class KitObservationProvider(ReportingProvider):
     """Record ordinary observations; only the explicit repeat seam enables one send."""
     def __init__(self, provider, report, effect):
@@ -1534,7 +1581,7 @@ def authentication_only_main():
     parser.add_argument("--result-path", type=pathlib.Path, required=True)
     args = parser.parse_args()
     report = {"schema": "fsgg.release-successor-result/1",
-              "profile": "utel-rel-21/original-tag-authentication-only/1",
+              "profile": AUTH_PROFILE,
               "disposition": "blocked-authentication-route-inactive", "qualified": False,
               "publicationComplete": False, "credentialAcquisitionAttempted": False,
               "publicationEffects": {"tag": 0, "journal": 0, "feed": 0, "release": 0, "asset": 0, "channel": 0},
