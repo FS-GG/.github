@@ -780,8 +780,8 @@ nonce, owner, mount, symlink, escape, replacement and terminal-absence refusals;
 policy fixtures exercise both targets and bounded cleanup without claiming kernel
 custody. The source launcher links the new module into its maintained controls.
 No privileged native fixture, namespace/cgroup operation, Podman, CLR invocation or
-production effects ran for this window. Root semantic review and required hosted
-source qualification remain pending.
+production effects ran for this window. Source safeguard review accepted the finite policy, exact cwd/copy bounds and
+unchanged caller cleanup ordering. Required hosted source qualification remains pending.
 
 The next source window joins the actual production caller, finite selector and real
 wire/core through an explicitly inert test transport boundary. The authenticated
