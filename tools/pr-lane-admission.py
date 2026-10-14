@@ -175,9 +175,13 @@ def current_head_sha(gh: str, repo: str, head: str) -> str:
 
 
 def pull_summary(pull: dict[str, Any]) -> dict[str, Any]:
+    head = pull.get("head")
+    head = head if isinstance(head, dict) else {}
     return {
         "number": pull.get("number"),
         "url": pull.get("html_url"),
+        "headRef": head.get("ref"),
+        "headSha": head.get("sha"),
     }
 
 
@@ -186,23 +190,46 @@ def enforce_lane(
 ) -> int:
     managed_in_repo: list[dict[str, Any]] = []
     same_chain: list[dict[str, Any]] = []
+    unresolved: list[dict[str, Any]] = []
     for pull in pulls:
-        parsed = marker_from_body(pull.get("body"))
+        body = pull.get("body")
+        parsed = marker_from_body(body)
         if parsed is None:
-            continue
+            head = pull.get("head")
+            branch = head.get("ref") if isinstance(head, dict) else None
+            # Reservation is distinct from source eligibility. A body rewrite
+            # or a stale routine head must not manufacture a free managed slot.
+            routine = (isinstance(branch, str)
+                       and routine_validator().ROUTINE_BRANCH_RE.fullmatch(branch) is not None)
+            footprint = isinstance(body, str) and "<!-- fsgg-pr-lane-admission" in body
+            if not routine and not footprint:
+                continue  # Genuine unmanaged feature PR policy is unchanged.
+            unresolved.append(pull)
         managed_in_repo.append(pull)
         if parsed == (campaign_id, chain_id):
             same_chain.append(pull)
+    population = {
+        "openNativePullRequestCount": len(pulls),
+        "nativeOpenPullRequests": [pull_summary(pull) for pull in pulls],
+        "openManagedPullRequestCount": len(managed_in_repo),
+    }
     if same_chain:
         raise Refusal(
             "same-chain-open",
+            **population,
             matchingPullRequests=[pull_summary(pull) for pull in same_chain],
         )
     if len(managed_in_repo) >= 2:
         raise Refusal(
             "repository-open-pr-cap",
-            openManagedPullRequestCount=len(managed_in_repo),
+            **population,
             matchingPullRequests=[pull_summary(pull) for pull in managed_in_repo],
+        )
+    if unresolved:
+        raise Refusal(
+            "managed-reservation-identity-unknown",
+            **population,
+            matchingPullRequests=[pull_summary(pull) for pull in unresolved],
         )
     return len(managed_in_repo)
 
@@ -305,6 +332,8 @@ def execute(arguments: argparse.Namespace) -> dict[str, Any]:
             raise Refusal(
                 "head-moved",
                 **identity,
+                openNativePullRequestCount=len(pulls),
+                nativeOpenPullRequests=[pull_summary(pull) for pull in pulls],
                 expectedHeadSha=arguments.head_sha,
                 observedHeadSha=observed_sha,
             )
@@ -314,6 +343,8 @@ def execute(arguments: argparse.Namespace) -> dict[str, Any]:
             "headSha": arguments.head_sha,
             "base": arguments.base,
             "openManagedPullRequestCount": open_count,
+            "openNativePullRequestCount": len(pulls),
+            "nativeOpenPullRequests": [pull_summary(pull) for pull in pulls],
         }
         if arguments.inspect:
             return {"ok": True, "action": "admitted", **common}

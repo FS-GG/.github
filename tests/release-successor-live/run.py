@@ -567,6 +567,148 @@ class TerminalAcquisitionControls(unittest.TestCase):
         self.assertIn("release-successor-result.json",error.exception.terminalEvidence["memberSHA256"])
         self.assertIsNone(error.exception.terminalEvidence["nativeResult"])
 
+class ProviderDiagnosticTests(unittest.TestCase):
+    def setUp(self):
+        import io
+        import release_successor_provider as provider_module
+        self.io, self.module = io, provider_module
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.root = pathlib.Path(self.temporary.name)
+        self.manifest = candidate_manifest("0.103.0")
+        self.manifest["descriptor"].update(previousStableVersion="0.102.0", previousStableContentId="sha256:" + "d" * 64)
+        self.path = self.root / "release-manifest.json"
+        self.path.write_text(json.dumps(self.manifest))
+        self.api = provider_module.GitHubAPI("SECRET-github-token")
+        self.provider = provider_module.LiveProvider(self.api, self.path, "SECRET-github-token", "SECRET-nuget-key")
+        for name in [*(f"{package}.0.103.0.nupkg" for package in PACKAGES),
+                     "standalone-telemetry-evidence.json", "standalone-telemetry-runtime-evidence.json",
+                     "promoted-release-manifest.json"]:
+            (self.root / name).write_text("fixture")
+        (self.root / "previous-stable-channel.json").write_text(json.dumps({
+            "version": "0.102.0", "contentId": "sha256:" + "d" * 64}))
+        self.release = {"id": 1, "draft": True}
+        self.writes = []
+
+    def http_error(self, request, code=403, body=None, headers=None):
+        import urllib.error
+        return urllib.error.HTTPError(request.full_url, code, "SECRET-free-form-error", headers or {
+            "X-GitHub-Request-Id": "ABC:123", "X-RateLimit-Remaining": "4567",
+            "X-RateLimit-Reset": "1791991722", "X-RateLimit-Resource": "core", "Retry-After": "20",
+            "X-Accepted-GitHub-Permissions": "contents=write; workflows=write"},
+            self.io.BytesIO(body or b'{"message":"Resource not accessible by integration","extra":"SECRET-body"}'))
+
+    def transport(self, request, **kwargs):
+        if request.get_method() == "GET":
+            reply = self.io.BytesIO(json.dumps(self.release).encode())
+            reply.status, reply.headers = 200, {}
+            return reply
+        self.writes.append((request.get_method(), request.full_url))
+        raise self.http_error(request)
+
+    def test_all_github_write_branches_retain_safe_cause_and_remain_unknown(self):
+        identities = ["tag", "draft", *("archive-asset:" + x for x in PACKAGES),
+                      "qualification-asset:evidence", "qualification-asset:runtime",
+                      "channel-asset", "manifest-asset", "promote"]
+        for identity in identities:
+            with self.subTest(identity=identity), patch.object(self.module.urllib.request, "urlopen", self.transport), \
+                 patch.object(self.provider, "_prepare_manifest_asset", return_value=self.root / "promoted-release-manifest.json"), \
+                 patch.object(self.provider, "_final_manifest", return_value={}):
+                rows = {}
+                outcome = publisher.ReportingProvider(self.provider, rows).dispatch(Effect(identity, "d", "r"))
+                self.assertEqual("unknown", outcome.state)
+                diagnostic = rows["lastDispatch"]["diagnostic"]["request"]
+                self.assertEqual(403, diagnostic["status"])
+                self.assertEqual("integration-permission-denied", diagnostic["responseClass"])
+                self.assertEqual("ABC:123", diagnostic["requestId"])
+                self.assertEqual("contents=write; workflows=write", diagnostic["acceptedPermissions"])
+                self.assertNotIn("?", diagnostic["path"])
+                self.assertNotIn("SECRET", json.dumps(rows))
+        self.assertEqual(len(identities), len(self.writes))
+
+    def test_all_feed_write_failures_exclude_command_keys_and_raw_output(self):
+        import subprocess
+        for feed in ("github", "nuget"):
+            for package in PACKAGES:
+                with self.subTest(feed=feed, package=package), patch.object(self.module.subprocess, "run", side_effect=
+                        subprocess.CalledProcessError(1, ["SECRET-command-key"], output="SECRET-stdout", stderr="SECRET-stderr")):
+                    rows = {}
+                    outcome = publisher.ReportingProvider(self.provider, rows).dispatch(Effect(feed + ":" + package, "d", "r"))
+                    self.assertEqual("unknown", outcome.state)
+                    self.assertEqual({"category": "process-failure", "returnCode": 1}, rows["lastDispatch"]["diagnostic"])
+                    self.assertNotIn("SECRET", json.dumps(rows))
+
+    def test_bounded_body_headers_and_workflow_class_do_not_echo_untrusted_values(self):
+        headers = {"X-GitHub-Request-Id": "SECRET\ninvalid", "Retry-After": "SECRET",
+                   "X-RateLimit-Resource": ["SECRET"], "X-RateLimit-Remaining": "SECRET"}
+        body = json.dumps({"message": "refusing to allow a GitHub App to create or update workflow 'SECRET' without workflows permission"}).encode()
+        error = self.http_error(type("Request", (), {"full_url": "https://api.github.com/repos/FS-GG/.github/git/refs"})(), body=body, headers=headers)
+        row = self.module.request_diagnostic(error.url + "?token=SECRET", "POST", 403, headers, error)
+        self.assertEqual("workflow-permission-denied", row["responseClass"])
+        self.assertNotIn("SECRET", json.dumps(row))
+        oversized = self.http_error(type("Request", (), {"full_url": error.url})(), body=b"SECRET" * 1000)
+        row = self.module.request_diagnostic(error.url, "POST", 403, {}, oversized)
+        self.assertTrue(row["bodyTruncated"])
+        self.assertTrue(row["bodyUnavailable"])
+        self.assertNotIn("SECRET", json.dumps(row))
+
+    def test_diagnostic_read_failure_preserves_original_http_cause(self):
+        request = type("Request", (), {"full_url": "https://api.github.com/repos/FS-GG/.github/git/refs"})()
+        error = self.http_error(request)
+        error.read = lambda size: (_ for _ in ()).throw(OSError("SECRET-body-read"))
+        with patch.object(self.module.urllib.request, "urlopen", side_effect=error):
+            with self.assertRaises(self.module.Refused) as caught:
+                self.api.post("repos/FS-GG/.github/git/refs", {"ref": "refs/tags/coherent-set/v0.103.0"})
+        self.assertIs(error, caught.exception.__cause__)
+        self.assertTrue(caught.exception.diagnostic["bodyUnavailable"])
+        self.assertNotIn("SECRET", json.dumps(caught.exception.diagnostic))
+
+    def test_reporting_failure_preserves_provider_outcome_and_original_exception(self):
+        class BrokenDiagnostic:
+            @property
+            def last_dispatch_diagnostic(self):
+                raise KeyboardInterrupt("SECRET-diagnostic")
+            def dispatch(self, effect):
+                return Dispatch("unknown")
+        rows = {}
+        self.assertEqual("unknown", publisher.ReportingProvider(BrokenDiagnostic(), rows).dispatch(Effect("tag", "d", "r")).state)
+        self.assertTrue(rows["lastDispatch"]["diagnosticUnavailable"])
+        original = NotFound("original-first-cause")
+        class RaisedDiagnostic(BrokenDiagnostic):
+            def dispatch(self, effect):
+                raise original
+        with self.assertRaises(NotFound) as caught:
+            publisher.ReportingProvider(RaisedDiagnostic(), {}).dispatch(Effect("tag", "d", "r"))
+        self.assertIs(original, caught.exception)
+
+    def test_actual_api_and_provider_diagnostic_failures_never_replace_http_or_success(self):
+        request = type("Request", (), {"full_url": "https://api.github.com/repos/FS-GG/.github/git/refs"})()
+        original = self.http_error(request)
+        with patch.object(self.module, "request_diagnostic", side_effect=KeyboardInterrupt("diagnostic failure")), \
+             patch.object(self.module.urllib.request, "urlopen", side_effect=original):
+            with self.assertRaises(self.module.Refused) as caught:
+                self.api.post("repos/FS-GG/.github/git/refs", {})
+            self.assertIs(original, caught.exception.__cause__)
+            self.assertEqual("unknown", self.provider.dispatch(Effect("tag", "d", "r")).state)
+            self.assertTrue(self.provider.last_dispatch_diagnostic["diagnosticUnavailable"])
+        reply = self.io.BytesIO(b'{"object":{"sha":"bbbb"}}')
+        reply.status, reply.headers = 201, {}
+        with patch.object(self.module, "request_diagnostic", side_effect=KeyboardInterrupt("diagnostic failure")), \
+             patch.object(self.module.urllib.request, "urlopen", return_value=reply):
+            self.assertEqual({"object": {"sha": "bbbb"}}, self.api.post("repos/FS-GG/.github/git/refs", {}))
+        with patch.object(self.module, "sanitized_dispatch_diagnostic", side_effect=KeyboardInterrupt("projection failure")), \
+             patch.object(self.module.urllib.request, "urlopen", side_effect=self.http_error(request)):
+            self.assertEqual("unknown", self.provider.dispatch(Effect("tag", "d", "r")).state)
+            self.assertTrue(self.provider.last_dispatch_diagnostic["diagnosticUnavailable"])
+
+    def test_earlier_observation_cause_never_joins_a_later_local_prerequisite_failure(self):
+        self.api.last_request_diagnostic = {"method": "POST", "status": 403, "requestId": "STALE"}
+        self.provider.last_dispatch_diagnostic = {"category": "process-failure", "returnCode": 1}
+        self.provider.nuget_key = ""
+        self.assertEqual("unknown", self.provider.dispatch(Effect("nuget:FS.GG.Kit", "d", "r")).state)
+        self.assertEqual({"category": "provider-refused"}, self.provider.last_dispatch_diagnostic)
+
+
 if __name__ == "__main__":
     qualify_live_provider()
     unittest.main()

@@ -123,6 +123,79 @@ class PullRequestLaneAdmissionTests(unittest.TestCase):
         self.assertEqual(1, result["openManagedPullRequestCount"])
         self.assertEqual("POST", calls[-1]["arguments"][2])
 
+    def test_stale_routine_head_does_not_release_campaign_chain_reservation(self):
+        body = managed_body('campaign-7', 'chain-3') + (
+            '<!-- fsgg:routine-development/v1 head=' + 'b' * 40 + ' operation=source-change -->\n')
+        state = {'head_sha': EXPECTED_SHA, 'open_pages': [[{'number': 11, 'body': body,
+            'head': {'ref': 'routine/source', 'sha': EXPECTED_SHA}}]]}
+        completed, result, calls = self.invoke(state)
+        self.assertEqual(3, completed.returncode)
+        self.assertEqual('same-chain-open', result['reason'])
+        self.assertEqual(1, result['openManagedPullRequestCount'])
+        self.assertEqual(1, result['openNativePullRequestCount'])
+        self.assertEqual(EXPECTED_SHA, result['nativeOpenPullRequests'][0]['headSha'])
+        self.assertEqual(1, len(calls))
+
+    def test_erased_lane_marker_on_routine_branch_cannot_manufacture_third_slot(self):
+        routine = '<!-- fsgg:routine-development/v1 head=' + EXPECTED_SHA + ' operation=source-change -->'
+        state = {'head_sha': EXPECTED_SHA, 'open_pages': [[{'number': 11, 'body': routine,
+            'head': {'ref': 'routine/source', 'sha': EXPECTED_SHA}},
+            {'number': 12, 'body': managed_body('other', 'other')}]]}
+        completed, result, calls = self.invoke(state)
+        self.assertEqual(3, completed.returncode)
+        self.assertEqual('repository-open-pr-cap', result['reason'])
+        self.assertEqual(2, result['openManagedPullRequestCount'])
+        self.assertEqual(2, result['openNativePullRequestCount'])
+        self.assertEqual([11, 12], [p['number'] for p in result['matchingPullRequests']])
+        self.assertEqual(1, len(calls))
+
+    def test_missing_or_edited_routine_identity_blocks_without_guessing_chain(self):
+        bodies = [None, '', 'Rewritten prose', '<!-- fsgg-pr-lane-admission:v1 campaign=campaign-7 -->',
+                  managed_body('campaign-7', 'chain-3') * 2,
+                  managed_body('campaign-7', 'chain-3') + managed_body('other', 'other')]
+        for body in bodies:
+            state = {'head_sha': EXPECTED_SHA, 'open_pages': [[{'number': 11, 'body': body,
+                'head': {'ref': 'routine/source', 'sha': EXPECTED_SHA}}]]}
+            with self.subTest(body=body):
+                completed, result, calls = self.invoke(state)
+                self.assertEqual(3, completed.returncode)
+                self.assertEqual('managed-reservation-identity-unknown', result['reason'])
+                self.assertEqual(1, result['openManagedPullRequestCount'])
+                self.assertEqual(1, result['openNativePullRequestCount'])
+                self.assertEqual(1, len(calls))
+
+    def test_damaged_lane_footprint_blocks_even_on_generic_feature_branch(self):
+        for body in ('<!-- fsgg-pr-lane-admission', '<!-- fsgg-pr-lane-admission edited metadata -->',
+                     managed_body('one', 'one') + managed_body('two', 'two')):
+            state = {'head_sha': EXPECTED_SHA, 'open_pages': [[{'number': 11, 'body': body,
+                'head': {'ref': 'feature/source', 'sha': EXPECTED_SHA}}]]}
+            with self.subTest(body=body):
+                completed, result, calls = self.invoke(state)
+                self.assertEqual(3, completed.returncode)
+                self.assertEqual('managed-reservation-identity-unknown', result['reason'])
+                self.assertEqual(1, len(calls))
+
+    def test_native_population_reports_genuine_unmanaged_prs_without_expanding_cap(self):
+        state = {'head_sha': EXPECTED_SHA, 'open_pages': [[{'number': 11, 'body': '',
+            'head': {'ref': 'feature/unmanaged', 'sha': EXPECTED_SHA}}],
+            [{'number': 12, 'body': 'Discuss fsgg-pr-lane-admission without a reservation marker',
+              'head': {'ref': 'feature/other', 'sha': 'b' * 40}}]]}
+        completed, result, calls = self.invoke(state)
+        self.assertEqual(0, completed.returncode)
+        self.assertEqual(0, result['openManagedPullRequestCount'])
+        self.assertEqual(2, result['openNativePullRequestCount'])
+        self.assertEqual([11, 12], [p['number'] for p in result['nativeOpenPullRequests']])
+        self.assertEqual('POST', calls[-1]['arguments'][2])
+
+    def test_valid_lane_identity_remains_reserved_when_routine_body_is_malformed(self):
+        state = {'head_sha': EXPECTED_SHA, 'open_pages': [[{'number': 11,
+            'body': managed_body('campaign-7', 'chain-3') + '<!-- fsgg:routine-development/v1 broken',
+            'head': {'ref': 'routine/source', 'sha': 'b' * 40}}]]}
+        completed, result, calls = self.invoke(state)
+        self.assertEqual(3, completed.returncode)
+        self.assertEqual('same-chain-open', result['reason'])
+        self.assertEqual(1, len(calls))
+
     def test_refuses_when_head_moved_and_does_not_post(self):
         state = {"head_sha": "b" * 40, "open_pages": [[]]}
         completed, result, calls = self.invoke(state)

@@ -30,6 +30,12 @@ on:
         default: false
         type: boolean
 
+      recover_original_0103_tag_intent:
+        description: Fixed original generation2 tag intent; matched settlement or approved create only, incomplete checkpoint
+        required: true
+        default: false
+        type: boolean
+
       recovery_checkpoint:
         description: Recover the retained journal19 candidate for at most four advances; checkpoint is incomplete
         required: true
@@ -121,6 +127,7 @@ jobs:
           CANDIDATE_ARCHIVE_SHA256: ${{ inputs.candidate_archive_sha256 }}
           PUBLISH: ${{ inputs.publish }}
           ORIGINAL_0103_CANDIDATE: ${{ inputs.original_0103_candidate }}
+          RECOVER_ORIGINAL_0103_TAG_INTENT: ${{ inputs.recover_original_0103_tag_intent }}
           RECOVERY_CHECKPOINT: ${{ inputs.recovery_checkpoint }}
           REPEAT_ORIGINAL_NUGET_KIT_INTENT: ${{ inputs.repeat_original_nuget_kit_intent }}
           RECOVER_ORIGINAL_RUNTIME_INTENT: ${{ inputs.recover_original_runtime_intent }}
@@ -131,6 +138,9 @@ jobs:
           mode=--preflight-only
           if test "$PUBLISH" = true; then mode=--publish; fi
           profile=()
+          if test "$RECOVER_ORIGINAL_0103_TAG_INTENT" = true; then
+            profile+=(--recover-original-0103-tag-intent)
+          fi
           if test "$ORIGINAL_0103_CANDIDATE" = true; then
             profile+=(--original-0103-candidate)
           fi
@@ -167,6 +177,7 @@ jobs:
             ${{ runner.temp }}/release-successor-result.json
             ${{ runner.temp }}/release-successor-result-kit-repeat-attempt.json
             ${{ runner.temp }}/release-successor-result-runtime-recovery-attempt.json
+            ${{ runner.temp }}/release-successor-result-original-tag-attempt.json
           if-no-files-found: error
       - name: Report the actual publication disposition
         if: steps.publication.outcome == 'success'
