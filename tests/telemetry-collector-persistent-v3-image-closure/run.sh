@@ -703,8 +703,8 @@ if selected['Id']!=config or selected['Architecture']!='amd64' or selected['Os']
 if image not in selected['RepoDigests']: raise RuntimeError('inactive source immutable manifest correspondence')
 loaded=repo/'tests/telemetry-collector-persistent-v3-image-closure/bin/Debug/net10.0/PersistentV3.ImageClosure.Tests.dll'
 argv=client+['run','--pull=never','--name',name,'--cidfile',str(cidfile),'--label=fsgg.inactive-source='+name,
-      '--user=0:0','--read-only','--network=none','--pid=private','--ipc=private',
-      '--cap-drop=ALL','--cap-add=CHOWN','--cap-add=DAC_OVERRIDE','--cap-add=FOWNER',
+      '--user=0:0','--read-only','--network=none','--ipc=private',
+      '--cap-drop=ALL','--cap-add=CAP_CHOWN','--cap-add=CAP_DAC_OVERRIDE','--cap-add=CAP_FOWNER',
       '--security-opt=no-new-privileges','--cpus=2','--memory=6g','--memory-swap=6g','--pids-limit=512',
       '--tmpfs=/tmp:rw,exec,nosuid,nodev,size=1g,mode=1777',
       '--mount','type=bind,src='+str(repo)+',dst='+str(repo)+',readonly',
@@ -718,8 +718,8 @@ def authenticate(observed,cid):
         config_row['Labels'].get('fsgg.inactive-source')!=name or config_row['User']!='0:0' or
         config_row['Entrypoint']!=['/usr/share/dotnet/dotnet'] or config_row['Cmd']!=[str(loaded)] or
         'PERSISTENT_V3_RECIPE_CONTROLS_ONLY=1' not in config_row['Env'] or
-        not host['ReadonlyRootfs'] or host['NetworkMode']!='none' or host['PidMode']!='private' or host['IpcMode']!='private' or
-        host['CapDrop']!=['ALL'] or sorted(host['CapAdd'])!=['CHOWN','DAC_OVERRIDE','FOWNER'] or
+        not host['ReadonlyRootfs'] or host['NetworkMode']!='none' or host['PidMode']!='' or host['IpcMode']!='private' or
+        host['CapDrop']!=['ALL'] or host['CapAdd']!=['CAP_CHOWN','CAP_DAC_OVERRIDE','CAP_FOWNER'] or
         host['SecurityOpt']!=['no-new-privileges'] or host['NanoCpus']!=2000000000 or
         host['Memory']!=6442450944 or host['MemorySwap']!=6442450944 or host['PidsLimit']!=512 or
         host['Tmpfs']!={'/tmp':'rw,exec,nosuid,nodev,size=1g,mode=1777'} or
