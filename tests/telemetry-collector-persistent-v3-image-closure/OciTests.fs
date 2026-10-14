@@ -190,7 +190,7 @@ let run selected prepared trusted =
         else synthetic.Start command}
     let mismatchMechanism=RootlessMechanism(changedInputs,mismatched)
     let mismatch,_=RunnerExecution.runWithBudgets RunnerExecution.productionBudgets 32 (DateTimeOffset.UtcNow.AddSeconds 30.) CancellationToken.None mismatchMechanism (Runner.initialC4 changedInputs.ExpectedInput)
-    require(not(Runner.c4Ready mismatch)&&mismatch.Phase=Refused&&mismatch.Owned.IsEmpty&&mismatch.Refusal=Some "BuildMismatch") "different OCI config did not refuse and clean owned bundles"
+    require(not(Runner.c4Ready mismatch)&&mismatch.Phase=Phase.Refused&&mismatch.Owned.IsEmpty&&mismatch.Refusal=Some "BuildMismatch") "different OCI config did not refuse and clean owned bundles"
     // The unacknowledged backend above demonstrably never spawned its failing build.
     // Only the fixture owns this explicit reconciliation; production may not infer absence.
     for directory in Directory.EnumerateDirectories(failedInputs.WorkRoot,"*",SearchOption.AllDirectories) do File.SetUnixFileMode(directory,UnixFileMode.UserRead|||UnixFileMode.UserWrite|||UnixFileMode.UserExecute)
