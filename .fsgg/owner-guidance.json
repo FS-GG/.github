@@ -1,0 +1,22 @@
+{
+  "schema": "fsgg.owner-guidance/1",
+  "guidance": [
+    {
+      "id": "atlas",
+      "sourcePath": ".fsgg/atlas-guidance.md",
+      "targets": [
+        "claude",
+        "codex"
+      ],
+      "requiredPaths": [
+        ".fsgg/atlas.json",
+        ".agents/skills/atlas/SKILL.md",
+        ".agents/skills/atlas/scripts/atlas.py",
+        ".agents/skills/atlas/references/root-guidance.md",
+        ".claude/skills/atlas/SKILL.md",
+        ".claude/skills/atlas/scripts/atlas.py",
+        ".claude/skills/atlas/references/root-guidance.md"
+      ]
+    }
+  ]
+}

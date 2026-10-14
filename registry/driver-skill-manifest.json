@@ -5,7 +5,7 @@
       "id": "atlas",
       "scope": "driver",
       "sha256": "c18e56fcc56abf80903e2fc6829cd94b44f42947724a26318ebcbf1ac5e1b35b",
-      "tree-sha256": "4950054d884eb15a90aed2b159313e40dba09971d2d108ac029956aed7d074f7",
+      "tree-sha256": "cadf0b53e3615ea85cee34adb927f11df7d3c29dc5169632681169121b42eae2",
       "files": [
         {
           "path": "SKILL.md",
@@ -719,7 +719,7 @@
         },
         {
           "path": "references/lifecycle.md",
-          "sha256": "e661efad5335bedf8dcfe7312e8ce8229b7a43ff75e4db6112ab1c8adc2dae82",
+          "sha256": "96611e4834b3215b841e26c5c85ee0dee4fecc434077f6efd2d1f8e74958f8fc",
           "executable": false
         },
         {
@@ -728,8 +728,13 @@
           "executable": false
         },
         {
+          "path": "references/root-guidance.md",
+          "sha256": "74fb4879935b3808bee12bb3dcfebcb0c46078b1e0abca3c4fad2271e24be826",
+          "executable": false
+        },
+        {
           "path": "scripts/atlas.py",
-          "sha256": "a80a3d3842c69d4d18b5daa506180acea651a9c8ad32f4fa874e1b43b5293f37",
+          "sha256": "3a5f5e7c1e9e239152b3ef39f9dd80b5ffc30c32ce5ae1f453ff4090d4f4f5e5",
           "executable": false
         }
       ],

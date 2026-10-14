@@ -6,6 +6,14 @@
       "path": ".fsgg/atlas.json"
     },
     {
+      "source": ".fsgg/owner-guidance.json",
+      "path": ".fsgg/owner-guidance.json"
+    },
+    {
+      "source": ".agents/skills/atlas/references/root-guidance.md",
+      "path": ".fsgg/atlas-guidance.md"
+    },
+    {
       "source": ".fsgg/routine-development.json",
       "path": ".fsgg/routine-development.json"
     },

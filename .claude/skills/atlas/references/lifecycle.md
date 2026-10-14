@@ -30,13 +30,23 @@ encountered through supported memory mechanisms; never edit an internal memory d
 
 ## Installed workspace guidance
 
-When adopting the owner driver payload, check its policy projection with
-`python3 .agents/skills/atlas/scripts/atlas.py guidance --root . --check` from the
-repository root. When authorized to update owner guidance, omit `--check` to refresh
-only the marked Atlas blocks; other agent instructions are preserved. A missing policy
-is an adoption gap, not permission to invent one. Source delivery of this helper/policy
-alone does not prove that an installed consumer ran it or adopted the archive update.
-The installed `work-roadmap` entrypoint already routes through Atlas; staging policy is
-transport. The generic SDD generator currently uses its separate product Knowledge API
-and does not read `knowledgePolicy` or call this helper. Automatic root activation needs
-a supported owner/provider hook and installed readback; preserve the generic API.
+The Atlas guidance body is authored once in `references/root-guidance.md`. The helper
+reads that reference, and Drivers stages the identical bytes at `.fsgg/atlas-guidance.md`
+through its existing workspace inventory. The optional `.fsgg/owner-guidance.json`
+descriptor declares the `atlas` block for `claude` and `codex` and names its required
+policy, skill, helper and reference files. It carries no command or execution hook.
+
+A compatible SDD receiver can validate the selected owner payload and merge that body
+between `<!-- atlas:begin -->` and `<!-- atlas:end -->` through its ordinary file effects.
+Descriptor delivery alone does not prove activation: it requires the generic owner-guidance
+implementation, publication and installed receiver readback. Older receivers retain their
+existing behavior. The separate product Knowledge API and its historical records remain
+under their own contract; `knowledgePolicy` by itself is not an activation mechanism.
+
+From the receiving repository root, check manual/automatic agreement with
+`python3 .agents/skills/atlas/scripts/atlas.py guidance --root . --check`. When authorized
+to update owner guidance manually, omit `--check` to refresh only the marked Atlas blocks;
+other agent instructions are preserved. A missing policy or reference is an adoption gap,
+not permission to invent one. Automatic fresh scaffold and confirmed retained upgrade must
+verify all declared prerequisites and preserve conflicting authored files; doctor remains
+read-only. Claim those routes only after acceptance of the exact installed receiver.
