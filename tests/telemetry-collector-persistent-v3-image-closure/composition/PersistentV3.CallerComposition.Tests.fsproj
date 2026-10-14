@@ -11,6 +11,6 @@
     <Compile Include="../../../deployment/telemetry-collector/persistent/v3/image-closure/RootlessMechanism.fs" Link="RootlessMechanism.fs" />
     <Compile Include="../../../deployment/telemetry-collector/persistent/v3/image-closure/RootRecipeBinding.fs" Link="RootRecipeBinding.fs" />
     <Compile Include="../../../deployment/telemetry-collector/persistent/v3/image-closure/ProductionCaller.fs" Link="ProductionCaller.fs" />
-    <Compile Include="CallerCompositionTests.fs" /><Compile Include="Program.fs" />
+    <Compile Include="../RecipeControls.fs" Link="RecipeControls.fs" /><Compile Include="../OciTests.fs" Link="OciTests.fs" /><Compile Include="CallerSourceFixtures.fs" /><Compile Include="CallerCompositionTests.fs" /><Compile Include="JoinedCallerTests.fs" /><Compile Include="Program.fs" />
   </ItemGroup>
 </Project>

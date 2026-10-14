@@ -8,7 +8,7 @@
  * lc_operation authority or an authentic provisioner. No child is created and
  * no namespace/cgroup is entered. Real private directory FDs, selected recipe,
  * core/parser/perform/capture/pump/cleanup and resource accounting are retained. */
-typedef int (*source_effect)(uint32_t,int *,const unsigned char **,size_t *,const unsigned char **,size_t *);
+typedef int (*source_effect)(uint32_t,const lr_command *,int *,const unsigned char **,size_t *,const unsigned char **,size_t *);
 struct source_fixture {
  lc_adapter *adapter;
  source_effect effect;
@@ -59,7 +59,9 @@ static long source_birth(lc_adapter *a,uint32_t slot,int out[2],int err[2],int h
  struct source_fixture *f=source_current;
  if(!f||f->adapter!=a||slot>=70||!f->effect){errno=EINVAL;return -1;}
  int exit_code=0;const unsigned char *stdout_bytes=NULL,*stderr_bytes=NULL;size_t stdout_count=0,stderr_count=0;
- if(!f->effect(slot,&exit_code,&stdout_bytes,&stdout_count,&stderr_bytes,&stderr_count)){errno=EIO;return -1;}
+ const lc_command_slot *selected=&a->slots[slot];
+ lr_command command={selected->executable,selected->working_directory,selected->arguments,selected->argument_count,selected->environment,selected->environment_count,selected->output_limit};
+ if(!f->effect(slot,&command,&exit_code,&stdout_bytes,&stdout_count,&stderr_bytes,&stderr_count)){errno=EIO;return -1;}
  int new_out=source_memfd(stdout_bytes,stdout_count),new_err=source_memfd(stderr_bytes,stderr_count),leader=eventfd(0,EFD_CLOEXEC|EFD_NONBLOCK);
  if(new_out<0||new_err<0||leader<0){if(new_out>=0)close(new_out);if(new_err>=0)close(new_err);if(leader>=0)close(leader);return -1;}
  close(out[0]);close(err[0]);out[0]=new_out;err[0]=new_err;
