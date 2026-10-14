@@ -1,6 +1,6 @@
 ---
 name: show-progress
-description: Use showProgress for roadmap progress, complications, effort changes and completion forecasts; explicit invocations save and automatically PR/merge dated reports.
+description: Report roadmap progress, complications, effort and forecasts; explicit invocations save and PR/merge timestamped reports.
 ---
 
 # showProgress
