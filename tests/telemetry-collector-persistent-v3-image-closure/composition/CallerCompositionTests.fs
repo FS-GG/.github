@@ -9,7 +9,7 @@ open FSGG.Telemetry.PersistentV3.ImageClosure
 let private require condition reason=if not condition then raise(InvalidDataException reason)
 // Pure correspondence checks precede FFI; they claim no native operation or
 // supplying-controller profile. Real C/wire composition is a separate fixture.
-let recipeCorrespondence (inputs:RootlessInputs)=
+let internal recipeCorrespondence (inputs:RootlessInputs)=
     let native=RootRecipeBinding.prepare inputs
     require(native.RecipeSha256=CommandRecipe.identity inputs.Program&&native.ExpectedInputSha256=inputs.ExpectedInput) "caller-native-input-digest"
     require(native.Version=1u&&native.Schema=RootRecipeBinding.Schema&&native.MaximumCommands<=70&&native.Steps.Length=native.NormalCount+12) "caller-native-shape"
