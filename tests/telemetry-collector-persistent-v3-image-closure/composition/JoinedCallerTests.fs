@@ -58,6 +58,9 @@ let private exercise target failFirst=
                 output stdout stdoutCount result.Stdout;output stderr stderrCount result.Stderr
                 1
             with error->callbackFailure<-Some error;0)
+        // An unretired native peer keeps its callback rooted even after refusal.
+        // Unknown cleanup retains the handle and unmanaged output allocations.
+        let callbackRoot=GCHandle.Alloc callback
         let pair=[|-1;-1|]
         let deadline=DateTimeOffset.UtcNow.AddSeconds 90.
         let mutable opened=false
@@ -97,7 +100,9 @@ let private exercise target failFirst=
             for fd in pair do if fd>=0 then close fd|>ignore
             let retired=match peer with None->true|Some task->task.Wait(TimeSpan.FromSeconds 5.)
             if opened&&retired then require(fsgg_caller_source_close()=1) "source-native-close"
-            if retired then for memory in allocations do Marshal.FreeHGlobal memory
+            if retired then
+                for memory in allocations do Marshal.FreeHGlobal memory
+                callbackRoot.Free()
             GC.KeepAlive callback
             require retired "source-peer-cleanup-unknown"))
 
