@@ -161,6 +161,7 @@ let run selected prepared trusted =
     let final,trace=RunnerExecution.runWithBudgets RunnerExecution.productionBudgets 32 (DateTimeOffset.UtcNow.AddSeconds 30.) CancellationToken.None mechanism (Runner.initialC4 expected)
     require(Runner.c4Ready final&&not(Runner.qualificationAccepted final)&&actualBuilds=2&&trace.Length=12) (sprintf "synthetic OCI mechanism did not reach narrower C4Ready: %A" final)
     require(JsonSerializer.SerializeToUtf8Bytes(commands.ToArray())=JsonSerializer.SerializeToUtf8Bytes(inputs.Program.Steps|>Array.map _.Command)) "actual C4 caller stream differs from selected program"
+    printfn "PASS actual C4 Runner/RootlessMechanism stream matches all selected normal/cleanup commands"
     mechanism.SealTerminal(final,trace)
     require(File.Exists(Path.Combine(inputs.EvidenceRoot,"terminal.json"))&&not(Directory.Exists(Path.Combine(inputs.WorkRoot,"bundle-a")))&&not(Directory.Exists(Path.Combine(inputs.WorkRoot,"bundle-b")))) "synthetic terminal evidence or scoped cleanup absent"
     for name in ["a-build.oci.tar";"b-build.oci.tar";"a-reload.oci.tar";"b-reload.oci.tar"] do require(File.Exists(Path.Combine(inputs.EvidenceRoot,name))) "external OCI archive lost during cleanup"
@@ -221,9 +222,21 @@ let inactive (source:Selection) (trusted:TrustedNativeSelection)=
         File.SetUnixFileMode(Path.Combine(acquired,host.SourcePath),enum<UnixFileMode> 0o600)
         File.WriteAllBytes(Path.Combine(acquired,host.SourcePath),package)
         File.SetUnixFileMode(Path.Combine(acquired,host.SourcePath),enum<UnixFileMode> 0o444)
-        let rows=source.Files|>Array.map(fun row->if row=host then {row with Bytes=int64 package.Length;Sha256=OciEvidence.shaBytes package} else row)
+        // C5's actual pure preparation requires its canonical verifier bytes even
+        // for synthetic input. Preserve that gate; the copied module is not run.
+        let verifier=source.Files|>Array.find(fun row->row.TargetPath="/opt/fsgg/verifier/learn_01_native_source.py")
+        let verifierBytes=File.ReadAllBytes(Path.GetFullPath(Path.Combine(__SOURCE_DIRECTORY__,"../../tools/learn_01_native_source.py")))
+        require(OciEvidence.shaBytes verifierBytes=ImageClosure.CanonicalVerifierSha256) "canonical verifier source bytes differ"
+        let verifierPath=Path.Combine(acquired,verifier.SourcePath)
+        File.SetUnixFileMode(verifierPath,enum<UnixFileMode> 0o600)
+        File.WriteAllBytes(verifierPath,verifierBytes)
+        File.SetUnixFileMode(verifierPath,enum<UnixFileMode> 0o444)
+        let rows=source.Files|>Array.map(fun row->
+            if row=host then {row with Bytes=int64 package.Length;Sha256=OciEvidence.shaBytes package}
+            elif row=verifier then {row with Bytes=int64 verifierBytes.Length;Sha256=OciEvidence.shaBytes verifierBytes}
+            else row)
         let selected={source with IdentityClass="synthetic-test";AcquisitionRoot=acquired;ManifestRoot=manifests;Files=rows;HostArchiveSha256=OciEvidence.shaBytes package;
-                                  HostPayloadSha256=OciEvidence.shaBytes(JsonSerializer.SerializeToUtf8Bytes(Map.ofList[payloadName,OciEvidence.shaBytes payload]));InventorySha256=OciEvidence.shaBytes(JsonSerializer.SerializeToUtf8Bytes rows);NativeInventoryPath="native-inventory.json"}
+                                  HostPayloadSha256=OciEvidence.shaBytes(JsonSerializer.SerializeToUtf8Bytes(Map.ofList[payloadName,OciEvidence.shaBytes payload]));InventorySha256=OciEvidence.shaBytes(JsonSerializer.SerializeToUtf8Bytes rows);CanonicalVerifierSha256=OciEvidence.shaBytes verifierBytes;NativeInventoryPath="native-inventory.json"}
         let refs=[|"host";"manager";"native";"runtime"|]|>Array.map(fun role->
             let authority=match role with "host"->selected.HostManifestSha256|"manager"->selected.ManagerManifestSha256|"runtime"->selected.RuntimeTreeSha256|_->selected.NativeProfileSha256
             let files=rows|>Array.filter(fun row->row.SourceClass=role)|>Array.map(fun row->{SourcePath=row.SourcePath;TargetPath=row.TargetPath;Bytes=row.Bytes;Sha256=row.Sha256;Mode=row.Mode}:ManifestFile)
