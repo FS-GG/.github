@@ -182,8 +182,9 @@ type RootlessMechanism(inputs:RootlessInputs,backend:IProcessBackend)=
         bundle.Children.Clear()
     member _.SealTerminal(state:State,trace:(Effect*Observation) list)=
         require((Runner.c4Ready state||Runner.qualificationAccepted state)&&comparisonSealed) "terminal-not-qualified"
+        require(state.ExpectedInput=inputs.ExpectedInput&&program.Selection.Target=(if state.Target=C4Only then "run-c4" else "run-inactive")) "terminal-recipe-binding"
         let accepted=Runner.qualificationAccepted state
-        seal "terminal.json" {|schema=(if accepted then "fsgg.telemetry.persistent-v3-inactive-result/1" else "fsgg.telemetry.persistent-v3-c4-result/1");status=(if accepted then "InactiveQualified" else "C4Ready");input=inputs.ExpectedInput;custody=inputs.CustodyIdentity;qualificationAccepted=accepted;cleanupObserved=state.Owned.IsEmpty&&state.Running.IsEmpty;effects=trace|>List.map(fun(effect,observation)->sprintf "%A -> %A" effect observation)|}
+        seal "terminal.json" {|schema=(if accepted then "fsgg.telemetry.persistent-v3-inactive-result/1" else "fsgg.telemetry.persistent-v3-c4-result/1");status=(if accepted then "InactiveQualified" else "C4Ready");input=inputs.ExpectedInput;custody=inputs.CustodyIdentity;recipeSha256=CommandRecipe.identity program;qualificationAccepted=accepted;cleanupObserved=state.Owned.IsEmpty&&state.Running.IsEmpty;effects=trace|>List.map(fun(effect,observation)->sprintf "%A -> %A" effect observation)|}
     interface IRunnerMechanism with
         member _.Execute(effect,token)=Task.Run<Observation>((fun()->
             token.ThrowIfCancellationRequested()
@@ -197,7 +198,7 @@ type RootlessMechanism(inputs:RootlessInputs,backend:IProcessBackend)=
                 Directory.CreateDirectory(inputs.EvidenceRoot,UnixFileMode.UserRead|||UnixFileMode.UserWrite|||UnixFileMode.UserExecute)|>ignore
                 let parent=OciEvidence.read token inputs.ParentOci (Path.Combine(inputs.WorkRoot,"parent-admission"))
                 require(parent.ManifestDigest=inputs.Selection.RuntimeImageDigest) "parent-manifest-mismatch"
-                seal "input.json" {|schema="fsgg.telemetry.persistent-v3-c4-input/1";input=expected;custody=inputs.CustodyIdentity;parent=parent.ManifestDigest;builder=RootlessPolicy.BuilderSha256;supervisor=RootlessPolicy.SupervisorSha256;commandPolicy=RootlessPolicy.commandPolicy|}
+                seal "input.json" {|schema="fsgg.telemetry.persistent-v3-c4-input/1";input=expected;custody=inputs.CustodyIdentity;recipeSha256=CommandRecipe.identity program;parent=parent.ManifestDigest;builder=RootlessPolicy.BuilderSha256;supervisor=RootlessPolicy.SupervisorSha256;commandPolicy=RootlessPolicy.commandPolicy|}
                 InputsAcquired expected
             | ValidateInputs expected->validate token;InputsValidated inputs.ExpectedInput
             | CreateStore logical->
