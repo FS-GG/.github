@@ -1,6 +1,6 @@
 ---
 name: show-progress
-description: Use showProgress for roadmap progress, complications, effort changes and completion forecasts; save dated reports on request.
+description: Use showProgress for roadmap progress, complications, effort changes and completion forecasts; explicit invocations save and automatically PR/merge dated reports.
 ---
 
 # showProgress
@@ -69,10 +69,12 @@ assume parallel agent count translates into equivalent delivery capacity.
 
 ## Write the report
 
-An explicit invocation of this skill authorizes saving the report. For an ordinary chat
-question, answer in chat unless saving is requested; automatic skill selection is not
-permission to create files. A requested skill implementation is not an instruction to
-start recurring reporting or schedule automation.
+An explicit reporting invocation of this skill authorizes saving the report and automatically
+committing it, opening a PR and merging after required checks pass. Complete that delivery
+without asking for separate landing confirmation, unless the user limits the request to a
+draft, local save or another narrower scope. For an ordinary chat question, answer in chat
+unless saving is requested; automatic skill selection alone does not authorize saving or
+landing. A request to modify this skill does not itself invoke reporting or schedule automation.
 
 Use [report-template.md](references/report-template.md) for the saved report. Fill every
 selected item; use explicit unknown/not-applicable states instead of silently omitting
@@ -91,8 +93,18 @@ freshness. Ensure completed rows have acceptance evidence and open rows do not b
 100% by rounding. Remove secrets, private raw logs, usernames and local credential paths;
 link public or repository evidence where possible and describe unavailable private proof.
 
-Return the saved path, overall accepted status, defensible approximate movement, the most
-important forecast revisions and blockers. Reporting alone does not authorize commits,
-PRs, merges, notifications or roadmap status changes. When landing is explicitly requested,
-use the repository's current delivery route and required checks; report the actual PR/merge
-result and respect any conversation-specific limits on delivery.
+## Land the report
+
+After validating and saving a report from an explicit reporting invocation, use the repository's
+current delivery route to make one focused report-only commit and PR from the current default
+branch, then merge at the first green required-check state. Required delivery CI is permitted;
+the restriction on launching work to produce status evidence still applies. Preserve the active
+branch, index and unrelated files, using an isolated checkout when needed and permitted by the
+conversation. Do not include unrelated changes or bypass required checks or branch protection.
+Fix report-related failures in the same PR. If delivery is blocked by access, an unrelated CI
+failure or a conversation-specific limit, retain the saved report and any PR, report the blocker
+and actual delivery state, and stop rather than claiming a merge or retrying indefinitely.
+
+Return the saved path, actual PR/merge result, overall accepted status, defensible approximate
+movement, the most important forecast revisions and blockers. Reporting does not authorize
+notifications, roadmap status changes or resuming roadmap execution.
