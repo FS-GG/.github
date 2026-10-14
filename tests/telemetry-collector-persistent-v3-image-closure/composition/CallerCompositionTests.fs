@@ -2,7 +2,8 @@ module CallerCompositionTests
 
 open System
 open System.IO
-open System.Reflection
+open System.Reflection.Metadata
+open System.Reflection.PortableExecutable
 open FSGG.Telemetry.PersistentV3.ImageClosure
 
 let private require condition reason=if not condition then raise(InvalidDataException reason)
@@ -30,9 +31,19 @@ let testIdentity ()=
     require(not(isNull(moduleType.GetMethod("run")))) "caller-shared-production-entry-missing"
     let productionPath=Environment.GetEnvironmentVariable "PERSISTENT_V3_CALLER_PRODUCTION_ASSEMBLY"
     require(not(String.IsNullOrWhiteSpace productionPath)&&Path.IsPathFullyQualified productionPath) "caller-production-assembly-required"
-    let production=Assembly.LoadFile productionPath
-    require(production.GetName().Name="PersistentV3.ImageClosure") "caller-production-assembly-identity"
-    let productionType=production.GetType("FSGG.Telemetry.PersistentV3.ImageClosure.ProductionCaller",true)
-    require(isNull(productionType.GetMethod("runSourceBoundary"))&&isNull(production.GetType("FSGG.Telemetry.PersistentV3.ImageClosure.ProductionCaller+SourceBoundary"))) "caller-test-injection-present-in-production"
-    require(not(isNull(productionType.GetMethod("run")))) "caller-production-entry-missing"
+    // Inspect immutable PE metadata only: no assembly load, entry point,
+    // module initializer, native library resolution or production code runs.
+    use productionStream=File.OpenRead productionPath
+    use productionPe=new PEReader(productionStream)
+    require(productionPe.HasMetadata) "caller-production-metadata-missing"
+    let metadata=productionPe.GetMetadataReader()
+    let assembly=metadata.GetAssemblyDefinition()
+    require(metadata.GetString assembly.Name="PersistentV3.ImageClosure") "caller-production-assembly-identity"
+    let types=metadata.TypeDefinitions |> Seq.map(fun handle->metadata.GetTypeDefinition handle) |> Seq.toArray
+    let productionTypes=types |> Array.filter(fun definition->metadata.GetString definition.Namespace="FSGG.Telemetry.PersistentV3.ImageClosure"&&metadata.GetString definition.Name="ProductionCaller")
+    require(productionTypes.Length=1) "caller-production-module-missing"
+    let methodNames=productionTypes[0].GetMethods() |> Seq.map(fun handle->metadata.GetString(metadata.GetMethodDefinition(handle).Name)) |> Set.ofSeq
+    let boundaryPresent=types |> Array.exists(fun definition->metadata.GetString definition.Name="SourceBoundary")
+    require(not(methodNames.Contains "runSourceBoundary")&&not boundaryPresent) "caller-test-injection-present-in-production"
+    require(methodNames.Contains "run") "caller-production-entry-missing"
     printfn "PASS distinct linked-source caller assembly and production hook absence; supplying controller/native effects NOT_RUN"
