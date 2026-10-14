@@ -684,14 +684,12 @@ inert substitutions; the ordinary SDK container's exact removal and empty store 
 observed. Descriptor and existing CLI/release-pin controls also passed. These source
 results establish neither authentic provider isolation nor native acceptance.
 
-The next window must review and implement the trusted native selector, delayed
-selected-slot directory acquisition, finite normal/abort cleanup terminal states,
-and independent root recipe binding. The current native owner check expects host
-UID 0 while a real mapped namespace UID 0 has a different host owner; its UID 32768
-child also cannot traverse the private mode-0700 bundle. Those checks remain unchanged.
-The engine UID profile and authentic provisioner remain required, with supplying
-owner still unresolved. No phase-2/phase-3 effects, native replay, cold-image build,
-receiver installation or activation are accepted by this source window.
+The fixed native API retains its host-UID0 directory check and UID32768 child.
+The second source window prepares a separate production entry for the trusted native
+selector, delayed selected-slot capabilities and mapped engine profile, described
+below. The authentic provisioner remains required, with supplying owner unresolved.
+No phase-2/phase-3 effects, native replay, cold-image build, receiver installation or
+activation are accepted by either source window.
 
 
 The first hosted source run compiled successfully but refused the full inactive
@@ -714,7 +712,7 @@ leaving 208 seconds to the original job deadline; cold acquisition and stage
 variation remain unmeasured. Missing Docker refuses before expensive source work.
 Static adversarial cleanup controls refuse identity, mount, namespace, capability,
 resource and command drift before removal. Required hosted qualification of this
-fixture repair remains pending.
+fixture repair subsequently passed the required hosted source qualification.
 
 
 The reviewed hosted variant passed the full source job in 590 seconds, including
@@ -727,3 +725,66 @@ removal. The intentional cap-plus-one pipeline is annotated because truncation
 refuses overflow and `pipefail` retains writer failure; its repository fixture passes
 all 25 controls. Final exact-source hosted qualification retains the original failure
 and these stronger safeguards.
+
+
+The final first-window source candidate passed required hosted qualification at
+`071e00e121376bc925abfe332d55edc3a539b2ea` and landed as
+`0ba575b150549bd2390d886e44d744e3dabdf8b3`. The original ownership failure and
+intermediate successful fixture evidence remain retained. Source completion still
+supplies no production controller or native acceptance.
+
+### Prepared second source window: finite native policy and deferred capabilities
+
+`native/custody_root` now supplies a bounded copied recipe and finite normal/abort
+cleanup policy. The private production `lc_open_root` composes it with the existing
+adapter validation, original peer/pidfd and namespace/cgroup joins, capture, birth
+and retirement. Root selects a finite pool of unique immutable command leases and
+empty command cgroups. A request cannot register a command or capability. START
+consumes its pool slot before matching or attempted birth, then freezes one exact
+selected command. Only the adapter's own successful, fully captured retired census
+can supply removal IDs; each retains its original operation/store/lease origin and
+is consumed once in observed order. The root controller must independently derive
+and validate the typed recipe from the shared producer. Digest shape alone supplies
+no authority, and an authentic production controller does not yet call this API.
+
+Already-existing work/evidence parent anchors are retained before BindInput; no
+bundle precreation changes Runner ownership. Selected roots must initially be absent.
+The production path derives exact parent and private-directory host UID/GID from the
+retained keeper's verified namespace-UID0 mappings. It authenticates mapped parent
+metadata, selected namespace paths and mount identities, then resolves the selected
+bundle through retained parents without symlinks, mount crossing or path escape.
+Mode0700, original inode/device/mount and the exact regular owner nonce remain
+required. Namespace visibility checks the next selected and live slots, so legitimately
+deleted historical bundle paths need not remain visible. Control cgroups, executables
+and supervisor retain host-root ownership checks. The fixed fixture retains its
+existing identity; a supplying production profile must independently prove mapped
+engine isolation from control paths and inherited descriptors.
+
+Production output buffers allocate only for selected slots and remain retained.
+Before opening, bounded arithmetic accounts for worst-case output for every possible
+slot, copied recipe, vectors, argv/environment, workspace and lease tables, plus a
+nonzero independently admitted requester/controller/runtime overhead reservation.
+The sum must fit the existing operation memory ceiling. Original captured-output
+charging, task/CPU limits and deadline remain authoritative; this adds no capacity.
+
+Production EOF requires a finite cleaned state, genuine retirement of every consumed
+slot, complete framing/acknowledgements and actual selected bundle absence under
+original directory identities. An unused operation can settle only an abort custody
+state after actual absence. The observational outcome explicitly distinguishes abort
+custody completion; only actual Runner terminal evidence establishes C4Ready or
+InactiveQualified. Unknown program or directory retirement holds the original handles.
+
+Strict C11 executable and shared-library compilation passed, with 375 ordinary source
+controls and zero failures. Controls use the actual parser and directory helpers for
+nonce, owner, mount, symlink, escape, replacement and terminal-absence refusals; pure
+policy fixtures exercise both targets and bounded cleanup without claiming kernel
+custody. The source launcher links the new module into its maintained controls.
+No privileged native fixture, namespace/cgroup operation, Podman, CLR invocation or
+production effects ran for this window. Root semantic review and required hosted
+source qualification remain pending.
+
+The next source window joins the actual production caller, finite selector and real
+wire/core through an explicitly inert test transport boundary. The authenticated
+production controller/profile, native8, cold image closure, native C5 and receiver
+acceptance remain separate unresolved outcomes. Source success cannot settle a
+historical unknown operation or establish publication, installation or activation.
