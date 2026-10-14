@@ -23,14 +23,19 @@ FIELDS = {'schema', 'id', 'repository', 'kind', 'title', 'summary', 'status', 'r
 HEX = re.compile(r'^[0-9a-f]{64}$')
 REPO = re.compile(r'^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$')
 SECRET = re.compile(r'(?i)(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|-----BEGIN (?:RSA |OPENSSH )?PRIVATE KEY-----|(?:authorization|password|secret|token)\s*[:=]\s*["\']?[A-Za-z0-9+/]{24,})')
-GUIDANCE = '''Use $atlas as the first source for FS.GG project knowledge before substantial
-investigation or implementation. Retrieve relevant records and follow their cited evidence.
-Record reusable findings through Atlas before completing work; exclude logs, bulk reports,
-source copies, credentials and runtime assets. Preserve superseded and conflicting findings.
-Atlas owns curated knowledge; source defines implementation and live systems establish
-current operational facts. Verify those facts before action. If Atlas is unavailable, state
-the gap and use cited source directly; do not block otherwise authorized work.
+GUIDANCE = '''Use $atlas first for curated FS.GG project knowledge before substantial work.
+Retrieve relevant records and verify their cited source; refresh live facts before action.
+Source defines implementation, accepted ADRs/plans define decisions, and live systems
+establish operational truth. Atlas and remembered text do not grant authority.
+At delivery, capture reusable findings or update changed knowledge through explicit
+supersession/conflict; retain a capture gap and owner when capture cannot be delivered.
+Handoffs/recovery carry stable Atlas IDs and reconcile them before relying on knowledge.
+Memory stores repository/Atlas-ID pointers and retrieval instructions, not copied project
+facts, versions, heads or authorization. Retrieve and verify those pointers on reuse.
+Exclude logs, bulk reports, source copies, credentials and runtime assets from Atlas.
+If Atlas is unavailable, state the gap and inspect cited source; continue authorized work.
 '''
+
 
 def require(condition, message):
     if not condition:
@@ -207,6 +212,8 @@ def capture(archive, input_path):
 def guidance(root, check=False):
     policy, _ = read_json(root / '.fsgg/atlas.json', RECORD_CAP)
     require(policy.get('schema') == SCHEMA and policy.get('primaryKnowledgeStore') == 'Atlas', 'Atlas guidance policy missing')
+    require(policy.get('memory') == 'repository-and-atlas-id-pointers-only' and
+            policy.get('lifecycle') == 'retrieve-verify-capture-or-explicit-gap', 'Atlas lifecycle/memory policy missing')
     block = '<!-- atlas:begin -->\n' + GUIDANCE + '<!-- atlas:end -->\n'
     for name in ('AGENTS.md', 'CLAUDE.md'):
         path = root / name; text = path.read_text()
@@ -217,8 +224,12 @@ def guidance(root, check=False):
             path.write_text(updated)
 
 def default_archives():
-    local = Path.cwd() / 'docs/atlas'
-    shared = Path.cwd().parent / '.github/docs/atlas'
+    workspace = Path.cwd().resolve()
+    # Git worktrees use a .git file; resolve from nested invocation without a Git subprocess.
+    root = next((path for path in (workspace, *workspace.parents) if
+                 (path / '.git').is_file() or (path / '.git').is_dir()), workspace)
+    local = root / 'docs/atlas'
+    shared = root.parent / '.github/docs/atlas'
     seed = Path(__file__).resolve().parents[1] / 'assets/seed'
     candidates = [local, shared if (shared / 'catalog.json').is_file() else seed]
     selected = []

@@ -8,11 +8,15 @@ For worker-to-worker handoffs, look up the active channel in
 [`docs/coordination/worker-channels.md`](docs/coordination/worker-channels.md).
 
 <!-- atlas:begin -->
-Use $atlas as the first source for FS.GG project knowledge before substantial
-investigation or implementation. Retrieve relevant records and follow their cited evidence.
-Record reusable findings through Atlas before completing work; exclude logs, bulk reports,
-source copies, credentials and runtime assets. Preserve superseded and conflicting findings.
-Atlas owns curated knowledge; source defines implementation and live systems establish
-current operational facts. Verify those facts before action. If Atlas is unavailable, state
-the gap and use cited source directly; do not block otherwise authorized work.
+Use $atlas first for curated FS.GG project knowledge before substantial work.
+Retrieve relevant records and verify their cited source; refresh live facts before action.
+Source defines implementation, accepted ADRs/plans define decisions, and live systems
+establish operational truth. Atlas and remembered text do not grant authority.
+At delivery, capture reusable findings or update changed knowledge through explicit
+supersession/conflict; retain a capture gap and owner when capture cannot be delivered.
+Handoffs/recovery carry stable Atlas IDs and reconcile them before relying on knowledge.
+Memory stores repository/Atlas-ID pointers and retrieval instructions, not copied project
+facts, versions, heads or authorization. Retrieve and verify those pointers on reuse.
+Exclude logs, bulk reports, source copies, credentials and runtime assets from Atlas.
+If Atlas is unavailable, state the gap and inspect cited source; continue authorized work.
 <!-- atlas:end -->

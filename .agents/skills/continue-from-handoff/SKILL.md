@@ -8,6 +8,9 @@ description: "Resume FS-GG work from the newest saved handoff, reconcile live st
 Resume the saved programme and work the roadmap to its actual acceptance outcomes.
 Creating, editing, or inspecting this skill does not start programme execution.
 
+Retrieve Atlas IDs named by the handoff using [$atlas](../atlas/SKILL.md); reconcile
+supersession/conflicts and verify citations/live facts. Keep missing knowledge explicit.
+
 ## Select the current roadmap
 
 Use the protected [Unified Roadmap v3](../../../docs/roadmaps/2026-10-07-unified-development-roadmap-v3.md)

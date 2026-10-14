@@ -2,6 +2,10 @@
   "schema": "fsgg/driver-workspace-inventory/v1",
   "files": [
     {
+      "source": ".fsgg/atlas.json",
+      "path": ".fsgg/atlas.json"
+    },
+    {
       "source": ".fsgg/routine-development.json",
       "path": ".fsgg/routine-development.json"
     },

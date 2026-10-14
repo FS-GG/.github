@@ -6,5 +6,7 @@
   "warningBytes": 52428800,
   "ceilingBytes": 104857600,
   "recordBytes": 32768,
-  "retrievalBytes": 65536
+  "retrievalBytes": 65536,
+  "memory": "repository-and-atlas-id-pointers-only",
+  "lifecycle": "retrieve-verify-capture-or-explicit-gap"
 }

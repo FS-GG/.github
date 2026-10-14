@@ -64,3 +64,21 @@ emitted by `scripts/generate-driver-manifest` from the authored `SKILL.md` bodie
 reads that manifest at pack time and stages exactly its `scope: driver` rows; a driver added or retired
 needs no edit to this package. `verify-package.sh` proves the packed set derives from the manifest, packs
 every driver member, and fails loud on a byte that does not match its recorded `sha256`.
+
+## Atlas guidance adoption
+
+The driver payload carries the Atlas skill/helper and historical seed; the workspace
+payload carries `.fsgg/atlas.json`. Owner workflow entrypoints such as `work-roadmap`
+route project investigation through Atlas. To adopt the central root guidance, an
+owner uses the Atlas helper's `guidance --root . --check` from the receiving repository
+and refreshes the marked blocks within its authorized guidance change when needed.
+The check and lifecycle instructions are in the delivered Atlas skill.
+
+Workspace staging is transport, not automatic activation. The generic SDD scaffold
+currently seeds `.fsgg/knowledge-guide.md` for its separate `fsgg-sdd knowledge` product
+API; its agent configuration parser does not consume `knowledgePolicy`, and driver
+materialization does not invoke the Atlas guidance helper. Automatic root activation
+therefore still requires a supported owner/provider guidance hook and an installed
+consumer readback. Neither this package's source checks nor its packaged seed proves
+that adoption. Preserve the generic product Knowledge API and existing guidance;
+Atlas indexes curated project knowledge with citations rather than replacing that API.

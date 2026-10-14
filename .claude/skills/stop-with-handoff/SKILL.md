@@ -9,6 +9,9 @@ Stop programme execution immediately and preserve enough verified state for a
 later [$continue-from-handoff](../continue-from-handoff/SKILL.md) invocation.
 Creating, editing, or inspecting this skill does not stop another task.
 
+Include delivered Atlas IDs and any unfinished capture gap/owner in the saved report;
+follow [$atlas](../atlas/SKILL.md) without restarting capture work after shutdown.
+
 ## Stop execution before saving
 
 Cancel new roadmap dispatches, source edits, repair pushes, publications, and
