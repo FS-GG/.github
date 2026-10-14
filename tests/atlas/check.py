@@ -79,6 +79,41 @@ class AtlasControls(unittest.TestCase):
         with sqlite3.connect(db) as connection:connection.execute('DELETE FROM records')
         result=self.query('--database',str(db),'search','governance')
         self.assertEqual(result.returncode,2);self.assertIn('population differs',result.stderr)
+    def test_cache_omissions_refuse_before_search_or_get_filtering(self):
+        self.add(fixture())
+        mutations = [
+            ('DELETE FROM search', ['search', 'governance']),
+            ("UPDATE records SET id='other/finding'", ['get', 'fixture/boundary']),
+            ('UPDATE records SET active=0', ['get', 'fixture/boundary']),
+            ("UPDATE records SET repository='FS-GG/Other'", ['search', 'governance', '--repository', 'FS-GG/Fixture']),
+        ]
+        for index, (sql, query) in enumerate(mutations):
+            with self.subTest(sql=sql):
+                db = self.root / ('cache-' + str(index))
+                atlas.build_database([self.archive], db)
+                self.assertEqual(len(json.loads(self.query('--database', str(db), *query).stdout)), 1)
+                with sqlite3.connect(db) as connection:
+                    connection.execute(sql)
+                result = self.query('--database', str(db), *query)
+                self.assertEqual(result.returncode, 2, result.stderr)
+                self.assertIn('differs from cited archive', result.stderr)
+                self.assertEqual(result.stdout, '')
+    def test_query_rebuilds_fts_shadow_index_from_archive(self):
+        sha = self.add(fixture()); db = self.root / 'cache'
+        atlas.build_database([self.archive], db)
+        with sqlite3.connect(db) as connection:
+            connection.execute('DELETE FROM search_data WHERE id > 10')
+            self.assertEqual(connection.execute('SELECT count(*) FROM search').fetchone(), (1,))
+            try:
+                matched = connection.execute("SELECT digest FROM search WHERE search MATCH 'governance'").fetchall()
+            except sqlite3.DatabaseError:
+                matched = []
+            self.assertEqual(matched, [])
+        before = db.read_bytes()
+        result = self.query('--database', str(db), 'search', 'governance')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)[0]['digest'], sha)
+        self.assertEqual(db.read_bytes(), before, 'explicit cache must remain read-only')
     def test_reject_bulk_logs_credentials_and_large_records(self):
         for name in ['run.log','report.html','image.zip','source.fs','store.sqlite']:
             path=self.archive/name;path.write_bytes(b'payload')

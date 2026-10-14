@@ -4,12 +4,12 @@
     {
       "id": "atlas",
       "scope": "driver",
-      "sha256": "341bb5129dc34c1dfbee86ed57762eb387f48ff1da6b4df0604f149eaa5c4b98",
-      "tree-sha256": "a800b52056522a72d1748bab75ebc077871e8178373229b1bd722a69619ad3a0",
+      "sha256": "99db8aa942a7361afd52b943967b931a57c683545312e0e3814a1f12a673d10a",
+      "tree-sha256": "34ba21e0bd390aca46f51b4399d0e1bdb9db05e6982339964a352e23b5579366",
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "341bb5129dc34c1dfbee86ed57762eb387f48ff1da6b4df0604f149eaa5c4b98",
+          "sha256": "99db8aa942a7361afd52b943967b931a57c683545312e0e3814a1f12a673d10a",
           "executable": false
         },
         {
@@ -24,7 +24,7 @@
         },
         {
           "path": "assets/seed/catalog.json",
-          "sha256": "824a2b6f541ddceaa41ad8d8bf101d4563cf0177cfde4d7fb889df1b657eb8fd",
+          "sha256": "1acc841bef7695ff36acaed593d28d475d3556b64f32d693c5c3d403728eaae3",
           "executable": false
         },
         {
@@ -90,6 +90,11 @@
         {
           "path": "assets/seed/records/34463778cf2d29e3896a65613cf9e3eb3e9f2d8946d17f12b609e70eec63d128.json",
           "sha256": "34463778cf2d29e3896a65613cf9e3eb3e9f2d8946d17f12b609e70eec63d128",
+          "executable": false
+        },
+        {
+          "path": "assets/seed/records/397476cf107b48e7a662264f8fea9f880231fd3d1e0401622650f214cfaa35c7.json",
+          "sha256": "397476cf107b48e7a662264f8fea9f880231fd3d1e0401622650f214cfaa35c7",
           "executable": false
         },
         {
@@ -363,6 +368,11 @@
           "executable": false
         },
         {
+          "path": "assets/seed/records/e2c734504d211580b4e6674eb1c7d31fb6fb730c037210c34c980a96f9098269.json",
+          "sha256": "e2c734504d211580b4e6674eb1c7d31fb6fb730c037210c34c980a96f9098269",
+          "executable": false
+        },
+        {
           "path": "assets/seed/records/e3f19c383354cdf45311f92f00b90fed25dfba7e9892ab2f5f3aa4885876b75f.json",
           "sha256": "e3f19c383354cdf45311f92f00b90fed25dfba7e9892ab2f5f3aa4885876b75f",
           "executable": false
@@ -399,7 +409,7 @@
         },
         {
           "path": "scripts/atlas.py",
-          "sha256": "af4add5a90c64f627e831ad1fd51bab3782a79e89a330904110e3a9d2940cd31",
+          "sha256": "a613472e9f6902bca84068d1d63fc4ef129c37b67a6a547c77ef8f483f24a862",
           "executable": false
         }
       ],

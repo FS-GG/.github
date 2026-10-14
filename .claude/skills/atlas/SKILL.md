@@ -25,7 +25,8 @@ python3 .agents/skills/atlas/scripts/atlas.py --archive docs/atlas --database /t
 The Claude root carries identical helper bytes. Default retrieval combines the repository's `docs/atlas` with a sibling `.github/docs/atlas`
 when available, otherwise the packaged historical seed. Identical catalogs are deduplicated.
 Repeat `--archive` to aggregate repository-owned archives. Explicit databases are opened read-only
-and must match current archive fingerprints; rebuild stale caches to a fresh path. Queries return
+and their complete record/search content must match current archives; rebuild stale caches to a fresh path.
+Queries rebuild a temporary archive-derived FTS index so damaged cache indexes cannot hide knowledge. Queries return
 active records by default; `--history` includes superseded versions. Conflicting active records
 remain visible. Fetch the cited immutable revision/path and check its SHA256 before relying on
 implementation details; refresh live checks, feeds, ownership and runtime facts before action.

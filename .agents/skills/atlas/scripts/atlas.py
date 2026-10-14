@@ -159,6 +159,14 @@ def build_database(paths, destination):
         Path(temporary).unlink(missing_ok=True)
     return {'records': len(records), 'archiveBytes': total, 'databaseBytes': destination.stat().st_size, 'fingerprint': fingerprint}
 
+def validate_database(db, records, hidden, fingerprint):
+    require(db.execute('SELECT fingerprint FROM metadata').fetchall() == [(fingerprint,)], 'stale cache; rebuild from current archives to a fresh path')
+    require(db.execute('SELECT count(*) FROM records').fetchone() == (len(records),), 'cache population differs from source')
+    expected = [(sha, row['id'], row['repository'], int(sha not in hidden), canonical(row).decode()) for sha, row in sorted(records.items())]
+    require(db.execute('SELECT digest,id,repository,active,payload FROM records ORDER BY digest').fetchall() == expected, 'cache record differs from cited archive; rebuild to a fresh path')
+    expected_search = [(sha, row['title'], row['summary'], ' '.join(row['tags']), row['repository']) for sha, row in sorted(records.items())]
+    require(db.execute('SELECT digest,title,summary,tags,repository FROM search ORDER BY digest').fetchall() == expected_search, 'cache search content differs from cited archive; rebuild to a fresh path')
+
 def emit(value):
     raw = canonical(value)
     require(len(raw) <= RESULT_CAP, 'retrieval exceeds 64 KiB; narrow query or lower limit')
@@ -255,13 +263,17 @@ def main(argv=None):
         if args.command == 'restore':
             require(args.database is not None, '--database is required for restore'); emit(build_database(paths, args.database)); return 0
         with tempfile.TemporaryDirectory(prefix='atlas-query-') as temporary:
-            path = args.database or Path(temporary) / 'atlas.sqlite'
-            if args.database is None:
-                build_database(paths, path)
-            require(path.is_file() and not path.is_symlink(), 'database must be regular')
+            if args.database is not None:
+                require(args.database.is_file() and not args.database.is_symlink(), 'database must be regular')
+                require(args.database.stat().st_size <= 3 * CEILING, 'derived SQLite cache exceeds 300 MiB')
+                with sqlite3.connect(args.database.resolve().as_uri() + '?mode=ro', uri=True) as db:
+                    validate_database(db, records, hidden, fingerprint)
+            # FTS shadow indexes can disagree with their visible content rows.
+            # Query a fresh archive-derived index, never a caller cache's MATCH state.
+            path = Path(temporary) / 'atlas.sqlite'
+            build_database(paths, path)
             with sqlite3.connect(path.resolve().as_uri() + '?mode=ro', uri=True) as db:
-                require(db.execute('SELECT fingerprint FROM metadata').fetchone() == (fingerprint,), 'stale cache; rebuild from current archives to a fresh path')
-                require(db.execute('SELECT count(*) FROM records').fetchone() == (len(records),), 'cache population differs from source')
+                validate_database(db, records, hidden, fingerprint)
                 if args.command == 'search':
                     require(1 <= args.limit <= 30 and 0 < len(args.query) <= 512, 'query/limit outside bound')
                     terms = ' AND '.join('"' + word.replace('"', '""') + '"' for word in args.query.split())
