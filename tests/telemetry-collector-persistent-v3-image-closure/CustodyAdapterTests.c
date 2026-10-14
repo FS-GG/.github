@@ -86,9 +86,10 @@ static int fx_diagnostic_note(struct fx_diagnostic *d,const char *stage,int ok,i
  return 0;
 }
 static int fx_diagnostic_text(char *out,size_t capacity,const struct fx_diagnostic *d,const char *stage,int error,int known) {
- int n=snprintf(out,capacity,"native diagnostic stage=%s errno-known=%d errno=%d first-stage=%s first-errno-known=%d first-errno=%d additional=%u\n",
-  stage,known,known?error:0,d->first_stage?d->first_stage:"none",d->first_errno_known,d->first_errno,d->additional);
- return n>=0&&(size_t)n<capacity;
+ const char *format="native diagnostic stage=%s errno-known=%d errno=%d first-stage=%s first-errno-known=%d first-errno=%d additional=%u\n";
+ int n=snprintf(NULL,0,format,stage,known,known?error:0,d->first_stage?d->first_stage:"none",d->first_errno_known,d->first_errno,d->additional);
+ if(n<0||(size_t)n>=capacity)return 0;
+ return snprintf(out,capacity,format,stage,known,known?error:0,d->first_stage?d->first_stage:"none",d->first_errno_known,d->first_errno,d->additional)==n;
 }
 /* An additive attribute request cannot clear an inherited restriction, change
  * propagation/ownership, or request a recursive change. Unsupported kernels
@@ -108,6 +109,7 @@ static void rejects(struct shape *f,const char *name){const char *why=NULL;
  check(!lc_validate(&f->o,&why)&&why!=NULL,name);
  }
 static void source_channel_controls(void);
+static void root_program_controls(void);
 /* Shared by the actual denial workload and nonprivileged descriptor controls. */
 static int fx_descriptor_present(int fd) { return fcntl(fd,F_GETFD)>=0; }
 
@@ -187,6 +189,7 @@ int fsgg_custody_adapter_controls(void) {
  f.slots[0].environment=NULL;
  check(lc_validate(&f.o,&why),"empty exact vectors");
  source_channel_controls();
+ root_program_controls();
  uint64_t parsed_clock;
  check(fx_decimal("18446744073709551615",&parsed_clock)&&parsed_clock==UINT64_MAX,"component exact uint64 original clock parse");
  check(!fx_decimal("18446744073709551616",&parsed_clock),"component original clock overflow refused");
@@ -257,6 +260,111 @@ int fsgg_custody_adapter_controls(void) {
  check(fx_readonly_flags_preserved(1UL<<30,(1UL<<30)|ST_RDONLY)&&!fx_readonly_flags_preserved(1UL<<30,ST_RDONLY),"readback preserves even unclassified inherited flag bits");
  printf("adapter source controls=%u failures=%u native=NOT_RUN\n",controls,failures);
  return (int)failures;
+}
+
+/* Recipe shape/state controls supply no provider, cgroup or production result.
+ * Real descriptor tests below exercise the retained-path helpers without opening
+ * a custody operation or entering a namespace. */
+static void root_recipe_shape(lr_recipe *r,lr_step steps[LR_RECIPE_MAX],char names[LR_RECIPE_MAX][64],int inactive) {
+ static const char *build[]={"parent-load","parent-inspect","build","build-save"};
+ static const char *reload[]={"reload-load","reload-inspect","reload-save","probe-dotnet","probe-python","probe-native"};
+ static const char *extra[]={"inactive-inspect","inactive-manager","inactive-host"};
+ static const char *cleanup[]={"census","empty","mount"};
+ memset(r,0,sizeof *r);
+ *r=(lr_recipe){.version=LR_VERSION,.size=sizeof *r,.schema=view(LR_SCHEMA),.recipe_sha256=sha(),.expected_input_sha256=sha(),.custody_identity=sha(),
+  .target=inactive?LR_INACTIVE:LR_C4,.work_root=view("/tmp/learn-work"),.evidence_root=view("/tmp/learn-evidence"),
+  .bundle_nonce={view("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),view("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")},.steps=steps,
+  .normal_count=inactive?26:20,.step_count=inactive?38:32,.removal_limit=2,.maximum_commands=inactive?40:34};
+ for(size_t i=0;i<r->step_count;i++) {
+  unsigned bundle;const char *name;int store=-1;
+  if(i<8){bundle=(unsigned)i/4;name=build[i%4];}
+  else if(i<20){bundle=(unsigned)(i-8)/6;name=reload[(i-8)%6];}
+  else if(i<r->normal_count){bundle=(unsigned)(i-20)/3;name=extra[(i-20)%3];}
+  else {store=(int)((i-r->normal_count)/3);bundle=(unsigned)store/2;name=cleanup[(i-r->normal_count)%3];}
+  if(store<0)snprintf(names[i],64,"%c/%s",'a'+bundle,name);
+  else snprintf(names[i],64,"%c/cleanup-%s-%s",'a'+bundle,store%2?"reload":"build",name);
+  steps[i]=(lr_step){view(names[i]),{.executable=view("/usr/sbin/podman"),.working_directory=view(bundle?"/tmp/learn-work/bundle-b":"/tmp/learn-work/bundle-a"),.output_limit=CC_OUTPUT_MAX}};
+ }
+ for(unsigned i=0;i<4;i++)r->removal_prefix[i]=steps[r->normal_count+i*3].command;
+}
+static void root_program_controls(void) {
+ lr_recipe r;lr_step steps[LR_RECIPE_MAX];char names[LR_RECIPE_MAX][64];lr_state state;lr_selection selected;const char *why=NULL;
+ for(int inactive=0;inactive<2;inactive++) {
+  root_recipe_shape(&r,steps,names,inactive);
+  check(lr_init(&state,&r,&why),"finite recipe both target shapes");
+  check(lr_note_bundle(&state,0)&&lr_note_bundle(&state,1),"independent root bundle notes");
+  for(size_t i=0;i<r.normal_count;i++) {
+   check(lr_select(&state,0,&selected)&&selected.command==&steps[i].command,"finite normal order");
+   check(!lr_select(&state,0,&selected),"pending step cannot be reused");
+   check(lr_retired(&state,0,view(""),1,1),"pure normal retirement");
+  }
+  char census[131];memset(census,'c',64);census[64]='\n';memset(census+65,'d',64);census[129]='\n';census[130]=0;
+  for(unsigned store=0;store<4;store++) {
+   check(lr_select(&state,1,&selected),"finite cleanup census");
+   check(lr_retired(&state,0,view(store?"":census),1,1),"bounded retired census state");
+   if(!store)for(unsigned id=0;id<2;id++) {
+    check(lr_select(&state,1,&selected)&&selected.removal_id.size==64&&selected.removal_id.data[0]==(unsigned char)('c'+id),"only ordered census IDs selected");
+    check(lr_retired(&state,0,view(""),1,1),"pure removal retirement");
+   }
+   check(lr_select(&state,1,&selected)&&lr_retired(&state,0,view(""),1,1),"fresh empty census");
+   check(lr_select(&state,1,&selected)&&lr_retired(&state,0,view(""),1,1),"empty mount census");
+  }
+  check(lr_terminal(&state)&&!lr_select(&state,0,&selected)&&!lr_select(&state,1,&selected),"finite terminal below maximum when fewer removals");
+ }
+ root_recipe_shape(&r,steps,names,0);check(lr_init(&state,&r,&why),"abort init");lr_note_bundle(&state,0);
+ check(lr_select(&state,0,&selected)&&lr_retired(&state,1,view(""),1,1),"known failed normal result");
+ check(!lr_select(&state,0,&selected)&&state.poisoned,"failed normal cannot resume normal");
+ check(lr_init(&state,&r,&why),"early cleanup init");lr_note_bundle(&state,0);
+ check(lr_select(&state,1,&selected)&&state.aborting,"irreversible abort cleanup starts");
+ check(!lr_retired(&state,0,view(""),1,0)&&state.poisoned,"unknown retirement cannot supply cleanup census");
+ check(lr_init(&state,&r,&why),"duplicate census init");lr_note_bundle(&state,0);lr_select(&state,1,&selected);
+ char duplicate[131];memset(duplicate,'c',64);duplicate[64]='\n';memcpy(duplicate+65,duplicate,65);duplicate[130]=0;
+ check(!lr_retired(&state,0,view(duplicate),1,1)&&state.poisoned,"duplicate census refuses removal authority");
+ lr_recipe_copy *copy_recipe=lr_copy_recipe(&r);check(copy_recipe!=NULL,"bounded recipe immutable copy");
+ names[0][0]='x';check(copy_recipe&&lr_copied_recipe(copy_recipe)->steps[0].step.data[0]=='a',"recipe source mutation cannot alter retained copy");lr_free_recipe(copy_recipe);
+ root_recipe_shape(&r,steps,names,0);steps[0].command.working_directory=view("/tmp/../learn-work");check(!lr_validate(&r,&why),"noncanonical cwd refuses");
+ root_recipe_shape(&r,steps,names,0);unsigned char invalid[]={0xc0,0x80};cc_view invalid_arg={invalid,2};steps[0].command.arguments=&invalid_arg;steps[0].command.argument_count=1;check(!lr_validate(&r,&why),"overlong UTF8 refuses");
+ uint32_t uid=0;
+ check(lr_mapped_uid0("         0       1000          1\n     32768       2000          1\n",&uid)&&uid==1000,"actual kernel padded UID map shape");
+ const char *bad_maps[]={"+0 1000 1\n32768 2000 1\n","0 0 1\n32768 2000 1\n","0 1000 1\n32768 1000 1\n","0 4294967296 1\n32768 2000 1\n","0 1000 1\n32768 2000 1\n1 3000 1\n"};
+ for(size_t i=0;i<sizeof bad_maps/sizeof bad_maps[0];i++)check(!lr_mapped_uid0(bad_maps[i],&uid),"mapped UID strict refusal");
+ char temporary[]="/tmp/fsgg-learn-root-controls-XXXXXX";char *directory=mkdtemp(temporary);
+ check(directory!=NULL,"private real-FD fixture");if(!directory)return;
+ int parent=open(directory,O_RDONLY|O_DIRECTORY|O_CLOEXEC);check(parent>=0,"retained real parent");
+ check(mkdirat(parent,"selected",0700)==0,"private selected directory");
+ int original=root_open_beneath(parent,"selected",O_RDONLY|O_DIRECTORY);check(original>=0&&root_same_directory(original,-1,getuid(),getgid()),"real selected directory owner and mode");
+ check(symlinkat("selected",parent,"linked")==0&&root_open_beneath(parent,"linked",O_RDONLY|O_DIRECTORY)<0,"real symlink refusal");
+ check(renameat(parent,"selected",parent,"retired")==0&&mkdirat(parent,"selected",0700)==0,"replace selected pathname");
+ int replacement=root_open_beneath(parent,"selected",O_RDONLY|O_DIRECTORY);check(replacement>=0&&!root_same_directory(replacement,original,getuid(),getgid()),"retained inode rejects path replacement");
+ if(replacement>=0)close(replacement);
+ if(original>=0)close(original);
+ check(root_open_beneath(parent,"../",O_RDONLY|O_DIRECTORY)<0,"real parent escape refusal");
+ unlinkat(parent,"linked",0);unlinkat(parent,"selected",AT_REMOVEDIR);unlinkat(parent,"retired",AT_REMOVEDIR);
+ lc_adapter *a=calloc(1,sizeof *a);check(a!=NULL,"actual deferred binding helper storage");
+ if(a) {
+  root_recipe_shape(&r,steps,names,0);lr_init(&a->root_state,&r,NULL);
+  for(unsigned i=0;i<2;i++)a->root_directory[i]=a->bundle_directory[i]=-1;
+  a->root_parent[0]=a->root_parent[1]=parent;a->root_uid=getuid();a->root_gid=getgid();a->root_binding.work_name=view("work");a->root_binding.evidence_name=view("evidence");
+  check(mkdirat(parent,"work",0700)==0&&mkdirat(parent,"evidence",0700)==0,"selected roots created after inert bind");
+  int work=root_open_beneath(parent,"work",O_RDONLY|O_DIRECTORY);
+  check(work>=0&&mkdirat(work,"bundle-a",0700)==0,"exact root-selected bundle");
+  check(!root_refresh(a,1),"bundle without selected owner nonce refuses");
+  int bundle=root_open_beneath(work,"bundle-a",O_RDONLY|O_DIRECTORY);
+  int owner=openat(bundle,"owner",O_WRONLY|O_CREAT|O_EXCL|O_CLOEXEC|O_NOFOLLOW,0600);
+  check(owner>=0&&write(owner,r.bundle_nonce[0].data,32)==32,"actual nonce file population");if(owner>=0)close(owner);
+  a->failure=NULL;a->core.poisoned=0;
+  check(root_refresh(a,1)&&a->root_state.known_bundles==1,"actual deferred bundle owner binding");
+  check(!root_bundles_absent(a),"present owned bundle blocks retirement");
+  check(unlinkat(bundle,"owner",0)==0&&unlinkat(work,"bundle-a",AT_REMOVEDIR)==0,"exact owned bundle teardown");
+  check(root_bundles_absent(a),"absent selected bundle permits directory retirement");
+  check(renameat(parent,"work",parent,"old-work")==0&&mkdirat(parent,"work",0700)==0,"replace selected work root after retirement");
+  check(!root_bundles_absent(a),"replacement work root cannot authenticate terminal absence");
+  if(bundle>=0)close(bundle);
+  if(work>=0)close(work);
+  for(unsigned i=0;i<2;i++){if(a->root_directory[i]>=0)close(a->root_directory[i]);if(a->bundle_directory[i]>=0)close(a->bundle_directory[i]);}
+  free(a);unlinkat(parent,"work",AT_REMOVEDIR);unlinkat(parent,"old-work",AT_REMOVEDIR);unlinkat(parent,"evidence",AT_REMOVEDIR);
+ }
+ close(parent);check(rmdir(directory)==0,"owned ordinary fixture teardown");
 }
 
 static void source_channel_controls(void) {

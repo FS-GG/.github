@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <limits.h>
+#include <stdlib.h>
 
 static int lr_fail(lr_state *s,const char *why) {
  if(!s->failure)s->failure=why;
@@ -19,11 +20,36 @@ static int lr_hex(cc_view x,size_t count) {
  return 1;
 }
 static int lr_text(cc_view x) {
- if(x.size&&!x.data)return 0;
- return x.size<LC_STRING_MAX&&(!x.size||!memchr(x.data,0,x.size));
+ size_t i=0;
+ if(x.size>=LC_STRING_MAX||(x.size&&!x.data))return 0;
+ while(i<x.size) {
+  unsigned char b=x.data[i++]; unsigned n; uint32_t cp,min;
+  if(!b)return 0;
+  if(b<128)continue;
+  if(b>=0xc2&&b<=0xdf){n=1;cp=b&31u;min=128;}
+  else if(b>=0xe0&&b<=0xef){n=2;cp=b&15u;min=2048;}
+  else if(b>=0xf0&&b<=0xf4){n=3;cp=b&7u;min=65536;}
+  else return 0;
+  if(n>x.size-i)return 0;
+  while(n--){b=x.data[i++];if((b&0xc0u)!=0x80u)return 0;cp=(cp<<6)|(b&63u);}
+  if(cp<min||cp>0x10ffffu||(cp>=0xd800u&&cp<=0xdfffu))return 0;
+ }
+ return 1;
+}
+static int lr_path(cc_view x) {
+ if(!lr_text(x)||x.size<2||x.data[0]!='/')return 0;
+ size_t component=1;
+ for(size_t i=1;i<=x.size;i++) {
+  if(i==x.size||x.data[i]=='/') {
+   size_t n=i-component;
+   if(!n||(n==1&&x.data[component]=='.')||(n==2&&x.data[component]=='.'&&x.data[component+1]=='.'))return 0;
+   component=i+1;
+  } else {unsigned char c=x.data[i];if(!((c>='A'&&c<='Z')||(c>='a'&&c<='z')||(c>='0'&&c<='9')||c=='.'||c=='_'||c=='-'))return 0;}
+ }
+ return 1;
 }
 static int lr_command_shape(const lr_command *c) {
- if(!c||!lr_same(c->executable,"/usr/sbin/podman")||!lr_text(c->working_directory)||!c->working_directory.size||c->working_directory.data[0]!='/'||
+ if(!c||!lr_same(c->executable,"/usr/sbin/podman")||!lr_path(c->working_directory)||
   c->output_limit!=CC_OUTPUT_MAX||c->argument_count>LC_VECTOR_MAX||c->environment_count>LC_VECTOR_MAX||
   (c->argument_count&&!c->arguments)||(c->environment_count&&!c->environment))return 0;
  for(size_t i=0;i<c->argument_count;i++)if(!lr_text(c->arguments[i]))return 0;
@@ -57,21 +83,24 @@ int lr_validate(const lr_recipe *r,const char **failure) {
  size_t normal=r->target==LR_C4?20:r->target==LR_INACTIVE?26:0;
  if(!normal||r->normal_count!=normal||r->step_count!=normal+12||!r->steps||r->removal_limit>LR_REMOVAL_MAX||
   r->maximum_commands!=r->step_count+r->removal_limit||r->maximum_commands>LC_SLOT_MAX||
-  !lr_text(r->work_root)||!r->work_root.size||r->work_root.data[0]!='/'||!lr_text(r->evidence_root)||!r->evidence_root.size||r->evidence_root.data[0]!='/')goto bad;
+  !lr_path(r->work_root)||!lr_path(r->evidence_root))goto bad;
  for(size_t i=0;i<r->step_count+LR_STORE_COUNT;i++) {
   const lr_command *c=i<r->step_count?&r->steps[i].command:&r->removal_prefix[i-r->step_count];
   why="root-recipe-command";if(!lr_command_shape(c))goto bad;
   if(i<r->step_count){char step[64];why="root-recipe-step";if(!lr_expected_step(i,normal,step,sizeof step)||!lr_same(r->steps[i].step,step))goto bad;}
   size_t bytes=c->executable.size+c->working_directory.size+2;
+  if(bytes>LC_STRING_MAX)goto bad;
   for(size_t j=0;j<c->argument_count;j++){if(bytes>LC_STRING_MAX-c->arguments[j].size-1)goto bad;bytes+=c->arguments[j].size+1;}
   for(size_t j=0;j<c->environment_count;j++){size_t n=c->environment[j].name.size,v=c->environment[j].value.size;if(n>LC_STRING_MAX-v-2||bytes>LC_STRING_MAX-n-v-2)goto bad;bytes+=n+v+2;}
   why="root-recipe-retained-bound";if(total>LC_STRING_MAX-bytes)goto bad;total+=bytes;
  }
- if(failure)*failure=NULL;return 1;
+ if(failure)*failure=NULL;
+ return 1;
  bad:if(failure)*failure=why;return 0;
 }
 int lr_init(lr_state *s,const lr_recipe *r,const char **failure) {
- if(!s||!lr_validate(r,failure))return 0;memset(s,0,sizeof *s);s->recipe=r;return 1;
+ if(!s||!lr_validate(r,failure))return 0;
+ memset(s,0,sizeof *s);s->recipe=r;return 1;
 }
 int lr_note_bundle(lr_state *s,unsigned bundle) {
  if(!s||s->poisoned||bundle>1||s->terminal)return 0;
@@ -86,10 +115,10 @@ int lr_select(lr_state *s,int cleanup,lr_selection *selection) {
  if(!s||!selection||s->poisoned||s->pending||s->terminal)return 0;
  memset(selection,0,sizeof *selection);
  if(!s->cleanup_started&&(cleanup||s->normal_cursor==s->recipe->normal_count)){
-  s->cleanup_started=1;s->aborting=s->normal_cursor!=s->recipe->normal_count;lr_skip_absent(s);
+  s->cleanup_started=1;s->aborting|=s->normal_cursor!=s->recipe->normal_count;lr_skip_absent(s);
  }
  if(!s->cleanup_started) {
-  if(cleanup||s->normal_cursor>=s->recipe->normal_count)return lr_fail(s,"root-normal-step-unavailable");
+  if(cleanup||s->aborting||s->normal_cursor>=s->recipe->normal_count)return lr_fail(s,"root-normal-step-unavailable");
   selection->command=&s->recipe->steps[s->normal_cursor].command;s->pending_kind=0;
   selection->bundle=s->normal_cursor<8?s->normal_cursor/4:s->normal_cursor<20?(s->normal_cursor-8)/6:(s->normal_cursor-20)/3;
  } else {
@@ -119,17 +148,70 @@ int lr_retired(lr_state *s,int exit_code,cc_view output,int stdout_eof,int stder
   if(s->removed>=s->census_count||s->total_removed>=s->recipe->removal_limit)return lr_fail(s,"root-removal-budget");
   s->removed++;s->total_removed++;if(s->removed==s->census_count)s->phase=2;
  } else if(s->pending_kind==3) {
-  if(output.size)return lr_fail(s,"root-fresh-census-not-empty");s->phase=3;
+  if(output.size)return lr_fail(s,"root-fresh-census-not-empty");
+  s->phase=3;
  } else {
-  if(output.size)return lr_fail(s,"root-mounts-not-empty");s->store++;s->phase=0;lr_skip_absent(s);
+  if(output.size)return lr_fail(s,"root-mounts-not-empty");
+  s->store++;s->phase=0;lr_skip_absent(s);
  }
  return 1;
 }
 int lr_terminal(const lr_state *s) { return s&&!s->poisoned&&!s->pending&&s->cleanup_started&&s->terminal; }
-int lr_mapped_uid0(const char *text,uint32_t *uid) {
- unsigned long in[2],out[2],count[2];int used=0;const char *at=text;
- if(!text||!uid)return 0;
- for(unsigned i=0;i<2;i++){if(sscanf(at,"%lu %lu %lu%n",&in[i],&out[i],&count[i],&used)!=3||used<=0)return 0;at+=used;if(*at++!='\n')return 0;}
- if(*at||in[0]!=0||in[1]!=32768||count[0]!=1||count[1]!=1||out[0]==0||out[1]==0||out[0]>=UINT32_MAX||out[1]>=UINT32_MAX||out[0]==out[1])return 0;
- *uid=(uint32_t)out[0];return 1;
+static int lr_decimal(const char **at,uint32_t *value) {
+ uint32_t n=0;const char *p=*at;
+ if(*p<'0'||*p>'9')return 0;
+ do {unsigned d=(unsigned)(*p-'0');if(n>(UINT32_MAX-d)/10u)return 0;n=n*10u+d;p++;}while(*p>='0'&&*p<='9');
+ *at=p;*value=n;return 1;
 }
+static int lr_space(const char **at) {
+ const char *p=*at;if(*p!=' '&&*p!='\t')return 0;
+ while(*p==' '||*p=='\t')p++;
+ *at=p;return 1;
+}
+int lr_mapped_uid0(const char *text,uint32_t *uid) {
+ uint32_t in[2],out[2],count[2];const char *at=text;
+ if(!text||!uid)return 0;
+ for(unsigned i=0;i<2;i++) {
+  while(*at==' '||*at=='\t')at++;
+  if(!lr_decimal(&at,&in[i])||!lr_space(&at)||!lr_decimal(&at,&out[i])||!lr_space(&at)||!lr_decimal(&at,&count[i]))return 0;
+  while(*at==' '||*at=='\t')at++;
+  if(*at!='\n')return 0;
+  at++;
+ }
+ if(*at||in[0]!=0||in[1]!=32768||count[0]!=1||count[1]!=1||out[0]==0||out[1]==0||out[0]==UINT32_MAX||out[1]==UINT32_MAX||out[0]==out[1])return 0;
+ *uid=out[0];return 1;
+}
+
+struct lr_recipe_copy {
+ lr_recipe recipe; lr_step steps[LR_RECIPE_MAX];
+ cc_view vectors[LC_VECTOR_MAX]; lc_environment environment[LC_VECTOR_MAX];
+ size_t bytes,vectors_used,environment_used; unsigned char text[LC_STRING_MAX];
+};
+static cc_view lr_copy_text(lr_recipe_copy *c,cc_view x) {
+ if(x.size>=LC_STRING_MAX-c->bytes)return (cc_view){0};
+ cc_view r={c->text+c->bytes,x.size};memcpy(c->text+c->bytes,x.data,x.size);c->text[c->bytes+x.size]=0;c->bytes+=x.size+1;return r;
+}
+static int lr_copy_command(lr_recipe_copy *c,lr_command *to,const lr_command *from) {
+ *to=*from;to->executable=lr_copy_text(c,from->executable);to->working_directory=lr_copy_text(c,from->working_directory);
+ if(!to->executable.data||!to->working_directory.data||from->argument_count>LC_VECTOR_MAX-c->vectors_used||from->environment_count>LC_VECTOR_MAX-c->environment_used)return 0;
+ to->arguments=c->vectors+c->vectors_used;to->environment=c->environment+c->environment_used;
+ for(size_t i=0;i<from->argument_count;i++){cc_view x=lr_copy_text(c,from->arguments[i]);if(!x.data)return 0;c->vectors[c->vectors_used++]=x;}
+ for(size_t i=0;i<from->environment_count;i++){lc_environment e={lr_copy_text(c,from->environment[i].name),lr_copy_text(c,from->environment[i].value)};if(!e.name.data||!e.value.data)return 0;c->environment[c->environment_used++]=e;}
+ return 1;
+}
+lr_recipe_copy *lr_copy_recipe(const lr_recipe *r) {
+ if(!lr_validate(r,NULL))return NULL;
+ lr_recipe_copy *c=calloc(1,sizeof *c);if(!c)return NULL;
+ c->recipe=*r;c->recipe.steps=c->steps;
+ c->recipe.schema=lr_copy_text(c,r->schema);c->recipe.recipe_sha256=lr_copy_text(c,r->recipe_sha256);
+ c->recipe.expected_input_sha256=lr_copy_text(c,r->expected_input_sha256);c->recipe.custody_identity=lr_copy_text(c,r->custody_identity);
+ c->recipe.work_root=lr_copy_text(c,r->work_root);c->recipe.evidence_root=lr_copy_text(c,r->evidence_root);
+ for(unsigned i=0;i<2;i++)c->recipe.bundle_nonce[i]=lr_copy_text(c,r->bundle_nonce[i]);
+ if(!c->recipe.bundle_nonce[1].data)goto bad;
+ for(size_t i=0;i<r->step_count;i++){c->steps[i].step=lr_copy_text(c,r->steps[i].step);if(!c->steps[i].step.data||!lr_copy_command(c,&c->steps[i].command,&r->steps[i].command))goto bad;}
+ for(unsigned i=0;i<LR_STORE_COUNT;i++)if(!lr_copy_command(c,&c->recipe.removal_prefix[i],&r->removal_prefix[i]))goto bad;
+ return c;
+ bad:free(c);return NULL;
+}
+const lr_recipe *lr_copied_recipe(const lr_recipe_copy *c){return c?&c->recipe:NULL;}
+void lr_free_recipe(lr_recipe_copy *c){free(c);}

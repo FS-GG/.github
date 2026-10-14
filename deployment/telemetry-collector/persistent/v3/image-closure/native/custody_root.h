@@ -16,7 +16,7 @@ typedef struct {
  uint32_t output_limit;
 } lr_command;
 typedef struct { cc_view step; lr_command command; } lr_step;
-typedef struct {
+typedef struct lr_recipe {
  uint32_t version,size; cc_view schema,recipe_sha256,expected_input_sha256,custody_identity;
  lr_target target; cc_view work_root,evidence_root,bundle_nonce[2];
  const lr_step *steps; size_t step_count,normal_count;
@@ -47,4 +47,19 @@ int lr_terminal(const lr_state *);
 void lr_poison(lr_state *,const char *);
 /* Parse the verified namespace's two singleton mappings, never a requester UID. */
 int lr_mapped_uid0(const char *,uint32_t *);
+typedef struct lr_recipe_copy lr_recipe_copy;
+lr_recipe_copy *lr_copy_recipe(const lr_recipe *);
+const lr_recipe *lr_copied_recipe(const lr_recipe_copy *);
+void lr_free_recipe(lr_recipe_copy *);
+/* Private root composition, never decoded from channel traffic. Parent paths
+ * are existing protected directories; selected root basenames do not yet need
+ * to exist. The supplying controller must independently admit the mapped-UID0
+ * engine profile and authenticate recipe/source correspondence. */
+typedef struct {
+ uint32_t version,size; lr_engine_profile engine_profile;
+ const lr_recipe *recipe;
+ lc_capability work_parent,evidence_parent;
+ cc_view work_parent_path,evidence_parent_path,work_name,evidence_name;
+} lr_binding;
+lc_adapter *lc_open_root(const lc_operation *,const lr_binding *,cc_workspace,cc_lease *,size_t,const char **);
 #endif
