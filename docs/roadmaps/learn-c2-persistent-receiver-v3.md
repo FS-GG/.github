@@ -636,9 +636,59 @@ missing and NUL-containing paths, replacement refusal and repeated descriptor
 cleanup. The existing pure path/inactive-result controls and actual CLI placeholder
 and sixteen historical Host/Manager release-pin refusals also passed. The ordinary
 container exited zero and its exact removal and empty selected store were observed.
-Full required hosted source checks and protected source delivery remain pending.
+The required hosted source checks passed and PR #4499 delivered this source slice.
+This acceptance is limited to descriptor metadata and its source controls.
 
 The production command producer/root caller, authentic provider profile, native
 custody, two cold-image builds/reloads, installed receiver, grants/capture/recovery,
 usage completeness and activation remain open. Existing unknown historical effects
 retain their original holds; no native replay or activation occurred.
+
+
+### Production caller command recipe: source window 1, 2026-10-14
+
+The fixed native fixture cannot bind the real production command stream at open:
+production previously selected bundle nonces after `BindInput`, first created private
+bundle directories after that binding, and selected cleanup removal operands from
+later captured census results. A production caller therefore needs a finite trusted
+command program, delayed directory capabilities and captured-result cleanup binding.
+The accepted implementation sequence separates the shared source recipe from native
+capability and mapped-engine execution changes.
+
+The first source window supplies `CommandRecipe`, a pure producer shared with the
+actual rootless mechanism and inactive qualification. Its independently selected
+recipe binds the target, custody identity, selection/trusted/prepared digests, parent
+archive, work/evidence roots, two distinct bundle nonces and bounded cleanup allowance.
+The production CLI requires a root-owned private `--command-recipe` file before
+`BindInput`; it does not select that file's nonces itself. A closed, canonical parser
+rejects duplicate, missing, extra, null and noncanonical input fields. Exact command
+recipes include argv, environment, working directory and output bounds. Revalidation
+compares the selected recipe with the actual runtime inputs and includes its digest
+in the existing input identity and evidence.
+
+The same command producer now supplies actual build, reload, probe, inactive-manager,
+inactive-host and fixed cleanup commands. C4 selects 20 normal and 12 fixed cleanup
+commands; the full inactive target selects 26 normal and 12 fixed cleanup commands.
+Up to 32 removals are separately bounded across four owned stores. Each removal has
+an exact storage/environment prefix and a 64-character lowercase hexadecimal ID
+selected from the adapter's captured census result. The source parser and removal
+shape do not authenticate a native operation or establish result custody.
+
+Integrated source qualification at `066f34ca4231dd2069c2ea40452a2c0640195de6`
+passed locked restore and compilation with zero warnings/errors. Actual C4 and full
+inactive Runner/RootlessMechanism/InactiveQualification control flow matched all
+selected commands. Tests exercised closed-parser refusals, target/input/nonce and
+command drift, package/receipt checks, the genuine pinned verifier bytes and four
+captured-result removal IDs. External Podman effects and Manager/Host responses were
+inert substitutions; the ordinary SDK container's exact removal and empty store were
+observed. Descriptor and existing CLI/release-pin controls also passed. These source
+results establish neither authentic provider isolation nor native acceptance.
+
+The next window must review and implement the trusted native selector, delayed
+selected-slot directory acquisition, finite normal/abort cleanup terminal states,
+and independent root recipe binding. The current native owner check expects host
+UID 0 while a real mapped namespace UID 0 has a different host owner; its UID 32768
+child also cannot traverse the private mode-0700 bundle. Those checks remain unchanged.
+The engine UID profile and authentic provisioner remain required, with supplying
+owner still unresolved. No phase-2/phase-3 effects, native replay, cold-image build,
+receiver installation or activation are accepted by this source window.
