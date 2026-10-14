@@ -1,4 +1,4 @@
 interface:
   display_name: "showProgress"
   short_description: "Roadmap progress, effort changes and completion forecasts"
-  default_prompt: "Use $show-progress to report Unified Roadmap v3 progress over the last 24 hours, including complications, effort revisions and completion forecasts, then save and automatically PR/merge the timestamped report after required checks pass."
+  default_prompt: "Use $show-progress to report Unified Roadmap v3 progress over the last 24 hours, showing changes since the last report, work done overall, remaining tasks with effort/complexity and inline uncertainty, and health including churn and estimate revisions, then save and automatically PR/merge the timestamped report after required checks pass."
