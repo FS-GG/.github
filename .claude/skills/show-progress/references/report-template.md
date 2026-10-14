@@ -19,11 +19,29 @@ status: "[evidence snapshot / partial evidence snapshot]"
 ---
 ```
 
+## Process health and expectations
+
+Lead with a short verdict: is development advancing within the recorded plan or
+forecast, at risk, blocked, recovering, churning, done, or too poorly observed to
+judge? Name the affected scope and evidence coverage. Compare accepted outcomes and
+useful intermediate milestones with the expected path; state material effort or
+calendar revisions separately. Identify the most consequential recurring failure,
+rework pattern, reopened decision, external wait or other complication, including
+when it first appeared and its practical effect. Name the owner and next corrective
+step or the evidence needed to diagnose it. If items differ, state that mixed picture
+instead of assigning one unsupported programme-wide label. Missing baseline or
+telemetry means the comparison is unavailable, not that delivery is healthy.
+
+| Scope | Recorded expectation | Observed delivery and process | Verdict / confidence | Effect and next step |
+|---|---|---|---|---|
+| [item, shared dependency or selected programme scope] | [planned acceptance/effort/date and source, or unavailable] | [accepted gains; rework, failures, waits and coverage] | [health label; reason] | [effort/calendar change; owner and corrective step] |
+
 ## Overview
 
-Lead with what improved since the last report, what is already usable/accepted overall,
-and the most important remaining work. State formal outcome closure separately from
-intermediate progress. Summarize evidence coverage, critical path, health/churn and material
+After the health assessment, show what improved since the last report, what is
+already usable or accepted overall, and the most important remaining work. State
+formal outcome closure separately from intermediate progress. Summarize evidence
+coverage, critical path, health/churn and material
 estimate changes. Keep percentage comparisons secondary; missing percentages do not erase
 concrete achievements. Explain shared evidence gaps once, with item-specific limits inline.
 
