@@ -42,8 +42,14 @@ final inventory to exactly one safe checksum row. Inert controls cover complete 
 missing/extra/duplicate/path-escape/symlink/byte-drift refusals. This verifies supplied-input coverage,
 not authentic package closure or native image acceptance.
 
-The acquired lock is absent; donor policy, trusted complete transaction, maintained common-base
-helper join and native build/export/cleanup remain pending. Separate Coordination .NET and Templates
+The first native build reached the recipe and failed because the authenticated donor lacks `cmp`.
+[Source repair #4511](https://github.com/FS-GG/.github/pull/4511) replaces both comparisons with the
+existing SHA256 tool; its twelve source controls and required PR checks passed, and the two packaged
+Atlas seeds match the protected archive. The original failed build and its scoped cleanup remain
+separate evidence. Its acquired lock binds the earlier source, while the Coordination common-base
+helper still needs the new recipe pin and fresh qualification. The repaired source has no native
+image, export, release or installed acceptance. Donor policy, trusted complete transaction and
+the new exact helper/lock join remain pending. Separate Coordination .NET and Templates
 TypeScript compile/unit pilot preparations preserve profile ownership, opt-in digest selection and
 explicit retaining upgrades. OCI publication permissions/integration, actual installed journeys,
 external host-backed allocation/independent cleanup, containment and the second compatible machine
