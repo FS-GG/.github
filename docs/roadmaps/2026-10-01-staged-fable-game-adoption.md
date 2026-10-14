@@ -338,7 +338,7 @@ contain the exact original archive. The signed NuGet archive differs in packagin
 but matches all 504 signature-excluded payload entries. This accepts actual dual publication
 of the original 0.19.0 package, retaining the source and checker scope above.
 
-Fresh NuGet CLI `verify --all` remains pending. Genuine clean installed WASM runtime has
+[Templates #715](https://github.com/FS-GG/FS.GG.Templates/pull/715) accepts fresh detailed NuGet verification of the exact signed public archive, including repository/timestamp trust checks. The [producer report](https://github.com/FS-GG/FS.GG.Templates/blob/main/docs/reports/2026-10-13-wasm-template-source-and-public-successor.md#dual-publication-and-signature-trust--2026-10-14) retains the publication and signature evidence digests. Genuine clean installed WASM runtime has
 not run; downloaded-template acceptance, promised retaining upgrades, provider/AT journeys
 and remaining composition remain open. Publication does not accept native Worker exit,
 full custody, strong security or the whole GAME-TEMPLATE-01 / FABLE-ADOPT-01 outcome.
