@@ -33,7 +33,7 @@ type private CallbackRoot(callback:Effect)=
     member _.Retire(observed:bool)=if observed&&handle.IsAllocated then handle.Free()
     member _.IsRetained=handle.IsAllocated
 
-let private callbackRetention()=
+let callbackRetention()=
     let root,weak=
         let callback=Effect(fun _ _ _ _ _ _ _->17)
         CallbackRoot(callback),WeakReference(callback)
