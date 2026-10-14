@@ -381,6 +381,15 @@ deadline, memory or replacement reducer in JavaScript.
 - [ ] **WASM-SHARED-01.5-B2 — BAR production and receiver adoption**
   — route: routine.
   Depends on: .5-B1 and a join with the BAR native-capacity owner.
+  The canonical routine producer is installed through [BAR #44](https://github.com/FS-GG/FSBarV2/pull/44)
+  at `b21b3284`, following the [BAR first-install helper](https://github.com/FS-GG/.github/pull/4487).
+  The protected six-file tree matches reviewed `fd88b5c2`; the
+  [prearm source cohort](https://github.com/FS-GG/FSBarV2/actions/runs/38540547824) passed.
+  The subsequent [BAR #45](https://github.com/FS-GG/FSBarV2/pull/45) source PR
+  passed [genuine routine eligibility](https://github.com/FS-GG/FSBarV2/actions/runs/38543585646)
+  and merged at `78351405`, delivering the headless runtime image source.
+  This accepts producer activation for that source PR; image build, .5-B2
+  installed/native acceptance, publication and .7 remain open.
   Scope: integrate the adapter into `src/Broker.Browser.Client/` and the
   `src/Broker.Browser.Wasm/` facade. Update the existing package/adopt/
   qualify scripts and receiver tests to bind the complete installed Worker
