@@ -298,6 +298,34 @@ pending. The complete GAME-TEMPLATE-01 / FABLE-ADOPT-01 outcome remains **Done: 
 The keyboard/screen-reader journey, full-site/example composition and historical escaped
 custody below remain separate unresolved assertions.
 
+### Workspace 0.19.0 source and installed checker — 2026-10-14
+
+[Templates #714](https://github.com/FS-GG/FS.GG.Templates/pull/714) merged at
+`8952e1c5753b0abc972154c7596ddc8da772b271` on 2026-10-14 at 00:00:10 UTC.
+The eleven changed paths match the accepted candidate and preserve all eighteen #713
+source paths and the six installed-producer files. Workspace 0.19.0 source and all five
+provider self-pins are delivered; existing public 0.18.2 remains immutable.
+[Full composition `38485384861`](https://github.com/FS-GG/FS.GG.Templates/actions/runs/38485384861)
+passed, with sixteen passing native checks and four intentional skips. Publication was skipped.
+
+The maintained direct installed-WASM checker and shell join exact public package,
+descriptor, source and immutable tag to default-versus-Complete generation, the selected
+SDK, Fable/Vite production and nine browser definitions per family. Their 0.19.0 route
+explicitly refuses provider, Wizard and typed-SDD qualification. Checker/fixture success
+is tooling source qualification; actual clean downloaded-template WASM runtime remains
+unaccepted. The [producer-owned report](https://github.com/FS-GG/FS.GG.Templates/blob/8952e1c5753b0abc972154c7596ddc8da772b271/docs/reports/2026-10-13-wasm-template-source-and-public-successor.md)
+retains the exact source scope, original failures, publisher route and acceptance limits.
+
+The GET-only occupancy observation found no 0.19.0 GitHub active/deleted version or NuGet
+index at 2026-10-13 23:44:46–47 UTC. This point-in-time absence is neither a publication
+reservation nor OIDC proof. Packing/publication were skipped; fresh protected publication
+admission and original archive/feed evidence remain required. Publication, genuine clean
+installed WASM runtime, promised retaining upgrades, provider/AT journeys and remaining
+composition stay open. This milestone neither resolves historical unknown holds nor accepts
+native Worker exit, full custody or strong security. The prior #713 source-consumer browser
+scope above remains accepted; the whole GAME-TEMPLATE-01 / FABLE-ADOPT-01 outcome remains
+**Done: No**.
+
 ### Reference delivery history and holds
 
 The following records the reference frontier before Templates #713. Preserve its immutable
