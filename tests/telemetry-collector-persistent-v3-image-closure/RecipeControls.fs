@@ -12,7 +12,7 @@ let private refused action=
     try action() with :? InvalidDataException | :? IOException | :? JsonException -> rejected<-true
     require rejected "recipe accepted changed input/command bytes"
 
-let run selection trusted prepared=
+let run (selection:Selection) (trusted:TrustedNativeSelection) (prepared:byte array)=
     let custody=String('c',64)
     let make target=CommandRecipe.prepare selection trusted prepared custody target "/recipe/parent.oci.tar" "/recipe/work" "/recipe/evidence" (String('a',32)) (String('b',32)) 32
     let c4=make "run-c4"

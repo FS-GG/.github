@@ -237,7 +237,7 @@ let inactive (source:Selection) (trusted:TrustedNativeSelection)=
         let imageFiles=rows|>Array.map(fun row->row.TargetPath.TrimStart('/'),File.ReadAllBytes(Path.Combine(acquired,row.SourcePath)),Convert.ToInt32(row.Mode,8))
         let manifest,config=archive image imageFiles "synthetic-inactive" "amd64" false false false false
         let selected={selected with RoleManifests=refs;RuntimeImageDigest=manifest}
-        let prepared=match ImageClosure.prepare selected with Prepared value->value|other->failwith(sprintf "inactive source prepare refused: %A" other)
+        let prepared=match ImageClosure.prepare selected with ClosureResult.Prepared value->value|other->failwith(sprintf "inactive source prepare refused: %A" other)
         RecipeControls.run selected trusted prepared
         let selectionPath=Path.Combine(root,"selection.json")
         let trustedPath=Path.Combine(root,"trusted.json")
@@ -251,7 +251,7 @@ let inactive (source:Selection) (trusted:TrustedNativeSelection)=
         let inputs={CustodyIdentity=custody;Selection=selected;Trusted=trusted;SelectionPath=selectionPath;TrustedPath=trustedPath;ParentOci=image;WorkRoot=work;EvidenceRoot=evidence;ExpectedInput=expected;Prepared=prepared;Program=program}
         let actual=ResizeArray<ProcessCommand>()
         let removals=Collections.Generic.HashSet<string>()
-        let writeFixture path bytes=
+        let writeFixture (path:string) (bytes:byte array)=
             File.WriteAllBytes(path,bytes)
             require(InactiveQualification.chown(path,32768u,32768u)=0) "inert Manager fixture ownership"
             File.SetUnixFileMode(path,enum<UnixFileMode> 0o600)
@@ -285,8 +285,9 @@ let inactive (source:Selection) (trusted:TrustedNativeSelection)=
                 elif has "run" then
                     output<-match after "--entrypoint" with "/usr/share/dotnet/dotnet"->"Microsoft.NETCore.App 10.0.12\nMicrosoft.AspNetCore.App 10.0.12"|entry when entry.Contains "python"->"Python 3.14.0"|_->"codex-cli 0.158.0"
                 let mutable retired=false
+                let identity="synthetic-full:"+string actual.Count
                 {new IOwnedProcess with
-                    member _.Identity="synthetic-full:"+string actual.Count
+                    member _.Identity=identity
                     member _.Wait token=token.ThrowIfCancellationRequested();retired<-true;{ExitCode=0;Stdout=output;Stderr=""}
                     member _.Cancel token=token.ThrowIfCancellationRequested();retired<-true
                     member _.HasExited=retired
