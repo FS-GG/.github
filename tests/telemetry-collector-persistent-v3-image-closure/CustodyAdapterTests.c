@@ -331,6 +331,12 @@ static void root_program_controls(void) {
  char temporary[]="/tmp/fsgg-learn-root-controls-XXXXXX";char *directory=mkdtemp(temporary);
  check(directory!=NULL,"private real-FD fixture");if(!directory)return;
  int parent=open(directory,O_RDONLY|O_DIRECTORY|O_CLOEXEC);check(parent>=0,"retained real parent");
+ struct stat parent_stat;struct statfs parent_fs;struct statx parent_x;
+ check(fstat(parent,&parent_stat)==0&&fstatfs(parent,&parent_fs)==0&&statx(parent,"",AT_EMPTY_PATH,STATX_MNT_ID,&parent_x)==0,"real parent metadata provenance");
+ lc_capability parent_cap={.descriptor=parent,.access=O_RDONLY,.device=parent_stat.st_dev,.inode=parent_stat.st_ino,.expected_file_system=parent_fs.f_type,.mount_identity=parent_x.stx_mnt_id};
+ check(verify_root_parent(&parent_cap,getuid(),getgid()),"production parent exact derived-owner guard");
+ check(!verify_root_parent(&parent_cap,getuid()+1,getgid()),"different mapped parent owner refuses");
+ parent_cap.mount_identity++;check(!verify_root_parent(&parent_cap,getuid(),getgid()),"different parent mount identity refuses");
  check(mkdirat(parent,"selected",0700)==0,"private selected directory");
  int original=root_open_beneath(parent,"selected",O_RDONLY|O_DIRECTORY);check(original>=0&&root_same_directory(original,-1,getuid(),getgid()),"real selected directory owner and mode");
  check(symlinkat("selected",parent,"linked")==0&&root_open_beneath(parent,"linked",O_RDONLY|O_DIRECTORY)<0,"real symlink refusal");

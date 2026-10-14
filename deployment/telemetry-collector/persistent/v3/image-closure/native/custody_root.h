@@ -51,6 +51,7 @@ typedef struct lr_recipe_copy lr_recipe_copy;
 lr_recipe_copy *lr_copy_recipe(const lr_recipe *);
 const lr_recipe *lr_copied_recipe(const lr_recipe_copy *);
 void lr_free_recipe(lr_recipe_copy *);
+size_t lr_recipe_storage_bound(void);
 /* Private root composition, never decoded from channel traffic. Parent paths
  * are existing protected directories; selected root basenames do not yet need
  * to exist. The supplying controller must independently admit the mapped-UID0
@@ -58,6 +59,8 @@ void lr_free_recipe(lr_recipe_copy *);
 typedef struct {
  uint32_t version,size; lr_engine_profile engine_profile;
  const lr_recipe *recipe;
+ /* Independently admitted reserve for requester/controller/runtime overhead. */
+ uint64_t reserved_other_bytes;
  lc_capability work_parent,evidence_parent;
  cc_view work_parent_path,evidence_parent_path,work_name,evidence_name;
 } lr_binding;

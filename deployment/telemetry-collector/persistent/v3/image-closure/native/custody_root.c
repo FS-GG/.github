@@ -91,8 +91,8 @@ int lr_validate(const lr_recipe *r,const char **failure) {
   size_t bytes=c->executable.size+c->working_directory.size+2;
   if(bytes>LC_STRING_MAX)goto bad;
   for(size_t j=0;j<c->argument_count;j++){if(bytes>LC_STRING_MAX-c->arguments[j].size-1)goto bad;bytes+=c->arguments[j].size+1;}
-  for(size_t j=0;j<c->environment_count;j++){size_t n=c->environment[j].name.size,v=c->environment[j].value.size;if(n>LC_STRING_MAX-v-2||bytes>LC_STRING_MAX-n-v-2)goto bad;bytes+=n+v+2;}
-  why="root-recipe-retained-bound";if(total>LC_STRING_MAX-bytes)goto bad;total+=bytes;
+  for(size_t j=0;j<c->environment_count;j++){size_t n=c->environment[j].name.size,v=c->environment[j].value.size;if(v>LC_STRING_MAX-2||n>LC_STRING_MAX-v-2||bytes>LC_STRING_MAX-(n+v+2))goto bad;bytes+=n+v+2;}
+  why="root-recipe-retained-bound";if(bytes>LC_STRING_MAX||total>LC_STRING_MAX-bytes)goto bad;total+=bytes;
  }
  if(failure)*failure=NULL;
  return 1;
@@ -215,3 +215,5 @@ lr_recipe_copy *lr_copy_recipe(const lr_recipe *r) {
 }
 const lr_recipe *lr_copied_recipe(const lr_recipe_copy *c){return c?&c->recipe:NULL;}
 void lr_free_recipe(lr_recipe_copy *c){free(c);}
+
+size_t lr_recipe_storage_bound(void){return sizeof(lr_recipe_copy);}

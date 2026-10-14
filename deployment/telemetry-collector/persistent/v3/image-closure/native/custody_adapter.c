@@ -304,6 +304,13 @@ static int visible(lc_adapter *a,int proc,uint32_t slot) {
  close(root);
  return 1;
 }
+static int verify_root_parent(const lc_capability *c,uint32_t uid,uint32_t gid) {
+ struct stat s;struct statfs fs;struct statx x;int flags=fcntl(c->descriptor,F_GETFL);
+ return flags>=0&&(flags&O_ACCMODE)==O_RDONLY&&fstat(c->descriptor,&s)==0&&fstatfs(c->descriptor,&fs)==0&&
+  S_ISDIR(s.st_mode)&&s.st_uid==uid&&s.st_gid==gid&&!(s.st_mode&0022)&&
+  (uint64_t)s.st_dev==c->device&&(uint64_t)s.st_ino==c->inode&&(uint64_t)fs.f_type==c->expected_file_system&&
+  statx(c->descriptor,"",AT_EMPTY_PATH,STATX_MNT_ID,&x)==0&&(x.stx_mask&STATX_MNT_ID)&&x.stx_mnt_id==c->mount_identity;
+}
 static int root_parent_visible(lc_adapter *a,int proc) {
  const lc_capability *caps[]={&a->root_binding.work_parent,&a->root_binding.evidence_parent};
  const cc_view paths[]={a->root_binding.work_parent_path,a->root_binding.evidence_parent_path};
@@ -314,7 +321,7 @@ static int root_parent_visible(lc_adapter *a,int proc) {
   struct open_how how={.flags=O_RDONLY|O_DIRECTORY|O_CLOEXEC,.resolve=RESOLVE_BENEATH|RESOLVE_NO_SYMLINKS|RESOLVE_NO_MAGICLINKS};
   int fd=(int)syscall(SYS_openat2,root,(const char *)paths[i].data+1,&how,sizeof how);
   if(fd<0||fstat(fd,&st)||fstatfs(fd,&fs)||statx(fd,"",AT_EMPTY_PATH,STATX_MNT_ID,&x)||
-   st.st_uid!=0||(st.st_mode&0022)||(uint64_t)st.st_dev!=caps[i]->device||(uint64_t)st.st_ino!=caps[i]->inode||
+   st.st_uid!=a->root_uid||st.st_gid!=a->root_gid||(st.st_mode&0022)||(uint64_t)st.st_dev!=caps[i]->device||(uint64_t)st.st_ino!=caps[i]->inode||
    (uint64_t)fs.f_type!=caps[i]->expected_file_system||(x.stx_mask&STATX_MNT_ID)==0||x.stx_mnt_id!=caps[i]->mount_identity)ok=0;
   if(fd>=0)close(fd);
  }
@@ -348,10 +355,10 @@ static int namespace_join(lc_adapter *a,int visible_slots) {
  if(!read_at(proc,"uid_map",uid,sizeof uid)||!read_at(proc,"gid_map",gid,sizeof gid)||!maps(uid)||!maps(gid))goto done;
  if(!membership(pid,a->caps[a->control_leaf].descriptor))goto done;
  if(a->root_recipe){uint32_t u,g;
-  if(!root_parent_visible(a,proc))goto done;
   if(!lr_mapped_uid0(uid,&u)||!lr_mapped_uid0(gid,&g)||
    (a->root_uid&&(a->root_uid!=u||a->root_gid!=g)))goto done;
   a->root_uid=u;a->root_gid=g;
+  if(!root_parent_visible(a,proc))goto done;
  }
  if(visible_slots)for(uint32_t i=0;i<a->operation.command_count;i++) {
   if(a->root_recipe&&(!a->root_bound[i]||(i!=a->next_slot-1&&(!a->owned[i].born||a->owned[i].settled))))continue;
@@ -571,6 +578,13 @@ static lc_adapter *open_adapter(const lc_operation *o,const lr_binding *binding,
   lease_capacity!=o->maximum_commands){refuse(failure,"bounded-caller-workspace");
   return NULL;
   }
+ if(binding) {
+  uint64_t storage=(uint64_t)sizeof(lc_adapter)+lr_recipe_storage_bound()+LC_STRING_MAX+CC_FRAME_MAX+4u+
+   (uint64_t)o->maximum_commands*2u*CC_OUTPUT_MAX+(uint64_t)LC_VECTOR_MAX*3u*sizeof(char *)+
+   (uint64_t)o->maximum_commands*6u*sizeof(char *)+workspace.frame_capacity+workspace.text_capacity+
+   (uint64_t)workspace.node_capacity*sizeof(cc_node)+(uint64_t)lease_capacity*sizeof(cc_lease);
+  if(!binding->reserved_other_bytes||storage>o->memory_max_bytes||binding->reserved_other_bytes>o->memory_max_bytes-storage){refuse(failure,"root-full-retained-memory-reservation");return NULL;}
+ }
  a=calloc(1,sizeof *a);
  if(!a){refuse(failure,"adapter-storage");
   return NULL;
@@ -608,7 +622,7 @@ static lc_adapter *open_adapter(const lc_operation *o,const lr_binding *binding,
   for(unsigned r=0;r<2;r++) {
    a->root_parent[r]=fcntl(parents[r]->descriptor,F_DUPFD_CLOEXEC,3);
    lc_capability c=*parents[r];c.descriptor=a->root_parent[r];
-   if(c.descriptor<0||!verify_cap(&c))goto capability;
+   if(c.descriptor<0)goto capability;
    const cc_view name=r?a->root_binding.evidence_name:a->root_binding.work_name;
    int present=root_open_beneath(c.descriptor,(const char *)name.data,O_PATH|O_NOFOLLOW);
    if(present>=0){close(present);goto capability;}
@@ -618,7 +632,7 @@ static lc_adapter *open_adapter(const lc_operation *o,const lr_binding *binding,
  for(i=0;i<o->handle_count;i++) {
   a->caps[i]=o->handles[i];
   a->caps[i].descriptor=fcntl(o->handles[i].descriptor,F_DUPFD_CLOEXEC,3);
-  if(a->caps[i].descriptor<0||!verify_cap(&a->caps[i]))goto capability;
+  if(a->caps[i].descriptor<0||(!(binding&&a->caps[i].role==LC_DIRECTORY)&&!verify_cap(&a->caps[i])))goto capability;
   switch(a->caps[i].role){case LC_OPERATION_CGROUP:operation=(int)i;
    break;
    case LC_CONTROL_LEAF:control=(int)i;
@@ -646,6 +660,11 @@ static lc_adapter *open_adapter(const lc_operation *o,const lr_binding *binding,
  a->operation_group=operation;
  a->control_leaf=control;
  if(!namespace_join(a,0)||!membership((long)getpid(),a->caps[control].descriptor))goto capability;
+ if(binding) {
+  const lc_capability *parents[]={&binding->work_parent,&binding->evidence_parent};
+  for(unsigned r=0;r<2;r++){lc_capability c=*parents[r];c.descriptor=a->root_parent[r];if(!verify_root_parent(&c,a->root_uid,a->root_gid))goto capability;}
+  for(i=0;i<o->handle_count;i++)if(a->caps[i].role==LC_DIRECTORY&&!verify_root_parent(&a->caps[i],a->root_uid,a->root_gid))goto capability;
+ }
  {struct ucred peer;
   socklen_t size=sizeof peer;
   int peerfd;
@@ -701,9 +720,10 @@ static lc_adapter *open_adapter(const lc_operation *o,const lr_binding *binding,
    ancestor(group,a->caps[requester].descriptor)||ancestor(a->caps[requester].descriptor,group))goto capability;
   for(size_t prior=0;prior<i;prior++)if(ancestor(group,a->caps[a->slots[prior].cgroup_handle].descriptor)||ancestor(a->caps[a->slots[prior].cgroup_handle].descriptor,group))goto capability;
   if(!ancestor(a->caps[s->cgroup_handle].descriptor,a->caps[operation].descriptor)||!populated(a->caps[s->cgroup_handle].descriptor,&population)||population)goto capability;
-  a->owned[i].out_bytes=malloc(CC_OUTPUT_MAX);
-  a->owned[i].err_bytes=malloc(CC_OUTPUT_MAX);
-  if(!a->owned[i].out_bytes||!a->owned[i].err_bytes)goto storage;
+  if(!binding) {
+   a->owned[i].out_bytes=malloc(CC_OUTPUT_MAX);a->owned[i].err_bytes=malloc(CC_OUTPUT_MAX);
+   if(!a->owned[i].out_bytes||!a->owned[i].err_bytes)goto storage;
+  }
   a->owned[i].events=openat(a->caps[s->cgroup_handle].descriptor,"cgroup.events",O_RDONLY|O_CLOEXEC|O_NOFOLLOW);
   a->owned[i].kill=openat(a->caps[s->cgroup_handle].descriptor,"cgroup.kill",O_WRONLY|O_CLOEXEC|O_NOFOLLOW);
   if(a->owned[i].events<0||a->owned[i].kill<0)goto capability;
@@ -767,6 +787,8 @@ static int root_slot_command(lc_adapter *a,uint32_t slot,const lr_selection *sel
  if(selection->removal_id.size)arguments[candidate.argument_count++]=selection->removal_id;
  if(!command_match(a,&candidate))return 0;
  if(!retain)return 1;
+ a->owned[slot].out_bytes=malloc(CC_OUTPUT_MAX);a->owned[slot].err_bytes=malloc(CC_OUTPUT_MAX);
+ if(!a->owned[slot].out_bytes||!a->owned[slot].err_bytes)return fail(a,"root-selected-output-storage");
  if(candidate.argument_count>LC_VECTOR_MAX-a->vector_used||candidate.environment_count>LC_VECTOR_MAX-a->environment_used)return fail(a,"root-selected-vector-bound");
  lc_command_slot *s=&a->slots[slot];
  free(a->argv[slot]);free(a->envp[slot]);
